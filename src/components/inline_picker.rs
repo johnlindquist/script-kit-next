@@ -6,16 +6,16 @@
 //! [`crate::components::inline_dropdown`] (see `InlineDropdown`,
 //! `render_soft_compact_picker_row`, `inline_dropdown_visible_range_from_start`,
 //! `InlineDropdownColors`, `InlineDropdownEmptyState`, `InlineDropdownSynopsis`).
-//! ACP's slash/@ mention popup consumes that renderer today.
+//! Agent Chat's slash/@ mention popup consumes that renderer today.
 //!
 //! What this module adds is the neutral **data shape** that callers like
 //! the menu-syntax `:`, `;`, and `!` trigger popups and cross-surface automation tooling
-//! that inspects picker state — can hold independent of ACP's
+//! that inspects picker state — can hold independent of Agent Chat's
 //! `ContextPickerItem` or menu-syntax's `TriggerPickerRow`. Both owners map
 //! their domain row into `InlinePickerRow` via a small adapter function kept in
-//! the owner's module (`adapt_context_picker_item` inside ACP code,
+//! the owner's module (`adapt_context_picker_item` inside Agent Chat code,
 //! `adapt_trigger_picker_row` inside the menu-syntax popup owner). The
-//! adapters live with the domain types so this shared file never imports ACP
+//! adapters live with the domain types so this shared file never imports Agent Chat
 //! or menu-syntax types.
 //!
 //! On top of the shape, this module also provides enabled-row-aware selection
@@ -27,7 +27,7 @@
 //!
 //! The shape carries **no closures and no domain actions**. Owners map a
 //! selection back to their domain behavior using the row `id`. Keeping the
-//! shape behavior-free is what makes it usable across ACP and menu-syntax
+//! shape behavior-free is what makes it usable across Agent Chat and menu-syntax
 //! without either one leaking into the other.
 
 use gpui::SharedString;
@@ -45,9 +45,9 @@ pub type InlinePickerRowId = SharedString;
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[allow(dead_code)]
 pub enum InlinePickerRowKind {
-    /// ACP `@` mention rows (files, dictation, screenshots, etc.).
+    /// Agent Chat `@` mention rows (files, dictation, screenshots, etc.).
     Context,
-    /// ACP `/` slash-command rows.
+    /// Agent Chat `/` slash-command rows.
     SlashCommand,
     /// Menu-syntax `:`, `;`, and `!` trigger rows.
     TextTrigger,
@@ -59,7 +59,7 @@ pub enum InlinePickerRowKind {
     Custom(SharedString),
 }
 
-/// Optional leading visual. Kept generic so ACP and menu-syntax do not leak
+/// Optional leading visual. Kept generic so Agent Chat and menu-syntax do not leak
 /// their icon systems into the shared row type.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[allow(dead_code)]
@@ -114,7 +114,7 @@ pub struct InlinePickerHighlights {
 /// automation / inspection tooling.
 ///
 /// This struct is intentionally behavior-free. It does not carry callbacks,
-/// domain actions, ACP context objects, or menu-syntax actions. Owners map
+/// domain actions, Agent Chat context objects, or menu-syntax actions. Owners map
 /// `id` back to their domain row when Enter/Tab accepts a selection.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[allow(dead_code)]

@@ -547,7 +547,7 @@ impl ScriptListApp {
         notes_options: crate::notes::RootNotesSectionOptions,
         clipboard_history_options: crate::clipboard_history::RootClipboardHistorySectionOptions,
         dictation_history_options: crate::dictation::RootDictationHistorySectionOptions,
-        acp_history_options: crate::ai::acp::history::RootAcpHistorySectionOptions,
+        agent_chat_history_options: crate::ai::agent_chat::ui::history::RootAgentChatHistorySectionOptions,
         ai_vault_options: crate::ai_vault::RootAiVaultSectionOptions,
         browser_tabs_options: crate::browser_tabs::RootBrowserTabsSectionOptions,
         browser_history_options: crate::browser_history::RootBrowserHistorySectionOptions,
@@ -563,7 +563,7 @@ impl ScriptListApp {
             notes_options,
             clipboard_history_options,
             dictation_history_options,
-            acp_history_options,
+            agent_chat_history_options,
             ai_vault_options: ai_vault_options.clone(),
             ai_vault_snapshot_generation: ai_vault_status.generation,
             browser_tabs_options: browser_tabs_options.clone(),
@@ -690,24 +690,24 @@ impl ScriptListApp {
                 }
             });
 
-        let acp_history_hits =
-            timed_root_passive_source("acp_history", search_text, explicit_conversations, || {
+        let agent_chat_history_hits =
+            timed_root_passive_source("agent_chat_history", search_text, explicit_conversations, || {
                 if !advanced_query_active
                     && allow_conversations
-                    && crate::ai::acp::history::root_acp_history_query_is_eligible(
+                    && crate::ai::agent_chat::ui::history::root_agent_chat_history_query_is_eligible(
                         search_text,
-                        acp_history_options,
+                        agent_chat_history_options,
                     )
                 {
                     if explicit_conversations {
-                        crate::ai::acp::history::search_history_direct(
+                        crate::ai::agent_chat::ui::history::search_history_direct(
                             search_text,
-                            acp_history_options.max_results,
+                            agent_chat_history_options.max_results,
                         )
                     } else {
-                        crate::ai::acp::history::search_history_cached(
+                        crate::ai::agent_chat::ui::history::search_history_cached(
                             search_text,
-                            acp_history_options.max_results,
+                            agent_chat_history_options.max_results,
                         )
                     }
                 } else {
@@ -785,7 +785,7 @@ impl ScriptListApp {
             todo_hits,
             clipboard_history_hits,
             dictation_history_hits,
-            acp_history_hits,
+            agent_chat_history_hits,
             ai_vault_hits,
             browser_tab_hits,
             browser_history_hits,
@@ -1255,11 +1255,11 @@ impl ScriptListApp {
                             build_rich_dictation_rows(&rich_query, &hits)
                         }
                         crate::spine::catalog_subsearch::ContextSubsearchSource::History => {
-                            let hits = crate::ai::acp::history::search_history_direct(
+                            let hits = crate::ai::agent_chat::ui::history::search_history_direct(
                                 &rich_query,
                                 crate::spine::catalog_subsearch::SUBSEARCH_RENDER_LIMIT,
                             );
-                            build_rich_acp_history_rows(&rich_query, &hits)
+                            build_rich_agent_chat_history_rows(&rich_query, &hits)
                         }
                         crate::spine::catalog_subsearch::ContextSubsearchSource::Scripts => {
                             build_rich_script_rows(&rich_query, &self.scripts)
@@ -1581,7 +1581,7 @@ impl ScriptListApp {
             let mut root_file_options = unified_search.root_file_section_options();
             let mut todo_options = unified_search.todo_section_options();
             let mut notes_options = unified_search.notes_section_options();
-            let mut acp_history_options = unified_search.acp_history_section_options();
+            let mut agent_chat_history_options = unified_search.agent_chat_history_section_options();
             let mut ai_vault_options = unified_search.ai_vault_section_options();
             let mut clipboard_history_options =
                 self.config.root_clipboard_history_section_options();
@@ -1639,9 +1639,9 @@ impl ScriptListApp {
                     .max(explicit_source_result_target);
             }
             if source_filters.includes(crate::menu_syntax::RootUnifiedSourceFilter::Conversations) {
-                acp_history_options.enabled = true;
-                acp_history_options.min_query_chars = 0;
-                acp_history_options.max_results = acp_history_options
+                agent_chat_history_options.enabled = true;
+                agent_chat_history_options.min_query_chars = 0;
+                agent_chat_history_options.max_results = agent_chat_history_options
                     .max_results
                     .max(explicit_source_result_target);
             }
@@ -1676,7 +1676,7 @@ impl ScriptListApp {
                 notes_options,
                 clipboard_history_options,
                 dictation_history_options,
-                acp_history_options,
+                agent_chat_history_options,
                 ai_vault_options.clone(),
                 browser_tabs_options.clone(),
                 browser_history_options.clone(),
@@ -1765,8 +1765,8 @@ impl ScriptListApp {
                 clipboard_history_options,
                 &root_passive_frame.dictation_history_hits,
                 dictation_history_options,
-                &root_passive_frame.acp_history_hits,
-                acp_history_options,
+                &root_passive_frame.agent_chat_history_hits,
+                agent_chat_history_options,
                 &root_passive_frame.ai_vault_hits,
                 ai_vault_options,
                 &root_passive_frame.browser_tab_hits,
@@ -3095,9 +3095,9 @@ fn build_rich_dictation_rows(
     (grouped, flat)
 }
 
-fn build_rich_acp_history_rows(
+fn build_rich_agent_chat_history_rows(
     query: &str,
-    hits: &[crate::ai::acp::history::AcpHistorySearchHit],
+    hits: &[crate::ai::agent_chat::ui::history::AgentChatHistorySearchHit],
 ) -> (Vec<GroupedListItem>, Vec<scripts::SearchResult>) {
     let limit = crate::spine::catalog_subsearch::SUBSEARCH_RENDER_LIMIT;
     let mut grouped = Vec::new();
@@ -3123,8 +3123,8 @@ fn build_rich_acp_history_rows(
     } else {
         for hit in hits.iter().take(limit) {
             let idx = flat.len();
-            flat.push(scripts::SearchResult::AcpHistory(
-                scripts::AcpHistoryMatch {
+            flat.push(scripts::SearchResult::AgentChatHistory(
+                scripts::AgentChatHistoryMatch {
                     entry: hit.entry.clone(),
                     score: 0,
                     matched_field: hit.matched_field,

@@ -208,15 +208,15 @@ const EMBEDDED_SKILL_NEW_AGENT: &str = include_str!("../../kit-init/skills/new-a
 const EMBEDDED_SKILL_START_CHAT: &str = include_str!("../../kit-init/skills/start-chat/SKILL.md");
 /// Skill: custom actions — Actions Menu commands in scripts and companion .actions.md files
 const EMBEDDED_SKILL_ADD_ACTIONS: &str = include_str!("../../kit-init/skills/add-actions/SKILL.md");
-/// Default ACP agent catalog (seeded on first run — provider/catalog selection, not plugin skills)
-const EMBEDDED_ACP_AGENTS_JSON: &str = r#"{
+/// Default Agent Chat agent catalog (seeded on first run — provider/catalog selection, not plugin skills)
+const EMBEDDED_AGENT_CHAT_AGENTS_JSON: &str = r#"{
   "schemaVersion": 1,
   "agents": [
     {
       "id": "opencode",
       "displayName": "OpenCode",
       "command": "opencode",
-      "args": ["acp"],
+      "args": ["agent_chat"],
       "env": {},
       "models": [],
       "install": {
@@ -225,9 +225,9 @@ const EMBEDDED_ACP_AGENTS_JSON: &str = r#"{
       }
     },
     {
-      "id": "codex-acp",
+      "id": "codex-agent_chat",
       "displayName": "Codex",
-      "command": "codex-acp",
+      "command": "codex-agent_chat",
       "args": [],
       "env": {},
       "models": [],
@@ -862,14 +862,14 @@ pub fn ensure_kit_setup() -> SetupResult {
     let guide_md_path = kit_dir.join("GUIDE.md");
     write_string_if_missing(&guide_md_path, EMBEDDED_GUIDE_MD, &mut warnings, "GUIDE.md");
 
-    // User-owned: ACP agent catalog (only create if missing)
-    // Users add/edit ACP agent entries here for multi-agent support
-    let acp_agents_path = kit_dir.join("acp").join("agents.json");
+    // User-owned: Agent Chat agent catalog (only create if missing)
+    // Users add/edit Agent Chat agent entries here for multi-agent support
+    let agent_chat_agents_path = kit_dir.join("agent_chat").join("agents.json");
     write_string_if_missing(
-        &acp_agents_path,
-        EMBEDDED_ACP_AGENTS_JSON,
+        &agent_chat_agents_path,
+        EMBEDDED_AGENT_CHAT_AGENTS_JSON,
         &mut warnings,
-        "acp/agents.json",
+        "agent_chat/agents.json",
     );
 
     // Root-level CLAUDE.md — the canonical agent instructions file.
@@ -1329,7 +1329,7 @@ fn prune_managed_examples_plugin(root: &Path, warnings: &mut Vec<String>) {
         "scripts/power-syntax-payload-lab.ts",
         "scripts/power-syntax-refine-fixture.ts",
         "scripts/todoist-demo.ts",
-        "scriptlets/acp-chat/main.md",
+        "scriptlets/agent_chat-chat/main.md",
         "scriptlets/advanced.md",
         "scriptlets/custom-actions/main.actions.md",
         "scriptlets/custom-actions/main.md",
@@ -1359,7 +1359,7 @@ fn prune_managed_examples_plugin(root: &Path, warnings: &mut Vec<String>) {
 
     for rel in [
         "scripts/lib",
-        "scriptlets/acp-chat",
+        "scriptlets/agent_chat-chat",
         "scriptlets/custom-actions",
         "scriptlets/notes",
         "skills/explain-code",
@@ -2628,7 +2628,7 @@ mod tab_ai_agent_doc_contract_tests {
             "Cmd+W",
             "Escape",
             "Agent Chat",
-            "open_tab_ai_acp_with_entry_intent",
+            "open_tab_ai_agent_chat_with_entry_intent",
         ] {
             assert!(source.contains(needle), "{label} must contain `{needle}`");
         }
@@ -2639,9 +2639,10 @@ mod tab_ai_agent_doc_contract_tests {
         );
 
         assert!(
-            source
-                .contains("Plain `Tab` in `AppView::ScriptList` routes through the ACP entry path"),
-            "{label} must describe plain Tab as the ACP entry path"
+            source.contains(
+                "Plain `Tab` in `AppView::ScriptList` routes through the Agent Chat entry path"
+            ),
+            "{label} must describe plain Tab as the Agent Chat entry path"
         );
 
         assert!(
@@ -2698,11 +2699,11 @@ mod tab_ai_agent_doc_contract_tests {
     }
 
     #[test]
-    fn ai_mod_docs_reflect_acp_primary_path() {
+    fn ai_mod_docs_reflect_agent_chat_primary_path() {
         for needle in [
             "//! AI surfaces and shared contracts.",
             "//! - User-facing AI chat surface: Agent Chat",
-            "//! - Entry points should route to `open_tab_ai_acp_with_entry_intent(...)` when they need the canonical chat UI",
+            "//! - Entry points should route to `open_tab_ai_agent_chat_with_entry_intent(...)` when they need the canonical chat UI",
             "//! - The legacy `window/` module remains only for deprecated compatibility flows and should not be used for new entry points",
         ] {
             assert!(

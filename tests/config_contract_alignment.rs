@@ -22,8 +22,8 @@ fn config_skill_mentions_authoring_skills_and_runtime_preference_groups() {
         "SKILL.md must mention selectedDeviceId"
     );
     assert!(
-        content.contains("selectedAcpAgentId"),
-        "SKILL.md must mention selectedAcpAgentId"
+        content.contains("selectedAgentChatAgentId"),
+        "SKILL.md must mention selectedAgentChatAgentId"
     );
     assert!(
         content.contains("windowManagement"),
@@ -79,7 +79,7 @@ fn kit_sdk_mentions_current_public_config_fields() {
         "dictation",
         "selectedDeviceId",
         "selectedModelId",
-        "selectedAcpAgentId",
+        "selectedAgentChatAgentId",
         "windowManagement",
         "commands",
         "claudeCode",

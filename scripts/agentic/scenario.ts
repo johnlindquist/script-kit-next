@@ -11,7 +11,7 @@
  * in one structured receipt.
  *
  * Usage (standalone):
- *   bun scripts/agentic/scenario.ts --session default --scenario detached-acp-exact-id --index 0
+ *   bun scripts/agentic/scenario.ts --session default --scenario detached-agent_chat-exact-id --index 0
  *
  * Output:
  *   stdout: JSON proof bundle (schemaVersion 2)
@@ -83,9 +83,9 @@ export interface ProofBundle {
 export interface HardScenarioReceipt {
   schemaVersion: 2;
   scenario:
-    | "detached-acp-target-threading-stress"
-    | "acp-prompt-popup-parity"
-    | "notes-acp-delayed-action-origin-stress"
+    | "detached-agent_chat-target-threading-stress"
+    | "agent_chat-prompt-popup-parity"
+    | "notes-agent_chat-delayed-action-origin-stress"
     | "file-portal-origin-roundtrip"
     | "permission-privacy-preflight"
     | "shortcut-recorder-focus-capture"
@@ -94,7 +94,7 @@ export interface HardScenarioReceipt {
     | "actions-captured-subject-frame-stress"
     | "drop-prompt-native-drop-privacy-stress"
     | "path-prompt-filesystem-edge-stress"
-    | "screenshot-identity-acp-context-stress"
+    | "screenshot-identity-agent_chat-context-stress"
     | "clipboard-history-portal-range-stress"
     | "browser-tabs-cache-identity-stress"
     | "scroll-selection-reanchor-stress"
@@ -106,7 +106,7 @@ export interface HardScenarioReceipt {
     | "scriptlet-bundle-execution-matrix-stress"
     | "tray-global-hotkey-menu-mutation-stress"
     | "multi-window-resize-monitor-restoration-stress"
-    | "acp-targeted-dictation-delivery-stress"
+    | "agent_chat-targeted-dictation-delivery-stress"
     | "clipboard-share-trust-install-stress"
     | "clipboard-share-watcher-stale-replay-stress"
     | "permission-share-cross-prompt-focus-stress"
@@ -176,14 +176,14 @@ export interface HardScenarioReceipt {
     | "inline-attachment-preview-chip-stability-stress"
     | "window-title-status-semantics-stress"
     | "menu-syntax-capture-validation-chip-stress"
-    | "acp-footer-activity-indicator-stress"
-    | "acp-model-history-popover-visual-state-stress"
-    | "acp-context-insertion-preview-parity-stress"
-    | "acp-slash-mention-provider-visibility-stress"
-    | "acp-composer-token-keyboard-edit-parity-stress"
-    | "acp-transcript-stream-retry-virtualization-stress"
-    | "acp-plugin-skill-entry-thread-affinity-stress"
-    | "notes-cart-acp-handoff-dedupe-stress"
+    | "agent_chat-footer-activity-indicator-stress"
+    | "agent_chat-model-history-popover-visual-state-stress"
+    | "agent_chat-context-insertion-preview-parity-stress"
+    | "agent_chat-slash-mention-provider-visibility-stress"
+    | "agent_chat-composer-token-keyboard-edit-parity-stress"
+    | "agent_chat-transcript-stream-retry-virtualization-stress"
+    | "agent_chat-plugin-skill-entry-thread-affinity-stress"
+    | "notes-cart-agent_chat-handoff-dedupe-stress"
     | "root-file-source-filter-pagination-footer-stress"
     | "file-search-directory-breadcrumb-restoration-stress"
     | "emoji-picker-skin-tone-category-ux-stress"
@@ -234,7 +234,7 @@ export interface HardScenarioReceipt {
   scriptletBundleExecution?: Record<string, unknown>;
   trayMenuMutation?: Record<string, unknown>;
   multiWindowRestore?: Record<string, unknown>;
-  acpDictationDelivery?: Record<string, unknown>;
+  agent_chatDictationDelivery?: Record<string, unknown>;
   clipboardShareTrust?: Record<string, unknown>;
   clipboardShareReplay?: Record<string, unknown>;
   permissionShareCrossPrompt?: Record<string, unknown>;
@@ -306,14 +306,14 @@ export interface HardScenarioReceipt {
   inlineAttachmentPreviewChipStabilityReceipt?: Record<string, unknown>;
   windowTitleStatusSemanticsReceipt?: Record<string, unknown>;
   menuSyntaxCaptureValidationChipReceipt?: Record<string, unknown>;
-  acpFooterActivityIndicatorReceipt?: Record<string, unknown>;
-  acpModelHistoryPopoverVisualStateReceipt?: Record<string, unknown>;
-  acpContextInsertionPreviewParityReceipt?: Record<string, unknown>;
-  acpSlashMentionProviderVisibilityReceipt?: Record<string, unknown>;
-  acpComposerTokenKeyboardEditParityReceipt?: Record<string, unknown>;
-  acpTranscriptStreamRetryVirtualizationReceipt?: Record<string, unknown>;
-  acpPluginSkillEntryThreadAffinityReceipt?: Record<string, unknown>;
-  notesCartAcpHandoffDedupeReceipt?: Record<string, unknown>;
+  agent_chatFooterActivityIndicatorReceipt?: Record<string, unknown>;
+  agent_chatModelHistoryPopoverVisualStateReceipt?: Record<string, unknown>;
+  agent_chatContextInsertionPreviewParityReceipt?: Record<string, unknown>;
+  agent_chatSlashMentionProviderVisibilityReceipt?: Record<string, unknown>;
+  agent_chatComposerTokenKeyboardEditParityReceipt?: Record<string, unknown>;
+  agent_chatTranscriptStreamRetryVirtualizationReceipt?: Record<string, unknown>;
+  agent_chatPluginSkillEntryThreadAffinityReceipt?: Record<string, unknown>;
+  notesCartAgentChatHandoffDedupeReceipt?: Record<string, unknown>;
   rootFileSourceFilterPaginationFooterReceipt?: Record<string, unknown>;
   fileSearchDirectoryBreadcrumbRestorationReceipt?: Record<string, unknown>;
   emojiPickerSkinToneCategoryUxReceipt?: Record<string, unknown>;
@@ -547,27 +547,27 @@ async function inspectAndPromoteTarget(opts: {
 // Scenarios
 // ---------------------------------------------------------------------------
 
-export async function runDetachedAcpExactIdScenario(
+export async function runDetachedAgentChatExactIdScenario(
   session: string,
   index: number
 ): Promise<ProofBundle> {
   stderrLog("scenario.start", {
-    scenario: "detached-acp-exact-id",
+    scenario: "detached-agent_chat-exact-id",
     session,
     index,
   });
 
-  // Step 1: Resolve the detached ACP target to an exact ID
+  // Step 1: Resolve the detached Agent Chat target to an exact ID
   const resolved = await inspectAndPromoteTarget({
     session,
-    kind: "acpDetached",
+    kind: "agentChatDetached",
     index,
     probes: [{ x: 24, y: 24 }],
   });
 
   const bundle: ProofBundle = {
     schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
-    scenario: "detached-acp-exact-id",
+    scenario: "detached-agent_chat-exact-id",
     surfaceClass: "detached",
     resolvedTarget: {
       windowId: resolved.automationWindowId,
@@ -590,7 +590,7 @@ export async function runDetachedAcpExactIdScenario(
   pushProofStep(bundle, {
     type: "resolveTarget",
     at: new Date().toISOString(),
-    request: { session, kind: "acpDetached", index },
+    request: { session, kind: "agentChatDetached", index },
     response: {
       automationWindowId: resolved.automationWindowId,
       windowKind: resolved.windowKind,
@@ -705,7 +705,7 @@ export async function runDetachedAcpExactIdScenario(
   }
 
   stderrLog("scenario.complete", {
-    scenario: "detached-acp-exact-id",
+    scenario: "detached-agent_chat-exact-id",
     stepCount: bundle.steps.length,
     warningCount: bundle.warnings.length,
   });
@@ -1145,8 +1145,8 @@ function hardFailure(
     status: "fail",
     usage: {
       stateFirst: true,
-      usedGetAcpState: false,
-      usedGetAcpTestProbe: false,
+      usedGetAgentChatState: false,
+      usedGetAgentChatTestProbe: false,
       usedGetElements: false,
       usedWaitFor: false,
       usedNativeInput: false,
@@ -1173,7 +1173,7 @@ function failureFromError(
   };
 }
 
-export async function runDetachedAcpTargetThreadingStressScenario(opts: {
+export async function runDetachedAgentChatTargetThreadingStressScenario(opts: {
   session: string;
   kind: string;
   index: number;
@@ -1181,16 +1181,16 @@ export async function runDetachedAcpTargetThreadingStressScenario(opts: {
   key: "enter" | "tab";
   vision: boolean;
 }): Promise<HardScenarioReceipt> {
-  const scenario = "detached-acp-target-threading-stress";
+  const scenario = "detached-agent_chat-target-threading-stress";
   const steps: Array<Record<string, unknown>> = [];
   const driftFailures: TargetThreadFailure[] = [];
-  const peerWindows = await listNativePeerWindows({ family: "acpDetached" });
+  const peerWindows = await listNativePeerWindows({ family: "agentChatDetached" });
 
   if (peerWindows.length < opts.minTargets) {
     return hardFailure(scenario, {
       code: "insufficient_target_count",
       stepName: "peer-window-count",
-      message: `Expected at least ${opts.minTargets} ACP peer windows, found ${peerWindows.length}`,
+      message: `Expected at least ${opts.minTargets} Agent Chat peer windows, found ${peerWindows.length}`,
       expected: { peerCount: opts.minTargets },
       actual: { peerCount: peerWindows.length, peerWindows },
     }, steps);
@@ -1202,7 +1202,7 @@ export async function runDetachedAcpTargetThreadingStressScenario(opts: {
       session: opts.session,
       kind: opts.kind,
       index: opts.index,
-      expected: { windowKind: "acpDetached" },
+      expected: { windowKind: "agentChatDetached" },
     });
   } catch (error) {
     return hardFailure(
@@ -1218,7 +1218,7 @@ export async function runDetachedAcpTargetThreadingStressScenario(opts: {
       stepName: "promote-exact-target",
       expected: { surfaceId: "non-null" } as Partial<TargetThreadIdentity>,
       actual: identity,
-      message: "Detached ACP native input requires exact surfaceId from automation-window inspection",
+      message: "Detached Agent Chat native input requires exact surfaceId from automation-window inspection",
     }, steps);
   }
   if (identity.osWindowId == null) {
@@ -1227,7 +1227,7 @@ export async function runDetachedAcpTargetThreadingStressScenario(opts: {
       stepName: "promote-exact-target",
       expected: { osWindowId: 1 } as Partial<TargetThreadIdentity>,
       actual: identity,
-      message: "Detached ACP strict capture requires osWindowId from automation-window inspection",
+      message: "Detached Agent Chat strict capture requires osWindowId from automation-window inspection",
     }, steps);
   }
 
@@ -1258,8 +1258,8 @@ export async function runDetachedAcpTargetThreadingStressScenario(opts: {
     return receipt;
   };
 
-  await pushRpc("baseline-getAcpState", { type: "getAcpState" }, "acpStateResult");
-  await pushRpc("reset-probe", { type: "resetAcpTestProbe" }, "acpTestProbeResult");
+  await pushRpc("baseline-getAgentChatState", { type: "getAgentChatState" }, "agent_chatStateResult");
+  await pushRpc("reset-probe", { type: "resetAgentChatTestProbe" }, "agent_chatTestProbeResult");
 
   const nativeType = await runTargetThreadTool(
     [
@@ -1288,7 +1288,7 @@ export async function runDetachedAcpTargetThreadingStressScenario(opts: {
     "wait-picker-open",
     {
       type: "waitFor",
-      condition: { type: "acpPickerOpen" },
+      condition: { type: "agent_chatPickerOpen" },
       timeout: 3000,
       pollInterval: 25,
       trace: "onFailure",
@@ -1322,7 +1322,7 @@ export async function runDetachedAcpTargetThreadingStressScenario(opts: {
     `wait-accepted-via-${opts.key}`,
     {
       type: "waitFor",
-      condition: { type: "acpAcceptedViaKey", key: opts.key },
+      condition: { type: "agent_chatAcceptedViaKey", key: opts.key },
       timeout: 3000,
       pollInterval: 25,
       trace: "onFailure",
@@ -1331,7 +1331,7 @@ export async function runDetachedAcpTargetThreadingStressScenario(opts: {
     5000,
   );
 
-  await pushRpc("final-getAcpState", { type: "getAcpState" }, "acpStateResult");
+  await pushRpc("final-getAgentChatState", { type: "getAgentChatState" }, "agent_chatStateResult");
 
   const verify = await runTargetThreadTool(
     [
@@ -1345,9 +1345,9 @@ export async function runDetachedAcpTargetThreadingStressScenario(opts: {
       JSON.stringify(identity.targetJson),
       "--capture-window-id",
       String(identity.osWindowId),
-      "--acp-picker-closed",
-      "--acp-item-accepted",
-      "--acp-accepted-via",
+      "--agent_chat-picker-closed",
+      "--agent_chat-item-accepted",
+      "--agent_chat-accepted-via",
       opts.key,
       ...(opts.vision ? ["--vision"] : []),
     ],
@@ -1400,8 +1400,8 @@ export async function runDetachedAcpTargetThreadingStressScenario(opts: {
     peerWindows,
     usage: {
       stateFirst: true,
-      usedGetAcpState: true,
-      usedGetAcpTestProbe: true,
+      usedGetAgentChatState: true,
+      usedGetAgentChatTestProbe: true,
       usedWaitFor: true,
       usedNativeInput: true,
       usedScreenshot: true,
@@ -1413,14 +1413,14 @@ export async function runDetachedAcpTargetThreadingStressScenario(opts: {
   };
 }
 
-export async function runAcpPromptPopupParityScenario(opts: {
+export async function runAgentChatPromptPopupParityScenario(opts: {
   session: string;
   families: string[];
 }): Promise<HardScenarioReceipt> {
-  const scenario = "acp-prompt-popup-parity";
+  const scenario = "agent_chat-prompt-popup-parity";
   const popupMap: Record<string, { id: string; triggerText: string }> = {
-    mention: { id: "acp-mention-popup", triggerText: "@" },
-    "local-history": { id: "acp-history-popup", triggerText: "" },
+    mention: { id: "agent_chat-mention-popup", triggerText: "@" },
+    "local-history": { id: "agent_chat-history-popup", triggerText: "" },
   };
   const popupCases: Array<Record<string, unknown>> = [];
   const steps: Array<Record<string, unknown>> = [];
@@ -1448,7 +1448,7 @@ export async function runAcpPromptPopupParityScenario(opts: {
         "send",
         opts.session,
         JSON.stringify({
-          type: "setAcpInput",
+          type: "setAgentChatInput",
           text: expected.triggerText,
           requestId: `popup-parity-${family}-set-input`,
         }),
@@ -1513,7 +1513,7 @@ export async function runAcpPromptPopupParityScenario(opts: {
     popupCases.push({
       family,
       expectedPopupId: expected.id,
-      trigger: { method: "protocol", command: "setAcpInput", text: expected.triggerText },
+      trigger: { method: "protocol", command: "setAgentChatInput", text: expected.triggerText },
       targetThread: {
         stable: stable.ok,
         initial: identity,
@@ -1559,29 +1559,29 @@ export async function runAcpPromptPopupParityScenario(opts: {
   };
 }
 
-export async function runNotesAcpDelayedActionOriginStressScenario(opts: {
+export async function runNotesAgentChatDelayedActionOriginStressScenario(opts: {
   session: string;
   drift: string;
 }): Promise<HardScenarioReceipt> {
   return {
     schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
-    scenario: "notes-acp-delayed-action-origin-stress",
+    scenario: "notes-agent_chat-delayed-action-origin-stress",
     status: "fail",
     origin: {
       host: "notes",
-      acpGeneration: null,
+      agent_chatGeneration: null,
     },
     delayedAction: {
       outcome: "missingOriginGeneration",
       drift: {
-        field: "acpGeneration",
+        field: "agent_chatGeneration",
         expected: "non-null",
         actual: null,
       },
     },
     usage: {
       stateFirst: true,
-      usedGetAcpState: false,
+      usedGetAgentChatState: false,
       usedGetElements: false,
       usedWaitFor: false,
       usedNativeInput: false,
@@ -1596,7 +1596,7 @@ export async function runNotesAcpDelayedActionOriginStressScenario(opts: {
           session: opts.session,
           drift: opts.drift,
           blockingGap:
-            "Notes-hosted ACP delayed action origin/generation receipts are not yet exposed to the TypeScript harness.",
+            "Notes-hosted Agent Chat delayed action origin/generation receipts are not yet exposed to the TypeScript harness.",
         },
       },
     ],
@@ -1604,9 +1604,9 @@ export async function runNotesAcpDelayedActionOriginStressScenario(opts: {
       code: "missing_origin_generation",
       stepName: "notes-origin-receipt-preflight",
       message:
-        "The harness now fails closed until app-side Notes ACP origin/generation receipts exist.",
+        "The harness now fails closed until app-side Notes Agent Chat origin/generation receipts exist.",
     },
-    warnings: ["file_linear:notes_acp_origin_generation_receipts_missing"],
+    warnings: ["file_linear:notes_agent_chat_origin_generation_receipts_missing"],
   };
 }
 
@@ -1896,7 +1896,7 @@ async function collectMainLayoutShiftAudit(session: string): Promise<Record<stri
   }
 }
 
-export async function runAcpPortalRoundTripOriginStressScenario(opts: {
+export async function runAgentChatPortalRoundTripOriginStressScenario(opts: {
   session: string;
   host: string;
   portal: string;
@@ -1910,7 +1910,7 @@ export async function runAcpPortalRoundTripOriginStressScenario(opts: {
     origin: {
       host: opts.host,
       session: opts.session,
-      acpGeneration: null,
+      agent_chatGeneration: null,
       portalSessionId: null,
       returnTarget: null,
     },
@@ -1921,7 +1921,7 @@ export async function runAcpPortalRoundTripOriginStressScenario(opts: {
       roundTrip: "unverified",
       expectedReceipts: [
         "origin.host",
-        "origin.acpGeneration",
+        "origin.agent_chatGeneration",
         "portal.sessionId",
         "portal.returnTarget",
         "contextPart.uri",
@@ -1929,7 +1929,7 @@ export async function runAcpPortalRoundTripOriginStressScenario(opts: {
     },
     usage: {
       stateFirst: true,
-      usedGetAcpState: false,
+      usedGetAgentChatState: false,
       usedGetElements: false,
       usedWaitFor: false,
       usedNativeInput: false,
@@ -1946,7 +1946,7 @@ export async function runAcpPortalRoundTripOriginStressScenario(opts: {
           host: opts.host,
           portal: opts.portal,
           blockingGap:
-            "ACP portal round-trip receipts do not yet expose origin generation, portal session id, return target, and accepted context part URI to the TypeScript harness.",
+            "Agent Chat portal round-trip receipts do not yet expose origin generation, portal session id, return target, and accepted context part URI to the TypeScript harness.",
         },
       },
     ],
@@ -1954,9 +1954,9 @@ export async function runAcpPortalRoundTripOriginStressScenario(opts: {
       code: "missing_portal_round_trip_origin_receipt",
       stepName: "portal-origin-receipt-preflight",
       message:
-        "The harness fails closed until ACP portal round-trip origin and context-part receipts exist.",
+        "The harness fails closed until Agent Chat portal round-trip origin and context-part receipts exist.",
     },
-    warnings: ["file_linear:acp_portal_round_trip_origin_receipts_missing"],
+    warnings: ["file_linear:agent_chat_portal_round_trip_origin_receipts_missing"],
   };
 }
 
@@ -2011,7 +2011,7 @@ export async function runPermissionPreflightReadonlyScenario(opts: {
     permissions,
     usage: {
       stateFirst: true,
-      usedGetAcpState: false,
+      usedGetAgentChatState: false,
       usedGetElements: false,
       usedWaitFor: false,
       usedNativeInput: false,
@@ -2056,7 +2056,7 @@ export async function runShortcutRecorderFocusCaptureStressScenario(opts: {
     },
     usage: {
       stateFirst: true,
-      usedGetAcpState: false,
+      usedGetAgentChatState: false,
       usedGetElements: false,
       usedWaitFor: false,
       usedNativeInput: false,
@@ -2646,14 +2646,14 @@ export async function runPathPromptFilesystemEdgeStressScenario(opts: {
   };
 }
 
-export async function runScreenshotIdentityAcpContextStressScenario(opts: {
+export async function runScreenshotIdentityAgentChatContextStressScenario(opts: {
   session: string;
   source?: string;
 }): Promise<HardScenarioReceipt> {
   const source = opts.source ?? "tab-ai-screenshot";
   return {
     schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
-    scenario: "screenshot-identity-acp-context-stress",
+    scenario: "screenshot-identity-agent_chat-context-stress",
     status: "fail",
     screenshotIdentity: {
       session: opts.session,
@@ -2661,7 +2661,7 @@ export async function runScreenshotIdentityAcpContextStressScenario(opts: {
       stateField: "stateResult.screenshotIdentity",
       expectedIdentityShape: "bare screenshot filename",
       captureReceipt: null,
-      acpContextPart: null,
+      agent_chatContextPart: null,
       identityMatched: null,
       filesystemGrepUsed: false,
     },
@@ -2683,7 +2683,7 @@ export async function runScreenshotIdentityAcpContextStressScenario(opts: {
           session: opts.session,
           source,
           blockingGap:
-            "ACP context automation does not yet expose one receipt tying capture identity, stateResult.screenshotIdentity, and accepted ACP context part identity together.",
+            "Agent Chat context automation does not yet expose one receipt tying capture identity, stateResult.screenshotIdentity, and accepted Agent Chat context part identity together.",
         },
       },
     ],
@@ -2691,7 +2691,7 @@ export async function runScreenshotIdentityAcpContextStressScenario(opts: {
       code: "missing_screenshot_identity_context_receipt",
       stepName: "screenshot-identity-context-receipt-preflight",
       message:
-        "The harness fails closed until screenshot identity threading can be proven from state and ACP context receipts without grepping the filesystem.",
+        "The harness fails closed until screenshot identity threading can be proven from state and Agent Chat context receipts without grepping the filesystem.",
     },
     warnings: ["file_linear:screenshot_identity_context_receipts_missing"],
   };
@@ -2993,7 +2993,7 @@ export async function runMcpContextResourceAttachmentIdentityStressScenario(opts
         contentHash: null,
       },
       composer: {
-        host: "acp",
+        host: "agent_chat",
         returnTarget: null,
         openedWithoutManualPicker: false,
       },
@@ -3390,7 +3390,7 @@ export async function runMultiWindowResizeMonitorRestorationStressScenario(opts:
   surfaces?: string[];
   monitorProfile?: string;
 }): Promise<HardScenarioReceipt> {
-  const requestedSurfaces = opts.surfaces ?? ["main", "actionsDialog", "acpDetached", "notes"];
+  const requestedSurfaces = opts.surfaces ?? ["main", "actionsDialog", "agentChatDetached", "notes"];
   const monitorProfile = opts.monitorProfile ?? "scale-bounds-drift";
   return {
     schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
@@ -3423,7 +3423,7 @@ export async function runMultiWindowResizeMonitorRestorationStressScenario(opts:
       bounds: {
         mainBoundsRestored: null,
         popupBoundsRestored: null,
-        detachedAcpBoundsRestored: null,
+        detachedAgentChatBoundsRestored: null,
         notesBoundsRestored: null,
         restoreOrder: null,
       },
@@ -3434,7 +3434,7 @@ export async function runMultiWindowResizeMonitorRestorationStressScenario(opts:
       },
       clobberGuards: {
         noPopupMainClobber: null,
-        noDetachedAcpMainClobber: null,
+        noDetachedAgentChatMainClobber: null,
         noNotesMainClobber: null,
         popupParentStillMain: null,
       },
@@ -3471,32 +3471,32 @@ export async function runMultiWindowResizeMonitorRestorationStressScenario(opts:
   };
 }
 
-export async function runAcpTargetedDictationDeliveryStressScenario(opts: {
+export async function runAgentChatTargetedDictationDeliveryStressScenario(opts: {
   session: string;
   kind?: string;
   index?: number;
   transcript?: string;
 }): Promise<HardScenarioReceipt> {
-  const kind = opts.kind ?? "acpDetached";
+  const kind = opts.kind ?? "agentChatDetached";
   const index = opts.index ?? 0;
   const transcript = opts.transcript ?? "agentic loop eight dictation";
   return {
     schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
-    scenario: "acp-targeted-dictation-delivery-stress",
+    scenario: "agent_chat-targeted-dictation-delivery-stress",
     status: "fail",
-    acpDictationDelivery: {
+    agent_chatDictationDelivery: {
       session: opts.session,
       transcript,
       target: {
         kind,
         index,
-        targetAcpWindowId: null,
+        targetAgentChatWindowId: null,
         targetSurfaceId: null,
         targetGenerationId: null,
       },
       peers: {
-        embeddedAcpWindowId: null,
-        detachedAcpWindowIds: [],
+        embeddedAgentChatWindowId: null,
+        detachedAgentChatWindowIds: [],
         wrongWindowUnchanged: null,
         wrongWindowInputBefore: null,
         wrongWindowInputAfter: null,
@@ -3536,7 +3536,7 @@ export async function runAcpTargetedDictationDeliveryStressScenario(opts: {
       startedAudioCapture: false,
     },
     steps: [{
-      name: "acp-dictation-delivery-receipt-preflight",
+      name: "agent_chat-dictation-delivery-receipt-preflight",
       status: "fail",
       output: {
         session: opts.session,
@@ -3544,16 +3544,16 @@ export async function runAcpTargetedDictationDeliveryStressScenario(opts: {
         index,
         transcript,
         blockingGap:
-          "ACP/dictation automation does not expose one targeted transcript delivery receipt with ACP generation, cursor insertion range, wrong-window negative proof, and passive microphone/model setup flags.",
+          "Agent Chat/dictation automation does not expose one targeted transcript delivery receipt with Agent Chat generation, cursor insertion range, wrong-window negative proof, and passive microphone/model setup flags.",
       },
     }],
     failure: {
-      code: "missing_acp_targeted_dictation_delivery_receipt",
-      stepName: "acp-dictation-delivery-receipt-preflight",
+      code: "missing_agent_chat_targeted_dictation_delivery_receipt",
+      stepName: "agent_chat-dictation-delivery-receipt-preflight",
       message:
-        "The harness fails closed until ACP-targeted dictation delivery can be proven without starting microphone capture or model setup.",
+        "The harness fails closed until Agent Chat-targeted dictation delivery can be proven without starting microphone capture or model setup.",
     },
-    warnings: ["file_linear:acp_targeted_dictation_delivery_receipts_missing"],
+    warnings: ["file_linear:agent_chat_targeted_dictation_delivery_receipts_missing"],
   };
 }
 
@@ -3855,7 +3855,7 @@ export async function runVisibleTextClippingOverlapStressScenario(opts: {
   session: string;
   surfaces?: string[];
 }): Promise<HardScenarioReceipt> {
-  const surfaces = opts.surfaces ?? ["main", "actionsDialog", "acpDetached"];
+  const surfaces = opts.surfaces ?? ["main", "actionsDialog", "agentChatDetached"];
   const measurement = await collectMainVisualMeasurement(opts.session);
   const clipped = measurement.textSamples.filter((sample) => sample.textFitsContainer === false);
   const status = measurement.textSamples.length > 0 && measurement.overlapPairs.length === 0 ? "pass" : "fail";
@@ -3956,7 +3956,7 @@ export async function runLayoutMeasurementRegressionStressScenario(opts: {
   session: string;
   surfaces?: string[];
 }): Promise<HardScenarioReceipt> {
-  const surfaces = opts.surfaces ?? ["main", "actionsDialog", "acpDetached"];
+  const surfaces = opts.surfaces ?? ["main", "actionsDialog", "agentChatDetached"];
   const measurement = await collectMainVisualMeasurement(opts.session);
   const components = asArray(measurement.layoutInfo.components).map(asRecord);
   const windowBounds = boundsOf(componentByName(measurement.layoutInfo, "Window"));
@@ -3981,7 +3981,7 @@ export async function runLayoutMeasurementRegressionStressScenario(opts: {
         componentCount: components.length,
       },
       attachedPopupSurface: null,
-      detachedAcpSurface: null,
+      detachedAgentChatSurface: null,
       remPx: 16,
       scaleFactor: null,
       contentBounds,
@@ -4002,7 +4002,7 @@ export async function runLayoutMeasurementRegressionStressScenario(opts: {
         surfaceContract: measurement.state.surfaceContract ?? null,
       },
       attachedPopupSurface: null,
-      detachedAcpSurface: null,
+      detachedAgentChatSurface: null,
       remMetrics: {
         remPx: 16,
         fontSizePx: 14,
@@ -4309,7 +4309,7 @@ export async function runModalStackArbitrationStressScenario(opts: {
     status: "fail",
     modalStackArbitration: {
       session: opts.session,
-      host: opts.host ?? "acpChat",
+      host: opts.host ?? "agentChatChat",
       requestedStack: ["actionsDialog", "confirmPopup", "promptPopup"],
       stackSequence: ["actionsDialog", "confirmPopup", "promptPopup"],
       requiredReceipt: "stateResult.modalStackArbitration",
@@ -4388,7 +4388,7 @@ export async function runCrossSurfaceExportProvenanceStressScenario(opts: {
   range?: string;
 }): Promise<HardScenarioReceipt> {
   const source = opts.source ?? "file-search";
-  const destination = opts.destination ?? "acp-composer";
+  const destination = opts.destination ?? "agent_chat-composer";
   return {
     schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
     scenario: "cross-surface-export-provenance-stress",
@@ -4467,7 +4467,7 @@ export async function runCrossSurfaceExportProvenanceStressScenario(opts: {
       code: "missing_cross_surface_export_provenance_receipt",
       stepName: "cross-surface-export-provenance-receipt-preflight",
       message:
-        "The harness fails closed until File Search or Clipboard History export into ACP/Notes exposes provenance, redaction, destination insertion, and stale-source rejection receipts.",
+        "The harness fails closed until File Search or Clipboard History export into Agent Chat/Notes exposes provenance, redaction, destination insertion, and stale-source rejection receipts.",
     },
     warnings: ["file_linear:cross_surface_export_provenance_receipts_missing"],
   };
@@ -4723,7 +4723,7 @@ export async function runImeCompositionInputBoundaryStressScenario(opts: {
     status: "fail",
     imeCompositionBoundary: {
       session: opts.session,
-      surfaces: ["filterInput", "promptInput", "acpComposer"],
+      surfaces: ["filterInput", "promptInput", "agent_chatComposer"],
       requiredReceipt: "input.compositionBoundary",
       compositionLifecycle: {
         compositionStart: null,
@@ -4736,7 +4736,7 @@ export async function runImeCompositionInputBoundaryStressScenario(opts: {
         enterDuringCompositionSubmitted: false,
         actionsOpenedDuringComposition: false,
         filterCommittedBeforeCompositionEnd: false,
-        acpMessageSentBeforeCompositionEnd: false,
+        agent_chatMessageSentBeforeCompositionEnd: false,
       },
       semanticReceipts: {
         finalFilterText: null,
@@ -4761,7 +4761,7 @@ export async function runImeCompositionInputBoundaryStressScenario(opts: {
       status: "fail",
       output: {
         blockingGap:
-          "The harness cannot yet prove composition start/update/commit boundaries across filter input, prompt input, and ACP composer without relying on plain key events.",
+          "The harness cannot yet prove composition start/update/commit boundaries across filter input, prompt input, and Agent Chat composer without relying on plain key events.",
       },
     }],
     failure: {
@@ -4848,7 +4848,7 @@ export async function runDisplayMigrationVisualBoundsStressScenario(opts: {
 }): Promise<HardScenarioReceipt> {
   const surfaces = opts.surfaces && opts.surfaces.length > 0
     ? opts.surfaces
-    : ["main", "actionsDialog", "promptPopup", "acpDetached", "notes"];
+    : ["main", "actionsDialog", "promptPopup", "agentChatDetached", "notes"];
 
   return {
     schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
@@ -4949,7 +4949,7 @@ export async function runNativePickerExternalReturnFocusStressScenario(opts: {
       requiredReceipt: "handoff.returnFocus",
       handoffRequestId: null,
       origin: {
-        originSurface: opts.origin ?? "acp",
+        originSurface: opts.origin ?? "agent_chat",
         originAutomationWindowId: null,
         originOsWindowId: null,
         originSemanticSurface: null,
@@ -5114,7 +5114,7 @@ export async function runRuntimeAppearanceChurnFocusedInputStressScenario(opts: 
       session: opts.session,
       requiredReceipt: "ui.appearanceChurnFocusedInput",
       appearanceChurnId: null,
-      surface: opts.surface ?? "acp-composer",
+      surface: opts.surface ?? "agent_chat-composer",
       churn: opts.churn && opts.churn.length > 0 ? opts.churn : ["scale", "font", "theme"],
       cycles: opts.cycles ?? 6,
       automationWindowId: null,
@@ -5298,7 +5298,7 @@ export async function runMenuTrayNotificationModalInterruptionStressScenario(opt
       session: opts.session,
       requiredReceipt: "platform.modalInterruptionFocus",
       interruptionStressId: null,
-      hostSurface: opts.host ?? "acpChat",
+      hostSurface: opts.host ?? "agentChatChat",
       activeSurface: opts.activeSurface ?? "actionsDialog",
       modalStackGenerationBefore: null,
       modalStackGenerationAfter: null,
@@ -5383,7 +5383,7 @@ export async function runStreamProgressCancelVisualStabilityStressScenario(opts:
       session: opts.session,
       requiredReceipt: "stream.progressCancelVisualStability",
       streamRunId: null,
-      originSurface: opts.surface ?? "acp-composer",
+      originSurface: opts.surface ?? "agent_chat-composer",
       updates: opts.updates ?? 40,
       cancelAt: opts.cancelAt ?? 25,
       automationWindowId: null,
@@ -5456,7 +5456,7 @@ export async function runDictationMediaPermissionReadinessChurnStressScenario(op
       session: opts.session,
       requiredReceipt: "media.dictationPermissionReadinessChurn",
       dictationSessionId: null,
-      targetSurface: opts.target ?? "acp-composer",
+      targetSurface: opts.target ?? "agent_chat-composer",
       churn: opts.churn && opts.churn.length > 0
         ? opts.churn
         : ["microphone-permission", "model-readiness"],
@@ -5711,7 +5711,7 @@ export async function runRtlBidiEmojiTextRenderingStressScenario(opts: {
       session: opts.session,
       requiredReceipt: "text.rtlBidiEmojiTextRendering",
       bidiStressId: null,
-      surface: opts.surface ?? "acp-composer",
+      surface: opts.surface ?? "agent_chat-composer",
       automationWindowId: null,
       osWindowId: null,
       semanticSurface: null,
@@ -6001,7 +6001,7 @@ export async function runMultiContextAttachmentDedupeProvenanceStressScenario(op
       contextRunId: null,
       hostSamples: (opts.destinations && opts.destinations.length > 0
         ? opts.destinations
-        : ["acp-composer", "notes"]).map((destinationSurface) => ({
+        : ["agent_chat-composer", "notes"]).map((destinationSurface) => ({
           destinationSurface,
           automationWindowId: null,
           osWindowId: null,
@@ -6083,7 +6083,7 @@ export async function runVisualContrastReadableStateStressScenario(opts: {
 }): Promise<HardScenarioReceipt> {
   const requestedSurfaces = opts.surfaces && opts.surfaces.length > 0
     ? opts.surfaces
-    : ["main", "actionsDialog", "promptPopup", "acp-composer", "notes"];
+    : ["main", "actionsDialog", "promptPopup", "agent_chat-composer", "notes"];
   const requestedThemes = opts.themes && opts.themes.length > 0 ? opts.themes : ["light", "dark"];
   const requestedScaleFactors = opts.scaleFactors && opts.scaleFactors.length > 0 ? opts.scaleFactors : [1, 1.25, 1.5];
   const requestedStates = opts.states && opts.states.length > 0
@@ -6285,7 +6285,7 @@ export async function runEmptyErrorRetryStateUxStressScenario(opts: {
       openedSecurityPrompt: false,
       mutatedTcc: false,
       installedAgent: false,
-      triggeredCodexAcpSecurityAgent: false,
+      triggeredCodexAgentChatSecurityAgent: false,
     },
     steps: [{
       name: "declare-required-receipt",
@@ -6382,7 +6382,7 @@ export async function runFormValidationInlineRecoveryStressScenario(opts: {
       openedSecurityPrompt: false,
       mutatedTcc: false,
       installedAgent: false,
-      triggeredCodexAcpSecurityAgent: false,
+      triggeredCodexAgentChatSecurityAgent: false,
     },
     steps: [{
       name: "declare-required-receipt",
@@ -6483,7 +6483,7 @@ export async function runNavigationBackStackHistoryStressScenario(opts: {
       openedSecurityPrompt: false,
       mutatedTcc: false,
       installedAgent: false,
-      triggeredCodexAcpSecurityAgent: false,
+      triggeredCodexAgentChatSecurityAgent: false,
     },
     steps: [{
       name: "declare-required-receipt",
@@ -8150,7 +8150,7 @@ export async function runPortalCancelReturnStateRestorationStressScenario(opts: 
     portalCancelReturnStateRestoration: {
       kind: "ux.portalCancelReturnStateRestoration",
       portalCancelReturnStressId: "loop-twenty-four-portal-cancel-return-state-restoration",
-      requestedOrigins: opts.origins ?? ["acp-composer", "notes"],
+      requestedOrigins: opts.origins ?? ["agent_chat-composer", "notes"],
       requestedPortal: opts.portal ?? "file-search",
       requestedQuery: opts.query ?? "AGENTS.md",
       requestedCancelMethods: opts.cancelMethods ?? ["escape", "back"],
@@ -8280,7 +8280,7 @@ export async function runInlinePopoverAnchorResizeStressScenario(opts: {
       kind: "ux.inlinePopoverAnchorResize",
       inlinePopoverAnchorResizeStressId: "loop-twenty-five-inline-popover-anchor-resize",
       session: opts.session,
-      requestedFamilies: opts.families ?? ["acp-slash", "acp-mention", "menu-syntax-colon"],
+      requestedFamilies: opts.families ?? ["agent_chat-slash", "agent_chat-mention", "menu-syntax-colon"],
       requestedWidths: opts.widths ?? ["mini", "narrow", "full"],
       requestedFixture: opts.fixture ?? "agentic-inline-popover",
       requestedInputModes: opts.inputModes ?? ["protocol-key", "protocol-resize"],
@@ -8904,7 +8904,7 @@ export async function runRecentHistoryDedupeRootGroupingStressScenario(opts: {
       kind: "ux.recentHistoryDedupeRootGrouping",
       recentHistoryDedupeRootGroupingStressId: "loop-twenty-nine-recent-history-dedupe-root-grouping",
       session: opts.session, fixture: opts.fixture ?? "agentic-root-recents",
-      requestedSources: opts.sources ?? ["files", "notes", "clipboard", "dictation", "acp-history"],
+      requestedSources: opts.sources ?? ["files", "notes", "clipboard", "dictation", "agent_chat-history"],
       requestedQuery: opts.query ?? "agentic-loop-29-dupe", requestedCycles: opts.cycles ?? 6,
       requestedInputModes: opts.inputModes ?? ["protocol-set-filter", "protocol-key", "batch"],
       noNativeInput: opts.noNativeInput ?? true, noNativePointer: opts.noNativePointer ?? true,
@@ -8954,7 +8954,7 @@ export async function runInlineAttachmentPreviewChipStabilityStressScenario(opts
     inlineAttachmentPreviewChipStabilityReceipt: {
       kind: "ux.inlineAttachmentPreviewChipStability",
       inlineAttachmentPreviewChipStabilityStressId: "loop-thirty-inline-attachment-preview-chip-stability",
-      session: opts.session, requestedHosts: opts.hosts ?? ["acp-composer", "notes"],
+      session: opts.session, requestedHosts: opts.hosts ?? ["agent_chat-composer", "notes"],
       fixture: opts.fixture ?? "agentic-inline-attachments",
       requestedOrigins: opts.origins ?? ["local-file", "fixture-image", "fixture-text", "script-resource"],
       requestedChipActions: opts.chipActions ?? ["focus", "preview", "remove", "reorder", "overflow"],
@@ -9005,7 +9005,7 @@ export async function runWindowTitleStatusSemanticsStressScenario(opts: {
       kind: "ux.windowTitleStatusSemantics",
       windowTitleStatusSemanticsStressId: "loop-thirty-window-title-status-semantics",
       session: opts.session,
-      requestedSurfaces: opts.surfaces ?? ["main", "acp-composer", "actionsDialog", "promptPopup", "notes"],
+      requestedSurfaces: opts.surfaces ?? ["main", "agent_chat-composer", "actionsDialog", "promptPopup", "notes"],
       requestedStates: opts.states ?? ["idle", "busy", "error", "dirty", "ready"],
       requestedTransitions: opts.transitions ?? ["triggerBuiltin", "cmd-k", "escape", "hide-show"],
       requestedInputModes: opts.inputModes ?? ["protocol-key", "batch"],
@@ -9073,7 +9073,7 @@ export async function runMenuSyntaxCaptureValidationChipStressScenario(opts: {
   };
 }
 
-export async function runAcpFooterActivityIndicatorStressScenario(opts: {
+export async function runAgentChatFooterActivityIndicatorStressScenario(opts: {
   session: string;
   hosts?: string[];
   fixture?: string;
@@ -9091,17 +9091,17 @@ export async function runAcpFooterActivityIndicatorStressScenario(opts: {
 }): Promise<HardScenarioReceipt> {
   return {
     schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
-    scenario: "acp-footer-activity-indicator-stress",
+    scenario: "agent_chat-footer-activity-indicator-stress",
     status: "fail",
     failClosed: true,
     failureMode: "fail_closed",
-    missingReceipt: "missing_acp_footer_activity_indicator_receipt",
-    linearIssue: "file_linear:acp_footer_activity_indicator_receipts_missing",
-    acpFooterActivityIndicatorReceipt: {
-      kind: "ux.acpFooterActivityIndicator",
-      acpFooterActivityIndicatorStressId: "loop-thirty-one-acp-footer-activity-indicator",
-      session: opts.session, requestedHosts: opts.hosts ?? ["acp-composer", "notes"],
-      fixture: opts.fixture ?? "agentic-acp-footer-activity",
+    missingReceipt: "missing_agent_chat_footer_activity_indicator_receipt",
+    linearIssue: "file_linear:agent_chat_footer_activity_indicator_receipts_missing",
+    agent_chatFooterActivityIndicatorReceipt: {
+      kind: "ux.agent_chatFooterActivityIndicator",
+      agent_chatFooterActivityIndicatorStressId: "loop-thirty-one-agent_chat-footer-activity-indicator",
+      session: opts.session, requestedHosts: opts.hosts ?? ["agent_chat-composer", "notes"],
+      fixture: opts.fixture ?? "agentic-agent_chat-footer-activity",
       requestedActivityFixtures: opts.activityFixtures ?? ["context-capture", "tool-call", "plan-update", "permission-wait", "cancelled", "idle-recovered"],
       requestedInputModes: opts.inputModes ?? ["protocol-state", "batch"], agentFixture: opts.agentFixture ?? "scripted-local",
       noNativeInput: opts.noNativeInput ?? true, noNativePointer: opts.noNativePointer ?? true,
@@ -9118,13 +9118,13 @@ export async function runAcpFooterActivityIndicatorStressScenario(opts: {
       cleanupConfirmed: true,
     },
     usage: { stateFirst: true, usedGetState: true, usedGetElements: true, usedNativeInput: false, usedNativePointer: false, usedScreenshot: false, openedSystemSettings: false, mutatedTcc: false, installedAgents: false, triggeredSecurityPrompt: false, networkAccessed: false, systemPasteboardMutated: false },
-    steps: [{ name: "declare-required-receipt", status: "fail", output: { reason: "missing_acp_footer_activity_indicator_receipt" } }],
-    failure: { code: "missing_acp_footer_activity_indicator_receipt", stepName: "declare-required-receipt", message: "Missing app-side ACP footer activity indicator receipts." },
-    warnings: ["file_linear:acp_footer_activity_indicator_receipts_missing"],
+    steps: [{ name: "declare-required-receipt", status: "fail", output: { reason: "missing_agent_chat_footer_activity_indicator_receipt" } }],
+    failure: { code: "missing_agent_chat_footer_activity_indicator_receipt", stepName: "declare-required-receipt", message: "Missing app-side Agent Chat footer activity indicator receipts." },
+    warnings: ["file_linear:agent_chat_footer_activity_indicator_receipts_missing"],
   };
 }
 
-export async function runAcpModelHistoryPopoverVisualStateStressScenario(opts: {
+export async function runAgentChatModelHistoryPopoverVisualStateStressScenario(opts: {
   session: string;
   families?: string[];
   fixture?: string;
@@ -9142,17 +9142,17 @@ export async function runAcpModelHistoryPopoverVisualStateStressScenario(opts: {
 }): Promise<HardScenarioReceipt> {
   return {
     schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
-    scenario: "acp-model-history-popover-visual-state-stress",
+    scenario: "agent_chat-model-history-popover-visual-state-stress",
     status: "fail",
     failClosed: true,
     failureMode: "fail_closed",
-    missingReceipt: "missing_acp_model_history_popover_visual_state_receipt",
-    linearIssue: "file_linear:acp_model_history_popover_visual_state_receipts_missing",
-    acpModelHistoryPopoverVisualStateReceipt: {
-      kind: "ux.acpModelHistoryPopoverVisualState",
-      acpModelHistoryPopoverVisualStateStressId: "loop-thirty-one-acp-model-history-popover-visual-state",
+    missingReceipt: "missing_agent_chat_model_history_popover_visual_state_receipt",
+    linearIssue: "file_linear:agent_chat_model_history_popover_visual_state_receipts_missing",
+    agent_chatModelHistoryPopoverVisualStateReceipt: {
+      kind: "ux.agent_chatModelHistoryPopoverVisualState",
+      agent_chatModelHistoryPopoverVisualStateStressId: "loop-thirty-one-agent_chat-model-history-popover-visual-state",
       session: opts.session, requestedFamilies: opts.families ?? ["model-selector", "local-history"],
-      fixture: opts.fixture ?? "agentic-acp-popover-visual-state",
+      fixture: opts.fixture ?? "agentic-agent_chat-popover-visual-state",
       requestedStates: opts.states ?? ["idle", "filtered", "empty", "loading", "current-selection", "error-recovered"],
       selectionCycles: opts.selectionCycles ?? 8, filterCycles: opts.filterCycles ?? 4,
       requestedInputModes: opts.inputModes ?? ["protocol-set-input", "protocol-key", "batch"],
@@ -9169,13 +9169,13 @@ export async function runAcpModelHistoryPopoverVisualStateStressScenario(opts: {
       wrongPopupRejected: null, noSubmit: true, afkSafeFlags: true, cleanupConfirmed: true,
     },
     usage: { stateFirst: true, usedGetState: true, usedGetElements: true, usedNativeInput: false, usedNativePointer: false, usedScreenshot: false, openedSystemSettings: false, mutatedTcc: false, installedAgents: false, triggeredSecurityPrompt: false, networkAccessed: false, systemPasteboardMutated: false },
-    steps: [{ name: "declare-required-receipt", status: "fail", output: { reason: "missing_acp_model_history_popover_visual_state_receipt" } }],
-    failure: { code: "missing_acp_model_history_popover_visual_state_receipt", stepName: "declare-required-receipt", message: "Missing app-side ACP model/history popover visual-state receipts." },
-    warnings: ["file_linear:acp_model_history_popover_visual_state_receipts_missing"],
+    steps: [{ name: "declare-required-receipt", status: "fail", output: { reason: "missing_agent_chat_model_history_popover_visual_state_receipt" } }],
+    failure: { code: "missing_agent_chat_model_history_popover_visual_state_receipt", stepName: "declare-required-receipt", message: "Missing app-side Agent Chat model/history popover visual-state receipts." },
+    warnings: ["file_linear:agent_chat_model_history_popover_visual_state_receipts_missing"],
   };
 }
 
-export async function runAcpContextInsertionPreviewParityStressScenario(opts: {
+export async function runAgentChatContextInsertionPreviewParityStressScenario(opts: {
   session: string;
   sources?: string[];
   destination?: string;
@@ -9196,17 +9196,17 @@ export async function runAcpContextInsertionPreviewParityStressScenario(opts: {
 }): Promise<HardScenarioReceipt> {
   return {
     schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
-    scenario: "acp-context-insertion-preview-parity-stress",
+    scenario: "agent_chat-context-insertion-preview-parity-stress",
     status: "fail",
     failClosed: true,
     failureMode: "fail_closed",
-    missingReceipt: "missing_acp_context_insertion_preview_parity_receipt",
-    linearIssue: "file_linear:acp_context_insertion_preview_parity_receipts_missing",
-    acpContextInsertionPreviewParityReceipt: {
-      kind: "ux.acpContextInsertionPreviewParity",
-      acpContextInsertionPreviewParityStressId: "loop-thirty-one-acp-context-insertion-preview-parity",
+    missingReceipt: "missing_agent_chat_context_insertion_preview_parity_receipt",
+    linearIssue: "file_linear:agent_chat_context_insertion_preview_parity_receipts_missing",
+    agent_chatContextInsertionPreviewParityReceipt: {
+      kind: "ux.agent_chatContextInsertionPreviewParity",
+      agent_chatContextInsertionPreviewParityStressId: "loop-thirty-one-agent_chat-context-insertion-preview-parity",
       session: opts.session, requestedSources: opts.sources ?? ["file-search", "browser-history", "dictation-history", "notes"],
-      destinationComposerIdentity: opts.destination ?? "acp-composer", fixture: opts.fixture ?? "agentic-context-preview-parity",
+      destinationComposerIdentity: opts.destination ?? "agent_chat-composer", fixture: opts.fixture ?? "agentic-context-preview-parity",
       selectionCycles: opts.selectionCycles ?? 6, filterCycles: opts.filterCycles ?? 4,
       requestedInsertModes: opts.insertModes ?? ["protocol-accept", "batch"],
       requestedInputModes: opts.inputModes ?? ["protocol-set-filter", "protocol-key", "batch"],
@@ -9225,13 +9225,13 @@ export async function runAcpContextInsertionPreviewParityStressScenario(opts: {
       noNetwork: true, noSubmit: true, afkSafeFlags: true, cleanupConfirmed: true,
     },
     usage: { stateFirst: true, usedGetState: true, usedGetElements: true, usedNativeInput: false, usedNativePointer: false, usedScreenshot: false, openedSystemSettings: false, mutatedTcc: false, installedAgents: false, triggeredSecurityPrompt: false, networkAccessed: false, systemPasteboardMutated: false },
-    steps: [{ name: "declare-required-receipt", status: "fail", output: { reason: "missing_acp_context_insertion_preview_parity_receipt" } }],
-    failure: { code: "missing_acp_context_insertion_preview_parity_receipt", stepName: "declare-required-receipt", message: "Missing app-side ACP context insertion preview parity receipts." },
-    warnings: ["file_linear:acp_context_insertion_preview_parity_receipts_missing"],
+    steps: [{ name: "declare-required-receipt", status: "fail", output: { reason: "missing_agent_chat_context_insertion_preview_parity_receipt" } }],
+    failure: { code: "missing_agent_chat_context_insertion_preview_parity_receipt", stepName: "declare-required-receipt", message: "Missing app-side Agent Chat context insertion preview parity receipts." },
+    warnings: ["file_linear:agent_chat_context_insertion_preview_parity_receipts_missing"],
   };
 }
 
-export async function runAcpSlashMentionProviderVisibilityStressScenario(opts: {
+export async function runAgentChatSlashMentionProviderVisibilityStressScenario(opts: {
   session: string;
   families?: string[];
   fixture?: string;
@@ -9251,17 +9251,17 @@ export async function runAcpSlashMentionProviderVisibilityStressScenario(opts: {
 }): Promise<HardScenarioReceipt> {
   return {
     schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
-    scenario: "acp-slash-mention-provider-visibility-stress",
+    scenario: "agent_chat-slash-mention-provider-visibility-stress",
     status: "fail",
     failClosed: true,
     failureMode: "fail_closed",
-    missingReceipt: "missing_acp_slash_mention_provider_visibility_receipt",
-    linearIssue: "file_linear:acp_slash_mention_provider_visibility_receipts_missing",
-    acpSlashMentionProviderVisibilityReceipt: {
-      kind: "ux.acpSlashMentionProviderVisibility",
-      acpSlashMentionProviderVisibilityStressId: "loop-thirty-two-acp-slash-mention-provider-visibility",
+    missingReceipt: "missing_agent_chat_slash_mention_provider_visibility_receipt",
+    linearIssue: "file_linear:agent_chat_slash_mention_provider_visibility_receipts_missing",
+    agent_chatSlashMentionProviderVisibilityReceipt: {
+      kind: "ux.agent_chatSlashMentionProviderVisibility",
+      agent_chatSlashMentionProviderVisibilityStressId: "loop-thirty-two-agent_chat-slash-mention-provider-visibility",
       session: opts.session, requestedFamilies: opts.families ?? ["slash", "mention"],
-      fixture: opts.fixture ?? "agentic-acp-provider-hints",
+      fixture: opts.fixture ?? "agentic-agent_chat-provider-hints",
       requestedProviders: opts.providers ?? ["dictation-history", "browser-history", "notes", "files", "skills"],
       requestedQueries: opts.queries ?? ["@di", "@browser-history", "@missing", "/new-script", "/unknown"],
       requestedStates: opts.states ?? ["ready", "unavailable", "loading", "error-recovered", "filtered-empty"],
@@ -9282,13 +9282,13 @@ export async function runAcpSlashMentionProviderVisibilityStressScenario(opts: {
       noQuickLook: true, noNetwork: true, noSubmit: true, cleanupConfirmed: true,
     },
     usage: { stateFirst: true, usedGetState: true, usedGetElements: true, usedNativeInput: false, usedNativePointer: false, usedScreenshot: false, openedSystemSettings: false, mutatedTcc: false, installedAgents: false, triggeredSecurityPrompt: false, networkAccessed: false, systemPasteboardMutated: false },
-    steps: [{ name: "declare-required-receipt", status: "fail", output: { reason: "missing_acp_slash_mention_provider_visibility_receipt" } }],
-    failure: { code: "missing_acp_slash_mention_provider_visibility_receipt", stepName: "declare-required-receipt", message: "Missing app-side ACP slash/mention provider visibility receipts." },
-    warnings: ["file_linear:acp_slash_mention_provider_visibility_receipts_missing"],
+    steps: [{ name: "declare-required-receipt", status: "fail", output: { reason: "missing_agent_chat_slash_mention_provider_visibility_receipt" } }],
+    failure: { code: "missing_agent_chat_slash_mention_provider_visibility_receipt", stepName: "declare-required-receipt", message: "Missing app-side Agent Chat slash/mention provider visibility receipts." },
+    warnings: ["file_linear:agent_chat_slash_mention_provider_visibility_receipts_missing"],
   };
 }
 
-export async function runAcpComposerTokenKeyboardEditParityStressScenario(opts: {
+export async function runAgentChatComposerTokenKeyboardEditParityStressScenario(opts: {
   session: string;
   hosts?: string[];
   fixture?: string;
@@ -9307,17 +9307,17 @@ export async function runAcpComposerTokenKeyboardEditParityStressScenario(opts: 
 }): Promise<HardScenarioReceipt> {
   return {
     schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
-    scenario: "acp-composer-token-keyboard-edit-parity-stress",
+    scenario: "agent_chat-composer-token-keyboard-edit-parity-stress",
     status: "fail",
     failClosed: true,
     failureMode: "fail_closed",
-    missingReceipt: "missing_acp_composer_token_keyboard_edit_parity_receipt",
-    linearIssue: "file_linear:acp_composer_token_keyboard_edit_parity_receipts_missing",
-    acpComposerTokenKeyboardEditParityReceipt: {
-      kind: "ux.acpComposerTokenKeyboardEditParity",
-      acpComposerTokenKeyboardEditParityStressId: "loop-thirty-two-acp-composer-token-keyboard-edit-parity",
-      session: opts.session, requestedHosts: opts.hosts ?? ["acp-composer", "notes"],
-      fixture: opts.fixture ?? "agentic-acp-composer-tokens",
+    missingReceipt: "missing_agent_chat_composer_token_keyboard_edit_parity_receipt",
+    linearIssue: "file_linear:agent_chat_composer_token_keyboard_edit_parity_receipts_missing",
+    agent_chatComposerTokenKeyboardEditParityReceipt: {
+      kind: "ux.agent_chatComposerTokenKeyboardEditParity",
+      agent_chatComposerTokenKeyboardEditParityStressId: "loop-thirty-two-agent_chat-composer-token-keyboard-edit-parity",
+      session: opts.session, requestedHosts: opts.hosts ?? ["agent_chat-composer", "notes"],
+      fixture: opts.fixture ?? "agentic-agent_chat-composer-tokens",
       requestedTokenKinds: opts.tokenKinds ?? ["mention", "slash", "pasted-text", "pasted-image", "skill-file"],
       requestedEditSteps: opts.editSteps ?? ["backspace-delete", "delete-forward", "range-remove", "move-token-left", "move-token-right", "cursor-around-token"],
       requestedInputModes: opts.inputModes ?? ["protocol-key", "batch"],
@@ -9338,13 +9338,13 @@ export async function runAcpComposerTokenKeyboardEditParityStressScenario(opts: 
       noNativeInput: true, noSubmit: true, cleanupConfirmed: true,
     },
     usage: { stateFirst: true, usedGetState: true, usedGetElements: true, usedNativeInput: false, usedNativePointer: false, usedScreenshot: false, openedSystemSettings: false, mutatedTcc: false, installedAgents: false, triggeredSecurityPrompt: false, networkAccessed: false, systemPasteboardMutated: false },
-    steps: [{ name: "declare-required-receipt", status: "fail", output: { reason: "missing_acp_composer_token_keyboard_edit_parity_receipt" } }],
-    failure: { code: "missing_acp_composer_token_keyboard_edit_parity_receipt", stepName: "declare-required-receipt", message: "Missing app-side ACP composer token keyboard edit parity receipts." },
-    warnings: ["file_linear:acp_composer_token_keyboard_edit_parity_receipts_missing"],
+    steps: [{ name: "declare-required-receipt", status: "fail", output: { reason: "missing_agent_chat_composer_token_keyboard_edit_parity_receipt" } }],
+    failure: { code: "missing_agent_chat_composer_token_keyboard_edit_parity_receipt", stepName: "declare-required-receipt", message: "Missing app-side Agent Chat composer token keyboard edit parity receipts." },
+    warnings: ["file_linear:agent_chat_composer_token_keyboard_edit_parity_receipts_missing"],
   };
 }
 
-export async function runAcpTranscriptStreamRetryVirtualizationStressScenario(opts: {
+export async function runAgentChatTranscriptStreamRetryVirtualizationStressScenario(opts: {
   session: string;
   hosts?: string[];
   fixture?: string;
@@ -9366,17 +9366,17 @@ export async function runAcpTranscriptStreamRetryVirtualizationStressScenario(op
 }): Promise<HardScenarioReceipt> {
   return {
     schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
-    scenario: "acp-transcript-stream-retry-virtualization-stress",
+    scenario: "agent_chat-transcript-stream-retry-virtualization-stress",
     status: "fail",
     failClosed: true,
     failureMode: "fail_closed",
-    missingReceipt: "missing_acp_transcript_stream_retry_virtualization_receipt",
-    linearIssue: "file_linear:acp_transcript_stream_retry_virtualization_receipts_missing",
-    acpTranscriptStreamRetryVirtualizationReceipt: {
-      kind: "ux.acpTranscriptStreamRetryVirtualization",
-      acpTranscriptStreamRetryVirtualizationStressId: "loop-thirty-two-acp-transcript-stream-retry-virtualization",
-      session: opts.session, requestedHosts: opts.hosts ?? ["acp-composer", "notes"],
-      fixture: opts.fixture ?? "agentic-acp-transcript-stream",
+    missingReceipt: "missing_agent_chat_transcript_stream_retry_virtualization_receipt",
+    linearIssue: "file_linear:agent_chat_transcript_stream_retry_virtualization_receipts_missing",
+    agent_chatTranscriptStreamRetryVirtualizationReceipt: {
+      kind: "ux.agent_chatTranscriptStreamRetryVirtualization",
+      agent_chatTranscriptStreamRetryVirtualizationStressId: "loop-thirty-two-agent_chat-transcript-stream-retry-virtualization",
+      session: opts.session, requestedHosts: opts.hosts ?? ["agent_chat-composer", "notes"],
+      fixture: opts.fixture ?? "agentic-agent_chat-transcript-stream",
       messageCount: opts.messageCount ?? 160, streamChunks: opts.streamChunks ?? 48,
       requestedErrorFixtures: opts.errorFixtures ?? ["tool-error", "agent-error", "model-timeout", "cancelled"],
       requestedRetryPaths: opts.retryPaths ?? ["retry-same-draft", "retry-edited-draft", "retry-after-scroll"],
@@ -9400,13 +9400,13 @@ export async function runAcpTranscriptStreamRetryVirtualizationStressScenario(op
       noNetwork: true, noSubmit: true, cleanupConfirmed: true,
     },
     usage: { stateFirst: true, usedGetState: true, usedGetElements: true, usedNativeInput: false, usedNativePointer: false, usedScreenshot: false, openedSystemSettings: false, mutatedTcc: false, installedAgents: false, triggeredSecurityPrompt: false, networkAccessed: false, systemPasteboardMutated: false },
-    steps: [{ name: "declare-required-receipt", status: "fail", output: { reason: "missing_acp_transcript_stream_retry_virtualization_receipt" } }],
-    failure: { code: "missing_acp_transcript_stream_retry_virtualization_receipt", stepName: "declare-required-receipt", message: "Missing app-side ACP transcript streaming retry virtualization receipts." },
-    warnings: ["file_linear:acp_transcript_stream_retry_virtualization_receipts_missing"],
+    steps: [{ name: "declare-required-receipt", status: "fail", output: { reason: "missing_agent_chat_transcript_stream_retry_virtualization_receipt" } }],
+    failure: { code: "missing_agent_chat_transcript_stream_retry_virtualization_receipt", stepName: "declare-required-receipt", message: "Missing app-side Agent Chat transcript streaming retry virtualization receipts." },
+    warnings: ["file_linear:agent_chat_transcript_stream_retry_virtualization_receipts_missing"],
   };
 }
 
-export async function runAcpPluginSkillEntryThreadAffinityStressScenario(opts: {
+export async function runAgentChatPluginSkillEntryThreadAffinityStressScenario(opts: {
   session: string;
   hosts?: string[];
   fixture?: string;
@@ -9425,15 +9425,15 @@ export async function runAcpPluginSkillEntryThreadAffinityStressScenario(opts: {
 }): Promise<HardScenarioReceipt> {
   return {
     schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
-    scenario: "acp-plugin-skill-entry-thread-affinity-stress",
+    scenario: "agent_chat-plugin-skill-entry-thread-affinity-stress",
     status: "fail",
     failClosed: true,
     failureMode: "fail_closed",
-    missingReceipt: "missing_acp_plugin_skill_entry_thread_affinity_receipt",
-    linearIssue: "file_linear:acp_plugin_skill_entry_thread_affinity_receipts_missing",
-    acpPluginSkillEntryThreadAffinityReceipt: {
-      kind: "ux.acpPluginSkillEntryThreadAffinity",
-      acpPluginSkillEntryThreadAffinityStressId: "loop-thirty-three-acp-plugin-skill-entry-thread-affinity",
+    missingReceipt: "missing_agent_chat_plugin_skill_entry_thread_affinity_receipt",
+    linearIssue: "file_linear:agent_chat_plugin_skill_entry_thread_affinity_receipts_missing",
+    agent_chatPluginSkillEntryThreadAffinityReceipt: {
+      kind: "ux.agent_chatPluginSkillEntryThreadAffinity",
+      agent_chatPluginSkillEntryThreadAffinityStressId: "loop-thirty-three-agent_chat-plugin-skill-entry-thread-affinity",
       session: opts.session,
       requestedHosts: opts.hosts ?? ["embedded", "detached"],
       fixture: opts.fixture ?? "agentic-plugin-skill-entry",
@@ -9452,7 +9452,7 @@ export async function runAcpPluginSkillEntryThreadAffinityStressScenario(opts: {
       fixtureSkillCatalogId: null,
       entryPath: null,
       hostSurfaceIdentity: null,
-      resolvedAcpTarget: null,
+      resolvedAgentChatTarget: null,
       targetThreadId: null,
       detachedThreadReused: null,
       embeddedThreadReused: null,
@@ -9473,13 +9473,13 @@ export async function runAcpPluginSkillEntryThreadAffinityStressScenario(opts: {
       cleanupConfirmed: true,
     },
     usage: { stateFirst: true, usedGetState: true, usedGetElements: true, usedNativeInput: false, usedNativePointer: false, usedScreenshot: false, openedSystemSettings: false, mutatedTcc: false, installedAgents: false, triggeredSecurityPrompt: false, networkAccessed: false, systemPasteboardMutated: false },
-    steps: [{ name: "declare-required-receipt", status: "fail", output: { reason: "missing_acp_plugin_skill_entry_thread_affinity_receipt" } }],
-    failure: { code: "missing_acp_plugin_skill_entry_thread_affinity_receipt", stepName: "declare-required-receipt", message: "Missing app-side ACP plugin skill entry thread affinity receipts." },
-    warnings: ["file_linear:acp_plugin_skill_entry_thread_affinity_receipts_missing"],
+    steps: [{ name: "declare-required-receipt", status: "fail", output: { reason: "missing_agent_chat_plugin_skill_entry_thread_affinity_receipt" } }],
+    failure: { code: "missing_agent_chat_plugin_skill_entry_thread_affinity_receipt", stepName: "declare-required-receipt", message: "Missing app-side Agent Chat plugin skill entry thread affinity receipts." },
+    warnings: ["file_linear:agent_chat_plugin_skill_entry_thread_affinity_receipts_missing"],
   };
 }
 
-export async function runNotesCartAcpHandoffDedupeStressScenario(opts: {
+export async function runNotesCartAgentChatHandoffDedupeStressScenario(opts: {
   session: string;
   fixture?: string;
   notes?: string[];
@@ -9500,20 +9500,20 @@ export async function runNotesCartAcpHandoffDedupeStressScenario(opts: {
 }): Promise<HardScenarioReceipt> {
   return {
     schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
-    scenario: "notes-cart-acp-handoff-dedupe-stress",
+    scenario: "notes-cart-agent_chat-handoff-dedupe-stress",
     status: "fail",
     failClosed: true,
     failureMode: "fail_closed",
-    missingReceipt: "missing_notes_cart_acp_handoff_dedupe_receipt",
-    linearIssue: "file_linear:notes_cart_acp_handoff_dedupe_receipts_missing",
-    notesCartAcpHandoffDedupeReceipt: {
-      kind: "ux.notesCartAcpHandoffDedupe",
-      notesCartAcpHandoffDedupeStressId: "loop-thirty-three-notes-cart-acp-handoff-dedupe",
+    missingReceipt: "missing_notes_cart_agent_chat_handoff_dedupe_receipt",
+    linearIssue: "file_linear:notes_cart_agent_chat_handoff_dedupe_receipts_missing",
+    notesCartAgentChatHandoffDedupeReceipt: {
+      kind: "ux.notesCartAgentChatHandoffDedupe",
+      notesCartAgentChatHandoffDedupeStressId: "loop-thirty-three-notes-cart-agent_chat-handoff-dedupe",
       session: opts.session,
       fixture: opts.fixture ?? "agentic-notes-cart",
       requestedNotes: opts.notes ?? ["note-a", "note-b"],
       requestedCartItems: opts.cartItems ?? ["duplicate-link", "local-snippet", "repo-file", "unchecked-task"],
-      requestedHandoffPaths: opts.handoffPaths ?? ["open-acp", "switch-note", "cancel", "consume"],
+      requestedHandoffPaths: opts.handoffPaths ?? ["open-agent_chat", "switch-note", "cancel", "consume"],
       requestedInputModes: opts.inputModes ?? ["protocol-click", "protocol-key", "batch"],
       agentFixture: opts.agentFixture ?? "scripted-local",
       noNativeInput: opts.noNativeInput ?? true,
@@ -9536,7 +9536,7 @@ export async function runNotesCartAcpHandoffDedupeStressScenario(opts: {
       duplicateCartItemsRejected: null,
       handoffSessionId: null,
       destinationHostIdentity: null,
-      destinationAcpGeneration: null,
+      destinationAgentChatGeneration: null,
       stagedContextPartUris: [],
       inlineTokenAliases: [],
       redactedPreviewFingerprints: [],
@@ -9552,9 +9552,9 @@ export async function runNotesCartAcpHandoffDedupeStressScenario(opts: {
       cleanupConfirmed: true,
     },
     usage: { stateFirst: true, usedGetState: true, usedGetElements: true, usedNativeInput: false, usedNativePointer: false, usedScreenshot: false, openedSystemSettings: false, mutatedTcc: false, installedAgents: false, triggeredSecurityPrompt: false, networkAccessed: false, systemPasteboardMutated: false },
-    steps: [{ name: "declare-required-receipt", status: "fail", output: { reason: "missing_notes_cart_acp_handoff_dedupe_receipt" } }],
-    failure: { code: "missing_notes_cart_acp_handoff_dedupe_receipt", stepName: "declare-required-receipt", message: "Missing app-side Notes cart ACP handoff dedupe receipts." },
-    warnings: ["file_linear:notes_cart_acp_handoff_dedupe_receipts_missing"],
+    steps: [{ name: "declare-required-receipt", status: "fail", output: { reason: "missing_notes_cart_agent_chat_handoff_dedupe_receipt" } }],
+    failure: { code: "missing_notes_cart_agent_chat_handoff_dedupe_receipt", stepName: "declare-required-receipt", message: "Missing app-side Notes cart Agent Chat handoff dedupe receipts." },
+    warnings: ["file_linear:notes_cart_agent_chat_handoff_dedupe_receipts_missing"],
   };
 }
 
@@ -10335,7 +10335,7 @@ function parseArgs() {
   const host =
     originIdx >= 0 && args[originIdx + 1]
       ? args[originIdx + 1]
-      : hostIdx >= 0 && args[hostIdx + 1] ? args[hostIdx + 1] : "acp";
+      : hostIdx >= 0 && args[hostIdx + 1] ? args[hostIdx + 1] : "agent_chat";
   const portalIdx = args.indexOf("--portal");
   const portal = portalIdx >= 0 && args[portalIdx + 1] ? args[portalIdx + 1] : "file-search";
   const selectionIdx = args.indexOf("--selection");
@@ -10446,10 +10446,10 @@ if (import.meta.main) {
     "main-window-exact-id",
     "actions-dialog-exact-id",
     "prompt-popup-exact-id",
-    "detached-acp-exact-id",
-    "detached-acp-target-threading-stress",
-    "acp-prompt-popup-parity",
-    "notes-acp-delayed-action-origin-stress",
+    "detached-agent_chat-exact-id",
+    "detached-agent_chat-target-threading-stress",
+    "agent_chat-prompt-popup-parity",
+    "notes-agent_chat-delayed-action-origin-stress",
     "file-portal-origin-roundtrip",
     "permission-privacy-preflight",
     "shortcut-recorder-focus-capture",
@@ -10484,8 +10484,8 @@ if (import.meta.main) {
       break;
     }
 
-    case "detached-acp-exact-id": {
-      const bundle = await runDetachedAcpExactIdScenario(session, index);
+    case "detached-agent_chat-exact-id": {
+      const bundle = await runDetachedAgentChatExactIdScenario(session, index);
       process.stdout.write(JSON.stringify(bundle, null, 2) + "\n");
       process.exit(bundle.warnings.length > 0 ? 1 : 0);
       break;
@@ -10498,10 +10498,10 @@ if (import.meta.main) {
       break;
     }
 
-    case "detached-acp-target-threading-stress": {
-      const bundle = await runDetachedAcpTargetThreadingStressScenario({
+    case "detached-agent_chat-target-threading-stress": {
+      const bundle = await runDetachedAgentChatTargetThreadingStressScenario({
         session,
-        kind: "acpDetached",
+        kind: "agentChatDetached",
         index,
         minTargets,
         key,
@@ -10512,22 +10512,22 @@ if (import.meta.main) {
       break;
     }
 
-    case "acp-prompt-popup-parity": {
-      const bundle = await runAcpPromptPopupParityScenario({ session, families });
+    case "agent_chat-prompt-popup-parity": {
+      const bundle = await runAgentChatPromptPopupParityScenario({ session, families });
       process.stdout.write(JSON.stringify(bundle, null, 2) + "\n");
       process.exit(bundle.status === "pass" ? 0 : 1);
       break;
     }
 
-    case "notes-acp-delayed-action-origin-stress": {
-      const bundle = await runNotesAcpDelayedActionOriginStressScenario({ session, drift });
+    case "notes-agent_chat-delayed-action-origin-stress": {
+      const bundle = await runNotesAgentChatDelayedActionOriginStressScenario({ session, drift });
       process.stdout.write(JSON.stringify(bundle, null, 2) + "\n");
       process.exit(bundle.status === "pass" ? 0 : 1);
       break;
     }
 
     case "file-portal-origin-roundtrip": {
-      const bundle = await runAcpPortalRoundTripOriginStressScenario({ session, host, portal, selection, query });
+      const bundle = await runAgentChatPortalRoundTripOriginStressScenario({ session, host, portal, selection, query });
       process.stdout.write(JSON.stringify(bundle, null, 2) + "\n");
       process.exit(bundle.status === "pass" ? 0 : 1);
       break;

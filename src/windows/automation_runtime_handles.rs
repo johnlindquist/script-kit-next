@@ -1,6 +1,6 @@
 //! Exact runtime window handle registry for automation dispatch.
 //!
-//! Maps automation window IDs (e.g. `"acpDetached:thread-2"`) to live GPUI
+//! Maps automation window IDs (e.g. `"agentChatDetached:thread-2"`) to live GPUI
 //! [`AnyWindowHandle`] values, so that [`dispatch_gpui_event`] can target a
 //! specific window without collapsing back to a shared [`WindowRole`].
 //!

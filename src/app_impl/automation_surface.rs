@@ -14,7 +14,7 @@ impl ScriptListApp {
     /// Restore a previously captured main route and focus target.
     ///
     /// This deliberately does not re-key automation or emit notifications.
-    /// Callers that close child windows or ACP surfaces still own those
+    /// Callers that close child windows or Agent Chat surfaces still own those
     /// side-effects in their local route contract.
     pub(crate) fn restore_current_view_with_focus(
         &mut self,

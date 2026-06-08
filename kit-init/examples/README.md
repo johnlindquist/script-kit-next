@@ -5,7 +5,7 @@ This plugin intentionally ships one example script and a small set of scriptlet 
 | File | Pattern Demonstrated |
 |------|---------------------|
 | `scripts/todo-app.ts` | A local Todo app with projects, labels, priorities, due dates, Today/Upcoming views, CRUD, and `;todo` capture sync |
-| `scriptlets/acp-chat/main.md` | Agent Chat handoff examples |
+| `scriptlets/agent_chat-chat/main.md` | Agent Chat handoff examples |
 | `scriptlets/custom-actions/main.md` | Custom action examples |
 | `scriptlets/notes/main.md` | Notes create, update, organize, and automation payload examples |
 

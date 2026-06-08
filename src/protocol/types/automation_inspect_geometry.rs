@@ -91,7 +91,7 @@ pub fn default_suggested_hit_points(
         AutomationWindowKind::ActionsDialog => "panel:actions-dialog",
         AutomationWindowKind::PromptPopup => "panel:prompt-popup",
         AutomationWindowKind::Notes => "input:notes-editor",
-        AutomationWindowKind::AcpDetached => "input:acp-composer",
+        AutomationWindowKind::AgentChatDetached => "input:agent_chat-composer",
         _ => "panel:window",
     };
 
@@ -183,12 +183,12 @@ mod tests {
             height: 300.0,
         };
         let info = make_info(
-            AutomationWindowKind::AcpDetached,
+            AutomationWindowKind::AgentChatDetached,
             Some(make_bounds(0.0, 0.0, 400.0, 300.0)),
         );
         let hits = default_suggested_hit_points(&info, Some(&bounds));
         assert_eq!(hits.len(), 1);
-        assert_eq!(hits[0].semantic_id, "input:acp-composer");
+        assert_eq!(hits[0].semantic_id, "input:agent_chat-composer");
         assert_eq!(hits[0].reason, "surface_center");
     }
 }

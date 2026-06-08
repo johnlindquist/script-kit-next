@@ -32,7 +32,7 @@ const TYPE_FILTER_VALUES = [
   "dictation-history",
   "browser-tab",
   "browser-history",
-  "acp-history",
+  "agent_chat-history",
   "fallback",
   "issue",
 ];

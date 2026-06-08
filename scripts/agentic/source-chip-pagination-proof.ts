@@ -151,7 +151,7 @@ async function main() {
     notes: { enabled: false },
     clipboardHistory: { enabled: false },
     dictationHistory: { enabled: false },
-    acpHistory: { enabled: false },
+    agent_chatHistory: { enabled: false },
     browserTabs: { enabled: false },
     browserHistory: { enabled: false },
   },

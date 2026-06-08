@@ -61,7 +61,7 @@ pub struct UnifiedSearchConfig {
     pub files: UnifiedSearchFilesConfig,
     pub todos: UnifiedSearchTodosConfig,
     pub notes: UnifiedSearchNotesConfig,
-    pub acp_history: UnifiedSearchAcpHistoryConfig,
+    pub agent_chat_history: UnifiedSearchAgentChatHistoryConfig,
     pub ai_vault: UnifiedSearchAiVaultConfig,
     pub clipboard_history: UnifiedSearchClipboardHistoryConfig,
     pub dictation_history: UnifiedSearchDictationHistoryConfig,
@@ -78,7 +78,7 @@ impl Default for UnifiedSearchConfig {
             files: UnifiedSearchFilesConfig::default(),
             todos: UnifiedSearchTodosConfig::default(),
             notes: UnifiedSearchNotesConfig::default(),
-            acp_history: UnifiedSearchAcpHistoryConfig::default(),
+            agent_chat_history: UnifiedSearchAgentChatHistoryConfig::default(),
             ai_vault: UnifiedSearchAiVaultConfig::default(),
             clipboard_history: UnifiedSearchClipboardHistoryConfig::default(),
             dictation_history: UnifiedSearchDictationHistoryConfig::default(),
@@ -96,7 +96,7 @@ pub enum UnifiedSearchPassiveSource {
     Notes,
     ClipboardHistory,
     DictationHistory,
-    AcpHistory,
+    AgentChatHistory,
     AiVault,
     BrowserHistory,
 }
@@ -108,7 +108,7 @@ impl UnifiedSearchPassiveSource {
         Self::Notes,
         Self::ClipboardHistory,
         Self::DictationHistory,
-        Self::AcpHistory,
+        Self::AgentChatHistory,
         Self::AiVault,
         Self::BrowserHistory,
     ];
@@ -180,18 +180,18 @@ impl Default for UnifiedSearchTodosConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(default, rename_all = "camelCase")]
-pub struct UnifiedSearchAcpHistoryConfig {
+pub struct UnifiedSearchAgentChatHistoryConfig {
     pub enabled: bool,
     pub max_results: usize,
     pub min_query_chars: usize,
 }
 
-impl Default for UnifiedSearchAcpHistoryConfig {
+impl Default for UnifiedSearchAgentChatHistoryConfig {
     fn default() -> Self {
         Self {
-            enabled: DEFAULT_UNIFIED_SEARCH_ACP_HISTORY_ENABLED,
-            max_results: DEFAULT_UNIFIED_SEARCH_ACP_HISTORY_MAX_RESULTS,
-            min_query_chars: DEFAULT_UNIFIED_SEARCH_ACP_HISTORY_MIN_QUERY_CHARS,
+            enabled: DEFAULT_UNIFIED_SEARCH_AGENT_CHAT_HISTORY_ENABLED,
+            max_results: DEFAULT_UNIFIED_SEARCH_AGENT_CHAT_HISTORY_MAX_RESULTS,
+            min_query_chars: DEFAULT_UNIFIED_SEARCH_AGENT_CHAT_HISTORY_MIN_QUERY_CHARS,
         }
     }
 }
@@ -466,13 +466,13 @@ impl UnifiedSearchConfig {
     }
 
     #[allow(dead_code)]
-    pub(crate) fn acp_history_section_options(
+    pub(crate) fn agent_chat_history_section_options(
         &self,
-    ) -> crate::ai::acp::history::RootAcpHistorySectionOptions {
-        crate::ai::acp::history::RootAcpHistorySectionOptions {
-            enabled: self.enabled && self.acp_history.enabled,
-            max_results: self.acp_history.max_results.clamp(1, 5),
-            min_query_chars: self.acp_history.min_query_chars.clamp(2, 32),
+    ) -> crate::ai::agent_chat::ui::history::RootAgentChatHistorySectionOptions {
+        crate::ai::agent_chat::ui::history::RootAgentChatHistorySectionOptions {
+            enabled: self.enabled && self.agent_chat_history.enabled,
+            max_results: self.agent_chat_history.max_results.clamp(1, 5),
+            min_query_chars: self.agent_chat_history.min_query_chars.clamp(2, 32),
         }
     }
 
@@ -810,13 +810,13 @@ pub struct ScriptKitUserPreferences {
 
 /// Agent Chat backend selected for a profile or runtime preference.
 ///
-/// All profiles now resolve through Pi. Legacy `"acp"` values in persisted
+/// All profiles now resolve through Pi. Legacy `"agent_chat"` values in persisted
 /// config deserialize as `Pi` via the serde alias.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash, Default)]
 #[serde(rename_all = "kebab-case")]
 pub enum AgentChatBackend {
     #[default]
-    #[serde(alias = "acp")]
+    #[serde(alias = "agent_chat")]
     Pi,
 }
 
@@ -850,7 +850,7 @@ pub struct AiPreferences {
     /// Pre-configured Agent Chat profiles. Each profile bundles a display name,
     /// optional agent id + model hint, and a custom system prompt.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub profiles: Vec<AcpProfile>,
+    pub profiles: Vec<AgentChatProfile>,
 
     /// Name of the profile currently applied. Matches one of `profiles[].name`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -864,7 +864,7 @@ pub struct AiPreferences {
 /// agent's equivalent) when the profile is active.
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
 #[serde(rename_all = "camelCase")]
-pub struct AcpProfile {
+pub struct AgentChatProfile {
     /// Stable profile id. Legacy profiles may omit this and use the name.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
@@ -892,7 +892,7 @@ pub struct AcpProfile {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub model: Option<String>,
 
-    /// Optional Pi provider id. This is not mapped onto ACP launch args.
+    /// Optional Pi provider id. This is not mapped onto Agent Chat launch args.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub provider: Option<String>,
 

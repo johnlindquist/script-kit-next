@@ -32,7 +32,7 @@ Do not copy the full generated profile into `~/.scriptkit/config.ts`. Config may
 
 Users select profiles through the main Menu Search. Type `|` in the launcher to
 show Agent Chat profile rows, then select the generated profile from that main
-list. Do not use or reference the deprecated ACP profile selector popup.
+list. Do not use or reference the deprecated Agent Chat profile selector popup.
 
 ## Intake
 

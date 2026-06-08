@@ -571,7 +571,7 @@ fn tab_routes_to_handler_form_before_tab_ai_paths() {
             "{path}: physical Tab path must check handler form ownership"
         );
         assert!(
-            !source.contains("try_route_plain_tab_to_acp_context_capture"),
+            !source.contains("try_route_plain_tab_to_agent_chat_context_capture"),
             "{path}: physical Tab must not keep a Tab-to-Agent-Chat route"
         );
     }
@@ -583,7 +583,7 @@ fn tab_routes_to_handler_form_before_tab_ai_paths() {
     ] {
         let source = read(path);
         assert!(
-            !source.contains("try_route_plain_tab_to_acp_context_capture"),
+            !source.contains("try_route_plain_tab_to_agent_chat_context_capture"),
             "{path}: simulateKey Tab must not keep a Tab-to-Agent-Chat route"
         );
     }

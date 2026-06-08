@@ -944,8 +944,8 @@ impl SelectableHint {
 
 /// Render hint icons with per-hint click handlers and optional selected state.
 ///
-/// Selected hints show a persistent `selection_rgba` background (like the ACP
-/// chat Actions toggle). Uses the same icon-aware rendering as the ACP footer.
+/// Selected hints show a persistent `selection_rgba` background (like the Agent Chat
+/// chat Actions toggle). Uses the same icon-aware rendering as the Agent Chat footer.
 pub fn render_selectable_hint_icons(hints: Vec<SelectableHint>, text_rgba: u32) -> AnyElement {
     let theme = crate::theme::get_cached_theme();
     let chrome = crate::theme::AppChromeColors::from_theme(&theme);

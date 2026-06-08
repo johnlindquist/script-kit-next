@@ -317,7 +317,7 @@ pub struct NoteCartItem {
 }
 
 impl NoteCartItem {
-    /// Convert this cart item into a canonical `AiContextPart` for ACP handoff.
+    /// Convert this cart item into a canonical `AiContextPart` for Agent Chat handoff.
     pub fn to_ai_context_part(&self) -> crate::ai::message_parts::AiContextPart {
         match &self.payload {
             NoteCartItemPayload::Text {

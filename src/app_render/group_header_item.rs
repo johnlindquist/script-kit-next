@@ -53,7 +53,7 @@ fn builtin_feature_annotation(feature: &builtins::BuiltInFeature) -> String {
         builtins::BuiltInFeature::DictationToAiHarness => "Voice Dictation to Agent Chat".to_string(),
         builtins::BuiltInFeature::DictationToFrontmostApp => "Voice Dictation to App".to_string(),
         builtins::BuiltInFeature::DictationToNotes => "Voice Dictation to Notes".to_string(),
-        builtins::BuiltInFeature::AcpHistory => "Agent Chat History".to_string(),
+        builtins::BuiltInFeature::AgentChatHistory => "Agent Chat History".to_string(),
         builtins::BuiltInFeature::AiVault => "AI Vault".to_string(),
         builtins::BuiltInFeature::DictationHistory => "Dictation History".to_string(),
         builtins::BuiltInFeature::Settings => "Script Kit Settings".to_string(),

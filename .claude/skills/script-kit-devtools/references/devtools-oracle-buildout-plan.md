@@ -6,7 +6,7 @@ Oracle browser session `devtools-all-surfaces-buildout-plan-2` reviewed the surf
 
 The inventory is a source-backed backlog, not a coverage model. A surface should not count as covered until there is a target-scoped runtime receipt with target identity, surface contract, semantic tree, layout, scroll, text, focus, event trace, action receipts, visual proof, and fail-closed classification.
 
-Coverage aliases must be routing hints only. `ScriptList -> main`, `ActionsDialog -> actions-dialog`, `AttachmentPortalBrowser -> dictation-history`, and `AcpChat -> notes-acp` are useful lookup hints, but they must not count as coverage because they can hide missing AppView variants, detached hosts, and portal modes.
+Coverage aliases must be routing hints only. `ScriptList -> main`, `ActionsDialog -> actions-dialog`, `AttachmentPortalBrowser -> dictation-history`, and `AgentChatChat -> notes-agent_chat` are useful lookup hints, but they must not count as coverage because they can hide missing AppView variants, detached hosts, and portal modes.
 
 The inventory must preserve `dismissPolicy`. Escape, Cmd-W, window blur, backdrop click, popup dismissal, and focus routing bugs cannot be investigated correctly if the generated dismiss contract is dropped.
 
@@ -34,8 +34,8 @@ The recommended package order is:
 6. Prompt runtime and oversized container pressure.
 7. Built-in filterable lists and preview surfaces.
 8. Portals, resources, and context.
-9. ACP/chat and composer state.
-10. Notes resizing and Notes-hosted ACP.
+9. AgentChat/chat and composer state.
+10. Notes resizing and Notes-hosted AgentChat.
 11. Dictation, media, permissions, and target delivery.
 12. Platform windowing, permissions, and visual proof.
 13. Storybook, design, and theme.
@@ -49,6 +49,6 @@ Dynamic main menu resizing bugs require before/after window rects, desired conte
 
 Oversized prompt container bugs require `clientHeight`, `scrollHeight`, `canScrollY`, clipping, overflow policy, resize pressure score, footer/input/content overlap counts, and same-stack red/green comparison.
 
-Notes resize bugs require active note identity, dirty state, selection range, scroll anchor, editor/preview overlap count, clipped node count, shortcut focus owner, and embedded ACP generation when ACP is visible.
+Notes resize bugs require active note identity, dirty state, selection range, scroll anchor, editor/preview overlap count, clipped node count, shortcut focus owner, and embedded AgentChat generation when AgentChat is visible.
 
 Dictation bugs require passive permission status, microphone device snapshot, model readiness generation, recording state generation, audio level metrics, transcript fingerprint, target delivery generation, target identity, insertion range, wrong-target refusal when applicable, and cleanup receipt.

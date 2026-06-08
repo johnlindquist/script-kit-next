@@ -30,7 +30,7 @@ fn notes_collector_exposes_stable_semantic_ids() {
 }
 
 // ============================================================
-// Target resolution: Notes is accepted alongside Main and AcpDetached
+// Target resolution: Notes is accepted alongside Main and AgentChatDetached
 // ============================================================
 
 #[test]
@@ -60,7 +60,7 @@ fn resolve_automation_read_target_accepts_notes() {
 // ============================================================
 
 #[test]
-fn wait_for_uses_automation_read_target_for_non_acp_conditions() {
+fn wait_for_uses_automation_read_target_for_non_agent_chat_conditions() {
     let source = include_str!("../src/prompt_handler/mod.rs");
     let wait_for_start = source
         .find("let resolved_target: AutomationReadTarget = if target.is_some()")
@@ -70,7 +70,7 @@ fn wait_for_uses_automation_read_target_for_non_acp_conditions() {
         wait_for_block.contains("resolve_automation_read_target(")
             && wait_for_block.contains("&rid,")
             && wait_for_block.contains("\"waitFor\","),
-        "waitFor should use resolve_automation_read_target for non-ACP conditions"
+        "waitFor should use resolve_automation_read_target for non-Agent Chat conditions"
     );
 }
 
@@ -298,11 +298,11 @@ fn notes_skill_documents_automation_only_surface_and_sdk_has_no_public_notes_glo
 }
 
 // ============================================================
-// Notes ↔ ACP handoff labels are consistent
+// Notes ↔ Agent Chat handoff labels are consistent
 // ============================================================
 
 #[test]
-fn notes_send_to_acp_label_is_consistent_across_builder_and_panel() {
+fn notes_send_to_agent_chat_label_is_consistent_across_builder_and_panel() {
     let builder = include_str!("../src/actions/builders/notes.rs");
     let panel = include_str!("../src/notes/actions_panel.rs");
 
@@ -317,23 +317,24 @@ fn notes_send_to_acp_label_is_consistent_across_builder_and_panel() {
 }
 
 #[test]
-fn notes_embedded_acp_switch_emits_structured_logs() {
+fn notes_embedded_agent_chat_switch_emits_structured_logs() {
     let panels = include_str!("../src/notes/window/panels.rs");
     assert!(
-        panels.contains("notes_cart_open_embedded_acp_requested"),
-        "Notes cart handler must emit notes_cart_open_embedded_acp_requested structured log"
+        panels.contains("notes_cart_open_embedded_agent_chat_requested"),
+        "Notes cart handler must emit notes_cart_open_embedded_agent_chat_requested structured log"
     );
     assert!(
         panels.contains("notes_cart_handoff_skipped"),
         "Notes cart handler must emit notes_cart_handoff_skipped for empty notes"
     );
     assert!(
-        panels.contains("open_or_focus_embedded_acp") || panels.contains("relaunch_embedded_acp"),
-        "Notes must route through the Notes-owned embedded ACP helpers"
+        panels.contains("open_or_focus_embedded_agent_chat")
+            || panels.contains("relaunch_embedded_agent_chat"),
+        "Notes must route through the Notes-owned embedded Agent Chat helpers"
     );
     assert!(
-        !panels.contains("request_explicit_acp_handoff_from_secondary_window"),
-        "Notes must not use the detached secondary-window ACP handoff path"
+        !panels.contains("request_explicit_agent_chat_handoff_from_secondary_window"),
+        "Notes must not use the detached secondary-window Agent Chat handoff path"
     );
     assert!(
         !panels.contains("crate::ai::open_ai_window(cx)"),
@@ -344,49 +345,49 @@ fn notes_embedded_acp_switch_emits_structured_logs() {
         "Notes must not target the deprecated AI window input API"
     );
 
-    // Detached ACP and shared helpers must still exist for non-Notes paths.
-    let acp_mod = include_str!("../src/ai/acp/mod.rs");
+    // Detached Agent Chat and shared helpers must still exist for non-Notes paths.
+    let agent_chat_mod = include_str!("../src/ai/agent_chat/ui/mod.rs");
     assert!(
-        acp_mod.contains("pub(crate) fn open_or_focus_chat_with_input("),
-        "ACP staging helper must exist for non-Notes secondary-window handoffs"
+        agent_chat_mod.contains("pub(crate) fn open_or_focus_chat_with_input("),
+        "Agent Chat staging helper must exist for non-Notes secondary-window handoffs"
     );
 
     let handler = include_str!("../src/app_actions/handle_action/mod.rs");
     assert!(
-        handler.contains("acp_save_as_note"),
-        "ACP handler must emit acp_save_as_note structured log"
+        handler.contains("agent_chat_save_as_note"),
+        "Agent Chat handler must emit agent_chat_save_as_note structured log"
     );
     assert!(
-        handler.contains("self.close_acp_chat_to_script_list(false, cx);"),
-        "Embedded ACP save-as-note should close ACP back to ScriptList on success"
+        handler.contains("self.close_agent_chat_to_script_list(false, cx);"),
+        "Embedded Agent Chat save-as-note should close Agent Chat back to ScriptList on success"
     );
 
-    let detached = include_str!("../src/ai/acp/chat_window.rs");
+    let detached = include_str!("../src/ai/agent_chat/ui/chat_window.rs");
     assert!(
-        detached.contains("\"acp_save_as_note\""),
-        "Detached ACP handler must implement acp_save_as_note"
+        detached.contains("\"agent_chat_save_as_note\""),
+        "Detached Agent Chat handler must implement agent_chat_save_as_note"
     );
     assert!(
         detached.contains("close_chat_window(cx);"),
-        "Detached ACP save-as-note should close the detached ACP window on success"
+        "Detached Agent Chat save-as-note should close the detached Agent Chat window on success"
     );
 
     let builder = include_str!("../src/actions/builders/script_context.rs");
     assert!(
-        builder.contains("| \"acp_save_as_note\""),
-        "Detached ACP host filter should allow acp_save_as_note"
+        builder.contains("| \"agent_chat_save_as_note\""),
+        "Detached Agent Chat host filter should allow agent_chat_save_as_note"
     );
 }
 
 #[test]
-fn notes_acp_handoff_documented_in_skill_and_guide() {
+fn notes_agent_chat_handoff_documented_in_skill_and_guide() {
     let skill = include_str!("../kit-init/skills/manage-notes/SKILL.md");
     let guide = include_str!("../kit-init/GUIDE.md");
 
     for doc in [skill, guide] {
         assert!(
-            doc.contains("## ACP Handoffs"),
-            "Notes docs must have ACP Handoffs section"
+            doc.contains("## Agent Chat Handoffs"),
+            "Notes docs must have Agent Chat Handoffs section"
         );
         assert!(
             doc.contains("**Send to Agent Chat**"),

@@ -164,7 +164,7 @@ impl ScriptListApp {
                 self.open_file_search(String::new(), cx);
             }
             AppRoute::OpenTabAi => {
-                self.open_tab_ai_acp_with_entry_intent(None, cx);
+                self.open_tab_ai_agent_chat_with_entry_intent(None, cx);
             }
             AppRoute::OpenCurrentAppCommands => {
                 if let Err(e) = self.open_current_app_commands_from_tray(cx) {

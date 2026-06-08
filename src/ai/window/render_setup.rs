@@ -90,7 +90,7 @@ impl AiApp {
                     })
                     .hover(|s| s.bg(button_bg.opacity(OPACITY_ACTIVE)))
                     .on_click(cx.listener(|this, _event, window, cx| {
-                        this.open_acp_agents_catalog(window, cx);
+                        this.open_agent_chat_agents_catalog(window, cx);
                     }))
                     .child(
                         svg()

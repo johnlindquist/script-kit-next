@@ -6,7 +6,7 @@
 //! `[?] attacker-show-restores-last-view-not-main-menu` (filed Run 9
 //! Pass #4, 2026-04-19T05:35Z). Pass #4 observed that a `rpc show`
 //! from a "cold" session followed by `rpc getState` reported
-//! `{promptType:"acpChat", choiceCount:0}` — it claimed `show` in
+//! `{promptType:"agentChatChat", choiceCount:0}` — it claimed `show` in
 //! isolation restored a last-used view instead of the canonical
 //! ScriptList. Pass #5 clean repro on a FRESH kill+restart session
 //! (pid 75585) — `rpc getState` before show → `promptType:"none"`,

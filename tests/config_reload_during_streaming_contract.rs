@@ -8,24 +8,24 @@
 //!    equivalent"), subsequent `load_config()` callers see the updated
 //!    value without restarting the app.
 //!
-//! 2. In-flight ACP stream continues to completion without interruption —
-//!    a config edit while an ACP turn is streaming MUST NOT tear down the
+//! 2. In-flight Agent Chat stream continues to completion without interruption —
+//!    a config edit while an Agent Chat turn is streaming MUST NOT tear down the
 //!    running agent subprocess, re-spawn bun, or cancel the stream.
 //!
 //! These two requirements sound contradictory, but the codebase splits them
-//! cleanly: the **agent-side** `AcpAgentConfig` is frozen per-process (so a
+//! cleanly: the **agent-side** `AgentChatAgentConfig` is frozen per-process (so a
 //! mid-stream edit cannot disturb the running subprocess) while the
 //! **Script Kit-side** `load_config()` re-fingerprints `config.ts` on every
-//! call (so the next ACP open / next config read picks up the edit).
+//! call (so the next Agent Chat open / next config read picks up the edit).
 //!
 //! Specifically:
 //!
-//! - `CACHED_AGENT_CONFIG: OnceLock<AcpAgentConfig>` in
-//!   `src/ai/acp/config.rs` is a one-shot cell — primed by
-//!   `prewarm_agent_config()` at startup or by the first ACP open, and
+//! - `CACHED_AGENT_CONFIG: OnceLock<AgentChatAgentConfig>` in
+//!   `src/ai/agent_chat/ui/config.rs` is a one-shot cell — primed by
+//!   `prewarm_agent_config()` at startup or by the first Agent Chat open, and
 //!   never invalidated afterwards. That is what keeps an in-flight stream
 //!   stable: the subprocess was spawned with args derived from the cached
-//!   `AcpAgentConfig`, and the hot path re-entering
+//!   `AgentChatAgentConfig`, and the hot path re-entering
 //!   `claude_code_agent_config_cached()` short-circuits on the cached
 //!   value — no new bun subprocess, no filesystem re-read.
 //!
@@ -36,7 +36,7 @@
 //!   cache and re-runs bun; same fingerprint serves instantly from disk.
 //!   This is the "picked up on next call" half of the story.
 //!
-//! The two halves compose: the one-shot `OnceLock<AcpAgentConfig>`
+//! The two halves compose: the one-shot `OnceLock<AgentChatAgentConfig>`
 //! protects in-flight streams from churn, and the fingerprint-keyed disk
 //! cache in `load_config()` ensures the next read sees the edit. If either
 //! primitive regresses — the agent cache growing an invalidation path, or
@@ -46,17 +46,18 @@
 //! This test pins both primitives so a future refactor that "helps" by
 //! adding reload semantics in the wrong place fails loudly in CI.
 
-const ACP_CONFIG_SOURCE: &str = include_str!("../src/ai/acp/config.rs");
+const AGENT_CHAT_CONFIG_SOURCE: &str = include_str!("../src/ai/agent_chat/ui/config.rs");
 const LOADER_SOURCE: &str = include_str!("../src/config/loader.rs");
 
 #[test]
-fn acp_agent_config_is_cached_per_process_via_oncelock() {
+fn agent_chat_agent_config_is_cached_per_process_via_oncelock() {
     assert!(
-        ACP_CONFIG_SOURCE
-            .contains("static CACHED_AGENT_CONFIG: OnceLock<AcpAgentConfig> = OnceLock::new();"),
-        "CACHED_AGENT_CONFIG must remain a one-shot OnceLock<AcpAgentConfig> \
+        AGENT_CHAT_CONFIG_SOURCE.contains(
+            "static CACHED_AGENT_CONFIG: OnceLock<AgentChatAgentConfig> = OnceLock::new();"
+        ),
+        "CACHED_AGENT_CONFIG must remain a one-shot OnceLock<AgentChatAgentConfig> \
          at module scope — this is the primitive that keeps an in-flight \
-         ACP stream insulated from mid-stream config edits. If this \
+         Agent Chat stream insulated from mid-stream config edits. If this \
          regresses into a Mutex<Option<...>> or gains an invalidation \
          path (e.g., `CACHED_AGENT_CONFIG.take()` or a clear fn), a config \
          edit during streaming could race with a re-read and yield \
@@ -67,17 +68,17 @@ fn acp_agent_config_is_cached_per_process_via_oncelock() {
 #[test]
 fn cached_agent_config_hot_path_short_circuits_on_cached_value() {
     assert!(
-        ACP_CONFIG_SOURCE.contains(
-            "pub(crate) fn claude_code_agent_config_cached() -> anyhow::Result<AcpAgentConfig> {"
+        AGENT_CHAT_CONFIG_SOURCE.contains(
+            "pub(crate) fn claude_code_agent_config_cached() -> anyhow::Result<AgentChatAgentConfig> {"
         ),
         "claude_code_agent_config_cached must remain the single hot-path \
-         accessor for ACP agent config — callers in the streaming \
+         accessor for Agent Chat agent config — callers in the streaming \
          pipeline rely on its short-circuit semantics to avoid spawning \
          bun mid-turn"
     );
     assert!(
-        ACP_CONFIG_SOURCE.contains("if let Some(cached) = CACHED_AGENT_CONFIG.get() {")
-            && ACP_CONFIG_SOURCE.contains("return Ok(cached.clone());"),
+        AGENT_CHAT_CONFIG_SOURCE.contains("if let Some(cached) = CACHED_AGENT_CONFIG.get() {")
+            && AGENT_CHAT_CONFIG_SOURCE.contains("return Ok(cached.clone());"),
         "claude_code_agent_config_cached must early-return with a clone of \
          the cached value when the OnceLock is populated — without this \
          short-circuit, a mid-stream re-read would spawn bun and \
@@ -95,8 +96,8 @@ fn agent_config_cache_has_no_invalidation_path() {
         "fn reload_agent_config",
     ] {
         assert!(
-            !ACP_CONFIG_SOURCE.contains(forbidden),
-            "`{forbidden}` must not appear in src/ai/acp/config.rs — the \
+            !AGENT_CHAT_CONFIG_SOURCE.contains(forbidden),
+            "`{forbidden}` must not appear in src/ai/agent_chat/ui/config.rs — the \
              cached agent config is deliberately one-shot so in-flight \
              streams are shielded from mid-stream config churn. Adding \
              an invalidation path undoes that contract and can cause a \
@@ -109,15 +110,15 @@ fn agent_config_cache_has_no_invalidation_path() {
 #[test]
 fn prewarm_primes_the_agent_config_cache_on_startup() {
     assert!(
-        ACP_CONFIG_SOURCE.contains("pub(crate) fn prewarm_agent_config() {"),
+        AGENT_CHAT_CONFIG_SOURCE.contains("pub(crate) fn prewarm_agent_config() {"),
         "prewarm_agent_config must remain the public startup prewarmer — \
          it pays the ~100-500ms bun transpile cost off the main thread \
-         so the first ACP open does not block, which matters here \
+         so the first Agent Chat open does not block, which matters here \
          because the prewarmed value is what the in-flight stream will \
          be insulated by"
     );
     assert!(
-        ACP_CONFIG_SOURCE.contains("let _ = CACHED_AGENT_CONFIG.set(config);"),
+        AGENT_CHAT_CONFIG_SOURCE.contains("let _ = CACHED_AGENT_CONFIG.set(config);"),
         "prewarm_agent_config must populate CACHED_AGENT_CONFIG via `.set` \
          — if it stops populating the OnceLock, the first streaming \
          request pays the bun cost synchronously AND the in-flight \

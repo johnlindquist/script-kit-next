@@ -59,7 +59,7 @@ fn notes_automation_state_is_runtime_derived_and_redacted() {
         "\"focusSurface\"",
         "\"autoSizingEnabled\"",
         "\"lastWindowHeight\"",
-        "\"notesAcpGeneration\"",
+        "\"notesAgentChatGeneration\"",
         "\"redacted\": true",
         "\"storage\"",
         "\"commandBars\"",
@@ -204,7 +204,7 @@ fn notes_state_exposes_shortcut_registry_and_focus_owner_scope() {
         "\"modalGuard\"",
         "\"actionsPanel\"",
         "\"noteSwitcher\"",
-        "\"embeddedAcp\"",
+        "\"embeddedAgentChat\"",
         "\"Cmd+K\"",
         "\"Cmd+P\"",
         "\"Cmd+Enter\"",
@@ -231,10 +231,10 @@ fn notes_state_exposes_shortcut_registry_and_focus_owner_scope() {
 }
 
 #[test]
-fn notes_state_exposes_embedded_acp_origin_isolation_receipt() {
+fn notes_state_exposes_embedded_agent_chat_origin_isolation_receipt() {
     for needle in [
-        "fn automation_embedded_acp_isolation_snapshot(&self)",
-        "\"embeddedAcp\"",
+        "fn automation_embedded_agent_chat_isolation_snapshot(&self)",
+        "\"embeddedAgentChat\"",
         "\"host\": \"notes\"",
         "\"automationId\"",
         "NOTES_EMBEDDED_AI_AUTOMATION_ID",
@@ -247,23 +247,23 @@ fn notes_state_exposes_embedded_acp_origin_isolation_receipt() {
     ] {
         assert!(
             NOTES_NAVIGATION.contains(needle),
-            "Notes state must expose embedded ACP origin/isolation receipt: {needle}"
+            "Notes state must expose embedded Agent Chat origin/isolation receipt: {needle}"
         );
     }
 }
 
 #[test]
-fn notes_cli_reports_embedded_acp_origin_receipt() {
+fn notes_cli_reports_embedded_agent_chat_origin_receipt() {
     for needle in [
-        "embeddedAcp: runtimeNotes.embeddedAcp ?? null",
-        "function hasNotesAcpOriginReceipt",
-        "embeddedAcp.host === \"notes\"",
-        "embeddedAcp.automationId === \"notes:ai\"",
-        "embeddedAcp.usesMainAiAutomationWindow === false",
+        "embeddedAgentChat: runtimeNotes.embeddedAgentChat ?? null",
+        "function hasNotesAgentChatOriginReceipt",
+        "embeddedAgentChat.host === \"notes\"",
+        "embeddedAgentChat.automationId === \"notes:ai\"",
+        "embeddedAgentChat.usesMainAiAutomationWindow === false",
     ] {
         assert!(
             DEVTOOLS_NOTES.contains(needle),
-            "Notes DevTools CLI must report embedded ACP origin receipt: {needle}"
+            "Notes DevTools CLI must report embedded Agent Chat origin receipt: {needle}"
         );
     }
 }
@@ -278,7 +278,7 @@ fn notes_batch_supports_target_scoped_open_actions() {
     }
 
     for needle in [
-        "supported_commands: &[\"setInput\", \"openActions\", \"togglePreview\", \"openNotesAcp\", \"waitFor\"]",
+        "supported_commands: &[\"setInput\", \"openActions\", \"togglePreview\", \"openNotesAgentChat\", \"waitFor\"]",
         "protocol::BatchCommand::OpenActions",
         "transaction_notes_open_actions",
         "window.defer(cx, move |window, cx|",
@@ -308,17 +308,17 @@ fn notes_batch_supports_target_scoped_open_actions() {
 }
 
 #[test]
-fn notes_batch_supports_target_scoped_open_acp() {
+fn notes_batch_supports_target_scoped_open_agent_chat() {
     for needle in [
-        "OpenNotesAcp",
-        "openNotesAcp",
-        "protocol::BatchCommand::OpenNotesAcp",
-        "transaction_notes_open_acp",
-        "app.open_or_focus_embedded_acp(",
+        "OpenNotesAgentChat",
+        "openNotesAgentChat",
+        "protocol::BatchCommand::OpenNotesAgentChat",
+        "transaction_notes_open_agent_chat",
+        "app.open_or_focus_embedded_agent_chat(",
     ] {
         assert!(
             BATCH_WAIT.contains(needle) || PROMPT_HANDLER.contains(needle),
-            "Batch protocol must define target-scoped Notes ACP primitive: {needle}"
+            "Batch protocol must define target-scoped Notes Agent Chat primitive: {needle}"
         );
     }
 }

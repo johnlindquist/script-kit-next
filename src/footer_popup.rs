@@ -393,7 +393,7 @@ static DICTATION_FOOTER_ACTION_CHANNEL: std::sync::LazyLock<(
     async_channel::Receiver<FooterAction>,
 )> = std::sync::LazyLock::new(|| async_channel::bounded(32));
 
-static ACP_FOOTER_ACTION_CHANNEL: std::sync::LazyLock<(
+static AGENT_CHAT_FOOTER_ACTION_CHANNEL: std::sync::LazyLock<(
     async_channel::Sender<FooterAction>,
     async_channel::Receiver<FooterAction>,
 )> = std::sync::LazyLock::new(|| async_channel::bounded(32));
@@ -542,7 +542,7 @@ impl GpuiFooterOverlay {
                 MouseButton::Left,
                 move |_event: &MouseDownEvent, _window, cx| {
                     cx.stop_propagation();
-                    dispatch_acp_footer_action(action);
+                    dispatch_agent_chat_footer_action(action);
                 },
             );
         }
@@ -592,7 +592,7 @@ impl GpuiFooterOverlay {
             let metrics = crate::components::footer_chrome::current_main_menu_footer_metrics();
             row = row.child(
                 div()
-                    .id("acp-model-display")
+                    .id("agent_chat-model-display")
                     .min_w(px(0.0))
                     .font_family(crate::list_item::FONT_SYSTEM_UI)
                     .font_weight(metrics.font_weight)
@@ -948,18 +948,18 @@ pub(crate) fn dictation_footer_action_channel() -> &'static (
     &DICTATION_FOOTER_ACTION_CHANNEL
 }
 
-pub(crate) fn acp_footer_action_channel() -> &'static (
+pub(crate) fn agent_chat_footer_action_channel() -> &'static (
     async_channel::Sender<FooterAction>,
     async_channel::Receiver<FooterAction>,
 ) {
-    &ACP_FOOTER_ACTION_CHANNEL
+    &AGENT_CHAT_FOOTER_ACTION_CHANNEL
 }
 
-pub(crate) fn dispatch_acp_footer_action(action: FooterAction) {
-    if let Err(error) = acp_footer_action_channel().0.try_send(action) {
+pub(crate) fn dispatch_agent_chat_footer_action(action: FooterAction) {
+    if let Err(error) = agent_chat_footer_action_channel().0.try_send(action) {
         tracing::warn!(
             target: "script_kit::footer_popup",
-            event = "acp_footer_left_info_action_send_failed",
+            event = "agent_chat_footer_left_info_action_send_failed",
             action = footer_action_key(action),
             %error,
             "Failed to enqueue Agent Chat footer left-info action"
@@ -3634,7 +3634,7 @@ mod footer_layout_tests {
     }
 
     #[test]
-    fn active_dot_can_force_accent_for_acp_states() {
+    fn active_dot_can_force_accent_for_agent_chat_states() {
         let mut theme = crate::theme::Theme::dark_default();
         theme.colors.background.main = 0x101114;
         theme.colors.accent.selected = 0x3a4250;
@@ -3668,13 +3668,13 @@ mod footer_layout_tests {
 enum FooterWindowKind {
     Main,
     Dictation,
-    AcpChat,
+    AgentChat,
 }
 
 #[cfg(target_os = "macos")]
 fn send_footer_action_from_sender(sender: id, action: FooterAction) {
     if footer_sender_has_identifier(sender, FOOTER_LEFT_INFO_HIT_TARGET_ID) {
-        dispatch_acp_footer_action(action);
+        dispatch_agent_chat_footer_action(action);
         return;
     }
 
@@ -3684,7 +3684,7 @@ fn send_footer_action_from_sender(sender: id, action: FooterAction) {
         if t.contains("Script Kit Dictation") {
             FooterWindowKind::Dictation
         } else if t.contains("Script Kit Agent Chat") {
-            FooterWindowKind::AcpChat
+            FooterWindowKind::AgentChat
         } else {
             FooterWindowKind::Main
         }
@@ -3729,7 +3729,7 @@ fn send_footer_action_to_channel_v2(action: FooterAction, window_kind: FooterWin
     );
     let (tx, _) = match window_kind {
         FooterWindowKind::Dictation => dictation_footer_action_channel(),
-        FooterWindowKind::AcpChat => acp_footer_action_channel(),
+        FooterWindowKind::AgentChat => agent_chat_footer_action_channel(),
         FooterWindowKind::Main => footer_action_channel(),
     };
     if let Err(error) = tx.try_send(action) {

@@ -371,12 +371,12 @@ pub struct TodoMatch {
     pub(crate) score: i32,
 }
 
-/// Represents a passive root-search match for a saved ACP conversation.
+/// Represents a passive root-search match for a saved Agent Chat conversation.
 #[derive(Clone, Debug)]
-pub struct AcpHistoryMatch {
-    pub(crate) entry: crate::ai::acp::history::AcpHistoryEntry,
+pub struct AgentChatHistoryMatch {
+    pub(crate) entry: crate::ai::agent_chat::ui::history::AgentChatHistoryEntry,
     pub(crate) score: i32,
-    pub(crate) matched_field: crate::ai::acp::history::AcpHistorySearchField,
+    pub(crate) matched_field: crate::ai::agent_chat::ui::history::AgentChatHistorySearchField,
     pub(crate) subtitle: String,
 }
 
@@ -443,8 +443,8 @@ pub enum SearchResult {
     Note(NoteMatch),
     /// Captured todo surfaced as a root-search source.
     Todo(TodoMatch),
-    /// Saved ACP conversation surfaced as a passive root-search source.
-    AcpHistory(AcpHistoryMatch),
+    /// Saved Agent Chat conversation surfaced as a passive root-search source.
+    AgentChatHistory(AgentChatHistoryMatch),
     /// cmux AI Vault session metadata surfaced as a passive root-search source.
     AiVault(AiVaultMatch),
     /// Recent clipboard metadata surfaced as a passive root-search source.
@@ -457,7 +457,7 @@ pub enum SearchResult {
     BrowserHistory(BrowserHistoryMatch),
     /// Legacy agent artifact — suppressed from the launcher pipeline.
     /// Agent results are actively filtered out of search/grouping/selection.
-    /// ACP agent catalog and provider selection remain intact in `src/ai/acp/`.
+    /// Agent Chat agent catalog and provider selection remain intact in `src/ai/agent_chat/ui/`.
     /// Kept as a variant for compilation compatibility; never yielded to the UI.
     Agent(AgentMatch),
     /// Fallback command from "Use with..." section (shown at bottom of search results)
@@ -495,7 +495,7 @@ impl SearchResult {
             SearchResult::File(_) => Some(RootUnifiedSourceFilter::Files),
             SearchResult::Note(_) => Some(RootUnifiedSourceFilter::Notes),
             SearchResult::Todo(_) => Some(RootUnifiedSourceFilter::Todo),
-            SearchResult::AcpHistory(_) => Some(RootUnifiedSourceFilter::Conversations),
+            SearchResult::AgentChatHistory(_) => Some(RootUnifiedSourceFilter::Conversations),
             SearchResult::AiVault(_) => Some(RootUnifiedSourceFilter::AiVault),
             SearchResult::ClipboardHistory(_) => Some(RootUnifiedSourceFilter::ClipboardHistory),
             SearchResult::DictationHistory(_) => Some(RootUnifiedSourceFilter::Dictation),
@@ -520,7 +520,7 @@ impl SearchResult {
             SearchResult::File(fm) => &fm.file.name,
             SearchResult::Note(nm) => &nm.title,
             SearchResult::Todo(tm) => &tm.hit.title,
-            SearchResult::AcpHistory(am) => am.entry.title_display(),
+            SearchResult::AgentChatHistory(am) => am.entry.title_display(),
             SearchResult::AiVault(am) => &am.hit.safe_title,
             SearchResult::ClipboardHistory(cm) => &cm.title,
             SearchResult::DictationHistory(dm) => &dm.preview,
@@ -554,7 +554,7 @@ impl SearchResult {
             SearchResult::File(fm) => Some(fm.file.path.as_str()),
             SearchResult::Note(nm) => Some(nm.subtitle.as_str()),
             SearchResult::Todo(tm) => Some(tm.hit.subtitle.as_str()),
-            SearchResult::AcpHistory(am) => Some(am.subtitle.as_str()),
+            SearchResult::AgentChatHistory(am) => Some(am.subtitle.as_str()),
             SearchResult::AiVault(am) => Some(am.subtitle.as_str()),
             SearchResult::ClipboardHistory(cm) => Some(cm.subtitle.as_str()),
             SearchResult::DictationHistory(dm) => Some(dm.subtitle.as_str()),
@@ -582,7 +582,7 @@ impl SearchResult {
             SearchResult::File(fm) => fm.score,
             SearchResult::Note(nm) => nm.score,
             SearchResult::Todo(tm) => tm.score,
-            SearchResult::AcpHistory(am) => am.score,
+            SearchResult::AgentChatHistory(am) => am.score,
             SearchResult::AiVault(am) => am.score,
             SearchResult::ClipboardHistory(cm) => cm.score,
             SearchResult::DictationHistory(dm) => dm.score,
@@ -616,7 +616,7 @@ impl SearchResult {
             SearchResult::File(_) => "File",
             SearchResult::Note(_) => "Note",
             SearchResult::Todo(_) => "Todo",
-            SearchResult::AcpHistory(_) => "Agent Chat Conversation",
+            SearchResult::AgentChatHistory(_) => "Agent Chat Conversation",
             SearchResult::AiVault(_) => "Vault Conversation",
             SearchResult::ClipboardHistory(_) => "Clipboard",
             SearchResult::DictationHistory(_) => "Dictation",
@@ -652,7 +652,7 @@ impl SearchResult {
             SearchResult::File(fm) => Some(format!("file/{}", fm.file.path)),
             SearchResult::Note(_) => None,
             SearchResult::Todo(_) => None,
-            SearchResult::AcpHistory(_) => None,
+            SearchResult::AgentChatHistory(_) => None,
             SearchResult::AiVault(_) => None,
             SearchResult::ClipboardHistory(_) => None,
             SearchResult::DictationHistory(_) => None,
@@ -676,7 +676,9 @@ impl SearchResult {
                 sm.skill.plugin_id, sm.skill.skill_id
             )),
             SearchResult::Window(wm) => Some(wm.window.selection_key()),
-            SearchResult::AcpHistory(am) => Some(format!("acp-history/{}", am.entry.session_id)),
+            SearchResult::AgentChatHistory(am) => {
+                Some(format!("agent_chat-history/{}", am.entry.session_id))
+            }
             SearchResult::AiVault(am) => Some(am.hit.stable_key.clone()),
             SearchResult::Note(nm) => Some(format!("note/{}", nm.hit.id.as_str())),
             SearchResult::Todo(tm) => Some(tm.hit.stable_key.clone()),
@@ -736,7 +738,7 @@ impl SearchResult {
             SearchResult::File(_) => ("File", "file"),
             SearchResult::Note(_) => ("Note", "notebook-text"),
             SearchResult::Todo(_) => ("Todo", "list-todo"),
-            SearchResult::AcpHistory(_) => ("Agent Chat", "message-circle"),
+            SearchResult::AgentChatHistory(_) => ("Agent Chat", "message-circle"),
             SearchResult::AiVault(_) => ("Vault", "vault"),
             SearchResult::ClipboardHistory(_) => ("Clipboard", "clipboard"),
             SearchResult::DictationHistory(_) => ("Dictation", "mic"),
@@ -786,7 +788,7 @@ impl SearchResult {
             SearchResult::File(_) => Some("Files"),
             SearchResult::Note(_) => Some("Notes"),
             SearchResult::Todo(_) => Some("Todos"),
-            SearchResult::AcpHistory(_) => Some("Agent Chat Conversations"),
+            SearchResult::AgentChatHistory(_) => Some("Agent Chat Conversations"),
             SearchResult::AiVault(_) => Some("AI Vault"),
             SearchResult::ClipboardHistory(_) => Some("Clipboard History"),
             SearchResult::DictationHistory(_) => Some("Dictation History"),
@@ -847,7 +849,7 @@ impl SearchResult {
             }
             SearchResult::Note(_) => "Open Note",
             SearchResult::Todo(_) => "Copy Todo",
-            SearchResult::AcpHistory(_) => "Resume Conversation",
+            SearchResult::AgentChatHistory(_) => "Resume Conversation",
             SearchResult::AiVault(_) => "Paste Resume Command",
             SearchResult::ClipboardHistory(_) => "Paste Clipboard",
             SearchResult::DictationHistory(_) => "Paste Dictation",
@@ -968,8 +970,10 @@ impl FallbackConfig {
 
 #[cfg(test)]
 mod tests {
-    use super::{AcpHistoryMatch, ClipboardHistoryMatch, FallbackMatch, FileMatch, SearchResult};
-    use crate::ai::acp::history::{AcpHistoryEntry, AcpHistorySearchField};
+    use super::{
+        AgentChatHistoryMatch, ClipboardHistoryMatch, FallbackMatch, FileMatch, SearchResult,
+    };
+    use crate::ai::agent_chat::ui::history::{AgentChatHistoryEntry, AgentChatHistorySearchField};
     use crate::clipboard_history::{ClipboardEntryMeta, ContentType};
     use crate::fallbacks::builtins::{BuiltinFallback, FallbackAction, FallbackCondition};
     use crate::fallbacks::collector::FallbackItem;
@@ -1020,9 +1024,9 @@ mod tests {
     }
 
     #[test]
-    fn acp_history_result_exposes_launcher_metadata() {
-        let result = SearchResult::AcpHistory(AcpHistoryMatch {
-            entry: AcpHistoryEntry {
+    fn agent_chat_history_result_exposes_launcher_metadata() {
+        let result = SearchResult::AgentChatHistory(AgentChatHistoryMatch {
+            entry: AgentChatHistoryEntry {
                 timestamp: "2026-05-10T17:13:06Z".to_string(),
                 first_message: "How do I search files?".to_string(),
                 message_count: 4,
@@ -1032,7 +1036,7 @@ mod tests {
                 search_text: "how do i search files use the root launcher".to_string(),
             },
             score: 80,
-            matched_field: AcpHistorySearchField::Title,
+            matched_field: AgentChatHistorySearchField::Title,
             subtitle: "Use the root launcher · 4 messages".to_string(),
         });
 
@@ -1046,7 +1050,7 @@ mod tests {
         assert_eq!(result.launcher_command_id(), None);
         assert_eq!(
             result.history_result_key(),
-            Some("acp-history/session-123".to_string())
+            Some("agent_chat-history/session-123".to_string())
         );
         assert_eq!(
             result.type_accessory_info(),

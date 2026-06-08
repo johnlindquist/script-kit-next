@@ -345,70 +345,73 @@ impl Message {
     }
 
     // ============================================================
-    // Constructor methods for ACP state query
+    // Constructor methods for Agent Chat state query
     // ============================================================
 
-    /// Create a getAcpState request
-    pub fn get_acp_state(request_id: String) -> Self {
-        Message::GetAcpState {
+    /// Create a getAgentChatState request
+    pub fn get_agent_chat_state(request_id: String) -> Self {
+        Message::GetAgentChatState {
             request_id,
             target: None,
         }
     }
 
-    /// Create an ACP state result response
-    pub fn acp_state_result(request_id: String, state: AcpStateSnapshot) -> Self {
-        Message::AcpStateResult { request_id, state }
+    /// Create an Agent Chat state result response
+    pub fn agent_chat_state_result(request_id: String, state: AgentChatStateSnapshot) -> Self {
+        Message::AgentChatStateResult { request_id, state }
     }
 
     // ============================================================
-    // Constructor methods for ACP test probe
+    // Constructor methods for Agent Chat test probe
     // ============================================================
 
-    /// Create a resetAcpTestProbe request
-    pub fn reset_acp_test_probe(request_id: String) -> Self {
-        Message::ResetAcpTestProbe {
+    /// Create a resetAgentChatTestProbe request
+    pub fn reset_agent_chat_test_probe(request_id: String) -> Self {
+        Message::ResetAgentChatTestProbe {
             request_id,
             target: None,
         }
     }
 
-    /// Create a resetAcpTestProbe request targeting a specific ACP surface
-    pub fn reset_acp_test_probe_targeted(
+    /// Create a resetAgentChatTestProbe request targeting a specific Agent Chat surface
+    pub fn reset_agent_chat_test_probe_targeted(
         request_id: String,
         target: AutomationWindowTarget,
     ) -> Self {
-        Message::ResetAcpTestProbe {
+        Message::ResetAgentChatTestProbe {
             request_id,
             target: Some(target),
         }
     }
 
-    /// Create a getAcpTestProbe request
-    pub fn get_acp_test_probe(request_id: String, tail: Option<usize>) -> Self {
-        Message::GetAcpTestProbe {
+    /// Create a getAgentChatTestProbe request
+    pub fn get_agent_chat_test_probe(request_id: String, tail: Option<usize>) -> Self {
+        Message::GetAgentChatTestProbe {
             request_id,
             tail,
             target: None,
         }
     }
 
-    /// Create an ACP test probe result response
-    pub fn acp_test_probe_result(request_id: String, probe: AcpTestProbeSnapshot) -> Self {
-        Message::AcpTestProbeResult { request_id, probe }
+    /// Create an Agent Chat test probe result response
+    pub fn agent_chat_test_probe_result(
+        request_id: String,
+        probe: AgentChatTestProbeSnapshot,
+    ) -> Self {
+        Message::AgentChatTestProbeResult { request_id, probe }
     }
 
     // ============================================================
-    // Constructor methods for ACP setup actions
+    // Constructor methods for Agent Chat setup actions
     // ============================================================
 
-    /// Create a performAcpSetupAction request
-    pub fn perform_acp_setup_action(
+    /// Create a performAgentChatSetupAction request
+    pub fn perform_agent_chat_setup_action(
         request_id: String,
-        action: AcpSetupActionKind,
+        action: AgentChatSetupActionKind,
         agent_id: Option<String>,
     ) -> Self {
-        Message::PerformAcpSetupAction {
+        Message::PerformAgentChatSetupAction {
             request_id,
             action,
             agent_id,
@@ -416,9 +419,12 @@ impl Message {
         }
     }
 
-    /// Create a successful ACP setup action result
-    pub fn acp_setup_action_result_success(request_id: String, state: AcpStateSnapshot) -> Self {
-        Message::AcpSetupActionResult {
+    /// Create a successful Agent Chat setup action result
+    pub fn agent_chat_setup_action_result_success(
+        request_id: String,
+        state: AgentChatStateSnapshot,
+    ) -> Self {
+        Message::AgentChatSetupActionResult {
             request_id,
             success: true,
             error: None,
@@ -426,9 +432,9 @@ impl Message {
         }
     }
 
-    /// Create a failed ACP setup action result
-    pub fn acp_setup_action_result_error(request_id: String, error: String) -> Self {
-        Message::AcpSetupActionResult {
+    /// Create a failed Agent Chat setup action result
+    pub fn agent_chat_setup_action_result_error(request_id: String, error: String) -> Self {
+        Message::AgentChatSetupActionResult {
             request_id,
             success: false,
             error: Some(error),

@@ -92,9 +92,9 @@ interface StatusResult {
   windows: WindowInfo[];
 }
 
-/** Stable automation-surface identity for ACP-relevant windows. */
+/** Stable automation-surface identity for Agent Chat-relevant windows. */
 interface AutomationSurface {
-  /** Stable identity: "main", "acp", "actions", "notes", "ai", or window title. */
+  /** Stable identity: "main", "agent_chat", "actions", "notes", "ai", or window title. */
   surfaceId: string;
   /** Window kind hint: "main", "popup", "panel", or "unknown". */
   kind: string;
@@ -530,8 +530,8 @@ function classifyWindow(w: WindowInfo): AutomationSurface {
   let surfaceId = "main";
   let kind = "popup";
 
-  if (titleLower.includes("acp") || titleLower.includes("chat")) {
-    surfaceId = "acp";
+  if (titleLower.includes("agent_chat") || titleLower.includes("chat")) {
+    surfaceId = "agent_chat";
     kind = "panel";
   } else if (titleLower.includes("actions") || titleLower.includes("⌘k")) {
     surfaceId = "actions";

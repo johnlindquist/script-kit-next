@@ -50,20 +50,20 @@ impl NotesApp {
             self.close_browse_panel(window, cx);
             return ("closeBrowsePanel", true);
         }
-        if self.surface_mode == NotesSurfaceMode::Acp {
-            if let Some(ref entity) = self.embedded_acp_chat {
+        if self.surface_mode == NotesSurfaceMode::AgentChat {
+            if let Some(ref entity) = self.embedded_agent_chat {
                 let dismissed = entity.update(cx, |chat, cx| chat.dismiss_escape_popup(cx));
                 if dismissed {
-                    return ("dismissAcpPopup", true);
+                    return ("dismissAgentChatPopup", true);
                 }
                 let cancelled_streaming =
                     entity.update(cx, |chat, cx| chat.cancel_streaming_from_escape(cx));
                 if cancelled_streaming {
-                    return ("cancelAcpStreaming", true);
+                    return ("cancelAgentChatStreaming", true);
                 }
             }
             self.switch_to_notes_surface(window, cx);
-            return ("switchAcpToNotes", true);
+            return ("switchAgentChatToNotes", true);
         }
         if self.dismiss_notes_ghost(cx) {
             return ("dismissNotesGhost", true);
@@ -182,8 +182,8 @@ impl NotesApp {
 
         self.save_current_note();
 
-        if self.surface_mode == NotesSurfaceMode::Acp {
-            self.prepare_embedded_acp_for_window_close(reason, cx);
+        if self.surface_mode == NotesSurfaceMode::AgentChat {
+            self.prepare_embedded_agent_chat_for_window_close(reason, cx);
         }
 
         self.command_bar.close_app(cx);
@@ -274,7 +274,7 @@ impl NotesApp {
         if command_bar_was_stale || note_switcher_was_stale {
             // Detached action windows are visual-only; restore focus to the
             // Notes root so the next Cmd+P / Cmd+K is routable. Avoid forcing
-            // editor focus so Notes-hosted ACP keeps its surface.
+            // editor focus so Notes-hosted Agent Chat keeps its surface.
             self.focus_handle.focus(window, cx);
             cx.notify();
         }
@@ -473,20 +473,20 @@ impl NotesApp {
             return;
         }
 
-        // In ACP mode, intercept host-owned shortcuts before propagating to ACP.
-        if self.surface_mode == NotesSurfaceMode::Acp {
+        // In Agent Chat mode, intercept host-owned shortcuts before propagating to Agent Chat.
+        if self.surface_mode == NotesSurfaceMode::AgentChat {
             if is_key_escape(key) {
-                if let Some(ref entity) = self.embedded_acp_chat {
+                if let Some(ref entity) = self.embedded_agent_chat {
                     let dismissed = entity.update(cx, |chat, cx| chat.dismiss_escape_popup(cx));
                     if dismissed {
-                        tracing::info!(event = "notes_acp_escape_dismissed_local_popup");
+                        tracing::info!(event = "notes_agent_chat_escape_dismissed_local_popup");
                         cx.stop_propagation();
                         return;
                     }
                     let cancelled_streaming =
                         entity.update(cx, |chat, cx| chat.cancel_streaming_from_escape(cx));
                     if cancelled_streaming {
-                        tracing::info!(event = "notes_acp_escape_cancelled_streaming");
+                        tracing::info!(event = "notes_agent_chat_escape_cancelled_streaming");
                         cx.stop_propagation();
                         return;
                     }
@@ -496,16 +496,16 @@ impl NotesApp {
                 return;
             }
             if modifiers.platform {
-                // Cmd+K: toggle Notes-hosted ACP actions.
+                // Cmd+K: toggle Notes-hosted Agent Chat actions.
                 if key.eq_ignore_ascii_case("k") {
-                    self.toggle_acp_actions(window, cx);
+                    self.toggle_agent_chat_actions(window, cx);
                     cx.stop_propagation();
                     return;
                 }
                 // Cmd+W: close the Notes window (same as Notes mode).
                 if key.eq_ignore_ascii_case("w") && !modifiers.shift {
                     self.save_current_note();
-                    self.prepare_embedded_acp_for_window_close("notes_acp_cmd_w", cx);
+                    self.prepare_embedded_agent_chat_for_window_close("notes_agent_chat_cmd_w", cx);
                     let wb = window.window_bounds();
                     crate::window_state::save_window_from_gpui(
                         crate::window_state::WindowRole::Notes,
@@ -518,7 +518,7 @@ impl NotesApp {
                     return;
                 }
             }
-            // All other keys propagate to the ACP chat view.
+            // All other keys propagate to the Agent Chat chat view.
             cx.propagate();
             return;
         }
@@ -613,7 +613,7 @@ impl NotesApp {
 
         if modifiers.platform {
             match key {
-                // Cmd+Enter: open embedded ACP with the staged note cart as
+                // Cmd+Enter: open embedded Agent Chat with the staged note cart as
                 // inline @mentions. Must precede plain Enter and other
                 // platform shortcuts.
                 key if is_key_enter(key)
@@ -621,7 +621,9 @@ impl NotesApp {
                     && !modifiers.control
                     && !modifiers.alt =>
                 {
-                    if self.open_selected_note_cart_in_embedded_acp("NotesWindowCmdEnter", cx) {
+                    if self
+                        .open_selected_note_cart_in_embedded_agent_chat("NotesWindowCmdEnter", cx)
+                    {
                         cx.stop_propagation();
                     }
                 }
@@ -668,9 +670,9 @@ impl NotesApp {
                 }
                 key if key.eq_ignore_ascii_case("a") => {
                     if modifiers.shift {
-                        if self.surface_mode == NotesSurfaceMode::Acp {
+                        if self.surface_mode == NotesSurfaceMode::AgentChat {
                             self.request_focus_surface(
-                                focus::NotesFocusSurface::AcpChat,
+                                focus::NotesFocusSurface::AgentChat,
                                 window,
                                 cx,
                             );
@@ -678,8 +680,10 @@ impl NotesApp {
                             return;
                         }
 
-                        if self.open_selected_note_cart_in_embedded_acp("NotesWindowCmdShiftA", cx)
-                        {
+                        if self.open_selected_note_cart_in_embedded_agent_chat(
+                            "NotesWindowCmdShiftA",
+                            cx,
+                        ) {
                             cx.stop_propagation();
                         }
                     }

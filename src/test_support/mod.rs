@@ -1,2 +1,2 @@
 #[doc(hidden)]
-pub mod acp_portal;
+pub mod agent_chat_portal;

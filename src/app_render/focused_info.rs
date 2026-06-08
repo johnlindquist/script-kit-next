@@ -636,8 +636,8 @@ fn render_focused_info_for_result(
                 .child(focused_info_type_indicator("Todo", style));
         }
 
-        scripts::SearchResult::AcpHistory(acp_history_match) => {
-            let entry = &acp_history_match.entry;
+        scripts::SearchResult::AgentChatHistory(agent_chat_history_match) => {
+            let entry = &agent_chat_history_match.entry;
 
             content = content.child(
                 div()
@@ -1188,7 +1188,7 @@ impl ScriptListApp {
                     scripts::SearchResult::File(m) => Some(format!("file/{}", m.file.path)),
                     scripts::SearchResult::Note(_) => None,
                     scripts::SearchResult::Todo(_) => None,
-                    scripts::SearchResult::AcpHistory(_) => None,
+                    scripts::SearchResult::AgentChatHistory(_) => None,
                     scripts::SearchResult::AiVault(_) => None,
                     scripts::SearchResult::ClipboardHistory(_) => None,
                     scripts::SearchResult::DictationHistory(_) => None,
@@ -1317,9 +1317,9 @@ impl ScriptListApp {
                             .with_frecency(is_suggested, frecency_path),
                         )
                     }
-                    scripts::SearchResult::AcpHistory(m) => Some(ScriptInfo::with_action_verb(
+                    scripts::SearchResult::AgentChatHistory(m) => Some(ScriptInfo::with_action_verb(
                         m.entry.title_display(),
-                        format!("acp-history:{}", m.entry.session_id),
+                        format!("agent_chat-history:{}", m.entry.session_id),
                         false,
                         "Resume",
                     )),

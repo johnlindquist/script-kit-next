@@ -3,11 +3,13 @@
 const AUTOMATION_SURFACE_SOURCE: &str = include_str!("../src/app_impl/automation_surface.rs");
 const ABOUT_ROUTE_SOURCE: &str = include_str!("../src/app_impl/about_route.rs");
 const TRIGGER_DISPATCH_SOURCE: &str = include_str!("../src/app_impl/trigger_builtin_dispatch.rs");
-const ACP_SETUP_SOURCE: &str = include_str!("../src/app_impl/tab_ai_mode/acp_setup.rs");
-const ACP_LAUNCH_SOURCE: &str = include_str!("../src/app_impl/tab_ai_mode/acp_launch.rs");
+const AGENT_CHAT_SETUP_SOURCE: &str =
+    include_str!("../src/app_impl/tab_ai_mode/agent_chat_setup.rs");
+const AGENT_CHAT_LAUNCH_SOURCE: &str =
+    include_str!("../src/app_impl/tab_ai_mode/agent_chat_launch.rs");
 const TAB_AI_MODE_SOURCE: &str = include_str!("../src/app_impl/tab_ai_mode/mod.rs");
-const ACP_SURFACE_TRANSITIONS_SOURCE: &str =
-    include_str!("../src/app_impl/acp_surface_transitions.rs");
+const AGENT_CHAT_SURFACE_TRANSITIONS_SOURCE: &str =
+    include_str!("../src/app_impl/agent_chat_surface_transitions.rs");
 
 fn function_body<'a>(source: &'a str, signature: &str) -> &'a str {
     let start = source
@@ -198,10 +200,10 @@ fn about_and_confirm_routes_rekey_from_current_view_contract() {
 }
 
 #[test]
-fn embedded_acp_entry_and_return_paths_rekey_from_current_view_contract() {
+fn embedded_agent_chat_entry_and_return_paths_rekey_from_current_view_contract() {
     for (name, source) in [
-        ("acp_setup.rs", ACP_SETUP_SOURCE),
-        ("acp_launch.rs", ACP_LAUNCH_SOURCE),
+        ("agent_chat_setup.rs", AGENT_CHAT_SETUP_SOURCE),
+        ("agent_chat_launch.rs", AGENT_CHAT_LAUNCH_SOURCE),
         ("tab_ai_mode/mod.rs", TAB_AI_MODE_SOURCE),
     ] {
         assert!(
@@ -215,39 +217,40 @@ fn embedded_acp_entry_and_return_paths_rekey_from_current_view_contract() {
         "tab_ai_mode/mod.rs must not hand-roll main semantic-surface re-keying"
     );
     assert!(
-        TAB_AI_MODE_SOURCE.contains("self.exit_embedded_acp_chat_surface("),
-        "tab_ai_mode/mod.rs must delegate embedded ACP return-origin close to the lifecycle actor"
+        TAB_AI_MODE_SOURCE.contains("self.exit_embedded_agent_chat_surface("),
+        "tab_ai_mode/mod.rs must delegate embedded Agent Chat return-origin close to the lifecycle actor"
     );
     assert!(
-        !ACP_SETUP_SOURCE.contains("self.rekey_main_automation_surface_from_current_view();")
-            && !ACP_LAUNCH_SOURCE
+        !AGENT_CHAT_SETUP_SOURCE.contains("self.rekey_main_automation_surface_from_current_view();")
+            && !AGENT_CHAT_LAUNCH_SOURCE
                 .contains("self.rekey_main_automation_surface_from_current_view();"),
-        "ACP setup and launch entry paths must not split re-keying from the shared embedded entry owner"
+        "Agent Chat setup and launch entry paths must not split re-keying from the shared embedded entry owner"
     );
     assert!(
-        ACP_SURFACE_TRANSITIONS_SOURCE.contains("pub(crate) fn enter_embedded_acp_chat_surface")
-            && ACP_SURFACE_TRANSITIONS_SOURCE
-                .contains("pub(crate) fn exit_embedded_acp_chat_surface")
-            && ACP_SURFACE_TRANSITIONS_SOURCE
+        AGENT_CHAT_SURFACE_TRANSITIONS_SOURCE
+            .contains("pub(crate) fn enter_embedded_agent_chat_surface")
+            && AGENT_CHAT_SURFACE_TRANSITIONS_SOURCE
+                .contains("pub(crate) fn exit_embedded_agent_chat_surface")
+            && AGENT_CHAT_SURFACE_TRANSITIONS_SOURCE
                 .matches("self.rekey_main_automation_surface_from_current_view()")
                 .count()
                 >= 2,
-        "embedded ACP entry and exit must re-key main through the lifecycle actors"
+        "embedded Agent Chat entry and exit must re-key main through the lifecycle actors"
     );
     let entry_delegate_count: usize = [
-        ("acp_setup.rs", ACP_SETUP_SOURCE),
-        ("acp_launch.rs", ACP_LAUNCH_SOURCE),
+        ("agent_chat_setup.rs", AGENT_CHAT_SETUP_SOURCE),
+        ("agent_chat_launch.rs", AGENT_CHAT_LAUNCH_SOURCE),
         ("tab_ai_mode/mod.rs", TAB_AI_MODE_SOURCE),
     ]
     .iter()
     .map(|(_, source)| {
         source
-            .matches("self.enter_embedded_acp_chat_surface(")
+            .matches("self.enter_embedded_agent_chat_surface(")
             .count()
     })
     .sum();
     assert_eq!(
         entry_delegate_count, 4,
-        "setup, launch, reuse, and focused-text ACP entry paths must delegate to enter_embedded_acp_chat_surface"
+        "setup, launch, reuse, and focused-text Agent Chat entry paths must delegate to enter_embedded_agent_chat_surface"
     );
 }

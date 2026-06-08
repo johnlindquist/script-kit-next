@@ -4,7 +4,7 @@
 //! # Why this matters (UX)
 //!
 //! Every Cmd+K actions menu in the app (main-menu, clipboard history
-//! with its 6 section headers, emoji picker, file search, ACP chat,
+//! with its 6 section headers, emoji picker, file search, Agent Chat chat,
 //! notes, app launcher, …) groups actions under section headers via
 //! `GroupedActionItem::SectionHeader(String)`. Headers render as a
 //! distinct 22px row and are NOT activatable — `get_selected_action_id`

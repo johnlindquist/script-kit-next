@@ -45,24 +45,24 @@ fn root_filter_keeps_type_skill_qualifier_without_new_drawer() {
 }
 
 #[test]
-fn acp_slash_skills_stage_context_parts_instead_of_opening_drawer() {
-    let view = read("src/ai/acp/view.rs");
+fn agent_chat_slash_skills_stage_context_parts_instead_of_opening_drawer() {
+    let view = read("src/ai/agent_chat/ui/view.rs");
 
     assert!(
         view.contains("discover_plugin_skills(&index)")
-            && view.contains("acp_slash_skill_cataloged")
+            && view.contains("agent_chat_slash_skill_cataloged")
             && view.contains("SlashCommandPayload::PluginSkill(skill)")
             && view.contains("build_skill_slash_command_text(&skill.skill_id)")
             && view.contains("build_skill_context_part(")
             && view.contains("thread.add_context_part(part, cx)"),
-        "ACP slash skill acceptance must stay in the slash/context-part path"
+        "Agent Chat slash skill acceptance must stay in the slash/context-part path"
     );
 }
 
 #[test]
 fn existing_skill_contract_tests_cover_duplicate_slugs_and_staging() {
     let plugin_skill_search = read("tests/plugin_skill_search.rs");
-    let acp_tests = read("src/ai/acp/tests.rs");
+    let agent_chat_tests = read("src/ai/agent_chat/ui/tests.rs");
 
     assert!(
         plugin_skill_search.contains("duplicate_skill_slugs_across_plugins_are_distinct_results")
@@ -70,8 +70,9 @@ fn existing_skill_contract_tests_cover_duplicate_slugs_and_staging() {
         "plugin skill search tests must keep duplicate skill slugs distinct"
     );
     assert!(
-        acp_tests.contains("acp_plugin_slash_accept_stages_selected_skill_prompt")
-            && acp_tests.contains("acp_claude_skill_staged_prompt_uses_claude_owner_phrase"),
-        "ACP tests must keep skill slash acceptance staged as context parts"
+        agent_chat_tests.contains("agent_chat_plugin_slash_accept_stages_selected_skill_prompt")
+            && agent_chat_tests
+                .contains("agent_chat_claude_skill_staged_prompt_uses_claude_owner_phrase"),
+        "Agent Chat tests must keep skill slash acceptance staged as context parts"
     );
 }

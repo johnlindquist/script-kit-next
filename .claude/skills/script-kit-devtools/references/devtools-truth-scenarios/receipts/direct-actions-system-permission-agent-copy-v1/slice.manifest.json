@@ -12,7 +12,7 @@
     "blockedByUnsafeOperation": 0
   },
   "scenarioIds": [
-    "dt-truth-029-actions-acp-history-agent-chat-copy-truth",
+    "dt-truth-029-actions-agent_chat-history-agent-chat-copy-truth",
     "dt-truth-030-actions-permission-assistant-accessibility-copy-gated",
     "dt-truth-031-actions-system-settings-pane-copy-gated",
     "dt-truth-032-actions-generate-script-agent-chat-handoff-copy-gated"

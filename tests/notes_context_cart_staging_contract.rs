@@ -1,9 +1,9 @@
-//! Source-level contract for Notes context-cart staging into embedded ACP.
+//! Source-level contract for Notes context-cart staging into embedded Agent Chat.
 
 const PANELS_SOURCE: &str = include_str!("../src/notes/window/panels.rs");
 const NOTES_SOURCE: &str = include_str!("../src/notes/window/notes.rs");
-const ACP_HOST_SOURCE: &str = include_str!("../src/notes/window/acp_host.rs");
-const ACP_VIEW_SOURCE: &str = include_str!("../src/ai/acp/view.rs");
+const AGENT_CHAT_HOST_SOURCE: &str = include_str!("../src/notes/window/agent_chat_host.rs");
+const AGENT_CHAT_VIEW_SOURCE: &str = include_str!("../src/ai/agent_chat/ui/view.rs");
 
 fn body<'a>(source: &'a str, start: &str, end: &str) -> &'a str {
     let start_idx = source.find(start).expect("start marker should exist");
@@ -16,8 +16,8 @@ fn body<'a>(source: &'a str, start: &str, end: &str) -> &'a str {
 fn note_cart_handoff_uses_deduped_replacement_staging_and_consumes_items() {
     let handoff = body(
         PANELS_SOURCE,
-        "pub(super) fn open_selected_note_cart_in_embedded_acp(",
-        "event = \"notes_cart_open_embedded_acp_completed\"",
+        "pub(super) fn open_selected_note_cart_in_embedded_agent_chat(",
+        "event = \"notes_cart_open_embedded_agent_chat_completed\"",
     );
     assert!(PANELS_SOURCE.contains("list_note_cart_items_deduped(note_id)"));
     assert!(
@@ -29,7 +29,7 @@ fn note_cart_handoff_uses_deduped_replacement_staging_and_consumes_items() {
 }
 
 #[test]
-fn note_switch_clears_notes_hosted_acp_context_for_previous_note() {
+fn note_switch_clears_notes_hosted_agent_chat_context_for_previous_note() {
     let select_note = body(
         NOTES_SOURCE,
         "fn select_note_internal(",
@@ -42,9 +42,10 @@ fn note_switch_clears_notes_hosted_acp_context_for_previous_note() {
         .find("self.selected_note_id = Some(id);")
         .unwrap();
     let clear = select_note
-        .find("self.clear_notes_hosted_acp_context_for_note(prev_note_id, cx);")
+        .find("self.clear_notes_hosted_agent_chat_context_for_note(prev_note_id, cx);")
         .unwrap();
     assert!(prev < assign && assign < clear);
-    assert!(ACP_HOST_SOURCE.contains("pub(super) fn clear_notes_hosted_acp_context_for_note"));
-    assert!(ACP_VIEW_SOURCE.contains("pub(crate) fn clear_hosted_context_parts_from_host"));
+    assert!(AGENT_CHAT_HOST_SOURCE
+        .contains("pub(super) fn clear_notes_hosted_agent_chat_context_for_note"));
+    assert!(AGENT_CHAT_VIEW_SOURCE.contains("pub(crate) fn clear_hosted_context_parts_from_host"));
 }

@@ -1,11 +1,13 @@
 const AGENT_CHAT_MOD_SOURCE: &str = include_str!("../src/ai/agent_chat/mod.rs");
 const WARM_SESSION_SOURCE: &str = include_str!("../src/ai/agent_chat/warm_session.rs");
 const AGENT_CHAT_LAUNCH_SOURCE: &str = include_str!("../src/ai/agent_chat/launch.rs");
-const ACP_VIEW_SOURCE: &str = include_str!("../src/ai/acp/view.rs");
-const ACP_THREAD_SOURCE: &str = include_str!("../src/ai/acp/thread.rs");
+const AGENT_CHAT_VIEW_SOURCE: &str = include_str!("../src/ai/agent_chat/ui/view.rs");
+const AGENT_CHAT_THREAD_SOURCE: &str = include_str!("../src/ai/agent_chat/ui/thread.rs");
 const TAB_AI_MODE_SOURCE: &str = include_str!("../src/app_impl/tab_ai_mode/mod.rs");
-const ACP_LAUNCH_SOURCE: &str = include_str!("../src/app_impl/tab_ai_mode/acp_launch.rs");
-const ACP_SETUP_SOURCE: &str = include_str!("../src/app_impl/tab_ai_mode/acp_setup.rs");
+const TAB_AI_AGENT_CHAT_LAUNCH_SOURCE: &str =
+    include_str!("../src/app_impl/tab_ai_mode/agent_chat_launch.rs");
+const AGENT_CHAT_SETUP_SOURCE: &str =
+    include_str!("../src/app_impl/tab_ai_mode/agent_chat_setup.rs");
 
 #[test]
 fn warm_session_manager_module_is_declared_under_agent_chat() {
@@ -33,7 +35,7 @@ fn warm_session_manager_is_backend_neutral() {
     for forbidden in [
         "PiRpcRuntime",
         "PiLaunchSpec",
-        "AcpChatView",
+        "AgentChatView",
         "AppView",
         "ScriptListApp",
         "gpui::",
@@ -52,12 +54,12 @@ fn warm_session_lifecycle_routes_pi_only_through_launch_helper() {
     assert!(AGENT_CHAT_LAUNCH_SOURCE.contains("warm_session_manager"));
     assert!(AGENT_CHAT_LAUNCH_SOURCE.contains("PiRpcRuntime::spawn"));
     assert!(AGENT_CHAT_LAUNCH_SOURCE.contains("resolve_selected_pi_launch_with_cwd_override"));
-    assert!(ACP_LAUNCH_SOURCE.contains("resolve_selected_pi_launch_with_cwd_override"));
-    assert!(ACP_LAUNCH_SOURCE.contains("manager.acquire_warm"));
+    assert!(AGENT_CHAT_LAUNCH_SOURCE.contains("resolve_selected_pi_launch_with_cwd_override"));
+    assert!(TAB_AI_AGENT_CHAT_LAUNCH_SOURCE.contains("manager.acquire_ready_or_spawn_cold"));
     assert!(TAB_AI_MODE_SOURCE.contains("dismiss_active_agent_chat_warm_lease"));
     assert!(
-        !ACP_SETUP_SOURCE.contains("PiRpcRuntime")
-            && !ACP_SETUP_SOURCE.contains("AgentChatBackend::Pi"),
+        !AGENT_CHAT_SETUP_SOURCE.contains("PiRpcRuntime")
+            && !AGENT_CHAT_SETUP_SOURCE.contains("AgentChatBackend::Pi"),
         "setup card routing must stay out of the Pi warm path"
     );
 }
@@ -73,14 +75,14 @@ fn startup_open_and_cwd_prewarm_share_selected_pi_cwd_launch_resolution() {
     );
 
     let startup_body = TAB_AI_MODE_SOURCE
-        .split("pub(crate) fn warm_acp_chat_on_startup")
+        .split("pub(crate) fn warm_agent_chat_on_startup")
         .nth(1)
-        .expect("warm_acp_chat_on_startup must exist");
-    let open_body = ACP_LAUNCH_SOURCE
-        .split("fn open_tab_ai_acp_view_from_request_impl")
+        .expect("warm_agent_chat_on_startup must exist");
+    let open_body = TAB_AI_AGENT_CHAT_LAUNCH_SOURCE
+        .split("fn open_tab_ai_agent_chat_view_from_request_impl")
         .nth(1)
-        .expect("open_tab_ai_acp_view_from_request_impl must exist");
-    let cwd_prewarm_body = ACP_LAUNCH_SOURCE
+        .expect("open_tab_ai_agent_chat_view_from_request_impl must exist");
+    let cwd_prewarm_body = TAB_AI_AGENT_CHAT_LAUNCH_SOURCE
         .split("pub(crate) fn prewarm_selected_agent_chat_profile_for_current_cwd")
         .nth(1)
         .expect("prewarm selected profile helper must exist");
@@ -103,8 +105,8 @@ fn startup_open_and_cwd_prewarm_share_selected_pi_cwd_launch_resolution() {
 }
 
 #[test]
-fn warm_session_lifecycle_keeps_acp_ui_out_of_manager() {
-    for source in [ACP_VIEW_SOURCE, ACP_THREAD_SOURCE] {
+fn warm_session_lifecycle_keeps_agent_chat_ui_out_of_manager() {
+    for source in [AGENT_CHAT_VIEW_SOURCE, AGENT_CHAT_THREAD_SOURCE] {
         assert!(!source.contains("AgentChatWarmSessionManager"));
         assert!(!source.contains("warm_session"));
     }

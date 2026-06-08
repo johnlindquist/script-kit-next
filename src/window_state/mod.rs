@@ -56,7 +56,7 @@ pub enum WindowRole {
     Notes,
     Ai,
     AiMini,
-    AcpChat,
+    AgentChat,
 }
 impl WindowRole {
     /// Get a lowercase string key for persistence/file paths
@@ -66,7 +66,7 @@ impl WindowRole {
             WindowRole::Notes => "notes",
             WindowRole::Ai => "ai",
             WindowRole::AiMini => "ai_mini",
-            WindowRole::AcpChat => "acp_chat",
+            WindowRole::AgentChat => "agent_chat",
         }
     }
 
@@ -77,7 +77,7 @@ impl WindowRole {
             WindowRole::Notes => "Notes",
             WindowRole::Ai => "AI",
             WindowRole::AiMini => "AI Mini",
-            WindowRole::AcpChat => "Agent Chat",
+            WindowRole::AgentChat => "Agent Chat",
         }
     }
 }
@@ -176,9 +176,9 @@ pub struct WindowStateFile {
     /// Mini AI window position (separate from full AI)
     #[serde(default)]
     pub ai_mini: Option<PersistedWindowBounds>,
-    /// ACP chat detached window position
+    /// Agent Chat chat detached window position
     #[serde(default)]
-    pub acp_chat: Option<PersistedWindowBounds>,
+    pub agent_chat: Option<PersistedWindowBounds>,
 }
 fn default_version() -> u32 {
     3 // Version 3 adds per-display support for AI and Notes windows
@@ -265,7 +265,7 @@ pub fn load_window_bounds(role: WindowRole) -> Option<PersistedWindowBounds> {
         WindowRole::Notes => state.notes,
         WindowRole::Ai => state.ai,
         WindowRole::AiMini => state.ai_mini,
-        WindowRole::AcpChat => state.acp_chat,
+        WindowRole::AgentChat => state.agent_chat,
     }
 }
 /// Save bounds for a specific window role.
@@ -287,7 +287,7 @@ pub fn save_window_bounds(role: WindowRole, bounds: PersistedWindowBounds) {
         WindowRole::Notes => state.notes = Some(bounds),
         WindowRole::Ai => state.ai = Some(bounds),
         WindowRole::AiMini => state.ai_mini = Some(bounds),
-        WindowRole::AcpChat => state.acp_chat = Some(bounds),
+        WindowRole::AgentChat => state.agent_chat = Some(bounds),
     }
     save_state_file(&state);
     logging::log(

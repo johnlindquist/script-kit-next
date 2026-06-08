@@ -28,12 +28,12 @@ fn batch_command_open_actions_round_trips() {
 }
 
 #[test]
-fn batch_command_open_notes_acp_round_trips() {
-    let cmd = BatchCommand::OpenNotesAcp;
-    let json = serde_json::to_value(&cmd).expect("serialize openNotesAcp");
-    assert_eq!(json["type"], "openNotesAcp");
+fn batch_command_open_notes_agent_chat_round_trips() {
+    let cmd = BatchCommand::OpenNotesAgentChat;
+    let json = serde_json::to_value(&cmd).expect("serialize openNotesAgentChat");
+    assert_eq!(json["type"], "openNotesAgentChat");
 
-    let back: BatchCommand = serde_json::from_value(json).expect("deserialize openNotesAcp");
+    let back: BatchCommand = serde_json::from_value(json).expect("deserialize openNotesAgentChat");
     assert_eq!(back, cmd);
 }
 

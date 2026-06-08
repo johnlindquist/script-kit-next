@@ -21,7 +21,7 @@ fn oracle_iteration_index_records_batch_provenance() {
     for session in [
         "devtools-oracle-iterations-actions-popups",
         "devtools-oracle-iterations-prompts-resize",
-        "devtools-oracle-iterations-notes-acp",
+        "devtools-oracle-iterations-notes-agent_chat",
         "devtools-oracle-iterations-filterable-data",
         "devtools-oracle-iterations-native-a11y",
     ] {

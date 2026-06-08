@@ -1,8 +1,8 @@
-use script_kit_gpui::protocol::{AcpFocusedTextActionReceipt, AcpFocusedTextState};
+use script_kit_gpui::protocol::{AgentChatFocusedTextActionReceipt, AgentChatFocusedTextState};
 
 #[test]
 fn focused_text_action_receipt_serializes_only_redacted_fields() {
-    let receipt = AcpFocusedTextActionReceipt {
+    let receipt = AgentChatFocusedTextActionReceipt {
         action: "copy".to_string(),
         success: true,
         changed_text: false,
@@ -41,7 +41,7 @@ fn focused_text_action_receipt_serializes_only_redacted_fields() {
 
 #[test]
 fn focused_text_state_carries_redacted_context_identity_and_last_action() {
-    let state = AcpFocusedTextState {
+    let state = AgentChatFocusedTextState {
         mode: "mini".to_string(),
         phase: "result".to_string(),
         footer_visible: true,
@@ -63,7 +63,7 @@ fn focused_text_state_carries_redacted_context_identity_and_last_action() {
         can_copy: true,
         has_output: true,
         last_apply_action: Some("copy".to_string()),
-        last_action_receipt: Some(AcpFocusedTextActionReceipt {
+        last_action_receipt: Some(AgentChatFocusedTextActionReceipt {
             action: "copy".to_string(),
             success: true,
             changed_text: false,
@@ -103,7 +103,7 @@ fn focused_text_state_carries_redacted_context_identity_and_last_action() {
     ] {
         assert!(
             !raw.contains(forbidden),
-            "focused-text ACP state leaked sensitive field or fixture text: {forbidden}"
+            "focused-text Agent Chat state leaked sensitive field or fixture text: {forbidden}"
         );
     }
 }

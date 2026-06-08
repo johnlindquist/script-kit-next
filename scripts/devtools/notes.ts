@@ -7,7 +7,7 @@ type Args = {
   session: string;
   open: boolean;
   openActions: boolean;
-  openAcp: boolean;
+  openAgentChat: boolean;
   start: boolean;
   sandbox: boolean;
   sandboxPath: string;
@@ -22,7 +22,7 @@ type Args = {
 function usage() {
   return [
     "Usage:",
-    "  bun scripts/devtools/notes.ts inspect [--session <name>] [--open] [--open-actions] [--open-acp] [--start] [--limit <n>]",
+    "  bun scripts/devtools/notes.ts inspect [--session <name>] [--open] [--open-actions] [--open-agent_chat] [--start] [--limit <n>]",
     "  bun scripts/devtools/notes.ts resize-compare --session <name> --start --sandbox [--short-line-count <n>] [--tall-line-count <n>]",
   ].join("\n");
 }
@@ -41,7 +41,7 @@ function parseArgs(argv: string[]): Args {
     session: "default",
     open: false,
     openActions: false,
-    openAcp: false,
+    openAgentChat: false,
     start: false,
     sandbox: false,
     sandboxPath: "",
@@ -60,8 +60,8 @@ function parseArgs(argv: string[]): Args {
       args.open = true;
     } else if (arg === "--open-actions") {
       args.openActions = true;
-    } else if (arg === "--open-acp" || arg === "--open-notes-acp") {
-      args.openAcp = true;
+    } else if (arg === "--open-agent_chat" || arg === "--open-notes-agent_chat") {
+      args.openAgentChat = true;
     } else if (arg === "--start") {
       args.start = true;
     } else if (arg === "--sandbox") {
@@ -145,8 +145,8 @@ async function maybeOpenActions(args: Args) {
   return receipt;
 }
 
-async function maybeOpenAcp(args: Args) {
-  if (!args.openAcp) {
+async function maybeOpenAgentChat(args: Args) {
+  if (!args.openAgentChat) {
     return null;
   }
   const receipt = await run([
@@ -156,9 +156,9 @@ async function maybeOpenAcp(args: Args) {
     args.session,
     JSON.stringify({
       type: "batch",
-      requestId: `devtools-notes-open-acp-${Date.now()}`,
+      requestId: `devtools-notes-open-agent_chat-${Date.now()}`,
       target: { type: "kind", kind: "notes" },
-      commands: [{ type: "openNotesAcp" }],
+      commands: [{ type: "openNotesAgentChat" }],
       options: { stopOnError: true, rollbackOnError: false, timeout: args.timeoutMs },
       trace: "on",
     }),
@@ -166,7 +166,7 @@ async function maybeOpenAcp(args: Args) {
     "batchResult",
     "--timeout",
     String(args.timeoutMs),
-  ], "open-acp");
+  ], "open-agent_chat");
   await Bun.sleep(350);
   return receipt;
 }
@@ -208,7 +208,7 @@ function missingCoveragePrimitives(coverage: ReturnType<typeof notesCoverage>, r
     if (hasDraftSnapshot(runtimeNotes) && primitive === "draft snapshot fingerprint") {
       return false;
     }
-    if (hasNotesAcpOriginReceipt(runtimeNotes) && primitive.includes("ACP embedded origin receipts")) {
+    if (hasNotesAgentChatOriginReceipt(runtimeNotes) && primitive.includes("Agent Chat embedded origin receipts")) {
       return false;
     }
     return true;
@@ -223,17 +223,17 @@ function shortcutSnapshot(value: JsonObject) {
   };
 }
 
-function hasNotesAcpOriginReceipt(runtimeNotes: JsonObject): boolean {
-  const embeddedAcp = asObject(runtimeNotes.embeddedAcp);
-  const registered = asObject(embeddedAcp.registered);
+function hasNotesAgentChatOriginReceipt(runtimeNotes: JsonObject): boolean {
+  const embeddedAgentChat = asObject(runtimeNotes.embeddedAgentChat);
+  const registered = asObject(embeddedAgentChat.registered);
   return (
-    embeddedAcp.host === "notes" &&
-    embeddedAcp.automationId === "notes:ai" &&
-    embeddedAcp.parentWindowId === "notes" &&
-    embeddedAcp.parentKind === "notes" &&
-    embeddedAcp.usesMainAiAutomationWindow === false &&
+    embeddedAgentChat.host === "notes" &&
+    embeddedAgentChat.automationId === "notes:ai" &&
+    embeddedAgentChat.parentWindowId === "notes" &&
+    embeddedAgentChat.parentKind === "notes" &&
+    embeddedAgentChat.usesMainAiAutomationWindow === false &&
     (
-      embeddedAcp.active !== true ||
+      embeddedAgentChat.active !== true ||
       (
         registered.id === "notes:ai" &&
         registered.kind === "ai" &&
@@ -402,7 +402,7 @@ function notesState(elements: JsonObject, focus: JsonObject, text: JsonObject, r
   const layoutRegions = asArray(layout.regions);
   const editorRegion = layoutRegions.find((region) => {
     const name = String(region.name ?? "");
-    return name === "NotesEditor" || name === "NotesPreview" || name === "NotesEmbeddedAcp";
+    return name === "NotesEditor" || name === "NotesPreview" || name === "NotesEmbeddedAgentChat";
   }) ?? null;
   return {
     panelPresent: nodes.some((node) => node.semanticId === "panel:notes-window"),
@@ -420,7 +420,7 @@ function notesState(elements: JsonObject, focus: JsonObject, text: JsonObject, r
     previewAnchor: runtimeNotes.previewAnchor ?? null,
     view: runtimeNotes.view ?? null,
     commandBars: runtimeNotes.commandBars ?? null,
-    embeddedAcp: runtimeNotes.embeddedAcp ?? null,
+    embeddedAgentChat: runtimeNotes.embeddedAgentChat ?? null,
     shortcutRegistry: runtimeNotes.shortcutRegistry ?? null,
     focusTransitions: runtimeNotes.focusTransitions ?? null,
     ghostAutocomplete: runtimeNotes.ghostAutocomplete ?? null,
@@ -701,7 +701,7 @@ async function runResizeCompare(args: Args) {
       ],
       missingPrimitives: fixed ? [
         "preview scroll handle populated content bounds under mounted markdown preview",
-        "ACP embedded origin receipts",
+        "Agent Chat embedded origin receipts",
         "portal session provenance",
         "remaining Notes shortcut activation parity receipts beyond Cmd+Shift+P",
       ] : ["auto-resize before/after compare"],
@@ -739,7 +739,7 @@ async function runInspect(args: Args) {
     shortcutBeforeEnvelope,
     shortcutAfterEnvelope,
   );
-  const openAcpReceipt = await maybeOpenAcp(args);
+  const openAgentChatReceipt = await maybeOpenAgentChat(args);
   const targetArgs = ["--session", args.session, "--target-id", notesTargetId, "--strict"];
   const elements = await run(["bun", "scripts/devtools/elements.ts", "snapshot", ...targetArgs, "--limit", String(args.limit)], "elements.snapshot");
   const focus = await run(["bun", "scripts/devtools/focus.ts", "inspect", ...targetArgs], "focus.inspect");
@@ -787,7 +787,7 @@ async function runInspect(args: Args) {
       previewAnchor.previewEnabled === true && previewAnchor.scrollMetricsAvailable !== true
         ? "preview scroll metrics"
         : "",
-      hasNotesAcpOriginReceipt(runtimeNotes) ? "" : "ACP embedded origin receipts",
+      hasNotesAgentChatOriginReceipt(runtimeNotes) ? "" : "Agent Chat embedded origin receipts",
       "portal session provenance",
       state.commandBars == null ? "notes command bar runtime state" : "",
       state.shortcutRegistry == null ? "notes shortcut registry" : "",
@@ -802,7 +802,7 @@ async function runInspect(args: Args) {
     session: args.session,
     openReceipt,
     openActionsReceipt,
-    openAcpReceipt,
+    openAgentChatReceipt,
     shortcutActivation,
     availableActions: {
       togglePreview: {
@@ -810,9 +810,9 @@ async function runInspect(args: Args) {
         command: "togglePreview",
         target: { type: "kind", kind: "notes" },
       },
-      openAcp: {
-        channel: "protocol.batch.openNotesAcp",
-        command: "openNotesAcp",
+      openAgentChat: {
+        channel: "protocol.batch.openNotesAgentChat",
+        command: "openNotesAgentChat",
         target: { type: "kind", kind: "notes" },
       },
     },

@@ -31,12 +31,12 @@ pub use defaults::DEFAULT_SUGGESTED_HALF_LIFE_DAYS;
 // Re-export types that are used externally
 #[allow(unused_imports)]
 pub use types::{
-    AcpProfile, AgentChatBackend, AgentChatPathPolicyConfig, AgentChatToolPolicyConfig,
+    AgentChatBackend, AgentChatPathPolicyConfig, AgentChatProfile, AgentChatToolPolicyConfig,
     AiPreferences, AiVaultProvider, AiVaultResumeTerminal, BrowserHistoryProvider,
     BrowserTabProvider, BuiltInConfig, ClaudeCodeConfig, Config, DictationPreferences,
     HotkeyConfig, LayoutConfig, McpConfig, McpHttpServerConfig, McpServerConfig,
     McpStdioServerConfig, RootFilePromotionConfig, ScriptKitUserPreferences, SuggestedConfig,
-    ThemeSelectionPreferences, UnifiedSearchAcpHistoryConfig, UnifiedSearchAiVaultConfig,
+    ThemeSelectionPreferences, UnifiedSearchAgentChatHistoryConfig, UnifiedSearchAiVaultConfig,
     UnifiedSearchBrowserHistoryConfig, UnifiedSearchBrowserTabsConfig, UnifiedSearchConfig,
     UnifiedSearchFilesConfig, UnifiedSearchPassiveResultLimitsConfig, UnifiedSearchPassiveSource,
     WatcherConfig, WindowManagementPreferences,

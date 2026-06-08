@@ -24,7 +24,7 @@ fn tahoe_liquid_glass_is_gated_and_uses_shared_theme_tint() {
     let terminal_command_bar = read_source("src/terminal/command_bar_ui/render.rs");
     let notes_actions_panel = read_source("src/notes/actions_panel.rs");
     let notes_browse_panel = read_source("src/notes/browse_panel.rs");
-    let acp_chat_window = read_source("src/ai/acp/chat_window.rs");
+    let agent_chat_window = read_source("src/ai/agent_chat/ui/chat_window.rs");
     let file_search = read_source("src/file_search/mod.rs");
 
     assert!(
@@ -63,7 +63,7 @@ fn tahoe_liquid_glass_is_gated_and_uses_shared_theme_tint() {
             && platform.contains("\"Notes\"")
             && platform.contains("\"Mini AI\"")
             && platform.contains("\"Script Kit Agent Chat\"")
-            && platform.contains("\"Script Kit ACP\"")
+            && platform.contains("\"Script Kit Agent Chat\"")
             && platform.contains("should_refresh_secondary_window_appearance(&title_string)"),
         "Theme/appearance refresh must use one predicate covering real Notes, detached Agent Chat, and legacy AI titles"
     );
@@ -95,10 +95,10 @@ fn tahoe_liquid_glass_is_gated_and_uses_shared_theme_tint() {
         "Notes actions and browse panels must share the main-window matched background helper"
     );
     assert!(
-        acp_chat_window.contains("theme::get_cached_theme().is_vibrancy_enabled()")
-            && acp_chat_window.contains("WindowBackgroundAppearance::Opaque")
-            && acp_chat_window.contains("WindowBackgroundAppearance::Blurred"),
-        "Detached ACP window background appearance must honor vibrancy-disabled opaque mode"
+        agent_chat_window.contains("theme::get_cached_theme().is_vibrancy_enabled()")
+            && agent_chat_window.contains("WindowBackgroundAppearance::Opaque")
+            && agent_chat_window.contains("WindowBackgroundAppearance::Blurred"),
+        "Detached Agent Chat window background appearance must honor vibrancy-disabled opaque mode"
     );
     assert!(
         file_search.contains("AppChromeColors::from_theme(&theme)")
@@ -224,10 +224,10 @@ fn footer_native_host_uses_theme_vibrancy_and_reports_installed_surface() {
 }
 
 #[test]
-fn acp_detached_chat_window_uses_default_vibrancy_native_backdrop_and_runtime_identity() {
-    let chat_window = read_source("src/ai/acp/chat_window.rs");
+fn agent_chat_detached_chat_window_uses_default_vibrancy_native_backdrop_and_runtime_identity() {
+    let chat_window = read_source("src/ai/agent_chat/ui/chat_window.rs");
     let platform = read_source("src/platform/secondary_window_config.rs");
-    let devtools_acp = read_source("scripts/devtools/acp.ts");
+    let devtools_agent_chat = read_source("scripts/devtools/agent_chat.ts");
 
     let options = chat_window
         .split("fn chat_window_options(")
@@ -242,22 +242,22 @@ fn acp_detached_chat_window_uses_default_vibrancy_native_backdrop_and_runtime_id
     ] {
         assert!(
             options.contains(needle),
-            "ACP detached chat options must preserve background/window marker: {needle}"
+            "Agent Chat detached chat options must preserve background/window marker: {needle}"
         );
     }
 
     for needle in [
-        "AutomationWindowKind::AcpDetached",
-        "semantic_surface: Some(\"acpChat\".to_string())",
+        "AutomationWindowKind::AgentChatDetached",
+        "semantic_surface: Some(\"agentChatChat\".to_string())",
     ] {
         assert!(
             chat_window.contains(needle),
-            "ACP detached automation identity must preserve marker: {needle}"
+            "Agent Chat detached automation identity must preserve marker: {needle}"
         );
     }
     assert!(
-        !chat_window.contains("surfaceKind: Some(\"AcpChat\""),
-        "ACP detached runtime identity should use semanticSurface acpChat instead of inventing a surfaceKind field"
+        !chat_window.contains("surfaceKind: Some(\"AgentChat\""),
+        "Agent Chat detached runtime identity should use semanticSurface agentChatChat instead of inventing a surfaceKind field"
     );
 
     let placeholder = chat_window
@@ -266,19 +266,22 @@ fn acp_detached_chat_window_uses_default_vibrancy_native_backdrop_and_runtime_id
         .and_then(|tail| tail.split("pub fn open_chat_window_with_thread(").next())
         .expect("open_chat_window placeholder body should be present");
     assert!(
-        placeholder.contains("upsert_acp_detached_automation_window(&automation_id, automation_bounds);")
-            && placeholder.contains("configure_acp_chat_vibrancy(cx);"),
-        "ACP detached placeholder fixture must configure native vibrancy/backdrop after automation registration"
+        placeholder.contains("upsert_agent_chat_detached_automation_window(&automation_id, automation_bounds);")
+            && placeholder.contains("configure_agent_chat_vibrancy(cx);"),
+        "Agent Chat detached placeholder fixture must configure native vibrancy/backdrop after automation registration"
     );
 
     let with_thread = chat_window
         .split("pub fn open_chat_window_with_thread(")
         .nth(1)
-        .and_then(|tail| tail.split("pub fn get_detached_acp_view_entity(").next())
+        .and_then(|tail| {
+            tail.split("pub fn get_detached_agent_chat_view_entity(")
+                .next()
+        })
         .expect("open_chat_window_with_thread body should be present");
     assert!(
-        with_thread.contains("configure_acp_chat_vibrancy(cx);"),
-        "ACP detached live-thread path must configure native vibrancy/backdrop"
+        with_thread.contains("configure_agent_chat_vibrancy(cx);"),
+        "Agent Chat detached live-thread path must configure native vibrancy/backdrop"
     );
 
     for needle in [
@@ -290,26 +293,26 @@ fn acp_detached_chat_window_uses_default_vibrancy_native_backdrop_and_runtime_id
     ] {
         assert!(
             platform.contains(needle),
-            "ACP detached native backdrop refresh path must preserve marker: {needle}"
+            "Agent Chat detached native backdrop refresh path must preserve marker: {needle}"
         );
     }
 
     for needle in [
         "open-detached-placeholder",
-        "openAcpDetachedFixture",
-        "targets.inspect.acpDetached",
-        "AcpChat",
+        "openAgentChatDetachedFixture",
+        "targets.inspect.agentChatDetached",
+        "AgentChat",
         "providerRequired: false",
     ] {
         assert!(
-            devtools_acp.contains(needle),
-            "ACP DevTools opener must preserve no-provider detached placeholder marker: {needle}"
+            devtools_agent_chat.contains(needle),
+            "Agent Chat DevTools opener must preserve no-provider detached placeholder marker: {needle}"
         );
     }
 }
 
 #[test]
-fn devtools_targets_match_acp_chat_by_semantic_surface_alias() {
+fn devtools_targets_match_agent_chat_by_semantic_surface_alias() {
     let targets = read_source("scripts/devtools/targets.ts");
     assert!(
         targets.contains("[\"snapshot.semanticSurface\", snapshot.semanticSurface]")
@@ -318,9 +321,9 @@ fn devtools_targets_match_acp_chat_by_semantic_surface_alias() {
     );
     assert!(
         targets.contains("function acceptedSurfaceValues")
-            && targets.contains("expectedSurfaceKind === \"AcpChat\"")
-            && targets.contains("values.add(\"acpChat\")"),
-        "AcpChat strict target matching must accept the acpChat automation semantic surface"
+            && targets.contains("expectedSurfaceKind === \"AgentChat\"")
+            && targets.contains("values.add(\"agentChatChat\")"),
+        "AgentChat strict target matching must accept the agentChatChat automation semantic surface"
     );
     assert!(
         targets.contains("acceptedValues.has(candidate.value)"),

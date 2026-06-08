@@ -176,7 +176,7 @@ fn result_role(result: &crate::scripts::SearchResult) -> MainWindowPreflightResu
         crate::scripts::SearchResult::File(_) => MainWindowPreflightResultRole::RootFile,
         crate::scripts::SearchResult::Note(_)
         | crate::scripts::SearchResult::Todo(_)
-        | crate::scripts::SearchResult::AcpHistory(_)
+        | crate::scripts::SearchResult::AgentChatHistory(_)
         | crate::scripts::SearchResult::AiVault(_)
         | crate::scripts::SearchResult::ClipboardHistory(_)
         | crate::scripts::SearchResult::DictationHistory(_)
@@ -203,7 +203,9 @@ fn enter_action_kind(result: &crate::scripts::SearchResult) -> MainWindowPreflig
         crate::scripts::SearchResult::File(_) => MainWindowPreflightActionKind::OpenFile,
         crate::scripts::SearchResult::Note(_) => MainWindowPreflightActionKind::RunCommand,
         crate::scripts::SearchResult::Todo(_) => MainWindowPreflightActionKind::RunCommand,
-        crate::scripts::SearchResult::AcpHistory(_) => MainWindowPreflightActionKind::RunCommand,
+        crate::scripts::SearchResult::AgentChatHistory(_) => {
+            MainWindowPreflightActionKind::RunCommand
+        }
         crate::scripts::SearchResult::AiVault(_) => {
             MainWindowPreflightActionKind::PasteResumeCommand
         }
@@ -370,9 +372,9 @@ fn build_root_passive_frame_receipt(app: &crate::ScriptListApp) -> Option<RootPa
             frame_generation: 0,
             refreshing: false,
         },
-        acp_history: RootPassiveSourceReceipt {
-            enabled: frame.key.acp_history_options.enabled,
-            frame_count: frame.acp_history_hits.len(),
+        agent_chat_history: RootPassiveSourceReceipt {
+            enabled: frame.key.agent_chat_history_options.enabled,
+            frame_count: frame.agent_chat_history_hits.len(),
             cache_generation: 0,
             frame_generation: 0,
             refreshing: false,
@@ -417,7 +419,7 @@ pub(crate) fn build_main_window_preflight_receipt(
             | AppView::CurrentAppCommandsView { .. }
             | AppView::SettingsView { .. }
             | AppView::FavoritesBrowseView { .. }
-            | AppView::AcpHistoryView { .. }
+            | AppView::AgentChatHistoryView { .. }
             | AppView::DictationHistoryView { .. }
             | AppView::NotesBrowseView { .. }
     ) {

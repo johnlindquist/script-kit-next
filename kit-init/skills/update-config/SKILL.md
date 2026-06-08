@@ -23,7 +23,7 @@ Manage files under `~/.scriptkit` that control launcher behavior, hotkeys, dicta
 | AI/Logs/Dictation shortcuts | `config.ts` | `aiHotkey`, `logsHotkey`, `dictationHotkey` |
 | Dictation microphone | `config.ts` | `dictation.selectedDeviceId` |
 | Theme preset | `config.ts` | `theme.presetId` |
-| ACP defaults | `config.ts` | `ai.selectedAcpAgentId`, `ai.selectedModelId` |
+| Agent Chat defaults | `config.ts` | `ai.selectedAgentChatAgentId`, `ai.selectedModelId` |
 | Snap mode | `config.ts` | `windowManagement.snapMode` |
 | External MCP servers | `config.ts` | `mcp` |
 | Theme colors | `theme.json` | `colors.*` |
@@ -80,7 +80,7 @@ Command deeplinks: `scriptkit://commands/{id}`
 theme: { presetId: "nord" },
 dictation: { selectedDeviceId: "usb-mic" },
 ai: {
-  selectedAcpAgentId: "codex-acp",
+  selectedAgentChatAgentId: "codex-agent_chat",
   selectedModelId: "gpt-5.4",
 },
 windowManagement: { snapMode: "expanded" },

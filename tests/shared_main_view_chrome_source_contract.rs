@@ -16,7 +16,7 @@ fn production_source(path: &str) -> String {
 fn main_window_search_surfaces_use_shared_main_view_input_shell() {
     let shared = read_source("src/components/main_view_chrome.rs");
     let script_list = production_source("src/render_script_list/mod.rs");
-    let acp = production_source("src/ai/acp/view.rs");
+    let agent_chat = production_source("src/ai/agent_chat/ui/view.rs");
     let file_search = production_source("src/render_builtins/file_search.rs");
     let clipboard = production_source("src/render_builtins/clipboard.rs");
     let profile_search = production_source("src/render_builtins/profile_search.rs");
@@ -140,14 +140,14 @@ fn main_window_search_surfaces_use_shared_main_view_input_shell() {
     );
     assert!(
         ui_window.contains("config.left_info = None;"),
-        "ACP footer enrichment must suppress old left-info model/cwd marker now owned by the header"
+        "Agent Chat footer enrichment must suppress old left-info model/cwd marker now owned by the header"
     );
     assert!(app_view_state.contains("pub(crate) fn uses_shared_main_view_header"));
     assert!(app_view_state.contains("AppView::ScriptList"));
     assert!(app_view_state.contains("| AppView::FileSearchView { .. }"));
     assert!(app_view_state.contains("| AppView::ClipboardHistoryView { .. }"));
     assert!(app_view_state.contains("| AppView::ProfileSearchView { .. }"));
-    assert!(app_view_state.contains("| AppView::AcpChatView { .. }"));
+    assert!(app_view_state.contains("| AppView::AgentChatView { .. }"));
     assert!(render_impl.contains(
         "let shared_header_owned_by_view = self.current_view.uses_shared_main_view_header();"
     ));
@@ -180,35 +180,35 @@ fn main_window_search_surfaces_use_shared_main_view_input_shell() {
         script_list.contains("margin_x: shell.divider_margin_x"),
         "ScriptList divider should align with the active theme shell inset"
     );
-    assert!(acp.contains("render_main_view_input_shell"));
-    assert!(acp.contains("render_main_view_shell()"));
-    assert!(acp.contains("render_main_view_chrome"));
-    assert!(acp.contains("MainViewInputChrome"));
-    assert!(acp.contains("MainViewHeaderChrome"));
+    assert!(agent_chat.contains("render_main_view_input_shell"));
+    assert!(agent_chat.contains("render_main_view_shell()"));
+    assert!(agent_chat.contains("render_main_view_chrome"));
+    assert!(agent_chat.contains("MainViewInputChrome"));
+    assert!(agent_chat.contains("MainViewHeaderChrome"));
     assert!(
-        !acp.contains("\"message-circle\""),
-        "ACP composer input must not inject an extra leading message icon"
+        !agent_chat.contains("\"message-circle\""),
+        "Agent Chat composer input must not inject an extra leading message icon"
     );
     assert!(
-        !acp.contains("leading:"),
-        "ACP composer input should match main-menu input positioning without a leading slot"
+        !agent_chat.contains("leading:"),
+        "Agent Chat composer input should match main-menu input positioning without a leading slot"
     );
     assert!(
-        acp.contains("footer_snapshot.profile_display"),
-        "ACP shared header must show the active profile, not a model-only label"
+        agent_chat.contains("footer_snapshot.profile_display"),
+        "Agent Chat shared header must show the active profile, not a model-only label"
     );
     assert!(
-        !acp.contains("action_label: Some(SharedString::from(\"Attach\"))"),
-        "ACP @ picker rows must not show per-row Attach accessories"
+        !agent_chat.contains("action_label: Some(SharedString::from(\"Attach\"))"),
+        "Agent Chat @ picker rows must not show per-row Attach accessories"
     );
     assert!(
-        acp.contains("FooterAction::Run if button.label == \"Attach\" => \"↵ Attach\""),
-        "ACP footer label must derive the Attach primary action from the button spec"
+        agent_chat.contains("FooterAction::Run if button.label == \"Attach\" => \"↵ Attach\""),
+        "Agent Chat footer label must derive the Attach primary action from the button spec"
     );
-    assert!(acp.contains("context: Some("));
-    assert!(acp.contains("MainViewDividerChrome"));
-    assert!(acp.contains("visible: false"));
-    assert!(acp.contains("MainViewChrome"));
+    assert!(agent_chat.contains("context: Some("));
+    assert!(agent_chat.contains("MainViewDividerChrome"));
+    assert!(agent_chat.contains("visible: false"));
+    assert!(agent_chat.contains("MainViewChrome"));
     assert!(file_search.contains("render_main_view_input_shell"));
     assert!(file_search.contains("render_clickable_main_view_context_zone"));
     assert!(!file_search.contains("render_main_view_state_icon"));
@@ -365,40 +365,40 @@ fn script_list_no_longer_owns_local_main_view_chrome() {
 }
 
 #[test]
-fn acp_composer_shell_consumes_main_menu_header_geometry() {
-    let acp = read_source("src/ai/acp/view.rs");
-    let ui_variant = read_source("src/ai/acp/ui_variant.rs");
+fn agent_chat_composer_shell_consumes_main_menu_header_geometry() {
+    let agent_chat = read_source("src/ai/agent_chat/ui/view.rs");
+    let ui_variant = read_source("src/ai/agent_chat/ui/ui_variant.rs");
 
-    assert!(acp.contains("crate::designs::current_main_menu_theme().def()"));
-    assert!(acp.contains("fn render_composer_input_shell"));
-    assert!(acp.contains("render_main_view_input_shell"));
-    assert!(acp.contains("render_main_view_header"));
-    assert!(!acp.contains("render_main_view_header_divider("));
-    assert!(acp.contains("render_main_view_context_zone_inert"));
-    assert!(acp.contains("MainViewContextLabels::new"));
-    assert!(acp.contains("snapshot.profile_display.clone()"));
-    assert!(acp.contains("snapshot.model_display.clone()"));
-    assert!(acp.contains(".id(\"acp-profile-display\")"));
-    assert!(acp.contains(".id(\"acp-model-display\")"));
-    assert!(acp.contains("render_main_view_main_slot"));
-    assert!(acp.contains("render_main_view_chrome"));
-    assert!(!acp.contains("\"agent-chat-input-profile-icon\""));
-    assert!(!acp.contains("trailing: vec![profile_icon]"));
-    assert!(acp.contains("trailing: Vec::new()"));
-    assert!(acp.contains("padding_x: menu_def.shell.header_padding_x"));
-    assert!(acp.contains("margin_x: menu_def.shell.divider_margin_x"));
-    assert!(acp.contains("visible: false"));
-    assert!(acp.contains("padding_y: menu_def.shell.header_padding_y"));
+    assert!(agent_chat.contains("crate::designs::current_main_menu_theme().def()"));
+    assert!(agent_chat.contains("fn render_composer_input_shell"));
+    assert!(agent_chat.contains("render_main_view_input_shell"));
+    assert!(agent_chat.contains("render_main_view_header"));
+    assert!(!agent_chat.contains("render_main_view_header_divider("));
+    assert!(agent_chat.contains("render_main_view_context_zone_inert"));
+    assert!(agent_chat.contains("MainViewContextLabels::new"));
+    assert!(agent_chat.contains("snapshot.profile_display.clone()"));
+    assert!(agent_chat.contains("snapshot.model_display.clone()"));
+    assert!(agent_chat.contains(".id(\"agent_chat-profile-display\")"));
+    assert!(agent_chat.contains(".id(\"agent_chat-model-display\")"));
+    assert!(agent_chat.contains("render_main_view_main_slot"));
+    assert!(agent_chat.contains("render_main_view_chrome"));
+    assert!(!agent_chat.contains("\"agent-chat-input-profile-icon\""));
+    assert!(!agent_chat.contains("trailing: vec![profile_icon]"));
+    assert!(agent_chat.contains("trailing: Vec::new()"));
+    assert!(agent_chat.contains("padding_x: menu_def.shell.header_padding_x"));
+    assert!(agent_chat.contains("margin_x: menu_def.shell.divider_margin_x"));
+    assert!(agent_chat.contains("visible: false"));
+    assert!(agent_chat.contains("padding_y: menu_def.shell.header_padding_y"));
     assert!(
-        !acp.contains(".id(\"agent-chat-shell\")"),
+        !agent_chat.contains(".id(\"agent-chat-shell\")"),
         "standard Agent Chat must use the shared main-view root shell instead of local feature shell chrome"
     );
     assert!(
-        acp.contains(".id(\"acp-conversation\")"),
+        agent_chat.contains(".id(\"agent_chat-conversation\")"),
         "standard Agent Chat should wrap all conversation chrome inside one swapped main child"
     );
     assert!(
-        ui_variant.contains("Self::Standard => AcpChatUiConfig {\n                transcript: AcpTranscriptPresentation::Standard,\n                composer: AcpComposerPlacement::Default"),
+        ui_variant.contains("Self::Standard => AgentChatUiConfig {\n                transcript: AgentChatTranscriptPresentation::Standard,\n                composer: AgentChatComposerPlacement::Default"),
         "standard Agent Chat must stay on the default composer path that returns shared main-view chrome"
     );
 }
@@ -453,54 +453,56 @@ fn file_search_layout_model_uses_main_view_context_chrome() {
     assert!(layout.contains("| AppView::FileSearchView { .. }"));
     assert!(layout.contains("| AppView::ClipboardHistoryView { .. }"));
     assert!(layout.contains("| AppView::ProfileSearchView { .. }"));
-    assert!(layout.contains("| AppView::AcpChatView { .. }"));
+    assert!(layout.contains("| AppView::AgentChatView { .. }"));
     assert!(bounds.contains("| AppView::FileSearchView { .. }"));
     assert!(bounds.contains("| AppView::ClipboardHistoryView { .. }"));
     assert!(bounds.contains("| AppView::ProfileSearchView { .. }"));
-    assert!(bounds.contains("| AppView::AcpChatView { .. }"));
+    assert!(bounds.contains("| AppView::AgentChatView { .. }"));
 }
 
 #[test]
-fn acp_layout_model_swaps_only_main_section_to_conversation() {
+fn agent_chat_layout_model_swaps_only_main_section_to_conversation() {
     let layout = read_source("src/app_layout/build_layout_info.rs");
 
     assert!(
         layout.contains(
-            "| AppView::AcpChatView { .. } => crate::window_resize::ViewType::MainWindow"
+            "| AppView::AgentChatView { .. } => crate::window_resize::ViewType::MainWindow"
         ),
-        "AcpChat should use the same stable main-window sizing target as the main menu chrome"
+        "AgentChat should use the same stable main-window sizing target as the main menu chrome"
     );
     assert!(
-        layout.contains("if let AppView::AcpChatView { entity } = &self.current_view"),
-        "AcpChat needs its own layout branch before the launcher ScriptList fallback"
+        layout.contains("if let AppView::AgentChatView { entity } = &self.current_view"),
+        "AgentChat needs its own layout branch before the launcher ScriptList fallback"
     );
     assert!(
-        layout.contains("LayoutComponentInfo::new(\"AcpConversation\", LayoutComponentType::List)"),
-        "AcpChat layout receipts should name the conversation as the swapped main section"
+        layout.contains(
+            "LayoutComponentInfo::new(\"AgentChatConversation\", LayoutComponentType::List)"
+        ),
+        "AgentChat layout receipts should name the conversation as the swapped main section"
     );
     for name in [
-        "AcpEmptyGuidance",
-        "AcpEmptyGuidanceTitle",
-        "AcpEmptyGuidanceBody",
-        "AcpEmptyGuidanceShortcutSlot",
-        "AcpEmptyGuidanceLabelColumn",
+        "AgentChatEmptyGuidance",
+        "AgentChatEmptyGuidanceTitle",
+        "AgentChatEmptyGuidanceBody",
+        "AgentChatEmptyGuidanceShortcutSlot",
+        "AgentChatEmptyGuidanceLabelColumn",
     ] {
         assert!(
             layout.contains(name),
-            "AcpChat layout receipts should expose {name} for empty-state typography/spacing proof"
+            "AgentChat layout receipts should expose {name} for empty-state typography/spacing proof"
         );
     }
     assert!(layout.contains("main_view_content_columns(menu_def)"));
     assert!(
         layout.contains("with_parent(\"MainViewMain\")"),
-        "AcpConversation should remain inside the shared MainViewMain slot"
+        "AgentChatConversation should remain inside the shared MainViewMain slot"
     );
     assert!(
         layout.contains("} else {")
             && layout.contains(
                 "// Script list: full width for MainWindow, left panel for split-preview surfaces."
             ),
-        "AcpChat branch should not fall through to stale ScriptList/PreviewPanel layout components"
+        "AgentChat branch should not fall through to stale ScriptList/PreviewPanel layout components"
     );
 }
 
@@ -539,45 +541,45 @@ fn main_window_footer_keeps_header_context_out_of_action_zone() {
 }
 
 #[test]
-fn acp_component_bounds_model_uses_main_view_chrome() {
+fn agent_chat_component_bounds_model_uses_main_view_chrome() {
     let bounds = read_source("src/app_layout/build_component_bounds.rs");
 
     assert!(bounds.contains("\"MainViewHeader\""));
     assert!(bounds.contains("\"MainViewContextZone\""));
-    assert!(bounds.contains("AppView::AcpChatView { .. } =>"));
+    assert!(bounds.contains("AppView::AgentChatView { .. } =>"));
     assert!(bounds.contains("\"MainViewMain\""));
-    assert!(bounds.contains("\"AcpConversation\""));
+    assert!(bounds.contains("\"AgentChatConversation\""));
     assert!(bounds.contains("\"MainViewInput\""));
     assert!(!bounds.contains("\"MainViewInputStateIcon\""));
     assert!(bounds.contains("\"MainViewFooter\""));
-    assert!(bounds.contains("\"AcpEmptyGuidance\""));
-    assert!(bounds.contains("\"AcpEmptyGuidanceTitle\""));
-    assert!(bounds.contains("\"AcpEmptyGuidanceShortcutSlot\""));
-    assert!(bounds.contains("\"AcpEmptyGuidanceLabelColumn\""));
+    assert!(bounds.contains("\"AgentChatEmptyGuidance\""));
+    assert!(bounds.contains("\"AgentChatEmptyGuidanceTitle\""));
+    assert!(bounds.contains("\"AgentChatEmptyGuidanceShortcutSlot\""));
+    assert!(bounds.contains("\"AgentChatEmptyGuidanceLabelColumn\""));
     assert!(bounds.contains("main_view_content_columns(menu_def)"));
     assert!(
         bounds.contains("AppView::ScriptList")
             && bounds.contains("| AppView::FileSearchView { .. }")
             && bounds.contains("| AppView::ClipboardHistoryView { .. }")
             && bounds.contains("| AppView::ProfileSearchView { .. }")
-            && bounds.contains("| AppView::AcpChatView { .. }"),
-        "debug component bounds should emit shared input details for ScriptList, FileSearch, Clipboard History, ProfileSearch, and AcpChat"
+            && bounds.contains("| AppView::AgentChatView { .. }"),
+        "debug component bounds should emit shared input details for ScriptList, FileSearch, Clipboard History, ProfileSearch, and AgentChat"
     );
 }
 
 #[test]
 fn standard_agent_chat_mock_fixture_bypasses_provider_warmup() {
-    let acp_launch = read_source("src/app_impl/tab_ai_mode/acp_launch.rs");
+    let agent_chat_launch = read_source("src/app_impl/tab_ai_mode/agent_chat_launch.rs");
     let runtime_stdin = read_source("src/main_entry/runtime_stdin.rs");
     let app_run_setup = read_source("src/main_entry/app_run_setup.rs");
     let runtime_tail = read_source("src/main_entry/runtime_stdin_match_tail.rs");
 
-    assert!(acp_launch.contains("fn open_standard_agent_chat_mock_fixture"));
-    assert!(acp_launch.contains("StandardAgentChatMockFixtureConnection"));
-    assert!(acp_launch.contains("AcpChatUiVariant::Standard"));
+    assert!(agent_chat_launch.contains("fn open_standard_agent_chat_mock_fixture"));
+    assert!(agent_chat_launch.contains("StandardAgentChatMockFixtureConnection"));
+    assert!(agent_chat_launch.contains("AgentChatUiVariant::Standard"));
     assert!(
-        acp_launch.contains("self.enter_embedded_acp_chat_surface(view_entity, cx);"),
-        "fixture should use the same embedded ACP surface transition as real Agent Chat"
+        agent_chat_launch.contains("self.enter_embedded_agent_chat_surface(view_entity, cx);"),
+        "fixture should use the same embedded Agent Chat surface transition as real Agent Chat"
     );
 
     for (path, source) in [

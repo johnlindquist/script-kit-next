@@ -111,7 +111,7 @@ fn should_restore_main_window_after_script_exit(
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct ScriptErrorAcpContextBundle {
+struct ScriptErrorAgentChatContextBundle {
     script_snapshot_path: String,
     script_snapshot_label: String,
     error_report_path: String,
@@ -139,7 +139,7 @@ fn sanitize_script_error_context_name(value: &str, fallback: &str) -> String {
     }
 }
 
-fn build_script_error_acp_prompt(
+fn build_script_error_agent_chat_prompt(
     script_path: &str,
     error_message: &str,
     exit_code: Option<i32>,
@@ -212,7 +212,7 @@ fn build_script_error_report_markdown(
     report
 }
 
-fn persist_script_error_acp_context_bundle_in_dir(
+fn persist_script_error_agent_chat_context_bundle_in_dir(
     root_dir: &std::path::Path,
     script_path: &str,
     error_message: &str,
@@ -220,11 +220,11 @@ fn persist_script_error_acp_context_bundle_in_dir(
     exit_code: Option<i32>,
     stack_trace: Option<&str>,
     suggestions: &[String],
-) -> Result<ScriptErrorAcpContextBundle, String> {
+) -> Result<ScriptErrorAgentChatContextBundle, String> {
     let bundle_dir = root_dir.join(uuid::Uuid::new_v4().to_string());
     std::fs::create_dir_all(&bundle_dir).map_err(|error| {
         format!(
-            "failed to create script-error ACP context directory '{}': {error}",
+            "failed to create script-error Agent Chat context directory '{}': {error}",
             bundle_dir.display()
         )
     })?;
@@ -274,7 +274,7 @@ fn persist_script_error_acp_context_bundle_in_dir(
         )
     })?;
 
-    Ok(ScriptErrorAcpContextBundle {
+    Ok(ScriptErrorAgentChatContextBundle {
         script_snapshot_path: script_snapshot_path.to_string_lossy().into_owned(),
         script_snapshot_label,
         error_report_path: error_report_path.to_string_lossy().into_owned(),
@@ -433,19 +433,19 @@ fn resolve_get_state_target(
     }
 }
 
-/// Which window an ACP read should target.
+/// Which window an Agent Chat read should target.
 #[derive(Clone)]
-enum AcpReadTarget {
-    /// Read from the main window's ACP view (current behavior).
+enum AgentChatReadTarget {
+    /// Read from the main window's Agent Chat view (current behavior).
     Main {
         info: Option<crate::protocol::AutomationWindowInfo>,
     },
-    /// Read from the detached ACP chat window's entity.
+    /// Read from the detached Agent Chat chat window's entity.
     Detached {
         info: crate::protocol::AutomationWindowInfo,
         entity: gpui::Entity<crate::ai::agent_chat::ui::AgentChatView>,
     },
-    /// Read from the Notes-hosted embedded ACP chat entity.
+    /// Read from the Notes-hosted embedded Agent Chat chat entity.
     Notes {
         info: crate::protocol::AutomationWindowInfo,
         entity: gpui::Entity<crate::ai::agent_chat::ui::AgentChatView>,
@@ -454,15 +454,15 @@ enum AcpReadTarget {
 
 /// Resolved automation target for batch/waitFor operations.
 ///
-/// Extends `AcpReadTarget` to also accept Notes and ActionsDialog windows.
+/// Extends `AgentChatReadTarget` to also accept Notes and ActionsDialog windows.
 #[derive(Clone)]
 enum AutomationReadTarget {
     /// Main window (default).
     Main {
         info: Option<crate::protocol::AutomationWindowInfo>,
     },
-    /// Detached ACP chat window.
-    AcpDetached {
+    /// Detached Agent Chat chat window.
+    AgentChatDetached {
         info: crate::protocol::AutomationWindowInfo,
         entity: gpui::Entity<crate::ai::agent_chat::ui::AgentChatView>,
     },
@@ -490,7 +490,7 @@ enum AutomationReadTarget {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum AutomationBatchTargetKind {
     Main,
-    AcpDetached,
+    AgentChatDetached,
     Notes,
     ActionsDialog,
     PromptPopup,
@@ -523,9 +523,9 @@ impl BatchTargetCapabilities {
                 ],
                 concise_unsupported_message: true,
             },
-            AutomationBatchTargetKind::AcpDetached => Self {
-                display_name: "Detached ACP",
-                unsupported_target_name: "detached ACP",
+            AutomationBatchTargetKind::AgentChatDetached => Self {
+                display_name: "Detached Agent Chat",
+                unsupported_target_name: "detached Agent Chat",
                 supported_commands: &["setInput", "waitFor", "selectByValue", "selectBySemanticId"],
                 concise_unsupported_message: true,
             },
@@ -536,7 +536,7 @@ impl BatchTargetCapabilities {
                     "setInput",
                     "openActions",
                     "togglePreview",
-                    "openNotesAcp",
+                    "openNotesAgentChat",
                     "waitFor",
                 ],
                 concise_unsupported_message: true,
@@ -575,7 +575,7 @@ fn batch_target_kind_for_resolved_target(
 ) -> AutomationBatchTargetKind {
     match target {
         AutomationReadTarget::Main { .. } => AutomationBatchTargetKind::Main,
-        AutomationReadTarget::AcpDetached { .. } => AutomationBatchTargetKind::AcpDetached,
+        AutomationReadTarget::AgentChatDetached { .. } => AutomationBatchTargetKind::AgentChatDetached,
         AutomationReadTarget::Notes { .. } => AutomationBatchTargetKind::Notes,
         AutomationReadTarget::ActionsDialog { .. } => AutomationBatchTargetKind::ActionsDialog,
         AutomationReadTarget::PromptPopup { .. } => AutomationBatchTargetKind::PromptPopup,
@@ -628,47 +628,47 @@ fn unsupported_batch_command_error(
     }
 }
 
-fn is_acp_wait_condition(condition: &protocol::WaitCondition) -> bool {
+fn is_agent_chat_wait_condition(condition: &protocol::WaitCondition) -> bool {
     matches!(
         condition,
         protocol::WaitCondition::Detailed(
-            protocol::WaitDetailedCondition::AcpReady
-                | protocol::WaitDetailedCondition::AcpPickerOpen
-                | protocol::WaitDetailedCondition::AcpPickerClosed
-                | protocol::WaitDetailedCondition::AcpItemAccepted
-                | protocol::WaitDetailedCondition::AcpCursorAt { .. }
-                | protocol::WaitDetailedCondition::AcpStatus { .. }
-                | protocol::WaitDetailedCondition::AcpInputMatch { .. }
-                | protocol::WaitDetailedCondition::AcpInputContains { .. }
-                | protocol::WaitDetailedCondition::AcpAcceptedViaKey { .. }
-                | protocol::WaitDetailedCondition::AcpAcceptedLabel { .. }
-                | protocol::WaitDetailedCondition::AcpAcceptedCursorAt { .. }
-                | protocol::WaitDetailedCondition::AcpInputLayoutMatch { .. }
-                | protocol::WaitDetailedCondition::AcpSetupVisible
-                | protocol::WaitDetailedCondition::AcpSetupReasonCode { .. }
-                | protocol::WaitDetailedCondition::AcpSetupPrimaryAction { .. }
-                | protocol::WaitDetailedCondition::AcpSetupAgentPickerOpen
-                | protocol::WaitDetailedCondition::AcpSetupSelectedAgent { .. }
+            protocol::WaitDetailedCondition::AgentChatReady
+                | protocol::WaitDetailedCondition::AgentChatPickerOpen
+                | protocol::WaitDetailedCondition::AgentChatPickerClosed
+                | protocol::WaitDetailedCondition::AgentChatItemAccepted
+                | protocol::WaitDetailedCondition::AgentChatCursorAt { .. }
+                | protocol::WaitDetailedCondition::AgentChatStatus { .. }
+                | protocol::WaitDetailedCondition::AgentChatInputMatch { .. }
+                | protocol::WaitDetailedCondition::AgentChatInputContains { .. }
+                | protocol::WaitDetailedCondition::AgentChatAcceptedViaKey { .. }
+                | protocol::WaitDetailedCondition::AgentChatAcceptedLabel { .. }
+                | protocol::WaitDetailedCondition::AgentChatAcceptedCursorAt { .. }
+                | protocol::WaitDetailedCondition::AgentChatInputLayoutMatch { .. }
+                | protocol::WaitDetailedCondition::AgentChatSetupVisible
+                | protocol::WaitDetailedCondition::AgentChatSetupReasonCode { .. }
+                | protocol::WaitDetailedCondition::AgentChatSetupPrimaryAction { .. }
+                | protocol::WaitDetailedCondition::AgentChatSetupAgentPickerOpen
+                | protocol::WaitDetailedCondition::AgentChatSetupSelectedAgent { .. }
         )
     )
 }
 
-/// Return the live ACP chat entity for automation, preferring the detached window
+/// Return the live Agent Chat chat entity for automation, preferring the detached window
 /// when it is open and falling back to the embedded main-window view.
-fn active_acp_chat_entity(
+fn active_agent_chat_entity(
     embedded: Option<&gpui::Entity<crate::ai::agent_chat::ui::AgentChatView>>,
 ) -> Option<gpui::Entity<crate::ai::agent_chat::ui::AgentChatView>> {
-    crate::ai::acp::chat_window::get_detached_acp_view_entity().or_else(|| embedded.cloned())
+    crate::ai::agent_chat::ui::chat_window::get_detached_agent_chat_view_entity().or_else(|| embedded.cloned())
 }
 
-/// Resolve an automation target that accepts Main, AcpDetached, Notes, and ActionsDialog.
+/// Resolve an automation target that accepts Main, AgentChatDetached, Notes, and ActionsDialog.
 ///
 /// Used by `batch` and `waitFor` to route commands to the correct window.
 fn resolve_automation_read_target(
     request_id: &str,
     op: &'static str,
     target: Option<&crate::protocol::AutomationWindowTarget>,
-    embedded_acp: Option<&gpui::Entity<crate::ai::agent_chat::ui::AgentChatView>>,
+    embedded_agent_chat: Option<&gpui::Entity<crate::ai::agent_chat::ui::AgentChatView>>,
     cx: &gpui::App,
 ) -> Result<AutomationReadTarget, crate::protocol::TransactionError> {
     let Some(target) = target else {
@@ -692,8 +692,8 @@ fn resolve_automation_read_target(
         crate::protocol::AutomationWindowKind::Main => Ok(AutomationReadTarget::Main {
             info: Some(resolved),
         }),
-        crate::protocol::AutomationWindowKind::AcpDetached => {
-            match active_acp_chat_entity(embedded_acp) {
+        crate::protocol::AutomationWindowKind::AgentChatDetached => {
+            match active_agent_chat_entity(embedded_agent_chat) {
                 Some(entity) => {
                     tracing::info!(
                         target: "script_kit::automation",
@@ -701,20 +701,20 @@ fn resolve_automation_read_target(
                         op = op,
                         window_id = %resolved.id,
                         kind = ?resolved.kind,
-                        "automation.target.acp_detached_resolved"
+                        "automation.target.agent_chat_detached_resolved"
                     );
-                    Ok(AutomationReadTarget::AcpDetached {
+                    Ok(AutomationReadTarget::AgentChatDetached {
                         info: resolved,
                         entity,
                     })
                 }
                 None => Err(crate::protocol::TransactionError::action_failed(format!(
-                    "{op} resolved detached ACP target {} but no live view entity is available",
+                    "{op} resolved detached Agent Chat target {} but no live view entity is available",
                     resolved.id
                 ))),
             }
         }
-        crate::protocol::AutomationWindowKind::Ai => match active_acp_chat_entity(embedded_acp) {
+        crate::protocol::AutomationWindowKind::Ai => match active_agent_chat_entity(embedded_agent_chat) {
             Some(entity) => {
                 tracing::info!(
                     target: "script_kit::automation",
@@ -722,15 +722,15 @@ fn resolve_automation_read_target(
                     op = op,
                     window_id = %resolved.id,
                     kind = ?resolved.kind,
-                    "automation.target.ai_routed_to_acp_entity"
+                    "automation.target.ai_routed_to_agent_chat_entity"
                 );
-                Ok(AutomationReadTarget::AcpDetached {
+                Ok(AutomationReadTarget::AgentChatDetached {
                     info: resolved,
                     entity,
                 })
             }
             None => Err(crate::protocol::TransactionError::action_failed(format!(
-                "{op} resolved Ai target {} but no live ACP chat view is available",
+                "{op} resolved Ai target {} but no live Agent Chat chat view is available",
                 resolved.id
             ))),
         },
@@ -783,8 +783,8 @@ fn resolve_automation_read_target(
             // PromptPopup is a union of mention picker, history popup, and confirm dialog.
             // We verify at least one popup is open. The specific sub-type is detected at
             // batch-execution time since the popup could change between resolution and use.
-            let any_open = crate::ai::acp::picker_popup::is_mention_popup_window_open()
-                || crate::ai::acp::history_popup::is_history_popup_window_open()
+            let any_open = crate::ai::agent_chat::ui::picker_popup::is_mention_popup_window_open()
+                || crate::ai::agent_chat::ui::history_popup::is_history_popup_window_open()
                 || crate::confirm::is_confirm_popup_window_open();
             if any_open {
                 tracing::info!(
@@ -816,28 +816,28 @@ fn resolve_automation_read_target(
                 "automation.target.unsupported_kind"
             );
             Err(crate::protocol::TransactionError::action_failed(format!(
-                "{op} supports Main, Ai, AcpDetached, Notes, ActionsDialog, and PromptPopup targets; resolved {} ({:?})",
+                "{op} supports Main, Ai, AgentChatDetached, Notes, ActionsDialog, and PromptPopup targets; resolved {} ({:?})",
                 resolved.id, other_kind
             )))
         }
     }
 }
 
-/// Resolve an automation target for ACP read operations (getAcpState, getAcpTestProbe).
+/// Resolve an automation target for Agent Chat read operations (getAgentChatState, getAgentChatTestProbe).
 ///
-/// Allows `Main` and `AcpDetached` kinds. Rejects all other secondary targets
-/// with a structured error. For `AcpDetached`, returns the live entity from the
+/// Allows `Main` and `AgentChatDetached` kinds. Rejects all other secondary targets
+/// with a structured error. For `AgentChatDetached`, returns the live entity from the
 /// detached chat window (or errors if no detached window is open).
-fn resolve_acp_read_target(
+fn resolve_agent_chat_read_target(
     request_id: &str,
     op: &'static str,
     target: Option<&crate::protocol::AutomationWindowTarget>,
-    embedded_acp: Option<&gpui::Entity<crate::ai::agent_chat::ui::AgentChatView>>,
+    embedded_agent_chat: Option<&gpui::Entity<crate::ai::agent_chat::ui::AgentChatView>>,
     cx: &gpui::App,
-) -> Result<AcpReadTarget, crate::protocol::TransactionError> {
+) -> Result<AgentChatReadTarget, crate::protocol::TransactionError> {
     // No explicit target → default to main window (preserves existing behavior).
     let Some(target) = target else {
-        return Ok(AcpReadTarget::Main { info: None });
+        return Ok(AgentChatReadTarget::Main { info: None });
     };
 
     let resolved = crate::windows::resolve_automation_window(Some(target)).map_err(|err| {
@@ -846,7 +846,7 @@ fn resolve_acp_read_target(
             request_id = %request_id,
             op = op,
             error = %err,
-            "automation.acp_target.resolve_failed"
+            "automation.agent_chat_target.resolve_failed"
         );
         crate::protocol::TransactionError::action_failed(format!(
             "{op} target resolution failed: {err}"
@@ -860,14 +860,14 @@ fn resolve_acp_read_target(
                 request_id = %request_id,
                 op = op,
                 window_id = %resolved.id,
-                "automation.acp_target.main"
+                "automation.agent_chat_target.main"
             );
-            Ok(AcpReadTarget::Main {
+            Ok(AgentChatReadTarget::Main {
                 info: Some(resolved),
             })
         }
-        crate::protocol::AutomationWindowKind::AcpDetached => {
-            match active_acp_chat_entity(embedded_acp) {
+        crate::protocol::AutomationWindowKind::AgentChatDetached => {
+            match active_agent_chat_entity(embedded_agent_chat) {
                 Some(entity) => {
                     tracing::info!(
                         target: "script_kit::automation",
@@ -875,9 +875,9 @@ fn resolve_acp_read_target(
                         op = op,
                         window_id = %resolved.id,
                         kind = ?resolved.kind,
-                        "automation.acp_target.detached_resolved"
+                        "automation.agent_chat_target.detached_resolved"
                     );
-                    Ok(AcpReadTarget::Detached {
+                    Ok(AgentChatReadTarget::Detached {
                         info: resolved,
                         entity,
                     })
@@ -888,10 +888,10 @@ fn resolve_acp_read_target(
                         request_id = %request_id,
                         op = op,
                         window_id = %resolved.id,
-                        "automation.acp_target.detached_no_entity"
+                        "automation.agent_chat_target.detached_no_entity"
                     );
                     Err(crate::protocol::TransactionError::action_failed(format!(
-                        "{op} resolved detached ACP target {} but no live view entity is available \
+                        "{op} resolved detached Agent Chat target {} but no live view entity is available \
                          (window may be a placeholder or closed)",
                         resolved.id
                     )))
@@ -900,7 +900,7 @@ fn resolve_acp_read_target(
         }
         crate::protocol::AutomationWindowKind::Notes => {
             match crate::notes::get_notes_app_entity_and_handle()
-                .and_then(|(entity, _handle)| entity.read(cx).embedded_acp_chat_entity())
+                .and_then(|(entity, _handle)| entity.read(cx).embedded_agent_chat_entity())
             {
                 Some(entity) => {
                     tracing::info!(
@@ -909,9 +909,9 @@ fn resolve_acp_read_target(
                         op = op,
                         window_id = %resolved.id,
                         kind = ?resolved.kind,
-                        "automation.acp_target.notes_resolved"
+                        "automation.agent_chat_target.notes_resolved"
                     );
-                    Ok(AcpReadTarget::Notes {
+                    Ok(AgentChatReadTarget::Notes {
                         info: resolved,
                         entity,
                     })
@@ -922,16 +922,16 @@ fn resolve_acp_read_target(
                         request_id = %request_id,
                         op = op,
                         window_id = %resolved.id,
-                        "automation.acp_target.notes_no_entity"
+                        "automation.agent_chat_target.notes_no_entity"
                     );
                     Err(crate::protocol::TransactionError::action_failed(format!(
-                        "{op} resolved Notes target {} but no embedded ACP view is available",
+                        "{op} resolved Notes target {} but no embedded Agent Chat view is available",
                         resolved.id
                     )))
                 }
             }
         }
-        crate::protocol::AutomationWindowKind::Ai => match active_acp_chat_entity(embedded_acp) {
+        crate::protocol::AutomationWindowKind::Ai => match active_agent_chat_entity(embedded_agent_chat) {
             Some(entity) => {
                 tracing::info!(
                     target: "script_kit::automation",
@@ -939,9 +939,9 @@ fn resolve_acp_read_target(
                     op = op,
                     window_id = %resolved.id,
                     kind = ?resolved.kind,
-                    "automation.acp_target.ai_resolved_to_entity"
+                    "automation.agent_chat_target.ai_resolved_to_entity"
                 );
-                Ok(AcpReadTarget::Detached {
+                Ok(AgentChatReadTarget::Detached {
                     info: resolved,
                     entity,
                 })
@@ -953,9 +953,9 @@ fn resolve_acp_read_target(
                     op = op,
                     window_id = %resolved.id,
                     kind = ?resolved.kind,
-                    "automation.acp_target.ai_fallback_main_collector"
+                    "automation.agent_chat_target.ai_fallback_main_collector"
                 );
-                Ok(AcpReadTarget::Main {
+                Ok(AgentChatReadTarget::Main {
                     info: Some(resolved),
                 })
             }
@@ -967,25 +967,25 @@ fn resolve_acp_read_target(
                 op = op,
                 window_id = %resolved.id,
                 kind = ?other_kind,
-                "automation.acp_target.non_acp_rejected"
+                "automation.agent_chat_target.non_agent_chat_rejected"
             );
             Err(crate::protocol::TransactionError::action_failed(format!(
-                "{op} supports only Main, Ai, AcpDetached, and Notes targets; resolved {} ({:?})",
+                "{op} supports only Main, Ai, AgentChatDetached, and Notes targets; resolved {} ({:?})",
                 resolved.id, other_kind
             )))
         }
     }
 }
 
-/// Build an `AcpResolvedTarget` from a resolved `AcpReadTarget` and emit
-/// a structured `acp_target_resolved` log line.
-fn build_acp_resolved_target(
+/// Build an `AgentChatResolvedTarget` from a resolved `AgentChatReadTarget` and emit
+/// a structured `agent_chat_target_resolved` log line.
+fn build_agent_chat_resolved_target(
     request_id: &str,
     op: &'static str,
-    acp_target: &AcpReadTarget,
-) -> Option<crate::protocol::AcpResolvedTarget> {
-    let (window_id, window_kind, title) = match acp_target {
-        AcpReadTarget::Main { info } => {
+    agent_chat_target: &AgentChatReadTarget,
+) -> Option<crate::protocol::AgentChatResolvedTarget> {
+    let (window_id, window_kind, title) = match agent_chat_target {
+        AgentChatReadTarget::Main { info } => {
             if let Some(info) = info {
                 (
                     info.id.clone(),
@@ -1002,12 +1002,12 @@ fn build_acp_resolved_target(
                 )
             }
         }
-        AcpReadTarget::Detached { info, .. } => (
+        AgentChatReadTarget::Detached { info, .. } => (
             info.id.clone(),
             info.kind.as_camel_case().to_string(),
             info.title.clone(),
         ),
-        AcpReadTarget::Notes { info, .. } => (
+        AgentChatReadTarget::Notes { info, .. } => (
             info.id.clone(),
             info.kind.as_camel_case().to_string(),
             info.title.clone(),
@@ -1016,7 +1016,7 @@ fn build_acp_resolved_target(
 
     tracing::info!(
         target: "script_kit::automation",
-        event = "acp_target_resolved",
+        event = "agent_chat_target_resolved",
         request_id = %request_id,
         window_id = %window_id,
         kind = %window_kind,
@@ -1024,7 +1024,7 @@ fn build_acp_resolved_target(
         op = op,
     );
 
-    Some(crate::protocol::AcpResolvedTarget {
+    Some(crate::protocol::AgentChatResolvedTarget {
         window_id,
         window_kind,
         title,
@@ -1080,21 +1080,21 @@ fn build_notes_ui_snapshot(
     }
 }
 
-/// Build a UI state snapshot for a detached ACP target — mirrors
-/// [`DetachedAcpTransactionProvider::snapshot`](crate::windows::automation_transaction_provider).
-fn build_acp_detached_ui_snapshot(
+/// Build a UI state snapshot for a detached Agent Chat target — mirrors
+/// [`DetachedAgentChatTransactionProvider::snapshot`](crate::windows::automation_transaction_provider).
+fn build_agent_chat_detached_ui_snapshot(
     entity: &gpui::Entity<crate::ai::agent_chat::ui::AgentChatView>,
     cx: &gpui::App,
 ) -> crate::protocol::UiStateSnapshot {
     let view = entity.read(cx);
-    let state = view.collect_acp_state_snapshot(cx);
-    let surface = crate::windows::automation_surface_collector::collect_acp_detached_elements(
+    let state = view.collect_agent_chat_state_snapshot(cx);
+    let surface = crate::windows::automation_surface_collector::collect_agent_chat_detached_elements(
         entity, 200, cx,
     );
     crate::protocol::UiStateSnapshot {
         window_visible: true,
         window_focused: true,
-        prompt_type: Some("acpChat".to_string()),
+        prompt_type: Some("agentChatChat".to_string()),
         input_value: Some(state.input_text.clone()),
         selected_value: state
             .picker
@@ -1107,10 +1107,10 @@ fn build_acp_detached_ui_snapshot(
             .map(|el| el.semantic_id.clone())
             .collect(),
         focused_semantic_id: surface.focused_semantic_id,
-        acp_status: Some(state.status.clone()),
-        acp_context_ready: state.context_ready,
-        acp_picker_open: state.picker.as_ref().is_some_and(|picker| picker.open),
-        acp_cursor_index: Some(state.cursor_index),
+        agent_chat_status: Some(state.status.clone()),
+        agent_chat_context_ready: state.context_ready,
+        agent_chat_picker_open: state.picker.as_ref().is_some_and(|picker| picker.open),
+        agent_chat_cursor_index: Some(state.cursor_index),
     }
 }
 
@@ -1118,7 +1118,7 @@ fn build_acp_detached_ui_snapshot(
 ///
 /// Only generic conditions (elementExists, elementFocused, inputEmpty,
 /// windowVisible, windowFocused, stateMatch) are meaningful for Notes.
-/// ACP-specific conditions always return `false`.
+/// Agent Chat-specific conditions always return `false`.
 fn notes_wait_condition_satisfied(
     entity: &gpui::Entity<crate::notes::NotesApp>,
     condition: &crate::protocol::WaitCondition,
@@ -1157,7 +1157,7 @@ fn notes_wait_condition_satisfied(
             use crate::protocol::transaction_executor::matches_state_spec;
             matches_state_spec(&snapshot, state)
         }
-        // ACP-specific conditions are not applicable to Notes.
+        // Agent Chat-specific conditions are not applicable to Notes.
         _ => false,
     }
 }
@@ -1400,28 +1400,28 @@ fn prompt_message_from_protocol_message(
             limit,
             target,
         }),
-        Message::GetAcpState { request_id, target } => {
-            Some(PromptMessage::GetAcpState { request_id, target })
+        Message::GetAgentChatState { request_id, target } => {
+            Some(PromptMessage::GetAgentChatState { request_id, target })
         }
-        Message::PerformAcpSetupAction {
+        Message::PerformAgentChatSetupAction {
             request_id,
             action,
             agent_id,
             target,
-        } => Some(PromptMessage::PerformAcpSetupAction {
+        } => Some(PromptMessage::PerformAgentChatSetupAction {
             request_id,
             action,
             agent_id,
             target,
         }),
-        Message::ResetAcpTestProbe { request_id, target } => {
-            Some(PromptMessage::ResetAcpTestProbe { request_id, target })
+        Message::ResetAgentChatTestProbe { request_id, target } => {
+            Some(PromptMessage::ResetAgentChatTestProbe { request_id, target })
         }
-        Message::GetAcpTestProbe {
+        Message::GetAgentChatTestProbe {
             request_id,
             tail,
             target,
-        } => Some(PromptMessage::GetAcpTestProbe {
+        } => Some(PromptMessage::GetAgentChatTestProbe {
             request_id,
             tail,
             target,
@@ -2304,35 +2304,35 @@ impl ScriptListApp {
         }
     }
 
-    fn script_error_acp_view_entity(
+    fn script_error_agent_chat_view_entity(
         &self,
     ) -> Option<gpui::Entity<crate::ai::agent_chat::ui::AgentChatView>> {
-        crate::ai::acp::chat_window::get_detached_acp_view_entity()
-            .or_else(|| self.embedded_acp_automation_entity())
+        crate::ai::agent_chat::ui::chat_window::get_detached_agent_chat_view_entity()
+            .or_else(|| self.embedded_agent_chat_automation_entity())
     }
 
-    fn embedded_acp_automation_entity(
+    fn embedded_agent_chat_automation_entity(
         &self,
     ) -> Option<gpui::Entity<crate::ai::agent_chat::ui::AgentChatView>> {
         match &self.current_view {
-            AppView::AcpChatView { entity } => Some(entity.clone()),
+            AppView::AgentChatView { entity } => Some(entity.clone()),
             _ => None,
         }
     }
 
-    fn ensure_script_error_acp_view(
+    fn ensure_script_error_agent_chat_view(
         &mut self,
         cx: &mut Context<Self>,
     ) -> Option<gpui::Entity<crate::ai::agent_chat::ui::AgentChatView>> {
-        if let Some(entity) = self.script_error_acp_view_entity() {
+        if let Some(entity) = self.script_error_agent_chat_view_entity() {
             return Some(entity);
         }
 
-        self.open_tab_ai_acp_with_entry_intent(None, cx);
-        self.script_error_acp_view_entity()
+        self.open_tab_ai_agent_chat_with_entry_intent(None, cx);
+        self.script_error_agent_chat_view_entity()
     }
 
-    fn route_script_error_to_acp(
+    fn route_script_error_to_agent_chat(
         &mut self,
         script_path: &str,
         error_message: &str,
@@ -2343,9 +2343,9 @@ impl ScriptListApp {
         cx: &mut Context<Self>,
     ) {
         let context_root = crate::setup::get_kit_path()
-            .join("acp")
+            .join("agent_chat")
             .join("script-error-context");
-        let bundle = match persist_script_error_acp_context_bundle_in_dir(
+        let bundle = match persist_script_error_agent_chat_context_bundle_in_dir(
             &context_root,
             script_path,
             error_message,
@@ -2358,7 +2358,7 @@ impl ScriptListApp {
             Err(error) => {
                 tracing::warn!(
                     target: "script_kit::tab_ai",
-                    event = "script_error_acp_context_bundle_failed",
+                    event = "script_error_agent_chat_context_bundle_failed",
                     script_path = %script_path,
                     error = %error,
                 );
@@ -2366,32 +2366,32 @@ impl ScriptListApp {
             }
         };
 
-        let Some(view_entity) = self.ensure_script_error_acp_view(cx) else {
+        let Some(view_entity) = self.ensure_script_error_agent_chat_view(cx) else {
             tracing::warn!(
                 target: "script_kit::tab_ai",
-                event = "script_error_acp_view_unavailable",
+                event = "script_error_agent_chat_view_unavailable",
                 script_path = %script_path,
             );
             return;
         };
 
         let prompt =
-            build_script_error_acp_prompt(script_path, error_message, exit_code, suggestions);
+            build_script_error_agent_chat_prompt(script_path, error_message, exit_code, suggestions);
         if let Err(error) =
-            Self::stage_script_error_context_on_acp_view(view_entity, bundle, prompt, cx)
+            Self::stage_script_error_context_on_agent_chat_view(view_entity, bundle, prompt, cx)
         {
             tracing::warn!(
                 target: "script_kit::tab_ai",
-                event = "script_error_acp_stage_failed",
+                event = "script_error_agent_chat_stage_failed",
                 script_path = %script_path,
                 error = %error,
             );
         }
     }
 
-    fn stage_script_error_context_on_acp_view(
+    fn stage_script_error_context_on_agent_chat_view(
         view_entity: gpui::Entity<crate::ai::agent_chat::ui::AgentChatView>,
-        bundle: ScriptErrorAcpContextBundle,
+        bundle: ScriptErrorAgentChatContextBundle,
         prompt: String,
         cx: &mut Context<Self>,
     ) -> Result<(), String> {
@@ -2908,13 +2908,13 @@ impl ScriptListApp {
                 );
 
                 let keep_tab_ai_save_offer_open = self.tab_ai_save_offer_state.is_some();
-                let keep_acp_chat_open = matches!(self.current_view, AppView::AcpChatView { .. });
+                let keep_agent_chat_open = matches!(self.current_view, AppView::AgentChatView { .. });
 
                 if keep_tab_ai_save_offer_open {
                     tracing::info!(
                         category = "VISIBILITY",
                         keep_tab_ai_save_offer_open,
-                        keep_acp_chat_open,
+                        keep_agent_chat_open,
                         "Tab AI active after script exit - preserving view"
                     );
 
@@ -2927,11 +2927,11 @@ impl ScriptListApp {
                     }
 
                     return;
-                } else if keep_acp_chat_open {
+                } else if keep_agent_chat_open {
                     tracing::info!(
                         category = "VISIBILITY",
                         keep_tab_ai_save_offer_open,
-                        keep_acp_chat_open,
+                        keep_agent_chat_open,
                         "Tab AI active after script exit - preserving view"
                     );
 
@@ -3178,7 +3178,7 @@ impl ScriptListApp {
                     "Toast created for script error"
                 );
 
-                self.route_script_error_to_acp(
+                self.route_script_error_to_agent_chat(
                     &script_path,
                     &error_message,
                     stderr_output.as_deref(),
@@ -3760,17 +3760,17 @@ impl ScriptListApp {
                             selected_value,
                         )
                     }
-                    AppView::AcpHistoryView {
+                    AppView::AgentChatHistoryView {
                         filter,
                         selected_index,
                     } => {
                         let (dataset_count, visible_count) =
-                            Self::acp_history_dataset_and_visible_counts(filter);
+                            Self::agent_chat_history_dataset_and_visible_counts(filter);
                         let selected_value =
-                            Self::acp_history_selected_visible_row(filter, *selected_index)
+                            Self::agent_chat_history_selected_visible_row(filter, *selected_index)
                                 .map(|entry| entry.title_display().to_string());
                         (
-                            "acpHistory".to_string(),
+                            "agent_chatHistory".to_string(),
                             None,
                             None,
                             filter.clone(),
@@ -4289,8 +4289,8 @@ impl ScriptListApp {
                             selected_value,
                         )
                     }
-                    AppView::AcpChatView { .. } => (
-                        "acpChat".to_string(),
+                    AppView::AgentChatView { .. } => (
+                        "agentChatChat".to_string(),
                         None,
                         None,
                         String::new(),
@@ -4702,28 +4702,28 @@ impl ScriptListApp {
                 }
             }
 
-            PromptMessage::GetAcpState { request_id, target } => {
+            PromptMessage::GetAgentChatState { request_id, target } => {
                 tracing::info!(
-                    category = "ACP_STATE",
+                    category = "AGENT_CHAT_STATE",
                     request_id = %request_id,
                     target = ?target,
-                    "acp_state.request"
+                    "agent_chat_state.request"
                 );
 
-                // Resolve target: Main → main window, AcpDetached → detached entity,
+                // Resolve target: Main → main window, AgentChatDetached → detached entity,
                 // anything else → structured error.
-                let acp_target = match resolve_acp_read_target(
+                let agent_chat_target = match resolve_agent_chat_read_target(
                     &request_id,
-                    "getAcpState",
+                    "getAgentChatState",
                     target.as_ref(),
-                    self.embedded_acp_automation_entity().as_ref(),
+                    self.embedded_agent_chat_automation_entity().as_ref(),
                     cx,
                 ) {
                     Ok(t) => t,
                     Err(error) => {
-                        let mut state = protocol::AcpStateSnapshot::default();
+                        let mut state = protocol::AgentChatStateSnapshot::default();
                         state.warnings = vec![format!("target_unsupported: {}", error.message)];
-                        let response = Message::acp_state_result(request_id.clone(), state);
+                        let response = Message::agent_chat_state_result(request_id.clone(), state);
                         if let Some(ref sender) = self.response_sender {
                             let _ = sender.try_send(response);
                         }
@@ -4732,88 +4732,88 @@ impl ScriptListApp {
                 };
 
                 let resolved_target =
-                    build_acp_resolved_target(&request_id, "getAcpState", &acp_target);
+                    build_agent_chat_resolved_target(&request_id, "getAgentChatState", &agent_chat_target);
 
-                let mut state = match &acp_target {
-                    AcpReadTarget::Main { .. } => self.collect_acp_state(cx),
-                    AcpReadTarget::Detached { entity, .. } => {
+                let mut state = match &agent_chat_target {
+                    AgentChatReadTarget::Main { .. } => self.collect_agent_chat_state(cx),
+                    AgentChatReadTarget::Detached { entity, .. } => {
                         let view = entity.read(cx);
-                        view.collect_acp_state_snapshot(cx)
+                        view.collect_agent_chat_state_snapshot(cx)
                     }
-                    AcpReadTarget::Notes { entity, .. } => {
+                    AgentChatReadTarget::Notes { entity, .. } => {
                         let view = entity.read(cx);
-                        view.collect_acp_state_snapshot(cx)
+                        view.collect_agent_chat_state_snapshot(cx)
                     }
                 };
                 state.resolved_target = resolved_target;
 
                 tracing::info!(
-                    target: "script_kit::acp_telemetry",
-                    category = "ACP_STATE",
+                    target: "script_kit::agent_chat_telemetry",
+                    category = "AGENT_CHAT_STATE",
                     request_id = %request_id,
                     status = %state.status,
                     cursor_index = state.cursor_index,
                     picker_open = state.picker.as_ref().map_or(false, |p| p.open),
                     message_count = state.message_count,
                     context_ready = state.context_ready,
-                    "acp_state.result"
+                    "agent_chat_state.result"
                 );
 
-                let response = Message::acp_state_result(request_id.clone(), state);
+                let response = Message::agent_chat_state_result(request_id.clone(), state);
 
                 if let Some(ref sender) = self.response_sender {
                     match sender.try_send(response) {
                         Ok(()) => {}
                         Err(std::sync::mpsc::TrySendError::Full(_)) => {
                             tracing::warn!(
-                                category = "ACP_STATE",
+                                category = "AGENT_CHAT_STATE",
                                 request_id = %request_id,
-                                "acp_state.response_channel_full"
+                                "agent_chat_state.response_channel_full"
                             );
                         }
                         Err(std::sync::mpsc::TrySendError::Disconnected(_)) => {
                             tracing::info!(
-                                category = "ACP_STATE",
+                                category = "AGENT_CHAT_STATE",
                                 request_id = %request_id,
-                                "acp_state.response_channel_disconnected"
+                                "agent_chat_state.response_channel_disconnected"
                             );
                         }
                     }
                 } else {
                     tracing::error!(
-                        category = "ACP_STATE",
+                        category = "AGENT_CHAT_STATE",
                         request_id = %request_id,
-                        "acp_state.no_response_sender"
+                        "agent_chat_state.no_response_sender"
                     );
                 }
             }
 
-            PromptMessage::PerformAcpSetupAction {
+            PromptMessage::PerformAgentChatSetupAction {
                 request_id,
                 action,
                 agent_id,
                 target,
             } => {
                 tracing::info!(
-                    category = "ACP_SETUP_ACTION",
+                    category = "AGENT_CHAT_SETUP_ACTION",
                     request_id = %request_id,
                     action = ?action,
                     agent_id = ?agent_id,
                     target = ?target,
-                    "acp_setup_action.request"
+                    "agent_chat_setup_action.request"
                 );
 
-                // Resolve the ACP target — now accepts both Main and AcpDetached.
-                let acp_target = match resolve_acp_read_target(
+                // Resolve the Agent Chat target — now accepts both Main and AgentChatDetached.
+                let agent_chat_target = match resolve_agent_chat_read_target(
                     &request_id,
-                    "performAcpSetupAction",
+                    "performAgentChatSetupAction",
                     target.as_ref(),
-                    self.embedded_acp_automation_entity().as_ref(),
+                    self.embedded_agent_chat_automation_entity().as_ref(),
                     cx,
                 ) {
                     Ok(t) => t,
                     Err(error) => {
-                        let response = Message::acp_setup_action_result_error(
+                        let response = Message::agent_chat_setup_action_result_error(
                             request_id.clone(),
                             error.message,
                         );
@@ -4824,17 +4824,17 @@ impl ScriptListApp {
                     }
                 };
 
-                // For Main targets, verify the main window is actually showing AcpChatView.
-                if matches!(acp_target, AcpReadTarget::Main { .. }) {
-                    if !matches!(self.current_view, AppView::AcpChatView { .. }) {
+                // For Main targets, verify the main window is actually showing AgentChatView.
+                if matches!(agent_chat_target, AgentChatReadTarget::Main { .. }) {
+                    if !matches!(self.current_view, AppView::AgentChatView { .. }) {
                         tracing::warn!(
                             target: "script_kit::automation",
                             request_id = %request_id,
-                            "automation.acp_action_target_main_view_missing"
+                            "automation.agent_chat_action_target_main_view_missing"
                         );
-                        let response = Message::acp_setup_action_result_error(
+                        let response = Message::agent_chat_setup_action_result_error(
                             request_id.clone(),
-                            "performAcpSetupAction resolved the main ACP target but the main window is not currently showing AcpChatView".to_string(),
+                            "performAgentChatSetupAction resolved the main Agent Chat target but the main window is not currently showing AgentChatView".to_string(),
                         );
                         if let Some(ref sender) = self.response_sender {
                             let _ = sender.try_send(response);
@@ -4846,56 +4846,56 @@ impl ScriptListApp {
                 tracing::info!(
                     target: "script_kit::automation",
                     request_id = %request_id,
-                    resolved_target = match &acp_target {
-                        AcpReadTarget::Main { .. } => "main",
-                        AcpReadTarget::Detached { .. } => "detached",
-                        AcpReadTarget::Notes { .. } => "notes",
+                    resolved_target = match &agent_chat_target {
+                        AgentChatReadTarget::Main { .. } => "main",
+                        AgentChatReadTarget::Detached { .. } => "detached",
+                        AgentChatReadTarget::Notes { .. } => "notes",
                     },
-                    "automation.acp_action_target_resolved"
+                    "automation.agent_chat_action_target_resolved"
                 );
 
                 let resolved_target =
-                    build_acp_resolved_target(&request_id, "performAcpSetupAction", &acp_target);
+                    build_agent_chat_resolved_target(&request_id, "performAgentChatSetupAction", &agent_chat_target);
 
-                // Dispatch the action to the resolved ACP view.
-                let result = match acp_target.clone() {
-                    AcpReadTarget::Main { .. } => match &self.current_view {
-                        AppView::AcpChatView { entity } => entity.update(cx, |view, cx| {
+                // Dispatch the action to the resolved Agent Chat view.
+                let result = match agent_chat_target.clone() {
+                    AgentChatReadTarget::Main { .. } => match &self.current_view {
+                        AppView::AgentChatView { entity } => entity.update(cx, |view, cx| {
                             view.perform_setup_automation_action(action, agent_id.as_deref(), cx)
                         }),
-                        _ => Err("current main view is not AcpChatView".to_string()),
+                        _ => Err("current main view is not AgentChatView".to_string()),
                     },
-                    AcpReadTarget::Detached { entity, .. } => entity.update(cx, |view, cx| {
+                    AgentChatReadTarget::Detached { entity, .. } => entity.update(cx, |view, cx| {
                         view.perform_setup_automation_action(action, agent_id.as_deref(), cx)
                     }),
-                    AcpReadTarget::Notes { entity, .. } => entity.update(cx, |view, cx| {
+                    AgentChatReadTarget::Notes { entity, .. } => entity.update(cx, |view, cx| {
                         view.perform_setup_automation_action(action, agent_id.as_deref(), cx)
                     }),
                 };
 
-                let mut state = match &acp_target {
-                    AcpReadTarget::Main { .. } => self.collect_acp_state(cx),
-                    AcpReadTarget::Detached { entity, .. } => {
+                let mut state = match &agent_chat_target {
+                    AgentChatReadTarget::Main { .. } => self.collect_agent_chat_state(cx),
+                    AgentChatReadTarget::Detached { entity, .. } => {
                         let view = entity.read(cx);
-                        view.collect_acp_state_snapshot(cx)
+                        view.collect_agent_chat_state_snapshot(cx)
                     }
-                    AcpReadTarget::Notes { entity, .. } => {
+                    AgentChatReadTarget::Notes { entity, .. } => {
                         let view = entity.read(cx);
-                        view.collect_acp_state_snapshot(cx)
+                        view.collect_agent_chat_state_snapshot(cx)
                     }
                 };
                 state.resolved_target = resolved_target;
 
                 let response = match result {
-                    Ok(()) => Message::acp_setup_action_result_success(request_id.clone(), state),
+                    Ok(()) => Message::agent_chat_setup_action_result_success(request_id.clone(), state),
                     Err(error_msg) => {
                         tracing::warn!(
-                            category = "ACP_SETUP_ACTION",
+                            category = "AGENT_CHAT_SETUP_ACTION",
                             request_id = %request_id,
                             error = %error_msg,
-                            "acp_setup_action.failed"
+                            "agent_chat_setup_action.failed"
                         );
-                        Message::AcpSetupActionResult {
+                        Message::AgentChatSetupActionResult {
                             request_id: request_id.clone(),
                             success: false,
                             error: Some(error_msg),
@@ -4909,28 +4909,28 @@ impl ScriptListApp {
                 }
             }
 
-            PromptMessage::ResetAcpTestProbe { request_id, target } => {
+            PromptMessage::ResetAgentChatTestProbe { request_id, target } => {
                 tracing::info!(
-                    category = "ACP_PROBE",
+                    category = "AGENT_CHAT_PROBE",
                     request_id = %request_id,
                     target = ?target,
-                    "acp_test_probe.reset"
+                    "agent_chat_test_probe.reset"
                 );
 
-                // Resolve target: Main → main window, AcpDetached → detached entity,
+                // Resolve target: Main → main window, AgentChatDetached → detached entity,
                 // anything else → structured error.
-                let acp_target = match resolve_acp_read_target(
+                let agent_chat_target = match resolve_agent_chat_read_target(
                     &request_id,
-                    "resetAcpTestProbe",
+                    "resetAgentChatTestProbe",
                     target.as_ref(),
-                    self.embedded_acp_automation_entity().as_ref(),
+                    self.embedded_agent_chat_automation_entity().as_ref(),
                     cx,
                 ) {
                     Ok(t) => t,
                     Err(error) => {
-                        let mut probe = protocol::AcpTestProbeSnapshot::default();
+                        let mut probe = protocol::AgentChatTestProbeSnapshot::default();
                         probe.warnings = vec![format!("target_unsupported: {}", error.message)];
-                        let response = Message::acp_test_probe_result(request_id.clone(), probe);
+                        let response = Message::agent_chat_test_probe_result(request_id.clone(), probe);
                         if let Some(ref sender) = self.response_sender {
                             let _ = sender.try_send(response);
                         }
@@ -4939,18 +4939,18 @@ impl ScriptListApp {
                 };
 
                 let resolved_target =
-                    build_acp_resolved_target(&request_id, "resetAcpTestProbe", &acp_target);
+                    build_agent_chat_resolved_target(&request_id, "resetAgentChatTestProbe", &agent_chat_target);
 
-                match &acp_target {
-                    AcpReadTarget::Main { .. } => {
-                        self.reset_acp_test_probe(cx);
+                match &agent_chat_target {
+                    AgentChatReadTarget::Main { .. } => {
+                        self.reset_agent_chat_test_probe(cx);
                     }
-                    AcpReadTarget::Detached { entity, .. } => {
+                    AgentChatReadTarget::Detached { entity, .. } => {
                         entity.update(cx, |view, _cx| {
                             view.reset_test_probe();
                         });
                     }
-                    AcpReadTarget::Notes { entity, .. } => {
+                    AgentChatReadTarget::Notes { entity, .. } => {
                         entity.update(cx, |view, _cx| {
                             view.reset_test_probe();
                         });
@@ -4958,73 +4958,73 @@ impl ScriptListApp {
                 };
 
                 // Respond with the current (now-empty) probe snapshot.
-                let mut probe = match &acp_target {
-                    AcpReadTarget::Main { .. } => {
-                        self.collect_acp_test_probe(protocol::ACP_TEST_PROBE_MAX_EVENTS, cx)
+                let mut probe = match &agent_chat_target {
+                    AgentChatReadTarget::Main { .. } => {
+                        self.collect_agent_chat_test_probe(protocol::AGENT_CHAT_TEST_PROBE_MAX_EVENTS, cx)
                     }
-                    AcpReadTarget::Detached { entity, .. } => {
+                    AgentChatReadTarget::Detached { entity, .. } => {
                         let view = entity.read(cx);
-                        view.test_probe_snapshot(protocol::ACP_TEST_PROBE_MAX_EVENTS, cx)
+                        view.test_probe_snapshot(protocol::AGENT_CHAT_TEST_PROBE_MAX_EVENTS, cx)
                     }
-                    AcpReadTarget::Notes { entity, .. } => {
+                    AgentChatReadTarget::Notes { entity, .. } => {
                         let view = entity.read(cx);
-                        view.test_probe_snapshot(protocol::ACP_TEST_PROBE_MAX_EVENTS, cx)
+                        view.test_probe_snapshot(protocol::AGENT_CHAT_TEST_PROBE_MAX_EVENTS, cx)
                     }
                 };
                 probe.state.resolved_target = resolved_target;
-                let response = Message::acp_test_probe_result(request_id.clone(), probe);
+                let response = Message::agent_chat_test_probe_result(request_id.clone(), probe);
 
                 if let Some(ref sender) = self.response_sender {
                     match sender.try_send(response) {
                         Ok(()) => {}
                         Err(std::sync::mpsc::TrySendError::Full(_)) => {
                             tracing::warn!(
-                                category = "ACP_PROBE",
+                                category = "AGENT_CHAT_PROBE",
                                 request_id = %request_id,
-                                "acp_test_probe.response_channel_full"
+                                "agent_chat_test_probe.response_channel_full"
                             );
                         }
                         Err(std::sync::mpsc::TrySendError::Disconnected(_)) => {
                             tracing::info!(
-                                category = "ACP_PROBE",
+                                category = "AGENT_CHAT_PROBE",
                                 request_id = %request_id,
-                                "acp_test_probe.response_channel_disconnected"
+                                "agent_chat_test_probe.response_channel_disconnected"
                             );
                         }
                     }
                 }
             }
 
-            PromptMessage::GetAcpTestProbe {
+            PromptMessage::GetAgentChatTestProbe {
                 request_id,
                 tail,
                 target,
             } => {
                 let tail = tail
-                    .unwrap_or(protocol::ACP_TEST_PROBE_MAX_EVENTS)
-                    .clamp(1, protocol::ACP_TEST_PROBE_MAX_EVENTS);
+                    .unwrap_or(protocol::AGENT_CHAT_TEST_PROBE_MAX_EVENTS)
+                    .clamp(1, protocol::AGENT_CHAT_TEST_PROBE_MAX_EVENTS);
                 tracing::info!(
-                    category = "ACP_PROBE",
+                    category = "AGENT_CHAT_PROBE",
                     request_id = %request_id,
                     tail,
                     target = ?target,
-                    "acp_test_probe.request"
+                    "agent_chat_test_probe.request"
                 );
 
-                // Resolve target: Main → main window, AcpDetached → detached entity,
+                // Resolve target: Main → main window, AgentChatDetached → detached entity,
                 // anything else → structured error.
-                let acp_target = match resolve_acp_read_target(
+                let agent_chat_target = match resolve_agent_chat_read_target(
                     &request_id,
-                    "getAcpTestProbe",
+                    "getAgentChatTestProbe",
                     target.as_ref(),
-                    self.embedded_acp_automation_entity().as_ref(),
+                    self.embedded_agent_chat_automation_entity().as_ref(),
                     cx,
                 ) {
                     Ok(t) => t,
                     Err(error) => {
-                        let mut probe = protocol::AcpTestProbeSnapshot::default();
+                        let mut probe = protocol::AgentChatTestProbeSnapshot::default();
                         probe.warnings = vec![format!("target_unsupported: {}", error.message)];
-                        let response = Message::acp_test_probe_result(request_id.clone(), probe);
+                        let response = Message::agent_chat_test_probe_result(request_id.clone(), probe);
                         if let Some(ref sender) = self.response_sender {
                             let _ = sender.try_send(response);
                         }
@@ -5033,37 +5033,37 @@ impl ScriptListApp {
                 };
 
                 let resolved_target =
-                    build_acp_resolved_target(&request_id, "getAcpTestProbe", &acp_target);
+                    build_agent_chat_resolved_target(&request_id, "getAgentChatTestProbe", &agent_chat_target);
 
-                let mut probe = match &acp_target {
-                    AcpReadTarget::Main { .. } => self.collect_acp_test_probe(tail, cx),
-                    AcpReadTarget::Detached { entity, .. } => {
+                let mut probe = match &agent_chat_target {
+                    AgentChatReadTarget::Main { .. } => self.collect_agent_chat_test_probe(tail, cx),
+                    AgentChatReadTarget::Detached { entity, .. } => {
                         let view = entity.read(cx);
                         view.test_probe_snapshot(tail, cx)
                     }
-                    AcpReadTarget::Notes { entity, .. } => {
+                    AgentChatReadTarget::Notes { entity, .. } => {
                         let view = entity.read(cx);
                         view.test_probe_snapshot(tail, cx)
                     }
                 };
                 probe.state.resolved_target = resolved_target;
-                let response = Message::acp_test_probe_result(request_id.clone(), probe);
+                let response = Message::agent_chat_test_probe_result(request_id.clone(), probe);
 
                 if let Some(ref sender) = self.response_sender {
                     match sender.try_send(response) {
                         Ok(()) => {}
                         Err(std::sync::mpsc::TrySendError::Full(_)) => {
                             tracing::warn!(
-                                category = "ACP_PROBE",
+                                category = "AGENT_CHAT_PROBE",
                                 request_id = %request_id,
-                                "acp_test_probe.response_channel_full"
+                                "agent_chat_test_probe.response_channel_full"
                             );
                         }
                         Err(std::sync::mpsc::TrySendError::Disconnected(_)) => {
                             tracing::info!(
-                                category = "ACP_PROBE",
+                                category = "AGENT_CHAT_PROBE",
                                 request_id = %request_id,
-                                "acp_test_probe.response_channel_disconnected"
+                                "agent_chat_test_probe.response_channel_disconnected"
                             );
                         }
                     }
@@ -5230,10 +5230,10 @@ impl ScriptListApp {
                         }
                         Ok(resolved)
                             if resolved.kind
-                                == crate::protocol::AutomationWindowKind::AcpDetached =>
+                                == crate::protocol::AutomationWindowKind::AgentChatDetached =>
                         {
                             if let Some(entity) =
-                                crate::ai::acp::chat_window::get_detached_acp_view_entity()
+                                crate::ai::agent_chat::ui::chat_window::get_detached_agent_chat_view_entity()
                             {
                                 let layout_info = entity.read(cx).automation_layout_info(&resolved);
                                 let response =
@@ -5409,26 +5409,26 @@ impl ScriptListApp {
                         }
                     };
 
-                let is_acp_condition = is_acp_wait_condition(&condition);
+                let is_agent_chat_condition = is_agent_chat_wait_condition(&condition);
 
-                // Resolve target: ACP conditions accept AcpDetached; generic
-                // conditions accept Main, AcpDetached, and Notes.
+                // Resolve target: Agent Chat conditions accept AgentChatDetached; generic
+                // conditions accept Main, AgentChatDetached, and Notes.
                 let resolved_target: AutomationReadTarget = if target.is_some() {
-                    if is_acp_condition {
-                        match resolve_acp_read_target(
+                    if is_agent_chat_condition {
+                        match resolve_agent_chat_read_target(
                             &rid,
                             "waitFor",
                             target.as_ref(),
-                            self.embedded_acp_automation_entity().as_ref(),
+                            self.embedded_agent_chat_automation_entity().as_ref(),
                             cx,
                         ) {
-                            Ok(AcpReadTarget::Detached { entity, info }) => {
-                                AutomationReadTarget::AcpDetached { entity, info }
+                            Ok(AgentChatReadTarget::Detached { entity, info }) => {
+                                AutomationReadTarget::AgentChatDetached { entity, info }
                             }
-                            Ok(AcpReadTarget::Notes { entity, info }) => {
-                                AutomationReadTarget::AcpDetached { entity, info }
+                            Ok(AgentChatReadTarget::Notes { entity, info }) => {
+                                AutomationReadTarget::AgentChatDetached { entity, info }
                             }
-                            Ok(AcpReadTarget::Main { info }) => AutomationReadTarget::Main { info },
+                            Ok(AgentChatReadTarget::Main { info }) => AutomationReadTarget::Main { info },
                             Err(error) => {
                                 if let Some(ref sender) = self.response_sender {
                                     let _ = sender.try_send(Message::wait_for_result(
@@ -5446,7 +5446,7 @@ impl ScriptListApp {
                             &rid,
                             "waitFor",
                             target.as_ref(),
-                            self.embedded_acp_automation_entity().as_ref(),
+                            self.embedded_agent_chat_automation_entity().as_ref(),
                             cx,
                         ) {
                             Ok(resolved) => resolved,
@@ -5467,10 +5467,10 @@ impl ScriptListApp {
                     AutomationReadTarget::Main { info: None }
                 };
 
-                // Extract the detached ACP entity for backward-compatible condition checking.
+                // Extract the detached Agent Chat entity for backward-compatible condition checking.
                 let detached_entity: Option<
                     gpui::Entity<crate::ai::agent_chat::ui::AgentChatView>,
-                > = if let AutomationReadTarget::AcpDetached { ref entity, .. } = resolved_target {
+                > = if let AutomationReadTarget::AgentChatDetached { ref entity, .. } = resolved_target {
                     Some(entity.clone())
                 } else {
                     None
@@ -5575,7 +5575,7 @@ impl ScriptListApp {
                                 if let Some(ne) = notes_ent {
                                     build_notes_ui_snapshot(&ne, cx)
                                 } else if let Some(de) = detached_ent {
-                                    build_acp_detached_ui_snapshot(&de, cx)
+                                    build_agent_chat_detached_ui_snapshot(&de, cx)
                                 } else {
                                     this.build_main_ui_snapshot(cx)
                                 }
@@ -5665,7 +5665,7 @@ impl ScriptListApp {
                                         Some(&de),
                                         cx,
                                     );
-                                    let snap = build_acp_detached_ui_snapshot(&de, cx);
+                                    let snap = build_agent_chat_detached_ui_snapshot(&de, cx);
                                     (ok, snap)
                                 })
                             } else {
@@ -5908,13 +5908,13 @@ impl ScriptListApp {
                     }
                 }
 
-                // Resolve target: accept Main, AcpDetached, and Notes.
+                // Resolve target: accept Main, AgentChatDetached, and Notes.
                 let batch_target: AutomationReadTarget = if target.is_some() {
                     match resolve_automation_read_target(
                         &rid,
                         "batch",
                         target.as_ref(),
-                        self.embedded_acp_automation_entity().as_ref(),
+                        self.embedded_agent_chat_automation_entity().as_ref(),
                         cx,
                     ) {
                         Ok(resolved) => resolved,
@@ -5945,7 +5945,7 @@ impl ScriptListApp {
 
                 let detached_batch_entity: Option<
                     gpui::Entity<crate::ai::agent_chat::ui::AgentChatView>,
-                > = if let AutomationReadTarget::AcpDetached { ref entity, .. } = batch_target {
+                > = if let AutomationReadTarget::AgentChatDetached { ref entity, .. } = batch_target {
                     Some(entity.clone())
                 } else {
                     None
@@ -5988,12 +5988,12 @@ impl ScriptListApp {
                 let main_batch_window_handle = crate::get_main_window_handle();
 
                 cx.spawn(async move |this, cx| {
-                    // ── Detached ACP batch path ──────────────────────────
-                    // When targeting a detached ACP entity, route commands
+                    // ── Detached Agent Chat batch path ──────────────────────────
+                    // When targeting a detached Agent Chat entity, route commands
                     // to it instead of the main window. The command set is
                     // limited to setInput, waitFor, selectByValue, and
                     // selectBySemanticId.
-                    if let Some(acp_entity) = detached_batch_entity {
+                    if let Some(agent_chat_entity) = detached_batch_entity {
                         let batch_started_at_ms = protocol::transaction_trace::now_epoch_ms();
                         let batch_start = std::time::Instant::now();
                         let batch_timeout = std::time::Duration::from_millis(opts.timeout);
@@ -6019,28 +6019,28 @@ impl ScriptListApp {
                                 protocol::BatchCommand::SetInput { text } => {
                                     let text = text.clone();
                                     let text_len = text.len();
-                                    let acp_entity = acp_entity.clone();
+                                    let agent_chat_entity = agent_chat_entity.clone();
                                     let result = this.update(cx, |_this, cx| {
-                                        acp_entity.update(cx, |view, cx| {
+                                        agent_chat_entity.update(cx, |view, cx| {
                                             if view.thread().is_none() {
-                                                return "detached ACP is in setup mode".to_string();
+                                                return "detached Agent Chat is in setup mode".to_string();
                                             }
-                                            // Route through `AcpChatView::set_input` so mention
+                                            // Route through `AgentChatView::set_input` so mention
                                             // picker sessions refresh (thread-only updates
                                             // leave `mention_session` stale for selectByValue).
                                             view.set_input(text, cx);
                                             tracing::info!(
                                                 target: "script_kit::transaction",
-                                                event = "transaction_detached_acp_set_input",
+                                                event = "transaction_detached_agent_chat_set_input",
                                                 text_len,
-                                                "detached ACP set_input"
+                                                "detached Agent Chat set_input"
                                             );
                                             String::new() // empty = success
                                         })
                                     });
                                     match result {
                                         Ok(err) if err.is_empty() => {
-                                            tracing::info!(category = "BATCH", request_id = %rid, index, command = "setInput", "batch.detached_acp.step.ok");
+                                            tracing::info!(category = "BATCH", request_id = %rid, index, command = "setInput", "batch.detached_agent_chat.step.ok");
                                             results.push(protocol::BatchResultEntry {
                                                 index, success: true, command: "setInput".to_string(),
                                                 elapsed: Some(cmd_start.elapsed().as_millis() as u64),
@@ -6072,10 +6072,10 @@ impl ScriptListApp {
                                 protocol::BatchCommand::SelectByValue { value, submit } => {
                                     let submit = *submit;
                                     let value = value.clone();
-                                    let acp_entity = acp_entity.clone();
+                                    let agent_chat_entity = agent_chat_entity.clone();
                                     // Returns Option<String>: Some(matched) or None if not found.
                                     let selected = this.update(cx, |_this, cx| {
-                                        acp_entity.update(cx, |view, _cx| -> Option<String> {
+                                        agent_chat_entity.update(cx, |view, _cx| -> Option<String> {
                                             let session = view.mention_session.as_ref()?;
                                             let idx = session.items.iter().position(|item| {
                                                 item.label.as_ref() == value || item.id.as_ref() == value
@@ -6087,18 +6087,18 @@ impl ScriptListApp {
                                     match selected {
                                         Ok(Some(v)) => {
                                             if submit {
-                                                let acp_entity2 = acp_entity.clone();
+                                                let agent_chat_entity2 = agent_chat_entity.clone();
                                                 let _ = this.update(cx, |_this, cx| {
-                                                    acp_entity2.update(cx, |view, cx| {
+                                                    agent_chat_entity2.update(cx, |view, cx| {
                                                         view.accept_mention_selection(cx);
                                                     });
                                                 });
                                             }
                                             tracing::info!(
                                                 target: "script_kit::transaction",
-                                                event = "transaction_detached_acp_select_by_value",
+                                                event = "transaction_detached_agent_chat_select_by_value",
                                                 value = %v, submit,
-                                                "detached ACP select_by_value"
+                                                "detached Agent Chat select_by_value"
                                             );
                                             results.push(protocol::BatchResultEntry {
                                                 index, success: true, command: "selectByValue".to_string(),
@@ -6112,7 +6112,7 @@ impl ScriptListApp {
                                                 elapsed: Some(cmd_start.elapsed().as_millis() as u64),
                                                 value: None,
                                                 error: Some(protocol::TransactionError::selection_not_found(
-                                                    format!("selectByValue could not find '{value}' in detached ACP picker")
+                                                    format!("selectByValue could not find '{value}' in detached Agent Chat picker")
                                                 )),
                                             });
                                             failed = true;
@@ -6133,9 +6133,9 @@ impl ScriptListApp {
                                 protocol::BatchCommand::SelectBySemanticId { semantic_id, submit } => {
                                     let submit = *submit;
                                     let semantic_id = semantic_id.clone();
-                                    let acp_entity = acp_entity.clone();
+                                    let agent_chat_entity = agent_chat_entity.clone();
                                     let selected = this.update(cx, |_this, cx| {
-                                        acp_entity.update(cx, |view, _cx| -> Option<String> {
+                                        agent_chat_entity.update(cx, |view, _cx| -> Option<String> {
                                             let session = view.mention_session.as_ref()?;
                                             let idx = session.items.iter().position(|item| {
                                                 item.label.as_ref() == semantic_id || item.id.as_ref() == semantic_id
@@ -6147,18 +6147,18 @@ impl ScriptListApp {
                                     match selected {
                                         Ok(Some(v)) => {
                                             if submit {
-                                                let acp_entity2 = acp_entity.clone();
+                                                let agent_chat_entity2 = agent_chat_entity.clone();
                                                 let _ = this.update(cx, |_this, cx| {
-                                                    acp_entity2.update(cx, |view, cx| {
+                                                    agent_chat_entity2.update(cx, |view, cx| {
                                                         view.accept_mention_selection(cx);
                                                     });
                                                 });
                                             }
                                             tracing::info!(
                                                 target: "script_kit::transaction",
-                                                event = "transaction_detached_acp_select_by_value",
+                                                event = "transaction_detached_agent_chat_select_by_value",
                                                 value = %v, submit,
-                                                "detached ACP select_by_semantic_id"
+                                                "detached Agent Chat select_by_semantic_id"
                                             );
                                             results.push(protocol::BatchResultEntry {
                                                 index, success: true, command: "selectBySemanticId".to_string(),
@@ -6172,7 +6172,7 @@ impl ScriptListApp {
                                                 elapsed: Some(cmd_start.elapsed().as_millis() as u64),
                                                 value: None,
                                                 error: Some(protocol::TransactionError::selection_not_found(
-                                                    format!("selectBySemanticId could not find '{semantic_id}' in detached ACP picker")
+                                                    format!("selectBySemanticId could not find '{semantic_id}' in detached Agent Chat picker")
                                                 )),
                                             });
                                             failed = true;
@@ -6194,10 +6194,10 @@ impl ScriptListApp {
                                     let wait_timeout = std::time::Duration::from_millis(timeout.unwrap_or(5_000));
                                     let wait_poll = std::time::Duration::from_millis(poll_interval.unwrap_or(25));
                                     let wait_start = std::time::Instant::now();
-                                    let acp_entity_ref = &acp_entity;
+                                    let agent_chat_entity_ref = &agent_chat_entity;
 
                                     let already = this.update(cx, |this, cx| {
-                                        this.wait_condition_satisfied_for_target(condition, Some(acp_entity_ref), cx)
+                                        this.wait_condition_satisfied_for_target(condition, Some(agent_chat_entity_ref), cx)
                                     });
                                     match already {
                                         Ok(true) => {
@@ -6215,7 +6215,7 @@ impl ScriptListApp {
                                                 cx.background_executor().timer(wait_poll).await;
                                                 if wait_start.elapsed() >= wait_timeout { break; }
                                                 match this.update(cx, |this, cx| {
-                                                    this.wait_condition_satisfied_for_target(condition, Some(acp_entity_ref), cx)
+                                                    this.wait_condition_satisfied_for_target(condition, Some(agent_chat_entity_ref), cx)
                                                 }) {
                                                     Ok(true) => { wait_result = Ok(None); break; }
                                                     Ok(false) => continue,
@@ -6234,8 +6234,8 @@ impl ScriptListApp {
                                                         event = "transaction_wait_complete",
                                                         request_id = %rid,
                                                         index,
-                                                        target = "acpDetached",
-                                                        "batch.detached_acp.wait.ok"
+                                                        target = "agentChatDetached",
+                                                        "batch.detached_agent_chat.wait.ok"
                                                     );
                                                     results.push(protocol::BatchResultEntry {
                                                         index, success: true, command: "waitFor".to_string(),
@@ -6244,7 +6244,7 @@ impl ScriptListApp {
                                                     });
                                                 }
                                                 Err(e) => {
-                                                    tracing::info!(category = "BATCH", request_id = %rid, index, command = "waitFor", error = %e.message, "batch.detached_acp.step.error");
+                                                    tracing::info!(category = "BATCH", request_id = %rid, index, command = "waitFor", error = %e.message, "batch.detached_agent_chat.step.error");
                                                     results.push(protocol::BatchResultEntry {
                                                         index, success: false, command: "waitFor".to_string(),
                                                         elapsed: Some(wait_start.elapsed().as_millis() as u64),
@@ -6268,7 +6268,7 @@ impl ScriptListApp {
                                     }
                                 }
                                 _ => {
-                                    // Unsupported commands for detached ACP
+                                    // Unsupported commands for detached Agent Chat
                                     let cmd_name = batch_command_name(cmd);
                                     results.push(protocol::BatchResultEntry {
                                         index,
@@ -6277,7 +6277,7 @@ impl ScriptListApp {
                                         elapsed: Some(0),
                                         value: None,
                                         error: Some(unsupported_batch_command_error(
-                                            AutomationBatchTargetKind::AcpDetached,
+                                            AutomationBatchTargetKind::AgentChatDetached,
                                             cmd,
                                         )),
                                     });
@@ -6343,9 +6343,9 @@ impl ScriptListApp {
                             success,
                             total_elapsed_ms = total_elapsed,
                             failed_at = ?failed_at,
-                            target = "acpDetached",
+                            target = "agentChatDetached",
                             trace_included = trace.is_some(),
-                            "automation.batch.detached_acp.completed"
+                            "automation.batch.detached_agent_chat.completed"
                         );
 
                         if let Some(ref s) = sender {
@@ -6388,11 +6388,11 @@ impl ScriptListApp {
                                     let nh = notes_handle;
                                     let result = nh.update(cx, |_root, window, cx| {
                                         ne.update(cx, |app, cx| {
-                                            let embedded_acp = (app.surface_mode()
-                                                == crate::notes::NotesSurfaceMode::Acp)
-                                                .then(|| app.embedded_acp_chat_entity())
+                                            let embedded_agent_chat = (app.surface_mode()
+                                                == crate::notes::NotesSurfaceMode::AgentChat)
+                                                .then(|| app.embedded_agent_chat_entity())
                                                 .flatten();
-                                            if let Some(chat) = embedded_acp {
+                                            if let Some(chat) = embedded_agent_chat {
                                                 chat.update(cx, |chat, cx| {
                                                     chat.set_input_in_window(
                                                         text.clone(),
@@ -6520,28 +6520,28 @@ impl ScriptListApp {
                                         }
                                     }
                                 }
-                                protocol::BatchCommand::OpenNotesAcp => {
+                                protocol::BatchCommand::OpenNotesAgentChat => {
                                     let ne = notes_entity.clone();
                                     let nh = notes_handle;
                                     let result = nh.update(cx, |_root, window, cx| {
                                         let open_result = ne.update(cx, |app, cx| {
-                                            app.open_or_focus_embedded_acp(None, window, cx)
+                                            app.open_or_focus_embedded_agent_chat(None, window, cx)
                                         });
                                         tracing::info!(
                                             target: "script_kit::transaction",
-                                            event = "transaction_notes_open_acp",
+                                            event = "transaction_notes_open_agent_chat",
                                             request_id = %rid,
-                                            "Notes open_notes_acp dispatched"
+                                            "Notes open_notes_agent_chat dispatched"
                                         );
                                         open_result
                                     });
                                     match result {
                                         Ok(Ok(())) => {
-                                            tracing::info!(category = "BATCH", request_id = %rid, index, command = "openNotesAcp", "batch.notes.step.ok");
+                                            tracing::info!(category = "BATCH", request_id = %rid, index, command = "openNotesAgentChat", "batch.notes.step.ok");
                                             results.push(protocol::BatchResultEntry {
                                                 index,
                                                 success: true,
-                                                command: "openNotesAcp".to_string(),
+                                                command: "openNotesAgentChat".to_string(),
                                                 elapsed: Some(cmd_start.elapsed().as_millis() as u64),
                                                 value: None,
                                                 error: None,
@@ -6550,14 +6550,14 @@ impl ScriptListApp {
                                         Ok(Err(e)) => {
                                             tracing::warn!(
                                                 target: "script_kit::transaction",
-                                                event = "transaction_notes_open_acp_failed",
+                                                event = "transaction_notes_open_agent_chat_failed",
                                                 error = %e,
-                                                "Notes open_notes_acp failed"
+                                                "Notes open_notes_agent_chat failed"
                                             );
                                             results.push(protocol::BatchResultEntry {
                                                 index,
                                                 success: false,
-                                                command: "openNotesAcp".to_string(),
+                                                command: "openNotesAgentChat".to_string(),
                                                 elapsed: Some(cmd_start.elapsed().as_millis() as u64),
                                                 value: None,
                                                 error: Some(protocol::TransactionError::action_failed(e)),
@@ -6569,7 +6569,7 @@ impl ScriptListApp {
                                             results.push(protocol::BatchResultEntry {
                                                 index,
                                                 success: false,
-                                                command: "openNotesAcp".to_string(),
+                                                command: "openNotesAgentChat".to_string(),
                                                 elapsed: Some(cmd_start.elapsed().as_millis() as u64),
                                                 value: None,
                                                 error: Some(protocol::TransactionError::action_failed(format!("{e}"))),
@@ -7100,7 +7100,7 @@ impl ScriptListApp {
                                     let value = value.clone();
                                     let selected = this.update(cx, |_this, cx| {
                                         // Try each popup sub-type in priority order
-                                        if let Some(v) = crate::ai::acp::picker_popup::batch_select_mention_item_by_value(&value, cx) {
+                                        if let Some(v) = crate::ai::agent_chat::ui::picker_popup::batch_select_mention_item_by_value(&value, cx) {
                                             return Some(v);
                                         }
                                         if let Some(v) = crate::confirm::batch_select_confirm_button_by_value(&value) {
@@ -7150,7 +7150,7 @@ impl ScriptListApp {
                             protocol::BatchCommand::SelectBySemanticId { semantic_id, submit: _ } => {
                                 let semantic_id = semantic_id.clone();
                                 let selected = this.update(cx, |_this, cx| {
-                                        if let Some(v) = crate::ai::acp::picker_popup::batch_select_mention_item_by_semantic_id(&semantic_id, cx) {
+                                        if let Some(v) = crate::ai::agent_chat::ui::picker_popup::batch_select_mention_item_by_semantic_id(&semantic_id, cx) {
                                             return Some(v);
                                         }
                                         if let Some(v) = crate::confirm::batch_select_confirm_button_by_semantic_id(&semantic_id) {
@@ -8113,7 +8113,7 @@ impl ScriptListApp {
                                     break;
                                 }
                             }
-                            protocol::BatchCommand::OpenNotesAcp => {
+                            protocol::BatchCommand::OpenNotesAgentChat => {
                                 let command = batch_command_name(cmd);
                                 results.push(protocol::BatchResultEntry {
                                     index,
@@ -9515,98 +9515,98 @@ impl ScriptListApp {
                             .is_none_or(|v| selected_value.as_deref() == Some(v))
                         && expected.window_visible.is_none_or(|v| v == window_visible)
                 }
-                // ── ACP-specific wait conditions ────────────────────
-                protocol::WaitDetailedCondition::AcpReady => {
-                    let state = self.collect_acp_state(cx);
+                // ── Agent Chat-specific wait conditions ────────────────────
+                protocol::WaitDetailedCondition::AgentChatReady => {
+                    let state = self.collect_agent_chat_state(cx);
                     state.context_ready && state.status == "idle"
                 }
-                protocol::WaitDetailedCondition::AcpPickerOpen => {
-                    let state = self.collect_acp_state(cx);
+                protocol::WaitDetailedCondition::AgentChatPickerOpen => {
+                    let state = self.collect_agent_chat_state(cx);
                     state.picker.as_ref().is_some_and(|p| p.open)
                 }
-                protocol::WaitDetailedCondition::AcpPickerClosed => {
-                    let state = self.collect_acp_state(cx);
+                protocol::WaitDetailedCondition::AgentChatPickerClosed => {
+                    let state = self.collect_agent_chat_state(cx);
                     state.picker.is_none() || state.picker.as_ref().is_some_and(|p| !p.open)
                 }
-                protocol::WaitDetailedCondition::AcpItemAccepted => {
-                    let state = self.collect_acp_state(cx);
+                protocol::WaitDetailedCondition::AgentChatItemAccepted => {
+                    let state = self.collect_agent_chat_state(cx);
                     state.last_accepted_item.is_some()
                 }
-                protocol::WaitDetailedCondition::AcpCursorAt { index } => {
-                    let state = self.collect_acp_state(cx);
+                protocol::WaitDetailedCondition::AgentChatCursorAt { index } => {
+                    let state = self.collect_agent_chat_state(cx);
                     state.cursor_index == *index
                 }
-                protocol::WaitDetailedCondition::AcpStatus { status } => {
-                    let state = self.collect_acp_state(cx);
+                protocol::WaitDetailedCondition::AgentChatStatus { status } => {
+                    let state = self.collect_agent_chat_state(cx);
                     state.status == *status
                 }
-                protocol::WaitDetailedCondition::AcpInputMatch { text } => {
-                    let state = self.collect_acp_state(cx);
+                protocol::WaitDetailedCondition::AgentChatInputMatch { text } => {
+                    let state = self.collect_agent_chat_state(cx);
                     state.input_text == *text
                 }
-                protocol::WaitDetailedCondition::AcpInputContains { substring } => {
-                    let state = self.collect_acp_state(cx);
+                protocol::WaitDetailedCondition::AgentChatInputContains { substring } => {
+                    let state = self.collect_agent_chat_state(cx);
                     state.input_text.contains(substring.as_str())
                 }
-                // ── ACP proof wait conditions (test probe) ─────────
-                protocol::WaitDetailedCondition::AcpAcceptedViaKey { key } => {
-                    let probe = self.collect_acp_test_probe(1, cx);
+                // ── Agent Chat proof wait conditions (test probe) ─────────
+                protocol::WaitDetailedCondition::AgentChatAcceptedViaKey { key } => {
+                    let probe = self.collect_agent_chat_test_probe(1, cx);
                     probe
                         .accepted_items
                         .last()
                         .is_some_and(|item| item.accepted_via_key == *key)
                 }
-                protocol::WaitDetailedCondition::AcpAcceptedLabel { label } => {
-                    let probe = self.collect_acp_test_probe(1, cx);
+                protocol::WaitDetailedCondition::AgentChatAcceptedLabel { label } => {
+                    let probe = self.collect_agent_chat_test_probe(1, cx);
                     probe
                         .accepted_items
                         .last()
                         .is_some_and(|item| item.item_label == *label)
                 }
-                protocol::WaitDetailedCondition::AcpAcceptedCursorAt { index } => {
-                    let probe = self.collect_acp_test_probe(1, cx);
+                protocol::WaitDetailedCondition::AgentChatAcceptedCursorAt { index } => {
+                    let probe = self.collect_agent_chat_test_probe(1, cx);
                     probe
                         .accepted_items
                         .last()
                         .is_some_and(|item| item.cursor_after == *index)
                 }
-                protocol::WaitDetailedCondition::AcpInputLayoutMatch {
+                protocol::WaitDetailedCondition::AgentChatInputLayoutMatch {
                     visible_start,
                     visible_end,
                     cursor_in_window,
                 } => {
-                    let probe = self.collect_acp_test_probe(1, cx);
+                    let probe = self.collect_agent_chat_test_probe(1, cx);
                     probe.input_layout.as_ref().is_some_and(|layout| {
                         layout.visible_start == *visible_start
                             && layout.visible_end == *visible_end
                             && layout.cursor_in_window == *cursor_in_window
                     })
                 }
-                // ── ACP setup wait conditions ─────────────────────
-                protocol::WaitDetailedCondition::AcpSetupVisible => {
-                    let state = self.collect_acp_state(cx);
+                // ── Agent Chat setup wait conditions ─────────────────────
+                protocol::WaitDetailedCondition::AgentChatSetupVisible => {
+                    let state = self.collect_agent_chat_state(cx);
                     state.setup.is_some()
                 }
-                protocol::WaitDetailedCondition::AcpSetupReasonCode { reason_code } => {
-                    let state = self.collect_acp_state(cx);
+                protocol::WaitDetailedCondition::AgentChatSetupReasonCode { reason_code } => {
+                    let state = self.collect_agent_chat_state(cx);
                     state
                         .setup
                         .as_ref()
                         .is_some_and(|s| s.reason_code == *reason_code)
                 }
-                protocol::WaitDetailedCondition::AcpSetupPrimaryAction { action } => {
-                    let state = self.collect_acp_state(cx);
+                protocol::WaitDetailedCondition::AgentChatSetupPrimaryAction { action } => {
+                    let state = self.collect_agent_chat_state(cx);
                     state
                         .setup
                         .as_ref()
                         .is_some_and(|s| s.primary_action == *action)
                 }
-                protocol::WaitDetailedCondition::AcpSetupAgentPickerOpen => {
-                    let state = self.collect_acp_state(cx);
+                protocol::WaitDetailedCondition::AgentChatSetupAgentPickerOpen => {
+                    let state = self.collect_agent_chat_state(cx);
                     state.setup.as_ref().is_some_and(|s| s.agent_picker_open)
                 }
-                protocol::WaitDetailedCondition::AcpSetupSelectedAgent { agent_id } => {
-                    let state = self.collect_acp_state(cx);
+                protocol::WaitDetailedCondition::AgentChatSetupSelectedAgent { agent_id } => {
+                    let state = self.collect_agent_chat_state(cx);
                     state.setup.as_ref().is_some_and(|s| {
                         s.selected_agent_id
                             .as_ref()
@@ -9617,10 +9617,10 @@ impl ScriptListApp {
         }
     }
 
-    /// Check if a wait condition is currently satisfied, reading ACP data
+    /// Check if a wait condition is currently satisfied, reading Agent Chat data
     /// from the given detached entity (if provided) instead of the main window.
     ///
-    /// Non-ACP conditions always read from the main window regardless.
+    /// Non-Agent Chat conditions always read from the main window regardless.
     fn wait_condition_satisfied_for_target(
         &self,
         condition: &protocol::WaitCondition,
@@ -9628,66 +9628,66 @@ impl ScriptListApp {
         cx: &Context<Self>,
     ) -> bool {
         match condition {
-            // Non-ACP conditions: delegate to main-window logic
+            // Non-Agent Chat conditions: delegate to main-window logic
             protocol::WaitCondition::Named(_) => self.wait_condition_satisfied(condition, cx),
             protocol::WaitCondition::Detailed(detailed) => {
-                let is_acp = is_acp_wait_condition(condition);
+                let is_agent_chat = is_agent_chat_wait_condition(condition);
 
-                if !is_acp || detached_entity.is_none() {
+                if !is_agent_chat || detached_entity.is_none() {
                     return self.wait_condition_satisfied(condition, cx);
                 }
 
-                // ACP condition with a detached entity — read from it.
-                let state = self.collect_acp_state_for_target(detached_entity, cx);
-                let probe_fn = || self.collect_acp_test_probe_for_target(detached_entity, 1, cx);
+                // Agent Chat condition with a detached entity — read from it.
+                let state = self.collect_agent_chat_state_for_target(detached_entity, cx);
+                let probe_fn = || self.collect_agent_chat_test_probe_for_target(detached_entity, 1, cx);
 
                 match detailed {
-                    protocol::WaitDetailedCondition::AcpReady => {
+                    protocol::WaitDetailedCondition::AgentChatReady => {
                         state.context_ready && state.status == "idle"
                     }
-                    protocol::WaitDetailedCondition::AcpPickerOpen => {
+                    protocol::WaitDetailedCondition::AgentChatPickerOpen => {
                         state.picker.as_ref().is_some_and(|p| p.open)
                     }
-                    protocol::WaitDetailedCondition::AcpPickerClosed => {
+                    protocol::WaitDetailedCondition::AgentChatPickerClosed => {
                         state.picker.is_none() || state.picker.as_ref().is_some_and(|p| !p.open)
                     }
-                    protocol::WaitDetailedCondition::AcpItemAccepted => {
+                    protocol::WaitDetailedCondition::AgentChatItemAccepted => {
                         state.last_accepted_item.is_some()
                     }
-                    protocol::WaitDetailedCondition::AcpCursorAt { index } => {
+                    protocol::WaitDetailedCondition::AgentChatCursorAt { index } => {
                         state.cursor_index == *index
                     }
-                    protocol::WaitDetailedCondition::AcpStatus { status } => {
+                    protocol::WaitDetailedCondition::AgentChatStatus { status } => {
                         state.status == *status
                     }
-                    protocol::WaitDetailedCondition::AcpInputMatch { text } => {
+                    protocol::WaitDetailedCondition::AgentChatInputMatch { text } => {
                         state.input_text == *text
                     }
-                    protocol::WaitDetailedCondition::AcpInputContains { substring } => {
+                    protocol::WaitDetailedCondition::AgentChatInputContains { substring } => {
                         state.input_text.contains(substring.as_str())
                     }
-                    protocol::WaitDetailedCondition::AcpAcceptedViaKey { key } => {
+                    protocol::WaitDetailedCondition::AgentChatAcceptedViaKey { key } => {
                         let probe = probe_fn();
                         probe
                             .accepted_items
                             .last()
                             .is_some_and(|item| item.accepted_via_key == *key)
                     }
-                    protocol::WaitDetailedCondition::AcpAcceptedLabel { label } => {
+                    protocol::WaitDetailedCondition::AgentChatAcceptedLabel { label } => {
                         let probe = probe_fn();
                         probe
                             .accepted_items
                             .last()
                             .is_some_and(|item| item.item_label == *label)
                     }
-                    protocol::WaitDetailedCondition::AcpAcceptedCursorAt { index } => {
+                    protocol::WaitDetailedCondition::AgentChatAcceptedCursorAt { index } => {
                         let probe = probe_fn();
                         probe
                             .accepted_items
                             .last()
                             .is_some_and(|item| item.cursor_after == *index)
                     }
-                    protocol::WaitDetailedCondition::AcpInputLayoutMatch {
+                    protocol::WaitDetailedCondition::AgentChatInputLayoutMatch {
                         visible_start,
                         visible_end,
                         cursor_in_window,
@@ -9699,26 +9699,26 @@ impl ScriptListApp {
                                 && layout.cursor_in_window == *cursor_in_window
                         })
                     }
-                    protocol::WaitDetailedCondition::AcpSetupVisible => state.setup.is_some(),
-                    protocol::WaitDetailedCondition::AcpSetupReasonCode { reason_code } => state
+                    protocol::WaitDetailedCondition::AgentChatSetupVisible => state.setup.is_some(),
+                    protocol::WaitDetailedCondition::AgentChatSetupReasonCode { reason_code } => state
                         .setup
                         .as_ref()
                         .is_some_and(|s| s.reason_code == *reason_code),
-                    protocol::WaitDetailedCondition::AcpSetupPrimaryAction { action } => state
+                    protocol::WaitDetailedCondition::AgentChatSetupPrimaryAction { action } => state
                         .setup
                         .as_ref()
                         .is_some_and(|s| s.primary_action == *action),
-                    protocol::WaitDetailedCondition::AcpSetupAgentPickerOpen => {
+                    protocol::WaitDetailedCondition::AgentChatSetupAgentPickerOpen => {
                         state.setup.as_ref().is_some_and(|s| s.agent_picker_open)
                     }
-                    protocol::WaitDetailedCondition::AcpSetupSelectedAgent { agent_id } => {
+                    protocol::WaitDetailedCondition::AgentChatSetupSelectedAgent { agent_id } => {
                         state.setup.as_ref().is_some_and(|s| {
                             s.selected_agent_id
                                 .as_ref()
                                 .is_some_and(|id| id == agent_id)
                         })
                     }
-                    // Non-ACP conditions (already handled above, but required for exhaustiveness)
+                    // Non-Agent Chat conditions (already handled above, but required for exhaustiveness)
                     _ => self.wait_condition_satisfied(condition, cx),
                 }
             }
@@ -9844,7 +9844,7 @@ impl ScriptListApp {
         let popup_open = self.show_actions_popup || self.actions_dialog.is_some();
         let mut config = self.main_window_footer_config_with_cx(Some(cx));
         if let Some(ref mut cfg) = config {
-            self.enrich_footer_config_with_acp_info(cfg);
+            self.enrich_footer_config_with_agent_chat_info(cfg);
         }
         let slot_model = config.as_ref().map(|cfg| cfg.slot_model());
         let native_buttons: Vec<_> = config
@@ -9878,7 +9878,7 @@ impl ScriptListApp {
         let native_ready = expected_surface.is_some()
             && host.native_host_installed
             && host.installed_surface == expected_surface;
-        let acp_footer_hidden = matches!(self.current_view, AppView::AcpChatView { .. })
+        let agent_chat_footer_hidden = matches!(self.current_view, AppView::AgentChatView { .. })
             && expected_surface.is_some()
             && config.is_none();
 
@@ -9893,7 +9893,7 @@ impl ScriptListApp {
 
         let owner = if popup_open {
             "popup"
-        } else if acp_footer_hidden {
+        } else if agent_chat_footer_hidden {
             "none"
         } else if native_ready {
             "native"
@@ -10083,16 +10083,16 @@ impl ScriptListApp {
         }
     }
 
-    /// Collect a machine-readable ACP state snapshot.
+    /// Collect a machine-readable Agent Chat state snapshot.
     ///
     /// Returns a default (idle, empty) snapshot when the current view is not
-    /// `AcpChatView` — callers should check `status == "notAcp"` to detect this.
-    fn collect_acp_state(&self, cx: &Context<Self>) -> protocol::AcpStateSnapshot {
+    /// `AgentChatView` — callers should check `status == "notAgentChat"` to detect this.
+    fn collect_agent_chat_state(&self, cx: &Context<Self>) -> protocol::AgentChatStateSnapshot {
         let entity = match &self.current_view {
-            AppView::AcpChatView { entity } => entity,
+            AppView::AgentChatView { entity } => entity,
             _ => {
-                return protocol::AcpStateSnapshot {
-                    status: "notAcp".to_string(),
+                return protocol::AgentChatStateSnapshot {
+                    status: "notAgentChat".to_string(),
                     ..Default::default()
                 };
             }
@@ -10100,56 +10100,56 @@ impl ScriptListApp {
 
         let view = entity.read(cx);
 
-        // Extract state from the ACP view's public API.
-        view.collect_acp_state_snapshot(cx)
+        // Extract state from the Agent Chat view's public API.
+        view.collect_agent_chat_state_snapshot(cx)
     }
 
-    /// Collect ACP state from the given detached entity, or fall through to main.
-    fn collect_acp_state_for_target(
+    /// Collect Agent Chat state from the given detached entity, or fall through to main.
+    fn collect_agent_chat_state_for_target(
         &self,
         detached_entity: Option<&gpui::Entity<crate::ai::agent_chat::ui::AgentChatView>>,
         cx: &Context<Self>,
-    ) -> protocol::AcpStateSnapshot {
+    ) -> protocol::AgentChatStateSnapshot {
         match detached_entity {
-            Some(entity) => entity.read(cx).collect_acp_state_snapshot(cx),
-            None => self.collect_acp_state(cx),
+            Some(entity) => entity.read(cx).collect_agent_chat_state_snapshot(cx),
+            None => self.collect_agent_chat_state(cx),
         }
     }
 
-    /// Collect ACP test probe from the given detached entity, or fall through to main.
-    fn collect_acp_test_probe_for_target(
+    /// Collect Agent Chat test probe from the given detached entity, or fall through to main.
+    fn collect_agent_chat_test_probe_for_target(
         &self,
         detached_entity: Option<&gpui::Entity<crate::ai::agent_chat::ui::AgentChatView>>,
         tail: usize,
         cx: &Context<Self>,
-    ) -> protocol::AcpTestProbeSnapshot {
+    ) -> protocol::AgentChatTestProbeSnapshot {
         match detached_entity {
             Some(entity) => entity.read(cx).test_probe_snapshot(tail, cx),
-            None => self.collect_acp_test_probe(tail, cx),
+            None => self.collect_agent_chat_test_probe(tail, cx),
         }
     }
 
-    /// Reset the ACP test probe ring buffer.
-    fn reset_acp_test_probe(&mut self, cx: &mut Context<Self>) {
-        if let AppView::AcpChatView { entity } = &self.current_view {
+    /// Reset the Agent Chat test probe ring buffer.
+    fn reset_agent_chat_test_probe(&mut self, cx: &mut Context<Self>) {
+        if let AppView::AgentChatView { entity } = &self.current_view {
             entity.update(cx, |view, _cx| {
                 view.reset_test_probe();
             });
         }
     }
 
-    /// Collect a bounded ACP test probe snapshot.
-    fn collect_acp_test_probe(
+    /// Collect a bounded Agent Chat test probe snapshot.
+    fn collect_agent_chat_test_probe(
         &self,
         tail: usize,
         cx: &Context<Self>,
-    ) -> protocol::AcpTestProbeSnapshot {
+    ) -> protocol::AgentChatTestProbeSnapshot {
         let entity = match &self.current_view {
-            AppView::AcpChatView { entity } => entity,
+            AppView::AgentChatView { entity } => entity,
             _ => {
-                return protocol::AcpTestProbeSnapshot {
-                    state: protocol::AcpStateSnapshot {
-                        status: "notAcp".to_string(),
+                return protocol::AgentChatTestProbeSnapshot {
+                    state: protocol::AgentChatStateSnapshot {
+                        status: "notAgentChat".to_string(),
                         ..Default::default()
                     },
                     ..Default::default()
@@ -10198,7 +10198,7 @@ impl ScriptListApp {
                 self.queue_filter_compute(text, cx);
                 cx.notify();
             }
-            AppView::AcpChatView { entity } => {
+            AppView::AgentChatView { entity } => {
                 let entity = entity.clone();
                 entity.update(cx, |view, cx| view.set_input(text.to_string(), cx));
                 cx.notify();
@@ -10597,7 +10597,7 @@ fn batch_command_name(cmd: &protocol::BatchCommand) -> String {
         protocol::BatchCommand::SetInput { .. } => "setInput".to_string(),
         protocol::BatchCommand::OpenActions => "openActions".to_string(),
         protocol::BatchCommand::TogglePreview => "togglePreview".to_string(),
-        protocol::BatchCommand::OpenNotesAcp => "openNotesAcp".to_string(),
+        protocol::BatchCommand::OpenNotesAgentChat => "openNotesAgentChat".to_string(),
         protocol::BatchCommand::ForceSubmit { .. } => "forceSubmit".to_string(),
         protocol::BatchCommand::WaitFor { .. } => "waitFor".to_string(),
         protocol::BatchCommand::SelectByValue { .. } => "selectByValue".to_string(),
@@ -10729,8 +10729,8 @@ mod prompt_handler_message_tests {
     }
 
     #[test]
-    fn test_build_script_error_acp_prompt_includes_fix_and_verification_guidance() {
-        let prompt = build_script_error_acp_prompt(
+    fn test_build_script_error_agent_chat_prompt_includes_fix_and_verification_guidance() {
+        let prompt = build_script_error_agent_chat_prompt(
             "/tmp/failing-script.ts",
             "ReferenceError: foo is not defined",
             Some(1),
@@ -10765,12 +10765,12 @@ mod prompt_handler_message_tests {
     }
 
     #[test]
-    fn test_persist_script_error_acp_context_bundle_writes_snapshot_and_report() {
+    fn test_persist_script_error_agent_chat_context_bundle_writes_snapshot_and_report() {
         let temp_dir = tempfile::tempdir().expect("create temp dir");
         let script_path = temp_dir.path().join("failing-script.ts");
         std::fs::write(&script_path, "throw new Error('boom');").expect("write script");
 
-        let bundle = persist_script_error_acp_context_bundle_in_dir(
+        let bundle = persist_script_error_agent_chat_context_bundle_in_dir(
             temp_dir.path(),
             script_path.to_str().expect("utf8 path"),
             "ReferenceError: foo is not defined",
@@ -10779,7 +10779,7 @@ mod prompt_handler_message_tests {
             Some("stack trace"),
             &["Check the missing symbol".to_string()],
         )
-        .expect("persist ACP context bundle");
+        .expect("persist Agent Chat context bundle");
 
         let script_snapshot =
             std::fs::read_to_string(&bundle.script_snapshot_path).expect("read script snapshot");

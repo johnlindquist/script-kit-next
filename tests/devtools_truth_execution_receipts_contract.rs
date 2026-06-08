@@ -79,7 +79,7 @@ const DT_028_BUILTINS_PREFERENCES_GLOBAL: &str = include_str!(
     "../.agents/skills/script-kit-devtools/references/devtools-truth-scenarios/receipts/direct-actions-builtins-preferences-global-v1/dt-truth-028-actions-global-show-logs-copy-gated/scenario.receipt.json"
 );
 const DT_029_SYSTEM_PERMISSION_AGENT: &str = include_str!(
-    "../.agents/skills/script-kit-devtools/references/devtools-truth-scenarios/receipts/direct-actions-system-permission-agent-copy-v1/dt-truth-029-actions-acp-history-agent-chat-copy-truth/scenario.receipt.json"
+    "../.agents/skills/script-kit-devtools/references/devtools-truth-scenarios/receipts/direct-actions-system-permission-agent-copy-v1/dt-truth-029-actions-agent_chat-history-agent-chat-copy-truth/scenario.receipt.json"
 );
 const DT_030_SYSTEM_PERMISSION_AGENT: &str = include_str!(
     "../.agents/skills/script-kit-devtools/references/devtools-truth-scenarios/receipts/direct-actions-system-permission-agent-copy-v1/dt-truth-030-actions-permission-assistant-accessibility-copy-gated/scenario.receipt.json"
@@ -1210,7 +1210,7 @@ fn direct_actions_system_permission_agent_slice_has_exact_scenarios_and_no_runne
     assert_eq!(
         scenario_ids,
         vec![
-            "dt-truth-029-actions-acp-history-agent-chat-copy-truth",
+            "dt-truth-029-actions-agent_chat-history-agent-chat-copy-truth",
             "dt-truth-030-actions-permission-assistant-accessibility-copy-gated",
             "dt-truth-031-actions-system-settings-pane-copy-gated",
             "dt-truth-032-actions-generate-script-agent-chat-handoff-copy-gated",
@@ -1229,7 +1229,7 @@ fn direct_actions_system_permission_agent_slice_has_exact_scenarios_and_no_runne
 fn direct_actions_system_permission_agent_receipts_have_truth_schema_safety_and_primitives() {
     for (expected_id, raw) in [
         (
-            "dt-truth-029-actions-acp-history-agent-chat-copy-truth",
+            "dt-truth-029-actions-agent_chat-history-agent-chat-copy-truth",
             DT_029_SYSTEM_PERMISSION_AGENT,
         ),
         (
@@ -1322,9 +1322,9 @@ fn direct_actions_system_permission_agent_records_expected_truth_checks() {
         (
             DT_029_SYSTEM_PERMISSION_AGENT,
             vec![
-                "acpHistoryParentSelectionStable",
-                "acpHistoryVisibleCopyNamesAgentChat",
-                "acpHistoryCopyRejectsAiConversations",
+                "agent_chatHistoryParentSelectionStable",
+                "agent_chatHistoryVisibleCopyNamesAgentChat",
+                "agent_chatHistoryCopyRejectsAiConversations",
                 "genericAssistantFilterDoesNotExposeStaleAction",
                 "historyFilterRecoveryRestoresAction",
             ],
@@ -1991,7 +1991,7 @@ fn direct_devtools_agent_handoff_submit_requires_scoped_dry_run_receipt_gate() {
         "SCRIPT_KIT_AGENT_HANDOFF_DRY_RUN",
         "SCRIPT_KIT_AGENT_HANDOFF_RECEIPT_PATH",
         "submitIntent:agent-handoff-dry-run",
-        "parentTarget?.targetKind === \"AcpChat\"",
+        "parentTarget?.targetKind === \"AgentChat\"",
         "parentTarget?.targetKind === \"ScriptList\"",
         "parentTarget?.targetKind === \"ActionsDialog\"",
     ] {

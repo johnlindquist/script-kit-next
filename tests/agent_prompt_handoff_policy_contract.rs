@@ -1,6 +1,6 @@
 //! Source contracts for Agent Chat prompt handoff policy.
 //!
-//! These keep the handoff action aligned with the normal ACP prompt-builder
+//! These keep the handoff action aligned with the normal Agent Chat prompt-builder
 //! submit gate while the broader equivalence matrix is built out.
 
 #[test]
@@ -19,7 +19,7 @@ fn handoff_blocks_non_submittable_prompt_builder_plans() {
     ] {
         assert!(
             method.contains(expected),
-            "handoff must block prompt-builder drafts that normal ACP prompt-builder submit would not submit: {expected}"
+            "handoff must block prompt-builder drafts that normal Agent Chat prompt-builder submit would not submit: {expected}"
         );
     }
 }
@@ -36,22 +36,22 @@ fn handoff_preserves_plain_text_composer_fallback() {
     assert!(
         method.contains("if plan.prompt_builder_segment_count > 0")
             && method.contains("raw_input.trim().to_string()"),
-        "plain ACP composer text has no prompt-builder segments and must still hand off as raw prompt text"
+        "plain Agent Chat composer text has no prompt-builder segments and must still hand off as raw prompt text"
     );
 }
 
 #[test]
-fn acp_view_uses_shared_handoff_compiler() {
-    let source = include_str!("../src/ai/acp/view.rs");
+fn agent_chat_view_uses_shared_handoff_compiler() {
+    let source = include_str!("../src/ai/agent_chat/ui/view.rs");
     let method = source
         .split("pub(crate) fn current_prompt_handoff_payload")
         .nth(1)
-        .and_then(|tail| tail.split("fn handle_acp_spine_key_down").next())
+        .and_then(|tail| tail.split("fn handle_agent_chat_spine_key_down").next())
         .expect("current_prompt_handoff_payload body");
 
     assert!(
         method.contains("compile_handoff_payload_from_spine_plan"),
-        "ACP view should delegate payload semantics to the shared handoff compiler"
+        "Agent Chat view should delegate payload semantics to the shared handoff compiler"
     );
 }
 
@@ -171,12 +171,12 @@ fn main_prompt_actions_use_shared_handoff_compiler() {
         "filter_text().to_string()",
         "set_spine_parse_from_filter_and_cursor",
         "build_spine_prompt_plan",
-        "spine_cwd_for_acp_launch",
+        "spine_cwd_for_agent_chat_launch",
         "compile_handoff_payload_from_spine_plan",
     ] {
         assert!(
             method.contains(expected),
-            "main prompt handoff must share ACP prompt-builder semantics: {expected}"
+            "main prompt handoff must share Agent Chat prompt-builder semantics: {expected}"
         );
     }
 }

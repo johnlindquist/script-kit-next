@@ -27,7 +27,7 @@ fn prompt_handler_declares_batch_target_capability_owner() {
         "fn batch_target_kind_for_resolved_target(",
         "fn supported_batch_commands_for_target(",
         "fn unsupported_batch_command_error(",
-        "fn is_acp_wait_condition(",
+        "fn is_agent_chat_wait_condition(",
     ] {
         assert!(
             PROMPT_HANDLER.contains(required),
@@ -59,7 +59,7 @@ fn supported_command_lists_are_named_by_target_kind() {
             ][..],
         ),
         (
-            "AutomationBatchTargetKind::AcpDetached",
+            "AutomationBatchTargetKind::AgentChatDetached",
             &[
                 "\"setInput\"",
                 "\"waitFor\"",
@@ -73,7 +73,7 @@ fn supported_command_lists_are_named_by_target_kind() {
                 "\"setInput\"",
                 "\"openActions\"",
                 "\"togglePreview\"",
-                "\"openNotesAcp\"",
+                "\"openNotesAgentChat\"",
                 "\"waitFor\"",
             ][..],
         ),
@@ -151,7 +151,7 @@ fn unsupported_command_errors_are_generated_by_the_helper() {
     let helper_body = source_between(
         PROMPT_HANDLER,
         "fn unsupported_batch_command_error(",
-        "\nfn is_acp_wait_condition(",
+        "\nfn is_agent_chat_wait_condition(",
     );
 
     assert!(helper_body.contains("protocol::TransactionErrorCode::UnsupportedCommand"));
@@ -165,7 +165,7 @@ fn unsupported_command_errors_are_generated_by_the_helper() {
     );
 
     for required in [
-        "unsupported_batch_command_error(\n                                            AutomationBatchTargetKind::AcpDetached",
+        "unsupported_batch_command_error(\n                                            AutomationBatchTargetKind::AgentChatDetached",
         "unsupported_batch_command_error(\n                                            AutomationBatchTargetKind::Notes",
         "unsupported_batch_command_error(\n                                            AutomationBatchTargetKind::ActionsDialog",
         "unsupported_batch_command_error(\n                                            AutomationBatchTargetKind::PromptPopup",
@@ -178,40 +178,41 @@ fn unsupported_command_errors_are_generated_by_the_helper() {
 }
 
 #[test]
-fn acp_wait_condition_classification_is_shared() {
+fn agent_chat_wait_condition_classification_is_shared() {
     let helper_body = source_between(
         PROMPT_HANDLER,
-        "fn is_acp_wait_condition(",
+        "fn is_agent_chat_wait_condition(",
         "\n/// Resolve an automation target",
     );
 
     for condition in [
-        "AcpReady",
-        "AcpPickerOpen",
-        "AcpPickerClosed",
-        "AcpItemAccepted",
-        "AcpCursorAt",
-        "AcpStatus",
-        "AcpInputMatch",
-        "AcpInputContains",
-        "AcpAcceptedViaKey",
-        "AcpAcceptedLabel",
-        "AcpAcceptedCursorAt",
-        "AcpInputLayoutMatch",
-        "AcpSetupVisible",
-        "AcpSetupReasonCode",
-        "AcpSetupPrimaryAction",
-        "AcpSetupAgentPickerOpen",
-        "AcpSetupSelectedAgent",
+        "AgentChatReady",
+        "AgentChatPickerOpen",
+        "AgentChatPickerClosed",
+        "AgentChatItemAccepted",
+        "AgentChatCursorAt",
+        "AgentChatStatus",
+        "AgentChatInputMatch",
+        "AgentChatInputContains",
+        "AgentChatAcceptedViaKey",
+        "AgentChatAcceptedLabel",
+        "AgentChatAcceptedCursorAt",
+        "AgentChatInputLayoutMatch",
+        "AgentChatSetupVisible",
+        "AgentChatSetupReasonCode",
+        "AgentChatSetupPrimaryAction",
+        "AgentChatSetupAgentPickerOpen",
+        "AgentChatSetupSelectedAgent",
     ] {
         assert!(
             helper_body.contains(condition),
-            "ACP wait classifier must include {condition}"
+            "Agent Chat wait classifier must include {condition}"
         );
     }
 
-    assert!(PROMPT_HANDLER.contains("let is_acp_condition = is_acp_wait_condition(&condition);"));
-    assert!(PROMPT_HANDLER.contains("let is_acp = is_acp_wait_condition(condition);"));
+    assert!(PROMPT_HANDLER
+        .contains("let is_agent_chat_condition = is_agent_chat_wait_condition(&condition);"));
+    assert!(PROMPT_HANDLER.contains("let is_agent_chat = is_agent_chat_wait_condition(condition);"));
 }
 
 #[test]
@@ -228,16 +229,16 @@ fn batch_prompt_popup_routing_uses_the_resolved_target_kind() {
 }
 
 #[test]
-fn automation_ai_target_routes_to_live_acp_entity_for_batch_and_reads() {
+fn automation_ai_target_routes_to_live_agent_chat_entity_for_batch_and_reads() {
     for marker in [
-        "fn active_acp_chat_entity(",
-        "automation.target.ai_routed_to_acp_entity",
-        "automation.acp_target.ai_resolved_to_entity",
-        "fn embedded_acp_automation_entity(",
+        "fn active_agent_chat_entity(",
+        "automation.target.ai_routed_to_agent_chat_entity",
+        "automation.agent_chat_target.ai_resolved_to_entity",
+        "fn embedded_agent_chat_automation_entity(",
     ] {
         assert!(
             PROMPT_HANDLER.contains(marker),
-            "prompt_handler must include Ai→ACP routing marker: {marker}"
+            "prompt_handler must include Ai→Agent Chat routing marker: {marker}"
         );
     }
 }

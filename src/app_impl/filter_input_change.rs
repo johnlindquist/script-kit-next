@@ -468,13 +468,13 @@ impl ScriptListApp {
                 }
                 return; // Don't run main menu filter logic
             }
-            AppView::AcpHistoryView {
+            AppView::AgentChatHistoryView {
                 filter,
                 selected_index,
             } => {
                 self.filter_text = new_text.clone();
                 if Self::sync_builtin_query_state(filter, selected_index, &new_text) {
-                    self.acp_history_scroll_handle.scroll_to_top_of_item(0);
+                    self.agent_chat_history_scroll_handle.scroll_to_top_of_item(0);
                     cx.notify();
                 }
                 return; // Don't run main menu filter logic

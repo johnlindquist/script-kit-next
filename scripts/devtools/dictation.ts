@@ -431,7 +431,7 @@ async function deliverFixture(args: Args) {
       args.expectRefusal && !refusalProven ? "wrong-target refusal receipt" : "",
     ].filter(Boolean),
     recommendedNext: [
-      "Add cursor insertion range for Notes/ACP/frontmost destinations.",
+      "Add cursor insertion range for Notes/Agent Chat/frontmost destinations.",
       "Add wrong-target refusal receipts for stale or incompatible dictation targets.",
     ],
     errors: [sendReceipt].filter((receipt) => receipt.status === "error"),

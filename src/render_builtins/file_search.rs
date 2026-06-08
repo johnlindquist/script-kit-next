@@ -643,7 +643,7 @@ impl ScriptListApp {
                     }
                 }
 
-                // ESC: In portal mode, cancel and return to ACP chat.
+                // ESC: In portal mode, cancel and return to Agent Chat chat.
                 // Otherwise, clear query first; if empty, go back/close.
                 if is_key_escape(key) {
                     if this.is_in_attachment_portal() {
@@ -709,7 +709,7 @@ impl ScriptListApp {
                                 let has_selection = get_selected_file().is_some();
 
                                 // Plain ⌘↵ (no Shift): prefer the shared launcher
-                                // route so FileSearch converges on the same ACP
+                                // route so FileSearch converges on the same Agent Chat
                                 // context-capture path as other main-window surfaces.
                                 if !has_shift {
                                     tracing::info!(
@@ -718,7 +718,7 @@ impl ScriptListApp {
                                         has_selection,
                                     );
 
-                                    if this.try_route_global_cmd_enter_to_acp_context_capture(cx) {
+                                    if this.try_route_global_cmd_enter_to_agent_chat_context_capture(cx) {
                                         cx.stop_propagation();
                                         return;
                                     }
@@ -785,7 +785,7 @@ impl ScriptListApp {
                                             // so the next Cmd+Enter launches the
                                             // agent in the chosen directory
                                             // without a cold-start "try again".
-                                            this.prewarm_acp_for_spine_cwd(cx);
+                                            this.prewarm_agent_chat_for_spine_cwd(cx);
                                             this.persist_spine_cwd();
                                             this.reset_to_script_list(cx);
                                             this.clear_filter(window, cx);
@@ -804,7 +804,7 @@ impl ScriptListApp {
                                         return;
                                     }
 
-                                    // Portal mode: attach file to ACP chat and return.
+                                    // Portal mode: attach file to Agent Chat chat and return.
                                     if this.is_in_attachment_portal() {
                                         if file.file_type == FileType::Directory {
                                             let next_query = format!(

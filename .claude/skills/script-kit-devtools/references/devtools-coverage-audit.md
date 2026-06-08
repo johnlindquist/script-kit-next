@@ -22,7 +22,7 @@ The app already exposes a partial DevTools foundation:
 | --- | --- | --- |
 | Surface/window identity | Strong for registered windows and exact targets. | Need capability discovery that tells agents which targets support which state/layout/action primitives. |
 | Semantic tree | Good for main and many built-ins; partial for non-main windows. | Some built-in and popup surfaces still fall back to panel-only receipts. Need uniform roles, labels, action ids, disabled reasons, and owner metadata. |
-| Layout bounds | Main-window `getLayoutInfo` exists. | Need target-scoped layout for Notes, actions dialogs, prompt popups, ACP detached windows, and DivPrompt content. |
+| Layout bounds | Main-window `getLayoutInfo` exists. | Need target-scoped layout for Notes, actions dialogs, prompt popups, AgentChat detached windows, and DivPrompt content. |
 | Text fit/clipping | Exists in specialized scripts/receipts. | Needs protocol-level primitives for rendered text bounds, measured width, available width, wrap lines, truncation intent, and overlap pairs. |
 | Scroll state | Main list exposes some footer-safe scroll geometry. | Need scroll position, content height, viewport height, sticky headers, shadows, and selected-row visibility across prompts, DivPrompt, Notes, popups, and virtualized lists. |
 | Popup/menu inspection | Actions popup identity and semantic row work is improving. | Need anchor rects, route stack, section bounds, keycap/shortcut layout, hover/focus row state, and post-resize anchor/bounds invariants. |
@@ -41,7 +41,7 @@ Build the DevTools surface around these scenarios before adding more recipes:
 
 1. User screenshot says an actions popup menu is clipped, anchored wrong, unreadable, or missing expected rows.
 2. Main menu with dynamic choices does not resize correctly as choices appear/disappear.
-3. Notes window grows, shrinks, or scrolls incorrectly with long notes and embedded ACP.
+3. Notes window grows, shrinks, or scrolls incorrectly with long notes and embedded AgentChat.
 4. `div`, `arg`, `form`, `fields`, and other prompt containers become too tall, need scrolling, or hide footer/input controls.
 5. Long labels, file paths, snippets, emoji, RTL text, or mixed grapheme content clip or overlap.
 6. Footer buttons, disabled actions, shortcut hints, and keycaps do not match action availability.
@@ -70,7 +70,7 @@ The current coverage command and narrative map live in `references/devtools-api-
 
 The intended domain spread is targets/windows, elements/semantics, layout/box model, styles/theme/text fit, console/logs/events, sources/scripts/owners, performance/timeline, storage/resources/privacy, accessibility, input/focus/actions, media/sensors/permissions, screenshots/visual proof, and investigation records.
 
-Notes and Dictation are first-class coverage targets. Notes must expose editor, preview, browse, trash, command-bar, recent-switcher, note-cart, embedded ACP, portal, draft, resize, scroll, and shortcut receipts. Dictation must expose passive permission/model readiness, recording state, audio levels, target delivery, transcript generation, wrong-target refusal, history preview/redaction, hotkey, and cleanup receipts before live dictation bugs are called green.
+Notes and Dictation are first-class coverage targets. Notes must expose editor, preview, browse, trash, command-bar, recent-switcher, note-cart, embedded AgentChat, portal, draft, resize, scroll, and shortcut receipts. Dictation must expose passive permission/model readiness, recording state, audio levels, target delivery, transcript generation, wrong-target refusal, history preview/redaction, hotkey, and cleanup receipts before live dictation bugs are called green.
 
 Oracle browser session `devtools-chrome-notes-dictation-api` reviewed this API direction on 2026-05-16 and reinforced the same split: coverage may be source-backed before runtime exists, but runtime proof must stay fail-closed until `devtools.measure`, `devtools.media.inspect`, `devtools.act`, `devtools.compare`, and `devtools.investigate` expose the needed receipts.
 
@@ -81,7 +81,7 @@ The first inspect slice should be enough for agents to orient on these user repo
 1. A screenshot shows the wrong Script Kit window, or the bug report does not name the surface.
 2. An actions popup is visible, but the agent needs exact target identity before measuring clipping or anchor drift.
 3. A main menu report needs visible count, selected/focused ids, footer state, and screenshot metadata in one receipt.
-4. A Notes, ACP, PromptPopup, or detached window report needs to prove whether state/layout support is missing before adding code.
+4. A Notes, AgentChat, PromptPopup, or detached window report needs to prove whether state/layout support is missing before adding code.
 5. A screenshot disagrees with semantic rows, so the agent needs screenshot size, target bounds, hit points, semantic quality, and warnings together.
 
 When `devtools.inspect` returns `status:"degraded"` or non-empty `missingFields`, the correct next step is to build or use the named primitive, not to bury the gap in a larger recipe.
@@ -123,7 +123,7 @@ The corrected 50-iteration Oracle planning artifact is `references/oracle-devtoo
 | 27 | Notes window does not grow for a long note. | Notes target, bounds, elements, editor mode | Inspect -> Compare |
 | 28 | Notes window grows but never shrinks. | Notes bounds before/after tall and short input | Inspect -> Compare |
 | 29 | Notes editor scroll jumps while typing. | editor state, scroll position, cursor position | Inspect -> Measure/Act |
-| 30 | Notes embedded ACP receives input instead of the note editor. | Notes mode, exact target, ACP identity, input owner | Inspect |
+| 30 | Notes embedded AgentChat receives input instead of the note editor. | Notes mode, exact target, AgentChat identity, input owner | Inspect |
 | 31 | Markdown preview scroll is not synced with editor. | editor/preview identities and scroll positions | Inspect -> Measure/Act |
 | 32 | Div prompt hides the end marker. | prompt type, content/viewport bounds, scroll need | Inspect -> Measure |
 | 33 | Tall form prompt pushes Submit off-screen. | prompt type, content/input/footer bounds | Inspect -> Measure |
@@ -132,12 +132,12 @@ The corrected 50-iteration Oracle planning artifact is `references/oracle-devtoo
 | 36 | Drop prompt exposes full local file paths in rows. | redacted file metadata, row values | Inspect |
 | 37 | Hotkey prompt records a shortcut after cancel. | prompt type, hotkey elements, config fingerprint | Inspect -> Act/Compare |
 | 38 | Template prompt tab order skips a field. | field elements, focused id, tab order | Inspect -> Act/Measure |
-| 39 | Detached ACP receives input for the main ACP. | exact target, osWindowId, ACP state capability | Inspect |
-| 40 | Detached ACP screenshot captures the wrong window. | automation id, osWindowId, screenshot target/crop | Inspect |
-| 41 | ACP mention popup rows do not match semantic rows. | promptPopup target, elements, selected/focused ids | Inspect |
-| 42 | ACP slash popup drifts after composer resize. | popup target, parent id, bounds, anchor rect | Inspect -> Measure |
+| 39 | Detached AgentChat receives input for the main AgentChat. | exact target, osWindowId, AgentChat state capability | Inspect |
+| 40 | Detached AgentChat screenshot captures the wrong window. | automation id, osWindowId, screenshot target/crop | Inspect |
+| 41 | AgentChat mention popup rows do not match semantic rows. | promptPopup target, elements, selected/focused ids | Inspect |
+| 42 | AgentChat slash popup drifts after composer resize. | popup target, parent id, bounds, anchor rect | Inspect -> Measure |
 | 43 | Model selector popup shows stale current model. | popup elements, selected id, model state | Inspect |
-| 44 | Context insertion preview differs between File Search and ACP. | source row, destination identity, provenance | Inspect -> Act/Compare |
+| 44 | Context insertion preview differs between File Search and AgentChat. | source row, destination identity, provenance | Inspect -> Act/Compare |
 | 45 | Portal cancel does not restore composer cursor. | origin identity, cursor state, portal session | Inspect -> Act/Compare |
 | 46 | Main search source chip remains after clearing input. | filter decorations, input value, chip elements | Inspect |
 | 47 | Source filter syntax shows hints instead of file rows. | input decorations, visible rows, source status rows | Inspect |

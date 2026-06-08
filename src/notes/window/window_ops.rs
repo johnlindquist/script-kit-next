@@ -951,7 +951,7 @@ pub(crate) fn restore_launcher_after_notes_close_if_needed(cx: &mut App) {
 ///
 /// The launcher surface is NOT reset — `current_view` and focus target are
 /// preserved across the Notes session, so the user returns to the exact
-/// view they left (ScriptList, embedded ACP, FileSearch, etc.).
+/// view they left (ScriptList, embedded Agent Chat, FileSearch, etc.).
 pub(crate) fn restore_launcher_after_notes_close(_cx: &mut App) {
     // Only restore if the main window is currently hidden.
     // If it's already visible (e.g. Notes was opened without hiding it),

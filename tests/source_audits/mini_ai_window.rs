@@ -207,7 +207,7 @@ fn builtin_execution_routes_mini_ai_to_deferred_handoff() {
     );
     assert!(
         source.contains("cmd.is_legacy_harness_alias()")
-            && source.contains("self.open_tab_ai_acp_with_entry_intent(None, cx);"),
+            && source.contains("self.open_tab_ai_agent_chat_with_entry_intent(None, cx);"),
         "builtin_execution.rs must route MiniAi through the shared Agent Chat compatibility entry point"
     );
 }
@@ -1082,7 +1082,7 @@ fn mini_ai_has_stdin_protocol_commands() {
             "{dispatch_file} must dispatch ExternalCommand::OpenMiniAiWithMockData"
         );
         assert!(
-            source.contains("open_tab_ai_acp_with_entry_intent(None,"),
+            source.contains("open_tab_ai_agent_chat_with_entry_intent(None,"),
             "{dispatch_file} must route openMiniAi compatibility aliases through Agent Chat"
         );
     }

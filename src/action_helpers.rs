@@ -64,7 +64,7 @@ pub fn extract_path_for_reveal(
         Some(SearchResult::Todo(_)) => Err(PathExtractionError::UnsupportedType(
             SharedString::from("Todos row has no filesystem path"),
         )),
-        Some(SearchResult::AcpHistory(_)) => Err(PathExtractionError::UnsupportedType(
+        Some(SearchResult::AgentChatHistory(_)) => Err(PathExtractionError::UnsupportedType(
             SharedString::from("Agent Chat conversations row has no filesystem path"),
         )),
         Some(SearchResult::AiVault(_)) => Err(PathExtractionError::UnsupportedType(
@@ -120,7 +120,7 @@ pub fn extract_path_for_copy(
         Some(SearchResult::Todo(_)) => Err(PathExtractionError::UnsupportedType(
             SharedString::from("Todos row has no filesystem path"),
         )),
-        Some(SearchResult::AcpHistory(_)) => Err(PathExtractionError::UnsupportedType(
+        Some(SearchResult::AgentChatHistory(_)) => Err(PathExtractionError::UnsupportedType(
             SharedString::from("Agent Chat conversations row has no filesystem path"),
         )),
         Some(SearchResult::AiVault(_)) => Err(PathExtractionError::UnsupportedType(
@@ -186,7 +186,7 @@ pub fn extract_path_for_quick_terminal(
         Some(SearchResult::Todo(_)) => Err(PathExtractionError::UnsupportedType(
             SharedString::from("Cannot open todos in Quick Terminal"),
         )),
-        Some(SearchResult::AcpHistory(_)) => Err(PathExtractionError::UnsupportedType(
+        Some(SearchResult::AgentChatHistory(_)) => Err(PathExtractionError::UnsupportedType(
             SharedString::from("Cannot open Agent Chat conversations in Quick Terminal"),
         )),
         Some(SearchResult::AiVault(_)) => Err(PathExtractionError::UnsupportedType(
@@ -274,7 +274,7 @@ pub fn extract_path_for_edit(
         Some(SearchResult::Fallback(_)) => Err(PathExtractionError::UnsupportedType(
             SharedString::from("Cannot edit fallback commands"),
         )),
-        Some(SearchResult::AcpHistory(_)) => Err(PathExtractionError::UnsupportedType(
+        Some(SearchResult::AgentChatHistory(_)) => Err(PathExtractionError::UnsupportedType(
             SharedString::from("Cannot edit Agent Chat conversations"),
         )),
         Some(SearchResult::AiVault(_)) => Err(PathExtractionError::UnsupportedType(

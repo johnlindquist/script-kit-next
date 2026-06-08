@@ -223,7 +223,7 @@ pub fn show_main_window_without_activation() {
 ///
 /// This makes the window visible but does not steal keyboard focus from whatever
 /// surface currently has it.  Use this when another surface (e.g., Notes or
-/// Detached ACP Chat) should remain the key window.
+/// Detached Agent Chat Chat) should remain the key window.
 ///
 /// # macOS Behavior
 ///

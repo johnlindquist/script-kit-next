@@ -1,16 +1,17 @@
-//! Contract tests verifying Agent Chat compatibility routes and ACP entry points.
+//! Contract tests verifying Agent Chat compatibility routes and Agent Chat entry points.
 //!
 //! The primary Agent Chat entry key is Command+Enter. Plain Tab is deprecated
 //! for Agent Chat entry and remains local to focus/navigation handlers.
 //!
 //! Direct zero-intent launcher surfaces now route through
-//! `open_tab_ai_acp_with_entry_intent(None, cx)`, while `open_tab_ai_chat()`
+//! `open_tab_ai_agent_chat_with_entry_intent(None, cx)`, while `open_tab_ai_chat()`
 //! remains a compatibility wrapper for older harness entry callers.
 
 const TAB_SOURCE: &str = include_str!("../src/app_impl/startup.rs");
 const TAB_NEW_SOURCE: &str = include_str!("../src/app_impl/startup_new_tab.rs");
 const TAB_AI_MODE_SOURCE: &str = include_str!("../src/app_impl/tab_ai_mode/mod.rs");
-const TAB_AI_ACP_LAUNCH_SOURCE: &str = include_str!("../src/app_impl/tab_ai_mode/acp_launch.rs");
+const TAB_AI_AGENT_CHAT_LAUNCH_SOURCE: &str =
+    include_str!("../src/app_impl/tab_ai_mode/agent_chat_launch.rs");
 const RENDER_IMPL_SOURCE: &str = include_str!("../src/main_sections/render_impl.rs");
 const SCRIPT_LIST_SOURCE: &str = include_str!("../src/render_script_list/mod.rs");
 const APP_STATE_SOURCE: &str = include_str!("../src/main_sections/app_state.rs");
@@ -45,21 +46,21 @@ fn plain_tab_agent_chat_entry_is_removed_and_global_cmd_enter_bails_when_portal_
     // entry at all, and global Cmd+Enter must still refuse portal submits.
 
     assert!(
-        !TAB_AI_MODE_SOURCE.contains("try_route_plain_tab_to_acp_context_capture")
+        !TAB_AI_MODE_SOURCE.contains("try_route_plain_tab_to_agent_chat_context_capture")
             && !TAB_AI_MODE_SOURCE.contains("agent_chat_plain_tab_entry_deprecated")
-            && !TAB_AI_MODE_SOURCE.contains("tab_ai_plain_tab_routed_to_acp"),
+            && !TAB_AI_MODE_SOURCE.contains("tab_ai_plain_tab_routed_to_agent_chat"),
         "Plain Tab must not keep an Agent Chat route, shim, or telemetry marker"
     );
 
     let cmd_enter_fn = TAB_AI_MODE_SOURCE
-        .find("fn try_route_global_cmd_enter_to_acp_context_capture")
+        .find("fn try_route_global_cmd_enter_to_agent_chat_context_capture")
         .expect("global cmd+enter helper must exist");
     let cmd_enter_body = &TAB_AI_MODE_SOURCE
         [cmd_enter_fn..cmd_enter_fn + 1500.min(TAB_AI_MODE_SOURCE.len() - cmd_enter_fn)];
     assert!(
         cmd_enter_body.contains("self.is_in_attachment_portal()")
             && cmd_enter_body.contains("return false"),
-        "Global Cmd+Enter ACP helper must early-return false when an attachment portal is active"
+        "Global Cmd+Enter Agent Chat helper must early-return false when an attachment portal is active"
     );
 }
 
@@ -67,7 +68,7 @@ fn plain_tab_agent_chat_entry_is_removed_and_global_cmd_enter_bails_when_portal_
 fn global_cmd_enter_spine_probe_falls_through_to_agent_chat_route() {
     let cmd_enter_body = source_block_after(
         TAB_AI_MODE_SOURCE,
-        "fn try_route_global_cmd_enter_to_acp_context_capture",
+        "fn try_route_global_cmd_enter_to_agent_chat_context_capture",
         2600,
     );
 
@@ -85,8 +86,8 @@ fn global_cmd_enter_spine_probe_falls_through_to_agent_chat_route() {
          prose should continue to the Agent Chat route"
     );
     assert!(
-        cmd_enter_body.contains("tab_ai_global_cmd_enter_routed_to_acp"),
-        "Global Cmd+Enter fallthrough must still reach the ACP route telemetry"
+        cmd_enter_body.contains("tab_ai_global_cmd_enter_routed_to_agent_chat"),
+        "Global Cmd+Enter fallthrough must still reach the Agent Chat route telemetry"
     );
 }
 
@@ -97,8 +98,8 @@ fn quick_terminal_output_routes_through_text_block_context_part() {
             && TAB_AI_MODE_SOURCE.contains("AiContextPart::TextBlock")
             && TAB_AI_MODE_SOURCE.contains("text/x-terminal-transcript")
             && TAB_AI_MODE_SOURCE
-                .contains("open_tab_ai_acp_with_context_part(part, \"quick_terminal_output\""),
-        "Quick Terminal output must attach to ACP as a TextBlock via the existing context-part handoff"
+                .contains("open_tab_ai_agent_chat_with_context_part(part, \"quick_terminal_output\""),
+        "Quick Terminal output must attach to Agent Chat as a TextBlock via the existing context-part handoff"
     );
 }
 
@@ -120,21 +121,21 @@ fn terminal_context_picker_portal_opens_quick_terminal() {
 }
 
 #[test]
-fn quick_terminal_cmd_enter_does_not_add_new_acp_surface_mutation_path() {
+fn quick_terminal_cmd_enter_does_not_add_new_agent_chat_surface_mutation_path() {
     let handoff = source_block_after(
         TAB_AI_MODE_SOURCE,
         "pub(crate) fn open_agent_chat_with_quick_terminal_output",
         2200,
     );
     for forbidden in [
-        "self.current_view = AppView::AcpChatView",
+        "self.current_view = AppView::AgentChatView",
         "ensure_embedded_ai_window(",
-        "transition_acp_surface(",
+        "transition_agent_chat_surface(",
         "thread.add_context_part",
     ] {
         assert!(
             !handoff.contains(forbidden),
-            "Quick Terminal handoff must not bypass ACP entry/context helpers: {forbidden}"
+            "Quick Terminal handoff must not bypass Agent Chat entry/context helpers: {forbidden}"
         );
     }
 }
@@ -142,7 +143,7 @@ fn quick_terminal_cmd_enter_does_not_add_new_acp_surface_mutation_path() {
 #[test]
 fn pi_warmup_branch_opens_visible_chat_instead_of_warming_setup() {
     let launch_body = source_block_after(
-        TAB_AI_ACP_LAUNCH_SOURCE,
+        TAB_AI_AGENT_CHAT_LAUNCH_SOURCE,
         "fn open_tab_ai_pi_view_from_launch(",
         6500,
     );
@@ -152,7 +153,7 @@ fn pi_warmup_branch_opens_visible_chat_instead_of_warming_setup() {
         "Pi Agent Chat warm miss must acquire a ready lease or cold-spawn an acquired lease"
     );
     assert!(
-        launch_body.contains("enter_embedded_acp_chat_surface"),
+        launch_body.contains("enter_embedded_agent_chat_surface"),
         "Pi Agent Chat open must still switch into the visible Agent Chat view"
     );
     assert!(
@@ -209,8 +210,8 @@ fn open_tab_ai_chat_does_not_create_tab_ai_chat_entity() {
 #[test]
 fn startup_routes_cmd_enter_into_harness_terminal() {
     assert!(
-        TAB_SOURCE.contains("try_route_global_cmd_enter_to_acp_context_capture"),
-        "startup.rs must route Cmd+Enter through the ACP context-capture entry point"
+        TAB_SOURCE.contains("try_route_global_cmd_enter_to_agent_chat_context_capture"),
+        "startup.rs must route Cmd+Enter through the Agent Chat context-capture entry point"
     );
     assert!(
         !TAB_SOURCE.contains("open_tab_ai_overlay"),
@@ -263,12 +264,12 @@ fn tab_ai_uses_persistent_harness_session_state() {
 #[test]
 fn cmd_enter_routing_file_search_uses_shared_global_route() {
     // FileSearch plain Cmd+Enter now routes through the same shared global
-    // ACP context-capture path as other launcher surfaces. The global route
+    // Agent Chat context-capture path as other launcher surfaces. The global route
     // fires in the startup interceptor, and FileSearch is eligible because
     // supports_global_cmd_enter_ai_entry includes FileSearchView.
     assert!(
-        TAB_SOURCE.contains("try_route_global_cmd_enter_to_acp_context_capture"),
-        "global Cmd+Enter ACP route must exist in startup interceptor"
+        TAB_SOURCE.contains("try_route_global_cmd_enter_to_agent_chat_context_capture"),
+        "global Cmd+Enter Agent Chat route must exist in startup interceptor"
     );
     assert!(
         TAB_AI_MODE_SOURCE.contains("AppView::FileSearchView { .. }"),
@@ -281,7 +282,7 @@ fn tab_ai_routing_preserves_chat_prompt_tab_setup_only() {
     assert!(
         TAB_SOURCE.contains("if matches!(this.current_view, AppView::ChatPrompt { .. }) {")
             && TAB_SOURCE.contains("chat.handle_setup_key(\"tab\", true, cx)")
-            && !TAB_SOURCE.contains("tab_ai_chat_prompt_plain_tab_to_acp"),
+            && !TAB_SOURCE.contains("tab_ai_chat_prompt_plain_tab_to_agent_chat"),
         "ChatPrompt Tab handling must keep only its local setup/back-tab path",
     );
 }
@@ -781,9 +782,9 @@ fn render_impl_renders_tab_ai_save_offer_overlay() {
 // =========================================================================
 
 #[test]
-fn script_list_cmd_enter_fallback_routes_to_shared_acp_helper() {
+fn script_list_cmd_enter_fallback_routes_to_shared_agent_chat_helper() {
     assert!(
-        SCRIPT_LIST_SOURCE.contains("try_route_global_cmd_enter_to_acp_context_capture(cx)"),
+        SCRIPT_LIST_SOURCE.contains("try_route_global_cmd_enter_to_agent_chat_context_capture(cx)"),
         "ScriptList Cmd+Enter fallback must route through the shared AI helper"
     );
     assert!(
@@ -1841,7 +1842,7 @@ fn generate_script_builtin_routes_to_harness_not_chat_prompt() {
         BUILTIN_EXECUTION_SOURCE
             .contains("self.open_tab_ai_chat_with_entry_intent(Some(request), cx);")
             || BUILTIN_EXECUTION_SOURCE
-                .contains("self.open_tab_ai_acp_with_entry_intent(None, cx);"),
+                .contains("self.open_tab_ai_agent_chat_with_entry_intent(None, cx);"),
         "GenerateScript must route through the shared Tab AI entry point"
     );
 }
@@ -2050,7 +2051,7 @@ fn deferred_capture_checks_generation_before_injection() {
 // =========================================================================
 
 #[test]
-fn builtin_ai_chat_entry_reflects_acp_label() {
+fn builtin_ai_chat_entry_reflects_agent_chat_label() {
     assert!(
         BUILTINS_SOURCE.contains("\"Agent Chat\""),
         "builtin/ai-chat entry must use the Agent Chat label, not the legacy AI Chat label"
@@ -2640,10 +2641,10 @@ fn selection_fallback_recognizes_harness_result() {
 }
 
 #[test]
-fn selection_fallback_routes_to_acp_chat() {
+fn selection_fallback_routes_to_agent_chat() {
     assert!(
-        SELECTION_FALLBACK_SOURCE.contains("self.open_tab_ai_acp_with_entry_intent("),
-        "Send to AI fallback must route to ACP chat",
+        SELECTION_FALLBACK_SOURCE.contains("self.open_tab_ai_agent_chat_with_entry_intent("),
+        "Send to AI fallback must route to Agent Chat chat",
     );
 }
 
@@ -2950,19 +2951,19 @@ fn file_search_cmd_enter_passes_shift_for_plan_mode() {
 }
 
 // =========================================================================
-// ACP routing: Tab now opens AcpChatView instead of QuickTerminalView
+// Agent Chat routing: Tab now opens AgentChatView instead of QuickTerminalView
 // =========================================================================
 
-const ACP_VIEW_SOURCE: &str = include_str!("../src/ai/acp/view.rs");
-const ACP_THREAD_SOURCE: &str = include_str!("../src/ai/acp/thread.rs");
-const ACP_MOD_SOURCE: &str = include_str!("../src/ai/acp/mod.rs");
-const ACP_CHAT_WINDOW_SOURCE: &str = include_str!("../src/ai/acp/chat_window.rs");
+const AGENT_CHAT_VIEW_SOURCE: &str = include_str!("../src/ai/agent_chat/ui/view.rs");
+const AGENT_CHAT_THREAD_SOURCE: &str = include_str!("../src/ai/agent_chat/ui/thread.rs");
+const AGENT_CHAT_MOD_SOURCE: &str = include_str!("../src/ai/agent_chat/ui/mod.rs");
+const AGENT_CHAT_WINDOW_SOURCE: &str = include_str!("../src/ai/agent_chat/ui/chat_window.rs");
 
 #[test]
-fn detached_acp_reuse_preserves_entry_intent() {
+fn detached_agent_chat_reuse_preserves_entry_intent() {
     let open_fn_start = TAB_AI_MODE_SOURCE
-        .find("fn open_tab_ai_acp_with_options(")
-        .expect("open_tab_ai_acp_with_options must exist");
+        .find("fn open_tab_ai_agent_chat_with_options(")
+        .expect("open_tab_ai_agent_chat_with_options must exist");
     let open_fn_body = &TAB_AI_MODE_SOURCE[open_fn_start..];
     let next_fn = open_fn_body[1..]
         .find("\n    fn ")
@@ -2971,93 +2972,94 @@ fn detached_acp_reuse_preserves_entry_intent() {
 
     let normalized_idx = open_fn_body
         .find("let normalized_entry_intent = entry_intent")
-        .expect("entry intent must be normalized for detached ACP reuse");
+        .expect("entry intent must be normalized for detached Agent Chat reuse");
     let detached_idx = open_fn_body
-        .find("if crate::ai::acp::chat_window::is_chat_window_open()")
-        .expect("detached ACP reuse branch must exist");
+        .find("if crate::ai::agent_chat::ui::chat_window::is_chat_window_open()")
+        .expect("detached Agent Chat reuse branch must exist");
 
     assert!(
         normalized_idx < detached_idx,
-        "entry intent must be normalized before detached ACP reuse is checked"
+        "entry intent must be normalized before detached Agent Chat reuse is checked"
     );
     assert!(
         open_fn_body.contains("submit_reused_entry_intent_in_detached_chat"),
-        "detached ACP reuse must route fresh entry intent into the live detached view"
+        "detached Agent Chat reuse must route fresh entry intent into the live detached view"
     );
     assert!(
-        ACP_CHAT_WINDOW_SOURCE
+        AGENT_CHAT_WINDOW_SOURCE
             .contains("event = \"tab_ai_reused_detached_window_with_entry_intent\""),
-        "detached ACP reuse helper must emit a dedicated structured log event"
+        "detached Agent Chat reuse helper must emit a dedicated structured log event"
     );
 }
 
 #[test]
-fn detached_acp_reuse_with_host_context_submits_atomically() {
+fn detached_agent_chat_reuse_with_host_context_submits_atomically() {
     assert!(
-        ACP_VIEW_SOURCE.contains("fn submit_reused_entry_intent_with_host_context("),
-        "AcpChatView must expose a combined reuse helper for host context plus fresh intent"
+        AGENT_CHAT_VIEW_SOURCE.contains("fn submit_reused_entry_intent_with_host_context("),
+        "AgentChatView must expose a combined reuse helper for host context plus fresh intent"
     );
-    let fn_start = ACP_VIEW_SOURCE
+    let fn_start = AGENT_CHAT_VIEW_SOURCE
         .find("fn submit_reused_entry_intent_with_host_context(")
-        .expect("combined ACP reuse helper must exist");
-    let fn_body = &ACP_VIEW_SOURCE[fn_start..];
+        .expect("combined Agent Chat reuse helper must exist");
+    let fn_body = &AGENT_CHAT_VIEW_SOURCE[fn_start..];
     let next_fn = fn_body[1..].find("\n    fn ").unwrap_or(fn_body.len());
     let fn_body = &fn_body[..next_fn];
 
     assert!(
         fn_body.contains("thread.replace_pending_context_parts(staged_parts, source, cx);"),
-        "combined ACP reuse helper must replace stale pending context"
+        "combined Agent Chat reuse helper must replace stale pending context"
     );
     assert!(
         fn_body.contains("thread.submit_input(cx)"),
-        "combined ACP reuse helper must submit after staging fresh context and intent"
+        "combined Agent Chat reuse helper must submit after staging fresh context and intent"
     );
     assert!(
-        ACP_CHAT_WINDOW_SOURCE
+        AGENT_CHAT_WINDOW_SOURCE
             .contains("submit_reused_entry_intent_with_host_context_in_detached_chat"),
         "detached chat window must expose a host-context-aware reuse wrapper"
     );
     assert!(
-        ACP_CHAT_WINDOW_SOURCE.contains("chat.submit_reused_entry_intent_with_host_context("),
-        "detached chat reuse must delegate into the shared AcpChatView helper"
+        AGENT_CHAT_WINDOW_SOURCE.contains("chat.submit_reused_entry_intent_with_host_context("),
+        "detached chat reuse must delegate into the shared AgentChatView helper"
     );
 }
 
 #[test]
-fn startup_guards_against_double_acp_open() {
-    // Both startup.rs variants must check for AcpChatView to prevent
-    // stacking a second ACP session on Tab press.
+fn startup_guards_against_double_agent_chat_open() {
+    // Both startup.rs variants must check for AgentChatView to prevent
+    // stacking a second Agent Chat session on Tab press.
     assert!(
-        TAB_SOURCE.contains("AppView::AcpChatView"),
-        "startup.rs must check for existing AcpChatView"
+        TAB_SOURCE.contains("AppView::AgentChatView"),
+        "startup.rs must check for existing AgentChatView"
     );
     assert!(
         TAB_SOURCE.contains("handle_tab_key"),
-        "startup.rs must delegate Tab to AcpChatView.handle_tab_key"
+        "startup.rs must delegate Tab to AgentChatView.handle_tab_key"
     );
 
     assert!(
-        TAB_NEW_SOURCE.contains("AppView::AcpChatView"),
-        "startup_new_tab.rs must check for existing AcpChatView"
+        TAB_NEW_SOURCE.contains("AppView::AgentChatView"),
+        "startup_new_tab.rs must check for existing AgentChatView"
     );
     assert!(
         TAB_NEW_SOURCE.contains("handle_tab_key"),
-        "startup_new_tab.rs must delegate Tab to AcpChatView.handle_tab_key"
+        "startup_new_tab.rs must delegate Tab to AgentChatView.handle_tab_key"
     );
 }
 
 #[test]
-fn acp_chat_view_consumes_tab_to_prevent_reentry() {
-    // AcpChatView.handle_tab_key must return true to consume the key.
+fn agent_chat_view_consumes_tab_to_prevent_reentry() {
+    // AgentChatView.handle_tab_key must return true to consume the key.
     assert!(
-        ACP_VIEW_SOURCE.contains("fn handle_tab_key"),
-        "AcpChatView must implement handle_tab_key"
+        AGENT_CHAT_VIEW_SOURCE.contains("fn handle_tab_key"),
+        "AgentChatView must implement handle_tab_key"
     );
     // The function must return true to consume Tab.
-    let fn_start = ACP_VIEW_SOURCE
+    let fn_start = AGENT_CHAT_VIEW_SOURCE
         .find("fn handle_tab_key")
         .expect("handle_tab_key must exist");
-    let fn_body = &ACP_VIEW_SOURCE[fn_start..fn_start + 300.min(ACP_VIEW_SOURCE.len() - fn_start)];
+    let fn_body = &AGENT_CHAT_VIEW_SOURCE
+        [fn_start..fn_start + 300.min(AGENT_CHAT_VIEW_SOURCE.len() - fn_start)];
     assert!(
         fn_body.contains("true"),
         "handle_tab_key must return true to consume Tab"
@@ -3078,66 +3080,67 @@ fn pty_path_still_exists_for_script_terminals() {
 }
 
 #[test]
-fn acp_thread_supports_staged_context_and_initial_input() {
-    // AcpThread must support staged context blocks and initial input for auto-submit.
+fn agent_chat_thread_supports_staged_context_and_initial_input() {
+    // AgentChatThread must support staged context blocks and initial input for auto-submit.
     assert!(
-        ACP_THREAD_SOURCE.contains("pending_context_blocks"),
-        "AcpThread must have staged context fields"
+        AGENT_CHAT_THREAD_SOURCE.contains("pending_context_blocks"),
+        "AgentChatThread must have staged context fields"
     );
     assert!(
-        ACP_THREAD_SOURCE.contains("stage_context"),
-        "AcpThread must expose a stage_context method"
+        AGENT_CHAT_THREAD_SOURCE.contains("stage_context"),
+        "AgentChatThread must expose a stage_context method"
     );
     assert!(
-        ACP_THREAD_SOURCE.contains("initial_input"),
-        "AcpThreadInit must accept initial_input for auto-submit"
-    );
-}
-
-#[test]
-fn render_impl_handles_acp_chat_view() {
-    assert!(
-        RENDER_IMPL_SOURCE.contains("AppView::AcpChatView"),
-        "render_impl must dispatch AcpChatView for rendering"
+        AGENT_CHAT_THREAD_SOURCE.contains("initial_input"),
+        "AgentChatThreadInit must accept initial_input for auto-submit"
     );
 }
 
 #[test]
-fn acp_view_has_inline_permission_card() {
+fn render_impl_handles_agent_chat_view() {
     assert!(
-        ACP_VIEW_SOURCE.contains("render_permission_inline_card"),
-        "AcpChatView must render an inline permission approval card"
-    );
-    assert!(
-        ACP_VIEW_SOURCE.contains("approve_pending_permission"),
-        "AcpChatView permission card must call approve_pending_permission"
+        RENDER_IMPL_SOURCE.contains("AppView::AgentChatView"),
+        "render_impl must dispatch AgentChatView for rendering"
     );
 }
 
 #[test]
-fn acp_view_has_empty_and_streaming_states() {
+fn agent_chat_view_has_inline_permission_card() {
     assert!(
-        ACP_VIEW_SOURCE.contains("Ask anything\\u{2026}")
-            || ACP_VIEW_SOURCE.contains("Ask anything…"),
-        "AcpChatView must expose an empty-state placeholder"
+        AGENT_CHAT_VIEW_SOURCE.contains("render_permission_inline_card"),
+        "AgentChatView must render an inline permission approval card"
     );
     assert!(
-        ACP_VIEW_SOURCE.contains("acp-streaming-dot"),
-        "AcpChatView must have a streaming indicator"
-    );
-    assert!(
-        ACP_VIEW_SOURCE.contains("Follow up\\u{2026}") || ACP_VIEW_SOURCE.contains("Follow up…"),
-        "AcpChatView must expose a follow-up placeholder once messages exist"
+        AGENT_CHAT_VIEW_SOURCE.contains("approve_pending_permission"),
+        "AgentChatView permission card must call approve_pending_permission"
     );
 }
 
 #[test]
-fn acp_mod_exports_required_types() {
-    // The ACP module must re-export the key types used by tab_ai_mode.
-    assert!(ACP_MOD_SOURCE.contains("AcpChatView"));
-    assert!(ACP_MOD_SOURCE.contains("AcpThread"));
-    assert!(ACP_MOD_SOURCE.contains("AcpPermissionBroker"));
-    assert!(!ACP_MOD_SOURCE.contains(concat!("Acp", "Runtime")));
+fn agent_chat_view_has_empty_and_streaming_states() {
+    assert!(
+        AGENT_CHAT_VIEW_SOURCE.contains("Ask anything\\u{2026}")
+            || AGENT_CHAT_VIEW_SOURCE.contains("Ask anything…"),
+        "AgentChatView must expose an empty-state placeholder"
+    );
+    assert!(
+        AGENT_CHAT_VIEW_SOURCE.contains("agent_chat-streaming-dot"),
+        "AgentChatView must have a streaming indicator"
+    );
+    assert!(
+        AGENT_CHAT_VIEW_SOURCE.contains("Follow up\\u{2026}")
+            || AGENT_CHAT_VIEW_SOURCE.contains("Follow up…"),
+        "AgentChatView must expose a follow-up placeholder once messages exist"
+    );
+}
+
+#[test]
+fn agent_chat_mod_exports_required_types() {
+    // The Agent Chat module must re-export the key types used by tab_ai_mode.
+    assert!(AGENT_CHAT_MOD_SOURCE.contains("AgentChatView"));
+    assert!(AGENT_CHAT_MOD_SOURCE.contains("AgentChatThread"));
+    assert!(AGENT_CHAT_MOD_SOURCE.contains("AgentChatPermissionBroker"));
+    assert!(!AGENT_CHAT_MOD_SOURCE.contains(concat!("AgentChat", "Runtime")));
 }
 
 // =========================================================================
@@ -3187,46 +3190,46 @@ fn tab_ai_focused_path_skips_ambient_capture() {
 }
 
 #[test]
-fn acp_view_renders_pending_context_chips() {
+fn agent_chat_view_renders_pending_context_chips() {
     assert!(
-        ACP_VIEW_SOURCE.contains("render_pending_context_chips"),
-        "AcpChatView must render pending context chips",
+        AGENT_CHAT_VIEW_SOURCE.contains("render_pending_context_chips"),
+        "AgentChatView must render pending context chips",
     );
     assert!(
-        ACP_VIEW_SOURCE.contains("acp-pending-context-chips"),
-        "AcpChatView must have an element ID for the chips container",
-    );
-}
-
-#[test]
-fn acp_thread_supports_context_parts() {
-    assert!(
-        ACP_THREAD_SOURCE.contains("pending_context_parts"),
-        "AcpThread must store typed context parts",
-    );
-    assert!(
-        ACP_THREAD_SOURCE.contains("fn add_context_part("),
-        "AcpThread must have an add_context_part method",
-    );
-    assert!(
-        ACP_THREAD_SOURCE.contains("fn remove_context_part("),
-        "AcpThread must have a remove_context_part method",
-    );
-    assert!(
-        ACP_THREAD_SOURCE.contains("fn mark_context_bootstrap_ready("),
-        "AcpThread must have a mark_context_bootstrap_ready method",
+        AGENT_CHAT_VIEW_SOURCE.contains("agent_chat-pending-context-chips"),
+        "AgentChatView must have an element ID for the chips container",
     );
 }
 
 #[test]
-fn acp_thread_resolves_context_parts_on_submit() {
+fn agent_chat_thread_supports_context_parts() {
     assert!(
-        ACP_THREAD_SOURCE.contains("acp_submit_resolved_context_parts"),
-        "AcpThread must resolve context parts at submit time and log it",
+        AGENT_CHAT_THREAD_SOURCE.contains("pending_context_parts"),
+        "AgentChatThread must store typed context parts",
     );
     assert!(
-        ACP_THREAD_SOURCE.contains("resolve_context_parts_with_receipt"),
-        "AcpThread must use resolve_context_parts_with_receipt for typed parts",
+        AGENT_CHAT_THREAD_SOURCE.contains("fn add_context_part("),
+        "AgentChatThread must have an add_context_part method",
+    );
+    assert!(
+        AGENT_CHAT_THREAD_SOURCE.contains("fn remove_context_part("),
+        "AgentChatThread must have a remove_context_part method",
+    );
+    assert!(
+        AGENT_CHAT_THREAD_SOURCE.contains("fn mark_context_bootstrap_ready("),
+        "AgentChatThread must have a mark_context_bootstrap_ready method",
+    );
+}
+
+#[test]
+fn agent_chat_thread_resolves_context_parts_on_submit() {
+    assert!(
+        AGENT_CHAT_THREAD_SOURCE.contains("agent_chat_submit_resolved_context_parts"),
+        "AgentChatThread must resolve context parts at submit time and log it",
+    );
+    assert!(
+        AGENT_CHAT_THREAD_SOURCE.contains("resolve_context_parts_with_receipt"),
+        "AgentChatThread must use resolve_context_parts_with_receipt for typed parts",
     );
 }
 
@@ -3428,22 +3431,22 @@ fn search_query_and_input_targets_prevent_ambient_capture() {
 }
 
 // =========================================================================
-// Mandatory script verification guidance: ACP path parity
+// Mandatory script verification guidance: Agent Chat path parity
 // =========================================================================
 
 #[test]
-fn harness_source_builds_acp_initial_input_with_guidance_before_user_intent() {
+fn harness_source_builds_agent_chat_initial_input_with_guidance_before_user_intent() {
     assert!(
-        HARNESS_SOURCE.contains("pub(crate) fn build_tab_ai_acp_initial_input_for_prompt("),
-        "harness module must define the shared ACP initial-input builder"
+        HARNESS_SOURCE.contains("pub(crate) fn build_tab_ai_agent_chat_initial_input_for_prompt("),
+        "harness module must define the shared Agent Chat initial-input builder"
     );
     assert!(
         HARNESS_SOURCE.contains(r#"format!("{guidance}\n\nUser intent:\n{intent}\n")"#),
-        "shared ACP initial-input builder must place guidance before the User intent line"
+        "shared Agent Chat initial-input builder must place guidance before the User intent line"
     );
     assert!(
         HARNESS_SOURCE.contains("TabAiHarnessSubmissionMode::Submit"),
-        "shared ACP initial-input builder must always use Submit mode"
+        "shared Agent Chat initial-input builder must always use Submit mode"
     );
 }
 
@@ -3502,11 +3505,11 @@ fn begin_tab_ai_harness_entry_routes_quick_terminal_to_harness_terminal() {
 }
 
 #[test]
-fn begin_tab_ai_harness_entry_routes_acp_chat_when_no_verification_markers() {
+fn begin_tab_ai_harness_entry_routes_agent_chat_when_no_verification_markers() {
     let fn_body = extract_begin_tab_ai_harness_entry_body();
     assert!(
-        fn_body.contains("open_tab_ai_acp_view_from_request_impl("),
-        "when use_quick_terminal is false, must route to ACP chat"
+        fn_body.contains("open_tab_ai_agent_chat_view_from_request_impl("),
+        "when use_quick_terminal is false, must route to Agent Chat chat"
     );
 }
 
@@ -3519,12 +3522,12 @@ fn begin_tab_ai_harness_entry_emits_surface_selected_log() {
         "begin_tab_ai_harness_entry must emit tab_ai_surface_selected log event"
     );
     assert!(
-        fn_body.contains(r#"surface = if surface_preference.use_quick_terminal { "quick_terminal" } else { "acp_chat" }"#),
-        "surface log field must resolve to quick_terminal or acp_chat"
+        fn_body.contains(r#"surface = if surface_preference.use_quick_terminal { "quick_terminal" } else { "agent_chat" }"#),
+        "surface log field must resolve to quick_terminal or agent_chat"
     );
     assert!(
-        fn_body.contains(r#"reason = if surface_preference.use_quick_terminal { "script_verification_required" } else { "default_acp" }"#),
-        "reason log field must resolve to script_verification_required or default_acp"
+        fn_body.contains(r#"reason = if surface_preference.use_quick_terminal { "script_verification_required" } else { "default_agent_chat" }"#),
+        "reason log field must resolve to script_verification_required or default_agent_chat"
     );
     assert!(
         fn_body.contains(
@@ -3649,33 +3652,33 @@ fn harness_verification_markers_are_used_in_from_guidance() {
 }
 
 // =========================================================================
-// Regression: ACP live quick-submit reroutes verification requests
+// Regression: Agent Chat live quick-submit reroutes verification requests
 // =========================================================================
 
 #[test]
-fn acp_live_quick_submit_reroutes_verification_bearing_requests_to_quick_terminal() {
+fn agent_chat_live_quick_submit_reroutes_verification_bearing_requests_to_quick_terminal() {
     let fn_start = TAB_AI_MODE_SOURCE
-        .find("fn submit_live_acp_tab_ai_from_plan(")
-        .expect("submit_live_acp_tab_ai_from_plan must exist");
+        .find("fn submit_live_agent_chat_tab_ai_from_plan(")
+        .expect("submit_live_agent_chat_tab_ai_from_plan must exist");
     let fn_body = &TAB_AI_MODE_SOURCE[fn_start..];
     let next_fn = fn_body[1..].find("\n    fn ").unwrap_or(fn_body.len());
     let fn_body = &fn_body[..next_fn];
 
     assert!(
         fn_body.contains("tab_ai_surface_preference_for_prompt"),
-        "live ACP quick submit must compute surface preference from the shared markers"
+        "live Agent Chat quick submit must compute surface preference from the shared markers"
     );
     assert!(
         fn_body.contains("if surface_preference.use_quick_terminal"),
-        "live ACP quick submit must reroute verification-bearing requests to the terminal"
+        "live Agent Chat quick submit must reroute verification-bearing requests to the terminal"
     );
     assert!(
         fn_body.contains("begin_tab_ai_harness_entry_from_source_view"),
-        "rerouted ACP quick submit must preserve the original source view"
+        "rerouted Agent Chat quick submit must preserve the original source view"
     );
     assert!(
-        fn_body.contains(r#"event = "tab_ai_quick_submit_acp_live_rerouted""#),
-        "rerouted ACP quick submit must emit a dedicated log event"
+        fn_body.contains(r#"event = "tab_ai_quick_submit_agent_chat_live_rerouted""#),
+        "rerouted Agent Chat quick submit must emit a dedicated log event"
     );
 }
 
@@ -3687,14 +3690,14 @@ fn acp_live_quick_submit_reroutes_verification_bearing_requests_to_quick_termina
 fn harness_module_has_surface_preference_unit_tests() {
     // The harness module must contain unit tests that exercise the surface
     // preference helper with ScriptList + Submit + intent → quick_terminal
-    // and non-authoring flows → acp_chat.
+    // and non-authoring flows → agent_chat.
     assert!(
         HARNESS_SOURCE.contains("fn surface_preference_script_list_submit_uses_quick_terminal"),
         "harness module must have unit test for ScriptList submit → quick_terminal"
     );
     assert!(
-        HARNESS_SOURCE.contains("fn surface_preference_non_authoring_stays_acp"),
-        "harness module must have unit test for non-authoring → acp_chat"
+        HARNESS_SOURCE.contains("fn surface_preference_non_authoring_stays_agent_chat"),
+        "harness module must have unit test for non-authoring → agent_chat"
     );
     assert!(
         HARNESS_SOURCE.contains("fn surface_preference_no_appendix_returns_all_false"),
@@ -3739,13 +3742,13 @@ fn script_list_submit_creation_flow_selects_quick_terminal_with_all_markers() {
 }
 
 // =========================================================================
-// AC: Non-authoring flow omits appendix and stays on ACP (runtime call)
+// AC: Non-authoring flow omits appendix and stays on Agent Chat (runtime call)
 // =========================================================================
 
 #[test]
-fn non_authoring_flow_stays_acp_with_no_markers() {
+fn non_authoring_flow_stays_agent_chat_with_no_markers() {
     // Runtime call: FileSearch + Submit + non-artifact intent must NOT
-    // produce verification-bearing guidance and must stay on ACP.
+    // produce verification-bearing guidance and must stay on Agent Chat.
     let pref = script_kit_gpui::ai::tab_ai_surface_preference_for_prompt(
         "FileSearch",
         Some("rename this file"),
@@ -3753,7 +3756,7 @@ fn non_authoring_flow_stays_acp_with_no_markers() {
     );
     assert!(
         !pref.use_quick_terminal,
-        "non-authoring flow must stay on ACP"
+        "non-authoring flow must stay on Agent Chat"
     );
     assert!(
         !pref.includes_script_authoring_skill,
@@ -3865,19 +3868,20 @@ fn non_authoring_harness_submission_omits_guidance_block() {
 }
 
 // =========================================================================
-// ACP setup-card agent confirmation refreshes inline setup state
+// Agent Chat setup-card agent confirmation refreshes inline setup state
 // =========================================================================
 
-const ACP_ACTION_HANDLER_SOURCE: &str = include_str!("../src/ai/acp/view.rs");
+const AGENT_CHAT_ACTION_HANDLER_SOURCE: &str = include_str!("../src/ai/agent_chat/ui/view.rs");
 
 #[test]
-fn acp_setup_confirm_refreshes_state_and_queues_retry() {
+fn agent_chat_setup_confirm_refreshes_state_and_queues_retry() {
     assert!(
-        ACP_ACTION_HANDLER_SOURCE.contains("self.replace_active_setup_state(next_setup, cx);"),
+        AGENT_CHAT_ACTION_HANDLER_SOURCE
+            .contains("self.replace_active_setup_state(next_setup, cx);"),
         "setup-agent confirmation must refresh the inline setup state",
     );
     assert!(
-        ACP_ACTION_HANDLER_SOURCE.contains("self.queue_setup_retry_request(cx);"),
+        AGENT_CHAT_ACTION_HANDLER_SOURCE.contains("self.queue_setup_retry_request(cx);"),
         "setup-agent confirmation must queue a runtime retry when the selected agent becomes ready",
     );
 }
@@ -3941,7 +3945,7 @@ fn authoring_harness_submission_contains_verification_guidance() {
 }
 
 // =========================================================================
-// Cmd+Enter ACP handoff consistency contract
+// Cmd+Enter Agent Chat handoff consistency contract
 // =========================================================================
 
 #[test]
@@ -3957,37 +3961,37 @@ fn actions_dialog_cmd_enter_branch_precedes_plain_enter_execute() {
         .expect("embedded actions dialog must have the plain Enter activate_selected path");
     assert!(
         cmd_enter_pos < plain_enter_pos,
-        "Cmd+Enter ACP handoff must precede the generic Enter execute path in route_key_to_actions_dialog"
+        "Cmd+Enter Agent Chat handoff must precede the generic Enter execute path in route_key_to_actions_dialog"
     );
 }
 
 #[test]
-fn detached_actions_window_has_distinct_send_to_acp_intent() {
+fn detached_actions_window_has_distinct_send_to_agent_chat_intent() {
     assert!(
-        ACTIONS_WINDOW_SOURCE.contains("SendToAcp"),
-        "detached actions window must define a SendToAcp key intent variant"
+        ACTIONS_WINDOW_SOURCE.contains("SendToAgentChat"),
+        "detached actions window must define a SendToAgentChat key intent variant"
     );
-    // In the actions_window_key_intent function, the Cmd+Enter → SendToAcp
+    // In the actions_window_key_intent function, the Cmd+Enter → SendToAgentChat
     // branch must appear before the plain Enter → ExecuteSelected branch.
     let intent_fn_start = ACTIONS_WINDOW_SOURCE
         .find("fn actions_window_key_intent(")
         .expect("actions_window_key_intent function must exist");
     let intent_fn = &ACTIONS_WINDOW_SOURCE[intent_fn_start..];
-    let send_to_acp_pos = intent_fn
-        .find("ActionsWindowKeyIntent::SendToAcp")
-        .expect("SendToAcp must be returned from actions_window_key_intent");
+    let send_to_agent_chat_pos = intent_fn
+        .find("ActionsWindowKeyIntent::SendToAgentChat")
+        .expect("SendToAgentChat must be returned from actions_window_key_intent");
     let execute_selected_pos = intent_fn
         .find("ActionsWindowKeyIntent::ExecuteSelected")
         .expect("ExecuteSelected must be returned from actions_window_key_intent");
     assert!(
-        send_to_acp_pos < execute_selected_pos,
-        "SendToAcp must be returned before ExecuteSelected in actions_window_key_intent"
+        send_to_agent_chat_pos < execute_selected_pos,
+        "SendToAgentChat must be returned before ExecuteSelected in actions_window_key_intent"
     );
 }
 
 #[test]
-fn detached_actions_window_routes_cmd_enter_to_send_to_acp() {
-    // In the key intent function, Cmd+Enter must map to SendToAcp
+fn detached_actions_window_routes_cmd_enter_to_send_to_agent_chat() {
+    // In the key intent function, Cmd+Enter must map to SendToAgentChat
     let intent_fn_start = ACTIONS_WINDOW_SOURCE
         .find("fn actions_window_key_intent(")
         .expect("actions_window_key_intent function must exist");
@@ -4000,36 +4004,36 @@ fn detached_actions_window_routes_cmd_enter_to_send_to_acp() {
         "actions_window_key_intent must check platform modifier for Cmd+Enter"
     );
     assert!(
-        intent_fn.contains("ActionsWindowKeyIntent::SendToAcp"),
-        "actions_window_key_intent must return SendToAcp for Cmd+Enter"
+        intent_fn.contains("ActionsWindowKeyIntent::SendToAgentChat"),
+        "actions_window_key_intent must return SendToAgentChat for Cmd+Enter"
     );
 }
 
 #[test]
-fn tab_ai_mode_has_explicit_target_acp_open_method() {
+fn tab_ai_mode_has_explicit_target_agent_chat_open_method() {
     assert!(
-        TAB_AI_MODE_SOURCE.contains("fn open_tab_ai_acp_with_explicit_target("),
-        "tab_ai_mode must define open_tab_ai_acp_with_explicit_target for Cmd+Enter handoff"
+        TAB_AI_MODE_SOURCE.contains("fn open_tab_ai_agent_chat_with_explicit_target("),
+        "tab_ai_mode must define open_tab_ai_agent_chat_with_explicit_target for Cmd+Enter handoff"
     );
     // The method must stage a FocusedTarget chip, not synthesize prompt text
     let fn_start = TAB_AI_MODE_SOURCE
-        .find("fn open_tab_ai_acp_with_explicit_target(")
-        .expect("open_tab_ai_acp_with_explicit_target must exist");
+        .find("fn open_tab_ai_agent_chat_with_explicit_target(")
+        .expect("open_tab_ai_agent_chat_with_explicit_target must exist");
     let fn_body = &TAB_AI_MODE_SOURCE[fn_start..];
     let next_fn = fn_body[1..].find("\n    fn ").unwrap_or(fn_body.len());
     let fn_body = &fn_body[..next_fn];
 
     assert!(
         fn_body.contains("AiContextPart::FocusedTarget"),
-        "open_tab_ai_acp_with_explicit_target must stage a FocusedTarget chip"
+        "open_tab_ai_agent_chat_with_explicit_target must stage a FocusedTarget chip"
     );
     assert!(
-        fn_body.contains("tab_ai_explicit_target_acp_open"),
-        "open_tab_ai_acp_with_explicit_target must emit the explicit-target log event"
+        fn_body.contains("tab_ai_explicit_target_agent_chat_open"),
+        "open_tab_ai_agent_chat_with_explicit_target must emit the explicit-target log event"
     );
     assert!(
         fn_body.contains("submit_reused_entry_intent_with_host_context_in_detached_chat"),
-        "explicit-target ACP entry must reuse a live detached chat with staged host context"
+        "explicit-target Agent Chat entry must reuse a live detached chat with staged host context"
     );
 }
 
@@ -4073,18 +4077,18 @@ fn embedded_actions_cmd_enter_preserves_plain_enter_behavior() {
 }
 
 #[test]
-fn close_actions_popup_checks_pending_acp_target() {
+fn close_actions_popup_checks_pending_agent_chat_target() {
     let close_fn_start = ACTIONS_DIALOG_SOURCE
         .find("fn close_actions_popup(")
         .expect("close_actions_popup must exist");
     let close_fn = &ACTIONS_DIALOG_SOURCE[close_fn_start..];
 
     assert!(
-        close_fn.contains("take_pending_explicit_acp_target"),
-        "close_actions_popup must check for pending ACP handoff targets from the detached window"
+        close_fn.contains("take_pending_explicit_agent_chat_target"),
+        "close_actions_popup must check for pending Agent Chat handoff targets from the detached window"
     );
     assert!(
-        close_fn.contains("open_tab_ai_acp_with_explicit_target"),
-        "close_actions_popup must route pending targets to the explicit-target ACP opener"
+        close_fn.contains("open_tab_ai_agent_chat_with_explicit_target"),
+        "close_actions_popup must route pending targets to the explicit-target Agent Chat opener"
     );
 }

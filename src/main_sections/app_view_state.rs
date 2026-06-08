@@ -282,12 +282,12 @@ enum AppView {
         filter: String,
         selected_index: usize,
     },
-    /// Browsing ACP conversation history with search and preview
-    AcpHistoryView {
+    /// Browsing Agent Chat conversation history with search and preview
+    AgentChatHistoryView {
         filter: String,
         selected_index: usize,
     },
-    /// Browsing recent browser history as an ACP attachment portal
+    /// Browsing recent browser history as an Agent Chat attachment portal
     BrowserHistoryView {
         filter: String,
         selected_index: usize,
@@ -297,21 +297,21 @@ enum AppView {
         filter: String,
         selected_index: usize,
     },
-    /// Browsing notes from ACP as an attachment portal
+    /// Browsing notes from Agent Chat as an attachment portal
     NotesBrowseView {
         filter: String,
         selected_index: usize,
     },
     /// Showing the Agent Chat surface for the default Tab path.
     ///
-    /// The `AcpChatView` variant name and `"acp_chat"` serialized id are kept
+    /// The `AgentChatView` variant name and `"agent_chat"` serialized id are kept
     /// for launcher surface-contract compatibility; the entity now flows
     /// through the canonical `agent_chat::ui` boundary.
     ///
     /// Verification-bearing new-script requests deliberately route to
     /// `QuickTerminalView` so the agent can run Bun verification inside the
     /// live harness terminal session before reporting success.
-    AcpChatView {
+    AgentChatView {
         entity: Entity<crate::ai::agent_chat::ui::AgentChatView>,
     },
     /// In-window confirm state — replaces the popup dialog when the main window
@@ -383,9 +383,9 @@ pub(crate) enum SurfaceKind {
     Feedback,
     SdkReference,
     ScriptTemplateCatalog,
-    AcpHistory,
+    AgentChatHistory,
     AttachmentPortalBrowser,
-    AcpChat,
+    AgentChat,
     ConfirmPrompt,
 }
 
@@ -406,7 +406,7 @@ pub(crate) enum LauncherSurfaceFamily {
     FilterableLauncherList,
     /// Tool-like workspaces that own richer interaction than a plain row list.
     UtilityWorkspace,
-    /// Temporary picker surfaces opened to attach context back to ACP.
+    /// Temporary picker surfaces opened to attach context back to Agent Chat.
     AttachmentPortal,
     /// Embedded assistant/chat surfaces and their transcript/history variants.
     AssistantWorkspace,
@@ -452,7 +452,7 @@ pub(crate) enum LauncherSurfaceFocusPolicy {
     LauncherFilterFocus,
     /// Focus should land on a script prompt entity.
     PromptEntityFocus,
-    /// Focus should land inside a child content view such as editor, terminal, or ACP.
+    /// Focus should land inside a child content view such as editor, terminal, or Agent Chat.
     ChildViewFocus,
     /// The surface has no normal editable focus target.
     NoEditableFocus,
@@ -514,7 +514,7 @@ pub(crate) enum LauncherSurfaceVisualPolicy {
     CompactLauncherVisual,
     /// Split list/detail surface where preview is part of the contract.
     SplitPreviewVisual,
-    /// Child/content pane such as terminal, editor, ACP, or About.
+    /// Child/content pane such as terminal, editor, Agent Chat, or About.
     ContentPaneVisual,
     /// Attached/modal popup visual contract.
     PopupVisual,
@@ -739,11 +739,11 @@ impl AppView {
             AppView::ScriptIssuesView { .. } => "ScriptIssuesView",
             AppView::SdkReferenceView { .. } => "SdkReferenceView",
             AppView::ScriptTemplateCatalogView { .. } => "ScriptTemplateCatalogView",
-            AppView::AcpHistoryView { .. } => "AcpHistoryView",
+            AppView::AgentChatHistoryView { .. } => "AgentChatHistoryView",
             AppView::BrowserHistoryView { .. } => "BrowserHistoryView",
             AppView::DictationHistoryView { .. } => "DictationHistoryView",
             AppView::NotesBrowseView { .. } => "NotesBrowseView",
-            AppView::AcpChatView { .. } => "AcpChatView",
+            AppView::AgentChatView { .. } => "AgentChatView",
             AppView::ConfirmPrompt { .. } => "ConfirmPrompt",
         }
     }
@@ -811,11 +811,11 @@ impl AppView {
             }
             AppView::SdkReferenceView { .. } => SurfaceKind::SdkReference,
             AppView::ScriptTemplateCatalogView { .. } => SurfaceKind::ScriptTemplateCatalog,
-            AppView::AcpHistoryView { .. } => SurfaceKind::AcpHistory,
+            AppView::AgentChatHistoryView { .. } => SurfaceKind::AgentChatHistory,
             AppView::BrowserHistoryView { .. }
             | AppView::DictationHistoryView { .. }
             | AppView::NotesBrowseView { .. } => SurfaceKind::AttachmentPortalBrowser,
-            AppView::AcpChatView { .. } => SurfaceKind::AcpChat,
+            AppView::AgentChatView { .. } => SurfaceKind::AgentChat,
             AppView::ConfirmPrompt { .. } => SurfaceKind::ConfirmPrompt,
         }
     }
@@ -837,7 +837,7 @@ impl AppView {
                 | AppView::FileSearchView { .. }
                 | AppView::ClipboardHistoryView { .. }
                 | AppView::ProfileSearchView { .. }
-                | AppView::AcpChatView { .. }
+                | AppView::AgentChatView { .. }
         )
     }
 
@@ -875,10 +875,10 @@ impl AppView {
             AppView::ScriptIssuesView { .. } => Some("script_issues"),
             AppView::ArgPrompt { .. } => Some("arg_prompt"),
             AppView::EmojiPickerView { .. } => Some("emoji_picker"),
-            AppView::AcpHistoryView { .. } => Some("acp_history"),
+            AppView::AgentChatHistoryView { .. } => Some("agent_chat_history"),
             AppView::BrowserHistoryView { .. } => Some("browser_history"),
             AppView::DictationHistoryView { .. } => Some("dictation_history"),
-            AppView::AcpChatView { .. } => Some("acp_chat"),
+            AppView::AgentChatView { .. } => Some("agent_chat"),
             AppView::ChatPrompt { .. } => Some("chat_prompt"),
             AppView::QuickTerminalView { .. } => Some("quick_terminal"),
             AppView::PathPrompt { .. } => Some("path_prompt"),
@@ -1355,7 +1355,7 @@ impl SurfaceKind {
                 "scriptTemplateCatalog",
             ),
 
-            SurfaceKind::AcpHistory => LauncherSurfaceContract::new(
+            SurfaceKind::AgentChatHistory => LauncherSurfaceContract::new(
                 LauncherSurfaceContractVocabulary::new(
                     AssistantWorkspace,
                     LauncherFilter,
@@ -1383,7 +1383,7 @@ impl SurfaceKind {
                 standard,
                 "scriptList",
             ),
-            SurfaceKind::AcpChat => LauncherSurfaceContract::new(
+            SurfaceKind::AgentChat => LauncherSurfaceContract::new(
                 LauncherSurfaceContractVocabulary::new(AssistantWorkspace, ChildView, ContentPane),
                 ChildViewFocus,
                 ChildViewKeyboard,
@@ -1391,7 +1391,7 @@ impl SurfaceKind {
                 ChildViewStateProof,
                 ContentPaneVisual,
                 explicit,
-                "acpChat",
+                "agentChatChat",
             ),
             SurfaceKind::ConfirmPrompt => LauncherSurfaceContract::new(
                 LauncherSurfaceContractVocabulary::new(
@@ -1482,8 +1482,8 @@ enum FocusTarget {
     TermPrompt,
     /// Focus the chat prompt
     ChatPrompt,
-    /// Focus the launcher ACP chat composer
-    AcpChat,
+    /// Focus the launcher Agent Chat chat composer
+    AgentChat,
     /// Focus the naming prompt
     NamingPrompt,
 }
@@ -1529,14 +1529,14 @@ enum ActionsDialogHost {
     BuiltinList,
     /// Actions in webcam prompt (restore focus to None - webcam has no input)
     WebcamPrompt,
-    /// Actions in ACP chat (restore focus to ACP chat input)
-    AcpChat,
-    /// Actions in ACP history browser (restore focus to history search input)
-    AcpHistory,
-    /// Actions in the detached ACP chat window (routes to the detached
+    /// Actions in Agent Chat chat (restore focus to Agent Chat chat input)
+    AgentChat,
+    /// Actions in Agent Chat history browser (restore focus to history search input)
+    AgentChatHistory,
+    /// Actions in the detached Agent Chat chat window (routes to the detached
     /// window's own dispatcher via `dispatch_action_to_detached`; focus
     /// restoration is handled by the detached window, not the main view)
-    AcpDetached,
+    AgentChatDetached,
 }
 
 /// Input mode for list navigation - tracks whether user is using keyboard or mouse.

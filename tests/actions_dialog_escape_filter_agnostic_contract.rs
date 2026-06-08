@@ -5,7 +5,7 @@
 //!
 //! The shared `ActionsDialog` at `src/actions/dialog.rs` hosts every
 //! Cmd+K actions menu in the app — main-menu, clipboard history,
-//! emoji picker, file search, app launcher, ACP chat, notes, and
+//! emoji picker, file search, app launcher, Agent Chat chat, notes, and
 //! any future host registered in `actions_host_for_view` at
 //! `src/app_impl/actions_dialog.rs`. A single user-visible invariant
 //! spans all of them: pressing Escape closes the dialog in one
@@ -42,8 +42,8 @@
 //!
 //!   (1) `self.pop_route(cx)` — the back-stack decision call. Removing
 //!       this would collapse the `PoppedRoute` path and break route
-//!       drill-downs (e.g., ACP agent switch sub-menu at
-//!       `src/actions/builders/acp.rs`).
+//!       drill-downs (e.g., Agent Chat agent switch sub-menu at
+//!       `src/actions/builders/agent_chat.rs`).
 //!   (2) The body MUST NOT contain `self.search_text.clear()` — any
 //!       self-clear of the filter inside the escape handler is the
 //!       regression this contract exists to block.
@@ -58,7 +58,7 @@
 //!
 //! Behavioural tests do NOT cover this: the existing dialog-hosted
 //! live probes exercise an empty-filter escape, and the few unit
-//! tests in `src/actions/dialog.rs` / `tests/acp_switch_actions.rs`
+//! tests in `src/actions/dialog.rs` / `tests/agent_chat_switch_actions.rs`
 //! pin the two existing outcomes without asserting the filter-text
 //! input is ignored. This file is the structural pin that makes the
 //! regression impossible to ship silently.
@@ -108,7 +108,7 @@ fn handle_escape_delegates_to_pop_route_for_back_navigation() {
          between PoppedRoute and CloseDialog. \
          Dropping it would collapse back-navigation and close the \
          dialog on every Escape, breaking drill-down routes \
-         (ACP agent switch, etc.). Body was:\n{body}"
+         (Agent Chat agent switch, etc.). Body was:\n{body}"
     );
 }
 

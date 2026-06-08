@@ -72,7 +72,7 @@ pub(crate) fn should_claim_inline_mention_ownership(
 /// Build a plan that describes which parts to add, which to remove, and what
 /// the desired ownership set should look like — without mutating any state.
 ///
-/// Both ACP and the AI window call this then apply the plan to their own
+/// Both Agent Chat and the AI window call this then apply the plan to their own
 /// state/thread structures.
 pub(crate) fn build_inline_mention_sync_plan(
     text: &str,

@@ -97,7 +97,7 @@ impl ScriptListApp {
                 ElementCollectionOutcome::new(elements, total_count)
             }
 
-            AppView::AcpChatView { entity } => {
+            AppView::AgentChatView { entity } => {
                 let focused_text_elements = entity
                     .read(cx)
                     .collect_focused_text_mini_elements(limit, cx);
@@ -107,15 +107,15 @@ impl ScriptListApp {
                         focused_text_elements.len(),
                     )
                 } else {
-                    let state = entity.read(cx).collect_acp_state_snapshot(cx);
+                    let state = entity.read(cx).collect_agent_chat_state_snapshot(cx);
                     let elements = vec![
-                        protocol::ElementInfo::panel("acp-chat"),
+                        protocol::ElementInfo::panel("agent_chat-chat"),
                         protocol::ElementInfo::input(
-                            "acp-composer",
+                            "agent_chat-composer",
                             Some(state.input_text.as_str()),
                             true,
                         ),
-                        protocol::ElementInfo::list("acp-messages", state.message_count),
+                        protocol::ElementInfo::list("agent_chat-messages", state.message_count),
                     ];
                     let total_count = elements.len();
                     ElementCollectionOutcome::new(
@@ -363,15 +363,15 @@ impl ScriptListApp {
                 ElementCollectionOutcome::new(elements, rows.len() + 1)
             }
 
-            AppView::AcpHistoryView {
+            AppView::AgentChatHistoryView {
                 filter,
                 selected_index,
             } => {
-                let rows = Self::acp_history_visible_row_labels(filter);
+                let rows = Self::agent_chat_history_visible_row_labels(filter);
                 self.collect_named_rows(
-                    "acp-history-filter",
+                    "agent_chat-history-filter",
                     filter.clone(),
-                    "acp-history",
+                    "agent_chat-history",
                     &rows,
                     *selected_index,
                     limit,
@@ -2660,7 +2660,7 @@ impl ScriptListApp {
             scripts::SearchResult::File(m) => m.file.name.clone(),
             scripts::SearchResult::Note(m) => m.title.clone(),
             scripts::SearchResult::Todo(m) => m.hit.title.clone(),
-            scripts::SearchResult::AcpHistory(m) => m.entry.title_display().to_string(),
+            scripts::SearchResult::AgentChatHistory(m) => m.entry.title_display().to_string(),
             scripts::SearchResult::AiVault(m) => m.hit.safe_title.clone(),
             scripts::SearchResult::ClipboardHistory(m) => m.title.clone(),
             scripts::SearchResult::DictationHistory(m) => m.preview.clone(),

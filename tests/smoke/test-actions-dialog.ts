@@ -5,7 +5,7 @@ import '../../scripts/kit-sdk';
 await arg({
   placeholder: "Press Cmd+K to test actions dialog...",
   choices: [
-    { name: "Agent Chat", description: "Open the primary Agent Chat surface", value: "acp-chat" },
+    { name: "Agent Chat", description: "Open the primary Agent Chat surface", value: "agent_chat-chat" },
     { name: "Script Runner", description: "Run your scripts", value: "runner" },
     { name: "Settings", description: "Configure Script Kit", value: "settings" },
   ],

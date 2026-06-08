@@ -180,23 +180,27 @@ impl AiApp {
         cx.notify();
     }
 
-    /// Open the ACP agents catalog file for recovery without requiring a restart.
+    /// Open the Agent Chat agents catalog file for recovery without requiring a restart.
     ///
-    /// Seeds starter entries for common ACP agents, then opens the catalog
+    /// Seeds starter entries for common Agent Chat agents, then opens the catalog
     /// so the user can add, fix, or remove agent entries.
-    pub(super) fn open_acp_agents_catalog(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        match crate::ai::acp::open_acp_agents_catalog_in_editor() {
+    pub(super) fn open_agent_chat_agents_catalog(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        match crate::ai::agent_chat::ui::open_agent_chat_agents_catalog_in_editor() {
             Ok(path) => {
                 tracing::info!(
                     target: "script_kit::tab_ai",
-                    event = "open_acp_agents_catalog",
+                    event = "open_agent_chat_agents_catalog",
                     path = %path.display(),
                 );
             }
             Err(error) => {
                 tracing::warn!(
                     target: "script_kit::tab_ai",
-                    event = "open_acp_agents_catalog_failed",
+                    event = "open_agent_chat_agents_catalog_failed",
                     error = %error,
                 );
             }

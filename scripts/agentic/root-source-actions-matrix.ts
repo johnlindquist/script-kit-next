@@ -203,7 +203,7 @@ function seedFixtures() {
     notes: { enabled: false },
     clipboardHistory: { enabled: false },
     dictationHistory: { enabled: false },
-    acpHistory: { enabled: false },
+    agent_chatHistory: { enabled: false },
     browserTabs: { enabled: false },
     browserHistory: { enabled: false },
   },
@@ -306,12 +306,12 @@ INSERT INTO history (
   );
 
   writeFileSync(
-    join(kitDir, "acp-history.jsonl"),
+    join(kitDir, "agent_chat-history.jsonl"),
     `${JSON.stringify({
       timestamp: now,
       first_message: `${query} conversation prompt`,
       message_count: 2,
-      session_id: "acp-source-actions",
+      session_id: "agent_chat-source-actions",
       title: `${query} conversation prompt`,
       preview: `${query} conversation reply`,
       search_text: `${query} conversation prompt ${query} conversation reply`,
@@ -451,12 +451,12 @@ const cases: Json[] = [
     role: "rootPassive",
     typeLabel: "Agent Chat Conversation",
     sourceName: "Agent Chat Conversations",
-    stableKey: "acp-history/acp-source-actions",
+    stableKey: "agent_chat-history/agent_chat-source-actions",
     expectedActions: [
-      ["root_acp_history_resume", "Resume Conversation"],
-      ["root_acp_history_copy_title", "Copy Conversation Title"],
-      ["root_acp_history_copy_session_id", "Copy Session ID"],
-      ["root_acp_history_copy_preview", "Copy Preview"],
+      ["root_agent_chat_history_resume", "Resume Conversation"],
+      ["root_agent_chat_history_copy_title", "Copy Conversation Title"],
+      ["root_agent_chat_history_copy_session_id", "Copy Session ID"],
+      ["root_agent_chat_history_copy_preview", "Copy Preview"],
     ],
   },
   {

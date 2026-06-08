@@ -2,7 +2,7 @@
 //! `tool-simulategpui-main-reacquire-contract` user story.
 //!
 //! Run 2 Pass #5 (commit `92c8d66cb`) fixed the handle-staleness gap
-//! that blocked Pass #2's `clipboard-to-acp-paste` story: stdin
+//! that blocked Pass #2's `clipboard-to-agent_chat-paste` story: stdin
 //! commands run inside `window_for_stdin.update(...)`, so any
 //! subsequent `handle.update()` on the Main handle returns Err because
 //! reentrancy-protection trips (`cx.windows.get_mut(id)?.take()?`).
@@ -34,7 +34,7 @@
 //! a mechanical refactor of the simulator (e.g. renaming the dispatch
 //! path labels, removing the global-handle re-acquisition, or
 //! inlining `apply_simulated_event`) can't silently regress the
-//! substrate gain behind the currently-open `clipboard-to-acp-paste`
+//! substrate gain behind the currently-open `clipboard-to-agent_chat-paste`
 //! story.
 
 const SIMULATOR: &str = include_str!("../src/platform/gpui_event_simulator.rs");
@@ -196,15 +196,15 @@ fn deferred_body_emits_complete_and_failed_tracing_events() {
 
 #[test]
 fn detached_exact_handle_dispatch_defers_out_of_stdin_update_stack() {
-    // Detached ACP exact-id dispatch can route back through shared app
+    // Detached Agent Chat exact-id dispatch can route back through shared app
     // state while stdin is still updating ScriptListApp. It must take the
     // same next-tick shape as Main reentrancy recovery instead of calling
     // handle.update synchronously.
     assert!(
-        SIMULATOR.contains("AutomationWindowKind::AcpDetached")
+        SIMULATOR.contains("AutomationWindowKind::AgentChatDetached")
             && SIMULATOR.contains("dispatch_with_any_handle_deferred("),
         "src/platform/gpui_event_simulator.rs must send \
-         AutomationWindowKind::AcpDetached exact-handle dispatch through \
+         AutomationWindowKind::AgentChatDetached exact-handle dispatch through \
          dispatch_with_any_handle_deferred so protocol simulateGpuiEvent \
          cannot re-enter ScriptListApp while stdin owns the app update stack."
     );

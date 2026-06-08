@@ -90,7 +90,7 @@
                         let _ = cx.update(|cx| {
                             app_entity_for_tray.update(cx, |view, cx| {
                                 view.mark_opened_directly("tray");
-                                view.open_tab_ai_acp_with_entry_intent(None, cx);
+                                view.open_tab_ai_agent_chat_with_entry_intent(None, cx);
                             });
                         });
                     }
@@ -265,7 +265,7 @@
                 let _ = cx.update(|cx: &mut gpui::App| {
                     app_entity_for_ai_hotkey.update(cx, |view, cx| {
                         view.mark_opened_directly("shortcut");
-                        view.open_tab_ai_acp_with_entry_intent(None, cx);
+                        view.open_tab_ai_agent_chat_with_entry_intent(None, cx);
                     });
                 });
             }

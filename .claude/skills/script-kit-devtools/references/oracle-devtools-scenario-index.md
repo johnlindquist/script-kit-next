@@ -8,7 +8,7 @@ This index records the corrected 50 Oracle-planned scenario iterations. The deta
 | --- | --- | --- |
 | 01-10 | Actions dialogs and popup menus | `devtools-oracle-iterations-actions-popups` |
 | 11-20 | Prompt runtime containers and resizing | `devtools-oracle-iterations-prompts-resize` |
-| 21-30 | Notes and ACP surfaces | `devtools-oracle-iterations-notes-acp` |
+| 21-30 | Notes and AgentChat surfaces | `devtools-oracle-iterations-notes-agent_chat` |
 | 31-40 | Filterable data-heavy surfaces | `devtools-oracle-iterations-filterable-data` |
 | 41-50 | Native windowing, accessibility, theme, focus | `devtools-oracle-iterations-native-a11y` |
 
@@ -36,16 +36,16 @@ This index records the corrected 50 Oracle-planned scenario iterations. The deta
 | 18 | Drop prompt file list grows past continue/cancel controls after large drag batch. | Drop-state schema and synthetic drop-file action |
 | 19 | Template prompt live preview clips generated output and variables behind footer. | Compound prompt scroll policy and render-version layout |
 | 20 | Hotkey prompt long chord/conflict list hides active chord or save button. | Keyboard capture event log and conflict layout metrics |
-| 21 | Notes target identity becomes ambiguous after script-driven note creation. | Stable Notes window/note/editor/ACP target identity |
+| 21 | Notes target identity becomes ambiguous after script-driven note creation. | Stable Notes window/note/editor/AgentChat target identity |
 | 22 | Notes long markdown editor and preview disagree about scroll position. | Editor/preview scroll pairing and sync generation |
 | 23 | Notes window resize leaves editor bounds stale after markdown preview toggle. | Notes-specific target-scoped layout and resize comparison |
-| 24 | Notes embedded ACP receives input intended for note editor. | Notes mode, ACP identity, and input-owner receipts |
+| 24 | Notes embedded AgentChat receives input intended for note editor. | Notes mode, AgentChat identity, and input-owner receipts |
 | 25 | Notes attachment/context chips overflow or dedupe incorrectly. | Attachment provenance, chip overflow, and dedupe diagnostics |
-| 26 | Detached ACP screenshot or semantics target the wrong window. | Exact detached ACP target, native id, and screenshot crop binding |
-| 27 | ACP composer popup drifts after composer growth or context insertion. | Composer anchor rects and popup placement generation |
-| 28 | ACP slash/mention popup selected row disagrees with execution target. | Popup selected/focused/execution identity parity |
-| 29 | Streaming ACP response resizes and hides cancel/progress affordances. | Stream progress layout and cancellation control visibility |
-| 30 | Notes-hosted ACP and standalone ACP share stale session/context state. | ACP session provenance and context-source isolation |
+| 26 | Detached AgentChat screenshot or semantics target the wrong window. | Exact detached AgentChat target, native id, and screenshot crop binding |
+| 27 | AgentChat composer popup drifts after composer growth or context insertion. | Composer anchor rects and popup placement generation |
+| 28 | AgentChat slash/mention popup selected row disagrees with execution target. | Popup selected/focused/execution identity parity |
+| 29 | Streaming AgentChat response resizes and hides cancel/progress affordances. | Stream progress layout and cancellation control visibility |
+| 30 | Notes-hosted AgentChat and standalone AgentChat share stale session/context state. | AgentChat session provenance and context-source isolation |
 | 31 | Clipboard history filter shows stale/redacted preview content. | Preview generation, redaction status, and selected item identity |
 | 32 | App launcher results mismatch installed app identity, icon, or launch target. | App identity provenance and launch-target proof |
 | 33 | Browser tabs/history search leaks private or stale URL metadata. | Source trust, redaction, and browser data generation |

@@ -21,7 +21,9 @@ fn profile_builder_iteration_ledger_has_ten_unique_iterations() {
     let forbidden = json["runtimeContract"]["forbiddenSelectorSurfaces"]
         .as_array()
         .expect("forbidden selector surfaces");
-    assert!(forbidden.iter().any(|value| value == "acp-profile-popup"));
+    assert!(forbidden
+        .iter()
+        .any(|value| value == "agent_chat-profile-popup"));
     assert!(forbidden.iter().any(|value| value == "actions-dialog"));
 
     let iterations = json["iterations"].as_array().expect("iterations array");
@@ -197,7 +199,7 @@ fn profile_builder_iteration_points_to_runtime_receipt_doc() {
         "postIntentTargetProof.classification: ok",
         "Allowed validation only",
         "Blocked validation only",
-        "acp_export_markdown",
+        "agent_chat_export_markdown",
         "read-only profile for `~/dev/demo`",
         "this profile can only create profile artifacts under plugins/main/profiles",
         "ActionsDialog",

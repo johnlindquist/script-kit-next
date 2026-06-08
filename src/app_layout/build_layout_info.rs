@@ -33,12 +33,12 @@ impl ScriptListApp {
             | AppView::ThemeChooserView { .. }
             | AppView::SdkReferenceView { .. }
             | AppView::ScriptTemplateCatalogView { .. }
-            | AppView::AcpHistoryView { .. }
+            | AppView::AgentChatHistoryView { .. }
             | AppView::BrowserHistoryView { .. }
             | AppView::DictationHistoryView { .. }
             | AppView::NotesBrowseView { .. }
             | AppView::ProfileSearchView { .. }
-            | AppView::AcpChatView { .. } => crate::window_resize::ViewType::MainWindow,
+            | AppView::AgentChatView { .. } => crate::window_resize::ViewType::MainWindow,
             AppView::AppLauncherView { .. }
             | AppView::WindowSwitcherView { .. }
             | AppView::BrowserTabsView { .. }
@@ -107,11 +107,11 @@ impl ScriptListApp {
             AppView::CreateAiPresetView { .. } => "createAiPreset",
             AppView::SettingsView { .. } => "settings",
             AppView::FavoritesBrowseView { .. } => "favoritesBrowse",
-            AppView::AcpHistoryView { .. } => "acpHistory",
+            AppView::AgentChatHistoryView { .. } => "agent_chatHistory",
             AppView::BrowserHistoryView { .. } => "browserHistory",
             AppView::DictationHistoryView { .. } => "dictationHistory",
             AppView::NotesBrowseView { .. } => "notesBrowse",
-            AppView::AcpChatView { .. } => "acpChat",
+            AppView::AgentChatView { .. } => "agentChatChat",
             AppView::ScriptIssuesView { .. } => "scriptIssues",
             AppView::SdkReferenceView { .. } => "sdkReference",
             AppView::ScriptTemplateCatalogView { .. } => "scriptTemplateCatalog",
@@ -129,7 +129,7 @@ impl ScriptListApp {
                 | AppView::FileSearchView { .. }
                 | AppView::ClipboardHistoryView { .. }
                 | AppView::ProfileSearchView { .. }
-                | AppView::AcpChatView { .. }
+                | AppView::AgentChatView { .. }
         );
         let shell_horizontal_padding = shell.header_padding_x;
         let main_view_context_zone_height = menu_def.header_info_bar.height_px;
@@ -2097,10 +2097,10 @@ impl ScriptListApp {
             };
         }
 
-        if let AppView::AcpChatView { entity } = &self.current_view {
-            let acp_state = entity.read(cx).collect_acp_state_snapshot(cx);
-            let acp_is_empty =
-                acp_state.message_count == 0 && !acp_state.awaiting_first_assistant_text;
+        if let AppView::AgentChatView { entity } = &self.current_view {
+            let agent_chat_state = entity.read(cx).collect_agent_chat_state_snapshot(cx);
+            let agent_chat_is_empty =
+                agent_chat_state.message_count == 0 && !agent_chat_state.awaiting_first_assistant_text;
             let info_metrics = crate::components::info_state::info_metrics(
                 crate::components::info_state::InfoStateDensity::Comfortable,
             );
@@ -2119,7 +2119,7 @@ impl ScriptListApp {
                     .max(0.0);
 
             components.push(
-                LayoutComponentInfo::new("AcpConversation", LayoutComponentType::List)
+                LayoutComponentInfo::new("AgentChatConversation", LayoutComponentType::List)
                     .with_bounds(
                         0.0,
                         content_top,
@@ -2131,20 +2131,20 @@ impl ScriptListApp {
                         chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
                         Some(chrome_tokens::LIQUID_GLASS_PANEL_RADIUS_PX),
                     )
-                    .with_visual_token("content.acpConversation")
+                    .with_visual_token("content.agent_chatConversation")
                     .with_flex_column()
                     .with_flex_grow(1.0)
                     .with_depth(2)
                     .with_parent("MainViewMain")
                     .with_explanation(format!(
-                        "AcpChat conversation region. message_count={}, awaiting_first_assistant_text={}.",
-                        acp_state.message_count, acp_state.awaiting_first_assistant_text
+                        "AgentChat conversation region. message_count={}, awaiting_first_assistant_text={}.",
+                        agent_chat_state.message_count, agent_chat_state.awaiting_first_assistant_text
                     )),
             );
 
-            if acp_is_empty {
+            if agent_chat_is_empty {
                 components.push(
-                    LayoutComponentInfo::new("AcpEmptyGuidance", LayoutComponentType::Container)
+                    LayoutComponentInfo::new("AgentChatEmptyGuidance", LayoutComponentType::Container)
                         .with_bounds(
                             info_x,
                             info_y,
@@ -2159,18 +2159,18 @@ impl ScriptListApp {
                             chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
                             Some(chrome_tokens::LIQUID_GLASS_PANEL_RADIUS_PX),
                         )
-                        .with_visual_token("content.acpEmptyGuidance")
+                        .with_visual_token("content.agent_chatEmptyGuidance")
                         .with_flex_column()
                         .with_gap(info_metrics.block_gap)
                         .with_depth(3)
-                        .with_parent("AcpConversation")
+                        .with_parent("AgentChatConversation")
                         .with_explanation(format!(
                             "ComposerEmpty InfoState is anchored to the shared main-view text column: x={} = row outer + row inner + icon + gap. Width = window({}) - x({}) - right inset({}).",
                             info_x, window_width, info_x, info_columns.content_right_inset_x
                         )),
                 );
                 components.push(
-                    LayoutComponentInfo::new("AcpEmptyGuidanceTitle", LayoutComponentType::Header)
+                    LayoutComponentInfo::new("AgentChatEmptyGuidanceTitle", LayoutComponentType::Header)
                         .with_bounds(
                             info_x,
                             info_y,
@@ -2187,14 +2187,14 @@ impl ScriptListApp {
                             "left",
                         )
                         .with_depth(4)
-                        .with_parent("AcpEmptyGuidance")
+                        .with_parent("AgentChatEmptyGuidance")
                         .with_explanation(
                             "Comfortable ComposerEmpty title uses the InfoState title scale and starts on the shared main-view text column."
                                 .to_string(),
                         ),
                 );
                 components.push(
-                    LayoutComponentInfo::new("AcpEmptyGuidanceBody", LayoutComponentType::Other)
+                    LayoutComponentInfo::new("AgentChatEmptyGuidanceBody", LayoutComponentType::Other)
                         .with_bounds(
                             info_x,
                             info_y
@@ -2213,7 +2213,7 @@ impl ScriptListApp {
                             "left",
                         )
                         .with_depth(4)
-                        .with_parent("AcpEmptyGuidance")
+                        .with_parent("AgentChatEmptyGuidance")
                         .with_explanation(
                             "ComposerEmpty body follows the title inside the same shared main-view column."
                                 .to_string(),
@@ -2221,7 +2221,7 @@ impl ScriptListApp {
                 );
                 components.push(
                     LayoutComponentInfo::new(
-                        "AcpEmptyGuidanceShortcutSlot",
+                        "AgentChatEmptyGuidanceShortcutSlot",
                         LayoutComponentType::Other,
                     )
                     .with_bounds(
@@ -2231,7 +2231,7 @@ impl ScriptListApp {
                         info_metrics.row_min_h,
                     )
                     .with_depth(4)
-                    .with_parent("AcpEmptyGuidance")
+                    .with_parent("AgentChatEmptyGuidance")
                     .with_explanation(
                         "Shortcut slot width uses the same footer keycap geometry as InfoState guidance rows."
                             .to_string(),
@@ -2239,7 +2239,7 @@ impl ScriptListApp {
                 );
                 components.push(
                     LayoutComponentInfo::new(
-                        "AcpEmptyGuidanceLabelColumn",
+                        "AgentChatEmptyGuidanceLabelColumn",
                         LayoutComponentType::Other,
                     )
                     .with_bounds(
@@ -2258,7 +2258,7 @@ impl ScriptListApp {
                         "left",
                     )
                     .with_depth(4)
-                    .with_parent("AcpEmptyGuidance")
+                    .with_parent("AgentChatEmptyGuidance")
                     .with_explanation(
                         "Guidance labels start after the footer-keycap shortcut slot and the InfoState row gap; the whole block remains anchored to the main-view text column."
                             .to_string(),
@@ -2266,7 +2266,7 @@ impl ScriptListApp {
                 );
             } else {
                 components.push(
-                    LayoutComponentInfo::new("AcpTranscript", LayoutComponentType::List)
+                    LayoutComponentInfo::new("AgentChatTranscript", LayoutComponentType::List)
                         .with_bounds(
                             0.0,
                             content_top,
@@ -2278,14 +2278,14 @@ impl ScriptListApp {
                             chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
                             Some(chrome_tokens::LIQUID_GLASS_PANEL_RADIUS_PX),
                         )
-                        .with_visual_token("content.acpTranscript")
+                        .with_visual_token("content.agent_chatTranscript")
                         .with_flex_column()
                         .with_flex_grow(1.0)
                         .with_depth(3)
-                        .with_parent("AcpConversation")
+                        .with_parent("AgentChatConversation")
                         .with_explanation(format!(
-                            "ACP transcript viewport for {} live thread messages.",
-                            acp_state.message_count
+                            "Agent Chat transcript viewport for {} live thread messages.",
+                            agent_chat_state.message_count
                         )),
                 );
             }

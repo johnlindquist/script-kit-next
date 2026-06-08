@@ -1,8 +1,8 @@
 use script_kit_gpui::ai::message_parts::AiContextPart;
-use script_kit_gpui::test_support::acp_portal as portal;
+use script_kit_gpui::test_support::agent_chat_portal as portal;
 
 #[test]
-fn clipboard_history_host_aware_refusal_leaves_acp_idle() {
+fn clipboard_history_host_aware_refusal_leaves_agent_chat_idle() {
     assert_eq!(
         portal::open_refusal(true, false),
         Some("missing_host_callback")
@@ -81,7 +81,7 @@ fn clipboard_history_attach_replaces_exact_range_and_terminal_states_clear() {
 }
 
 #[test]
-fn dictation_history_host_aware_refusal_leaves_acp_idle() {
+fn dictation_history_host_aware_refusal_leaves_agent_chat_idle() {
     assert_eq!(
         portal::open_refusal(true, false),
         Some("missing_host_callback")

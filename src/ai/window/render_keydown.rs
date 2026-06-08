@@ -111,7 +111,7 @@ impl AiApp {
                 }
                 k if is_key_enter(k) => {
                     if self.setup_button_focus_index == 0 {
-                        self.open_acp_agents_catalog(window, cx);
+                        self.open_agent_chat_agents_catalog(window, cx);
                     }
                     window.activate_window();
                     cx.stop_propagation();

@@ -45,8 +45,8 @@ pub(super) fn build_search_mode_results(
                 SearchResult::File(fm) => Some(format!("file/{}", fm.file.path)),
                 SearchResult::Note(nm) => Some(format!("note/{}", nm.hit.id.as_str())),
                 SearchResult::Todo(tm) => Some(tm.hit.stable_key.clone()),
-                SearchResult::AcpHistory(am) => {
-                    Some(format!("acp-history/{}", am.entry.session_id))
+                SearchResult::AgentChatHistory(am) => {
+                    Some(format!("agent_chat-history/{}", am.entry.session_id))
                 }
                 SearchResult::AiVault(am) => Some(am.hit.stable_key.clone()),
                 SearchResult::ClipboardHistory(cm) => {

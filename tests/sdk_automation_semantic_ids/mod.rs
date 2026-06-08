@@ -176,52 +176,52 @@ fn dictation_model_all_statuses_produce_non_empty_semantic_ids() {
 }
 
 // ---------------------------------------------------------------------------
-// Detached ACP semantic IDs (source contract)
+// Detached Agent Chat semantic IDs (source contract)
 // ---------------------------------------------------------------------------
 
 #[test]
-fn acp_detached_collector_exposes_panel_semantic_id() {
+fn agent_chat_detached_collector_exposes_panel_semantic_id() {
     let source = include_str!("../../src/windows/automation_surface_collector.rs");
     assert!(
-        source.contains("\"panel:acp-detached\""),
-        "ACP detached collector must expose panel:acp-detached"
+        source.contains("\"panel:agent_chat-detached\""),
+        "Agent Chat detached collector must expose panel:agent_chat-detached"
     );
 }
 
 #[test]
-fn acp_detached_collector_exposes_composer_semantic_id() {
+fn agent_chat_detached_collector_exposes_composer_semantic_id() {
     let source = include_str!("../../src/windows/automation_surface_collector.rs");
     assert!(
-        source.contains("\"input:acp-composer\""),
-        "ACP detached collector must expose input:acp-composer"
+        source.contains("\"input:agent_chat-composer\""),
+        "Agent Chat detached collector must expose input:agent_chat-composer"
     );
 }
 
 #[test]
-fn acp_detached_collector_exposes_messages_semantic_id() {
+fn agent_chat_detached_collector_exposes_messages_semantic_id() {
     let source = include_str!("../../src/windows/automation_surface_collector.rs");
     assert!(
-        source.contains("\"list:acp-messages\""),
-        "ACP detached collector must expose list:acp-messages"
+        source.contains("\"list:agent_chat-messages\""),
+        "Agent Chat detached collector must expose list:agent_chat-messages"
     );
 }
 
 #[test]
-fn acp_detached_collector_exposes_picker_semantic_id() {
+fn agent_chat_detached_collector_exposes_picker_semantic_id() {
     let source = include_str!("../../src/windows/automation_surface_collector.rs");
     assert!(
-        source.contains("\"panel:acp-picker\""),
-        "ACP detached collector must expose panel:acp-picker when picker is open"
+        source.contains("\"panel:agent_chat-picker\""),
+        "Agent Chat detached collector must expose panel:agent_chat-picker when picker is open"
     );
 }
 
 #[test]
-fn acp_detached_focused_semantic_id_is_composer() {
+fn agent_chat_detached_focused_semantic_id_is_composer() {
     let source = include_str!("../../src/windows/automation_surface_collector.rs");
     // The focused_semantic_id should be the composer input
     assert!(
-        source.contains("focused_semantic_id: Some(\"input:acp-composer\""),
-        "ACP detached focused_semantic_id must be input:acp-composer"
+        source.contains("focused_semantic_id: Some(\"input:agent_chat-composer\""),
+        "Agent Chat detached focused_semantic_id must be input:agent_chat-composer"
     );
 }
 
@@ -261,21 +261,21 @@ fn notes_focused_semantic_id_is_editor() {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn acp_and_notes_semantic_ids_do_not_collide() {
+fn agent_chat_and_notes_semantic_ids_do_not_collide() {
     // Verify the hardcoded semantic IDs in each collector are disjoint
-    let acp_ids = [
-        "panel:acp-detached",
-        "input:acp-composer",
-        "list:acp-messages",
-        "panel:acp-picker",
+    let agent_chat_ids = [
+        "panel:agent_chat-detached",
+        "input:agent_chat-composer",
+        "list:agent_chat-messages",
+        "panel:agent_chat-picker",
     ];
     let notes_ids = ["panel:notes-window", "input:notes-editor"];
 
-    for acp_id in &acp_ids {
+    for agent_chat_id in &agent_chat_ids {
         for notes_id in &notes_ids {
             assert_ne!(
-                acp_id, notes_id,
-                "ACP and Notes semantic IDs must not collide"
+                agent_chat_id, notes_id,
+                "Agent Chat and Notes semantic IDs must not collide"
             );
         }
     }

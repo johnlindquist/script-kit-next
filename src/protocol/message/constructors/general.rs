@@ -405,7 +405,7 @@ impl Message {
             mode,
             ok,
             submitted,
-            target_id: "acp-chat".to_string(),
+            target_id: "agent_chat-chat".to_string(),
             target_kind: "main".to_string(),
             text_length,
             instruction_length,

@@ -134,7 +134,7 @@
             browser_tabs_scroll_handle: UniformListScrollHandle::new(),
             process_list_scroll_handle: UniformListScrollHandle::new(),
             current_app_commands_scroll_handle: UniformListScrollHandle::new(),
-            acp_history_scroll_handle: ScrollHandle::new(),
+            agent_chat_history_scroll_handle: ScrollHandle::new(),
             browser_history_scroll_handle: ScrollHandle::new(),
             dictation_history_scroll_handle: ScrollHandle::new(),
             notes_browse_scroll_handle: ScrollHandle::new(),

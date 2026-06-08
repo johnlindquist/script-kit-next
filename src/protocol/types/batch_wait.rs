@@ -53,47 +53,47 @@ pub enum WaitDetailedCondition {
     StateMatch {
         state: StateMatchSpec,
     },
-    /// ACP-specific: wait until the ACP view is ready (context bootstrapped, idle).
-    AcpReady,
-    /// ACP-specific: wait until the mention/slash picker is open.
-    AcpPickerOpen,
-    /// ACP-specific: wait until the mention/slash picker is closed.
-    AcpPickerClosed,
-    /// ACP-specific: wait until a picker item has been accepted.
-    AcpItemAccepted,
-    /// ACP-specific: wait until the cursor reaches a specific character index.
-    AcpCursorAt {
+    /// Agent Chat-specific: wait until the Agent Chat view is ready (context bootstrapped, idle).
+    AgentChatReady,
+    /// Agent Chat-specific: wait until the mention/slash picker is open.
+    AgentChatPickerOpen,
+    /// Agent Chat-specific: wait until the mention/slash picker is closed.
+    AgentChatPickerClosed,
+    /// Agent Chat-specific: wait until a picker item has been accepted.
+    AgentChatItemAccepted,
+    /// Agent Chat-specific: wait until the cursor reaches a specific character index.
+    AgentChatCursorAt {
         index: usize,
     },
-    /// ACP-specific: wait until the ACP thread reaches a specific status.
-    AcpStatus {
+    /// Agent Chat-specific: wait until the Agent Chat thread reaches a specific status.
+    AgentChatStatus {
         status: String,
     },
-    /// ACP-specific: wait until the ACP input text matches exactly.
-    AcpInputMatch {
+    /// Agent Chat-specific: wait until the Agent Chat input text matches exactly.
+    AgentChatInputMatch {
         text: String,
     },
-    /// ACP-specific: wait until the ACP input text contains a substring.
-    AcpInputContains {
+    /// Agent Chat-specific: wait until the Agent Chat input text contains a substring.
+    AgentChatInputContains {
         substring: String,
     },
-    /// ACP proof: wait until a picker item was accepted via a specific key.
-    AcpAcceptedViaKey {
+    /// Agent Chat proof: wait until a picker item was accepted via a specific key.
+    AgentChatAcceptedViaKey {
         /// The key that must have caused acceptance: `"enter"` or `"tab"`.
         key: String,
     },
-    /// ACP proof: wait until a picker item with a specific label was accepted.
-    AcpAcceptedLabel {
+    /// Agent Chat proof: wait until a picker item with a specific label was accepted.
+    AgentChatAcceptedLabel {
         /// The label of the accepted item.
         label: String,
     },
-    /// ACP proof: wait until the cursor reaches a specific index after acceptance.
-    AcpAcceptedCursorAt {
+    /// Agent Chat proof: wait until the cursor reaches a specific index after acceptance.
+    AgentChatAcceptedCursorAt {
         /// Target cursor index after the accepted text was inserted.
         index: usize,
     },
-    /// ACP proof: wait until the input layout matches specific visibility metrics.
-    AcpInputLayoutMatch {
+    /// Agent Chat proof: wait until the input layout matches specific visibility metrics.
+    AgentChatInputLayoutMatch {
         /// Visible window start (character index).
         #[serde(rename = "visibleStart")]
         visible_start: usize,
@@ -104,21 +104,21 @@ pub enum WaitDetailedCondition {
         #[serde(rename = "cursorInWindow")]
         cursor_in_window: usize,
     },
-    /// ACP setup: wait until the setup card is visible (status == "setup" with setup payload).
-    AcpSetupVisible,
-    /// ACP setup: wait until the setup reason code matches.
-    AcpSetupReasonCode {
+    /// Agent Chat setup: wait until the setup card is visible (status == "setup" with setup payload).
+    AgentChatSetupVisible,
+    /// Agent Chat setup: wait until the setup reason code matches.
+    AgentChatSetupReasonCode {
         #[serde(rename = "reasonCode")]
         reason_code: String,
     },
-    /// ACP setup: wait until the setup primary action matches.
-    AcpSetupPrimaryAction {
-        action: crate::protocol::types::acp_state::AcpSetupActionKind,
+    /// Agent Chat setup: wait until the setup primary action matches.
+    AgentChatSetupPrimaryAction {
+        action: crate::protocol::types::agent_chat_state::AgentChatSetupActionKind,
     },
-    /// ACP setup: wait until the setup agent picker overlay is open.
-    AcpSetupAgentPickerOpen,
-    /// ACP setup: wait until the setup selected agent matches.
-    AcpSetupSelectedAgent {
+    /// Agent Chat setup: wait until the setup agent picker overlay is open.
+    AgentChatSetupAgentPickerOpen,
+    /// Agent Chat setup: wait until the setup selected agent matches.
+    AgentChatSetupSelectedAgent {
         #[serde(rename = "agentId")]
         agent_id: String,
     },
@@ -145,7 +145,7 @@ pub enum BatchCommand {
     },
     OpenActions,
     TogglePreview,
-    OpenNotesAcp,
+    OpenNotesAgentChat,
     ForceSubmit {
         value: serde_json::Value,
     },
@@ -319,13 +319,13 @@ pub struct UiStateSnapshot {
     #[serde(default)]
     pub choice_count: usize,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub acp_status: Option<String>,
+    pub agent_chat_status: Option<String>,
     #[serde(default)]
-    pub acp_context_ready: bool,
+    pub agent_chat_context_ready: bool,
     #[serde(default)]
-    pub acp_picker_open: bool,
+    pub agent_chat_picker_open: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub acp_cursor_index: Option<usize>,
+    pub agent_chat_cursor_index: Option<usize>,
 }
 
 /// A single poll observation during a waitFor command.

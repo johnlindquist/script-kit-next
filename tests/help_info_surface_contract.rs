@@ -11,17 +11,17 @@ fn section_between<'a>(source: &'a str, start: &str, end: &str) -> &'a str {
 }
 
 #[test]
-fn acp_empty_guidance_uses_shared_info_state() {
-    let source =
-        fs::read_to_string("src/ai/acp/view.rs").expect("failed to read src/ai/acp/view.rs");
+fn agent_chat_empty_guidance_uses_shared_info_state() {
+    let source = fs::read_to_string("src/ai/agent_chat/ui/view.rs")
+        .expect("failed to read src/ai/agent_chat/ui/view.rs");
 
     assert!(
-        source.contains("render_acp_empty_guidance"),
-        "ACP empty composer must use shared InfoState guidance"
+        source.contains("render_agent_chat_empty_guidance"),
+        "Agent Chat empty composer must use shared InfoState guidance"
     );
     assert!(
         !source.contains("Type / for skills"),
-        "old weak ACP empty hint copy must not return"
+        "old weak Agent Chat empty hint copy must not return"
     );
 }
 
@@ -36,7 +36,7 @@ fn shared_info_state_is_exported() {
 }
 
 #[test]
-fn info_state_keeps_context_first_acp_copy() {
+fn info_state_keeps_context_first_agent_chat_copy() {
     let source = fs::read_to_string("src/components/info_state.rs")
         .expect("failed to read src/components/info_state.rs");
 
@@ -44,14 +44,14 @@ fn info_state_keeps_context_first_acp_copy() {
     assert!(source.contains("Use / for skills or @ to attach context"));
     assert!(source.contains("Attach files, scripts, clipboard, or history"));
     assert!(source.contains("InfoGuidanceItem::new(Some(\"⌘K\"), \"Show every chat action\")"));
-    let acp_spec = section_between(
+    let agent_chat_spec = section_between(
         &source,
-        "pub(crate) fn acp_empty_guidance_spec",
-        "pub(crate) fn render_acp_empty_guidance",
+        "pub(crate) fn agent_chat_empty_guidance_spec",
+        "pub(crate) fn render_agent_chat_empty_guidance",
     );
     assert!(
-        !acp_spec.contains(".footer_shortcut_note("),
-        "ACP empty guidance must keep Cmd+K in the normal row list so spacing stays consistent"
+        !agent_chat_spec.contains(".footer_shortcut_note("),
+        "Agent Chat empty guidance must keep Cmd+K in the normal row list so spacing stays consistent"
     );
     assert!(!source.contains("⌘N new"));
     assert!(!source.contains("⌘W close"));
@@ -80,13 +80,13 @@ fn composer_empty_info_state_uses_main_view_columns_not_centered_card() {
 }
 
 #[test]
-fn acp_empty_guidance_uses_comfortable_main_view_density() {
+fn agent_chat_empty_guidance_uses_comfortable_main_view_density() {
     let info = fs::read_to_string("src/components/info_state.rs")
         .expect("failed to read src/components/info_state.rs");
     let spec = section_between(
         &info,
-        "pub(crate) fn acp_empty_guidance_spec",
-        "pub(crate) fn render_acp_empty_guidance",
+        "pub(crate) fn agent_chat_empty_guidance_spec",
+        "pub(crate) fn render_agent_chat_empty_guidance",
     );
 
     assert!(spec.contains(".layout(InfoStateLayout::ComposerEmpty)"));
@@ -94,14 +94,19 @@ fn acp_empty_guidance_uses_comfortable_main_view_density() {
 }
 
 #[test]
-fn acp_empty_guidance_slot_does_not_center_the_info_state() {
-    let acp = fs::read_to_string("src/ai/acp/view.rs").expect("failed to read src/ai/acp/view.rs");
-    let middle = section_between(&acp, "fn render_acp_middle_area", "if show_sidecar");
+fn agent_chat_empty_guidance_slot_does_not_center_the_info_state() {
+    let agent_chat = fs::read_to_string("src/ai/agent_chat/ui/view.rs")
+        .expect("failed to read src/ai/agent_chat/ui/view.rs");
+    let middle = section_between(
+        &agent_chat,
+        "fn render_agent_chat_middle_area",
+        "if show_sidecar",
+    );
 
-    assert!(middle.contains("render_acp_empty_guidance"));
+    assert!(middle.contains("render_agent_chat_empty_guidance"));
     assert!(
         !middle.contains(".items_center()") && !middle.contains(".justify_center()"),
-        "Acp middle area must not center ComposerEmpty; InfoState owns that layout"
+        "AgentChat middle area must not center ComposerEmpty; InfoState owns that layout"
     );
     assert!(middle.contains(".w_full()"));
     assert!(middle.contains(".h_full()"));

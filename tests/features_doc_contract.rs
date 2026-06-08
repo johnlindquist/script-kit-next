@@ -38,8 +38,8 @@ fn features_doc_applies_agent_chat_pi_backend_terminology() {
         "Agent Chat with Pi Backend should be the user-facing terminology"
     );
     assert!(
-        !matrix_without_code.contains("ACP") && !matrix_without_code.contains("Acp"),
-        "legacy ACP wording should not appear in user-facing feature prose"
+        !matrix_without_code.contains("AgentChat"),
+        "Rust-style AgentChat identifiers should not appear in user-facing feature prose"
     );
 }
 

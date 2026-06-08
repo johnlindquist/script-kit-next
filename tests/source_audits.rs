@@ -131,8 +131,8 @@ mod launcher_speed_gate_contract;
 #[path = "source_audits/actions_popup_contract.rs"]
 mod actions_popup_contract;
 
-#[path = "source_audits/acp_no_legacy_backend.rs"]
-mod acp_no_legacy_backend;
+#[path = "source_audits/agent_chat_no_legacy_backend.rs"]
+mod agent_chat_no_legacy_backend;
 
 #[path = "source_audits/agent_chat_boundary_and_frozen_contracts.rs"]
 mod agent_chat_boundary_and_frozen_contracts;
@@ -143,8 +143,8 @@ mod main_window_footer_global_left_chips;
 #[path = "source_audits/scriptlist_hide_bounds_reset.rs"]
 mod scriptlist_hide_bounds_reset;
 
-#[path = "source_audits/embedded_ai_acp_read_target.rs"]
-mod embedded_ai_acp_read_target;
+#[path = "source_audits/embedded_ai_agent_chat_read_target.rs"]
+mod embedded_ai_agent_chat_read_target;
 
 #[path = "source_audits/stdin_check_accessibility_wired.rs"]
 mod stdin_check_accessibility_wired;
@@ -203,8 +203,8 @@ mod root_unified_browser_tabs_contract;
 #[path = "source_audits/mcp_computer_list_tray_menu_observation_only.rs"]
 mod mcp_computer_list_tray_menu_observation_only;
 
-#[path = "source_audits/root_unified_acp_history_contract.rs"]
-mod root_unified_acp_history_contract;
+#[path = "source_audits/root_unified_agent_chat_history_contract.rs"]
+mod root_unified_agent_chat_history_contract;
 
 #[path = "source_audits/root_unified_clipboard_history_contract.rs"]
 mod root_unified_clipboard_history_contract;

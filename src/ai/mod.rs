@@ -16,7 +16,7 @@
 //! # Primary Agent Chat contract
 //!
 //! - User-facing AI chat surface: Agent Chat
-//! - Entry points should route to `open_tab_ai_acp_with_entry_intent(...)` when they need the canonical chat UI
+//! - Entry points should route to `open_tab_ai_agent_chat_with_entry_intent(...)` when they need the canonical chat UI
 //! - Compatibility-named `tab_ai_*` helpers and harness/context types still back Agent Chat plumbing
 //! - The legacy `window/` module remains only for deprecated compatibility flows and should not be used for new entry points
 
@@ -24,7 +24,6 @@
 #![allow(unused_imports)]
 #![allow(dead_code)]
 
-pub(crate) mod acp;
 pub mod agent_chat;
 pub(crate) mod agent_prompt_handoff;
 pub mod agent_task_dock;
@@ -97,8 +96,9 @@ pub use self::preflight_audit::{
 };
 pub use self::providers::{AiProvider, ProviderMessage, ProviderRegistry};
 pub use self::result_cards::{
-    derive_acp_result_cards_from_assistant_message, AcpResultArtifact, AcpResultArtifactKind,
-    AcpResultCards, AcpResultFollowUp, RESULT_CARD_MAX_ARTIFACTS, RESULT_CARD_MAX_FOLLOW_UPS,
+    derive_agent_chat_result_cards_from_assistant_message, AgentChatResultArtifact,
+    AgentChatResultArtifactKind, AgentChatResultCards, AgentChatResultFollowUp,
+    RESULT_CARD_MAX_ARTIFACTS, RESULT_CARD_MAX_FOLLOW_UPS,
 };
 pub use self::script_generation::{
     extract_current_app_recipe_from_script, generate_script_from_prompt,
@@ -153,7 +153,7 @@ pub use self::context_contract::{
 pub use self::context_mentions::{
     mention_range_at_cursor, parse_inline_context_mentions, InlineContextMention,
 };
-pub(crate) use self::explicit_target_handoff::request_explicit_acp_handoff_from_secondary_window;
+pub(crate) use self::explicit_target_handoff::request_explicit_agent_chat_handoff_from_secondary_window;
 pub use self::window::context_picker::types::ContextPickerTrigger;
 pub use self::window::context_picker::types::{
     ContextPickerItem, ContextPickerItemKind, ContextPickerItemSnapshot, ContextPickerSection,
@@ -168,18 +168,19 @@ pub use self::window::context_preflight::{
 };
 
 // ---------------------------------------------------------------------------
-// Pending explicit ACP target — cross-window handoff slot
+// Pending explicit Agent Chat target — cross-window handoff slot
 // ---------------------------------------------------------------------------
 
 use parking_lot::Mutex;
 use std::sync::OnceLock;
 
-/// Pending explicit ACP target from a secondary window (e.g. detached actions
+/// Pending explicit Agent Chat target from a secondary window (e.g. detached actions
 /// popup). The main window checks this after the secondary surface closes and
-/// hands the target to `open_tab_ai_acp_with_explicit_target`.
-static PENDING_EXPLICIT_ACP_TARGET: OnceLock<Mutex<Option<TabAiTargetContext>>> = OnceLock::new();
+/// hands the target to `open_tab_ai_agent_chat_with_explicit_target`.
+static PENDING_EXPLICIT_AGENT_CHAT_TARGET: OnceLock<Mutex<Option<TabAiTargetContext>>> =
+    OnceLock::new();
 
-/// Build a canonical ACP handoff target for an action-menu selection.
+/// Build a canonical Agent Chat handoff target for an action-menu selection.
 pub(crate) fn build_action_target_for_ai(
     action: &crate::actions::Action,
     host_label: &str,
@@ -200,26 +201,26 @@ pub(crate) fn build_action_target_for_ai(
     }
 }
 
-/// Enqueue a canonical target for ACP handoff from a secondary window.
+/// Enqueue a canonical target for Agent Chat handoff from a secondary window.
 ///
-/// The main window picks this up via `take_pending_explicit_acp_target` the
+/// The main window picks this up via `take_pending_explicit_agent_chat_target` the
 /// next time it processes a close-actions-popup event.
-pub fn enqueue_explicit_acp_target(target: TabAiTargetContext) {
-    let storage = PENDING_EXPLICIT_ACP_TARGET.get_or_init(|| Mutex::new(None));
+pub fn enqueue_explicit_agent_chat_target(target: TabAiTargetContext) {
+    let storage = PENDING_EXPLICIT_AGENT_CHAT_TARGET.get_or_init(|| Mutex::new(None));
     *storage.lock() = Some(target);
 }
 
-/// Take a pending ACP handoff target, if any, clearing the slot.
-pub fn take_pending_explicit_acp_target() -> Option<TabAiTargetContext> {
-    PENDING_EXPLICIT_ACP_TARGET
+/// Take a pending Agent Chat handoff target, if any, clearing the slot.
+pub fn take_pending_explicit_agent_chat_target() -> Option<TabAiTargetContext> {
+    PENDING_EXPLICIT_AGENT_CHAT_TARGET
         .get()
         .and_then(|storage| storage.lock().take())
 }
 
-/// Build the canonical chip label used by explicit ACP target handoffs.
+/// Build the canonical chip label used by explicit Agent Chat target handoffs.
 ///
 /// Notes, actions, and any future secondary surfaces should use this instead
-/// of formatting bespoke labels locally. The main-window ACP entry also
+/// of formatting bespoke labels locally. The main-window Agent Chat entry also
 /// delegates here so all chip labels share a single source of truth.
 pub(crate) fn format_explicit_target_chip_label(target: &TabAiTargetContext) -> String {
     let prefix = match target.kind.as_str() {

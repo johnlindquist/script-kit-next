@@ -35,6 +35,6 @@ fn filterable_matrix_includes_settings_and_kit_store_visible_rows() {
 
 #[test]
 fn attached_popup_matrix_still_declares_prompt_popup_family() {
-    assert!(ATTACHED_MATRIX.contains("prompt-popup-on-acp-chat-slash"));
-    assert!(ATTACHED_MATRIX.contains("expectedAutomationWindowId: \"acp-mention-popup\""));
+    assert!(ATTACHED_MATRIX.contains("prompt-popup-on-agent_chat-chat-slash"));
+    assert!(ATTACHED_MATRIX.contains("expectedAutomationWindowId: \"agent_chat-mention-popup\""));
 }

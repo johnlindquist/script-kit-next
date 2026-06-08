@@ -97,11 +97,11 @@ async function resolveTarget(
     state = await rpc(
       session,
       {
-        type: "getAcpState",
+        type: "getAgentChatState",
         requestId: `resolve-${Date.now()}`,
         target: targetJson,
       },
-      "acpStateResult"
+      "agent_chatStateResult"
     );
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -114,7 +114,7 @@ async function resolveTarget(
     };
   }
 
-  // session.sh rpc returns { response: { type: "acpStateResult", resolvedTarget: {...}, ... } }
+  // session.sh rpc returns { response: { type: "agent_chatStateResult", resolvedTarget: {...}, ... } }
   const response = (state as { response?: Record<string, unknown> }).response;
   const resolvedTarget = (response?.resolvedTarget as Record<string, unknown>) ?? null;
   const windowKind = (resolvedTarget?.windowKind as string) ?? null;
@@ -123,7 +123,7 @@ async function resolveTarget(
     : null;
   const title = (resolvedTarget?.windowTitle as string) ?? (resolvedTarget?.title as string) ?? null;
 
-  stderrLog("resolve_acp_state", { windowKind, automationWindowId, title });
+  stderrLog("resolve_agent_chat_state", { windowKind, automationWindowId, title });
 
   let surfaceId: string | null = null;
   try {
@@ -341,7 +341,7 @@ function parseArgs() {
   const session = sessionIdx >= 0 && args[sessionIdx + 1] ? args[sessionIdx + 1] : "default";
 
   const kindIdx = args.indexOf("--kind");
-  const kind = kindIdx >= 0 && args[kindIdx + 1] ? args[kindIdx + 1] : "acpDetached";
+  const kind = kindIdx >= 0 && args[kindIdx + 1] ? args[kindIdx + 1] : "agentChatDetached";
 
   const indexIdx = args.indexOf("--index");
   const index = indexIdx >= 0 && args[indexIdx + 1] ? Number(args[indexIdx + 1]) : 0;
@@ -414,7 +414,7 @@ Commands:
 
 Options:
   --session NAME    Session name (default: "default")
-  --kind KIND       Target kind: acpDetached | actionsDialog | promptPopup | notes | main | focused
+  --kind KIND       Target kind: agentChatDetached | actionsDialog | promptPopup | notes | main | focused
   --index N         Kind index (default: 0)
   --id WINDOW_ID    Resolve by exact automation window ID
   --title TEXT      Resolve by titleContains target

@@ -387,7 +387,7 @@ impl ScriptListApp {
                     scripts::SearchResult::File(_) => None,
                     scripts::SearchResult::Note(_) => None,
                     scripts::SearchResult::Todo(_) => None,
-                    scripts::SearchResult::AcpHistory(_) => None,
+                    scripts::SearchResult::AgentChatHistory(_) => None,
                     scripts::SearchResult::AiVault(_) => None,
                     scripts::SearchResult::ClipboardHistory(_) => None,
                     scripts::SearchResult::DictationHistory(_) => None,
@@ -529,10 +529,10 @@ impl ScriptListApp {
                     scripts::SearchResult::Todo(todo_match) => {
                         self.execute_root_todo_copy(&todo_match.hit, cx);
                     }
-                    scripts::SearchResult::AcpHistory(acp_history_match) => {
-                        self.resume_acp_conversation_from_history(
-                            &acp_history_match.entry.session_id,
-                            acp_history_match.entry.first_message.as_str(),
+                    scripts::SearchResult::AgentChatHistory(agent_chat_history_match) => {
+                        self.resume_agent_chat_conversation_from_history(
+                            &agent_chat_history_match.entry.session_id,
+                            agent_chat_history_match.entry.first_message.as_str(),
                             cx,
                         );
                     }
@@ -559,7 +559,7 @@ impl ScriptListApp {
                             skill_match.skill.plugin_title.as_str()
                         };
                         tracing::info!(
-                            event = "acp_skill_launch_requested",
+                            event = "agent_chat_skill_launch_requested",
                             plugin_id = %skill_match.skill.plugin_id,
                             skill_id = %skill_match.skill.skill_id,
                             path = %skill_match.skill.path.display(),
@@ -572,18 +572,18 @@ impl ScriptListApp {
                             cx,
                         );
                         tracing::info!(
-                            event = "acp_skill_launch_hud_shown",
+                            event = "agent_chat_skill_launch_hud_shown",
                             plugin_id = %skill_match.skill.plugin_id,
                             skill_id = %skill_match.skill.skill_id,
                             owner,
-                            "Displayed ACP skill launch HUD"
+                            "Displayed Agent Chat skill launch HUD"
                         );
-                        self.open_acp_with_selected_skill(&skill_match.skill, cx);
+                        self.open_agent_chat_with_selected_skill(&skill_match.skill, cx);
                     }
                     scripts::SearchResult::Agent(agent_match) => {
                         // Suppressed: agents are not launchable from the main menu.
                         // Skills replace agents as the first-class reusable AI artifact.
-                        // ACP agent catalog/provider selection remains in src/ai/acp/.
+                        // Agent Chat agent catalog/provider selection remains in src/ai/agent_chat/ui/.
                         tracing::info!(
                             event = "legacy_agent_result_suppressed",
                             agent_name = %agent_match.agent.name,
@@ -1216,7 +1216,7 @@ impl ScriptListApp {
                     } else {
                         Some(normalized)
                     };
-                    self.open_tab_ai_acp_with_entry_intent(intent, cx);
+                    self.open_tab_ai_agent_chat_with_entry_intent(intent, cx);
                 }
             },
             Err(e) => {

@@ -490,8 +490,8 @@ fn config_change_does_not_require_rebuild_when_section_style_same() {
 }
 
 #[test]
-fn acp_chat_dialog_config_matches_main_acp_layout() {
-    let config = super::dialog::ActionsDialog::acp_chat_dialog_config();
+fn agent_chat_dialog_config_matches_main_agent_chat_layout() {
+    let config = super::dialog::ActionsDialog::agent_chat_dialog_config();
 
     assert_eq!(config.search_position, SearchPosition::Top);
     assert_eq!(config.section_style, SectionStyle::Headers);
@@ -499,7 +499,7 @@ fn acp_chat_dialog_config_matches_main_acp_layout() {
     assert!(config.show_icons);
     assert!(
         !config.show_context_header,
-        "ACP actions should use the compact chrome without a duplicate context header"
+        "Agent Chat actions should use the compact chrome without a duplicate context header"
     );
 }
 
@@ -593,11 +593,11 @@ fn route_initial_selection_carries_through_to_grouped_items() {
 
 #[test]
 fn route_preserves_context_title_and_placeholder() {
-    let route = make_route("acp:root", &["change_model", "copy"]);
-    assert_eq!(route.context_title.as_deref(), Some("acp:root title"));
+    let route = make_route("agent_chat:root", &["change_model", "copy"]);
+    assert_eq!(route.context_title.as_deref(), Some("agent_chat:root title"));
     assert_eq!(
         route.search_placeholder.as_deref(),
-        Some("acp:root placeholder")
+        Some("agent_chat:root placeholder")
     );
 }
 
@@ -652,13 +652,13 @@ fn route_state_back_stack_restore_preserves_search_and_selection() {
 }
 
 #[test]
-fn acp_root_route_initial_selection_is_change_profile() {
-    // Verify the ACP root route builder sets initial selection
+fn agent_chat_root_route_initial_selection_is_change_profile() {
+    // Verify the Agent Chat root route builder sets initial selection
     // to the "Change Profile" action.
-    use super::builders::{get_acp_chat_root_route, AGENT_CHAT_CHANGE_PROFILE_ACTION_ID};
+    use super::builders::{get_agent_chat_root_route, AGENT_CHAT_CHANGE_PROFILE_ACTION_ID};
 
     let models = vec![];
-    let route = get_acp_chat_root_route(&models, None);
+    let route = get_agent_chat_root_route(&models, None);
 
     assert_eq!(
         route.initial_selected_action_id.as_deref(),

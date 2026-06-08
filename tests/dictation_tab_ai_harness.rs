@@ -133,11 +133,11 @@ fn dictation_target_enum_has_tab_ai_harness_variant() {
 }
 
 // =========================================================================
-// Dictation delivery handler routes TabAiHarness to ACP entry intent
+// Dictation delivery handler routes TabAiHarness to Agent Chat entry intent
 // =========================================================================
 
 /// When dictation finishes with target=TabAiHarness, the transcript must
-/// open ACP as the initial submitted prompt.
+/// open Agent Chat as the initial submitted prompt.
 #[test]
 fn dictation_transcript_delivery_routes_tab_ai_harness() {
     let fn_start = BUILTIN_EXECUTION_SOURCE
@@ -155,9 +155,9 @@ fn dictation_transcript_delivery_routes_tab_ai_harness() {
         "handle_dictation_transcript must have a TabAiHarness arm"
     );
     assert!(
-        fn_body.contains("open_tab_ai_acp_with_entry_intent_suppressing_focused_part")
+        fn_body.contains("open_tab_ai_agent_chat_with_entry_intent_suppressing_focused_part")
             && fn_body.contains("Some(transcript.clone())"),
-        "TabAiHarness delivery must open ACP with the transcript as the entry intent without inheriting launcher context"
+        "TabAiHarness delivery must open Agent Chat with the transcript as the entry intent without inheriting launcher context"
     );
 }
 
@@ -177,23 +177,23 @@ fn tab_ai_harness_delivery_seeds_script_list_return_origin_before_open() {
     let arm = &arm[..arm_end];
 
     let seed_idx = arm
-        .find("self.seed_acp_dictation_return_origin()")
+        .find("self.seed_agent_chat_dictation_return_origin()")
         .expect("TabAiHarness delivery must seed its close return origin");
     let open_idx = arm
-        .find("self.open_tab_ai_acp_with_entry_intent_suppressing_focused_part")
-        .expect("TabAiHarness delivery must open embedded ACP");
+        .find("self.open_tab_ai_agent_chat_with_entry_intent_suppressing_focused_part")
+        .expect("TabAiHarness delivery must open embedded Agent Chat");
     let finish_idx = arm
         .find("WindowEvent::FinishDictation")
-        .expect("TabAiHarness delivery must reveal/focus ACP through the orchestrator");
+        .expect("TabAiHarness delivery must reveal/focus Agent Chat through the orchestrator");
 
     assert!(
         seed_idx < open_idx && open_idx < finish_idx,
-        "TabAiHarness delivery must seed ScriptList/MainFilter return origin before opening ACP, then finish dictation"
+        "TabAiHarness delivery must seed ScriptList/MainFilter return origin before opening Agent Chat, then finish dictation"
     );
 }
 
 #[test]
-fn tab_ai_harness_delivery_closes_detached_acp_before_embedded_open() {
+fn tab_ai_harness_delivery_closes_detached_agent_chat_before_embedded_open() {
     let fn_start = BUILTIN_EXECUTION_SOURCE
         .find("fn handle_dictation_transcript")
         .expect("handle_dictation_transcript must exist");
@@ -208,29 +208,29 @@ fn tab_ai_harness_delivery_closes_detached_acp_before_embedded_open() {
     let arm = &arm[..arm_end];
 
     let guard_idx = arm
-        .find("crate::ai::acp::chat_window::is_chat_window_open()")
-        .expect("TabAiHarness delivery must check for an already-detached ACP chat");
+        .find("crate::ai::agent_chat::ui::chat_window::is_chat_window_open()")
+        .expect("TabAiHarness delivery must check for an already-detached Agent Chat chat");
     let close_idx = arm
-        .find("crate::ai::acp::chat_window::close_chat_window(&mut **cx)")
-        .expect("TabAiHarness delivery must close detached ACP before embedded reveal");
+        .find("crate::ai::agent_chat::ui::chat_window::close_chat_window(&mut **cx)")
+        .expect("TabAiHarness delivery must close detached Agent Chat before embedded reveal");
     let open_idx = arm
-        .find("self.open_tab_ai_acp_with_entry_intent_suppressing_focused_part")
-        .expect("TabAiHarness delivery must open embedded ACP");
+        .find("self.open_tab_ai_agent_chat_with_entry_intent_suppressing_focused_part")
+        .expect("TabAiHarness delivery must open embedded Agent Chat");
     let finish_idx = arm
         .find("WindowEvent::FinishDictation")
-        .expect("TabAiHarness delivery must reveal/focus ACP through the orchestrator");
+        .expect("TabAiHarness delivery must reveal/focus Agent Chat through the orchestrator");
 
     assert!(
         guard_idx < close_idx && close_idx < open_idx && open_idx < finish_idx,
-        "ACP dictation must close detached ACP before opening the embedded chat, then let the orchestrator reveal/focus main"
+        "Agent Chat dictation must close detached Agent Chat before opening the embedded chat, then let the orchestrator reveal/focus main"
     );
 }
 
 #[test]
 fn dictation_return_origin_helper_targets_script_list_main_filter() {
     let helper_start = TAB_AI_MODE_SOURCE
-        .find("pub(crate) fn seed_acp_dictation_return_origin")
-        .expect("seed_acp_dictation_return_origin must exist");
+        .find("pub(crate) fn seed_agent_chat_dictation_return_origin")
+        .expect("seed_agent_chat_dictation_return_origin must exist");
     let helper = &TAB_AI_MODE_SOURCE[helper_start..];
     let helper_end = helper
         .find("\n    fn tab_ai_return_focus_target_for_view")
@@ -243,7 +243,7 @@ fn dictation_return_origin_helper_targets_script_list_main_filter() {
                 "self.tab_ai_harness_return_focus_target = Some(FocusTarget::MainFilter)"
             )
             && helper.contains("self.tab_ai_harness_script_list_trigger = None"),
-        "ACP dictation must close back to ScriptList/MainFilter and clear stale launcher trigger state"
+        "Agent Chat dictation must close back to ScriptList/MainFilter and clear stale launcher trigger state"
     );
 }
 
@@ -265,7 +265,7 @@ fn stop_edge_defaults_to_tab_ai_harness() {
 }
 
 #[test]
-fn dictation_to_ai_empty_capture_aborts_without_opening_acp() {
+fn dictation_to_ai_empty_capture_aborts_without_opening_agent_chat() {
     let helper_start = BUILTIN_EXECUTION_SOURCE
         .find("fn execute_dictation_builtin_action(")
         .expect("execute_dictation_builtin_action must exist");
@@ -293,8 +293,8 @@ fn dictation_to_ai_empty_capture_aborts_without_opening_acp() {
         "DictationToAiHarness Stopped(None) must not finish because no transcript exists"
     );
     assert!(
-        !stopped_none_arm.contains("open_tab_ai_acp_with_entry_intent"),
-        "DictationToAiHarness Stopped(None) must not open ACP without a transcript"
+        !stopped_none_arm.contains("open_tab_ai_agent_chat_with_entry_intent"),
+        "DictationToAiHarness Stopped(None) must not open Agent Chat without a transcript"
     );
 }
 

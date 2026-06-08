@@ -140,16 +140,16 @@ fn execute_single(command: &WindowCommand, cx: &mut gpui::App) {
         }
 
         // -----------------------------------------------------------------
-        // Detached ACP Chat
+        // Detached Agent Chat Chat
         // -----------------------------------------------------------------
         WindowCommand::OpenDetachedAiChatWindow => {
-            if let Err(e) = crate::ai::acp::chat_window::open_chat_window(cx) {
+            if let Err(e) = crate::ai::agent_chat::ui::chat_window::open_chat_window(cx) {
                 tracing::warn!(category = "ORCHESTRATOR", error = %e, "Failed to open detached AI chat window");
             }
         }
 
         WindowCommand::CloseDetachedAiChatWindow => {
-            crate::ai::acp::chat_window::close_chat_window(cx);
+            crate::ai::agent_chat::ui::chat_window::close_chat_window(cx);
         }
 
         // -----------------------------------------------------------------

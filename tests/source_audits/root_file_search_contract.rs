@@ -1183,7 +1183,7 @@ mod tests {
     }
 
     #[test]
-    fn root_directory_tab_navigation_has_no_plain_tab_acp_routing() {
+    fn root_directory_tab_navigation_has_no_plain_tab_agent_chat_routing() {
         let simulate_key_source = fs::read_to_string("src/app_impl/simulate_key_dispatch.rs")
             .expect("read src/app_impl/simulate_key_dispatch.rs");
         let runtime_stdin =
@@ -1194,8 +1194,8 @@ mod tests {
             "central simulateKey dispatcher should route root file directory Tab"
         );
         assert!(
-            !simulate_key_source.contains("try_route_plain_tab_to_acp_context_capture")
-                && !runtime_stdin.contains("try_route_plain_tab_to_acp_context_capture"),
+            !simulate_key_source.contains("try_route_plain_tab_to_agent_chat_context_capture")
+                && !runtime_stdin.contains("try_route_plain_tab_to_agent_chat_context_capture"),
             "ScriptList Tab simulateKey should not route plain Tab to Agent Chat"
         );
 

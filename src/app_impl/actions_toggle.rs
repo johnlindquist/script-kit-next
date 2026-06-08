@@ -257,9 +257,9 @@ fn actions_dialog_host_label(host: &ActionsDialogHost) -> &'static str {
         ActionsDialogHost::WebcamPrompt => "WebcamPrompt",
         ActionsDialogHost::AppLauncher => "AppLauncher",
         ActionsDialogHost::BuiltinList => "BuiltinList",
-        ActionsDialogHost::AcpChat => "AcpChat",
-        ActionsDialogHost::AcpHistory => "AcpHistory",
-        ActionsDialogHost::AcpDetached => "AcpDetached",
+        ActionsDialogHost::AgentChat => "AgentChat",
+        ActionsDialogHost::AgentChatHistory => "AgentChatHistory",
+        ActionsDialogHost::AgentChatDetached => "AgentChatDetached",
     }
 }
 
@@ -675,7 +675,7 @@ impl ScriptListApp {
             return true;
         }
 
-        if matches!(&self.current_view, AppView::AcpChatView { .. }) {
+        if matches!(&self.current_view, AppView::AgentChatView { .. }) {
             self.toggle_actions(cx, window);
             return true;
         }
@@ -691,7 +691,7 @@ impl ScriptListApp {
         // Generic fallback for any remaining view that advertises SharedDialog
         // support via actions_support_for_view() but doesn't need a dedicated
         // branch with selection-specific context (e.g. DivPrompt, EditorPrompt,
-        // TermPrompt, FormPrompt, EmojiPicker, AcpHistory).
+        // TermPrompt, FormPrompt, EmojiPicker, AgentChatHistory).
         if self.current_view_supports_shared_actions() {
             return self.dispatch_shared_actions_toggle_fallback(window, cx, trigger);
         }
@@ -826,7 +826,7 @@ impl ScriptListApp {
             // Open actions as a separate window with vibrancy blur
             self.begin_actions_popup_window_open(cx, window);
 
-            let acp_context = if let AppView::AcpChatView { ref entity } = self.current_view {
+            let agent_chat_context = if let AppView::AgentChatView { ref entity } = self.current_view {
                 // Trigger a preflight `session/new` so the agent re-advertises its
                 // model catalog before we snapshot `available_models` for the
                 // Change Model drill-down. Fire-and-forget: this dialog opening
@@ -865,7 +865,7 @@ impl ScriptListApp {
 
                 tracing::info!(
                     target: "script_kit::tab_ai",
-                    event = "acp_actions_context_built",
+                    event = "agent_chat_actions_context_built",
                     selected_model_id = ?selected_model_id,
                     model_count = available_models.len(),
                     focused_text,
@@ -940,7 +940,7 @@ impl ScriptListApp {
             // Create the dialog entity HERE in main app (for keyboard routing)
             let theme_arc = std::sync::Arc::clone(&self.theme);
             let is_mini = matches!(self.main_window_mode, MainWindowMode::Mini);
-            let is_acp_actions_dialog = acp_context.is_some();
+            let is_agent_chat_actions_dialog = agent_chat_context.is_some();
             // Create the dialog entity
             let dialog = cx.new(|cx| {
                 let focus_handle = cx.focus_handle();
@@ -949,13 +949,13 @@ impl ScriptListApp {
                     ref available_models,
                     focused_text,
                     focused_text_expanded,
-                )) = acp_context
+                )) = agent_chat_context
                 {
-                    // ACP chat view: use route-based dialog with drill-down model/profile pickers
-                    ActionsDialog::with_acp_chat(
+                    // Agent Chat chat view: use route-based dialog with drill-down model/profile pickers
+                    ActionsDialog::with_agent_chat(
                         focus_handle,
                         std::sync::Arc::new(|_action_id| {}),
-                        crate::actions::AcpActionsDialogContext {
+                        crate::actions::AgentChatActionsDialogContext {
                             available_models,
                             selected_model_id: selected_model_id.as_deref(),
                             focused_text,
@@ -995,10 +995,10 @@ impl ScriptListApp {
                 }
 
                 // If we have a scriptlet with actions, pass it to the dialog.
-                // ACP owns its route stack and action source; script/global
+                // Agent Chat owns its route stack and action source; script/global
                 // rebuild hooks would replace Change Agent/Model with launcher
                 // actions.
-                if !is_acp_actions_dialog {
+                if !is_agent_chat_actions_dialog {
                     if let Some(ref scriptlet) = focused_scriptlet {
                         dialog.set_focused_scriptlet(script_info.clone(), Some(scriptlet.clone()));
                     }
@@ -1006,10 +1006,10 @@ impl ScriptListApp {
 
                 // Run 12 Pass 7 — wire the cmdk-actions Power Syntax section.
                 // The owned section was computed BEFORE entering this closure
-                // (can't borrow `self` inside `cx.new`); push it now. ACP uses
+                // (can't borrow `self` inside `cx.new`); push it now. Agent Chat uses
                 // its own route-backed actions, so skip the generic script/global
                 // action rebuild there.
-                if !is_acp_actions_dialog {
+                if !is_agent_chat_actions_dialog {
                     dialog.set_menu_syntax_section(power_syntax_section_for_dialog.clone());
                 }
 

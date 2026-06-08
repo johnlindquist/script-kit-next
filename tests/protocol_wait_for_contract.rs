@@ -94,17 +94,18 @@ fn wait_for_state_match_round_trips_without_semantic_id_fields() {
 // ============================================================
 
 #[test]
-fn wait_for_with_acp_detached_target_round_trips() {
-    let msg =
-        wait_for_message(json!({"type": "elementExists", "semanticId": "input:acp-composer"}));
+fn wait_for_with_agent_chat_detached_target_round_trips() {
+    let msg = wait_for_message(
+        json!({"type": "elementExists", "semanticId": "input:agent_chat-composer"}),
+    );
     let mut msg_with_target = msg.clone();
     msg_with_target.as_object_mut().unwrap().insert(
         "target".into(),
-        json!({"type": "kind", "kind": "acpDetached"}),
+        json!({"type": "kind", "kind": "agentChatDetached"}),
     );
 
     let parsed: Message = serde_json::from_value(msg_with_target)
-        .expect("waitFor with acpDetached target should parse");
+        .expect("waitFor with agentChatDetached target should parse");
     let output = serde_json::to_value(parsed).expect("should serialize");
 
     assert!(
@@ -112,7 +113,7 @@ fn wait_for_with_acp_detached_target_round_trips() {
         "target field must survive round-trip"
     );
     let target = output.get("target").unwrap();
-    assert_eq!(target["kind"], "acpDetached");
+    assert_eq!(target["kind"], "agentChatDetached");
 }
 
 #[test]

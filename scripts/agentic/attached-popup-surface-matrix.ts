@@ -17,7 +17,7 @@ export type AttachedPopupHostFixture =
       caseId: string;
     }
   | {
-      kind: "acp-chat";
+      kind: "agent_chat-chat";
       trigger: "slash";
     };
 
@@ -126,16 +126,16 @@ export const ATTACHED_POPUP_SURFACE_MATRIX: AttachedPopupSurfaceEntry[] = [
     },
   },
   {
-    id: "prompt-popup-on-acp-chat-slash",
+    id: "prompt-popup-on-agent_chat-chat-slash",
     surfaceClass: "attachedPopup",
-    viewName: "prompt-popup-on-acp-chat-slash",
-    imageLibraryName: "prompt-popup-on-acp-chat-slash.png",
+    viewName: "prompt-popup-on-agent_chat-chat-slash",
+    imageLibraryName: "prompt-popup-on-agent_chat-chat-slash.png",
     windowKind: "PromptPopup",
     targetKind: "promptPopup",
     targetIndex: 0,
     target: PROMPT_POPUP_TARGET,
-    expectedAutomationWindowId: "acp-mention-popup",
-    hostFixture: { kind: "acp-chat", trigger: "slash" },
+    expectedAutomationWindowId: "agent_chat-mention-popup",
+    hostFixture: { kind: "agent_chat-chat", trigger: "slash" },
     expectedPopupCaptureStrategy: "parent_capture_with_crop",
     safeInteractions: {
       filter: false,

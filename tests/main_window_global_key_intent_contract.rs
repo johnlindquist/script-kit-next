@@ -17,14 +17,14 @@ fn source_between<'a>(source: &'a str, start_pat: &str, end_pat: &str) -> &'a st
 }
 
 #[test]
-fn cmd_enter_to_acp_is_classified_as_a_named_global_key_intent() {
+fn cmd_enter_to_agent_chat_is_classified_as_a_named_global_key_intent() {
     assert!(
         STARTUP.contains("enum MainWindowGlobalKeyIntent"),
         "startup.rs must declare the main-window global key intent enum."
     );
     assert!(
-        STARTUP.contains("OpenAcpWithCurrentContext"),
-        "Cmd+Enter ACP entry must be named by behavior, not by raw key chord."
+        STARTUP.contains("OpenAgentChatWithCurrentContext"),
+        "Cmd+Enter Agent Chat entry must be named by behavior, not by raw key chord."
     );
 
     let classifier = source_between(
@@ -42,8 +42,8 @@ fn cmd_enter_to_acp_is_classified_as_a_named_global_key_intent() {
         "The classifier must preserve the exact Cmd+Enter modifier gate."
     );
     assert!(
-        classifier.contains("Some(MainWindowGlobalKeyIntent::OpenAcpWithCurrentContext)"),
-        "The classifier must return the behavior-named ACP context intent."
+        classifier.contains("Some(MainWindowGlobalKeyIntent::OpenAgentChatWithCurrentContext)"),
+        "The classifier must return the behavior-named Agent Chat context intent."
     );
 }
 
@@ -73,18 +73,18 @@ fn tab_interceptor_dispatches_the_named_global_key_intent() {
 }
 
 #[test]
-fn global_key_intent_handler_routes_to_the_shared_acp_context_helper() {
+fn global_key_intent_handler_routes_to_the_shared_agent_chat_context_helper() {
     let handler = source_between(
         STARTUP,
         "fn handle_main_window_global_key_intent(",
         "\n    pub(crate) fn new(",
     );
     assert!(
-        handler.contains("MainWindowGlobalKeyIntent::OpenAcpWithCurrentContext =>"),
-        "The handler must own the ACP context intent arm."
+        handler.contains("MainWindowGlobalKeyIntent::OpenAgentChatWithCurrentContext =>"),
+        "The handler must own the Agent Chat context intent arm."
     );
     assert!(
-        handler.contains("self.try_route_global_cmd_enter_to_acp_context_capture(cx)"),
-        "The ACP context intent must preserve the shared routing helper."
+        handler.contains("self.try_route_global_cmd_enter_to_agent_chat_context_capture(cx)"),
+        "The Agent Chat context intent must preserve the shared routing helper."
     );
 }

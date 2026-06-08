@@ -1,14 +1,14 @@
-//! Smoke tests for the main-menu skill launch → ACP staging pipeline.
+//! Smoke tests for the main-menu skill launch → Agent Chat staging pipeline.
 //!
 //! Validates the end-to-end contract from plugin setup → skill discovery →
-//! search/grouping → ACP initial input staging, without requiring a live
+//! search/grouping → Agent Chat initial input staging, without requiring a live
 //! GPUI window. This is the headless equivalent of `make smoke-main-menu`.
 //!
 //! Runtime evidence is emitted via structured tracing logs:
 //! - `plugin_skill_cataloged` — skill discovered in plugin inventory
 //! - `main_menu_skill_ranked` — skill surfaced in search results
-//! - `acp_skill_launch_requested` — skill selected from main menu
-//! - `acp_skill_context_staged` — skill slash prefill + attachment staged for ACP session
+//! - `agent_chat_skill_launch_requested` — skill selected from main menu
+//! - `agent_chat_skill_context_staged` — skill slash prefill + attachment staged for Agent Chat session
 
 use std::fs;
 use std::sync::Arc;
@@ -35,7 +35,7 @@ fn with_temp_sk_path<F: FnOnce(&std::path::Path)>(f: F) {
 // ── End-to-end: setup → discover → search → stage ───────────────────
 
 /// Full vertical slice: ensure_kit_setup() seeds skills that are discoverable,
-/// searchable, and produce the correct ACP staging payload.
+/// searchable, and produce the correct Agent Chat staging payload.
 #[test]
 fn smoke_skill_discovery_through_search_pipeline() {
     with_temp_sk_path(|kit_root| {
@@ -100,7 +100,7 @@ fn smoke_skill_discovery_through_search_pipeline() {
             "No agent results should appear in search pipeline"
         );
 
-        // Phase 5: Validate ACP staging contract for the top skill result
+        // Phase 5: Validate Agent Chat staging contract for the top skill result
         let top_skill = &skill_results[0].skill;
         let initial_input = format!("/{} ", top_skill.skill_id);
         let part = script_kit_gpui::ai::AiContextPart::SkillFile {
@@ -114,7 +114,7 @@ fn smoke_skill_discovery_through_search_pipeline() {
         assert_eq!(
             initial_input,
             format!("/{} ", top_skill.skill_id),
-            "ACP initial input must prefill the slash command"
+            "Agent Chat initial input must prefill the slash command"
         );
         match part {
             script_kit_gpui::ai::AiContextPart::SkillFile {
@@ -294,10 +294,10 @@ fn smoke_agents_never_appear_in_skill_search() {
     });
 }
 
-/// ACP staging contract: skill content includes the SKILL.md body with
+/// Agent Chat staging contract: skill content includes the SKILL.md body with
 /// correct XML wrapping and metadata.
 #[test]
-fn smoke_acp_staging_contract_structure() {
+fn smoke_agent_chat_staging_contract_structure() {
     with_temp_sk_path(|kit_root| {
         let _ = ensure_kit_setup();
         let kit_dir = kit_root.join("plugins");

@@ -320,7 +320,7 @@ impl ScriptListApp {
                 focus_coordinator::FocusTarget::TemplatePrompt => FocusTarget::TemplatePrompt,
                 focus_coordinator::FocusTarget::TermPrompt => FocusTarget::TermPrompt,
                 focus_coordinator::FocusTarget::ChatPrompt => FocusTarget::ChatPrompt,
-                focus_coordinator::FocusTarget::AcpChat => FocusTarget::AcpChat,
+                focus_coordinator::FocusTarget::AgentChat => FocusTarget::AgentChat,
                 focus_coordinator::FocusTarget::DivPrompt => FocusTarget::AppRoot, // DivPrompt uses AppRoot
                 focus_coordinator::FocusTarget::ScratchPad => FocusTarget::EditorPrompt,
                 focus_coordinator::FocusTarget::QuickTerminal => FocusTarget::TermPrompt,
@@ -435,7 +435,7 @@ impl ScriptListApp {
             FocusTarget::ChatPrompt => {
                 let entity = match &self.current_view {
                     AppView::ChatPrompt { entity, .. } => Some(entity.read(cx).focus_handle(cx)),
-                    AppView::AcpChatView { .. } => self.embedded_acp_focus_handle.clone(),
+                    AppView::AgentChatView { .. } => self.embedded_agent_chat_focus_handle.clone(),
                     _ => None,
                 };
                 if let Some(fh) = entity {
@@ -443,9 +443,9 @@ impl ScriptListApp {
                     self.focused_input = FocusedInput::None;
                 }
             }
-            FocusTarget::AcpChat => {
-                if matches!(self.current_view, AppView::AcpChatView { .. }) {
-                    let Some(fh) = self.embedded_acp_focus_handle.clone() else {
+            FocusTarget::AgentChat => {
+                if matches!(self.current_view, AppView::AgentChatView { .. }) {
+                    let Some(fh) = self.embedded_agent_chat_focus_handle.clone() else {
                         return false;
                     };
                     window.focus(&fh, cx);
@@ -476,25 +476,25 @@ mod focus_restore_regression_tests {
     use std::fs;
 
     #[test]
-    fn apply_pending_focus_restores_launcher_acp_via_dedicated_target() {
+    fn apply_pending_focus_restores_launcher_agent_chat_via_dedicated_target() {
         let source = fs::read_to_string("src/app_impl/theme_focus.rs")
             .expect("Failed to read src/app_impl/theme_focus.rs");
 
         assert!(
-            source.contains("focus_coordinator::FocusTarget::AcpChat => FocusTarget::AcpChat"),
-            "coordinator sync should preserve the AcpChat target through the legacy bridge"
+            source.contains("focus_coordinator::FocusTarget::AgentChat => FocusTarget::AgentChat"),
+            "coordinator sync should preserve the AgentChat target through the legacy bridge"
         );
         assert!(
             source
-                .contains("AppView::AcpChatView { .. } => self.embedded_acp_focus_handle.clone()")
-                && source.contains("FocusTarget::AcpChat => {")
-                && source.contains("matches!(self.current_view, AppView::AcpChatView { .. })"),
-            "launcher ACP focus should work through cached focus handles for both the legacy ChatPrompt compatibility path and the dedicated AcpChat target"
+                .contains("AppView::AgentChatView { .. } => self.embedded_agent_chat_focus_handle.clone()")
+                && source.contains("FocusTarget::AgentChat => {")
+                && source.contains("matches!(self.current_view, AppView::AgentChatView { .. })"),
+            "launcher Agent Chat focus should work through cached focus handles for both the legacy ChatPrompt compatibility path and the dedicated AgentChat target"
         );
         assert!(
-            source.contains("FocusTarget::AcpChat => {")
-                && source.contains("self.embedded_acp_focus_handle.clone()"),
-            "apply_pending_focus should restore launcher ACP via the cached AcpChatView focus handle"
+            source.contains("FocusTarget::AgentChat => {")
+                && source.contains("self.embedded_agent_chat_focus_handle.clone()"),
+            "apply_pending_focus should restore launcher Agent Chat via the cached AgentChatView focus handle"
         );
     }
 }

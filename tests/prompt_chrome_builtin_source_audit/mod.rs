@@ -893,7 +893,7 @@ fn canonical_resolver_covers_all_focus_restore_hosts() {
         "ActionsDialogHost::ChatPrompt",
         "ActionsDialogHost::ArgPrompt",
         "ActionsDialogHost::WebcamPrompt",
-        "ActionsDialogHost::AcpChat",
+        "ActionsDialogHost::AgentChat",
     ] {
         assert!(
             resolver_fn.contains(host),

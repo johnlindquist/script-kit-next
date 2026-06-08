@@ -1,17 +1,17 @@
-//! Source-level contract pinning embedded ACP entry/exit symmetry.
+//! Source-level contract pinning embedded Agent Chat entry/exit symmetry.
 //!
 //! Background: the embedded-AI automation registry entry is maintained
 //! by exactly one helper, `crate::windows::ensure_embedded_ai_window`.
-//! ACP entry now routes through exactly one app-level owner:
+//! Agent Chat entry now routes through exactly one app-level owner:
 //!   - 1 × `ensure_embedded_ai_window(true)` inside
-//!     `enter_embedded_acp_chat_surface`, after
-//!     `self.current_view = AppView::AcpChatView { ... }` and before
+//!     `enter_embedded_agent_chat_surface`, after
+//!     `self.current_view = AppView::AgentChatView { ... }` and before
 //!     the main-window re-key.
-//!   - 3 × `enter_embedded_acp_chat_surface(...)` callers — setup,
+//!   - 3 × `enter_embedded_agent_chat_surface(...)` callers — setup,
 //!     reuse, and full-launch.
 //!   - 2 × `ensure_embedded_ai_window(false)` — one inside
-//!     `close_acp_chat_to_script_list`, and one inside the normal
-//!     embedded ACP close helper used by Escape/Cmd+W/native close.
+//!     `close_agent_chat_to_script_list`, and one inside the normal
+//!     embedded Agent Chat close helper used by Escape/Cmd+W/native close.
 //!
 //! The 4 hide-flow exits (in `src/main_sections/window_visibility.rs`
 //! and the three stdin `ExternalCommand::Hide` arms) are already pinned
@@ -19,15 +19,15 @@
 //! file defends the OTHER half of the lock-step: the shared entry upsert
 //! and the 2 close-flow teardowns.
 //!
-//! **Refactor threat**: the `self.current_view = AppView::AcpChatView { ... }`
+//! **Refactor threat**: the `self.current_view = AppView::AgentChatView { ... }`
 //! entry sites are labelled in `removed-docs` as setup helper,
 //! reuse path, and full-launch path — a plausible
-//! consolidation. A contributor extracting a shared `enter_acp_chat_view`
+//! consolidation. A contributor extracting a shared `enter_agent_chat_view`
 //! helper could easily drop the paired `ensure_embedded_ai_window(true)`
 //! call during extraction, silently regressing the embedded AI registry
 //! entry on that entry path so `listAutomationWindows` no longer reports
 //! the `ai` child window after tab-ai launch. Same threat on the exit
-//! side: moving either `false` call out of its ACP close helper would
+//! side: moving either `false` call out of its Agent Chat close helper would
 //! likely lose the pairing with its main-surface re-key, repeating the
 //! Pass #20 bug class on a close-flow path.
 //!
@@ -36,20 +36,22 @@
 //!   2. exact count of `(false)` calls == 2
 //!   3. the production `(true)` call lives inside the shared entry owner
 //!   4. the shared entry owner preserves view/upsert/re-key/surface/focus order
-//!   5. the 3 ACP entry paths call the shared owner
-//!   6. the `(false)` calls live inside both ACP close bodies.
+//!   5. the 3 Agent Chat entry paths call the shared owner
+//!   6. the `(false)` calls live inside both Agent Chat close bodies.
 
 const SRC: &str = include_str!("../src/app_impl/tab_ai_mode/mod.rs");
-const ACP_SETUP_SOURCE: &str = include_str!("../src/app_impl/tab_ai_mode/acp_setup.rs");
-const ACP_LAUNCH_SOURCE: &str = include_str!("../src/app_impl/tab_ai_mode/acp_launch.rs");
-const ACP_SURFACE_TRANSITIONS_SOURCE: &str =
-    include_str!("../src/app_impl/acp_surface_transitions.rs");
+const AGENT_CHAT_SETUP_SOURCE: &str =
+    include_str!("../src/app_impl/tab_ai_mode/agent_chat_setup.rs");
+const AGENT_CHAT_LAUNCH_SOURCE: &str =
+    include_str!("../src/app_impl/tab_ai_mode/agent_chat_launch.rs");
+const AGENT_CHAT_SURFACE_TRANSITIONS_SOURCE: &str =
+    include_str!("../src/app_impl/agent_chat_surface_transitions.rs");
 
 fn production_sources() -> [(&'static str, &'static str); 3] {
     [
         ("tab_ai_mode/mod.rs", SRC),
-        ("tab_ai_mode/acp_setup.rs", ACP_SETUP_SOURCE),
-        ("tab_ai_mode/acp_launch.rs", ACP_LAUNCH_SOURCE),
+        ("tab_ai_mode/agent_chat_setup.rs", AGENT_CHAT_SETUP_SOURCE),
+        ("tab_ai_mode/agent_chat_launch.rs", AGENT_CHAT_LAUNCH_SOURCE),
     ]
 }
 
@@ -87,14 +89,14 @@ fn exactly_one_ensure_embedded_ai_window_true_call() {
                 .count()
         })
         .sum::<usize>()
-        + ACP_SURFACE_TRANSITIONS_SOURCE
+        + AGENT_CHAT_SURFACE_TRANSITIONS_SOURCE
             .matches("crate::windows::ensure_embedded_ai_window(true)")
             .count();
     assert_eq!(
         count, 1,
-        "embedded ACP entry MUST contain exactly 1 production \
+        "embedded Agent Chat entry MUST contain exactly 1 production \
          `ensure_embedded_ai_window(true)` call, inside \
-         `enter_embedded_acp_chat_surface`. Found {count}."
+         `enter_embedded_agent_chat_surface`. Found {count}."
     );
 }
 
@@ -107,7 +109,7 @@ fn exactly_two_ensure_embedded_ai_window_false_calls() {
         count, 2,
         "`src/app_impl/tab_ai_mode/mod.rs` MUST contain exactly 2 \
          `ensure_embedded_ai_window(false)` calls: one forced ScriptList \
-         detach/close path and one normal embedded ACP return-origin \
+         detach/close path and one normal embedded Agent Chat return-origin \
          close path. Found {count}."
     );
 }
@@ -115,25 +117,25 @@ fn exactly_two_ensure_embedded_ai_window_false_calls() {
 #[test]
 fn shared_entry_owner_preserves_transition_order() {
     let body = function_body(
-        ACP_SURFACE_TRANSITIONS_SOURCE,
-        "pub(crate) fn enter_embedded_acp_chat_surface",
+        AGENT_CHAT_SURFACE_TRANSITIONS_SOURCE,
+        "pub(crate) fn enter_embedded_agent_chat_surface",
     );
     let ordered_patterns = [
-        "self.current_view = AppView::AcpChatView { entity };",
+        "self.current_view = AppView::AgentChatView { entity };",
         "crate::windows::ensure_embedded_ai_window(true);",
         "self.rekey_main_automation_surface_from_current_view();",
-        "self.transition_acp_surface(AcpSurfaceEvent::EmbeddedOpened);",
+        "self.transition_agent_chat_surface(AgentChatSurfaceEvent::EmbeddedOpened);",
         "self.focused_input = FocusedInput::None;",
         "self.clear_actions_popup_state();",
         "self.focus_coordinator",
-        ".request(crate::focus_coordinator::FocusRequest::acp_chat());",
+        ".request(crate::focus_coordinator::FocusRequest::agent_chat());",
         "self.sync_coordinator_to_legacy();",
     ];
     let mut last = 0usize;
     for pattern in ordered_patterns {
         let idx = body[last..]
             .find(pattern)
-            .unwrap_or_else(|| panic!("missing ordered ACP entry step: {pattern}\n{body}"));
+            .unwrap_or_else(|| panic!("missing ordered Agent Chat entry step: {pattern}\n{body}"));
         last += idx + pattern.len();
     }
 }
@@ -144,48 +146,53 @@ fn entry_paths_delegate_to_shared_owner() {
         .iter()
         .map(|(_, source)| {
             source
-                .matches("self.enter_embedded_acp_chat_surface(")
+                .matches("self.enter_embedded_agent_chat_surface(")
                 .count()
         })
         .sum();
     assert_eq!(
         count, 3,
-        "setup, reuse, and full-launch ACP entry paths must delegate to \
-         `enter_embedded_acp_chat_surface`. Found {count} callers."
+        "setup, reuse, and full-launch Agent Chat entry paths must delegate to \
+         `enter_embedded_agent_chat_surface`. Found {count} callers."
     );
     for (name, source) in production_sources() {
         assert!(
             !source.contains("crate::windows::ensure_embedded_ai_window(true)"),
-            "{name} must not split embedded ACP view assignment from the shared entry owner"
+            "{name} must not split embedded Agent Chat view assignment from the shared entry owner"
         );
     }
     for (source, signature) in [
-        (ACP_SETUP_SOURCE, "fn show_embedded_acp_setup_view"),
         (
-            ACP_LAUNCH_SOURCE,
-            "pub(super) fn open_tab_ai_acp_view_from_request_impl",
+            AGENT_CHAT_SETUP_SOURCE,
+            "fn show_embedded_agent_chat_setup_view",
         ),
-        (SRC, "fn try_reuse_embedded_acp_view"),
+        (
+            AGENT_CHAT_LAUNCH_SOURCE,
+            "pub(super) fn open_tab_ai_agent_chat_view_from_request_impl",
+        ),
+        (SRC, "fn try_reuse_embedded_agent_chat_view"),
     ] {
         let body = function_body(source, signature);
         assert!(
-            !body.contains("self.current_view = AppView::AcpChatView {"),
-            "{signature} must not assign AcpChatView directly; use enter_embedded_acp_chat_surface"
+            !body.contains("self.current_view = AppView::AgentChatView {"),
+            "{signature} must not assign AgentChatView directly; use enter_embedded_agent_chat_surface"
         );
     }
 }
 
 #[test]
-fn false_calls_live_inside_both_acp_close_bodies() {
+fn false_calls_live_inside_both_agent_chat_close_bodies() {
     for header in [
         "fn close_tab_ai_harness_terminal_impl",
-        "pub(crate) fn close_acp_chat_to_script_list",
+        "pub(crate) fn close_agent_chat_to_script_list",
     ] {
-        let header_idx = SRC.find(header).expect("ACP close function must exist");
+        let header_idx = SRC
+            .find(header)
+            .expect("Agent Chat close function must exist");
         let after_header = &SRC[header_idx..];
         let false_rel = after_header
             .find("crate::windows::ensure_embedded_ai_window(false)")
-            .expect("each ACP close function must tear down the embedded AI registry entry");
+            .expect("each Agent Chat close function must tear down the embedded AI registry entry");
         let false_idx = header_idx + false_rel;
         let between = &SRC[header_idx..false_idx];
         let intruder_patterns = ["\n    pub fn ", "\n    pub(crate) fn ", "\n    fn "];

@@ -4467,7 +4467,7 @@ mod from_dialog_builtin_action_validation_tests_35 {
             .as_ref()
             .unwrap()
             .to_lowercase()
-            .contains("acp chat"));
+            .contains("agent_chat chat"));
     }
 
     #[test]
@@ -12582,7 +12582,7 @@ mod from_dialog_builtin_action_validation_tests_41 {
                 .as_ref()
                 .unwrap()
                 .to_lowercase()
-                .contains("acp chat"));
+                .contains("agent_chat chat"));
         }
 
         #[test]

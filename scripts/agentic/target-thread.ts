@@ -29,12 +29,12 @@ export interface TargetThreadIdentity {
   parentAutomationWindowId?: string | null;
   popupFamily?: string | null;
   popupId?: string | null;
-  acpViewId?: string | null;
-  acpGeneration?: number | null;
+  agent_chatViewId?: string | null;
+  agent_chatGeneration?: number | null;
   originAutomationWindowId?: string | null;
   originSurfaceId?: string | null;
-  originAcpViewId?: string | null;
-  originAcpGeneration?: number | null;
+  originAgentChatViewId?: string | null;
+  originAgentChatGeneration?: number | null;
   portalId?: string | null;
   portalFamily?: string | null;
   permissionSurfaceId?: string | null;
@@ -217,12 +217,12 @@ function identityFromInspect(
     popupId:
       typeof inspect.popupId === "string"
         ? (inspect.popupId as string)
-        : automationWindowId.startsWith("acp-") ? automationWindowId : null,
-    acpViewId:
-      typeof inspect.acpViewId === "string" ? (inspect.acpViewId as string) : null,
-    acpGeneration:
-      typeof inspect.acpGeneration === "number"
-        ? (inspect.acpGeneration as number)
+        : automationWindowId.startsWith("agent_chat-") ? automationWindowId : null,
+    agent_chatViewId:
+      typeof inspect.agent_chatViewId === "string" ? (inspect.agent_chatViewId as string) : null,
+    agent_chatGeneration:
+      typeof inspect.agent_chatGeneration === "number"
+        ? (inspect.agent_chatGeneration as number)
         : null,
     originAutomationWindowId:
       typeof inspect.originAutomationWindowId === "string"
@@ -232,13 +232,13 @@ function identityFromInspect(
       typeof inspect.originSurfaceId === "string"
         ? (inspect.originSurfaceId as string)
         : null,
-    originAcpViewId:
-      typeof inspect.originAcpViewId === "string"
-        ? (inspect.originAcpViewId as string)
+    originAgentChatViewId:
+      typeof inspect.originAgentChatViewId === "string"
+        ? (inspect.originAgentChatViewId as string)
         : null,
-    originAcpGeneration:
-      typeof inspect.originAcpGeneration === "number"
-        ? (inspect.originAcpGeneration as number)
+    originAgentChatGeneration:
+      typeof inspect.originAgentChatGeneration === "number"
+        ? (inspect.originAgentChatGeneration as number)
         : null,
     portalId:
       typeof inspect.portalId === "string" ? (inspect.portalId as string) : null,
@@ -377,8 +377,8 @@ export async function assertTargetStable(opts: {
     "surfaceId",
     "windowKind",
     "osWindowId",
-    "acpViewId",
-    "acpGeneration",
+    "agent_chatViewId",
+    "agent_chatGeneration",
   ];
   for (const field of driftFields) {
     if (expected[field] != null && actual[field] !== expected[field]) {
@@ -451,18 +451,18 @@ export async function targetedRpc(opts: {
 }
 
 export async function listNativePeerWindows(opts: {
-  family: "acpDetached" | "promptPopup";
+  family: "agentChatDetached" | "promptPopup";
 }): Promise<Array<Record<string, unknown>>> {
   const result = await runTool(["bun", "scripts/agentic/window.ts", "list"], "window-list");
   if (result.exitCode !== 0) return [];
   const parsed = parseJson(result.stdout);
   const surfaces = (parsed.data as { surfaces?: Array<Record<string, unknown>> } | undefined)
     ?.surfaces ?? [];
-  if (opts.family === "acpDetached") {
+  if (opts.family === "agentChatDetached") {
     return surfaces.filter((surface) => {
       const surfaceId = String(surface.surfaceId ?? "");
       const title = String(surface.title ?? "");
-      return surfaceId.includes("acp") || title.toLowerCase().includes("agent");
+      return surfaceId.includes("agent_chat") || title.toLowerCase().includes("agent");
     });
   }
   return surfaces.filter((surface) => {

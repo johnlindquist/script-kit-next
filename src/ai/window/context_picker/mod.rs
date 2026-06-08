@@ -50,7 +50,7 @@ fn char_to_byte_offset(text: &str, char_idx: usize) -> usize {
 
 /// Extract a trigger query from the composer text at a specific cursor position.
 ///
-/// Shared implementation used by both the AI window picker and ACP.
+/// Shared implementation used by both the AI window picker and Agent Chat.
 /// Returns `None` when there is no active trigger before the cursor.
 pub(crate) fn extract_context_picker_query_before_cursor(
     input: &str,
@@ -190,7 +190,7 @@ pub(crate) struct ContextPickerEmptyStateHint {
 /// Hint chips for the empty state when no results match.
 ///
 /// These are the canonical entries shared by both the AI window picker and
-/// ACP.  `@file:<path>` uses `insertion: "@file:"` so clicking it keeps
+/// Agent Chat.  `@file:<path>` uses `insertion: "@file:"` so clicking it keeps
 /// the picker open for file suggestions instead of fabricating a fake path.
 pub(crate) fn empty_state_hints(
     trigger: ContextPickerTrigger,
@@ -369,7 +369,7 @@ fn portal_prefix_for_kind(kind: PortalKind) -> &'static str {
         PortalKind::ScriptletSearch => "scriptlet",
         PortalKind::SkillSearch => "skill",
         PortalKind::NotesBrowse => "note",
-        PortalKind::AcpHistory => "history",
+        PortalKind::AgentChatHistory => "history",
         PortalKind::Terminal => "terminal",
     }
 }
@@ -385,7 +385,7 @@ fn portal_kind_from_prefix(prefix: &str) -> Option<PortalKind> {
         "scriptlet" => Some(PortalKind::ScriptletSearch),
         "skill" => Some(PortalKind::SkillSearch),
         "note" => Some(PortalKind::NotesBrowse),
-        "history" => Some(PortalKind::AcpHistory),
+        "history" => Some(PortalKind::AgentChatHistory),
         "terminal" => Some(PortalKind::Terminal),
         _ => None,
     }
@@ -685,7 +685,7 @@ impl AiApp {
                 | ContextPickerItemKind::PortalPrefix(_)
                 | ContextPickerItemKind::PortalResult(_)
                 | ContextPickerItemKind::Inert => {
-                    // Portal and slash items are ACP-only; the window picker
+                    // Portal and slash items are Agent Chat-only; the window picker
                     // should never encounter them, but handle gracefully.
                     return;
                 }
@@ -922,7 +922,7 @@ fn extend_builtin_picker_items(
         );
     }
 
-    // Portal items — rich browse surfaces that attach their selection back to ACP.
+    // Portal items — rich browse surfaces that attach their selection back to Agent Chat.
     // Only in mention mode; slash mode is command-only.
     if trigger == ContextPickerTrigger::Mention {
         inject_portal_items(query_lower, items);
@@ -930,7 +930,7 @@ fn extend_builtin_picker_items(
 }
 
 /// Inject portal items for rich browsing. These open a temporary browse
-/// surface and attach the selected result back to ACP.
+/// surface and attach the selected result back to Agent Chat.
 fn inject_portal_items(query_lower: &str, items: &mut Vec<ContextPickerItem>) {
     struct PortalDef {
         kind: PortalKind,
@@ -1023,8 +1023,8 @@ fn inject_portal_items(query_lower: &str, items: &mut Vec<ContextPickerItem>) {
             match_terms: &["note", "notes", "markdown", "browse"],
         },
         PortalDef {
-            kind: PortalKind::AcpHistory,
-            id: "portal:acp_history",
+            kind: PortalKind::AgentChatHistory,
+            id: "portal:agent_chat_history",
             label: "@history",
             description: "Browse prior Agent Chat conversations",
             meta: "Portal",
@@ -1094,7 +1094,7 @@ fn portal_kind_detail_label(kind: PortalKind) -> &'static str {
         PortalKind::ScriptletSearch => "scriptlet search",
         PortalKind::SkillSearch => "skill search",
         PortalKind::NotesBrowse => "notes",
-        PortalKind::AcpHistory => "Agent Chat history",
+        PortalKind::AgentChatHistory => "Agent Chat history",
         PortalKind::Terminal => "terminal",
     }
 }
@@ -1140,7 +1140,9 @@ fn collect_inline_portal_items(
             collect_script_list_inline_items(inline_query, items)
         }
         PortalKind::NotesBrowse => collect_notes_inline_items(&inline_query.query, items),
-        PortalKind::AcpHistory => collect_acp_history_inline_items(&inline_query.query, items),
+        PortalKind::AgentChatHistory => {
+            collect_agent_chat_history_inline_items(&inline_query.query, items)
+        }
         PortalKind::Terminal => collect_terminal_history_inline_items(&inline_query.query, items),
     }
 }
@@ -1528,7 +1530,7 @@ fn collect_dictation_inline_items(query: &str, items: &mut Vec<ContextPickerItem
 
 fn collect_notes_inline_items(query: &str, items: &mut Vec<ContextPickerItem>) {
     // Always read fresh from storage so the picker reflects creates, renames,
-    // and deletes that happened outside the ACP composer. For blank queries
+    // and deletes that happened outside the Agent Chat composer. For blank queries
     // prefer `get_all_notes()` so the picker shows the current note list
     // even if the FTS index is mid-rebuild.
     let trimmed = query.trim();
@@ -1580,9 +1582,11 @@ fn collect_notes_inline_items(query: &str, items: &mut Vec<ContextPickerItem>) {
     }
 }
 
-fn collect_acp_history_inline_items(query: &str, items: &mut Vec<ContextPickerItem>) {
+fn collect_agent_chat_history_inline_items(query: &str, items: &mut Vec<ContextPickerItem>) {
     let query_lower = query.trim().to_lowercase();
-    for hit in crate::ai::acp::history::search_history(query, INLINE_PORTAL_RESULTS_LIMIT) {
+    for hit in
+        crate::ai::agent_chat::ui::history::search_history(query, INLINE_PORTAL_RESULTS_LIMIT)
+    {
         let title = hit.entry.title_display().to_string();
         let preview = hit.entry.preview_display().to_string();
         let session_id = hit.entry.session_id.clone();
@@ -1595,10 +1599,10 @@ fn collect_acp_history_inline_items(query: &str, items: &mut Vec<ContextPickerIt
             description: SharedString::from(preview.clone()),
             meta: SharedString::from(format!("@history:{session_id}")),
             kind: ContextPickerItemKind::PortalResult(InlinePortalResultPayload {
-                portal_kind: PortalKind::AcpHistory,
+                portal_kind: PortalKind::AgentChatHistory,
                 attachment: InlinePortalAttachment::FocusedTarget {
-                    source: "AcpHistory".to_string(),
-                    kind: "acpHistory".to_string(),
+                    source: "AgentChatHistory".to_string(),
+                    kind: "agent_chatHistory".to_string(),
                     semantic_id: session_id.clone(),
                     label: title.clone(),
                     metadata: Some(serde_json::json!({
@@ -1619,7 +1623,7 @@ fn collect_acp_history_inline_items(query: &str, items: &mut Vec<ContextPickerIt
 }
 
 /// Populate `items` with agent slash command entries (e.g. `/compact`,
-/// `/clear`). Shared by ACP and any future slash-command surface.
+/// `/clear`). Shared by Agent Chat and any future slash-command surface.
 ///
 /// Uses bare `(name, description)` pairs — all entries get `Default` payload.
 fn extend_agent_slash_command_items<'a, I>(
@@ -1691,7 +1695,7 @@ fn extend_agent_slash_command_items_with_payloads<'a, I>(
             slash_name = %name,
             owner = %payload.owner_label(),
             meta = %meta_str,
-            "acp_slash_picker_entry_built"
+            "agent_chat_slash_picker_entry_built"
         );
 
         items.push(ContextPickerItem {
@@ -1989,11 +1993,11 @@ fn section_priority(kind: &ContextPickerItemKind) -> u8 {
 
 /// Build a non-actionable "Discovering plugin skills…" placeholder row.
 ///
-/// Shown when the ACP slash picker opens before async discovery completes
+/// Shown when the Agent Chat slash picker opens before async discovery completes
 /// (i.e. `cached_slash_commands` is still empty).
 pub(crate) fn slash_picker_loading_row() -> ContextPickerItem {
     tracing::debug!(
-        event = "acp_slash_picker_loading",
+        event = "agent_chat_slash_picker_loading",
         "Building slash picker loading row"
     );
     ContextPickerItem {
@@ -2014,7 +2018,7 @@ pub(crate) fn slash_picker_loading_row() -> ContextPickerItem {
 /// (no defaults, no plugins, no Claude skills were found).
 pub(crate) fn slash_picker_empty_row() -> ContextPickerItem {
     tracing::debug!(
-        event = "acp_slash_picker_empty_state",
+        event = "agent_chat_slash_picker_empty_state",
         "Building slash picker empty row"
     );
     ContextPickerItem {
@@ -2037,7 +2041,7 @@ pub(crate) fn slash_picker_empty_row() -> ContextPickerItem {
 /// (`slash_picker_loading_row`).
 pub(crate) fn slash_picker_no_match_row() -> ContextPickerItem {
     tracing::debug!(
-        event = "acp_slash_picker_no_match",
+        event = "agent_chat_slash_picker_no_match",
         "Building slash picker no-match row"
     );
     ContextPickerItem {

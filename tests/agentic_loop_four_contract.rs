@@ -9,7 +9,7 @@ fn index_help_exposes_loop_four_recipes() {
     for name in [
         "drop-prompt-native-drop-privacy-stress",
         "path-prompt-filesystem-edge-stress",
-        "screenshot-identity-acp-context-stress",
+        "screenshot-identity-agent_chat-context-stress",
     ] {
         assert!(
             INDEX.contains(&format!("name: \"{name}\"")),
@@ -63,12 +63,12 @@ fn path_prompt_stress_wraps_filesystem_edge_helper() {
 #[test]
 fn screenshot_identity_stress_pins_context_threading_receipts() {
     for token in [
-        "screenshot-identity-acp-context-stress",
+        "screenshot-identity-agent_chat-context-stress",
         "missing_screenshot_identity_context_receipt",
         "screenshotIdentity",
         "stateResult.screenshotIdentity",
         "bare screenshot filename",
-        "acpContextPart",
+        "agent_chatContextPart",
         "identityMatched",
         "filesystemGrepUsed: false",
     ] {

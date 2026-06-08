@@ -290,25 +290,29 @@ fn wait_for_result_with_trace_receipt_serializes() {
     assert_eq!(re["trace"]["status"], "timeout");
 }
 
-// ---------- ACP proof condition wire shapes ----------
+// ---------- Agent Chat proof condition wire shapes ----------
 
 #[test]
-fn wait_for_acp_accepted_via_key_enter_parses() {
+fn wait_for_agent_chat_accepted_via_key_enter_parses() {
     let raw = serde_json::json!({
         "type": "waitFor",
-        "requestId": "w-acp-enter",
+        "requestId": "w-agent_chat-enter",
         "condition": {
-            "type": "acpAcceptedViaKey",
+            "type": "agent_chatAcceptedViaKey",
             "key": "enter"
         },
         "timeout": 3000,
         "pollInterval": 25,
         "trace": "onFailure"
     });
-    let msg: Message = serde_json::from_value(raw).expect("should parse acpAcceptedViaKey enter");
+    let msg: Message =
+        serde_json::from_value(raw).expect("should parse agent_chatAcceptedViaKey enter");
     let reserialized = serde_json::to_value(&msg).expect("should reserialize");
 
-    assert_eq!(reserialized["condition"]["type"], "acpAcceptedViaKey");
+    assert_eq!(
+        reserialized["condition"]["type"],
+        "agent_chatAcceptedViaKey"
+    );
     assert_eq!(reserialized["condition"]["key"], "enter");
     assert_eq!(reserialized["timeout"], 3000);
     assert_eq!(reserialized["pollInterval"], 25);
@@ -316,70 +320,82 @@ fn wait_for_acp_accepted_via_key_enter_parses() {
 }
 
 #[test]
-fn wait_for_acp_accepted_via_key_tab_parses() {
+fn wait_for_agent_chat_accepted_via_key_tab_parses() {
     let raw = serde_json::json!({
         "type": "waitFor",
-        "requestId": "w-acp-tab",
+        "requestId": "w-agent_chat-tab",
         "condition": {
-            "type": "acpAcceptedViaKey",
+            "type": "agent_chatAcceptedViaKey",
             "key": "tab"
         },
         "timeout": 3000
     });
-    let msg: Message = serde_json::from_value(raw).expect("should parse acpAcceptedViaKey tab");
+    let msg: Message =
+        serde_json::from_value(raw).expect("should parse agent_chatAcceptedViaKey tab");
     let reserialized = serde_json::to_value(&msg).expect("should reserialize");
 
-    assert_eq!(reserialized["condition"]["type"], "acpAcceptedViaKey");
+    assert_eq!(
+        reserialized["condition"]["type"],
+        "agent_chatAcceptedViaKey"
+    );
     assert_eq!(reserialized["condition"]["key"], "tab");
 }
 
 #[test]
-fn wait_for_acp_accepted_cursor_at_parses() {
+fn wait_for_agent_chat_accepted_cursor_at_parses() {
     let raw = serde_json::json!({
         "type": "waitFor",
         "requestId": "w-cursor",
         "condition": {
-            "type": "acpAcceptedCursorAt",
+            "type": "agent_chatAcceptedCursorAt",
             "index": 17
         },
         "timeout": 3000
     });
-    let msg: Message = serde_json::from_value(raw).expect("should parse acpAcceptedCursorAt");
+    let msg: Message =
+        serde_json::from_value(raw).expect("should parse agent_chatAcceptedCursorAt");
     let reserialized = serde_json::to_value(&msg).expect("should reserialize");
 
-    assert_eq!(reserialized["condition"]["type"], "acpAcceptedCursorAt");
+    assert_eq!(
+        reserialized["condition"]["type"],
+        "agent_chatAcceptedCursorAt"
+    );
     assert_eq!(reserialized["condition"]["index"], 17);
 }
 
 #[test]
-fn wait_for_acp_input_layout_match_parses() {
+fn wait_for_agent_chat_input_layout_match_parses() {
     let raw = serde_json::json!({
         "type": "waitFor",
         "requestId": "w-layout",
         "condition": {
-            "type": "acpInputLayoutMatch",
+            "type": "agent_chatInputLayoutMatch",
             "visibleStart": 0,
             "visibleEnd": 15,
             "cursorInWindow": 9
         },
         "timeout": 3000
     });
-    let msg: Message = serde_json::from_value(raw).expect("should parse acpInputLayoutMatch");
+    let msg: Message =
+        serde_json::from_value(raw).expect("should parse agent_chatInputLayoutMatch");
     let reserialized = serde_json::to_value(&msg).expect("should reserialize");
 
-    assert_eq!(reserialized["condition"]["type"], "acpInputLayoutMatch");
+    assert_eq!(
+        reserialized["condition"]["type"],
+        "agent_chatInputLayoutMatch"
+    );
     assert_eq!(reserialized["condition"]["visibleStart"], 0);
     assert_eq!(reserialized["condition"]["visibleEnd"], 15);
     assert_eq!(reserialized["condition"]["cursorInWindow"], 9);
 }
 
 #[test]
-fn wait_for_acp_proof_conditions_round_trip() {
+fn wait_for_agent_chat_proof_conditions_round_trip() {
     let conditions = [
-        serde_json::json!({"type": "acpAcceptedViaKey", "key": "enter"}),
-        serde_json::json!({"type": "acpAcceptedViaKey", "key": "tab"}),
-        serde_json::json!({"type": "acpAcceptedCursorAt", "index": 42}),
-        serde_json::json!({"type": "acpInputLayoutMatch", "visibleStart": 5, "visibleEnd": 20, "cursorInWindow": 3}),
+        serde_json::json!({"type": "agent_chatAcceptedViaKey", "key": "enter"}),
+        serde_json::json!({"type": "agent_chatAcceptedViaKey", "key": "tab"}),
+        serde_json::json!({"type": "agent_chatAcceptedCursorAt", "index": 42}),
+        serde_json::json!({"type": "agent_chatInputLayoutMatch", "visibleStart": 5, "visibleEnd": 20, "cursorInWindow": 3}),
     ];
 
     for (i, cond) in conditions.iter().enumerate() {
@@ -389,7 +405,7 @@ fn wait_for_acp_proof_conditions_round_trip() {
             "condition": cond,
         });
         let msg: Message = serde_json::from_value(raw.clone())
-            .unwrap_or_else(|e| panic!("should parse ACP proof condition {i}: {e}"));
+            .unwrap_or_else(|e| panic!("should parse Agent Chat proof condition {i}: {e}"));
         let serialized = serde_json::to_string(&msg).expect("serialize");
         let back: Message =
             serde_json::from_str(&serialized).unwrap_or_else(|e| panic!("round-trip {i}: {e}"));

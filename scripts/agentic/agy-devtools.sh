@@ -57,7 +57,7 @@ Required for run/infer/prompt:
   --prompt-file <path>     Read the user request from a file.
 
 Core options:
-  --surface <id>           auto, main, actions-dialog, notes, dictation, prompt, acp, portal, theme, storybook.
+  --surface <id>           auto, main, actions-dialog, notes, dictation, prompt, agent_chat, portal, theme, storybook.
   --target <target>        auto, main, focused, id:<automation-id>, kind:<target-kind>, title:<substring>.
   --mode <mode>            plan, inspect, act, full. Default: inspect.
   --session <name>         DevTools session hint. Default: agy-devtools-<timestamp>-<pid>.
@@ -199,7 +199,7 @@ surface_map = {
     "notes": ("Notes", 0.95, ["explicit surface hint"]),
     "dictation": ("Dictation", 0.95, ["explicit surface hint"]),
     "prompt": ("PromptEntity", 0.95, ["explicit surface hint"]),
-    "acp": ("AcpChat", 0.90, ["explicit surface hint"]),
+    "agent_chat": ("AgentChat", 0.90, ["explicit surface hint"]),
     "portal": ("Portal", 0.90, ["explicit surface hint"]),
     "theme": ("Theme", 0.90, ["explicit surface hint"]),
     "storybook": ("Storybook", 0.90, ["explicit surface hint"]),
@@ -217,8 +217,8 @@ elif re.search(r"\b(dictation|mic|microphone|transcript|recording|audio|waveform
     surface_id, surface_kind, confidence, reasons = "dictation", "Dictation", 0.88, ["matched dictation/media vocabulary"]
 elif re.search(r"\b(arg prompt|form|fields|div|editor prompt|terminal prompt|prompt container)\b", text):
     surface_id, surface_kind, confidence, reasons = "prompt", "PromptEntity", 0.78, ["matched prompt-runtime vocabulary"]
-elif re.search(r"\b(acp|agent chat|composer|mention|slash command|thread)\b", text):
-    surface_id, surface_kind, confidence, reasons = "acp", "AcpChat", 0.78, ["matched acp vocabulary"]
+elif re.search(r"\b(agent_chat|agent chat|composer|mention|slash command|thread)\b", text):
+    surface_id, surface_kind, confidence, reasons = "agent_chat", "AgentChat", 0.78, ["matched agent_chat vocabulary"]
 else:
     surface_id, surface_kind, confidence, reasons = "main", "ScriptList", 0.55, ["defaulted to main launcher"]
 
@@ -247,7 +247,7 @@ def add(name, file_name, args, receipt):
     else:
         unavailable.append({"name": name, "file": path, "reason": "missing devtools CLI file"})
 
-if surface_id in {"main", "actions-dialog", "prompt", "acp", "portal", "theme", "storybook"}:
+if surface_id in {"main", "actions-dialog", "prompt", "agent_chat", "portal", "theme", "storybook"}:
     add("devtools.investigate", "investigate.ts", ["bun", "scripts/devtools/investigate.ts", "--surface", surface_kind, "--bug", "<prompt>"], "010-investigate.json")
     inspect_args = ["bun", "scripts/devtools/inspect.ts", "--session", session, "--bug", "<prompt>", "--surface", surface_kind, *target_args]
     if start:
@@ -343,13 +343,13 @@ for item in inference.get("unavailablePrimitives", []):
     unavailable.append(f"- {item['name']}: unavailable because {item['reason']} ({item['file']})")
 
 if fast:
-    acp_fast_path = ""
+    agent_chat_fast_path = ""
     theme_fast_path = ""
-    if inference.get("surface", {}).get("id") == "acp":
-        acp_fast_path = f"""
+    if inference.get("surface", {}).get("id") == "agent_chat":
+        agent_chat_fast_path = f"""
 Known minimal Agent Chat path for this repo:
 1. Start/show main and inspect once:
-   `bun scripts/devtools/inspect.ts --session {session} --start --show --bug "{prompt}" --surface AcpChat --main > {receipts_dir}/010-inspect-main.json`
+   `bun scripts/devtools/inspect.ts --session {session} --start --show --bug "{prompt}" --surface AgentChat --main > {receipts_dir}/010-inspect-main.json`
 2. Select the allowlisted Search Files launcher row:
    `bun scripts/devtools/act.ts select --semantic-id "choice:1:search-files" --session {session} --main > {receipts_dir}/020-select-search-files.json`
 3. Open Agent Chat through the known Cmd+Enter shortcut path:
@@ -399,7 +399,7 @@ Wrapper inference:
 ```json
 {json.dumps(inference, indent=2)}
 ```
-{acp_fast_path}
+{agent_chat_fast_path}
 {theme_fast_path}
 Fallback primitive stack if this is not the Agent Chat path:
 {chr(10).join(primitive_lines) if primitive_lines else "- none"}

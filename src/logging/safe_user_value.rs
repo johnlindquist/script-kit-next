@@ -2,7 +2,7 @@
 //!
 //! Oracle-Session `logging-observability-next-pass` PR1 (A): every log
 //! site that interpolates untrusted input (stdin text, chat titles,
-//! dictation queries, triggerBuiltin names, ACP command display strings,
+//! dictation queries, triggerBuiltin names, Agent Chat command display strings,
 //! …) must route through [`log_user_value`] so the preview can never
 //! exceed [`SAFE_USER_VALUE_MAX_BYTES`].
 //!

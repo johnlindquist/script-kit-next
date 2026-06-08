@@ -1,6 +1,6 @@
-//! Source-contract tests for Notes → ACP Chat handoff.
+//! Source-contract tests for Notes → Agent Chat Chat handoff.
 //!
-//! These lock the invariant that Notes opens its embedded ACP surface and
+//! These lock the invariant that Notes opens its embedded Agent Chat surface and
 //! stages the selected note cart as inline `@mentions` (not raw string
 //! injection or secondary-window handoff), and that Cmd+Enter is claimed in
 //! the Notes keyboard handler.
@@ -8,13 +8,13 @@
 use std::fs;
 
 #[test]
-fn notes_send_to_ai_routes_through_embedded_acp_handoff() {
+fn notes_send_to_ai_routes_through_embedded_agent_chat_handoff() {
     let source = fs::read_to_string("src/notes/window/panels.rs")
         .expect("Failed to read src/notes/window/panels.rs");
 
     assert!(
-        source.contains("open_selected_note_cart_in_embedded_acp(\"NotesAction::SendToAi\""),
-        "NotesAction::SendToAi must route through the note-cart ACP handoff"
+        source.contains("open_selected_note_cart_in_embedded_agent_chat(\"NotesAction::SendToAi\""),
+        "NotesAction::SendToAi must route through the note-cart Agent Chat handoff"
     );
 
     assert!(
@@ -46,7 +46,7 @@ fn notes_keyboard_claims_cmd_enter() {
 
     assert!(
         source.contains("NotesWindowCmdEnter"),
-        "Notes keyboard must route Cmd+Enter through the ACP handoff helper"
+        "Notes keyboard must route Cmd+Enter through the Agent Chat handoff helper"
     );
 
     assert!(
@@ -57,8 +57,10 @@ fn notes_keyboard_claims_cmd_enter() {
     );
 
     assert!(
-        source.contains("self.open_selected_note_cart_in_embedded_acp(\"NotesWindowCmdEnter\""),
-        "Notes Cmd+Enter must route through the note-cart ACP handoff"
+        source.contains(
+            "self.open_selected_note_cart_in_embedded_agent_chat(\"NotesWindowCmdEnter\""
+        ),
+        "Notes Cmd+Enter must route through the note-cart Agent Chat handoff"
     );
 }
 
@@ -78,17 +80,17 @@ fn chip_prefix_map_includes_action_and_note() {
 }
 
 #[test]
-fn notes_embedded_acp_stages_note_cart_as_mentions() {
+fn notes_embedded_agent_chat_stages_note_cart_as_mentions() {
     let source = fs::read_to_string("src/notes/window/panels.rs")
         .expect("Failed to read src/notes/window/panels.rs");
-    let host_source = fs::read_to_string("src/notes/window/acp_host.rs")
-        .expect("Failed to read src/notes/window/acp_host.rs");
-    let acp_view_source =
-        fs::read_to_string("src/ai/acp/view.rs").expect("Failed to read src/ai/acp/view.rs");
+    let host_source = fs::read_to_string("src/notes/window/agent_chat_host.rs")
+        .expect("Failed to read src/notes/window/agent_chat_host.rs");
+    let agent_chat_view_source = fs::read_to_string("src/ai/agent_chat/ui/view.rs")
+        .expect("Failed to read src/ai/agent_chat/ui/view.rs");
 
     assert!(
-        source.contains("notes_cart_open_embedded_acp_requested"),
-        "Notes cart handoff must log notes_cart_open_embedded_acp_requested"
+        source.contains("notes_cart_open_embedded_agent_chat_requested"),
+        "Notes cart handoff must log notes_cart_open_embedded_agent_chat_requested"
     );
     assert!(
         source.contains("AiContextPart::TextBlock"),
@@ -103,29 +105,29 @@ fn notes_embedded_acp_stages_note_cart_as_mentions() {
         "Notes cart handoff must preserve selection provenance in the text-block source"
     );
     assert!(
-        source.contains("self.ensure_embedded_acp_view(None, cx)"),
-        "Notes cart handoff must reuse the shared embedded ACP bootstrap helper"
+        source.contains("self.ensure_embedded_agent_chat_view(None, cx)"),
+        "Notes cart handoff must reuse the shared embedded Agent Chat bootstrap helper"
     );
     assert!(
         source.contains("chat.stage_inline_context_parts_from_host(parts, source, cx)"),
-        "Notes cart handoff must delegate staged mention rendering to the shared ACP host helper"
+        "Notes cart handoff must delegate staged mention rendering to the shared Agent Chat host helper"
     );
     assert!(
-        host_source.contains("fn wire_acp_host_callbacks(")
-            && host_source.contains("fn ensure_embedded_acp_view(")
-            && host_source.contains("self.wire_acp_host_callbacks(&view, cx);"),
+        host_source.contains("fn wire_agent_chat_host_callbacks(")
+            && host_source.contains("fn ensure_embedded_agent_chat_view(")
+            && host_source.contains("self.wire_agent_chat_host_callbacks(&view, cx);"),
         "Notes first-open cart handoff must go through the shared host wiring path"
     );
     assert!(
-        acp_view_source.contains("event = \"acp_host_inline_context_staged\"")
-            && acp_view_source
+        agent_chat_view_source.contains("event = \"agent_chat_host_inline_context_staged\"")
+            && agent_chat_view_source
                 .contains("thread.replace_pending_context_parts(staged_parts, source, cx);")
-            && acp_view_source.contains("format_typed_label_mention_token("),
-        "Shared ACP host staging must replace prior parts and build deterministic inline tokens"
+            && agent_chat_view_source.contains("format_typed_label_mention_token("),
+        "Shared Agent Chat host staging must replace prior parts and build deterministic inline tokens"
     );
     assert!(
-        host_source.contains("event = \"notes_embedded_acp_view_ensured\""),
-        "Shared Notes ACP bootstrap helper must emit the ensure log for first-open and reuse"
+        host_source.contains("event = \"notes_embedded_agent_chat_view_ensured\""),
+        "Shared Notes Agent Chat bootstrap helper must emit the ensure log for first-open and reuse"
     );
 }
 
@@ -172,37 +174,38 @@ fn tab_ai_mode_delegates_to_shared_chip_label_formatter() {
 
 #[test]
 fn notes_cart_first_open_uses_shared_notes_host_contract() {
-    let host_source = fs::read_to_string("src/notes/window/acp_host.rs")
-        .expect("Failed to read src/notes/window/acp_host.rs");
+    let host_source = fs::read_to_string("src/notes/window/agent_chat_host.rs")
+        .expect("Failed to read src/notes/window/agent_chat_host.rs");
 
     assert!(
         host_source.contains("chat.set_allowed_portal_kinds(vec![")
-            && host_source.contains("PortalKind::AcpHistory"),
-        "Notes host contract must keep ACP history as the only locally hosted portal kind"
+            && host_source.contains("PortalKind::AgentChatHistory"),
+        "Notes host contract must keep Agent Chat history as the only locally hosted portal kind"
     );
     assert!(
         host_source.contains("chat.set_on_open_portal(move |kind, cx|")
-            && host_source.contains("Self::handle_acp_portal_static(chat_entity, kind, cx);"),
+            && host_source
+                .contains("Self::handle_agent_chat_portal_static(chat_entity, kind, cx);"),
         "Notes host wiring must continue to route portal opens through the shared static handler"
     );
 }
 
 #[test]
 fn notes_cart_reopen_replaces_previous_pending_parts() {
-    let acp_view_source =
-        fs::read_to_string("src/ai/acp/view.rs").expect("Failed to read src/ai/acp/view.rs");
-    let thread_source =
-        fs::read_to_string("src/ai/acp/thread.rs").expect("Failed to read src/ai/acp/thread.rs");
+    let agent_chat_view_source = fs::read_to_string("src/ai/agent_chat/ui/view.rs")
+        .expect("Failed to read src/ai/agent_chat/ui/view.rs");
+    let thread_source = fs::read_to_string("src/ai/agent_chat/ui/thread.rs")
+        .expect("Failed to read src/ai/agent_chat/ui/thread.rs");
 
     assert!(
-        acp_view_source.contains("self.typed_mention_aliases.clear();")
-            && acp_view_source.contains("self.inline_owned_context_tokens.clear();")
-            && acp_view_source
+        agent_chat_view_source.contains("self.typed_mention_aliases.clear();")
+            && agent_chat_view_source.contains("self.inline_owned_context_tokens.clear();")
+            && agent_chat_view_source
                 .contains("thread.replace_pending_context_parts(staged_parts, source, cx);"),
-        "ACP host staging must clear stale composer aliases/tokens before replacing staged parts"
+        "Agent Chat host staging must clear stale composer aliases/tokens before replacing staged parts"
     );
     assert!(
-        thread_source.contains("event = \"acp_pending_context_parts_replaced\""),
+        thread_source.contains("event = \"agent_chat_pending_context_parts_replaced\""),
         "Thread replacement path must emit an explicit replacement log for runtime verification"
     );
 }
@@ -213,8 +216,8 @@ fn notes_target_staging_uses_shared_host_replacement_path() {
         .expect("Failed to read src/notes/window/panels.rs");
 
     let fn_start = source
-        .find("fn stage_note_target_in_embedded_acp(")
-        .expect("stage_note_target_in_embedded_acp must exist");
+        .find("fn stage_note_target_in_embedded_agent_chat(")
+        .expect("stage_note_target_in_embedded_agent_chat must exist");
     let fn_body = &source[fn_start..];
     let next_fn = fn_body[1..]
         .find("\n    pub(crate) fn ")
@@ -223,14 +226,14 @@ fn notes_target_staging_uses_shared_host_replacement_path() {
 
     assert!(
         fn_body.contains("chat.stage_inline_context_parts_from_host("),
-        "stage_note_target_in_embedded_acp must use the shared host replacement helper"
+        "stage_note_target_in_embedded_agent_chat must use the shared host replacement helper"
     );
     assert!(
         !fn_body.contains("thread.add_context_part("),
-        "stage_note_target_in_embedded_acp must stop appending direct thread context parts"
+        "stage_note_target_in_embedded_agent_chat must stop appending direct thread context parts"
     );
     assert!(
-        source.contains("event = \"notes_embedded_acp_target_staged_via_shared_host_path\""),
+        source.contains("event = \"notes_embedded_agent_chat_target_staged_via_shared_host_path\""),
         "notes target staging should emit a migration breadcrumb log for runtime verification"
     );
 }

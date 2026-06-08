@@ -893,7 +893,7 @@ const OUTSIDE_IN_SURFACE_PRIORITY: Record<string, number> = {
   PromptChildContent: 11,
   ExplicitPromptEntity: 12,
   UtilityChildContent: 13,
-  AcpChat: 14,
+  AgentChat: 14,
   FileSearchMini: 15,
   FileSearchFull: 16,
   AttachmentPortalBrowser: 17,
@@ -909,7 +909,7 @@ const OUTSIDE_IN_SURFACE_PRIORITY: Record<string, number> = {
   Settings: 37,
   KitStoreBrowse: 38,
   KitStoreInstalled: 39,
-  AcpHistory: 40,
+  AgentChatHistory: 40,
   ThemeChooser: 41,
   EmojiPicker: 42,
   SdkReference: 43,
@@ -970,8 +970,8 @@ async function main() {
     Webcam: ["webcam"],
     About: ["about"],
     Feedback: ["feedback", "creation-feedback", "creationFeedback"],
-    AcpChat: ["acp"],
-    AcpHistory: ["acp-history"],
+    AgentChat: ["agent_chat"],
+    AgentChatHistory: ["agent_chat-history"],
     ClipboardHistory: ["clipboard"],
     AppLauncher: ["app-launcher", "applauncher"],
     WindowSwitcher: ["window-switcher", "windowswitcher"],
@@ -1052,10 +1052,10 @@ async function main() {
       await attachVisualAudit(evidence, [
         `${RECEIPT_ROOT}/window-priority-dictation-layout-after.json`,
       ]);
-    } else if (surfaceKind === "AcpChat") {
+    } else if (surfaceKind === "AgentChat") {
       await attachVisualAudit(evidence, [
-        `${RECEIPT_ROOT}/window-priority-acp-detached-current-layout.json`,
-        `${RECEIPT_ROOT}/window-priority-acp-detached-layout-after.json`,
+        `${RECEIPT_ROOT}/window-priority-agent_chat-detached-current-layout.json`,
+        `${RECEIPT_ROOT}/window-priority-agent_chat-detached-layout-after.json`,
       ]);
     } else if (surfaceKind === "ClipboardHistory") {
       await attachVisualAudit(evidence, [
@@ -1098,9 +1098,9 @@ async function main() {
       await attachVisualAudit(evidence, [
         `${RECEIPT_ROOT}/window-priority-kit-store-installed-current-layout.json`,
       ]);
-    } else if (surfaceKind === "AcpHistory") {
+    } else if (surfaceKind === "AgentChatHistory") {
       await attachVisualAudit(evidence, [
-        `${RECEIPT_ROOT}/window-priority-acp-history-current-layout.json`,
+        `${RECEIPT_ROOT}/window-priority-agent_chat-history-current-layout.json`,
       ]);
     } else if (surfaceKind === "FileSearchMini") {
       await attachVisualAudit(evidence, [
@@ -1207,9 +1207,9 @@ async function main() {
   const practicalTargets = await Promise.all([
     { id: "notes", terms: ["notes"] },
     { id: "dictation", terms: ["dictation"] },
-    { id: "acp-detached", terms: ["acp-detached"] },
+    { id: "agent_chat-detached", terms: ["agent_chat-detached"] },
     { id: "inline-agent", terms: ["inline-agent"] },
-    { id: "notes-acp", terms: ["notes-acp"] },
+    { id: "notes-agent_chat", terms: ["notes-agent_chat"] },
   ].map(async (target) => {
     const evidence = evidenceFor(target.terms, files);
     if (target.id === "notes") {
@@ -1220,18 +1220,18 @@ async function main() {
       await attachVisualAudit(evidence, [
         `${RECEIPT_ROOT}/inline-agent-main-layout.json`,
       ]);
-    } else if (target.id === "notes-acp") {
+    } else if (target.id === "notes-agent_chat") {
       await attachVisualAudit(evidence, [
-        `${RECEIPT_ROOT}/notes-acp-next-actions-open-inspect.json`,
-        `${RECEIPT_ROOT}/notes-acp-actions-open-inspect.json`,
+        `${RECEIPT_ROOT}/notes-agent_chat-next-actions-open-inspect.json`,
+        `${RECEIPT_ROOT}/notes-agent_chat-actions-open-inspect.json`,
       ]);
     } else if (target.id === "dictation") {
       await attachVisualAudit(evidence, [
         `${RECEIPT_ROOT}/window-priority-dictation-layout-after.json`,
       ]);
-    } else if (target.id === "acp-detached") {
+    } else if (target.id === "agent_chat-detached") {
       await attachVisualAudit(evidence, [
-        `${RECEIPT_ROOT}/window-priority-acp-detached-layout-after.json`,
+        `${RECEIPT_ROOT}/window-priority-agent_chat-detached-layout-after.json`,
       ]);
     }
     const dictationMedia = target.id === "dictation"
@@ -1244,14 +1244,14 @@ async function main() {
     const tiers = proofTiers(evidence);
     const proofStatus = target.id === "dictation" && evidence.visualAudit && evidence.layoutReceipts.length > 0
       ? "numeric-window-proof-screenshot-blocked"
-      : target.id === "acp-detached" && evidence.visualAudit && evidence.layoutReceipts.length > 0
+      : target.id === "agent_chat-detached" && evidence.visualAudit && evidence.layoutReceipts.length > 0
         ? "numeric-window-proof-screenshot-blocked"
       : target.id === "dictation" && dictationMedia
         ? "media-proof-missing-visual"
       : target.id === "inline-agent" && evidence.visualAudit && evidence.layoutReceipts.length > 0
         ? "numeric-proof-missing-visual-capture"
-        : target.id === "notes-acp" && evidence.visualAudit && evidence.inspectReceipts.length > 0
-          ? "actions-panel-proof-acp-startup-blocked"
+        : target.id === "notes-agent_chat" && evidence.visualAudit && evidence.inspectReceipts.length > 0
+          ? "actions-panel-proof-agent_chat-startup-blocked"
         : baseStatus;
     return {
       id: target.id,

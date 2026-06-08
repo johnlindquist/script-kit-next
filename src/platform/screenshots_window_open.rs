@@ -745,7 +745,7 @@ fn is_attached_popup(kind: crate::protocol::AutomationWindowKind) -> bool {
 fn is_detached_window(kind: crate::protocol::AutomationWindowKind) -> bool {
     matches!(
         kind,
-        crate::protocol::AutomationWindowKind::AcpDetached
+        crate::protocol::AutomationWindowKind::AgentChatDetached
             | crate::protocol::AutomationWindowKind::Dictation
             | crate::protocol::AutomationWindowKind::Notes
     )
@@ -761,7 +761,7 @@ fn is_detached_window(kind: crate::protocol::AutomationWindowKind) -> bool {
 ///   if parent identity or popup bounds are missing — never returns an
 ///   unscoped whole-window screenshot.
 ///
-/// For **detached windows** (AcpDetached, Notes):
+/// For **detached windows** (AgentChatDetached, Notes):
 /// - Captures the window directly.
 ///
 /// For **other targets** (Main, etc.):
@@ -969,7 +969,7 @@ pub fn capture_app_screenshot(
 /// Capture a screenshot of a window by its title pattern.
 ///
 /// Similar to `capture_app_screenshot` but allows specifying which window to capture
-/// by matching the title. This is useful for secondary windows like the ACP Chat window.
+/// by matching the title. This is useful for secondary windows like the Agent Chat Chat window.
 ///
 /// # Arguments
 /// * `title_pattern` - A string that the window title must contain

@@ -69,7 +69,7 @@ pub(crate) use storage::{
 #[allow(unused_imports)]
 pub use window::{
     accept_notes_ghost_for_automation, apply_mcp_notes_mutation_on_main_thread,
-    close_notes_embedded_acp, close_notes_window, get_notes_app_entity_and_handle,
+    close_notes_embedded_agent_chat, close_notes_window, get_notes_app_entity_and_handle,
     get_notes_editor_text, handle_notes_ghost_key_for_automation, inject_text_into_notes,
     is_notes_window, is_notes_window_open, open_note_in_notes_window, open_notes_window,
     open_notes_window_without_launcher_restore, quick_capture, save_note_with_content, NotesApp,

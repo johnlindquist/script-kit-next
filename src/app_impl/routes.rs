@@ -43,7 +43,7 @@ pub enum AppRoute {
     /// Open the shared file-search prompt. The dispatcher calls
     /// [`crate::app_impl`] `ScriptListApp::open_file_search`.
     OpenFileSearch,
-    /// Open the Tab-AI ACP surface with no entry intent.
+    /// Open the Tab-AI Agent Chat surface with no entry intent.
     OpenTabAi,
     /// Open the "Do in current app" commands list via the existing
     /// menu-bar helper.

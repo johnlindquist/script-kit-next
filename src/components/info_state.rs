@@ -318,8 +318,8 @@ impl InfoStateSpec {
     }
 }
 
-pub(crate) fn acp_empty_guidance_spec() -> InfoStateSpec {
-    InfoStateSpec::new("acp-empty-composer-guidance")
+pub(crate) fn agent_chat_empty_guidance_spec() -> InfoStateSpec {
+    InfoStateSpec::new("agent_chat-empty-composer-guidance")
         .layout(InfoStateLayout::ComposerEmpty)
         .density(InfoStateDensity::Comfortable)
         .tone(InfoStateTone::Help)
@@ -334,8 +334,8 @@ pub(crate) fn acp_empty_guidance_spec() -> InfoStateSpec {
         ]))
 }
 
-pub(crate) fn render_acp_empty_guidance(theme: &theme::Theme) -> AnyElement {
-    render_info_state(acp_empty_guidance_spec(), theme)
+pub(crate) fn render_agent_chat_empty_guidance(theme: &theme::Theme) -> AnyElement {
+    render_info_state(agent_chat_empty_guidance_spec(), theme)
 }
 
 pub(crate) fn launcher_empty_or_no_results_spec(
@@ -866,8 +866,8 @@ mod tests {
     }
 
     #[test]
-    fn acp_empty_guidance_teaches_starting_context_not_window_management() {
-        let spec = acp_empty_guidance_spec();
+    fn agent_chat_empty_guidance_teaches_starting_context_not_window_management() {
+        let spec = agent_chat_empty_guidance_spec();
         let copy = format!("{spec:?}");
         assert!(copy.contains("Ask with context"));
         assert!(copy.contains("Use a skill or agent command"));
@@ -898,14 +898,14 @@ mod tests {
     }
 
     #[test]
-    fn acp_empty_guidance_keeps_actions_shortcut_in_guidance_rows() {
+    fn agent_chat_empty_guidance_keeps_actions_shortcut_in_guidance_rows() {
         // Regression: keeping ⌘K as a separate footer note made the actions row
         // sit lower than the rest of the guidance list. It belongs in the same
         // guidance item stack so every row shares one spacing contract.
-        let spec = acp_empty_guidance_spec();
+        let spec = agent_chat_empty_guidance_spec();
         assert!(
             spec.footer_shortcut_note.is_none(),
-            "acp guidance should not render a separate footer shortcut note"
+            "agent_chat guidance should not render a separate footer shortcut note"
         );
         let guidance_items: Vec<InfoGuidanceItem> = spec
             .sections

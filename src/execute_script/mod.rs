@@ -1855,15 +1855,15 @@ impl ScriptListApp {
                                         continue;
                                     }
 
-                                    // Handle GetAcpState - needs ACP view state, forward to UI thread
-                                    if let Message::GetAcpState { request_id, target } = &msg {
+                                    // Handle GetAgentChatState - needs Agent Chat view state, forward to UI thread
+                                    if let Message::GetAgentChatState { request_id, target } = &msg {
                                         tracing::info!(
                                             category = "EXEC",
                                             request_id = %request_id,
                                             target = ?target,
-                                            "GetAcpState request"
+                                            "GetAgentChatState request"
                                         );
-                                        let prompt_msg = PromptMessage::GetAcpState {
+                                        let prompt_msg = PromptMessage::GetAgentChatState {
                                             request_id: request_id.clone(),
                                             target: target.clone(),
                                         };
@@ -1877,8 +1877,8 @@ impl ScriptListApp {
                                         continue;
                                     }
 
-                                    // Handle PerformAcpSetupAction - forward to UI thread
-                                    if let Message::PerformAcpSetupAction {
+                                    // Handle PerformAgentChatSetupAction - forward to UI thread
+                                    if let Message::PerformAgentChatSetupAction {
                                         request_id,
                                         action,
                                         agent_id,
@@ -1889,9 +1889,9 @@ impl ScriptListApp {
                                             category = "EXEC",
                                             request_id = %request_id,
                                             action = ?action,
-                                            "PerformAcpSetupAction request"
+                                            "PerformAgentChatSetupAction request"
                                         );
-                                        let prompt_msg = PromptMessage::PerformAcpSetupAction {
+                                        let prompt_msg = PromptMessage::PerformAgentChatSetupAction {
                                             request_id: request_id.clone(),
                                             action: *action,
                                             agent_id: agent_id.clone(),
@@ -1907,16 +1907,16 @@ impl ScriptListApp {
                                         continue;
                                     }
 
-                                    // Handle ResetAcpTestProbe - forward to UI thread
-                                    if let Message::ResetAcpTestProbe { request_id, target } = &msg
+                                    // Handle ResetAgentChatTestProbe - forward to UI thread
+                                    if let Message::ResetAgentChatTestProbe { request_id, target } = &msg
                                     {
                                         tracing::info!(
                                             category = "EXEC",
                                             request_id = %request_id,
                                             target = ?target,
-                                            "ResetAcpTestProbe request"
+                                            "ResetAgentChatTestProbe request"
                                         );
-                                        let prompt_msg = PromptMessage::ResetAcpTestProbe {
+                                        let prompt_msg = PromptMessage::ResetAgentChatTestProbe {
                                             request_id: request_id.clone(),
                                             target: target.clone(),
                                         };
@@ -1930,8 +1930,8 @@ impl ScriptListApp {
                                         continue;
                                     }
 
-                                    // Handle GetAcpTestProbe - forward to UI thread
-                                    if let Message::GetAcpTestProbe {
+                                    // Handle GetAgentChatTestProbe - forward to UI thread
+                                    if let Message::GetAgentChatTestProbe {
                                         request_id,
                                         tail,
                                         target,
@@ -1941,9 +1941,9 @@ impl ScriptListApp {
                                             category = "EXEC",
                                             request_id = %request_id,
                                             target = ?target,
-                                            "GetAcpTestProbe request"
+                                            "GetAgentChatTestProbe request"
                                         );
-                                        let prompt_msg = PromptMessage::GetAcpTestProbe {
+                                        let prompt_msg = PromptMessage::GetAgentChatTestProbe {
                                             request_id: request_id.clone(),
                                             tail: *tail,
                                             target: target.clone(),

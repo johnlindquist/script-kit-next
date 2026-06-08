@@ -11,7 +11,7 @@
 //! keystroke for text-cursor movement. The Up/Down match that runs next
 //! had arms for every other grid/list view (ClipboardHistoryView,
 //! AppLauncherView, WindowSwitcherView, BrowserTabsView, DesignGalleryView,
-//! ThemeChooserView, ProcessManagerView, SettingsView, AcpHistoryView,
+//! ThemeChooserView, ProcessManagerView, SettingsView, AgentChatHistoryView,
 //! BrowserHistoryView, DictationHistoryView, NotesBrowseView,
 //! CurrentAppCommandsView, SearchAiPresetsView, ScriptList) but NO arm
 //! for `AppView::EmojiPickerView`. Up/Down keystrokes therefore fell

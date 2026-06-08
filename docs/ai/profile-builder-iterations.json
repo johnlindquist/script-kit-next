@@ -5,7 +5,7 @@
   "runtimeContract": {
     "selectorSurface": "main-menu-search",
     "selectorTrigger": "|",
-    "forbiddenSelectorSurfaces": ["acp-profile-popup", "actions-dialog"],
+    "forbiddenSelectorSurfaces": ["agent_chat-profile-popup", "actions-dialog"],
     "profileInstallRoot": "~/.scriptkit/plugins/main/profiles",
     "artifactFiles": ["profile.json", "PROMPT.md", "README.md", "examples/smoke.json"],
     "requiredCargoGates": [

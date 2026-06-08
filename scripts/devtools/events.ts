@@ -247,7 +247,7 @@ function classifyFailureSignals(child: JsonObject | null, appEvents: ReturnType<
     lineText(responseEvents),
   ].join("\n");
   const openAiSeen = /command_type=openAi|"type":"openAi"|openAi/.test(text);
-  const acpNotAcp = /notAcp|not_acp|status.?[:=].?notAcp/i.test(text);
+  const agent_chatNotAgentChat = /notAgentChat|not_agent_chat|status.?[:=].?notAgentChat/i.test(text);
   const piWarmSeen = /pi warm|warm pi|prepare.*pi|acquire.*pi|Pi Text|openAi/i.test(text);
   const responseTimeout = /response_timeout|timeout|parseOutcome.?[:=].?timeout/i.test(text);
   return {
@@ -255,25 +255,25 @@ function classifyFailureSignals(child: JsonObject | null, appEvents: ReturnType<
       seen: openAiSeen,
       parsedEventSeen: /event_type=stdin_command_parsed.*command_type=openAi/.test(text),
     },
-    acp: {
-      statusNotAcpSeen: acpNotAcp,
-      nextReceipt: "getAcpState(target ai or focused AcpChat target)",
+    agent_chat: {
+      statusNotAgentChatSeen: agent_chatNotAgentChat,
+      nextReceipt: "getAgentChatState(target ai or focused AgentChat target)",
     },
     piWarm: {
       signalsSeen: piWarmSeen,
-      nextReceipt: "events.record around openAi plus getAcpState after transition",
+      nextReceipt: "events.record around openAi plus getAgentChatState after transition",
     },
     timeout: {
       responseTimeoutSeen: responseTimeout,
     },
     likelyOwners: [
-      acpNotAcp ? "acp-chat-core" : "",
+      agent_chatNotAgentChat ? "agent_chat-chat-core" : "",
       piWarmSeen ? "sdk-script-execution" : "",
       openAiSeen ? "protocol-automation" : "",
     ].filter(Boolean),
     recommendedNext: [
-      openAiSeen && acpNotAcp ? "Prove target identity first: targets.inspect --target-kind acpDetached|main and getAcpState." : "",
-      piWarmSeen ? "Separate warm Pi acquire failure from ACP routing failure in the receipt." : "",
+      openAiSeen && agent_chatNotAgentChat ? "Prove target identity first: targets.inspect --target-kind agentChatDetached|main and getAgentChatState." : "",
+      piWarmSeen ? "Separate warm Pi acquire failure from Agent Chat routing failure in the receipt." : "",
       responseTimeout ? "Use compact output artifact path; do not rely on transcript tail." : "",
     ].filter(Boolean),
   };

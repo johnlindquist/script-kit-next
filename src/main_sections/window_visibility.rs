@@ -297,11 +297,11 @@ fn show_main_window_helper(
             // GPUI state changes — no macOS callbacks, safe inside borrow.
             cx.update(move |cx: &mut gpui::App| {
                 app_entity.update(cx, |view, ctx| {
-                    let acp_focus_handle = match &view.current_view {
-                        AppView::AcpChatView { entity } => Some(entity.read(ctx).focus_handle(ctx)),
+                    let agent_chat_focus_handle = match &view.current_view {
+                        AppView::AgentChatView { entity } => Some(entity.read(ctx).focus_handle(ctx)),
                         _ => None,
                     };
-                    let focus_handle = acp_focus_handle
+                    let focus_handle = agent_chat_focus_handle
                         .clone()
                         .unwrap_or_else(|| view.focus_handle(ctx));
                     let _ = window.update(ctx, |_root, win, _cx| {
@@ -313,9 +313,9 @@ fn show_main_window_helper(
                     // reset_to_script_list sets these too, but that runs BEFORE the
                     // window is shown — the render loop needs pending_focus set AFTER
                     // the window is key to actually move focus to the input element.
-                    if acp_focus_handle.is_some() {
+                    if agent_chat_focus_handle.is_some() {
                         view.focused_input = FocusedInput::None;
-                        view.pending_focus = Some(FocusTarget::AcpChat);
+                        view.pending_focus = Some(FocusTarget::AgentChat);
                     } else {
                         view.focused_input = FocusedInput::MainFilter;
                         view.pending_focus = Some(FocusTarget::MainFilter);
@@ -391,12 +391,12 @@ fn hide_main_window_helper(app_entity: Entity<ScriptListApp>, cx: &mut App) {
     // 3. Check secondary windows BEFORE the update closure
     let notes_open = notes::is_notes_window_open();
     let ai_open = ai::is_ai_window_open();
-    let acp_chat_open = ai::acp::chat_window::is_chat_window_open();
+    let agent_chat_open = ai::agent_chat::ui::chat_window::is_chat_window_open();
     logging::log(
         "VISIBILITY",
         &format!(
-            "Secondary windows: notes_open={}, ai_open={}, acp_chat_open={}",
-            notes_open, ai_open, acp_chat_open
+            "Secondary windows: notes_open={}, ai_open={}, agent_chat_open={}",
+            notes_open, ai_open, agent_chat_open
         ),
     );
 
@@ -413,10 +413,10 @@ fn hide_main_window_helper(app_entity: Entity<ScriptListApp>, cx: &mut App) {
     });
     // Sibling teardown for the embedded AI (`kind: Ai`, `id: "ai"`) entry.
     // Matches the `ensure_embedded_ai_window(false)` call in
-    // `close_acp_chat_to_script_list` (the in-app Escape/close-flow path)
+    // `close_agent_chat_to_script_list` (the in-app Escape/close-flow path)
     // so the hide path doesn't leave a stale `ai` child entry behind main
     // once the view is back on ScriptList. Without this, `listAutomationWindows`
-    // post-hide reports `{id:"ai", visible:true, semanticSurface:"acpChat"}`
+    // post-hide reports `{id:"ai", visible:true, semanticSurface:"agentChatChat"}`
     // even though main is hidden + re-keyed to `"scriptList"` — the anomaly
     // filed by Run 9 Pass #20 as `attacker-hide-path-embedded-ai-registry-stale`.
     // Idempotent no-op if the entry isn't present (safe to call on any hide).
@@ -443,7 +443,7 @@ fn hide_main_window_helper(app_entity: Entity<ScriptListApp>, cx: &mut App) {
 
     // 5. Hide only the main panel. `cx.hide()` app-hides all windows, so any
     // false-negative secondary-window check can take Notes down with main.
-    let secondary_windows_open = notes_open || ai_open || acp_chat_open;
+    let secondary_windows_open = notes_open || ai_open || agent_chat_open;
     logging::log(
         "VISIBILITY",
         &format!(

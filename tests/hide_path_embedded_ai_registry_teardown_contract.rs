@@ -5,7 +5,7 @@
 //! commit `237ad3245`) filed `[?] attacker-hide-path-embedded-ai-registry-stale`
 //! — after `triggerBuiltin tab-ai` then `{type:"hide"}`,
 //! `listAutomationWindows` returned a stale `{id:"ai", kind:"ai",
-//! visible:true, semanticSurface:"acpChat", parentWindowId:"main"}` entry
+//! visible:true, semanticSurface:"agentChatChat", parentWindowId:"main"}` entry
 //! even though main's own entry had been correctly re-keyed to
 //! `semanticSurface:"scriptList"` with `visible:false`. Root cause: the
 //! four hide dispatchers called `reset_to_script_list(ctx)` +
@@ -16,7 +16,7 @@
 //!
 //! The Fix adds `ensure_embedded_ai_window(false)` to ALL FOUR hide
 //! dispatcher sites, symmetric with the already-pinned
-//! `close_acp_chat_to_script_list` teardown at
+//! `close_agent_chat_to_script_list` teardown at
 //! `src/app_impl/tab_ai_mode/mod.rs:3151`.
 //!
 //! The hide path has since been split: the dispatcher tears down stale child
@@ -41,7 +41,7 @@
 //! `ensure_embedded_ai_window(false)` call from the extraction. The
 //! pairing is code-only, not contract-tested except by this file. A
 //! moved or deleted call in any one of the four sites would silently
-//! regress the receipt for every hide-from-acpChat sequence on that
+//! regress the receipt for every hide-from-agentChatChat sequence on that
 //! dispatcher path and reopen the Pass #20 anomaly. This contract
 //! catches that edit at test time.
 
@@ -73,9 +73,9 @@ fn every_hide_site_calls_ensure_embedded_ai_window_false() {
             "Hide dispatcher {name} MUST call \
              `ensure_embedded_ai_window(false)` to tear down the `ai` \
              child registry entry when the main window hides from an \
-             embedded-ACP view. Without this, `listAutomationWindows` \
+             embedded-Agent Chat view. Without this, `listAutomationWindows` \
              post-hide leaves a stale `{{id:\"ai\", visible:true, \
-             semanticSurface:\"acpChat\"}}` entry that disagrees with \
+             semanticSurface:\"agentChatChat\"}}` entry that disagrees with \
              its parent main entry on both visibility and semantic \
              surface — the Pass #20 attacker anomaly \
              `attacker-hide-path-embedded-ai-registry-stale`."

@@ -147,7 +147,7 @@ function arrayOf(value: unknown): JsonObject[] {
 function stableWindowKind(value: unknown) {
   if (value === "actionsDialog") return "ActionsDialog";
   if (value === "promptPopup") return "PromptPopup";
-  if (value === "acpDetached") return "AcpDetached";
+  if (value === "agentChatDetached") return "AgentChatDetached";
   if (value === "dictation") return "Dictation";
   if (value === "miniAi") return "MiniAi";
   if (value === "ai") return "Ai";
@@ -203,10 +203,10 @@ function surfaceCandidates(snapshot: JsonObject, listedWindow: JsonObject): Surf
 
 function acceptedSurfaceValues(expectedSurfaceKind: string): Set<string> {
   const values = new Set<string>([expectedSurfaceKind]);
-  // ACP detached windows expose their UI contract through automation
-  // semanticSurface while their window kind remains AcpDetached.
-  if (expectedSurfaceKind === "AcpChat") {
-    values.add("acpChat");
+  // Agent Chat detached windows expose their UI contract through automation
+  // semanticSurface while their window kind remains AgentChatDetached.
+  if (expectedSurfaceKind === "AgentChat") {
+    values.add("agentChatChat");
   }
   return values;
 }

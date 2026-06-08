@@ -79,11 +79,11 @@
 //!      anchors the reasoning to the code.
 //!
 //! Adjacent defended invariants already pinned elsewhere:
-//!   - `src/ai/acp/tests.rs::acp_history_toggle_uses_recent_close_debounce`
-//!     (line 711) pins the SIBLING ACP-history debounce (same
+//!   - `src/ai/agent_chat/ui/tests.rs::agent_chat_history_toggle_uses_recent_close_debounce`
+//!     (line 711) pins the SIBLING Agent Chat-history debounce (same
 //!     mechanism, different host) — the existence of that pin for
 //!     the sibling makes the actions-dialog pin even more urgent,
-//!     because the ACP-history variant could drift in isolation
+//!     because the Agent Chat-history variant could drift in isolation
 //!     without this one catching the drift on the primary site.
 //!
 //! **Refactor threat** (must be named per looper/rules/discipline.md):
@@ -95,8 +95,8 @@
 //! 2 open-path clearers (`src/app_impl/actions_toggle.rs:256`,
 //! `src/render_builtins/actions.rs:82`) into a shared
 //! `RecentCloseDebouncer` helper reused by the actions dialog AND
-//! the ACP-history debounce (sibling at
-//! `src/ai/acp/view.rs::handle_cmd_p_acp_history_toggle`). The
+//! the Agent Chat-history debounce (sibling at
+//! `src/ai/agent_chat/ui/view.rs::handle_cmd_p_agent_chat_history_toggle`). The
 //! consolidation naturally parameterizes the 300ms window; a
 //! "clean" default of 100ms or 500ms lands silently and nobody
 //! notices in review because the raw-literal debounce still

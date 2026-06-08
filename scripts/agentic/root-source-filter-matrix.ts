@@ -179,7 +179,7 @@ function seedFixtures() {
     notes: { enabled: false },
     clipboardHistory: { enabled: false },
     dictationHistory: { enabled: false },
-    acpHistory: { enabled: false },
+    agent_chatHistory: { enabled: false },
     aiVault: { enabled: false },
     browserTabs: { enabled: false },
     browserHistory: { enabled: false },
@@ -262,12 +262,12 @@ INSERT INTO history (
   );
 
   writeFileSync(
-    join(kitDir, "acp-history.jsonl"),
+    join(kitDir, "agent_chat-history.jsonl"),
     `${JSON.stringify({
       timestamp: now,
       first_message: `${query} conversation prompt`,
       message_count: 2,
-      session_id: "acp-source-filter",
+      session_id: "agent_chat-source-filter",
       title: `${query} conversation prompt`,
       preview: `${query} conversation reply`,
       search_text: `${query} conversation prompt ${query} conversation reply`,
@@ -333,8 +333,8 @@ const cases = [
     expectedFilters: ["conversations"],
     role: "rootPassive",
     sourceName: "Agent Chat Conversations",
-    stableKey: "acp-history/acp-source-filter",
-    emptyStableKey: "acp-history/acp-source-filter",
+    stableKey: "agent_chat-history/agent_chat-source-filter",
+    emptyStableKey: "agent_chat-history/agent_chat-source-filter",
   },
   {
     heads: ["v:", "vault:"],

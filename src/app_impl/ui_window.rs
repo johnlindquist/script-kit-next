@@ -225,7 +225,7 @@ impl ScriptListApp {
 
         match action {
             crate::footer_popup::FooterAction::Run => {
-                if let AppView::AcpChatView { entity } = &self.current_view {
+                if let AppView::AgentChatView { entity } = &self.current_view {
                     let entity = entity.clone();
                     entity.update(cx, |chat, cx| {
                         chat.submit_with_expanded_tokens(cx);
@@ -260,7 +260,7 @@ impl ScriptListApp {
                 } else if let AppView::DropPrompt { entity, .. } = &self.current_view {
                     let entity = entity.clone();
                     entity.update(cx, |prompt, _cx| prompt.submit());
-                } else if !self.try_run_ready_acp_script(cx) {
+                } else if !self.try_run_ready_agent_chat_script(cx) {
                     self.execute_selected(cx);
                 }
             }
@@ -278,7 +278,7 @@ impl ScriptListApp {
                 );
             }
             crate::footer_popup::FooterAction::Ai => {
-                if let AppView::AcpChatView { entity } = &self.current_view {
+                if let AppView::AgentChatView { entity } = &self.current_view {
                     let entity = entity.clone();
                     entity.update(cx, |chat, cx| {
                         chat.open_profile_trigger_picker_in_window(window, cx);
@@ -290,11 +290,11 @@ impl ScriptListApp {
                     let entity = entity.clone();
                     entity.update(cx, |prompt, cx| prompt.next_input(cx));
                 } else {
-                    self.open_tab_ai_acp_with_entry_intent(None, cx);
+                    self.open_tab_ai_agent_chat_with_entry_intent(None, cx);
                 }
             }
             crate::footer_popup::FooterAction::Stop => {
-                if let AppView::AcpChatView { entity } = &self.current_view {
+                if let AppView::AgentChatView { entity } = &self.current_view {
                     let entity = entity.clone();
                     entity.update(cx, |chat, cx| {
                         let _ = chat.cancel_streaming_from_escape(cx);
@@ -304,19 +304,19 @@ impl ScriptListApp {
                         target: "script_kit::footer_popup",
                         event = "main_window_footer_stop_ignored",
                         view = ?self.current_view,
-                        "Ignored Stop footer action outside ACP chat"
+                        "Ignored Stop footer action outside Agent Chat chat"
                     );
                 }
             }
             crate::footer_popup::FooterAction::PasteResponse => {
-                self.paste_latest_acp_response_to_frontmost(None, cx);
+                self.paste_latest_agent_chat_response_to_frontmost(None, cx);
             }
             crate::footer_popup::FooterAction::Replace
             | crate::footer_popup::FooterAction::Append
             | crate::footer_popup::FooterAction::Copy
             | crate::footer_popup::FooterAction::Expand
             | crate::footer_popup::FooterAction::Retry => {
-                if let AppView::AcpChatView { entity } = &self.current_view {
+                if let AppView::AgentChatView { entity } = &self.current_view {
                     let entity = entity.clone();
                     entity.update(cx, |chat, cx| {
                         chat.dispatch_footer_button(action, window, cx);
@@ -424,7 +424,7 @@ impl ScriptListApp {
                     view = ?self.current_view,
                     "Opening Profile Switcher from footer chip"
                 );
-                if let AppView::AcpChatView { entity, .. } = &self.current_view {
+                if let AppView::AgentChatView { entity, .. } = &self.current_view {
                     if self.show_actions_popup || crate::actions::is_actions_window_open() {
                         tracing::info!(
                             target: "script_kit::footer_popup",
@@ -448,20 +448,20 @@ impl ScriptListApp {
         }
     }
 
-    /// If the current view is an ACP chat with a validated `SCRIPT_READY` receipt,
+    /// If the current view is an Agent Chat chat with a validated `SCRIPT_READY` receipt,
     /// execute that specific script and return `true`. Otherwise return `false`
     /// so the caller can fall back to `execute_selected`.
-    fn try_run_ready_acp_script(&mut self, cx: &mut Context<Self>) -> bool {
-        if !matches!(self.current_view, AppView::AcpChatView { .. }) {
+    fn try_run_ready_agent_chat_script(&mut self, cx: &mut Context<Self>) -> bool {
+        if !matches!(self.current_view, AppView::AgentChatView { .. }) {
             return false;
         }
-        let Some(path) = self.acp_ready_script_path.clone() else {
+        let Some(path) = self.agent_chat_ready_script_path.clone() else {
             return false;
         };
         let path_str = path.to_string_lossy().to_string();
         tracing::info!(
             target: "script_kit::footer_popup",
-            event = "acp_footer_run_dispatched",
+            event = "agent_chat_footer_run_dispatched",
             path = %path_str,
         );
         self.execute_script_by_path(&path_str, cx);
@@ -469,18 +469,18 @@ impl ScriptListApp {
     }
 
     /// Paste assistant output into the frontmost app. When `text_override` is
-    /// `Some`, that text is pasted directly. Otherwise the current ACP view
+    /// `Some`, that text is pasted directly. Otherwise the current Agent Chat view
     /// resolves pastable text (selected focused-text variation when present,
     /// else the latest assistant message).
-    pub(crate) fn paste_latest_acp_response_to_frontmost(
+    pub(crate) fn paste_latest_agent_chat_response_to_frontmost(
         &mut self,
         text_override: Option<String>,
         cx: &mut Context<Self>,
     ) {
-        let Some(text) = text_override.or_else(|| self.latest_acp_assistant_response(cx)) else {
+        let Some(text) = text_override.or_else(|| self.latest_agent_chat_assistant_response(cx)) else {
             tracing::info!(
                 target: "script_kit::footer_popup",
-                event = "acp_footer_paste_response_ignored",
+                event = "agent_chat_footer_paste_response_ignored",
                 "Ignored Paste Response footer action because no assistant response exists"
             );
             return;
@@ -493,22 +493,22 @@ impl ScriptListApp {
             if let Err(error) = injector.paste_text(&text) {
                 tracing::warn!(
                     target: "script_kit::footer_popup",
-                    event = "acp_footer_paste_response_failed",
+                    event = "agent_chat_footer_paste_response_failed",
                     %error,
-                    "Failed to paste ACP response into frontmost app"
+                    "Failed to paste Agent Chat response into frontmost app"
                 );
             }
         });
 
         tracing::info!(
             target: "script_kit::footer_popup",
-            event = "acp_footer_paste_response_dispatched",
-            "Dispatched latest ACP assistant response to frontmost app"
+            event = "agent_chat_footer_paste_response_dispatched",
+            "Dispatched latest Agent Chat assistant response to frontmost app"
         );
     }
 
-    fn latest_acp_assistant_response(&self, cx: &App) -> Option<String> {
-        let AppView::AcpChatView { entity } = &self.current_view else {
+    fn latest_agent_chat_assistant_response(&self, cx: &App) -> Option<String> {
+        let AppView::AgentChatView { entity } = &self.current_view else {
             return None;
         };
 
@@ -711,15 +711,15 @@ impl ScriptListApp {
             return buttons;
         }
 
-        // ACP owns its own footer state: Send/Paste Response/Stop + Actions.
-        if matches!(self.current_view, AppView::AcpChatView { .. }) {
-            let buttons = self.acp_footer_buttons();
+        // Agent Chat owns its own footer state: Send/Paste Response/Stop + Actions.
+        if matches!(self.current_view, AppView::AgentChatView { .. }) {
+            let buttons = self.agent_chat_footer_buttons();
             tracing::info!(
                 target: "script_kit::footer_popup",
                 event = "main_window_footer_buttons_resolved",
                 view = ?self.current_view,
                 button_count = buttons.len(),
-                "Resolved ACP footer buttons"
+                "Resolved Agent Chat footer buttons"
             );
             return buttons;
         }
@@ -967,16 +967,16 @@ impl ScriptListApp {
         buttons
     }
 
-    /// Build footer buttons for the ACP chat surface from the child-owned
+    /// Build footer buttons for the Agent Chat chat surface from the child-owned
     /// composer/thread state snapshot.
-    fn acp_footer_buttons(&self) -> Vec<crate::footer_popup::FooterButtonConfig> {
+    fn agent_chat_footer_buttons(&self) -> Vec<crate::footer_popup::FooterButtonConfig> {
         use crate::footer_popup::{FooterAction, FooterButtonConfig};
 
         let footer_disabled = self.main_window_footer_buttons_blocked();
         let actions_open = self.show_actions_popup || crate::actions::is_actions_window_open();
         let enabled = !footer_disabled;
 
-        if let Some(snapshot) = self.acp_footer_snapshot.as_ref() {
+        if let Some(snapshot) = self.agent_chat_footer_snapshot.as_ref() {
             if !snapshot.visible {
                 return Vec::new();
             }
@@ -997,7 +997,7 @@ impl ScriptListApp {
         }
 
         vec![
-            FooterButtonConfig::new(FooterAction::Run, "↵", "Send").disabled_reason("loading_acp"),
+            FooterButtonConfig::new(FooterAction::Run, "↵", "Send").disabled_reason("loading_agent_chat"),
             FooterButtonConfig::new(FooterAction::Actions, "⌘K", "Actions")
                 .selected(actions_open)
                 .enabled(enabled),
@@ -1016,13 +1016,13 @@ impl ScriptListApp {
     ) -> Option<crate::footer_popup::MainWindowFooterConfig> {
         use crate::footer_popup::MainWindowFooterConfig;
 
-        if let AppView::AcpChatView { entity } = &self.current_view {
+        if let AppView::AgentChatView { entity } = &self.current_view {
             let hidden_by_live_view = cx
                 .map(|cx| !entity.read(cx).main_window_footer_visible(cx))
                 .unwrap_or(false);
             let hidden_by_cached_snapshot = cx.is_none()
                 && self
-                    .acp_footer_snapshot
+                    .agent_chat_footer_snapshot
                     .as_ref()
                     .is_some_and(|snapshot| !snapshot.visible);
             if hidden_by_live_view || hidden_by_cached_snapshot {
@@ -1061,9 +1061,9 @@ impl ScriptListApp {
         &self,
         gpui_footer: gpui::AnyElement,
     ) -> Option<gpui::AnyElement> {
-        if matches!(self.current_view, AppView::AcpChatView { .. })
+        if matches!(self.current_view, AppView::AgentChatView { .. })
             && self
-                .acp_footer_snapshot
+                .agent_chat_footer_snapshot
                 .as_ref()
                 .is_some_and(|snapshot| !snapshot.visible)
         {
@@ -1116,7 +1116,7 @@ impl ScriptListApp {
         cx: &Context<Self>,
     ) {
         let should_lock = match &self.current_view {
-            AppView::AcpChatView { entity } => {
+            AppView::AgentChatView { entity } => {
                 entity.read_with(cx, |view, _cx| view.locks_main_window_resize())
             }
             _ => false,
@@ -1133,9 +1133,9 @@ impl ScriptListApp {
             None
         };
 
-        // Enrich with ACP streaming/model info when on the ACP chat view.
+        // Enrich with Agent Chat streaming/model info when on the Agent Chat chat view.
         if let Some(ref mut cfg) = config {
-            self.enrich_footer_config_with_acp_info(cfg);
+            self.enrich_footer_config_with_agent_chat_info(cfg);
         }
 
         tracing::info!(
@@ -1258,14 +1258,14 @@ impl ScriptListApp {
         )
     }
 
-    pub(crate) fn enrich_footer_config_with_acp_info(
+    pub(crate) fn enrich_footer_config_with_agent_chat_info(
         &self,
         config: &mut crate::footer_popup::MainWindowFooterConfig,
     ) {
-        if matches!(self.current_view, AppView::AcpChatView { .. }) {
+        if matches!(self.current_view, AppView::AgentChatView { .. }) {
             // Cwd and Agent/Model now live in the shared main-view header. Keep
             // the native footer scoped to surface actions only, and make sure
-            // stale ACP left-info state cannot reintroduce duplicate model/cwd
+            // stale Agent Chat left-info state cannot reintroduce duplicate model/cwd
             // chips beside the footer buttons.
             config.left_info = None;
             return;
@@ -1560,8 +1560,8 @@ impl ScriptListApp {
             }
             AppView::SettingsView { .. } => Some((ViewType::MainWindow, 0)),
             AppView::FavoritesBrowseView { .. } => Some((ViewType::MainWindow, 0)),
-            AppView::AcpHistoryView { filter, .. } => {
-                let entries = crate::ai::acp::history::load_history();
+            AppView::AgentChatHistoryView { filter, .. } => {
+                let entries = crate::ai::agent_chat::ui::history::load_history();
                 let filtered_count = if filter.is_empty() {
                     entries.len()
                 } else {
@@ -1600,7 +1600,7 @@ impl ScriptListApp {
                         .unwrap_or(0)
                 },
             )),
-            AppView::AcpChatView { entity } => {
+            AppView::AgentChatView { entity } => {
                 if let Some(cx) = cx {
                     if let Some(item_count) = entity.read(cx).focused_text_mini_sizing_count(cx) {
                         return Some((ViewType::FocusedTextMini, item_count));
@@ -1921,7 +1921,7 @@ impl ScriptListApp {
                 entity.update(cx, |prompt, cx| prompt.set_input(text, cx));
                 true
             }
-            AppView::AcpChatView { entity } => {
+            AppView::AgentChatView { entity } => {
                 entity.update(cx, |view, cx| view.set_input(text, cx));
                 true
             }

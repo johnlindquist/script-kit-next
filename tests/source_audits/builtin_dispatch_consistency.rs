@@ -322,7 +322,7 @@ fn deferred_sizing_keeps_preview_builtins_wide() {
         "AppView::ThemeChooserView{",
         "AppView::SdkReferenceView{",
         "AppView::ScriptTemplateCatalogView{",
-        "AppView::AcpHistoryView{",
+        "AppView::AgentChatHistoryView{",
         "AppView::BrowserHistoryView{",
         "AppView::DictationHistoryView{",
         "AppView::NotesBrowseView{",

@@ -277,7 +277,7 @@ pub fn render_design_item(
                     None,
                     Some(IconKind::Svg("ListTodo".to_string())),
                 ),
-                SearchResult::AcpHistory(am) => (
+                SearchResult::AgentChatHistory(am) => (
                     am.entry.title_display().to_string(),
                     Some(am.subtitle.clone()),
                     None,

@@ -335,14 +335,14 @@ ${scenarios
   );
 
   writeFileSync(
-    join(kitDir, "acp-history.jsonl"),
+    join(kitDir, "agent_chat-history.jsonl"),
     scenarios
       .map((query) =>
         JSON.stringify({
           timestamp: now,
           first_message: `${query} conversation prompt`,
           message_count: 2,
-          session_id: `acp-root-typing-${slug(query)}`,
+          session_id: `agent_chat-root-typing-${slug(query)}`,
           title: `${query} conversation prompt`,
           preview: `${query} conversation reply`,
           search_text: `${query} conversation prompt ${query} conversation reply`,

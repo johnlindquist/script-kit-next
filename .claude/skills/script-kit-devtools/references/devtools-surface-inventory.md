@@ -18,7 +18,7 @@ The buildout target is a protocol/MCP/CLI DevTools primitives layer that agents 
 
 Every major surface family should eventually have direct primitives for target discovery, semantic elements, layout and scroll measurement, style and text fit, input and focus, resources and storage, visual comparison, event timelines, and investigation records.
 
-The first checked-in inventory groups buildout work into launcher/actions, prompt runtime, built-in filterable surfaces, portals/resources, ACP chat, Notes/Dictation/media, platform/windowing/permissions, storybook/design/theme, and observability/security/storage batches.
+The first checked-in inventory groups buildout work into launcher/actions, prompt runtime, built-in filterable surfaces, portals/resources, AgentChat chat, Notes/Dictation/media, platform/windowing/permissions, storybook/design/theme, and observability/security/storage batches.
 
 ## Current Interpretation
 

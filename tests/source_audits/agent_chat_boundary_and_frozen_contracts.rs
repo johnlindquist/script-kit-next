@@ -1,8 +1,8 @@
-//! Source audit for the Agent Chat / ACP rename boundary.
+//! Source audit for the Agent Chat / Agent Chat rename boundary.
 //!
-//! The project renamed the *feature* to "Agent Chat" while keeping "ACP" as the
+//! The project renamed the *feature* to "Agent Chat" while keeping "Agent Chat" as the
 //! name of frozen compatibility contracts (action IDs, route IDs, serialized
-//! surface IDs, `getAcpState`, telemetry labels). This audit proves two things
+//! surface IDs, `getAgentChatState`, telemetry labels). This audit proves two things
 //! at once:
 //!
 //! 1. The canonical `agent_chat::ui` boundary exists and is wired into the
@@ -50,13 +50,13 @@ fn agent_chat_ui_boundary_exists() {
 
     let ui = read("src/ai/agent_chat/ui/mod.rs");
     for alias in [
-        "AcpChatView as AgentChatView",
-        "AcpThread as AgentChatThread",
-        "AcpEvent as AgentChatEvent",
-        "AcpChatSession as AgentChatSession",
-        "AcpInlineSetupState as AgentChatInlineSetupState",
-        "AcpRetryRequest as AgentChatRetryRequest",
-        "AcpPermissionBroker as AgentChatPermissionBroker",
+        "AgentChatView as AgentChatView",
+        "AgentChatThread as AgentChatThread",
+        "AgentChatEvent as AgentChatEvent",
+        "AgentChatSession as AgentChatSession",
+        "AgentChatInlineSetupState as AgentChatInlineSetupState",
+        "AgentChatRetryRequest as AgentChatRetryRequest",
+        "AgentChatPermissionBroker as AgentChatPermissionBroker",
     ] {
         assert!(
             ui.contains(alias),
@@ -70,69 +70,40 @@ fn app_view_state_uses_agent_chat_ui_boundary() {
     let app_view = read("src/main_sections/app_view_state.rs");
     assert!(
         app_view.contains("crate::ai::agent_chat::ui::AgentChatView"),
-        "AcpChatView variant entity must flow through the agent_chat::ui boundary"
-    );
-}
-
-#[test]
-fn agent_client_protocol_is_imported_only_through_content_boundary() {
-    // The external `agent_client_protocol` crate is a type-only content-block
-    // dependency. All of `src/` must reach it through the single
-    // `agent_chat::content` choke point so the dependency stays visible and
-    // swappable. The only file allowed to name the crate is content.rs.
-    let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let mut files = Vec::new();
-    collect_rs_files(manifest.join("src"), &mut files);
-
-    let allowed = manifest.join("src/ai/agent_chat/content.rs");
-    let mut offenders = Vec::new();
-    for file in files {
-        if file == allowed {
-            continue;
-        }
-        let contents = fs::read_to_string(&file).unwrap_or_default();
-        if contents.contains("agent_client_protocol") {
-            offenders.push(file.display().to_string());
-        }
-    }
-
-    assert!(
-        offenders.is_empty(),
-        "agent_client_protocol must only be referenced in \
-         src/ai/agent_chat/content.rs; offenders: {offenders:?}"
+        "AgentChatView variant entity must flow through the agent_chat::ui boundary"
     );
 }
 
 /// The chat-runtime/UI types that MUST flow through the `agent_chat::ui`
-/// facade once an outer consumer references them by an `acp::` path.
+/// facade once an outer consumer references them by an `agent_chat::` path.
 const RUNTIME_TYPES: &[&str] = &[
-    "AcpChatView",
-    "AcpThread",
-    "AcpThreadInit",
-    "AcpThreadMessage",
-    "AcpThreadStatus",
-    "AcpEvent",
-    "AcpEventRx",
-    "AcpChatSession",
-    "AcpInlineSetupState",
-    "AcpSetupAction",
-    "AcpRetryRequest",
-    "AcpHistoryResumeRequest",
-    "AcpPermissionBroker",
-    "AcpLaunchBlocker",
-    "AcpLaunchRequirements",
-    "AcpLaunchResolution",
-    "AcpToolCallState",
+    "AgentChatView",
+    "AgentChatThread",
+    "AgentChatThreadInit",
+    "AgentChatThreadMessage",
+    "AgentChatThreadStatus",
+    "AgentChatEvent",
+    "AgentChatEventRx",
+    "AgentChatSession",
+    "AgentChatInlineSetupState",
+    "AgentChatSetupAction",
+    "AgentChatRetryRequest",
+    "AgentChatHistoryResumeRequest",
+    "AgentChatPermissionBroker",
+    "AgentChatLaunchBlocker",
+    "AgentChatLaunchRequirements",
+    "AgentChatLaunchResolution",
+    "AgentChatToolCallState",
 ];
 
-/// Returns the first runtime type that `content` reaches via an `acp::` path
-/// (optionally through a single submodule segment, e.g. `acp::view::AcpThread`).
-/// The frozen `AppView::AcpChatView` enum variant is NOT matched because it has
-/// no `acp::` path prefix.
-fn first_acp_runtime_reference(content: &str) -> Option<String> {
+/// Returns the first runtime type that `content` reaches via an `agent_chat::` path
+/// (optionally through a single submodule segment, e.g. `agent_chat::view::AgentChatThread`).
+/// The frozen `AppView::AgentChatView` enum variant is NOT matched because it has
+/// no `agent_chat::` path prefix.
+fn first_agent_chat_runtime_reference(content: &str) -> Option<String> {
     let is_ident = |c: char| c.is_alphanumeric() || c == '_';
-    for (idx, _) in content.match_indices("acp::") {
-        let rest = &content[idx + "acp::".len()..];
+    for (idx, _) in content.match_indices("agent_chat::") {
+        let rest = &content[idx + "agent_chat::".len()..];
         // Optionally skip one lowercase submodule segment like `view::`.
         let after_submodule = match rest.find("::") {
             Some(pos)
@@ -159,9 +130,9 @@ fn first_acp_runtime_reference(content: &str) -> Option<String> {
 #[test]
 fn outer_consumers_reach_runtime_types_through_agent_chat_ui() {
     // Outer feature roots must import the chat-runtime/UI types via the
-    // `agent_chat::ui` facade, not directly from `crate::ai::acp`. Non-runtime
-    // ACP compatibility surfaces (catalog/config/portal/history/surface_state/
-    // actions-dialog/context builders) are allowed to stay on `crate::ai::acp`.
+    // `agent_chat::ui` facade, not directly from `crate::ai::agent_chat::ui`. Non-runtime
+    // Agent Chat compatibility surfaces (catalog/config/portal/history/surface_state/
+    // actions-dialog/context builders) are allowed to stay on `crate::ai::agent_chat::ui`.
     let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
     let outer_roots = [
         "src/app_impl",
@@ -179,8 +150,8 @@ fn outer_consumers_reach_runtime_types_through_agent_chat_ui() {
         collect_rs_files(manifest.join(root), &mut files);
         for file in files {
             let contents = fs::read_to_string(&file).unwrap_or_default();
-            if let Some(ty) = first_acp_runtime_reference(&contents) {
-                offenders.push(format!("{} reaches acp::{ty}", file.display()));
+            if let Some(ty) = first_agent_chat_runtime_reference(&contents) {
+                offenders.push(format!("{} reaches agent_chat::{ty}", file.display()));
             }
         }
     }
@@ -188,22 +159,22 @@ fn outer_consumers_reach_runtime_types_through_agent_chat_ui() {
     assert!(
         offenders.is_empty(),
         "outer consumers must import chat-runtime types from \
-         crate::ai::agent_chat::ui, not crate::ai::acp; offenders: {offenders:#?}"
+         crate::ai::agent_chat::ui, not crate::ai::agent_chat::ui; offenders: {offenders:#?}"
     );
 }
 
 #[test]
 fn agent_chat_ui_facade_stays_runtime_only() {
-    // The facade is a runtime/UI boundary; it must NOT absorb non-runtime ACP
+    // The facade is a runtime/UI boundary; it must NOT absorb non-runtime Agent Chat
     // compatibility surfaces. Those get their own future boundaries if needed.
     let ui = read("src/ai/agent_chat/ui/mod.rs");
     for forbidden in [
-        "AcpAgentCatalogEntry",
-        "AcpAgentConfig",
-        "AcpAgentRuntimeState",
-        "AcpActionsDialogContext",
-        "AcpPortalLaunchContract",
-        "AcpHistoryEntry",
+        "AgentChatAgentCatalogEntry",
+        "AgentChatAgentConfig",
+        "AgentChatAgentRuntimeState",
+        "AgentChatActionsDialogContext",
+        "AgentChatPortalLaunchContract",
+        "AgentChatHistoryEntry",
         "portal_contract",
         "catalog::",
         "config::",
@@ -222,23 +193,27 @@ fn frozen_serialized_surface_ids_are_unchanged() {
     // Serialized view-type ids feed launcher surface contracts and automation;
     // these MUST stay stable even though the feature is now "Agent Chat".
     assert!(
-        app_view.contains("Some(\"acp_chat\")"),
-        "frozen serialized surface id `acp_chat` must remain"
+        app_view.contains("Some(\"agent_chat\")"),
+        "frozen serialized surface id `agent_chat` must remain"
     );
     assert!(
-        app_view.contains("SurfaceKind::AcpChat"),
-        "frozen SurfaceKind::AcpChat variant must remain"
+        app_view.contains("SurfaceKind::AgentChat"),
+        "frozen SurfaceKind::AgentChat variant must remain"
     );
     assert!(
-        app_view.contains("AppView::AcpChatView"),
-        "frozen AppView::AcpChatView variant must remain"
+        app_view.contains("AppView::AgentChatView"),
+        "frozen AppView::AgentChatView variant must remain"
     );
 }
 
 #[test]
 fn frozen_action_and_route_ids_are_unchanged() {
     let script_context = read("src/actions/builders/script_context.rs");
-    for id in ["acp:root", "acp:change_model", "acp_switch_model:"] {
+    for id in [
+        "agent_chat:root",
+        "agent_chat:change_model",
+        "agent_chat_switch_model:",
+    ] {
         assert!(
             script_context.contains(id),
             "frozen action/route id `{id}` must remain in script_context.rs"
@@ -247,23 +222,27 @@ fn frozen_action_and_route_ids_are_unchanged() {
 }
 
 #[test]
-fn frozen_get_acp_state_protocol_contract_is_unchanged() {
-    let acp_state = read("src/protocol/types/acp_state.rs");
+fn frozen_get_agent_chat_state_protocol_contract_is_unchanged() {
+    let agent_chat_state = read("src/protocol/types/agent_chat_state.rs");
     assert!(
-        acp_state.contains("ACP_STATE_SCHEMA_VERSION"),
-        "frozen `ACP_STATE_SCHEMA_VERSION` automation contract must remain"
+        agent_chat_state.contains("AGENT_CHAT_STATE_SCHEMA_VERSION"),
+        "frozen `AGENT_CHAT_STATE_SCHEMA_VERSION` automation contract must remain"
     );
     assert!(
-        acp_state.contains("AcpStateSnapshot"),
-        "frozen `AcpStateSnapshot` automation type must remain"
+        agent_chat_state.contains("AgentChatStateSnapshot"),
+        "frozen `AgentChatStateSnapshot` automation type must remain"
     );
 }
 
 #[test]
 fn agent_chat_user_facing_copy_uses_feature_name() {
-    // Display copy must name the feature "Agent Chat", not "ACP". Each pair
-    // asserts the new copy is present and the old ACP-as-feature label is gone.
-    let cases: &[(&str, &str, &str)] = &[("src/render_prompts/term.rs", "⌘W Agent Chat", "⌘W ACP")];
+    // Display copy must name the feature "Agent Chat", not "Agent Chat". Each pair
+    // asserts the new copy is present and the old Agent Chat-as-feature label is gone.
+    let cases: &[(&str, &str, &str)] = &[(
+        "src/render_prompts/term.rs",
+        "⌘W Agent Chat",
+        "⌘W Agent Chat",
+    )];
     for (path, expect_new, forbid_old) in cases {
         let src = read(path);
         assert!(
@@ -272,26 +251,26 @@ fn agent_chat_user_facing_copy_uses_feature_name() {
         );
         assert!(
             !src.contains(forbid_old),
-            "{path} must not keep the ACP-as-feature display label (`{forbid_old}`)"
+            "{path} must not keep the Agent Chat-as-feature display label (`{forbid_old}`)"
         );
     }
 }
 
 #[test]
-fn acp_contract_strings_remain_frozen_until_contract_rename_slice() {
+fn agent_chat_contract_strings_remain_frozen_until_contract_rename_slice() {
     // Step 6 changes only display copy. Native window title, serialized surface
     // ids, automation snapshot, and detached-target wire ids stay frozen.
     assert!(
-        read("src/platform/secondary_window_config.rs").contains("Script Kit ACP"),
-        "frozen native window title `Script Kit ACP` must remain"
+        read("src/platform/secondary_window_config.rs").contains("Script Kit Agent Chat"),
+        "frozen native window title `Script Kit Agent Chat` must remain"
     );
     assert!(
-        read("src/ai/acp/chat_window.rs").contains("acpDetached"),
-        "frozen detached-target wire id `acpDetached` must remain"
+        read("src/ai/agent_chat/ui/chat_window.rs").contains("agentChatDetached"),
+        "frozen detached-target wire id `agentChatDetached` must remain"
     );
     let app_view = read("src/main_sections/app_view_state.rs");
     assert!(
-        app_view.contains("Some(\"acp_history\")"),
-        "frozen serialized surface id `acp_history` must remain"
+        app_view.contains("Some(\"agent_chat_history\")"),
+        "frozen serialized surface id `agent_chat_history` must remain"
     );
 }

@@ -1,5 +1,5 @@
 // Manual helper for Agent Chat handoff from the main menu.
-// Automated coverage should use scripts/agentic with getAcpState receipts.
+// Automated coverage should use scripts/agentic with getAgentChatState receipts.
 
 import '../../scripts/kit-sdk';
 

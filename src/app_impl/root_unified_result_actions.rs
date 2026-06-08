@@ -31,10 +31,10 @@ pub(crate) enum RootUnifiedResultAction {
     BrowserHistoryCopyUrl,
     BrowserHistoryCopyTitle,
     BrowserHistoryCopyTitleUrl,
-    AcpHistoryResume,
-    AcpHistoryCopyTitle,
-    AcpHistoryCopySessionId,
-    AcpHistoryCopyPreview,
+    AgentChatHistoryResume,
+    AgentChatHistoryCopyTitle,
+    AgentChatHistoryCopySessionId,
+    AgentChatHistoryCopyPreview,
     AiVaultPasteResumeCommand,
     AiVaultCopyResumeCommand,
     AiVaultResumeConfiguredTerminal,
@@ -94,10 +94,10 @@ impl RootUnifiedResultAction {
         Self::BrowserHistoryCopyUrl,
         Self::BrowserHistoryCopyTitle,
         Self::BrowserHistoryCopyTitleUrl,
-        Self::AcpHistoryResume,
-        Self::AcpHistoryCopyTitle,
-        Self::AcpHistoryCopySessionId,
-        Self::AcpHistoryCopyPreview,
+        Self::AgentChatHistoryResume,
+        Self::AgentChatHistoryCopyTitle,
+        Self::AgentChatHistoryCopySessionId,
+        Self::AgentChatHistoryCopyPreview,
         Self::AiVaultPasteResumeCommand,
         Self::AiVaultCopyResumeCommand,
         Self::AiVaultResumeConfiguredTerminal,
@@ -157,10 +157,10 @@ impl RootUnifiedResultAction {
             Self::BrowserHistoryCopyUrl => "root_browser_history_copy_url",
             Self::BrowserHistoryCopyTitle => "root_browser_history_copy_title",
             Self::BrowserHistoryCopyTitleUrl => "root_browser_history_copy_title_url",
-            Self::AcpHistoryResume => "root_acp_history_resume",
-            Self::AcpHistoryCopyTitle => "root_acp_history_copy_title",
-            Self::AcpHistoryCopySessionId => "root_acp_history_copy_session_id",
-            Self::AcpHistoryCopyPreview => "root_acp_history_copy_preview",
+            Self::AgentChatHistoryResume => "root_agent_chat_history_resume",
+            Self::AgentChatHistoryCopyTitle => "root_agent_chat_history_copy_title",
+            Self::AgentChatHistoryCopySessionId => "root_agent_chat_history_copy_session_id",
+            Self::AgentChatHistoryCopyPreview => "root_agent_chat_history_copy_preview",
             Self::AiVaultPasteResumeCommand => "root_ai_vault_paste_resume_command",
             Self::AiVaultCopyResumeCommand => "root_ai_vault_copy_resume_command",
             Self::AiVaultResumeConfiguredTerminal => "root_ai_vault_resume_configured_terminal",
@@ -220,7 +220,7 @@ pub(crate) enum RootUnifiedActionSubject {
     Clipboard(crate::clipboard_history::ClipboardEntryMeta),
     BrowserTab(crate::browser_tabs::RootBrowserTabSearchHit),
     BrowserHistory(crate::browser_history::RootBrowserHistorySearchHit),
-    AcpHistory(crate::ai::acp::history::AcpHistoryEntry),
+    AgentChatHistory(crate::ai::agent_chat::ui::history::AgentChatHistoryEntry),
     AiVault(crate::ai_vault::AiVaultHit),
     Dictation {
         id: String,
@@ -241,7 +241,7 @@ impl RootUnifiedActionSubject {
             Self::Clipboard(entry) => entry.text_preview.clone(),
             Self::BrowserTab(hit) => hit.title.clone(),
             Self::BrowserHistory(hit) => hit.title.clone(),
-            Self::AcpHistory(entry) => entry.title_display().to_string(),
+            Self::AgentChatHistory(entry) => entry.title_display().to_string(),
             Self::AiVault(_) => "AI Vault Conversation".to_string(),
             Self::Dictation { preview, .. } => preview.clone(),
             Self::App(app) => app.name.clone(),
@@ -259,7 +259,7 @@ impl RootUnifiedActionSubject {
             Self::Clipboard(entry) => Some(format!("clipboard-history/{}", entry.id)),
             Self::BrowserTab(hit) => Some(hit.stable_key.clone()),
             Self::BrowserHistory(hit) => Some(hit.stable_key.clone()),
-            Self::AcpHistory(entry) => Some(format!("acp-history/{}", entry.session_id)),
+            Self::AgentChatHistory(entry) => Some(format!("agent_chat-history/{}", entry.session_id)),
             Self::AiVault(hit) => Some(hit.stable_key.clone()),
             Self::Dictation { id, .. } => Some(format!("dictation-history/{id}")),
             Self::App(app) => Some(
@@ -293,7 +293,7 @@ impl RootUnifiedActionSubject {
             Self::Clipboard(_) => "Clipboard History",
             Self::BrowserTab(_) => "Browser Tabs",
             Self::BrowserHistory(_) => "Browser History",
-            Self::AcpHistory(_) => "Agent Chat Conversations",
+            Self::AgentChatHistory(_) => "Agent Chat Conversations",
             Self::AiVault(_) => "AI Vault",
             Self::Dictation { .. } => "Dictation History",
             Self::App(_) => "Apps",
@@ -335,8 +335,8 @@ pub(crate) fn root_unified_action_subject_from_result(
         SearchResult::BrowserHistory(history) => Some(RootUnifiedActionSubject::BrowserHistory(
             history.hit.clone(),
         )),
-        SearchResult::AcpHistory(history) => {
-            Some(RootUnifiedActionSubject::AcpHistory(history.entry.clone()))
+        SearchResult::AgentChatHistory(history) => {
+            Some(RootUnifiedActionSubject::AgentChatHistory(history.entry.clone()))
         }
         SearchResult::AiVault(ai_vault) => {
             Some(RootUnifiedActionSubject::AiVault(ai_vault.hit.clone()))
@@ -471,27 +471,27 @@ pub(crate) fn root_unified_actions_for_subject(subject: &RootUnifiedActionSubjec
                 "Share",
             ),
         ],
-        RootUnifiedActionSubject::AcpHistory(entry) => {
+        RootUnifiedActionSubject::AgentChatHistory(entry) => {
             let mut actions = vec![
                 action(
-                    RootUnifiedResultAction::AcpHistoryResume,
+                    RootUnifiedResultAction::AgentChatHistoryResume,
                     "Resume Conversation",
                     "Open",
                 ),
                 action(
-                    RootUnifiedResultAction::AcpHistoryCopyTitle,
+                    RootUnifiedResultAction::AgentChatHistoryCopyTitle,
                     "Copy Conversation Title",
                     "Share",
                 ),
                 action(
-                    RootUnifiedResultAction::AcpHistoryCopySessionId,
+                    RootUnifiedResultAction::AgentChatHistoryCopySessionId,
                     "Copy Session ID",
                     "Share",
                 ),
             ];
             if !entry.preview_display().is_empty() {
                 actions.push(action(
-                    RootUnifiedResultAction::AcpHistoryCopyPreview,
+                    RootUnifiedResultAction::AgentChatHistoryCopyPreview,
                     "Copy Preview",
                     "Share",
                 ));
@@ -830,10 +830,10 @@ pub(crate) fn execute_root_unified_result_action(
             RootUnifiedActionSubject::BrowserHistory(hit),
         ) => copy(format!("{} — {}", hit.title, hit.url), cx),
         (
-            RootUnifiedResultAction::AcpHistoryResume,
-            RootUnifiedActionSubject::AcpHistory(entry),
+            RootUnifiedResultAction::AgentChatHistoryResume,
+            RootUnifiedActionSubject::AgentChatHistory(entry),
         ) => {
-            app.resume_acp_conversation_from_history(
+            app.resume_agent_chat_conversation_from_history(
                 &entry.session_id,
                 entry.first_message.as_str(),
                 cx,
@@ -841,16 +841,16 @@ pub(crate) fn execute_root_unified_result_action(
             true
         }
         (
-            RootUnifiedResultAction::AcpHistoryCopyTitle,
-            RootUnifiedActionSubject::AcpHistory(entry),
+            RootUnifiedResultAction::AgentChatHistoryCopyTitle,
+            RootUnifiedActionSubject::AgentChatHistory(entry),
         ) => copy(entry.title_display().to_string(), cx),
         (
-            RootUnifiedResultAction::AcpHistoryCopySessionId,
-            RootUnifiedActionSubject::AcpHistory(entry),
+            RootUnifiedResultAction::AgentChatHistoryCopySessionId,
+            RootUnifiedActionSubject::AgentChatHistory(entry),
         ) => copy(entry.session_id.clone(), cx),
         (
-            RootUnifiedResultAction::AcpHistoryCopyPreview,
-            RootUnifiedActionSubject::AcpHistory(entry),
+            RootUnifiedResultAction::AgentChatHistoryCopyPreview,
+            RootUnifiedActionSubject::AgentChatHistory(entry),
         ) => copy(entry.preview_display().to_string(), cx),
         (
             RootUnifiedResultAction::AiVaultPasteResumeCommand,
@@ -1016,7 +1016,7 @@ pub(crate) fn execute_root_unified_result_action(
             copy(entry.id.clone(), cx)
         }
         (RootUnifiedResultAction::SkillOpen, RootUnifiedActionSubject::Skill(skill)) => {
-            app.open_acp_with_selected_skill(skill, cx);
+            app.open_agent_chat_with_selected_skill(skill, cx);
             true
         }
         (RootUnifiedResultAction::SkillCopyId, RootUnifiedActionSubject::Skill(skill)) => {

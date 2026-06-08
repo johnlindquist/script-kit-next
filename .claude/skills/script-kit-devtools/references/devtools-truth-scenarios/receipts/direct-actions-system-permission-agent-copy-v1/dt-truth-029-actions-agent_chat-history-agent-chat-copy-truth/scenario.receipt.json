@@ -1,0 +1,88 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "dt-truth-029-actions-agent_chat-history-agent-chat-copy-truth",
+  "oracleSession": "actions-batch-three-plan",
+  "executor": "direct-devtools-primitives",
+  "result": "pass",
+  "executorProvenance": {
+    "hasRunner": false,
+    "topLevelCommands": [
+      {
+        "argv": ["bun", "scripts/devtools/targets.ts", "inspect", "--main", "--strict", "--surface", "ScriptList"],
+        "receiptRef": "01-main.inspect.json"
+      },
+      {
+        "argv": ["bun", "scripts/devtools/act.ts", "select", "--main", "--strict", "--surface", "ScriptList", "--semantic-id", "choice:23:agent-chat-history"],
+        "receiptRef": "03-main-select-agent-chat-history.json"
+      },
+      {
+        "argv": ["bun", "scripts/devtools/actions.ts", "inspect", "--target-kind", "actionsDialog", "--strict", "--surface", "ActionsDialog"],
+        "receiptRef": "11-actions-history.inspect.json"
+      }
+    ]
+  },
+  "truthModel": {
+    "routeGeneration": "script-list-to-actions-dialog",
+    "focusOwner": "actionsDialog",
+    "selectedSemanticId": "choice:0:run_script",
+    "visibleLabel": "Open Agent Chat History",
+    "footerIntent": "actions-dialog",
+    "actionId": "run_script",
+    "handlerId": "builtin-agent-chat-history",
+    "sideEffectClass": "agent-chat-history-open",
+    "disabledReason": null,
+    "targetSurface": "ActionsDialog",
+    "parentSubjectId": "choice:23:agent-chat-history",
+    "layoutGeneration": "actions-dialog-filtered"
+  },
+  "safety": {
+    "destructiveOperationObserved": false,
+    "systemPasteboardChanged": false,
+    "filesystemMutationOutsideSandbox": false,
+    "externalActivation": false,
+    "submitAllowed": false,
+    "submitAttempted": false,
+    "nativeEscalation": false,
+    "blockedClassification": null
+  },
+  "userPath": [
+    {
+      "step": "Select Agent Chat History from the main launcher",
+      "controlChannel": "direct-primitive",
+      "receiptRef": "03-main-select-agent-chat-history.json"
+    },
+    {
+      "step": "Open actions for the selected built-in",
+      "controlChannel": "direct-primitive",
+      "receiptRef": "06-open-actions.json"
+    },
+    {
+      "step": "Filter stale Assistant copy and recover History copy",
+      "controlChannel": "direct-primitive",
+      "receiptRef": "11-actions-history.inspect.json"
+    }
+  ],
+  "primitiveReceipts": [
+    { "command": "targets.inspect", "receiptRef": "01-main.inspect.json" },
+    { "command": "act.set-input", "receiptRef": "02-main-filter-agent-chat-history.json" },
+    { "command": "act.select", "receiptRef": "03-main-select-agent-chat-history.json" },
+    { "command": "elements.snapshot", "receiptRef": "04-main-elements-selected.json" },
+    { "command": "text.measure", "receiptRef": "05-main-text.json" },
+    { "command": "act.open-actions", "receiptRef": "06-open-actions.json" },
+    { "command": "actions.inspect", "receiptRef": "07-actions-open.inspect.json" },
+    { "command": "act.set-input", "receiptRef": "08-actions-filter-assistant.json" },
+    { "command": "actions.inspect", "receiptRef": "09-actions-assistant.inspect.json" },
+    { "command": "act.set-input", "receiptRef": "10-actions-filter-history.json" },
+    { "command": "actions.inspect", "receiptRef": "11-actions-history.inspect.json" },
+    { "command": "focus.inspect", "receiptRef": "12-actions-focus.json" },
+    { "command": "layout.measure", "receiptRef": "13-actions-layout.json" },
+    { "command": "act.key", "receiptRef": "14-actions-escape.json" }
+  ],
+  "truthChecks": [
+    { "name": "agent_chatHistoryParentSelectionStable", "status": "pass" },
+    { "name": "agent_chatHistoryVisibleCopyNamesAgentChat", "status": "pass" },
+    { "name": "agent_chatHistoryCopyRejectsAiConversations", "status": "pass" },
+    { "name": "genericAssistantFilterDoesNotExposeStaleAction", "status": "pass" },
+    { "name": "historyFilterRecoveryRestoresAction", "status": "pass" }
+  ]
+}

@@ -8,7 +8,7 @@ This document is generated from the `scriptkit-core-qa-50` web-choice submission
 - Active lock-in scope: 49 selected QA candidates.
 - One selected candidate is omitted from this contract per product-scope feedback.
 - Experimental: Mini Mode is documented as WIP only; it is not treated as a stable user contract yet.
-- Terminology: user-facing docs use `Agent Chat with Pi Backend`; legacy `acp` names may remain only where they identify current source files, tests, commands, or persisted choice ids.
+- Terminology: user-facing docs use `Agent Chat with Pi Backend`; source files, tests, commands, and persisted choice ids use Agent Chat / Pi-backed Agent Chat names only.
 - Main input cwd behavior: `>` must not select cwd; Tab is the cwd trigger.
 - Cargo verification must use `./scripts/agentic/agent-cargo.sh`, not bare `cargo`.
 
@@ -127,34 +127,34 @@ Every feature below should be locked with the smallest proof set that can fail f
 ### Agent Chat with Pi Backend context picker accepts @ items with receipts
 
 - Stable anchor: `agent-chat-with-pi-backend-context-picker-accepts-items-with-receipts`
-- Choice id: `acp-context-picker-acceptance-receipts`
+- Choice id: `agent_chat-context-picker-acceptance-receipts`
 - Surface: Agent Chat / Context Picker
 - Status: Active QA lock-in candidate
 - User contract: Agent Chat state and test probe receipts show picker open, selected item, acceptedViaKey, cursorAfter, contextChipCount, and final input layout after acceptance.
 - Regression risk: Picker keyboard routing and context insertion are easy to break during composer, popup, or context refactors.
 - Proof commands:
-  - `bash scripts/agentic/session.sh rpc core-qa '{"type":"resetAcpTestProbe","requestId":"core-qa-reset-probe","target":{"type":"main"}}' --expect acpTestProbeResult --timeout 8000`
+  - `bash scripts/agentic/session.sh rpc core-qa '{"type":"resetAgentChatTestProbe","requestId":"core-qa-reset-probe","target":{"type":"main"}}' --expect agent_chatTestProbeResult --timeout 8000`
   - `bun scripts/devtools/act.ts set-input --text '@' --main --strict --surface AgentChat`
   - `bun scripts/devtools/act.ts key --key Tab --main --strict --surface AgentChat`
-  - `bash scripts/agentic/session.sh rpc core-qa '{"type":"getAcpTestProbe","requestId":"core-qa-probe","tail":4,"target":{"type":"main"}}' --expect acpTestProbeResult --timeout 8000`
-  - `./scripts/agentic/agent-cargo.sh test --test acp_mention_popup_registry_lifecycle_contract -- --nocapture`
+  - `bash scripts/agentic/session.sh rpc core-qa '{"type":"getAgentChatTestProbe","requestId":"core-qa-probe","tail":4,"target":{"type":"main"}}' --expect agent_chatTestProbeResult --timeout 8000`
+  - `./scripts/agentic/agent-cargo.sh test --test agent_chat_mention_popup_registry_lifecycle_contract -- --nocapture`
 - Pass evidence: Probe receipt contains keyRoutes and acceptedItems with acceptedViaKey tab/enter, cursorAfter, and context state; popup lifecycle contract passes.
 - Fail evidence: Picker never opens, acceptedItems stays empty, cursor/chip count is wrong, event route is propagated incorrectly, or contract fails.
 
 ### Detached Agent Chat with Pi Backend targets, reattaches, and cleans up
 
 - Stable anchor: `detached-agent-chat-with-pi-backend-targets-reattaches-and-cleans-up`
-- Choice id: `acp-detached-targeting-and-close-cleanup`
+- Choice id: `agent_chat-detached-targeting-and-close-cleanup`
 - Surface: Agent Chat / Detached Agent Chat with Pi Backend
 - Status: Active QA lock-in candidate
 - User contract: Detached Agent Chat with Pi Backend windows appear in listAutomationWindows, inspect target resolves by kind/id, reattach identity is stable, and close cleanup removes only the detached host.
 - Regression risk: Detached windows are prone to stale registry entries, wrong-window reads, and leaked popups after refactors.
 - Proof commands:
-  - `bun scripts/devtools/inspect.ts --session core-qa --target-kind acpDetached --limit 200`
-  - `bun scripts/devtools/surface.ts inspect --surface AgentChat --target-kind acpDetached`
-  - `./scripts/agentic/agent-cargo.sh test --test acp_reattach_identity_contract -- --nocapture`
-  - `./scripts/agentic/agent-cargo.sh test --test detached_acp_close_cleanup_contract -- --nocapture`
-- Pass evidence: Window inventory/inspect identifies acpDetached with full or acceptable semantic quality, reattach id remains stable, and close cleanup contracts pass.
+  - `bun scripts/devtools/inspect.ts --session core-qa --target-kind agentChatDetached --limit 200`
+  - `bun scripts/devtools/surface.ts inspect --surface AgentChat --target-kind agentChatDetached`
+  - `./scripts/agentic/agent-cargo.sh test --test agent_chat_reattach_identity_contract -- --nocapture`
+  - `./scripts/agentic/agent-cargo.sh test --test detached_agent_chat_close_cleanup_contract -- --nocapture`
+- Pass evidence: Window inventory/inspect identifies agentChatDetached with full or acceptable semantic quality, reattach id remains stable, and close cleanup contracts pass.
 - Fail evidence: Target resolution fails, detached and main state are mixed, registry remains after close, or contracts fail.
 
 ### Notes edit state survives main-window activity
@@ -457,56 +457,56 @@ Every feature below should be locked with the smallest proof set that can fail f
 ### Agent Chat history can resume and export conversations
 
 - Stable anchor: `agent-chat-history-can-resume-and-export-conversations`
-- Choice id: `acp-history-resume-export`
+- Choice id: `agent_chat-history-resume-export`
 - Surface: Agent Chat / History
 - Status: Active QA lock-in candidate
 - User contract: History rows are searchable, resume targets the selected conversation id, and export emits one canonical path with transcript metadata.
 - Regression risk: History and export refactors can duplicate export paths, resume the wrong thread, or lose message metadata.
 - Proof commands:
   - `bash scripts/agentic/session.sh rpc core-qa '{"type":"triggerBuiltin","requestId":"core-qa-agent-chat-pi-backend-history","builtinId":"builtin/agent-chat-pi-backend-history"}' --expect triggerBuiltinResult --timeout 8000`
-  - `bun scripts/devtools/inspect.ts --session core-qa --main --surface AcpHistory --limit 200`
-  - `./scripts/agentic/agent-cargo.sh test --test acp_history_empty_state_contract -- --nocapture`
-  - `./scripts/agentic/agent-cargo.sh test --test acp_existing_chat_mutation_contract -- --nocapture`
-  - `./scripts/agentic/agent-cargo.sh test --test acp_conversation_export_single_path_contract -- --nocapture`
+  - `bun scripts/devtools/inspect.ts --session core-qa --main --surface AgentChatHistory --limit 200`
+  - `./scripts/agentic/agent-cargo.sh test --test agent_chat_history_empty_state_contract -- --nocapture`
+  - `./scripts/agentic/agent-cargo.sh test --test agent_chat_existing_chat_mutation_contract -- --nocapture`
+  - `./scripts/agentic/agent-cargo.sh test --test agent_chat_conversation_export_single_path_contract -- --nocapture`
 - Pass evidence: Inspect shows history rows or empty state and contracts pass for resume/mutation/export single path.
 - Fail evidence: Wrong conversation resumed, duplicate export routes, missing empty state, or tests fail.
 
 ### Agent Chat with Pi Backend setup and onboarding offer recoverable actions
 
 - Stable anchor: `agent-chat-with-pi-backend-setup-and-onboarding-offer-recoverable-actions`
-- Choice id: `acp-setup-onboarding-agent-picker`
+- Choice id: `agent_chat-setup-onboarding-agent-picker`
 - Surface: Agent Chat / Setup
 - Status: Active QA lock-in candidate
 - User contract: Agent Chat with Pi Backend setup state exposes reasonCode/title/body/primaryAction, setup actions return updated state, and agent picker open/select/close states are observable.
 - Regression risk: Setup regressions can strand users when agents are missing or auth/capabilities change.
 - Proof commands:
-  - `bash scripts/agentic/session.sh rpc core-qa '{"type":"getAcpState","requestId":"core-qa-agent-chat-pi-backend-setup","target":{"type":"main"}}' --expect acpStateResult --timeout 8000`
-  - `./scripts/agentic/agent-cargo.sh test --test acp_onboarding -- --nocapture`
+  - `bash scripts/agentic/session.sh rpc core-qa '{"type":"getAgentChatState","requestId":"core-qa-agent-chat-pi-backend-setup","target":{"type":"main"}}' --expect agent_chatStateResult --timeout 8000`
+  - `./scripts/agentic/agent-cargo.sh test --test agent_chat_onboarding -- --nocapture`
   - `./scripts/agentic/agent-cargo.sh test --test ai_preflight_prompt_compiler_contract -- --nocapture`
-  - `./scripts/agentic/agent-cargo.sh test --test acp_plugin_skill_thread_affinity_contract -- --nocapture`
+  - `./scripts/agentic/agent-cargo.sh test --test agent_chat_plugin_skill_thread_affinity_contract -- --nocapture`
 - Pass evidence: Agent Chat with Pi Backend state receipt has setup details when applicable and onboarding/preflight/thread-affinity contracts pass.
 - Fail evidence: Setup state absent for blocked condition, actions do nothing, picker selection stale, or tests fail.
 
 ### Agent Chat with Pi Backend streaming can cancel and survive config reloads
 
 - Stable anchor: `agent-chat-with-pi-backend-streaming-can-cancel-and-survive-config-reloads`
-- Choice id: `acp-streaming-cancel-config-reload`
+- Choice id: `agent_chat-streaming-cancel-config-reload`
 - Surface: Agent Chat / Streaming
 - Status: Active QA lock-in candidate
 - User contract: Streaming status transitions to canceled/idle, subscriptions are cleaned up, config reload does not duplicate providers, and transcript remains consistent.
 - Regression risk: Streaming is asynchronous; cancel and config changes commonly leak tasks or double-send events.
 - Proof commands:
   - `bash scripts/agentic/session.sh rpc core-qa '{"type":"aiGetStreamingStatus","requestId":"core-qa-streaming"}' --expect aiStreamingStatusResult --timeout 8000`
-  - `./scripts/agentic/agent-cargo.sh test --test acp_cancel_midstream_contract -- --nocapture`
+  - `./scripts/agentic/agent-cargo.sh test --test agent_chat_cancel_midstream_contract -- --nocapture`
   - `./scripts/agentic/agent-cargo.sh test --test config_reload_during_streaming_contract -- --nocapture`
-  - `./scripts/agentic/agent-cargo.sh test --test acp_live_subscription_contract -- --nocapture`
+  - `./scripts/agentic/agent-cargo.sh test --test agent_chat_live_subscription_contract -- --nocapture`
 - Pass evidence: RPC/contract output shows streaming status and cleanup invariants pass for cancel, config reload, and live subscriptions.
 - Fail evidence: Cancel ignored, duplicate subscription events, transcript corruption, provider reload drift, or tests fail.
 
 ### Notes Agent Chat with Pi Backend actions match chat behavior without leaking host state
 
 - Stable anchor: `notes-agent-chat-with-pi-backend-actions-match-chat-behavior-without-leaking-host-state`
-- Choice id: `notes-acp-actions-history-parity`
+- Choice id: `notes-agent_chat-actions-history-parity`
 - Surface: Notes / Hosted Agent Chat with Pi Backend
 - Status: Active QA lock-in candidate
 - User contract: Notes Agent Chat with Pi Backend has targetable composer, note context chip/source, actions parity, history portal terminal state, and host isolation from main Agent Chat with Pi Backend.
@@ -514,9 +514,9 @@ Every feature below should be locked with the smallest proof set that can fail f
 - Proof commands:
   - `bun scripts/devtools/notes.ts inspect --session core-qa --start --open --open-agent-chat-pi-backend --limit 200`
   - `./scripts/agentic/agent-cargo.sh test --test notes_ai_routing -- --nocapture`
-  - `./scripts/agentic/agent-cargo.sh test --test notes_acp_actions_parity_contract -- --nocapture`
-  - `./scripts/agentic/agent-cargo.sh test --test notes_acp_history_portal_terminal_contract -- --nocapture`
-  - `./scripts/agentic/agent-cargo.sh test --test notes_hosted_acp_host_isolation_contract -- --nocapture`
+  - `./scripts/agentic/agent-cargo.sh test --test notes_agent_chat_actions_parity_contract -- --nocapture`
+  - `./scripts/agentic/agent-cargo.sh test --test notes_agent_chat_history_portal_terminal_contract -- --nocapture`
+  - `./scripts/agentic/agent-cargo.sh test --test notes_hosted_agent_chat_host_isolation_contract -- --nocapture`
 - Pass evidence: Notes DevTools receipt shows hosted Agent Chat with Pi Backend state and contracts pass for routing, actions parity, history portal, and isolation.
 - Fail evidence: Notes Agent Chat with Pi Backend targets main chat, loses note context, actions differ without reason, or tests fail.
 

@@ -16,15 +16,15 @@
                 // their own Tab/Cmd+Enter handling.
                 let is_notes = crate::notes::is_notes_window(window);
                 let is_ai = crate::ai::is_ai_window(window);
-                let is_detached_acp = crate::ai::acp::chat_window::is_chat_window(window);
+                let is_detached_agent_chat = crate::ai::agent_chat::ui::chat_window::is_chat_window(window);
                 let is_actions = crate::actions::is_actions_window(window);
-                if is_notes || is_ai || is_detached_acp || is_actions {
+                if is_notes || is_ai || is_detached_agent_chat || is_actions {
                     tracing::debug!(
                         target: "script_kit::keyboard",
                         event = "tab_interceptor_skipped_secondary_window",
                         is_notes,
                         is_ai,
-                        is_detached_acp,
+                        is_detached_agent_chat,
                         is_actions,
                     );
                     return;
@@ -75,7 +75,7 @@
                 if is_global_ai_chord {
                     if let Some(app) = app_entity.upgrade() {
                         app.update(cx, |this, cx| {
-                            if this.try_route_global_cmd_enter_to_acp_context_capture(cx) {
+                            if this.try_route_global_cmd_enter_to_agent_chat_context_capture(cx) {
                                 cx.stop_propagation();
                             }
                         });
@@ -93,7 +93,7 @@
                         app.update(cx, |this, cx| {
                             let owner = match &this.current_view {
                                 AppView::ScriptList => "script_list",
-                                AppView::AcpChatView { .. } => "embedded_acp",
+                                AppView::AgentChatView { .. } => "embedded_agent_chat",
                                 AppView::QuickTerminalView { .. } => "quick_terminal",
                                 AppView::FileSearchView { .. } => "file_search",
                                 AppView::ChatPrompt { .. } => "chat_prompt",
@@ -185,9 +185,9 @@
                             // Menu-syntax trigger popup owns Tab when it is visible —
                             // Tab applies the selected row (keep-open for open-value
                             // qualifiers like `source:`, close-after-apply for bare
-                            // qualifiers or capture targets). Runs BEFORE the ACP
+                            // qualifiers or capture targets). Runs BEFORE the Agent Chat
                             // plain-Tab routing branch so menu-syntax keyboard stays
-                            // consistent with the ACP slash / @ pickers.
+                            // consistent with the Agent Chat slash / @ pickers.
                             if matches!(this.current_view, AppView::ScriptList)
                                 && this.menu_syntax_object_selector_owns_main_keyboard()
                             {
@@ -253,12 +253,12 @@
                             // Tab-to-Agent deprecated: Cmd+Enter is the AI entry.
                             // Ghost text acceptance (above) now owns plain Tab.
 
-                            // ACP owns Tab locally. Plain Tab stays swallowed so
+                            // Agent Chat owns Tab locally. Plain Tab stays swallowed so
                             // the global interceptor cannot re-open a fresh chat.
                             // Shift+Tab is the documented Profile Switcher
                             // shortcut, so route it to the in-chat Profile picker
                             // via the window-aware entry point.
-                            if let AppView::AcpChatView { entity, .. } = &this.current_view {
+                            if let AppView::AgentChatView { entity, .. } = &this.current_view {
                                 if has_shift {
                                     cx.stop_propagation();
                                     // Preserve the prior swallow when another popup
@@ -271,7 +271,7 @@
                                     }
                                     tracing::info!(
                                         target: "script_kit::keyboard",
-                                        event = "acp_shift_tab_profile_switcher",
+                                        event = "agent_chat_shift_tab_profile_switcher",
                                         "Opening Agent Chat Profile picker from Shift+Tab"
                                     );
                                     let entity = entity.clone();
@@ -338,11 +338,11 @@
                     }
                 }
 
-                // Keep plain Enter routed to ACP mention acceptance in the
+                // Keep plain Enter routed to Agent Chat mention acceptance in the
                 // embedded main-window host when the picker is open, and to
                 // the menu-syntax trigger popup when it is open on
                 // ScriptList (Accept the selected qualifier / capture
-                // target — same behavior as the ACP / and @ pickers).
+                // target — same behavior as the Agent Chat / and @ pickers).
                 if is_plain_enter {
                     if let Some(app) = app_entity.upgrade() {
                         app.update(cx, |this, cx| {
@@ -370,7 +370,7 @@
                                     return;
                                 }
                             }
-                            if let AppView::AcpChatView { entity, .. } = &this.current_view {
+                            if let AppView::AgentChatView { entity, .. } = &this.current_view {
                                 let handled =
                                     entity.update(cx, |chat, cx| chat.handle_enter_key(cx));
                                 if handled {
@@ -384,11 +384,11 @@
         });
         app.gpui_input_subscriptions.push(tab_interceptor);
 
-        // Prewarm the ACP agent config on a background thread so AI-entry
+        // Prewarm the Agent Chat agent config on a background thread so AI-entry
         // shortcuts do not block on bun transpile of ~/.scriptkit/config.ts.
-        crate::ai::acp::prewarm_agent_config();
+        crate::ai::agent_chat::ui::prewarm_agent_config();
 
-        // Prewarm ACP Chat and the Tab AI harness asynchronously so AI-entry
+        // Prewarm Agent Chat Chat and the Tab AI harness asynchronously so AI-entry
         // shortcuts do not pay subprocess/session startup cost on submit.
         let app_entity_for_tab_ai_warm = cx.entity().downgrade();
         cx.spawn(async move |_this, cx| {
@@ -400,7 +400,7 @@
                     return;
                 };
                 app.update(cx, |this, cx| {
-                    this.warm_acp_chat_on_startup(cx);
+                    this.warm_agent_chat_on_startup(cx);
                     this.warm_tab_ai_harness_on_startup(cx);
                 });
             });

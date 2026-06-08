@@ -60,17 +60,17 @@ fn visible_count(prefix: &str, kind: AutomationWindowKind) -> usize {
 fn single_visible_window_is_not_ambiguous() {
     let p = prefix();
 
-    let info = make_visible(&p, "acp-0", AutomationWindowKind::AcpDetached);
+    let info = make_visible(&p, "agent_chat-0", AutomationWindowKind::AgentChatDetached);
     script_kit_gpui::windows::upsert_automation_window(info);
 
-    let count = visible_count(&p, AutomationWindowKind::AcpDetached);
+    let count = visible_count(&p, AutomationWindowKind::AgentChatDetached);
     // With exactly one visible window, the ambiguity guard should NOT fire
     assert_eq!(
         count, 1,
-        "Expected exactly 1 visible AcpDetached window under prefix {p}, got {count}"
+        "Expected exactly 1 visible AgentChatDetached window under prefix {p}, got {count}"
     );
 
-    cleanup(&p, &["acp-0"]);
+    cleanup(&p, &["agent_chat-0"]);
 }
 
 // ============================================================
@@ -81,19 +81,19 @@ fn single_visible_window_is_not_ambiguous() {
 fn multiple_visible_windows_same_kind_is_ambiguous() {
     let p = prefix();
 
-    let info0 = make_visible(&p, "acp-0", AutomationWindowKind::AcpDetached);
-    let info1 = make_visible(&p, "acp-1", AutomationWindowKind::AcpDetached);
+    let info0 = make_visible(&p, "agent_chat-0", AutomationWindowKind::AgentChatDetached);
+    let info1 = make_visible(&p, "agent_chat-1", AutomationWindowKind::AgentChatDetached);
     script_kit_gpui::windows::upsert_automation_window(info0);
     script_kit_gpui::windows::upsert_automation_window(info1);
 
-    let count = visible_count(&p, AutomationWindowKind::AcpDetached);
+    let count = visible_count(&p, AutomationWindowKind::AgentChatDetached);
     // With 2+ visible windows sharing a kind, the ambiguity guard fires
     assert!(
         count > 1,
-        "Expected >1 visible AcpDetached windows under prefix {p}, got {count}"
+        "Expected >1 visible AgentChatDetached windows under prefix {p}, got {count}"
     );
 
-    cleanup(&p, &["acp-0", "acp-1"]);
+    cleanup(&p, &["agent_chat-0", "agent_chat-1"]);
 }
 
 // ============================================================
@@ -104,20 +104,20 @@ fn multiple_visible_windows_same_kind_is_ambiguous() {
 fn hidden_window_not_counted_for_ambiguity() {
     let p = prefix();
 
-    let info0 = make_visible(&p, "acp-0", AutomationWindowKind::AcpDetached);
-    let mut info1 = make_visible(&p, "acp-1", AutomationWindowKind::AcpDetached);
+    let info0 = make_visible(&p, "agent_chat-0", AutomationWindowKind::AgentChatDetached);
+    let mut info1 = make_visible(&p, "agent_chat-1", AutomationWindowKind::AgentChatDetached);
     info1.visible = false; // hidden
 
     script_kit_gpui::windows::upsert_automation_window(info0);
     script_kit_gpui::windows::upsert_automation_window(info1);
 
-    let count = visible_count(&p, AutomationWindowKind::AcpDetached);
+    let count = visible_count(&p, AutomationWindowKind::AgentChatDetached);
     assert_eq!(
         count, 1,
         "Hidden window should not be counted; expected 1 under prefix {p}, got {count}"
     );
 
-    cleanup(&p, &["acp-0", "acp-1"]);
+    cleanup(&p, &["agent_chat-0", "agent_chat-1"]);
 }
 
 // ============================================================
@@ -128,25 +128,25 @@ fn hidden_window_not_counted_for_ambiguity() {
 fn different_kinds_are_not_ambiguous_with_each_other() {
     let p = prefix();
 
-    let acp = make_visible(&p, "acp-0", AutomationWindowKind::AcpDetached);
+    let agent_chat = make_visible(&p, "agent_chat-0", AutomationWindowKind::AgentChatDetached);
     let notes = make_visible(&p, "notes-0", AutomationWindowKind::Notes);
 
-    script_kit_gpui::windows::upsert_automation_window(acp);
+    script_kit_gpui::windows::upsert_automation_window(agent_chat);
     script_kit_gpui::windows::upsert_automation_window(notes);
 
-    let acp_count = visible_count(&p, AutomationWindowKind::AcpDetached);
+    let agent_chat_count = visible_count(&p, AutomationWindowKind::AgentChatDetached);
     let notes_count = visible_count(&p, AutomationWindowKind::Notes);
 
     assert_eq!(
-        acp_count, 1,
-        "AcpDetached should have 1 visible window under prefix {p}"
+        agent_chat_count, 1,
+        "AgentChatDetached should have 1 visible window under prefix {p}"
     );
     assert_eq!(
         notes_count, 1,
         "Notes should have 1 visible window under prefix {p}"
     );
 
-    cleanup(&p, &["acp-0", "notes-0"]);
+    cleanup(&p, &["agent_chat-0", "notes-0"]);
 }
 
 // ============================================================
@@ -157,23 +157,23 @@ fn different_kinds_are_not_ambiguous_with_each_other() {
 fn removing_window_clears_ambiguity() {
     let p = prefix();
 
-    let info0 = make_visible(&p, "acp-0", AutomationWindowKind::AcpDetached);
-    let info1 = make_visible(&p, "acp-1", AutomationWindowKind::AcpDetached);
+    let info0 = make_visible(&p, "agent_chat-0", AutomationWindowKind::AgentChatDetached);
+    let info1 = make_visible(&p, "agent_chat-1", AutomationWindowKind::AgentChatDetached);
     script_kit_gpui::windows::upsert_automation_window(info0);
     script_kit_gpui::windows::upsert_automation_window(info1);
 
-    assert!(visible_count(&p, AutomationWindowKind::AcpDetached) > 1);
+    assert!(visible_count(&p, AutomationWindowKind::AgentChatDetached) > 1);
 
     // Remove one window — ambiguity should clear
-    script_kit_gpui::windows::remove_automation_window(&format!("{p}:acp-1"));
+    script_kit_gpui::windows::remove_automation_window(&format!("{p}:agent_chat-1"));
 
-    let count = visible_count(&p, AutomationWindowKind::AcpDetached);
+    let count = visible_count(&p, AutomationWindowKind::AgentChatDetached);
     assert_eq!(
         count, 1,
         "After removing one window, should have 1 visible under prefix {p}, got {count}"
     );
 
-    cleanup(&p, &["acp-0"]);
+    cleanup(&p, &["agent_chat-0"]);
 }
 
 // ============================================================
@@ -184,11 +184,11 @@ fn removing_window_clears_ambiguity() {
 fn plain_kind_target_resolves_when_single_window() {
     let p = prefix();
 
-    let info = make_visible(&p, "acp-0", AutomationWindowKind::AcpDetached);
+    let info = make_visible(&p, "agent_chat-0", AutomationWindowKind::AgentChatDetached);
     script_kit_gpui::windows::upsert_automation_window(info);
 
     let target = script_kit_gpui::protocol::AutomationWindowTarget::Kind {
-        kind: AutomationWindowKind::AcpDetached,
+        kind: AutomationWindowKind::AgentChatDetached,
         index: None,
     };
     let resolved = script_kit_gpui::windows::resolve_automation_window(Some(&target));
@@ -197,7 +197,7 @@ fn plain_kind_target_resolves_when_single_window() {
         "Should resolve when exactly one window exists"
     );
 
-    cleanup(&p, &["acp-0"]);
+    cleanup(&p, &["agent_chat-0"]);
 }
 
 // ============================================================
@@ -212,7 +212,7 @@ fn simulate_gpui_event_result_with_error_serializes() {
         "requestId": "gpui-ambiguous",
         "success": false,
         "errorCode": "target_ambiguous",
-        "error": "Resolved target acpDetached:thread-1 (AcpDetached) is ambiguous: 2 visible windows share this kind and GPUI dispatch still routes through one WindowRole"
+        "error": "Resolved target agentChatDetached:thread-1 (AgentChatDetached) is ambiguous: 2 visible windows share this kind and GPUI dispatch still routes through one WindowRole"
     });
 
     let success = result["success"].as_bool().expect("success field");
@@ -367,7 +367,7 @@ fn attached_surface_without_bounds_fails_closed() {
 fn detached_window_bounds_not_required_for_dispatch() {
     let p = prefix();
 
-    // Detached windows (Notes, AcpDetached) do not need coordinate rebasing
+    // Detached windows (Notes, AgentChatDetached) do not need coordinate rebasing
     let notes = make_with_bounds(
         &p,
         "notes",
@@ -774,7 +774,7 @@ fn inspect_hit_point_lands_inside_target_bounds() {
     cleanup(&p, &["main", "actions"]);
 }
 
-/// Detached windows (Notes, AcpDetached) must NOT have their coordinates
+/// Detached windows (Notes, AgentChatDetached) must NOT have their coordinates
 /// rebased — the inspect geometry should place them at (0, 0).
 #[test]
 fn detached_windows_are_not_rebased() {
@@ -802,10 +802,10 @@ fn detached_windows_are_not_rebased() {
             height: 280.0,
         }),
     );
-    let acp = make_with_bounds(
+    let agent_chat = make_with_bounds(
         &p,
-        "acp",
-        AutomationWindowKind::AcpDetached,
+        "agent_chat",
+        AutomationWindowKind::AgentChatDetached,
         Some(AutomationWindowBounds {
             x: 900.0,
             y: 100.0,
@@ -815,9 +815,9 @@ fn detached_windows_are_not_rebased() {
     );
     script_kit_gpui::windows::upsert_automation_window(main);
     script_kit_gpui::windows::upsert_automation_window(notes);
-    script_kit_gpui::windows::upsert_automation_window(acp);
+    script_kit_gpui::windows::upsert_automation_window(agent_chat);
 
-    for (id_suffix, kind) in [("notes", "Notes"), ("acp", "AcpDetached")] {
+    for (id_suffix, kind) in [("notes", "Notes"), ("agent_chat", "AgentChatDetached")] {
         let target = AutomationWindowTarget::Id {
             id: format!("{p}:{id_suffix}"),
         };
@@ -838,7 +838,7 @@ fn detached_windows_are_not_rebased() {
         );
     }
 
-    cleanup(&p, &["main", "notes", "acp"]);
+    cleanup(&p, &["main", "notes", "agent_chat"]);
 }
 
 // ============================================================
@@ -1148,12 +1148,12 @@ fn success_result_includes_dispatch_path_exact_handle() {
     let msg = script_kit_gpui::protocol::Message::simulate_gpui_event_result_success(
         "dp-1".into(),
         Some("exact_handle".into()),
-        Some("acp-thread-42".into()),
+        Some("agent_chat-thread-42".into()),
     );
     let json = serde_json::to_value(&msg).expect("serialize");
     assert_eq!(json["success"], true);
     assert_eq!(json["dispatchPath"], "exact_handle");
-    assert_eq!(json["resolvedWindowId"], "acp-thread-42");
+    assert_eq!(json["resolvedWindowId"], "agent_chat-thread-42");
 }
 
 #[test]
@@ -1176,11 +1176,11 @@ fn error_result_includes_resolved_window_id_when_available() {
         "target_ambiguous".into(),
         "2 visible windows".into(),
         None,
-        Some("acp-thread-1".into()),
+        Some("agent_chat-thread-1".into()),
     );
     let json = serde_json::to_value(&msg).expect("serialize");
     assert_eq!(json["success"], false);
-    assert_eq!(json["resolvedWindowId"], "acp-thread-1");
+    assert_eq!(json["resolvedWindowId"], "agent_chat-thread-1");
     // dispatchPath is None for errors before dispatch
     assert!(json.get("dispatchPath").is_none() || json["dispatchPath"].is_null());
 }

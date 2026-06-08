@@ -3,7 +3,7 @@
 //! The `screenshot-identity-threading` user story wanted a live receipt
 //! of `getState.imageIdentity="screenshot:<timestamp>"` after a tab-ai
 //! capture, so automation could verify identity threading from capture
-//! through to ACP context without grepping the filesystem. Pass #14 of
+//! through to Agent Chat context without grepping the filesystem. Pass #14 of
 //! Run 1 discovered three structural gaps; the remaining one —
 //! "`imageIdentity` is not a `State` field" — is closed here by adding
 //! `screenshotIdentity: Option<String>` to the `stateResult` JSON.
@@ -13,7 +13,7 @@
 //! has happened). Identity is already encoded in that filename via
 //! `build_tab_ai_screenshot_filename` (timestamp + PID + sequence), so
 //! reading `getState.screenshotIdentity` gives automation the same
-//! identity the ACP context line `screenshot path: <path>` carries —
+//! identity the Agent Chat context line `screenshot path: <path>` carries —
 //! just without the leading directory and without a filesystem read.
 //!
 //! Contract pinned:

@@ -296,7 +296,7 @@ fn agent_chat_setup_copy_points_to_catalog_and_config_ts_not_direct_provider_key
         "Configure Anthropic API Key",
         "Configure Vercel",
         "Vercel AI Gateway",
-        "ACP Chat",
+        "Agent Chat Chat",
     ] {
         assert!(
             !setup.contains(stale),
@@ -330,7 +330,7 @@ fn ai_open_and_new_conversation_use_deferred_helper() {
         "Expected legacy AI window aliases to be centralized via is_legacy_harness_alias"
     );
     assert!(
-        content.contains("self.open_tab_ai_acp_with_entry_intent(None, cx);"),
+        content.contains("self.open_tab_ai_agent_chat_with_entry_intent(None, cx);"),
         "Expected legacy AI window aliases to route to Agent Chat"
     );
 }

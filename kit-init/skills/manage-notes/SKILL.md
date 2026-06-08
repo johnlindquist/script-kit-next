@@ -124,12 +124,12 @@ The Notes window is a first-class automation target. Use `target: { "type": "kin
 }
 ```
 
-## ACP Handoffs
+## Agent Chat Handoffs
 
 Use the Notes UI actions for cross-surface handoffs:
 
 - **Send to Agent Chat** — opens or focuses Agent Chat with the active note content
-- **Save as Note** — creates or updates a note from ACP-generated content
+- **Save as Note** — creates or updates a note from Agent Chat-generated content
 
 These are UI actions, not JavaScript globals. The current public Notes script surface is the automation target (`kind: notes`) plus the runtime MCP notes tools above unless real Notes functions are added to `scripts/kit-sdk.ts`.
 

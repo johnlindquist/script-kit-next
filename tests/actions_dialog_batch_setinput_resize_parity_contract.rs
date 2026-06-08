@@ -21,13 +21,13 @@
 //! semantics"): `src/prompt_handler/mod.rs` currently has four
 //! distinct `protocol::BatchCommand::SetInput { text }` arms — one per
 //! target kind (main-menu at line ~4099, clipboard at ~4457,
-//! actions-dialog at ~4683, ACP at ~5263). A contributor consolidating
+//! actions-dialog at ~4683, Agent Chat at ~5263). A contributor consolidating
 //! those four arms into a shared helper (e.g., a generic
 //! `handle_batch_set_input<T>(target_kind: BatchTarget, text: &str,
 //! ...)` routed through `set_filter_text_immediate`) could drop the
 //! `crate::actions::resize_actions_window(cx, &de)` post-call because
 //! only the actions-dialog arm needs it — the main-menu, clipboard,
-//! and ACP variants have no popup to resize. The consolidation would
+//! and Agent Chat variants have no popup to resize. The consolidation would
 //! compile, the keyboard path's own resize would still work, and the
 //! regression would only be visible through a live stdin-batch filter
 //! receipt (the scenario that originally produced the 2026-04-18

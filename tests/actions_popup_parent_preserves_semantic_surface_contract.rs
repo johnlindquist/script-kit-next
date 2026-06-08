@@ -7,7 +7,7 @@
 //!
 //! **The defended behavior**: when a non-main-menu host (clipboard
 //! history with `clipboardHistory` surface, file-search with
-//! `fileSearch`, embedded ACP with `acpChat`, etc.) opens the shared
+//! `fileSearch`, embedded Agent Chat with `agentChatChat`, etc.) opens the shared
 //! actions dialog, the actions-popup synthesis path needs a main-window
 //! automation record to parent the popup against. If that record is
 //! missing, the synthesis path upserts one. Because
@@ -16,7 +16,7 @@
 //! read the *existing* `semantic_surface` from the registry and pass it
 //! through — falling back to `"scriptList"` only when no prior record
 //! exists. Previously the site hardcoded `"scriptList"`, which wiped
-//! `clipboardHistory` / `fileSearch` / `acpChat` every time the user
+//! `clipboardHistory` / `fileSearch` / `agentChatChat` every time the user
 //! pressed Cmd+K on a non-main-menu host. Filed originally as
 //! `[?] actions-cmdk-clipboard-main-surface-flip` in Run 7 Pass #17;
 //! Fix landed Run 7 Pass #21 (commit `69d5846f0`).
@@ -146,7 +146,7 @@ fn resolve_actions_popup_parent_reads_registry_before_upsert() {
              `{SEMANTIC_SURFACE_EXTRACT}` on the `list_automation_windows()` \
              result. Without this extraction, the upsert would use a \
              default and wipe any non-scriptList surface (clipboardHistory, \
-             fileSearch, acpChat) that was already set."
+             fileSearch, agentChatChat) that was already set."
         )
     });
     let upsert_idx = body.find(UPSERT_CALL).unwrap_or_else(|| {
@@ -223,7 +223,7 @@ fn resolve_actions_popup_parent_forbids_hardcoded_scriptlist_upsert() {
              `upsert_automation_window` call. This is the pre-Run 7 \
              Pass #21 regression shape: hardcoding `scriptList` \
              wipes any existing non-scriptList surface \
-             (clipboardHistory, fileSearch, acpChat) every time the \
+             (clipboardHistory, fileSearch, agentChatChat) every time the \
              actions popup opens on a non-main-menu host. The Fix \
              replaced this literal with \
              `semantic_surface: Some(preserved_semantic_surface)` \

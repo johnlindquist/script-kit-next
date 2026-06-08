@@ -73,7 +73,7 @@ pub(crate) struct RootPassiveFrameKey {
     pub(crate) clipboard_history_options:
         crate::clipboard_history::RootClipboardHistorySectionOptions,
     pub(crate) dictation_history_options: crate::dictation::RootDictationHistorySectionOptions,
-    pub(crate) acp_history_options: crate::ai::acp::history::RootAcpHistorySectionOptions,
+    pub(crate) agent_chat_history_options: crate::ai::agent_chat::ui::history::RootAgentChatHistorySectionOptions,
     pub(crate) ai_vault_options: crate::ai_vault::RootAiVaultSectionOptions,
     pub(crate) ai_vault_snapshot_generation: u64,
     pub(crate) browser_tabs_options: crate::browser_tabs::RootBrowserTabsSectionOptions,
@@ -89,7 +89,7 @@ pub(crate) struct RootPassiveFrame {
     pub(crate) todo_hits: Vec<crate::menu_syntax::RootTodoSearchHit>,
     pub(crate) clipboard_history_hits: Vec<crate::clipboard_history::ClipboardEntryMeta>,
     pub(crate) dictation_history_hits: Vec<crate::dictation::RootDictationHistorySearchHit>,
-    pub(crate) acp_history_hits: Vec<crate::ai::acp::history::AcpHistorySearchHit>,
+    pub(crate) agent_chat_history_hits: Vec<crate::ai::agent_chat::ui::history::AgentChatHistorySearchHit>,
     pub(crate) ai_vault_hits: Vec<crate::ai_vault::AiVaultHit>,
     pub(crate) browser_tab_hits: Vec<crate::browser_tabs::RootBrowserTabSearchHit>,
     pub(crate) browser_history_hits: Vec<crate::browser_history::RootBrowserHistorySearchHit>,
@@ -625,7 +625,7 @@ pub(crate) struct ScriptListApp {
     scripts: Vec<std::sync::Arc<scripts::Script>>,
     /// H1 Optimization: Arc-wrapped scriptlets for cheap cloning during filter operations
     scriptlets: Vec<std::sync::Arc<scripts::Scriptlet>>,
-    /// Plugin-owned skills for main-menu search and ACP skill launch
+    /// Plugin-owned skills for main-menu search and Agent Chat skill launch
     skills: Vec<std::sync::Arc<crate::plugins::PluginSkill>>,
     /// Latest validation report describing scripts that were excluded from the
     /// catalog (e.g., binding collisions). Used to surface the launcher
@@ -830,8 +830,8 @@ pub(crate) struct ScriptListApp {
     process_list_scroll_handle: UniformListScrollHandle,
     // Scroll handle for current app commands list
     current_app_commands_scroll_handle: UniformListScrollHandle,
-    // Scroll handle for ACP history list
-    acp_history_scroll_handle: ScrollHandle,
+    // Scroll handle for Agent Chat history list
+    agent_chat_history_scroll_handle: ScrollHandle,
     // Scroll handle for browser history list
     browser_history_scroll_handle: ScrollHandle,
     // Scroll handle for dictation history list
@@ -905,7 +905,7 @@ pub(crate) struct ScriptListApp {
     menu_syntax_mode: crate::menu_syntax::MenuSyntaxMode,
     /// Spine parse: parallel projection-based input model.
     /// When `spine_enabled` is true, sigils drive the main list in-place
-    /// instead of navigating to ACP picker views.
+    /// instead of navigating to Agent Chat picker views.
     spine_enabled: bool,
     spine_parse: crate::spine::SpineParse,
     spine_projection: Option<crate::spine::SpineCursorProjection>,
@@ -931,9 +931,9 @@ pub(crate) struct ScriptListApp {
     /// selections persist to user preferences instead of dispatching as
     /// ordinary launcher actions. Cleared when the picker closes.
     pub(crate) agent_model_picker_active: bool,
-    /// Resolved display name of the globally-selected ACP agent (e.g.
+    /// Resolved display name of the globally-selected Agent Chat agent (e.g.
     /// "Claude Code"), shown in the footer marker. Sourced from
-    /// `ai.selectedAcpAgentId` via the agent catalog; refreshed on startup and
+    /// `ai.selectedAgentChatAgentId` via the agent catalog; refreshed on startup and
     /// whenever the Agent & Model picker persists a selection.
     pub(crate) spine_agent_label: Option<String>,
     /// Resolved display name of the globally-selected model (e.g. "Sonnet
@@ -982,7 +982,7 @@ pub(crate) struct ScriptListApp {
     /// card can render the proposal title + accept-label inline. Cleared on
     /// filter change or Esc/Tab dismissal. Pass 11 ships a deterministic stub
     /// proposal so the receipt is observable without an LLM round-trip; the
-    /// real ACP/LLM call wiring is a follow-up.
+    /// real Agent Chat/LLM call wiring is a follow-up.
     pub(crate) pending_menu_syntax_ai_proposal:
         Option<crate::menu_syntax_ai::PendingMenuSyntaxAiProposal>,
     /// When `Some(filter)`, the menu-syntax trigger popup must NOT
@@ -1119,36 +1119,36 @@ pub(crate) struct ScriptListApp {
     pub(crate) tab_ai_harness_return_view: Option<AppView>,
     /// Previous focus target to restore when leaving Tab AI quick terminal.
     pub(crate) tab_ai_harness_return_focus_target: Option<FocusTarget>,
-    /// Main-menu trigger that launched the current ACP session, if any.
+    /// Main-menu trigger that launched the current Agent Chat session, if any.
     pub(crate) tab_ai_harness_script_list_trigger: Option<char>,
     /// Pending explicit apply-back route for the active Tab AI harness session.
     pub(crate) tab_ai_harness_apply_back_route: Option<crate::ai::TabAiApplyBackRoute>,
-    /// Persistent embedded ACP chat entity so repeated Tab opens can reuse
-    /// the same live ACP connection instead of cold-starting a new one.
-    pub(crate) embedded_acp_chat: Option<Entity<crate::ai::acp::view::AcpChatView>>,
-    /// Cached focus handle for the embedded ACP chat. Focus restoration happens
-    /// from parent render paths, so it must not read the child while ACP is
+    /// Persistent embedded Agent Chat chat entity so repeated Tab opens can reuse
+    /// the same live Agent Chat connection instead of cold-starting a new one.
+    pub(crate) embedded_agent_chat: Option<Entity<crate::ai::agent_chat::ui::view::AgentChatView>>,
+    /// Cached focus handle for the embedded Agent Chat chat. Focus restoration happens
+    /// from parent render paths, so it must not read the child while Agent Chat is
     /// updating its picker/composer state.
-    pub(crate) embedded_acp_focus_handle: Option<gpui::FocusHandle>,
-    /// Hidden, never-shown ACP chat entity warmed at startup. It is consumed
-    /// by the first compatible ACP open so prompt submit avoids initialization.
-    pub(crate) prewarmed_acp_chat: Option<Entity<crate::ai::acp::view::AcpChatView>>,
+    pub(crate) embedded_agent_chat_focus_handle: Option<gpui::FocusHandle>,
+    /// Hidden, never-shown Agent Chat chat entity warmed at startup. It is consumed
+    /// by the first compatible Agent Chat open so prompt submit avoids initialization.
+    pub(crate) prewarmed_agent_chat: Option<Entity<crate::ai::agent_chat::ui::view::AgentChatView>>,
     /// Active Pi-backed Agent Chat warm lease, reset on chat dismissal so the
     /// next Agent Chat open starts from a fresh warm session.
     pub(crate) active_agent_chat_warm_lease:
         Option<crate::ai::agent_chat::warm_session::AgentChatWarmSessionLease>,
-    /// Cached ready script path from the ACP `SCRIPT_READY` receipt. Updated
-    /// whenever the ACP observer fires. Used by footer button resolution
-    /// (which only has `&self`) without needing a `cx` to read the ACP entity.
-    pub(crate) acp_ready_script_path: Option<std::path::PathBuf>,
-    /// Cached ACP footer dot status so child ACP notifications only repaint
+    /// Cached ready script path from the Agent Chat `SCRIPT_READY` receipt. Updated
+    /// whenever the Agent Chat observer fires. Used by footer button resolution
+    /// (which only has `&self`) without needing a `cx` to read the Agent Chat entity.
+    pub(crate) agent_chat_ready_script_path: Option<std::path::PathBuf>,
+    /// Cached Agent Chat footer dot status so child Agent Chat notifications only repaint
     /// the parent-owned native footer when the visible footer state changes.
-    pub(crate) acp_footer_dot_status: Option<crate::footer_popup::FooterDotStatus>,
-    /// Cached ACP model label paired with `acp_footer_dot_status`.
-    pub(crate) acp_footer_model_display: Option<String>,
-    /// Cached ACP footer state so native footer labels refresh when composer
+    pub(crate) agent_chat_footer_dot_status: Option<crate::footer_popup::FooterDotStatus>,
+    /// Cached Agent Chat model label paired with `agent_chat_footer_dot_status`.
+    pub(crate) agent_chat_footer_model_display: Option<String>,
+    /// Cached Agent Chat footer state so native footer labels refresh when composer
     /// or response-derived actions change.
-    pub(crate) acp_footer_snapshot: Option<crate::ai::acp::view::AcpFooterSnapshot>,
+    pub(crate) agent_chat_footer_snapshot: Option<crate::ai::agent_chat::ui::view::AgentChatFooterSnapshot>,
     /// Snapshot of shared launcher host state while an attachment portal owns
     /// the main window.
     pub(crate) attachment_portal_host_snapshot: Option<AttachmentPortalHostSnapshot>,
@@ -1161,11 +1161,11 @@ pub(crate) struct ScriptListApp {
     /// Which attachment portal is currently active, when any.
     pub(crate) active_attachment_portal_kind:
         Option<crate::ai::window::context_picker::types::PortalKind>,
-    /// App-owned placement machine for the ACP surface. Source of
+    /// App-owned placement machine for the Agent Chat surface. Source of
     /// truth for the `blocks_launcher_ai_entry` and
     /// `is_attachment_portal` predicates. Written only through
-    /// `transition_acp_surface`; do not mutate directly.
-    pub(crate) acp_surface_state: crate::ai::acp::surface_state::AcpSurfaceState,
+    /// `transition_agent_chat_surface`; do not mutate directly.
+    pub(crate) agent_chat_surface_state: crate::ai::agent_chat::ui::surface_state::AgentChatSurfaceState,
     /// Input history for shell-like up/down navigation through previous inputs
     input_history: input_history::InputHistory,
     /// Pending API key configuration - tracks which provider is being configured

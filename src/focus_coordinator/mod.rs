@@ -87,8 +87,8 @@ pub enum FocusTarget {
     TermPrompt,
     /// Focus the chat prompt
     ChatPrompt,
-    /// Focus the launcher ACP chat composer
-    AcpChat,
+    /// Focus the launcher Agent Chat chat composer
+    AgentChat,
     /// Focus the div prompt (uses app root, no cursor)
     DivPrompt,
     /// Focus the scratchpad editor
@@ -106,7 +106,7 @@ impl FocusTarget {
             FocusTarget::MainFilter => CursorOwner::MainFilter,
             FocusTarget::ActionsDialog => CursorOwner::ActionsSearch,
             FocusTarget::ArgPrompt => CursorOwner::ArgPrompt,
-            FocusTarget::ChatPrompt | FocusTarget::AcpChat => CursorOwner::ChatPrompt,
+            FocusTarget::ChatPrompt | FocusTarget::AgentChat => CursorOwner::ChatPrompt,
             // These prompts have their own cursor management
             FocusTarget::PathPrompt
             | FocusTarget::FormPrompt
@@ -170,9 +170,9 @@ impl FocusRequest {
         Self::with_default_cursor(FocusTarget::ChatPrompt)
     }
 
-    /// Focus launcher ACP chat with cursor
-    pub fn acp_chat() -> Self {
-        Self::with_default_cursor(FocusTarget::AcpChat)
+    /// Focus launcher Agent Chat chat with cursor
+    pub fn agent_chat() -> Self {
+        Self::with_default_cursor(FocusTarget::AgentChat)
     }
 
     /// Focus div prompt (no cursor)
@@ -469,8 +469,8 @@ mod tests {
         assert_eq!(req.target, FocusTarget::MainFilter);
         assert_eq!(req.cursor, CursorOwner::MainFilter);
 
-        let req = FocusRequest::acp_chat();
-        assert_eq!(req.target, FocusTarget::AcpChat);
+        let req = FocusRequest::agent_chat();
+        assert_eq!(req.target, FocusTarget::AgentChat);
         assert_eq!(req.cursor, CursorOwner::ChatPrompt);
 
         let req = FocusRequest::div_prompt();

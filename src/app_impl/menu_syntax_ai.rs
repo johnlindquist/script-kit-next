@@ -6,7 +6,7 @@
 // `MenuSyntaxMainHintSnapshot.menu_syntax_ai_proposal` so the renderer can
 // show the title + accept-label without re-running mapping rules.
 //
-// The runtime Cmd+Enter handler + ACP/LLM call wiring is the deferred UI
+// The runtime Cmd+Enter handler + Agent Chat/LLM call wiring is the deferred UI
 // integration; this module is the pure data layer per Pass 5
 // `menu-syntax-ai-contract` precedent.
 
@@ -164,7 +164,7 @@ pub fn proposal_from_response(response: &MenuSyntaxAiResponse) -> MenuSyntaxAiPr
 
 /// Run 12 Pass 11 — deterministic stub proposal generator. Used by the
 /// Cmd+Enter handler so the receipt is observable without an LLM round-trip.
-/// Replace with the real ACP/LLM call when that wiring lands; the function
+/// Replace with the real Agent Chat/LLM call when that wiring lands; the function
 /// signature is stable.
 ///
 /// Heuristics:

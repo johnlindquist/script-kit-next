@@ -48,7 +48,7 @@ fn root_unified_clipboard_history_uses_passive_grouping_contract() {
     assert!(grouping.contains("root_clipboard_history_query_is_eligible("));
     assert!(
         grouping.find("append_root_clipboard_history_section(")
-            < grouping.find("append_root_acp_history_section("),
+            < grouping.find("append_root_agent_chat_history_section("),
         "clipboard rows should be appended before Agent Chat Conversations"
     );
     assert!(

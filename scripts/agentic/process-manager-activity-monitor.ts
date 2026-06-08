@@ -141,7 +141,7 @@ function seedFixtures() {
     notes: { enabled: false },
     clipboardHistory: { enabled: false },
     dictationHistory: { enabled: false },
-    acpHistory: { enabled: false },
+    agent_chatHistory: { enabled: false },
     aiVault: { enabled: false },
     browserTabs: { enabled: false },
     browserHistory: { enabled: false },

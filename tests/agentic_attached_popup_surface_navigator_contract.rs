@@ -1,6 +1,6 @@
 //! Source-level contract for attached-popup image-library navigation.
 //!
-//! Attached popup coverage spans Actions Dialog and the promoted ACP slash
+//! Attached popup coverage spans Actions Dialog and the promoted Agent Chat slash
 //! Prompt Popup proof.
 
 const NAVIGATOR: &str = include_str!("../scripts/agentic/surface-navigator.ts");
@@ -37,16 +37,16 @@ fn attached_popup_matrix_declares_actions_dialog_active_cases() {
 #[test]
 fn attached_popup_matrix_declares_prompt_popup_active_case() {
     assert!(
-        MATRIX.contains("id: \"prompt-popup-on-acp-chat-slash\"")
+        MATRIX.contains("id: \"prompt-popup-on-agent_chat-chat-slash\"")
             && MATRIX.contains("windowKind: \"PromptPopup\"")
             && MATRIX.contains("targetKind: \"promptPopup\"")
-            && MATRIX.contains("expectedAutomationWindowId: \"acp-mention-popup\"")
-            && MATRIX.contains("hostFixture: { kind: \"acp-chat\", trigger: \"slash\" }")
+            && MATRIX.contains("expectedAutomationWindowId: \"agent_chat-mention-popup\"")
+            && MATRIX.contains("hostFixture: { kind: \"agent_chat-chat\", trigger: \"slash\" }")
             && MATRIX.contains("parent_capture_with_crop"),
-        "attached popup matrix must include the promoted ACP slash Prompt Popup case"
+        "attached popup matrix must include the promoted Agent Chat slash Prompt Popup case"
     );
     assert!(
-        !MATRIX.contains("prompt-popup-on-acp-chat-slash-candidate")
+        !MATRIX.contains("prompt-popup-on-agent_chat-chat-slash-candidate")
             && !MATRIX.contains("PROMPT_POPUP_FIXTURE_MATRIX"),
         "active attached-popup matrix must use durable Prompt Popup case names"
     );

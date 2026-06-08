@@ -326,9 +326,9 @@ fn replace_pending_context_parts_clears_previous_parts_and_resets_consumption() 
     );
 }
 
-/// Regression test for the Notes-hosted ACP staging-replacement story: when
-/// a user opens note A and portals it to ACP, then opens note B and portals
-/// *it* to the same reused ACP surface, the pending context must contain
+/// Regression test for the Notes-hosted Agent Chat staging-replacement story: when
+/// a user opens note A and portals it to Agent Chat, then opens note B and portals
+/// *it* to the same reused Agent Chat surface, the pending context must contain
 /// exactly note B's parts — never both. This models the production two-call
 /// sequence through `stage_inline_context_parts_from_host` ->
 /// `replace_pending_context_parts` on the shared host-reuse path.

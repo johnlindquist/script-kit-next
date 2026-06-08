@@ -57,7 +57,9 @@ pub fn parse_dictation_target_label(label: &str) -> Option<DictationTarget> {
         "mainwindowprompt" | "prompt" => Some(DictationTarget::MainWindowPrompt),
         "noteseditor" | "notes" => Some(DictationTarget::NotesEditor),
         "aichatcomposer" | "aichat" | "legacyai" => Some(DictationTarget::AiChatComposer),
-        "tabaiharness" | "acp" | "acpchat" | "ai" => Some(DictationTarget::TabAiHarness),
+        "tabaiharness" | "agentchat" | "agentchatchat" | "ai" => {
+            Some(DictationTarget::TabAiHarness)
+        }
         "externalapp" | "frontmostapp" | "frontmost" | "app" => Some(DictationTarget::ExternalApp),
         _ => None,
     }

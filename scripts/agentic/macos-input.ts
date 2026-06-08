@@ -748,7 +748,7 @@ async function sendKeyWithLadder(
  *
  * Sends each character of `text` as a separate `keyDown` event. This is slower
  * than `directBatch`/`setInput` but works for surfaces that accept key events
- * but don't support the `setInput` batch command (e.g., detached ACP input).
+ * but don't support the `setInput` batch command (e.g., detached Agent Chat input).
  */
 async function tryGpuiTextDispatch(
   sessionName: string,
@@ -779,7 +779,7 @@ async function tryGpuiTextDispatch(
  * Deliver text via the capability ladder.
  * Order: directBatch (setInput) → gpuiDispatch (char-at-a-time) → accessibility → quartz.
  *
- * For targets with direct semantic mutation support (detached ACP, ActionsDialog),
+ * For targets with direct semantic mutation support (detached Agent Chat, ActionsDialog),
  * `directBatch` is preferred because it sets the full input atomically.
  * `gpuiDispatch` is the next focus-independent method, dispatching each character
  * through GPUI's real input pipeline without requiring OS-level keyboard focus.
@@ -1180,7 +1180,7 @@ Focus enforcement:
   --ensure-focus                 Focus Script Kit window before input (delegates to window.ts)
   --focus-title SUBSTR           Title substring for focus target (default: "${DEFAULT_FOCUS_TITLE}")
   --session NAME                 Use session.sh to show window before focusing (more reliable)
-  --target SURFACE               Target a specific automation surface (main, acp, actions, notes, ai)
+  --target SURFACE               Target a specific automation surface (main, agent_chat, actions, notes, ai)
                                  Requires --ensure-focus. Resolves via window.ts list.
   --force-native                 For key input with --session, bypass GPUI dispatch and deliver OS-level input.
   --no-gpui-dispatch             Alias for --force-native.

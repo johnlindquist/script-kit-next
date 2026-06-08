@@ -293,7 +293,7 @@ impl ScriptListApp {
                     }
                 }
 
-                // ESC: In portal mode, cancel and return to ACP chat.
+                // ESC: In portal mode, cancel and return to Agent Chat chat.
                 // Otherwise, clear filter first; if empty, go back/close.
                 if is_key_escape(key) && !this.show_actions_popup {
                     if this.is_in_attachment_portal() {
@@ -433,7 +433,7 @@ impl ScriptListApp {
                             return;
                         }
                         _ if is_key_enter(key) => {
-                            // Portal mode: attach the selected entry's content to ACP chat.
+                            // Portal mode: attach the selected entry's content to Agent Chat chat.
                             if in_portal {
                                 if let Some((_, entry)) = filtered_entries.get(current_selected) {
                                     let label = if entry.text_preview.len() > 40 {

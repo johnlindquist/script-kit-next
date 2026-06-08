@@ -1771,7 +1771,7 @@ fn slash_picker_loading_and_empty_states_are_inert() {
 }
 
 #[test]
-fn acp_slash_picker_duplicate_rows_show_owner_labels() {
+fn agent_chat_slash_picker_duplicate_rows_show_owner_labels() {
     let alpha_skill = crate::plugins::PluginSkill {
         plugin_id: "alpha".to_string(),
         plugin_title: "Alpha".to_string(),

@@ -1,14 +1,14 @@
 //! Shared inline-popup window helpers.
 //!
 //! These helpers own the detached child-window mechanics used by any inline
-//! popup surface (ACP slash/@ pickers, ACP history popup, and the menu-syntax
+//! popup surface (Agent Chat slash/@ pickers, Agent Chat history popup, and the menu-syntax
 //! `:`, `;`, and `!` trigger popups). They are intentionally
-//! neutral: no ACP types, no menu-syntax types, no domain callbacks. Callers
+//! neutral: no Agent Chat types, no menu-syntax types, no domain callbacks. Callers
 //! layer their own row models and accept behavior on top.
 //!
-//! Every symbol that used to live in `src/ai/acp/popup_window.rs` under the
+//! Every symbol that used to live in `src/ai/agent_chat/ui/popup_window.rs` under the
 //! `DENSE_PICKER_*` / `dense_picker_*` / `popup_*` names has been renamed to a
-//! neutral `INLINE_POPUP_*` / `inline_popup_*` form here. ACP keeps a thin
+//! neutral `INLINE_POPUP_*` / `inline_popup_*` form here. Agent Chat keeps a thin
 //! compatibility facade via `pub(crate) use ... as old_name;` re-exports so
 //! existing call sites and source-text audit tests continue to compile without
 //! edits.

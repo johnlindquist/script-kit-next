@@ -769,15 +769,15 @@ fn inspect_detached_response_has_origin_bounds() {
     inspect_cleanup(&p, &["notes"]);
 }
 
-/// AcpDetached inspect response must use the correct semantic ID.
+/// AgentChatDetached inspect response must use the correct semantic ID.
 #[test]
-fn inspect_acp_detached_suggested_hit_uses_correct_semantic_id() {
+fn inspect_agent_chat_detached_suggested_hit_uses_correct_semantic_id() {
     let p = inspect_prefix();
 
-    let acp = make_window(
+    let agent_chat = make_window(
         &p,
-        "acp",
-        AutomationWindowKind::AcpDetached,
+        "agent_chat",
+        AutomationWindowKind::AgentChatDetached,
         Some(AutomationWindowBounds {
             x: 200.0,
             y: 100.0,
@@ -785,10 +785,10 @@ fn inspect_acp_detached_suggested_hit_uses_correct_semantic_id() {
             height: 440.0,
         }),
     );
-    script_kit_gpui::windows::upsert_automation_window(acp);
+    script_kit_gpui::windows::upsert_automation_window(agent_chat);
 
     let target = AutomationWindowTarget::Id {
-        id: format!("{p}:acp"),
+        id: format!("{p}:agent_chat"),
     };
     let resolved =
         script_kit_gpui::windows::resolve_automation_window(Some(&target)).expect("should resolve");
@@ -799,7 +799,7 @@ fn inspect_acp_detached_suggested_hit_uses_correct_semantic_id() {
         script_kit_gpui::protocol::default_suggested_hit_points(&resolved, Some(&target_bounds));
 
     assert_eq!(suggested.len(), 1);
-    assert_eq!(suggested[0].semantic_id, "input:acp-composer");
+    assert_eq!(suggested[0].semantic_id, "input:agent_chat-composer");
     assert_eq!(suggested[0].reason, "surface_center");
     // Center of (0, 0, 480, 440) = (240, 220)
     assert!(
@@ -813,7 +813,7 @@ fn inspect_acp_detached_suggested_hit_uses_correct_semantic_id() {
         suggested[0].y
     );
 
-    inspect_cleanup(&p, &["acp"]);
+    inspect_cleanup(&p, &["agent_chat"]);
 }
 
 /// Missing bounds must produce empty suggested hit points (fail closed).
@@ -951,7 +951,10 @@ fn inspect_suggested_hit_semantic_ids_per_kind() {
         (AutomationWindowKind::ActionsDialog, "panel:actions-dialog"),
         (AutomationWindowKind::PromptPopup, "panel:prompt-popup"),
         (AutomationWindowKind::Notes, "input:notes-editor"),
-        (AutomationWindowKind::AcpDetached, "input:acp-composer"),
+        (
+            AutomationWindowKind::AgentChatDetached,
+            "input:agent_chat-composer",
+        ),
         (AutomationWindowKind::Main, "panel:window"),
     ];
 

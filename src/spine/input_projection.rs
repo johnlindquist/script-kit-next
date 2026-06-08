@@ -1,7 +1,7 @@
 //! Surface-neutral Spine parse/projection helpers.
 //!
 //! Lifts the parse + cursor-projection + ownership-decision logic out of the
-//! main-menu `ScriptListApp` so other surfaces (ACP composer, future Notes /
+//! main-menu `ScriptListApp` so other surfaces (Agent Chat composer, future Notes /
 //! Quick-Terminal composers) can share the same Spine state machine without
 //! duplicating it.
 

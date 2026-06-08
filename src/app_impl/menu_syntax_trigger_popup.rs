@@ -101,7 +101,7 @@ pub(crate) enum TriggerPopupTransition {
 
 /// Character-index highlights for the compact row renderer.
 ///
-/// This mirrors ACP's `/` and `@` picker contract: query matches are
+/// This mirrors Agent Chat's `/` and `@` picker contract: query matches are
 /// expressed as visible character positions, and trigger prefixes like `;`
 /// are not highlighted.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -393,7 +393,7 @@ pub(crate) fn trigger_picker_row_to_main_list_row(
 ///
 /// The renderer shows the row title on the left and either `token` or
 /// `subtitle` on the right. This helper uses the same ordered-character match
-/// behavior as the ACP `/` and `@` pickers, offsetting `;` / `:` token matches
+/// behavior as the Agent Chat `/` and `@` pickers, offsetting `;` / `:` token matches
 /// past the trigger prefix so the typed trigger itself stays neutral.
 #[allow(dead_code)]
 pub(crate) fn trigger_popup_row_highlight_indices(

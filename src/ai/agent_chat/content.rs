@@ -1,10 +1,36 @@
 //! Canonical Agent Chat content-block boundary.
 //!
-//! New Agent Chat code should import content-block types from here rather than
-//! reaching for the external `agent_client_protocol` crate directly. The crate
-//! is retained purely for its content-block schema (`ContentBlock`,
-//! `TextContent`, `ImageContent`); it is **not** used as an active transport.
-//! Centralizing the import keeps the dependency boundary visible and makes a
-//! future swap or local wrapper a single-file change.
+//! Agent Chat owns these payload types locally so the Pi-backed runtime does
+//! not depend on the deprecated backend client library.
 
-pub(crate) use agent_client_protocol::{ContentBlock, ImageContent, TextContent};
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum ContentBlock {
+    Text(TextContent),
+    Image(ImageContent),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct TextContent {
+    pub text: String,
+}
+
+impl TextContent {
+    pub(crate) fn new(text: impl Into<String>) -> Self {
+        Self { text: text.into() }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ImageContent {
+    pub data: String,
+    pub mime_type: String,
+}
+
+impl ImageContent {
+    pub(crate) fn new(data: impl Into<String>, mime_type: impl Into<String>) -> Self {
+        Self {
+            data: data.into(),
+            mime_type: mime_type.into(),
+        }
+    }
+}

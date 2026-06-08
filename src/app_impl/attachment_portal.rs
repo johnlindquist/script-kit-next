@@ -46,7 +46,7 @@ impl ScriptListApp {
         };
 
         tracing::info!(
-            target: "script_kit::acp",
+            target: "script_kit::agent_chat",
             event = "attachment_portal_host_snapshot_captured",
         );
 
@@ -93,7 +93,7 @@ impl ScriptListApp {
         self.sync_list_state();
 
         tracing::info!(
-            target: "script_kit::acp",
+            target: "script_kit::agent_chat",
             event = "attachment_portal_host_snapshot_restored",
         );
 
@@ -126,7 +126,7 @@ impl ScriptListApp {
                 }) =>
             {
                 tracing::info!(
-                    target: "script_kit::acp",
+                    target: "script_kit::agent_chat",
                     event = "attachment_portal_width_restore_skipped_user_resize",
                     width_before_portal = return_width,
                     width_after_portal_open = ?width_after_portal_open,
@@ -147,14 +147,14 @@ impl ScriptListApp {
     }
 
     /// Whether the app is currently in an attachment portal (file search or
-    /// clipboard history opened from the ACP chat context picker).
+    /// clipboard history opened from the Agent Chat chat context picker).
     ///
-    /// Reads from the app-owned `acp_surface_state` machine rather
+    /// Reads from the app-owned `agent_chat_surface_state` machine rather
     /// than probing `attachment_portal_return_view.is_some()`. The
     /// the Cmd+Enter launcher-entry guard calls this, so a single source of
     /// truth prevents it from drifting against the portal snapshot fields.
     pub(crate) fn is_in_attachment_portal(&self) -> bool {
-        self.acp_surface_state.is_attachment_portal()
+        self.agent_chat_surface_state.is_attachment_portal()
     }
 
     pub(crate) fn active_attachment_portal_kind(
@@ -211,7 +211,7 @@ impl ScriptListApp {
 
     /// Open a full built-in view as an attachment portal. The user browses
     /// files or clipboard entries; Enter attaches the selection back to the
-    /// ACP chat, Escape cancels and returns.
+    /// Agent Chat chat, Escape cancels and returns.
     pub(crate) fn open_attachment_portal(
         &mut self,
         kind: crate::ai::window::context_picker::types::PortalKind,
@@ -222,14 +222,14 @@ impl ScriptListApp {
         // Prevent nesting — only one portal at a time.
         if self.is_in_attachment_portal() {
             tracing::warn!(
-                target: "script_kit::acp",
+                target: "script_kit::agent_chat",
                 event = "attachment_portal_nested_prevented",
             );
             return;
         }
 
         // Save the current view and focus target for restoration on return.
-        // The portal is always opened from AcpChatView, so ChatPrompt is correct.
+        // The portal is always opened from AgentChatView, so ChatPrompt is correct.
         self.attachment_portal_return_view = Some(self.current_view.clone());
         self.attachment_portal_return_focus_target = Some(FocusTarget::ChatPrompt);
         self.attachment_portal_return_width = crate::platform::get_main_window_bounds()
@@ -237,18 +237,18 @@ impl ScriptListApp {
             .filter(|width| width.is_finite() && *width > 0.0);
         self.attachment_portal_host_snapshot = Some(self.capture_attachment_portal_host_snapshot());
         self.active_attachment_portal_kind = Some(kind);
-        self.transition_acp_surface(
-            crate::ai::acp::surface_state::AcpSurfaceEvent::PortalOpened { kind },
+        self.transition_agent_chat_surface(
+            crate::ai::agent_chat::ui::surface_state::AgentChatSurfaceEvent::PortalOpened { kind },
         );
 
         tracing::info!(
-            target: "script_kit::acp",
+            target: "script_kit::agent_chat",
             event = "attachment_portal_opened",
             kind = ?kind,
             return_width = ?self.attachment_portal_return_width,
         );
 
-        let portal_query = if let Some(AppView::AcpChatView { entity }) =
+        let portal_query = if let Some(AppView::AgentChatView { entity }) =
             self.attachment_portal_return_view.as_ref()
         {
             entity.update(cx, |view, _cx| {
@@ -259,20 +259,20 @@ impl ScriptListApp {
         };
 
         tracing::info!(
-            target: "script_kit::acp",
+            target: "script_kit::agent_chat",
             event = "attachment_portal_query_seeded_from_contract",
             kind = ?kind,
             query = %portal_query,
         );
 
         tracing::info!(
-            target: "script_kit::acp",
+            target: "script_kit::agent_chat",
             event = "attachment_portal_picker_query_resolved",
             kind = ?kind,
             query = %portal_query,
         );
 
-        if let Some(AppView::AcpChatView { entity }) = self.attachment_portal_return_view.as_ref() {
+        if let Some(AppView::AgentChatView { entity }) = self.attachment_portal_return_view.as_ref() {
             let entity = entity.clone();
             entity.update(cx, |view, cx| {
                 view.prepare_for_attachment_portal_open(cx);
@@ -317,7 +317,7 @@ impl ScriptListApp {
                             }
                             Err(error) => {
                                 tracing::warn!(
-                                    target: "script_kit::acp",
+                                    target: "script_kit::agent_chat",
                                     event = "browser_tabs_portal_load_failed",
                                     error = %error,
                                 );
@@ -392,9 +392,9 @@ impl ScriptListApp {
                     cx,
                 );
             }
-            PortalKind::AcpHistory => {
+            PortalKind::AgentChatHistory => {
                 self.open_builtin_filterable_view_with_filter(
-                    AppView::AcpHistoryView {
+                    AppView::AgentChatHistoryView {
                         filter: portal_query.clone(),
                         selected_index: 0,
                     },
@@ -413,7 +413,7 @@ impl ScriptListApp {
         cx.notify();
     }
 
-    /// Close the attachment portal and attach the selected part to the ACP chat.
+    /// Close the attachment portal and attach the selected part to the Agent Chat chat.
     pub(crate) fn close_attachment_portal_with_part(
         &mut self,
         part: crate::ai::message_parts::AiContextPart,
@@ -429,7 +429,7 @@ impl ScriptListApp {
             .unwrap_or(FocusTarget::MainFilter);
 
         tracing::info!(
-            target: "script_kit::acp",
+            target: "script_kit::agent_chat",
             event = "attachment_portal_closed_with_part",
             focus_target = ?return_focus_target,
         );
@@ -437,20 +437,20 @@ impl ScriptListApp {
         self.restore_attachment_portal_return_view(return_view.clone(), return_focus_target);
         // Drive the placement machine back to Embedded when the portal
         // is returning to the chat view, otherwise Hidden — the portal
-        // can only have been opened from an embedded ACP host, so
+        // can only have been opened from an embedded Agent Chat host, so
         // EmbeddedOpened from a non-chat return means host state has
         // drifted; downgrade to Hidden rather than a silent no-op.
-        self.transition_acp_surface(crate::ai::acp::surface_state::AcpSurfaceEvent::PortalClosed);
-        if !matches!(return_view, AppView::AcpChatView { .. }) {
-            self.transition_acp_surface(
-                crate::ai::acp::surface_state::AcpSurfaceEvent::EmbeddedClosed,
+        self.transition_agent_chat_surface(crate::ai::agent_chat::ui::surface_state::AgentChatSurfaceEvent::PortalClosed);
+        if !matches!(return_view, AppView::AgentChatView { .. }) {
+            self.transition_agent_chat_surface(
+                crate::ai::agent_chat::ui::surface_state::AgentChatSurfaceEvent::EmbeddedClosed,
             );
         }
 
         // Stage the context part with an inline @mention token.
         // Uses the canonical token format so the mention sync system can track
         // it — deleting characters from the mention removes the part.
-        if let AppView::AcpChatView { entity } = &return_view {
+        if let AppView::AgentChatView { entity } = &return_view {
             let entity = entity.clone();
             entity.update(cx, |view, cx| {
                 view.resume_after_attachment_portal_close(cx);
@@ -475,7 +475,7 @@ impl ScriptListApp {
             .unwrap_or(FocusTarget::MainFilter);
 
         tracing::info!(
-            target: "script_kit::acp",
+            target: "script_kit::agent_chat",
             event = "attachment_portal_cancelled",
             kind = ?portal_kind,
             focus_target = ?return_focus_target,
@@ -484,15 +484,15 @@ impl ScriptListApp {
         self.restore_attachment_portal_return_view(return_view.clone(), return_focus_target);
         // Same split as the accept path: PortalClosed first (the
         // default return lands back in Embedded), then EmbeddedClosed
-        // if the restored view is not the ACP chat.
-        self.transition_acp_surface(crate::ai::acp::surface_state::AcpSurfaceEvent::PortalClosed);
-        if !matches!(return_view, AppView::AcpChatView { .. }) {
-            self.transition_acp_surface(
-                crate::ai::acp::surface_state::AcpSurfaceEvent::EmbeddedClosed,
+        // if the restored view is not the Agent Chat chat.
+        self.transition_agent_chat_surface(crate::ai::agent_chat::ui::surface_state::AgentChatSurfaceEvent::PortalClosed);
+        if !matches!(return_view, AppView::AgentChatView { .. }) {
+            self.transition_agent_chat_surface(
+                crate::ai::agent_chat::ui::surface_state::AgentChatSurfaceEvent::EmbeddedClosed,
             );
         }
 
-        if let (Some(kind), AppView::AcpChatView { entity }) = (portal_kind, &return_view) {
+        if let (Some(kind), AppView::AgentChatView { entity }) = (portal_kind, &return_view) {
             let entity = entity.clone();
             entity.update(cx, |view, cx| {
                 view.resume_after_attachment_portal_close(cx);
@@ -554,12 +554,12 @@ mod tests {
     }
 
     #[test]
-    fn attachment_portal_cancel_clears_acp_portal_session() {
+    fn attachment_portal_cancel_clears_agent_chat_portal_session() {
         let source = attachment_portal_source();
 
         assert!(
             source.contains("view.cancel_pending_portal_session(kind, cx);"),
-            "cancel should clear any staged ACP portal session after restoring the host view"
+            "cancel should clear any staged Agent Chat portal session after restoring the host view"
         );
     }
 
@@ -586,16 +586,16 @@ mod tests {
     }
 
     #[test]
-    fn attachment_portal_calls_acp_prepare_and_resume_hooks() {
+    fn attachment_portal_calls_agent_chat_prepare_and_resume_hooks() {
         let source = attachment_portal_source();
 
         assert!(
             source.contains("view.prepare_for_attachment_portal_open(cx);"),
-            "portal open should let ACP dismiss popup/setup surfaces before the host switch"
+            "portal open should let Agent Chat dismiss popup/setup surfaces before the host switch"
         );
         assert!(
             source.contains("view.resume_after_attachment_portal_close(cx);"),
-            "portal close should notify ACP after the host view is restored"
+            "portal close should notify Agent Chat after the host view is restored"
         );
     }
 }

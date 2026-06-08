@@ -2,7 +2,7 @@
 //!
 //! This module is intentionally pure. It only recognizes explicit artifacts
 //! and follow-up prompts from completed assistant text; UI rendering and action
-//! dispatch stay in ACP surfaces.
+//! dispatch stay in Agent Chat surfaces.
 
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
@@ -11,44 +11,44 @@ pub const RESULT_CARD_MAX_ARTIFACTS: usize = 3;
 pub const RESULT_CARD_MAX_FOLLOW_UPS: usize = 2;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct AcpResultCards {
-    pub artifacts: Vec<AcpResultArtifact>,
-    pub follow_ups: Vec<AcpResultFollowUp>,
+pub struct AgentChatResultCards {
+    pub artifacts: Vec<AgentChatResultArtifact>,
+    pub follow_ups: Vec<AgentChatResultFollowUp>,
 }
 
-impl AcpResultCards {
+impl AgentChatResultCards {
     pub fn is_empty(&self) -> bool {
         self.artifacts.is_empty() && self.follow_ups.is_empty()
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct AcpResultArtifact {
-    pub kind: AcpResultArtifactKind,
+pub struct AgentChatResultArtifact {
+    pub kind: AgentChatResultArtifactKind,
     pub title: String,
     pub target: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum AcpResultArtifactKind {
+pub enum AgentChatResultArtifactKind {
     File,
     Link,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct AcpResultFollowUp {
+pub struct AgentChatResultFollowUp {
     pub label: String,
     pub prompt: String,
 }
 
-pub fn derive_acp_result_cards_from_assistant_message(body: &str) -> AcpResultCards {
+pub fn derive_agent_chat_result_cards_from_assistant_message(body: &str) -> AgentChatResultCards {
     let mut artifacts = Vec::new();
     let mut seen_artifacts = HashSet::new();
 
     collect_markdown_links(body, &mut artifacts, &mut seen_artifacts);
     collect_plain_absolute_paths(body, &mut artifacts, &mut seen_artifacts);
 
-    AcpResultCards {
+    AgentChatResultCards {
         artifacts,
         follow_ups: collect_next_actions(body),
     }
@@ -56,7 +56,7 @@ pub fn derive_acp_result_cards_from_assistant_message(body: &str) -> AcpResultCa
 
 fn collect_markdown_links(
     body: &str,
-    artifacts: &mut Vec<AcpResultArtifact>,
+    artifacts: &mut Vec<AgentChatResultArtifact>,
     seen: &mut HashSet<String>,
 ) {
     for line in body.lines() {
@@ -88,7 +88,7 @@ fn collect_markdown_links(
 
 fn collect_plain_absolute_paths(
     body: &str,
-    artifacts: &mut Vec<AcpResultArtifact>,
+    artifacts: &mut Vec<AgentChatResultArtifact>,
     seen: &mut HashSet<String>,
 ) {
     if artifacts.len() >= RESULT_CARD_MAX_ARTIFACTS {
@@ -110,7 +110,7 @@ fn collect_plain_absolute_paths(
 fn push_artifact(
     label: &str,
     target: &str,
-    artifacts: &mut Vec<AcpResultArtifact>,
+    artifacts: &mut Vec<AgentChatResultArtifact>,
     seen: &mut HashSet<String>,
 ) {
     if artifacts.len() >= RESULT_CARD_MAX_ARTIFACTS {
@@ -119,8 +119,8 @@ fn push_artifact(
 
     if let Some(link) = normalize_http_link(target) {
         if seen.insert(link.clone()) {
-            artifacts.push(AcpResultArtifact {
-                kind: AcpResultArtifactKind::Link,
+            artifacts.push(AgentChatResultArtifact {
+                kind: AgentChatResultArtifactKind::Link,
                 title: sanitized_title(label, &link),
                 target: link,
             });
@@ -131,8 +131,8 @@ fn push_artifact(
     if let Some(path) = normalize_existing_absolute_path(target) {
         let target = path.to_string_lossy().to_string();
         if seen.insert(target.clone()) {
-            artifacts.push(AcpResultArtifact {
-                kind: AcpResultArtifactKind::File,
+            artifacts.push(AgentChatResultArtifact {
+                kind: AgentChatResultArtifactKind::File,
                 title: sanitized_title(label, &target),
                 target,
             });
@@ -159,7 +159,7 @@ fn normalize_existing_absolute_path(target: &str) -> Option<PathBuf> {
         .filter(|canonical| canonical.exists())
 }
 
-fn collect_next_actions(body: &str) -> Vec<AcpResultFollowUp> {
+fn collect_next_actions(body: &str) -> Vec<AgentChatResultFollowUp> {
     let mut follow_ups = Vec::new();
     let mut in_section = false;
 
@@ -194,7 +194,7 @@ fn collect_next_actions(body: &str) -> Vec<AcpResultFollowUp> {
                 continue;
             }
             let label = truncate_chars(&prompt, 48);
-            follow_ups.push(AcpResultFollowUp { label, prompt });
+            follow_ups.push(AgentChatResultFollowUp { label, prompt });
             if follow_ups.len() >= RESULT_CARD_MAX_FOLLOW_UPS {
                 break;
             }

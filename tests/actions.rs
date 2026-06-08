@@ -1774,7 +1774,7 @@ fn ai_generate_builtin_uses_named_action_states() {
             && content.contains("query_override.unwrap_or(&self.filter_text)")
             && content.contains("action.normalized_request(query)")
             && content.contains("action.entry_intent(request)")
-            && content.contains("action.opens_acp_when_request_empty()")
+            && content.contains("action.opens_agent_chat_when_request_empty()")
             && content.contains("action.success_detail()"),
         "AI generation commands should delegate query handling, routing fallback, prompt text, and success details through their state"
     );
@@ -1783,7 +1783,7 @@ fn ai_generate_builtin_uses_named_action_states() {
             && content.contains("normalize_generate_script_from_current_app_request")
             && content.contains("Some(query)")
             && content.contains("open_tab_ai_chat_with_entry_intent")
-            && content.contains("open_tab_ai_acp_with_entry_intent"),
+            && content.contains("open_tab_ai_agent_chat_with_entry_intent"),
         "AI generation state should preserve direct script and current-app intent routing"
     );
     assert!(
@@ -1842,10 +1842,10 @@ fn ai_legacy_harness_builtin_uses_named_action_states() {
         "Legacy AI aliases should keep centralized table classification and named success details"
     );
     assert!(
-        content.contains("open_tab_ai_acp_with_entry_intent(None, cx)")
+        content.contains("open_tab_ai_agent_chat_with_entry_intent(None, cx)")
             && content.contains("ai_OpenAi_routed_to_harness")
             && content.contains("ai_ClearConversation_routed_to_harness"),
-        "Legacy AI aliases should keep routing through the ACP harness compatibility path"
+        "Legacy AI aliases should keep routing through the Agent Chat harness compatibility path"
     );
 }
 
@@ -2138,7 +2138,7 @@ fn surface_open_builtins_use_named_action_states() {
             && content.contains("SurfaceOpenBuiltinAction::Webcam")
             && content.contains("SurfaceOpenBuiltinAction::FileSearch")
             && content.contains("SurfaceOpenBuiltinAction::Settings")
-            && content.contains("SurfaceOpenBuiltinAction::AcpHistory")
+            && content.contains("SurfaceOpenBuiltinAction::AgentChatHistory")
             && content.contains("SurfaceOpenBuiltinAction::AiVault")
             && content.contains("SurfaceOpenBuiltinAction::DictationHistory")
             && content.contains("SurfaceOpenBuiltinAction::SdkReference")
@@ -2150,12 +2150,12 @@ fn surface_open_builtins_use_named_action_states() {
             && content.contains("AppView::FavoritesBrowseView")
             && content.contains("app_launcher::scan_applications()")
             && content.contains("AppView::DesignGalleryView")
-            && content.contains("open_tab_ai_acp_with_entry_intent(None, cx)")
+            && content.contains("open_tab_ai_agent_chat_with_entry_intent(None, cx)")
             && content.contains("crate::emoji_usage::load_frequent_snapshot")
             && content.contains("self.open_webcam(cx)")
             && content.contains("self.open_file_search(String::new(), cx)")
             && content.contains("AppView::SettingsView")
-            && content.contains("AppView::AcpHistoryView")
+            && content.contains("AppView::AgentChatHistoryView")
             && content.contains("self.open_ai_vault_source_filter(cx)")
             && content.contains("AppView::DictationHistoryView")
             && content.contains("sdk_reference_entries_for_ui")
@@ -2664,35 +2664,36 @@ fn script_ranking_handler_uses_named_action_states() {
 }
 
 #[test]
-fn acp_model_selection_actions_use_named_plan_states() {
+fn agent_chat_model_selection_actions_use_named_plan_states() {
     let content = fs::read_to_string("src/actions/builders/script_context.rs")
         .expect("Failed to read script context builder");
 
     assert!(
-        content.contains("enum AcpModelSelectionActionPlan")
+        content.contains("enum AgentChatModelSelectionActionPlan")
             && content.contains("CurrentModel")
             && content.contains("AvailableModel"),
-        "ACP model current/switch labels and descriptions should be driven by named selection plan states"
+        "Agent Chat model current/switch labels and descriptions should be driven by named selection plan states"
     );
     assert!(
-        content.contains("AcpModelSelectionActionPlan::from_is_selected(is_selected)")
+        content.contains("AgentChatModelSelectionActionPlan::from_is_selected(is_selected)")
             && content.contains("fn picker_title")
             && content.contains("fn description"),
-        "ACP model picker rows should derive visible copy from the named selection plan"
+        "Agent Chat model picker rows should derive visible copy from the named selection plan"
     );
 }
 
 #[test]
-fn acp_model_switch_handler_uses_named_action_states() {
+fn agent_chat_model_switch_handler_uses_named_action_states() {
     let content = fs::read_to_string("src/app_actions/handle_action/mod.rs")
         .expect("Failed to read action handler");
 
     assert!(
-        content.contains("enum AcpModelSwitchHandlerAction") && content.contains("SwitchModel"),
-        "ACP model switch handler should be driven by named action states"
+        content.contains("enum AgentChatModelSwitchHandlerAction")
+            && content.contains("SwitchModel"),
+        "Agent Chat model switch handler should be driven by named action states"
     );
     assert!(
-        content.contains("AcpModelSwitchHandlerAction::from_action_id(action_id)")
+        content.contains("AgentChatModelSwitchHandlerAction::from_action_id(action_id)")
             && content.contains("model_action.unavailable_message(model_id)")
             && content.contains("model_action.already_selected_message(&model_display_name)")
             && content.contains("model_action.hud_message(&model_display_name)")
@@ -2701,7 +2702,7 @@ fn acp_model_switch_handler_uses_named_action_states() {
             && content.contains("Already using {display_name}")
             && content.contains("Model: {display_name}")
             && content.contains("Switched model to {display_name}"),
-        "ACP model switch handler should derive unavailable/current/HUD/switched feedback from named state"
+        "Agent Chat model switch handler should derive unavailable/current/HUD/switched feedback from named state"
     );
 }
 
@@ -2728,42 +2729,42 @@ fn agent_chat_profile_switch_handler_uses_named_action_states() {
 }
 
 #[test]
-fn acp_root_change_actions_use_named_plan_states() {
+fn agent_chat_root_change_actions_use_named_plan_states() {
     let content = fs::read_to_string("src/actions/builders/script_context.rs")
         .expect("Failed to read script context builder");
 
     assert!(
-        content.contains("enum AcpRootPickerActionPlan")
+        content.contains("enum AgentChatRootPickerActionPlan")
             && content.contains("CurrentSelection")
             && content.contains("NoCurrentSelection"),
-        "ACP root Change Profile/Model descriptions should be driven by named picker plan states"
+        "Agent Chat root Change Profile/Model descriptions should be driven by named picker plan states"
     );
     assert!(
-        content.contains("AcpRootPickerActionPlan::from_selected_display_name")
+        content.contains("AgentChatRootPickerActionPlan::from_selected_display_name")
             && content
                 .contains("profile_picker_plan.description(AGENT_CHAT_CHANGE_PROFILE_DESCRIPTION)")
-            && content.contains("model_picker_plan.description(ACP_CHANGE_MODEL_DESCRIPTION)"),
-        "ACP root Change Profile/Model actions should derive current/fallback copy from the named picker plan"
+            && content.contains("model_picker_plan.description(AGENT_CHAT_CHANGE_MODEL_DESCRIPTION)"),
+        "Agent Chat root Change Profile/Model actions should derive current/fallback copy from the named picker plan"
     );
 }
 
 #[test]
-fn acp_last_response_handlers_use_named_action_states() {
+fn agent_chat_last_response_handlers_use_named_action_states() {
     let content = fs::read_to_string("src/app_actions/handle_action/mod.rs")
         .expect("Failed to read action handler");
 
     assert!(
-        content.contains("enum AcpLastResponseHandlerAction")
+        content.contains("enum AgentChatLastResponseHandlerAction")
             && content.contains("CopyToClipboard")
             && content.contains("PasteToFrontmost"),
-        "ACP last-response copy/paste handlers should be driven by named action states"
+        "Agent Chat last-response copy/paste handlers should be driven by named action states"
     );
     assert!(
-        content.contains("AcpLastResponseHandlerAction::from_action_id(action_id)")
+        content.contains("AgentChatLastResponseHandlerAction::from_action_id(action_id)")
             && content.contains("last_response_action.success_message()")
             && content.contains("Copied last response to clipboard")
             && content.contains("Pasting to frontmost app"),
-        "ACP last-response handlers should derive user-facing copy/paste feedback from the named state"
+        "Agent Chat last-response handlers should derive user-facing copy/paste feedback from the named state"
     );
 }
 
@@ -2849,75 +2850,76 @@ fn ai_open_failure_helper_preserves_actionable_copy() {
 }
 
 #[test]
-fn acp_conversation_session_handlers_use_named_action_states() {
+fn agent_chat_conversation_session_handlers_use_named_action_states() {
     let content = fs::read_to_string("src/app_actions/handle_action/mod.rs")
         .expect("Failed to read action handler");
 
     assert!(
-        content.contains("enum AcpConversationSessionHandlerAction")
+        content.contains("enum AgentChatConversationSessionHandlerAction")
             && content.contains("NewConversation")
             && content.contains("ClearConversation"),
-        "ACP new/clear conversation handlers should be driven by named session action states"
+        "Agent Chat new/clear conversation handlers should be driven by named session action states"
     );
     assert!(
-        content.contains("AcpConversationSessionHandlerAction::from_action_id(action_id)")
+        content.contains("AgentChatConversationSessionHandlerAction::from_action_id(action_id)")
             && content.contains("session_action.preserves_session()")
             && content.contains("thread.clear_messages(cx)")
             && content.contains("self.close_tab_ai_harness_terminal(cx)")
-            && content.contains("self.open_tab_ai_acp_with_entry_intent(None, cx)"),
-        "ACP conversation session handlers should derive keep-session vs fresh-session behavior from the named state"
+            && content.contains("self.open_tab_ai_agent_chat_with_entry_intent(None, cx)"),
+        "Agent Chat conversation session handlers should derive keep-session vs fresh-session behavior from the named state"
     );
 }
 
 #[test]
-fn acp_retry_last_handler_uses_named_action_states() {
+fn agent_chat_retry_last_handler_uses_named_action_states() {
     let content = fs::read_to_string("src/app_actions/handle_action/mod.rs")
         .expect("Failed to read action handler");
 
     assert!(
-        content.contains("enum AcpRetryLastHandlerAction") && content.contains("RetryLastMessage"),
-        "ACP retry-last handler should be driven by a named action state"
+        content.contains("enum AgentChatRetryLastHandlerAction")
+            && content.contains("RetryLastMessage"),
+        "Agent Chat retry-last handler should be driven by a named action state"
     );
     assert!(
-        content.contains("AcpRetryLastHandlerAction::from_action_id(action_id)")
+        content.contains("AgentChatRetryLastHandlerAction::from_action_id(action_id)")
             && content.contains("retry_action.missing_user_message()")
             && content.contains("No previous message to retry"),
-        "ACP retry-last handler should derive missing-message copy from the named state"
+        "Agent Chat retry-last handler should derive missing-message copy from the named state"
     );
 }
 
 #[test]
-fn acp_code_copy_handler_uses_named_action_states() {
+fn agent_chat_code_copy_handler_uses_named_action_states() {
     let content = fs::read_to_string("src/app_actions/handle_action/mod.rs")
         .expect("Failed to read action handler");
 
     assert!(
-        content.contains("enum AcpCodeCopyHandlerAction") && content.contains("CopyAllCode"),
-        "ACP copy-all-code handler should be driven by named action states"
+        content.contains("enum AgentChatCodeCopyHandlerAction") && content.contains("CopyAllCode"),
+        "Agent Chat copy-all-code handler should be driven by named action states"
     );
     assert!(
-        content.contains("AcpCodeCopyHandlerAction::from_action_id(action_id)")
+        content.contains("AgentChatCodeCopyHandlerAction::from_action_id(action_id)")
             && content.contains("code_copy_action.result_message(false)")
             && content.contains("code_copy_action.result_message(true)")
             && content.contains("No code blocks found")
             && content.contains("All code blocks copied"),
-        "ACP copy-all-code handler should derive found/missing feedback from the named state"
+        "Agent Chat copy-all-code handler should derive found/missing feedback from the named state"
     );
 }
 
 #[test]
-fn acp_conversation_markdown_handlers_use_named_action_states() {
+fn agent_chat_conversation_markdown_handlers_use_named_action_states() {
     let content = fs::read_to_string("src/app_actions/handle_action/mod.rs")
         .expect("Failed to read action handler");
 
     assert!(
-        content.contains("enum AcpConversationMarkdownHandlerAction")
+        content.contains("enum AgentChatConversationMarkdownHandlerAction")
             && content.contains("CopyToClipboard")
             && content.contains("SaveAsNote"),
-        "ACP conversation markdown copy/save handlers should be driven by named action states"
+        "Agent Chat conversation markdown copy/save handlers should be driven by named action states"
     );
     assert!(
-        content.contains("AcpConversationMarkdownHandlerAction::from_action_id(action_id)")
+        content.contains("AgentChatConversationMarkdownHandlerAction::from_action_id(action_id)")
             && content.contains("markdown_action.empty_message()")
             && content.contains("markdown_action.success_message()")
             && content.contains(".failure_message(e)")
@@ -2926,23 +2928,23 @@ fn acp_conversation_markdown_handlers_use_named_action_states() {
             && content.contains("Copied Agent Chat conversation as markdown")
             && content.contains("Saved Agent Chat conversation to Notes")
             && content.contains("Failed to save note: {error}"),
-        "ACP markdown handlers should derive empty, success, and save-failure feedback from the named state"
+        "Agent Chat markdown handlers should derive empty, success, and save-failure feedback from the named state"
     );
 }
 
 #[test]
-fn acp_last_code_block_handlers_use_named_action_states() {
+fn agent_chat_last_code_block_handlers_use_named_action_states() {
     let content = fs::read_to_string("src/app_actions/handle_action/mod.rs")
         .expect("Failed to read action handler");
 
     assert!(
-        content.contains("enum AcpLastCodeBlockHandlerAction")
+        content.contains("enum AgentChatLastCodeBlockHandlerAction")
             && content.contains("SaveAsScript")
             && content.contains("RunLastCode"),
-        "ACP save/run-last-code handlers should be driven by named action states"
+        "Agent Chat save/run-last-code handlers should be driven by named action states"
     );
     assert!(
-        content.contains("AcpLastCodeBlockHandlerAction::from_action_id(action_id)")
+        content.contains("AgentChatLastCodeBlockHandlerAction::from_action_id(action_id)")
             && content.contains("code_block_action.missing_code_message()")
             && content.contains("code_block_action.saved_script_message(&name, ext)")
             && content.contains("code_block_action.temp_write_failure_message(e)")
@@ -2958,51 +2960,51 @@ fn acp_last_code_block_handlers_use_named_action_states() {
             && content.contains("Finished (no output)")
             && content.contains("Error (exit {status})")
             && content.contains("Failed to run: {error}"),
-        "ACP save/run-last-code handlers should derive missing-code, save-success, run status, and failure feedback from the named state"
+        "Agent Chat save/run-last-code handlers should derive missing-code, save-success, run status, and failure feedback from the named state"
     );
 }
 
 #[test]
-fn acp_panel_window_handlers_use_named_action_states() {
+fn agent_chat_panel_window_handlers_use_named_action_states() {
     let content = fs::read_to_string("src/app_actions/handle_action/mod.rs")
         .expect("Failed to read action handler");
 
     assert!(
-        content.contains("enum AcpPanelWindowHandlerAction")
+        content.contains("enum AgentChatPanelWindowHandlerAction")
             && content.contains("ShowHistory")
             && content.contains("DetachWindow")
             && content.contains("ReattachPanel"),
-        "ACP history/detach/reattach handlers should be driven by named action states"
+        "Agent Chat history/detach/reattach handlers should be driven by named action states"
     );
     assert!(
-        content.contains("AcpPanelWindowHandlerAction::from_action_id(action_id)")
+        content.contains("AgentChatPanelWindowHandlerAction::from_action_id(action_id)")
             && content.contains("panel_action.success_message().map(String::from)")
             && content.contains(".history_search_placeholder()")
             && content.contains("Opened conversation history")
             && content.contains("Search conversation history...")
             && content.contains("Chat kept open in window")
             && content.contains("Chat returned to panel"),
-        "ACP panel/window handlers should derive success messages and history placeholder from the named state"
+        "Agent Chat panel/window handlers should derive success messages and history placeholder from the named state"
     );
 }
 
 #[test]
-fn acp_history_mutation_handler_uses_named_action_states() {
+fn agent_chat_history_mutation_handler_uses_named_action_states() {
     let content = fs::read_to_string("src/app_actions/handle_action/mod.rs")
         .expect("Failed to read action handler");
 
     assert!(
-        content.contains("enum AcpHistoryMutationHandlerAction")
+        content.contains("enum AgentChatHistoryMutationHandlerAction")
             && content.contains("ClearHistory"),
-        "ACP history mutation handlers should be driven by named action states"
+        "Agent Chat history mutation handlers should be driven by named action states"
     );
     assert!(
-        content.contains("AcpHistoryMutationHandlerAction::from_action_id(action_id)")
+        content.contains("AgentChatHistoryMutationHandlerAction::from_action_id(action_id)")
             && content.contains("history_action.history_index_path(&kit)")
             && content.contains("history_action.conversations_dir(&kit)")
             && content.contains("history_action.success_message()")
             && content.contains("Conversation history cleared"),
-        "ACP clear-history should derive deletion targets and success copy from the named state"
+        "Agent Chat clear-history should derive deletion targets and success copy from the named state"
     );
 }
 

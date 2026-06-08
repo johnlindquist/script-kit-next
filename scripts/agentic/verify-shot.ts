@@ -2,11 +2,11 @@
 /**
  * scripts/agentic/verify-shot.ts
  *
- * ACP proof bundle: state receipt + test probe + screenshot + vision prompts.
+ * Agent Chat proof bundle: state receipt + test probe + screenshot + vision prompts.
  *
- * The reliable ACP verification order is:
- *   1. State receipt (getAcpState) — machine-readable proof
- *   2. Probe receipt (getAcpTestProbe) — key-route / picker-acceptance telemetry
+ * The reliable Agent Chat verification order is:
+ *   1. State receipt (getAgentChatState) — machine-readable proof
+ *   2. Probe receipt (getAgentChatTestProbe) — key-route / picker-acceptance telemetry
  *   3. Screenshot capture — visual proof with pixel-content audit
  *   4. Vision checks — structured prompts for external image readers
  *
@@ -17,43 +17,43 @@
  *   --session NAME              Session name (default: "default")
  *   --label LABEL               Human-readable step label (default: "verify")
  *   --out PATH                  Screenshot output path (default: .test-screenshots/<label>-<ts>.png)
- *   --acp-status STATUS         Assert ACP status equals this value
- *   --acp-picker-open           Assert picker is open
- *   --acp-picker-closed         Assert picker is closed
- *   --acp-input-contains STR    Assert input text contains substring
- *   --acp-input-match STR       Assert input text equals exactly
- *   --acp-cursor-at N           Assert cursor is at character index N
- *   --acp-item-accepted         Assert lastAcceptedItem is non-null
- *   --acp-accepted-label STR    Assert lastAcceptedItem.label equals STR
- *   --acp-accepted-trigger STR  Assert lastAcceptedItem.trigger equals STR (@ or /)
- *   --acp-accepted-via KEY      Assert probe acceptedItems[last].acceptedViaKey equals KEY (enter|tab)
- *   --acp-cursor-after-accepted N  Assert probe acceptedItems[last].cursorAfter equals N
- *   --acp-context-ready         Assert contextReady is true
- *   --acp-no-selection          Assert hasSelection is false
- *   --acp-has-selection         Assert hasSelection is true
- *   --acp-no-permission         Assert hasPendingPermission is false
- *   --acp-has-permission        Assert hasPendingPermission is true
- *   --acp-visible-start N       Assert inputLayout.visibleStart equals N
- *   --acp-visible-end N         Assert inputLayout.visibleEnd equals N
- *   --acp-cursor-in-window N    Assert inputLayout.cursorInWindow equals N
- *   --acp-setup-visible         Assert setup card is present (status == "setup")
- *   --acp-setup-reason CODE     Assert setup.reasonCode equals CODE
- *   --acp-setup-primary-action A  Assert setup.primaryAction equals A
- *   --acp-setup-selected-agent ID Assert setup.selectedAgentId equals ID
- *   --acp-setup-agent-picker-open Assert setup.agentPickerOpen is true
+ *   --agent_chat-status STATUS         Assert Agent Chat status equals this value
+ *   --agent_chat-picker-open           Assert picker is open
+ *   --agent_chat-picker-closed         Assert picker is closed
+ *   --agent_chat-input-contains STR    Assert input text contains substring
+ *   --agent_chat-input-match STR       Assert input text equals exactly
+ *   --agent_chat-cursor-at N           Assert cursor is at character index N
+ *   --agent_chat-item-accepted         Assert lastAcceptedItem is non-null
+ *   --agent_chat-accepted-label STR    Assert lastAcceptedItem.label equals STR
+ *   --agent_chat-accepted-trigger STR  Assert lastAcceptedItem.trigger equals STR (@ or /)
+ *   --agent_chat-accepted-via KEY      Assert probe acceptedItems[last].acceptedViaKey equals KEY (enter|tab)
+ *   --agent_chat-cursor-after-accepted N  Assert probe acceptedItems[last].cursorAfter equals N
+ *   --agent_chat-context-ready         Assert contextReady is true
+ *   --agent_chat-no-selection          Assert hasSelection is false
+ *   --agent_chat-has-selection         Assert hasSelection is true
+ *   --agent_chat-no-permission         Assert hasPendingPermission is false
+ *   --agent_chat-has-permission        Assert hasPendingPermission is true
+ *   --agent_chat-visible-start N       Assert inputLayout.visibleStart equals N
+ *   --agent_chat-visible-end N         Assert inputLayout.visibleEnd equals N
+ *   --agent_chat-cursor-in-window N    Assert inputLayout.cursorInWindow equals N
+ *   --agent_chat-setup-visible         Assert setup card is present (status == "setup")
+ *   --agent_chat-setup-reason CODE     Assert setup.reasonCode equals CODE
+ *   --agent_chat-setup-primary-action A  Assert setup.primaryAction equals A
+ *   --agent_chat-setup-selected-agent ID Assert setup.selectedAgentId equals ID
+ *   --agent_chat-setup-agent-picker-open Assert setup.agentPickerOpen is true
  *   --probe-tail N              Number of probe events to request (default: 20)
  *   --vision                    Emit vision checks with mustReview prompts and requiresVisionReview
  *   --emit-vision-crops         Alias for --vision
  *   --skip-screenshot           Only run state assertions, skip capture
- *   --skip-state                Only capture screenshot, skip ACP state query
- *   --skip-probe                Skip ACP test probe query
- *   --strict-window             Require exact target/window identity for non-ACP captures
+ *   --skip-state                Only capture screenshot, skip Agent Chat state query
+ *   --skip-probe                Skip Agent Chat test probe query
+ *   --strict-window             Require exact target/window identity for non-Agent Chat captures
  *   --visual-source SOURCE      os|render|auto (default: os)
- *   --target-json JSON           ACP window target for getAcpState/getAcpTestProbe RPCs
+ *   --target-json JSON           Agent Chat window target for getAgentChatState/getAgentChatTestProbe RPCs
  *                               (same AutomationWindowTarget shape as the Rust protocol)
  *   --capture-window-id N        Exact native window ID for screencapture
  *                               (the inspected osWindowId, not automationWindowId)
- *   --request-id ID             Request ID for getAcpState (default: auto-generated)
+ *   --request-id ID             Request ID for getAgentChatState (default: auto-generated)
  *   --json                      (default) Output JSON receipt
  *   --help                      Show this help
  *
@@ -139,7 +139,7 @@ interface CapturePlan {
  * the parent (main) window. The `targetBounds` field specifies the exact
  * crop region within the parent screenshot where the popup lives.
  *
- * For detached windows (AcpDetached, Notes), the screenshot is the window
+ * For detached windows (AgentChatDetached, Notes), the screenshot is the window
  * itself at origin (0, 0).
  */
 interface PopupCaptureReceipt {
@@ -199,7 +199,7 @@ interface VerifyReceipt {
   renderEvidence: VisualEvidenceReceipt | null;
   visionCrops: VisionCheck[];
   // Detailed receipts (full diagnostics)
-  stateReceipt: AcpStateResult | null;
+  stateReceipt: AgentChatStateResult | null;
   probeReceipt: ProbeResult | null;
   screenshotReceipt: ScreenshotResult | null;
   visionChecks: VisionCheck[];
@@ -207,7 +207,7 @@ interface VerifyReceipt {
   summary: string;
 }
 
-interface AcpStateResult {
+interface AgentChatStateResult {
   queried: boolean;
   snapshot: Record<string, unknown> | null;
   error: string | null;
@@ -348,26 +348,26 @@ function parseArgs() {
       opts.skipScreenshot = true;
     } else if (arg === "--skip-state") {
       opts.skipState = true;
-    } else if (arg === "--acp-picker-open") {
-      opts.acpPickerOpen = true;
-    } else if (arg === "--acp-picker-closed") {
-      opts.acpPickerClosed = true;
-    } else if (arg === "--acp-item-accepted") {
-      opts.acpItemAccepted = true;
-    } else if (arg === "--acp-context-ready") {
-      opts.acpContextReady = true;
-    } else if (arg === "--acp-no-selection") {
-      opts.acpNoSelection = true;
-    } else if (arg === "--acp-has-selection") {
-      opts.acpHasSelection = true;
-    } else if (arg === "--acp-no-permission") {
-      opts.acpNoPermission = true;
-    } else if (arg === "--acp-has-permission") {
-      opts.acpHasPermission = true;
-    } else if (arg === "--acp-setup-visible") {
-      opts.acpSetupVisible = true;
-    } else if (arg === "--acp-setup-agent-picker-open") {
-      opts.acpSetupAgentPickerOpen = true;
+    } else if (arg === "--agent_chat-picker-open") {
+      opts.agent_chatPickerOpen = true;
+    } else if (arg === "--agent_chat-picker-closed") {
+      opts.agent_chatPickerClosed = true;
+    } else if (arg === "--agent_chat-item-accepted") {
+      opts.agent_chatItemAccepted = true;
+    } else if (arg === "--agent_chat-context-ready") {
+      opts.agent_chatContextReady = true;
+    } else if (arg === "--agent_chat-no-selection") {
+      opts.agent_chatNoSelection = true;
+    } else if (arg === "--agent_chat-has-selection") {
+      opts.agent_chatHasSelection = true;
+    } else if (arg === "--agent_chat-no-permission") {
+      opts.agent_chatNoPermission = true;
+    } else if (arg === "--agent_chat-has-permission") {
+      opts.agent_chatHasPermission = true;
+    } else if (arg === "--agent_chat-setup-visible") {
+      opts.agent_chatSetupVisible = true;
+    } else if (arg === "--agent_chat-setup-agent-picker-open") {
+      opts.agent_chatSetupAgentPickerOpen = true;
     } else if (arg === "--emit-vision-crops" || arg === "--vision") {
       opts.emitVisionCrops = true;
     } else if (arg === "--skip-probe") {
@@ -1090,14 +1090,14 @@ async function captureRenderReadbackViaMcp(
   }
 }
 
-async function queryAcpState(
+async function queryAgentChatState(
   session: string,
   requestId: string,
   target?: Record<string, unknown>
-): Promise<AcpStateResult> {
+): Promise<AgentChatStateResult> {
   const sessionScript = join(PROJECT_ROOT, "scripts/agentic/session.sh");
   const payload: Record<string, unknown> = {
-    type: "getAcpState",
+    type: "getAgentChatState",
     requestId,
   };
   if (target) {
@@ -1113,7 +1113,7 @@ async function queryAcpState(
       session,
       cmd,
       "--expect",
-      "acpStateResult",
+      "agent_chatStateResult",
       "--timeout",
       "3000",
     ],
@@ -1144,7 +1144,7 @@ async function queryAcpState(
     return {
       queried: true,
       snapshot: null,
-      error: `Failed to query getAcpState: ${errorMessage}`,
+      error: `Failed to query getAgentChatState: ${errorMessage}`,
     };
   }
 
@@ -1153,11 +1153,11 @@ async function queryAcpState(
     return {
       queried: true,
       snapshot: null,
-      error: "RPC completed but did not return an acpStateResult payload",
+      error: "RPC completed but did not return an agent_chatStateResult payload",
     };
   }
 
-  if ((response as Record<string, unknown>).type !== "acpStateResult") {
+  if ((response as Record<string, unknown>).type !== "agent_chatStateResult") {
     return {
       queried: true,
       snapshot: null,
@@ -1172,7 +1172,7 @@ async function queryAcpState(
   };
 }
 
-async function queryAcpTestProbe(
+async function queryAgentChatTestProbe(
   session: string,
   requestId: string,
   tail: number,
@@ -1180,7 +1180,7 @@ async function queryAcpTestProbe(
 ): Promise<ProbeResult> {
   const sessionScript = join(PROJECT_ROOT, "scripts/agentic/session.sh");
   const payload: Record<string, unknown> = {
-    type: "getAcpTestProbe",
+    type: "getAgentChatTestProbe",
     requestId,
     tail,
   };
@@ -1197,7 +1197,7 @@ async function queryAcpTestProbe(
       session,
       cmd,
       "--expect",
-      "acpTestProbeResult",
+      "agent_chatTestProbeResult",
       "--timeout",
       "3000",
     ],
@@ -1228,7 +1228,7 @@ async function queryAcpTestProbe(
     return {
       queried: true,
       snapshot: null,
-      error: `Failed to query getAcpTestProbe: ${errorMessage}`,
+      error: `Failed to query getAgentChatTestProbe: ${errorMessage}`,
     };
   }
 
@@ -1237,11 +1237,11 @@ async function queryAcpTestProbe(
     return {
       queried: true,
       snapshot: null,
-      error: "RPC completed but did not return an acpTestProbeResult payload",
+      error: "RPC completed but did not return an agent_chatTestProbeResult payload",
     };
   }
 
-  if ((response as Record<string, unknown>).type !== "acpTestProbeResult") {
+  if ((response as Record<string, unknown>).type !== "agent_chatTestProbeResult") {
     return {
       queried: true,
       snapshot: null,
@@ -1328,27 +1328,27 @@ function diag(event: string, data: Record<string, unknown> = {}): void {
   console.error(JSON.stringify({ event, ...data }));
 }
 
-function hasAcpAssertions(opts: Record<string, string | boolean>): boolean {
+function hasAgentChatAssertions(opts: Record<string, string | boolean>): boolean {
   return [
-    "acpStatus",
-    "acpPickerOpen",
-    "acpPickerClosed",
-    "acpInputContains",
-    "acpInputMatch",
-    "acpCursorAt",
-    "acpItemAccepted",
-    "acpAcceptedLabel",
-    "acpAcceptedTrigger",
-    "acpAcceptedVia",
-    "acpCursorAfterAccepted",
-    "acpContextReady",
-    "acpNoSelection",
-    "acpHasSelection",
-    "acpNoPermission",
-    "acpHasPermission",
-    "acpVisibleStart",
-    "acpVisibleEnd",
-    "acpCursorInWindow",
+    "agent_chatStatus",
+    "agent_chatPickerOpen",
+    "agent_chatPickerClosed",
+    "agent_chatInputContains",
+    "agent_chatInputMatch",
+    "agent_chatCursorAt",
+    "agent_chatItemAccepted",
+    "agent_chatAcceptedLabel",
+    "agent_chatAcceptedTrigger",
+    "agent_chatAcceptedVia",
+    "agent_chatCursorAfterAccepted",
+    "agent_chatContextReady",
+    "agent_chatNoSelection",
+    "agent_chatHasSelection",
+    "agent_chatNoPermission",
+    "agent_chatHasPermission",
+    "agent_chatVisibleStart",
+    "agent_chatVisibleEnd",
+    "agent_chatCursorInWindow",
   ].some((key) => hasOpt(opts, key));
 }
 
@@ -1358,7 +1358,7 @@ function shouldQueryProbe(
 ): boolean {
   return (
     !skipProbe &&
-    (hasOpt(opts, "acpAcceptedVia") || hasOpt(opts, "acpCursorAfterAccepted"))
+    (hasOpt(opts, "agent_chatAcceptedVia") || hasOpt(opts, "agent_chatCursorAfterAccepted"))
   );
 }
 
@@ -1563,7 +1563,7 @@ async function captureScreenshot(
   let nativeCaptureFailure: string | null = null;
   let screenRectFailure: string | null = null;
   let screenRectFallback: ScreenRectFallbackReceipt | null = null;
-  const strictWindowProof = opts.strictWindow === true || hasAcpAssertions(opts);
+  const strictWindowProof = opts.strictWindow === true || hasAgentChatAssertions(opts);
   const inspectionOsWindowId =
     typeof inspection?.osWindowId === "number" && inspection.osWindowId > 0
       ? inspection.osWindowId
@@ -1791,7 +1791,7 @@ async function captureScreenshot(
     }
   } else if (!strictWindowProof) {
     captureRouting = "runtime-capture-window";
-    // Fallback: use session-based captureWindow (only when no ACP assertions).
+    // Fallback: use session-based captureWindow (only when no Agent Chat assertions).
     // The runtime captureWindow handler now routes through the resolver-driven
     // capture path (capture_window_by_title_via_resolver), which translates the
     // title to an AutomationWindowTarget and emits the same structured log
@@ -1865,7 +1865,7 @@ async function captureScreenshot(
         rectCapture.ok
           ? "screen-rect fallback captured but no target-bound native window id was available"
           : rectCapture.error;
-      // Strict mode: window.ts failed and we have ACP assertions — do not fall back to generic frontmost capture.
+      // Strict mode: window.ts failed and we have Agent Chat assertions — do not fall back to generic frontmost capture.
       const primaryFailure = stderr.trim() || stdout.trim() || "window.ts capture failed";
       const failureParts = [
         `primary=${primaryFailure}`,
@@ -2170,177 +2170,177 @@ function runAssertions(
 
   if (!snapshot) {
     // If state was expected but missing, every assertion fails
-    if (hasOpt(opts, "acpStatus")) {
+    if (hasOpt(opts, "agent_chatStatus")) {
       results.push({
-        name: "acp-status",
-        expected: String(opts.acpStatus),
+        name: "agent_chat-status",
+        expected: String(opts.agent_chatStatus),
         actual: "<no state>",
         passed: false,
       });
     }
-    if (opts.acpPickerOpen) {
+    if (opts.agent_chatPickerOpen) {
       results.push({
-        name: "acp-picker-open",
+        name: "agent_chat-picker-open",
         expected: "true",
         actual: "<no state>",
         passed: false,
       });
     }
-    if (opts.acpPickerClosed) {
+    if (opts.agent_chatPickerClosed) {
       results.push({
-        name: "acp-picker-closed",
+        name: "agent_chat-picker-closed",
         expected: "true",
         actual: "<no state>",
         passed: false,
       });
     }
-    if (hasOpt(opts, "acpInputContains")) {
+    if (hasOpt(opts, "agent_chatInputContains")) {
       results.push({
-        name: "acp-input-contains",
-        expected: `contains "${opts.acpInputContains}"`,
+        name: "agent_chat-input-contains",
+        expected: `contains "${opts.agent_chatInputContains}"`,
         actual: "<no state>",
         passed: false,
       });
     }
-    if (hasOpt(opts, "acpInputMatch")) {
+    if (hasOpt(opts, "agent_chatInputMatch")) {
       results.push({
-        name: "acp-input-match",
-        expected: String(opts.acpInputMatch),
+        name: "agent_chat-input-match",
+        expected: String(opts.agent_chatInputMatch),
         actual: "<no state>",
         passed: false,
       });
     }
-    if (hasOpt(opts, "acpCursorAt")) {
+    if (hasOpt(opts, "agent_chatCursorAt")) {
       results.push({
-        name: "acp-cursor-at",
-        expected: String(opts.acpCursorAt),
+        name: "agent_chat-cursor-at",
+        expected: String(opts.agent_chatCursorAt),
         actual: "<no state>",
         passed: false,
       });
     }
-    if (opts.acpItemAccepted) {
+    if (opts.agent_chatItemAccepted) {
       results.push({
-        name: "acp-item-accepted",
+        name: "agent_chat-item-accepted",
         expected: "non-null",
         actual: "<no state>",
         passed: false,
       });
     }
-    if (opts.acpContextReady) {
+    if (opts.agent_chatContextReady) {
       results.push({
-        name: "acp-context-ready",
+        name: "agent_chat-context-ready",
         expected: "true",
         actual: "<no state>",
         passed: false,
       });
     }
-    if (hasOpt(opts, "acpAcceptedLabel")) {
+    if (hasOpt(opts, "agent_chatAcceptedLabel")) {
       results.push({
-        name: "acp-accepted-label",
-        expected: String(opts.acpAcceptedLabel),
+        name: "agent_chat-accepted-label",
+        expected: String(opts.agent_chatAcceptedLabel),
         actual: "<no state>",
         passed: false,
       });
     }
-    if (hasOpt(opts, "acpAcceptedTrigger")) {
+    if (hasOpt(opts, "agent_chatAcceptedTrigger")) {
       results.push({
-        name: "acp-accepted-trigger",
-        expected: String(opts.acpAcceptedTrigger),
+        name: "agent_chat-accepted-trigger",
+        expected: String(opts.agent_chatAcceptedTrigger),
         actual: "<no state>",
         passed: false,
       });
     }
-    if (opts.acpNoSelection) {
+    if (opts.agent_chatNoSelection) {
       results.push({
-        name: "acp-no-selection",
+        name: "agent_chat-no-selection",
         expected: "false",
         actual: "<no state>",
         passed: false,
       });
     }
-    if (opts.acpHasSelection) {
+    if (opts.agent_chatHasSelection) {
       results.push({
-        name: "acp-has-selection",
+        name: "agent_chat-has-selection",
         expected: "true",
         actual: "<no state>",
         passed: false,
       });
     }
-    if (opts.acpNoPermission) {
+    if (opts.agent_chatNoPermission) {
       results.push({
-        name: "acp-no-permission",
+        name: "agent_chat-no-permission",
         expected: "false",
         actual: "<no state>",
         passed: false,
       });
     }
-    if (opts.acpHasPermission) {
+    if (opts.agent_chatHasPermission) {
       results.push({
-        name: "acp-has-permission",
+        name: "agent_chat-has-permission",
         expected: "true",
         actual: "<no state>",
         passed: false,
       });
     }
-    if (hasOpt(opts, "acpVisibleStart")) {
+    if (hasOpt(opts, "agent_chatVisibleStart")) {
       results.push({
-        name: "acp-visible-start",
-        expected: String(opts.acpVisibleStart),
+        name: "agent_chat-visible-start",
+        expected: String(opts.agent_chatVisibleStart),
         actual: "<no state>",
         passed: false,
       });
     }
-    if (hasOpt(opts, "acpVisibleEnd")) {
+    if (hasOpt(opts, "agent_chatVisibleEnd")) {
       results.push({
-        name: "acp-visible-end",
-        expected: String(opts.acpVisibleEnd),
+        name: "agent_chat-visible-end",
+        expected: String(opts.agent_chatVisibleEnd),
         actual: "<no state>",
         passed: false,
       });
     }
-    if (hasOpt(opts, "acpCursorInWindow")) {
+    if (hasOpt(opts, "agent_chatCursorInWindow")) {
       results.push({
-        name: "acp-cursor-in-window",
-        expected: String(opts.acpCursorInWindow),
+        name: "agent_chat-cursor-in-window",
+        expected: String(opts.agent_chatCursorInWindow),
         actual: "<no state>",
         passed: false,
       });
     }
-    if (opts.acpSetupVisible) {
+    if (opts.agent_chatSetupVisible) {
       results.push({
-        name: "acp-setup-visible",
+        name: "agent_chat-setup-visible",
         expected: "true",
         actual: "<no state>",
         passed: false,
       });
     }
-    if (hasOpt(opts, "acpSetupReason")) {
+    if (hasOpt(opts, "agent_chatSetupReason")) {
       results.push({
-        name: "acp-setup-reason",
-        expected: String(opts.acpSetupReason),
+        name: "agent_chat-setup-reason",
+        expected: String(opts.agent_chatSetupReason),
         actual: "<no state>",
         passed: false,
       });
     }
-    if (hasOpt(opts, "acpSetupPrimaryAction")) {
+    if (hasOpt(opts, "agent_chatSetupPrimaryAction")) {
       results.push({
-        name: "acp-setup-primary-action",
-        expected: String(opts.acpSetupPrimaryAction),
+        name: "agent_chat-setup-primary-action",
+        expected: String(opts.agent_chatSetupPrimaryAction),
         actual: "<no state>",
         passed: false,
       });
     }
-    if (hasOpt(opts, "acpSetupSelectedAgent")) {
+    if (hasOpt(opts, "agent_chatSetupSelectedAgent")) {
       results.push({
-        name: "acp-setup-selected-agent",
-        expected: String(opts.acpSetupSelectedAgent),
+        name: "agent_chat-setup-selected-agent",
+        expected: String(opts.agent_chatSetupSelectedAgent),
         actual: "<no state>",
         passed: false,
       });
     }
-    if (opts.acpSetupAgentPickerOpen) {
+    if (opts.agent_chatSetupAgentPickerOpen) {
       results.push({
-        name: "acp-setup-agent-picker-open",
+        name: "agent_chat-setup-agent-picker-open",
         expected: "true",
         actual: "<no state>",
         passed: false,
@@ -2350,22 +2350,22 @@ function runAssertions(
   }
 
   // Status assertion
-  if (hasOpt(opts, "acpStatus")) {
+  if (hasOpt(opts, "agent_chatStatus")) {
     const actual = String(snapshot.status ?? "<missing>");
     results.push({
-      name: "acp-status",
-      expected: String(opts.acpStatus),
+      name: "agent_chat-status",
+      expected: String(opts.agent_chatStatus),
       actual,
-      passed: actual === String(opts.acpStatus),
+      passed: actual === String(opts.agent_chatStatus),
     });
   }
 
   // Picker open assertion
-  if (opts.acpPickerOpen) {
+  if (opts.agent_chatPickerOpen) {
     const picker = snapshot.picker as Record<string, unknown> | null;
     const actual = picker ? String(picker.open ?? false) : "false";
     results.push({
-      name: "acp-picker-open",
+      name: "agent_chat-picker-open",
       expected: "true",
       actual,
       passed: actual === "true",
@@ -2373,11 +2373,11 @@ function runAssertions(
   }
 
   // Picker closed assertion
-  if (opts.acpPickerClosed) {
+  if (opts.agent_chatPickerClosed) {
     const picker = snapshot.picker as Record<string, unknown> | null;
     const isOpen = picker ? picker.open === true : false;
     results.push({
-      name: "acp-picker-closed",
+      name: "agent_chat-picker-closed",
       expected: "true",
       actual: String(!isOpen),
       passed: !isOpen,
@@ -2385,11 +2385,11 @@ function runAssertions(
   }
 
   // Input contains assertion
-  if (hasOpt(opts, "acpInputContains")) {
+  if (hasOpt(opts, "agent_chatInputContains")) {
     const inputText = String(snapshot.inputText ?? "");
-    const substring = String(opts.acpInputContains);
+    const substring = String(opts.agent_chatInputContains);
     results.push({
-      name: "acp-input-contains",
+      name: "agent_chat-input-contains",
       expected: `contains "${substring}"`,
       actual: `"${inputText}"`,
       passed: inputText.includes(substring),
@@ -2397,11 +2397,11 @@ function runAssertions(
   }
 
   // Input match assertion
-  if (hasOpt(opts, "acpInputMatch")) {
+  if (hasOpt(opts, "agent_chatInputMatch")) {
     const inputText = String(snapshot.inputText ?? "");
-    const expected = String(opts.acpInputMatch);
+    const expected = String(opts.agent_chatInputMatch);
     results.push({
-      name: "acp-input-match",
+      name: "agent_chat-input-match",
       expected: `"${expected}"`,
       actual: `"${inputText}"`,
       passed: inputText === expected,
@@ -2409,11 +2409,11 @@ function runAssertions(
   }
 
   // Cursor position assertion
-  if (hasOpt(opts, "acpCursorAt")) {
+  if (hasOpt(opts, "agent_chatCursorAt")) {
     const cursorIndex = Number(snapshot.cursorIndex ?? -1);
-    const expected = Number(opts.acpCursorAt);
+    const expected = Number(opts.agent_chatCursorAt);
     results.push({
-      name: "acp-cursor-at",
+      name: "agent_chat-cursor-at",
       expected: String(expected),
       actual: String(cursorIndex),
       passed: cursorIndex === expected,
@@ -2421,10 +2421,10 @@ function runAssertions(
   }
 
   // Item accepted assertion
-  if (opts.acpItemAccepted) {
+  if (opts.agent_chatItemAccepted) {
     const item = snapshot.lastAcceptedItem;
     results.push({
-      name: "acp-item-accepted",
+      name: "agent_chat-item-accepted",
       expected: "non-null",
       actual: item ? "present" : "null",
       passed: item != null,
@@ -2432,10 +2432,10 @@ function runAssertions(
   }
 
   // Context ready assertion
-  if (opts.acpContextReady) {
+  if (opts.agent_chatContextReady) {
     const ready = snapshot.contextReady === true;
     results.push({
-      name: "acp-context-ready",
+      name: "agent_chat-context-ready",
       expected: "true",
       actual: String(ready),
       passed: ready,
@@ -2443,12 +2443,12 @@ function runAssertions(
   }
 
   // Accepted item label assertion
-  if (hasOpt(opts, "acpAcceptedLabel")) {
+  if (hasOpt(opts, "agent_chatAcceptedLabel")) {
     const item = snapshot.lastAcceptedItem as Record<string, unknown> | null;
     const actual = item ? String(item.label ?? "<missing>") : "<no item>";
-    const expected = String(opts.acpAcceptedLabel);
+    const expected = String(opts.agent_chatAcceptedLabel);
     results.push({
-      name: "acp-accepted-label",
+      name: "agent_chat-accepted-label",
       expected,
       actual,
       passed: actual === expected,
@@ -2456,12 +2456,12 @@ function runAssertions(
   }
 
   // Accepted item trigger assertion
-  if (hasOpt(opts, "acpAcceptedTrigger")) {
+  if (hasOpt(opts, "agent_chatAcceptedTrigger")) {
     const item = snapshot.lastAcceptedItem as Record<string, unknown> | null;
     const actual = item ? String(item.trigger ?? "<missing>") : "<no item>";
-    const expected = String(opts.acpAcceptedTrigger);
+    const expected = String(opts.agent_chatAcceptedTrigger);
     results.push({
-      name: "acp-accepted-trigger",
+      name: "agent_chat-accepted-trigger",
       expected,
       actual,
       passed: actual === expected,
@@ -2469,20 +2469,20 @@ function runAssertions(
   }
 
   // Selection assertions
-  if (opts.acpNoSelection) {
+  if (opts.agent_chatNoSelection) {
     const hasSel = snapshot.hasSelection === true;
     results.push({
-      name: "acp-no-selection",
+      name: "agent_chat-no-selection",
       expected: "false",
       actual: String(hasSel),
       passed: !hasSel,
     });
   }
 
-  if (opts.acpHasSelection) {
+  if (opts.agent_chatHasSelection) {
     const hasSel = snapshot.hasSelection === true;
     results.push({
-      name: "acp-has-selection",
+      name: "agent_chat-has-selection",
       expected: "true",
       actual: String(hasSel),
       passed: hasSel,
@@ -2490,20 +2490,20 @@ function runAssertions(
   }
 
   // Permission assertions
-  if (opts.acpNoPermission) {
+  if (opts.agent_chatNoPermission) {
     const hasPerm = snapshot.hasPendingPermission === true;
     results.push({
-      name: "acp-no-permission",
+      name: "agent_chat-no-permission",
       expected: "false",
       actual: String(hasPerm),
       passed: !hasPerm,
     });
   }
 
-  if (opts.acpHasPermission) {
+  if (opts.agent_chatHasPermission) {
     const hasPerm = snapshot.hasPendingPermission === true;
     results.push({
-      name: "acp-has-permission",
+      name: "agent_chat-has-permission",
       expected: "true",
       actual: String(hasPerm),
       passed: hasPerm,
@@ -2513,88 +2513,88 @@ function runAssertions(
   // Input layout assertions
   const layout = snapshot.inputLayout as Record<string, unknown> | null;
 
-  if (hasOpt(opts, "acpVisibleStart")) {
-    const expected = Number(opts.acpVisibleStart);
+  if (hasOpt(opts, "agent_chatVisibleStart")) {
+    const expected = Number(opts.agent_chatVisibleStart);
     const actual = layout ? Number(layout.visibleStart ?? -1) : -1;
     results.push({
-      name: "acp-visible-start",
+      name: "agent_chat-visible-start",
       expected: String(expected),
       actual: layout ? String(actual) : "<no layout>",
       passed: actual === expected,
     });
   }
 
-  if (hasOpt(opts, "acpVisibleEnd")) {
-    const expected = Number(opts.acpVisibleEnd);
+  if (hasOpt(opts, "agent_chatVisibleEnd")) {
+    const expected = Number(opts.agent_chatVisibleEnd);
     const actual = layout ? Number(layout.visibleEnd ?? -1) : -1;
     results.push({
-      name: "acp-visible-end",
+      name: "agent_chat-visible-end",
       expected: String(expected),
       actual: layout ? String(actual) : "<no layout>",
       passed: actual === expected,
     });
   }
 
-  if (hasOpt(opts, "acpCursorInWindow")) {
-    const expected = Number(opts.acpCursorInWindow);
+  if (hasOpt(opts, "agent_chatCursorInWindow")) {
+    const expected = Number(opts.agent_chatCursorInWindow);
     const actual = layout ? Number(layout.cursorInWindow ?? -1) : -1;
     results.push({
-      name: "acp-cursor-in-window",
+      name: "agent_chat-cursor-in-window",
       expected: String(expected),
       actual: layout ? String(actual) : "<no layout>",
       passed: actual === expected,
     });
   }
 
-  // ACP setup assertions
+  // Agent Chat setup assertions
   const setup = snapshot.setup as Record<string, unknown> | null;
 
-  if (opts.acpSetupVisible) {
+  if (opts.agent_chatSetupVisible) {
     results.push({
-      name: "acp-setup-visible",
+      name: "agent_chat-setup-visible",
       expected: "true",
       actual: setup ? "true" : "false",
       passed: setup != null,
     });
   }
 
-  if (hasOpt(opts, "acpSetupReason")) {
-    const expected = String(opts.acpSetupReason);
+  if (hasOpt(opts, "agent_chatSetupReason")) {
+    const expected = String(opts.agent_chatSetupReason);
     const actual = setup ? String(setup.reasonCode ?? "<missing>") : "<no setup>";
     results.push({
-      name: "acp-setup-reason",
+      name: "agent_chat-setup-reason",
       expected,
       actual,
       passed: actual === expected,
     });
   }
 
-  if (hasOpt(opts, "acpSetupPrimaryAction")) {
-    const expected = String(opts.acpSetupPrimaryAction);
+  if (hasOpt(opts, "agent_chatSetupPrimaryAction")) {
+    const expected = String(opts.agent_chatSetupPrimaryAction);
     const actual = setup ? String(setup.primaryAction ?? "<missing>") : "<no setup>";
     results.push({
-      name: "acp-setup-primary-action",
+      name: "agent_chat-setup-primary-action",
       expected,
       actual,
       passed: actual === expected,
     });
   }
 
-  if (hasOpt(opts, "acpSetupSelectedAgent")) {
-    const expected = String(opts.acpSetupSelectedAgent);
+  if (hasOpt(opts, "agent_chatSetupSelectedAgent")) {
+    const expected = String(opts.agent_chatSetupSelectedAgent);
     const actual = setup ? String(setup.selectedAgentId ?? "<none>") : "<no setup>";
     results.push({
-      name: "acp-setup-selected-agent",
+      name: "agent_chat-setup-selected-agent",
       expected,
       actual,
       passed: actual === expected,
     });
   }
 
-  if (opts.acpSetupAgentPickerOpen) {
+  if (opts.agent_chatSetupAgentPickerOpen) {
     const actual = setup ? String(setup.agentPickerOpen ?? false) : "false";
     results.push({
-      name: "acp-setup-agent-picker-open",
+      name: "agent_chat-setup-agent-picker-open",
       expected: "true",
       actual,
       passed: actual === "true",
@@ -2611,22 +2611,22 @@ function runProbeAssertions(
   const results: AssertionResult[] = [];
 
   const needsProbe =
-    hasOpt(opts, "acpAcceptedVia") || hasOpt(opts, "acpCursorAfterAccepted");
+    hasOpt(opts, "agent_chatAcceptedVia") || hasOpt(opts, "agent_chatCursorAfterAccepted");
   if (!needsProbe) return results;
 
   if (!probeSnapshot) {
-    if (hasOpt(opts, "acpAcceptedVia")) {
+    if (hasOpt(opts, "agent_chatAcceptedVia")) {
       results.push({
-        name: "acp-accepted-via",
-        expected: String(opts.acpAcceptedVia),
+        name: "agent_chat-accepted-via",
+        expected: String(opts.agent_chatAcceptedVia),
         actual: "<no probe>",
         passed: false,
       });
     }
-    if (hasOpt(opts, "acpCursorAfterAccepted")) {
+    if (hasOpt(opts, "agent_chatCursorAfterAccepted")) {
       results.push({
-        name: "acp-cursor-after-accepted",
-        expected: String(opts.acpCursorAfterAccepted),
+        name: "agent_chat-cursor-after-accepted",
+        expected: String(opts.agent_chatCursorAfterAccepted),
         actual: "<no probe>",
         passed: false,
       });
@@ -2643,26 +2643,26 @@ function runProbeAssertions(
       ? acceptedItems[acceptedItems.length - 1]
       : null;
 
-  if (hasOpt(opts, "acpAcceptedVia")) {
-    const expected = String(opts.acpAcceptedVia);
+  if (hasOpt(opts, "agent_chatAcceptedVia")) {
+    const expected = String(opts.agent_chatAcceptedVia);
     const actual = lastAccepted
       ? String(lastAccepted.acceptedViaKey ?? "<missing>")
       : "<no accepted items>";
     results.push({
-      name: "acp-accepted-via",
+      name: "agent_chat-accepted-via",
       expected,
       actual,
       passed: actual === expected,
     });
   }
 
-  if (hasOpt(opts, "acpCursorAfterAccepted")) {
-    const expected = Number(opts.acpCursorAfterAccepted);
+  if (hasOpt(opts, "agent_chatCursorAfterAccepted")) {
+    const expected = Number(opts.agent_chatCursorAfterAccepted);
     const actual = lastAccepted
       ? Number(lastAccepted.cursorAfter ?? -1)
       : -1;
     results.push({
-      name: "acp-cursor-after-accepted",
+      name: "agent_chat-cursor-after-accepted",
       expected: String(expected),
       actual: lastAccepted ? String(actual) : "<no accepted items>",
       passed: actual === expected,
@@ -2689,7 +2689,7 @@ function buildVisionChecks(
 
   // Caret placement after insertion — mustReview because state alone
   // cannot prove the caret is *visually* positioned correctly
-  if (hasOpt(opts, "acpAcceptedVia") || opts.acpItemAccepted) {
+  if (hasOpt(opts, "agent_chatAcceptedVia") || opts.agent_chatItemAccepted) {
     checks.push({
       name: "composer-caret",
       path: screenshotResult.path,
@@ -2704,13 +2704,13 @@ function buildVisionChecks(
       expectedAnswer: "yes",
       mustReview: true,
       failureMessage:
-        "Caret is not visually aligned after ACP insertion. The cursor may have jumped or the inserted text may be clipped.",
+        "Caret is not visually aligned after Agent Chat insertion. The cursor may have jumped or the inserted text may be clipped.",
     });
   }
 
   // Picker dismissal check — mustReview because a stale picker overlay
   // can linger visually even when state reports it closed
-  if (opts.acpPickerClosed || hasOpt(opts, "acpAcceptedVia")) {
+  if (opts.agent_chatPickerClosed || hasOpt(opts, "agent_chatAcceptedVia")) {
     checks.push({
       name: "picker-dismissed",
       path: screenshotResult.path,
@@ -2731,7 +2731,7 @@ function buildVisionChecks(
 
   // Single-line composer stability — mustReview because layout metrics
   // can report correct values while the visual input jumps or clips
-  if (hasOpt(opts, "acpAcceptedVia") || opts.acpItemAccepted) {
+  if (hasOpt(opts, "agent_chatAcceptedVia") || opts.agent_chatItemAccepted) {
     checks.push({
       name: "single-line-stability",
       path: screenshotResult.path,
@@ -2751,7 +2751,7 @@ function buildVisionChecks(
   }
 
   // Picker visibility check (for picker-open assertions)
-  if (opts.acpPickerOpen) {
+  if (opts.agent_chatPickerOpen) {
     checks.push({
       name: "picker-visible",
       path: screenshotResult.path,
@@ -2806,52 +2806,52 @@ if (opts.help) {
   }
   console.log(`Usage: bun scripts/agentic/verify-shot.ts --session NAME [options]
 
-ACP proof bundle: state receipt + test probe + screenshot + vision prompts.
+Agent Chat proof bundle: state receipt + test probe + screenshot + vision prompts.
 
 Options:
   --session NAME              Session name (default: "default")
   --label LABEL               Human-readable step label (default: "verify")
   --out PATH                  Screenshot output path (default: .test-screenshots/<label>-<ts>.png)
-  --acp-status STATUS         Assert ACP status equals this value
-  --acp-picker-open           Assert picker is open
-  --acp-picker-closed         Assert picker is closed
-  --acp-input-contains STR    Assert input text contains substring
-  --acp-input-match STR       Assert input text equals exactly
-  --acp-cursor-at N           Assert cursor is at character index N
-  --acp-item-accepted         Assert lastAcceptedItem is non-null
-  --acp-accepted-label STR    Assert lastAcceptedItem.label equals STR
-  --acp-accepted-trigger STR  Assert lastAcceptedItem.trigger equals STR (@ or /)
-  --acp-accepted-via KEY      Assert probe acceptedItems[last].acceptedViaKey (enter|tab)
-  --acp-cursor-after-accepted N  Assert probe acceptedItems[last].cursorAfter equals N
-  --acp-context-ready         Assert contextReady is true
-  --acp-no-selection          Assert hasSelection is false
-  --acp-has-selection         Assert hasSelection is true
-  --acp-no-permission         Assert hasPendingPermission is false
-  --acp-has-permission        Assert hasPendingPermission is true
-  --acp-visible-start N       Assert inputLayout.visibleStart equals N
-  --acp-visible-end N         Assert inputLayout.visibleEnd equals N
-  --acp-cursor-in-window N    Assert inputLayout.cursorInWindow equals N
-  --acp-setup-visible         Assert setup card is present (status == "setup")
-  --acp-setup-reason CODE     Assert setup.reasonCode equals CODE
-  --acp-setup-primary-action A  Assert setup.primaryAction equals A
-  --acp-setup-selected-agent ID Assert setup.selectedAgentId equals ID
-  --acp-setup-agent-picker-open Assert setup.agentPickerOpen is true
+  --agent_chat-status STATUS         Assert Agent Chat status equals this value
+  --agent_chat-picker-open           Assert picker is open
+  --agent_chat-picker-closed         Assert picker is closed
+  --agent_chat-input-contains STR    Assert input text contains substring
+  --agent_chat-input-match STR       Assert input text equals exactly
+  --agent_chat-cursor-at N           Assert cursor is at character index N
+  --agent_chat-item-accepted         Assert lastAcceptedItem is non-null
+  --agent_chat-accepted-label STR    Assert lastAcceptedItem.label equals STR
+  --agent_chat-accepted-trigger STR  Assert lastAcceptedItem.trigger equals STR (@ or /)
+  --agent_chat-accepted-via KEY      Assert probe acceptedItems[last].acceptedViaKey (enter|tab)
+  --agent_chat-cursor-after-accepted N  Assert probe acceptedItems[last].cursorAfter equals N
+  --agent_chat-context-ready         Assert contextReady is true
+  --agent_chat-no-selection          Assert hasSelection is false
+  --agent_chat-has-selection         Assert hasSelection is true
+  --agent_chat-no-permission         Assert hasPendingPermission is false
+  --agent_chat-has-permission        Assert hasPendingPermission is true
+  --agent_chat-visible-start N       Assert inputLayout.visibleStart equals N
+  --agent_chat-visible-end N         Assert inputLayout.visibleEnd equals N
+  --agent_chat-cursor-in-window N    Assert inputLayout.cursorInWindow equals N
+  --agent_chat-setup-visible         Assert setup card is present (status == "setup")
+  --agent_chat-setup-reason CODE     Assert setup.reasonCode equals CODE
+  --agent_chat-setup-primary-action A  Assert setup.primaryAction equals A
+  --agent_chat-setup-selected-agent ID Assert setup.selectedAgentId equals ID
+  --agent_chat-setup-agent-picker-open Assert setup.agentPickerOpen is true
   --probe-tail N              Number of probe events to request (default: 20)
   --vision                    Emit vision checks with mustReview prompts and requiresVisionReview
   --emit-vision-crops         Alias for --vision
   --skip-screenshot           Only run state assertions, skip capture
   --skip-state                Only capture screenshot, skip state query
-  --skip-probe                Skip ACP test probe query
+  --skip-probe                Skip Agent Chat test probe query
   --strict-window             Require --target-json or --capture-window-id and forbid generic fallback
   --visual-source SOURCE      os|render|auto (default: os). auto tries GPUI app-render readback after OS capture is blocked.
-  --target-json JSON          ACP window target for getAcpState/getAcpTestProbe RPCs
+  --target-json JSON          Agent Chat window target for getAgentChatState/getAgentChatTestProbe RPCs
   --capture-window-id N       Exact native window ID for screencapture
                               (the inspected osWindowId, not automationWindowId)
-  --request-id ID             Request ID for getAcpState (auto-generated)
+  --request-id ID             Request ID for getAgentChatState (auto-generated)
 
-Verification order (ACP golden path):
-  1. State receipt (getAcpState) — machine-readable proof
-  2. Probe receipt (getAcpTestProbe) — key-route/picker-acceptance telemetry
+Verification order (Agent Chat golden path):
+  1. State receipt (getAgentChatState) — machine-readable proof
+  2. Probe receipt (getAgentChatTestProbe) — key-route/picker-acceptance telemetry
   3. Screenshot capture — visual proof with metadata + pixel-content audit
   4. Vision checks — structured prompts for external image readers
   5. Assertions check state + probe fields
@@ -2885,7 +2885,7 @@ if (!["os", "render", "auto"].includes(visualSource)) {
 const wantsOsVisual = visualSource === "os" || visualSource === "auto";
 const wantsRenderVisual = visualSource === "render" || visualSource === "auto";
 
-// Parse --target-json for ACP window targeting
+// Parse --target-json for Agent Chat window targeting
 let targetJson: Record<string, unknown> | undefined;
 if (typeof opts.targetJson === "string") {
   try {
@@ -2912,27 +2912,27 @@ if (opts.out) {
   );
 }
 
-// Step 1: Query ACP state (unless skipped)
-let stateResult: AcpStateResult | null = null;
+// Step 1: Query Agent Chat state (unless skipped)
+let stateResult: AgentChatStateResult | null = null;
 if (!skipState) {
-  stateResult = await queryAcpState(session, requestId, targetJson);
+  stateResult = await queryAgentChatState(session, requestId, targetJson);
 }
 
-// Step 2: Query ACP test probe only when probe assertions are requested
+// Step 2: Query Agent Chat test probe only when probe assertions are requested
 let probeResult: ProbeResult | null = null;
 const needsProbe = shouldQueryProbe(opts, skipProbe);
 if (needsProbe) {
   const probeRequestId = `${requestId}-probe`;
-  probeResult = await queryAcpTestProbe(session, probeRequestId, probeTail, targetJson);
+  probeResult = await queryAgentChatTestProbe(session, probeRequestId, probeTail, targetJson);
   diag("verify_shot_probe_loaded", {
     label,
     queried: probeResult.queried,
     hasSnapshot: probeResult.snapshot != null,
-    acceptedVia: hasOpt(opts, "acpAcceptedVia")
-      ? String(opts.acpAcceptedVia)
+    acceptedVia: hasOpt(opts, "agent_chatAcceptedVia")
+      ? String(opts.agent_chatAcceptedVia)
       : null,
-    cursorAfterAccepted: hasOpt(opts, "acpCursorAfterAccepted")
-      ? String(opts.acpCursorAfterAccepted)
+    cursorAfterAccepted: hasOpt(opts, "agent_chatCursorAfterAccepted")
+      ? String(opts.agent_chatCursorAfterAccepted)
       : null,
     error: probeResult.error ?? null,
   });
@@ -3015,7 +3015,7 @@ let popupCaptureInfraError = false;
 if (inspection) {
   const wk = inspection.windowKind;
   const attachedPopupKinds = ["ActionsDialog", "PromptPopup", "actionsDialog", "promptPopup"];
-  const detachedKinds = ["AcpDetached", "Notes", "acpDetached", "notes"];
+  const detachedKinds = ["AgentChatDetached", "Notes", "agentChatDetached", "notes"];
   const isAttached = attachedPopupKinds.includes(wk);
   const isDetached = detachedKinds.includes(wk);
 
@@ -3174,7 +3174,7 @@ if (hasInfraError) {
 
 function buildSummary(
   assertions: AssertionResult[],
-  state: AcpStateResult | null,
+  state: AgentChatStateResult | null,
   probe: ProbeResult | null,
   screenshot: ScreenshotResult | null
 ): string {

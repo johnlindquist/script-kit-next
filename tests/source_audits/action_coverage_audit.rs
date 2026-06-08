@@ -261,19 +261,20 @@ fn visible_attach_actions_use_agent_chat_label() {
 
 #[test]
 fn markdown_copy_actions_do_not_advertise_file_export() {
-    let acp_builder = read("src/actions/builders/script_context.rs");
-    let acp_handler = read("src/app_actions/handle_action/mod.rs");
+    let agent_chat_builder = read("src/actions/builders/script_context.rs");
+    let agent_chat_handler = read("src/app_actions/handle_action/mod.rs");
     let chat_builder = read("src/actions/builders/chat.rs");
 
     assert!(
-        acp_builder.contains("\"acp_export_markdown\"")
-            && acp_builder.contains("\"Copy Conversation as Markdown\""),
-        "ACP markdown action should advertise clipboard copy behavior"
+        agent_chat_builder.contains("\"agent_chat_export_markdown\"")
+            && agent_chat_builder.contains("\"Copy Conversation as Markdown\""),
+        "Agent Chat markdown action should advertise clipboard copy behavior"
     );
     assert!(
-        acp_handler.contains("cx.write_to_clipboard(gpui::ClipboardItem::new_string(markdown))")
-            && acp_handler.contains("Copied Agent Chat conversation as markdown"),
-        "ACP markdown handler should still prove clipboard copy behavior"
+        agent_chat_handler
+            .contains("cx.write_to_clipboard(gpui::ClipboardItem::new_string(markdown))")
+            && agent_chat_handler.contains("Copied Agent Chat conversation as markdown"),
+        "Agent Chat markdown handler should still prove clipboard copy behavior"
     );
     assert!(
         chat_builder.contains("\"chat:export_markdown\"")
@@ -282,7 +283,7 @@ fn markdown_copy_actions_do_not_advertise_file_export() {
         "Legacy chat markdown action should advertise clipboard copy behavior"
     );
     assert!(
-        !acp_builder.contains("\"Export as Markdown\"")
+        !agent_chat_builder.contains("\"Export as Markdown\"")
             && !chat_builder.contains("\"Export as Markdown\""),
         "Markdown copy actions must not use export wording unless they create a file"
     );

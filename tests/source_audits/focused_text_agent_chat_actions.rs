@@ -1,4 +1,4 @@
-const ACP_VIEW: &str = include_str!("../../src/ai/acp/view.rs");
+const AGENT_CHAT_VIEW: &str = include_str!("../../src/ai/agent_chat/ui/view.rs");
 const ACTIONS_BUILDERS: &str = include_str!("../../src/actions/builders/script_context.rs");
 const ACTIONS_TOGGLE: &str = include_str!("../../src/app_impl/actions_toggle.rs");
 const ACTIONS_DIALOG_IMPL: &str = include_str!("../../src/actions/dialog.rs");
@@ -17,7 +17,7 @@ fn source_between<'a>(source: &'a str, start_marker: &str, end_marker: &str) -> 
 }
 
 #[test]
-fn focused_text_action_ids_route_through_acp_view_dispatcher() {
+fn focused_text_action_ids_route_through_agent_chat_view_dispatcher() {
     for required in [
         "\"focused-text-action-replace\"",
         "\"focused-text-action-append\"",
@@ -28,12 +28,12 @@ fn focused_text_action_ids_route_through_acp_view_dispatcher() {
         "\"focused-text-action-retry\"",
         "pub(crate) fn perform_focused_text_mini_action",
         "apply_focused_text_output",
-        "set_ui_variant(AcpChatUiVariant::Standard",
-        "set_ui_variant(AcpChatUiVariant::FocusedTextMini",
+        "set_ui_variant(AgentChatUiVariant::Standard",
+        "set_ui_variant(AgentChatUiVariant::FocusedTextMini",
     ] {
         assert!(
-            ACP_VIEW.contains(required),
-            "missing focused-text mini action contract in ACP view: {required}"
+            AGENT_CHAT_VIEW.contains(required),
+            "missing focused-text mini action contract in Agent Chat view: {required}"
         );
     }
 
@@ -49,8 +49,8 @@ fn focused_text_action_ids_route_through_acp_view_dispatcher() {
     }
 
     assert!(
-        ACTIONS_DIALOG.contains("ActionsDialogHost::AcpChat"),
-        "TriggerAction host=acpChat must continue to route through shared actions"
+        ACTIONS_DIALOG.contains("ActionsDialogHost::AgentChat"),
+        "TriggerAction host=agentChatChat must continue to route through shared actions"
     );
     assert!(
         !HANDLE_ACTION.contains("crate::inline_agent::"),
@@ -61,7 +61,7 @@ fn focused_text_action_ids_route_through_acp_view_dispatcher() {
 #[test]
 fn focused_text_action_receipts_are_redacted_protocol_state() {
     for required in [
-        "AcpFocusedTextActionReceipt",
+        "AgentChatFocusedTextActionReceipt",
         "last_action_receipt",
         "context_present",
         "context_fingerprint",
@@ -69,8 +69,8 @@ fn focused_text_action_receipts_are_redacted_protocol_state() {
         "error_code",
     ] {
         assert!(
-            ACP_VIEW.contains(required)
-                || include_str!("../../src/protocol/types/acp_state.rs").contains(required),
+            AGENT_CHAT_VIEW.contains(required)
+                || include_str!("../../src/protocol/types/agent_chat_state.rs").contains(required),
             "missing redacted focused-text receipt/state field: {required}"
         );
     }
@@ -82,7 +82,7 @@ fn focused_text_action_receipts_are_redacted_protocol_state() {
         "clipboard_text",
     ] {
         assert!(
-            !include_str!("../../src/protocol/types/acp_state.rs").contains(forbidden),
+            !include_str!("../../src/protocol/types/agent_chat_state.rs").contains(forbidden),
             "focused-text action receipts must not expose raw sensitive field: {forbidden}"
         );
     }
@@ -91,7 +91,7 @@ fn focused_text_action_receipts_are_redacted_protocol_state() {
 #[test]
 fn focused_text_expanded_uses_standard_agent_chat_footer_not_focused_mini_footer() {
     let footer_fn = source_between(
-        ACP_VIEW,
+        AGENT_CHAT_VIEW,
         "fn footer_buttons_for_thread",
         "fn focused_text_visible_footer_buttons",
     );
@@ -102,7 +102,8 @@ fn focused_text_expanded_uses_standard_agent_chat_footer_not_focused_mini_footer
         "focused-text footer override should route through the focused-text footer helper"
     );
     assert!(
-        ACP_VIEW.contains("let expanded = self.ui_variant != AcpChatUiVariant::FocusedTextMini"),
+        AGENT_CHAT_VIEW
+            .contains("let expanded = self.ui_variant != AgentChatUiVariant::FocusedTextMini"),
         "expanded focused-text Agent Chat must use the focused-text expanded footer branch"
     );
 }
@@ -110,7 +111,7 @@ fn focused_text_expanded_uses_standard_agent_chat_footer_not_focused_mini_footer
 #[test]
 fn focused_text_expanded_actions_do_not_offer_collapse() {
     let semantic_fn = source_between(
-        ACP_VIEW,
+        AGENT_CHAT_VIEW,
         "fn focused_text_semantic_actions",
         "fn has_pastable_assistant_response",
     );
@@ -128,7 +129,7 @@ fn focused_text_expanded_actions_do_not_offer_collapse() {
 #[test]
 fn focused_text_mini_result_footer_is_replace_only() {
     let footer_fn = source_between(
-        ACP_VIEW,
+        AGENT_CHAT_VIEW,
         "fn focused_text_visible_footer_buttons",
         "fn focused_text_semantic_actions",
     );
@@ -137,7 +138,7 @@ fn focused_text_mini_result_footer_is_replace_only() {
 
     let mini_branch = source_between(
         footer_fn,
-        "if self.ui_variant == AcpChatUiVariant::FocusedTextMini",
+        "if self.ui_variant == AgentChatUiVariant::FocusedTextMini",
         "match thread.status",
     );
 
@@ -163,7 +164,7 @@ fn focused_text_input_only_omits_semantic_actions_and_preview() {
         "if result_ready",
     ] {
         assert!(
-            ACP_VIEW.contains(required),
+            AGENT_CHAT_VIEW.contains(required),
             "missing input-only automation contract: {required}"
         );
     }
@@ -172,7 +173,7 @@ fn focused_text_input_only_omits_semantic_actions_and_preview() {
 #[test]
 fn focused_text_mini_loading_has_no_body_thinking_text() {
     let render_fn = source_between(
-        ACP_VIEW,
+        AGENT_CHAT_VIEW,
         "fn render_focused_text_mini",
         "fn render_pending_context_chips",
     );
@@ -181,7 +182,7 @@ fn focused_text_mini_loading_has_no_body_thinking_text() {
     assert!(!render_fn.contains("focused-text-thinking"));
     assert!(!render_fn.contains(".child(\"✦\")"));
     assert!(!render_fn.contains("Edit, refine, ask"));
-    assert!(ACP_VIEW.contains("FOCUSED_TEXT_MINI_PLACEHOLDER"));
+    assert!(AGENT_CHAT_VIEW.contains("FOCUSED_TEXT_MINI_PLACEHOLDER"));
     assert!(render_fn.contains("Self::render_composer_input_text"));
     assert!(render_fn.contains("focused_text_mini_input_height()"));
     assert!(render_fn.contains("crate::panel::HEADER_PADDING_X"));
@@ -193,29 +194,29 @@ fn focused_text_mini_loading_has_no_body_thinking_text() {
     assert!(!render_fn.contains("focused-text-mini-close"));
     assert!(!render_fn.contains(".child(\"×\")"));
     assert!(!render_fn.contains("trigger_close_window_requested"));
-    assert!(ACP_VIEW.contains("fn focused_text_locked_input_allows_key"));
-    assert!(ACP_VIEW.contains("Self::focused_text_locked_input_allows_key(key)"));
+    assert!(AGENT_CHAT_VIEW.contains("fn focused_text_locked_input_allows_key"));
+    assert!(AGENT_CHAT_VIEW.contains("Self::focused_text_locked_input_allows_key(key)"));
 }
 
 #[test]
 fn full_agent_chat_profile_icon_moves_to_header_focused_text_keeps_icon() {
     let composer_fn = source_between(
-        ACP_VIEW,
+        AGENT_CHAT_VIEW,
         "fn render_composer_input_shell",
         "fn render_composer_bar",
     );
     let mini_render_fn = source_between(
-        ACP_VIEW,
+        AGENT_CHAT_VIEW,
         "fn render_focused_text_mini",
         "fn render_pending_context_chips",
     );
     let footer_marker_fn = source_between(
-        ACP_VIEW,
+        AGENT_CHAT_VIEW,
         "fn render_profile_status_marker_from_snapshot",
         "pub(crate) fn build_external_host_footer",
     );
     let left_info_fn = source_between(
-        ACP_VIEW,
+        AGENT_CHAT_VIEW,
         "pub(crate) fn profile_left_info",
         "#[derive(Clone, Debug)]",
     );
@@ -237,7 +238,7 @@ fn full_agent_chat_profile_icon_moves_to_header_focused_text_keeps_icon() {
     assert!(input_pos < app_badge_pos && app_badge_pos < profile_pos);
     assert!(!mini_render_fn.contains(".child(self.render_focused_text_profile_icon"));
     assert!(!footer_marker_fn.contains("footer_icon_path_or_profile"));
-    assert!(!footer_marker_fn.contains("acp-footer-profile-icon-pulse"));
+    assert!(!footer_marker_fn.contains("agent_chat-footer-profile-icon-pulse"));
     assert!(left_info_fn.contains("icon_token: None"));
     assert!(!left_info_fn.contains("icon_token: Some"));
 }
@@ -257,13 +258,13 @@ fn focused_text_mini_semantics_are_redacted_and_diagnostic() {
         "submitted_prompt_locked",
     ] {
         assert!(
-            ACP_VIEW.contains(required),
+            AGENT_CHAT_VIEW.contains(required),
             "missing focused-text diagnostic/redaction contract: {required}"
         );
     }
 
     assert!(
-        !ACP_VIEW.contains("value: Some(thread.input.text().to_string())"),
+        !AGENT_CHAT_VIEW.contains("value: Some(thread.input.text().to_string())"),
         "focused-text mini semantic input must not expose raw prompt text"
     );
 }
@@ -279,14 +280,14 @@ fn focused_text_secondary_actions_remain_semantic_cmd_k_actions() {
         "source_name: Some(\"Cmd+K\"",
     ] {
         assert!(
-            ACP_VIEW.contains(required),
+            AGENT_CHAT_VIEW.contains(required),
             "missing focused-text semantic Cmd+K action contract: {required}"
         );
     }
 }
 
 #[test]
-fn focused_text_cmd_k_uses_focused_text_action_route_not_generic_acp_actions() {
+fn focused_text_cmd_k_uses_focused_text_action_route_not_generic_agent_chat_actions() {
     for required in [
         "pub(crate) fn get_focused_text_agent_chat_actions",
         "pub(crate) fn get_focused_text_agent_chat_root_route",

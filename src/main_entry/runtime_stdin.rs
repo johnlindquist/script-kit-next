@@ -285,7 +285,7 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                 // Sibling teardown for the embedded AI (`kind: Ai`,
                                 // `id: "ai"`) registry entry. See the matching
                                 // `ensure_embedded_ai_window(false)` in
-                                // `src/app_impl/tab_ai_mode/mod.rs::close_acp_chat_to_script_list`
+                                // `src/app_impl/tab_ai_mode/mod.rs::close_agent_chat_to_script_list`
                                 // and the three-site lock-step across the Hide dispatchers
                                 // (this file, runtime_stdin_match_core.rs, app_run_setup.rs,
                                 // + window_visibility.rs::hide_main_window_helper).
@@ -480,13 +480,13 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                             }
                             ExternalCommand::OpenAi => {
                                 logging::log("STDIN", "Opening Agent Chat via openAi compatibility alias");
-                                view.open_tab_ai_acp_with_entry_intent(None, ctx);
+                                view.open_tab_ai_agent_chat_with_entry_intent(None, ctx);
                             }
-                            ExternalCommand::OpenAcpDetachedFixture { ref request_id } => {
+                            ExternalCommand::OpenAgentChatDetachedFixture { ref request_id } => {
                                 let rid = request_id.as_ref().map(|id| id.as_str());
-                                let result = crate::ai::acp::chat_window::open_chat_window(ctx)
+                                let result = crate::ai::agent_chat::ui::chat_window::open_chat_window(ctx)
                                     .map(|_| {
-                                        crate::ai::acp::chat_window::set_chat_window_fixture_bounds(
+                                        crate::ai::agent_chat::ui::chat_window::set_chat_window_fixture_bounds(
                                             gpui::Bounds {
                                                 origin: gpui::point(gpui::px(585.0), gpui::px(177.0)),
                                                 size: gpui::size(gpui::px(640.0), gpui::px(520.0)),
@@ -496,17 +496,17 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                     });
                                 tracing::info!(
                                     category = "STDIN",
-                                    event = "acp_detached_fixture_opened",
-                                    command = "openAcpDetachedFixture",
+                                    event = "agent_chat_detached_fixture_opened",
+                                    command = "openAgentChatDetachedFixture",
                                     request_id = ?rid,
                                     ok = result.as_ref().map(|moved| *moved).unwrap_or(false),
                                     error = result.err().map(|err| err.to_string()),
-                                    "Detached ACP fixture open result"
+                                    "Detached Agent Chat fixture open result"
                                 );
                             }
                             ExternalCommand::OpenMiniAi => {
                                 logging::log("STDIN", "Opening Agent Chat via openMiniAi compatibility alias");
-                                view.open_tab_ai_acp_with_entry_intent(None, ctx);
+                                view.open_tab_ai_agent_chat_with_entry_intent(None, ctx);
                             }
                             ExternalCommand::OpenAiWithMockData => {
                                 logging::log("STDIN", "Opening standard Agent Chat mock fixture");
@@ -542,7 +542,7 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                     "STDIN",
                                     "Ignoring deprecated mini mock-data AI alias and opening Agent Chat",
                                 );
-                                view.open_tab_ai_acp_with_entry_intent(None, ctx);
+                                view.open_tab_ai_agent_chat_with_entry_intent(None, ctx);
                             }
                             ExternalCommand::OpenFocusedTextAgentChatWithMockData { text, instruction, request_id }
                             | ExternalCommand::OpenInlineAgentWithMockData { text, instruction, request_id } => {
@@ -855,20 +855,20 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                     }
                                 }
                             }
-                            ExternalCommand::SetAcpInput { text, submit, ref request_id } => {
+                            ExternalCommand::SetAgentChatInput { text, submit, ref request_id } => {
                                 let request_id_value = request_id.clone();
                                 let request_id = request_id_value.as_deref();
                                 tracing::info!(
                                     category = "STDIN",
-                                    event = "stdin_acp_command_received",
-                                    command = "setAcpInput",
+                                    event = "stdin_agent_chat_command_received",
+                                    command = "setAgentChatInput",
                                     request_id = ?request_id,
                                     submit,
                                     text_len = text.len(),
-                                    "STDIN ACP command received"
+                                    "STDIN Agent Chat command received"
                                 );
                                 let result = match &view.current_view {
-                                    AppView::AcpChatView { entity } => {
+                                    AppView::AgentChatView { entity } => {
                                         let entity = entity.clone();
                                         entity.update(ctx, |chat, cx| {
                                             chat.set_input_in_window(text.clone(), window, cx);
@@ -888,28 +888,28 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                     Ok(()) => {
                                         tracing::info!(
                                             category = "STDIN",
-                                            event = "stdin_acp_command_finished",
-                                            command = "setAcpInput",
+                                            event = "stdin_agent_chat_command_finished",
+                                            command = "setAgentChatInput",
                                             request_id = ?request_id,
                                             submit,
                                             status = "success",
-                                            "STDIN ACP command finished"
+                                            "STDIN Agent Chat command finished"
                                         );
                                     }
                                     Err(error) => {
                                         logging::log(
                                             "STDIN",
-                                            &format!("Failed to set ACP input: {}", error),
+                                            &format!("Failed to set Agent Chat input: {}", error),
                                         );
                                         tracing::error!(
                                             category = "STDIN",
-                                            event = "stdin_acp_command_finished",
-                                            command = "setAcpInput",
+                                            event = "stdin_agent_chat_command_finished",
+                                            command = "setAgentChatInput",
                                             request_id = ?request_id,
                                             submit,
                                             status = "error",
                                             error = %error,
-                                            "STDIN ACP command finished"
+                                            "STDIN Agent Chat command finished"
                                         );
                                     }
                                 }
@@ -918,7 +918,7 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                         let _ = sender.try_send(
                                             crate::protocol::Message::external_command_result(
                                                 rid.to_string(),
-                                                "setAcpInput".to_string(),
+                                                "setAgentChatInput".to_string(),
                                                 result.is_ok(),
                                                 result
                                                     .as_ref()
@@ -930,16 +930,16 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                     }
                                 }
                             }
-                            ExternalCommand::SetAcpScopeInput {
+                            ExternalCommand::SetAgentChatScopeInput {
                                 ref text,
                                 ref request_id,
                             } => {
                                 let request_id_value = request_id.clone();
                                 let result = match &view.current_view {
-                                    AppView::AcpChatView { entity } => {
+                                    AppView::AgentChatView { entity } => {
                                         let entity = entity.clone();
                                         entity.update(ctx, |chat, cx| {
-                                            chat.scope_input = crate::ai::acp::view::AcpChatView::normalize_focused_text_scope_input_public(text);
+                                            chat.scope_input = crate::ai::agent_chat::ui::view::AgentChatView::normalize_focused_text_scope_input_public(text);
                                             cx.notify();
                                         });
                                         Ok(())
@@ -951,7 +951,7 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                         let _ = sender.try_send(
                                             crate::protocol::Message::external_command_result(
                                                 rid.to_string(),
-                                                "setAcpScopeInput".to_string(),
+                                                "setAgentChatScopeInput".to_string(),
                                                 result.is_ok(),
                                                 result.as_ref().err().map(|_| "agent_chat_inactive".to_string()),
                                                 result.as_ref().err().cloned(),
@@ -960,14 +960,14 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                     }
                                 }
                             }
-                            ExternalCommand::SelectAcpVariation {
+                            ExternalCommand::SelectAgentChatVariation {
                                 index,
                                 edit,
                                 ref request_id,
                             } => {
                                 let request_id_value = request_id.clone();
                                 let result = match &view.current_view {
-                                    AppView::AcpChatView { entity } => {
+                                    AppView::AgentChatView { entity } => {
                                         let entity = entity.clone();
                                         entity.update(ctx, |chat, cx| {
                                             chat.select_focused_text_variation(index, cx);
@@ -984,7 +984,7 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                         let _ = sender.try_send(
                                             crate::protocol::Message::external_command_result(
                                                 rid.to_string(),
-                                                "selectAcpVariation".to_string(),
+                                                "selectAgentChatVariation".to_string(),
                                                 result.is_ok(),
                                                 result.as_ref().err().map(|_| "agent_chat_inactive".to_string()),
                                                 result.as_ref().err().cloned(),
@@ -993,12 +993,12 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                     }
                                 }
                             }
-                            ExternalCommand::GetAcpVariations {
+                            ExternalCommand::GetAgentChatVariations {
                                 ref request_id,
                             } => {
                                 let request_id_value = request_id.clone();
                                 let variations_summary = match &view.current_view {
-                                    AppView::AcpChatView { entity } => {
+                                    AppView::AgentChatView { entity } => {
                                         let entity = entity.clone();
                                         let snapshots = entity.read(ctx).focused_text_variation_snapshots();
                                         let summaries: Vec<String> = snapshots
@@ -1022,14 +1022,14 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                             summaries.join(" | ")
                                         }
                                     }
-                                    _ => "not_acp".to_string(),
+                                    _ => "not_agent_chat".to_string(),
                                 };
                                 if let Some(rid) = request_id_value {
                                     if let Some(ref sender) = view.response_sender {
                                         let _ = sender.try_send(
                                             crate::protocol::Message::external_command_result(
                                                 rid.to_string(),
-                                                "getAcpVariations".to_string(),
+                                                "getAgentChatVariations".to_string(),
                                                 true,
                                                 None,
                                                 Some(variations_summary),
@@ -1038,12 +1038,12 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                     }
                                 }
                             }
-                            ExternalCommand::AcpEscape {
+                            ExternalCommand::AgentChatEscape {
                                 ref request_id,
                             } => {
                                 let request_id_value = request_id.clone();
                                 let result = match &view.current_view {
-                                    AppView::AcpChatView { entity } => {
+                                    AppView::AgentChatView { entity } => {
                                         let entity = entity.clone();
                                         entity.update(ctx, |chat, cx| {
                                             chat.handle_protocol_escape(window, cx);
@@ -1057,7 +1057,7 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                         let _ = sender.try_send(
                                             crate::protocol::Message::external_command_result(
                                                 rid.to_string(),
-                                                "acpEscape".to_string(),
+                                                "agent_chatEscape".to_string(),
                                                 result.is_ok(),
                                                 result.as_ref().err().map(|_| "agent_chat_inactive".to_string()),
                                                 result.as_ref().err().cloned(),
@@ -1066,7 +1066,7 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                     }
                                 }
                             }
-                            ExternalCommand::SetAcpTestFixture {
+                            ExternalCommand::SetAgentChatTestFixture {
                                 ref phase,
                                 ref user_text,
                                 ref assistant_text,
@@ -1076,16 +1076,16 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                 let request_id = request_id_value.as_deref();
                                 tracing::info!(
                                     category = "STDIN",
-                                    event = "stdin_acp_command_received",
-                                    command = "setAcpTestFixture",
+                                    event = "stdin_agent_chat_command_received",
+                                    command = "setAgentChatTestFixture",
                                     request_id = ?request_id,
                                     phase = %phase,
                                     user_text_len = user_text.as_ref().map(|text| text.len()).unwrap_or(0),
                                     assistant_text_len = assistant_text.as_ref().map(|text| text.len()).unwrap_or(0),
-                                    "STDIN ACP command received"
+                                    "STDIN Agent Chat command received"
                                 );
                                 let result = match &view.current_view {
-                                    AppView::AcpChatView { entity } => {
+                                    AppView::AgentChatView { entity } => {
                                         let entity = entity.clone();
                                         entity.update(ctx, |chat, cx| {
                                             chat.apply_test_fixture(
@@ -1102,28 +1102,28 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                     Ok(()) => {
                                         tracing::info!(
                                             category = "STDIN",
-                                            event = "stdin_acp_command_finished",
-                                            command = "setAcpTestFixture",
+                                            event = "stdin_agent_chat_command_finished",
+                                            command = "setAgentChatTestFixture",
                                             request_id = ?request_id,
                                             phase = %phase,
                                             status = "success",
-                                            "STDIN ACP command finished"
+                                            "STDIN Agent Chat command finished"
                                         );
                                     }
                                     Err(error) => {
                                         logging::log(
                                             "STDIN",
-                                            &format!("Failed to set ACP test fixture: {}", error),
+                                            &format!("Failed to set Agent Chat test fixture: {}", error),
                                         );
                                         tracing::error!(
                                             category = "STDIN",
-                                            event = "stdin_acp_command_finished",
-                                            command = "setAcpTestFixture",
+                                            event = "stdin_agent_chat_command_finished",
+                                            command = "setAgentChatTestFixture",
                                             request_id = ?request_id,
                                             phase = %phase,
                                             status = "error",
                                             error = %error,
-                                            "STDIN ACP command finished"
+                                            "STDIN Agent Chat command finished"
                                         );
                                     }
                                 }
@@ -1132,7 +1132,7 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                         let _ = sender.try_send(
                                             crate::protocol::Message::external_command_result(
                                                 rid.to_string(),
-                                                "setAcpTestFixture".to_string(),
+                                                "setAgentChatTestFixture".to_string(),
                                                 result.is_ok(),
                                                 result
                                                     .as_ref()
@@ -1144,17 +1144,17 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                     }
                                 }
                             }
-                            ExternalCommand::PasteClipboardIntoAcp { ref request_id } => {
+                            ExternalCommand::PasteClipboardIntoAgentChat { ref request_id } => {
                                 let request_id = request_id.as_ref().map(|id| id.as_str());
                                 tracing::info!(
                                     category = "STDIN",
-                                    event = "stdin_acp_command_received",
-                                    command = "pasteClipboardIntoAcp",
+                                    event = "stdin_agent_chat_command_received",
+                                    command = "pasteClipboardIntoAgentChat",
                                     request_id = ?request_id,
-                                    "STDIN ACP command received"
+                                    "STDIN Agent Chat command received"
                                 );
                                 let result = match &view.current_view {
-                                    AppView::AcpChatView { entity } => {
+                                    AppView::AgentChatView { entity } => {
                                         let entity = entity.clone();
                                         let pasted = entity
                                             .update(ctx, |chat, cx| chat.paste_text_from_clipboard(cx));
@@ -1171,26 +1171,26 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                     Ok(()) => {
                                         tracing::info!(
                                             category = "STDIN",
-                                            event = "stdin_acp_command_finished",
-                                            command = "pasteClipboardIntoAcp",
+                                            event = "stdin_agent_chat_command_finished",
+                                            command = "pasteClipboardIntoAgentChat",
                                             request_id = ?request_id,
                                             status = "success",
-                                            "STDIN ACP command finished"
+                                            "STDIN Agent Chat command finished"
                                         );
                                     }
                                     Err(error) => {
                                         logging::log(
                                             "STDIN",
-                                            &format!("Failed to paste clipboard into ACP: {}", error),
+                                            &format!("Failed to paste clipboard into Agent Chat: {}", error),
                                         );
                                         tracing::error!(
                                             category = "STDIN",
-                                            event = "stdin_acp_command_finished",
-                                            command = "pasteClipboardIntoAcp",
+                                            event = "stdin_agent_chat_command_finished",
+                                            command = "pasteClipboardIntoAgentChat",
                                             request_id = ?request_id,
                                             status = "error",
                                             error = %error,
-                                            "STDIN ACP command finished"
+                                            "STDIN Agent Chat command finished"
                                         );
                                     }
                                 }

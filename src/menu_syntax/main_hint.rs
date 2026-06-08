@@ -1676,7 +1676,7 @@ fn advanced_query_empty_hint(
             ArtifactKind::File => "file",
             ArtifactKind::Note => "note",
             ArtifactKind::Todo => "todo",
-            ArtifactKind::AcpHistory => "acp-history",
+            ArtifactKind::AgentChatHistory => "agent_chat-history",
             ArtifactKind::AiVault => "ai-vault",
             ArtifactKind::ClipboardHistory => "clipboard-history",
             ArtifactKind::DictationHistory => "dictation-history",
@@ -2209,7 +2209,7 @@ fn predicate_user_label(predicate: &Predicate) -> String {
             ArtifactKind::File => "files only".to_string(),
             ArtifactKind::Note => "notes only".to_string(),
             ArtifactKind::Todo => "todos only".to_string(),
-            ArtifactKind::AcpHistory => "Agent Chat conversations only".to_string(),
+            ArtifactKind::AgentChatHistory => "Agent Chat conversations only".to_string(),
             ArtifactKind::AiVault => "AI Vault sessions only".to_string(),
             ArtifactKind::ClipboardHistory => "clipboard history only".to_string(),
             ArtifactKind::DictationHistory => "dictation history only".to_string(),
@@ -2549,7 +2549,7 @@ fn artifact_kind_zero_copy_label(kind: &ArtifactKind) -> &'static str {
         ArtifactKind::File => "files",
         ArtifactKind::Note => "notes",
         ArtifactKind::Todo => "todos",
-        ArtifactKind::AcpHistory => "Agent Chat conversations",
+        ArtifactKind::AgentChatHistory => "Agent Chat conversations",
         ArtifactKind::AiVault => "AI Vault sessions",
         ArtifactKind::ClipboardHistory => "clipboard entries",
         ArtifactKind::DictationHistory => "dictation entries",
@@ -2579,7 +2579,7 @@ fn type_value_label(value: &str) -> &'static str {
             "browser tabs"
         }
         "browser" | "browser-history" | "browserhistory" | "web" => "browser history entries",
-        "acphistory" | "acp-history" | "ai-conversation" | "ai-conversations" => {
+        "agent_chathistory" | "agent_chat-history" | "ai-conversation" | "ai-conversations" => {
             "Agent Chat conversations"
         }
         "fallback" | "fallbacks" => "fallbacks",
@@ -2622,7 +2622,7 @@ fn artifact_kind_label(kind: &ArtifactKind) -> &'static str {
         ArtifactKind::File => "file",
         ArtifactKind::Note => "note",
         ArtifactKind::Todo => "todo",
-        ArtifactKind::AcpHistory => "acp-history",
+        ArtifactKind::AgentChatHistory => "agent_chat-history",
         ArtifactKind::ClipboardHistory => "clipboard-history",
         ArtifactKind::DictationHistory => "dictation-history",
         ArtifactKind::AiVault => "ai-vault",

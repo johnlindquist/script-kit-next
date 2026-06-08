@@ -92,10 +92,10 @@ fn clipboard_history_state_arm_computes_filtered_count_from_variant_filter_case_
     // Bound the body at the next `AppView::` arm so nothing downstream
     // can accidentally satisfy this contract.
     let body_end_rel = PROMPT_HANDLER[arm_pos..]
-        .find("\n                    AppView::AcpHistoryView")
+        .find("\n                    AppView::AgentChatHistoryView")
         .expect(
             "`ClipboardHistoryView` arm must be immediately followed by \
-             `AppView::AcpHistoryView` in the getState match — if that \
+             `AppView::AgentChatHistoryView` in the getState match — if that \
              ordering changes, amend this contract rather than silently \
              widening the body search.",
         );
@@ -159,8 +159,8 @@ fn clipboard_history_state_arm_returns_dataset_len_and_filtered_count_in_correct
         .find("AppView::ClipboardHistoryView {\n                        filter,")
         .expect("ClipboardHistoryView arm must exist — see sibling contract");
     let body_end_rel = PROMPT_HANDLER[arm_pos..]
-        .find("\n                    AppView::AcpHistoryView")
-        .expect("ClipboardHistoryView arm must precede AcpHistoryView");
+        .find("\n                    AppView::AgentChatHistoryView")
+        .expect("ClipboardHistoryView arm must precede AgentChatHistoryView");
     let body = &PROMPT_HANDLER[arm_pos..arm_pos + body_end_rel];
 
     // Pin the exact tuple shape: after the `(` and the `"clipboardHistory"`

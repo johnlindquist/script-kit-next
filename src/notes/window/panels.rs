@@ -222,8 +222,8 @@ impl NotesApp {
                 self.enable_auto_sizing(window, cx);
             }
             NotesAction::SendToAi => {
-                let opened =
-                    self.open_selected_note_cart_in_embedded_acp("NotesAction::SendToAi", cx);
+                let opened = self
+                    .open_selected_note_cart_in_embedded_agent_chat("NotesAction::SendToAi", cx);
                 self.close_actions_panel(window, cx);
                 if opened {
                     self.show_action_feedback("Staged in Agent Chat", false);
@@ -512,7 +512,7 @@ impl NotesApp {
         cx.notify();
     }
 
-    /// Build a canonical ACP target for the currently selected note or
+    /// Build a canonical Agent Chat target for the currently selected note or
     /// unsaved draft content.
     pub(super) fn build_selected_note_target_for_ai(
         &self,
@@ -570,8 +570,8 @@ impl NotesApp {
     }
 
     /// Stage a canonical note target as a `FocusedTarget` chip into the
-    /// Notes-hosted embedded ACP thread.
-    fn stage_note_target_in_embedded_acp(
+    /// Notes-hosted embedded Agent Chat thread.
+    fn stage_note_target_in_embedded_agent_chat(
         &mut self,
         source: &'static str,
         target: crate::ai::TabAiTargetContext,
@@ -580,20 +580,20 @@ impl NotesApp {
         let label = crate::ai::format_explicit_target_chip_label(&target);
         let semantic_id = target.semantic_id.clone();
 
-        let Some(entity) = self.embedded_acp_chat.as_ref().cloned() else {
+        let Some(entity) = self.embedded_agent_chat.as_ref().cloned() else {
             return Err("Notes Agent Chat entity unavailable".to_string());
         };
 
         tracing::info!(
             target: "script_kit::tab_ai",
-            event = "notes_embedded_acp_target_staged",
+            event = "notes_embedded_agent_chat_target_staged",
             source,
             semantic_id = %semantic_id,
             label = %label,
         );
         tracing::info!(
             target: "script_kit::tab_ai",
-            event = "notes_embedded_acp_target_staged_via_shared_host_path",
+            event = "notes_embedded_agent_chat_target_staged_via_shared_host_path",
             source,
             semantic_id = %semantic_id,
             label = %label,
@@ -651,7 +651,7 @@ impl NotesApp {
     /// then persisted `NoteCartItem`s in sort_order.
     ///
     /// Returns an ordered `Vec<AiContextPart>` ready to stage onto the
-    /// Notes-hosted ACP surface as inline `@mentions`.
+    /// Notes-hosted Agent Chat surface as inline `@mentions`.
     pub(super) fn build_selected_note_cart_parts_for_ai(
         &self,
         cx: &Context<Self>,
@@ -720,11 +720,11 @@ impl NotesApp {
         Ok(parts)
     }
 
-    /// Open the Notes-hosted ACP surface with the full cart payload from the
+    /// Open the Notes-hosted Agent Chat surface with the full cart payload from the
     /// selected note.
     ///
     /// Returns `true` if the handoff was initiated, `false` on failure.
-    pub(super) fn open_selected_note_cart_in_embedded_acp(
+    pub(super) fn open_selected_note_cart_in_embedded_agent_chat(
         &mut self,
         source: &'static str,
         cx: &mut Context<Self>,
@@ -764,12 +764,12 @@ impl NotesApp {
 
         tracing::info!(
             target: "script_kit::tab_ai",
-            event = "notes_cart_open_embedded_acp_requested",
+            event = "notes_cart_open_embedded_agent_chat_requested",
             source,
             item_count = part_count,
         );
 
-        let entity = match self.ensure_embedded_acp_view(None, cx) {
+        let entity = match self.ensure_embedded_agent_chat_view(None, cx) {
             Ok(view) => view,
             Err(err) => {
                 tracing::warn!(
@@ -782,8 +782,8 @@ impl NotesApp {
             }
         };
 
-        self.surface_mode = NotesSurfaceMode::Acp;
-        self.pending_focus_surface = Some(focus::NotesFocusSurface::AcpChat);
+        self.surface_mode = NotesSurfaceMode::AgentChat;
+        self.pending_focus_surface = Some(focus::NotesFocusSurface::AgentChat);
         cx.notify();
 
         let stage_result = entity.update(cx, move |chat, cx| {
@@ -814,7 +814,7 @@ impl NotesApp {
 
         tracing::info!(
             target: "script_kit::tab_ai",
-            event = "notes_cart_open_embedded_acp_completed",
+            event = "notes_cart_open_embedded_agent_chat_completed",
             source,
             item_count = part_count,
         );
@@ -822,12 +822,12 @@ impl NotesApp {
         true
     }
 
-    /// Open the Notes-hosted embedded ACP surface and stage the selected
+    /// Open the Notes-hosted embedded Agent Chat surface and stage the selected
     /// note (or unsaved draft) as a canonical `FocusedTarget` chip.
     ///
-    /// Returns `true` if the embedded ACP was opened and the target staged,
-    /// `false` if no note was selected or the ACP surface could not open.
-    pub(super) fn open_selected_note_in_embedded_acp(
+    /// Returns `true` if the embedded Agent Chat was opened and the target staged,
+    /// `false` if no note was selected or the Agent Chat surface could not open.
+    pub(super) fn open_selected_note_in_embedded_agent_chat(
         &mut self,
         source: &'static str,
         window: &mut Window,
@@ -836,7 +836,7 @@ impl NotesApp {
         let Some(target) = self.build_selected_note_target_for_ai(cx) else {
             tracing::info!(
                 target: "script_kit::tab_ai",
-                event = "notes_embedded_acp_switch_skipped",
+                event = "notes_embedded_agent_chat_switch_skipped",
                 source,
                 reason = "no_selected_note",
             );
@@ -844,28 +844,30 @@ impl NotesApp {
             return false;
         };
 
-        let reused_existing_session = self.embedded_acp_chat.is_some();
+        let reused_existing_session = self.embedded_agent_chat.is_some();
 
         tracing::info!(
             target: "script_kit::tab_ai",
-            event = "notes_embedded_acp_switch_requested",
+            event = "notes_embedded_agent_chat_switch_requested",
             source,
             reused_existing_session,
             semantic_id = %target.semantic_id,
         );
 
         let open_result = if reused_existing_session {
-            self.relaunch_embedded_acp(None, window, cx)
+            self.relaunch_embedded_agent_chat(None, window, cx)
         } else {
-            self.open_or_focus_embedded_acp(None, window, cx)
+            self.open_or_focus_embedded_agent_chat(None, window, cx)
         };
 
         match open_result {
             Ok(()) => {
-                if let Err(error) = self.stage_note_target_in_embedded_acp(source, target, cx) {
+                if let Err(error) =
+                    self.stage_note_target_in_embedded_agent_chat(source, target, cx)
+                {
                     tracing::warn!(
                         target: "script_kit::tab_ai",
-                        event = "notes_embedded_acp_target_stage_failed",
+                        event = "notes_embedded_agent_chat_target_stage_failed",
                         source,
                         error = %error,
                     );
@@ -875,7 +877,7 @@ impl NotesApp {
 
                 tracing::info!(
                     target: "script_kit::tab_ai",
-                    event = "notes_embedded_acp_switch_completed",
+                    event = "notes_embedded_agent_chat_switch_completed",
                     source,
                     reused_existing_session,
                 );
@@ -884,7 +886,7 @@ impl NotesApp {
             Err(error) => {
                 tracing::warn!(
                     target: "script_kit::tab_ai",
-                    event = "notes_embedded_acp_switch_failed",
+                    event = "notes_embedded_agent_chat_switch_failed",
                     source,
                     error = %error,
                 );

@@ -23,7 +23,7 @@ fn every_passive_append_function_consumes_shared_budget() {
         "append_root_notes_section",
         "append_root_clipboard_history_section",
         "append_root_dictation_history_section",
-        "append_root_acp_history_section",
+        "append_root_agent_chat_history_section",
         "append_root_browser_history_section",
     ] {
         let section = grouping

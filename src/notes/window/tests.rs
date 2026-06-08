@@ -166,9 +166,9 @@ fn test_notes_keyboard_escape_dismisses_ghost_after_higher_priority_surfaces() {
     let note_switcher = live_keyboard
         .find("if self.note_switcher.is_open()")
         .expect("note switcher should own escape before editor");
-    let acp_surface = live_keyboard[note_switcher..]
-        .find("if self.surface_mode == NotesSurfaceMode::Acp")
-        .expect("ACP surface should own escape before editor")
+    let agent_chat_surface = live_keyboard[note_switcher..]
+        .find("if self.surface_mode == NotesSurfaceMode::AgentChat")
+        .expect("Agent Chat surface should own escape before editor")
         + note_switcher;
     let editor_escape = live_keyboard
         .find("if is_key_escape(key) {\n            cx.stop_propagation();")
@@ -186,8 +186,8 @@ fn test_notes_keyboard_escape_dismisses_ghost_after_higher_priority_surfaces() {
         dialog_guard < command_bar
             && command_bar < actions_panel
             && actions_panel < note_switcher
-            && note_switcher < acp_surface
-            && acp_surface < editor_escape
+            && note_switcher < agent_chat_surface
+            && agent_chat_surface < editor_escape
             && editor_escape < ghost_dismiss
             && ghost_dismiss < search_close,
         "Notes ghost escape must run only inside the editor escape branch after higher-priority surfaces and before editor fallback closing"
@@ -571,7 +571,7 @@ fn test_save_note_with_content_activates_existing_notes_window() {
 
     assert!(
         helper_slice.contains("window.activate_window();"),
-        "save_note_with_content should activate the existing Notes window during ACP handoff"
+        "save_note_with_content should activate the existing Notes window during Agent Chat handoff"
     );
 }
 
@@ -641,32 +641,34 @@ fn test_notes_keyboard_stops_propagation_at_start_of_global_escape_chain() {
 }
 
 #[test]
-fn test_notes_acp_escape_dismisses_local_popup_before_leaving_surface() {
+fn test_notes_agent_chat_escape_dismisses_local_popup_before_leaving_surface() {
     const KEYBOARD_SOURCE: &str = include_str!("keyboard.rs");
-    let acp_escape_branch = KEYBOARD_SOURCE
-        .find("// In ACP mode, intercept host-owned shortcuts before propagating to ACP.")
+    let agent_chat_escape_branch = KEYBOARD_SOURCE
+        .find("// In Agent Chat mode, intercept host-owned shortcuts before propagating to Agent Chat.")
         .and_then(|start| {
             KEYBOARD_SOURCE[start..]
                 .find("if modifiers.platform {")
                 .map(|end| &KEYBOARD_SOURCE[start..start + end])
         })
-        .expect("Expected Notes ACP keyboard branch");
+        .expect("Expected Notes Agent Chat keyboard branch");
 
-    let dismiss_idx = acp_escape_branch
+    let dismiss_idx = agent_chat_escape_branch
         .find("chat.dismiss_escape_popup(cx)")
-        .expect("Notes ACP escape should check for local popup dismissal");
-    let dismissed_branch_idx = acp_escape_branch
+        .expect("Notes Agent Chat escape should check for local popup dismissal");
+    let dismissed_branch_idx = agent_chat_escape_branch
         .find("if dismissed {")
-        .expect("Notes ACP escape should branch on dismissed popup state");
-    let stop_idx = acp_escape_branch
+        .expect("Notes Agent Chat escape should branch on dismissed popup state");
+    let stop_idx = agent_chat_escape_branch
         .find("cx.stop_propagation();")
-        .expect("Notes ACP escape should stop propagation after dismissing local popup state");
-    let return_idx = acp_escape_branch
+        .expect(
+            "Notes Agent Chat escape should stop propagation after dismissing local popup state",
+        );
+    let return_idx = agent_chat_escape_branch
         .find("return;")
-        .expect("Notes ACP escape should return after dismissing local popup state");
-    let switch_idx = acp_escape_branch
+        .expect("Notes Agent Chat escape should return after dismissing local popup state");
+    let switch_idx = agent_chat_escape_branch
         .find("self.switch_to_notes_surface(window, cx);")
-        .expect("Notes ACP escape should still fall back to leaving ACP mode");
+        .expect("Notes Agent Chat escape should still fall back to leaving Agent Chat mode");
 
     assert!(
         dismiss_idx < switch_idx
@@ -674,8 +676,8 @@ fn test_notes_acp_escape_dismisses_local_popup_before_leaving_surface() {
             && dismissed_branch_idx < stop_idx
             && stop_idx < return_idx
             && return_idx < switch_idx
-            && acp_escape_branch.contains("event = \"notes_acp_escape_dismissed_local_popup\""),
-        "Notes ACP escape should dismiss local ACP popup state before returning to the editor"
+            && agent_chat_escape_branch.contains("event = \"notes_agent_chat_escape_dismissed_local_popup\""),
+        "Notes Agent Chat escape should dismiss local Agent Chat popup state before returning to the editor"
     );
 }
 
@@ -885,78 +887,79 @@ fn test_notes_render_does_not_apply_pending_focus_surface_in_render() {
 }
 
 #[test]
-fn test_notes_acp_focus_surface_targets_embedded_chat_focus_handle() {
+fn test_notes_agent_chat_focus_surface_targets_embedded_chat_focus_handle() {
     const FOCUS_SOURCE: &str = include_str!("focus.rs");
     assert!(
-        FOCUS_SOURCE.contains("let focus_handle = acp_entity.read(cx).focus_handle(cx);")
+        FOCUS_SOURCE.contains("let focus_handle = agent_chat_entity.read(cx).focus_handle(cx);")
             && FOCUS_SOURCE.contains("window.focus(&focus_handle, cx);"),
-        "Notes ACP focus surface should focus the embedded ACP view handle"
+        "Notes Agent Chat focus surface should focus the embedded Agent Chat view handle"
     );
 }
 
 #[test]
-fn test_notes_acp_actions_close_requests_embedded_chat_refocus() {
-    const ACP_HOST_SOURCE: &str = include_str!("acp_host.rs");
+fn test_notes_agent_chat_actions_close_requests_embedded_chat_refocus() {
+    const AGENT_CHAT_HOST_SOURCE: &str = include_str!("agent_chat_host.rs");
     assert!(
-        ACP_HOST_SOURCE
-            .contains("self.request_focus_surface(focus::NotesFocusSurface::AcpChat, window, cx);")
-            && ACP_HOST_SOURCE
-                .contains("self.pending_focus_surface = Some(focus::NotesFocusSurface::AcpChat);"),
-        "Closing the Notes-hosted ACP actions popup should restore ACP focus"
+        AGENT_CHAT_HOST_SOURCE.contains(
+            "self.request_focus_surface(focus::NotesFocusSurface::AgentChat, window, cx);"
+        ) && AGENT_CHAT_HOST_SOURCE
+            .contains("self.pending_focus_surface = Some(focus::NotesFocusSurface::AgentChat);"),
+        "Closing the Notes-hosted Agent Chat actions popup should restore Agent Chat focus"
     );
     assert!(
-        ACP_HOST_SOURCE
-            .contains("app.close_notes_acp_actions_via_host(\"dialog_on_close\", None, cx);"),
-        "Dialog on_close should route Notes ACP actions close through the shared host helper"
+        AGENT_CHAT_HOST_SOURCE
+            .contains("app.close_notes_agent_chat_actions_via_host(\"dialog_on_close\", None, cx);"),
+        "Dialog on_close should route Notes Agent Chat actions close through the shared host helper"
     );
 }
 
 #[test]
-fn test_notes_acp_host_routes_close_paths_through_host_helpers() {
-    const ACP_HOST_SOURCE: &str = include_str!("acp_host.rs");
+fn test_notes_agent_chat_host_routes_close_paths_through_host_helpers() {
+    const AGENT_CHAT_HOST_SOURCE: &str = include_str!("agent_chat_host.rs");
     assert!(
-        ACP_HOST_SOURCE.contains(
-            "app.close_embedded_acp_via_host(\"acp_close_requested\", Some(window), cx);"
-        ) && ACP_HOST_SOURCE.contains(
-            "self.close_notes_acp_actions_via_host(\"toggle_existing_window\", Some(window), cx);"
-        ) && ACP_HOST_SOURCE
-            .contains("app.close_notes_acp_actions_via_host(\"dialog_on_close\", None, cx);")
-            && ACP_HOST_SOURCE.contains(
-                "app.close_embedded_acp_via_host(\"acp_action_close\", Some(window), cx);"
+        AGENT_CHAT_HOST_SOURCE.contains(
+            "app.close_embedded_agent_chat_via_host(\"agent_chat_close_requested\", Some(window), cx);"
+        ) && AGENT_CHAT_HOST_SOURCE.contains(
+            "self.close_notes_agent_chat_actions_via_host(\"toggle_existing_window\", Some(window), cx);"
+        ) && AGENT_CHAT_HOST_SOURCE
+            .contains("app.close_notes_agent_chat_actions_via_host(\"dialog_on_close\", None, cx);")
+            && AGENT_CHAT_HOST_SOURCE.contains(
+                "app.close_embedded_agent_chat_via_host(\"agent_chat_action_close\", Some(window), cx);"
             )
-            && ACP_HOST_SOURCE
-                .contains("event = \"notes_acp_action_cancel_consumed_after_on_close\""),
-        "Notes embedded ACP close and ACP-actions close should route through shared host helpers"
+            && AGENT_CHAT_HOST_SOURCE
+                .contains("event = \"notes_agent_chat_action_cancel_consumed_after_on_close\""),
+        "Notes embedded Agent Chat close and Agent Chat-actions close should route through shared host helpers"
     );
 }
 
 #[test]
-fn test_notes_acp_uses_shared_external_footer_renderer() {
-    const ACP_HOST_SOURCE: &str = include_str!("acp_host.rs");
+fn test_notes_agent_chat_uses_shared_external_footer_renderer() {
+    const AGENT_CHAT_HOST_SOURCE: &str = include_str!("agent_chat_host.rs");
     const RENDER_SOURCE: &str = include_str!("render.rs");
-    const ACP_VIEW_SOURCE: &str = include_str!("../../ai/acp/view.rs");
+    const AGENT_CHAT_VIEW_SOURCE: &str = include_str!("../../ai/agent_chat/ui/view.rs");
     assert!(
-        ACP_HOST_SOURCE
-            .contains("chat.set_footer_host(crate::ai::acp::view::AcpFooterHost::External);"),
-        "Notes-hosted ACP should opt into the shared externally rendered footer"
+        AGENT_CHAT_HOST_SOURCE.contains(
+            "chat.set_footer_host(crate::ai::agent_chat::ui::view::AgentChatFooterHost::External);"
+        ),
+        "Notes-hosted Agent Chat should opt into the shared externally rendered footer"
     );
     assert!(
-        RENDER_SOURCE.contains("view.build_external_host_footer(acp_entity.downgrade(), cx)")
-            && RENDER_SOURCE.contains(".when_some(acp_footer, |d, footer| d.child(footer))"),
-        "Notes ACP surface should render the shared ACP footer below the embedded chat view"
+        RENDER_SOURCE.contains("view.build_external_host_footer(agent_chat_entity.downgrade(), cx)")
+            && RENDER_SOURCE.contains(".when_some(agent_chat_footer, |d, footer| d.child(footer))"),
+        "Notes Agent Chat surface should render the shared Agent Chat footer below the embedded chat view"
     );
-    let footer_hints = &ACP_VIEW_SOURCE[ACP_VIEW_SOURCE
+    let footer_hints = &AGENT_CHAT_VIEW_SOURCE[AGENT_CHAT_VIEW_SOURCE
         .find("fn footer_hint_label(")
-        .expect("ACP footer should define shared hint labels")..];
+        .expect("Agent Chat footer should define shared hint labels")..];
     let run_pos = footer_hints
         .find("\"↵ Send\"")
-        .expect("ACP footer should render the Send hint");
+        .expect("Agent Chat footer should render the Send hint");
     let actions_pos = footer_hints
         .find("\"⌘K Actions\"")
-        .expect("ACP footer should render the Actions hint");
+        .expect("Agent Chat footer should render the Actions hint");
     assert!(
         run_pos < actions_pos,
-        "Notes-hosted ACP should mirror the main-window ACP footer labels and order"
+        "Notes-hosted Agent Chat should mirror the main-window Agent Chat footer labels and order"
     );
 }
 

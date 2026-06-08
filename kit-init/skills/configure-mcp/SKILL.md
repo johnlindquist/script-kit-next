@@ -109,4 +109,4 @@ const result = await mcp.call("github", "search_repositories", { query: "script 
 ## Related Skills
 
 - `config` — broader launcher and workspace configuration
-- `acp-chat` — Agent Chat behavior and agent integration
+- `agent_chat-chat` — Agent Chat behavior and agent integration

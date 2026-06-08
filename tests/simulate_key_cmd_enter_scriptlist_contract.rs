@@ -40,7 +40,7 @@ fn assert_before(source: &str, first: &str, second: &str) {
 }
 
 #[test]
-fn simulate_key_dispatchers_route_cmd_enter_in_scriptlist_to_acp_context_capture() {
+fn simulate_key_dispatchers_route_cmd_enter_in_scriptlist_to_agent_chat_context_capture() {
     // 1. Verify the canonical simulateKey dispatcher contains the correct Cmd+Enter routing inside AppView::ScriptList.
     let scriptlist_anchor = "AppView::ScriptList => {";
     let Some(anchor_idx) = CANONICAL_SIMULATEKEY.find(scriptlist_anchor) else {
@@ -66,8 +66,8 @@ fn simulate_key_dispatchers_route_cmd_enter_in_scriptlist_to_acp_context_capture
     );
 
     assert!(
-        arm_body.contains("view.try_route_global_cmd_enter_to_acp_context_capture(ctx);"),
-        "simulate_key_dispatch.rs `AppView::ScriptList` must call try_route_global_cmd_enter_to_acp_context_capture"
+        arm_body.contains("view.try_route_global_cmd_enter_to_agent_chat_context_capture(ctx);"),
+        "simulate_key_dispatch.rs `AppView::ScriptList` must call try_route_global_cmd_enter_to_agent_chat_context_capture"
     );
 
     // 2. Verify that the entry points delegate to the unified helper.
@@ -89,7 +89,7 @@ fn simulate_key_dispatchers_route_cmd_enter_in_scriptlist_to_acp_context_capture
 fn simulate_key_cmd_enter_arm_precedes_plain_enter_in_scriptlist() {
     // Ordering contract: the Cmd+Enter arm MUST appear before the plain-enter arm.
     let cmd_enter_idx = CANONICAL_SIMULATEKEY
-        .find("SimulateKey: Cmd+Enter - route to ACP context capture")
+        .find("SimulateKey: Cmd+Enter - route to Agent Chat context capture")
         .expect("missing Cmd+Enter log line in simulate_key_dispatch.rs");
 
     let plain_enter_idx = CANONICAL_SIMULATEKEY
@@ -103,10 +103,11 @@ fn simulate_key_cmd_enter_arm_precedes_plain_enter_in_scriptlist() {
 }
 
 #[test]
-fn try_route_global_cmd_enter_to_acp_context_capture_still_defined() {
+fn try_route_global_cmd_enter_to_agent_chat_context_capture_still_defined() {
     assert!(
-        TAB_AI_MODE.contains("pub(crate) fn try_route_global_cmd_enter_to_acp_context_capture("),
-        "try_route_global_cmd_enter_to_acp_context_capture must still be defined"
+        TAB_AI_MODE
+            .contains("pub(crate) fn try_route_global_cmd_enter_to_agent_chat_context_capture("),
+        "try_route_global_cmd_enter_to_agent_chat_context_capture must still be defined"
     );
 }
 
@@ -130,7 +131,7 @@ fn script_list_shift_tab_runtime_and_simulate_key_share_profile_search_helper() 
 fn script_list_cmd_enter_spine_attempt_is_explicit_and_non_terminal() {
     let body = fn_body(
         TAB_AI_MODE,
-        "pub(crate) fn try_route_global_cmd_enter_to_acp_context_capture(",
+        "pub(crate) fn try_route_global_cmd_enter_to_agent_chat_context_capture(",
     );
 
     assert!(
@@ -157,7 +158,7 @@ fn script_list_cmd_enter_spine_attempt_is_explicit_and_non_terminal() {
 fn script_list_cmd_enter_plain_prompt_uses_agent_chat_entry_intent() {
     let body = fn_body(
         TAB_AI_MODE,
-        "pub(crate) fn try_route_global_cmd_enter_to_acp_context_capture(",
+        "pub(crate) fn try_route_global_cmd_enter_to_agent_chat_context_capture(",
     );
 
     assert!(
@@ -166,7 +167,7 @@ fn script_list_cmd_enter_plain_prompt_uses_agent_chat_entry_intent() {
     );
     assert!(
         body.contains(
-            "open_tab_ai_acp_with_entry_intent_suppressing_focused_part(Some(intent), cx)"
+            "open_tab_ai_agent_chat_with_entry_intent_suppressing_focused_part(Some(intent), cx)"
         ),
         "plain natural ScriptList input should seed Agent Chat as an entry intent so it can stream"
     );

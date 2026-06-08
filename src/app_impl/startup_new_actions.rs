@@ -6,7 +6,7 @@
             move |event, window, cx| {
                 let is_notes = crate::notes::is_notes_window(window);
                 let is_ai = crate::ai::is_ai_window(window);
-                let is_detached_acp = crate::ai::acp::chat_window::is_chat_window(window);
+                let is_detached_agent_chat = crate::ai::agent_chat::ui::chat_window::is_chat_window(window);
                 let is_actions = crate::actions::is_actions_window(window);
 
                 let key = event.keystroke.key.as_str();
@@ -16,7 +16,7 @@
                 let is_actions_close_key = crate::ui_foundation::is_key_escape(key)
                     || (has_cmd && key.eq_ignore_ascii_case("k") && !has_shift);
 
-                // ACP can open the shared actions dialog from its own focused
+                // Agent Chat can open the shared actions dialog from its own focused
                 // composer even when the launcher visibility flag is false.
                 // Close keys still need to reach the shared dialog before the
                 // hidden-window guard below has a chance to skip them.
@@ -79,13 +79,13 @@
                 // Skip keystrokes from secondary windows — interceptors are
                 // GLOBAL and fire for ALL windows.  Secondary windows own
                 // their own Cmd+K/Escape/Enter handling.
-                if is_notes || is_ai || is_detached_acp {
+                if is_notes || is_ai || is_detached_agent_chat {
                     tracing::debug!(
                         target: "script_kit::keyboard",
                         event = "actions_interceptor_skipped_secondary_window",
                         is_notes,
                         is_ai,
-                        is_detached_acp,
+                        is_detached_agent_chat,
                         is_actions,
                     );
                     return;
@@ -125,13 +125,13 @@
                             }
                         }
 
-                        // Handle Cmd+W for AcpChatView (close the window entirely)
+                        // Handle Cmd+W for AgentChatView (close the window entirely)
                         if has_cmd && key.eq_ignore_ascii_case("w") && !has_shift
-                            && matches!(this.current_view, AppView::AcpChatView { .. })
+                            && matches!(this.current_view, AppView::AgentChatView { .. })
                         {
                             tracing::info!(
                                 target: "script_kit::keyboard",
-                                event = "embedded_acp_cmd_w_close_window",
+                                event = "embedded_agent_chat_cmd_w_close_window",
                             );
                             logging::log("KEY", "Interceptor: Cmd+W -> close window from Agent Chat");
                             this.close_tab_ai_harness_terminal_with_window(window, cx);
@@ -140,14 +140,14 @@
                             return;
                         }
 
-                        let acp_escape_popup_open = match &this.current_view {
-                            AppView::AcpChatView { entity, .. } => {
+                        let agent_chat_escape_popup_open = match &this.current_view {
+                            AppView::AgentChatView { entity, .. } => {
                                 entity.read(cx).has_escape_dismissible_popup()
                             }
                             _ => false,
                         };
-                        let acp_escape_focused_text_origin = match &this.current_view {
-                            AppView::AcpChatView { entity, .. } => {
+                        let agent_chat_escape_focused_text_origin = match &this.current_view {
+                            AppView::AgentChatView { entity, .. } => {
                                 let chat = entity.read(cx);
                                 chat.is_focused_text_mini()
                                     || chat.focused_text_originated_from_quick_prompt()
@@ -155,13 +155,13 @@
                             _ => false,
                         };
 
-                        let acp_escape_cancelled_streaming = if crate::ui_foundation::is_key_escape(key)
+                        let agent_chat_escape_cancelled_streaming = if crate::ui_foundation::is_key_escape(key)
                             && !has_cmd
                             && !has_shift
-                            && !acp_escape_focused_text_origin
+                            && !agent_chat_escape_focused_text_origin
                         {
                             match &this.current_view {
-                                AppView::AcpChatView { entity, .. } => entity.update(cx, |chat, cx| {
+                                AppView::AgentChatView { entity, .. } => entity.update(cx, |chat, cx| {
                                     chat.cancel_streaming_from_escape(cx)
                                 }),
                                 _ => false,
@@ -169,7 +169,7 @@
                         } else {
                             false
                         };
-                        if acp_escape_cancelled_streaming {
+                        if agent_chat_escape_cancelled_streaming {
                             logging::log(
                                 "KEY",
                                 "Interceptor: Escape -> cancel Agent Chat streaming",
@@ -178,18 +178,18 @@
                             return;
                         }
 
-                        // Handle Escape for AcpChatView.
+                        // Handle Escape for AgentChatView.
                         if crate::ui_foundation::is_key_escape(key) && !has_cmd && !has_shift
                             && !this.show_actions_popup
-                            && !acp_escape_popup_open
-                            && matches!(this.current_view, AppView::AcpChatView { .. })
+                            && !agent_chat_escape_popup_open
+                            && matches!(this.current_view, AppView::AgentChatView { .. })
                         {
-                            if acp_escape_focused_text_origin {
+                            if agent_chat_escape_focused_text_origin {
                                 tracing::info!(
                                     target: "script_kit::keyboard",
                                     event = "focused_text_quick_prompt_escape_hide_requested",
                                 );
-                                this.close_acp_chat_main_window_state_first(cx);
+                                this.close_agent_chat_main_window_state_first(cx);
                                 logging::log("KEY", "Interceptor: Escape -> hide focused-text quick prompt Agent Chat");
                                 cx.stop_propagation();
                                 return;
@@ -197,16 +197,16 @@
                             if this.opened_from_main_menu {
                                 tracing::info!(
                                     target: "script_kit::keyboard",
-                                    event = "embedded_acp_escape_return_to_origin",
+                                    event = "embedded_agent_chat_escape_return_to_origin",
                                 );
                                 this.close_tab_ai_harness_terminal_with_window(window, cx);
                                 logging::log("KEY", "Interceptor: Escape -> return to main menu from Agent Chat");
                             } else {
                                 tracing::info!(
                                     target: "script_kit::keyboard",
-                                    event = "embedded_acp_escape_close_window",
+                                    event = "embedded_agent_chat_escape_close_window",
                                 );
-                                this.close_acp_chat_main_window_state_first(cx);
+                                this.close_agent_chat_main_window_state_first(cx);
                                 logging::log("KEY", "Interceptor: Escape -> close Agent Chat window");
                             }
                             cx.stop_propagation();

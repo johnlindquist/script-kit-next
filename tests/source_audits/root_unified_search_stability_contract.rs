@@ -215,7 +215,7 @@ fn preflight_visible_results_expose_search_safety_roles() {
         "SearchResult::File(_)",
         "MainWindowPreflightResultRole::RootFile",
         "SearchResult::Note(_)",
-        "SearchResult::AcpHistory(_)",
+        "SearchResult::AgentChatHistory(_)",
         "SearchResult::ClipboardHistory(_)",
         "SearchResult::DictationHistory(_)",
         "SearchResult::BrowserTab(_)",

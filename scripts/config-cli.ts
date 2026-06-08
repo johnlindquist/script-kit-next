@@ -113,7 +113,7 @@ interface DictationPreferences {
   selectedDeviceId?: string;
 }
 
-type AgentChatBackend = "acp" | "pi";
+type AgentChatBackend = "agent_chat" | "pi";
 
 interface AiProfile {
   id?: string;
@@ -139,7 +139,7 @@ interface AiProfile {
 
 interface AiPreferences {
   selectedModelId?: string;
-  selectedAcpAgentId?: string;
+  selectedAgentChatAgentId?: string;
   selectedProfileId?: string;
   selectedBackend?: AgentChatBackend;
   profiles?: AiProfile[];
@@ -663,7 +663,7 @@ const CONFIG_SCHEMA: ConfigOption[] = [
     description: "Last-selected Agent Chat model ID"
   },
   {
-    key: "ai.selectedAcpAgentId",
+    key: "ai.selectedAgentChatAgentId",
     type: "string | undefined",
     default: undefined,
     description: "Legacy Agent Chat agent ID compatibility field"

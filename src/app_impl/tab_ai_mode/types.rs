@@ -20,9 +20,9 @@ pub(crate) struct TabAiLaunchRequest {
     /// Optional user intent (from Shift+Tab typed query).
     pub(crate) entry_intent: Option<String>,
     /// Agent Chat presentation variant. Standard preserves the existing UI.
-    pub(crate) ui_variant: crate::ai::acp::ui_variant::AcpChatUiVariant,
+    pub(crate) ui_variant: crate::ai::agent_chat::ui::ui_variant::AgentChatUiVariant,
     /// Plain launcher Tab should submit only the current text and never
-    /// translate the focused row into an ACP context chip.
+    /// translate the focused row into an Agent Chat context chip.
     pub(crate) suppress_focused_part: bool,
     /// Quick-submit plan from the deterministic planner (fallback / dictation).
     pub(crate) quick_submit_plan: Option<crate::ai::TabAiQuickSubmitPlan>,

@@ -98,7 +98,7 @@ fn root_unified_browser_history_uses_passive_grouping_contract() {
         .contains("append_root_passive_section(grouped, flat_results, \"Browser History\", rows"));
     assert!(grouping.contains("root_browser_history_query_is_eligible("));
     assert!(
-        grouping.find("append_root_acp_history_section(")
+        grouping.find("append_root_agent_chat_history_section(")
             < grouping.find("append_root_browser_history_section("),
         "Browser History rows should be appended after Agent Chat Conversations"
     );

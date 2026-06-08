@@ -70,7 +70,7 @@ fn deferred_ai_image_handoff_staging_uses_named_failure_states() {
         source.contains("DeferredAiImageAttachmentStage::DecodeClipboardImage")
             && source.contains(".failure_message(error)")
             && source.contains("DeferredAiImageAttachmentStage::WriteClipboardImage"),
-        "SetInputWithImage ACP path should route decode/write errors through named staging states"
+        "SetInputWithImage Agent Chat path should route decode/write errors through named staging states"
     );
     assert!(
         !source
@@ -176,12 +176,12 @@ fn script_list_cmd_enter_fallback_routes_to_tab_ai_overlay() {
     let render_source = read_source("src/render_script_list/mod.rs");
     let tab_block = slice_from(
         &render_source,
-        "if this.try_route_global_cmd_enter_to_acp_context_capture(cx) {",
+        "if this.try_route_global_cmd_enter_to_agent_chat_context_capture(cx) {",
     );
 
     // Cmd+Enter fallback must route to Tab AI chat, not the old inline AI chat.
     assert!(
-        tab_block.contains("try_route_global_cmd_enter_to_acp_context_capture"),
+        tab_block.contains("try_route_global_cmd_enter_to_agent_chat_context_capture"),
         "ScriptList Cmd+Enter fallback must route to the shared AI-entry helper"
     );
     assert!(
@@ -259,7 +259,7 @@ fn open_only_handoffs_keep_open_only_variant_for_non_harness_paths() {
     // Builtin execution now routes AI entry through the Tab AI harness
     // instead of the legacy deferred AI window helper.
     assert!(
-        ai_chat_branch.contains("self.open_tab_ai_acp_with_entry_intent(None, cx);"),
+        ai_chat_branch.contains("self.open_tab_ai_agent_chat_with_entry_intent(None, cx);"),
         "AI chat builtin should open Agent Chat"
     );
     assert!(

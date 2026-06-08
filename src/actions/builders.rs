@@ -49,18 +49,19 @@ pub use file_path::{
 };
 pub use notes::{get_new_chat_actions, get_note_switcher_actions, get_notes_command_bar_actions};
 pub(crate) use script_context::{
-    acp_receipt_history_request_id_from_action, acp_switch_model_id_from_action,
-    agent_chat_switch_profile_id_from_action, get_acp_chat_actions, get_acp_history_route,
-    get_acp_receipt_history_route, get_global_actions, get_script_context_actions,
-    ACP_HISTORY_SELECT_ACTION_PREFIX, ACP_RECEIPT_HISTORY_COPY_ACTION_PREFIX,
-    ACP_RECEIPT_HISTORY_ROUTE_ID, ACP_SHOW_RECEIPT_HISTORY_ACTION_ID,
+    agent_chat_receipt_history_request_id_from_action, agent_chat_switch_model_id_from_action,
+    agent_chat_switch_profile_id_from_action, get_agent_chat_actions, get_agent_chat_history_route,
+    get_agent_chat_receipt_history_route, get_global_actions, get_script_context_actions,
+    AGENT_CHAT_HISTORY_SELECT_ACTION_PREFIX, AGENT_CHAT_RECEIPT_HISTORY_COPY_ACTION_PREFIX,
+    AGENT_CHAT_RECEIPT_HISTORY_ROUTE_ID, AGENT_CHAT_SHOW_RECEIPT_HISTORY_ACTION_ID,
 };
 #[allow(unused_imports)]
 pub(crate) use script_context::{
-    get_acp_chat_root_route, get_acp_chat_root_route_for_host, get_acp_model_picker_route,
-    get_acp_model_picker_route_for_host, get_agent_chat_profile_picker_route,
-    get_agent_chat_profile_picker_route_for_host, get_focused_text_agent_chat_root_route,
-    AcpActionsDialogHost, ACP_CHANGE_MODEL_ACTION_ID, AGENT_CHAT_CHANGE_PROFILE_ACTION_ID,
+    get_agent_chat_model_picker_route, get_agent_chat_model_picker_route_for_host,
+    get_agent_chat_profile_picker_route, get_agent_chat_profile_picker_route_for_host,
+    get_agent_chat_root_route, get_agent_chat_root_route_for_host,
+    get_focused_text_agent_chat_root_route, AgentChatActionsDialogHost,
+    AGENT_CHAT_CHANGE_MODEL_ACTION_ID, AGENT_CHAT_CHANGE_PROFILE_ACTION_ID,
 };
 pub use scriptlet::get_scriptlet_context_actions_with_custom;
 

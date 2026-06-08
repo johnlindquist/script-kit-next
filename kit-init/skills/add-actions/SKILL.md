@@ -91,5 +91,5 @@ open -a Safari "{{content}}"
 ## Related Skills
 
 - [new-scriptlet](../new-scriptlet/SKILL.md) — bundle and companion-file structure
-- [start-chat](../start-chat/SKILL.md) — ACP-oriented actions
+- [start-chat](../start-chat/SKILL.md) — Agent Chat-oriented actions
 - [manage-notes](../manage-notes/SKILL.md) — note-focused actions and handoffs

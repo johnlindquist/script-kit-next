@@ -7,7 +7,7 @@
  * falls back to app.log scraping when SCRIPT_KIT_ALLOW_LOG_RPC_FALLBACK=1.
  *
  * Usage:
- *   bun await-response.ts --session default --request-id acp1 --expect acpStateResult --timeout 3000
+ *   bun await-response.ts --session default --request-id agent_chat1 --expect agent_chatStateResult --timeout 3000
  *
  * Exit codes:
  *   0 = response found

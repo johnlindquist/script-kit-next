@@ -17,8 +17,8 @@ impl NotesApp {
             "actionsPanel"
         } else if self.note_switcher.is_open() || self.show_browse_panel {
             "noteSwitcher"
-        } else if self.surface_mode == NotesSurfaceMode::Acp {
-            "embeddedAcp"
+        } else if self.surface_mode == NotesSurfaceMode::AgentChat {
+            "embeddedAgentChat"
         } else {
             "editor"
         };
@@ -49,9 +49,9 @@ impl NotesApp {
                     "handles": ["Escape", "Cmd+P", "Enter", "ArrowUp", "ArrowDown", "Home", "End", "PageUp", "PageDown", "Backspace", "Delete", "text input"],
                 },
                 {
-                    "id": "embeddedAcp",
-                    "open": self.surface_mode == NotesSurfaceMode::Acp,
-                    "owner": "Notes-hosted ACP",
+                    "id": "embeddedAgentChat",
+                    "open": self.surface_mode == NotesSurfaceMode::AgentChat,
+                    "owner": "Notes-hosted Agent Chat",
                     "toggle": "Cmd+Enter",
                     "handles": ["Escape", "Cmd+K", "Cmd+W", "Cmd+Shift+A"],
                 },
@@ -102,8 +102,8 @@ impl NotesApp {
         })
     }
 
-    fn automation_embedded_acp_isolation_snapshot(&self) -> serde_json::Value {
-        let active = self.surface_mode == NotesSurfaceMode::Acp;
+    fn automation_embedded_agent_chat_isolation_snapshot(&self) -> serde_json::Value {
+        let active = self.surface_mode == NotesSurfaceMode::AgentChat;
         let child = crate::windows::automation_window_by_id(
             crate::notes::window::NOTES_EMBEDDED_AI_AUTOMATION_ID,
         );
@@ -111,16 +111,16 @@ impl NotesApp {
 
         serde_json::json!({
             "schemaVersion": 1,
-            "source": "runtime.notes.embeddedAcpIsolation",
+            "source": "runtime.notes.embeddedAgentChatIsolation",
             "redacted": true,
             "host": "notes",
             "active": active,
-            "cached": self.embedded_acp_chat.is_some(),
-            "generation": self.notes_acp_generation,
+            "cached": self.embedded_agent_chat.is_some(),
+            "generation": self.notes_agent_chat_generation,
             "automationId": crate::notes::window::NOTES_EMBEDDED_AI_AUTOMATION_ID,
             "parentWindowId": "notes",
             "parentKind": "notes",
-            "semanticSurface": "notesAcpChat",
+            "semanticSurface": "notesAgentChat",
             "actionsParentAutomationId": "notes",
             "usesMainAiAutomationWindow": false,
             "mainAiAutomationId": "ai",
@@ -476,7 +476,7 @@ impl NotesApp {
                 "autoSizingEnabled": self.auto_sizing_enabled,
                 "initialHeight": self.initial_height,
                 "lastWindowHeight": self.last_window_height,
-                "notesAcpGeneration": self.notes_acp_generation,
+                "notesAgentChatGeneration": self.notes_agent_chat_generation,
             },
             "autosize": {
                 "schemaVersion": 1,
@@ -522,7 +522,7 @@ impl NotesApp {
                 "actions": self.command_bar.automation_state("notes.actions", cx),
                 "noteSwitcher": self.note_switcher.automation_state("notes.switcher", cx),
             },
-            "embeddedAcp": self.automation_embedded_acp_isolation_snapshot(),
+            "embeddedAgentChat": self.automation_embedded_agent_chat_isolation_snapshot(),
             "shortcutRegistry": self.automation_shortcut_registry(),
             "focusTransitions": self.automation_focus_transition_timeline(),
             "ghostAutocomplete": self.automation_ghost_autocomplete_state(),
@@ -633,8 +633,8 @@ impl NotesApp {
             );
         }
 
-        let editor_name = if self.surface_mode == NotesSurfaceMode::Acp {
-            "NotesEmbeddedAcp"
+        let editor_name = if self.surface_mode == NotesSurfaceMode::AgentChat {
+            "NotesEmbeddedAgentChat"
         } else if self.preview_enabled {
             "NotesPreview"
         } else {
@@ -1249,7 +1249,7 @@ impl NotesApp {
             "",
             "The actions menu is the source of truth for commands, shortcuts, and anything added later (Cmd+K). Use it when you are unsure what Notes can do.",
             "",
-            "Send note context into ACP/AI when you want help rewriting, summarizing, planning, or turning notes into next actions (Cmd+Enter). Reference other notes with `@note` mentions from the notes portal when you are building context across notes (Cmd+Shift+O).",
+            "Send note context into Agent Chat/AI when you want help rewriting, summarizing, planning, or turning notes into next actions (Cmd+Enter). Reference other notes with `@note` mentions from the notes portal when you are building context across notes (Cmd+Shift+O).",
             "",
             "Make this your own: replace this tour with the first note you actually need.",
         ]

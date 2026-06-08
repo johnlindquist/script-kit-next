@@ -15,7 +15,7 @@
 //!   - `DrillDownPushed { action_id, route_id }` — the selected action
 //!     has a registered drill-down route. `push_route(route, cx)` is
 //!     called to open the child sub-menu; the `on_select` callback is
-//!     NOT fired. This is the ACP agent-switch path.
+//!     NOT fired. This is the Agent Chat agent-switch path.
 //!   - `Executed { action_id, should_close }` — the selected action is
 //!     terminal. `on_select(action_id)` fires exactly once; caller
 //!     decides whether to close based on `should_close`.
@@ -25,7 +25,7 @@
 //! `(self.on_select)(action_id.clone())` first, then check
 //! `drill_down_routes` afterward, double-fires on drill-down actions
 //! — the parent's `on_select` callback runs AND the child route
-//! pushes. The ACP agent-switch handler, for example, would persist
+//! pushes. The Agent Chat agent-switch handler, for example, would persist
 //! the partial "switch agent" selection AND open the agent-list
 //! child, leaving the user in an inconsistent state where a selection
 //! has been committed to the upstream store but the UI still expects
@@ -165,7 +165,7 @@ fn activate_action_id_checks_drill_down_before_calling_on_select() {
          appear BEFORE `(self.on_select)(` call in source order. \
          Reversing double-fires on every drill-down action — the \
          consumer's `on_select` commits a partial selection (e.g., \
-         ACP agent-switch writes to upstream store) AND `push_route` \
+         Agent Chat agent-switch writes to upstream store) AND `push_route` \
          opens the child sub-menu, leaving the user with an already- \
          committed selection under a sub-menu that expects them to \
          choose. Byte-offsets: drill_down_routes.get = {drill_idx}, \
@@ -178,7 +178,7 @@ fn activate_action_id_pushes_route_in_drill_down_arm() {
     // Without `push_route`, the drill-down arm would return
     // `DrillDownPushed { route_id }` to the caller but never
     // actually open the child sub-menu. The caller typically closes
-    // the dialog on `DrillDownPushed` (ACP switch flow) or keeps it
+    // the dialog on `DrillDownPushed` (Agent Chat switch flow) or keeps it
     // open awaiting the child render — either way the user sees
     // nothing happen. This anchor also ties `activate_action_id`
     // to the Pass #15 route-stack contract: any regression of

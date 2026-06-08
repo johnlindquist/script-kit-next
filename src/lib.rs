@@ -319,7 +319,7 @@ pub mod footer_popup;
 // Separate floating window for note-taking with gpui-component
 pub mod notes;
 
-// ACP Chat - Separate floating window for AI conversations
+// Agent Chat Chat - Separate floating window for AI conversations
 // BYOK (Bring Your Own Key) with SQLite storage at ~/.scriptkit/ai-chats.db
 pub mod ai;
 
@@ -564,9 +564,9 @@ mod main_menu_input_guard_tests {
         let execute_pos = physical_enter_section
             .find("this.execute_selected(cx);")
             .expect("physical Enter must execute selected ScriptList rows");
-        let acp_pos = physical_enter_section
-            .find("if let AppView::AcpChatView")
-            .expect("physical Enter ACP fallback not found");
+        let agent_chat_pos = physical_enter_section
+            .find("if let AppView::AgentChatView")
+            .expect("physical Enter Agent Chat fallback not found");
 
         assert!(
             script_issues_pos < object_popup_pos
@@ -575,8 +575,8 @@ mod main_menu_input_guard_tests {
                 && script_list_pos < spine_pos
                 && spine_pos < fallback_pos
                 && fallback_pos < execute_pos
-                && execute_pos < acp_pos,
-            "physical plain Enter must keep ScriptIssues/menu-syntax Accept ahead of ScriptList submit, then Spine, fallback/selected execution, and only later ACP handling"
+                && execute_pos < agent_chat_pos,
+            "physical plain Enter must keep ScriptIssues/menu-syntax Accept ahead of ScriptList submit, then Spine, fallback/selected execution, and only later Agent Chat handling"
         );
         assert!(
             physical_enter_section.contains("!crate::actions::is_actions_window_open()"),

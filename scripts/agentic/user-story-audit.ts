@@ -70,7 +70,7 @@ function humanizeRecipe(recipe: string) {
   return recipe
     .replace(/-stress$/, "")
     .replace(/-/g, " ")
-    .replace(/\bacp\b/g, "ACP")
+    .replace(/\bagent_chat\b/g, "Agent Chat")
     .replace(/\bux\b/g, "UX")
     .replace(/\bui\b/g, "UI");
 }

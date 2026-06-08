@@ -111,7 +111,7 @@ printf '{"status":"launched","provider":"codex","sessionId":"codex-sql-title-mat
     notes: { enabled: false },
     clipboardHistory: { enabled: false },
     dictationHistory: { enabled: false },
-    acpHistory: { enabled: false },
+    agent_chatHistory: { enabled: false },
     aiVault: { enabled: false, searchContent: true, providers: ["claude", "codex"] },
     browserTabs: { enabled: false },
     browserHistory: { enabled: false },

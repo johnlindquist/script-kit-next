@@ -1,12 +1,12 @@
 //! Source-level contract for the promoted Prompt Popup screenshot fixture.
 //!
-//! Prompt Popup proves a protocol-only ACP host setup before active
+//! Prompt Popup proves a protocol-only Agent Chat host setup before active
 //! attached-popup screenshot capture.
 
 const NAVIGATOR: &str = include_str!("../scripts/agentic/surface-navigator.ts");
 const MATRIX: &str = include_str!("../scripts/agentic/attached-popup-surface-matrix.ts");
-const ACP_VIEW: &str = include_str!("../src/ai/acp/view.rs");
-const ACP_PICKER_POPUP: &str = include_str!("../src/ai/acp/picker_popup.rs");
+const AGENT_CHAT_VIEW: &str = include_str!("../src/ai/agent_chat/ui/view.rs");
+const AGENT_CHAT_PICKER_POPUP: &str = include_str!("../src/ai/agent_chat/ui/picker_popup.rs");
 const RUNTIME_STDIN: &str = include_str!("../src/main_entry/runtime_stdin.rs");
 const RUNTIME_STDIN_TAIL: &str = include_str!("../src/main_entry/runtime_stdin_match_tail.rs");
 const APP_RUN_SETUP: &str = include_str!("../src/main_entry/app_run_setup.rs");
@@ -15,31 +15,31 @@ const APP_RUN_SETUP: &str = include_str!("../src/main_entry/app_run_setup.rs");
 fn prompt_popup_fixture_is_active_attached_popup_case() {
     assert!(
         MATRIX.contains("export const ATTACHED_POPUP_SURFACE_MATRIX")
-            && MATRIX.contains("id: \"prompt-popup-on-acp-chat-slash\"")
-            && MATRIX.contains("viewName: \"prompt-popup-on-acp-chat-slash\"")
-            && MATRIX.contains("imageLibraryName: \"prompt-popup-on-acp-chat-slash.png\"")
+            && MATRIX.contains("id: \"prompt-popup-on-agent_chat-chat-slash\"")
+            && MATRIX.contains("viewName: \"prompt-popup-on-agent_chat-chat-slash\"")
+            && MATRIX.contains("imageLibraryName: \"prompt-popup-on-agent_chat-chat-slash.png\"")
             && MATRIX.contains("windowKind: \"PromptPopup\"")
             && MATRIX.contains("targetKind: \"promptPopup\"")
             && MATRIX.contains("kind: \"promptPopup\"")
-            && MATRIX.contains("expectedAutomationWindowId: \"acp-mention-popup\""),
+            && MATRIX.contains("expectedAutomationWindowId: \"agent_chat-mention-popup\""),
         "Prompt Popup must be included in the active attached-popup matrix with durable naming"
     );
     assert!(
-        !MATRIX.contains("prompt-popup-on-acp-chat-slash-candidate")
+        !MATRIX.contains("prompt-popup-on-agent_chat-chat-slash-candidate")
             && !MATRIX.contains("PROMPT_POPUP_FIXTURE_MATRIX"),
         "promoted Prompt Popup must not keep candidate-only matrix artifacts"
     );
 }
 
 #[test]
-fn prompt_popup_fixture_uses_protocol_acp_input_not_native_input() {
+fn prompt_popup_fixture_uses_protocol_agent_chat_input_not_native_input() {
     assert!(
-        MATRIX.contains("hostFixture: { kind: \"acp-chat\", trigger: \"slash\" }"),
-        "Prompt Popup must declare ACP chat as the real host fixture"
+        MATRIX.contains("hostFixture: { kind: \"agent_chat-chat\", trigger: \"slash\" }"),
+        "Prompt Popup must declare Agent Chat chat as the real host fixture"
     );
     assert!(
         NAVIGATOR.contains("type: \"triggerBuiltin\", name: \"tab-ai\"")
-            && NAVIGATOR.contains("type: \"setAcpInput\"")
+            && NAVIGATOR.contains("type: \"setAgentChatInput\"")
             && NAVIGATOR.contains("text: \"/\"")
             && NAVIGATOR.contains("submit: false"),
         "Prompt Popup setup must open Agent Chat and trigger slash popup through protocol commands"
@@ -51,22 +51,22 @@ fn prompt_popup_fixture_uses_protocol_acp_input_not_native_input() {
 }
 
 #[test]
-fn protocol_acp_input_refreshes_prompt_popup_session() {
-    let set_input = ACP_VIEW
+fn protocol_agent_chat_input_refreshes_prompt_popup_session() {
+    let set_input = AGENT_CHAT_VIEW
         .find("pub(crate) fn set_input(&mut self, value: String")
-        .expect("AcpChatView::set_input must exist for protocol setAcpInput");
-    let refresh = ACP_VIEW[set_input..]
+        .expect("AgentChatView::set_input must exist for protocol setAgentChatInput");
+    let refresh = AGENT_CHAT_VIEW[set_input..]
         .find("self.refresh_mention_session(cx);")
-        .expect("protocol ACP input must refresh the slash/mention popup session");
+        .expect("protocol Agent Chat input must refresh the slash/mention popup session");
     assert!(
         refresh < 220,
-        "AcpChatView::set_input must immediately refresh the Prompt Popup session"
+        "AgentChatView::set_input must immediately refresh the Prompt Popup session"
     );
     assert!(
-        ACP_VIEW.contains("pub(crate) fn set_input_in_window")
-            && ACP_VIEW.contains("self.cache_popup_parent_window(window, cx);")
-            && ACP_VIEW.contains("self.set_input(value, cx);"),
-        "protocol ACP input must have a window-aware setter for attached Prompt Popup geometry"
+        AGENT_CHAT_VIEW.contains("pub(crate) fn set_input_in_window")
+            && AGENT_CHAT_VIEW.contains("self.cache_popup_parent_window(window, cx);")
+            && AGENT_CHAT_VIEW.contains("self.set_input(value, cx);"),
+        "protocol Agent Chat input must have a window-aware setter for attached Prompt Popup geometry"
     );
     for (path, source) in [
         ("runtime_stdin.rs", RUNTIME_STDIN),
@@ -75,7 +75,7 @@ fn protocol_acp_input_refreshes_prompt_popup_session() {
     ] {
         assert!(
             source.contains("chat.set_input_in_window(text.clone(), window, cx);"),
-            "{path} setAcpInput arm must cache parent window geometry before refreshing the picker"
+            "{path} setAgentChatInput arm must cache parent window geometry before refreshing the picker"
         );
     }
 }
@@ -83,12 +83,12 @@ fn protocol_acp_input_refreshes_prompt_popup_session() {
 #[test]
 fn prompt_popup_target_is_promoted_to_exact_id_with_crop_bounds() {
     assert!(
-        ACP_PICKER_POPUP.contains("ACP_MENTION_POPUP_AUTOMATION_ID")
-            && ACP_PICKER_POPUP.contains("register_mention_popup_automation_window")
-            && ACP_PICKER_POPUP.contains("register_attached_popup(")
-            && ACP_PICKER_POPUP.contains("AutomationWindowKind::PromptPopup")
-            && ACP_PICKER_POPUP.contains("remove_automation_window(ACP_MENTION_POPUP_AUTOMATION_ID)"),
-        "ACP mention popup must register and unregister as a PromptPopup attached automation window"
+        AGENT_CHAT_PICKER_POPUP.contains("AGENT_CHAT_MENTION_POPUP_AUTOMATION_ID")
+            && AGENT_CHAT_PICKER_POPUP.contains("register_mention_popup_automation_window")
+            && AGENT_CHAT_PICKER_POPUP.contains("register_attached_popup(")
+            && AGENT_CHAT_PICKER_POPUP.contains("AutomationWindowKind::PromptPopup")
+            && AGENT_CHAT_PICKER_POPUP.contains("remove_automation_window(AGENT_CHAT_MENTION_POPUP_AUTOMATION_ID)"),
+        "Agent Chat mention popup must register and unregister as a PromptPopup attached automation window"
     );
     assert!(
         NAVIGATOR.contains("promoteAttachedPopupTarget")

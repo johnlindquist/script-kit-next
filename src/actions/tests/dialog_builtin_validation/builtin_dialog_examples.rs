@@ -3441,7 +3441,7 @@ mod from_dialog_builtin_action_validation_tests_23 {
             .as_ref()
             .unwrap()
             .to_lowercase()
-            .contains("acp chat"));
+            .contains("agent_chat chat"));
     }
 
     #[test]
@@ -6590,7 +6590,7 @@ mod from_dialog_builtin_action_validation_tests_26 {
             .as_ref()
             .unwrap()
             .to_lowercase()
-            .contains("acp chat"));
+            .contains("agent_chat chat"));
     }
 
     #[test]
@@ -11188,7 +11188,7 @@ mod from_dialog_builtin_action_validation_tests_29 {
             .as_ref()
             .unwrap()
             .to_lowercase()
-            .contains("acp chat"));
+            .contains("agent_chat chat"));
     }
 
     // =============================================================================

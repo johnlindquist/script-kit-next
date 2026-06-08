@@ -210,11 +210,11 @@ mod tests {
         assert!(
             dispatcher_section.contains("FooterAction::Run")
                 && dispatcher_section.contains("execute_selected"),
-            "FooterAction::Run must fall back to execute_selected() for non-ACP views"
+            "FooterAction::Run must fall back to execute_selected() for non-Agent Chat views"
         );
         assert!(
-            dispatcher_section.contains("try_run_ready_acp_script"),
-            "FooterAction::Run must check for a ready ACP script before falling back to execute_selected()"
+            dispatcher_section.contains("try_run_ready_agent_chat_script"),
+            "FooterAction::Run must check for a ready Agent Chat script before falling back to execute_selected()"
         );
         assert!(
             dispatcher_section.contains("FooterAction::Actions")
@@ -224,17 +224,17 @@ mod tests {
         assert!(
             dispatcher_section.contains("FooterAction::Stop")
                 && dispatcher_section.contains("cancel_streaming_from_escape"),
-            "FooterAction::Stop must dispatch through the ACP streaming cancellation path"
+            "FooterAction::Stop must dispatch through the Agent Chat streaming cancellation path"
         );
         assert!(
             dispatcher_section.contains("FooterAction::PasteResponse")
-                && dispatcher_section.contains("paste_latest_acp_response_to_frontmost"),
-            "FooterAction::PasteResponse must paste the latest ACP assistant response"
+                && dispatcher_section.contains("paste_latest_agent_chat_response_to_frontmost"),
+            "FooterAction::PasteResponse must paste the latest Agent Chat assistant response"
         );
         assert!(
             dispatcher_section.contains("FooterAction::Ai")
-                && dispatcher_section.contains("open_tab_ai_acp_with_entry_intent"),
-            "FooterAction::Ai must dispatch to open_tab_ai_acp_with_entry_intent()"
+                && dispatcher_section.contains("open_tab_ai_agent_chat_with_entry_intent"),
+            "FooterAction::Ai must dispatch to open_tab_ai_agent_chat_with_entry_intent()"
         );
     }
 
@@ -570,8 +570,8 @@ mod tests {
             "Full footer Actions callback must dispatch to toggle_actions()"
         );
         assert!(
-            strip_section.contains("open_tab_ai_acp_with_entry_intent"),
-            "Full footer AI callback must dispatch to open_tab_ai_acp_with_entry_intent()"
+            strip_section.contains("open_tab_ai_agent_chat_with_entry_intent"),
+            "Full footer AI callback must dispatch to open_tab_ai_agent_chat_with_entry_intent()"
         );
     }
 

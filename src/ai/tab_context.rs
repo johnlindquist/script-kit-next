@@ -4574,7 +4574,7 @@ mod tab_ai_source_type_tests {
             .find("self.spawn_tab_ai_pre_switch_capture(&request)")
             .expect("capture spawn");
         let open_idx = scoped
-            .find("self.open_tab_ai_acp_view_from_request_impl(")
+            .find("self.open_tab_ai_agent_chat_view_from_request_impl(")
             .expect("harness open");
         assert!(
             spawn_idx < open_idx,

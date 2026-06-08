@@ -85,8 +85,8 @@ mod attachment_portal;
 mod trigger_builtin_dispatch;
 #[path = "simulate_key_dispatch.rs"]
 mod simulate_key_dispatch;
-#[path = "acp_surface_transitions.rs"]
-mod acp_surface_transitions;
+#[path = "agent_chat_surface_transitions.rs"]
+mod agent_chat_surface_transitions;
 #[allow(dead_code)]
 #[path = "window_orchestrator_bridge.rs"]
 mod window_orchestrator_bridge;

@@ -21,7 +21,7 @@ fn root_passive_frame_times_every_passive_source() {
         "todo",
         "clipboard_history",
         "dictation_history",
-        "acp_history",
+        "agent_chat_history",
         "ai_vault",
         "browser_tabs",
         "browser_history",

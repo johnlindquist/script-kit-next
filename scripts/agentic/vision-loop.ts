@@ -2,7 +2,7 @@
 /**
  * scripts/agentic/vision-loop.ts
  *
- * Reads an ACP proof receipt and materializes one crop file per
+ * Reads an Agent Chat proof receipt and materializes one crop file per
  * `proofBundle.visionCrops` entry, plus a compact manifest JSON.
  *
  * Usage:
@@ -61,7 +61,7 @@ function parseArgs(): { receiptPath: string; outDir: string } {
   if (args.includes("--help") || args.includes("-h")) {
     console.log(`Usage: bun scripts/agentic/vision-loop.ts --receipt <path> --out-dir <dir>
 
-Reads an ACP proof receipt and writes a manifest JSON plus one crop file
+Reads an Agent Chat proof receipt and writes a manifest JSON plus one crop file
 per visionCrops entry.
 
 Options:

@@ -2,7 +2,7 @@
 //!
 //! The actions interceptor must route keys through the shared actions dialog
 //! before dispatching local main-window intents such as Cmd+K toggle and
-//! embedded ACP Cmd+W close.
+//! embedded Agent Chat Cmd+W close.
 
 const STARTUP: &str = include_str!("../src/app_impl/startup.rs");
 
@@ -27,8 +27,8 @@ fn actions_chords_are_classified_as_named_main_window_intents() {
         "Cmd+K must be named by behavior instead of remaining an inline chord branch."
     );
     assert!(
-        STARTUP.contains("CloseEmbeddedAcpWindow"),
-        "Embedded ACP Cmd+W must be named by behavior instead of remaining an inline chord branch."
+        STARTUP.contains("CloseEmbeddedAgentChatWindow"),
+        "Embedded Agent Chat Cmd+W must be named by behavior instead of remaining an inline chord branch."
     );
 
     let classifier = source_between(
@@ -43,9 +43,10 @@ fn actions_chords_are_classified_as_named_main_window_intents() {
     );
     assert!(
         classifier.contains("key.eq_ignore_ascii_case(\"w\")")
-            && classifier.contains("matches!(current_view, AppView::AcpChatView { .. })")
-            && classifier.contains("Some(MainWindowActionsKeyIntent::CloseEmbeddedAcpWindow)"),
-        "The classifier must preserve embedded ACP Cmd+W as a view-specific close intent."
+            && classifier.contains("matches!(current_view, AppView::AgentChatView { .. })")
+            && classifier
+                .contains("Some(MainWindowActionsKeyIntent::CloseEmbeddedAgentChatWindow)"),
+        "The classifier must preserve embedded Agent Chat Cmd+W as a view-specific close intent."
     );
     assert!(
         classifier.contains("let has_shift = event.keystroke.modifiers.shift;")
@@ -81,8 +82,8 @@ fn actions_interceptor_routes_shared_dialog_before_local_intents() {
         "The old inline Cmd+K branch must not be reintroduced inside the interceptor."
     );
     assert!(
-        !interceptor.contains("// Handle Cmd+W for AcpChatView"),
-        "The old inline ACP Cmd+W branch must not be reintroduced inside the interceptor."
+        !interceptor.contains("// Handle Cmd+W for AgentChatView"),
+        "The old inline Agent Chat Cmd+W branch must not be reintroduced inside the interceptor."
     );
 }
 
@@ -100,6 +101,6 @@ fn actions_key_intent_handler_preserves_existing_effects() {
     assert!(
         handler.contains("self.close_tab_ai_harness_terminal_with_window(window, cx)")
             && handler.contains("self.close_and_reset_window(cx)"),
-        "The embedded ACP close intent must preserve terminal cleanup and main-window reset."
+        "The embedded Agent Chat close intent must preserve terminal cleanup and main-window reset."
     );
 }

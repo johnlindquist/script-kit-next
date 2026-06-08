@@ -30,7 +30,7 @@ fn result_type_order(r: &SearchResult) -> i32 {
         SearchResult::Note(_) => 9,
         SearchResult::ClipboardHistory(_) => 10,
         SearchResult::DictationHistory(_) => 11,
-        SearchResult::AcpHistory(_) => 12,
+        SearchResult::AgentChatHistory(_) => 12,
         SearchResult::AiVault(_) => 13,
         SearchResult::BrowserHistory(_) => 14,
         SearchResult::Agent(_) => 15,
@@ -186,7 +186,7 @@ pub fn fuzzy_search_unified_all_with_skills(
     }
 
     // Suppress legacy Agent results from the launcher pipeline.
-    // Agent artifacts are handled inside ACP internals, not the main menu.
+    // Agent artifacts are handled inside Agent Chat internals, not the main menu.
     // Skills replace agents as the first-class reusable AI artifact.
     let pre_suppress_len = results.len();
     results.retain(|r| {

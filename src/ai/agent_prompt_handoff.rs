@@ -71,7 +71,7 @@ impl AgentPromptHandoffAdapterId {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum AgentPromptHandoffSource {
-    AcpComposer,
+    AgentChatComposer,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -392,7 +392,7 @@ pub(crate) fn compile_handoff_payload_from_spine_plan(
     }
 
     Ok(AgentPromptHandoffPayload {
-        source: AgentPromptHandoffSource::AcpComposer,
+        source: AgentPromptHandoffSource::AgentChatComposer,
         adapter_id,
         raw_input,
         prompt,
@@ -1636,7 +1636,7 @@ with open(os.environ["TARGET_RECEIPT"], "w") as handle:
             ),
         ]);
         let payload = AgentPromptHandoffPayload {
-            source: AgentPromptHandoffSource::AcpComposer,
+            source: AgentPromptHandoffSource::AgentChatComposer,
             adapter_id: AgentPromptHandoffAdapterId::Command(target),
             raw_input: prompt.to_string(),
             prompt: prompt.to_string(),
@@ -1924,7 +1924,7 @@ with open(os.environ['CODEX_STUB_RECEIPT'], 'w') as handle:
         ]);
 
         let payload = AgentPromptHandoffPayload {
-            source: AgentPromptHandoffSource::AcpComposer,
+            source: AgentPromptHandoffSource::AgentChatComposer,
             adapter_id: AgentPromptHandoffAdapterId::CmuxCodex,
             raw_input: prompt.to_string(),
             prompt: prompt.to_string(),
@@ -1993,7 +1993,7 @@ with open(os.environ['CODEX_STUB_RECEIPT'], 'w') as handle:
     #[test]
     fn cmux_codex_rejects_nul_prompt_before_launch() {
         let payload = AgentPromptHandoffPayload {
-            source: AgentPromptHandoffSource::AcpComposer,
+            source: AgentPromptHandoffSource::AgentChatComposer,
             adapter_id: AgentPromptHandoffAdapterId::CmuxCodex,
             raw_input: "contains nul".to_string(),
             prompt: "contains\0nul".to_string(),
@@ -2224,7 +2224,7 @@ with open(os.environ['CODEX_STUB_RECEIPT'], 'w') as handle:
 
     fn test_payload(prompt: &str) -> AgentPromptHandoffPayload {
         AgentPromptHandoffPayload {
-            source: AgentPromptHandoffSource::AcpComposer,
+            source: AgentPromptHandoffSource::AgentChatComposer,
             adapter_id: AgentPromptHandoffAdapterId::CmuxCodex,
             raw_input: prompt.to_string(),
             prompt: prompt.to_string(),

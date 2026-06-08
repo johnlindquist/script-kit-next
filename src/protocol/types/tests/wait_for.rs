@@ -274,54 +274,54 @@ fn wait_for_result_round_trips() {
 }
 
 // ============================================================
-// ACP-specific wait conditions — serde roundtrip
+// Agent Chat-specific wait conditions — serde roundtrip
 // ============================================================
 
 #[test]
-fn wait_acp_ready_round_trips() {
-    let cond = WaitCondition::Detailed(WaitDetailedCondition::AcpReady);
-    let json = serde_json::to_value(&cond).expect("serialize acpReady");
-    assert_eq!(json["type"], "acpReady");
+fn wait_agent_chat_ready_round_trips() {
+    let cond = WaitCondition::Detailed(WaitDetailedCondition::AgentChatReady);
+    let json = serde_json::to_value(&cond).expect("serialize agent_chatReady");
+    assert_eq!(json["type"], "agent_chatReady");
 
-    let back: WaitCondition = serde_json::from_value(json).expect("deserialize acpReady");
+    let back: WaitCondition = serde_json::from_value(json).expect("deserialize agent_chatReady");
     assert_eq!(back, cond);
 }
 
 #[test]
-fn wait_acp_picker_open_round_trips() {
-    let cond = WaitCondition::Detailed(WaitDetailedCondition::AcpPickerOpen);
+fn wait_agent_chat_picker_open_round_trips() {
+    let cond = WaitCondition::Detailed(WaitDetailedCondition::AgentChatPickerOpen);
     let json = serde_json::to_value(&cond).expect("serialize");
-    assert_eq!(json["type"], "acpPickerOpen");
+    assert_eq!(json["type"], "agent_chatPickerOpen");
 
     let back: WaitCondition = serde_json::from_value(json).expect("deserialize");
     assert_eq!(back, cond);
 }
 
 #[test]
-fn wait_acp_picker_closed_round_trips() {
-    let cond = WaitCondition::Detailed(WaitDetailedCondition::AcpPickerClosed);
+fn wait_agent_chat_picker_closed_round_trips() {
+    let cond = WaitCondition::Detailed(WaitDetailedCondition::AgentChatPickerClosed);
     let json = serde_json::to_value(&cond).expect("serialize");
-    assert_eq!(json["type"], "acpPickerClosed");
+    assert_eq!(json["type"], "agent_chatPickerClosed");
 
     let back: WaitCondition = serde_json::from_value(json).expect("deserialize");
     assert_eq!(back, cond);
 }
 
 #[test]
-fn wait_acp_item_accepted_round_trips() {
-    let cond = WaitCondition::Detailed(WaitDetailedCondition::AcpItemAccepted);
+fn wait_agent_chat_item_accepted_round_trips() {
+    let cond = WaitCondition::Detailed(WaitDetailedCondition::AgentChatItemAccepted);
     let json = serde_json::to_value(&cond).expect("serialize");
-    assert_eq!(json["type"], "acpItemAccepted");
+    assert_eq!(json["type"], "agent_chatItemAccepted");
 
     let back: WaitCondition = serde_json::from_value(json).expect("deserialize");
     assert_eq!(back, cond);
 }
 
 #[test]
-fn wait_acp_cursor_at_round_trips() {
-    let cond = WaitCondition::Detailed(WaitDetailedCondition::AcpCursorAt { index: 15 });
+fn wait_agent_chat_cursor_at_round_trips() {
+    let cond = WaitCondition::Detailed(WaitDetailedCondition::AgentChatCursorAt { index: 15 });
     let json = serde_json::to_value(&cond).expect("serialize");
-    assert_eq!(json["type"], "acpCursorAt");
+    assert_eq!(json["type"], "agent_chatCursorAt");
     assert_eq!(json["index"], 15);
 
     let back: WaitCondition = serde_json::from_value(json).expect("deserialize");
@@ -329,12 +329,12 @@ fn wait_acp_cursor_at_round_trips() {
 }
 
 #[test]
-fn wait_acp_status_round_trips() {
-    let cond = WaitCondition::Detailed(WaitDetailedCondition::AcpStatus {
+fn wait_agent_chat_status_round_trips() {
+    let cond = WaitCondition::Detailed(WaitDetailedCondition::AgentChatStatus {
         status: "streaming".to_string(),
     });
     let json = serde_json::to_value(&cond).expect("serialize");
-    assert_eq!(json["type"], "acpStatus");
+    assert_eq!(json["type"], "agent_chatStatus");
     assert_eq!(json["status"], "streaming");
 
     let back: WaitCondition = serde_json::from_value(json).expect("deserialize");
@@ -342,12 +342,12 @@ fn wait_acp_status_round_trips() {
 }
 
 #[test]
-fn wait_acp_input_match_round_trips() {
-    let cond = WaitCondition::Detailed(WaitDetailedCondition::AcpInputMatch {
+fn wait_agent_chat_input_match_round_trips() {
+    let cond = WaitCondition::Detailed(WaitDetailedCondition::AgentChatInputMatch {
         text: "@context ".to_string(),
     });
     let json = serde_json::to_value(&cond).expect("serialize");
-    assert_eq!(json["type"], "acpInputMatch");
+    assert_eq!(json["type"], "agent_chatInputMatch");
     assert_eq!(json["text"], "@context ");
 
     let back: WaitCondition = serde_json::from_value(json).expect("deserialize");
@@ -355,12 +355,12 @@ fn wait_acp_input_match_round_trips() {
 }
 
 #[test]
-fn wait_acp_input_contains_round_trips() {
-    let cond = WaitCondition::Detailed(WaitDetailedCondition::AcpInputContains {
+fn wait_agent_chat_input_contains_round_trips() {
+    let cond = WaitCondition::Detailed(WaitDetailedCondition::AgentChatInputContains {
         substring: "hello".to_string(),
     });
     let json = serde_json::to_value(&cond).expect("serialize");
-    assert_eq!(json["type"], "acpInputContains");
+    assert_eq!(json["type"], "agent_chatInputContains");
     assert_eq!(json["substring"], "hello");
 
     let back: WaitCondition = serde_json::from_value(json).expect("deserialize");
@@ -368,19 +368,19 @@ fn wait_acp_input_contains_round_trips() {
 }
 
 // ============================================================
-// ACP wait conditions — full protocol message roundtrip
+// Agent Chat wait conditions — full protocol message roundtrip
 // ============================================================
 
 #[test]
-fn wait_for_request_parses_with_acp_ready_condition() {
+fn wait_for_request_parses_with_agent_chat_ready_condition() {
     let json = serde_json::json!({
         "type": "waitFor",
-        "requestId": "acp-1",
-        "condition": { "type": "acpReady" },
+        "requestId": "agent_chat-1",
+        "condition": { "type": "agent_chatReady" },
         "timeout": 3000,
     });
     let msg: crate::protocol::Message =
-        serde_json::from_value(json).expect("parse waitFor acpReady");
+        serde_json::from_value(json).expect("parse waitFor agent_chatReady");
 
     match msg {
         crate::protocol::Message::WaitFor {
@@ -389,10 +389,10 @@ fn wait_for_request_parses_with_acp_ready_condition() {
             timeout,
             ..
         } => {
-            assert_eq!(request_id, "acp-1");
+            assert_eq!(request_id, "agent_chat-1");
             assert_eq!(
                 condition,
-                WaitCondition::Detailed(WaitDetailedCondition::AcpReady)
+                WaitCondition::Detailed(WaitDetailedCondition::AgentChatReady)
             );
             assert_eq!(timeout, Some(3000));
         }
@@ -401,20 +401,20 @@ fn wait_for_request_parses_with_acp_ready_condition() {
 }
 
 #[test]
-fn wait_for_request_parses_with_acp_cursor_at_condition() {
+fn wait_for_request_parses_with_agent_chat_cursor_at_condition() {
     let json = serde_json::json!({
         "type": "waitFor",
-        "requestId": "acp-2",
-        "condition": { "type": "acpCursorAt", "index": 42 },
+        "requestId": "agent_chat-2",
+        "condition": { "type": "agent_chatCursorAt", "index": 42 },
     });
     let msg: crate::protocol::Message =
-        serde_json::from_value(json).expect("parse waitFor acpCursorAt");
+        serde_json::from_value(json).expect("parse waitFor agent_chatCursorAt");
 
     match msg {
         crate::protocol::Message::WaitFor { condition, .. } => {
             assert_eq!(
                 condition,
-                WaitCondition::Detailed(WaitDetailedCondition::AcpCursorAt { index: 42 })
+                WaitCondition::Detailed(WaitDetailedCondition::AgentChatCursorAt { index: 42 })
             );
         }
         other => panic!("Expected WaitFor, got: {:?}", other),
@@ -422,26 +422,27 @@ fn wait_for_request_parses_with_acp_cursor_at_condition() {
 }
 
 // ============================================================
-// getAcpState / acpStateResult — protocol message roundtrip
+// getAgentChatState / agent_chatStateResult — protocol message roundtrip
 // ============================================================
 
 #[test]
-fn get_acp_state_request_parses() {
-    let json = r#"{"type":"getAcpState","requestId":"acp-state-1"}"#;
-    let msg: crate::protocol::Message = serde_json::from_str(json).expect("parse getAcpState");
+fn get_agent_chat_state_request_parses() {
+    let json = r#"{"type":"getAgentChatState","requestId":"agent_chat-state-1"}"#;
+    let msg: crate::protocol::Message =
+        serde_json::from_str(json).expect("parse getAgentChatState");
 
     match msg {
-        crate::protocol::Message::GetAcpState { request_id, .. } => {
-            assert_eq!(request_id, "acp-state-1");
+        crate::protocol::Message::GetAgentChatState { request_id, .. } => {
+            assert_eq!(request_id, "agent_chat-state-1");
         }
-        other => panic!("Expected GetAcpState, got: {:?}", other),
+        other => panic!("Expected GetAgentChatState, got: {:?}", other),
     }
 }
 
 #[test]
-fn acp_state_result_round_trips() {
-    let snapshot = crate::protocol::AcpStateSnapshot {
-        schema_version: crate::protocol::ACP_STATE_SCHEMA_VERSION,
+fn agent_chat_state_result_round_trips() {
+    let snapshot = crate::protocol::AgentChatStateSnapshot {
+        schema_version: crate::protocol::AGENT_CHAT_STATE_SCHEMA_VERSION,
         resolved_target: None,
         status: "idle".to_string(),
         ui_variant: "standard".to_string(),
@@ -464,14 +465,15 @@ fn acp_state_result_round_trips() {
         setup: None,
         warnings: Vec::new(),
     };
-    let msg = crate::protocol::Message::acp_state_result("acp-rt".to_string(), snapshot);
-    let json = serde_json::to_value(&msg).expect("serialize acpStateResult");
+    let msg =
+        crate::protocol::Message::agent_chat_state_result("agent_chat-rt".to_string(), snapshot);
+    let json = serde_json::to_value(&msg).expect("serialize agent_chatStateResult");
 
-    assert_eq!(json["type"], "acpStateResult");
-    assert_eq!(json["requestId"], "acp-rt");
+    assert_eq!(json["type"], "agent_chatStateResult");
+    assert_eq!(json["requestId"], "agent_chat-rt");
     assert_eq!(
         json["schemaVersion"],
-        crate::protocol::ACP_STATE_SCHEMA_VERSION
+        crate::protocol::AGENT_CHAT_STATE_SCHEMA_VERSION
     );
     assert_eq!(json["status"], "idle");
     assert_eq!(json["inputText"], "test");
@@ -482,16 +484,16 @@ fn acp_state_result_round_trips() {
 }
 
 // ============================================================
-// ACP proof wait conditions — serde roundtrip
+// Agent Chat proof wait conditions — serde roundtrip
 // ============================================================
 
 #[test]
-fn wait_acp_accepted_via_key_round_trips() {
-    let cond = WaitCondition::Detailed(WaitDetailedCondition::AcpAcceptedViaKey {
+fn wait_agent_chat_accepted_via_key_round_trips() {
+    let cond = WaitCondition::Detailed(WaitDetailedCondition::AgentChatAcceptedViaKey {
         key: "tab".to_string(),
     });
     let json = serde_json::to_value(&cond).expect("serialize");
-    assert_eq!(json["type"], "acpAcceptedViaKey");
+    assert_eq!(json["type"], "agent_chatAcceptedViaKey");
     assert_eq!(json["key"], "tab");
 
     let back: WaitCondition = serde_json::from_value(json).expect("deserialize");
@@ -499,12 +501,12 @@ fn wait_acp_accepted_via_key_round_trips() {
 }
 
 #[test]
-fn wait_acp_accepted_label_round_trips() {
-    let cond = WaitCondition::Detailed(WaitDetailedCondition::AcpAcceptedLabel {
+fn wait_agent_chat_accepted_label_round_trips() {
+    let cond = WaitCondition::Detailed(WaitDetailedCondition::AgentChatAcceptedLabel {
         label: "What I\u{2019}m Looking At".to_string(),
     });
     let json = serde_json::to_value(&cond).expect("serialize");
-    assert_eq!(json["type"], "acpAcceptedLabel");
+    assert_eq!(json["type"], "agent_chatAcceptedLabel");
     assert_eq!(json["label"], "What I\u{2019}m Looking At");
 
     let back: WaitCondition = serde_json::from_value(json).expect("deserialize");
@@ -512,10 +514,11 @@ fn wait_acp_accepted_label_round_trips() {
 }
 
 #[test]
-fn wait_acp_accepted_cursor_at_round_trips() {
-    let cond = WaitCondition::Detailed(WaitDetailedCondition::AcpAcceptedCursorAt { index: 17 });
+fn wait_agent_chat_accepted_cursor_at_round_trips() {
+    let cond =
+        WaitCondition::Detailed(WaitDetailedCondition::AgentChatAcceptedCursorAt { index: 17 });
     let json = serde_json::to_value(&cond).expect("serialize");
-    assert_eq!(json["type"], "acpAcceptedCursorAt");
+    assert_eq!(json["type"], "agent_chatAcceptedCursorAt");
     assert_eq!(json["index"], 17);
 
     let back: WaitCondition = serde_json::from_value(json).expect("deserialize");
@@ -523,14 +526,14 @@ fn wait_acp_accepted_cursor_at_round_trips() {
 }
 
 #[test]
-fn wait_acp_input_layout_match_round_trips() {
-    let cond = WaitCondition::Detailed(WaitDetailedCondition::AcpInputLayoutMatch {
+fn wait_agent_chat_input_layout_match_round_trips() {
+    let cond = WaitCondition::Detailed(WaitDetailedCondition::AgentChatInputLayoutMatch {
         visible_start: 0,
         visible_end: 27,
         cursor_in_window: 17,
     });
     let json = serde_json::to_value(&cond).expect("serialize");
-    assert_eq!(json["type"], "acpInputLayoutMatch");
+    assert_eq!(json["type"], "agent_chatInputLayoutMatch");
     assert_eq!(json["visibleStart"], 0);
     assert_eq!(json["visibleEnd"], 27);
     assert_eq!(json["cursorInWindow"], 17);
@@ -540,21 +543,21 @@ fn wait_acp_input_layout_match_round_trips() {
 }
 
 // ============================================================
-// ACP proof wait conditions — full protocol message roundtrip
+// Agent Chat proof wait conditions — full protocol message roundtrip
 // ============================================================
 
 #[test]
-fn wait_for_request_parses_with_acp_accepted_via_key() {
+fn wait_for_request_parses_with_agent_chat_accepted_via_key() {
     let json = serde_json::json!({
         "type": "waitFor",
         "requestId": "wait-tab",
-        "condition": { "type": "acpAcceptedViaKey", "key": "tab" },
+        "condition": { "type": "agent_chatAcceptedViaKey", "key": "tab" },
         "timeout": 3000,
         "pollInterval": 25,
         "trace": "onFailure"
     });
     let msg: crate::protocol::Message =
-        serde_json::from_value(json).expect("parse waitFor acpAcceptedViaKey");
+        serde_json::from_value(json).expect("parse waitFor agent_chatAcceptedViaKey");
 
     match msg {
         crate::protocol::Message::WaitFor {
@@ -566,7 +569,7 @@ fn wait_for_request_parses_with_acp_accepted_via_key() {
             assert_eq!(request_id, "wait-tab");
             assert_eq!(
                 condition,
-                WaitCondition::Detailed(WaitDetailedCondition::AcpAcceptedViaKey {
+                WaitCondition::Detailed(WaitDetailedCondition::AgentChatAcceptedViaKey {
                     key: "tab".to_string(),
                 })
             );
@@ -577,12 +580,12 @@ fn wait_for_request_parses_with_acp_accepted_via_key() {
 }
 
 #[test]
-fn wait_for_request_parses_with_acp_input_layout_match() {
+fn wait_for_request_parses_with_agent_chat_input_layout_match() {
     let json = serde_json::json!({
         "type": "waitFor",
         "requestId": "wait-layout",
         "condition": {
-            "type": "acpInputLayoutMatch",
+            "type": "agent_chatInputLayoutMatch",
             "visibleStart": 0,
             "visibleEnd": 27,
             "cursorInWindow": 17
@@ -590,13 +593,13 @@ fn wait_for_request_parses_with_acp_input_layout_match() {
         "timeout": 1500,
     });
     let msg: crate::protocol::Message =
-        serde_json::from_value(json).expect("parse waitFor acpInputLayoutMatch");
+        serde_json::from_value(json).expect("parse waitFor agent_chatInputLayoutMatch");
 
     match msg {
         crate::protocol::Message::WaitFor { condition, .. } => {
             assert_eq!(
                 condition,
-                WaitCondition::Detailed(WaitDetailedCondition::AcpInputLayoutMatch {
+                WaitCondition::Detailed(WaitDetailedCondition::AgentChatInputLayoutMatch {
                     visible_start: 0,
                     visible_end: 27,
                     cursor_in_window: 17,
@@ -616,7 +619,7 @@ fn wait_for_request_parses_trace_on_failure() {
     let json = serde_json::json!({
         "type": "waitFor",
         "requestId": "wf-trace",
-        "condition": { "type": "acpAcceptedViaKey", "key": "enter" },
+        "condition": { "type": "agent_chatAcceptedViaKey", "key": "enter" },
         "timeout": 100,
         "pollInterval": 25,
         "trace": "onFailure"
@@ -692,7 +695,7 @@ fn wait_for_result_with_trace_serializes_correctly() {
             after: crate::protocol::UiStateSnapshot::default(),
             polls: Vec::new(),
             error: Some(crate::protocol::TransactionError::wait_timeout(
-                "Timeout after 100ms waiting for AcpAcceptedViaKey { key: \"enter\" }",
+                "Timeout after 100ms waiting for AgentChatAcceptedViaKey { key: \"enter\" }",
             )),
         }],
     };
@@ -814,112 +817,118 @@ fn batch_result_with_trace_serializes_correctly() {
 }
 
 // ============================================================
-// resetAcpTestProbe / getAcpTestProbe / acpTestProbeResult
+// resetAgentChatTestProbe / getAgentChatTestProbe / agent_chatTestProbeResult
 // ============================================================
 
 #[test]
-fn reset_acp_test_probe_request_parses() {
-    let json = r#"{"type":"resetAcpTestProbe","requestId":"probe-reset-1"}"#;
+fn reset_agent_chat_test_probe_request_parses() {
+    let json = r#"{"type":"resetAgentChatTestProbe","requestId":"probe-reset-1"}"#;
     let msg: crate::protocol::Message =
-        serde_json::from_str(json).expect("parse resetAcpTestProbe");
+        serde_json::from_str(json).expect("parse resetAgentChatTestProbe");
 
     match msg {
-        crate::protocol::Message::ResetAcpTestProbe { request_id, target } => {
+        crate::protocol::Message::ResetAgentChatTestProbe { request_id, target } => {
             assert_eq!(request_id, "probe-reset-1");
             assert!(target.is_none(), "legacy request should have no target");
         }
-        other => panic!("Expected ResetAcpTestProbe, got: {:?}", other),
+        other => panic!("Expected ResetAgentChatTestProbe, got: {:?}", other),
     }
 }
 
 #[test]
-fn reset_acp_test_probe_with_target_round_trips() {
+fn reset_agent_chat_test_probe_with_target_round_trips() {
     let json = serde_json::json!({
-        "type": "resetAcpTestProbe",
+        "type": "resetAgentChatTestProbe",
         "requestId": "probe-reset-targeted",
         "target": {
             "type": "kind",
-            "kind": "acpDetached",
+            "kind": "agentChatDetached",
             "index": 0
         }
     });
     let msg: crate::protocol::Message =
-        serde_json::from_value(json).expect("parse resetAcpTestProbe with target");
+        serde_json::from_value(json).expect("parse resetAgentChatTestProbe with target");
 
     match &msg {
-        crate::protocol::Message::ResetAcpTestProbe { request_id, target } => {
+        crate::protocol::Message::ResetAgentChatTestProbe { request_id, target } => {
             assert_eq!(request_id, "probe-reset-targeted");
             let t = target.as_ref().expect("should have target");
             match t {
                 crate::protocol::AutomationWindowTarget::Kind { kind, index } => {
-                    assert_eq!(*kind, crate::protocol::AutomationWindowKind::AcpDetached);
+                    assert_eq!(
+                        *kind,
+                        crate::protocol::AutomationWindowKind::AgentChatDetached
+                    );
                     assert_eq!(*index, Some(0));
                 }
                 other => panic!("Expected Kind target, got: {:?}", other),
             }
         }
-        other => panic!("Expected ResetAcpTestProbe, got: {:?}", other),
+        other => panic!("Expected ResetAgentChatTestProbe, got: {:?}", other),
     }
 
     // Round-trip
     let re_serialized = serde_json::to_value(&msg).expect("re-serialize");
-    assert_eq!(re_serialized["type"].as_str(), Some("resetAcpTestProbe"));
+    assert_eq!(
+        re_serialized["type"].as_str(),
+        Some("resetAgentChatTestProbe")
+    );
     assert_eq!(
         re_serialized["requestId"].as_str(),
         Some("probe-reset-targeted")
     );
     assert_eq!(
         re_serialized["target"]["kind"].as_str(),
-        Some("acpDetached")
+        Some("agentChatDetached")
     );
 }
 
 #[test]
-fn get_acp_test_probe_request_parses() {
+fn get_agent_chat_test_probe_request_parses() {
     let json = serde_json::json!({
-        "type": "getAcpTestProbe",
+        "type": "getAgentChatTestProbe",
         "requestId": "probe-get-1",
         "tail": 20,
     });
     let msg: crate::protocol::Message =
-        serde_json::from_value(json).expect("parse getAcpTestProbe");
+        serde_json::from_value(json).expect("parse getAgentChatTestProbe");
 
     match msg {
-        crate::protocol::Message::GetAcpTestProbe {
+        crate::protocol::Message::GetAgentChatTestProbe {
             request_id, tail, ..
         } => {
             assert_eq!(request_id, "probe-get-1");
             assert_eq!(tail, Some(20));
         }
-        other => panic!("Expected GetAcpTestProbe, got: {:?}", other),
+        other => panic!("Expected GetAgentChatTestProbe, got: {:?}", other),
     }
 }
 
 #[test]
-fn get_acp_test_probe_request_parses_without_tail() {
-    let json = r#"{"type":"getAcpTestProbe","requestId":"probe-get-2"}"#;
+fn get_agent_chat_test_probe_request_parses_without_tail() {
+    let json = r#"{"type":"getAgentChatTestProbe","requestId":"probe-get-2"}"#;
     let msg: crate::protocol::Message =
-        serde_json::from_str(json).expect("parse getAcpTestProbe without tail");
+        serde_json::from_str(json).expect("parse getAgentChatTestProbe without tail");
 
     match msg {
-        crate::protocol::Message::GetAcpTestProbe {
+        crate::protocol::Message::GetAgentChatTestProbe {
             request_id, tail, ..
         } => {
             assert_eq!(request_id, "probe-get-2");
             assert_eq!(tail, None);
         }
-        other => panic!("Expected GetAcpTestProbe, got: {:?}", other),
+        other => panic!("Expected GetAgentChatTestProbe, got: {:?}", other),
     }
 }
 
 #[test]
-fn acp_test_probe_result_round_trips() {
-    let probe = crate::protocol::AcpTestProbeSnapshot {
-        schema_version: crate::protocol::ACP_TEST_PROBE_SCHEMA_VERSION,
+fn agent_chat_test_probe_result_round_trips() {
+    let probe = crate::protocol::AgentChatTestProbeSnapshot {
+        schema_version: crate::protocol::AGENT_CHAT_TEST_PROBE_SCHEMA_VERSION,
         event_seq: 5,
-        key_routes: vec![crate::protocol::AcpKeyRouteTelemetry {
+        key_routes: vec![crate::protocol::AgentChatKeyRouteTelemetry {
             key: "tab".to_string(),
-            route: crate::protocol::AcpKeyRoute::Picker,
+            route: crate::protocol::AgentChatKeyRoute::Picker,
             picker_open: true,
             permission_active: false,
             cursor_before: 1,
@@ -927,7 +936,7 @@ fn acp_test_probe_result_round_trips() {
             caused_submit: false,
             consumed: true,
         }],
-        accepted_items: vec![crate::protocol::AcpPickerItemAcceptedTelemetry {
+        accepted_items: vec![crate::protocol::AgentChatPickerItemAcceptedTelemetry {
             trigger: "@".to_string(),
             item_label: "What I\u{2019}m Looking At".to_string(),
             item_id: "built_in:context".to_string(),
@@ -935,28 +944,28 @@ fn acp_test_probe_result_round_trips() {
             cursor_after: 17,
             caused_submit: false,
         }],
-        input_layout: Some(crate::protocol::AcpInputLayoutTelemetry {
+        input_layout: Some(crate::protocol::AgentChatInputLayoutTelemetry {
             char_count: 27,
             visible_start: 0,
             visible_end: 27,
             cursor_in_window: 17,
         }),
         last_interaction_trace: None,
-        state: crate::protocol::AcpStateSnapshot {
+        state: crate::protocol::AgentChatStateSnapshot {
             status: "idle".to_string(),
             cursor_index: 17,
             ..Default::default()
         },
         warnings: Vec::new(),
     };
-    let msg = crate::protocol::Message::acp_test_probe_result("probe-rt".to_string(), probe);
-    let json = serde_json::to_value(&msg).expect("serialize acpTestProbeResult");
+    let msg = crate::protocol::Message::agent_chat_test_probe_result("probe-rt".to_string(), probe);
+    let json = serde_json::to_value(&msg).expect("serialize agent_chatTestProbeResult");
 
-    assert_eq!(json["type"], "acpTestProbeResult");
+    assert_eq!(json["type"], "agent_chatTestProbeResult");
     assert_eq!(json["requestId"], "probe-rt");
     assert_eq!(
         json["schemaVersion"],
-        crate::protocol::ACP_TEST_PROBE_SCHEMA_VERSION
+        crate::protocol::AGENT_CHAT_TEST_PROBE_SCHEMA_VERSION
     );
     assert_eq!(json["eventSeq"], 5);
     assert_eq!(json["acceptedItems"][0]["acceptedViaKey"], "tab");
@@ -968,12 +977,12 @@ fn acp_test_probe_result_round_trips() {
     let json_str = serde_json::to_string(&msg).expect("serialize to string");
     let back: crate::protocol::Message = serde_json::from_str(&json_str).expect("deserialize");
     match back {
-        crate::protocol::Message::AcpTestProbeResult { request_id, probe } => {
+        crate::protocol::Message::AgentChatTestProbeResult { request_id, probe } => {
             assert_eq!(request_id, "probe-rt");
             assert_eq!(probe.event_seq, 5);
             assert_eq!(probe.accepted_items.len(), 1);
             assert_eq!(probe.key_routes.len(), 1);
         }
-        other => panic!("Expected AcpTestProbeResult, got: {:?}", other),
+        other => panic!("Expected AgentChatTestProbeResult, got: {:?}", other),
     }
 }

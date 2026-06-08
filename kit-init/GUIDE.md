@@ -860,7 +860,7 @@ export default {
   },
 
   ai: {
-    selectedAcpAgentId: "codex-acp",
+    selectedAgentChatAgentId: "codex-agent_chat",
     selectedModelId: "gpt-5.4",
   },
 
@@ -1099,7 +1099,7 @@ Script Kit includes Agent Chat - a built-in chat surface for command-line agents
 
 ### Agent Setup
 
-Agent defaults, model preferences, profiles, and related runtime settings live in `~/.scriptkit/config.ts`. Agent catalog recovery may also open `~/.scriptkit/acp/agents.json` when a local agent entry needs repair.
+Agent defaults, model preferences, profiles, and related runtime settings live in `~/.scriptkit/config.ts`. Agent catalog recovery may also open `~/.scriptkit/agent_chat/agents.json` when a local agent entry needs repair.
 
 ### Features
 

@@ -1,7 +1,7 @@
-//! [`TransactionStateProvider`] implementation for detached ACP windows.
+//! [`TransactionStateProvider`] implementation for detached Agent Chat windows.
 //!
 //! Bridges the generic transaction executor (used by `batch`) with the
-//! live state of a detached [`AcpChatView`] entity, enabling `setInput`,
+//! live state of a detached [`AgentChatView`] entity, enabling `setInput`,
 //! `waitFor`, `selectByValue`, and `selectBySemanticId` against a
 //! non-main automation target.
 
@@ -10,33 +10,34 @@ use crate::protocol::UiStateSnapshot;
 use anyhow::{anyhow, Result};
 use gpui::{App, Entity};
 
-/// Transaction provider backed by a live detached ACP entity.
+/// Transaction provider backed by a live detached Agent Chat entity.
 ///
 /// Created per-batch-request and dropped when the batch completes.
 /// Currently used by contract tests; the async batch handler inlines
 /// operations directly against the entity to avoid blocking the UI thread.
 #[allow(dead_code)]
-pub(crate) struct DetachedAcpTransactionProvider<'a> {
+pub(crate) struct DetachedAgentChatTransactionProvider<'a> {
     pub cx: &'a mut App,
-    pub entity: Entity<crate::ai::acp::view::AcpChatView>,
+    pub entity: Entity<crate::ai::agent_chat::ui::view::AgentChatView>,
 }
 
-impl<'a> TransactionStateProvider for DetachedAcpTransactionProvider<'a> {
+impl<'a> TransactionStateProvider for DetachedAgentChatTransactionProvider<'a> {
     fn snapshot(&self) -> UiStateSnapshot {
         let view = self.entity.read(self.cx);
-        let state = view.collect_acp_state_snapshot(self.cx);
+        let state = view.collect_agent_chat_state_snapshot(self.cx);
 
         // Build semantic IDs from the surface collector snapshot.
-        let surface = crate::windows::automation_surface_collector::collect_acp_detached_elements(
-            &self.entity,
-            200,
-            self.cx,
-        );
+        let surface =
+            crate::windows::automation_surface_collector::collect_agent_chat_detached_elements(
+                &self.entity,
+                200,
+                self.cx,
+            );
 
         UiStateSnapshot {
             window_visible: true,
             window_focused: true,
-            prompt_type: Some("acpChat".to_string()),
+            prompt_type: Some("agentChatChat".to_string()),
             input_value: Some(state.input_text.clone()),
             selected_value: state
                 .picker
@@ -49,10 +50,10 @@ impl<'a> TransactionStateProvider for DetachedAcpTransactionProvider<'a> {
                 .map(|el| el.semantic_id.clone())
                 .collect(),
             focused_semantic_id: surface.focused_semantic_id,
-            acp_status: Some(state.status.clone()),
-            acp_context_ready: state.context_ready,
-            acp_picker_open: state.picker.as_ref().is_some_and(|picker| picker.open),
-            acp_cursor_index: Some(state.cursor_index),
+            agent_chat_status: Some(state.status.clone()),
+            agent_chat_context_ready: state.context_ready,
+            agent_chat_picker_open: state.picker.as_ref().is_some_and(|picker| picker.open),
+            agent_chat_cursor_index: Some(state.cursor_index),
         }
     }
 
@@ -61,15 +62,15 @@ impl<'a> TransactionStateProvider for DetachedAcpTransactionProvider<'a> {
         self.entity.update(self.cx, |view, cx| {
             let thread = view
                 .thread()
-                .ok_or_else(|| anyhow!("detached ACP window is in setup mode"))?;
+                .ok_or_else(|| anyhow!("detached Agent Chat window is in setup mode"))?;
             thread.update(cx, |thread, cx| {
                 thread.set_input(&text, cx);
             });
             tracing::info!(
                 target: "script_kit::transaction",
-                event = "transaction_detached_acp_set_input",
+                event = "transaction_detached_agent_chat_set_input",
                 text_len = text.len(),
-                "detached ACP set_input"
+                "detached Agent Chat set_input"
             );
             Ok::<(), anyhow::Error>(())
         })
@@ -94,10 +95,10 @@ impl<'a> TransactionStateProvider for DetachedAcpTransactionProvider<'a> {
             }
             tracing::info!(
                 target: "script_kit::transaction",
-                event = "transaction_detached_acp_select_by_value",
+                event = "transaction_detached_agent_chat_select_by_value",
                 value = %value,
                 submit,
-                "detached ACP select_by_value"
+                "detached Agent Chat select_by_value"
             );
             Ok::<Option<String>, anyhow::Error>(Some(value))
         })
@@ -107,7 +108,7 @@ impl<'a> TransactionStateProvider for DetachedAcpTransactionProvider<'a> {
         self.select_by_value(semantic_id, submit)
     }
 
-    fn acp_test_probe(&self, tail: usize) -> crate::protocol::AcpTestProbeSnapshot {
+    fn agent_chat_test_probe(&self, tail: usize) -> crate::protocol::AgentChatTestProbeSnapshot {
         self.entity.read(self.cx).test_probe_snapshot(tail, self.cx)
     }
 }

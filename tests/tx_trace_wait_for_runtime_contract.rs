@@ -2,15 +2,15 @@ use script_kit_gpui::protocol::transaction_executor::{
     execute_wait_for, matches_state_spec, TransactionStateProvider,
 };
 use script_kit_gpui::protocol::{
-    AcpInputLayoutTelemetry, AcpPickerItemAcceptedTelemetry, AcpTestProbeSnapshot, StateMatchSpec,
-    TransactionErrorCode, TransactionTraceMode, UiStateSnapshot, WaitCondition,
-    WaitDetailedCondition,
+    AgentChatInputLayoutTelemetry, AgentChatPickerItemAcceptedTelemetry,
+    AgentChatTestProbeSnapshot, StateMatchSpec, TransactionErrorCode, TransactionTraceMode,
+    UiStateSnapshot, WaitCondition, WaitDetailedCondition,
 };
 
 #[derive(Clone, Default)]
 struct Provider {
     snapshot: UiStateSnapshot,
-    probe: AcpTestProbeSnapshot,
+    probe: AgentChatTestProbeSnapshot,
 }
 
 impl TransactionStateProvider for Provider {
@@ -34,7 +34,7 @@ impl TransactionStateProvider for Provider {
         Ok(None)
     }
 
-    fn acp_test_probe(&self, _tail: usize) -> AcpTestProbeSnapshot {
+    fn agent_chat_test_probe(&self, _tail: usize) -> AgentChatTestProbeSnapshot {
         self.probe.clone()
     }
 }
@@ -42,7 +42,7 @@ impl TransactionStateProvider for Provider {
 #[test]
 fn state_match_checks_prompt_type() {
     let snapshot = UiStateSnapshot {
-        prompt_type: Some("acpChat".to_string()),
+        prompt_type: Some("agentChatChat".to_string()),
         input_value: Some("/".to_string()),
         window_visible: true,
         ..Default::default()
@@ -51,7 +51,7 @@ fn state_match_checks_prompt_type() {
     assert!(matches_state_spec(
         &snapshot,
         &StateMatchSpec {
-            prompt_type: Some("acpChat".to_string()),
+            prompt_type: Some("agentChatChat".to_string()),
             input_value: Some("/".to_string()),
             window_visible: Some(true),
             ..Default::default()
@@ -67,7 +67,7 @@ fn state_match_checks_prompt_type() {
 }
 
 #[test]
-fn acp_input_match_and_contains_use_snapshot_input_value() {
+fn agent_chat_input_match_and_contains_use_snapshot_input_value() {
     let mut provider = Provider {
         snapshot: UiStateSnapshot {
             input_value: Some("/new-script".to_string()),
@@ -78,8 +78,8 @@ fn acp_input_match_and_contains_use_snapshot_input_value() {
 
     let exact = execute_wait_for(
         &mut provider,
-        unique_request_id("acp-input-match"),
-        &WaitCondition::Detailed(WaitDetailedCondition::AcpInputMatch {
+        unique_request_id("agent_chat-input-match"),
+        &WaitCondition::Detailed(WaitDetailedCondition::AgentChatInputMatch {
             text: "/new-script".to_string(),
         }),
         Some(1),
@@ -91,8 +91,8 @@ fn acp_input_match_and_contains_use_snapshot_input_value() {
 
     let contains = execute_wait_for(
         &mut provider,
-        unique_request_id("acp-input-contains"),
-        &WaitCondition::Detailed(WaitDetailedCondition::AcpInputContains {
+        unique_request_id("agent_chat-input-contains"),
+        &WaitCondition::Detailed(WaitDetailedCondition::AgentChatInputContains {
             substring: "new".to_string(),
         }),
         Some(1),
@@ -108,14 +108,14 @@ fn every_wait_detailed_condition_has_runtime_match_arm_or_invalid_error() {
     let mut provider = Provider {
         snapshot: UiStateSnapshot {
             input_value: Some("/".to_string()),
-            acp_status: Some("idle".to_string()),
-            acp_context_ready: true,
-            acp_picker_open: true,
-            acp_cursor_index: Some(1),
+            agent_chat_status: Some("idle".to_string()),
+            agent_chat_context_ready: true,
+            agent_chat_picker_open: true,
+            agent_chat_cursor_index: Some(1),
             ..Default::default()
         },
-        probe: AcpTestProbeSnapshot {
-            accepted_items: vec![AcpPickerItemAcceptedTelemetry {
+        probe: AgentChatTestProbeSnapshot {
+            accepted_items: vec![AgentChatPickerItemAcceptedTelemetry {
                 item_label: "New Script".to_string(),
                 item_id: "skill:new-script".to_string(),
                 trigger: "/".to_string(),
@@ -123,7 +123,7 @@ fn every_wait_detailed_condition_has_runtime_match_arm_or_invalid_error() {
                 cursor_after: 12,
                 caused_submit: false,
             }],
-            input_layout: Some(AcpInputLayoutTelemetry {
+            input_layout: Some(AgentChatInputLayoutTelemetry {
                 char_count: 1,
                 visible_start: 0,
                 visible_end: 1,
@@ -134,27 +134,27 @@ fn every_wait_detailed_condition_has_runtime_match_arm_or_invalid_error() {
     };
 
     for condition in [
-        WaitDetailedCondition::AcpReady,
-        WaitDetailedCondition::AcpPickerOpen,
-        WaitDetailedCondition::AcpStatus {
+        WaitDetailedCondition::AgentChatReady,
+        WaitDetailedCondition::AgentChatPickerOpen,
+        WaitDetailedCondition::AgentChatStatus {
             status: "idle".to_string(),
         },
-        WaitDetailedCondition::AcpCursorAt { index: 1 },
-        WaitDetailedCondition::AcpInputMatch {
+        WaitDetailedCondition::AgentChatCursorAt { index: 1 },
+        WaitDetailedCondition::AgentChatInputMatch {
             text: "/".to_string(),
         },
-        WaitDetailedCondition::AcpInputContains {
+        WaitDetailedCondition::AgentChatInputContains {
             substring: "/".to_string(),
         },
-        WaitDetailedCondition::AcpItemAccepted,
-        WaitDetailedCondition::AcpAcceptedViaKey {
+        WaitDetailedCondition::AgentChatItemAccepted,
+        WaitDetailedCondition::AgentChatAcceptedViaKey {
             key: "tab".to_string(),
         },
-        WaitDetailedCondition::AcpAcceptedLabel {
+        WaitDetailedCondition::AgentChatAcceptedLabel {
             label: "New Script".to_string(),
         },
-        WaitDetailedCondition::AcpAcceptedCursorAt { index: 12 },
-        WaitDetailedCondition::AcpInputLayoutMatch {
+        WaitDetailedCondition::AgentChatAcceptedCursorAt { index: 12 },
+        WaitDetailedCondition::AgentChatInputLayoutMatch {
             visible_start: 0,
             visible_end: 1,
             cursor_in_window: 1,
@@ -162,7 +162,7 @@ fn every_wait_detailed_condition_has_runtime_match_arm_or_invalid_error() {
     ] {
         let result = execute_wait_for(
             &mut provider,
-            unique_request_id("acp-runtime"),
+            unique_request_id("agent_chat-runtime"),
             &WaitCondition::Detailed(condition),
             Some(1),
             Some(1),
@@ -174,8 +174,8 @@ fn every_wait_detailed_condition_has_runtime_match_arm_or_invalid_error() {
 
     let unsupported = execute_wait_for(
         &mut provider,
-        unique_request_id("acp-setup-unsupported"),
-        &WaitCondition::Detailed(WaitDetailedCondition::AcpSetupVisible),
+        unique_request_id("agent_chat-setup-unsupported"),
+        &WaitCondition::Detailed(WaitDetailedCondition::AgentChatSetupVisible),
         Some(1),
         Some(1),
         TransactionTraceMode::Off,

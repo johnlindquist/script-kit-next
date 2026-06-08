@@ -2916,10 +2916,10 @@ mod tests {
         assert!(!should_retry_transport_error(&err));
     }
 
-    // ================= ACP Provider Registration Tests =================
+    // ================= Agent Chat Provider Registration Tests =================
 
     #[test]
-    fn legacy_claude_provider_remains_default_without_acp_opt_in() {
+    fn legacy_claude_provider_remains_default_without_agent_chat_opt_in() {
         #[cfg(unix)]
         use std::os::unix::fs::PermissionsExt;
 
@@ -2940,8 +2940,8 @@ mod tests {
                 .expect("mark fake claude binary executable");
         }
 
-        let orig = std::env::var("SCRIPT_KIT_ACP_CLAUDE_CODE").ok();
-        std::env::remove_var("SCRIPT_KIT_ACP_CLAUDE_CODE");
+        let orig = std::env::var("SCRIPT_KIT_AGENT_CHAT_CLAUDE_CODE").ok();
+        std::env::remove_var("SCRIPT_KIT_AGENT_CHAT_CLAUDE_CODE");
         let mut config = crate::config::Config::default();
         config.claude_code = Some(crate::config::ClaudeCodeConfig {
             enabled: true,
@@ -2953,17 +2953,17 @@ mod tests {
 
         assert!(
             registry.get_provider("claude_code").is_some(),
-            "Legacy claude_code provider must remain the default without ACP opt-in"
+            "Legacy claude_code provider must remain the default without Agent Chat opt-in"
         );
         assert!(
             registry.get_provider("claude-code").is_none(),
-            "ACP provider must not be registered without ACP opt-in"
+            "Agent Chat provider must not be registered without Agent Chat opt-in"
         );
 
         if let Some(v) = orig {
-            std::env::set_var("SCRIPT_KIT_ACP_CLAUDE_CODE", v);
+            std::env::set_var("SCRIPT_KIT_AGENT_CHAT_CLAUDE_CODE", v);
         } else {
-            std::env::remove_var("SCRIPT_KIT_ACP_CLAUDE_CODE");
+            std::env::remove_var("SCRIPT_KIT_AGENT_CHAT_CLAUDE_CODE");
         }
     }
 

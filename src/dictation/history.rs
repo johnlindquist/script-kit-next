@@ -1,4 +1,4 @@
-//! Persistent dictation history and ACP-facing provider payloads.
+//! Persistent dictation history and Agent Chat-facing provider payloads.
 
 use crate::dictation::DictationTarget;
 use chrono::{Datelike, Local};

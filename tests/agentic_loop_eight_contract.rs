@@ -8,7 +8,7 @@ fn index_help_exposes_loop_eight_recipes() {
     for name in [
         "tray-global-hotkey-menu-mutation-stress",
         "multi-window-resize-monitor-restoration-stress",
-        "acp-targeted-dictation-delivery-stress",
+        "agent_chat-targeted-dictation-delivery-stress",
     ] {
         assert!(
             INDEX.contains(&format!("name: \"{name}\"")),
@@ -22,7 +22,7 @@ fn index_help_exposes_loop_eight_recipes() {
     for function_name in [
         "runTrayGlobalHotkeyMenuMutationStressScenario",
         "runMultiWindowResizeMonitorRestorationStressScenario",
-        "runAcpTargetedDictationDeliveryStressScenario",
+        "runAgentChatTargetedDictationDeliveryStressScenario",
     ] {
         assert!(
             INDEX.contains(function_name) || SCENARIO.contains(function_name),
@@ -88,16 +88,16 @@ fn multi_window_resize_monitor_restoration_stress_pins_identity_bounds_scale_and
 }
 
 #[test]
-fn acp_targeted_dictation_delivery_stress_pins_target_generation_range_and_passive_setup_receipts()
-{
+fn agent_chat_targeted_dictation_delivery_stress_pins_target_generation_range_and_passive_setup_receipts(
+) {
     for token in [
-        "acp-targeted-dictation-delivery-stress",
-        "missing_acp_targeted_dictation_delivery_receipt",
-        "acpDictationDelivery",
-        "targetAcpWindowId",
+        "agent_chat-targeted-dictation-delivery-stress",
+        "missing_agent_chat_targeted_dictation_delivery_receipt",
+        "agent_chatDictationDelivery",
+        "targetAgentChatWindowId",
         "targetSurfaceId",
         "targetGenerationId",
-        "embeddedAcpWindowId",
+        "embeddedAgentChatWindowId",
         "wrongWindowUnchanged",
         "deliveryId",
         "transcriptGenerationId",
@@ -110,7 +110,7 @@ fn acp_targeted_dictation_delivery_stress_pins_target_generation_range_and_passi
     ] {
         assert!(
             INDEX.contains(token) || SCENARIO.contains(token),
-            "ACP-targeted dictation delivery stress must pin {token}"
+            "Agent Chat-targeted dictation delivery stress must pin {token}"
         );
     }
 }

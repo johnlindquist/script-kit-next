@@ -91,7 +91,7 @@ fn test_cmd_enter_routes_to_harness_terminal_in_startup_new_tab() {
         .expect("Failed to read src/app_impl/startup_new_tab.rs");
 
     assert!(
-        startup_tab.contains("try_route_global_cmd_enter_to_acp_context_capture"),
+        startup_tab.contains("try_route_global_cmd_enter_to_agent_chat_context_capture"),
         "Cmd+Enter in startup_new_tab.rs should route through the global AI-entry helper"
     );
 }
@@ -108,14 +108,14 @@ fn test_tab_interceptor_matches_tab_key_case_insensitive() {
 }
 
 #[test]
-fn plain_tab_in_script_list_routes_to_acp_in_startup_new_tab() {
+fn plain_tab_in_script_list_routes_to_agent_chat_in_startup_new_tab() {
     let startup_tab = fs::read_to_string("src/app_impl/startup_new_tab.rs")
         .expect("Failed to read src/app_impl/startup_new_tab.rs");
 
     assert!(
         startup_tab.contains("matches!(this.current_view, AppView::ScriptList)")
-            && startup_tab.contains("this.open_tab_ai_acp_with_entry_intent(entry_intent, cx);"),
-        "Plain Tab in ScriptList must route through the ACP entry path in startup_new_tab.rs"
+            && startup_tab.contains("this.open_tab_ai_agent_chat_with_entry_intent(entry_intent, cx);"),
+        "Plain Tab in ScriptList must route through the Agent Chat entry path in startup_new_tab.rs"
     );
 }
 
@@ -251,7 +251,7 @@ fn plain_tab_in_script_list_no_longer_routes_to_agent_chat_in_standard_startup()
 
     assert!(
         source.contains("Tab-to-Agent deprecated: Cmd+Enter is the AI entry.")
-            && !source.contains("this.try_route_plain_tab_to_acp_context_capture(cx)"),
+            && !source.contains("this.try_route_plain_tab_to_agent_chat_context_capture(cx)"),
         "Plain Tab in ScriptList must not route through the Agent Chat handoff helper in startup.rs"
     );
 }
@@ -262,10 +262,10 @@ fn plain_tab_agent_chat_helper_is_removed() {
         .expect("Failed to read src/app_impl/tab_ai_mode/mod.rs");
 
     assert!(
-        !source.contains("try_route_plain_tab_to_acp_context_capture")
+        !source.contains("try_route_plain_tab_to_agent_chat_context_capture")
             && !source.contains("agent_chat_plain_tab_entry_deprecated")
-            && !source.contains("tab_ai_plain_tab_routed_to_acp")
-            && !source.contains("tab_ai_plain_tab_submitted_to_detached_acp"),
+            && !source.contains("tab_ai_plain_tab_routed_to_agent_chat")
+            && !source.contains("tab_ai_plain_tab_submitted_to_detached_agent_chat"),
         "Plain Tab must not keep an Agent Chat route, shim, or telemetry marker"
     );
 }
@@ -282,25 +282,25 @@ fn focused_part_staging_suppression_stays_available_for_explicit_handoffs() {
     assert!(
         source.contains("if suppress_focused_part {")
             && source.contains("request.suppress_focused_part"),
-        "Focused-part routing must honor the suppression flag during ACP launch"
+        "Focused-part routing must honor the suppression flag during Agent Chat launch"
     );
     assert!(
-        source.contains("self.open_tab_ai_acp_with_entry_intent_preserving_return_and_options(")
+        source.contains("self.open_tab_ai_agent_chat_with_entry_intent_preserving_return_and_options(")
             && source.contains("entry_intent,\n            true,\n            cx,")
-            && source.contains("self.open_tab_ai_acp_with_options(entry_intent, false, cx);"),
+            && source.contains("self.open_tab_ai_agent_chat_with_options(entry_intent, false, cx);"),
         "Explicit Agent Chat handoffs can suppress focused-choice staging while the shared entry path should not"
     );
 }
 
 #[test]
-fn direct_prompt_acp_handoff_can_suppress_focused_part_staging() {
+fn direct_prompt_agent_chat_handoff_can_suppress_focused_part_staging() {
     let source = fs::read_to_string("src/app_impl/tab_ai_mode/mod.rs")
         .expect("Failed to read src/app_impl/tab_ai_mode/mod.rs");
 
     assert!(
-        source.contains("open_tab_ai_acp_with_entry_intent_suppressing_focused_part")
-            && source.contains("self.open_tab_ai_acp_with_options(entry_intent, true, cx);"),
-        "Direct prompt ACP handoffs such as dictation must be able to submit raw input without inheriting the selected launcher row"
+        source.contains("open_tab_ai_agent_chat_with_entry_intent_suppressing_focused_part")
+            && source.contains("self.open_tab_ai_agent_chat_with_options(entry_intent, true, cx);"),
+        "Direct prompt Agent Chat handoffs such as dictation must be able to submit raw input without inheriting the selected launcher row"
     );
 }
 
@@ -314,7 +314,7 @@ fn simulate_key_tab_does_not_use_plain_tab_agent_chat_helper() {
         .expect("Failed to read src/main_entry/runtime_stdin_match_simulate_key.rs");
 
     assert!(
-        !helper_source.contains("try_route_plain_tab_to_acp_context_capture"),
+        !helper_source.contains("try_route_plain_tab_to_agent_chat_context_capture"),
         "simulateKey Tab must not route through the deprecated plain-Tab Agent Chat helper"
     );
     assert!(
@@ -392,7 +392,7 @@ fn actions_window_escape_routes_before_secondary_window_skip() {
             .find("if is_actions")
             .unwrap_or_else(|| panic!("{label} must special-case actions window keys"));
         let secondary_skip_pos = source
-            .find("if is_notes || is_ai || is_detached_acp")
+            .find("if is_notes || is_ai || is_detached_agent_chat")
             .unwrap_or_else(|| panic!("{label} must keep the secondary-window skip"));
         assert!(
             actions_window_pos < secondary_skip_pos,
@@ -406,7 +406,7 @@ fn actions_window_escape_routes_before_secondary_window_skip() {
             .unwrap_or_else(|| panic!("{label} must keep the main-window visibility guard"));
         assert!(
             close_key_pos < hidden_guard_pos,
-            "{label} must route actions close keys before the visibility guard so embedded ACP can close its actions dialog"
+            "{label} must route actions close keys before the visibility guard so embedded Agent Chat can close its actions dialog"
         );
         assert!(
             source.contains("actions_interceptor_routed_from_actions_window")
@@ -435,71 +435,71 @@ fn render_impl_routes_modifier_aware_keys_into_confirm_popup_guard() {
 }
 
 #[test]
-fn script_list_cmd_v_routes_large_pastes_into_acp() {
+fn script_list_cmd_v_routes_large_pastes_into_agent_chat() {
     let render_script_list = fs::read_to_string("src/render_script_list/mod.rs")
         .expect("Failed to read src/render_script_list/mod.rs");
     let tab_ai_mode = fs::read_to_string("src/app_impl/tab_ai_mode/mod.rs")
         .expect("Failed to read src/app_impl/tab_ai_mode/mod.rs");
 
     assert!(
-        render_script_list.contains("\"v\" if this.route_large_script_list_paste_to_acp(cx)"),
-        "Cmd+V in ScriptList should first try the large-paste ACP handoff"
+        render_script_list.contains("\"v\" if this.route_large_script_list_paste_to_agent_chat(cx)"),
+        "Cmd+V in ScriptList should first try the large-paste Agent Chat handoff"
     );
     assert!(
-        tab_ai_mode.contains("script_list_large_paste_routed_to_acp")
+        tab_ai_mode.contains("script_list_large_paste_routed_to_agent_chat")
             && tab_ai_mode.contains("clipboard://pasted-text/")
-            && tab_ai_mode.contains("open_tab_ai_acp_with_context_part(part, \"script_list_large_paste\", cx);"),
-        "Large ScriptList pastes should become ACP text-block context instead of staying in the launcher filter"
+            && tab_ai_mode.contains("open_tab_ai_agent_chat_with_context_part(part, \"script_list_large_paste\", cx);"),
+        "Large ScriptList pastes should become Agent Chat text-block context instead of staying in the launcher filter"
     );
 }
 
 #[test]
-fn script_list_cmd_v_routes_clipboard_images_into_acp() {
+fn script_list_cmd_v_routes_clipboard_images_into_agent_chat() {
     let tab_ai_mode = fs::read_to_string("src/app_impl/tab_ai_mode/mod.rs")
         .expect("Failed to read src/app_impl/tab_ai_mode/mod.rs");
 
     assert!(
         tab_ai_mode.contains("clipboard.get_image()")
-            && tab_ai_mode.contains("script_list_clipboard_image_routed_to_acp")
+            && tab_ai_mode.contains("script_list_clipboard_image_routed_to_agent_chat")
             && tab_ai_mode.contains(
-                "open_tab_ai_acp_with_context_part(part, \"script_list_clipboard_image\", cx);"
+                "open_tab_ai_agent_chat_with_context_part(part, \"script_list_clipboard_image\", cx);"
             ),
-        "ScriptList Cmd+V should route clipboard images straight into ACP as file attachments"
+        "ScriptList Cmd+V should route clipboard images straight into Agent Chat as file attachments"
     );
 }
 
 #[test]
-fn acp_launch_staging_preserves_pasted_text_pills_for_clipboard_text_blocks() {
-    let acp_view =
-        fs::read_to_string("src/ai/acp/view.rs").expect("Failed to read src/ai/acp/view.rs");
+fn agent_chat_launch_staging_preserves_pasted_text_pills_for_clipboard_text_blocks() {
+    let agent_chat_view =
+        fs::read_to_string("src/ai/agent_chat/ui/view.rs").expect("Failed to read src/ai/agent_chat/ui/view.rs");
     let tab_ai_mode = fs::read_to_string("src/app_impl/tab_ai_mode/mod.rs")
         .expect("Failed to read src/app_impl/tab_ai_mode/mod.rs");
 
     assert!(
-        acp_view.contains("source.starts_with(\"clipboard://pasted-text/\")")
-            && acp_view.contains("self.pasted_text_tokens")
-            && acp_view.contains("register_inline_owned_context_part"),
-        "ACP should recognize staged clipboard text blocks as pasted-text pills"
+        agent_chat_view.contains("source.starts_with(\"clipboard://pasted-text/\")")
+            && agent_chat_view.contains("self.pasted_text_tokens")
+            && agent_chat_view.contains("register_inline_owned_context_part"),
+        "Agent Chat should recognize staged clipboard text blocks as pasted-text pills"
     );
     assert!(
         tab_ai_mode.contains("view.register_inline_owned_context_part(token, part);"),
-        "ACP launch staging should register routed clipboard text with the pasted-text pill registry"
+        "Agent Chat launch staging should register routed clipboard text with the pasted-text pill registry"
     );
 }
 
 #[test]
-fn acp_clipboard_image_parts_stage_as_pasted_image_pills() {
-    let acp_view =
-        fs::read_to_string("src/ai/acp/view.rs").expect("Failed to read src/ai/acp/view.rs");
+fn agent_chat_clipboard_image_parts_stage_as_pasted_image_pills() {
+    let agent_chat_view =
+        fs::read_to_string("src/ai/agent_chat/ui/view.rs").expect("Failed to read src/ai/agent_chat/ui/view.rs");
     let context_mentions = fs::read_to_string("src/ai/context_mentions/mod.rs")
         .expect("Failed to read src/ai/context_mentions/mod.rs");
 
     assert!(
-        acp_view.contains("pasted_image_tokens")
-            && acp_view.contains("paste_image_from_clipboard")
-            && acp_view.contains("crate::pasted_image::remove_pasted_image_token_at_cursor")
-            && acp_view.contains("pasted_image_pill_ranges"),
-        "ACP should give pasted clipboard images their own pill registry, paste handler, and atomic delete path"
+        agent_chat_view.contains("pasted_image_tokens")
+            && agent_chat_view.contains("paste_image_from_clipboard")
+            && agent_chat_view.contains("crate::pasted_image::remove_pasted_image_token_at_cursor")
+            && agent_chat_view.contains("pasted_image_pill_ranges"),
+        "Agent Chat should give pasted clipboard images their own pill registry, paste handler, and atomic delete path"
     );
     assert!(
         context_mentions.contains("crate::pasted_image::token_for_label(label)"),

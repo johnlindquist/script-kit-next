@@ -10,9 +10,10 @@ use script_kit_gpui::protocol::transaction_executor::{
     execute_batch, execute_wait_for, TransactionStateProvider,
 };
 use script_kit_gpui::protocol::{
-    AcpInputLayoutTelemetry, AcpPickerItemAcceptedTelemetry, AcpTestProbeSnapshot, BatchCommand,
-    Message, StateMatchSpec, TransactionError, TransactionErrorCode, TransactionTraceMode,
-    UiStateSnapshot, WaitCondition, WaitDetailedCondition, WaitNamedCondition,
+    AgentChatInputLayoutTelemetry, AgentChatPickerItemAcceptedTelemetry,
+    AgentChatTestProbeSnapshot, BatchCommand, Message, StateMatchSpec, TransactionError,
+    TransactionErrorCode, TransactionTraceMode, UiStateSnapshot, WaitCondition,
+    WaitDetailedCondition, WaitNamedCondition,
 };
 
 // ---------------------------------------------------------------------------
@@ -27,7 +28,7 @@ struct MockProvider {
     choice_count: usize,
     visible_semantic_ids: Vec<String>,
     focused_semantic_id: Option<String>,
-    acp_probe: AcpTestProbeSnapshot,
+    agent_chat_probe: AgentChatTestProbeSnapshot,
 }
 
 impl Default for MockProvider {
@@ -44,7 +45,7 @@ impl Default for MockProvider {
                 "choice:2:gamma".to_string(),
             ],
             focused_semantic_id: Some("choice:0:alpha".to_string()),
-            acp_probe: AcpTestProbeSnapshot::default(),
+            agent_chat_probe: AgentChatTestProbeSnapshot::default(),
         }
     }
 }
@@ -94,8 +95,8 @@ impl TransactionStateProvider for MockProvider {
         }
     }
 
-    fn acp_test_probe(&self, _tail: usize) -> AcpTestProbeSnapshot {
-        self.acp_probe.clone()
+    fn agent_chat_test_probe(&self, _tail: usize) -> AgentChatTestProbeSnapshot {
+        self.agent_chat_probe.clone()
     }
 }
 
@@ -700,20 +701,20 @@ fn transaction_error_matches_sdk_ts_interface() {
 // ============================================================
 
 #[test]
-fn detached_acp_transaction_provider_emits_set_input_log() {
+fn detached_agent_chat_transaction_provider_emits_set_input_log() {
     let source = include_str!("../../src/windows/automation_transaction_provider.rs");
     assert!(
-        source.contains("transaction_detached_acp_set_input"),
-        "DetachedAcpTransactionProvider::set_input must emit structured log"
+        source.contains("transaction_detached_agent_chat_set_input"),
+        "DetachedAgentChatTransactionProvider::set_input must emit structured log"
     );
 }
 
 #[test]
-fn detached_acp_transaction_provider_emits_select_log() {
+fn detached_agent_chat_transaction_provider_emits_select_log() {
     let source = include_str!("../../src/windows/automation_transaction_provider.rs");
     assert!(
-        source.contains("transaction_detached_acp_select_by_value"),
-        "DetachedAcpTransactionProvider::select_by_value must emit structured log"
+        source.contains("transaction_detached_agent_chat_select_by_value"),
+        "DetachedAgentChatTransactionProvider::select_by_value must emit structured log"
     );
 }
 
@@ -731,15 +732,17 @@ fn surface_collector_emits_snapshot_log_with_kind() {
 }
 
 #[test]
-fn surface_collector_routes_notes_and_acp_detached() {
+fn surface_collector_routes_notes_and_agent_chat_detached() {
     let source = include_str!("../../src/windows/automation_surface_collector.rs");
     assert!(
         source.contains("AutomationWindowKind::Notes => collect_notes_snapshot"),
         "surface collector must route Notes targets"
     );
     assert!(
-        source.contains("AutomationWindowKind::AcpDetached => collect_acp_detached_snapshot"),
-        "surface collector must route AcpDetached targets"
+        source.contains(
+            "AutomationWindowKind::AgentChatDetached => collect_agent_chat_detached_snapshot"
+        ),
+        "surface collector must route AgentChatDetached targets"
     );
 }
 
@@ -757,11 +760,11 @@ fn prompt_handler_emits_elements_result_log() {
 }
 
 #[test]
-fn prompt_handler_emits_batch_detached_acp_log() {
+fn prompt_handler_emits_batch_detached_agent_chat_log() {
     let source = include_str!("../../src/prompt_handler/mod.rs");
     assert!(
-        source.contains("automation.batch.detached_acp.completed"),
-        "batch handler must emit detached ACP completion log"
+        source.contains("automation.batch.detached_agent_chat.completed"),
+        "batch handler must emit detached Agent Chat completion log"
     );
 }
 
@@ -784,11 +787,11 @@ fn prompt_handler_emits_notes_target_resolution_log() {
 }
 
 // ============================================================
-// ACP proof conditions: acpAcceptedViaKey
+// Agent Chat proof conditions: agent_chatAcceptedViaKey
 // ============================================================
 
-fn make_accepted_item(key: &str) -> AcpPickerItemAcceptedTelemetry {
-    AcpPickerItemAcceptedTelemetry {
+fn make_accepted_item(key: &str) -> AgentChatPickerItemAcceptedTelemetry {
+    AgentChatPickerItemAcceptedTelemetry {
         trigger: "@".to_string(),
         item_label: "Context".to_string(),
         item_id: "built_in:context".to_string(),
@@ -799,11 +802,11 @@ fn make_accepted_item(key: &str) -> AcpPickerItemAcceptedTelemetry {
 }
 
 #[test]
-fn acp_accepted_via_enter_succeeds_immediately() {
+fn agent_chat_accepted_via_enter_succeeds_immediately() {
     let mut provider = MockProvider::default();
-    provider.acp_probe.accepted_items = vec![make_accepted_item("enter")];
+    provider.agent_chat_probe.accepted_items = vec![make_accepted_item("enter")];
 
-    let condition = WaitCondition::Detailed(WaitDetailedCondition::AcpAcceptedViaKey {
+    let condition = WaitCondition::Detailed(WaitDetailedCondition::AgentChatAcceptedViaKey {
         key: "enter".to_string(),
     });
 
@@ -817,17 +820,20 @@ fn acp_accepted_via_enter_succeeds_immediately() {
     )
     .expect("execute_wait_for");
 
-    assert!(output.success, "acpAcceptedViaKey enter should match");
+    assert!(
+        output.success,
+        "agent_chatAcceptedViaKey enter should match"
+    );
     assert_eq!(output.elapsed, 0);
     assert!(output.error.is_none());
 }
 
 #[test]
-fn acp_accepted_via_tab_succeeds_immediately() {
+fn agent_chat_accepted_via_tab_succeeds_immediately() {
     let mut provider = MockProvider::default();
-    provider.acp_probe.accepted_items = vec![make_accepted_item("tab")];
+    provider.agent_chat_probe.accepted_items = vec![make_accepted_item("tab")];
 
-    let condition = WaitCondition::Detailed(WaitDetailedCondition::AcpAcceptedViaKey {
+    let condition = WaitCondition::Detailed(WaitDetailedCondition::AgentChatAcceptedViaKey {
         key: "tab".to_string(),
     });
 
@@ -841,16 +847,16 @@ fn acp_accepted_via_tab_succeeds_immediately() {
     )
     .expect("execute_wait_for");
 
-    assert!(output.success, "acpAcceptedViaKey tab should match");
+    assert!(output.success, "agent_chatAcceptedViaKey tab should match");
     assert_eq!(output.elapsed, 0);
 }
 
 #[test]
-fn acp_accepted_via_key_wrong_key_times_out() {
+fn agent_chat_accepted_via_key_wrong_key_times_out() {
     let mut provider = MockProvider::default();
-    provider.acp_probe.accepted_items = vec![make_accepted_item("tab")];
+    provider.agent_chat_probe.accepted_items = vec![make_accepted_item("tab")];
 
-    let condition = WaitCondition::Detailed(WaitDetailedCondition::AcpAcceptedViaKey {
+    let condition = WaitCondition::Detailed(WaitDetailedCondition::AgentChatAcceptedViaKey {
         key: "enter".to_string(),
     });
 
@@ -870,11 +876,11 @@ fn acp_accepted_via_key_wrong_key_times_out() {
 }
 
 #[test]
-fn acp_accepted_via_key_empty_probe_times_out() {
+fn agent_chat_accepted_via_key_empty_probe_times_out() {
     let mut provider = MockProvider::default();
-    // acp_probe is default (empty)
+    // agent_chat_probe is default (empty)
 
-    let condition = WaitCondition::Detailed(WaitDetailedCondition::AcpAcceptedViaKey {
+    let condition = WaitCondition::Detailed(WaitDetailedCondition::AgentChatAcceptedViaKey {
         key: "enter".to_string(),
     });
 
@@ -892,15 +898,15 @@ fn acp_accepted_via_key_empty_probe_times_out() {
 }
 
 // ============================================================
-// ACP proof conditions: acpAcceptedCursorAt
+// Agent Chat proof conditions: agent_chatAcceptedCursorAt
 // ============================================================
 
 #[test]
-fn acp_accepted_cursor_at_succeeds() {
+fn agent_chat_accepted_cursor_at_succeeds() {
     let mut provider = MockProvider::default();
-    provider.acp_probe.accepted_items = vec![make_accepted_item("enter")];
+    provider.agent_chat_probe.accepted_items = vec![make_accepted_item("enter")];
 
-    let condition = WaitCondition::Detailed(WaitDetailedCondition::AcpAcceptedCursorAt {
+    let condition = WaitCondition::Detailed(WaitDetailedCondition::AgentChatAcceptedCursorAt {
         index: 9, // matches cursor_after in make_accepted_item
     });
 
@@ -918,11 +924,11 @@ fn acp_accepted_cursor_at_succeeds() {
 }
 
 #[test]
-fn acp_accepted_cursor_at_wrong_index_times_out() {
+fn agent_chat_accepted_cursor_at_wrong_index_times_out() {
     let mut provider = MockProvider::default();
-    provider.acp_probe.accepted_items = vec![make_accepted_item("enter")];
+    provider.agent_chat_probe.accepted_items = vec![make_accepted_item("enter")];
 
-    let condition = WaitCondition::Detailed(WaitDetailedCondition::AcpAcceptedCursorAt {
+    let condition = WaitCondition::Detailed(WaitDetailedCondition::AgentChatAcceptedCursorAt {
         index: 42, // does not match cursor_after=9
     });
 
@@ -940,11 +946,11 @@ fn acp_accepted_cursor_at_wrong_index_times_out() {
 }
 
 #[test]
-fn acp_accepted_cursor_at_empty_probe_times_out() {
+fn agent_chat_accepted_cursor_at_empty_probe_times_out() {
     let mut provider = MockProvider::default();
 
     let condition =
-        WaitCondition::Detailed(WaitDetailedCondition::AcpAcceptedCursorAt { index: 9 });
+        WaitCondition::Detailed(WaitDetailedCondition::AgentChatAcceptedCursorAt { index: 9 });
 
     let output = execute_wait_for(
         &mut provider,
@@ -963,20 +969,20 @@ fn acp_accepted_cursor_at_empty_probe_times_out() {
 }
 
 // ============================================================
-// ACP proof conditions: acpInputLayoutMatch
+// Agent Chat proof conditions: agent_chatInputLayoutMatch
 // ============================================================
 
 #[test]
-fn acp_input_layout_match_succeeds() {
+fn agent_chat_input_layout_match_succeeds() {
     let mut provider = MockProvider::default();
-    provider.acp_probe.input_layout = Some(AcpInputLayoutTelemetry {
+    provider.agent_chat_probe.input_layout = Some(AgentChatInputLayoutTelemetry {
         char_count: 20,
         visible_start: 0,
         visible_end: 15,
         cursor_in_window: 9,
     });
 
-    let condition = WaitCondition::Detailed(WaitDetailedCondition::AcpInputLayoutMatch {
+    let condition = WaitCondition::Detailed(WaitDetailedCondition::AgentChatInputLayoutMatch {
         visible_start: 0,
         visible_end: 15,
         cursor_in_window: 9,
@@ -996,9 +1002,9 @@ fn acp_input_layout_match_succeeds() {
 }
 
 #[test]
-fn acp_input_layout_match_partial_mismatch_times_out() {
+fn agent_chat_input_layout_match_partial_mismatch_times_out() {
     let mut provider = MockProvider::default();
-    provider.acp_probe.input_layout = Some(AcpInputLayoutTelemetry {
+    provider.agent_chat_probe.input_layout = Some(AgentChatInputLayoutTelemetry {
         char_count: 20,
         visible_start: 0,
         visible_end: 15,
@@ -1006,7 +1012,7 @@ fn acp_input_layout_match_partial_mismatch_times_out() {
     });
 
     // cursor_in_window differs
-    let condition = WaitCondition::Detailed(WaitDetailedCondition::AcpInputLayoutMatch {
+    let condition = WaitCondition::Detailed(WaitDetailedCondition::AgentChatInputLayoutMatch {
         visible_start: 0,
         visible_end: 15,
         cursor_in_window: 5,
@@ -1026,11 +1032,11 @@ fn acp_input_layout_match_partial_mismatch_times_out() {
 }
 
 #[test]
-fn acp_input_layout_match_no_layout_times_out() {
+fn agent_chat_input_layout_match_no_layout_times_out() {
     let mut provider = MockProvider::default();
     // input_layout is None (default)
 
-    let condition = WaitCondition::Detailed(WaitDetailedCondition::AcpInputLayoutMatch {
+    let condition = WaitCondition::Detailed(WaitDetailedCondition::AgentChatInputLayoutMatch {
         visible_start: 0,
         visible_end: 15,
         cursor_in_window: 9,
@@ -1061,9 +1067,9 @@ fn stale_probe_state_does_not_satisfy_after_reset() {
     let mut provider = MockProvider::default();
 
     // Simulate a previous session: probe has accepted items and layout
-    provider.acp_probe.event_seq = 5;
-    provider.acp_probe.accepted_items = vec![make_accepted_item("enter")];
-    provider.acp_probe.input_layout = Some(AcpInputLayoutTelemetry {
+    provider.agent_chat_probe.event_seq = 5;
+    provider.agent_chat_probe.accepted_items = vec![make_accepted_item("enter")];
+    provider.agent_chat_probe.input_layout = Some(AgentChatInputLayoutTelemetry {
         char_count: 20,
         visible_start: 0,
         visible_end: 15,
@@ -1071,7 +1077,7 @@ fn stale_probe_state_does_not_satisfy_after_reset() {
     });
 
     // Verify the condition matches BEFORE reset
-    let condition = WaitCondition::Detailed(WaitDetailedCondition::AcpAcceptedViaKey {
+    let condition = WaitCondition::Detailed(WaitDetailedCondition::AgentChatAcceptedViaKey {
         key: "enter".to_string(),
     });
     let before_reset = execute_wait_for(
@@ -1085,8 +1091,8 @@ fn stale_probe_state_does_not_satisfy_after_reset() {
     .expect("pre-reset check");
     assert!(before_reset.success, "should match before reset");
 
-    // Simulate probe reset (what resetAcpTestProbe does)
-    provider.acp_probe = AcpTestProbeSnapshot::default();
+    // Simulate probe reset (what resetAgentChatTestProbe does)
+    provider.agent_chat_probe = AgentChatTestProbeSnapshot::default();
 
     // Verify the same condition does NOT match after reset
     let after_reset = execute_wait_for(
@@ -1104,11 +1110,12 @@ fn stale_probe_state_does_not_satisfy_after_reset() {
     );
 
     // Also verify layout condition doesn't match
-    let layout_condition = WaitCondition::Detailed(WaitDetailedCondition::AcpInputLayoutMatch {
-        visible_start: 0,
-        visible_end: 15,
-        cursor_in_window: 9,
-    });
+    let layout_condition =
+        WaitCondition::Detailed(WaitDetailedCondition::AgentChatInputLayoutMatch {
+            visible_start: 0,
+            visible_end: 15,
+            cursor_in_window: 9,
+        });
     let layout_after_reset = execute_wait_for(
         &mut provider,
         "wf-layout-post-reset".to_string(),
@@ -1127,9 +1134,9 @@ fn stale_probe_state_does_not_satisfy_after_reset() {
 #[test]
 fn stale_probe_accepted_label_does_not_satisfy_after_reset() {
     let mut provider = MockProvider::default();
-    provider.acp_probe.accepted_items = vec![make_accepted_item("enter")];
+    provider.agent_chat_probe.accepted_items = vec![make_accepted_item("enter")];
 
-    let condition = WaitCondition::Detailed(WaitDetailedCondition::AcpAcceptedLabel {
+    let condition = WaitCondition::Detailed(WaitDetailedCondition::AgentChatAcceptedLabel {
         label: "Context".to_string(),
     });
 
@@ -1144,7 +1151,7 @@ fn stale_probe_accepted_label_does_not_satisfy_after_reset() {
     .expect("pre-reset");
     assert!(before.success);
 
-    provider.acp_probe = AcpTestProbeSnapshot::default();
+    provider.agent_chat_probe = AgentChatTestProbeSnapshot::default();
 
     let after = execute_wait_for(
         &mut provider,

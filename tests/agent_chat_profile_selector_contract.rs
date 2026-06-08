@@ -8,15 +8,17 @@ const RENDER_SCRIPT_LIST_SOURCE: &str = include_str!("../src/render_script_list/
 const COLLECT_ELEMENTS_SOURCE: &str = include_str!("../src/app_layout/collect_elements.rs");
 const ACT_TS: &str = include_str!("../scripts/devtools/act.ts");
 const APP_VIEW_STATE_SOURCE: &str = include_str!("../src/main_sections/app_view_state.rs");
-const ACP_LAUNCH_SOURCE: &str = include_str!("../src/app_impl/tab_ai_mode/acp_launch.rs");
+const AGENT_CHAT_LAUNCH_SOURCE: &str =
+    include_str!("../src/app_impl/tab_ai_mode/agent_chat_launch.rs");
 const TAB_AI_MODE_SOURCE: &str = include_str!("../src/app_impl/tab_ai_mode/mod.rs");
 const FILTER_INPUT_CORE_SOURCE: &str = include_str!("../src/app_impl/filter_input_core.rs");
 const FILTER_INPUT_UPDATES_SOURCE: &str = include_str!("../src/app_impl/filter_input_updates.rs");
-const ACP_VIEW_SOURCE: &str = include_str!("../src/ai/acp/view.rs");
-const ACP_THREAD_SOURCE: &str = include_str!("../src/ai/acp/thread.rs");
-const ACP_MOD_SOURCE: &str = include_str!("../src/ai/acp/mod.rs");
-const ACP_PICKER_POPUP_SOURCE: &str = include_str!("../src/ai/acp/picker_popup.rs");
-const CHAT_WINDOW_SOURCE: &str = include_str!("../src/ai/acp/chat_window.rs");
+const AGENT_CHAT_VIEW_SOURCE: &str = include_str!("../src/ai/agent_chat/ui/view.rs");
+const AGENT_CHAT_THREAD_SOURCE: &str = include_str!("../src/ai/agent_chat/ui/thread.rs");
+const AGENT_CHAT_MOD_SOURCE: &str = include_str!("../src/ai/agent_chat/ui/mod.rs");
+const AGENT_CHAT_PICKER_POPUP_SOURCE: &str =
+    include_str!("../src/ai/agent_chat/ui/picker_popup.rs");
+const CHAT_WINDOW_SOURCE: &str = include_str!("../src/ai/agent_chat/ui/chat_window.rs");
 const PROMPT_HANDLER_SOURCE: &str = include_str!("../src/prompt_handler/mod.rs");
 const CONTEXT_PICKER_TYPES_SOURCE: &str = include_str!("../src/ai/window/context_picker/types.rs");
 const CONTEXT_PICKER_SOURCE: &str = include_str!("../src/ai/window/context_picker/mod.rs");
@@ -61,22 +63,27 @@ fn profile_picker_is_main_menu_spine_not_deprecated_popup() {
     assert!(SPINE_PROFILE_SOURCE.contains("SpineListRowKind::Profile"));
     assert!(SPINE_PROFILE_SOURCE.contains("resolution_source: ss(\"profile\")"));
 
-    assert!(!ACP_MOD_SOURCE.contains("profile_selector_popup"));
-    assert!(!ACP_VIEW_SOURCE.contains("profile_selector_open"));
-    assert!(!ACP_VIEW_SOURCE.contains("sync_profile_selector_popup_window_from_cached_parent"));
+    assert!(!AGENT_CHAT_MOD_SOURCE.contains("profile_selector_popup"));
+    assert!(!AGENT_CHAT_VIEW_SOURCE.contains("profile_selector_open"));
+    assert!(
+        !AGENT_CHAT_VIEW_SOURCE.contains("sync_profile_selector_popup_window_from_cached_parent")
+    );
     assert!(!PROMPT_HANDLER_SOURCE.contains("batch_select_profile_by_value"));
     assert!(!PROMPT_HANDLER_SOURCE.contains("batch_select_profile_by_semantic_id"));
     assert!(!PROMPT_HANDLER_SOURCE.contains("is_profile_selector_popup_window_open"));
     assert!(!AUTOMATION_COLLECTOR_SOURCE.contains("collect_profile_selector_snapshot"));
     assert!(!DETACHED_TRANSACTION_PROVIDER_SOURCE.contains("batch_select_profile_by_value"));
     assert!(!DETACHED_TRANSACTION_PROVIDER_SOURCE.contains("batch_select_profile_by_semantic_id"));
-    assert!(!STDIN_COMMANDS_SOURCE.contains("OpenAcpProfilePicker"));
-    assert!(!STDIN_COMMANDS_SOURCE.contains("\"openAcpProfilePicker\""));
+    assert!(!STDIN_COMMANDS_SOURCE.contains("OpenAgentChatProfilePicker"));
+    assert!(!STDIN_COMMANDS_SOURCE.contains("\"openAgentChatProfilePicker\""));
 }
 
 #[test]
-fn acp_spine_context_attacher_uses_main_menu_list_chrome() {
-    let body = fn_body(ACP_VIEW_SOURCE, "fn render_acp_spine_projection_area(");
+fn agent_chat_spine_context_attacher_uses_main_menu_list_chrome() {
+    let body = fn_body(
+        AGENT_CHAT_VIEW_SOURCE,
+        "fn render_agent_chat_spine_projection_area(",
+    );
 
     for required in [
         "crate::list_item::render_section_header(",
@@ -84,7 +91,7 @@ fn acp_spine_context_attacher_uses_main_menu_list_chrome() {
         "ListItem::new(title, list_colors)",
         ".selected(selected)",
         ".main_menu_theme(main_menu_theme)",
-        ".semantic_id(format!(\"acp-spine-row-{row_id}\"",
+        ".semantic_id(format!(\"agent_chat-spine-row-{row_id}\"",
         ".description_opt(subtitle)",
         ".source_hint_opt(source_hint)",
         ".type_accessory_opt(Some(TypeAccessory",
@@ -92,7 +99,7 @@ fn acp_spine_context_attacher_uses_main_menu_list_chrome() {
     ] {
         assert!(
             body.contains(required),
-            "ACP context attacher must reuse main-menu list chrome: {required}"
+            "Agent Chat context attacher must reuse main-menu list chrome: {required}"
         );
     }
 
@@ -106,16 +113,16 @@ fn acp_spine_context_attacher_uses_main_menu_list_chrome() {
     ] {
         assert!(
             !body.contains(forbidden),
-            "ACP context attacher must not keep bespoke item row styling: {forbidden}"
+            "Agent Chat context attacher must not keep bespoke item row styling: {forbidden}"
         );
     }
 }
 
 #[test]
 fn bare_pipe_stays_in_main_menu_search_for_profile_rows() {
-    assert!(!FILTER_INPUT_CORE_SOURCE.contains("AcpProfilePicker"));
-    assert!(!FILTER_INPUT_UPDATES_SOURCE.contains("open_tab_ai_acp_with_profile_picker"));
-    assert!(!TAB_AI_MODE_SOURCE.contains("open_tab_ai_acp_with_profile_picker"));
+    assert!(!FILTER_INPUT_CORE_SOURCE.contains("AgentChatProfilePicker"));
+    assert!(!FILTER_INPUT_UPDATES_SOURCE.contains("open_tab_ai_agent_chat_with_profile_picker"));
+    assert!(!TAB_AI_MODE_SOURCE.contains("open_tab_ai_agent_chat_with_profile_picker"));
     assert!(!CHAT_WINDOW_SOURCE.contains("open_detached_profile_picker"));
 }
 
@@ -136,20 +143,22 @@ fn spine_profile_submission_persists_pi_profile_before_launch() {
 fn profile_selection_updates_live_agent_chat_footer_without_relaunch() {
     assert!(ACTION_HANDLER_SOURCE.contains("agent_chat_switch_profile_id_from_action"));
     assert!(ACTION_HANDLER_SOURCE.contains("persist_agent_chat_profile_selection"));
-    assert!(ACP_VIEW_SOURCE.contains("set_on_profile_selected"));
-    assert!(ACP_THREAD_SOURCE.contains("pub(crate) fn set_profile_display("));
-    assert!(ACP_VIEW_SOURCE.contains("pub(crate) fn set_profile_display("));
+    assert!(AGENT_CHAT_VIEW_SOURCE.contains("set_on_profile_selected"));
+    assert!(AGENT_CHAT_THREAD_SOURCE.contains("pub(crate) fn set_profile_display("));
+    assert!(AGENT_CHAT_VIEW_SOURCE.contains("pub(crate) fn set_profile_display("));
     assert!(TAB_AI_MODE_SOURCE.contains("view.set_profile_display("));
     assert!(TAB_AI_MODE_SOURCE.contains("select_agent_chat_profile_and_relaunch"));
 }
 
 #[test]
-fn acp_launch_uses_effective_profile_for_acp_agent_and_model() {
-    assert!(ACP_LAUNCH_SOURCE.contains("resolve_selected_pi_launch_with_cwd_override"));
-    assert!(ACP_LAUNCH_SOURCE.contains("resolve_focused_text_pi_launch"));
-    assert!(ACP_LAUNCH_SOURCE
+fn agent_chat_launch_uses_effective_profile_for_agent_chat_agent_and_model() {
+    assert!(AGENT_CHAT_LAUNCH_SOURCE.contains("resolve_selected_pi_launch_with_cwd_override"));
+    assert!(AGENT_CHAT_LAUNCH_SOURCE.contains("resolve_focused_text_pi_launch"));
+    assert!(AGENT_CHAT_LAUNCH_SOURCE
         .contains("profile_display_name: Some(pi_launch.profile.name.clone().into())"));
-    assert!(ACP_LAUNCH_SOURCE.contains("profile_icon_name: pi_launch.profile.icon_name.clone()"));
+    assert!(
+        AGENT_CHAT_LAUNCH_SOURCE.contains("profile_icon_name: pi_launch.profile.icon_name.clone()")
+    );
 }
 
 #[test]
@@ -179,22 +188,24 @@ fn primary_pi_provider_catalog_is_codex_only_with_advanced_alternatives() {
 
 #[test]
 fn profile_display_flows_through_thread_and_footer() {
-    assert!(ACP_THREAD_SOURCE.contains("profile_display_name"));
-    assert!(ACP_THREAD_SOURCE.contains("pub(crate) fn profile_display"));
-    assert!(ACP_VIEW_SOURCE.contains("profile_display: thread.profile_display().to_string()"));
-    assert!(ACP_VIEW_SOURCE.contains("profile_left_info"));
-    assert!(ACP_VIEW_SOURCE.contains("profile_name: Some(self.profile_display.clone())"));
-    assert!(ACP_VIEW_SOURCE.contains("agent-chat-profile-display"));
-    assert!(ACP_VIEW_SOURCE.contains("snapshot.profile_display.clone()"));
-    assert!(ACP_VIEW_SOURCE.contains(".id(\"acp-profile-display\")"));
-    assert!(ACP_VIEW_SOURCE.contains(".id(\"acp-model-display\")"));
+    assert!(AGENT_CHAT_THREAD_SOURCE.contains("profile_display_name"));
+    assert!(AGENT_CHAT_THREAD_SOURCE.contains("pub(crate) fn profile_display"));
+    assert!(
+        AGENT_CHAT_VIEW_SOURCE.contains("profile_display: thread.profile_display().to_string()")
+    );
+    assert!(AGENT_CHAT_VIEW_SOURCE.contains("profile_left_info"));
+    assert!(AGENT_CHAT_VIEW_SOURCE.contains("profile_name: Some(self.profile_display.clone())"));
+    assert!(AGENT_CHAT_VIEW_SOURCE.contains("agent-chat-profile-display"));
+    assert!(AGENT_CHAT_VIEW_SOURCE.contains("snapshot.profile_display.clone()"));
+    assert!(AGENT_CHAT_VIEW_SOURCE.contains(".id(\"agent_chat-profile-display\")"));
+    assert!(AGENT_CHAT_VIEW_SOURCE.contains(".id(\"agent_chat-model-display\")"));
 }
 
 #[test]
 fn shift_tab_routes_to_profile_switcher_copy() {
     assert!(APP_IMPL_PROFILE_SEARCH_SOURCE.contains("profile_switcher_open_shift_tab"));
-    assert!(STARTUP_SOURCE.contains("acp_shift_tab_profile_switcher"));
-    assert!(STARTUP_NEW_TAB_SOURCE.contains("acp_shift_tab_profile_switcher"));
+    assert!(STARTUP_SOURCE.contains("agent_chat_shift_tab_profile_switcher"));
+    assert!(STARTUP_NEW_TAB_SOURCE.contains("agent_chat_shift_tab_profile_switcher"));
     assert!(!STARTUP_SOURCE.contains("Shift+Tab → Agent & Model picker"));
     assert!(!STARTUP_NEW_TAB_SOURCE.contains("Shift+Tab → Agent & Model picker"));
 }
@@ -557,19 +568,18 @@ fn footer_profile_affordance_is_merged_into_left_status_marker() {
     assert!(FOOTER_CHROME_SOURCE.contains("FOOTER_PROFILE_ICON_TOKEN"));
     assert!(FOOTER_CHROME_SOURCE.contains("FOOTER_PROFILE_ICON_PATH"));
 
-    let footer_buttons = fn_body(ACP_VIEW_SOURCE, "fn footer_buttons_for_thread");
+    let footer_buttons = fn_body(AGENT_CHAT_VIEW_SOURCE, "fn footer_buttons_for_thread");
     assert!(!footer_buttons.contains("FooterAction::Ai"));
     assert!(!footer_buttons.contains("FOOTER_PROFILE_ICON_TOKEN"));
 
-    assert!(ACP_VIEW_SOURCE.contains("profile_left_info"));
-    assert!(ACP_VIEW_SOURCE.contains("render_profile_status_marker_from_snapshot"));
-    assert!(
-        ACP_VIEW_SOURCE.contains("FooterAction::Ai => self.open_profile_trigger_picker_in_window")
-    );
+    assert!(AGENT_CHAT_VIEW_SOURCE.contains("profile_left_info"));
+    assert!(AGENT_CHAT_VIEW_SOURCE.contains("render_profile_status_marker_from_snapshot"));
+    assert!(AGENT_CHAT_VIEW_SOURCE
+        .contains("FooterAction::Ai => self.open_profile_trigger_picker_in_window"));
 
     assert!(FOOTER_POPUP_SOURCE.contains("pub action: Option<FooterAction>"));
     assert!(FOOTER_POPUP_SOURCE.contains("pub icon_token: Option<String>"));
-    assert!(FOOTER_POPUP_SOURCE.contains("dispatch_acp_footer_action"));
+    assert!(FOOTER_POPUP_SOURCE.contains("dispatch_agent_chat_footer_action"));
 }
 
 #[test]
@@ -578,7 +588,7 @@ fn pipe_trigger_selects_agent_chat_profiles_without_context_attachment() {
     assert!(CONTEXT_PICKER_TYPES_SOURCE.contains("PROFILE_TRIGGER_CHAR: char = '|'"));
     assert!(CONTEXT_PICKER_TYPES_SOURCE.contains("AgentChatProfile"));
     assert!(CONTEXT_PICKER_SOURCE.contains("b'|' => ContextPickerTrigger::Profile"));
-    let accept_body = fn_body(ACP_VIEW_SOURCE, "fn accept_mention_selection_impl(");
+    let accept_body = fn_body(AGENT_CHAT_VIEW_SOURCE, "fn accept_mention_selection_impl(");
     assert!(accept_body.contains("ContextPickerTrigger::Profile"));
     assert!(accept_body.contains("ContextPickerItemKind::AgentChatProfile"));
     assert!(accept_body.contains("Self::replace_text_in_char_range("));
@@ -589,14 +599,14 @@ fn pipe_trigger_selects_agent_chat_profiles_without_context_attachment() {
 
 #[test]
 fn composer_profile_trigger_rows_use_list_item_icon_and_selected_chrome() {
-    let row_body = fn_body(ACP_PICKER_POPUP_SOURCE, "fn render_picker_row(");
+    let row_body = fn_body(AGENT_CHAT_PICKER_POPUP_SOURCE, "fn render_picker_row(");
     assert!(row_body.contains("crate::list_item::ListItem::new"));
     assert!(row_body.contains("crate::list_item::ListItemColors::from_theme"));
     assert!(row_body.contains(".selected(is_selected)"));
     assert!(row_body.contains(".main_menu_theme("));
     assert!(row_body.contains(".semantic_id(format!(\"choice:{idx}:{}\", item.id))"));
-    assert!(ACP_PICKER_POPUP_SOURCE.contains("footer_icon_path_or_profile"));
-    assert!(ACP_PICKER_POPUP_SOURCE.contains("FOOTER_PROFILE_ICON_TOKEN"));
+    assert!(AGENT_CHAT_PICKER_POPUP_SOURCE.contains("footer_icon_path_or_profile"));
+    assert!(AGENT_CHAT_PICKER_POPUP_SOURCE.contains("FOOTER_PROFILE_ICON_TOKEN"));
     assert!(!row_body.contains(".border_l(gpui::px(2.0))"));
     assert!(!row_body.contains("selected_row_bg"));
     assert!(!row_body.contains("hover_row_bg"));
@@ -607,10 +617,10 @@ fn config_profile_icon_name_flows_to_footer_marker() {
     assert!(CONFIG_TYPES_SOURCE.contains("pub icon_name: Option<String>"));
     assert!(PROFILES_SOURCE.contains("pub icon_name: Option<String>"));
     assert!(PROFILES_SOURCE.contains("icon_name: profile.icon_name"));
-    assert!(ACP_THREAD_SOURCE.contains("profile_icon_name: Option<String>"));
-    assert!(ACP_THREAD_SOURCE.contains("pub(crate) fn profile_icon_name(&self)"));
-    assert!(ACP_VIEW_SOURCE
+    assert!(AGENT_CHAT_THREAD_SOURCE.contains("profile_icon_name: Option<String>"));
+    assert!(AGENT_CHAT_THREAD_SOURCE.contains("pub(crate) fn profile_icon_name(&self)"));
+    assert!(AGENT_CHAT_VIEW_SOURCE
         .contains("profile_icon_name: thread.profile_icon_name().map(str::to_string)"));
-    assert!(ACP_VIEW_SOURCE.contains("footer_icon_path_or_profile"));
+    assert!(AGENT_CHAT_VIEW_SOURCE.contains("footer_icon_path_or_profile"));
     assert!(FOOTER_POPUP_SOURCE.contains("pub icon_token: Option<String>"));
 }

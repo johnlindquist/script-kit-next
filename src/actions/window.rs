@@ -125,7 +125,7 @@ enum ActionsWindowKeyIntent {
     MovePageDown,
     ExecuteSelected,
     /// Cmd+Enter: hand the selected action to Agent Chat as a canonical target.
-    SendToAcp,
+    SendToAgentChat,
     Close,
     Backspace,
     TypeChar(char),
@@ -161,7 +161,7 @@ fn actions_window_key_intent(
         && !modifiers.alt
         && is_key_enter(key)
     {
-        return Some(ActionsWindowKeyIntent::SendToAcp);
+        return Some(ActionsWindowKeyIntent::SendToAgentChat);
     }
     if is_key_enter(key) {
         return Some(ActionsWindowKeyIntent::ExecuteSelected);
@@ -641,7 +641,7 @@ impl Render for ActionsWindow {
                     });
                     true
                 }
-                Some(ActionsWindowKeyIntent::SendToAcp) => {
+                Some(ActionsWindowKeyIntent::SendToAgentChat) => {
                     if let Some(action) = this.dialog.read(cx).get_selected_action().cloned() {
                         let target =
                             crate::ai::build_action_target_for_ai(&action, "DetachedActionsWindow");
@@ -655,12 +655,12 @@ impl Render for ActionsWindow {
                         // the target. Pass show_main_window=false because request_close
                         // already handles activate_main_window with the correct timing
                         // (before defer_close, not after).
-                        crate::ai::request_explicit_acp_handoff_from_secondary_window(
+                        crate::ai::request_explicit_agent_chat_handoff_from_secondary_window(
                             target,
                             "DetachedActionsWindow",
                             false,
                         );
-                        this.request_close(window, cx, "send_to_acp", true);
+                        this.request_close(window, cx, "send_to_agent_chat", true);
                     }
                     true
                 }
@@ -1356,7 +1356,7 @@ fn record_actions_popup_automation_snapshot(
             AutomationWindowKind::Main => "main.actions",
             AutomationWindowKind::Ai => "ai.actions",
             AutomationWindowKind::MiniAi => "miniAi.actions",
-            AutomationWindowKind::AcpDetached => "acpDetached.actions",
+            AutomationWindowKind::AgentChatDetached => "agentChatDetached.actions",
             AutomationWindowKind::Dictation => "dictation.actions",
             AutomationWindowKind::DevStyleTool => "devStyleTool.actions",
             AutomationWindowKind::ActionsDialog => "actionsDialog.actions",
@@ -1560,7 +1560,7 @@ fn resolve_actions_popup_parent_automation_id(
     // Preserve the existing main window's semantic_surface if the registry
     // already has one (e.g. "clipboardHistory" when the clipboard-history
     // builtin is hosted in main, or "fileSearch" for file-search, or
-    // "acpChat" for embedded ACP). Previously this `upsert_automation_window`
+    // "agentChatChat" for embedded Agent Chat). Previously this `upsert_automation_window`
     // call hardcoded `semantic_surface: "scriptList"` and so REWROTE main's
     // surface tag mid-flight every time actions opened, which broke any
     // automation caller that routed on surface. See

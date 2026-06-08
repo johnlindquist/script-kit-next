@@ -26,7 +26,7 @@ fn inline_agent_fixture_open_result_is_redacted_and_correlatable() {
     assert_eq!(json["mode"], "pi");
     assert_eq!(json["ok"], false);
     assert_eq!(json["submitted"], false);
-    assert_eq!(json["targetId"], "acp-chat");
+    assert_eq!(json["targetId"], "agent_chat-chat");
     assert_eq!(json["targetKind"], "main");
     assert_eq!(json["textLength"], 11);
     assert_eq!(json["instructionLength"], 19);

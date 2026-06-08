@@ -15,28 +15,28 @@ fn live_and_setfilter_paths_share_script_list_special_entry_router() {
 }
 
 #[test]
-fn set_filter_text_immediate_does_not_acp_only_special_case_sigil_routing() {
+fn set_filter_text_immediate_does_not_agent_chat_only_special_case_sigil_routing() {
     let sig = FILTER_UPDATES
         .find("pub(crate) fn set_filter_text_immediate")
         .expect("set_filter_text_immediate exists");
     let body = &FILTER_UPDATES[sig..sig + 3500.min(FILTER_UPDATES.len() - sig)];
 
     assert!(
-        !body.contains("ScriptListSpecialEntry::AcpMentionPicker =>"),
-        "setFilter must not special-case only ACP mention routing"
+        !body.contains("ScriptListSpecialEntry::AgentChatMentionPicker =>"),
+        "setFilter must not special-case only Agent Chat mention routing"
     );
     assert!(
-        !body.contains("ScriptListSpecialEntry::AcpProfilePicker =>"),
-        "setFilter must not special-case only ACP profile routing"
+        !body.contains("ScriptListSpecialEntry::AgentChatProfilePicker =>"),
+        "setFilter must not special-case only Agent Chat profile routing"
     );
 }
 
 #[test]
 fn bare_at_stays_in_script_list_spine_route() {
     assert!(
-        !FILTER_CORE.contains("AcpMentionPicker")
-            && !FILTER_CHANGE.contains("open_tab_ai_acp_with_mention_picker"),
-        "bare @ in ScriptList must stay in the shared Spine/main-list route, not open ACP"
+        !FILTER_CORE.contains("AgentChatMentionPicker")
+            && !FILTER_CHANGE.contains("open_tab_ai_agent_chat_with_mention_picker"),
+        "bare @ in ScriptList must stay in the shared Spine/main-list route, not open Agent Chat"
     );
     assert!(
         FILTER_CORE.contains("\"@\"") && FILTER_CORE.contains("None"),

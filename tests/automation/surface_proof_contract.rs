@@ -10,7 +10,7 @@ fn scenario_cli_lists_all_surface_proof_scenarios() {
         "\"main-window-exact-id\"",
         "\"actions-dialog-exact-id\"",
         "\"prompt-popup-exact-id\"",
-        "\"detached-acp-exact-id\"",
+        "\"detached-agent_chat-exact-id\"",
     ] {
         assert!(
             source.contains(expected),
@@ -36,7 +36,7 @@ fn index_help_exposes_surface_proof_as_default_entrypoint() {
         "help must show attached popup proof example"
     );
     assert!(
-        source.contains("surface-proof --session default --kind acpDetached"),
+        source.contains("surface-proof --session default --kind agentChatDetached"),
         "help must show detached proof example"
     );
 }
@@ -45,7 +45,7 @@ fn index_help_exposes_surface_proof_as_default_entrypoint() {
 fn surface_proof_keeps_non_main_no_focus_routing() {
     let source = read_source("scripts/agentic/index.ts");
     assert!(
-        source.contains("acpDetached, actionsDialog, promptPopup")
+        source.contains("agentChatDetached, actionsDialog, promptPopup")
             && source.contains("no OS focus needed"),
         "help text must preserve non-main no-focus routing contract"
     );
@@ -61,13 +61,13 @@ fn attached_popup_proof_depends_on_popup_semantics_receipt() {
 }
 
 #[test]
-fn detached_surface_proof_uses_acp_state_receipt() {
+fn detached_surface_proof_uses_agent_chat_state_receipt() {
     let source = read_source("scripts/agentic/index.ts");
     assert!(
-        source.contains("kind === \"acpDetached\"")
-            && source.contains("surface.getAcpState")
-            && source.contains("type: \"getAcpState\"")
-            && source.contains("expect: \"acpStateResult\""),
-        "detached ACP surface-proof must use getAcpState(target), not generic getState, so the state receipt describes the detached composer"
+        source.contains("kind === \"agentChatDetached\"")
+            && source.contains("surface.getAgentChatState")
+            && source.contains("type: \"getAgentChatState\"")
+            && source.contains("expect: \"agent_chatStateResult\""),
+        "detached Agent Chat surface-proof must use getAgentChatState(target), not generic getState, so the state receipt describes the detached composer"
     );
 }

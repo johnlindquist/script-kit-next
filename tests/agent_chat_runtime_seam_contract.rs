@@ -2,11 +2,12 @@ const AGENT_CHAT_MOD_SOURCE: &str = include_str!("../src/ai/agent_chat/mod.rs");
 const AGENT_CHAT_EVENTS_SOURCE: &str = include_str!("../src/ai/agent_chat/events.rs");
 const AGENT_CHAT_RUNTIME_SOURCE: &str = include_str!("../src/ai/agent_chat/runtime.rs");
 const AGENT_CHAT_LAUNCH_SOURCE: &str = include_str!("../src/ai/agent_chat/launch.rs");
-const ACP_THREAD_SOURCE: &str = include_str!("../src/ai/acp/thread.rs");
-const ACP_VIEW_SOURCE: &str = include_str!("../src/ai/acp/view.rs");
+const AGENT_CHAT_THREAD_SOURCE: &str = include_str!("../src/ai/agent_chat/ui/thread.rs");
+const AGENT_CHAT_VIEW_SOURCE: &str = include_str!("../src/ai/agent_chat/ui/view.rs");
 const APP_STATE_SOURCE: &str = include_str!("../src/main_sections/app_state.rs");
 const TAB_AI_MODE_SOURCE: &str = include_str!("../src/app_impl/tab_ai_mode/mod.rs");
-const ACP_LAUNCH_SOURCE: &str = include_str!("../src/app_impl/tab_ai_mode/acp_launch.rs");
+const TAB_AI_AGENT_CHAT_LAUNCH_SOURCE: &str =
+    include_str!("../src/app_impl/tab_ai_mode/agent_chat_launch.rs");
 
 #[test]
 fn agent_chat_runtime_modules_are_declared() {
@@ -34,9 +35,11 @@ fn agent_chat_connection_trait_is_backend_neutral_and_object_safe_by_shape() {
 }
 
 #[test]
-fn phase_two_event_boundary_aliases_current_acp_stream() {
-    assert!(AGENT_CHAT_EVENTS_SOURCE.contains("type AgentChatEvent = crate::ai::acp::AcpEvent"));
-    assert!(AGENT_CHAT_EVENTS_SOURCE.contains("type AgentChatEventRx = crate::ai::acp::AcpEventRx"));
+fn phase_two_event_boundary_aliases_current_agent_chat_stream() {
+    assert!(AGENT_CHAT_EVENTS_SOURCE
+        .contains("type AgentChatEvent = crate::ai::agent_chat::ui::AgentChatEvent"));
+    assert!(AGENT_CHAT_EVENTS_SOURCE
+        .contains("type AgentChatEventRx = crate::ai::agent_chat::ui::AgentChatEventRx"));
     assert!(
         !AGENT_CHAT_EVENTS_SOURCE.contains("enum AgentChatEvent"),
         "Phase 2 must not fork a second event enum"
@@ -44,25 +47,25 @@ fn phase_two_event_boundary_aliases_current_acp_stream() {
 }
 
 #[test]
-fn acp_thread_depends_on_trait_object_not_concrete_acp_runtime() {
+fn agent_chat_thread_depends_on_trait_object_not_concrete_agent_chat_runtime() {
     assert!(
-        ACP_THREAD_SOURCE.contains("Arc<dyn AgentChatConnection>"),
-        "AcpThread should store the neutral runtime seam"
+        AGENT_CHAT_THREAD_SOURCE.contains("Arc<dyn AgentChatConnection>"),
+        "AgentChatThread should store the neutral runtime seam"
     );
     assert!(
-        ACP_THREAD_SOURCE.contains("connection: Arc<dyn AgentChatConnection>"),
-        "AcpThread must store the neutral Agent Chat runtime seam"
+        AGENT_CHAT_THREAD_SOURCE.contains("connection: Arc<dyn AgentChatConnection>"),
+        "AgentChatThread must store the neutral Agent Chat runtime seam"
     );
 }
 
 #[test]
 fn phase_two_keeps_view_out_of_runtime_refactor() {
     assert!(
-        !ACP_VIEW_SOURCE.contains("AgentChatConnection"),
-        "AcpChatView should keep owning UI state only; runtime seam belongs in AcpThread"
+        !AGENT_CHAT_VIEW_SOURCE.contains("AgentChatConnection"),
+        "AgentChatView should keep owning UI state only; runtime seam belongs in AgentChatThread"
     );
     assert!(
-        !ACP_VIEW_SOURCE.contains("PiLaunchSpec"),
+        !AGENT_CHAT_VIEW_SOURCE.contains("PiLaunchSpec"),
         "Phase 2 must not route the view toward Pi"
     );
 }
@@ -74,18 +77,18 @@ fn pi_routing_is_owned_by_agent_chat_launch_and_tab_entry_only() {
     assert!(AGENT_CHAT_LAUNCH_SOURCE.contains("PiRpcRuntime::spawn"));
     assert!(AGENT_CHAT_LAUNCH_SOURCE.contains("AgentChatWarmSessionSpec"));
     assert!(
-        ACP_LAUNCH_SOURCE.contains("open_tab_ai_pi_view_from_launch"),
+        TAB_AI_AGENT_CHAT_LAUNCH_SOURCE.contains("open_tab_ai_pi_view_from_launch"),
         "Tab launch should route selected Pi profiles through an explicit helper"
     );
     assert!(
-        ACP_LAUNCH_SOURCE.contains("resolve_effective_profile")
-            && ACP_LAUNCH_SOURCE.contains("PiAgentChatLaunch::from_profile"),
+        AGENT_CHAT_LAUNCH_SOURCE.contains("resolve_effective_profile")
+            && AGENT_CHAT_LAUNCH_SOURCE.contains("PiAgentChatLaunch::from_profile"),
         "Tab launch must branch on the effective Agent Chat profile"
     );
 
     for (name, source) in [
         ("agent_chat_runtime", AGENT_CHAT_RUNTIME_SOURCE),
-        ("acp_thread", ACP_THREAD_SOURCE),
+        ("agent_chat_thread", AGENT_CHAT_THREAD_SOURCE),
     ] {
         assert!(
             !source.contains("PiLaunchSpec"),
@@ -101,13 +104,13 @@ fn pi_routing_is_owned_by_agent_chat_launch_and_tab_entry_only() {
 }
 
 #[test]
-fn tab_launch_uses_pi_warm_path_without_acp_runtime_fallback() {
+fn tab_launch_uses_pi_warm_path_without_agent_chat_runtime_fallback() {
     assert!(
-        !ACP_LAUNCH_SOURCE.contains("spawn_with_approval"),
-        "Agent Chat launch must not instantiate the legacy ACP runtime"
+        !AGENT_CHAT_LAUNCH_SOURCE.contains("spawn_with_approval"),
+        "Agent Chat launch must not instantiate the legacy Agent Chat runtime"
     );
     assert!(
-        ACP_LAUNCH_SOURCE.contains("PiRpcRuntime")
+        AGENT_CHAT_LAUNCH_SOURCE.contains("PiRpcRuntime")
             || AGENT_CHAT_LAUNCH_SOURCE.contains("PiRpcRuntime"),
         "Pi profiles should be routed to the Pi RPC runtime"
     );
@@ -117,7 +120,7 @@ fn tab_launch_uses_pi_warm_path_without_acp_runtime_fallback() {
     );
     assert!(
         TAB_AI_MODE_SOURCE.contains("closing_pi_agent_chat")
-            && TAB_AI_MODE_SOURCE.contains("self.embedded_acp_chat = None;"),
+            && TAB_AI_MODE_SOURCE.contains("self.embedded_agent_chat = None;"),
         "Normal Pi Agent Chat dismissal must not leave the old embedded entity reusable"
     );
     assert!(

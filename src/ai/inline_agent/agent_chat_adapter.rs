@@ -1,7 +1,7 @@
 //! Legacy compatibility adapter for the deprecated inline-agent overlay.
 //!
 //! Production focused-text Agent Chat launches through
-//! `app_impl::tab_ai_mode::acp_launch` and `resolve_focused_text_pi_launch`.
+//! `app_impl::tab_ai_mode::agent_chat_launch` and `resolve_focused_text_pi_launch`.
 
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};

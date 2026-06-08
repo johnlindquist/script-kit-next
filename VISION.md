@@ -427,7 +427,7 @@ remain in the source.
   become an explicit profile or skill before it is treated as launch-facing.
 - Pi is backend/runtime implementation detail unless the UI is intentionally
   showing model, provider, or backend attribution.
-- ACP and `tab_ai` are compatibility or implementation names. They should not
+- Agent Chat and `tab_ai` are compatibility or implementation names. They should not
   create a second user-facing AI chat concept.
 
 ## Source-Of-Truth Map
@@ -458,7 +458,7 @@ remain in the source.
   universal discovery layer.
 - Built-ins: `src/render_builtins/**`. Built-ins should model first-party use of
   the shared surface language.
-- Agent Chat/profiles: `src/ai/agent_chat/**`, `src/ai/acp/**`,
+- Agent Chat/profiles: `src/ai/agent_chat/**`, `src/ai/agent_chat/ui/**`,
   `src/app_impl/tab_ai_mode/**`. Product language should say Agent Chat even
   where compatibility implementation names remain.
 - Plugin artifacts: `src/plugins/**`. Plugin profile artifacts are parsed and
@@ -548,7 +548,7 @@ chrome, footer ownership, semantic elements, and layout receipt model.
 - Anti-example: do not add persistent footer chrome for every feature just
   because the operation is useful.
 - Anti-example: do not hide profile handoffs, call prompt-policy path posture a
-  sandbox, or turn ACP/`tab_ai` compatibility names into new product concepts.
+  sandbox, or turn Agent Chat/`tab_ai` compatibility names into new product concepts.
 
 ## Migration Model
 

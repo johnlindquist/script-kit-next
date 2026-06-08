@@ -1285,9 +1285,9 @@ fn unified_search_defaults_enable_files_but_disable_promotion() {
     assert!(unified.files.recent_files);
     assert!(unified.files.directory_browse);
     assert_eq!(unified.files.promotion, RootFilePromotionConfig::Never);
-    assert!(unified.acp_history.enabled);
-    assert_eq!(unified.acp_history.max_results, 3);
-    assert_eq!(unified.acp_history.min_query_chars, 3);
+    assert!(unified.agent_chat_history.enabled);
+    assert_eq!(unified.agent_chat_history.max_results, 3);
+    assert_eq!(unified.agent_chat_history.min_query_chars, 3);
     assert!(!unified.clipboard_history.enabled);
     assert_eq!(unified.clipboard_history.max_results, 3);
     assert_eq!(unified.clipboard_history.min_query_chars, 3);
@@ -1323,26 +1323,26 @@ fn unified_search_files_disabled_loads() {
 }
 
 #[test]
-fn unified_search_acp_history_disabled_loads() {
+fn unified_search_agent_chat_history_disabled_loads() {
     let json = r#"{
         "hotkey": { "modifiers": ["meta"], "key": "Semicolon" },
-        "unifiedSearch": { "acpHistory": { "enabled": false } }
+        "unifiedSearch": { "agent_chatHistory": { "enabled": false } }
     }"#;
 
     let config: Config = serde_json::from_str(json).unwrap();
     let unified = config.get_unified_search();
 
     assert!(unified.enabled);
-    assert!(!unified.acp_history.enabled);
-    assert!(!unified.acp_history_section_options().enabled);
+    assert!(!unified.agent_chat_history.enabled);
+    assert!(!unified.agent_chat_history_section_options().enabled);
 }
 
 #[test]
-fn unified_search_acp_history_options_are_sanitized() {
+fn unified_search_agent_chat_history_options_are_sanitized() {
     let json = r#"{
         "hotkey": { "modifiers": ["meta"], "key": "Semicolon" },
         "unifiedSearch": {
-            "acpHistory": {
+            "agent_chatHistory": {
                 "maxResults": 99,
                 "minQueryChars": 1
             }
@@ -1350,7 +1350,9 @@ fn unified_search_acp_history_options_are_sanitized() {
     }"#;
 
     let config: Config = serde_json::from_str(json).unwrap();
-    let options = config.get_unified_search().acp_history_section_options();
+    let options = config
+        .get_unified_search()
+        .agent_chat_history_section_options();
 
     assert_eq!(options.max_results, 5);
     assert_eq!(options.min_query_chars, 2);

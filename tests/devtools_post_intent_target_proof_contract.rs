@@ -11,7 +11,7 @@ fn route_changing_act_requires_post_intent_target_proof() {
         "waitForPostIntentTarget",
         "postIntentTargetProof",
         "agent-chat-route",
-        "\"--main\", \"--strict\", \"--surface\", \"AcpChat\"",
+        "\"--main\", \"--strict\", \"--surface\", \"AgentChat\"",
         "post-intent target did not resolve",
     ] {
         assert!(

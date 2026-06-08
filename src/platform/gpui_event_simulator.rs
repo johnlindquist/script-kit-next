@@ -164,7 +164,7 @@ fn automation_kind_to_window_role(
         AutomationWindowKind::Notes => Some(WindowRole::Notes),
         AutomationWindowKind::Ai => Some(WindowRole::Ai),
         AutomationWindowKind::MiniAi => Some(WindowRole::AiMini),
-        AutomationWindowKind::AcpDetached => Some(WindowRole::AcpChat),
+        AutomationWindowKind::AgentChatDetached => Some(WindowRole::AgentChat),
         // Attached surfaces and popup-only windows use exact runtime handles
         // when available and do not map to the shared role registry.
         AutomationWindowKind::DevStyleTool
@@ -402,7 +402,7 @@ fn dispatch_with_any_handle_deferred(
 /// **Exact-handle dispatch**: If the resolved automation target has a
 /// registered runtime handle (via [`upsert_runtime_window_handle`]),
 /// events are dispatched directly to that exact window.  This allows
-/// two visible detached ACP windows to be targeted independently by
+/// two visible detached Agent Chat windows to be targeted independently by
 /// exact ID.
 ///
 /// **Fallback dispatch**: When no exact runtime handle exists, the
@@ -464,7 +464,7 @@ pub(crate) fn dispatch_gpui_event(
 
     // 2. Try exact runtime handle first — this preserves the resolved
     //    automation window identity all the way through GPUI dispatch,
-    //    so two detached ACP windows can be targeted independently. Attached
+    //    so two detached Agent Chat windows can be targeted independently. Attached
     //    popup exact handles also receive popup-local mouse coordinates; only
     //    the parent-window fallback below rebases into parent dispatch space.
     if let Some(handle) = crate::windows::get_valid_runtime_window_handle(&resolved.id, cx) {
@@ -476,7 +476,7 @@ pub(crate) fn dispatch_gpui_event(
         );
         if matches!(
             resolved.kind,
-            crate::protocol::AutomationWindowKind::AcpDetached
+            crate::protocol::AutomationWindowKind::AgentChatDetached
                 | crate::protocol::AutomationWindowKind::Dictation
         ) {
             return dispatch_with_any_handle_deferred(

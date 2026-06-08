@@ -62,11 +62,11 @@ impl ScriptListApp {
             AppView::CreateAiPresetView { .. } => "CreateAiPreset",
             AppView::SettingsView { .. } => "Settings",
             AppView::FavoritesBrowseView { .. } => "FavoritesBrowse",
-            AppView::AcpHistoryView { .. } => "AcpHistory",
+            AppView::AgentChatHistoryView { .. } => "AgentChatHistory",
             AppView::BrowserHistoryView { .. } => "BrowserHistory",
             AppView::DictationHistoryView { .. } => "DictationHistory",
             AppView::NotesBrowseView { .. } => "NotesBrowse",
-            AppView::AcpChatView { .. } => "AcpChat",
+            AppView::AgentChatView { .. } => "AgentChat",
             AppView::ScriptIssuesView { .. } => "ScriptIssues",
             AppView::SdkReferenceView { .. } => "SdkReference",
             AppView::ScriptTemplateCatalogView { .. } => "ScriptTemplateCatalog",
@@ -79,7 +79,7 @@ impl ScriptListApp {
                 | AppView::FileSearchView { .. }
                 | AppView::ClipboardHistoryView { .. }
                 | AppView::ProfileSearchView { .. }
-                | AppView::AcpChatView { .. }
+                | AppView::AgentChatView { .. }
         );
         let main_view_context_zone_height = menu_def.header_info_bar.height_px;
         let main_view_header_content_height = if main_view_has_context_zone {
@@ -311,7 +311,7 @@ impl ScriptListApp {
                 }
             }
 
-            AppView::AcpChatView { .. } => {
+            AppView::AgentChatView { .. } => {
                 let info_columns =
                     crate::components::main_view_chrome::main_view_content_columns(menu_def);
                 let info_metrics = crate::components::info_state::info_metrics(
@@ -346,7 +346,7 @@ impl ScriptListApp {
                 );
                 bounds.push(
                     ComponentBounds::new(
-                        "AcpConversation",
+                        "AgentChatConversation",
                         gpui::Bounds {
                             origin: gpui::point(px(0.), content_top),
                             size: gpui::size(width, content_height),
@@ -357,7 +357,7 @@ impl ScriptListApp {
                 );
                 bounds.push(
                     ComponentBounds::new(
-                        "AcpEmptyGuidance",
+                        "AgentChatEmptyGuidance",
                         gpui::Bounds {
                             origin: gpui::point(info_x, info_y),
                             size: gpui::size(
@@ -374,7 +374,7 @@ impl ScriptListApp {
                 );
                 bounds.push(
                     ComponentBounds::new(
-                        "AcpEmptyGuidanceTitle",
+                        "AgentChatEmptyGuidanceTitle",
                         gpui::Bounds {
                             origin: gpui::point(info_x, info_y),
                             size: gpui::size(
@@ -388,7 +388,7 @@ impl ScriptListApp {
                 );
                 bounds.push(
                     ComponentBounds::new(
-                        "AcpEmptyGuidanceShortcutSlot",
+                        "AgentChatEmptyGuidanceShortcutSlot",
                         gpui::Bounds {
                             origin: gpui::point(
                                 info_x,
@@ -406,7 +406,7 @@ impl ScriptListApp {
                 );
                 bounds.push(
                     ComponentBounds::new(
-                        "AcpEmptyGuidanceLabelColumn",
+                        "AgentChatEmptyGuidanceLabelColumn",
                         gpui::Bounds {
                             origin: gpui::point(
                                 guidance_label_x,
@@ -446,7 +446,7 @@ impl ScriptListApp {
                 | AppView::FileSearchView { .. }
                 | AppView::ClipboardHistoryView { .. }
                 | AppView::ProfileSearchView { .. }
-                | AppView::AcpChatView { .. }
+                | AppView::AgentChatView { .. }
         ) {
             if main_view_has_context_zone {
                 let context_outset_x = px(menu_def.header_info_bar.context_edge_outset_x);

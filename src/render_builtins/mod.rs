@@ -20,7 +20,7 @@ include!("current_app_commands.rs");
 include!("ai_presets.rs");
 include!("settings.rs");
 include!("favorites.rs");
-include!("acp_history.rs");
+include!("agent_chat_history.rs");
 include!("browser_history.rs");
 include!("dictation_history.rs");
 include!("notes_browse.rs");

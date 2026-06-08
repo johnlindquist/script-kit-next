@@ -11,7 +11,7 @@ use script_kit_gpui::ai::agent_chat::profiles::{
     BUILTIN_TEXT_PROFILE_ID, DEFAULT_PI_MODEL, DEFAULT_PI_PROVIDER, GENERAL_PI_TOOLS,
     SCRIPT_KIT_PI_TOOLS, TEXT_APPEND_SYSTEM_PROMPT, TEXT_BLOCKED_ACTION_MESSAGE,
 };
-use script_kit_gpui::config::{AcpProfile, AgentChatBackend, AiPreferences};
+use script_kit_gpui::config::{AgentChatBackend, AgentChatProfile, AiPreferences};
 
 fn context() -> AgentChatProfileContext {
     AgentChatProfileContext {
@@ -213,14 +213,14 @@ fn selected_profile_id_takes_precedence_over_selected_profile_name() {
 }
 
 #[test]
-fn selected_profile_name_resolves_legacy_acp_profile() {
+fn selected_profile_name_resolves_legacy_agent_chat_profile() {
     let ctx = context();
     let ai = AiPreferences {
         selected_profile_name: Some("Ops".to_string()),
-        profiles: vec![AcpProfile {
+        profiles: vec![AgentChatProfile {
             name: "Ops".to_string(),
             system_prompt: Some("legacy prompt".to_string()),
-            ..AcpProfile::default()
+            ..AgentChatProfile::default()
         }],
         ..AiPreferences::default()
     };
@@ -238,9 +238,9 @@ fn selected_model_fills_missing_legacy_profile_fields() {
     let ai = AiPreferences {
         selected_model_id: Some("gpt-5.4".to_string()),
         selected_profile_name: Some("Ops".to_string()),
-        profiles: vec![AcpProfile {
+        profiles: vec![AgentChatProfile {
             name: "Ops".to_string(),
-            ..AcpProfile::default()
+            ..AgentChatProfile::default()
         }],
         ..AiPreferences::default()
     };
@@ -285,12 +285,12 @@ fn profile_pi_binary_overrides_global_pi_binary_preference() {
     let ai = AiPreferences {
         pi_binary: Some("/tmp/global-pi".to_string()),
         selected_profile_id: Some("ops".to_string()),
-        profiles: vec![AcpProfile {
+        profiles: vec![AgentChatProfile {
             id: Some("ops".to_string()),
             name: "Ops".to_string(),
             backend: Some(AgentChatBackend::Pi),
             pi_binary: Some("/tmp/profile-pi".to_string()),
-            ..AcpProfile::default()
+            ..AgentChatProfile::default()
         }],
         ..AiPreferences::default()
     };
@@ -321,12 +321,12 @@ fn plugin_namespace_selection_cannot_resolve_to_custom_user_profile() {
     let ai = AiPreferences {
         pi_binary: Some("/tmp/test-pi".to_string()),
         selected_profile_id: Some("plugin:examples/codebase-scout".to_string()),
-        profiles: vec![AcpProfile {
+        profiles: vec![AgentChatProfile {
             id: Some("plugin:examples/codebase-scout".to_string()),
             name: "Shadow Plugin Scout".to_string(),
             backend: Some(AgentChatBackend::Pi),
             system_prompt: Some("shadow prompt".to_string()),
-            ..AcpProfile::default()
+            ..AgentChatProfile::default()
         }],
         ..AiPreferences::default()
     };
@@ -339,7 +339,7 @@ fn plugin_namespace_selection_cannot_resolve_to_custom_user_profile() {
 }
 
 #[test]
-fn legacy_acp_backend_selection_falls_back_to_general_pi() {
+fn legacy_agent_chat_backend_selection_falls_back_to_general_pi() {
     let ctx = context();
     let ai = AiPreferences {
         pi_binary: Some("/tmp/test-pi".to_string()),
@@ -372,11 +372,11 @@ fn selected_profile_id_still_beats_selected_backend() {
 fn profile_picker_lists_builtin_and_custom_profiles() {
     let ctx = context();
     let ai = AiPreferences {
-        profiles: vec![AcpProfile {
+        profiles: vec![AgentChatProfile {
             id: Some("ops".to_string()),
             name: "Ops".to_string(),
             backend: Some(AgentChatBackend::Pi),
-            ..AcpProfile::default()
+            ..AgentChatProfile::default()
         }],
         ..AiPreferences::default()
     };
@@ -444,11 +444,11 @@ fn provider_scoped_pi_model_selection_splits_provider_and_model_for_launch() {
 fn profile_picker_skips_custom_profiles_that_collide_with_builtins() {
     let ctx = context();
     let ai = AiPreferences {
-        profiles: vec![AcpProfile {
+        profiles: vec![AgentChatProfile {
             id: Some(BUILTIN_GENERAL_PROFILE_ID.to_string()),
             name: "Shadow General".to_string(),
             backend: Some(AgentChatBackend::Pi),
-            ..AcpProfile::default()
+            ..AgentChatProfile::default()
         }],
         ..AiPreferences::default()
     };

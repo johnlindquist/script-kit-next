@@ -8,9 +8,9 @@ use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt, BufReader
 use tokio::process::Command;
 use tokio::sync::oneshot;
 
-use crate::ai::acp::events::AcpEventTx;
 use crate::ai::agent_chat::events::{AgentChatEvent, AgentChatEventRx};
 use crate::ai::agent_chat::runtime::{AgentChatConnection, AgentChatTurnRequest};
+use crate::ai::agent_chat::ui::events::AgentChatEventTx;
 
 use super::events::map_rpc_line_to_events;
 use super::protocol::{
@@ -26,7 +26,7 @@ type StderrFailureHint = Arc<Mutex<Option<String>>>;
 const PI_REVEAL_CHUNK_DELAY_MS: u64 = 6;
 
 enum PendingResponse {
-    Events(AcpEventTx),
+    Events(AgentChatEventTx),
     Rpc(oneshot::Sender<PiRpcResponse>),
 }
 
@@ -34,18 +34,18 @@ enum PendingResponse {
 struct ActiveTurnState {
     ui_thread_id: String,
     prompt_id: String,
-    event_tx: AcpEventTx,
+    event_tx: AgentChatEventTx,
 }
 
 pub(crate) enum PiRpcRuntimeCommand {
     StartTurn {
         request: AgentChatTurnRequest,
-        event_tx: AcpEventTx,
+        event_tx: AgentChatEventTx,
     },
     PrepareSession {
         ui_thread_id: String,
         cwd: std::path::PathBuf,
-        event_tx: AcpEventTx,
+        event_tx: AgentChatEventTx,
     },
     CancelTurn {
         ui_thread_id: String,
@@ -305,7 +305,7 @@ fn new_cancel_flag() -> IsolatedTurnCancelFlag {
 fn spawn_single_turn_runtime(
     spec: Arc<PiRpcLaunchSpec>,
     request: AgentChatTurnRequest,
-    event_tx: AcpEventTx,
+    event_tx: AgentChatEventTx,
 ) -> Result<IsolatedTurnCancelFlag> {
     let cancel = new_cancel_flag();
     let cancel_inner = cancel.clone();
@@ -338,7 +338,7 @@ fn spawn_single_turn_runtime(
 async fn run_pi_rpc_single_turn(
     spec: Arc<PiRpcLaunchSpec>,
     request: AgentChatTurnRequest,
-    event_tx: AcpEventTx,
+    event_tx: AgentChatEventTx,
     cancel: IsolatedTurnCancelFlag,
 ) -> Result<()> {
     let mut cmd = Command::new(&spec.command);
@@ -760,7 +760,7 @@ async fn read_stdout<R>(
     fail_pending_responses(&pending, &error).await;
 }
 
-async fn send_events(event_tx: &AcpEventTx, events: Vec<AgentChatEvent>) {
+async fn send_events(event_tx: &AgentChatEventTx, events: Vec<AgentChatEvent>) {
     let reveal_count = events
         .iter()
         .filter(|event| {

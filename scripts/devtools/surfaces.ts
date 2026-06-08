@@ -57,7 +57,7 @@ const coverageSurfaceAliases = [
   { alias: "main", resolvesTo: { surfaceKind: "ScriptList" }, countsAsCoverage: false },
   { alias: "actions-dialog", resolvesTo: { surfaceKind: "ActionsDialog" }, countsAsCoverage: false },
   { alias: "dictation-history", resolvesTo: { surfaceKind: "AttachmentPortalBrowser", appViewVariant: "DictationHistoryView" }, countsAsCoverage: false },
-  { alias: "notes-acp", resolvesTo: { surfaceKind: "AcpChat", hostKind: "NotesWindow" }, countsAsCoverage: false },
+  { alias: "notes-agent_chat", resolvesTo: { surfaceKind: "AgentChat", hostKind: "NotesWindow" }, countsAsCoverage: false },
 ] as const;
 
 const liquidGlassAuditExclusions = [
@@ -220,7 +220,7 @@ function buildOracleBatches(contracts: SurfaceContract[], features: FeatureMapEn
         "CurrentAppCommands",
         "ThemeChooser",
         "EmojiPicker",
-        "AcpHistory",
+        "AgentChatHistory",
       ]),
       featureIds: featureIds(features, ["builtin-filterable-surfaces", "theme-config-preferences", "storage-cache-security"], [
         "built-in",
@@ -240,9 +240,9 @@ function buildOracleBatches(contracts: SurfaceContract[], features: FeatureMapEn
       priority: 5,
       outsideInPhase: "surface-shell",
       priorityRationale: "Portal windows and return containers affect attachment, resource, and context layouts before individual rows.",
-      owners: ["file-search-portals", "mcp-context-resources", "acp-context-composer"],
+      owners: ["file-search-portals", "mcp-context-resources", "agent_chat-context-composer"],
       surfaceKinds: keepKinds(["FileSearchMini", "FileSearchFull", "AttachmentPortalBrowser", "ScriptTemplateCatalog", "SdkReference"]),
-      featureIds: featureIds(features, ["file-search-portals", "mcp-context-resources", "acp-context-composer"], [
+      featureIds: featureIds(features, ["file-search-portals", "mcp-context-resources", "agent_chat-context-composer"], [
         "portal",
         "resource",
         "context",
@@ -255,33 +255,33 @@ function buildOracleBatches(contracts: SurfaceContract[], features: FeatureMapEn
       ],
     },
     {
-      id: "acp-chat-ai",
-      name: "ACP chat, composer, history, SDK AI APIs, model setup",
+      id: "agent_chat-chat-ai",
+      name: "Agent Chat chat, composer, history, SDK AI APIs, model setup",
       priority: 6,
       outsideInPhase: "content-controls",
-      priorityRationale: "ACP has important window shells, but after detached/window proof the remaining work is composer and transcript internals.",
-      owners: ["acp-chat-core", "acp-context-composer", "sdk-script-execution"],
-      surfaceKinds: keepKinds(["AcpChat", "AcpHistory", "AttachmentPortalBrowser", "GenericFilterableList"]),
-      featureIds: featureIds(features, ["acp-chat-core", "acp-context-composer", "sdk-script-execution"], ["acp", "agent chat", "ai"]),
-      requiredDevToolsPrimitives: ["devtools.acp.inspect", "devtools.acp.timeline", "devtools.composer.inspect", "devtools.turn.diff"],
+      priorityRationale: "Agent Chat has important window shells, but after detached/window proof the remaining work is composer and transcript internals.",
+      owners: ["agent_chat-chat-core", "agent_chat-context-composer", "sdk-script-execution"],
+      surfaceKinds: keepKinds(["AgentChat", "AgentChatHistory", "AttachmentPortalBrowser", "GenericFilterableList"]),
+      featureIds: featureIds(features, ["agent_chat-chat-core", "agent_chat-context-composer", "sdk-script-execution"], ["agent_chat", "agent chat", "ai"]),
+      requiredDevToolsPrimitives: ["devtools.agent_chat.inspect", "devtools.agent_chat.timeline", "devtools.composer.inspect", "devtools.turn.diff"],
       questionsForOracle: [
-        "What generation, host, composer, model, and context-part receipts are required for ACP UI bugs?",
+        "What generation, host, composer, model, and context-part receipts are required for Agent Chat UI bugs?",
         "How should agents prove wrong-host, stale-turn, and delayed-action failures without starting external AI calls?",
       ],
     },
     {
       id: "notes-dictation-media",
-      name: "Notes, notes-hosted ACP, dictation, media, history, target delivery",
+      name: "Notes, notes-hosted Agent Chat, dictation, media, history, target delivery",
       priority: 7,
       outsideInPhase: "content-controls",
-      priorityRationale: "Notes and Dictation have practical window proof; remaining work is embedded ACP, media state, history, and delivery details.",
-      owners: ["notes-window", "dictation-media", "acp-chat-core"],
-      surfaceKinds: keepKinds(["AcpChat", "AcpHistory", "ClipboardHistory"]),
-      featureIds: featureIds(features, ["notes-window", "dictation-media", "acp-chat-core"], ["notes", "dictation", "media"]),
+      priorityRationale: "Notes and Dictation have practical window proof; remaining work is embedded Agent Chat, media state, history, and delivery details.",
+      owners: ["notes-window", "dictation-media", "agent_chat-chat-core"],
+      surfaceKinds: keepKinds(["AgentChat", "AgentChatHistory", "ClipboardHistory"]),
+      featureIds: featureIds(features, ["notes-window", "dictation-media", "agent_chat-chat-core"], ["notes", "dictation", "media"]),
       requiredDevToolsPrimitives: ["devtools.notes.inspect", "devtools.media.inspect", "devtools.measure.selection", "devtools.delivery.trace"],
       questionsForOracle: [
         "Which passive media, target-delivery, editor-selection, and notes-resize receipts unlock reliable Dictation and Notes bug proof?",
-        "How should the tools separate visible Notes UI state, embedded ACP state, and background storage state?",
+        "How should the tools separate visible Notes UI state, embedded Agent Chat state, and background storage state?",
       ],
     },
     {

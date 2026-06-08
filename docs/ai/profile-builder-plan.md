@@ -232,10 +232,10 @@ Current partial receipt:
   and ended with `Docs Researcher ✓` as the current Plugin/Pi profile.
 - `profile-builder-prompt-transcript-profile-builder`: DevTools proved the
   selected `profile-builder` profile from main Menu Search, cleared the profile
-  token, opened the compatibility `AcpChat` surface with Cmd+Enter from the
+  token, opened the compatibility `AgentChat` surface with Cmd+Enter from the
   main Menu, submitted one allowed prompt and one blocked prompt through real
   Agent Chat input, and exported the conversation markdown with
-  `acp_export_markdown`. The allowed prompt was
+  `agent_chat_export_markdown`. The allowed prompt was
   answered in-scope, and the blocked prompt refused editing `~/.scriptkit` or
   reading `~/.codex/auth.json`.
 

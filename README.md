@@ -435,8 +435,8 @@ naming, but those are implementation details rather than separate chat products.
 - The footer keeps Agent Chat aligned with the launcher chrome and action model.
 
 **Runtime contract:**
-- Agent Chat entry is driven from `src/app_impl/tab_ai_mode.rs` and rendered through the compatibility `AppView::AcpChatView` surface.
-- Detached Agent Chat windows are managed by the compatibility implementation in `src/ai/acp/chat_window.rs`.
+- Agent Chat entry is driven from `src/app_impl/tab_ai_mode.rs` and rendered through the compatibility `AppView::AgentChatView` surface.
+- Detached Agent Chat windows are managed by the compatibility implementation in `src/ai/agent_chat/ui/chat_window.rs`.
 - Agent selection, model preferences, and profiles live under the `ai` block in `~/.scriptkit/config.ts` and are backed by the Agent Catalog.
 - Context bundle: `~/.scriptkit/context/latest.md` (deterministic path)
 - Context assembly still uses compatibility-named helpers such as `snapshot_tab_ai_ui()`, `capture_context_snapshot(CaptureContextOptions::tab_ai_submit())`, and `build_tab_ai_context_from()`.

@@ -4,7 +4,7 @@ const RUNTIME_SOURCE: &str = include_str!("../src/dev_style_tool/runtime_overrid
 const RENDER_SOURCE: &str = include_str!("../src/dev_style_tool/render.rs");
 const TARGETS_SOURCE: &str = include_str!("../src/dev_style_tool/kitchen_sink_targets.rs");
 const EXPORT_SOURCE: &str = include_str!("../src/dev_style_tool/export.rs");
-const TRANSCRIPT_SOURCE: &str = include_str!("../src/ai/acp/components/transcript.rs");
+const TRANSCRIPT_SOURCE: &str = include_str!("../src/ai/agent_chat/ui/components/transcript.rs");
 const PROMPT_HANDLER_SOURCE: &str = include_str!("../src/prompt_handler/mod.rs");
 const COLLECTOR_SOURCE: &str = include_str!("../src/windows/automation_surface_collector.rs");
 const TEXT_VIEW_STYLE_SOURCE: &str =
@@ -96,7 +96,7 @@ fn dev_style_tool_navigation_tabs_have_cleaner_chrome() {
 }
 
 #[test]
-fn acp_transcript_uses_live_agent_chat_style() {
+fn agent_chat_transcript_uses_live_agent_chat_style() {
     assert!(TRANSCRIPT_SOURCE.contains("effective_agent_chat_style()"));
     assert!(TRANSCRIPT_SOURCE.contains("style_def.markdown.body_font_size"));
     assert!(TRANSCRIPT_SOURCE.contains("style_def.transcript.row_padding_x"));

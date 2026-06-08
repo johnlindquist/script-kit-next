@@ -345,7 +345,7 @@ pub fn compute_match_indices_for_result(result: &SearchResult, query: &str) -> M
 
             indices
         }
-        SearchResult::AcpHistory(am) => {
+        SearchResult::AgentChatHistory(am) => {
             let mut indices = MatchIndices::default();
 
             let (name_matched, name_indices) = highlight_ctx.indices_for(am.entry.title_display());

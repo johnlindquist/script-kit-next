@@ -6,7 +6,7 @@
 //! view state, with no accumulation, no duplicate automation windows,
 //! and no surface-tag drift:
 //!
-//!   `triggerBuiltin tab-ai` ×2           → 1 main window, surface=acpChat, visible=false, identical bounds
+//!   `triggerBuiltin tab-ai` ×2           → 1 main window, surface=agentChatChat, visible=false, identical bounds
 //!   `triggerBuiltin clipboard-history` ×2 → 1 main window, surface=clipboardHistory, choiceCount=100 both times
 //!   `triggerBuiltin emoji` ×3 (rapid-fire, 200 ms apart) → 1 main window, surface=emojiPicker
 //!
@@ -30,7 +30,7 @@
 //!
 //! A refactor that, for instance, added
 //!     `crate::automation::upsert_automation_window(AutomationWindow { ... });`
-//! to the `tab-ai` arm body — perhaps "to make ACP show up in
+//! to the `tab-ai` arm body — perhaps "to make Agent Chat show up in
 //! listAutomationWindows immediately" — would create a duplicate entry
 //! on the second call, break `listAutomationWindows[0].kind=main`
 //! stability that downstream receipts rely on, and could double-fire

@@ -1,9 +1,9 @@
 //! Source-level contract test for the `portal-dictation-roundtrip` user story.
 //!
 //! The story wants a live end-to-end proof: start the dictation portal from
-//! inside the ACP composer, feed a synthetic transcript via `pushDictationResult`,
+//! inside the Agent Chat composer, feed a synthetic transcript via `pushDictationResult`,
 //! close the portal, and watch the text land at the cursor without auto-submit
-//! while `getAcpState.dictationStatus` returns to `idle`. The stdin hook now
+//! while `getAgentChatState.dictationStatus` returns to `idle`. The stdin hook now
 //! covers transcript injection, but a full portal live run still needs stable
 //! `dictationStatus` exposure. Until then, this test pins the production
 //! delivery invariants that the story's acceptance criteria depend on.
@@ -16,10 +16,10 @@
 //!    no-auto-submit flag that encodes the story's "nothing else changed"
 //!    half: transcript appears in composer, user still presses Enter.
 //!
-//! 2. `DictationTarget::TabAiHarness` (the ACP-hosted path) opens ACP Chat
+//! 2. `DictationTarget::TabAiHarness` (the Agent Chat-hosted path) opens Agent Chat Chat
 //!    with the transcript as the entry intent while suppressing focused
 //!    launcher context, so the dictation becomes the initial prompt and is
-//!    auto-submitted by the ACP launch path.
+//!    auto-submitted by the Agent Chat launch path.
 //!
 //! 3. `record_dictation_history(&transcript, audio_duration, target)` runs
 //!    BEFORE the delivery `match target` block, so a delivery failure never
@@ -52,7 +52,7 @@ fn ai_chat_composer_delivery_uses_set_ai_input_without_auto_submit() {
     assert!(
         handler.contains("DictationTarget::AiChatComposer =>"),
         "handle_dictation_transcript must have an explicit AiChatComposer \
-         arm so ACP-adjacent dictation has a routed delivery path"
+         arm so Agent Chat-adjacent dictation has a routed delivery path"
     );
     assert!(
         handler.contains("ai::set_ai_input(&mut **cx, &transcript, false)"),
@@ -64,18 +64,18 @@ fn ai_chat_composer_delivery_uses_set_ai_input_without_auto_submit() {
 }
 
 #[test]
-fn tab_ai_harness_delivery_opens_acp_with_transcript_entry_intent() {
+fn tab_ai_harness_delivery_opens_agent_chat_with_transcript_entry_intent() {
     let handler = handler_slice();
     assert!(
         handler.contains("DictationTarget::TabAiHarness =>"),
-        "TabAiHarness arm (the ACP-hosted tab-ai path) must remain in the \
-         dispatch block — losing it would drop the ACP composer target entirely"
+        "TabAiHarness arm (the Agent Chat-hosted tab-ai path) must remain in the \
+         dispatch block — losing it would drop the Agent Chat composer target entirely"
     );
     assert!(
-        handler.contains("open_tab_ai_acp_with_entry_intent_suppressing_focused_part")
+        handler.contains("open_tab_ai_agent_chat_with_entry_intent_suppressing_focused_part")
             && handler.contains("Some(transcript.clone())"),
-        "TabAiHarness delivery must open ACP Chat with the transcript as \
-         the entry intent so ACP auto-submits the dictated prompt without \
+        "TabAiHarness delivery must open Agent Chat Chat with the transcript as \
+         the entry intent so Agent Chat auto-submits the dictated prompt without \
          inheriting the selected launcher row as context"
     );
 }

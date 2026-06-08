@@ -38,12 +38,12 @@ pub trait TransactionStateProvider {
     /// matched value or `None` if no element matched the semantic ID.
     fn select_by_semantic_id(&mut self, semantic_id: &str, submit: bool) -> Result<Option<String>>;
 
-    /// Return the most recent ACP test probe snapshot for proof-level
-    /// condition evaluation. Providers without ACP state return a default
-    /// (empty) snapshot, which causes all ACP proof conditions to evaluate
+    /// Return the most recent Agent Chat test probe snapshot for proof-level
+    /// condition evaluation. Providers without Agent Chat state return a default
+    /// (empty) snapshot, which causes all Agent Chat proof conditions to evaluate
     /// as not-matched.
-    fn acp_test_probe(&self, _tail: usize) -> crate::protocol::AcpTestProbeSnapshot {
-        crate::protocol::AcpTestProbeSnapshot::default()
+    fn agent_chat_test_probe(&self, _tail: usize) -> crate::protocol::AgentChatTestProbeSnapshot {
+        crate::protocol::AgentChatTestProbeSnapshot::default()
     }
 }
 
@@ -83,16 +83,16 @@ fn matches_state(snapshot: &UiStateSnapshot, spec: &StateMatchSpec) -> bool {
 
 fn unsupported_wait_condition(condition: &WaitCondition) -> Option<TransactionError> {
     match condition {
-        WaitCondition::Detailed(WaitDetailedCondition::AcpSetupVisible)
-        | WaitCondition::Detailed(WaitDetailedCondition::AcpSetupReasonCode { .. })
-        | WaitCondition::Detailed(WaitDetailedCondition::AcpSetupPrimaryAction { .. })
-        | WaitCondition::Detailed(WaitDetailedCondition::AcpSetupAgentPickerOpen)
-        | WaitCondition::Detailed(WaitDetailedCondition::AcpSetupSelectedAgent { .. }) => {
+        WaitCondition::Detailed(WaitDetailedCondition::AgentChatSetupVisible)
+        | WaitCondition::Detailed(WaitDetailedCondition::AgentChatSetupReasonCode { .. })
+        | WaitCondition::Detailed(WaitDetailedCondition::AgentChatSetupPrimaryAction { .. })
+        | WaitCondition::Detailed(WaitDetailedCondition::AgentChatSetupAgentPickerOpen)
+        | WaitCondition::Detailed(WaitDetailedCondition::AgentChatSetupSelectedAgent { .. }) => {
             Some(TransactionError {
                 code: TransactionErrorCode::InvalidCondition,
                 message: format!("Wait condition is not wired to transaction runtime state: {condition:?}"),
                 suggestion: Some(
-                    "Use getAcpState/performAcpSetupAction for setup-card assertions until setup wait snapshots are supported."
+                    "Use getAgentChatState/performAgentChatSetupAction for setup-card assertions until setup wait snapshots are supported."
                         .to_string(),
                 ),
             })
@@ -144,31 +144,31 @@ fn matches_condition<P: TransactionStateProvider>(
         WaitCondition::Detailed(WaitDetailedCondition::StateMatch { state }) => {
             (matches_state(snapshot, state), Vec::new())
         }
-        WaitCondition::Detailed(WaitDetailedCondition::AcpReady) => {
-            (snapshot.acp_context_ready, Vec::new())
+        WaitCondition::Detailed(WaitDetailedCondition::AgentChatReady) => {
+            (snapshot.agent_chat_context_ready, Vec::new())
         }
-        WaitCondition::Detailed(WaitDetailedCondition::AcpPickerOpen) => {
-            (snapshot.acp_picker_open, Vec::new())
+        WaitCondition::Detailed(WaitDetailedCondition::AgentChatPickerOpen) => {
+            (snapshot.agent_chat_picker_open, Vec::new())
         }
-        WaitCondition::Detailed(WaitDetailedCondition::AcpPickerClosed) => {
-            (!snapshot.acp_picker_open, Vec::new())
+        WaitCondition::Detailed(WaitDetailedCondition::AgentChatPickerClosed) => {
+            (!snapshot.agent_chat_picker_open, Vec::new())
         }
-        WaitCondition::Detailed(WaitDetailedCondition::AcpItemAccepted) => {
-            let probe = provider.acp_test_probe(1);
+        WaitCondition::Detailed(WaitDetailedCondition::AgentChatItemAccepted) => {
+            let probe = provider.agent_chat_test_probe(1);
             (!probe.accepted_items.is_empty(), Vec::new())
         }
-        WaitCondition::Detailed(WaitDetailedCondition::AcpCursorAt { index }) => {
-            (snapshot.acp_cursor_index == Some(*index), Vec::new())
+        WaitCondition::Detailed(WaitDetailedCondition::AgentChatCursorAt { index }) => {
+            (snapshot.agent_chat_cursor_index == Some(*index), Vec::new())
         }
-        WaitCondition::Detailed(WaitDetailedCondition::AcpStatus { status }) => (
-            snapshot.acp_status.as_deref() == Some(status.as_str()),
+        WaitCondition::Detailed(WaitDetailedCondition::AgentChatStatus { status }) => (
+            snapshot.agent_chat_status.as_deref() == Some(status.as_str()),
             Vec::new(),
         ),
-        WaitCondition::Detailed(WaitDetailedCondition::AcpInputMatch { text }) => (
+        WaitCondition::Detailed(WaitDetailedCondition::AgentChatInputMatch { text }) => (
             snapshot.input_value.as_deref() == Some(text.as_str()),
             Vec::new(),
         ),
-        WaitCondition::Detailed(WaitDetailedCondition::AcpInputContains { substring }) => (
+        WaitCondition::Detailed(WaitDetailedCondition::AgentChatInputContains { substring }) => (
             snapshot
                 .input_value
                 .as_deref()
@@ -176,37 +176,37 @@ fn matches_condition<P: TransactionStateProvider>(
             Vec::new(),
         ),
 
-        // ── ACP proof conditions (evaluated against test probe) ──────
-        WaitCondition::Detailed(WaitDetailedCondition::AcpAcceptedViaKey { key }) => {
-            let probe = provider.acp_test_probe(1);
+        // ── Agent Chat proof conditions (evaluated against test probe) ──────
+        WaitCondition::Detailed(WaitDetailedCondition::AgentChatAcceptedViaKey { key }) => {
+            let probe = provider.agent_chat_test_probe(1);
             let ok = probe
                 .accepted_items
                 .last()
                 .is_some_and(|item| item.accepted_via_key == *key);
             (ok, Vec::new())
         }
-        WaitCondition::Detailed(WaitDetailedCondition::AcpAcceptedLabel { label }) => {
-            let probe = provider.acp_test_probe(1);
+        WaitCondition::Detailed(WaitDetailedCondition::AgentChatAcceptedLabel { label }) => {
+            let probe = provider.agent_chat_test_probe(1);
             let ok = probe
                 .accepted_items
                 .last()
                 .is_some_and(|item| item.item_label == *label);
             (ok, Vec::new())
         }
-        WaitCondition::Detailed(WaitDetailedCondition::AcpAcceptedCursorAt { index }) => {
-            let probe = provider.acp_test_probe(1);
+        WaitCondition::Detailed(WaitDetailedCondition::AgentChatAcceptedCursorAt { index }) => {
+            let probe = provider.agent_chat_test_probe(1);
             let ok = probe
                 .accepted_items
                 .last()
                 .is_some_and(|item| item.cursor_after == *index);
             (ok, Vec::new())
         }
-        WaitCondition::Detailed(WaitDetailedCondition::AcpInputLayoutMatch {
+        WaitCondition::Detailed(WaitDetailedCondition::AgentChatInputLayoutMatch {
             visible_start,
             visible_end,
             cursor_in_window,
         }) => {
-            let probe = provider.acp_test_probe(1);
+            let probe = provider.agent_chat_test_probe(1);
             let ok = probe.input_layout.as_ref().is_some_and(|layout| {
                 layout.visible_start == *visible_start
                     && layout.visible_end == *visible_end
@@ -215,11 +215,11 @@ fn matches_condition<P: TransactionStateProvider>(
             (ok, Vec::new())
         }
 
-        WaitCondition::Detailed(WaitDetailedCondition::AcpSetupVisible)
-        | WaitCondition::Detailed(WaitDetailedCondition::AcpSetupReasonCode { .. })
-        | WaitCondition::Detailed(WaitDetailedCondition::AcpSetupPrimaryAction { .. })
-        | WaitCondition::Detailed(WaitDetailedCondition::AcpSetupAgentPickerOpen)
-        | WaitCondition::Detailed(WaitDetailedCondition::AcpSetupSelectedAgent { .. }) => {
+        WaitCondition::Detailed(WaitDetailedCondition::AgentChatSetupVisible)
+        | WaitCondition::Detailed(WaitDetailedCondition::AgentChatSetupReasonCode { .. })
+        | WaitCondition::Detailed(WaitDetailedCondition::AgentChatSetupPrimaryAction { .. })
+        | WaitCondition::Detailed(WaitDetailedCondition::AgentChatSetupAgentPickerOpen)
+        | WaitCondition::Detailed(WaitDetailedCondition::AgentChatSetupSelectedAgent { .. }) => {
             (false, Vec::new())
         }
     }
@@ -273,7 +273,7 @@ fn command_name(command: &BatchCommand) -> &'static str {
         BatchCommand::SetInput { .. } => "setInput",
         BatchCommand::OpenActions => "openActions",
         BatchCommand::TogglePreview => "togglePreview",
-        BatchCommand::OpenNotesAcp => "openNotesAcp",
+        BatchCommand::OpenNotesAgentChat => "openNotesAgentChat",
         BatchCommand::ForceSubmit { .. } => "forceSubmit",
         BatchCommand::WaitFor { .. } => "waitFor",
         BatchCommand::SelectByValue { .. } => "selectByValue",
@@ -826,7 +826,7 @@ pub fn execute_batch<P: TransactionStateProvider>(
             BatchCommand::ForceSubmit { .. }
             | BatchCommand::OpenActions
             | BatchCommand::TogglePreview
-            | BatchCommand::OpenNotesAcp
+            | BatchCommand::OpenNotesAgentChat
             | BatchCommand::SetThemeControl { .. }
             | BatchCommand::UndoStyleChange
             | BatchCommand::RedoStyleChange

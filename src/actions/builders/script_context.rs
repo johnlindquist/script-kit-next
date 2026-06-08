@@ -827,18 +827,18 @@ fn get_prompt_target_actions(config: &crate::config::Config) -> Vec<Action> {
         .collect()
 }
 
-#[allow(dead_code)] // Used by the binary ACP actions surface.
-const ACP_SWITCH_MODEL_ACTION_PREFIX: &str = "acp_switch_model:";
+#[allow(dead_code)] // Used by the binary Agent Chat actions surface.
+const AGENT_CHAT_SWITCH_MODEL_ACTION_PREFIX: &str = "agent_chat_switch_model:";
 const AGENT_CHAT_SWITCH_PROFILE_ACTION_PREFIX: &str = "agent_chat_switch_profile:";
 
-#[allow(dead_code)] // Used by the binary ACP actions surface.
-fn acp_switch_model_action_id(model_id: &str) -> String {
-    format!("{ACP_SWITCH_MODEL_ACTION_PREFIX}{model_id}")
+#[allow(dead_code)] // Used by the binary Agent Chat actions surface.
+fn agent_chat_switch_model_action_id(model_id: &str) -> String {
+    format!("{AGENT_CHAT_SWITCH_MODEL_ACTION_PREFIX}{model_id}")
 }
 
-#[allow(dead_code)] // Used by ACP chat action dispatch in the binary target.
-pub(crate) fn acp_switch_model_id_from_action(action_id: &str) -> Option<&str> {
-    action_id.strip_prefix(ACP_SWITCH_MODEL_ACTION_PREFIX)
+#[allow(dead_code)] // Used by Agent Chat chat action dispatch in the binary target.
+pub(crate) fn agent_chat_switch_model_id_from_action(action_id: &str) -> Option<&str> {
+    action_id.strip_prefix(AGENT_CHAT_SWITCH_MODEL_ACTION_PREFIX)
 }
 
 #[allow(dead_code)] // Used by Agent Chat action dispatch in the binary target.
@@ -851,9 +851,9 @@ pub(crate) fn agent_chat_switch_profile_id_from_action(action_id: &str) -> Optio
     action_id.strip_prefix(AGENT_CHAT_SWITCH_PROFILE_ACTION_PREFIX)
 }
 
-/// Actions available in the ACP chat view (Cmd+K menu).
+/// Actions available in the Agent Chat chat view (Cmd+K menu).
 #[allow(dead_code)]
-pub fn get_acp_chat_actions() -> Vec<Action> {
+pub fn get_agent_chat_actions() -> Vec<Action> {
     let config = crate::config::load_config();
     let mut actions = get_prompt_export_actions(&config)
         .into_iter()
@@ -867,7 +867,7 @@ pub fn get_acp_chat_actions() -> Vec<Action> {
     actions.extend(vec![
         // ── Response ─────────────────────────────────────────
         Action::new(
-            "acp_copy_last_response",
+            "agent_chat_copy_last_response",
             "Copy Last Response",
             Some("Copy the most recent assistant response".to_string()),
             ActionCategory::ScriptContext,
@@ -876,7 +876,7 @@ pub fn get_acp_chat_actions() -> Vec<Action> {
         .with_icon(IconName::Copy)
         .with_section("Response"),
         Action::new(
-            "acp_paste_to_frontmost",
+            "agent_chat_paste_to_frontmost",
             "Paste Response to App",
             Some("Paste into the frontmost application".to_string()),
             ActionCategory::ScriptContext,
@@ -884,7 +884,7 @@ pub fn get_acp_chat_actions() -> Vec<Action> {
         .with_icon(IconName::ArrowRight)
         .with_section("Response"),
         Action::new(
-            "acp_retry_last",
+            "agent_chat_retry_last",
             "Retry Last Message",
             Some("Resend the last user message".to_string()),
             ActionCategory::ScriptContext,
@@ -892,7 +892,7 @@ pub fn get_acp_chat_actions() -> Vec<Action> {
         .with_icon(IconName::ArrowRight)
         .with_section("Response"),
         Action::new(
-            "acp_export_markdown",
+            "agent_chat_export_markdown",
             "Copy Conversation as Markdown",
             Some("Copy the full conversation as markdown".to_string()),
             ActionCategory::ScriptContext,
@@ -900,9 +900,9 @@ pub fn get_acp_chat_actions() -> Vec<Action> {
         .with_icon(IconName::FileCode)
         .with_section("Response"),
         Action::new(
-            "acp_save_as_note",
+            "agent_chat_save_as_note",
             "Save as Note",
-            Some("Create or update a note from the current ACP content".to_string()),
+            Some("Create or update a note from the current Agent Chat content".to_string()),
             ActionCategory::ScriptContext,
         )
         .with_shortcut("\u{21e7}\u{2318}S")
@@ -910,7 +910,7 @@ pub fn get_acp_chat_actions() -> Vec<Action> {
         .with_section("Response"),
         // ── Code ─────────────────────────────────────────────
         Action::new(
-            "acp_copy_all_code",
+            "agent_chat_copy_all_code",
             "Copy All Code Blocks",
             Some("Copy all code blocks to clipboard".to_string()),
             ActionCategory::ScriptContext,
@@ -918,7 +918,7 @@ pub fn get_acp_chat_actions() -> Vec<Action> {
         .with_icon(IconName::Code)
         .with_section("Code"),
         Action::new(
-            "acp_save_as_script",
+            "agent_chat_save_as_script",
             "Save as Script",
             Some("Save last code block as a Script Kit script".to_string()),
             ActionCategory::ScriptContext,
@@ -926,7 +926,7 @@ pub fn get_acp_chat_actions() -> Vec<Action> {
         .with_icon(IconName::FileCode)
         .with_section("Code"),
         Action::new(
-            "acp_run_last_code",
+            "agent_chat_run_last_code",
             "Run Last Code Block",
             Some("Execute the last code block and show output".to_string()),
             ActionCategory::ScriptContext,
@@ -934,7 +934,7 @@ pub fn get_acp_chat_actions() -> Vec<Action> {
         .with_icon(IconName::BoltFilled)
         .with_section("Code"),
         Action::new(
-            "acp_open_in_editor",
+            "agent_chat_open_in_editor",
             "Open in Editor",
             Some("Open ~/.scriptkit in editor".to_string()),
             ActionCategory::ScriptContext,
@@ -943,7 +943,7 @@ pub fn get_acp_chat_actions() -> Vec<Action> {
         .with_section("Code"),
         // ── Navigate ─────────────────────────────────────────
         Action::new(
-            "acp_scroll_to_top",
+            "agent_chat_scroll_to_top",
             "Scroll to Top",
             None,
             ActionCategory::ScriptContext,
@@ -951,7 +951,7 @@ pub fn get_acp_chat_actions() -> Vec<Action> {
         .with_icon(IconName::ArrowUp)
         .with_section("Navigate"),
         Action::new(
-            "acp_scroll_to_bottom",
+            "agent_chat_scroll_to_bottom",
             "Scroll to Latest",
             None,
             ActionCategory::ScriptContext,
@@ -959,7 +959,7 @@ pub fn get_acp_chat_actions() -> Vec<Action> {
         .with_icon(IconName::ArrowDown)
         .with_section("Navigate"),
         Action::new(
-            "acp_show_history",
+            "agent_chat_show_history",
             "Agent Chat History",
             Some("Browse and manage past Agent Chat conversations".to_string()),
             ActionCategory::ScriptContext,
@@ -968,7 +968,7 @@ pub fn get_acp_chat_actions() -> Vec<Action> {
         .with_icon(IconName::MagnifyingGlass)
         .with_section("Navigate"),
         Action::new(
-            ACP_SHOW_RECEIPT_HISTORY_ACTION_ID,
+            AGENT_CHAT_SHOW_RECEIPT_HISTORY_ACTION_ID,
             "Receipt History",
             Some("Inspect recent semantic automation receipts for this session".to_string()),
             ActionCategory::ScriptContext,
@@ -977,7 +977,7 @@ pub fn get_acp_chat_actions() -> Vec<Action> {
         .with_section("Proof"),
         // ── View ─────────────────────────────────────────────
         Action::new(
-            "acp_expand_all",
+            "agent_chat_expand_all",
             "Expand All Blocks",
             None,
             ActionCategory::ScriptContext,
@@ -985,7 +985,7 @@ pub fn get_acp_chat_actions() -> Vec<Action> {
         .with_icon(IconName::ChevronDown)
         .with_section("View"),
         Action::new(
-            "acp_collapse_all",
+            "agent_chat_collapse_all",
             "Collapse All Blocks",
             None,
             ActionCategory::ScriptContext,
@@ -994,7 +994,7 @@ pub fn get_acp_chat_actions() -> Vec<Action> {
         .with_section("View"),
         // ── Session ──────────────────────────────────────────
         Action::new(
-            "acp_new_conversation",
+            "agent_chat_new_conversation",
             "New Conversation",
             Some("Clear messages, keep session".to_string()),
             ActionCategory::ScriptContext,
@@ -1003,7 +1003,7 @@ pub fn get_acp_chat_actions() -> Vec<Action> {
         .with_icon(IconName::Plus)
         .with_section("Session"),
         Action::new(
-            "acp_clear_conversation",
+            "agent_chat_clear_conversation",
             "Clear & Restart",
             Some("Close and reopen a fresh session".to_string()),
             ActionCategory::ScriptContext,
@@ -1011,7 +1011,7 @@ pub fn get_acp_chat_actions() -> Vec<Action> {
         .with_icon(IconName::Trash)
         .with_section("Session"),
         Action::new(
-            "acp_clear_history",
+            "agent_chat_clear_history",
             "Clear History",
             Some("Delete all saved conversations".to_string()),
             ActionCategory::ScriptContext,
@@ -1020,7 +1020,7 @@ pub fn get_acp_chat_actions() -> Vec<Action> {
         .with_section("Session"),
         // ── Window ───────────────────────────────────────────
         Action::new(
-            "acp_detach_window",
+            "agent_chat_detach_window",
             "Keep Open in Window",
             Some("Keep this chat open in a separate window".to_string()),
             ActionCategory::ScriptContext,
@@ -1028,7 +1028,7 @@ pub fn get_acp_chat_actions() -> Vec<Action> {
         .with_icon(IconName::ArrowUp)
         .with_section("Window"),
         Action::new(
-            "acp_reattach_panel",
+            "agent_chat_reattach_panel",
             "Return to Panel",
             Some("Move this chat back to the main panel".to_string()),
             ActionCategory::ScriptContext,
@@ -1036,7 +1036,7 @@ pub fn get_acp_chat_actions() -> Vec<Action> {
         .with_icon(IconName::ArrowDown)
         .with_section("Window"),
         Action::new(
-            "acp_close",
+            "agent_chat_close",
             "Close Agent Chat",
             None,
             ActionCategory::ScriptContext,
@@ -1119,7 +1119,7 @@ pub(crate) fn get_focused_text_agent_chat_root_route(
     expanded: bool,
 ) -> crate::actions::ActionsDialogRoute {
     crate::actions::ActionsDialogRoute {
-        id: ACP_ROOT_ROUTE_ID.to_string(),
+        id: AGENT_CHAT_ROOT_ROUTE_ID.to_string(),
         actions: get_focused_text_agent_chat_actions(expanded),
         context_title: Some("Focused Text".to_string()),
         search_placeholder: Some("Search focused text actions...".to_string()),
@@ -1127,63 +1127,65 @@ pub(crate) fn get_focused_text_agent_chat_root_route(
     }
 }
 
-// ── ACP route builders ───────────────────────────────────────────────────────
+// ── Agent Chat route builders ───────────────────────────────────────────────────────
 /// Action ID for the root-level "Change Model" entry that pushes the model picker.
-pub const ACP_CHANGE_MODEL_ACTION_ID: &str = "acp:change_model";
+pub const AGENT_CHAT_CHANGE_MODEL_ACTION_ID: &str = "agent_chat:change_model";
 /// Action ID for the root-level "Profile picker" entry that pushes Agent Chat profiles.
 pub const AGENT_CHAT_CHANGE_PROFILE_ACTION_ID: &str = "agent_chat:change_profile";
 
-/// Stable root labels and descriptions for ACP Actions Menu parity across hosts.
-const ACP_CHANGE_MODEL_LABEL: &str = "Change Model";
-const ACP_CHANGE_MODEL_DESCRIPTION: &str = "Pick the model for this chat";
+/// Stable root labels and descriptions for Agent Chat Actions Menu parity across hosts.
+const AGENT_CHAT_CHANGE_MODEL_LABEL: &str = "Change Model";
+const AGENT_CHAT_CHANGE_MODEL_DESCRIPTION: &str = "Pick the model for this chat";
 const AGENT_CHAT_CHANGE_PROFILE_LABEL: &str = "Profile picker";
 const AGENT_CHAT_CHANGE_PROFILE_DESCRIPTION: &str =
     "Pick the Agent Chat profile. Switching profiles starts a new chat";
-/// Route ID for the ACP root actions menu.
-pub const ACP_ROOT_ROUTE_ID: &str = "acp:root";
+/// Route ID for the Agent Chat root actions menu.
+pub const AGENT_CHAT_ROOT_ROUTE_ID: &str = "agent_chat:root";
 /// Route ID for the model picker sub-route.
-pub const ACP_MODEL_PICKER_ROUTE_ID: &str = "acp:model_picker";
+pub const AGENT_CHAT_MODEL_PICKER_ROUTE_ID: &str = "agent_chat:model_picker";
 /// Route ID for the Agent Chat profile picker sub-route.
 pub const AGENT_CHAT_PROFILE_PICKER_ROUTE_ID: &str = "agent_chat:profile_picker";
 /// Route ID for the Agent Chat history sub-route.
-pub const ACP_HISTORY_ROUTE_ID: &str = "acp:history";
+pub const AGENT_CHAT_HISTORY_ROUTE_ID: &str = "agent_chat:history";
 /// Prefix for Agent Chat history row actions.
-pub const ACP_HISTORY_SELECT_ACTION_PREFIX: &str = "acp_history:select:";
+pub const AGENT_CHAT_HISTORY_SELECT_ACTION_PREFIX: &str = "agent_chat_history:select:";
 /// Action ID for the root-level receipt-history entry.
-pub const ACP_SHOW_RECEIPT_HISTORY_ACTION_ID: &str = "acp_show_receipt_history";
+pub const AGENT_CHAT_SHOW_RECEIPT_HISTORY_ACTION_ID: &str = "agent_chat_show_receipt_history";
 /// Route ID for the Agent Chat receipt-history sub-route.
-pub const ACP_RECEIPT_HISTORY_ROUTE_ID: &str = "acp:receipt_history";
+pub const AGENT_CHAT_RECEIPT_HISTORY_ROUTE_ID: &str = "agent_chat:receipt_history";
 /// Prefix for receipt-history copy row actions.
-pub const ACP_RECEIPT_HISTORY_COPY_ACTION_PREFIX: &str = "acp_receipt_history:copy:";
+pub const AGENT_CHAT_RECEIPT_HISTORY_COPY_ACTION_PREFIX: &str = "agent_chat_receipt_history:copy:";
 /// Maximum receipt rows displayed in the compact ActionsDialog route.
-pub const ACP_RECEIPT_HISTORY_ROUTE_LIMIT: usize = 20;
+pub const AGENT_CHAT_RECEIPT_HISTORY_ROUTE_LIMIT: usize = 20;
 
-fn acp_model_display_name(entry: &crate::ai::acp::config::AcpModelEntry) -> String {
+fn agent_chat_model_display_name(
+    entry: &crate::ai::agent_chat::ui::config::AgentChatModelEntry,
+) -> String {
     entry
         .display_name
         .clone()
         .unwrap_or_else(|| entry.id.clone())
 }
 
-pub(crate) fn acp_history_select_action_id(session_id: &str) -> String {
-    format!("{ACP_HISTORY_SELECT_ACTION_PREFIX}{session_id}")
+pub(crate) fn agent_chat_history_select_action_id(session_id: &str) -> String {
+    format!("{AGENT_CHAT_HISTORY_SELECT_ACTION_PREFIX}{session_id}")
 }
 
-pub(crate) fn acp_receipt_history_copy_action_id(request_id: &str) -> String {
-    format!("{ACP_RECEIPT_HISTORY_COPY_ACTION_PREFIX}{request_id}")
+pub(crate) fn agent_chat_receipt_history_copy_action_id(request_id: &str) -> String {
+    format!("{AGENT_CHAT_RECEIPT_HISTORY_COPY_ACTION_PREFIX}{request_id}")
 }
 
-pub(crate) fn acp_receipt_history_request_id_from_action(action_id: &str) -> Option<&str> {
-    action_id.strip_prefix(ACP_RECEIPT_HISTORY_COPY_ACTION_PREFIX)
+pub(crate) fn agent_chat_receipt_history_request_id_from_action(action_id: &str) -> Option<&str> {
+    action_id.strip_prefix(AGENT_CHAT_RECEIPT_HISTORY_COPY_ACTION_PREFIX)
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum AcpModelSelectionActionPlan {
+enum AgentChatModelSelectionActionPlan {
     CurrentModel,
     AvailableModel,
 }
 
-impl AcpModelSelectionActionPlan {
+impl AgentChatModelSelectionActionPlan {
     fn from_is_selected(is_selected: bool) -> Self {
         if is_selected {
             Self::CurrentModel
@@ -1208,12 +1210,12 @@ impl AcpModelSelectionActionPlan {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-enum AcpRootPickerActionPlan {
+enum AgentChatRootPickerActionPlan {
     CurrentSelection(String),
     NoCurrentSelection,
 }
 
-impl AcpRootPickerActionPlan {
+impl AgentChatRootPickerActionPlan {
     fn from_selected_display_name(selected_display_name: Option<String>) -> Self {
         selected_display_name
             .map(Self::CurrentSelection)
@@ -1228,12 +1230,12 @@ impl AcpRootPickerActionPlan {
     }
 }
 
-fn acp_model_switch_description(
-    entry: &crate::ai::acp::config::AcpModelEntry,
+fn agent_chat_model_switch_description(
+    entry: &crate::ai::agent_chat::ui::config::AgentChatModelEntry,
     is_selected: bool,
 ) -> String {
-    let display_name = acp_model_display_name(entry);
-    AcpModelSelectionActionPlan::from_is_selected(is_selected).description(&display_name)
+    let display_name = agent_chat_model_display_name(entry);
+    AgentChatModelSelectionActionPlan::from_is_selected(is_selected).description(&display_name)
 }
 
 fn agent_chat_profile_backend_label(_backend: crate::config::AgentChatBackend) -> &'static str {
@@ -1297,12 +1299,12 @@ fn agent_chat_profile_picker_actions(
         .collect()
 }
 
-/// Build the root-level ACP actions list. Includes the profile and model
-/// picker entries (which trigger drill-down) plus the standard ACP chat
+/// Build the root-level Agent Chat actions list. Includes the profile and model
+/// picker entries (which trigger drill-down) plus the standard Agent Chat chat
 /// actions. (The legacy "Change Agent" picker was removed — all sessions use
 /// the Pi backend, with provider/model chosen via the Shift+Tab picker.)
-pub(crate) fn get_acp_chat_root_actions(
-    available_models: &[crate::ai::acp::config::AcpModelEntry],
+pub(crate) fn get_agent_chat_root_actions(
+    available_models: &[crate::ai::agent_chat::ui::config::AgentChatModelEntry],
     selected_model_id: Option<&str>,
 ) -> Vec<Action> {
     let profile_entries = agent_chat_profile_picker_entries();
@@ -1313,11 +1315,11 @@ pub(crate) fn get_acp_chat_root_actions(
         .map(|entry| entry.name.clone());
     let selected_model =
         selected_model_id.and_then(|id| available_models.iter().find(|entry| entry.id == id));
-    let model_picker_plan = AcpRootPickerActionPlan::from_selected_display_name(
-        selected_model.map(acp_model_display_name),
+    let model_picker_plan = AgentChatRootPickerActionPlan::from_selected_display_name(
+        selected_model.map(agent_chat_model_display_name),
     );
     let profile_picker_plan =
-        AcpRootPickerActionPlan::from_selected_display_name(selected_profile_name);
+        AgentChatRootPickerActionPlan::from_selected_display_name(selected_profile_name);
 
     let mut actions = vec![Action::new(
         AGENT_CHAT_CHANGE_PROFILE_ACTION_ID,
@@ -1331,9 +1333,9 @@ pub(crate) fn get_acp_chat_root_actions(
     if !available_models.is_empty() {
         actions.push(
             Action::new(
-                ACP_CHANGE_MODEL_ACTION_ID,
-                ACP_CHANGE_MODEL_LABEL,
-                Some(model_picker_plan.description(ACP_CHANGE_MODEL_DESCRIPTION)),
+                AGENT_CHAT_CHANGE_MODEL_ACTION_ID,
+                AGENT_CHAT_CHANGE_MODEL_LABEL,
+                Some(model_picker_plan.description(AGENT_CHAT_CHANGE_MODEL_DESCRIPTION)),
                 ActionCategory::ScriptContext,
             )
             .with_icon(IconName::Settings)
@@ -1341,7 +1343,7 @@ pub(crate) fn get_acp_chat_root_actions(
         );
     }
 
-    actions.extend(get_acp_chat_actions());
+    actions.extend(get_agent_chat_actions());
     actions
 }
 
@@ -1352,9 +1354,9 @@ pub(crate) fn get_agent_chat_profile_picker_actions() -> Vec<Action> {
     agent_chat_profile_picker_actions(&entries, &selected_profile_id)
 }
 
-/// Build the second-level ACP model picker actions.
-pub(crate) fn get_acp_model_picker_actions(
-    available_models: &[crate::ai::acp::config::AcpModelEntry],
+/// Build the second-level Agent Chat model picker actions.
+pub(crate) fn get_agent_chat_model_picker_actions(
+    available_models: &[crate::ai::agent_chat::ui::config::AgentChatModelEntry],
     selected_model_id: Option<&str>,
 ) -> Vec<Action> {
     let selected_model_id = selected_model_id.filter(|id| !id.is_empty());
@@ -1362,12 +1364,12 @@ pub(crate) fn get_acp_model_picker_actions(
         .iter()
         .map(|entry| {
             let is_selected = selected_model_id == Some(entry.id.as_str());
-            let selection_plan = AcpModelSelectionActionPlan::from_is_selected(is_selected);
-            let display_name = acp_model_display_name(entry);
+            let selection_plan = AgentChatModelSelectionActionPlan::from_is_selected(is_selected);
+            let display_name = agent_chat_model_display_name(entry);
             Action::new(
-                acp_switch_model_action_id(&entry.id),
+                agent_chat_switch_model_action_id(&entry.id),
                 selection_plan.picker_title(&display_name),
-                Some(acp_model_switch_description(entry, is_selected)),
+                Some(agent_chat_model_switch_description(entry, is_selected)),
                 ActionCategory::ScriptContext,
             )
             .with_icon(IconName::Settings)
@@ -1375,30 +1377,30 @@ pub(crate) fn get_acp_model_picker_actions(
         .collect()
 }
 
-// ── Host-aware ACP action filtering ─────────────────────────────────────────
+// ── Host-aware Agent Chat action filtering ─────────────────────────────────────────
 
-/// Distinguishes whether the ACP actions dialog is hosted in the shared main
-/// panel or in the detached ACP chat window.
+/// Distinguishes whether the Agent Chat actions dialog is hosted in the shared main
+/// panel or in the detached Agent Chat chat window.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum AcpActionsDialogHost {
-    /// Shared ACP surface in the main Script Kit panel — all actions available.
+pub(crate) enum AgentChatActionsDialogHost {
+    /// Shared Agent Chat surface in the main Script Kit panel — all actions available.
     Shared,
-    /// Notes-hosted ACP surface — subset that works inside the Notes window.
-    /// `acp_close` returns to the Notes editor rather than closing a window.
-    /// `acp_save_as_note` is excluded because the user is already in Notes.
+    /// Notes-hosted Agent Chat surface — subset that works inside the Notes window.
+    /// `agent_chat_close` returns to the Notes editor rather than closing a window.
+    /// `agent_chat_save_as_note` is excluded because the user is already in Notes.
     Notes,
-    /// Detached ACP chat window — only actions that work without the main panel.
+    /// Detached Agent Chat chat window — only actions that work without the main panel.
     Detached,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum AcpHostActionPlan {
+enum AgentChatHostActionPlan {
     IncludeWithShortcut,
     IncludeWithoutShortcut,
     Exclude,
 }
 
-impl AcpHostActionPlan {
+impl AgentChatHostActionPlan {
     fn is_included(self) -> bool {
         !matches!(self, Self::Exclude)
     }
@@ -1408,91 +1410,97 @@ impl AcpHostActionPlan {
     }
 }
 
-fn acp_host_action_plan(host: AcpActionsDialogHost, action_id: &str) -> AcpHostActionPlan {
+fn agent_chat_host_action_plan(
+    host: AgentChatActionsDialogHost,
+    action_id: &str,
+) -> AgentChatHostActionPlan {
     match host {
-        AcpActionsDialogHost::Shared => {
-            if action_id == "acp_close" {
-                AcpHostActionPlan::IncludeWithoutShortcut
+        AgentChatActionsDialogHost::Shared => {
+            if action_id == "agent_chat_close" {
+                AgentChatHostActionPlan::IncludeWithoutShortcut
             } else {
-                AcpHostActionPlan::IncludeWithShortcut
+                AgentChatHostActionPlan::IncludeWithShortcut
             }
         }
-        AcpActionsDialogHost::Notes => {
-            // Notes-hosted: same as Detached but without `acp_save_as_note`
-            // (already in Notes), keeping `acp_close` (returns to editor),
-            // and routing `acp_show_history` through the shared ActionsDialog.
+        AgentChatActionsDialogHost::Notes => {
+            // Notes-hosted: same as Detached but without `agent_chat_save_as_note`
+            // (already in Notes), keeping `agent_chat_close` (returns to editor),
+            // and routing `agent_chat_show_history` through the shared ActionsDialog.
             if matches!(
                 action_id,
                 "agent_chat:change_profile"
-                    | "acp:change_model"
-                    | "acp_copy_last_response"
-                    | "acp_retry_last"
-                    | "acp_export_markdown"
-                    | "acp_show_history"
-                    | ACP_SHOW_RECEIPT_HISTORY_ACTION_ID
-                    | "acp_scroll_to_top"
-                    | "acp_scroll_to_bottom"
-                    | "acp_expand_all"
-                    | "acp_collapse_all"
-                    | "acp_new_conversation"
-                    | "acp_clear_history"
-                    | "acp_close"
+                    | "agent_chat:change_model"
+                    | "agent_chat_copy_last_response"
+                    | "agent_chat_retry_last"
+                    | "agent_chat_export_markdown"
+                    | "agent_chat_show_history"
+                    | AGENT_CHAT_SHOW_RECEIPT_HISTORY_ACTION_ID
+                    | "agent_chat_scroll_to_top"
+                    | "agent_chat_scroll_to_bottom"
+                    | "agent_chat_expand_all"
+                    | "agent_chat_collapse_all"
+                    | "agent_chat_new_conversation"
+                    | "agent_chat_clear_history"
+                    | "agent_chat_close"
             ) || action_id.starts_with(AGENT_CHAT_SWITCH_PROFILE_ACTION_PREFIX)
-                || action_id.starts_with(ACP_SWITCH_MODEL_ACTION_PREFIX)
+                || action_id.starts_with(AGENT_CHAT_SWITCH_MODEL_ACTION_PREFIX)
             {
-                if action_id == "acp_close" {
-                    AcpHostActionPlan::IncludeWithoutShortcut
+                if action_id == "agent_chat_close" {
+                    AgentChatHostActionPlan::IncludeWithoutShortcut
                 } else {
-                    AcpHostActionPlan::IncludeWithShortcut
+                    AgentChatHostActionPlan::IncludeWithShortcut
                 }
             } else {
-                AcpHostActionPlan::Exclude
+                AgentChatHostActionPlan::Exclude
             }
         }
-        AcpActionsDialogHost::Detached => {
+        AgentChatActionsDialogHost::Detached => {
             if matches!(
                 action_id,
-                "acp:change_model"
-                    | "acp_copy_last_response"
-                    | "acp_retry_last"
-                    | "acp_export_markdown"
-                    | "acp_save_as_note"
-                    | "acp_show_history"
-                    | ACP_SHOW_RECEIPT_HISTORY_ACTION_ID
-                    | "acp_scroll_to_top"
-                    | "acp_scroll_to_bottom"
-                    | "acp_expand_all"
-                    | "acp_collapse_all"
-                    | "acp_new_conversation"
-                    | "acp_clear_history"
-                    | "acp_close"
-            ) || action_id.starts_with(ACP_SWITCH_MODEL_ACTION_PREFIX)
+                "agent_chat:change_model"
+                    | "agent_chat_copy_last_response"
+                    | "agent_chat_retry_last"
+                    | "agent_chat_export_markdown"
+                    | "agent_chat_save_as_note"
+                    | "agent_chat_show_history"
+                    | AGENT_CHAT_SHOW_RECEIPT_HISTORY_ACTION_ID
+                    | "agent_chat_scroll_to_top"
+                    | "agent_chat_scroll_to_bottom"
+                    | "agent_chat_expand_all"
+                    | "agent_chat_collapse_all"
+                    | "agent_chat_new_conversation"
+                    | "agent_chat_clear_history"
+                    | "agent_chat_close"
+            ) || action_id.starts_with(AGENT_CHAT_SWITCH_MODEL_ACTION_PREFIX)
             {
-                AcpHostActionPlan::IncludeWithShortcut
+                AgentChatHostActionPlan::IncludeWithShortcut
             } else {
-                AcpHostActionPlan::Exclude
+                AgentChatHostActionPlan::Exclude
             }
         }
     }
 }
 
-fn filter_acp_actions_for_host(host: AcpActionsDialogHost, actions: Vec<Action>) -> Vec<Action> {
+fn filter_agent_chat_actions_for_host(
+    host: AgentChatActionsDialogHost,
+    actions: Vec<Action>,
+) -> Vec<Action> {
     let host_label = match host {
-        AcpActionsDialogHost::Shared => "shared",
-        AcpActionsDialogHost::Notes => "notes",
-        AcpActionsDialogHost::Detached => "detached",
+        AgentChatActionsDialogHost::Shared => "shared",
+        AgentChatActionsDialogHost::Notes => "notes",
+        AgentChatActionsDialogHost::Detached => "detached",
     };
     actions
         .into_iter()
         .filter_map(|mut action| {
-            let plan = acp_host_action_plan(host, &action.id);
+            let plan = agent_chat_host_action_plan(host, &action.id);
             if !plan.is_included() {
                 tracing::warn!(
-                    event = "acp_actions_menu_filtered",
+                    event = "agent_chat_actions_menu_filtered",
                     host = host_label,
                     action_id = %action.id,
                     reason = "unsupported_in_host",
-                    "Filtered unsupported ACP Actions Menu item"
+                    "Filtered unsupported Agent Chat Actions Menu item"
                 );
                 return None;
             }
@@ -1506,34 +1514,34 @@ fn filter_acp_actions_for_host(host: AcpActionsDialogHost, actions: Vec<Action>)
         .collect()
 }
 
-/// Build an `ActionsDialogRoute` for the ACP root menu, filtered for the given host.
-pub(crate) fn get_acp_chat_root_route_for_host(
-    available_models: &[crate::ai::acp::config::AcpModelEntry],
+/// Build an `ActionsDialogRoute` for the Agent Chat root menu, filtered for the given host.
+pub(crate) fn get_agent_chat_root_route_for_host(
+    available_models: &[crate::ai::agent_chat::ui::config::AgentChatModelEntry],
     selected_model_id: Option<&str>,
-    host: AcpActionsDialogHost,
+    host: AgentChatActionsDialogHost,
 ) -> crate::actions::ActionsDialogRoute {
     let host_label = match host {
-        AcpActionsDialogHost::Shared => "shared",
-        AcpActionsDialogHost::Notes => "notes",
-        AcpActionsDialogHost::Detached => "detached",
+        AgentChatActionsDialogHost::Shared => "shared",
+        AgentChatActionsDialogHost::Notes => "notes",
+        AgentChatActionsDialogHost::Detached => "detached",
     };
 
-    let actions = filter_acp_actions_for_host(
+    let actions = filter_agent_chat_actions_for_host(
         host,
-        get_acp_chat_root_actions(available_models, selected_model_id),
+        get_agent_chat_root_actions(available_models, selected_model_id),
     );
 
     let model_count = available_models.len();
     tracing::info!(
-        event = "acp_actions_menu_built",
+        event = "agent_chat_actions_menu_built",
         host = host_label,
         model_count,
         action_count = actions.len(),
-        "Built ACP Actions Menu"
+        "Built Agent Chat Actions Menu"
     );
 
     crate::actions::ActionsDialogRoute {
-        id: ACP_ROOT_ROUTE_ID.to_string(),
+        id: AGENT_CHAT_ROOT_ROUTE_ID.to_string(),
         actions,
         context_title: Some("Agent Chat".to_string()),
         search_placeholder: Some("Search Agent Chat actions...".to_string()),
@@ -1541,32 +1549,32 @@ pub(crate) fn get_acp_chat_root_route_for_host(
     }
 }
 
-/// Build an `ActionsDialogRoute` for the ACP model picker sub-route, filtered for the given host.
-pub(crate) fn get_acp_model_picker_route_for_host(
-    available_models: &[crate::ai::acp::config::AcpModelEntry],
+/// Build an `ActionsDialogRoute` for the Agent Chat model picker sub-route, filtered for the given host.
+pub(crate) fn get_agent_chat_model_picker_route_for_host(
+    available_models: &[crate::ai::agent_chat::ui::config::AgentChatModelEntry],
     selected_model_id: Option<&str>,
-    host: AcpActionsDialogHost,
+    host: AgentChatActionsDialogHost,
 ) -> crate::actions::ActionsDialogRoute {
     crate::actions::ActionsDialogRoute {
-        id: ACP_MODEL_PICKER_ROUTE_ID.to_string(),
-        actions: filter_acp_actions_for_host(
+        id: AGENT_CHAT_MODEL_PICKER_ROUTE_ID.to_string(),
+        actions: filter_agent_chat_actions_for_host(
             host,
-            get_acp_model_picker_actions(available_models, selected_model_id),
+            get_agent_chat_model_picker_actions(available_models, selected_model_id),
         ),
         context_title: Some("Change Model".to_string()),
         search_placeholder: Some("Search models...".to_string()),
-        initial_selected_action_id: selected_model_id.map(acp_switch_model_action_id),
+        initial_selected_action_id: selected_model_id.map(agent_chat_switch_model_action_id),
     }
 }
 
 /// Build an `ActionsDialogRoute` for recent Agent Chat conversations.
-pub(crate) fn get_acp_history_route() -> crate::actions::ActionsDialogRoute {
-    let actions = crate::ai::acp::history::load_history()
+pub(crate) fn get_agent_chat_history_route() -> crate::actions::ActionsDialogRoute {
+    let actions = crate::ai::agent_chat::ui::history::load_history()
         .into_iter()
         .take(100)
         .map(|entry| {
             Action::new(
-                acp_history_select_action_id(&entry.session_id),
+                agent_chat_history_select_action_id(&entry.session_id),
                 entry.title_display().to_string(),
                 Some(entry.preview_display().to_string()),
                 ActionCategory::ScriptContext,
@@ -1577,7 +1585,7 @@ pub(crate) fn get_acp_history_route() -> crate::actions::ActionsDialogRoute {
         .collect();
 
     crate::actions::ActionsDialogRoute {
-        id: ACP_HISTORY_ROUTE_ID.to_string(),
+        id: AGENT_CHAT_HISTORY_ROUTE_ID.to_string(),
         actions,
         context_title: Some("Agent Chat History".to_string()),
         search_placeholder: Some("Search conversation history...".to_string()),
@@ -1586,9 +1594,9 @@ pub(crate) fn get_acp_history_route() -> crate::actions::ActionsDialogRoute {
 }
 
 /// Build an `ActionsDialogRoute` for recent semantic automation receipts.
-pub(crate) fn get_acp_receipt_history_route() -> crate::actions::ActionsDialogRoute {
+pub(crate) fn get_agent_chat_receipt_history_route() -> crate::actions::ActionsDialogRoute {
     let mut actions = crate::agentic_protocol_bus::load_recent_protocol_response_summaries(
-        ACP_RECEIPT_HISTORY_ROUTE_LIMIT,
+        AGENT_CHAT_RECEIPT_HISTORY_ROUTE_LIMIT,
     )
     .into_iter()
     .map(|summary| {
@@ -1602,7 +1610,7 @@ pub(crate) fn get_acp_receipt_history_route() -> crate::actions::ActionsDialogRo
                 .unwrap_or("no automation target")
         );
         Action::new(
-            acp_receipt_history_copy_action_id(&summary.request_id),
+            agent_chat_receipt_history_copy_action_id(&summary.request_id),
             format!("{} · {}", summary.response_type, summary.request_id),
             Some(description),
             ActionCategory::ScriptContext,
@@ -1615,7 +1623,7 @@ pub(crate) fn get_acp_receipt_history_route() -> crate::actions::ActionsDialogRo
     if actions.is_empty() {
         actions.push(
             Action::new(
-                "acp_receipt_history_empty",
+                "agent_chat_receipt_history_empty",
                 "No receipt history",
                 Some("No protocol receipts have been recorded for this app session.".to_string()),
                 ActionCategory::ScriptContext,
@@ -1626,7 +1634,7 @@ pub(crate) fn get_acp_receipt_history_route() -> crate::actions::ActionsDialogRo
     }
 
     crate::actions::ActionsDialogRoute {
-        id: ACP_RECEIPT_HISTORY_ROUTE_ID.to_string(),
+        id: AGENT_CHAT_RECEIPT_HISTORY_ROUTE_ID.to_string(),
         actions,
         context_title: Some("Receipt History".to_string()),
         search_placeholder: Some("Search receipts...".to_string()),
@@ -1636,11 +1644,11 @@ pub(crate) fn get_acp_receipt_history_route() -> crate::actions::ActionsDialogRo
 
 /// Build an `ActionsDialogRoute` for the Agent Chat profile picker sub-route.
 pub(crate) fn get_agent_chat_profile_picker_route_for_host(
-    host: AcpActionsDialogHost,
+    host: AgentChatActionsDialogHost,
 ) -> crate::actions::ActionsDialogRoute {
     crate::actions::ActionsDialogRoute {
         id: AGENT_CHAT_PROFILE_PICKER_ROUTE_ID.to_string(),
-        actions: filter_acp_actions_for_host(host, get_agent_chat_profile_picker_actions()),
+        actions: filter_agent_chat_actions_for_host(host, get_agent_chat_profile_picker_actions()),
         context_title: Some("Profile picker".to_string()),
         search_placeholder: Some("Search profiles...".to_string()),
         initial_selected_action_id: Some(agent_chat_switch_profile_action_id(
@@ -1652,32 +1660,32 @@ pub(crate) fn get_agent_chat_profile_picker_route_for_host(
 /// Build an `ActionsDialogRoute` for the Agent Chat profile picker sub-route (shared host).
 #[allow(dead_code)]
 pub(crate) fn get_agent_chat_profile_picker_route() -> crate::actions::ActionsDialogRoute {
-    get_agent_chat_profile_picker_route_for_host(AcpActionsDialogHost::Shared)
+    get_agent_chat_profile_picker_route_for_host(AgentChatActionsDialogHost::Shared)
 }
 
-/// Build an `ActionsDialogRoute` for the ACP root menu (shared host).
+/// Build an `ActionsDialogRoute` for the Agent Chat root menu (shared host).
 #[allow(dead_code)]
-pub(crate) fn get_acp_chat_root_route(
-    available_models: &[crate::ai::acp::config::AcpModelEntry],
+pub(crate) fn get_agent_chat_root_route(
+    available_models: &[crate::ai::agent_chat::ui::config::AgentChatModelEntry],
     selected_model_id: Option<&str>,
 ) -> crate::actions::ActionsDialogRoute {
-    get_acp_chat_root_route_for_host(
+    get_agent_chat_root_route_for_host(
         available_models,
         selected_model_id,
-        AcpActionsDialogHost::Shared,
+        AgentChatActionsDialogHost::Shared,
     )
 }
 
-/// Build an `ActionsDialogRoute` for the ACP model picker sub-route (shared host).
+/// Build an `ActionsDialogRoute` for the Agent Chat model picker sub-route (shared host).
 #[allow(dead_code)]
-pub(crate) fn get_acp_model_picker_route(
-    available_models: &[crate::ai::acp::config::AcpModelEntry],
+pub(crate) fn get_agent_chat_model_picker_route(
+    available_models: &[crate::ai::agent_chat::ui::config::AgentChatModelEntry],
     selected_model_id: Option<&str>,
 ) -> crate::actions::ActionsDialogRoute {
-    get_acp_model_picker_route_for_host(
+    get_agent_chat_model_picker_route_for_host(
         available_models,
         selected_model_id,
-        AcpActionsDialogHost::Shared,
+        AgentChatActionsDialogHost::Shared,
     )
 }
 
@@ -2126,8 +2134,11 @@ mod tests {
         }
     }
 
-    fn sample_acp_model(id: &str, display_name: &str) -> crate::ai::acp::config::AcpModelEntry {
-        crate::ai::acp::config::AcpModelEntry {
+    fn sample_agent_chat_model(
+        id: &str,
+        display_name: &str,
+    ) -> crate::ai::agent_chat::ui::config::AgentChatModelEntry {
+        crate::ai::agent_chat::ui::config::AgentChatModelEntry {
             id: id.to_string(),
             display_name: Some(display_name.to_string()),
             context_window: None,
@@ -2135,26 +2146,29 @@ mod tests {
     }
 
     #[test]
-    fn test_acp_close_shortcut_is_only_advertised_for_detached_host() {
-        let shared = get_acp_chat_root_route_for_host(&[], None, AcpActionsDialogHost::Shared);
-        let notes = get_acp_chat_root_route_for_host(&[], None, AcpActionsDialogHost::Notes);
-        let detached = get_acp_chat_root_route_for_host(&[], None, AcpActionsDialogHost::Detached);
+    fn test_agent_chat_close_shortcut_is_only_advertised_for_detached_host() {
+        let shared =
+            get_agent_chat_root_route_for_host(&[], None, AgentChatActionsDialogHost::Shared);
+        let notes =
+            get_agent_chat_root_route_for_host(&[], None, AgentChatActionsDialogHost::Notes);
+        let detached =
+            get_agent_chat_root_route_for_host(&[], None, AgentChatActionsDialogHost::Detached);
 
         let shared_close = shared
             .actions
             .iter()
-            .find(|action| action.id == "acp_close")
-            .expect("shared acp_close action should exist");
+            .find(|action| action.id == "agent_chat_close")
+            .expect("shared agent_chat_close action should exist");
         let notes_close = notes
             .actions
             .iter()
-            .find(|action| action.id == "acp_close")
-            .expect("notes acp_close action should exist");
+            .find(|action| action.id == "agent_chat_close")
+            .expect("notes agent_chat_close action should exist");
         let detached_close = detached
             .actions
             .iter()
-            .find(|action| action.id == "acp_close")
-            .expect("detached acp_close action should exist");
+            .find(|action| action.id == "agent_chat_close")
+            .expect("detached agent_chat_close action should exist");
 
         assert!(shared_close.shortcut.is_none());
         assert!(notes_close.shortcut.is_none());
@@ -2162,53 +2176,62 @@ mod tests {
     }
 
     #[test]
-    fn test_acp_host_action_plan_matrix() {
-        for host in [AcpActionsDialogHost::Shared, AcpActionsDialogHost::Notes] {
+    fn test_agent_chat_host_action_plan_matrix() {
+        for host in [
+            AgentChatActionsDialogHost::Shared,
+            AgentChatActionsDialogHost::Notes,
+        ] {
             assert_eq!(
-                acp_host_action_plan(host, "acp_close"),
-                AcpHostActionPlan::IncludeWithoutShortcut,
+                agent_chat_host_action_plan(host, "agent_chat_close"),
+                AgentChatHostActionPlan::IncludeWithoutShortcut,
                 "{host:?} should keep close available without advertising Cmd-W"
             );
         }
 
         assert_eq!(
-            acp_host_action_plan(AcpActionsDialogHost::Detached, "acp_close"),
-            AcpHostActionPlan::IncludeWithShortcut
+            agent_chat_host_action_plan(AgentChatActionsDialogHost::Detached, "agent_chat_close"),
+            AgentChatHostActionPlan::IncludeWithShortcut
         );
         assert_eq!(
-            acp_host_action_plan(AcpActionsDialogHost::Notes, "acp_save_as_note"),
-            AcpHostActionPlan::Exclude
+            agent_chat_host_action_plan(
+                AgentChatActionsDialogHost::Notes,
+                "agent_chat_save_as_note"
+            ),
+            AgentChatHostActionPlan::Exclude
         );
         assert_eq!(
-            acp_host_action_plan(AcpActionsDialogHost::Detached, "acp_show_history"),
-            AcpHostActionPlan::IncludeWithShortcut
+            agent_chat_host_action_plan(
+                AgentChatActionsDialogHost::Detached,
+                "agent_chat_show_history"
+            ),
+            AgentChatHostActionPlan::IncludeWithShortcut
         );
 
         for host in [
-            AcpActionsDialogHost::Shared,
-            AcpActionsDialogHost::Notes,
-            AcpActionsDialogHost::Detached,
+            AgentChatActionsDialogHost::Shared,
+            AgentChatActionsDialogHost::Notes,
+            AgentChatActionsDialogHost::Detached,
         ] {
             assert_eq!(
-                acp_host_action_plan(host, "acp_switch_model:gpt"),
-                AcpHostActionPlan::IncludeWithShortcut
+                agent_chat_host_action_plan(host, "agent_chat_switch_model:gpt"),
+                AgentChatHostActionPlan::IncludeWithShortcut
             );
         }
     }
 
     #[test]
-    fn test_acp_chat_root_actions_add_change_model_when_models_exist() {
-        let actions = get_acp_chat_root_actions(
+    fn test_agent_chat_root_actions_add_change_model_when_models_exist() {
+        let actions = get_agent_chat_root_actions(
             &[
-                sample_acp_model("claude-sonnet-4-6", "Sonnet 4.6"),
-                sample_acp_model("claude-opus-4-6", "Opus 4.6"),
+                sample_agent_chat_model("claude-sonnet-4-6", "Sonnet 4.6"),
+                sample_agent_chat_model("claude-opus-4-6", "Opus 4.6"),
             ],
             Some("claude-sonnet-4-6"),
         );
 
         let change_model = actions
             .iter()
-            .find(|action| action.id == ACP_CHANGE_MODEL_ACTION_ID)
+            .find(|action| action.id == AGENT_CHAT_CHANGE_MODEL_ACTION_ID)
             .expect("change model action should exist");
         assert_eq!(change_model.section.as_deref(), Some("Agent"));
         assert_eq!(
@@ -2218,49 +2241,50 @@ mod tests {
     }
 
     #[test]
-    fn detached_acp_history_routes_through_actions_dialog() {
-        let detached = get_acp_chat_root_route_for_host(&[], None, AcpActionsDialogHost::Detached);
+    fn detached_agent_chat_history_routes_through_actions_dialog() {
+        let detached =
+            get_agent_chat_root_route_for_host(&[], None, AgentChatActionsDialogHost::Detached);
         assert!(
             detached
                 .actions
                 .iter()
-                .any(|action| action.id == "acp_show_history"),
-            "detached ACP must expose history in Cmd+K instead of relying on a PromptPopup-only shortcut"
+                .any(|action| action.id == "agent_chat_show_history"),
+            "detached Agent Chat must expose history in Cmd+K instead of relying on a PromptPopup-only shortcut"
         );
 
         assert!(
-            acp_history_select_action_id("session-123")
-                .starts_with(ACP_HISTORY_SELECT_ACTION_PREFIX),
+            agent_chat_history_select_action_id("session-123")
+                .starts_with(AGENT_CHAT_HISTORY_SELECT_ACTION_PREFIX),
             "history rows must dispatch through stable session-id action ids"
         );
     }
 
     #[test]
-    fn test_acp_model_picker_actions_mark_selected_model() {
-        let actions = get_acp_model_picker_actions(
+    fn test_agent_chat_model_picker_actions_mark_selected_model() {
+        let actions = get_agent_chat_model_picker_actions(
             &[
-                sample_acp_model("claude-sonnet-4-6", "Sonnet 4.6"),
-                sample_acp_model("claude-opus-4-6", "Opus 4.6"),
+                sample_agent_chat_model("claude-sonnet-4-6", "Sonnet 4.6"),
+                sample_agent_chat_model("claude-opus-4-6", "Opus 4.6"),
             ],
             Some("claude-opus-4-6"),
         );
 
         let current = actions
             .iter()
-            .find(|action| action.id == "acp_switch_model:claude-opus-4-6")
+            .find(|action| action.id == "agent_chat_switch_model:claude-opus-4-6")
             .expect("current model action should exist");
         assert_eq!(current.title, "Opus 4.6 ✓");
 
         let alternate = actions
             .iter()
-            .find(|action| action.id == "acp_switch_model:claude-sonnet-4-6")
+            .find(|action| action.id == "agent_chat_switch_model:claude-sonnet-4-6")
             .expect("alternate model action should exist");
         assert_eq!(alternate.title, "Sonnet 4.6");
     }
 
     #[test]
-    fn acp_chat_actions_include_cmux_codex_prompt_handoff() {
-        let actions = get_acp_chat_actions();
+    fn agent_chat_actions_include_cmux_codex_prompt_handoff() {
+        let actions = get_agent_chat_actions();
         let action = actions
             .iter()
             .find(|action| action.id == crate::ai::agent_prompt_handoff::CMUX_CODEX_ACTION_ID)
@@ -2272,11 +2296,14 @@ mod tests {
     }
 
     #[test]
-    fn test_acp_switch_model_action_parser_returns_model_id() {
+    fn test_agent_chat_switch_model_action_parser_returns_model_id() {
         assert_eq!(
-            acp_switch_model_id_from_action("acp_switch_model:claude-sonnet-4-6"),
+            agent_chat_switch_model_id_from_action("agent_chat_switch_model:claude-sonnet-4-6"),
             Some("claude-sonnet-4-6")
         );
-        assert_eq!(acp_switch_model_id_from_action("acp_retry_last"), None);
+        assert_eq!(
+            agent_chat_switch_model_id_from_action("agent_chat_retry_last"),
+            None
+        );
     }
 }

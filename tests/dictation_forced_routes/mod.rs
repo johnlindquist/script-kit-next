@@ -76,7 +76,7 @@ fn overlay_target_badge_preserves_full_label_for_accessibility() {
 }
 
 #[test]
-fn hidden_dictation_to_app_route_uses_acp_quick_submit() {
+fn hidden_dictation_to_app_route_uses_agent_chat_quick_submit() {
     let hidden_start = BUILTINS_SOURCE
         .find(r#""builtin/dictation-to-app""#)
         .expect("hidden dictation-to-app route must exist");

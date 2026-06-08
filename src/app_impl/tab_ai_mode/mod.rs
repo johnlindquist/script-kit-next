@@ -1,11 +1,11 @@
-//! Tab-AI mode: ACP entry, context staging, inline agent launch, and AI-surface transitions.
+//! Tab-AI mode: Agent Chat entry, context staging, inline agent launch, and AI-surface transitions.
 
 use super::*;
 
-mod acp_context_staging;
-mod acp_entry;
-mod acp_launch;
-mod acp_setup;
+mod agent_chat_context_staging;
+mod agent_chat_entry;
+mod agent_chat_launch;
+mod agent_chat_setup;
 mod focused_text_entry;
 mod source_classification;
 mod types;
@@ -15,21 +15,21 @@ use source_classification::{
 };
 pub(crate) use types::*;
 
-static ACP_OBSERVED_STATE_SYNC_GENERATION: std::sync::atomic::AtomicU64 =
+static AGENT_CHAT_OBSERVED_STATE_SYNC_GENERATION: std::sync::atomic::AtomicU64 =
     std::sync::atomic::AtomicU64::new(0);
 
 #[allow(dead_code)]
-const ACP_ONBOARDING_SOURCE_AUDIT_ANCHORS: &str = r#"
-load_acp_agent_catalog_entries
-resolve_acp_launch_with_requirements
+const AGENT_CHAT_ONBOARDING_SOURCE_AUDIT_ANCHORS: &str = r#"
+load_agent_chat_agent_catalog_entries
+resolve_agent_chat_launch_with_requirements
 preferred_agent_id.as_deref()
 launch_requirements: requirements
 implicit_codex_default_active
 retry_request.is_some()
 preferred_agent_id.is_none()
 preferred_agent_id.as_deref() == selected_agent_id.as_deref()
-acp_preferred_agent_post_launch_persist_decision
-acp_preferred_agent_preserved_during_fallback_launch
+agent_chat_preferred_agent_post_launch_persist_decision
+agent_chat_preferred_agent_preserved_during_fallback_launch
 "#;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -39,12 +39,12 @@ enum TabAiHarnessCloseDisposition {
 }
 
 impl ScriptListApp {
-    /// Give the ACP chat one frame to paint before deferred context staging runs.
-    const ACP_CONTEXT_FIRST_PAINT_DELAY_MS: u64 = 16;
+    /// Give the Agent Chat chat one frame to paint before deferred context staging runs.
+    const AGENT_CHAT_CONTEXT_FIRST_PAINT_DELAY_MS: u64 = 16;
     /// Upper bound for Ask Anything / ambient desktop capture before bootstrap fails open.
     const TAB_AI_DEFERRED_CAPTURE_TIMEOUT_SEC: u64 = 30;
 
-    fn wire_embedded_acp_footer_callbacks(
+    fn wire_embedded_agent_chat_footer_callbacks(
         &mut self,
         view_entity: &Entity<crate::ai::agent_chat::ui::AgentChatView>,
         cx: &mut Context<Self>,
@@ -76,14 +76,14 @@ impl ScriptListApp {
             let history_app = app_entity.clone();
             view.set_on_open_history_command(move |window, cx| {
                 history_app.update(cx, |app, cx| {
-                    app.open_acp_history_main_list(window, cx);
+                    app.open_agent_chat_history_main_list(window, cx);
                 });
             });
 
             let paste_response_app = app_entity.clone();
             view.set_on_paste_response_requested(move |_window, cx| {
                 paste_response_app.update(cx, |app, cx| {
-                    app.paste_latest_acp_response_to_frontmost(None, cx);
+                    app.paste_latest_agent_chat_response_to_frontmost(None, cx);
                 });
             });
 
@@ -129,14 +129,14 @@ impl ScriptListApp {
             });
         });
 
-        // Observe the ACP view for ready-script state and footer-status changes
+        // Observe the Agent Chat view for ready-script state and footer-status changes
         // owned by the child view. The child notification can fire while the
-        // AcpChatView entity is still being updated. The mention/slash picker
+        // AgentChatView entity is still being updated. The mention/slash picker
         // can also emit a burst of child notifications while rebuilding, so
         // debounce and keep only the latest parent sync before reading from the
         // child entity.
         cx.observe(view_entity, move |this, view_entity, cx| {
-            this.schedule_embedded_acp_observed_state_sync(view_entity, cx);
+            this.schedule_embedded_agent_chat_observed_state_sync(view_entity, cx);
         })
         .detach();
     }
@@ -188,14 +188,14 @@ impl ScriptListApp {
             "agent_chat_profile_selection",
         );
 
-        if let AppView::AcpChatView { entity } = self.current_view.clone() {
+        if let AppView::AgentChatView { entity } = self.current_view.clone() {
             if entity.read(cx).is_setup_mode() {
                 tracing::info!(
                     target: "script_kit::tab_ai",
                     event = "agent_chat_profile_selection_relaunch_from_setup",
                     profile_id = %profile.id,
                 );
-                self.open_tab_ai_acp_with_entry_intent(None, cx);
+                self.open_tab_ai_agent_chat_with_entry_intent(None, cx);
                 return;
             }
 
@@ -206,16 +206,16 @@ impl ScriptListApp {
             return;
         }
 
-        self.open_tab_ai_acp_with_entry_intent(None, cx);
+        self.open_tab_ai_agent_chat_with_entry_intent(None, cx);
     }
 
-    fn schedule_embedded_acp_observed_state_sync(
+    fn schedule_embedded_agent_chat_observed_state_sync(
         &mut self,
         view_entity: Entity<crate::ai::agent_chat::ui::AgentChatView>,
         cx: &mut Context<Self>,
     ) {
         let view_weak = view_entity.downgrade();
-        let generation = ACP_OBSERVED_STATE_SYNC_GENERATION
+        let generation = AGENT_CHAT_OBSERVED_STATE_SYNC_GENERATION
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
             + 1;
         cx.spawn(async move |this, cx| {
@@ -224,7 +224,7 @@ impl ScriptListApp {
                 .await;
 
             let _ = cx.update(|cx| {
-                if ACP_OBSERVED_STATE_SYNC_GENERATION.load(std::sync::atomic::Ordering::Relaxed)
+                if AGENT_CHAT_OBSERVED_STATE_SYNC_GENERATION.load(std::sync::atomic::Ordering::Relaxed)
                     != generation
                 {
                     return;
@@ -236,39 +236,39 @@ impl ScriptListApp {
                     return;
                 };
                 app.update(cx, |this, cx| {
-                    this.sync_embedded_acp_observed_state(&view_entity, cx);
+                    this.sync_embedded_agent_chat_observed_state(&view_entity, cx);
                 });
             });
         })
         .detach();
     }
 
-    fn sync_embedded_acp_observed_state(
+    fn sync_embedded_agent_chat_observed_state(
         &mut self,
         view_entity: &Entity<crate::ai::agent_chat::ui::AgentChatView>,
         cx: &mut Context<Self>,
     ) {
         let view = view_entity.read(cx);
         let new_path = view.ready_script_path();
-        let ready_script_path_changed = self.acp_ready_script_path != new_path;
-        let visible_acp_view_changed = matches!(
+        let ready_script_path_changed = self.agent_chat_ready_script_path != new_path;
+        let visible_agent_chat_view_changed = matches!(
             &self.current_view,
-            AppView::AcpChatView { entity } if entity == view_entity
+            AppView::AgentChatView { entity } if entity == view_entity
         );
-        let footer_status_changed = if visible_acp_view_changed && !view.is_setup_mode() {
+        let footer_status_changed = if visible_agent_chat_view_changed && !view.is_setup_mode() {
             let snapshot = view.footer_snapshot(cx);
-            let changed = self.acp_footer_snapshot.as_ref() != Some(&snapshot);
+            let changed = self.agent_chat_footer_snapshot.as_ref() != Some(&snapshot);
             if changed {
-                self.acp_footer_dot_status = Some(snapshot.dot_status);
-                self.acp_footer_model_display = Some(snapshot.model_display.clone());
-                self.acp_footer_snapshot = Some(snapshot);
+                self.agent_chat_footer_dot_status = Some(snapshot.dot_status);
+                self.agent_chat_footer_model_display = Some(snapshot.model_display.clone());
+                self.agent_chat_footer_snapshot = Some(snapshot);
             }
             changed
         } else {
             false
         };
         if ready_script_path_changed {
-            self.acp_ready_script_path = new_path;
+            self.agent_chat_ready_script_path = new_path;
         }
         if ready_script_path_changed || footer_status_changed {
             cx.notify();
@@ -354,7 +354,7 @@ impl ScriptListApp {
         // Plain prose without sigils normally doesn't submit to chat. But when
         // the user has already established a working directory via the cwd
         // chip (typed `>` then picked a folder), Cmd+Enter on a non-empty
-        // prompt should dispatch to ACP with that cwd. The chip is itself a
+        // prompt should dispatch to Agent Chat with that cwd. The chip is itself a
         // context anchor.
         let cwd_anchor_authorizes_submit =
             self.spine_cwd.is_some() && !plan.normalized_prompt.trim().is_empty();
@@ -429,10 +429,10 @@ impl ScriptListApp {
         self.invalidate_grouped_cache();
 
         let spine_cwd = self.spine_cwd.clone();
-        self.embedded_acp_chat = None;
-        self.open_tab_ai_acp_with_entry_intent_suppressing_focused_part(None, cx);
+        self.embedded_agent_chat = None;
+        self.open_tab_ai_agent_chat_with_entry_intent_suppressing_focused_part(None, cx);
 
-        if let AppView::AcpChatView { entity } = &self.current_view {
+        if let AppView::AgentChatView { entity } = &self.current_view {
             let entity = entity.clone();
             entity.update(cx, |chat, cx| {
                 if let Some(thread_entity) = chat.thread() {
@@ -451,7 +451,7 @@ impl ScriptListApp {
                 ) {
                     tracing::warn!(
                         target: "script_kit::spine",
-                        event = "spine_prompt_plan_acp_submit_failed",
+                        event = "spine_prompt_plan_agent_chat_submit_failed",
                         error = %e,
                     );
                 }
@@ -462,33 +462,33 @@ impl ScriptListApp {
         true
     }
 
-    /// Entry point that always routes to ACP chat, bypassing the surface
+    /// Entry point that always routes to Agent Chat chat, bypassing the surface
     /// preference routing that may redirect to the quick terminal.
     ///
-    /// Used by the Auto Submit fallback so it always opens the ACP chat
+    /// Used by the Auto Submit fallback so it always opens the Agent Chat chat
     /// experience regardless of new-script detection heuristics.
-    pub(crate) fn open_tab_ai_acp_with_entry_intent(
+    pub(crate) fn open_tab_ai_agent_chat_with_entry_intent(
         &mut self,
         entry_intent: Option<String>,
         cx: &mut Context<Self>,
     ) {
-        self.open_tab_ai_acp_with_entry_intent_variant(
+        self.open_tab_ai_agent_chat_with_entry_intent_variant(
             entry_intent,
-            crate::ai::acp::ui_variant::AcpChatUiVariant::Standard,
+            crate::ai::agent_chat::ui::ui_variant::AgentChatUiVariant::Standard,
             cx,
         );
     }
 
-    pub(crate) fn open_tab_ai_acp_with_entry_intent_variant(
+    pub(crate) fn open_tab_ai_agent_chat_with_entry_intent_variant(
         &mut self,
         entry_intent: Option<String>,
-        ui_variant: crate::ai::acp::ui_variant::AcpChatUiVariant,
+        ui_variant: crate::ai::agent_chat::ui::ui_variant::AgentChatUiVariant,
         cx: &mut Context<Self>,
     ) {
         let suppress_focused_part =
-            ui_variant != crate::ai::acp::ui_variant::AcpChatUiVariant::Standard;
-        self.open_acp_chat_from_entry_request(
-            acp_entry::AcpEntryRequest::main_launcher_with_variant(
+            ui_variant != crate::ai::agent_chat::ui::ui_variant::AgentChatUiVariant::Standard;
+        self.open_agent_chat_from_entry_request(
+            agent_chat_entry::AgentChatEntryRequest::main_launcher_with_variant(
                 entry_intent,
                 suppress_focused_part,
                 ui_variant,
@@ -498,60 +498,60 @@ impl ScriptListApp {
     }
 
     /// Entry point for direct prompt handoffs that should not inherit the
-    /// currently selected launcher row as ACP context.
-    pub(crate) fn open_tab_ai_acp_with_entry_intent_suppressing_focused_part(
+    /// currently selected launcher row as Agent Chat context.
+    pub(crate) fn open_tab_ai_agent_chat_with_entry_intent_suppressing_focused_part(
         &mut self,
         entry_intent: Option<String>,
         cx: &mut Context<Self>,
     ) {
-        self.open_acp_chat_from_entry_request(
-            acp_entry::AcpEntryRequest::main_launcher(entry_intent, true),
+        self.open_agent_chat_from_entry_request(
+            agent_chat_entry::AgentChatEntryRequest::main_launcher(entry_intent, true),
             cx,
         );
     }
 
-    /// Reattach flow for the "Return to Panel" action on a detached ACP chat.
+    /// Reattach flow for the "Return to Panel" action on a detached Agent Chat chat.
     ///
     /// The detached window and the main embedded view share the same
-    /// [`AcpThread`] entity, and `close_acp_chat_to_script_list` preserves a
-    /// strong reference via `self.embedded_acp_chat` when detaching. On
+    /// [`AgentChatThread`] entity, and `close_agent_chat_to_script_list` preserves a
+    /// strong reference via `self.embedded_agent_chat` when detaching. On
     /// reattach we reuse that cached view so the thread's message history,
     /// pending parts, and identity survive the round trip. Only when the
     /// cache is missing do we fall back to a fresh launch.
-    pub(crate) fn reattach_embedded_acp_from_detached(&mut self, cx: &mut Context<Self>) {
-        if self.try_reuse_embedded_acp_view(
+    pub(crate) fn reattach_embedded_agent_chat_from_detached(&mut self, cx: &mut Context<Self>) {
+        if self.try_reuse_embedded_agent_chat_view(
             None,
-            crate::ai::acp::ui_variant::AcpChatUiVariant::Standard,
+            crate::ai::agent_chat::ui::ui_variant::AgentChatUiVariant::Standard,
             cx,
         ) {
             tracing::info!(
                 target: "script_kit::tab_ai",
-                event = "acp_reattach_embedded_reused",
+                event = "agent_chat_reattach_embedded_reused",
                 reuse = true,
             );
             return;
         }
         tracing::info!(
             target: "script_kit::tab_ai",
-            event = "acp_reattach_embedded_cache_miss_fresh_launch",
+            event = "agent_chat_reattach_embedded_cache_miss_fresh_launch",
             reuse = false,
         );
-        self.open_tab_ai_acp_with_entry_intent(None, cx);
+        self.open_tab_ai_agent_chat_with_entry_intent(None, cx);
     }
 
-    pub(crate) fn open_tab_ai_acp_with_entry_intent_preserving_return(
+    pub(crate) fn open_tab_ai_agent_chat_with_entry_intent_preserving_return(
         &mut self,
         entry_intent: Option<String>,
         cx: &mut Context<Self>,
     ) {
-        self.open_tab_ai_acp_with_entry_intent_preserving_return_and_options(
+        self.open_tab_ai_agent_chat_with_entry_intent_preserving_return_and_options(
             entry_intent,
             false,
             cx,
         );
     }
 
-    fn open_tab_ai_acp_with_entry_intent_preserving_return_and_options(
+    fn open_tab_ai_agent_chat_with_entry_intent_preserving_return_and_options(
         &mut self,
         entry_intent: Option<String>,
         suppress_focused_part: bool,
@@ -560,7 +560,7 @@ impl ScriptListApp {
         let previous_return_view = self.tab_ai_harness_return_view.clone();
         let previous_return_focus_target = self.tab_ai_harness_return_focus_target;
         let source_view = self.current_view.clone();
-        self.seed_acp_return_origin_for_view(&source_view);
+        self.seed_agent_chat_return_origin_for_view(&source_view);
         tracing::info!(
             target: "script_kit::tab_ai",
             event = "tab_ai_entry_intent_return_seeded",
@@ -571,24 +571,24 @@ impl ScriptListApp {
                 .is_some_and(|value| !value.trim().is_empty()),
             return_focus_target = ?self.tab_ai_harness_return_focus_target,
         );
-        self.open_acp_chat_from_entry_request(
-            acp_entry::AcpEntryRequest {
-                origin: acp_entry::AcpEntryOrigin::MainLauncher,
-                target: acp_entry::AcpThreadTarget::ExistingDetachedOrEmbedded,
+        self.open_agent_chat_from_entry_request(
+            agent_chat_entry::AgentChatEntryRequest {
+                origin: agent_chat_entry::AgentChatEntryOrigin::MainLauncher,
+                target: agent_chat_entry::AgentChatThreadTarget::ExistingDetachedOrEmbedded,
                 seed_text: entry_intent,
-                ui_variant: crate::ai::acp::ui_variant::AcpChatUiVariant::Standard,
-                seed_policy: acp_entry::AcpSeedPolicy::AutoSubmitFirstTurn,
+                ui_variant: crate::ai::agent_chat::ui::ui_variant::AgentChatUiVariant::Standard,
+                seed_policy: agent_chat_entry::AgentChatSeedPolicy::AutoSubmitFirstTurn,
                 suppress_focused_part,
                 context_staging: if suppress_focused_part {
-                    acp_entry::AcpContextStaging::SuppressFocused
+                    agent_chat_entry::AgentChatContextStaging::SuppressFocused
                 } else {
-                    acp_entry::AcpContextStaging::AmbientOrFocused
+                    agent_chat_entry::AgentChatContextStaging::AmbientOrFocused
                 },
                 return_origin: Some(source_view.clone()),
             },
             cx,
         );
-        if !matches!(self.current_view, AppView::AcpChatView { .. }) {
+        if !matches!(self.current_view, AppView::AgentChatView { .. }) {
             self.tab_ai_harness_return_view = previous_return_view;
             self.tab_ai_harness_return_focus_target = previous_return_focus_target;
             tracing::info!(
@@ -599,11 +599,11 @@ impl ScriptListApp {
         }
     }
 
-    fn open_tab_ai_acp_with_options(
+    fn open_tab_ai_agent_chat_with_options(
         &mut self,
         entry_intent: Option<String>,
         suppress_focused_part: bool,
-        ui_variant: crate::ai::acp::ui_variant::AcpChatUiVariant,
+        ui_variant: crate::ai::agent_chat::ui::ui_variant::AgentChatUiVariant,
         cx: &mut Context<Self>,
     ) {
         if self.tab_ai_save_offer_state.is_some() {
@@ -618,9 +618,9 @@ impl ScriptListApp {
 
         // If a detached chat window exists, bring it to front instead
         // of opening a new panel chat.
-        if crate::ai::acp::chat_window::is_chat_window_open() {
+        if crate::ai::agent_chat::ui::chat_window::is_chat_window_open() {
             if let Some(intent) = normalized_entry_intent.clone() {
-                match crate::ai::acp::chat_window::submit_reused_entry_intent_in_detached_chat(
+                match crate::ai::agent_chat::ui::chat_window::submit_reused_entry_intent_in_detached_chat(
                     intent, cx,
                 ) {
                     Ok(true) => return,
@@ -635,7 +635,7 @@ impl ScriptListApp {
                 }
             }
 
-            if let Err(e) = crate::ai::acp::chat_window::open_chat_window(cx) {
+            if let Err(e) = crate::ai::agent_chat::ui::chat_window::open_chat_window(cx) {
                 tracing::debug!(%e, "failed to focus detached chat window");
             } else {
                 tracing::info!("tab_ai_focused_detached_window");
@@ -643,19 +643,19 @@ impl ScriptListApp {
             }
         }
         let has_cached_retry_request = self
-            .embedded_acp_chat
+            .embedded_agent_chat
             .as_ref()
             .is_some_and(|entity| entity.read(cx).has_retry_request());
-        let cached_acp_is_setup_mode = self
-            .embedded_acp_chat
+        let cached_agent_chat_is_setup_mode = self
+            .embedded_agent_chat
             .as_ref()
             .is_some_and(|entity| entity.read(cx).is_setup_mode());
 
-        if Self::should_reuse_embedded_acp_view_for_open(
+        if Self::should_reuse_embedded_agent_chat_view_for_open(
             normalized_entry_intent.as_deref(),
             has_cached_retry_request,
-            cached_acp_is_setup_mode,
-        ) && self.try_reuse_embedded_acp_view(entry_intent.clone(), ui_variant, cx)
+            cached_agent_chat_is_setup_mode,
+        ) && self.try_reuse_embedded_agent_chat_view(entry_intent.clone(), ui_variant, cx)
         {
             return;
         }
@@ -671,11 +671,11 @@ impl ScriptListApp {
         );
     }
 
-    /// Open ACP Chat with an explicit focused target, bypassing view-based
+    /// Open Agent Chat Chat with an explicit focused target, bypassing view-based
     /// auto-resolution. Used by Cmd+Enter from surfaces that own plain Enter
     /// locally (action menus, Notes) and want to hand off a canonical
-    /// `FocusedTarget` chip to ACP without re-resolving from the current view.
-    pub(crate) fn open_tab_ai_acp_with_explicit_target(
+    /// `FocusedTarget` chip to Agent Chat without re-resolving from the current view.
+    pub(crate) fn open_tab_ai_agent_chat_with_explicit_target(
         &mut self,
         target: crate::ai::TabAiTargetContext,
         cx: &mut Context<Self>,
@@ -687,7 +687,7 @@ impl ScriptListApp {
         let label = Self::format_tab_ai_focused_chip_label(&target);
         tracing::info!(
             target: "script_kit::tab_ai",
-            event = "tab_ai_explicit_target_acp_open",
+            event = "tab_ai_explicit_target_agent_chat_open",
             item_source = %target.source,
             item_kind = %target.kind,
             semantic_id = %target.semantic_id,
@@ -697,12 +697,12 @@ impl ScriptListApp {
         let focused_part =
             Some(crate::ai::message_parts::AiContextPart::FocusedTarget { target, label });
 
-        if crate::ai::acp::chat_window::is_chat_window_open() {
+        if crate::ai::agent_chat::ui::chat_window::is_chat_window_open() {
             let detached_parts = focused_part.clone().into_iter().collect::<Vec<_>>();
-            match crate::ai::acp::chat_window::submit_reused_entry_intent_with_host_context_in_detached_chat(
+            match crate::ai::agent_chat::ui::chat_window::submit_reused_entry_intent_with_host_context_in_detached_chat(
                 String::new(),
                 detached_parts,
-                "tab_ai_explicit_target_acp_open",
+                "tab_ai_explicit_target_agent_chat_open",
                 cx,
             ) {
                 Ok(true) => return,
@@ -724,7 +724,7 @@ impl ScriptListApp {
         let request = TabAiLaunchRequest {
             source_view: self.current_view.clone(),
             entry_intent: None,
-            ui_variant: crate::ai::acp::ui_variant::AcpChatUiVariant::Standard,
+            ui_variant: crate::ai::agent_chat::ui::ui_variant::AgentChatUiVariant::Standard,
             suppress_focused_part: false,
             quick_submit_plan: None,
             ui_snapshot,
@@ -736,18 +736,18 @@ impl ScriptListApp {
         // No ambient capture needed — explicit target path skips desktop snapshot.
         let (_tx, rx) = async_channel::bounded::<Result<TabAiDeferredCaptureArtifacts, String>>(1);
 
-        self.open_tab_ai_acp_view_from_request_impl(
+        self.open_tab_ai_agent_chat_view_from_request_impl(
             request,
             rx,
             focused_part,
             false, // use_ask_anything_fallback
             None,  // explicit_ambient_chip_label
-            true,  // force_acp_surface
+            true,  // force_agent_chat_surface
             cx,
         );
     }
 
-    pub(crate) fn open_tab_ai_acp_with_explicit_target_preserving_return(
+    pub(crate) fn open_tab_ai_agent_chat_with_explicit_target_preserving_return(
         &mut self,
         target: crate::ai::TabAiTargetContext,
         cx: &mut Context<Self>,
@@ -755,7 +755,7 @@ impl ScriptListApp {
         let previous_return_view = self.tab_ai_harness_return_view.clone();
         let previous_return_focus_target = self.tab_ai_harness_return_focus_target;
         let source_view = self.current_view.clone();
-        self.seed_acp_return_origin_for_view(&source_view);
+        self.seed_agent_chat_return_origin_for_view(&source_view);
         tracing::info!(
             target: "script_kit::tab_ai",
             event = "tab_ai_explicit_target_return_seeded",
@@ -764,20 +764,20 @@ impl ScriptListApp {
             pending_script_list_trigger = ?self.tab_ai_harness_script_list_trigger,
             semantic_id = %target.semantic_id,
         );
-        self.open_acp_chat_from_entry_request(
-            acp_entry::AcpEntryRequest {
-                origin: acp_entry::AcpEntryOrigin::ActionsDialog,
-                target: acp_entry::AcpThreadTarget::ExistingDetachedOrEmbedded,
+        self.open_agent_chat_from_entry_request(
+            agent_chat_entry::AgentChatEntryRequest {
+                origin: agent_chat_entry::AgentChatEntryOrigin::ActionsDialog,
+                target: agent_chat_entry::AgentChatThreadTarget::ExistingDetachedOrEmbedded,
                 seed_text: None,
-                ui_variant: crate::ai::acp::ui_variant::AcpChatUiVariant::Standard,
-                seed_policy: acp_entry::AcpSeedPolicy::ComposerOnly,
+                ui_variant: crate::ai::agent_chat::ui::ui_variant::AgentChatUiVariant::Standard,
+                seed_policy: agent_chat_entry::AgentChatSeedPolicy::ComposerOnly,
                 suppress_focused_part: true,
-                context_staging: acp_entry::AcpContextStaging::ActionsPayload { target },
+                context_staging: agent_chat_entry::AgentChatContextStaging::ActionsPayload { target },
                 return_origin: Some(source_view.clone()),
             },
             cx,
         );
-        if !matches!(self.current_view, AppView::AcpChatView { .. }) {
+        if !matches!(self.current_view, AppView::AgentChatView { .. }) {
             self.tab_ai_harness_return_view = previous_return_view;
             self.tab_ai_harness_return_focus_target = previous_return_focus_target;
             tracing::info!(
@@ -788,7 +788,7 @@ impl ScriptListApp {
         }
     }
 
-    fn open_tab_ai_acp_with_context_part(
+    fn open_tab_ai_agent_chat_with_context_part(
         &mut self,
         part: crate::ai::message_parts::AiContextPart,
         source: &'static str,
@@ -800,13 +800,13 @@ impl ScriptListApp {
 
         tracing::info!(
             target: "script_kit::tab_ai",
-            event = "tab_ai_context_part_acp_open",
+            event = "tab_ai_context_part_agent_chat_open",
             source,
             label = %part.label(),
         );
 
-        if crate::ai::acp::chat_window::is_chat_window_open() {
-            match crate::ai::acp::chat_window::submit_reused_entry_intent_with_host_context_in_detached_chat(
+        if crate::ai::agent_chat::ui::chat_window::is_chat_window_open() {
+            match crate::ai::agent_chat::ui::chat_window::submit_reused_entry_intent_with_host_context_in_detached_chat(
                 String::new(),
                 vec![part.clone()],
                 source,
@@ -831,7 +831,7 @@ impl ScriptListApp {
         let request = TabAiLaunchRequest {
             source_view: self.current_view.clone(),
             entry_intent: None,
-            ui_variant: crate::ai::acp::ui_variant::AcpChatUiVariant::Standard,
+            ui_variant: crate::ai::agent_chat::ui::ui_variant::AgentChatUiVariant::Standard,
             suppress_focused_part: false,
             quick_submit_plan: None,
             ui_snapshot,
@@ -842,7 +842,7 @@ impl ScriptListApp {
 
         let (_tx, rx) = async_channel::bounded::<Result<TabAiDeferredCaptureArtifacts, String>>(1);
 
-        self.open_tab_ai_acp_view_from_request_impl(request, rx, Some(part), false, None, true, cx);
+        self.open_tab_ai_agent_chat_view_from_request_impl(request, rx, Some(part), false, None, true, cx);
     }
 
     fn quick_terminal_context_part_from_entity(
@@ -895,7 +895,7 @@ impl ScriptListApp {
             source = %part.source(),
             label = %part.label(),
         );
-        self.open_tab_ai_acp_with_context_part(part, "quick_terminal_output", cx);
+        self.open_tab_ai_agent_chat_with_context_part(part, "quick_terminal_output", cx);
         true
     }
 
@@ -953,7 +953,7 @@ impl ScriptListApp {
         self.open_agent_chat_with_quick_terminal_output(entity, cx)
     }
 
-    pub(crate) fn route_large_script_list_paste_to_acp(&mut self, cx: &mut Context<Self>) -> bool {
+    pub(crate) fn route_large_script_list_paste_to_agent_chat(&mut self, cx: &mut Context<Self>) -> bool {
         if !matches!(self.current_view, AppView::ScriptList) {
             return false;
         }
@@ -991,14 +991,14 @@ impl ScriptListApp {
 
             tracing::info!(
                 target: "script_kit::tab_ai",
-                event = "script_list_clipboard_image_routed_to_acp",
+                event = "script_list_clipboard_image_routed_to_agent_chat",
                 label = %label,
                 width = image_data.width,
                 height = image_data.height,
                 size_bytes = png_bytes.len(),
             );
 
-            self.open_tab_ai_acp_with_context_part(part, "script_list_clipboard_image", cx);
+            self.open_tab_ai_agent_chat_with_context_part(part, "script_list_clipboard_image", cx);
             return true;
         }
         let Ok(text) = clipboard.get_text() else {
@@ -1020,22 +1020,22 @@ impl ScriptListApp {
 
         tracing::info!(
             target: "script_kit::tab_ai",
-            event = "script_list_large_paste_routed_to_acp",
+            event = "script_list_large_paste_routed_to_agent_chat",
             label = %token.label,
             char_count = token.text.chars().count(),
             line_count = token.text.lines().count().max(1),
         );
 
-        self.open_tab_ai_acp_with_context_part(part, "script_list_large_paste", cx);
+        self.open_tab_ai_agent_chat_with_context_part(part, "script_list_large_paste", cx);
         true
     }
 
-    /// Open ACP Chat with a selected plugin skill staged like a slash pick.
+    /// Open Agent Chat Chat with a selected plugin skill staged like a slash pick.
     ///
     /// Main-menu skill selection should leave `/{skill} ` in the composer
     /// with the skill attached as pending context. It must not become an
     /// entry intent, because entry intents auto-submit.
-    pub(crate) fn open_acp_with_selected_skill(
+    pub(crate) fn open_agent_chat_with_selected_skill(
         &mut self,
         skill: &crate::plugins::PluginSkill,
         cx: &mut Context<Self>,
@@ -1045,8 +1045,8 @@ impl ScriptListApp {
         } else {
             &skill.plugin_title
         };
-        let command_text = crate::ai::acp::build_skill_slash_command_text(&skill.skill_id);
-        let part = crate::ai::acp::build_skill_context_part(
+        let command_text = crate::ai::agent_chat::ui::build_skill_slash_command_text(&skill.skill_id);
+        let part = crate::ai::agent_chat::ui::build_skill_context_part(
             &skill.title,
             owner,
             &skill.skill_id,
@@ -1054,49 +1054,49 @@ impl ScriptListApp {
         );
 
         tracing::info!(
-            event = "acp_skill_slash_selection_requested",
+            event = "agent_chat_skill_slash_selection_requested",
             plugin_id = %skill.plugin_id,
             skill_id = %skill.skill_id,
             skill_title = %skill.title,
             owner,
             path = %skill.path.display(),
             slash_input = %command_text,
-            "Opening ACP with plugin skill staged as a slash selection"
+            "Opening Agent Chat with plugin skill staged as a slash selection"
         );
 
-        if let Some(entity) = crate::ai::acp::chat_window::get_detached_acp_view_entity() {
+        if let Some(entity) = crate::ai::agent_chat::ui::chat_window::get_detached_agent_chat_view_entity() {
             let staged = entity.update(cx, |chat, cx| {
                 chat.stage_selected_plugin_skill_from_main_menu(skill, cx)
             });
             if staged {
-                crate::ai::acp::chat_window::activate_chat_window(cx);
+                crate::ai::agent_chat::ui::chat_window::activate_chat_window(cx);
                 return;
             }
         }
 
-        self.open_acp_chat_from_entry_request(
-            acp_entry::AcpEntryRequest {
-                origin: acp_entry::AcpEntryOrigin::PluginSkill {
+        self.open_agent_chat_from_entry_request(
+            agent_chat_entry::AgentChatEntryRequest {
+                origin: agent_chat_entry::AgentChatEntryOrigin::PluginSkill {
                     skill_id: skill.skill_id.clone(),
                 },
-                target: acp_entry::AcpThreadTarget::ExistingDetachedOrEmbedded,
+                target: agent_chat_entry::AgentChatThreadTarget::ExistingDetachedOrEmbedded,
                 seed_text: None,
-                ui_variant: crate::ai::acp::ui_variant::AcpChatUiVariant::Standard,
-                seed_policy: acp_entry::AcpSeedPolicy::ComposerOnly,
+                ui_variant: crate::ai::agent_chat::ui::ui_variant::AgentChatUiVariant::Standard,
+                seed_policy: agent_chat_entry::AgentChatSeedPolicy::ComposerOnly,
                 suppress_focused_part: true,
-                context_staging: acp_entry::AcpContextStaging::SuppressFocused,
+                context_staging: agent_chat_entry::AgentChatContextStaging::SuppressFocused,
                 return_origin: Some(self.current_view.clone()),
             },
             cx,
         );
 
-        if let AppView::AcpChatView { entity } = &self.current_view {
+        if let AppView::AgentChatView { entity } = &self.current_view {
             let staged = entity.update(cx, |chat, cx| {
                 chat.stage_selected_plugin_skill_from_main_menu(skill, cx)
             });
             tracing::info!(
                 target: "script_kit::tab_ai",
-                event = "acp_skill_slash_selection_staged",
+                event = "agent_chat_skill_slash_selection_staged",
                 plugin_id = %skill.plugin_id,
                 skill_id = %skill.skill_id,
                 staged,
@@ -1106,7 +1106,7 @@ impl ScriptListApp {
         }
     }
 
-    pub(crate) fn open_tab_ai_acp_with_slash_picker(
+    pub(crate) fn open_tab_ai_agent_chat_with_slash_picker(
         &mut self,
         window: &mut Window,
         cx: &mut Context<Self>,
@@ -1114,16 +1114,16 @@ impl ScriptListApp {
         self.tab_ai_harness_script_list_trigger = Some('/');
         tracing::info!(
             target: "script_kit::tab_ai",
-            event = "acp_open_from_script_list_trigger",
+            event = "agent_chat_open_from_script_list_trigger",
             trigger = "/",
             current_view = ?self.current_view,
         );
-        self.open_tab_ai_acp_with_entry_intent(None, cx);
+        self.open_tab_ai_agent_chat_with_entry_intent(None, cx);
 
-        let detached_opened = crate::ai::acp::chat_window::open_detached_slash_picker(cx);
+        let detached_opened = crate::ai::agent_chat::ui::chat_window::open_detached_slash_picker(cx);
         tracing::info!(
             target: "script_kit::tab_ai",
-            event = "acp_trigger_picker_open_attempt",
+            event = "agent_chat_trigger_picker_open_attempt",
             trigger = "/",
             detached_opened,
         );
@@ -1131,17 +1131,17 @@ impl ScriptListApp {
             return;
         }
 
-        if let AppView::AcpChatView { entity } = &self.current_view {
+        if let AppView::AgentChatView { entity } = &self.current_view {
             tracing::info!(
                 target: "script_kit::tab_ai",
-                event = "acp_trigger_picker_open_embedded_deferred",
+                event = "agent_chat_trigger_picker_open_embedded_deferred",
                 trigger = "/",
             );
-            self.schedule_embedded_acp_picker_open(window.window_handle(), entity.clone(), '/', cx);
+            self.schedule_embedded_agent_chat_picker_open(window.window_handle(), entity.clone(), '/', cx);
         }
     }
 
-    pub(crate) fn open_tab_ai_acp_with_mention_picker(
+    pub(crate) fn open_tab_ai_agent_chat_with_mention_picker(
         &mut self,
         _window: &mut Window,
         cx: &mut Context<Self>,
@@ -1149,16 +1149,16 @@ impl ScriptListApp {
         self.tab_ai_harness_script_list_trigger = Some('@');
         tracing::info!(
             target: "script_kit::tab_ai",
-            event = "acp_open_from_script_list_trigger",
+            event = "agent_chat_open_from_script_list_trigger",
             trigger = "@",
             current_view = ?self.current_view,
         );
-        self.open_tab_ai_acp_with_entry_intent(None, cx);
+        self.open_tab_ai_agent_chat_with_entry_intent(None, cx);
 
-        let detached_opened = crate::ai::acp::chat_window::open_detached_mention_picker(cx);
+        let detached_opened = crate::ai::agent_chat::ui::chat_window::open_detached_mention_picker(cx);
         tracing::info!(
             target: "script_kit::tab_ai",
-            event = "acp_trigger_picker_open_attempt",
+            event = "agent_chat_trigger_picker_open_attempt",
             trigger = "@",
             detached_opened,
         );
@@ -1166,20 +1166,20 @@ impl ScriptListApp {
             return;
         }
 
-        if let AppView::AcpChatView { entity } = &self.current_view {
+        if let AppView::AgentChatView { entity } = &self.current_view {
             tracing::info!(
                 target: "script_kit::tab_ai",
-                event = "acp_spine_trigger_seeded_embedded",
+                event = "agent_chat_spine_trigger_seeded_embedded",
                 trigger = "@",
             );
             entity.update(cx, |view, cx| {
                 view.set_input("@".to_string(), cx);
-                view.refresh_acp_spine_from_composer(cx);
+                view.refresh_agent_chat_spine_from_composer(cx);
             });
         }
     }
 
-    fn schedule_embedded_acp_picker_open(
+    fn schedule_embedded_agent_chat_picker_open(
         &self,
         window_handle: gpui::AnyWindowHandle,
         entity: gpui::Entity<crate::ai::agent_chat::ui::AgentChatView>,
@@ -1189,7 +1189,7 @@ impl ScriptListApp {
         cx.spawn(async move |_this, cx| {
             cx.background_executor()
                 .timer(std::time::Duration::from_millis(
-                    Self::ACP_CONTEXT_FIRST_PAINT_DELAY_MS,
+                    Self::AGENT_CHAT_CONTEXT_FIRST_PAINT_DELAY_MS,
                 ))
                 .await;
 
@@ -1201,7 +1201,7 @@ impl ScriptListApp {
                         '|' => view.open_profile_trigger_picker_in_window(window, cx),
                         '.' | ';' | '>' => {
                             view.set_input(trigger.to_string(), cx);
-                            view.refresh_acp_spine_from_composer(cx);
+                            view.refresh_agent_chat_spine_from_composer(cx);
                         }
                         _ => {}
                     }
@@ -1211,16 +1211,16 @@ impl ScriptListApp {
         .detach();
     }
 
-    fn try_reuse_embedded_acp_view(
+    fn try_reuse_embedded_agent_chat_view(
         &mut self,
         entry_intent: Option<String>,
-        ui_variant: crate::ai::acp::ui_variant::AcpChatUiVariant,
+        ui_variant: crate::ai::agent_chat::ui::ui_variant::AgentChatUiVariant,
         cx: &mut Context<Self>,
     ) -> bool {
-        let Some(entity) = self.embedded_acp_chat.as_ref().cloned() else {
+        let Some(entity) = self.embedded_agent_chat.as_ref().cloned() else {
             tracing::info!(
                 target: "script_kit::tab_ai",
-                event = "tab_ai_embedded_acp_cache_miss",
+                event = "tab_ai_embedded_agent_chat_cache_miss",
             );
             return false;
         };
@@ -1232,13 +1232,13 @@ impl ScriptListApp {
         let source_view = self.current_view.clone();
 
         if normalized_intent.is_some() && is_setup_mode {
-            self.embedded_acp_chat = None;
+            self.embedded_agent_chat = None;
             tracing::info!(
                 target: "script_kit::tab_ai",
-                event = "tab_ai_embedded_acp_reuse_rejected_setup_mode",
+                event = "tab_ai_embedded_agent_chat_reuse_rejected_setup_mode",
                 source_view = ?source_view,
                 auto_submit = true,
-                acp_chat_ui_variant = ui_variant.state_id(),
+                agent_chat_ui_variant = ui_variant.state_id(),
             );
             return false;
         }
@@ -1251,7 +1251,7 @@ impl ScriptListApp {
 
         self.tab_ai_harness_return_view = Some(source_view.clone());
         self.tab_ai_harness_return_focus_target = Some(self.tab_ai_return_focus_target());
-        self.enter_embedded_acp_chat_surface(entity.clone(), cx);
+        self.enter_embedded_agent_chat_surface(entity.clone(), cx);
 
         if let Some(intent) = normalized_intent.clone().filter(|_| !is_setup_mode) {
             entity.update(cx, |chat, cx| {
@@ -1261,25 +1261,25 @@ impl ScriptListApp {
 
         tracing::info!(
             target: "script_kit::tab_ai",
-            event = "tab_ai_embedded_acp_reused",
+            event = "tab_ai_embedded_agent_chat_reused",
             source_view = ?source_view,
             auto_submit = normalized_intent.is_some(),
             is_setup_mode,
-            acp_chat_ui_variant = ui_variant.state_id(),
+            agent_chat_ui_variant = ui_variant.state_id(),
         );
         cx.notify();
         true
     }
 
-    fn should_reuse_embedded_acp_view_for_open(
+    fn should_reuse_embedded_agent_chat_view_for_open(
         entry_intent: Option<&str>,
         has_cached_retry_request: bool,
-        cached_acp_is_setup_mode: bool,
+        cached_agent_chat_is_setup_mode: bool,
     ) -> bool {
-        entry_intent.is_some() && !has_cached_retry_request && !cached_acp_is_setup_mode
+        entry_intent.is_some() && !has_cached_retry_request && !cached_agent_chat_is_setup_mode
     }
 
-    fn take_prewarmed_acp_chat_for_launch(
+    fn take_prewarmed_agent_chat_for_launch(
         &mut self,
         selected_agent_id: Option<&str>,
         requirements: crate::ai::agent_chat::ui::AgentChatLaunchRequirements,
@@ -1293,8 +1293,8 @@ impl ScriptListApp {
         {
             tracing::info!(
                 target: "script_kit::tab_ai",
-                event = "acp_hot_prewarm_skip",
-                correlation_id = "acp_hot_prewarm",
+                event = "agent_chat_hot_prewarm_skip",
+                correlation_id = "agent_chat_hot_prewarm",
                 retry_request_active,
                 needs_embedded_context = requirements.needs_embedded_context,
                 needs_image = requirements.needs_image,
@@ -1302,18 +1302,18 @@ impl ScriptListApp {
             return None;
         }
 
-        let Some(view) = self.prewarmed_acp_chat.take() else {
+        let Some(view) = self.prewarmed_agent_chat.take() else {
             return None;
         };
 
         let Some(thread) = view.read(cx).thread() else {
             tracing::warn!(
                 target: "script_kit::tab_ai",
-                event = "acp_hot_prewarm_discarded",
-                correlation_id = "acp_hot_prewarm",
+                event = "agent_chat_hot_prewarm_discarded",
+                correlation_id = "agent_chat_hot_prewarm",
                 reason = "not_live",
             );
-            self.prewarmed_acp_chat = None;
+            self.prewarmed_agent_chat = None;
             return None;
         };
 
@@ -1321,23 +1321,23 @@ impl ScriptListApp {
         if thread_selected_agent_id.as_deref() != selected_agent_id {
             tracing::info!(
                 target: "script_kit::tab_ai",
-                event = "acp_hot_prewarm_discarded",
-                correlation_id = "acp_hot_prewarm",
+                event = "agent_chat_hot_prewarm_discarded",
+                correlation_id = "agent_chat_hot_prewarm",
                 reason = "agent_mismatch",
                 selected_agent_id = ?selected_agent_id,
                 thread_selected_agent_id = ?thread_selected_agent_id,
             );
-            self.prewarmed_acp_chat = None;
+            self.prewarmed_agent_chat = None;
             return None;
         }
 
         tracing::info!(
             target: "script_kit::tab_ai",
-            event = "acp_hot_prewarm_consumed",
-            correlation_id = "acp_hot_prewarm",
+            event = "agent_chat_hot_prewarm_consumed",
+            correlation_id = "agent_chat_hot_prewarm",
             selected_agent_id = ?selected_agent_id,
         );
-        self.prewarmed_acp_chat = None;
+        self.prewarmed_agent_chat = None;
         Some((view, thread))
     }
 
@@ -1368,8 +1368,8 @@ impl ScriptListApp {
 
         // If a detached chat window exists, bring it to front instead
         // of opening a new panel chat.
-        if crate::ai::acp::chat_window::is_chat_window_open() {
-            if let Err(e) = crate::ai::acp::chat_window::open_chat_window(cx) {
+        if crate::ai::agent_chat::ui::chat_window::is_chat_window_open() {
+            if let Err(e) = crate::ai::agent_chat::ui::chat_window::open_chat_window(cx) {
                 tracing::debug!(%e, "failed to focus detached chat window");
             } else {
                 tracing::info!("tab_ai_focused_detached_window");
@@ -1383,7 +1383,7 @@ impl ScriptListApp {
             None,
             capture_kind,
             false,
-            crate::ai::acp::ui_variant::AcpChatUiVariant::Standard,
+            crate::ai::agent_chat::ui::ui_variant::AgentChatUiVariant::Standard,
             cx,
         );
     }
@@ -1408,7 +1408,7 @@ impl ScriptListApp {
             Some(plan),
             capture_kind,
             false,
-            crate::ai::acp::ui_variant::AcpChatUiVariant::Standard,
+            crate::ai::agent_chat::ui::ui_variant::AgentChatUiVariant::Standard,
             cx,
         );
     }
@@ -1424,14 +1424,14 @@ impl ScriptListApp {
     ) {
         let Some(plan) = crate::ai::plan_tab_ai_quick_submit(source, &raw_text) else {
             // Empty input — open the harness without intent.
-            self.open_tab_ai_acp_with_entry_intent(None, cx);
+            self.open_tab_ai_agent_chat_with_entry_intent(None, cx);
             return;
         };
 
-        // If the ACP chat view is active, route through the shared
+        // If the Agent Chat chat view is active, route through the shared
         // verification-input builder so new-script guidance is appended.
-        if let AppView::AcpChatView { ref entity } = self.current_view {
-            self.submit_live_acp_tab_ai_from_plan(entity.clone(), plan, cx);
+        if let AppView::AgentChatView { ref entity } = self.current_view {
+            self.submit_live_agent_chat_tab_ai_from_plan(entity.clone(), plan, cx);
             return;
         }
 
@@ -1469,13 +1469,13 @@ impl ScriptListApp {
         self.open_tab_ai_chat_with_quick_submit_plan(plan, cx);
     }
 
-    /// Submit a quick-submit plan into an already-open, live ACP chat session.
+    /// Submit a quick-submit plan into an already-open, live Agent Chat chat session.
     ///
-    /// Routes through `build_tab_ai_acp_initial_input_for_prompt` so that
+    /// Routes through `build_tab_ai_agent_chat_initial_input_for_prompt` so that
     /// new-script guidance (including mandatory Bun verification) is
-    /// appended when the intent matches, keeping live ACP sessions aligned
-    /// with the new-session ACP path.
-    fn submit_live_acp_tab_ai_from_plan(
+    /// appended when the intent matches, keeping live Agent Chat sessions aligned
+    /// with the new-session Agent Chat path.
+    fn submit_live_agent_chat_tab_ai_from_plan(
         &mut self,
         entity: gpui::Entity<crate::ai::agent_chat::ui::AgentChatView>,
         plan: crate::ai::TabAiQuickSubmitPlan,
@@ -1496,7 +1496,7 @@ impl ScriptListApp {
         if surface_preference.use_quick_terminal {
             tracing::info!(
                 target: "script_kit::tab_ai",
-                event = "tab_ai_quick_submit_acp_live_rerouted",
+                event = "tab_ai_quick_submit_agent_chat_live_rerouted",
                 surface = "quick_terminal",
                 reason = "script_verification_required",
                 prompt_type = prompt_type,
@@ -1517,13 +1517,13 @@ impl ScriptListApp {
                 Some(plan),
                 capture_kind,
                 false,
-                crate::ai::acp::ui_variant::AcpChatUiVariant::Standard,
+                crate::ai::agent_chat::ui::ui_variant::AgentChatUiVariant::Standard,
                 cx,
             );
             return;
         }
 
-        let initial_input = crate::ai::harness::build_tab_ai_acp_initial_input_for_prompt(
+        let initial_input = crate::ai::harness::build_tab_ai_agent_chat_initial_input_for_prompt(
             prompt_type,
             plan.submission_intent(),
         );
@@ -1536,7 +1536,7 @@ impl ScriptListApp {
 
         tracing::info!(
             target: "script_kit::tab_ai",
-            event = "tab_ai_quick_submit_acp_live",
+            event = "tab_ai_quick_submit_agent_chat_live",
             prompt_type = prompt_type,
             source = ?plan.source,
             kind = ?plan.kind,
@@ -1555,7 +1555,7 @@ impl ScriptListApp {
                 if let Err(error) = thread.submit_input(cx) {
                     tracing::warn!(
                         target: "script_kit::tab_ai",
-                        event = "tab_ai_quick_submit_acp_live_submit_failed",
+                        event = "tab_ai_quick_submit_agent_chat_live_submit_failed",
                         prompt_type = prompt_type,
                         error = %error,
                     );
@@ -1589,7 +1589,7 @@ impl ScriptListApp {
         let request = TabAiLaunchRequest {
             source_view,
             entry_intent: Some(entry_intent),
-            ui_variant: crate::ai::acp::ui_variant::AcpChatUiVariant::Standard,
+            ui_variant: crate::ai::agent_chat::ui::ui_variant::AgentChatUiVariant::Standard,
             suppress_focused_part: false,
             quick_submit_plan: Some(plan),
             ui_snapshot,
@@ -1727,7 +1727,7 @@ impl ScriptListApp {
     /// Format a canonical chip label from a resolved target.
     ///
     /// Delegates to the shared `format_explicit_target_chip_label` so Notes,
-    /// actions, and the main-window ACP openings all produce the same text.
+    /// actions, and the main-window Agent Chat openings all produce the same text.
     fn format_tab_ai_focused_chip_label(target: &crate::ai::TabAiTargetContext) -> String {
         crate::ai::format_explicit_target_chip_label(target)
     }
@@ -1779,13 +1779,13 @@ impl ScriptListApp {
     }
 
     /// Route a launcher-style `Cmd+Enter` press from the current non-AI source
-    /// surface into ACP.
+    /// surface into Agent Chat.
     ///
-    /// Returns `true` when the keypress was consumed and ACP launch began.
+    /// Returns `true` when the keypress was consumed and Agent Chat launch began.
     /// Run 12 Pass 11 — Cmd+Enter while composing power syntax generates a
     /// deterministic stub proposal, sets `pending_menu_syntax_ai_proposal`,
     /// and triggers a snapshot rebuild. Returns `true` when the chord was
-    /// consumed so the legacy ACP route doesn't also fire.
+    /// consumed so the legacy Agent Chat route doesn't also fire.
     pub(crate) fn try_route_cmd_enter_to_menu_syntax_ai(&mut self, cx: &mut Context<Self>) -> bool {
         use crate::menu_syntax::{builtin_schema, MenuSyntaxActionState};
         let raw = self.filter_text().to_string();
@@ -1891,7 +1891,7 @@ impl ScriptListApp {
         true
     }
 
-    pub(crate) fn try_route_global_cmd_enter_to_acp_context_capture(
+    pub(crate) fn try_route_global_cmd_enter_to_agent_chat_context_capture(
         &mut self,
         cx: &mut Context<Self>,
     ) -> bool {
@@ -1904,8 +1904,8 @@ impl ScriptListApp {
         }
         // Run 12 Pass 11 — `cmd-enter-inline-ai-proposal`. When the user is
         // composing power syntax, Cmd+Enter generates an INLINE proposal
-        // shown in the hint card (NOT a full ACP chat handoff). Intercept
-        // BEFORE the legacy ACP-route guards.
+        // shown in the hint card (NOT a full Agent Chat chat handoff). Intercept
+        // BEFORE the legacy Agent Chat-route guards.
         if self.try_route_cmd_enter_to_menu_syntax_ai(cx) {
             return true;
         }
@@ -1917,7 +1917,7 @@ impl ScriptListApp {
         }
         // Same attachment-portal guard as the plain Tab path: the portal
         // temporarily hosts a builtin view, but Cmd+Enter there must not
-        // reopen / refocus the ACP chat behind the portal.
+        // reopen / refocus the Agent Chat chat behind the portal.
         if self.is_in_attachment_portal() {
             tracing::debug!(
                 target: "script_kit::tab_ai",
@@ -1932,25 +1932,25 @@ impl ScriptListApp {
         {
             tracing::info!(
                 target: "script_kit::tab_ai",
-                event = "tab_ai_global_cmd_enter_plain_prompt_routed_to_acp",
+                event = "tab_ai_global_cmd_enter_plain_prompt_routed_to_agent_chat",
                 input_len = intent.len(),
             );
-            self.open_tab_ai_acp_with_entry_intent_suppressing_focused_part(Some(intent), cx);
+            self.open_tab_ai_agent_chat_with_entry_intent_suppressing_focused_part(Some(intent), cx);
             return true;
         }
 
         let source_view = self.app_view_name();
         tracing::info!(
             target: "script_kit::tab_ai",
-            event = "tab_ai_global_cmd_enter_routed_to_acp",
+            event = "tab_ai_global_cmd_enter_routed_to_agent_chat",
             source_view = %source_view,
         );
 
         let is_file_search = matches!(self.current_view, AppView::FileSearchView { .. });
         let origin = if is_file_search {
-            acp_entry::AcpEntryOrigin::FileSearch
+            agent_chat_entry::AgentChatEntryOrigin::FileSearch
         } else {
-            acp_entry::AcpEntryOrigin::MainLauncher
+            agent_chat_entry::AgentChatEntryOrigin::MainLauncher
         };
 
         // Empty-input guard: when the user opens Agent Chat from the main menu
@@ -1978,20 +1978,20 @@ impl ScriptListApp {
         }
         let suppress_focused_part = suppress_default_script_list_selection;
 
-        self.open_acp_chat_from_entry_request(
-            acp_entry::AcpEntryRequest {
+        self.open_agent_chat_from_entry_request(
+            agent_chat_entry::AgentChatEntryRequest {
                 origin,
-                target: acp_entry::AcpThreadTarget::ExistingDetachedOrEmbedded,
+                target: agent_chat_entry::AgentChatThreadTarget::ExistingDetachedOrEmbedded,
                 seed_text: None,
-                ui_variant: crate::ai::acp::ui_variant::AcpChatUiVariant::Standard,
-                seed_policy: acp_entry::AcpSeedPolicy::ComposerOnly,
+                ui_variant: crate::ai::agent_chat::ui::ui_variant::AgentChatUiVariant::Standard,
+                seed_policy: agent_chat_entry::AgentChatSeedPolicy::ComposerOnly,
                 suppress_focused_part,
                 context_staging: if is_file_search {
-                    acp_entry::AcpContextStaging::FileSearchSelection
+                    agent_chat_entry::AgentChatContextStaging::FileSearchSelection
                 } else if suppress_focused_part {
-                    acp_entry::AcpContextStaging::SuppressFocused
+                    agent_chat_entry::AgentChatContextStaging::SuppressFocused
                 } else {
-                    acp_entry::AcpContextStaging::AmbientOrFocused
+                    agent_chat_entry::AgentChatContextStaging::AmbientOrFocused
                 },
                 return_origin: Some(self.current_view.clone()),
             },
@@ -2078,8 +2078,8 @@ impl ScriptListApp {
         suppress_focused_part: bool,
         quick_submit_plan: Option<crate::ai::TabAiQuickSubmitPlan>,
         capture_kind: crate::ai::TabAiCaptureKind,
-        force_acp_surface: bool,
-        ui_variant: crate::ai::acp::ui_variant::AcpChatUiVariant,
+        force_agent_chat_surface: bool,
+        ui_variant: crate::ai::agent_chat::ui::ui_variant::AgentChatUiVariant,
         cx: &mut Context<Self>,
     ) {
         self.begin_tab_ai_harness_entry_from_source_view(
@@ -2088,7 +2088,7 @@ impl ScriptListApp {
             suppress_focused_part,
             quick_submit_plan,
             capture_kind,
-            force_acp_surface,
+            force_agent_chat_surface,
             ui_variant,
             cx,
         );
@@ -2098,8 +2098,8 @@ impl ScriptListApp {
     ///
     /// This is the inner implementation that `begin_tab_ai_harness_entry`
     /// delegates to. The `source_view` parameter allows callers like the
-    /// ACP live-submit reroute to preserve the original source surface
-    /// instead of using `self.current_view` (which may already be ACP).
+    /// Agent Chat live-submit reroute to preserve the original source surface
+    /// instead of using `self.current_view` (which may already be Agent Chat).
     fn begin_tab_ai_harness_entry_from_source_view(
         &mut self,
         source_view: AppView,
@@ -2107,8 +2107,8 @@ impl ScriptListApp {
         suppress_focused_part: bool,
         quick_submit_plan: Option<crate::ai::TabAiQuickSubmitPlan>,
         capture_kind: crate::ai::TabAiCaptureKind,
-        force_acp_surface: bool,
-        ui_variant: crate::ai::acp::ui_variant::AcpChatUiVariant,
+        force_agent_chat_surface: bool,
+        ui_variant: crate::ai::agent_chat::ui::ui_variant::AgentChatUiVariant,
         cx: &mut Context<Self>,
     ) {
         let snapshot_started_at = std::time::Instant::now();
@@ -2119,7 +2119,7 @@ impl ScriptListApp {
         };
         tracing::info!(
             target: "script_kit::tab_ai",
-            event = "acp_open_stage",
+            event = "agent_chat_open_stage",
             stage = "snapshot_tab_ai_ui",
             stage_ms = snapshot_started_at.elapsed().as_millis() as u64,
             source_view = match &source_view {
@@ -2184,8 +2184,8 @@ impl ScriptListApp {
         tracing::info!(
             target: "script_kit::tab_ai",
             event = "tab_ai_surface_selected",
-            surface = if surface_preference.use_quick_terminal { "quick_terminal" } else { "acp_chat" },
-            reason = if surface_preference.use_quick_terminal { "script_verification_required" } else { "default_acp" },
+            surface = if surface_preference.use_quick_terminal { "quick_terminal" } else { "agent_chat" },
+            reason = if surface_preference.use_quick_terminal { "script_verification_required" } else { "default_agent_chat" },
             prompt_type = %request.ui_snapshot.prompt_type,
             has_entry_intent = request.entry_intent.is_some(),
             submit_now,
@@ -2267,16 +2267,16 @@ impl ScriptListApp {
             rx
         };
 
-        if surface_preference.use_quick_terminal && !force_acp_surface {
+        if surface_preference.use_quick_terminal && !force_agent_chat_surface {
             self.open_tab_ai_harness_terminal_from_request(request, capture_rx, cx);
         } else {
-            self.open_tab_ai_acp_view_from_request_impl(
+            self.open_tab_ai_agent_chat_view_from_request_impl(
                 request,
                 capture_rx,
                 focused_part,
                 use_ask_anything_fallback,
                 explicit_ambient_chip_label,
-                force_acp_surface,
+                force_agent_chat_surface,
                 cx,
             );
         }
@@ -2361,8 +2361,8 @@ impl ScriptListApp {
         rx
     }
 
-    /// Open the ACP chat view immediately, then spawn a task that waits
-    /// Compute the canonical submission intent for ACP launches, matching the
+    /// Open the Agent Chat chat view immediately, then spawn a task that waits
+    /// Compute the canonical submission intent for Agent Chat launches, matching the
     /// PTY path's normalization: prefer `quick_submit_plan.submission_intent()`
     /// over raw `entry_intent`, trim whitespace, and drop empty strings.
     fn tab_ai_effective_submission_intent(request: &TabAiLaunchRequest) -> Option<String> {
@@ -2457,15 +2457,15 @@ impl ScriptListApp {
         );
     }
 
-    /// Open the ACP chat view and stage context.
+    /// Open the Agent Chat chat view and stage context.
     ///
-    pub(crate) fn open_acp_history_main_list(
+    pub(crate) fn open_agent_chat_history_main_list(
         &mut self,
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         self.open_builtin_filterable_view(
-            AppView::AcpHistoryView {
+            AppView::AgentChatHistoryView {
                 filter: String::new(),
                 selected_index: 0,
             },
@@ -2765,15 +2765,15 @@ impl ScriptListApp {
     }
 
     /// Startup prewarm: respects `warmOnStartup=false`.
-    pub(crate) fn warm_acp_chat_on_startup(&mut self, _cx: &mut Context<Self>) {
-        if std::env::var("SCRIPT_KIT_DISABLE_ACP_HOT_PREWARM")
+    pub(crate) fn warm_agent_chat_on_startup(&mut self, _cx: &mut Context<Self>) {
+        if std::env::var("SCRIPT_KIT_DISABLE_AGENT_CHAT_HOT_PREWARM")
             .map(|value| value == "1" || value.eq_ignore_ascii_case("true"))
             .unwrap_or(false)
         {
             tracing::info!(
                 target: "script_kit::tab_ai",
-                event = "acp_hot_prewarm_skipped",
-                correlation_id = "acp_hot_prewarm",
+                event = "agent_chat_hot_prewarm_skipped",
+                correlation_id = "agent_chat_hot_prewarm",
                 reason = "disabled_by_env",
             );
             return;
@@ -2781,7 +2781,7 @@ impl ScriptListApp {
 
         let profile_ctx = crate::ai::agent_chat::profiles::AgentChatProfileContext::from_setup();
         let ai_prefs = crate::config::load_user_preferences().ai;
-        let cwd_override = self.spine_cwd_for_acp_launch();
+        let cwd_override = self.spine_cwd_for_agent_chat_launch();
         match crate::ai::agent_chat::launch::resolve_selected_pi_launch_with_cwd_override(
             &ai_prefs,
             &profile_ctx,
@@ -3063,7 +3063,7 @@ impl ScriptListApp {
 
     /// Terminate any active PTY harness session without restoring views.
     ///
-    /// Used at ACP open to kill a stale prewarm session, and by close to
+    /// Used at Agent Chat open to kill a stale prewarm session, and by close to
     /// tear down the PTY for `QuickTerminalView`.
     fn terminate_tab_ai_harness_session(&mut self, cx: &mut Context<Self>) {
         if let Some(session) = self.tab_ai_harness.as_ref() {
@@ -3088,13 +3088,13 @@ impl ScriptListApp {
     ///
     /// **Close semantics contract:**
     /// - `Cmd+W` closes the Quick Terminal main window state-first (handled in `render_prompts/term.rs`).
-    /// - Restore-origin callers still use the saved return view/focus for apply-back and embedded ACP close.
+    /// - Restore-origin callers still use the saved return view/focus for apply-back and embedded Agent Chat close.
     /// - Plain `Escape` is forwarded to the PTY so the harness TUI can handle it.
     /// - The footer advertises the same Close affordance as Cmd+W for Quick Terminal.
     ///
     /// **Lifecycle contract:**
     /// - For `QuickTerminalView`: tears down PTY, clears harness, schedules prewarm.
-    /// - For `AcpChatView`: restores view/focus without touching PTY lifecycle.
+    /// - For `AgentChatView`: restores view/focus without touching PTY lifecycle.
     fn clear_transient_script_list_trigger_on_return(
         &mut self,
         window: Option<&mut Window>,
@@ -3144,10 +3144,10 @@ impl ScriptListApp {
             current_view = ?self.current_view,
         );
         let closing_quick_terminal = matches!(self.current_view, AppView::QuickTerminalView { .. });
-        let closing_acp_chat = matches!(self.current_view, AppView::AcpChatView { .. });
-        let closing_pi_agent_chat = closing_acp_chat && self.active_agent_chat_warm_lease.is_some();
+        let closing_agent_chat = matches!(self.current_view, AppView::AgentChatView { .. });
+        let closing_pi_agent_chat = closing_agent_chat && self.active_agent_chat_warm_lease.is_some();
 
-        if !closing_quick_terminal && !closing_acp_chat {
+        if !closing_quick_terminal && !closing_agent_chat {
             return;
         }
 
@@ -3163,16 +3163,16 @@ impl ScriptListApp {
             self.terminate_tab_ai_harness_session(cx);
         }
         let mut pending_warm_lease = None;
-        if closing_acp_chat {
-            if let AppView::AcpChatView { entity } = &self.current_view {
-                self.embedded_acp_chat = Some(entity.clone());
+        if closing_agent_chat {
+            if let AppView::AgentChatView { entity } = &self.current_view {
+                self.embedded_agent_chat = Some(entity.clone());
                 entity.update(cx, |view, cx| {
                     view.prepare_for_host_hide(cx);
                 });
             }
             pending_warm_lease = self.active_agent_chat_warm_lease.take();
             if closing_pi_agent_chat {
-                self.embedded_acp_chat = None;
+                self.embedded_agent_chat = None;
             }
         }
 
@@ -3180,11 +3180,11 @@ impl ScriptListApp {
             .tab_ai_harness_return_view
             .take()
             .unwrap_or(AppView::ScriptList);
-        if closing_acp_chat && matches!(return_view, AppView::AcpChatView { .. }) {
+        if closing_agent_chat && matches!(return_view, AppView::AgentChatView { .. }) {
             tracing::warn!(
                 target: "script_kit::tab_ai",
-                event = "embedded_acp_return_origin_self_guarded",
-                "Embedded ACP close had ACP as its own return origin; falling back to ScriptList"
+                event = "embedded_agent_chat_return_origin_self_guarded",
+                "Embedded Agent Chat close had Agent Chat as its own return origin; falling back to ScriptList"
             );
             return_view = AppView::ScriptList;
         }
@@ -3218,12 +3218,12 @@ impl ScriptListApp {
             return;
         }
 
-        if closing_acp_chat {
-            self.acp_ready_script_path = None;
-            self.acp_footer_dot_status = None;
-            self.acp_footer_model_display = None;
-            self.acp_footer_snapshot = None;
-            let _receipt = self.exit_embedded_acp_chat_surface(
+        if closing_agent_chat {
+            self.agent_chat_ready_script_path = None;
+            self.agent_chat_footer_dot_status = None;
+            self.agent_chat_footer_model_display = None;
+            self.agent_chat_footer_snapshot = None;
+            let _receipt = self.exit_embedded_agent_chat_surface(
                 return_view,
                 return_focus_target,
                 "close_tab_ai_harness_terminal_impl",
@@ -3231,7 +3231,7 @@ impl ScriptListApp {
             );
             tracing::info!(
                 target: "script_kit::tab_ai",
-                event = "embedded_acp_lifecycle_close_to_origin",
+                event = "embedded_agent_chat_lifecycle_close_to_origin",
                 return_view = ?self.current_view,
                 focus_target = ?return_focus_target,
             );
@@ -3269,7 +3269,7 @@ impl ScriptListApp {
 
     pub(crate) fn close_tab_ai_harness_terminal(&mut self, cx: &mut Context<Self>) {
         // close_tab_ai_harness_terminal_impl(None, cx) owns the real contract:
-        // - it guards the restore path to AppView::QuickTerminalView / AppView::AcpChatView
+        // - it guards the restore path to AppView::QuickTerminalView / AppView::AgentChatView
         // - tab_ai_harness_capture_generation += 1
         // - self.tab_ai_harness_apply_back_route = None;
         // - self.terminate_tab_ai_harness_session(cx);
@@ -3296,7 +3296,7 @@ impl ScriptListApp {
         );
     }
 
-    pub(crate) fn close_acp_chat_main_window_state_first(&mut self, cx: &mut Context<Self>) {
+    pub(crate) fn close_agent_chat_main_window_state_first(&mut self, cx: &mut Context<Self>) {
         self.close_tab_ai_harness_terminal_impl(
             None,
             TabAiHarnessCloseDisposition::CloseMainWindowStateFirst,
@@ -3304,22 +3304,22 @@ impl ScriptListApp {
         );
     }
 
-    /// Close ACP chat and force the main panel back to ScriptList.
+    /// Close Agent Chat chat and force the main panel back to ScriptList.
     ///
     /// Used by the hotkey detach path where the intent is always to return
-    /// to the launcher, regardless of which view opened the ACP chat.
+    /// to the launcher, regardless of which view opened the Agent Chat chat.
     /// This avoids the correctness bug where `close_tab_ai_harness_terminal`
     /// would restore an unrelated originating view (e.g. ClipboardHistory).
     ///
     /// When `focus_main_filter` is `false`, the main panel switches to
     /// ScriptList but does not reclaim keyboard focus — this keeps the
     /// newly-detached chat window as the active key target.
-    pub(crate) fn close_acp_chat_to_script_list(
+    pub(crate) fn close_agent_chat_to_script_list(
         &mut self,
         focus_main_filter: bool,
         cx: &mut Context<Self>,
     ) {
-        if !matches!(self.current_view, AppView::AcpChatView { .. }) {
+        if !matches!(self.current_view, AppView::AgentChatView { .. }) {
             return;
         }
 
@@ -3327,8 +3327,8 @@ impl ScriptListApp {
         // target a chat surface that has already been detached.
         self.tab_ai_harness_capture_generation += 1;
         self.tab_ai_harness_apply_back_route = None;
-        if let AppView::AcpChatView { entity } = &self.current_view {
-            self.embedded_acp_chat = Some(entity.clone());
+        if let AppView::AgentChatView { entity } = &self.current_view {
+            self.embedded_agent_chat = Some(entity.clone());
             entity.update(cx, |view, cx| {
                 view.prepare_for_host_hide(cx);
             });
@@ -3341,10 +3341,10 @@ impl ScriptListApp {
         self.tab_ai_harness_return_focus_target = None;
 
         self.current_view = AppView::ScriptList;
-        self.acp_ready_script_path = None;
-        self.acp_footer_dot_status = None;
-        self.acp_footer_model_display = None;
-        self.acp_footer_snapshot = None;
+        self.agent_chat_ready_script_path = None;
+        self.agent_chat_footer_dot_status = None;
+        self.agent_chat_footer_model_display = None;
+        self.agent_chat_footer_snapshot = None;
         self.pending_focus = if focus_main_filter {
             Some(FocusTarget::MainFilter)
         } else {
@@ -3358,21 +3358,21 @@ impl ScriptListApp {
         self.clear_transient_script_list_trigger_on_return(None, cx);
 
         // Re-key main's automation surface tag in lockstep with the view flip.
-        // Without this, `listAutomationWindows` reports `semanticSurface:"acpChat"`
+        // Without this, `listAutomationWindows` reports `semanticSurface:"agentChatChat"`
         // on main even though the view is back on ScriptList, until the next
         // hide/show re-keys it. Mirrors the hide path in window_visibility.rs
         // which calls the same helper after `reset_to_script_list`.
         crate::windows::update_automation_semantic_surface("main", Some("scriptList".to_string()));
 
-        // Pair with the entry upsert in `enter_embedded_acp_chat_surface`:
+        // Pair with the entry upsert in `enter_embedded_agent_chat_surface`:
         // tear the AI entry back out of the automation registry so
         // `listAutomationWindows` stops reporting a kind=ai window once the
         // user is back on ScriptList.
         crate::windows::ensure_embedded_ai_window(false);
-        self.transition_acp_surface(crate::ai::acp::surface_state::AcpSurfaceEvent::EmbeddedClosed);
+        self.transition_agent_chat_surface(crate::ai::agent_chat::ui::surface_state::AgentChatSurfaceEvent::EmbeddedClosed);
 
         tracing::info!(
-            event = "acp_chat_restored_to_script_list",
+            event = "agent_chat_restored_to_script_list",
             capture_generation = self.tab_ai_harness_capture_generation,
             focus_main_filter,
         );
@@ -3498,19 +3498,19 @@ impl ScriptListApp {
         }
     }
 
-    fn seed_acp_return_origin_for_view(&mut self, source_view: &AppView) {
+    fn seed_agent_chat_return_origin_for_view(&mut self, source_view: &AppView) {
         self.tab_ai_harness_return_view = Some(source_view.clone());
         self.tab_ai_harness_return_focus_target =
             Some(Self::tab_ai_return_focus_target_for_view(source_view));
     }
 
-    pub(crate) fn seed_acp_dictation_return_origin(&mut self) {
+    pub(crate) fn seed_agent_chat_dictation_return_origin(&mut self) {
         self.tab_ai_harness_return_view = Some(AppView::ScriptList);
         self.tab_ai_harness_return_focus_target = Some(FocusTarget::MainFilter);
         self.tab_ai_harness_script_list_trigger = None;
         tracing::info!(
             target: "script_kit::tab_ai",
-            event = "acp_dictation_return_origin_seeded",
+            event = "agent_chat_dictation_return_origin_seeded",
             return_view = "ScriptList",
             return_focus_target = "MainFilter",
         );
@@ -3534,7 +3534,7 @@ impl ScriptListApp {
             | AppView::CreateAiPresetView { .. }
             | AppView::SettingsView { .. }
             | AppView::FavoritesBrowseView { .. }
-            | AppView::AcpHistoryView { .. }
+            | AppView::AgentChatHistoryView { .. }
             | AppView::BrowserHistoryView { .. }
             | AppView::DictationHistoryView { .. }
             | AppView::NotesBrowseView { .. }
@@ -3572,7 +3572,7 @@ impl ScriptListApp {
                 FocusTarget::TermPrompt
             }
 
-            AppView::ChatPrompt { .. } | AppView::AcpChatView { .. } => FocusTarget::ChatPrompt,
+            AppView::ChatPrompt { .. } | AppView::AgentChatView { .. } => FocusTarget::ChatPrompt,
             AppView::NamingPrompt { .. } => FocusTarget::NamingPrompt,
 
             AppView::ConfirmPrompt { .. } => FocusTarget::AppRoot,
@@ -3710,7 +3710,7 @@ impl ScriptListApp {
             scripts::SearchResult::File(_) => "file",
             scripts::SearchResult::Note(_) => "note",
             scripts::SearchResult::Todo(_) => "todo",
-            scripts::SearchResult::AcpHistory(_) => "acpHistory",
+            scripts::SearchResult::AgentChatHistory(_) => "agent_chatHistory",
             scripts::SearchResult::AiVault(_) => "aiVault",
             scripts::SearchResult::ClipboardHistory(_) => "clipboardHistory",
             scripts::SearchResult::DictationHistory(_) => "dictationHistory",
@@ -3771,7 +3771,7 @@ impl ScriptListApp {
                 "due": m.hit.due,
                 "createdAt": m.hit.created_at,
             }),
-            scripts::SearchResult::AcpHistory(m) => serde_json::json!({
+            scripts::SearchResult::AgentChatHistory(m) => serde_json::json!({
                 "sessionId": m.entry.session_id,
                 "title": m.entry.title_display(),
                 "preview": m.entry.preview_display(),
@@ -4852,11 +4852,11 @@ impl ScriptListApp {
             AppView::SettingsView { .. } => "Settings".to_string(),
             AppView::FavoritesBrowseView { .. } => "FavoritesBrowse".to_string(),
             AppView::CurrentAppCommandsView { .. } => "CurrentAppCommands".to_string(),
-            AppView::AcpHistoryView { .. } => "AcpHistoryView".to_string(),
+            AppView::AgentChatHistoryView { .. } => "AgentChatHistoryView".to_string(),
             AppView::BrowserHistoryView { .. } => "BrowserHistoryView".to_string(),
             AppView::DictationHistoryView { .. } => "DictationHistoryView".to_string(),
             AppView::NotesBrowseView { .. } => "NotesBrowse".to_string(),
-            AppView::AcpChatView { .. } => "AcpChatView".to_string(),
+            AppView::AgentChatView { .. } => "AgentChatView".to_string(),
             AppView::ScriptIssuesView { .. } => "ScriptIssuesView".to_string(),
             AppView::SdkReferenceView { .. } => "SdkReferenceView".to_string(),
             AppView::ScriptTemplateCatalogView { .. } => "ScriptTemplateCatalogView".to_string(),
@@ -4894,7 +4894,7 @@ impl ScriptListApp {
             | AppView::CurrentAppCommandsView { filter, .. }
             | AppView::DesignGalleryView { filter, .. }
             | AppView::FooterGalleryView { filter, .. }
-            | AppView::AcpHistoryView { filter, .. }
+            | AppView::AgentChatHistoryView { filter, .. }
             | AppView::BrowserHistoryView { filter, .. }
             | AppView::DictationHistoryView { filter, .. }
             | AppView::NotesBrowseView { filter, .. }
@@ -4977,7 +4977,7 @@ impl ScriptListApp {
             | AppView::FormPrompt { .. }
             | AppView::TermPrompt { .. }
             | AppView::QuickTerminalView { .. }
-            | AppView::AcpChatView { .. }
+            | AppView::AgentChatView { .. }
             | AppView::DropPrompt { .. }
             | AppView::HotkeyPrompt { .. }
             | AppView::WebcamView { .. }
@@ -6035,9 +6035,9 @@ mod tests {
     }
 
     #[test]
-    fn acp_initial_input_prefills_script_list_triggers_without_intent() {
+    fn agent_chat_initial_input_prefills_script_list_triggers_without_intent() {
         assert_eq!(
-            ScriptListApp::tab_ai_acp_initial_input_for_launch(
+            ScriptListApp::tab_ai_agent_chat_initial_input_for_launch(
                 "ScriptList",
                 None,
                 Some('@'),
@@ -6047,7 +6047,7 @@ mod tests {
             Some("@")
         );
         assert_eq!(
-            ScriptListApp::tab_ai_acp_initial_input_for_launch(
+            ScriptListApp::tab_ai_agent_chat_initial_input_for_launch(
                 "ScriptList",
                 None,
                 Some('/'),
@@ -6057,7 +6057,7 @@ mod tests {
             Some("/")
         );
         assert_eq!(
-            ScriptListApp::tab_ai_acp_initial_input_for_launch(
+            ScriptListApp::tab_ai_agent_chat_initial_input_for_launch(
                 "ScriptList",
                 None,
                 Some('|'),
@@ -6069,9 +6069,9 @@ mod tests {
     }
 
     #[test]
-    fn acp_initial_input_does_not_prefill_non_script_list_triggers() {
+    fn agent_chat_initial_input_does_not_prefill_non_script_list_triggers() {
         assert_eq!(
-            ScriptListApp::tab_ai_acp_initial_input_for_launch(
+            ScriptListApp::tab_ai_agent_chat_initial_input_for_launch(
                 "ThemeChooser",
                 None,
                 Some('@'),
@@ -6080,7 +6080,7 @@ mod tests {
             None
         );
         assert_eq!(
-            ScriptListApp::tab_ai_acp_initial_input_for_launch(
+            ScriptListApp::tab_ai_agent_chat_initial_input_for_launch(
                 "ScriptList",
                 None,
                 Some('>'),
@@ -6091,9 +6091,9 @@ mod tests {
     }
 
     #[test]
-    fn acp_initial_input_prefers_effective_intent_over_script_list_trigger() {
+    fn agent_chat_initial_input_prefers_effective_intent_over_script_list_trigger() {
         assert_eq!(
-            ScriptListApp::tab_ai_acp_initial_input_for_launch(
+            ScriptListApp::tab_ai_agent_chat_initial_input_for_launch(
                 "ScriptList",
                 Some("explain this code"),
                 Some('@'),
@@ -6105,21 +6105,21 @@ mod tests {
     }
 
     #[test]
-    fn embedded_acp_reuse_requires_entry_intent_no_retry_and_non_setup_cache() {
-        assert!(!ScriptListApp::should_reuse_embedded_acp_view_for_open(
+    fn embedded_agent_chat_reuse_requires_entry_intent_no_retry_and_non_setup_cache() {
+        assert!(!ScriptListApp::should_reuse_embedded_agent_chat_view_for_open(
             None, false, false,
         ));
-        assert!(ScriptListApp::should_reuse_embedded_acp_view_for_open(
+        assert!(ScriptListApp::should_reuse_embedded_agent_chat_view_for_open(
             Some("explain this"),
             false,
             false,
         ));
-        assert!(!ScriptListApp::should_reuse_embedded_acp_view_for_open(
+        assert!(!ScriptListApp::should_reuse_embedded_agent_chat_view_for_open(
             Some("switch agent"),
             true,
             false,
         ));
-        assert!(!ScriptListApp::should_reuse_embedded_acp_view_for_open(
+        assert!(!ScriptListApp::should_reuse_embedded_agent_chat_view_for_open(
             Some("explain this"),
             false,
             true,
@@ -6127,37 +6127,37 @@ mod tests {
     }
 
     #[test]
-    fn embedded_acp_reuse_submits_entry_intent_via_reuse_reset_helper() {
+    fn embedded_agent_chat_reuse_submits_entry_intent_via_reuse_reset_helper() {
         let body = tab_ai_contract_compact(&tab_ai_extract_fn_body(
             include_str!("mod.rs"),
-            "fn try_reuse_embedded_acp_view(",
+            "fn try_reuse_embedded_agent_chat_view(",
         ));
         assert!(
             body.contains(&tab_ai_contract_compact(
                 "chat.submit_reused_entry_intent(intent.clone(), cx);",
             )),
-            "reused ACP entry intents must clear stale composer state before submit"
+            "reused Agent Chat entry intents must clear stale composer state before submit"
         );
     }
 
     #[test]
-    fn entry_intent_does_not_reuse_cached_setup_mode_acp_view() {
+    fn entry_intent_does_not_reuse_cached_setup_mode_agent_chat_view() {
         let body = tab_ai_contract_compact(&tab_ai_extract_fn_body(
             include_str!("mod.rs"),
-            "fn try_reuse_embedded_acp_view(",
+            "fn try_reuse_embedded_agent_chat_view(",
         ));
         assert!(
             body.contains(&tab_ai_contract_compact(
                 "if normalized_intent.is_some() && is_setup_mode {"
             )),
-            "non-empty entry intents must reject setup-mode ACP cache reuse"
+            "non-empty entry intents must reject setup-mode Agent Chat cache reuse"
         );
         assert!(
-            body.contains(&tab_ai_contract_compact("self.embedded_acp_chat = None;")),
-            "setup-mode cache rejection must clear the stale embedded ACP view"
+            body.contains(&tab_ai_contract_compact("self.embedded_agent_chat = None;")),
+            "setup-mode cache rejection must clear the stale embedded Agent Chat view"
         );
         assert!(
-            body.contains("tab_ai_embedded_acp_reuse_rejected_setup_mode"),
+            body.contains("tab_ai_embedded_agent_chat_reuse_rejected_setup_mode"),
             "setup-mode cache rejection must leave a positive audit log"
         );
         assert!(
@@ -6170,30 +6170,30 @@ mod tests {
     fn main_menu_skill_launch_stages_slash_pick_without_entry_intent_submit_contract() {
         let body = tab_ai_contract_compact(&tab_ai_extract_fn_body(
             include_str!("mod.rs"),
-            "pub(crate) fn open_acp_with_selected_skill(",
+            "pub(crate) fn open_agent_chat_with_selected_skill(",
         ));
 
         assert!(
             body.contains(&tab_ai_contract_compact(
-                "crate::ai::acp::build_skill_slash_command_text(&skill.skill_id)",
+                "crate::ai::agent_chat::ui::build_skill_slash_command_text(&skill.skill_id)",
             )),
-            "main-menu skill launch must use the same slash text as ACP slash acceptance"
+            "main-menu skill launch must use the same slash text as Agent Chat slash acceptance"
         );
         assert!(
             body.contains(&tab_ai_contract_compact(
-                "crate::ai::acp::build_skill_context_part(&skill.title, owner, &skill.skill_id, &skill.path)",
+                "crate::ai::agent_chat::ui::build_skill_context_part(&skill.title, owner, &skill.skill_id, &skill.path)",
             )),
-            "main-menu skill launch must attach the same skill context part as ACP slash acceptance"
+            "main-menu skill launch must attach the same skill context part as Agent Chat slash acceptance"
         );
         assert!(
             body.contains(&tab_ai_contract_compact(
-                "self.open_tab_ai_acp_with_entry_intent_suppressing_focused_part(None, cx);",
+                "self.open_tab_ai_agent_chat_with_entry_intent_suppressing_focused_part(None, cx);",
             )),
-            "main-menu skill launch must open ACP without an auto-submit entry intent"
+            "main-menu skill launch must open Agent Chat without an auto-submit entry intent"
         );
         assert!(
             body.contains("stage_selected_plugin_skill_from_main_menu"),
-            "main-menu skill launch must stage the slash-style skill selection after ACP opens"
+            "main-menu skill launch must stage the slash-style skill selection after Agent Chat opens"
         );
         assert!(
             !body.contains("build_staged_skill_prompt"),
@@ -6201,22 +6201,22 @@ mod tests {
         );
         assert!(
             !body.contains(&tab_ai_contract_compact(
-                "open_tab_ai_acp_with_entry_intent(Some",
+                "open_tab_ai_agent_chat_with_entry_intent(Some",
             )),
             "main-menu skill launch must not pass selected skills as auto-submit entry intents"
         );
     }
 
     #[test]
-    fn script_list_trigger_routes_stage_trigger_before_acp_open_contract() {
+    fn script_list_trigger_routes_stage_trigger_before_agent_chat_open_contract() {
         let source = include_str!("mod.rs");
         for (signature, trigger) in [
             (
-                "pub(crate) fn open_tab_ai_acp_with_slash_picker(",
+                "pub(crate) fn open_tab_ai_agent_chat_with_slash_picker(",
                 "Some('/')",
             ),
             (
-                "pub(crate) fn open_tab_ai_acp_with_mention_picker(",
+                "pub(crate) fn open_tab_ai_agent_chat_with_mention_picker(",
                 "Some('@')",
             ),
         ] {
@@ -6228,12 +6228,12 @@ mod tests {
                 .expect("route must stage the trigger first");
             let open_idx = body
                 .find(&tab_ai_contract_compact(
-                    "self.open_tab_ai_acp_with_entry_intent(None, cx);",
+                    "self.open_tab_ai_agent_chat_with_entry_intent(None, cx);",
                 ))
-                .expect("route must open ACP");
+                .expect("route must open Agent Chat");
             assert!(
                 trigger_idx < open_idx,
-                "route must stage the trigger before opening ACP"
+                "route must stage the trigger before opening Agent Chat"
             );
         }
     }
@@ -6242,13 +6242,13 @@ mod tests {
     fn script_list_trigger_routes_defer_embedded_picker_contract() {
         let source = include_str!("mod.rs");
         for signature in [
-            "pub(crate) fn open_tab_ai_acp_with_slash_picker(",
-            "pub(crate) fn open_tab_ai_acp_with_mention_picker(",
+            "pub(crate) fn open_tab_ai_agent_chat_with_slash_picker(",
+            "pub(crate) fn open_tab_ai_agent_chat_with_mention_picker(",
         ] {
             let body = tab_ai_contract_compact(&tab_ai_extract_fn_body(source, signature));
             assert!(
                 body.contains(&tab_ai_contract_compact(
-                    "self.schedule_embedded_acp_picker_open("
+                    "self.schedule_embedded_agent_chat_picker_open("
                 )),
                 "trigger route must defer embedded picker opening"
             );
@@ -6256,10 +6256,10 @@ mod tests {
     }
 
     #[test]
-    fn explicit_target_return_seeding_restores_previous_origin_without_acp_launch() {
+    fn explicit_target_return_seeding_restores_previous_origin_without_agent_chat_launch() {
         let body = tab_ai_contract_compact(&tab_ai_extract_fn_body(
             include_str!("mod.rs"),
-            "pub(crate) fn open_tab_ai_acp_with_explicit_target_preserving_return(",
+            "pub(crate) fn open_tab_ai_agent_chat_with_explicit_target_preserving_return(",
         ));
         assert!(
             body.contains(&tab_ai_contract_compact(
@@ -6267,13 +6267,13 @@ mod tests {
             )) && body.contains(&tab_ai_contract_compact(
                 "let previous_return_focus_target = self.tab_ai_harness_return_focus_target;"
             )) && body.contains(&tab_ai_contract_compact(
-                "if !matches!(self.current_view, AppView::AcpChatView { .. }) {"
+                "if !matches!(self.current_view, AppView::AgentChatView { .. }) {"
             )) && body.contains(&tab_ai_contract_compact(
                 "self.tab_ai_harness_return_view = previous_return_view;"
             )) && body.contains(&tab_ai_contract_compact(
                 "self.tab_ai_harness_return_focus_target = previous_return_focus_target;"
             )),
-            "explicit target return seeding must restore the previous ACP return origin when the handoff does not actually launch ACP"
+            "explicit target return seeding must restore the previous Agent Chat return origin when the handoff does not actually launch Agent Chat"
         );
     }
 

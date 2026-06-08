@@ -596,7 +596,7 @@ impl ScriptListApp {
             .to_string();
 
         if query.is_empty() {
-            self.open_tab_ai_acp_with_entry_intent(None, cx);
+            self.open_tab_ai_agent_chat_with_entry_intent(None, cx);
         } else {
             self.open_tab_ai_chat_with_entry_intent(Some(query), cx);
         }
@@ -616,7 +616,7 @@ impl ScriptListApp {
             return;
         }
 
-        // Route through the current harness/ACP entry path, but suppress the
+        // Route through the current harness/Agent Chat entry path, but suppress the
         // launcher's focused fallback chip so recipe-driven generation uses
         // only the generated prompt as context.
         self.open_tab_ai_chat_with_entry_intent_suppressing_focused_part(Some(query), cx);

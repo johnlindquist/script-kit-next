@@ -603,7 +603,7 @@ pub fn configure_actions_popup_window(_window: *mut std::ffi::c_void, _is_dark: 
     // No-op on non-macOS platforms
 }
 
-/// Configure an ACP inline dropdown popup window with the same vibrancy path as
+/// Configure an Agent Chat inline dropdown popup window with the same vibrancy path as
 /// actions popups, including the detached AppKit shadow.
 ///
 /// # Safety
@@ -874,7 +874,7 @@ mod secondary_window_config_tests {
             "Notes",
             "Mini AI",
             "Script Kit Agent Chat",
-            "Script Kit ACP",
+            "Script Kit Agent Chat",
             "Script Kit Notes",
             "Actions",
             "Script Kit Footer",
@@ -994,7 +994,7 @@ mod secondary_window_config_tests {
 fn should_refresh_secondary_window_appearance(title: &str) -> bool {
     const EXACT_SECONDARY_TITLES: &[&str] = &["Notes", "Mini AI", "Script Kit Agent Chat"];
     const EXISTING_SECONDARY_TITLE_MARKERS: &[&str] = &[
-        "Script Kit ACP",
+        "Script Kit Agent Chat",
         "Script Kit Notes",
         "Actions",
         "Script Kit Footer",

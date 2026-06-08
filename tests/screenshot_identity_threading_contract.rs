@@ -3,7 +3,7 @@
 //! The story wants three live receipts: (a) a `screenshot` builtin trigger,
 //! (b) `getState.promptType="imagePrompt"` after capture, and (c)
 //! `imageIdentity="screenshot:<timestamp>"` with a matching identity when
-//! the image is embedded into ACP. Three structural gaps block the literal
+//! the image is embedded into Agent Chat. Three structural gaps block the literal
 //! assertions: (1) there is no `BuiltInFeature::Screenshot` — screenshots
 //! are captured through `AiCommand::SendScreenToAi` (from the AI commands
 //! submenu) and through the Tab AI deferred-capture pipeline, not via
@@ -12,13 +12,13 @@
 //! attached to the AI input; (3) `imageIdentity` is not a `State` field.
 //!
 //! However, the **behavioral** invariant the story cares about — identity
-//! threading from capture through to the ACP context — is real and
+//! threading from capture through to the Agent Chat context — is real and
 //! implemented, just via a different mechanism than the story text implies.
 //! Identity is encoded in the screenshot filename (`tab-ai-screenshot-
 //! <UTC-ISO-millis>Z-<pid>-<sequence>.png`) produced by
 //! [`src/ai/harness/screenshot_files.rs`], carried through
 //! `TabAiScreenshotFile.path` and then `TabAiContextBlob.screenshot_path`,
-//! and finally emitted into the ACP context as a `screenshot path: <path>`
+//! and finally emitted into the Agent Chat context as a `screenshot path: <path>`
 //! line inside a single `ContentBlock::Text`.
 //!
 //! This test pins the identity-threading chain at source level so any
@@ -51,7 +51,7 @@
 //!    literal `screenshot path: <path>` line when that field is `Some`,
 //!    so the captured path survives context construction.
 //!
-//! 6. `build_tab_ai_acp_context_blocks` produces a SINGLE `ContentBlock`
+//! 6. `build_tab_ai_agent_chat_context_blocks` produces a SINGLE `ContentBlock`
 //!    wrapping the harness text output — no image content block is
 //!    silently inserted, which would break the story's "matching identity"
 //!    clause (an image block has its own identity scheme separate from the
@@ -59,7 +59,7 @@
 
 const SCREENSHOT_FILES_SOURCE: &str = include_str!("../src/ai/harness/screenshot_files.rs");
 const HARNESS_CONTEXT_SOURCE: &str = include_str!("../src/ai/harness/mod.rs");
-const ACP_CONTEXT_SOURCE: &str = include_str!("../src/ai/acp/context.rs");
+const AGENT_CHAT_CONTEXT_SOURCE: &str = include_str!("../src/ai/agent_chat/ui/context.rs");
 const TAB_CONTEXT_SOURCE: &str = include_str!("../src/ai/tab_context.rs");
 
 #[test]
@@ -147,7 +147,7 @@ fn tab_ai_screenshot_file_has_identity_tuple_fields() {
             "TabAiScreenshotFile must retain field `{field}` — consumers \
              thread identity via this whole tuple (path is the primary \
              axis, width/height/title/used_fallback are the corroborating \
-             metadata that lets ACP render and caption the image \
+             metadata that lets Agent Chat render and caption the image \
              deterministically)"
         );
     }
@@ -167,28 +167,30 @@ fn screenshot_path_is_threaded_into_context_text_block() {
             && HARNESS_CONTEXT_SOURCE.contains("push_line(&mut out, \"screenshot path\", path);"),
         "build_tab_ai_harness_context_block must emit a `screenshot path: \
          <path>` line when `context.screenshot_path` is Some — removing \
-         the emission silently drops the path before ACP sees it; \
+         the emission silently drops the path before Agent Chat sees it; \
          changing the label breaks match patterns elsewhere that rely on \
          the exact `screenshot path: ` prefix"
     );
 }
 
 #[test]
-fn acp_context_block_builder_is_text_only_preserving_path_identity() {
+fn agent_chat_context_block_builder_is_text_only_preserving_path_identity() {
     assert!(
-        ACP_CONTEXT_SOURCE.contains("pub(crate) fn build_tab_ai_acp_context_blocks(")
-            && ACP_CONTEXT_SOURCE.contains("ContentBlock::Text(TextContent::new(context_text))"),
-        "build_tab_ai_acp_context_blocks must wrap the harness text output \
+        AGENT_CHAT_CONTEXT_SOURCE.contains("pub(crate) fn build_tab_ai_agent_chat_context_blocks(")
+            && AGENT_CHAT_CONTEXT_SOURCE
+                .contains("ContentBlock::Text(TextContent::new(context_text))"),
+        "build_tab_ai_agent_chat_context_blocks must wrap the harness text output \
          as a SINGLE `ContentBlock::Text` — if an image ContentBlock is \
-         ever inserted here, ACP would see two parallel identity channels \
+         ever inserted here, Agent Chat would see two parallel identity channels \
          (text path + image bytes) that can drift apart, breaking the \
          story's \"matching identity\" clause"
     );
     assert!(
-        ACP_CONTEXT_SOURCE.contains("screenshot_path_stays_in_text_context_without_image_block"),
+        AGENT_CHAT_CONTEXT_SOURCE
+            .contains("screenshot_path_stays_in_text_context_without_image_block"),
         "the screenshot_path_stays_in_text_context_without_image_block \
-         regression test in src/ai/acp/context.rs must remain — it is \
+         regression test in src/ai/agent_chat/ui/context.rs must remain — it is \
          the end-to-end pin that a Some(screenshot_path) surfaces in the \
-         final ACP context text with no image block"
+         final Agent Chat context text with no image block"
     );
 }

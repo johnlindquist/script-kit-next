@@ -245,7 +245,7 @@ fn build_tab_ai_user_prompt_mentions_clipboard_and_prior_automations() {
 
 /// The overlay source included once for all source-level assertions.
 const TAB_AI_SOURCE: &str = include_str!("../src/app_impl/tab_ai_mode/mod.rs");
-const ACP_VIEW_SOURCE: &str = include_str!("../src/ai/acp/view.rs");
+const AGENT_CHAT_VIEW_SOURCE: &str = include_str!("../src/ai/agent_chat/ui/view.rs");
 
 #[test]
 fn tab_ai_overlay_uses_canonical_three_key_footer_contract() {
@@ -283,8 +283,8 @@ fn tab_ai_overlay_preserves_memory_hint_rendering() {
 #[test]
 fn tab_ai_overlay_idle_placeholder_matches_expected_copy() {
     assert!(
-        ACP_VIEW_SOURCE.contains(r#"Ask anything\u{2026}"#)
-            || ACP_VIEW_SOURCE.contains("Ask anything…"),
+        AGENT_CHAT_VIEW_SOURCE.contains(r#"Ask anything\u{2026}"#)
+            || AGENT_CHAT_VIEW_SOURCE.contains("Ask anything…"),
         "idle placeholder must contain 'Ask anything…'"
     );
 }
@@ -292,24 +292,25 @@ fn tab_ai_overlay_idle_placeholder_matches_expected_copy() {
 #[test]
 fn tab_ai_overlay_running_placeholder_matches_expected_copy() {
     assert!(
-        ACP_VIEW_SOURCE.contains(r#"Follow up\u{2026}"#) || ACP_VIEW_SOURCE.contains("Follow up…"),
+        AGENT_CHAT_VIEW_SOURCE.contains(r#"Follow up\u{2026}"#)
+            || AGENT_CHAT_VIEW_SOURCE.contains("Follow up…"),
         "running placeholder must contain 'Follow up…'"
     );
 }
 
 #[test]
 fn tab_ai_overlay_placeholders_use_main_menu_placeholder_theme_token() {
-    let placeholder_render = ACP_VIEW_SOURCE
+    let placeholder_render = AGENT_CHAT_VIEW_SOURCE
         .split(r#""Ask anything\u{2026}""#)
         .next()
         .and_then(|prefix| prefix.rsplit(".text_color(").next())
         .unwrap_or("");
 
     assert!(
-        ACP_VIEW_SOURCE.contains("AppChromeColors::from_theme(&theme)")
-            && ACP_VIEW_SOURCE.contains("chrome.placeholder_text_rgba")
+        AGENT_CHAT_VIEW_SOURCE.contains("AppChromeColors::from_theme(&theme)")
+            && AGENT_CHAT_VIEW_SOURCE.contains("chrome.placeholder_text_rgba")
             && placeholder_render.contains("placeholder_text"),
-        "ACP placeholders must use AppChromeColors::placeholder_text_rgba, matching main menu placeholder opacity"
+        "Agent Chat placeholders must use AppChromeColors::placeholder_text_rgba, matching main menu placeholder opacity"
     );
 }
 

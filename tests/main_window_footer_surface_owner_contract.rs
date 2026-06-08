@@ -40,7 +40,7 @@ fn app_view_owns_native_footer_surface_map() {
     for expected in [
         "AppView::ScriptList => Some(\"script_list\")",
         "AppView::QuickTerminalView { .. } => Some(\"quick_terminal\")",
-        "AppView::AcpChatView { .. } => Some(\"acp_chat\")",
+        "AppView::AgentChatView { .. } => Some(\"agent_chat\")",
         "AppView::ScriptIssuesView { .. } => Some(\"script_issues\")",
         "AppView::ConfirmPrompt { .. } => Some(\"confirm_prompt\")",
         "AppView::TermPrompt { .. }",
@@ -100,7 +100,7 @@ fn script_issues_enter_routes_to_agent_chat_prompt_submission() {
     assert!(
         RENDER_PROMPTS_OTHER_SOURCE.contains("pub(crate) fn format_script_issues_agent_prompt")
             && RENDER_PROMPTS_OTHER_SOURCE.contains("Self::format_script_issues_diagnostics(report)")
-            && RENDER_PROMPTS_OTHER_SOURCE.contains("open_tab_ai_acp_with_entry_intent_suppressing_focused_part(Some(prompt), cx)"),
+            && RENDER_PROMPTS_OTHER_SOURCE.contains("open_tab_ai_agent_chat_with_entry_intent_suppressing_focused_part(Some(prompt), cx)"),
         "Script issues Agent handoff must include the formatted diagnostics and suppress focused context"
     );
 
@@ -267,10 +267,10 @@ fn cwd_and_agent_model_are_not_rendered_as_main_window_footer_chips() {
     assert!(
         function_body(
             UI_WINDOW_SOURCE,
-            "pub(crate) fn enrich_footer_config_with_acp_info"
+            "pub(crate) fn enrich_footer_config_with_agent_chat_info"
         )
         .contains("config.left_info = None;"),
-        "ACP footer enrichment must suppress legacy left-info cwd/model markers"
+        "Agent Chat footer enrichment must suppress legacy left-info cwd/model markers"
     );
 }
 

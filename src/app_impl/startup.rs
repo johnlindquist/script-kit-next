@@ -9,13 +9,13 @@ pub(super) fn calculate_fallback_error_message(expression: &str) -> String {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum MainWindowGlobalKeyIntent {
-    OpenAcpWithCurrentContext,
+    OpenAgentChatWithCurrentContext,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum MainWindowActionsKeyIntent {
     ToggleActions,
-    CloseEmbeddedAcpWindow,
+    CloseEmbeddedAgentChatWindow,
 }
 
 fn main_window_global_key_intent(
@@ -30,7 +30,7 @@ fn main_window_global_key_intent(
         && !event.keystroke.modifiers.alt
         && !event.keystroke.modifiers.control
     {
-        return Some(MainWindowGlobalKeyIntent::OpenAcpWithCurrentContext);
+        return Some(MainWindowGlobalKeyIntent::OpenAgentChatWithCurrentContext);
     }
 
     None
@@ -62,9 +62,9 @@ fn main_window_actions_key_intent(
     if has_cmd
         && key.eq_ignore_ascii_case("w")
         && !has_shift
-        && matches!(current_view, AppView::AcpChatView { .. })
+        && matches!(current_view, AppView::AgentChatView { .. })
     {
-        return Some(MainWindowActionsKeyIntent::CloseEmbeddedAcpWindow);
+        return Some(MainWindowActionsKeyIntent::CloseEmbeddedAgentChatWindow);
     }
 
     None
@@ -77,8 +77,8 @@ impl ScriptListApp {
         cx: &mut Context<Self>,
     ) -> bool {
         match intent {
-            MainWindowGlobalKeyIntent::OpenAcpWithCurrentContext => {
-                self.try_route_global_cmd_enter_to_acp_context_capture(cx)
+            MainWindowGlobalKeyIntent::OpenAgentChatWithCurrentContext => {
+                self.try_route_global_cmd_enter_to_agent_chat_context_capture(cx)
             }
         }
     }
@@ -178,10 +178,10 @@ impl ScriptListApp {
             MainWindowActionsKeyIntent::ToggleActions => {
                 self.handle_cmd_k_actions_toggle(window, cx)
             }
-            MainWindowActionsKeyIntent::CloseEmbeddedAcpWindow => {
+            MainWindowActionsKeyIntent::CloseEmbeddedAgentChatWindow => {
                 tracing::info!(
                     target: "script_kit::keyboard",
-                    event = "embedded_acp_cmd_w_close_window",
+                    event = "embedded_agent_chat_cmd_w_close_window",
                 );
                 logging::log("KEY", "Interceptor: Cmd+W -> close window from Agent Chat");
                 self.close_tab_ai_harness_terminal_with_window(window, cx);
@@ -217,7 +217,7 @@ impl ScriptListApp {
             AppView::QuickTerminalView { .. } => {
                 self.close_quick_terminal_main_window_state_first(cx);
             }
-            AppView::AcpChatView { .. } => {
+            AppView::AgentChatView { .. } => {
                 self.close_tab_ai_harness_terminal_with_window(window, cx);
                 self.close_and_reset_window(cx);
             }
@@ -971,7 +971,7 @@ impl ScriptListApp {
             browser_tabs_scroll_handle: UniformListScrollHandle::new(),
             process_list_scroll_handle: UniformListScrollHandle::new(),
             current_app_commands_scroll_handle: UniformListScrollHandle::new(),
-            acp_history_scroll_handle: ScrollHandle::new(),
+            agent_chat_history_scroll_handle: ScrollHandle::new(),
             browser_history_scroll_handle: ScrollHandle::new(),
             dictation_history_scroll_handle: ScrollHandle::new(),
             notes_browse_scroll_handle: ScrollHandle::new(),
@@ -1127,20 +1127,20 @@ impl ScriptListApp {
             tab_ai_harness_return_focus_target: None,
             tab_ai_harness_script_list_trigger: None,
             tab_ai_harness_apply_back_route: None,
-            embedded_acp_chat: None,
-            embedded_acp_focus_handle: None,
-            prewarmed_acp_chat: None,
+            embedded_agent_chat: None,
+            embedded_agent_chat_focus_handle: None,
+            prewarmed_agent_chat: None,
             active_agent_chat_warm_lease: None,
-            acp_ready_script_path: None,
-            acp_footer_dot_status: None,
-            acp_footer_model_display: None,
-            acp_footer_snapshot: None,
+            agent_chat_ready_script_path: None,
+            agent_chat_footer_dot_status: None,
+            agent_chat_footer_model_display: None,
+            agent_chat_footer_snapshot: None,
             attachment_portal_host_snapshot: None,
             attachment_portal_return_view: None,
             attachment_portal_return_focus_target: None,
             attachment_portal_return_width: None,
             active_attachment_portal_kind: None,
-            acp_surface_state: crate::ai::acp::surface_state::AcpSurfaceState::Hidden,
+            agent_chat_surface_state: crate::ai::agent_chat::ui::surface_state::AgentChatSurfaceState::Hidden,
             // Input history for shell-like up/down navigation
             input_history: {
                 let mut history = input_history::InputHistory::new();
@@ -1250,10 +1250,10 @@ impl ScriptListApp {
 
                 let is_notes = crate::notes::is_notes_window(window);
                 let is_ai = crate::ai::is_ai_window(window);
-                let is_detached_acp = crate::ai::acp::chat_window::is_chat_window(window);
+                let is_detached_agent_chat = crate::ai::agent_chat::ui::chat_window::is_chat_window(window);
                 let is_actions = crate::actions::is_actions_window(window);
 
-                if is_notes || is_ai || is_detached_acp {
+                if is_notes || is_ai || is_detached_agent_chat {
                     return;
                 }
 
@@ -1289,15 +1289,15 @@ impl ScriptListApp {
                 // their own Tab/Cmd+Enter handling.
                 let is_notes = crate::notes::is_notes_window(window);
                 let is_ai = crate::ai::is_ai_window(window);
-                let is_detached_acp = crate::ai::acp::chat_window::is_chat_window(window);
+                let is_detached_agent_chat = crate::ai::agent_chat::ui::chat_window::is_chat_window(window);
                 let is_actions = crate::actions::is_actions_window(window);
-                if is_notes || is_ai || is_detached_acp || is_actions {
+                if is_notes || is_ai || is_detached_agent_chat || is_actions {
                     tracing::debug!(
                         target: "script_kit::keyboard",
                         event = "tab_interceptor_skipped_secondary_window",
                         is_notes,
                         is_ai,
-                        is_detached_acp,
+                        is_detached_agent_chat,
                         is_actions,
                     );
                     return;
@@ -1382,7 +1382,7 @@ impl ScriptListApp {
                         app.update(cx, |this, cx| {
                             let owner = match &this.current_view {
                                 AppView::ScriptList => "script_list",
-                                AppView::AcpChatView { .. } => "embedded_acp",
+                                AppView::AgentChatView { .. } => "embedded_agent_chat",
                                 AppView::QuickTerminalView { .. } => "quick_terminal",
                                 AppView::FileSearchView { .. } => "file_search",
                                 AppView::ChatPrompt { .. } => "chat_prompt",
@@ -1477,9 +1477,9 @@ impl ScriptListApp {
                             // visible — Tab applies the selected row (keep-open
                             // for open-value qualifiers like `source:`,
                             // close-after-apply for bare qualifiers or capture
-                            // targets). Runs BEFORE the ACP plain-Tab routing
+                            // targets). Runs BEFORE the Agent Chat plain-Tab routing
                             // branch so menu-syntax keyboard stays consistent
-                            // with the ACP slash / @ pickers.
+                            // with the Agent Chat slash / @ pickers.
                             if matches!(this.current_view, AppView::ScriptList)
                                 && this.menu_syntax_object_selector_owns_main_keyboard()
                             {
@@ -1546,7 +1546,7 @@ impl ScriptListApp {
                             // Tab on ScriptList opens the cwd picker — the
                             // chip-as-button affordance. Fires only when
                             // nothing else above (menu-syntax popups, ghost
-                            // prediction, capture form, ACP/terminal locals)
+                            // prediction, capture form, Agent Chat/terminal locals)
                             // claimed the keystroke. The picker is the same
                             // FileSearchView that `>` used to open; the
                             // user's first typed char inside it transitions
@@ -1607,7 +1607,7 @@ impl ScriptListApp {
                             // Profile picker via the window-aware entry point. We
                             // Keep this on the in-chat profile picker; the
                             // main-window Profile Search is only for ScriptList.
-                            if let AppView::AcpChatView { entity, .. } = &this.current_view {
+                            if let AppView::AgentChatView { entity, .. } = &this.current_view {
                                 if has_shift {
                                     cx.stop_propagation();
                                     if this.show_actions_popup
@@ -1617,7 +1617,7 @@ impl ScriptListApp {
                                     }
                                     tracing::info!(
                                         target: "script_kit::keyboard",
-                                        event = "acp_shift_tab_profile_switcher",
+                                        event = "agent_chat_shift_tab_profile_switcher",
                                         "Opening Agent Chat Profile picker from Shift+Tab"
                                     );
                                     let entity = entity.clone();
@@ -1683,7 +1683,7 @@ impl ScriptListApp {
                     }
                 }
 
-                // Keep plain Enter routed to ACP mention acceptance in the
+                // Keep plain Enter routed to Agent Chat mention acceptance in the
                 // embedded main-window host when the picker is open.
                 if is_plain_enter {
                     if let Some(app) = app_entity.upgrade() {
@@ -1696,7 +1696,7 @@ impl ScriptListApp {
                             }
                             // Menu-syntax trigger popup owns Enter when it is
                             // visible on ScriptList — Accept the selected row
-                            // the same way the ACP / and @ pickers do.
+                            // the same way the Agent Chat / and @ pickers do.
                             if matches!(this.current_view, AppView::ScriptList)
                                 && this.menu_syntax_object_selector_owns_main_keyboard()
                             {
@@ -1748,7 +1748,7 @@ impl ScriptListApp {
                                 cx.stop_propagation();
                                 return;
                             }
-                            if let AppView::AcpChatView { entity, .. } = &this.current_view {
+                            if let AppView::AgentChatView { entity, .. } = &this.current_view {
                                 let handled =
                                     entity.update(cx, |chat, cx| chat.handle_enter_key(cx));
                                 if handled {
@@ -1762,9 +1762,9 @@ impl ScriptListApp {
         });
         app.gpui_input_subscriptions.push(tab_interceptor);
 
-        // Prewarm ACP config and the hidden Agent Chat connection so the first
-        // compatible ACP submit can reuse an initialized runtime/session.
-        crate::ai::acp::prewarm_agent_config();
+        // Prewarm Agent Chat config and the hidden Agent Chat connection so the first
+        // compatible Agent Chat submit can reuse an initialized runtime/session.
+        crate::ai::agent_chat::ui::prewarm_agent_config();
 
         // Prewarm Agent Chat and the Tab AI harness asynchronously so AI-entry
         // shortcuts do not pay subprocess/session startup cost on submit.
@@ -1778,7 +1778,7 @@ impl ScriptListApp {
                     return;
                 };
                 app.update(cx, |this, cx| {
-                    this.warm_acp_chat_on_startup(cx);
+                    this.warm_agent_chat_on_startup(cx);
                     this.warm_tab_ai_harness_on_startup(cx);
                     this.warm_quick_terminal_pty(cx);
                 });
@@ -1803,7 +1803,7 @@ impl ScriptListApp {
                 // windows receive their own navigation key events.
                 if crate::notes::is_notes_window(window)
                     || crate::ai::is_ai_window(window)
-                    || crate::ai::acp::chat_window::is_chat_window(window)
+                    || crate::ai::agent_chat::ui::chat_window::is_chat_window(window)
                     || crate::actions::is_actions_window(window)
                 {
                     return;
@@ -2257,15 +2257,15 @@ impl ScriptListApp {
                                     }
                                     cx.stop_propagation();
                                 }
-                                AppView::AcpHistoryView {
+                                AppView::AgentChatHistoryView {
                                     selected_index,
                                     filter,
                                 } => {
                                     let filtered_len = if filter.is_empty() {
-                                        crate::ai::acp::history::load_history().len()
+                                        crate::ai::agent_chat::ui::history::load_history().len()
                                     } else {
                                         let filter_lower = filter.to_lowercase();
-                                        crate::ai::acp::history::load_history()
+                                        crate::ai::agent_chat::ui::history::load_history()
                                             .into_iter()
                                             .filter(|entry| {
                                                 entry
@@ -2281,12 +2281,12 @@ impl ScriptListApp {
                                     };
                                     if is_up && *selected_index > 0 {
                                         *selected_index -= 1;
-                                        this.acp_history_scroll_handle
+                                        this.agent_chat_history_scroll_handle
                                             .scroll_to_item(*selected_index);
                                         cx.notify();
                                     } else if is_down && *selected_index + 1 < filtered_len {
                                         *selected_index += 1;
-                                        this.acp_history_scroll_handle
+                                        this.agent_chat_history_scroll_handle
                                             .scroll_to_item(*selected_index);
                                         cx.notify();
                                     }
@@ -2623,7 +2623,7 @@ impl ScriptListApp {
                 // Skip processing if this keystroke is from a secondary window
                 if crate::notes::is_notes_window(window)
                     || crate::ai::is_ai_window(window)
-                    || crate::ai::acp::chat_window::is_chat_window(window)
+                    || crate::ai::agent_chat::ui::chat_window::is_chat_window(window)
                     || crate::actions::is_actions_window(window)
                 {
                     return;
@@ -2692,7 +2692,7 @@ impl ScriptListApp {
             move |event, window, cx| {
                 let is_notes = crate::notes::is_notes_window(window);
                 let is_ai = crate::ai::is_ai_window(window);
-                let is_detached_acp = crate::ai::acp::chat_window::is_chat_window(window);
+                let is_detached_agent_chat = crate::ai::agent_chat::ui::chat_window::is_chat_window(window);
                 let is_actions = crate::actions::is_actions_window(window);
 
                 let key = event.keystroke.key.as_str();
@@ -2705,7 +2705,7 @@ impl ScriptListApp {
                 let is_actions_close_key = crate::ui_foundation::is_key_escape(key)
                     || (has_cmd && key.eq_ignore_ascii_case("k") && !has_shift);
 
-                // ACP can open the shared actions dialog from its own focused
+                // Agent Chat can open the shared actions dialog from its own focused
                 // composer even when the launcher visibility flag is false.
                 // Close keys still need to reach the shared dialog before the
                 // hidden-window guard below has a chance to skip them.
@@ -2761,7 +2761,7 @@ impl ScriptListApp {
                         event = "actions_interceptor_main_window_hidden",
                         is_notes,
                         is_ai,
-                        is_detached_acp,
+                        is_detached_agent_chat,
                         is_actions,
                     );
                     return;
@@ -2774,13 +2774,13 @@ impl ScriptListApp {
                 // CRITICAL: Skip processing if this keystroke is from a secondary window.
                 // intercept_keystrokes is GLOBAL and fires for ALL windows in the app.
                 // We only want to handle keystrokes for the main window.
-                if is_notes || is_ai || is_detached_acp {
+                if is_notes || is_ai || is_detached_agent_chat {
                     tracing::debug!(
                         target: "script_kit::keyboard",
                         event = "actions_interceptor_skipped_secondary_window",
                         is_notes,
                         is_ai,
-                        is_detached_acp,
+                        is_detached_agent_chat,
                         is_actions,
                     );
                     return; // Let the secondary window handle its own keystrokes
@@ -2870,14 +2870,14 @@ impl ScriptListApp {
                             }
                         }
 
-                        let acp_escape_popup_open = match &this.current_view {
-                            AppView::AcpChatView { entity, .. } => {
+                        let agent_chat_escape_popup_open = match &this.current_view {
+                            AppView::AgentChatView { entity, .. } => {
                                 entity.read(cx).has_escape_dismissible_popup()
                             }
                             _ => false,
                         };
-                        let acp_escape_focused_text_origin = match &this.current_view {
-                            AppView::AcpChatView { entity, .. } => {
+                        let agent_chat_escape_focused_text_origin = match &this.current_view {
+                            AppView::AgentChatView { entity, .. } => {
                                 let chat = entity.read(cx);
                                 chat.is_focused_text_mini()
                                     || chat.focused_text_originated_from_quick_prompt()
@@ -2885,13 +2885,13 @@ impl ScriptListApp {
                             _ => false,
                         };
 
-                        let acp_escape_cancelled_streaming = if crate::ui_foundation::is_key_escape(key)
+                        let agent_chat_escape_cancelled_streaming = if crate::ui_foundation::is_key_escape(key)
                             && !has_cmd
                             && !has_shift
-                            && !acp_escape_focused_text_origin
+                            && !agent_chat_escape_focused_text_origin
                         {
                             match &this.current_view {
-                                AppView::AcpChatView { entity, .. } => entity.update(cx, |chat, cx| {
+                                AppView::AgentChatView { entity, .. } => entity.update(cx, |chat, cx| {
                                     chat.cancel_streaming_from_escape(cx)
                                 }),
                                 _ => false,
@@ -2899,7 +2899,7 @@ impl ScriptListApp {
                         } else {
                             false
                         };
-                        if acp_escape_cancelled_streaming {
+                        if agent_chat_escape_cancelled_streaming {
                             logging::log(
                                 "KEY",
                                 "Interceptor: Escape -> cancel Agent Chat streaming",
@@ -2908,20 +2908,20 @@ impl ScriptListApp {
                             return;
                         }
 
-                        // Handle Escape for AcpChatView.
+                        // Handle Escape for AgentChatView.
                         if crate::ui_foundation::is_key_escape(key)
                             && !has_cmd
                             && !has_shift
                             && !this.show_actions_popup
-                            && !acp_escape_popup_open
-                            && matches!(this.current_view, AppView::AcpChatView { .. })
+                            && !agent_chat_escape_popup_open
+                            && matches!(this.current_view, AppView::AgentChatView { .. })
                         {
-                            if acp_escape_focused_text_origin {
+                            if agent_chat_escape_focused_text_origin {
                                 tracing::info!(
                                     target: "script_kit::keyboard",
                                     event = "focused_text_quick_prompt_escape_hide_requested",
                                 );
-                                this.close_acp_chat_main_window_state_first(cx);
+                                this.close_agent_chat_main_window_state_first(cx);
                                 logging::log(
                                     "KEY",
                                     "Interceptor: Escape -> hide focused-text quick prompt Agent Chat",
@@ -2932,7 +2932,7 @@ impl ScriptListApp {
                             if this.opened_from_main_menu {
                                 tracing::info!(
                                     target: "script_kit::keyboard",
-                                    event = "embedded_acp_escape_return_to_origin",
+                                    event = "embedded_agent_chat_escape_return_to_origin",
                                 );
                                 this.close_tab_ai_harness_terminal_with_window(window, cx);
                                 logging::log(
@@ -2942,9 +2942,9 @@ impl ScriptListApp {
                             } else {
                                 tracing::info!(
                                     target: "script_kit::keyboard",
-                                    event = "embedded_acp_escape_close_window",
+                                    event = "embedded_agent_chat_escape_close_window",
                                 );
-                                this.close_acp_chat_main_window_state_first(cx);
+                                this.close_agent_chat_main_window_state_first(cx);
                                 logging::log(
                                     "KEY",
                                     "Interceptor: Escape -> close Agent Chat window",

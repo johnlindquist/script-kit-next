@@ -5,8 +5,8 @@
 //!
 //! The shared `ActionsDialog` at `src/actions/dialog.rs` supports
 //! drill-down sub-menus via `route_stack: Vec<ActionsDialogRouteState>`.
-//! The canonical live consumer today is the ACP agent-switch menu
-//! at `src/ai/acp/view.rs` — users open Cmd+K on the ACP chat,
+//! The canonical live consumer today is the Agent Chat agent-switch menu
+//! at `src/ai/agent_chat/ui/view.rs` — users open Cmd+K on the Agent Chat chat,
 //! select "Switch agent", and drill into a child route listing
 //! available agents. Escape from the child MUST pop back to the
 //! parent with ITS search text, selection, and scroll position
@@ -118,7 +118,7 @@ fn push_route_snapshots_parent_state_before_pushing() {
          before pushing the child. Without it the parent's \
          `search_text` / `selected_action_id` are never captured \
          and popping back loses the parent's filter on every \
-         drill-down return (ACP agent-switch being the canonical \
+         drill-down return (Agent Chat agent-switch being the canonical \
          consumer). Body was:\n{body}"
     );
 
@@ -151,7 +151,7 @@ fn push_route_builds_child_ui_via_apply_from_route() {
          replace the parent's. Skipping this would leave the parent's \
          actions visible under the child's route banner — users \
          would see \"Switch Agent\" in the breadcrumb but the old \
-         ACP-host action list underneath. Body was:\n{body}"
+         Agent Chat-host action list underneath. Body was:\n{body}"
     );
 }
 

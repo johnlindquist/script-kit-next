@@ -11,7 +11,7 @@ fn trigger_action_result_is_request_correlated_and_redacted() {
     let message = Message::trigger_action_result(
         "act-1".to_string(),
         "focused-text-action-expand".to_string(),
-        Some("AcpChat".to_string()),
+        Some("AgentChat".to_string()),
         true,
         false,
         None,
@@ -23,7 +23,7 @@ fn trigger_action_result_is_request_correlated_and_redacted() {
     assert_eq!(json["type"], "triggerActionResult");
     assert_eq!(json["requestId"], "act-1");
     assert_eq!(json["actionId"], "focused-text-action-expand");
-    assert_eq!(json["host"], "AcpChat");
+    assert_eq!(json["host"], "AgentChat");
     assert_eq!(json["ok"], true);
     assert_eq!(json["popupClosed"], false);
 

@@ -55,7 +55,7 @@ fn mini_prompt_has_its_own_compact_view_type() {
 }
 
 #[test]
-fn chat_and_acp_sizing_branch_on_main_window_mode() {
+fn chat_and_agent_chat_sizing_branch_on_main_window_mode() {
     let calculate = source_between(
         UI_WINDOW,
         "pub(crate) fn calculate_window_size_params",
@@ -66,10 +66,14 @@ fn chat_and_acp_sizing_branch_on_main_window_mode() {
         chat_arm.contains("compact_ai_view_type_for_mode(self.main_window_mode)"),
         "AppView::ChatPrompt must branch on main_window_mode"
     );
-    let acp_arm = source_between(calculate, "AppView::AcpChatView", "AppView::ConfirmPrompt");
+    let agent_chat_arm = source_between(
+        calculate,
+        "AppView::AgentChatView",
+        "AppView::ConfirmPrompt",
+    );
     assert!(
-        acp_arm.contains("compact_ai_view_type_for_mode(self.main_window_mode)"),
-        "AppView::AcpChatView must branch on main_window_mode"
+        agent_chat_arm.contains("compact_ai_view_type_for_mode(self.main_window_mode)"),
+        "AppView::AgentChatView must branch on main_window_mode"
     );
 }
 

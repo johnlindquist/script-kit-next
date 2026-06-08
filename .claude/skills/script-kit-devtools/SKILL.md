@@ -59,7 +59,7 @@ Prefer direct primitives over prewritten recipes:
 - Measure CLI: `bun scripts/devtools/measure.ts --inspect <inspect.json> --coverage <coverage.json> --surface <id>` converts inspect and coverage receipts into target identity, screenshot, semantic, layout, text, scroll, focus, media, and missing-primitive measurements.
 - Media CLI: `bun scripts/devtools/media.ts --coverage <dictation-coverage.json>` is the fail-closed `devtools.media.inspect` slice for Dictation. It requires passive microphone, device, model, recording, transcript, target-delivery, hotkey, wrong-target, and cleanup receipts before live Dictation bugs can be called green.
 - Targeting: `listAutomationWindows`, `inspectAutomationWindow`, exact automation ids, kind/index promotion.
-- State: `getState`, `getAcpState`, surface contracts, popup contracts, active footer, visible counts, prompt-specific state.
+- State: `getState`, `getAgentChatState`, surface contracts, popup contracts, active footer, visible counts, prompt-specific state.
 - Semantics: `getElements(target)`, semantic ids, roles, labels, selected/focused ids, row metadata, warnings.
 - Layout: `getLayoutInfo`, layout component bounds, window bounds, footer/input/list/content bounds.
 - Interaction: `devtools.act`, `batch`, `waitFor`, `simulateKey`, `triggerBuiltin`, target-scoped `batch.setInput`, `batch.openActions`, `batch.selectBySemanticId`, and target-scoped `simulateKey` for surface-owned shortcuts.

@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use crate::config::{
-    AcpProfile, AgentChatBackend, AgentChatPathPolicyConfig, AgentChatToolPolicyConfig,
+    AgentChatBackend, AgentChatPathPolicyConfig, AgentChatProfile, AgentChatToolPolicyConfig,
     AiPreferences,
 };
 use crate::plugins::profiles::{
@@ -463,7 +463,7 @@ pub fn persist_agent_chat_profile_selection(
     Some(entry)
 }
 
-pub fn resolve_user_profile(profile: &AcpProfile) -> ResolvedAgentChatProfile {
+pub fn resolve_user_profile(profile: &AgentChatProfile) -> ResolvedAgentChatProfile {
     let backend = profile.backend.unwrap_or(AgentChatBackend::Pi);
     ResolvedAgentChatProfile {
         source: AgentChatProfileSource::User,
@@ -653,7 +653,7 @@ fn format_policy_list(values: &[String]) -> String {
     }
 }
 
-fn resolved_profile_tools(profile: &AcpProfile) -> Option<Vec<String>> {
+fn resolved_profile_tools(profile: &AgentChatProfile) -> Option<Vec<String>> {
     profile
         .tool_policy
         .as_ref()

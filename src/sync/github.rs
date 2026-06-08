@@ -146,7 +146,7 @@ pub fn sensitive_exclusion_patterns() -> Vec<String> {
         ".key",
         ".p12",
         ".pfx",
-        "acp/auth/",
+        "agent_chat/auth/",
         "logs/",
         "*.log",
         ".DS_Store",

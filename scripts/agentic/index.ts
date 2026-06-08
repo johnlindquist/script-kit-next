@@ -8,15 +8,15 @@
  *
  * Usage:
  *   bun scripts/agentic/index.ts <recipe> [--session NAME] [--key enter|tab] [--vision]
- *     [--target-json '{"type":"kind","kind":"acpDetached","index":0}'] [--surface acp]
+ *     [--target-json '{"type":"kind","kind":"agentChatDetached","index":0}'] [--surface agent_chat]
  *
  * Recipes:
- *   acp-accept             Full ACP picker accept; choose key with --key enter|tab
- *   acp-enter-accept       Compatibility alias for --key enter
- *   acp-tab-accept         Compatibility alias for --key tab
- *   acp-detached-accept    One-command detached ACP proof: resolve → accept → identity check
- *   acp-open               Open ACP and verify it reaches ready state
- *   acp-setup-recovery     Recovery from ACP setup state; select agent with --select-agent ID
+ *   agent_chat-accept             Full Agent Chat picker accept; choose key with --key enter|tab
+ *   agent_chat-enter-accept       Compatibility alias for --key enter
+ *   agent_chat-tab-accept         Compatibility alias for --key tab
+ *   agent_chat-detached-accept    One-command detached Agent Chat proof: resolve → accept → identity check
+ *   agent_chat-open               Open Agent Chat and verify it reaches ready state
+ *   agent_chat-setup-recovery     Recovery from Agent Chat setup state; select agent with --select-agent ID
  *   surface-navigate       Navigate known surfaces, safely interact, and capture image-library screenshots
  *   scenario               Run a replayable scenario with proof bundle (--scenario NAME --index N)
  *   vision-loop            Materialize visionCrops from a receipt into crop files + manifest
@@ -38,8 +38,8 @@
  *                         Fail-closed tray menu/global hotkey mutation proof
  *   multi-window-resize-monitor-restoration-stress
  *                         Fail-closed multi-window resize/monitor restoration proof
- *   acp-targeted-dictation-delivery-stress
- *                         Fail-closed ACP-targeted dictation delivery proof
+ *   agent_chat-targeted-dictation-delivery-stress
+ *                         Fail-closed Agent Chat-targeted dictation delivery proof
  *   clipboard-share-trust-install-stress
  *                         Fail-closed clipboard share trust install proof
  *   clipboard-share-watcher-stale-replay-stress
@@ -178,22 +178,22 @@
  *                         Fail-closed window title/status semantics proof
  *   menu-syntax-capture-validation-chip-stress
  *                         Fail-closed menu syntax capture validation chip proof
- *   acp-footer-activity-indicator-stress
- *                         Fail-closed ACP footer activity indicator proof
- *   acp-model-history-popover-visual-state-stress
- *                         Fail-closed ACP model/history popover visual state proof
- *   acp-context-insertion-preview-parity-stress
- *                         Fail-closed ACP context insertion preview parity proof
- *   acp-slash-mention-provider-visibility-stress
- *                         Fail-closed ACP slash/mention provider visibility proof
- *   acp-composer-token-keyboard-edit-parity-stress
- *                         Fail-closed ACP composer token keyboard edit parity proof
- *   acp-transcript-stream-retry-virtualization-stress
- *                         Fail-closed ACP transcript stream retry virtualization proof
- *   acp-plugin-skill-entry-thread-affinity-stress
- *                         Fail-closed ACP plugin skill entry thread affinity proof
- *   notes-cart-acp-handoff-dedupe-stress
- *                         Fail-closed Notes cart ACP handoff dedupe proof
+ *   agent_chat-footer-activity-indicator-stress
+ *                         Fail-closed Agent Chat footer activity indicator proof
+ *   agent_chat-model-history-popover-visual-state-stress
+ *                         Fail-closed Agent Chat model/history popover visual state proof
+ *   agent_chat-context-insertion-preview-parity-stress
+ *                         Fail-closed Agent Chat context insertion preview parity proof
+ *   agent_chat-slash-mention-provider-visibility-stress
+ *                         Fail-closed Agent Chat slash/mention provider visibility proof
+ *   agent_chat-composer-token-keyboard-edit-parity-stress
+ *                         Fail-closed Agent Chat composer token keyboard edit parity proof
+ *   agent_chat-transcript-stream-retry-virtualization-stress
+ *                         Fail-closed Agent Chat transcript stream retry virtualization proof
+ *   agent_chat-plugin-skill-entry-thread-affinity-stress
+ *                         Fail-closed Agent Chat plugin skill entry thread affinity proof
+ *   notes-cart-agent_chat-handoff-dedupe-stress
+ *                         Fail-closed Notes cart Agent Chat handoff dedupe proof
  *   root-file-source-filter-pagination-footer-stress
  *                         Fail-closed root file source-filter pagination footer proof
  *   file-search-directory-breadcrumb-restoration-stress
@@ -223,9 +223,9 @@
  *   help                   Show this help
  *
  * Target threading:
- *   --target-json JSON   ACP window target for all RPCs (getAcpState, getAcpTestProbe,
- *                        resetAcpTestProbe, waitFor). Reused consistently across all steps.
- *   --surface SURFACE    Automation surface for native input focus (main, acp, actions, notes, ai).
+ *   --target-json JSON   Agent Chat window target for all RPCs (getAgentChatState, getAgentChatTestProbe,
+ *                        resetAgentChatTestProbe, waitFor). Reused consistently across all steps.
+ *   --surface SURFACE    Automation surface for native input focus (main, agent_chat, actions, notes, ai).
  *                        Must match the --target-json window so focus and proof stay on the same surface.
  *
  * All output is JSON on stdout. Each recipe returns the underlying
@@ -234,18 +234,18 @@
 
 import { resolve } from "path";
 import {
-  runAcpPortalRoundTripOriginStressScenario,
-  runAcpPromptPopupParityScenario,
+  runAgentChatPortalRoundTripOriginStressScenario,
+  runAgentChatPromptPopupParityScenario,
   runActionsCapturedSubjectFrameStressScenario,
   runBrowserTabsCacheIdentityStressScenario,
   runClipboardHistoryPortalRangeStressScenario,
   runCurrentAppCommandsFrontmostStressScenario,
-  runDetachedAcpTargetThreadingStressScenario,
+  runDetachedAgentChatTargetThreadingStressScenario,
   runDropPromptNativeDropPrivacyStressScenario,
   runActionsDialogExactIdScenario,
-  runDetachedAcpExactIdScenario,
+  runDetachedAgentChatExactIdScenario,
   runMainWindowExactIdScenario,
-  runNotesAcpDelayedActionOriginStressScenario,
+  runNotesAgentChatDelayedActionOriginStressScenario,
   runPathPromptFilesystemEdgeStressScenario,
   runPermissionPreflightReadonlyScenario,
   runPermissionAssistantDragPreflightStressScenario,
@@ -257,7 +257,7 @@ import {
   runScriptletBundleExecutionMatrixStressScenario,
   runTrayGlobalHotkeyMenuMutationStressScenario,
   runMultiWindowResizeMonitorRestorationStressScenario,
-  runAcpTargetedDictationDeliveryStressScenario,
+  runAgentChatTargetedDictationDeliveryStressScenario,
   runClipboardShareTrustInstallStressScenario,
   runClipboardShareWatcherStaleReplayStressScenario,
   runPermissionShareCrossPromptFocusStressScenario,
@@ -324,14 +324,14 @@ import {
   runInlineAttachmentPreviewChipStabilityStressScenario,
   runWindowTitleStatusSemanticsStressScenario,
   runMenuSyntaxCaptureValidationChipStressScenario,
-  runAcpFooterActivityIndicatorStressScenario,
-  runAcpModelHistoryPopoverVisualStateStressScenario,
-  runAcpContextInsertionPreviewParityStressScenario,
-  runAcpSlashMentionProviderVisibilityStressScenario,
-  runAcpComposerTokenKeyboardEditParityStressScenario,
-  runAcpTranscriptStreamRetryVirtualizationStressScenario,
-  runAcpPluginSkillEntryThreadAffinityStressScenario,
-  runNotesCartAcpHandoffDedupeStressScenario,
+  runAgentChatFooterActivityIndicatorStressScenario,
+  runAgentChatModelHistoryPopoverVisualStateStressScenario,
+  runAgentChatContextInsertionPreviewParityStressScenario,
+  runAgentChatSlashMentionProviderVisibilityStressScenario,
+  runAgentChatComposerTokenKeyboardEditParityStressScenario,
+  runAgentChatTranscriptStreamRetryVirtualizationStressScenario,
+  runAgentChatPluginSkillEntryThreadAffinityStressScenario,
+  runNotesCartAgentChatHandoffDedupeStressScenario,
   runRootFileSourceFilterPaginationFooterStressScenario,
   runFileSearchDirectoryBreadcrumbRestorationStressScenario,
   runEmojiPickerSkinToneCategoryUxStressScenario,
@@ -348,7 +348,7 @@ import {
   runWarningBannerActionDismissSemanticsStressScenario,
   runSelectPromptMultiselectKeyboardStateStressScenario,
   runFileSearchPreviewSanitizationStressScenario,
-  runScreenshotIdentityAcpContextStressScenario,
+  runScreenshotIdentityAgentChatContextStressScenario,
   runScrollSelectionReanchorStressScenario,
   runShortcutRecorderFocusCaptureStressScenario,
   runTemplatePromptAutomationParityStressScenario,
@@ -362,7 +362,7 @@ const PROJECT_ROOT = resolve(import.meta.dir, "../..");
 // ---------------------------------------------------------------------------
 
 /**
- * Wire-compatible ACP window target. Same shape as Rust `AutomationWindowTarget`.
+ * Wire-compatible Agent Chat window target. Same shape as Rust `AutomationWindowTarget`.
  * One target object must be reused for every RPC in a single verification run.
  */
 type AutomationTargetJson =
@@ -387,7 +387,7 @@ interface RecipeReceipt {
   proofBundle?: unknown;
 }
 
-type SurfaceProofKind = "main" | "actionsDialog" | "promptPopup" | "acpDetached";
+type SurfaceProofKind = "main" | "actionsDialog" | "promptPopup" | "agentChatDetached";
 
 interface SurfaceProofUsage {
   stateFirst: true;
@@ -533,7 +533,7 @@ function buildCmd(
  * When `skipEnsureFocus` is true, the `--ensure-focus` flag is omitted so
  * macos-input.ts will not attempt OS-level focus enforcement before trying
  * protocol-level and GPUI dispatch paths. This is the correct mode for
- * detached ACP and popup targets that don't need foreground keyboard focus.
+ * detached Agent Chat and popup targets that don't need foreground keyboard focus.
  */
 function nativeInputArgs(
   command: string,
@@ -588,7 +588,7 @@ async function send(
  * Decide how to deliver input to a target surface.
  *
  * Decision rule:
- *   - acpDetached, actionsDialog, promptPopup → "batch" (protocol-level, no OS focus needed)
+ *   - agentChatDetached, actionsDialog, promptPopup → "batch" (protocol-level, no OS focus needed)
  *   - Exact ID targets → "batch"
  *   - main/focused/unspecified → "native" (OS-level input via macos-input.ts)
  */
@@ -603,7 +603,7 @@ function chooseInputMethod(
   if (target.type === "id") return "batch";
   if (target.type === "kind") {
     if (
-      target.kind === "acpDetached" ||
+      target.kind === "agentChatDetached" ||
       target.kind === "actionsDialog" ||
       target.kind === "promptPopup"
     ) {
@@ -1797,7 +1797,7 @@ function inferSurfaceClass(kind: SurfaceProofKind): "main" | "attachedPopup" | "
     case "actionsDialog":
     case "promptPopup":
       return "attachedPopup";
-    case "acpDetached":
+    case "agentChatDetached":
       return "detached";
   }
 }
@@ -1852,7 +1852,7 @@ function surfaceProofCapabilities(
     inspect: true,
     waitFor: true,
     batch: attachedPopup ? ["setInput"] : [],
-    gpuiEvent: kind === "acpDetached",
+    gpuiEvent: kind === "agentChatDetached",
     nativeInputRequired: false,
     screenshotRequired: false,
   };
@@ -1865,18 +1865,18 @@ async function collectSurfaceStateAndElements(
 ): Promise<{ stateStep: StepReceipt; elementsStep: StepReceipt }> {
   const stamp = Date.now();
   const stateStep =
-    kind === "acpDetached"
-      ? await step("surface.getAcpState", () =>
+    kind === "agentChatDetached"
+      ? await step("surface.getAgentChatState", () =>
           rpc(
             session,
             buildCmd(
               {
-                type: "getAcpState",
+                type: "getAgentChatState",
                 requestId: `surface-proof-${kind}-state-${stamp}`,
               },
               target
             ),
-            { expect: "acpStateResult", timeout: 5000 }
+            { expect: "agent_chatStateResult", timeout: 5000 }
           )
         )
       : await step("surface.getState", () =>
@@ -1943,8 +1943,8 @@ async function recipeSurfaceProof(
     case "promptPopup":
       bundle = await runPromptPopupExactIdScenario(session, index);
       break;
-    case "acpDetached":
-      bundle = await runDetachedAcpExactIdScenario(session, index);
+    case "agentChatDetached":
+      bundle = await runDetachedAgentChatExactIdScenario(session, index);
       break;
   }
 
@@ -2029,7 +2029,7 @@ async function recipeSurfaceProof(
 
 /**
  * Returns true when the target is the main window (or no target specified).
- * Non-main targets (e.g., acpDetached) should skip show/triggerBuiltin.
+ * Non-main targets (e.g., agentChatDetached) should skip show/triggerBuiltin.
  */
 function isMainLikeTarget(target?: AutomationTargetJson): boolean {
   if (!target) return true;
@@ -2037,7 +2037,7 @@ function isMainLikeTarget(target?: AutomationTargetJson): boolean {
   return false;
 }
 
-async function recipeAcpOpen(
+async function recipeAgentChatOpen(
   session: string,
   opts: { target?: AutomationTargetJson } = {}
 ): Promise<RecipeReceipt> {
@@ -2053,37 +2053,37 @@ async function recipeAcpOpen(
     // become frontmost after show before triggerBuiltin can target it.
     await Bun.sleep(300);
 
-    // 2. Trigger ACP
+    // 2. Trigger Agent Chat
     steps.push(
-      await step("trigger-acp", () =>
+      await step("trigger-agent_chat", () =>
         send(session, '{"type":"triggerBuiltin","name":"tab-ai"}')
       )
     );
   } else {
-    // Non-main target: skip show/triggerBuiltin — the detached ACP
+    // Non-main target: skip show/triggerBuiltin — the detached Agent Chat
     // surface is assumed to already exist. We only wait/verify.
     steps.push({
       name: "skip-main-open",
       status: "pass",
       output: {
         skipped: true,
-        reason: "non-main ACP target supplied; assuming detached target already exists",
+        reason: "non-main Agent Chat target supplied; assuming detached target already exists",
         target: opts.target,
       },
       durationMs: 0,
     });
   }
 
-  // 3. Wait for ACP to be ready using waitFor instead of fixed sleep
+  // 3. Wait for Agent Chat to be ready using waitFor instead of fixed sleep
   steps.push(
-    await step("wait-acp-ready", () =>
+    await step("wait-agent_chat-ready", () =>
       rpc(
         session,
         buildCmd(
           {
             type: "waitFor",
-            requestId: "w-acp-ready",
-            condition: { type: "acpReady" },
+            requestId: "w-agent_chat-ready",
+            condition: { type: "agent_chatReady" },
             timeout: 8000,
             pollInterval: 25,
             trace: "onFailure",
@@ -2097,7 +2097,7 @@ async function recipeAcpOpen(
 
   // 4. State-only verification: no screenshot, no probe
   steps.push(
-    await step("verify-acp-ready", () =>
+    await step("verify-agent_chat-ready", () =>
       runTool(
         verifyArgs(
           [
@@ -2106,10 +2106,10 @@ async function recipeAcpOpen(
             "--session",
             session,
             "--label",
-            "acp-open",
+            "agent_chat-open",
             "--skip-screenshot",
             "--skip-probe",
-            "--acp-context-ready",
+            "--agent_chat-context-ready",
           ],
           opts.target
         ),
@@ -2121,7 +2121,7 @@ async function recipeAcpOpen(
   const allPass = steps.every((s) => s.status === "pass");
   return {
     schemaVersion: SCHEMA_VERSION,
-    recipe: "acp-open",
+    recipe: "agent_chat-open",
     status: allPass
       ? "pass"
       : steps.some((s) => s.status === "error")
@@ -2129,7 +2129,7 @@ async function recipeAcpOpen(
         : "fail",
     steps,
     summary: allPass
-      ? "ACP opened and context ready"
+      ? "Agent Chat opened and context ready"
       : `Failed at: ${steps
           .filter((s) => s.status !== "pass")
           .map((s) => s.name)
@@ -2137,7 +2137,7 @@ async function recipeAcpOpen(
   };
 }
 
-async function recipeAcpPickerAccept(
+async function recipeAgentChatPickerAccept(
   session: string,
   acceptKey: "enter" | "tab",
   opts: {
@@ -2150,10 +2150,10 @@ async function recipeAcpPickerAccept(
 ): Promise<RecipeReceipt> {
   const steps: StepReceipt[] = [];
 
-  // 1. Open ACP first
-  const openResult = await recipeAcpOpen(session, { target: opts.target });
+  // 1. Open Agent Chat first
+  const openResult = await recipeAgentChatOpen(session, { target: opts.target });
   steps.push({
-    name: "acp-open",
+    name: "agent_chat-open",
     status: openResult.status,
     output: openResult,
     durationMs: openResult.steps.reduce((sum, s) => sum + s.durationMs, 0),
@@ -2162,10 +2162,10 @@ async function recipeAcpPickerAccept(
   if (openResult.status !== "pass") {
     return {
       schemaVersion: SCHEMA_VERSION,
-      recipe: `acp-${acceptKey}-accept`,
+      recipe: `agent_chat-${acceptKey}-accept`,
       status: "error",
       steps,
-      summary: "Cannot proceed: ACP open failed",
+      summary: "Cannot proceed: Agent Chat open failed",
     };
   }
 
@@ -2176,7 +2176,7 @@ async function recipeAcpPickerAccept(
         session,
         buildCmd(
           {
-            type: "resetAcpTestProbe",
+            type: "resetAgentChatTestProbe",
             requestId: `reset-${acceptKey}-${Date.now()}`,
           },
           opts.target
@@ -2186,7 +2186,7 @@ async function recipeAcpPickerAccept(
   );
 
   // 3. Type @ to open picker.
-  //    For non-main targets (detached ACP, popups), route through batch/GPUI first
+  //    For non-main targets (detached Agent Chat, popups), route through batch/GPUI first
   //    so the flow succeeds even when the human user types in another app.
   const typeAtStep = await routedInputStep("type-at-trigger", "type", "@", session, {
     target: opts.target,
@@ -2198,7 +2198,7 @@ async function recipeAcpPickerAccept(
   if (typeAtStep.status !== "pass") {
     return {
       schemaVersion: SCHEMA_VERSION,
-      recipe: `acp-${acceptKey}-accept`,
+      recipe: `agent_chat-${acceptKey}-accept`,
       status: "fail",
       steps,
       summary: `Input failed at type-at-trigger (method: ${typeAtStep.inputMethod ?? "unknown"})`,
@@ -2214,7 +2214,7 @@ async function recipeAcpPickerAccept(
           {
             type: "waitFor",
             requestId: `w-picker-open-${acceptKey}`,
-            condition: { type: "acpPickerOpen" },
+            condition: { type: "agent_chatPickerOpen" },
             timeout: 3000,
             pollInterval: 25,
             trace: "onFailure",
@@ -2240,7 +2240,7 @@ async function recipeAcpPickerAccept(
             "picker-open",
             "--skip-screenshot",
             "--skip-probe",
-            "--acp-picker-open",
+            "--agent_chat-picker-open",
           ],
           opts.target
         ),
@@ -2260,14 +2260,14 @@ async function recipeAcpPickerAccept(
   if (acceptKeyStep.status !== "pass") {
     return {
       schemaVersion: SCHEMA_VERSION,
-      recipe: `acp-${acceptKey}-accept`,
+      recipe: `agent_chat-${acceptKey}-accept`,
       status: "fail",
       steps,
       summary: `Input failed at accept-${acceptKey} (method: ${acceptKeyStep.inputMethod ?? "unknown"})`,
     };
   }
 
-  // 7. Wait for key-specific acceptance proof (not generic acpItemAccepted)
+  // 7. Wait for key-specific acceptance proof (not generic agent_chatItemAccepted)
   steps.push(
     await step("wait-accepted-via-key", () =>
       rpc(
@@ -2276,7 +2276,7 @@ async function recipeAcpPickerAccept(
           {
             type: "waitFor",
             requestId: `w-accepted-via-${acceptKey}`,
-            condition: { type: "acpAcceptedViaKey", key: acceptKey },
+            condition: { type: "agent_chatAcceptedViaKey", key: acceptKey },
             timeout: 3000,
             pollInterval: 25,
             trace: "onFailure",
@@ -2296,9 +2296,9 @@ async function recipeAcpPickerAccept(
     session,
     "--label",
     `${acceptKey}-accepted`,
-    "--acp-picker-closed",
-    "--acp-item-accepted",
-    "--acp-accepted-via",
+    "--agent_chat-picker-closed",
+    "--agent_chat-item-accepted",
+    "--agent_chat-accepted-via",
     acceptKey,
     ...(opts.emitVision ? ["--vision"] : []),
     ...(opts.captureWindowId != null ? ["--capture-window-id", String(opts.captureWindowId)] : []),
@@ -2318,7 +2318,7 @@ async function recipeAcpPickerAccept(
 
   return {
     schemaVersion: SCHEMA_VERSION,
-    recipe: `acp-${acceptKey}-accept`,
+    recipe: `agent_chat-${acceptKey}-accept`,
     status: allPass
       ? "pass"
       : steps.some((s) => s.status === "error")
@@ -2326,7 +2326,7 @@ async function recipeAcpPickerAccept(
         : "fail",
     steps,
     summary: allPass
-      ? `ACP picker accepted via ${acceptKey}`
+      ? `Agent Chat picker accepted via ${acceptKey}`
       : `Failed at: ${steps
           .filter((s) => s.status !== "pass")
           .map((s) => s.name)
@@ -2335,7 +2335,7 @@ async function recipeAcpPickerAccept(
   };
 }
 
-async function recipeAcpSetupRecovery(
+async function recipeAgentChatSetupRecovery(
   session: string,
   selectAgent?: string
 ): Promise<RecipeReceipt> {
@@ -2348,21 +2348,21 @@ async function recipeAcpSetupRecovery(
 
   await Bun.sleep(300);
 
-  // 2. Trigger ACP
+  // 2. Trigger Agent Chat
   steps.push(
-    await step("trigger-acp", () =>
+    await step("trigger-agent_chat", () =>
       send(session, '{"type":"triggerBuiltin","name":"tab-ai"}')
     )
   );
 
-  // 3. Wait for setup card to appear (or acpReady if no setup needed)
+  // 3. Wait for setup card to appear (or agent_chatReady if no setup needed)
   const waitSetupStep = await step("wait-setup-visible", () =>
     rpc(
       session,
       JSON.stringify({
         type: "waitFor",
         requestId: "w-setup-visible",
-        condition: { type: "acpSetupVisible" },
+        condition: { type: "agent_chatSetupVisible" },
         timeout: 8000,
         pollInterval: 25,
         trace: "onFailure",
@@ -2385,7 +2385,7 @@ async function recipeAcpSetupRecovery(
           "setup-not-found",
           "--skip-screenshot",
           "--skip-probe",
-          "--acp-status",
+          "--agent_chat-status",
           "setup",
         ],
         "verify-no-setup"
@@ -2394,11 +2394,11 @@ async function recipeAcpSetupRecovery(
     steps.push(verifyStep);
     return {
       schemaVersion: SCHEMA_VERSION,
-      recipe: "acp-setup-recovery",
+      recipe: "agent_chat-setup-recovery",
       status: "fail",
       steps,
       summary:
-        "Setup card did not appear — ACP may already be ready or failed to open",
+        "Setup card did not appear — Agent Chat may already be ready or failed to open",
     };
   }
 
@@ -2415,7 +2415,7 @@ async function recipeAcpSetupRecovery(
           "setup",
           "--skip-screenshot",
           "--skip-probe",
-          "--acp-setup-visible",
+          "--agent_chat-setup-visible",
         ],
         "verify-setup"
       )
@@ -2430,11 +2430,11 @@ async function recipeAcpSetupRecovery(
         rpc(
           session,
           JSON.stringify({
-            type: "performAcpSetupAction",
+            type: "performAgentChatSetupAction",
             requestId: "a-open-picker",
             action: "openAgentPicker",
           }),
-          { expect: "acpSetupActionResult", timeout: 5000 }
+          { expect: "agent_chatSetupActionResult", timeout: 5000 }
         )
       )
     );
@@ -2447,7 +2447,7 @@ async function recipeAcpSetupRecovery(
           JSON.stringify({
             type: "waitFor",
             requestId: "w-agent-picker-open",
-            condition: { type: "acpSetupAgentPickerOpen" },
+            condition: { type: "agent_chatSetupAgentPickerOpen" },
             timeout: 3000,
             pollInterval: 25,
             trace: "onFailure",
@@ -2463,12 +2463,12 @@ async function recipeAcpSetupRecovery(
         rpc(
           session,
           JSON.stringify({
-            type: "performAcpSetupAction",
+            type: "performAgentChatSetupAction",
             requestId: "a-select-agent",
             action: "selectAgent",
             agentId: selectAgent,
           }),
-          { expect: "acpSetupActionResult", timeout: 5000 }
+          { expect: "agent_chatSetupActionResult", timeout: 5000 }
         )
       )
     );
@@ -2481,7 +2481,7 @@ async function recipeAcpSetupRecovery(
           JSON.stringify({
             type: "waitFor",
             requestId: "w-selected-agent",
-            condition: { type: "acpSetupSelectedAgent", agentId: selectAgent },
+            condition: { type: "agent_chatSetupSelectedAgent", agentId: selectAgent },
             timeout: 3000,
             pollInterval: 25,
             trace: "onFailure",
@@ -2491,7 +2491,7 @@ async function recipeAcpSetupRecovery(
       )
     );
 
-    // 5e. Wait for ACP to become ready after agent selection
+    // 5e. Wait for Agent Chat to become ready after agent selection
     steps.push(
       await step("wait-ready", () =>
         rpc(
@@ -2499,7 +2499,7 @@ async function recipeAcpSetupRecovery(
           JSON.stringify({
             type: "waitFor",
             requestId: "w-ready-after-select",
-            condition: { type: "acpReady" },
+            condition: { type: "agent_chatReady" },
             timeout: 8000,
             pollInterval: 25,
             trace: "onFailure",
@@ -2510,7 +2510,7 @@ async function recipeAcpSetupRecovery(
     );
   }
 
-  // 6. Final verification — assert expected ACP status based on flow
+  // 6. Final verification — assert expected Agent Chat status based on flow
   const verifyArgs = [
     "bun",
     "scripts/agentic/verify-shot.ts",
@@ -2519,7 +2519,7 @@ async function recipeAcpSetupRecovery(
     "--label",
     selectAgent ? "setup-recovered" : "setup-final",
     "--skip-probe",
-    "--acp-status",
+    "--agent_chat-status",
     selectAgent ? "idle" : "setup",
   ];
   steps.push(
@@ -2530,7 +2530,7 @@ async function recipeAcpSetupRecovery(
 
   const allPass = steps.every((s) => s.status === "pass");
 
-  // Extract final ACP state from the verify-final step for the receipt
+  // Extract final Agent Chat state from the verify-final step for the receipt
   const verifyFinalStep = steps.find((s) => s.name === "verify-final");
   const finalState =
     verifyFinalStep?.output &&
@@ -2546,7 +2546,7 @@ async function recipeAcpSetupRecovery(
   // Log recipe completion as single-line JSON on stderr
   console.error(
     JSON.stringify({
-      event: "acp_setup_recovery_complete",
+      event: "agent_chat_setup_recovery_complete",
       finalStatus:
         finalState && typeof finalState === "object"
           ? (finalState as Record<string, unknown>).status
@@ -2561,7 +2561,7 @@ async function recipeAcpSetupRecovery(
 
   return {
     schemaVersion: SCHEMA_VERSION,
-    recipe: "acp-setup-recovery",
+    recipe: "agent_chat-setup-recovery",
     status: allPass
       ? "pass"
       : steps.some((s) => s.status === "error")
@@ -2570,8 +2570,8 @@ async function recipeAcpSetupRecovery(
     steps,
     summary: allPass
       ? selectAgent
-        ? `ACP setup recovered via ${selectAgent}`
-        : "ACP setup card rendered"
+        ? `Agent Chat setup recovered via ${selectAgent}`
+        : "Agent Chat setup card rendered"
       : `Failed at: ${steps
           .filter((s) => s.status !== "pass")
           .map((s) => s.name)
@@ -2580,7 +2580,7 @@ async function recipeAcpSetupRecovery(
 }
 
 /**
- * Resolved identity for a detached ACP window.
+ * Resolved identity for a detached Agent Chat window.
  * Threaded through the entire recipe so proof stays coherent.
  */
 interface DetachedResolved {
@@ -2590,7 +2590,7 @@ interface DetachedResolved {
   osWindowId: number | null;
 }
 
-async function recipeAcpDetachedAccept(
+async function recipeAgentChatDetachedAccept(
   session: string,
   acceptKey: "enter" | "tab",
   opts: {
@@ -2600,7 +2600,7 @@ async function recipeAcpDetachedAccept(
   } = {}
 ): Promise<RecipeReceipt> {
   const steps: StepReceipt[] = [];
-  const kind = opts.kind ?? "acpDetached";
+  const kind = opts.kind ?? "agentChatDetached";
   const index = opts.index ?? 0;
 
   // 1. Promote to exact target — resolve the kind-based target to an exact ID
@@ -2627,7 +2627,7 @@ async function recipeAcpDetachedAccept(
   if (inspectStep.status !== "pass") {
     return {
       schemaVersion: SCHEMA_VERSION,
-      recipe: "acp-detached-accept",
+      recipe: "agent_chat-detached-accept",
       status: "error",
       steps,
       summary: "Cannot proceed: exact target promotion failed",
@@ -2668,10 +2668,10 @@ async function recipeAcpDetachedAccept(
     );
     return {
       schemaVersion: SCHEMA_VERSION,
-      recipe: "acp-detached-accept",
+      recipe: "agent_chat-detached-accept",
       status: "error",
       steps,
-      summary: "Cannot proceed: detached ACP proof requires exact automationWindowId but inspect returned none",
+      summary: "Cannot proceed: detached Agent Chat proof requires exact automationWindowId but inspect returned none",
     };
   }
 
@@ -2701,31 +2701,31 @@ async function recipeAcpDetachedAccept(
         event: "agentic.proof_flow.os_window_id_required",
         automationWindowId,
         surfaceId,
-        reason: "detached ACP proof requires osWindowId for exact screenshot routing",
+        reason: "detached Agent Chat proof requires osWindowId for exact screenshot routing",
       })
     );
     steps.push({
       name: "require-os-window-id",
       status: "fail",
       output: {
-        error: "detached ACP proof requires osWindowId from inspect output",
+        error: "detached Agent Chat proof requires osWindowId from inspect output",
         resolved,
       },
       durationMs: 0,
     });
     return {
       schemaVersion: SCHEMA_VERSION,
-      recipe: "acp-detached-accept",
+      recipe: "agent_chat-detached-accept",
       status: "error",
       steps,
-      summary: "Cannot proceed: detached ACP proof requires osWindowId for exact screenshot routing",
+      summary: "Cannot proceed: detached Agent Chat proof requires osWindowId for exact screenshot routing",
     };
   }
 
   // 2. Emit structured identity bundle log on stderr
   console.error(
     JSON.stringify({
-      event: "acp_final_identity_bundle",
+      event: "agent_chat_final_identity_bundle",
       automationWindowId,
       surfaceId,
       osWindowId,
@@ -2735,7 +2735,7 @@ async function recipeAcpDetachedAccept(
   // 3. Delegate to the standard picker-accept recipe with resolved identity threaded through.
   //    Use osWindowId (native CGWindowID from inspect) for strict capture proof.
   const captureWindowId = osWindowId ?? undefined;
-  const acceptResult = await recipeAcpPickerAccept(session, acceptKey, {
+  const acceptResult = await recipeAgentChatPickerAccept(session, acceptKey, {
     emitVision: opts.emitVision,
     target: targetJson,
     surface: surfaceId ?? undefined,
@@ -2755,7 +2755,7 @@ async function recipeAcpDetachedAccept(
     console.error(
       JSON.stringify({
         event: "agentic.proof_flow.receipt_missing",
-        recipe: "acp-detached-accept",
+        recipe: "agent_chat-detached-accept",
         automationWindowId,
         reason: "acceptResult.proofBundle is absent; detached proof requires a real proof bundle",
       })
@@ -2771,10 +2771,10 @@ async function recipeAcpDetachedAccept(
     });
     return {
       schemaVersion: SCHEMA_VERSION,
-      recipe: "acp-detached-accept",
+      recipe: "agent_chat-detached-accept",
       status: "error",
       steps,
-      summary: "Detached ACP proof failed: proofBundle missing from accept result",
+      summary: "Detached Agent Chat proof failed: proofBundle missing from accept result",
     };
   }
 
@@ -2783,7 +2783,7 @@ async function recipeAcpDetachedAccept(
     console.error(
       JSON.stringify({
         event: "agentic.proof_flow.receipt_missing",
-        recipe: "acp-detached-accept",
+        recipe: "agent_chat-detached-accept",
         automationWindowId,
         reason: "proofBundle.captureTarget is absent; detached proof requires capture identity",
       })
@@ -2800,10 +2800,10 @@ async function recipeAcpDetachedAccept(
     });
     return {
       schemaVersion: SCHEMA_VERSION,
-      recipe: "acp-detached-accept",
+      recipe: "agent_chat-detached-accept",
       status: "error",
       steps,
-      summary: "Detached ACP proof failed: proofBundle.captureTarget missing",
+      summary: "Detached Agent Chat proof failed: proofBundle.captureTarget missing",
     };
   }
 
@@ -2816,7 +2816,7 @@ async function recipeAcpDetachedAccept(
     console.error(
       JSON.stringify({
         event: "agentic.proof_flow.capture_identity_mismatch",
-        recipe: "acp-detached-accept",
+        recipe: "agent_chat-detached-accept",
         automationWindowId,
         requestedWindowId: requestedId,
         actualWindowId: actualId,
@@ -2860,7 +2860,7 @@ async function recipeAcpDetachedAccept(
 
   return {
     schemaVersion: SCHEMA_VERSION,
-    recipe: "acp-detached-accept",
+    recipe: "agent_chat-detached-accept",
     status: allPass
       ? "pass"
       : identityMismatch || steps.some((s) => s.status === "fail")
@@ -2870,7 +2870,7 @@ async function recipeAcpDetachedAccept(
           : "fail",
     steps,
     summary: allPass
-      ? `Detached ACP picker accepted via ${acceptKey} (window ${automationWindowId})`
+      ? `Detached Agent Chat picker accepted via ${acceptKey} (window ${automationWindowId})`
       : identityMismatch
         ? "Identity mismatch: captureTarget.requestedWindowId != actualWindowId"
         : `Failed at: ${steps
@@ -3090,38 +3090,38 @@ switch (recipe) {
     result = await recipePreflight(session);
     break;
 
-  case "acp-open":
-    result = await recipeAcpOpen(session, { target: targetJson });
+  case "agent_chat-open":
+    result = await recipeAgentChatOpen(session, { target: targetJson });
     break;
 
-  case "acp-accept":
-    result = await recipeAcpPickerAccept(session, key, {
+  case "agent_chat-accept":
+    result = await recipeAgentChatPickerAccept(session, key, {
       emitVision: vision,
       target: targetJson,
       surface,
     });
     break;
 
-  case "acp-enter-accept":
-    result = await recipeAcpPickerAccept(session, "enter", {
+  case "agent_chat-enter-accept":
+    result = await recipeAgentChatPickerAccept(session, "enter", {
       emitVision: vision,
       target: targetJson,
       surface,
     });
     break;
 
-  case "acp-tab-accept":
-    result = await recipeAcpPickerAccept(session, "tab", {
+  case "agent_chat-tab-accept":
+    result = await recipeAgentChatPickerAccept(session, "tab", {
       emitVision: vision,
       target: targetJson,
       surface,
     });
     break;
 
-  case "acp-detached-accept":
-    result = await recipeAcpDetachedAccept(session, key, {
+  case "agent_chat-detached-accept":
+    result = await recipeAgentChatDetachedAccept(session, key, {
       emitVision: vision,
-      kind: kind ?? "acpDetached",
+      kind: kind ?? "agentChatDetached",
       index: index ?? 0,
     });
     break;
@@ -3163,10 +3163,10 @@ switch (recipe) {
     break;
   }
 
-  case "acp-detached-target-threading-stress": {
-    const proofBundle = await runDetachedAcpTargetThreadingStressScenario({
+  case "agent_chat-detached-target-threading-stress": {
+    const proofBundle = await runDetachedAgentChatTargetThreadingStressScenario({
       session,
-      kind: kind ?? "acpDetached",
+      kind: kind ?? "agentChatDetached",
       index: index ?? 0,
       minTargets: minTargets ?? 2,
       key,
@@ -3174,60 +3174,60 @@ switch (recipe) {
     });
     result = {
       schemaVersion: SCHEMA_VERSION,
-      recipe: "acp-detached-target-threading-stress",
+      recipe: "agent_chat-detached-target-threading-stress",
       status: proofBundle.status,
       steps: proofBundle.steps as StepReceipt[],
       summary:
         proofBundle.status === "pass"
-          ? "Detached ACP target identity stayed stable across native input, ACP state, waitFor, and strict capture"
-          : `Detached ACP target threading stress failed: ${JSON.stringify(proofBundle.failure ?? proofBundle.targetThread?.driftFailures ?? [])}`,
+          ? "Detached Agent Chat target identity stayed stable across native input, Agent Chat state, waitFor, and strict capture"
+          : `Detached Agent Chat target threading stress failed: ${JSON.stringify(proofBundle.failure ?? proofBundle.targetThread?.driftFailures ?? [])}`,
       proofBundle,
     };
     break;
   }
 
-  case "acp-prompt-popup-parity": {
-    const proofBundle = await runAcpPromptPopupParityScenario({
+  case "agent_chat-prompt-popup-parity": {
+    const proofBundle = await runAgentChatPromptPopupParityScenario({
       session,
       families: families ?? (family ? [family] : ["mention", "model-selector", "local-history"]),
     });
     result = {
       schemaVersion: SCHEMA_VERSION,
-      recipe: "acp-prompt-popup-parity",
+      recipe: "agent_chat-prompt-popup-parity",
       status: proofBundle.status,
       steps: proofBundle.steps as StepReceipt[],
       summary:
         proofBundle.status === "pass"
-          ? "ACP PromptPopup families produced stable row-aware exact-target receipts"
-          : "ACP PromptPopup parity failed; inspect proofBundle.popupCases",
+          ? "Agent Chat PromptPopup families produced stable row-aware exact-target receipts"
+          : "Agent Chat PromptPopup parity failed; inspect proofBundle.popupCases",
       proofBundle,
     };
     break;
   }
 
-  case "notes-acp-delayed-action-origin-stress": {
-    const proofBundle = await runNotesAcpDelayedActionOriginStressScenario({
+  case "notes-agent_chat-delayed-action-origin-stress": {
+    const proofBundle = await runNotesAgentChatDelayedActionOriginStressScenario({
       session,
       drift: drift ?? "generation",
     });
     result = {
       schemaVersion: SCHEMA_VERSION,
-      recipe: "notes-acp-delayed-action-origin-stress",
+      recipe: "notes-agent_chat-delayed-action-origin-stress",
       status: proofBundle.status,
       steps: proofBundle.steps as StepReceipt[],
       summary:
         proofBundle.status === "pass"
-          ? "Notes ACP delayed action origin receipt stayed valid"
-          : "Notes ACP delayed action origin stress failed closed; app-side origin/generation receipt is missing",
+          ? "Notes Agent Chat delayed action origin receipt stayed valid"
+          : "Notes Agent Chat delayed action origin stress failed closed; app-side origin/generation receipt is missing",
       proofBundle,
     };
     break;
   }
 
   case "file-portal-origin-roundtrip": {
-    const proofBundle = await runAcpPortalRoundTripOriginStressScenario({
+    const proofBundle = await runAgentChatPortalRoundTripOriginStressScenario({
       session,
-      host: host ?? "acp",
+      host: host ?? "agent_chat",
       portal: portal ?? "file-search",
       selection: selection ?? "file",
       query: query ?? "AGENTS.md",
@@ -3239,8 +3239,8 @@ switch (recipe) {
       steps: proofBundle.steps as StepReceipt[],
       summary:
         proofBundle.status === "pass"
-          ? "ACP portal round-trip preserved origin and accepted context-part identity"
-          : "ACP portal round-trip origin stress failed closed; app-side portal origin/context receipts are missing",
+          ? "Agent Chat portal round-trip preserved origin and accepted context-part identity"
+          : "Agent Chat portal round-trip origin stress failed closed; app-side portal origin/context receipts are missing",
       proofBundle,
     };
     break;
@@ -3384,20 +3384,20 @@ switch (recipe) {
     break;
   }
 
-  case "screenshot-identity-acp-context-stress": {
-    const proofBundle = await runScreenshotIdentityAcpContextStressScenario({
+  case "screenshot-identity-agent_chat-context-stress": {
+    const proofBundle = await runScreenshotIdentityAgentChatContextStressScenario({
       session,
       source,
     });
     result = {
       schemaVersion: SCHEMA_VERSION,
-      recipe: "screenshot-identity-acp-context-stress",
+      recipe: "screenshot-identity-agent_chat-context-stress",
       status: proofBundle.status,
       steps: proofBundle.steps as StepReceipt[],
       summary:
         proofBundle.status === "pass"
-          ? "Screenshot identity matched capture, state, and ACP context receipts"
-          : "Screenshot identity ACP context stress failed closed; context identity receipt is missing",
+          ? "Screenshot identity matched capture, state, and Agent Chat context receipts"
+          : "Screenshot identity Agent Chat context stress failed closed; context identity receipt is missing",
       proofBundle,
     };
     break;
@@ -3584,8 +3584,8 @@ switch (recipe) {
     break;
   }
 
-  case "acp-targeted-dictation-delivery-stress": {
-    const proofBundle = await runAcpTargetedDictationDeliveryStressScenario({
+  case "agent_chat-targeted-dictation-delivery-stress": {
+    const proofBundle = await runAgentChatTargetedDictationDeliveryStressScenario({
       session,
       kind,
       index,
@@ -3593,10 +3593,10 @@ switch (recipe) {
     });
     result = {
       schemaVersion: SCHEMA_VERSION,
-      recipe: "acp-targeted-dictation-delivery-stress",
+      recipe: "agent_chat-targeted-dictation-delivery-stress",
       status: proofBundle.status,
       steps: proofBundle.steps as StepReceipt[],
-      summary: "ACP-targeted dictation delivery stress failed closed; transcript generation, target identity, cursor range, wrong-window guard, and passive setup receipts are missing",
+      summary: "Agent Chat-targeted dictation delivery stress failed closed; transcript generation, target identity, cursor range, wrong-window guard, and passive setup receipts are missing",
       proofBundle,
     };
     break;
@@ -4547,51 +4547,51 @@ switch (recipe) {
     break;
   }
 
-  case "acp-footer-activity-indicator-stress": {
-    const proofBundle = await runAcpFooterActivityIndicatorStressScenario({ session, hosts, fixture, activityFixtures, inputModes, agentFixture, noNativeInput, noNativePointer, noSecurityPrompts, noSystemPasteboard, noNetwork, noSubmit, dryRunOnly, localFixtureOnly });
-    result = { schemaVersion: SCHEMA_VERSION, recipe: "acp-footer-activity-indicator-stress", status: proofBundle.status, failClosed: proofBundle.failClosed, failureMode: proofBundle.failureMode, missingReceipt: proofBundle.missingReceipt, linearIssue: proofBundle.linearIssue, steps: proofBundle.steps as StepReceipt[], summary: "ACP footer activity indicator stress failed closed; footer dot status, activity transitions, repaint generation, and no-security-prompt receipts are missing", proofBundle };
+  case "agent_chat-footer-activity-indicator-stress": {
+    const proofBundle = await runAgentChatFooterActivityIndicatorStressScenario({ session, hosts, fixture, activityFixtures, inputModes, agentFixture, noNativeInput, noNativePointer, noSecurityPrompts, noSystemPasteboard, noNetwork, noSubmit, dryRunOnly, localFixtureOnly });
+    result = { schemaVersion: SCHEMA_VERSION, recipe: "agent_chat-footer-activity-indicator-stress", status: proofBundle.status, failClosed: proofBundle.failClosed, failureMode: proofBundle.failureMode, missingReceipt: proofBundle.missingReceipt, linearIssue: proofBundle.linearIssue, steps: proofBundle.steps as StepReceipt[], summary: "Agent Chat footer activity indicator stress failed closed; footer dot status, activity transitions, repaint generation, and no-security-prompt receipts are missing", proofBundle };
     break;
   }
 
-  case "acp-model-history-popover-visual-state-stress": {
-    const proofBundle = await runAcpModelHistoryPopoverVisualStateStressScenario({ session, families, fixture, states, selectionCycles, filterCycles, inputModes, noNativeInput, noNativePointer, noSystemPasteboard, noNetwork, noSubmit, dryRunOnly, localFixtureOnly });
-    result = { schemaVersion: SCHEMA_VERSION, recipe: "acp-model-history-popover-visual-state-stress", status: proofBundle.status, failClosed: proofBundle.failClosed, failureMode: proofBundle.failureMode, missingReceipt: proofBundle.missingReceipt, linearIssue: proofBundle.linearIssue, steps: proofBundle.steps as StepReceipt[], summary: "ACP model/history popover visual state stress failed closed; row visual states, badges, filtered/loading/error recovery, and redacted preview receipts are missing", proofBundle };
+  case "agent_chat-model-history-popover-visual-state-stress": {
+    const proofBundle = await runAgentChatModelHistoryPopoverVisualStateStressScenario({ session, families, fixture, states, selectionCycles, filterCycles, inputModes, noNativeInput, noNativePointer, noSystemPasteboard, noNetwork, noSubmit, dryRunOnly, localFixtureOnly });
+    result = { schemaVersion: SCHEMA_VERSION, recipe: "agent_chat-model-history-popover-visual-state-stress", status: proofBundle.status, failClosed: proofBundle.failClosed, failureMode: proofBundle.failureMode, missingReceipt: proofBundle.missingReceipt, linearIssue: proofBundle.linearIssue, steps: proofBundle.steps as StepReceipt[], summary: "Agent Chat model/history popover visual state stress failed closed; row visual states, badges, filtered/loading/error recovery, and redacted preview receipts are missing", proofBundle };
     break;
   }
 
-  case "acp-context-insertion-preview-parity-stress": {
-    const proofBundle = await runAcpContextInsertionPreviewParityStressScenario({ session, sources, destination, fixture, selectionCycles, filterCycles, insertModes, inputModes, noNativeInput, noNativePointer, noNativePicker, noQuickLook, noSystemPasteboard, noNetwork, noSubmit, dryRunOnly, localFixtureOnly });
-    result = { schemaVersion: SCHEMA_VERSION, recipe: "acp-context-insertion-preview-parity-stress", status: proofBundle.status, failClosed: proofBundle.failClosed, failureMode: proofBundle.failureMode, missingReceipt: proofBundle.missingReceipt, linearIssue: proofBundle.linearIssue, steps: proofBundle.steps as StepReceipt[], summary: "ACP context insertion preview parity stress failed closed; selected-row preview, accepted context URI, inserted token preview, and stale drift receipts are missing", proofBundle };
+  case "agent_chat-context-insertion-preview-parity-stress": {
+    const proofBundle = await runAgentChatContextInsertionPreviewParityStressScenario({ session, sources, destination, fixture, selectionCycles, filterCycles, insertModes, inputModes, noNativeInput, noNativePointer, noNativePicker, noQuickLook, noSystemPasteboard, noNetwork, noSubmit, dryRunOnly, localFixtureOnly });
+    result = { schemaVersion: SCHEMA_VERSION, recipe: "agent_chat-context-insertion-preview-parity-stress", status: proofBundle.status, failClosed: proofBundle.failClosed, failureMode: proofBundle.failureMode, missingReceipt: proofBundle.missingReceipt, linearIssue: proofBundle.linearIssue, steps: proofBundle.steps as StepReceipt[], summary: "Agent Chat context insertion preview parity stress failed closed; selected-row preview, accepted context URI, inserted token preview, and stale drift receipts are missing", proofBundle };
     break;
   }
 
-  case "acp-slash-mention-provider-visibility-stress": {
-    const proofBundle = await runAcpSlashMentionProviderVisibilityStressScenario({ session, families, fixture, providers, queries, states, inputModes, noNativeInput, noNativePointer, noNativePicker, noQuickLook, noSystemPasteboard, noNetwork, noSubmit, dryRunOnly, localFixtureOnly });
-    result = { schemaVersion: SCHEMA_VERSION, recipe: "acp-slash-mention-provider-visibility-stress", status: proofBundle.status, failClosed: proofBundle.failClosed, failureMode: proofBundle.failureMode, missingReceipt: proofBundle.missingReceipt, linearIssue: proofBundle.linearIssue, steps: proofBundle.steps as StepReceipt[], summary: "ACP slash/mention provider visibility stress failed closed; provider readiness, hint rows, unavailable/loading/recovered states, and stale provider receipts are missing", proofBundle };
+  case "agent_chat-slash-mention-provider-visibility-stress": {
+    const proofBundle = await runAgentChatSlashMentionProviderVisibilityStressScenario({ session, families, fixture, providers, queries, states, inputModes, noNativeInput, noNativePointer, noNativePicker, noQuickLook, noSystemPasteboard, noNetwork, noSubmit, dryRunOnly, localFixtureOnly });
+    result = { schemaVersion: SCHEMA_VERSION, recipe: "agent_chat-slash-mention-provider-visibility-stress", status: proofBundle.status, failClosed: proofBundle.failClosed, failureMode: proofBundle.failureMode, missingReceipt: proofBundle.missingReceipt, linearIssue: proofBundle.linearIssue, steps: proofBundle.steps as StepReceipt[], summary: "Agent Chat slash/mention provider visibility stress failed closed; provider readiness, hint rows, unavailable/loading/recovered states, and stale provider receipts are missing", proofBundle };
     break;
   }
 
-  case "acp-composer-token-keyboard-edit-parity-stress": {
-    const proofBundle = await runAcpComposerTokenKeyboardEditParityStressScenario({ session, hosts, fixture, tokenKinds, editSteps, inputModes, noNativeInput, noNativePointer, noNativePicker, noScreenCapture, noSystemPasteboard, noNetwork, noSubmit, dryRunOnly, localFixtureOnly });
-    result = { schemaVersion: SCHEMA_VERSION, recipe: "acp-composer-token-keyboard-edit-parity-stress", status: proofBundle.status, failClosed: proofBundle.failClosed, failureMode: proofBundle.failureMode, missingReceipt: proofBundle.missingReceipt, linearIssue: proofBundle.linearIssue, steps: proofBundle.steps as StepReceipt[], summary: "ACP composer token keyboard edit parity stress failed closed; atomic delete, reorder, cursor, metadata preservation, and stale composer receipts are missing", proofBundle };
+  case "agent_chat-composer-token-keyboard-edit-parity-stress": {
+    const proofBundle = await runAgentChatComposerTokenKeyboardEditParityStressScenario({ session, hosts, fixture, tokenKinds, editSteps, inputModes, noNativeInput, noNativePointer, noNativePicker, noScreenCapture, noSystemPasteboard, noNetwork, noSubmit, dryRunOnly, localFixtureOnly });
+    result = { schemaVersion: SCHEMA_VERSION, recipe: "agent_chat-composer-token-keyboard-edit-parity-stress", status: proofBundle.status, failClosed: proofBundle.failClosed, failureMode: proofBundle.failureMode, missingReceipt: proofBundle.missingReceipt, linearIssue: proofBundle.linearIssue, steps: proofBundle.steps as StepReceipt[], summary: "Agent Chat composer token keyboard edit parity stress failed closed; atomic delete, reorder, cursor, metadata preservation, and stale composer receipts are missing", proofBundle };
     break;
   }
 
-  case "acp-transcript-stream-retry-virtualization-stress": {
-    const proofBundle = await runAcpTranscriptStreamRetryVirtualizationStressScenario({ session, hosts, fixture, messageCount, streamChunks, errorFixtures, retryPaths, scrollPositions, inputModes, agentFixture, noNativeInput, noNativePointer, noSecurityPrompts, noSystemPasteboard, noNetwork, noSubmit, dryRunOnly, localFixtureOnly });
-    result = { schemaVersion: SCHEMA_VERSION, recipe: "acp-transcript-stream-retry-virtualization-stress", status: proofBundle.status, failClosed: proofBundle.failClosed, failureMode: proofBundle.failureMode, missingReceipt: proofBundle.missingReceipt, linearIssue: proofBundle.linearIssue, steps: proofBundle.steps as StepReceipt[], summary: "ACP transcript stream retry virtualization stress failed closed; stream ordering, virtualized rows, retry recovery, and stale chunk receipts are missing", proofBundle };
+  case "agent_chat-transcript-stream-retry-virtualization-stress": {
+    const proofBundle = await runAgentChatTranscriptStreamRetryVirtualizationStressScenario({ session, hosts, fixture, messageCount, streamChunks, errorFixtures, retryPaths, scrollPositions, inputModes, agentFixture, noNativeInput, noNativePointer, noSecurityPrompts, noSystemPasteboard, noNetwork, noSubmit, dryRunOnly, localFixtureOnly });
+    result = { schemaVersion: SCHEMA_VERSION, recipe: "agent_chat-transcript-stream-retry-virtualization-stress", status: proofBundle.status, failClosed: proofBundle.failClosed, failureMode: proofBundle.failureMode, missingReceipt: proofBundle.missingReceipt, linearIssue: proofBundle.linearIssue, steps: proofBundle.steps as StepReceipt[], summary: "Agent Chat transcript stream retry virtualization stress failed closed; stream ordering, virtualized rows, retry recovery, and stale chunk receipts are missing", proofBundle };
     break;
   }
 
-  case "acp-plugin-skill-entry-thread-affinity-stress": {
-    const proofBundle = await runAcpPluginSkillEntryThreadAffinityStressScenario({ session, hosts, fixture, skillId, entryPaths, inputModes, agentFixture, noNativeInput, noNativePointer, noSecurityPrompts, noSystemPasteboard, noNetwork, noSubmit, dryRunOnly, localFixtureOnly });
-    result = { schemaVersion: SCHEMA_VERSION, recipe: "acp-plugin-skill-entry-thread-affinity-stress", status: proofBundle.status, failClosed: proofBundle.failClosed, failureMode: proofBundle.failureMode, missingReceipt: proofBundle.missingReceipt, linearIssue: proofBundle.linearIssue, steps: proofBundle.steps as StepReceipt[], summary: "ACP plugin skill entry thread affinity stress failed closed; skill entry, target thread, slash token, and stale thread receipts are missing", proofBundle };
+  case "agent_chat-plugin-skill-entry-thread-affinity-stress": {
+    const proofBundle = await runAgentChatPluginSkillEntryThreadAffinityStressScenario({ session, hosts, fixture, skillId, entryPaths, inputModes, agentFixture, noNativeInput, noNativePointer, noSecurityPrompts, noSystemPasteboard, noNetwork, noSubmit, dryRunOnly, localFixtureOnly });
+    result = { schemaVersion: SCHEMA_VERSION, recipe: "agent_chat-plugin-skill-entry-thread-affinity-stress", status: proofBundle.status, failClosed: proofBundle.failClosed, failureMode: proofBundle.failureMode, missingReceipt: proofBundle.missingReceipt, linearIssue: proofBundle.linearIssue, steps: proofBundle.steps as StepReceipt[], summary: "Agent Chat plugin skill entry thread affinity stress failed closed; skill entry, target thread, slash token, and stale thread receipts are missing", proofBundle };
     break;
   }
 
-  case "notes-cart-acp-handoff-dedupe-stress": {
-    const proofBundle = await runNotesCartAcpHandoffDedupeStressScenario({ session, fixture, notes, cartItems, handoffPaths, inputModes, agentFixture, noNativeInput, noNativePointer, noNativePicker, noScreenCapture, noSystemPasteboard, noNetwork, noSubmit, sandboxNotesStore, dryRunOnly, localFixtureOnly });
-    result = { schemaVersion: SCHEMA_VERSION, recipe: "notes-cart-acp-handoff-dedupe-stress", status: proofBundle.status, failClosed: proofBundle.failClosed, failureMode: proofBundle.failureMode, missingReceipt: proofBundle.missingReceipt, linearIssue: proofBundle.linearIssue, steps: proofBundle.steps as StepReceipt[], summary: "Notes cart ACP handoff dedupe stress failed closed; cart dedupe, handoff, cancel, stale note, and no-leak receipts are missing", proofBundle };
+  case "notes-cart-agent_chat-handoff-dedupe-stress": {
+    const proofBundle = await runNotesCartAgentChatHandoffDedupeStressScenario({ session, fixture, notes, cartItems, handoffPaths, inputModes, agentFixture, noNativeInput, noNativePointer, noNativePicker, noScreenCapture, noSystemPasteboard, noNetwork, noSubmit, sandboxNotesStore, dryRunOnly, localFixtureOnly });
+    result = { schemaVersion: SCHEMA_VERSION, recipe: "notes-cart-agent_chat-handoff-dedupe-stress", status: proofBundle.status, failClosed: proofBundle.failClosed, failureMode: proofBundle.failureMode, missingReceipt: proofBundle.missingReceipt, linearIssue: proofBundle.linearIssue, steps: proofBundle.steps as StepReceipt[], summary: "Notes cart Agent Chat handoff dedupe stress failed closed; cart dedupe, handoff, cancel, stale note, and no-leak receipts are missing", proofBundle };
     break;
   }
 
@@ -4673,8 +4673,8 @@ switch (recipe) {
     break;
   }
 
-  case "acp-setup-recovery":
-    result = await recipeAcpSetupRecovery(session, selectAgent);
+  case "agent_chat-setup-recovery":
+    result = await recipeAgentChatSetupRecovery(session, selectAgent);
     break;
 
   case "surface-proof":
@@ -4709,8 +4709,8 @@ switch (recipe) {
         console.log(JSON.stringify(bundle, null, 2));
         process.exit(bundle.warnings.length > 0 ? 1 : 0);
       }
-      case "detached-acp-exact-id": {
-        const bundle = await runDetachedAcpExactIdScenario(session, index ?? 0);
+      case "detached-agent_chat-exact-id": {
+        const bundle = await runDetachedAgentChatExactIdScenario(session, index ?? 0);
         console.log(JSON.stringify(bundle, null, 2));
         process.exit(bundle.warnings.length > 0 ? 1 : 0);
       }
@@ -4721,7 +4721,7 @@ switch (recipe) {
           status: "error",
           steps: [],
           summary:
-            `Unknown scenario: ${resolvedScenario}. Available: main-window-exact-id, actions-dialog-exact-id, prompt-popup-exact-id, detached-acp-exact-id`,
+            `Unknown scenario: ${resolvedScenario}. Available: main-window-exact-id, actions-dialog-exact-id, prompt-popup-exact-id, detached-agent_chat-exact-id`,
         };
     }
     break;
@@ -4768,15 +4768,15 @@ switch (recipe) {
         script: "index",
         commands: [
           { name: "preflight", description: "Check prerequisites (session, window, permissions)", flags: ["--session", "--json"] },
-          { name: "acp-open", description: "Open ACP and verify ready state", flags: ["--session", "--target-json", "--json"] },
-          { name: "acp-accept", description: "Full ACP picker accept", flags: ["--session", "--key", "--vision", "--target-json", "--surface", "--json"] },
-          { name: "acp-enter-accept", description: "Compatibility alias for --key enter", flags: ["--session", "--vision", "--target-json", "--surface", "--json"] },
-          { name: "acp-tab-accept", description: "Compatibility alias for --key tab", flags: ["--session", "--vision", "--target-json", "--surface", "--json"] },
-          { name: "acp-detached-accept", description: "One-command detached ACP proof: resolve, accept, identity check", flags: ["--session", "--kind", "--index", "--key", "--vision", "--json"] },
-          { name: "acp-detached-target-threading-stress", description: "Multi-window detached ACP proof with exact target threading, native input, and strict capture identity", flags: ["--session", "--kind", "--index", "--min-targets", "--key", "--vision", "--json"] },
-          { name: "acp-prompt-popup-parity", description: "State-first PromptPopup family parity proof for ACP mention and local history", flags: ["--session", "--family", "--families", "--json"] },
-          { name: "notes-acp-delayed-action-origin-stress", description: "Fail-closed Notes ACP delayed-action origin/generation stress receipt", flags: ["--session", "--drift", "--json"] },
-          { name: "file-portal-origin-roundtrip", description: "Fail-closed ACP portal origin/context-part round-trip receipt", flags: ["--session", "--origin", "--portal", "--selection", "--query", "--json"] },
+          { name: "agent_chat-open", description: "Open Agent Chat and verify ready state", flags: ["--session", "--target-json", "--json"] },
+          { name: "agent_chat-accept", description: "Full Agent Chat picker accept", flags: ["--session", "--key", "--vision", "--target-json", "--surface", "--json"] },
+          { name: "agent_chat-enter-accept", description: "Compatibility alias for --key enter", flags: ["--session", "--vision", "--target-json", "--surface", "--json"] },
+          { name: "agent_chat-tab-accept", description: "Compatibility alias for --key tab", flags: ["--session", "--vision", "--target-json", "--surface", "--json"] },
+          { name: "agent_chat-detached-accept", description: "One-command detached Agent Chat proof: resolve, accept, identity check", flags: ["--session", "--kind", "--index", "--key", "--vision", "--json"] },
+          { name: "agent_chat-detached-target-threading-stress", description: "Multi-window detached Agent Chat proof with exact target threading, native input, and strict capture identity", flags: ["--session", "--kind", "--index", "--min-targets", "--key", "--vision", "--json"] },
+          { name: "agent_chat-prompt-popup-parity", description: "State-first PromptPopup family parity proof for Agent Chat mention and local history", flags: ["--session", "--family", "--families", "--json"] },
+          { name: "notes-agent_chat-delayed-action-origin-stress", description: "Fail-closed Notes Agent Chat delayed-action origin/generation stress receipt", flags: ["--session", "--drift", "--json"] },
+          { name: "file-portal-origin-roundtrip", description: "Fail-closed Agent Chat portal origin/context-part round-trip receipt", flags: ["--session", "--origin", "--portal", "--selection", "--query", "--json"] },
           { name: "permission-privacy-preflight", description: "Read-only permission preflight that never opens System Settings or mutates OS permissions", flags: ["--session", "--kinds", "--json"] },
           { name: "shortcut-recorder-focus-capture", description: "Fail-closed native shortcut recorder focus/capture receipt", flags: ["--session", "--surface", "--action", "--chord", "--sandbox-config", "--json"] },
           { name: "template-prompt-automation-parity-stress", description: "State-first TemplatePrompt state/elements/actions/submit/cancel/forceSubmit parity receipt", flags: ["--session", "--template", "--field", "--value", "--forced-value", "--json"] },
@@ -4784,7 +4784,7 @@ switch (recipe) {
           { name: "actions-captured-subject-frame-stress", description: "Fail-closed root actions captured-subject and source-frame stability receipt", flags: ["--session", "--source", "--action", "--mutation", "--json"] },
           { name: "drop-prompt-native-drop-privacy-stress", description: "Fail-closed DropPrompt native drop privacy/redaction receipt", flags: ["--session", "--file-name", "--size", "--json"] },
           { name: "path-prompt-filesystem-edge-stress", description: "State-first PathPrompt filesystem edge receipt helper", flags: ["--session", "--json"] },
-          { name: "screenshot-identity-acp-context-stress", description: "Fail-closed screenshotIdentity to ACP context threading receipt", flags: ["--session", "--source", "--json"] },
+          { name: "screenshot-identity-agent_chat-context-stress", description: "Fail-closed screenshotIdentity to Agent Chat context threading receipt", flags: ["--session", "--source", "--json"] },
           { name: "clipboard-history-portal-range-stress", description: "Fail-closed Clipboard History portal host/range receipt", flags: ["--session", "--portal-id", "--range", "--json"] },
           { name: "browser-tabs-cache-identity-stress", description: "Fail-closed browser tabs/history cache identity receipt", flags: ["--session", "--source", "--json"] },
           { name: "scroll-selection-reanchor-stress", description: "Fail-closed cross-surface scroll selection reanchor receipt", flags: ["--session", "--kinds", "--json"] },
@@ -4795,8 +4795,8 @@ switch (recipe) {
           { name: "file-search-drag-out-identity-stress", description: "Fail-closed File Search selected URI, drag payload, host refusal, privacy, and return receipt", flags: ["--session", "--query", "--file-name", "--drop-target", "--json"] },
           { name: "scriptlet-bundle-execution-matrix-stress", description: "Fail-closed scriptlet id, bundle hash, args/env isolation, output, cancellation, and bleed receipt", flags: ["--session", "--scriptlet-id", "--bundle-id", "--cancel-after-ms", "--json"] },
           { name: "tray-global-hotkey-menu-mutation-stress", description: "Fail-closed tray menu/global-hotkey mutation receipt for section order, update state, action identity, duplicate guards, and hotkey route", flags: ["--session", "--loops", "--json"] },
-          { name: "multi-window-resize-monitor-restoration-stress", description: "Fail-closed multi-window monitor/scale/resize restoration receipt for main, attached popup, detached ACP, and Notes windows", flags: ["--session", "--surfaces", "--monitor-profile", "--json"] },
-          { name: "acp-targeted-dictation-delivery-stress", description: "Fail-closed ACP-targeted dictation delivery receipt for target identity, transcript generation, cursor insertion range, wrong-window guard, and passive setup", flags: ["--session", "--kind", "--index", "--transcript", "--json"] },
+          { name: "multi-window-resize-monitor-restoration-stress", description: "Fail-closed multi-window monitor/scale/resize restoration receipt for main, attached popup, detached Agent Chat, and Notes windows", flags: ["--session", "--surfaces", "--monitor-profile", "--json"] },
+          { name: "agent_chat-targeted-dictation-delivery-stress", description: "Fail-closed Agent Chat-targeted dictation delivery receipt for target identity, transcript generation, cursor insertion range, wrong-window guard, and passive setup", flags: ["--session", "--kind", "--index", "--transcript", "--json"] },
           { name: "clipboard-share-trust-install-stress", description: "Fail-closed clipboard share trust/install receipt for prompt identity, package fingerprint, accept/refuse, install gate, and clipboard restoration", flags: ["--session", "--fixture-id", "--share-kind", "--accept-mode", "--json"] },
           { name: "clipboard-share-watcher-stale-replay-stress", description: "Fail-closed clipboard share watcher stale/replay receipt for generation ordering, stale rejection, prompt replacement, and duplicate install guard", flags: ["--session", "--fixture-id", "--share-kind", "--count", "--burst-ms", "--json"] },
           { name: "permission-share-cross-prompt-focus-stress", description: "Fail-closed Permission Assistant/share trust prompt focus receipt for prompt priority, window identity, no Settings activation leak, and cleanup", flags: ["--session", "--fixture-id", "--share-kind", "--pane", "--bundle-id", "--json"] },
@@ -4812,7 +4812,7 @@ switch (recipe) {
           { name: "display-migration-visual-bounds-stress", description: "Fail-closed display migration visual/text bounds, focus/selection, capture identity, and wrong-display rejection receipt", flags: ["--session", "--surfaces", "--from-display", "--to-display", "--json"] },
           { name: "native-picker-external-return-focus-stress", description: "Fail-closed native picker/external handoff origin return, focus/selection/cursor restore, and stale/foreign event receipt", flags: ["--session", "--origin", "--handoff", "--foreign-app", "--json"] },
           { name: "drag-cancel-payload-scope-stress", description: "Fail-closed drag cancellation payload scope, hover/drop cleanup, origin restoration, and side-effect boundary receipt", flags: ["--session", "--source", "--hover-target", "--cancel", "--json"] },
-          { name: "runtime-appearance-churn-focused-input-stress", description: "Fail-closed focused prompt/ACP appearance churn receipt for scale/font/theme changes", flags: ["--session", "--surface", "--churn", "--cycles", "--json"] },
+          { name: "runtime-appearance-churn-focused-input-stress", description: "Fail-closed focused prompt/Agent Chat appearance churn receipt for scale/font/theme changes", flags: ["--session", "--surface", "--churn", "--cycles", "--json"] },
           { name: "power-resume-window-generation-stress", description: "Fail-closed power resume generation, stale target refusal, and post-wake revalidation receipt", flags: ["--session", "--surface", "--event", "--json"] },
           { name: "menu-tray-notification-modal-interruption-stress", description: "Fail-closed tray/menu/notification interruption active modal focus ownership receipt", flags: ["--session", "--host", "--active-surface", "--interruptions", "--json"] },
           { name: "stream-progress-cancel-visual-stability-stress", description: "Fail-closed stream/progress monotonic repaint, cancellation ordering, stale chunk, and focus return receipt", flags: ["--session", "--surface", "--updates", "--cancel-at", "--json"] },
@@ -4866,14 +4866,14 @@ switch (recipe) {
           { name: "inline-attachment-preview-chip-stability-stress", description: "Fail-closed UX receipt contract for inline attachment preview chip stability", flags: ["--session", "--hosts", "--fixture", "--origins", "--chip-actions", "--input-modes", "--no-native-input", "--no-native-pointer", "--no-native-picker", "--no-screen-capture", "--no-system-pasteboard", "--no-network", "--no-submit", "--dry-run-only", "--local-fixture-only", "--json"] },
           { name: "window-title-status-semantics-stress", description: "Fail-closed UX receipt contract for window title and visible status semantics", flags: ["--session", "--surfaces", "--states", "--transitions", "--input-modes", "--no-native-input", "--no-native-pointer", "--no-system-pasteboard", "--no-network", "--no-submit", "--dry-run-only", "--local-fixture-only", "--json"] },
           { name: "menu-syntax-capture-validation-chip-stress", description: "Fail-closed UX receipt contract for menu syntax capture validation chips", flags: ["--session", "--fixture", "--cases", "--input-modes", "--no-native-input", "--no-native-pointer", "--no-system-pasteboard", "--no-network", "--no-submit", "--dry-run-only", "--local-fixture-only", "--json"] },
-          { name: "acp-footer-activity-indicator-stress", description: "Fail-closed UX receipt contract for ACP footer activity indicator transitions", flags: ["--session", "--hosts", "--fixture", "--activity-fixtures", "--input-modes", "--agent-fixture", "--no-native-input", "--no-native-pointer", "--no-security-prompts", "--no-system-pasteboard", "--no-network", "--no-submit", "--dry-run-only", "--local-fixture-only", "--json"] },
-          { name: "acp-model-history-popover-visual-state-stress", description: "Fail-closed UX receipt contract for ACP model/history popover visual states", flags: ["--session", "--families", "--fixture", "--states", "--selection-cycles", "--filter-cycles", "--input-modes", "--no-native-input", "--no-native-pointer", "--no-system-pasteboard", "--no-network", "--no-submit", "--dry-run-only", "--local-fixture-only", "--json"] },
-          { name: "acp-context-insertion-preview-parity-stress", description: "Fail-closed UX receipt contract for ACP context insertion selected-row preview parity", flags: ["--session", "--sources", "--destination", "--fixture", "--selection-cycles", "--filter-cycles", "--insert-modes", "--input-modes", "--no-native-input", "--no-native-pointer", "--no-native-picker", "--no-quick-look", "--no-system-pasteboard", "--no-network", "--no-submit", "--dry-run-only", "--local-fixture-only", "--json"] },
-          { name: "acp-slash-mention-provider-visibility-stress", description: "Fail-closed UX receipt contract for ACP slash/mention provider visibility and hint readiness", flags: ["--session", "--families", "--fixture", "--providers", "--queries", "--states", "--input-modes", "--no-native-input", "--no-native-pointer", "--no-native-picker", "--no-quick-look", "--no-system-pasteboard", "--no-network", "--no-submit", "--dry-run-only", "--local-fixture-only", "--json"] },
-          { name: "acp-composer-token-keyboard-edit-parity-stress", description: "Fail-closed UX receipt contract for ACP composer token keyboard delete/reorder parity", flags: ["--session", "--hosts", "--fixture", "--token-kinds", "--edit-steps", "--input-modes", "--no-native-input", "--no-native-pointer", "--no-native-picker", "--no-screen-capture", "--no-system-pasteboard", "--no-network", "--no-submit", "--dry-run-only", "--local-fixture-only", "--json"] },
-          { name: "acp-transcript-stream-retry-virtualization-stress", description: "Fail-closed UX receipt contract for ACP transcript streaming, virtualization, and retry recovery", flags: ["--session", "--hosts", "--fixture", "--message-count", "--stream-chunks", "--error-fixtures", "--retry-paths", "--scroll-positions", "--input-modes", "--agent-fixture", "--no-native-input", "--no-native-pointer", "--no-security-prompts", "--no-system-pasteboard", "--no-network", "--no-submit", "--dry-run-only", "--local-fixture-only", "--json"] },
-          { name: "acp-plugin-skill-entry-thread-affinity-stress", description: "Fail-closed UX receipt contract for ACP plugin skill entry thread affinity", flags: ["--session", "--hosts", "--fixture", "--skill-id", "--entry-paths", "--input-modes", "--agent-fixture", "--no-native-input", "--no-native-pointer", "--no-security-prompts", "--no-system-pasteboard", "--no-network", "--no-submit", "--dry-run-only", "--local-fixture-only", "--json"] },
-          { name: "notes-cart-acp-handoff-dedupe-stress", description: "Fail-closed UX receipt contract for Notes cart ACP handoff dedupe", flags: ["--session", "--fixture", "--notes", "--cart-items", "--handoff-paths", "--input-modes", "--agent-fixture", "--no-native-input", "--no-native-pointer", "--no-native-picker", "--no-screen-capture", "--no-system-pasteboard", "--no-network", "--no-submit", "--sandbox-notes-store", "--dry-run-only", "--local-fixture-only", "--json"] },
+          { name: "agent_chat-footer-activity-indicator-stress", description: "Fail-closed UX receipt contract for Agent Chat footer activity indicator transitions", flags: ["--session", "--hosts", "--fixture", "--activity-fixtures", "--input-modes", "--agent-fixture", "--no-native-input", "--no-native-pointer", "--no-security-prompts", "--no-system-pasteboard", "--no-network", "--no-submit", "--dry-run-only", "--local-fixture-only", "--json"] },
+          { name: "agent_chat-model-history-popover-visual-state-stress", description: "Fail-closed UX receipt contract for Agent Chat model/history popover visual states", flags: ["--session", "--families", "--fixture", "--states", "--selection-cycles", "--filter-cycles", "--input-modes", "--no-native-input", "--no-native-pointer", "--no-system-pasteboard", "--no-network", "--no-submit", "--dry-run-only", "--local-fixture-only", "--json"] },
+          { name: "agent_chat-context-insertion-preview-parity-stress", description: "Fail-closed UX receipt contract for Agent Chat context insertion selected-row preview parity", flags: ["--session", "--sources", "--destination", "--fixture", "--selection-cycles", "--filter-cycles", "--insert-modes", "--input-modes", "--no-native-input", "--no-native-pointer", "--no-native-picker", "--no-quick-look", "--no-system-pasteboard", "--no-network", "--no-submit", "--dry-run-only", "--local-fixture-only", "--json"] },
+          { name: "agent_chat-slash-mention-provider-visibility-stress", description: "Fail-closed UX receipt contract for Agent Chat slash/mention provider visibility and hint readiness", flags: ["--session", "--families", "--fixture", "--providers", "--queries", "--states", "--input-modes", "--no-native-input", "--no-native-pointer", "--no-native-picker", "--no-quick-look", "--no-system-pasteboard", "--no-network", "--no-submit", "--dry-run-only", "--local-fixture-only", "--json"] },
+          { name: "agent_chat-composer-token-keyboard-edit-parity-stress", description: "Fail-closed UX receipt contract for Agent Chat composer token keyboard delete/reorder parity", flags: ["--session", "--hosts", "--fixture", "--token-kinds", "--edit-steps", "--input-modes", "--no-native-input", "--no-native-pointer", "--no-native-picker", "--no-screen-capture", "--no-system-pasteboard", "--no-network", "--no-submit", "--dry-run-only", "--local-fixture-only", "--json"] },
+          { name: "agent_chat-transcript-stream-retry-virtualization-stress", description: "Fail-closed UX receipt contract for Agent Chat transcript streaming, virtualization, and retry recovery", flags: ["--session", "--hosts", "--fixture", "--message-count", "--stream-chunks", "--error-fixtures", "--retry-paths", "--scroll-positions", "--input-modes", "--agent-fixture", "--no-native-input", "--no-native-pointer", "--no-security-prompts", "--no-system-pasteboard", "--no-network", "--no-submit", "--dry-run-only", "--local-fixture-only", "--json"] },
+          { name: "agent_chat-plugin-skill-entry-thread-affinity-stress", description: "Fail-closed UX receipt contract for Agent Chat plugin skill entry thread affinity", flags: ["--session", "--hosts", "--fixture", "--skill-id", "--entry-paths", "--input-modes", "--agent-fixture", "--no-native-input", "--no-native-pointer", "--no-security-prompts", "--no-system-pasteboard", "--no-network", "--no-submit", "--dry-run-only", "--local-fixture-only", "--json"] },
+          { name: "notes-cart-agent_chat-handoff-dedupe-stress", description: "Fail-closed UX receipt contract for Notes cart Agent Chat handoff dedupe", flags: ["--session", "--fixture", "--notes", "--cart-items", "--handoff-paths", "--input-modes", "--agent-fixture", "--no-native-input", "--no-native-pointer", "--no-native-picker", "--no-screen-capture", "--no-system-pasteboard", "--no-network", "--no-submit", "--sandbox-notes-store", "--dry-run-only", "--local-fixture-only", "--json"] },
           { name: "root-file-source-filter-pagination-footer-stress", description: "Fail-closed UX receipt contract for root Files source-filter pagination near the footer", flags: ["--session", "--fixture", "--queries", "--page-size", "--provider-delays", "--selection-steps", "--input-modes", "--no-native-input", "--no-native-pointer", "--no-native-picker", "--no-quick-look", "--no-system-pasteboard", "--no-network", "--no-submit", "--dry-run-only", "--local-fixture-only", "--json"] },
           { name: "file-search-directory-breadcrumb-restoration-stress", description: "Fail-closed UX receipt contract for File Search directory breadcrumb restoration", flags: ["--session", "--fixture", "--start-dir", "--queries", "--navigation-steps", "--input-modes", "--no-native-input", "--no-native-pointer", "--no-native-picker", "--no-quick-look", "--no-system-pasteboard", "--no-network", "--no-submit", "--dry-run-only", "--local-fixture-only", "--json"] },
           { name: "emoji-picker-skin-tone-category-ux-stress", description: "Fail-closed UX receipt contract for Emoji Picker skin-tone palette and category stability", flags: ["--session", "--fixture", "--categories", "--queries", "--skin-tones", "--steps", "--input-modes", "--no-native-input", "--no-native-pointer", "--no-system-pasteboard", "--no-network", "--no-submit", "--dry-run-only", "--local-fixture-only", "--json"] },
@@ -4887,7 +4887,7 @@ switch (recipe) {
           { name: "settings-preferences-readonly-detail-panel-stress", description: "Fail-closed UX receipt contract for Settings read-only detail panel navigation", flags: ["--session", "--fixture", "--sections", "--queries", "--navigation-steps", "--input-modes", "--no-native-input", "--no-native-pointer", "--no-system-pasteboard", "--no-network", "--no-external-services", "--no-security-prompts", "--no-system-settings", "--no-tcc-mutation", "--no-config-write", "--no-submit", "--dry-run-only", "--local-fixture-only", "--json"] },
           { name: "design-picker-preview-restore-visual-stress", description: "Fail-closed visual receipt contract for Design Picker preview restore", flags: ["--session", "--fixture", "--catalog-ids", "--preview-steps", "--input-modes", "--no-native-input", "--no-native-pointer", "--no-system-pasteboard", "--no-network", "--no-external-services", "--no-security-prompts", "--no-system-settings", "--no-tcc-mutation", "--no-config-write", "--no-design-write", "--no-submit", "--dry-run-only", "--local-fixture-only", "--json"] },
           { name: "dictation-history-transcript-preview-redaction-stress", description: "Fail-closed UX receipt contract for Dictation History transcript preview redaction", flags: ["--session", "--fixture", "--transcript-fixtures", "--queries", "--selection-cycles", "--view-steps", "--input-modes", "--dictation-fixture", "--no-microphone", "--no-media-capture", "--no-native-input", "--no-native-pointer", "--no-system-pasteboard", "--no-network", "--no-external-services", "--no-security-prompts", "--no-system-settings", "--no-tcc-mutation", "--no-submit", "--dry-run-only", "--local-fixture-only", "--json"] },
-          { name: "acp-setup-recovery", description: "Recovery from ACP setup state", flags: ["--session", "--select-agent", "--json"] },
+          { name: "agent_chat-setup-recovery", description: "Recovery from Agent Chat setup state", flags: ["--session", "--select-agent", "--json"] },
           { name: "surface-proof", description: "Seconds-first proof for main / attached popup / detached surfaces", flags: ["--session", "--kind", "--index", "--json"] },
           { name: "surface-navigate", description: "Warm-session state-first navigation, safe interaction, and strict screenshot capture for known surfaces", flags: ["--session", "--group", "--case", "--interact", "--capture", "--out-dir", "--manifest", "--fresh-per-case", "--keep-session", "--json"] },
           { name: "scenario", description: "Run a replayable scenario with proof bundle", flags: ["--session", "--scenario", "--index", "--json"] },
@@ -4935,7 +4935,7 @@ switch (recipe) {
           "proofBundle.scriptletBundleExecution",
           "proofBundle.trayMenuMutation",
           "proofBundle.multiWindowRestore",
-          "proofBundle.acpDictationDelivery",
+          "proofBundle.agent_chatDictationDelivery",
           "proofBundle.clipboardShareTrust",
           "proofBundle.clipboardShareReplay",
           "proofBundle.permissionShareCrossPrompt",
@@ -4981,39 +4981,39 @@ switch (recipe) {
           "proofBundle.inlineAttachmentPreviewChipStabilityReceipt",
           "proofBundle.windowTitleStatusSemanticsReceipt",
           "proofBundle.menuSyntaxCaptureValidationChipReceipt",
-          "proofBundle.acpFooterActivityIndicatorReceipt",
-          "proofBundle.acpModelHistoryPopoverVisualStateReceipt",
-          "proofBundle.acpContextInsertionPreviewParityReceipt",
+          "proofBundle.agent_chatFooterActivityIndicatorReceipt",
+          "proofBundle.agent_chatModelHistoryPopoverVisualStateReceipt",
+          "proofBundle.agent_chatContextInsertionPreviewParityReceipt",
           "proofBundle.delayedAction",
         ],
         routing: {
-          description: "Non-main targets are exact-id threaded. Attached popups prefer batch/simulateGpuiEvent. Detached ACP target-threading stress forces native input with focus enforcement.",
+          description: "Non-main targets are exact-id threaded. Attached popups prefer batch/simulateGpuiEvent. Detached Agent Chat target-threading stress forces native input with focus enforcement.",
           methods: ["batch", "simulateGpuiEvent", "native", "force-native", "force-batch", "force-gpui"],
-          nonMainTargets: ["acpDetached", "actionsDialog", "promptPopup"],
+          nonMainTargets: ["agentChatDetached", "actionsDialog", "promptPopup"],
         },
       };
       console.log(JSON.stringify(helpJson, null, 2));
       process.exit(0);
     }
     console.log(`Usage: bun scripts/agentic/index.ts <recipe> [--session NAME] [--key enter|tab] [--vision]
-  [--target-json '{"type":"kind","kind":"acpDetached","index":0}'] [--surface acp]
+  [--target-json '{"type":"kind","kind":"agentChatDetached","index":0}'] [--surface agent_chat]
   [--kind KIND] [--index N] [--select-agent ID] [--scenario NAME]
 
 Recipes:
   preflight              Check prerequisites (session, window, permissions)
-  acp-open               Open ACP and verify ready state
-  acp-accept             Full ACP picker accept; choose key with --key enter|tab
-  acp-enter-accept       Compatibility alias for --key enter
-  acp-tab-accept         Compatibility alias for --key tab
-  acp-detached-accept    One-command detached ACP proof: resolve → accept → identity check
-  acp-detached-target-threading-stress
-                         Multi-window detached ACP proof with exact target threading
-  acp-prompt-popup-parity
-                         State-first ACP PromptPopup family parity proof
-  notes-acp-delayed-action-origin-stress
-                         Fail-closed Notes ACP delayed-action origin/generation stress
+  agent_chat-open               Open Agent Chat and verify ready state
+  agent_chat-accept             Full Agent Chat picker accept; choose key with --key enter|tab
+  agent_chat-enter-accept       Compatibility alias for --key enter
+  agent_chat-tab-accept         Compatibility alias for --key tab
+  agent_chat-detached-accept    One-command detached Agent Chat proof: resolve → accept → identity check
+  agent_chat-detached-target-threading-stress
+                         Multi-window detached Agent Chat proof with exact target threading
+  agent_chat-prompt-popup-parity
+                         State-first Agent Chat PromptPopup family parity proof
+  notes-agent_chat-delayed-action-origin-stress
+                         Fail-closed Notes Agent Chat delayed-action origin/generation stress
   file-portal-origin-roundtrip
-                         Fail-closed ACP portal origin/context-part round-trip stress
+                         Fail-closed Agent Chat portal origin/context-part round-trip stress
   permission-privacy-preflight
                          Read-only permission preflight; never opens Settings or mutates TCC
   shortcut-recorder-focus-capture
@@ -5028,8 +5028,8 @@ Recipes:
                          Fail-closed DropPrompt native drop privacy/redaction proof
   path-prompt-filesystem-edge-stress
                          State-first PathPrompt filesystem edge proof
-  screenshot-identity-acp-context-stress
-                         Fail-closed screenshotIdentity to ACP context proof
+  screenshot-identity-agent_chat-context-stress
+                         Fail-closed screenshotIdentity to Agent Chat context proof
   clipboard-history-portal-range-stress
                          Fail-closed Clipboard History portal host/range proof
   browser-tabs-cache-identity-stress
@@ -5052,8 +5052,8 @@ Recipes:
                          Fail-closed tray/global hotkey menu mutation proof
   multi-window-resize-monitor-restoration-stress
                          Fail-closed multi-window resize/monitor restoration proof
-  acp-targeted-dictation-delivery-stress
-                         Fail-closed ACP-targeted dictation delivery proof
+  agent_chat-targeted-dictation-delivery-stress
+                         Fail-closed Agent Chat-targeted dictation delivery proof
   clipboard-share-trust-install-stress
                          Fail-closed clipboard share trust install proof
   clipboard-share-watcher-stale-replay-stress
@@ -5150,7 +5150,7 @@ Recipes:
                          Fail-closed reduced-motion animation disable proof
   command-search-highlighting-accessory-badges-stress
                          Fail-closed command search highlight/badge proof
-  acp-setup-recovery     Recovery from ACP setup; select agent with --select-agent ID
+  agent_chat-setup-recovery     Recovery from Agent Chat setup; select agent with --select-agent ID
   surface-proof          Seconds-first proof for main / attached popup / detached surfaces
   surface-navigate       Warm-session navigation, safe interaction, and strict screenshots for known surfaces
   scenario               Run a replayable scenario with proof bundle output
@@ -5158,22 +5158,22 @@ Recipes:
   help                   Show this help (--json for machine-readable output)
 
 Target threading:
-  --target-json JSON   ACP window target for all RPCs (reused across all steps)
-  --surface SURFACE    Automation surface for native input focus (main, acp, etc.)
-  --kind KIND          Target kind for acp-detached-accept (default: acpDetached)
-  --index N            Target kind index for acp-detached-accept (default: 0)
+  --target-json JSON   Agent Chat window target for all RPCs (reused across all steps)
+  --surface SURFACE    Automation surface for native input focus (main, agent_chat, etc.)
+  --kind KIND          Target kind for agent_chat-detached-accept (default: agentChatDetached)
+  --index N            Target kind index for agent_chat-detached-accept (default: 0)
   --scenario NAME      Scenario name for the scenario recipe
 
 Input routing (non-main targets):
   attached popups → batch/simulateGpuiEvent first, no OS focus unless required
-  detached ACP target-threading stress → force-native with OS focus enforcement
+  detached Agent Chat target-threading stress → force-native with OS focus enforcement
   main, focused, unspecified → native (macos-input.ts with OS focus enforcement)
 
 Available scenarios:
   main-window-exact-id    Resolve exact main target, inspect, getElements
   actions-dialog-exact-id Resolve exact attached ActionsDialog target, inspect, waitFor
   prompt-popup-exact-id   Resolve exact attached PromptPopup target, inspect, waitFor
-  detached-acp-exact-id  Resolve exact detached ACP target, inspect, GPUI event, inspect again
+  detached-agent_chat-exact-id  Resolve exact detached Agent Chat target, inspect, GPUI event, inspect again
   file-portal-origin-roundtrip
                          Emit fail-closed portal origin/context receipt requirements
   permission-privacy-preflight
@@ -5190,7 +5190,7 @@ Available scenarios:
                          Emit fail-closed DropPrompt native drop privacy requirements
   path-prompt-filesystem-edge-stress
                          Run PathPrompt filesystem edge helper
-  screenshot-identity-acp-context-stress
+  screenshot-identity-agent_chat-context-stress
                          Emit fail-closed screenshot identity context requirements
   clipboard-history-portal-range-stress
                          Emit fail-closed Clipboard History portal range requirements
@@ -5214,8 +5214,8 @@ Available scenarios:
                          Emit fail-closed tray/global hotkey mutation requirements
   multi-window-resize-monitor-restoration-stress
                          Emit fail-closed multi-window resize/monitor requirements
-  acp-targeted-dictation-delivery-stress
-                         Emit fail-closed ACP dictation targeting requirements
+  agent_chat-targeted-dictation-delivery-stress
+                         Emit fail-closed Agent Chat dictation targeting requirements
   clipboard-share-trust-install-stress
                          Emit fail-closed clipboard share trust install requirements
   clipboard-share-watcher-stale-replay-stress
@@ -5348,22 +5348,22 @@ Available scenarios:
                          Emit fail-closed window title/status semantics requirements
   menu-syntax-capture-validation-chip-stress
                          Emit fail-closed menu syntax capture validation chip requirements
-  acp-footer-activity-indicator-stress
-                         Emit fail-closed ACP footer activity indicator requirements
-  acp-model-history-popover-visual-state-stress
-                         Emit fail-closed ACP model/history popover visual state requirements
-  acp-context-insertion-preview-parity-stress
-                         Emit fail-closed ACP context insertion preview parity requirements
-  acp-slash-mention-provider-visibility-stress
-                         Emit fail-closed ACP slash/mention provider visibility requirements
-  acp-composer-token-keyboard-edit-parity-stress
-                         Emit fail-closed ACP composer token keyboard edit parity requirements
-  acp-transcript-stream-retry-virtualization-stress
-                         Emit fail-closed ACP transcript stream retry virtualization requirements
-  acp-plugin-skill-entry-thread-affinity-stress
-                         Emit fail-closed ACP plugin skill entry thread affinity requirements
-  notes-cart-acp-handoff-dedupe-stress
-                         Emit fail-closed Notes cart ACP handoff dedupe requirements
+  agent_chat-footer-activity-indicator-stress
+                         Emit fail-closed Agent Chat footer activity indicator requirements
+  agent_chat-model-history-popover-visual-state-stress
+                         Emit fail-closed Agent Chat model/history popover visual state requirements
+  agent_chat-context-insertion-preview-parity-stress
+                         Emit fail-closed Agent Chat context insertion preview parity requirements
+  agent_chat-slash-mention-provider-visibility-stress
+                         Emit fail-closed Agent Chat slash/mention provider visibility requirements
+  agent_chat-composer-token-keyboard-edit-parity-stress
+                         Emit fail-closed Agent Chat composer token keyboard edit parity requirements
+  agent_chat-transcript-stream-retry-virtualization-stress
+                         Emit fail-closed Agent Chat transcript stream retry virtualization requirements
+  agent_chat-plugin-skill-entry-thread-affinity-stress
+                         Emit fail-closed Agent Chat plugin skill entry thread affinity requirements
+  notes-cart-agent_chat-handoff-dedupe-stress
+                         Emit fail-closed Notes cart Agent Chat handoff dedupe requirements
   root-file-source-filter-pagination-footer-stress
                          Emit fail-closed root Files source-filter pagination footer requirements
   file-search-directory-breadcrumb-restoration-stress
@@ -5396,16 +5396,16 @@ Examples:
   bun scripts/agentic/index.ts surface-navigate --session default --group filterable-main --case all --interact safe --capture --fresh-per-case --out-dir .notes/image-library --manifest .notes/image-library/manifest.json --json
   bun scripts/agentic/index.ts surface-navigate --session popup --group attached-popup --case actions-dialog-attached-popup --capture --fresh-per-case --json
   bun scripts/agentic/index.ts surface-proof --session default --kind promptPopup --index 0
-  bun scripts/agentic/index.ts surface-proof --session default --kind acpDetached --index 0
-  bun scripts/agentic/index.ts acp-accept --session default --key enter
-  bun scripts/agentic/index.ts acp-accept --session default --key tab --vision
-  bun scripts/agentic/index.ts acp-accept --session default --key enter \\
-    --target-json '{"type":"kind","kind":"acpDetached","index":0}' --surface acp --vision
-  bun scripts/agentic/index.ts acp-detached-accept --session default --kind acpDetached --index 0 --key enter --vision
-  bun scripts/agentic/index.ts acp-detached-target-threading-stress --session default --kind acpDetached --index 0 --min-targets 2 --key enter --vision --json
-  bun scripts/agentic/index.ts acp-prompt-popup-parity --session default --families mention,model-selector,local-history --json
-  bun scripts/agentic/index.ts notes-acp-delayed-action-origin-stress --session default --drift generation --json
-  bun scripts/agentic/index.ts file-portal-origin-roundtrip --session default --host acp --portal file-search --json
+  bun scripts/agentic/index.ts surface-proof --session default --kind agentChatDetached --index 0
+  bun scripts/agentic/index.ts agent_chat-accept --session default --key enter
+  bun scripts/agentic/index.ts agent_chat-accept --session default --key tab --vision
+  bun scripts/agentic/index.ts agent_chat-accept --session default --key enter \\
+    --target-json '{"type":"kind","kind":"agentChatDetached","index":0}' --surface agent_chat --vision
+  bun scripts/agentic/index.ts agent_chat-detached-accept --session default --kind agentChatDetached --index 0 --key enter --vision
+  bun scripts/agentic/index.ts agent_chat-detached-target-threading-stress --session default --kind agentChatDetached --index 0 --min-targets 2 --key enter --vision --json
+  bun scripts/agentic/index.ts agent_chat-prompt-popup-parity --session default --families mention,model-selector,local-history --json
+  bun scripts/agentic/index.ts notes-agent_chat-delayed-action-origin-stress --session default --drift generation --json
+  bun scripts/agentic/index.ts file-portal-origin-roundtrip --session default --host agent_chat --portal file-search --json
   bun scripts/agentic/index.ts permission-privacy-preflight --session default --json
   bun scripts/agentic/index.ts shortcut-recorder-focus-capture --session default --chord cmd+shift+7 --json
   bun scripts/agentic/index.ts template-prompt-automation-parity-stress --session default --template 'Hello {{name}}' --field name --value Ada --forced-value forced-template-result --json
@@ -5413,7 +5413,7 @@ Examples:
   bun scripts/agentic/index.ts actions-captured-subject-frame-stress --session default --source root-file --action quick-look --mutation filter-selection-cache-frame --json
   bun scripts/agentic/index.ts drop-prompt-native-drop-privacy-stress --session default --file-name agentic-drop.txt --size 12 --json
   bun scripts/agentic/index.ts path-prompt-filesystem-edge-stress --session default --json
-  bun scripts/agentic/index.ts screenshot-identity-acp-context-stress --session default --source tab-ai-screenshot --json
+  bun scripts/agentic/index.ts screenshot-identity-agent_chat-context-stress --session default --source tab-ai-screenshot --json
   bun scripts/agentic/index.ts clipboard-history-portal-range-stress --session default --portal-id 'kit://clipboard-history?id=agentic' --range composer:0..0 --json
   bun scripts/agentic/index.ts browser-tabs-cache-identity-stress --session default --source browser-tabs --json
   bun scripts/agentic/index.ts scroll-selection-reanchor-stress --session default --kinds clipboard,browser-history,current-app-commands,file-search --json
@@ -5424,35 +5424,35 @@ Examples:
   bun scripts/agentic/index.ts file-search-drag-out-identity-stress --session default --query AGENTS.md --file-name AGENTS.md --drop-target host-refusal-fixture --json
   bun scripts/agentic/index.ts scriptlet-bundle-execution-matrix-stress --session default --scriptlet-id alpha --bundle-id agentic-loop-seven-bundle --cancel-after-ms 50 --json
   bun scripts/agentic/index.ts tray-global-hotkey-menu-mutation-stress --session default --loops 5 --json
-  bun scripts/agentic/index.ts multi-window-resize-monitor-restoration-stress --session default --surfaces main,actionsDialog,acpDetached,notes --monitor-profile scale-bounds-drift --json
-  bun scripts/agentic/index.ts acp-targeted-dictation-delivery-stress --session default --kind acpDetached --index 0 --transcript 'agentic loop eight dictation' --json
+  bun scripts/agentic/index.ts multi-window-resize-monitor-restoration-stress --session default --surfaces main,actionsDialog,agentChatDetached,notes --monitor-profile scale-bounds-drift --json
+  bun scripts/agentic/index.ts agent_chat-targeted-dictation-delivery-stress --session default --kind agentChatDetached --index 0 --transcript 'agentic loop eight dictation' --json
   bun scripts/agentic/index.ts clipboard-share-trust-install-stress --session default --fixture-id agentic-loop-nine --share-kind script --accept-mode both --json
   bun scripts/agentic/index.ts clipboard-share-watcher-stale-replay-stress --session default --fixture-id agentic-loop-nine --share-kind script --count 3 --burst-ms 25 --json
   bun scripts/agentic/index.ts permission-share-cross-prompt-focus-stress --session default --fixture-id agentic-loop-nine --share-kind script --pane Accessibility --bundle-id com.scriptkit.app --json
-  bun scripts/agentic/index.ts visible-text-clipping-overlap-stress --session default --surfaces main,actionsDialog,acpDetached --json
-  bun scripts/agentic/index.ts layout-measurement-regression-stress --session default --surfaces main,actionsDialog,acpDetached --json
+  bun scripts/agentic/index.ts visible-text-clipping-overlap-stress --session default --surfaces main,actionsDialog,agentChatDetached --json
+  bun scripts/agentic/index.ts layout-measurement-regression-stress --session default --surfaces main,actionsDialog,agentChatDetached --json
   bun scripts/agentic/index.ts screenshot-semantics-visual-consistency-stress --session default --group filterable-main --case clipboard-history-visible-rows --json
   bun scripts/agentic/index.ts modal-stack-arbitration-stress --session default --json
-  bun scripts/agentic/index.ts cross-surface-export-provenance-stress --session default --source file-search --destination acp-composer --export-mode copy --query AGENTS.md --json
+  bun scripts/agentic/index.ts cross-surface-export-provenance-stress --session default --source file-search --destination agent_chat-composer --export-mode copy --query AGENTS.md --json
   bun scripts/agentic/index.ts dev-session-recovery-stale-target-stress --session default --entry clipboard-history-actions --kind actionsDialog --restart-mode stop-start --json
   bun scripts/agentic/index.ts menu-syntax-ambiguity-diagnostics-stress --session default --query '>open @file !bad ~AGENTS.md' --json
   bun scripts/agentic/index.ts ime-composition-input-boundary-stress --session default --json
   bun scripts/agentic/index.ts accessibility-selected-text-fallback-stress --session default --json
-  bun scripts/agentic/index.ts display-migration-visual-bounds-stress --session default --surfaces main,actionsDialog,promptPopup,acpDetached,notes --from-display primary --to-display external --json
-  bun scripts/agentic/index.ts native-picker-external-return-focus-stress --session default --origin acp --handoff file-picker --foreign-app Finder --json
+  bun scripts/agentic/index.ts display-migration-visual-bounds-stress --session default --surfaces main,actionsDialog,promptPopup,agentChatDetached,notes --from-display primary --to-display external --json
+  bun scripts/agentic/index.ts native-picker-external-return-focus-stress --session default --origin agent_chat --handoff file-picker --foreign-app Finder --json
   bun scripts/agentic/index.ts drag-cancel-payload-scope-stress --session default --source file-search --hover-target drop-prompt --cancel escape --json
-  bun scripts/agentic/index.ts runtime-appearance-churn-focused-input-stress --session default --surface acp-composer --churn scale,font,theme --cycles 6 --json
+  bun scripts/agentic/index.ts runtime-appearance-churn-focused-input-stress --session default --surface agent_chat-composer --churn scale,font,theme --cycles 6 --json
   bun scripts/agentic/index.ts power-resume-window-generation-stress --session default --surface main --event sleep-wake --json
-  bun scripts/agentic/index.ts menu-tray-notification-modal-interruption-stress --session default --host acpChat --active-surface actionsDialog --interruptions tray-menu,app-menu,notification --json
-  bun scripts/agentic/index.ts stream-progress-cancel-visual-stability-stress --session default --surface acp-composer --updates 40 --cancel-at 25 --json
-  bun scripts/agentic/index.ts dictation-media-permission-readiness-churn-stress --session default --target acp-composer --churn microphone-permission,model-readiness --json
+  bun scripts/agentic/index.ts menu-tray-notification-modal-interruption-stress --session default --host agentChatChat --active-surface actionsDialog --interruptions tray-menu,app-menu,notification --json
+  bun scripts/agentic/index.ts stream-progress-cancel-visual-stability-stress --session default --surface agent_chat-composer --updates 40 --cancel-at 25 --json
+  bun scripts/agentic/index.ts dictation-media-permission-readiness-churn-stress --session default --target agent_chat-composer --churn microphone-permission,model-readiness --json
   bun scripts/agentic/index.ts animation-frame-capture-determinism-stress --session default --surfaces main,actionsDialog,promptPopup --frames 6 --interval-ms 80 --json
   bun scripts/agentic/index.ts accessibility-tree-semantic-parity-stress --session default --surfaces main,actionsDialog,promptPopup --json
-  bun scripts/agentic/index.ts rtl-bidi-emoji-text-rendering-stress --session default --surface acp-composer --text 'abc שלום 👩🏽‍💻 é مرحبا 123' --json
+  bun scripts/agentic/index.ts rtl-bidi-emoji-text-rendering-stress --session default --surface agent_chat-composer --text 'abc שלום 👩🏽‍💻 é مرحبا 123' --json
   bun scripts/agentic/index.ts high-volume-virtualized-list-stability-stress --session default --surface clipboard-history --fixture-count 5000 --filter-cycles 8 --scroll-cycles 12 --json
   bun scripts/agentic/index.ts input-modality-transition-ownership-stress --session default --surface main --interleave pointer-hover,keyboard-nav,trackpad-scroll,wheel-scroll,shortcut --cycles 8 --json
-  bun scripts/agentic/index.ts multi-context-attachment-dedupe-provenance-stress --session default --origins file,screenshot,selected-text,mcp-resource,clipboard-snippet --destinations acp-composer,notes --reorder-cycles 3 --json
-  bun scripts/agentic/index.ts visual-contrast-readable-state-stress --session default --surfaces main,actionsDialog,promptPopup,acp-composer,notes --themes light,dark --scale-factors 1,1.25,1.5 --states active,inactive,disabled,focused,error,loading --json
+  bun scripts/agentic/index.ts multi-context-attachment-dedupe-provenance-stress --session default --origins file,screenshot,selected-text,mcp-resource,clipboard-snippet --destinations agent_chat-composer,notes --reorder-cycles 3 --json
+  bun scripts/agentic/index.ts visual-contrast-readable-state-stress --session default --surfaces main,actionsDialog,promptPopup,agent_chat-composer,notes --themes light,dark --scale-factors 1,1.25,1.5 --states active,inactive,disabled,focused,error,loading --json
   bun scripts/agentic/index.ts empty-error-retry-state-ux-stress --session default --surfaces main,clipboard-history,emoji-picker,file-search --query 'agentic-loop-eighteen-no-results-zzzz' --json
   bun scripts/agentic/index.ts form-validation-inline-recovery-stress --session default --surface fields-prompt --fields email,required-text,number --invalid email:not-an-email,required-text:,number:not-a-number --valid email:ada@example.com,required-text:Ada,number:42 --json
   bun scripts/agentic/index.ts navigation-back-stack-history-stress --session default --origin main --surfaces clipboard-history,emoji-picker,file-search,actionsDialog --transitions triggerBuiltin,cmd-k,escape,back --json
@@ -5475,10 +5475,10 @@ Examples:
   bun scripts/agentic/index.ts reduced-motion-animation-disable-stress --session default --surfaces main,actionsDialog,menuSyntaxTriggerPopup --fixture reduced-motion --json
   bun scripts/agentic/index.ts command-search-highlighting-accessory-badges-stress --session default --hosts main,actionsDialog,app-launcher,menuSyntaxTriggerPopup --query agentic-loop-twenty-three --json
   bun scripts/agentic/index.ts clipboard-copy-visual-feedback-stress --session default --hosts file-search,actionsDialog,app-launcher --fixture agentic-copy-preview --pasteboard-scope fixture --no-system-pasteboard --json
-  bun scripts/agentic/index.ts portal-cancel-return-state-restoration-stress --session default --origins acp-composer,notes --portal file-search --query AGENTS.md --cancel-methods escape,back --fixture repo-file --no-native-picker --json
+  bun scripts/agentic/index.ts portal-cancel-return-state-restoration-stress --session default --origins agent_chat-composer,notes --portal file-search --query AGENTS.md --cancel-methods escape,back --fixture repo-file --no-native-picker --json
   bun scripts/agentic/index.ts tooltip-hover-focus-affordance-stress --session default --surfaces main,actionsDialog,app-launcher --targets truncated-row,disabled-action,footer-button --fixture agentic-tooltips --input-modes protocol-hover,keyboard-focus --no-native-pointer --json
   bun scripts/agentic/index.ts shortcut-recorder-cancel-layering-stress --session default --surface shortcuts --action test-agentic-shortcut --cancel-methods escape,cmd-w,backdrop,parent-click --input-modes protocol-key,protocol-click --sandbox-config --no-config-write --json
-  bun scripts/agentic/index.ts inline-popover-anchor-resize-stress --session default --families acp-slash,acp-mention,menu-syntax-colon --widths mini,narrow,full --fixture agentic-inline-popover --input-modes protocol-key,protocol-resize --no-native-input --json
+  bun scripts/agentic/index.ts inline-popover-anchor-resize-stress --session default --families agent_chat-slash,agent_chat-mention,menu-syntax-colon --widths mini,narrow,full --fixture agentic-inline-popover --input-modes protocol-key,protocol-resize --no-native-input --json
   bun scripts/agentic/index.ts disabled-footer-hit-target-refusal-stress --session default --surfaces drop-prompt,fields-prompt,path-prompt --fixtures empty-drop,invalid-fields,missing-path --input-modes enter,footer-shortcut,protocol-footer-click --no-native-pointer --dry-run-only --json
   bun scripts/agentic/index.ts mini-full-transition-layout-continuity-stress --session default --surfaces main,mini-prompt,fields-prompt,actionsDialog --transitions mini-to-full,full-to-mini,hide-show,return-to-origin --fixture agentic-mini-full-layout --input-modes protocol-key,protocol-resize --no-native-input --no-native-pointer --no-system-pasteboard --local-fixture-only --json
   bun scripts/agentic/index.ts filter-input-decoration-chip-layout-stress --session default --surfaces main --queries 'f: AGENTS.md,c: agentic,~/script,:actions,;note,!command,literal\\:chip' --widths mini,narrow,full --scale-factors 1,1.25,1.5 --fixture agentic-filter-input-decorations --input-modes protocol-set-filter,protocol-resize --no-native-input --no-native-pointer --no-system-pasteboard --no-config-write --local-fixture-only --json
@@ -5491,18 +5491,18 @@ Examples:
   bun scripts/agentic/index.ts env-prompt-redacted-status-error-recovery-stress --session default --surface env-prompt --fixture agentic-env-status --status-fixtures missing-secret,parse-error,masked-existing,valid-edit --input-modes protocol-set-input,protocol-key,batch --no-native-input --no-native-pointer --no-system-pasteboard --no-config-write --no-secret-write --dry-run-only --local-fixture-only --json
   bun scripts/agentic/index.ts command-palette-breadcrumb-route-stack-stress --session default --host main --fixture agentic-actions-breadcrumbs --drill-path parent-action,child-action --filter 'switch' --back-methods escape,breadcrumb-click --input-modes protocol-key,protocol-click,batch --no-native-input --no-native-pointer --no-submit --dry-run-only --local-fixture-only --json
   bun scripts/agentic/index.ts root-source-chip-action-semantics-stress --session default --queries 'f: AGENTS.md,c: agentic,n: welcome,-c: noise' --actions remove-chip,clear-all,toggle-exclude,open-chip-actions --input-modes protocol-click,protocol-key,batch --no-native-input --no-native-pointer --no-system-pasteboard --no-config-write --dry-run-only --local-fixture-only --json
-  bun scripts/agentic/index.ts recent-history-dedupe-root-grouping-stress --session default --fixture agentic-root-recents --sources files,notes,clipboard,dictation,acp-history --query agentic-loop-29-dupe --cycles 6 --input-modes protocol-set-filter,protocol-key,batch --no-native-input --no-native-pointer --no-system-pasteboard --no-network --dry-run-only --local-fixture-only --json
-  bun scripts/agentic/index.ts inline-attachment-preview-chip-stability-stress --session default --hosts acp-composer,notes --fixture agentic-inline-attachments --origins local-file,fixture-image,fixture-text,script-resource --chip-actions focus,preview,remove,reorder,overflow --input-modes protocol-set-input,protocol-click,batch --no-native-input --no-native-pointer --no-native-picker --no-screen-capture --no-system-pasteboard --no-network --no-submit --dry-run-only --local-fixture-only --json
-  bun scripts/agentic/index.ts window-title-status-semantics-stress --session default --surfaces main,acp-composer,actionsDialog,promptPopup,notes --states idle,busy,error,dirty,ready --transitions triggerBuiltin,cmd-k,escape,hide-show --input-modes protocol-key,batch --no-native-input --no-native-pointer --no-system-pasteboard --no-network --no-submit --dry-run-only --local-fixture-only --json
+  bun scripts/agentic/index.ts recent-history-dedupe-root-grouping-stress --session default --fixture agentic-root-recents --sources files,notes,clipboard,dictation,agent_chat-history --query agentic-loop-29-dupe --cycles 6 --input-modes protocol-set-filter,protocol-key,batch --no-native-input --no-native-pointer --no-system-pasteboard --no-network --dry-run-only --local-fixture-only --json
+  bun scripts/agentic/index.ts inline-attachment-preview-chip-stability-stress --session default --hosts agent_chat-composer,notes --fixture agentic-inline-attachments --origins local-file,fixture-image,fixture-text,script-resource --chip-actions focus,preview,remove,reorder,overflow --input-modes protocol-set-input,protocol-click,batch --no-native-input --no-native-pointer --no-native-picker --no-screen-capture --no-system-pasteboard --no-network --no-submit --dry-run-only --local-fixture-only --json
+  bun scripts/agentic/index.ts window-title-status-semantics-stress --session default --surfaces main,agent_chat-composer,actionsDialog,promptPopup,notes --states idle,busy,error,dirty,ready --transitions triggerBuiltin,cmd-k,escape,hide-show --input-modes protocol-key,batch --no-native-input --no-native-pointer --no-system-pasteboard --no-network --no-submit --dry-run-only --local-fixture-only --json
   bun scripts/agentic/index.ts menu-syntax-capture-validation-chip-stress --session default --fixture agentic-capture-validation --cases missing-body-date,missing-date,ready,malformed-url,unresolved-date,dynamic-schema --input-modes protocol-set-filter,batch --no-native-input --no-native-pointer --no-system-pasteboard --no-network --no-submit --dry-run-only --local-fixture-only --json
-  bun scripts/agentic/index.ts acp-footer-activity-indicator-stress --session default --hosts acp-composer,notes --fixture agentic-acp-footer-activity --activity-fixtures context-capture,tool-call,plan-update,permission-wait,cancelled,idle-recovered --input-modes protocol-state,batch --agent-fixture scripted-local --no-native-input --no-native-pointer --no-security-prompts --no-system-pasteboard --no-network --no-submit --dry-run-only --local-fixture-only --json
-  bun scripts/agentic/index.ts acp-model-history-popover-visual-state-stress --session default --families model-selector,local-history --fixture agentic-acp-popover-visual-state --states idle,filtered,empty,loading,current-selection,error-recovered --selection-cycles 8 --filter-cycles 4 --input-modes protocol-set-input,protocol-key,batch --no-native-input --no-native-pointer --no-system-pasteboard --no-network --no-submit --dry-run-only --local-fixture-only --json
-  bun scripts/agentic/index.ts acp-context-insertion-preview-parity-stress --session default --sources file-search,browser-history,dictation-history,notes --destination acp-composer --fixture agentic-context-preview-parity --selection-cycles 6 --filter-cycles 4 --insert-modes protocol-accept,batch --input-modes protocol-set-filter,protocol-key,batch --no-native-input --no-native-pointer --no-native-picker --no-quick-look --no-system-pasteboard --no-network --no-submit --dry-run-only --local-fixture-only --json
-  bun scripts/agentic/index.ts acp-slash-mention-provider-visibility-stress --session default --families slash,mention --fixture agentic-acp-provider-hints --providers dictation-history,browser-history,notes,files,skills --queries '@di,@browser-history,@missing,/new-script,/unknown' --states ready,unavailable,loading,error-recovered,filtered-empty --input-modes protocol-set-input,protocol-key,batch --no-native-input --no-native-pointer --no-native-picker --no-quick-look --no-system-pasteboard --no-network --no-submit --dry-run-only --local-fixture-only --json
-  bun scripts/agentic/index.ts acp-composer-token-keyboard-edit-parity-stress --session default --hosts acp-composer,notes --fixture agentic-acp-composer-tokens --token-kinds mention,slash,pasted-text,pasted-image,skill-file --edit-steps backspace-delete,delete-forward,range-remove,move-token-left,move-token-right,cursor-around-token --input-modes protocol-key,batch --no-native-input --no-native-pointer --no-native-picker --no-screen-capture --no-system-pasteboard --no-network --no-submit --dry-run-only --local-fixture-only --json
-  bun scripts/agentic/index.ts acp-transcript-stream-retry-virtualization-stress --session default --hosts acp-composer,notes --fixture agentic-acp-transcript-stream --message-count 160 --stream-chunks 48 --error-fixtures tool-error,agent-error,model-timeout,cancelled --retry-paths retry-same-draft,retry-edited-draft,retry-after-scroll --scroll-positions top,middle,bottom,near-active --input-modes protocol-state,protocol-key,batch --agent-fixture scripted-local --no-native-input --no-native-pointer --no-security-prompts --no-system-pasteboard --no-network --no-submit --dry-run-only --local-fixture-only --json
-  bun scripts/agentic/index.ts acp-plugin-skill-entry-thread-affinity-stress --session loop33 --hosts embedded,detached --fixture agentic-plugin-skill-entry --skill-id new-script --entry-paths main-menu,source-filter,cmd-enter --input-modes protocol-set-filter,batch --agent-fixture scripted-local --no-native-input --no-native-pointer --no-security-prompts --no-system-pasteboard --no-network --no-submit --dry-run-only --local-fixture-only --json
-  bun scripts/agentic/index.ts notes-cart-acp-handoff-dedupe-stress --session loop33 --fixture agentic-notes-cart --notes note-a,note-b --cart-items duplicate-link,local-snippet,repo-file,unchecked-task --handoff-paths open-acp,switch-note,cancel,consume --input-modes protocol-click,protocol-key,batch --agent-fixture scripted-local --no-native-input --no-native-pointer --no-native-picker --no-screen-capture --no-system-pasteboard --no-network --no-submit --sandbox-notes-store --dry-run-only --local-fixture-only --json
+  bun scripts/agentic/index.ts agent_chat-footer-activity-indicator-stress --session default --hosts agent_chat-composer,notes --fixture agentic-agent_chat-footer-activity --activity-fixtures context-capture,tool-call,plan-update,permission-wait,cancelled,idle-recovered --input-modes protocol-state,batch --agent-fixture scripted-local --no-native-input --no-native-pointer --no-security-prompts --no-system-pasteboard --no-network --no-submit --dry-run-only --local-fixture-only --json
+  bun scripts/agentic/index.ts agent_chat-model-history-popover-visual-state-stress --session default --families model-selector,local-history --fixture agentic-agent_chat-popover-visual-state --states idle,filtered,empty,loading,current-selection,error-recovered --selection-cycles 8 --filter-cycles 4 --input-modes protocol-set-input,protocol-key,batch --no-native-input --no-native-pointer --no-system-pasteboard --no-network --no-submit --dry-run-only --local-fixture-only --json
+  bun scripts/agentic/index.ts agent_chat-context-insertion-preview-parity-stress --session default --sources file-search,browser-history,dictation-history,notes --destination agent_chat-composer --fixture agentic-context-preview-parity --selection-cycles 6 --filter-cycles 4 --insert-modes protocol-accept,batch --input-modes protocol-set-filter,protocol-key,batch --no-native-input --no-native-pointer --no-native-picker --no-quick-look --no-system-pasteboard --no-network --no-submit --dry-run-only --local-fixture-only --json
+  bun scripts/agentic/index.ts agent_chat-slash-mention-provider-visibility-stress --session default --families slash,mention --fixture agentic-agent_chat-provider-hints --providers dictation-history,browser-history,notes,files,skills --queries '@di,@browser-history,@missing,/new-script,/unknown' --states ready,unavailable,loading,error-recovered,filtered-empty --input-modes protocol-set-input,protocol-key,batch --no-native-input --no-native-pointer --no-native-picker --no-quick-look --no-system-pasteboard --no-network --no-submit --dry-run-only --local-fixture-only --json
+  bun scripts/agentic/index.ts agent_chat-composer-token-keyboard-edit-parity-stress --session default --hosts agent_chat-composer,notes --fixture agentic-agent_chat-composer-tokens --token-kinds mention,slash,pasted-text,pasted-image,skill-file --edit-steps backspace-delete,delete-forward,range-remove,move-token-left,move-token-right,cursor-around-token --input-modes protocol-key,batch --no-native-input --no-native-pointer --no-native-picker --no-screen-capture --no-system-pasteboard --no-network --no-submit --dry-run-only --local-fixture-only --json
+  bun scripts/agentic/index.ts agent_chat-transcript-stream-retry-virtualization-stress --session default --hosts agent_chat-composer,notes --fixture agentic-agent_chat-transcript-stream --message-count 160 --stream-chunks 48 --error-fixtures tool-error,agent-error,model-timeout,cancelled --retry-paths retry-same-draft,retry-edited-draft,retry-after-scroll --scroll-positions top,middle,bottom,near-active --input-modes protocol-state,protocol-key,batch --agent-fixture scripted-local --no-native-input --no-native-pointer --no-security-prompts --no-system-pasteboard --no-network --no-submit --dry-run-only --local-fixture-only --json
+  bun scripts/agentic/index.ts agent_chat-plugin-skill-entry-thread-affinity-stress --session loop33 --hosts embedded,detached --fixture agentic-plugin-skill-entry --skill-id new-script --entry-paths main-menu,source-filter,cmd-enter --input-modes protocol-set-filter,batch --agent-fixture scripted-local --no-native-input --no-native-pointer --no-security-prompts --no-system-pasteboard --no-network --no-submit --dry-run-only --local-fixture-only --json
+  bun scripts/agentic/index.ts notes-cart-agent_chat-handoff-dedupe-stress --session loop33 --fixture agentic-notes-cart --notes note-a,note-b --cart-items duplicate-link,local-snippet,repo-file,unchecked-task --handoff-paths open-agent_chat,switch-note,cancel,consume --input-modes protocol-click,protocol-key,batch --agent-fixture scripted-local --no-native-input --no-native-pointer --no-native-picker --no-screen-capture --no-system-pasteboard --no-network --no-submit --sandbox-notes-store --dry-run-only --local-fixture-only --json
   bun scripts/agentic/index.ts root-file-source-filter-pagination-footer-stress --session loop33 --fixture agentic-root-file-pages --queries 'f: ,f:s,files: AGENTS' --page-size 12 --provider-delays 0,150,450 --selection-steps near-bottom,next-page,filter-tighten,clear-filter --input-modes protocol-set-filter,protocol-key,batch --no-native-input --no-native-pointer --no-native-picker --no-quick-look --no-system-pasteboard --no-network --no-submit --dry-run-only --local-fixture-only --json
   bun scripts/agentic/index.ts file-search-directory-breadcrumb-restoration-stress --session default --fixture agentic-file-tree-breadcrumbs --start-dir repo-root --queries 'AGENTS,src,missing' --navigation-steps enter-directory,breadcrumb-parent,back,forward,filter-tighten,clear-filter --input-modes protocol-set-filter,protocol-click,protocol-key,batch --no-native-input --no-native-pointer --no-native-picker --no-quick-look --no-system-pasteboard --no-network --no-submit --dry-run-only --local-fixture-only --json
   bun scripts/agentic/index.ts emoji-picker-skin-tone-category-ux-stress --session default --fixture agentic-emoji-skin-tone --categories people,symbols,flags --queries 'woman technologist,thumbs up,flag' --skin-tones default,medium-dark --steps category-click,skin-tone-open,variant-select,filter-tighten,escape-palette,clear-filter --input-modes protocol-set-filter,protocol-click,protocol-key,batch --no-native-input --no-native-pointer --no-system-pasteboard --no-network --no-submit --dry-run-only --local-fixture-only --json
@@ -5519,8 +5519,8 @@ Examples:
   bun scripts/agentic/index.ts scenario --session default --scenario main-window-exact-id
   bun scripts/agentic/index.ts scenario --session default --scenario actions-dialog-exact-id --index 0
   bun scripts/agentic/index.ts scenario --session default --scenario prompt-popup-exact-id --index 0
-  bun scripts/agentic/index.ts scenario --session default --scenario detached-acp-exact-id --index 0
-  bun scripts/agentic/index.ts acp-setup-recovery --session default --select-agent opencode --json
+  bun scripts/agentic/index.ts scenario --session default --scenario detached-agent_chat-exact-id --index 0
+  bun scripts/agentic/index.ts agent_chat-setup-recovery --session default --select-agent opencode --json
   bun scripts/agentic/index.ts help --json`);
     process.exit(0);
     break;

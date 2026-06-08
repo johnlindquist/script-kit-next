@@ -7,7 +7,7 @@ fn read(path: impl AsRef<Path>) -> String {
 }
 
 #[test]
-fn inline_agent_ui_and_ai_boundary_do_not_own_pi_or_acp_runtime_launch() {
+fn inline_agent_ui_and_ai_boundary_do_not_own_pi_or_agent_chat_runtime_launch() {
     let checked_files = [
         "src/ai/inline_agent/mod.rs",
         "src/inline_agent/window.rs",
@@ -23,8 +23,8 @@ fn inline_agent_ui_and_ai_boundary_do_not_own_pi_or_acp_runtime_launch() {
         for forbidden in [
             "PiRpcRuntime",
             "PiLaunchSpec",
-            "spawn_default_acp_inline_agent_executor",
-            "mod acp_adapter",
+            "spawn_default_agent_chat_inline_agent_executor",
+            "mod agent_chat_adapter",
         ] {
             assert!(
                 !source.contains(forbidden),

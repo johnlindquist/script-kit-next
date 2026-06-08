@@ -21,7 +21,7 @@ fn file_search_view_is_eligible_for_shared_global_cmd_enter_route() {
 
     assert!(
         source.contains("AppView::FileSearchView { .. }"),
-        "FileSearchView must opt into the shared main-window Cmd+Enter ACP route"
+        "FileSearchView must opt into the shared main-window Cmd+Enter Agent Chat route"
     );
 }
 
@@ -35,8 +35,8 @@ fn file_search_plain_cmd_enter_attempts_shared_global_route_first() {
         "FileSearch plain Cmd+Enter must emit a structured log before using the shared route"
     );
     assert!(
-        source.contains("this.try_route_global_cmd_enter_to_acp_context_capture(cx)"),
-        "FileSearch plain Cmd+Enter must attempt the shared global ACP route first"
+        source.contains("this.try_route_global_cmd_enter_to_agent_chat_context_capture(cx)"),
+        "FileSearch plain Cmd+Enter must attempt the shared global Agent Chat route first"
     );
 }
 

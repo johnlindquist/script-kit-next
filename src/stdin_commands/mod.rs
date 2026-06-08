@@ -454,11 +454,11 @@ pub enum ExternalCommand {
         #[serde(default, rename = "requestId")]
         request_id: Option<ExternalCommandRequestId>,
     },
-    /// Open a deterministic detached ACP placeholder window for visual/layout proof.
+    /// Open a deterministic detached Agent Chat placeholder window for visual/layout proof.
     ///
     /// This fixture does not start an agent, acquire provider credentials, submit
     /// prompts, or mutate chat history. It only opens the detached window shell.
-    OpenAcpDetachedFixture {
+    OpenAgentChatDetachedFixture {
         #[serde(default, rename = "requestId")]
         request_id: Option<ExternalCommandRequestId>,
     },
@@ -562,7 +562,7 @@ pub enum ExternalCommand {
     /// Set the Agent Chat input text and optionally submit (for testing composer behavior)
     /// text: Message text to set in the Agent Chat input field
     /// submit: If true, submit the message after setting
-    SetAcpInput {
+    SetAgentChatInput {
         text: String,
         #[serde(default)]
         submit: bool,
@@ -570,13 +570,13 @@ pub enum ExternalCommand {
         request_id: Option<ExternalCommandRequestId>,
     },
     /// Set the focused-text mini scope input text.
-    SetAcpScopeInput {
+    SetAgentChatScopeInput {
         text: String,
         #[serde(default, rename = "requestId")]
         request_id: Option<ExternalCommandRequestId>,
     },
     /// Select a focused-text variation by index (0, 1, or 2).
-    SelectAcpVariation {
+    SelectAgentChatVariation {
         index: usize,
         #[serde(default)]
         edit: bool,
@@ -584,20 +584,20 @@ pub enum ExternalCommand {
         request_id: Option<ExternalCommandRequestId>,
     },
     /// Get focused-text variation snapshots.
-    GetAcpVariations {
+    GetAgentChatVariations {
         #[serde(default, rename = "requestId")]
         request_id: Option<ExternalCommandRequestId>,
     },
-    /// Send an Escape key through the ACP view's progressive handler.
-    AcpEscape {
+    /// Send an Escape key through the Agent Chat view's progressive handler.
+    AgentChatEscape {
         #[serde(default, rename = "requestId")]
         request_id: Option<ExternalCommandRequestId>,
     },
     /// Install a no-token Agent Chat transcript fixture for devtools proof.
     ///
     /// phase accepts "awaitingFirstAssistantText", "assistantText", or "idle".
-    /// This mutates the active ACP thread only; it never submits to an agent.
-    SetAcpTestFixture {
+    /// This mutates the active Agent Chat thread only; it never submits to an agent.
+    SetAgentChatTestFixture {
         phase: String,
         #[serde(default, rename = "userText")]
         user_text: Option<String>,
@@ -666,8 +666,8 @@ pub enum ExternalCommand {
     /// host: Optional camelCase host label. Accepted values: "argPrompt",
     ///   "divPrompt", "editorPrompt", "termPrompt", "formPrompt", "chatPrompt",
     ///   "mainList", "fileSearch", "clipboardHistory", "dictationHistory",
-    ///   "emojiPicker", "appLauncher", "builtinList", "webcamPrompt", "acpChat",
-    ///   "acpHistory". When omitted, resolves to the current view's host.
+    ///   "emojiPicker", "appLauncher", "builtinList", "webcamPrompt", "agentChatChat",
+    ///   "agent_chatHistory". When omitted, resolves to the current view's host.
     TriggerAction {
         #[serde(rename = "actionId")]
         action_id: String,
@@ -676,28 +676,28 @@ pub enum ExternalCommand {
         #[serde(default, rename = "requestId")]
         request_id: Option<ExternalCommandRequestId>,
     },
-    /// Invoke the ACP composer's `paste_text_from_clipboard` handler directly
-    /// on the active `AppView::AcpChatView`, bypassing the OS Cmd+V heuristic
+    /// Invoke the Agent Chat composer's `paste_text_from_clipboard` handler directly
+    /// on the active `AppView::AgentChatView`, bypassing the OS Cmd+V heuristic
     /// (which routes pastes to the frontmost app — during automation runs
-    /// that's the invoking terminal, not the ACP composer).
+    /// that's the invoking terminal, not the Agent Chat composer).
     ///
     /// Pairs with the Pass #31 source-level invariants pinned in
-    /// `tests/acp_composer_paste_text_contract.rs`: this command is the
+    /// `tests/agent_chat_composer_paste_text_contract.rs`: this command is the
     /// substrate that lets live verification actually exercise the pinned
     /// paste-receiver shape (arboard read → CRLF normalize → `prepare_pasted_text`
     /// → `thread.input.insert_str`) against the current system clipboard.
     ///
     /// Returns a `Err("Agent Chat view is not active")` via the structured
-    /// tracing channel when no `AcpChatView` is active; `Err("clipboard is
+    /// tracing channel when no `AgentChatView` is active; `Err("clipboard is
     /// empty or text fetch failed")` when `paste_text_from_clipboard` returns
     /// false (empty clipboard, non-text clipboard, or arboard init failure).
-    PasteClipboardIntoAcp {
+    PasteClipboardIntoAgentChat {
         #[serde(default, rename = "requestId")]
         request_id: Option<ExternalCommandRequestId>,
     },
     /// Inject a synthetic dictation transcript result into the agentic-testing
     /// surface. The handler routes through the same delivery helper used after
-    /// transcription, so tests can prove ACP reveal/focus behavior without
+    /// transcription, so tests can prove Agent Chat reveal/focus behavior without
     /// depending on microphone capture or the local transcription model.
     ///
     /// transcript: Synthetic transcript text. Only `.len()` is logged — content
@@ -707,7 +707,7 @@ pub enum ExternalCommand {
     ///   touching live microphone/provider code.
     /// target: Optional target label. Accepted values mirror `DictationTarget`:
     ///   "mainWindowFilter", "mainWindowPrompt", "notesEditor", "aiChatComposer",
-    ///   "tabAiHarness", "externalApp", plus short aliases like "acp". Unknown
+    ///   "tabAiHarness", "externalApp", plus short aliases like "agent_chat". Unknown
     ///   or absent values fall back to the active dictation target, then the
     ///   current UI-derived target.
     PushDictationResult {
@@ -804,12 +804,12 @@ impl ExternalCommand {
             | Self::CaptureWindow { request_id, .. }
             | Self::SetAiSearch { request_id, .. }
             | Self::SetAiInput { request_id, .. }
-            | Self::SetAcpInput { request_id, .. }
-            | Self::SetAcpScopeInput { request_id, .. }
-            | Self::SelectAcpVariation { request_id, .. }
-            | Self::GetAcpVariations { request_id, .. }
-            | Self::AcpEscape { request_id, .. }
-            | Self::SetAcpTestFixture { request_id, .. }
+            | Self::SetAgentChatInput { request_id, .. }
+            | Self::SetAgentChatScopeInput { request_id, .. }
+            | Self::SelectAgentChatVariation { request_id, .. }
+            | Self::GetAgentChatVariations { request_id, .. }
+            | Self::AgentChatEscape { request_id, .. }
+            | Self::SetAgentChatTestFixture { request_id, .. }
             | Self::GetAiWindowState { request_id, .. }
             | Self::ShowGrid { request_id, .. }
             | Self::ShowShortcutRecorder { request_id, .. }
@@ -824,9 +824,9 @@ impl ExternalCommand {
             | Self::OpenInlineAgentWithPiData { request_id, .. }
             | Self::OpenCreationFeedback { request_id, .. }
             | Self::OpenConfirmPrompt { request_id, .. }
-            | Self::OpenAcpDetachedFixture { request_id, .. }
+            | Self::OpenAgentChatDetachedFixture { request_id, .. }
             | Self::OpenAgentChatKitchenSinkFixture { request_id, .. }
-            | Self::PasteClipboardIntoAcp { request_id, .. } => {
+            | Self::PasteClipboardIntoAgentChat { request_id, .. } => {
                 request_id.as_ref().map(ExternalCommandRequestId::as_str)
             }
             _ => None,
@@ -846,7 +846,7 @@ impl ExternalCommand {
             Self::OpenAbout => "openAbout",
             Self::OpenCreationFeedback { .. } => "openCreationFeedback",
             Self::OpenConfirmPrompt { .. } => "openConfirmPrompt",
-            Self::OpenAcpDetachedFixture { .. } => "openAcpDetachedFixture",
+            Self::OpenAgentChatDetachedFixture { .. } => "openAgentChatDetachedFixture",
             Self::OpenAi => "openAi",
             Self::OpenMiniAi => "openMiniAi",
             Self::OpenAiWithMockData => "openAiWithMockData",
@@ -866,19 +866,19 @@ impl ExternalCommand {
             Self::CaptureWindow { .. } => "captureWindow",
             Self::SetAiSearch { .. } => "setAiSearch",
             Self::SetAiInput { .. } => "setAiInput",
-            Self::SetAcpInput { .. } => "setAcpInput",
-            Self::SetAcpScopeInput { .. } => "setAcpScopeInput",
-            Self::SelectAcpVariation { .. } => "selectAcpVariation",
-            Self::GetAcpVariations { .. } => "getAcpVariations",
-            Self::AcpEscape { .. } => "acpEscape",
-            Self::SetAcpTestFixture { .. } => "setAcpTestFixture",
+            Self::SetAgentChatInput { .. } => "setAgentChatInput",
+            Self::SetAgentChatScopeInput { .. } => "setAgentChatScopeInput",
+            Self::SelectAgentChatVariation { .. } => "selectAgentChatVariation",
+            Self::GetAgentChatVariations { .. } => "getAgentChatVariations",
+            Self::AgentChatEscape { .. } => "agent_chatEscape",
+            Self::SetAgentChatTestFixture { .. } => "setAgentChatTestFixture",
             Self::GetAiWindowState { .. } => "getAiWindowState",
             Self::ShowGrid { .. } => "showGrid",
             Self::HideGrid => "hideGrid",
             Self::ShowShortcutRecorder { .. } => "showShortcutRecorder",
             Self::ExecuteFallback { .. } => "executeFallback",
             Self::TriggerAction { .. } => "triggerAction",
-            Self::PasteClipboardIntoAcp { .. } => "pasteClipboardIntoAcp",
+            Self::PasteClipboardIntoAgentChat { .. } => "pasteClipboardIntoAgentChat",
             Self::PushDictationResult { .. } => "pushDictationResult",
             Self::OpenDictationOverlayFixture { .. } => "openDictationOverlayFixture",
             Self::GetConfigFingerprint { .. } => "getConfigFingerprint",
@@ -903,7 +903,7 @@ pub const EXTERNAL_COMMAND_VERBS: &[&str] = &[
     "openAbout",
     "openCreationFeedback",
     "openConfirmPrompt",
-    "openAcpDetachedFixture",
+    "openAgentChatDetachedFixture",
     "openAi",
     "openMiniAi",
     "openAiWithMockData",
@@ -919,19 +919,19 @@ pub const EXTERNAL_COMMAND_VERBS: &[&str] = &[
     "captureWindow",
     "setAiSearch",
     "setAiInput",
-    "setAcpInput",
-    "setAcpScopeInput",
-    "selectAcpVariation",
-    "getAcpVariations",
-    "acpEscape",
-    "setAcpTestFixture",
+    "setAgentChatInput",
+    "setAgentChatScopeInput",
+    "selectAgentChatVariation",
+    "getAgentChatVariations",
+    "agent_chatEscape",
+    "setAgentChatTestFixture",
     "getAiWindowState",
     "showGrid",
     "hideGrid",
     "showShortcutRecorder",
     "executeFallback",
     "triggerAction",
-    "pasteClipboardIntoAcp",
+    "pasteClipboardIntoAgentChat",
     "pushDictationResult",
     "openDictationOverlayFixture",
     "getConfigFingerprint",
@@ -955,10 +955,14 @@ impl StdinCommand {
             Self::Protocol(message) => match message.as_ref() {
                 crate::protocol::Message::GetState { .. } => "getState",
                 crate::protocol::Message::GetElements { .. } => "getElements",
-                crate::protocol::Message::GetAcpState { .. } => "getAcpState",
-                crate::protocol::Message::PerformAcpSetupAction { .. } => "performAcpSetupAction",
-                crate::protocol::Message::ResetAcpTestProbe { .. } => "resetAcpTestProbe",
-                crate::protocol::Message::GetAcpTestProbe { .. } => "getAcpTestProbe",
+                crate::protocol::Message::GetAgentChatState { .. } => "getAgentChatState",
+                crate::protocol::Message::PerformAgentChatSetupAction { .. } => {
+                    "performAgentChatSetupAction"
+                }
+                crate::protocol::Message::ResetAgentChatTestProbe { .. } => {
+                    "resetAgentChatTestProbe"
+                }
+                crate::protocol::Message::GetAgentChatTestProbe { .. } => "getAgentChatTestProbe",
                 crate::protocol::Message::GetLayoutInfo { .. } => "getLayoutInfo",
                 crate::protocol::Message::InspectAutomationWindow { .. } => {
                     "inspectAutomationWindow"
@@ -978,10 +982,10 @@ impl StdinCommand {
             Self::Protocol(message) => match message.as_ref() {
                 crate::protocol::Message::GetState { request_id, .. }
                 | crate::protocol::Message::GetElements { request_id, .. }
-                | crate::protocol::Message::GetAcpState { request_id, .. }
-                | crate::protocol::Message::PerformAcpSetupAction { request_id, .. }
-                | crate::protocol::Message::ResetAcpTestProbe { request_id, .. }
-                | crate::protocol::Message::GetAcpTestProbe { request_id, .. }
+                | crate::protocol::Message::GetAgentChatState { request_id, .. }
+                | crate::protocol::Message::PerformAgentChatSetupAction { request_id, .. }
+                | crate::protocol::Message::ResetAgentChatTestProbe { request_id, .. }
+                | crate::protocol::Message::GetAgentChatTestProbe { request_id, .. }
                 | crate::protocol::Message::GetLayoutInfo { request_id, .. }
                 | crate::protocol::Message::InspectAutomationWindow { request_id, .. }
                 | crate::protocol::Message::WaitFor { request_id, .. }
@@ -1415,12 +1419,12 @@ mod tests {
                 submit: false,
                 request_id: None,
             },
-            ExternalCommand::SetAcpInput {
+            ExternalCommand::SetAgentChatInput {
                 text: String::new(),
                 submit: false,
                 request_id: None,
             },
-            ExternalCommand::SetAcpTestFixture {
+            ExternalCommand::SetAgentChatTestFixture {
                 phase: "awaitingFirstAssistantText".to_string(),
                 user_text: None,
                 assistant_text: None,
@@ -1452,7 +1456,7 @@ mod tests {
                 host: None,
                 request_id: None,
             },
-            ExternalCommand::PasteClipboardIntoAcp { request_id: None },
+            ExternalCommand::PasteClipboardIntoAgentChat { request_id: None },
             ExternalCommand::PushDictationResult {
                 transcript: String::new(),
                 partial_transcript: None,
@@ -2220,12 +2224,12 @@ mod tests {
     }
 
     #[test]
-    fn test_external_command_set_acp_input_deserialization() -> anyhow::Result<()> {
-        let json = r#"{"type": "setAcpInput", "text": "hello world", "submit": true}"#;
+    fn test_external_command_set_agent_chat_input_deserialization() -> anyhow::Result<()> {
+        let json = r#"{"type": "setAgentChatInput", "text": "hello world", "submit": true}"#;
         let cmd: ExternalCommand = serde_json::from_str(json)?;
-        assert_eq!(cmd.command_type(), "setAcpInput");
+        assert_eq!(cmd.command_type(), "setAgentChatInput");
         match cmd {
-            ExternalCommand::SetAcpInput {
+            ExternalCommand::SetAgentChatInput {
                 text,
                 submit,
                 request_id,
@@ -2234,27 +2238,28 @@ mod tests {
                 assert!(submit);
                 assert!(request_id.is_none());
             }
-            _ => panic!("Expected SetAcpInput command"),
+            _ => panic!("Expected SetAgentChatInput command"),
         }
         Ok(())
     }
 
     #[test]
-    fn test_external_command_set_acp_input_with_request_id() -> anyhow::Result<()> {
-        let json = r#"{"type": "setAcpInput", "text": "hello", "requestId": "req-acp"}"#;
+    fn test_external_command_set_agent_chat_input_with_request_id() -> anyhow::Result<()> {
+        let json =
+            r#"{"type": "setAgentChatInput", "text": "hello", "requestId": "req-agent_chat"}"#;
         let cmd: ExternalCommand = serde_json::from_str(json)?;
-        assert_eq!(cmd.request_id(), Some("req-acp"));
+        assert_eq!(cmd.request_id(), Some("req-agent_chat"));
         Ok(())
     }
 
     #[test]
-    fn test_external_command_set_acp_test_fixture_deserialization() -> anyhow::Result<()> {
-        let json = r#"{"type": "setAcpTestFixture", "phase": "awaitingFirstAssistantText", "userText": "hello", "requestId": "req-fixture"}"#;
+    fn test_external_command_set_agent_chat_test_fixture_deserialization() -> anyhow::Result<()> {
+        let json = r#"{"type": "setAgentChatTestFixture", "phase": "awaitingFirstAssistantText", "userText": "hello", "requestId": "req-fixture"}"#;
         let cmd: ExternalCommand = serde_json::from_str(json)?;
-        assert_eq!(cmd.command_type(), "setAcpTestFixture");
+        assert_eq!(cmd.command_type(), "setAgentChatTestFixture");
         assert_eq!(cmd.request_id(), Some("req-fixture"));
         match cmd {
-            ExternalCommand::SetAcpTestFixture {
+            ExternalCommand::SetAgentChatTestFixture {
                 phase,
                 user_text,
                 assistant_text,
@@ -2264,18 +2269,18 @@ mod tests {
                 assert_eq!(user_text.as_deref(), Some("hello"));
                 assert!(assistant_text.is_none());
             }
-            _ => panic!("Expected SetAcpTestFixture command"),
+            _ => panic!("Expected SetAgentChatTestFixture command"),
         }
         Ok(())
     }
 
     #[test]
     fn test_external_command_capture_window_deserialization() -> anyhow::Result<()> {
-        let json = r#"{"type": "captureWindow", "title": "Script Kit ACP", "path": "/tmp/screenshot.png"}"#;
+        let json = r#"{"type": "captureWindow", "title": "Script Kit Agent Chat", "path": "/tmp/screenshot.png"}"#;
         let cmd: ExternalCommand = serde_json::from_str(json)?;
         match cmd {
             ExternalCommand::CaptureWindow { title, path, .. } => {
-                assert_eq!(title, "Script Kit ACP");
+                assert_eq!(title, "Script Kit Agent Chat");
                 assert_eq!(path, "/tmp/screenshot.png");
             }
             _ => panic!("Expected CaptureWindow command"),

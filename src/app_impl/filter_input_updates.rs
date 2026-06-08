@@ -154,7 +154,7 @@ impl ScriptListApp {
 
         self.pending_menu_syntax_ai_proposal = None;
 
-        if let AppView::AcpChatView { entity } = &self.current_view {
+        if let AppView::AgentChatView { entity } = &self.current_view {
             self.suppress_filter_events = true;
             self.filter_text = text.clone();
             self.pending_programmatic_filter_echo = Some(text.clone());
@@ -168,7 +168,7 @@ impl ScriptListApp {
             self.pending_filter_sync = false;
             entity.update(cx, |chat, cx| {
                 chat.set_input(text.clone(), cx);
-                chat.refresh_acp_spine_from_composer(cx);
+                chat.refresh_agent_chat_spine_from_composer(cx);
             });
             cx.notify();
             return;
@@ -473,7 +473,7 @@ impl ScriptListApp {
                 Self::sync_builtin_query_state(filter, selected_index, text);
                 true
             }
-            AppView::AcpHistoryView {
+            AppView::AgentChatHistoryView {
                 filter,
                 selected_index,
             } => {
@@ -702,7 +702,7 @@ impl ScriptListApp {
                     self.spine_cwd_label = Some(resolution_label.as_ref().to_string());
                     self.spine_cwd_revision = self.spine_cwd_revision.wrapping_add(1);
                     self.persist_spine_cwd();
-                    self.prewarm_acp_for_spine_cwd(cx);
+                    self.prewarm_agent_chat_for_spine_cwd(cx);
                     self.invalidate_grouped_cache();
                     // CWD becomes a footer chip — strip the segment text from
                     // the input bar so the user sees a clean prompt builder.

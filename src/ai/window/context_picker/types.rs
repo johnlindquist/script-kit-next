@@ -33,8 +33,8 @@ pub enum PortalKind {
     SkillSearch,
     /// Open the notes browser portal.
     NotesBrowse,
-    /// Open the ACP conversation history browser (prefiltered by typed query).
-    AcpHistory,
+    /// Open the Agent Chat conversation history browser (prefiltered by typed query).
+    AgentChatHistory,
     /// Open Quick Terminal and attach its transcript back to Agent Chat.
     Terminal,
 }
@@ -83,7 +83,7 @@ pub struct InlinePortalResultPayload {
     pub attachment: InlinePortalAttachment,
 }
 
-/// Source-aware identity for a slash command in the ACP picker.
+/// Source-aware identity for a slash command in the Agent Chat picker.
 ///
 /// Carries enough information to distinguish duplicate slash slugs from
 /// different plugins and to stage local skill content on acceptance.
@@ -176,7 +176,7 @@ pub enum ContextPickerItemKind {
         icon_name: Option<String>,
     },
     /// Opens a full built-in view as a portal for rich browsing.
-    /// Selection in the portal attaches the result back to the ACP chat.
+    /// Selection in the portal attaches the result back to the Agent Chat chat.
     Portal(PortalKind),
     /// Inserts a portal prefix such as `@browser-history:` and keeps the
     /// inline picker open for provider-backed results.

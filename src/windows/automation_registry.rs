@@ -2,7 +2,7 @@
 //!
 //! A shared, thread-safe registry that maps stable automation IDs to
 //! [`AutomationWindowInfo`] descriptors.  Every product window (main,
-//! Notes, AI, detached ACP, popups) registers here on open and
+//! Notes, AI, detached Agent Chat, popups) registers here on open and
 //! unregisters on close.  The resolver accepts an
 //! [`AutomationWindowTarget`] and returns the matching entry — or an
 //! error, never a silent fallback.
@@ -51,7 +51,7 @@ fn kind_rank(kind: AutomationWindowKind) -> u8 {
         AutomationWindowKind::Notes => 1,
         AutomationWindowKind::Ai => 2,
         AutomationWindowKind::MiniAi => 3,
-        AutomationWindowKind::AcpDetached => 4,
+        AutomationWindowKind::AgentChatDetached => 4,
         AutomationWindowKind::Dictation => 5,
         AutomationWindowKind::DevStyleTool => 6,
         AutomationWindowKind::ActionsDialog => 7,
@@ -194,18 +194,18 @@ pub fn register_attached_popup(
 
 /// Sync the embedded AI surface entry to match the active view.
 ///
-/// The embedded ACP chat is a subview of the main panel (not a separate
+/// The embedded Agent Chat chat is a subview of the main panel (not a separate
 /// OS window), so automation previously could only observe it via
-/// `listAutomationWindows.windows[0].semanticSurface == "acpChat"` on
+/// `listAutomationWindows.windows[0].semanticSurface == "agentChatChat"` on
 /// main. This helper adds a parallel `kind: Ai` entry with a stable
 /// `id = "ai"` whenever the embedded AI surface is active, so automation
 /// can enumerate and target it as a first-class logical window.
 ///
 /// When `active` is true, upserts an entry with `id = "ai"`, kind
 /// [`AutomationWindowKind::Ai`], parent `"main"`, and semantic surface
-/// `"acpChat"`. When `active` is false, removes the entry. Call this
+/// `"agentChatChat"`. When `active` is false, removes the entry. Call this
 /// from every view transition that flips into or out of the embedded
-/// ACP chat surface.
+/// Agent Chat chat surface.
 pub fn ensure_embedded_ai_window(active: bool) {
     if active {
         // Deliberately `focused: false` — the embedded AI surface is a
@@ -220,7 +220,7 @@ pub fn ensure_embedded_ai_window(active: bool) {
             title: Some("Script Kit AI".to_string()),
             focused: false,
             visible: true,
-            semantic_surface: Some("acpChat".to_string()),
+            semantic_surface: Some("agentChatChat".to_string()),
             bounds: None,
             parent_window_id: Some("main".to_string()),
             parent_kind: Some(AutomationWindowKind::Main),
@@ -572,35 +572,35 @@ mod tests {
     fn automation_window_registry_resolves_kind_index() {
         let p = test_prefix();
 
-        let mut acp0 = make_info(&p, "acp0", AutomationWindowKind::AcpDetached);
-        acp0.title = Some("ACP Thread 0".into());
-        upsert_automation_window(acp0);
+        let mut agent_chat0 = make_info(&p, "agent_chat0", AutomationWindowKind::AgentChatDetached);
+        agent_chat0.title = Some("Agent Chat Thread 0".into());
+        upsert_automation_window(agent_chat0);
 
-        let mut acp1 = make_info(&p, "acp1", AutomationWindowKind::AcpDetached);
-        acp1.title = Some("ACP Thread 1".into());
-        upsert_automation_window(acp1);
+        let mut agent_chat1 = make_info(&p, "agent_chat1", AutomationWindowKind::AgentChatDetached);
+        agent_chat1.title = Some("Agent Chat Thread 1".into());
+        upsert_automation_window(agent_chat1);
 
         // Kind without index → first
         let target = AutomationWindowTarget::Kind {
-            kind: AutomationWindowKind::AcpDetached,
+            kind: AutomationWindowKind::AgentChatDetached,
             index: None,
         };
         let resolved =
             resolve_automation_window(Some(&target)).expect("should resolve kind index 0");
-        assert_eq!(resolved.kind, AutomationWindowKind::AcpDetached);
+        assert_eq!(resolved.kind, AutomationWindowKind::AgentChatDetached);
 
         // Kind with index 1 → second
         let target = AutomationWindowTarget::Kind {
-            kind: AutomationWindowKind::AcpDetached,
+            kind: AutomationWindowKind::AgentChatDetached,
             index: Some(1),
         };
         let resolved =
             resolve_automation_window(Some(&target)).expect("should resolve kind index 1");
-        assert_eq!(resolved.kind, AutomationWindowKind::AcpDetached);
+        assert_eq!(resolved.kind, AutomationWindowKind::AgentChatDetached);
         // The two should have different IDs
         assert_ne!(
             resolve_automation_window(Some(&AutomationWindowTarget::Kind {
-                kind: AutomationWindowKind::AcpDetached,
+                kind: AutomationWindowKind::AgentChatDetached,
                 index: Some(0),
             }))
             .expect("idx 0")
@@ -610,14 +610,14 @@ mod tests {
 
         // Kind with out-of-range index → error
         let target = AutomationWindowTarget::Kind {
-            kind: AutomationWindowKind::AcpDetached,
+            kind: AutomationWindowKind::AgentChatDetached,
             index: Some(99),
         };
         assert!(resolve_automation_window(Some(&target)).is_err());
 
         // Cleanup
-        remove_automation_window(&format!("{p}:acp0"));
-        remove_automation_window(&format!("{p}:acp1"));
+        remove_automation_window(&format!("{p}:agent_chat0"));
+        remove_automation_window(&format!("{p}:agent_chat1"));
     }
 
     #[test]
@@ -723,7 +723,7 @@ mod tests {
     fn title_contains_resolution() {
         let p = test_prefix();
 
-        let mut info = make_info(&p, "acp", AutomationWindowKind::AcpDetached);
+        let mut info = make_info(&p, "agent_chat", AutomationWindowKind::AgentChatDetached);
         info.title = Some(format!("{p} Script Kit Agent Chat"));
         upsert_automation_window(info);
 
@@ -732,7 +732,7 @@ mod tests {
         };
         let resolved =
             resolve_automation_window(Some(&target)).expect("should match title substring");
-        assert_eq!(resolved.kind, AutomationWindowKind::AcpDetached);
+        assert_eq!(resolved.kind, AutomationWindowKind::AgentChatDetached);
 
         // Non-matching title
         let target = AutomationWindowTarget::TitleContains {
@@ -740,7 +740,7 @@ mod tests {
         };
         assert!(resolve_automation_window(Some(&target)).is_err());
 
-        remove_automation_window(&format!("{p}:acp"));
+        remove_automation_window(&format!("{p}:agent_chat"));
     }
 
     // -- Bounds ------------------------------------------------------------
@@ -861,10 +861,10 @@ mod tests {
         remove_automation_window(&format!("{p}:notes"));
     }
 
-    /// Proves that targeting a detached ACP window resolves to a distinct
+    /// Proves that targeting a detached Agent Chat window resolves to a distinct
     /// window with its own ID and kind, suitable for screenshot routing.
     #[test]
-    fn targeted_capture_screenshot_routes_detached_acp() {
+    fn targeted_capture_screenshot_routes_detached_agent_chat() {
         let p = test_prefix();
 
         let mut main = make_info(&p, "main", AutomationWindowKind::Main);
@@ -872,21 +872,25 @@ mod tests {
         main.focused = false;
         upsert_automation_window(main);
 
-        let mut acp = make_info(&p, "acp-thread-1", AutomationWindowKind::AcpDetached);
-        acp.title = Some("Script Kit ACP".into());
-        acp.focused = true;
-        acp.semantic_surface = Some("acpChat".into());
-        upsert_automation_window(acp);
+        let mut agent_chat = make_info(
+            &p,
+            "agent_chat-thread-1",
+            AutomationWindowKind::AgentChatDetached,
+        );
+        agent_chat.title = Some("Script Kit Agent Chat".into());
+        agent_chat.focused = true;
+        agent_chat.semantic_surface = Some("agentChatChat".into());
+        upsert_automation_window(agent_chat);
 
-        // Target by kind → ACP
+        // Target by kind → Agent Chat
         let target = AutomationWindowTarget::Kind {
-            kind: AutomationWindowKind::AcpDetached,
+            kind: AutomationWindowKind::AgentChatDetached,
             index: Some(0),
         };
         let resolved =
-            resolve_automation_window(Some(&target)).expect("should resolve detached ACP");
-        assert_eq!(resolved.kind, AutomationWindowKind::AcpDetached);
-        assert_eq!(resolved.title.as_deref(), Some("Script Kit ACP"));
+            resolve_automation_window(Some(&target)).expect("should resolve detached Agent Chat");
+        assert_eq!(resolved.kind, AutomationWindowKind::AgentChatDetached);
+        assert_eq!(resolved.title.as_deref(), Some("Script Kit Agent Chat"));
         // The screenshot function would use this title to find the OS window
         assert_ne!(
             resolved.title.as_deref(),
@@ -894,20 +898,20 @@ mod tests {
             "must not screenshot the main window"
         );
 
-        // Target by ID → ACP
+        // Target by ID → Agent Chat
         let target_id = AutomationWindowTarget::Id {
-            id: format!("{p}:acp-thread-1"),
+            id: format!("{p}:agent_chat-thread-1"),
         };
         let resolved_by_id =
             resolve_automation_window(Some(&target_id)).expect("should resolve by ID");
-        assert_eq!(resolved_by_id.kind, AutomationWindowKind::AcpDetached);
+        assert_eq!(resolved_by_id.kind, AutomationWindowKind::AgentChatDetached);
 
         remove_automation_window(&format!("{p}:main"));
-        remove_automation_window(&format!("{p}:acp-thread-1"));
+        remove_automation_window(&format!("{p}:agent_chat-thread-1"));
     }
 
     /// Proves that waitFor/batch resolution uses the same resolver as
-    /// standalone queries — a Notes or ACP target resolves consistently.
+    /// standalone queries — a Notes or Agent Chat target resolves consistently.
     #[test]
     fn targeted_wait_for_uses_resolved_window_state() {
         let p = test_prefix();
@@ -1144,20 +1148,20 @@ mod tests {
     fn register_attached_popup_resolves_non_main_parent() {
         let p = test_prefix();
 
-        let mut acp = make_info(&p, "acp-1", AutomationWindowKind::AcpDetached);
-        acp.focused = true;
-        upsert_automation_window(acp);
+        let mut agent_chat = make_info(&p, "agent_chat-1", AutomationWindowKind::AgentChatDetached);
+        agent_chat.focused = true;
+        upsert_automation_window(agent_chat);
 
-        let popup_id = format!("{p}:acp-actions");
+        let popup_id = format!("{p}:agent_chat-actions");
         register_attached_popup(
             popup_id.clone(),
             AutomationWindowKind::ActionsDialog,
             Some("Actions".into()),
             Some("actionsDialog".into()),
             None,
-            Some(&format!("{p}:acp-1")),
+            Some(&format!("{p}:agent_chat-1")),
         )
-        .expect("should register with ACP parent");
+        .expect("should register with Agent Chat parent");
 
         let resolved = resolve_automation_window(Some(&AutomationWindowTarget::Id {
             id: popup_id.clone(),
@@ -1165,15 +1169,15 @@ mod tests {
         .expect("should resolve");
         assert_eq!(
             resolved.parent_window_id.as_deref(),
-            Some(format!("{p}:acp-1").as_str())
+            Some(format!("{p}:agent_chat-1").as_str())
         );
         assert_eq!(
             resolved.parent_kind,
-            Some(AutomationWindowKind::AcpDetached)
+            Some(AutomationWindowKind::AgentChatDetached)
         );
 
         remove_automation_window(&popup_id);
-        remove_automation_window(&format!("{p}:acp-1"));
+        remove_automation_window(&format!("{p}:agent_chat-1"));
     }
 
     #[test]
@@ -1240,7 +1244,10 @@ mod tests {
             .find(|w| w.id == "ai")
             .expect("ensure_embedded_ai_window(true) should upsert an `ai` entry");
         assert_eq!(after_activate.kind, AutomationWindowKind::Ai);
-        assert_eq!(after_activate.semantic_surface.as_deref(), Some("acpChat"));
+        assert_eq!(
+            after_activate.semantic_surface.as_deref(),
+            Some("agentChatChat")
+        );
         assert_eq!(after_activate.parent_window_id.as_deref(), Some("main"));
         assert_eq!(after_activate.parent_kind, Some(AutomationWindowKind::Main));
         assert!(after_activate.visible);

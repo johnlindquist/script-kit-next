@@ -51,8 +51,8 @@ impl ScriptListApp {
             AppView::TermPrompt { .. } => Some(ActionsDialogHost::TermPrompt),
             AppView::FormPrompt { .. } => Some(ActionsDialogHost::FormPrompt),
             AppView::WebcamView { .. } => Some(ActionsDialogHost::WebcamPrompt),
-            AppView::AcpChatView { .. } => Some(ActionsDialogHost::AcpChat),
-            AppView::AcpHistoryView { .. } => Some(ActionsDialogHost::AcpHistory),
+            AppView::AgentChatView { .. } => Some(ActionsDialogHost::AgentChat),
+            AppView::AgentChatHistoryView { .. } => Some(ActionsDialogHost::AgentChatHistory),
             AppView::AppLauncherView { .. } => Some(ActionsDialogHost::AppLauncher),
             AppView::BrowserHistoryView { .. }
             | AppView::BrowserTabsView { .. }
@@ -255,7 +255,7 @@ impl ScriptListApp {
                     // The model row carries the namespaced "provider/model" id;
                     // persisting it records both the agent and the model.
                     if let Some(model_id) =
-                        crate::actions::acp_switch_model_id_from_action(&action_id)
+                        crate::actions::agent_chat_switch_model_id_from_action(&action_id)
                     {
                         Self::persist_agent_model_picker_model(model_id);
                         self.refresh_agent_model_footer_labels();
@@ -311,12 +311,12 @@ impl ScriptListApp {
                     &start,
                 );
             }
-            ActionsDialogHost::AcpDetached => {
+            ActionsDialogHost::AgentChatDetached => {
                 let dispatched =
-                    crate::ai::acp::chat_window::dispatch_action_to_detached(&action_id, cx);
+                    crate::ai::agent_chat::ui::chat_window::dispatch_action_to_detached(&action_id, cx);
                 tracing::info!(
                     target: "script_kit::actions",
-                    event = "actions_host_execute_acp_detached",
+                    event = "actions_host_execute_agent_chat_detached",
                     action_id = %action_id,
                     dispatched,
                 );
@@ -514,8 +514,8 @@ impl ScriptListApp {
             }
             ActionsDialogHost::EmojiPicker
             | ActionsDialogHost::AppLauncher
-            | ActionsDialogHost::AcpChat
-            | ActionsDialogHost::AcpHistory
+            | ActionsDialogHost::AgentChat
+            | ActionsDialogHost::AgentChatHistory
             | ActionsDialogHost::DivPrompt
             | ActionsDialogHost::EditorPrompt
             | ActionsDialogHost::TemplatePrompt
@@ -539,10 +539,10 @@ impl ScriptListApp {
                     false
                 }
             }
-            ActionsDialogHost::AcpDetached => {
+            ActionsDialogHost::AgentChatDetached => {
                 // The detached window has its own Cmd+K handler
-                // (`toggle_detached_actions` in `src/ai/acp/chat_window.rs`).
-                // The main view never advertises AcpDetached via
+                // (`toggle_detached_actions` in `src/ai/agent_chat/ui/chat_window.rs`).
+                // The main view never advertises AgentChatDetached via
                 // `current_actions_host()`, so this arm is defensive-only
                 // and should never run in practice; leave the main view
                 // untouched and report "not handled".
@@ -643,7 +643,7 @@ impl ScriptListApp {
             return ActionsRoute::Handled;
         }
 
-        // Cmd+Enter: send selected action to ACP Chat as a canonical target chip.
+        // Cmd+Enter: send selected action to Agent Chat Chat as a canonical target chip.
         // Must precede the generic Enter branch to avoid being swallowed.
         if modifiers.platform
             && !modifiers.shift
@@ -662,7 +662,7 @@ impl ScriptListApp {
                     semantic_id = %target.semantic_id,
                 );
                 self.close_actions_popup(host, window, cx);
-                self.open_tab_ai_acp_with_explicit_target_preserving_return(target, cx);
+                self.open_tab_ai_agent_chat_with_explicit_target_preserving_return(target, cx);
                 return ActionsRoute::Handled;
             }
         }
@@ -878,7 +878,7 @@ impl ScriptListApp {
             ActionsDialogHost::DivPrompt => FocusRequest::div_prompt(),
             ActionsDialogHost::TermPrompt => FocusRequest::term_prompt(),
             ActionsDialogHost::WebcamPrompt => FocusRequest::div_prompt(),
-            ActionsDialogHost::AcpChat => FocusRequest::acp_chat(),
+            ActionsDialogHost::AgentChat => FocusRequest::agent_chat(),
             ActionsDialogHost::MainList
             | ActionsDialogHost::FileSearch
             | ActionsDialogHost::ClipboardHistory
@@ -888,8 +888,8 @@ impl ScriptListApp {
             | ActionsDialogHost::EmojiPicker
             | ActionsDialogHost::AppLauncher
             | ActionsDialogHost::BuiltinList
-            | ActionsDialogHost::AcpHistory
-            | ActionsDialogHost::AcpDetached => FocusRequest::main_filter(),
+            | ActionsDialogHost::AgentChatHistory
+            | ActionsDialogHost::AgentChatDetached => FocusRequest::main_filter(),
         };
 
         self.focus_coordinator.request(request);
@@ -1026,18 +1026,18 @@ impl ScriptListApp {
         );
         cx.notify();
 
-        // Check for a pending ACP handoff target enqueued by the detached
+        // Check for a pending Agent Chat handoff target enqueued by the detached
         // actions window's Cmd+Enter handler. The slot is only populated
         // when a secondary surface explicitly requested the handoff.
-        if let Some(target) = crate::ai::take_pending_explicit_acp_target() {
+        if let Some(target) = crate::ai::take_pending_explicit_agent_chat_target() {
             tracing::info!(
                 target: "script_kit::tab_ai",
-                event = "tab_ai_pending_acp_target_picked_up",
+                event = "tab_ai_pending_agent_chat_target_picked_up",
                 item_source = %target.source,
                 semantic_id = %target.semantic_id,
                 current_view = ?self.current_view,
             );
-            self.open_tab_ai_acp_with_explicit_target_preserving_return(target, cx);
+            self.open_tab_ai_agent_chat_with_explicit_target_preserving_return(target, cx);
         }
     }
 
@@ -1211,7 +1211,7 @@ mod close_actions_popup_regression_tests {
         for expected in [
             "ActionsDialogHost::ArgPrompt => FocusRequest::arg_prompt()",
             "ActionsDialogHost::ChatPrompt => FocusRequest::chat_prompt()",
-            "ActionsDialogHost::AcpChat => FocusRequest::acp_chat()",
+            "ActionsDialogHost::AgentChat => FocusRequest::agent_chat()",
             "ActionsDialogHost::EditorPrompt => FocusRequest::editor_prompt()",
             "ActionsDialogHost::TemplatePrompt => FocusRequest::template_prompt()",
             "ActionsDialogHost::FormPrompt => FocusRequest::form_prompt()",
@@ -1264,11 +1264,11 @@ mod actions_host_mapping_tests {
                 Some(ActionsDialogHost::BuiltinList),
             ),
             (
-                AppView::AcpHistoryView {
+                AppView::AgentChatHistoryView {
                     filter: String::new(),
                     selected_index: 0,
                 },
-                Some(ActionsDialogHost::AcpHistory),
+                Some(ActionsDialogHost::AgentChatHistory),
             ),
             (
                 AppView::ClipboardHistoryView {
@@ -1449,15 +1449,15 @@ mod actions_dialog_wiring_regression_tests {
     }
 
     #[test]
-    fn route_key_to_actions_dialog_preserves_return_origin_for_explicit_acp_handoff() {
+    fn route_key_to_actions_dialog_preserves_return_origin_for_explicit_agent_chat_handoff() {
         let source = fs::read_to_string("src/app_impl/actions_dialog.rs")
             .expect("Failed to read src/app_impl/actions_dialog.rs");
 
         assert!(
             source.contains(
-                "self.open_tab_ai_acp_with_explicit_target_preserving_return(target, cx);"
+                "self.open_tab_ai_agent_chat_with_explicit_target_preserving_return(target, cx);"
             ),
-            "shared actions Cmd+Enter handoff should seed ACP return origin before opening ACP"
+            "shared actions Cmd+Enter handoff should seed Agent Chat return origin before opening Agent Chat"
         );
     }
 

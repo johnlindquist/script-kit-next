@@ -6,8 +6,8 @@ pub(super) enum NotesFocusSurface {
     ActionsPanel,
     BrowsePanel,
     Dialog,
-    /// Embedded ACP chat inside the Notes window.
-    AcpChat,
+    /// Embedded Agent Chat chat inside the Notes window.
+    AgentChat,
 }
 
 impl NotesApp {
@@ -43,8 +43,8 @@ impl NotesApp {
             NotesFocusSurface::ActionsPanel
         } else if self.note_switcher.is_open() || self.show_browse_panel {
             NotesFocusSurface::BrowsePanel
-        } else if self.surface_mode == NotesSurfaceMode::Acp {
-            NotesFocusSurface::AcpChat
+        } else if self.surface_mode == NotesSurfaceMode::AgentChat {
+            NotesFocusSurface::AgentChat
         } else {
             NotesFocusSurface::Editor
         }
@@ -96,8 +96,8 @@ impl NotesApp {
             NotesFocusSurface::ActionsPanel
         } else if self.note_switcher.is_open() || self.show_browse_panel {
             NotesFocusSurface::BrowsePanel
-        } else if self.surface_mode == NotesSurfaceMode::Acp {
-            NotesFocusSurface::AcpChat
+        } else if self.surface_mode == NotesSurfaceMode::AgentChat {
+            NotesFocusSurface::AgentChat
         } else {
             NotesFocusSurface::Editor
         };
@@ -142,9 +142,9 @@ impl NotesApp {
             NotesFocusSurface::Dialog => {
                 // Dialog manages its own focus — no action needed
             }
-            NotesFocusSurface::AcpChat => {
-                if let Some(acp_entity) = self.embedded_acp_chat.as_ref() {
-                    let focus_handle = acp_entity.read(cx).focus_handle(cx);
+            NotesFocusSurface::AgentChat => {
+                if let Some(agent_chat_entity) = self.embedded_agent_chat.as_ref() {
+                    let focus_handle = agent_chat_entity.read(cx).focus_handle(cx);
                     window.focus(&focus_handle, cx);
                 } else {
                     self.focus_handle.focus(window, cx);

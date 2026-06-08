@@ -195,8 +195,8 @@ impl NotesApp {
             notes_ghost_generation: 0,
             notes_ghost_last_action: None,
             surface_mode: NotesSurfaceMode::default(),
-            embedded_acp_chat: None,
-            notes_acp_generation: 0,
+            embedded_agent_chat: None,
+            notes_agent_chat_generation: 0,
             mention_portal_edit: None,
         }
     }

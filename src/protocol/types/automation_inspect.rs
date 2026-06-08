@@ -91,10 +91,10 @@ pub struct AutomationInspectSnapshot {
     /// Schema version for forward compatibility.
     pub schema_version: u32,
 
-    /// Resolved automation window ID (e.g. `"main:0"`, `"acpDetached:thread-2"`).
+    /// Resolved automation window ID (e.g. `"main:0"`, `"agentChatDetached:thread-2"`).
     pub window_id: String,
 
-    /// Automation window kind as a string (e.g. `"Main"`, `"Notes"`, `"AcpDetached"`).
+    /// Automation window kind as a string (e.g. `"Main"`, `"Notes"`, `"AgentChatDetached"`).
     pub window_kind: String,
 
     /// Stable launcher surface kind when the target is backed by an AppView.
@@ -189,7 +189,7 @@ pub struct AutomationInspectSnapshot {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub semantic_quality: Option<SemanticQuality>,
 
-    /// Machine-readable warnings (e.g. `"panel_only_acp_detached"`).
+    /// Machine-readable warnings (e.g. `"panel_only_agent_chat_detached"`).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub warnings: Vec<String>,
     /// Process ID of the window owner.
@@ -415,8 +415,8 @@ mod tests {
     #[test]
     fn os_window_id_present_in_json() {
         let mut snapshot = make_minimal_snapshot();
-        snapshot.window_id = "acpDetached:thread-1".to_string();
-        snapshot.window_kind = "AcpDetached".to_string();
+        snapshot.window_id = "agentChatDetached:thread-1".to_string();
+        snapshot.window_kind = "AgentChatDetached".to_string();
         snapshot.screenshot_width = Some(800);
         snapshot.screenshot_height = Some(600);
         snapshot.os_window_id = Some(42);

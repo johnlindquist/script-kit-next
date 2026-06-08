@@ -31,7 +31,7 @@ Before adding or changing UI:
 2. Inspect the current surface, related tests, and the shared component entry points before editing.
 3. Check `src/components/mod.rs` and the relevant component modules before creating any new UI helper.
 4. Prefer extending the shared component library over adding surface-local render helpers.
-5. If a new reusable primitive is needed, add it under `src/components/**` or the appropriate theme/chrome/design layer and use it from the surface. Do not bury reusable UI in one prompt, built-in, ACP, or main-window renderer.
+5. If a new reusable primitive is needed, add it under `src/components/**` or the appropriate theme/chrome/design layer and use it from the surface. Do not bury reusable UI in one prompt, built-in, Agent Chat, or main-window renderer.
 
 Shared UI entry points to check first:
 
@@ -52,7 +52,7 @@ Theme and visual values must be tokenized:
 
 Cross-surface behavior must stay predictable:
 
-- Main window, prompt/make windows, built-ins, and Agent Chat/ACP should share inputs, menu/search behavior, list rows, prompt shells, hint strips, footer affordances, popup/dropdown mechanics, and chrome tokens wherever possible.
+- Main window, prompt/make windows, built-ins, and Agent Chat/Agent Chat should share inputs, menu/search behavior, list rows, prompt shells, hint strips, footer affordances, popup/dropdown mechanics, and chrome tokens wherever possible.
 - Actions UI should feel like the main list: same row language, same search treatment, same shortcut/keycap conventions, and no extra local chrome unless the owning contract requires it.
 - Expanded/preview surfaces may differ in layout, but their list side, footer, and chrome should still use the shared anatomy and tokens.
 - Any intentional divergence must be documented in the code or PR summary with the owning surface, the reused alternatives considered, and why the shared component could not fit.

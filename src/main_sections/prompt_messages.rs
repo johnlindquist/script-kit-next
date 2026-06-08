@@ -260,18 +260,18 @@ enum PromptMessage {
     },
     /// Hide the debug grid overlay
     HideGrid,
-    /// Request machine-readable ACP state snapshot
-    GetAcpState {
+    /// Request machine-readable Agent Chat state snapshot
+    GetAgentChatState {
         request_id: String,
         target: Option<protocol::AutomationWindowTarget>,
     },
-    /// Reset the ACP test probe ring buffer
-    ResetAcpTestProbe {
+    /// Reset the Agent Chat test probe ring buffer
+    ResetAgentChatTestProbe {
         request_id: String,
         target: Option<protocol::AutomationWindowTarget>,
     },
-    /// Request a bounded ACP test probe snapshot
-    GetAcpTestProbe {
+    /// Request a bounded Agent Chat test probe snapshot
+    GetAgentChatTestProbe {
         request_id: String,
         tail: Option<usize>,
         target: Option<protocol::AutomationWindowTarget>,
@@ -299,10 +299,10 @@ enum PromptMessage {
         target: Option<protocol::AutomationWindowTarget>,
         event: protocol::SimulatedGpuiEvent,
     },
-    /// Perform a setup action on the ACP setup card
-    PerformAcpSetupAction {
+    /// Perform a setup action on the Agent Chat setup card
+    PerformAgentChatSetupAction {
         request_id: String,
-        action: protocol::AcpSetupActionKind,
+        action: protocol::AgentChatSetupActionKind,
         agent_id: Option<String>,
         target: Option<protocol::AutomationWindowTarget>,
     },

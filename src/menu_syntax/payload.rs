@@ -14,7 +14,7 @@ pub enum ArtifactKind {
     File,
     Note,
     Todo,
-    AcpHistory,
+    AgentChatHistory,
     AiVault,
     ClipboardHistory,
     DictationHistory,
@@ -37,8 +37,8 @@ impl ArtifactKind {
             "file" | "files" => Some(Self::File),
             "note" | "notes" => Some(Self::Note),
             "todo" | "todos" => Some(Self::Todo),
-            "acphistory" | "acp-history" | "ai-conversation" | "ai-conversations" => {
-                Some(Self::AcpHistory)
+            "agent_chathistory" | "agent_chat-history" | "ai-conversation" | "ai-conversations" => {
+                Some(Self::AgentChatHistory)
             }
             "ai-vault" | "aivault" | "vault" | "vault-session" | "vault-sessions" => {
                 Some(Self::AiVault)

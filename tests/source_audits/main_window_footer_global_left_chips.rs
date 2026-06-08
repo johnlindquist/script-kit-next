@@ -3,7 +3,7 @@
 //!
 //! The reported bug was that the two context chips vanished / flashed a gap
 //! when switching between the main menu (ScriptList) and Agent Chat
-//! (AcpChatView), because footer paths tried to own the same context state.
+//! (AgentChatView), because footer paths tried to own the same context state.
 //!
 //! The current fix keeps Cwd + Agent·Model in the shared main-view header
 //! context zone and keeps the native footer scoped to surface actions. This
@@ -94,29 +94,29 @@ fn standard_footer_no_longer_owns_global_left_chips() {
 }
 
 #[test]
-fn acp_footer_buttons_remain_snapshot_owned() {
-    // The frozen ACP footer snapshot contract stays the source of ACP's own
+fn agent_chat_footer_buttons_remain_snapshot_owned() {
+    // The frozen Agent Chat footer snapshot contract stays the source of Agent Chat's own
     // buttons; the global chips wrap it from outside, not inside.
     let src = read("src/app_impl/ui_window.rs");
-    let body = fn_body(&src, "fn acp_footer_buttons(");
+    let body = fn_body(&src, "fn agent_chat_footer_buttons(");
     assert!(
-        body.contains("self.acp_footer_snapshot"),
-        "ACP footer buttons must still come from the snapshot"
+        body.contains("self.agent_chat_footer_snapshot"),
+        "Agent Chat footer buttons must still come from the snapshot"
     );
     assert!(
         !body.contains("FooterAction::Cwd"),
-        "ACP footer buttons must not embed the global Cwd chip"
+        "Agent Chat footer buttons must not embed the global Cwd chip"
     );
     assert!(
         !body.contains("FooterAction::AgentModel"),
-        "ACP footer buttons must not embed the global Agent·Model chip"
+        "Agent Chat footer buttons must not embed the global Agent·Model chip"
     );
 }
 
 #[test]
-fn acp_enrichment_suppresses_visual_cwd_when_real_chips_exist() {
+fn agent_chat_enrichment_suppresses_visual_cwd_when_real_chips_exist() {
     let src = read("src/app_impl/ui_window.rs");
-    let body = fn_body(&src, "fn enrich_footer_config_with_acp_info(");
+    let body = fn_body(&src, "fn enrich_footer_config_with_agent_chat_info(");
     assert!(
         body.contains("config.left_info = None"),
         "enrichment must drop the left-info rail because shared context chips live in the header"
@@ -133,19 +133,19 @@ fn acp_enrichment_suppresses_visual_cwd_when_real_chips_exist() {
 }
 
 #[test]
-fn acp_context_chips_do_not_use_footer_status_dot_lane() {
+fn agent_chat_context_chips_do_not_use_footer_status_dot_lane() {
     // Cwd + Agent·Model now live in the shared main-view header, not in native
-    // footer buttons. ACP enrichment must keep suppressing the old visual-only
+    // footer buttons. Agent Chat enrichment must keep suppressing the old visual-only
     // left_info rail and must not reintroduce a footer status-dot lane for them.
     let ui = read("src/app_impl/ui_window.rs");
 
-    let enrich = fn_body(&ui, "fn enrich_footer_config_with_acp_info(");
+    let enrich = fn_body(&ui, "fn enrich_footer_config_with_agent_chat_info(");
     assert!(
         enrich.contains("config.left_info = None"),
         "shared context chips must still suppress the old left-info rail"
     );
     assert!(
-        !ui.contains("acp_footer_dot_status") && !ui.contains(".leading_dot("),
+        !ui.contains("agent_chat_footer_dot_status") && !ui.contains(".leading_dot("),
         "ui_window.rs must not thread Agent Chat status through footer context chips"
     );
 }

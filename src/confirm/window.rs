@@ -559,7 +559,7 @@ pub(crate) fn open_confirm_popup_window(
     // Capture intended parent identity + frame so the AppKit attach step can
     // pick the *intended* parent NSWindow deterministically, instead of
     // defaulting to whichever window happens to be `isKeyWindow` when the
-    // defer block runs (which is brittle when Notes / ACP / main coexist).
+    // defer block runs (which is brittle when Notes / Agent Chat / main coexist).
     let parent_automation_id_for_nswindow = parent_automation_id.clone();
     let parent_expected_w: f32 = parent_window.bounds.size.width.into();
     let parent_expected_h: f32 = parent_window.bounds.size.height.into();
@@ -684,7 +684,7 @@ pub(crate) fn open_confirm_popup_window(
                         // frame size matches the parent we computed bounds from,
                         // optionally cross-checked against the registered
                         // automation title. This protects multi-window setups
-                        // (Notes / ACP / main coexist) where the key window may
+                        // (Notes / Agent Chat / main coexist) where the key window may
                         // not be the *intended* parent. Fall back to the legacy
                         // isKeyWindow / first-visible heuristic only if the
                         // deterministic match fails.

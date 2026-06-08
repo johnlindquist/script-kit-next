@@ -357,7 +357,7 @@ Tab AI now has two distinct surfaces: Agent Chat is the default AI chat UI, whil
 - The footer hint strip advertises only `⌘W Close`.
 
 **Runtime contract:**
-- Canonical chat entry: Command+Enter via `open_tab_ai_acp_with_entry_intent(...)`
+- Canonical chat entry: Command+Enter via `open_tab_ai_agent_chat_with_entry_intent(...)`
 - Quick-terminal path: `begin_tab_ai_harness_entry()` → `open_tab_ai_harness_terminal_from_request()`
 - Harness session state: `TabAiHarnessSessionState`
 - Harness config: `claudeCode` block in `~/.scriptkit/config.ts`

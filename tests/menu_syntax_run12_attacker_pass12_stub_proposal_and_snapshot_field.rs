@@ -1,6 +1,6 @@
 //! Run 12 Pass 12 — ATTACKER MODE on the Pass-11 surfaces:
 //! - [[src/app_impl/menu_syntax_ai.rs#stub_proposal_for]] — the deterministic
-//!   stub the Cmd+Enter handler calls in lieu of a real ACP/LLM round-trip.
+//!   stub the Cmd+Enter handler calls in lieu of a real Agent Chat/LLM round-trip.
 //! - [[src/menu_syntax/main_hint.rs#MenuSyntaxMainHintSnapshot]]'s new
 //!   `menu_syntax_ai_proposal` field (camelCase, skip-if-None).
 //!

@@ -139,14 +139,14 @@ export default {
   // dictation: { selectedDeviceId: "usb-mic" },
   // ai: {
   //   // Single active model - backward-compatible default
-  //   selectedAcpAgentId: "codex-acp",
+  //   selectedAgentChatAgentId: "codex-agent_chat",
   //   selectedModelId: "gpt-5.4",
   //   // Named profiles for quick switching
   //   profiles: [
   //     { id: "writing",   label: "Long-form writing",
   //       selectedModelId: "gpt-5.4", systemPromptSlug: "writing" },
   //     { id: "code",      label: "Code review",
-  //       selectedModelId: "gpt-5.5", selectedAcpAgentId: "codex-acp" },
+  //       selectedModelId: "gpt-5.5", selectedAgentChatAgentId: "codex-agent_chat" },
   //   ],
   //   activeProfileId: "writing",
   // },

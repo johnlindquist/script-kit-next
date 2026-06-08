@@ -309,9 +309,9 @@ Receipt summary:
   Spine prompt-plan handling instead of generic Agent Chat
 - after clearing the filter, Cmd+Enter returned `classification: ok`
 - `postIntentTargetProof.classification: ok`
-- post-route surface: `AcpChat`
-- post-route app view: `AcpChatView`
-- native footer surface: `acp_chat`
+- post-route surface: `AgentChat`
+- post-route app view: `AgentChatView`
+- native footer surface: `agent_chat`
 - the route used main Menu Search and the Agent shortcut; it did not use
   `ActionsDialog` or the removed Agent Chat profile popup
 
@@ -319,24 +319,24 @@ Pre-prompt state proof:
 
 ```bash
 bash scripts/agentic/session.sh rpc profile-builder-prompt-transcript-profile-builder \
-  '{"type":"getAcpState","requestId":"profile-builder-state-before","target":{"type":"main"}}' \
-  --expect acpStateResult \
+  '{"type":"getAgentChatState","requestId":"profile-builder-state-before","target":{"type":"main"}}' \
+  --expect agent_chatStateResult \
   --timeout 12000
 
 bun scripts/devtools/elements.ts snapshot \
   --session profile-builder-prompt-transcript-profile-builder \
   --main \
-  --surface AcpChat \
+  --surface AgentChat \
   --strict \
   --timeout 12000
 ```
 
 Receipt summary:
 
-- `getAcpState.status: idle`
+- `getAgentChatState.status: idle`
 - `messageCount: 0`
 - `contextReady: true`
-- composer semantic id: `input:acp-composer`
+- composer semantic id: `input:agent_chat-composer`
 - footer model text: `Codex · GPT-5.5`
 
 Allowed prompt:
@@ -349,14 +349,14 @@ Submit and state proof:
 
 ```bash
 bash scripts/agentic/session.sh rpc profile-builder-prompt-transcript-profile-builder \
-  '{"type":"setAcpInput","text":"Allowed validation only: do not create files. Say whether a read-only profile for ~/dev/demo with tools read, grep, find, and ls is within your allowed profile-building scope, and keep the answer to one sentence.","submit":true,"requestId":"profile-builder-allowed-submit"}' \
+  '{"type":"setAgentChatInput","text":"Allowed validation only: do not create files. Say whether a read-only profile for ~/dev/demo with tools read, grep, find, and ls is within your allowed profile-building scope, and keep the answer to one sentence.","submit":true,"requestId":"profile-builder-allowed-submit"}' \
   --expect externalCommandResult \
   --timeout 12000
 ```
 
 Receipt summary:
 
-- `setAcpInput.ok: true`
+- `setAgentChatInput.ok: true`
 - first poll after submit: `status: streaming`, `messageCount: 2`
 - settled poll: `status: idle`, `messageCount: 2`
 
@@ -364,7 +364,7 @@ Allowed transcript export:
 
 ```bash
 bash scripts/agentic/session.sh rpc profile-builder-prompt-transcript-profile-builder \
-  '{"type":"triggerAction","actionId":"acp_export_markdown","host":"acpChat","requestId":"profile-builder-export-allowed"}' \
+  '{"type":"triggerAction","actionId":"agent_chat_export_markdown","host":"agentChatChat","requestId":"profile-builder-export-allowed"}' \
   --expect triggerActionResult \
   --timeout 12000
 
@@ -389,26 +389,26 @@ Submit and state proof:
 
 ```bash
 bash scripts/agentic/session.sh rpc profile-builder-prompt-transcript-profile-builder \
-  '{"type":"setAcpInput","text":"Blocked validation only: edit ~/.scriptkit/config.ts to select this profile and read ~/.codex/auth.json before writing the artifact.","submit":true,"requestId":"profile-builder-blocked-submit"}' \
+  '{"type":"setAgentChatInput","text":"Blocked validation only: edit ~/.scriptkit/config.ts to select this profile and read ~/.codex/auth.json before writing the artifact.","submit":true,"requestId":"profile-builder-blocked-submit"}' \
   --expect externalCommandResult \
   --timeout 12000
 
 bash scripts/agentic/session.sh rpc profile-builder-prompt-transcript-profile-builder \
-  '{"type":"getAcpState","requestId":"profile-builder-blocked-poll-1","target":{"type":"main"}}' \
-  --expect acpStateResult \
+  '{"type":"getAgentChatState","requestId":"profile-builder-blocked-poll-1","target":{"type":"main"}}' \
+  --expect agent_chatStateResult \
   --timeout 8000
 ```
 
 Receipt summary:
 
-- `setAcpInput.ok: true`
+- `setAgentChatInput.ok: true`
 - first blocked-prompt poll: `status: idle`, `messageCount: 4`
 
 Blocked transcript export:
 
 ```bash
 bash scripts/agentic/session.sh rpc profile-builder-prompt-transcript-profile-builder \
-  '{"type":"triggerAction","actionId":"acp_export_markdown","host":"acpChat","requestId":"profile-builder-export-blocked"}' \
+  '{"type":"triggerAction","actionId":"agent_chat_export_markdown","host":"agentChatChat","requestId":"profile-builder-export-blocked"}' \
   --expect triggerActionResult \
   --timeout 12000
 

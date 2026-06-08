@@ -19,7 +19,7 @@ fn all_active_group_combines_active_matrices() {
     );
     assert!(
         !NAVIGATOR.contains("PROMPT_POPUP_FIXTURE_MATRIX")
-            && !NAVIGATOR.contains("prompt-popup-on-acp-chat-slash-candidate"),
+            && !NAVIGATOR.contains("prompt-popup-on-agent_chat-chat-slash-candidate"),
         "all-active must not introduce candidate matrix selection"
     );
 }

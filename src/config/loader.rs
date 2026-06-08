@@ -1016,7 +1016,7 @@ mod tests {
         let json = r#"{
             "ai": {
                 "selectedModelId": "gpt-5.4",
-                "selectedAcpAgentId": "codex-acp",
+                "selectedAgentChatAgentId": "codex-agent_chat",
                 "selectedProfileId": "general",
                 "selectedBackend": "pi",
                 "selectedProfileName": "Legacy",
@@ -1137,7 +1137,7 @@ mod tests {
         let json = r#"{
             "ai": {
                 "selectedModelId": "claude-sonnet-4-6",
-                "selectedAcpAgentId": "claude-code",
+                "selectedAgentChatAgentId": "claude-code",
                 "selectedProfileName": "Legacy",
                 "profiles": [
                     {
@@ -1223,7 +1223,7 @@ mod tests {
                 "dictation": { "selectedDeviceId": "usb-mic" },
                 "ai": {
                     "selectedModelId": "gpt-5.4",
-                    "selectedAcpAgentId": "codex-acp"
+                    "selectedAgentChatAgentId": "codex-agent_chat"
                 },
                 "windowManagement": { "snapMode": "precision" }
             }))

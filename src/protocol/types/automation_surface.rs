@@ -13,9 +13,9 @@ pub const AUTOMATION_SURFACE_SCHEMA_VERSION: u32 = 1;
 pub struct AutomationSurfaceSnapshot {
     /// Schema version (currently 1).
     pub schema_version: u32,
-    /// Canonical surface name (e.g. `"acp"`, `"main"`).
+    /// Canonical surface name (e.g. `"agent_chat"`, `"main"`).
     pub surface: String,
-    /// The `AppView` variant currently active (e.g. `"AcpChatView"`).
+    /// The `AppView` variant currently active (e.g. `"AgentChatView"`).
     pub view: String,
     /// Whether the main window is visible.
     pub window_visible: bool,

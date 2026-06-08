@@ -140,12 +140,12 @@ impl ScriptListApp {
     /// This clears all prompt state and resizes the window appropriately.
     pub(crate) fn reset_to_script_list(&mut self, cx: &mut Context<Self>) {
         clear_main_state_restore_after_focus_loss();
-        // Any detached floating popups (ACP @ picker / history popup /
+        // Any detached floating popups (Agent Chat @ picker / history popup /
         // menu-syntax trigger popup) are owned by the
         // outgoing view. Returning to the script list abandons that owner,
         // so make sure none of them survive past the transition.
         self.close_floating_popups_for_owner_loss("reset_to_script_list", cx);
-        let closing_acp_chat = matches!(self.current_view, AppView::AcpChatView { .. });
+        let closing_agent_chat = matches!(self.current_view, AppView::AgentChatView { .. });
         let old_view = match &self.current_view {
             AppView::ScriptList => "ScriptList",
             AppView::About { .. } => "About",
@@ -190,11 +190,11 @@ impl ScriptListApp {
             AppView::CreateAiPresetView { .. } => "CreateAiPresetView",
             AppView::SettingsView { .. } => "SettingsView",
             AppView::FavoritesBrowseView { .. } => "FavoritesBrowseView",
-            AppView::AcpHistoryView { .. } => "AcpHistoryView",
+            AppView::AgentChatHistoryView { .. } => "AgentChatHistoryView",
             AppView::BrowserHistoryView { .. } => "BrowserHistoryView",
             AppView::DictationHistoryView { .. } => "DictationHistoryView",
             AppView::NotesBrowseView { .. } => "NotesBrowseView",
-            AppView::AcpChatView { .. } => "AcpChatView",
+            AppView::AgentChatView { .. } => "AgentChatView",
             AppView::ScriptIssuesView { .. } => "ScriptIssuesView",
             AppView::SdkReferenceView { .. } => "SdkReferenceView",
             AppView::ScriptTemplateCatalogView { .. } => "ScriptTemplateCatalogView",
@@ -228,11 +228,11 @@ impl ScriptListApp {
         // Stop process manager refresh if it was running
         self.stop_process_manager_refresh();
 
-        // If reset bypasses the normal ACP close button/Escape route, still
-        // hide ACP-owned popups before the view is dropped. This covers
+        // If reset bypasses the normal Agent Chat close button/Escape route, still
+        // hide Agent Chat-owned popups before the view is dropped. This covers
         // window hide/reset paths after launcher-triggered "/" or "@" opens.
-        if let AppView::AcpChatView { entity } = &self.current_view {
-            self.embedded_acp_chat = Some(entity.clone());
+        if let AppView::AgentChatView { entity } = &self.current_view {
+            self.embedded_agent_chat = Some(entity.clone());
             entity.update(cx, |view, cx| {
                 view.prepare_for_host_hide(cx);
             });
@@ -242,11 +242,11 @@ impl ScriptListApp {
         self.current_view = AppView::ScriptList;
         self.set_main_window_mode_state_only(MainWindowMode::Mini, cx, "reset_to_script_list");
 
-        if closing_acp_chat {
-            self.acp_ready_script_path = None;
-            self.acp_footer_dot_status = None;
-            self.acp_footer_model_display = None;
-            self.acp_footer_snapshot = None;
+        if closing_agent_chat {
+            self.agent_chat_ready_script_path = None;
+            self.agent_chat_footer_dot_status = None;
+            self.agent_chat_footer_model_display = None;
+            self.agent_chat_footer_snapshot = None;
             self.tab_ai_harness_return_view = None;
             self.tab_ai_harness_return_focus_target = None;
             crate::windows::update_automation_semantic_surface(
@@ -254,8 +254,8 @@ impl ScriptListApp {
                 Some("scriptList".to_string()),
             );
             crate::windows::ensure_embedded_ai_window(false);
-            self.transition_acp_surface(
-                crate::ai::acp::surface_state::AcpSurfaceEvent::EmbeddedClosed,
+            self.transition_agent_chat_surface(
+                crate::ai::agent_chat::ui::surface_state::AgentChatSurfaceEvent::EmbeddedClosed,
             );
         }
 
@@ -326,7 +326,7 @@ impl ScriptListApp {
     ///
     /// FIX: Resolves bug where main menu sometimes opened with a random item
     /// selected instead of the first item (e.g., "Reset Window Positions"
-    /// instead of "ACP Chat").
+    /// instead of "Agent Chat Chat").
     pub fn ensure_selection_at_first_item(&mut self, cx: &mut Context<Self>) {
         // Only reset selection if we're in the script list view
         if !matches!(self.current_view, AppView::ScriptList) {

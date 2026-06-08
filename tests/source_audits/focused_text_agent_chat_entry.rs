@@ -2,10 +2,11 @@ const APP_RUN_SETUP: &str = include_str!("../../src/main_entry/app_run_setup.rs"
 const RUNTIME_TRAY_HOTKEYS: &str = include_str!("../../src/main_entry/runtime_tray_hotkeys.rs");
 const FOCUSED_TEXT_ENTRY: &str =
     include_str!("../../src/app_impl/tab_ai_mode/focused_text_entry.rs");
-const ACP_VIEW: &str = include_str!("../../src/ai/acp/view.rs");
-const ACP_TRANSCRIPT: &str = include_str!("../../src/ai/acp/components/transcript.rs");
-const ACP_UI_VARIANT: &str = include_str!("../../src/ai/acp/ui_variant.rs");
-const ACP_LAUNCH: &str = include_str!("../../src/app_impl/tab_ai_mode/acp_launch.rs");
+const AGENT_CHAT_VIEW: &str = include_str!("../../src/ai/agent_chat/ui/view.rs");
+const AGENT_CHAT_TRANSCRIPT: &str =
+    include_str!("../../src/ai/agent_chat/ui/components/transcript.rs");
+const AGENT_CHAT_UI_VARIANT: &str = include_str!("../../src/ai/agent_chat/ui/ui_variant.rs");
+const AGENT_CHAT_LAUNCH: &str = include_str!("../../src/app_impl/tab_ai_mode/agent_chat_launch.rs");
 const FOOTER_POPUP: &str = include_str!("../../src/footer_popup.rs");
 const STDIN_COMMANDS: &str = include_str!("../../src/stdin_commands/mod.rs");
 const RUNTIME_STDIN: &str = include_str!("../../src/main_entry/runtime_stdin.rs");
@@ -17,7 +18,7 @@ const STARTUP: &str = include_str!("../../src/app_impl/startup.rs");
 const STARTUP_NEW_ACTIONS: &str = include_str!("../../src/app_impl/startup_new_actions.rs");
 const SIMULATE_KEY_DISPATCH: &str = include_str!("../../src/app_impl/simulate_key_dispatch.rs");
 const APP_LAYOUT_COLLECT_ELEMENTS: &str = include_str!("../../src/app_layout/collect_elements.rs");
-const ACP_STATE_TYPES: &str = include_str!("../../src/protocol/types/acp_state.rs");
+const AGENT_CHAT_STATE_TYPES: &str = include_str!("../../src/protocol/types/agent_chat_state.rs");
 const APP_LAUNCHER_DB_CACHE: &str = include_str!("../../src/app_launcher/db_cache.rs");
 const WINDOW_RESIZE: &str = include_str!("../../src/window_resize/mod.rs");
 const PROTOCOL_SYSTEM_CONTROL: &str =
@@ -79,9 +80,9 @@ fn focused_text_entry_forces_embedded_mini_agent_chat_surface() {
         "has_focused_text_context",
         "focused_text_recapture_dismiss_previous_session",
         "CloseMainWindowStateFirst",
-        "AcpChatUiVariant::FocusedTextMini",
+        "AgentChatUiVariant::FocusedTextMini",
         "begin_tab_ai_harness_entry_from_source_view",
-        "force_acp_surface",
+        "force_agent_chat_surface",
         "stage_focused_text_from_host",
         "focused_text_agent_chat_open",
         "set_main_window_mode_state_only",
@@ -95,7 +96,7 @@ fn focused_text_entry_forces_embedded_mini_agent_chat_surface() {
 }
 
 #[test]
-fn acp_view_can_stage_focused_text_as_host_owned_context() {
+fn agent_chat_view_can_stage_focused_text_as_host_owned_context() {
     for required in [
         "stage_focused_text_from_host",
         "focused-text://",
@@ -104,22 +105,22 @@ fn acp_view_can_stage_focused_text_as_host_owned_context() {
         "focused_text_context_staged",
     ] {
         assert!(
-            ACP_VIEW.contains(required),
-            "missing focused-text ACP staging contract: {required}"
+            AGENT_CHAT_VIEW.contains(required),
+            "missing focused-text Agent Chat staging contract: {required}"
         );
     }
 }
 
 #[test]
-fn focused_text_mini_uses_pi_text_profile_not_acp_backend_fallback() {
+fn focused_text_mini_uses_pi_text_profile_not_agent_chat_backend_fallback() {
     for required in [
-        "request.ui_variant == crate::ai::acp::ui_variant::AcpChatUiVariant::FocusedTextMini",
+        "request.ui_variant == crate::ai::agent_chat::ui::ui_variant::AgentChatUiVariant::FocusedTextMini",
         "resolve_focused_text_pi_launch",
         "focused_text_mini",
         "\"Pi Text profile is unavailable\"",
     ] {
         assert!(
-            ACP_LAUNCH.contains(required),
+            AGENT_CHAT_LAUNCH.contains(required),
             "missing focused-text Pi launch contract: {required}"
         );
     }
@@ -148,8 +149,8 @@ fn focused_text_footer_actions_are_explicit_and_dispatch_apply_back() {
         "FocusedTextMutation::Append",
         "FocusedTextMutation::Copy",
         "SystemFocusedTextPlatformBridge",
-        "set_ui_variant(AcpChatUiVariant::Standard",
-        "set_ui_variant(AcpChatUiVariant::FocusedTextMini",
+        "set_ui_variant(AgentChatUiVariant::Standard",
+        "set_ui_variant(AgentChatUiVariant::FocusedTextMini",
         "set_on_focused_text_expand_requested",
         "set_on_focused_text_collapse_requested",
         "MainWindowMode::Full",
@@ -158,7 +159,7 @@ fn focused_text_footer_actions_are_explicit_and_dispatch_apply_back() {
         "focused_text_collapse_agent_chat",
     ] {
         assert!(
-            ACP_VIEW.contains(required)
+            AGENT_CHAT_VIEW.contains(required)
                 || include_str!("../../src/app_impl/tab_ai_mode/mod.rs").contains(required),
             "missing focused-text footer dispatch contract: {required}"
         );
@@ -170,12 +171,12 @@ fn focused_text_mini_variant_is_protocol_visible() {
     for required in [
         "FocusedTextMini",
         "\"focused-text-mini\"",
-        "AcpTranscriptPresentation::FocusedTextPreview",
-        "AcpComposerPlacement::FocusedTextSingleLine",
-        "AcpChromeDensity::Mini",
+        "AgentChatTranscriptPresentation::FocusedTextPreview",
+        "AgentChatComposerPlacement::FocusedTextSingleLine",
+        "AgentChatChromeDensity::Mini",
     ] {
         assert!(
-            ACP_UI_VARIANT.contains(required),
+            AGENT_CHAT_UI_VARIANT.contains(required),
             "missing focused-text mini variant contract: {required}"
         );
     }
@@ -190,13 +191,13 @@ fn focused_text_mini_initial_state_is_input_only_without_native_footer() {
         "focused_text_mini_footer_visible_for_thread",
         "main_window_footer_visible",
         "main_window_footer_slot",
-        "acp_footer_hidden",
+        "agent_chat_footer_hidden",
         "visible: bool",
         "FOCUSED_TEXT_MINI_SIZE_INPUT_ONLY",
         "crate::window_resize::ViewType::FocusedTextMini",
     ] {
         assert!(
-            ACP_VIEW.contains(required)
+            AGENT_CHAT_VIEW.contains(required)
                 || FOCUSED_TEXT_ENTRY.contains(required)
                 || include_str!("../../src/app_impl/ui_window.rs").contains(required)
                 || PROMPT_HANDLER.contains(required),
@@ -220,18 +221,19 @@ fn focused_text_mini_has_four_sizing_phases() {
         "FocusedTextMiniPhase::Loading if has_variations => Some(result_size + scope_extra)",
     ] {
         assert!(
-            ACP_VIEW.contains(required),
+            AGENT_CHAT_VIEW.contains(required),
             "missing focused-text mini sizing phase: {required}"
         );
     }
     assert!(
-        ACP_VIEW.contains(
+        AGENT_CHAT_VIEW.contains(
             "FocusedTextMiniPhase::Loading => Some(FOCUSED_TEXT_MINI_SIZE_INPUT_ONLY + scope_extra)"
         ),
         "loading focused-text mini without variations should keep the compact input-only size before assistant output"
     );
     assert!(
-        ACP_VIEW.contains("FocusedTextMiniPhase::Streaming => Some(result_size + scope_extra)"),
+        AGENT_CHAT_VIEW
+            .contains("FocusedTextMiniPhase::Streaming => Some(result_size + scope_extra)"),
         "streaming focused-text mini should grow once assistant output or variations are visible"
     );
     for required in [
@@ -260,21 +262,21 @@ fn focused_text_mini_has_four_sizing_phases() {
 }
 
 #[test]
-fn focused_text_mini_result_uses_shared_acp_transcript_component() {
+fn focused_text_mini_result_uses_shared_agent_chat_transcript_component() {
     let render_fn = source_between(
-        ACP_VIEW,
+        AGENT_CHAT_VIEW,
         "fn render_focused_text_mini",
         "fn render_pending_context_chips",
     );
     let mini_branch = source_between(
-        ACP_VIEW,
-        "if self.ui_variant == AcpChatUiVariant::FocusedTextMini {\n            let focused_phase",
+        AGENT_CHAT_VIEW,
+        "if self.ui_variant == AgentChatUiVariant::FocusedTextMini {\n            let focused_phase",
         ".child(self.render_focused_text_mini(",
     );
 
     assert!(
         mini_branch.contains("Some(self.ensure_transcript(cx).into_any_element())"),
-        "focused-text mini result must render the shared ACP transcript entity"
+        "focused-text mini result must render the shared Agent Chat transcript entity"
     );
     assert!(
         render_fn.contains("transcript: Option<gpui::AnyElement>"),
@@ -285,20 +287,20 @@ fn focused_text_mini_result_uses_shared_acp_transcript_component() {
         "focused-text mini result must not use a bespoke markdown preview"
     );
     assert!(
-        ACP_TRANSCRIPT.contains("AcpTranscriptPresentation::FocusedTextPreview"),
-        "AcpTranscript must own the focused-text preview presentation"
+        AGENT_CHAT_TRANSCRIPT.contains("AgentChatTranscriptPresentation::FocusedTextPreview"),
+        "AgentChatTranscript must own the focused-text preview presentation"
     );
     assert!(
-        ACP_TRANSCRIPT.contains("let messages_snapshot = self.messages.clone();"),
+        AGENT_CHAT_TRANSCRIPT.contains("let messages_snapshot = self.messages.clone();"),
         "focused-text preview must keep the shared transcript message model intact"
     );
     assert!(
-        !ACP_TRANSCRIPT.contains(".filter(|message|"),
+        !AGENT_CHAT_TRANSCRIPT.contains(".filter(|message|"),
         "focused-text preview must hide rows at render time, not build a filtered message model"
     );
     assert!(
-        ACP_TRANSCRIPT.contains("if focused_text_preview")
-            && ACP_TRANSCRIPT.contains("return div().into_any();"),
+        AGENT_CHAT_TRANSCRIPT.contains("if focused_text_preview")
+            && AGENT_CHAT_TRANSCRIPT.contains("return div().into_any();"),
         "focused-text preview should suppress non-assistant/empty rows in the render path"
     );
     assert!(
@@ -310,7 +312,7 @@ fn focused_text_mini_result_uses_shared_acp_transcript_component() {
 #[test]
 fn focused_text_mini_window_animation_reveals_fixed_height_content() {
     let render_fn = source_between(
-        ACP_VIEW,
+        AGENT_CHAT_VIEW,
         "fn render_focused_text_mini",
         "fn render_pending_context_chips",
     );
@@ -393,12 +395,12 @@ fn focused_text_mini_reuses_app_icon_cache_and_focuses_composer_on_open() {
         "\"focused-text-context-badge\"",
     ] {
         assert!(
-            ACP_VIEW.contains(required),
+            AGENT_CHAT_VIEW.contains(required),
             "focused-text badge must reuse the main-menu app icon cache: {required}"
         );
     }
     let badge_fn = source_between(
-        ACP_VIEW,
+        AGENT_CHAT_VIEW,
         "fn render_focused_text_app_icon_badge",
         "#[allow(clippy::too_many_arguments)]",
     );
@@ -408,7 +410,7 @@ fn focused_text_mini_reuses_app_icon_cache_and_focuses_composer_on_open() {
     );
     assert!(
         FOCUSED_TEXT_ENTRY.contains("self.request_focus(FocusTarget::ChatPrompt, cx);"),
-        "focused-text mini open must request composer focus after entering the ACP surface"
+        "focused-text mini open must request composer focus after entering the Agent Chat surface"
     );
 }
 
@@ -477,17 +479,17 @@ fn legacy_inline_agent_window_launch_is_not_public_product_api() {
 }
 
 #[test]
-fn focused_text_mini_has_redacted_acp_state_and_semantic_elements() {
+fn focused_text_mini_has_redacted_agent_chat_state_and_semantic_elements() {
     for required in [
-        "pub focused_text: Option<AcpFocusedTextState>",
-        "pub struct AcpFocusedTextState",
+        "pub focused_text: Option<AgentChatFocusedTextState>",
+        "pub struct AgentChatFocusedTextState",
         "char_count",
         "has_output",
         "last_apply_action",
     ] {
         assert!(
-            ACP_STATE_TYPES.contains(required),
-            "missing focused-text ACP state contract: {required}"
+            AGENT_CHAT_STATE_TYPES.contains(required),
+            "missing focused-text Agent Chat state contract: {required}"
         );
     }
 
@@ -507,42 +509,43 @@ fn focused_text_mini_has_redacted_acp_state_and_semantic_elements() {
         "source_name: Some(\"Cmd+K\"",
     ] {
         assert!(
-            ACP_VIEW.contains(required),
-            "missing focused-text ACP automation contract: {required}"
+            AGENT_CHAT_VIEW.contains(required),
+            "missing focused-text Agent Chat automation contract: {required}"
         );
     }
 
-    assert!(APP_LAYOUT_COLLECT_ELEMENTS.contains("AppView::AcpChatView { entity }"));
+    assert!(APP_LAYOUT_COLLECT_ELEMENTS.contains("AppView::AgentChatView { entity }"));
     assert!(APP_LAYOUT_COLLECT_ELEMENTS.contains("collect_focused_text_mini_elements"));
 }
 
 #[test]
 fn focused_text_mini_escape_hides_instead_of_returning_to_main_menu() {
     assert!(
-        ACP_VIEW.contains("pub(crate) fn is_focused_text_mini")
-            && ACP_VIEW.contains("focused_text_originated_from_quick_prompt")
-            && ACP_VIEW.contains("event = \"focused_text_escape_progressive\"")
-            && ACP_VIEW.contains("self.trigger_close_window_requested(window, cx);"),
+        AGENT_CHAT_VIEW.contains("pub(crate) fn is_focused_text_mini")
+            && AGENT_CHAT_VIEW.contains("focused_text_originated_from_quick_prompt")
+            && AGENT_CHAT_VIEW.contains("event = \"focused_text_escape_progressive\"")
+            && AGENT_CHAT_VIEW.contains("self.trigger_close_window_requested(window, cx);"),
         "focused-text quick-prompt Escape must progressively unwind before requesting close/hide"
     );
     assert!(
-        STARTUP.contains("acp_escape_focused_text_origin")
+        STARTUP.contains("agent_chat_escape_focused_text_origin")
             && STARTUP.contains("focused_text_originated_from_quick_prompt")
-            && STARTUP.contains("!acp_escape_focused_text_origin"),
-        "physical Escape from focused-text quick prompt origin must avoid generic streaming cancel before ACP handles the key"
+            && STARTUP.contains("!agent_chat_escape_focused_text_origin"),
+        "physical Escape from focused-text quick prompt origin must avoid generic streaming cancel before Agent Chat handles the key"
     );
     assert!(
-        STARTUP_NEW_ACTIONS.contains("acp_escape_focused_text_origin")
+        STARTUP_NEW_ACTIONS.contains("agent_chat_escape_focused_text_origin")
             && STARTUP_NEW_ACTIONS.contains("focused_text_originated_from_quick_prompt")
-            && STARTUP_NEW_ACTIONS.contains("!acp_escape_focused_text_origin"),
-        "startup_new_actions Escape interceptor must preserve focused-text quick prompt ACP key handling"
+            && STARTUP_NEW_ACTIONS.contains("!agent_chat_escape_focused_text_origin"),
+        "startup_new_actions Escape interceptor must preserve focused-text quick prompt Agent Chat key handling"
     );
     assert!(
         SIMULATE_KEY_DISPATCH.contains("chat.is_focused_text_mini()")
             && SIMULATE_KEY_DISPATCH.contains("chat.focused_text_originated_from_quick_prompt()")
             && SIMULATE_KEY_DISPATCH
                 .contains("SimulateKey: Escape - hide focused-text quick prompt Agent Chat")
-            && SIMULATE_KEY_DISPATCH.contains("view.close_acp_chat_main_window_state_first(ctx);"),
+            && SIMULATE_KEY_DISPATCH
+                .contains("view.close_agent_chat_main_window_state_first(ctx);"),
         "simulateKey Escape must match physical Escape for focused-text quick prompt origin"
     );
 }
@@ -555,7 +558,7 @@ fn focused_text_quick_prompt_origin_survives_expansion_for_escape_hide() {
         "focused_text_originated_from_quick_prompt",
     ] {
         assert!(
-            ACP_VIEW.contains(required) || FOCUSED_TEXT_ENTRY.contains(required),
+            AGENT_CHAT_VIEW.contains(required) || FOCUSED_TEXT_ENTRY.contains(required),
             "missing focused-text quick-prompt origin marker: {required}"
         );
     }
@@ -598,7 +601,7 @@ fn focused_text_devtools_mutators_echo_redacted_response_envelopes() {
         ("app_run_setup.rs", APP_RUN_SETUP),
         ("runtime_stdin_match_tail.rs", RUNTIME_STDIN_MATCH_TAIL),
     ] {
-        for command in ["setAcpInput", "setAcpTestFixture"] {
+        for command in ["setAgentChatInput", "setAgentChatTestFixture"] {
             assert!(
                 source.contains(&format!("\"{command}\".to_string()"))
                     && source.contains("crate::protocol::Message::external_command_result")

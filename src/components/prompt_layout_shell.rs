@@ -721,7 +721,7 @@ pub(crate) fn universal_prompt_hints_with_primary_label(
     vec![
         format!("↵ {}", primary_label.as_ref()).into(),
         "⌘K Actions".into(),
-        crate::ai::acp::labels::AGENT_CHAT_CMD_ENTER_HINT.into(),
+        crate::ai::agent_chat::ui::labels::AGENT_CHAT_CMD_ENTER_HINT.into(),
     ]
 }
 

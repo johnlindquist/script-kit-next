@@ -38,7 +38,7 @@ export default {
   },
 
   ai: {
-    selectedAcpAgentId: "codex-acp",
+    selectedAgentChatAgentId: "codex-agent_chat",
     selectedModelId: "gpt-5.4",
   },
 

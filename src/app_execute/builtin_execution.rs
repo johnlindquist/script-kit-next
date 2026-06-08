@@ -889,12 +889,12 @@ enum SurfaceOpenBuiltinAction {
     DesignGallery,
     FooterGallery,
     NonListStates,
-    AiChat(crate::ai::acp::ui_variant::AcpChatUiVariant),
+    AiChat(crate::ai::agent_chat::ui::ui_variant::AgentChatUiVariant),
     EmojiPicker,
     Webcam,
     FileSearch,
     Settings,
-    AcpHistory,
+    AgentChatHistory,
     AiVault,
     DictationHistory,
     SdkReference,
@@ -911,14 +911,14 @@ impl SurfaceOpenBuiltinAction {
             builtins::BuiltInFeature::FooterGallery => Some(Self::FooterGallery),
             builtins::BuiltInFeature::DesignNonListStates => Some(Self::NonListStates),
             builtins::BuiltInFeature::AiChat => Some(Self::AiChat(
-                crate::ai::acp::ui_variant::AcpChatUiVariant::Standard,
+                crate::ai::agent_chat::ui::ui_variant::AgentChatUiVariant::Standard,
             )),
             builtins::BuiltInFeature::AiChatVariant(variant) => Some(Self::AiChat(*variant)),
             builtins::BuiltInFeature::EmojiPicker => Some(Self::EmojiPicker),
             builtins::BuiltInFeature::Webcam => Some(Self::Webcam),
             builtins::BuiltInFeature::FileSearch => Some(Self::FileSearch),
             builtins::BuiltInFeature::Settings => Some(Self::Settings),
-            builtins::BuiltInFeature::AcpHistory => Some(Self::AcpHistory),
+            builtins::BuiltInFeature::AgentChatHistory => Some(Self::AgentChatHistory),
             builtins::BuiltInFeature::AiVault => Some(Self::AiVault),
             builtins::BuiltInFeature::DictationHistory => Some(Self::DictationHistory),
             builtins::BuiltInFeature::SdkReference => Some(Self::SdkReference),
@@ -935,7 +935,7 @@ impl SurfaceOpenBuiltinAction {
             Self::DesignGallery => "open_design_gallery",
             Self::FooterGallery => "open_footer_gallery",
             Self::NonListStates => "open_non_list_states",
-            Self::AiChat(crate::ai::acp::ui_variant::AcpChatUiVariant::Standard) => {
+            Self::AiChat(crate::ai::agent_chat::ui::ui_variant::AgentChatUiVariant::Standard) => {
                 "open_ai_harness_dispatched"
             }
             Self::AiChat(_) => "open_ai_harness_variant_dispatched",
@@ -943,7 +943,7 @@ impl SurfaceOpenBuiltinAction {
             Self::Webcam => "open_webcam",
             Self::FileSearch => "open_file_search",
             Self::Settings => "open_settings",
-            Self::AcpHistory => "open_acp_history",
+            Self::AgentChatHistory => "open_agent_chat_history",
             Self::AiVault => "open_ai_vault",
             Self::DictationHistory => "open_dictation_history",
             Self::SdkReference => "open_sdk_reference",
@@ -964,7 +964,7 @@ impl SurfaceOpenBuiltinAction {
             Self::Webcam => "Opening Webcam",
             Self::FileSearch => "Opening File Search",
             Self::Settings => "Opening Settings",
-            Self::AcpHistory => "Opening Agent Chat History",
+            Self::AgentChatHistory => "Opening Agent Chat History",
             Self::AiVault => "Opening AI Vault",
             Self::DictationHistory => "Opening Dictation History",
             Self::SdkReference => "Opening SDK Reference",
@@ -1467,7 +1467,7 @@ impl AiGenerateBuiltinAction {
         }
     }
 
-    fn opens_acp_when_request_empty(self) -> bool {
+    fn opens_agent_chat_when_request_empty(self) -> bool {
         match self {
             Self::NewScript => true,
             Self::CurrentAppScript => false,
@@ -3963,11 +3963,11 @@ impl ScriptListApp {
                 self.execute_surface_open_builtin(open_action, dctx, cx)
             }
             // =========================================================================
-            // ACP Conversation History
+            // Agent Chat Conversation History
             // =========================================================================
-            builtins::BuiltInFeature::AcpHistory => {
+            builtins::BuiltInFeature::AgentChatHistory => {
                 let open_action = SurfaceOpenBuiltinAction::from_feature(&entry.feature)
-                    .expect("surface open arm should only receive AcpHistory");
+                    .expect("surface open arm should only receive AgentChatHistory");
                 self.execute_surface_open_builtin(open_action, dctx, cx)
             }
             builtins::BuiltInFeature::AiVault => {
@@ -4158,11 +4158,11 @@ impl ScriptListApp {
                 tracing::info!(
                     category = "BUILTIN",
                     trace_id = %dctx.trace_id,
-                    acp_chat_ui_variant = variant.state_id(),
+                    agent_chat_ui_variant = variant.state_id(),
                     "{}",
                     action.log_message()
                 );
-                self.open_tab_ai_acp_with_entry_intent_variant(None, variant, cx);
+                self.open_tab_ai_agent_chat_with_entry_intent_variant(None, variant, cx);
             }
             SurfaceOpenBuiltinAction::EmojiPicker => {
                 tracing::info!(
@@ -4222,7 +4222,7 @@ impl ScriptListApp {
                     cx,
                 );
             }
-            SurfaceOpenBuiltinAction::AcpHistory => {
+            SurfaceOpenBuiltinAction::AgentChatHistory => {
                 tracing::info!(
                     category = "BUILTIN",
                     trace_id = %dctx.trace_id,
@@ -4230,7 +4230,7 @@ impl ScriptListApp {
                     action.log_message()
                 );
                 self.open_builtin_filterable_view(
-                    AppView::AcpHistoryView {
+                    AppView::AgentChatHistoryView {
                         filter: String::new(),
                         selected_index: 0,
                     },
@@ -4683,8 +4683,8 @@ impl ScriptListApp {
         let query = query_override.unwrap_or(&self.filter_text);
         let request = action.normalized_request(query);
         let intent = action.entry_intent(request);
-        if intent.is_none() && action.opens_acp_when_request_empty() {
-            self.open_tab_ai_acp_with_entry_intent(None, cx);
+        if intent.is_none() && action.opens_agent_chat_when_request_empty() {
+            self.open_tab_ai_agent_chat_with_entry_intent(None, cx);
         } else {
             self.open_tab_ai_chat_with_entry_intent(intent, cx);
         }
@@ -4717,7 +4717,7 @@ impl ScriptListApp {
         dctx: &crate::action_helpers::DispatchContext,
         cx: &mut Context<Self>,
     ) -> crate::action_helpers::DispatchOutcome {
-        self.open_tab_ai_acp_with_entry_intent(None, cx);
+        self.open_tab_ai_agent_chat_with_entry_intent(None, cx);
         Self::builtin_success(dctx, action.success_detail())
     }
 
@@ -6291,20 +6291,20 @@ impl ScriptListApp {
                         }
                     }
                     crate::dictation::DictationTarget::TabAiHarness => {
-                        self.seed_acp_dictation_return_origin();
-                        if crate::ai::acp::chat_window::is_chat_window_open() {
+                        self.seed_agent_chat_dictation_return_origin();
+                        if crate::ai::agent_chat::ui::chat_window::is_chat_window_open() {
                             tracing::info!(
                                 category = "DICTATION",
-                                event = "dictation_acp_detached_closed_for_embedded_reveal",
-                                "Closing detached ACP before ACP-targeted dictation reveal"
+                                event = "dictation_agent_chat_detached_closed_for_embedded_reveal",
+                                "Closing detached Agent Chat before Agent Chat-targeted dictation reveal"
                             );
-                            crate::ai::acp::chat_window::close_chat_window(&mut **cx);
+                            crate::ai::agent_chat::ui::chat_window::close_chat_window(&mut **cx);
                         }
-                        self.open_tab_ai_acp_with_entry_intent_suppressing_focused_part(
+                        self.open_tab_ai_agent_chat_with_entry_intent_suppressing_focused_part(
                             Some(transcript.clone()),
                             cx,
                         );
-                        // Let the orchestrator reveal the main window as ACP
+                        // Let the orchestrator reveal the main window as Agent Chat
                         // chat and focus the composer after the view is
                         // seeded with the dictated prompt.
                         self.dispatch_window_event(
@@ -6581,8 +6581,8 @@ impl ScriptListApp {
             }
             Ok(None) => {
                 // No speech detected — close overlay quietly and treat the
-                // session as an abort. For ACP dictation, a successful finish
-                // means "reveal ACP with a transcript"; without transcript
+                // session as an abort. For Agent Chat dictation, a successful finish
+                // means "reveal Agent Chat with a transcript"; without transcript
                 // there is nothing to seed or submit.
                 tracing::info!(
                     category = "DICTATION",
@@ -7425,7 +7425,7 @@ impl ScriptListApp {
 
     /// Build the small per-session destination cycle exposed by the overlay
     /// badge. Keep it intentionally tight: the primary target plus an
-    /// ACP chat-submit fallback, except external-app sessions which expose
+    /// Agent Chat chat-submit fallback, except external-app sessions which expose
     /// the main launcher filter as the alternate target.
     fn dictation_target_cycle_for(
         &self,
@@ -7623,7 +7623,7 @@ impl ScriptListApp {
     ///
     /// Used by the dictation-to-AI path: the main window is concealed so
     /// the overlay is visible, and once the overlay closes we reveal the
-    /// main window with the newly-opened ACP chat view.  The delay must
+    /// main window with the newly-opened Agent Chat chat view.  The delay must
     /// be slightly longer than `schedule_dictation_overlay_close` so the
     /// overlay is gone before the main window reappears.
     fn schedule_deferred_main_window_reveal(

@@ -325,12 +325,12 @@ INSERT INTO history VALUES (
   );
 
   writeFileSync(
-    join(kitDir, "acp-history.jsonl"),
+    join(kitDir, "agent_chat-history.jsonl"),
     `${JSON.stringify({
       timestamp: now,
       first_message: `${query} conversation prompt`,
       message_count: 2,
-      session_id: "acp-delete-key-benchmark",
+      session_id: "agent_chat-delete-key-benchmark",
       title: `${query} conversation prompt`,
       preview: `${query} conversation reply`,
       search_text: `${query} conversation prompt ${query} conversation reply`,

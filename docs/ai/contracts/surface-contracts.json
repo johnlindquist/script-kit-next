@@ -984,14 +984,14 @@
       "automationSemanticSurface": "scriptTemplateCatalog"
     },
     {
-      "surfaceKind": "AcpHistory",
+      "surfaceKind": "AgentChatHistory",
       "appViewVariants": [
-        "AcpHistoryView"
+        "AgentChatHistoryView"
       ],
       "appViewFooters": [
         {
-          "variant": "AcpHistoryView",
-          "nativeFooterSurface": "acp_history"
+          "variant": "AgentChatHistoryView",
+          "nativeFooterSurface": "agent_chat_history"
         }
       ],
       "vocabulary": {
@@ -1054,14 +1054,14 @@
       "automationSemanticSurface": "scriptList"
     },
     {
-      "surfaceKind": "AcpChat",
+      "surfaceKind": "AgentChat",
       "appViewVariants": [
-        "AcpChatView"
+        "AgentChatView"
       ],
       "appViewFooters": [
         {
-          "variant": "AcpChatView",
-          "nativeFooterSurface": "acp_chat"
+          "variant": "AgentChatView",
+          "nativeFooterSurface": "agent_chat"
         }
       ],
       "vocabulary": {
@@ -1081,7 +1081,7 @@
         "escape": "LetViewHandle",
         "cmdW": "CloseMainWindow"
       },
-      "automationSemanticSurface": "acpChat"
+      "automationSemanticSurface": "agentChatChat"
     },
     {
       "surfaceKind": "ConfirmPrompt",

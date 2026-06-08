@@ -151,7 +151,7 @@ impl ScriptListApp {
     /// 2. Resets state to the default script list
     /// 3. Hides the window
     /// Clear owner-bound popup state and force-close detached popup windows owned
-    /// by the main launcher (ACP `@` mention picker and ACP history).
+    /// by the main launcher (Agent Chat `@` mention picker and Agent Chat history).
     /// Detached windows cache a `WeakEntity` of the owner view but
     /// rely on the owner to explicitly close them on lifecycle / surface
     /// transitions. Whenever we hide the main window, return to ScriptList, or
@@ -163,8 +163,8 @@ impl ScriptListApp {
         cx: &mut Context<Self>,
     ) {
         self.menu_syntax_trigger_popup_state = Default::default();
-        crate::ai::acp::picker_popup::close_mention_popup_window(cx);
-        crate::ai::acp::history_popup::close_history_popup_window(cx);
+        crate::ai::agent_chat::ui::picker_popup::close_mention_popup_window(cx);
+        crate::ai::agent_chat::ui::history_popup::close_history_popup_window(cx);
         tracing::info!(
             target: "script_kit::popup_owner",
             event = "floating_popups_closed_for_owner_loss",
@@ -224,12 +224,12 @@ impl ScriptListApp {
         // Check if Notes or AI windows are open BEFORE hiding
         let notes_open = notes::is_notes_window_open();
         let ai_open = ai::is_ai_window_open();
-        let acp_chat_open = ai::acp::chat_window::is_chat_window_open();
+        let agent_chat_open = ai::agent_chat::ui::chat_window::is_chat_window_open();
         logging::log(
             "VISIBILITY",
             &format!(
-                "Secondary windows: notes_open={}, ai_open={}, acp_chat_open={}",
-                notes_open, ai_open, acp_chat_open
+                "Secondary windows: notes_open={}, ai_open={}, agent_chat_open={}",
+                notes_open, ai_open, agent_chat_open
             ),
         );
 
@@ -238,7 +238,7 @@ impl ScriptListApp {
         // check can hide Notes together with main.
         // Must be deferred: orderOut: triggers window_did_change_key_status
         // synchronously, which re-enters GPUI's App RefCell and panics.
-        let secondary_windows_open = notes_open || ai_open || acp_chat_open;
+        let secondary_windows_open = notes_open || ai_open || agent_chat_open;
         logging::log(
             "VISIBILITY",
             &format!(
@@ -301,7 +301,7 @@ impl ScriptListApp {
             && script_kit_gpui::is_main_window_visible()
             && !self.is_pinned
             && !confirm::is_confirm_window_open()
-            && !ai::acp::chat_window::is_chat_window_open()
+            && !ai::agent_chat::ui::chat_window::is_chat_window_open()
             && !crate::dictation::is_dictation_overlay_open()
             && !crate::dictation::is_dictation_recording()
             && self.tab_ai_save_offer_state.is_none()
@@ -344,16 +344,16 @@ impl ScriptListApp {
 
         let notes_open = notes::is_notes_window_open();
         let ai_open = ai::is_ai_window_open();
-        let acp_chat_open = ai::acp::chat_window::is_chat_window_open();
+        let agent_chat_open = ai::agent_chat::ui::chat_window::is_chat_window_open();
         logging::log(
             "VISIBILITY",
             &format!(
-                "Secondary windows: notes_open={}, ai_open={}, acp_chat_open={}",
-                notes_open, ai_open, acp_chat_open
+                "Secondary windows: notes_open={}, ai_open={}, agent_chat_open={}",
+                notes_open, ai_open, agent_chat_open
             ),
         );
 
-        let secondary_windows_open = notes_open || ai_open || acp_chat_open;
+        let secondary_windows_open = notes_open || ai_open || agent_chat_open;
         logging::log(
             "VISIBILITY",
             &format!(
@@ -405,8 +405,8 @@ impl ScriptListApp {
             AppView::FavoritesBrowseView { filter, .. } if !filter.is_empty() => {
                 Some("FavoritesBrowse filter")
             }
-            AppView::AcpHistoryView { filter, .. } if !filter.is_empty() => {
-                Some("AcpHistory filter")
+            AppView::AgentChatHistoryView { filter, .. } if !filter.is_empty() => {
+                Some("AgentChatHistory filter")
             }
             AppView::BrowserHistoryView { filter, .. } if !filter.is_empty() => {
                 Some("BrowserHistory filter")
@@ -515,12 +515,12 @@ impl ScriptListApp {
             } => {
                 Self::clear_builtin_query_state(filter, selected_index);
             }
-            AppView::AcpHistoryView {
+            AppView::AgentChatHistoryView {
                 filter,
                 selected_index,
             } => {
                 Self::clear_builtin_query_state(filter, selected_index);
-                self.acp_history_scroll_handle.scroll_to_top_of_item(0);
+                self.agent_chat_history_scroll_handle.scroll_to_top_of_item(0);
             }
             AppView::BrowserHistoryView {
                 filter,

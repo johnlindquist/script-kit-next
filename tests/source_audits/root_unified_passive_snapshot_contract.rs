@@ -148,7 +148,7 @@ fn filtering_cache_freezes_passive_snapshot_hits_per_query_frame() {
             && filtering_cache.contains("&root_passive_frame.note_hits")
             && filtering_cache.contains("&root_passive_frame.clipboard_history_hits")
             && filtering_cache.contains("&root_passive_frame.dictation_history_hits")
-            && filtering_cache.contains("&root_passive_frame.acp_history_hits")
+            && filtering_cache.contains("&root_passive_frame.agent_chat_history_hits")
             && filtering_cache.contains("&root_passive_frame.browser_tab_hits")
             && filtering_cache.contains("&root_passive_frame.browser_history_hits"),
         "all passive source hits should flow through the frozen passive frame"
@@ -192,7 +192,7 @@ fn foreground_grouping_uses_cache_only_passive_sources() {
         "search_root_notes_meta(",
         "search_root_clipboard_history_meta(",
         "search_root_dictation_history(",
-        "crate::ai::acp::history::search_history(",
+        "crate::ai::agent_chat::ui::history::search_history(",
     ] {
         assert!(
             !frame_fn.contains(forbidden),
@@ -204,7 +204,7 @@ fn foreground_grouping_uses_cache_only_passive_sources() {
 #[test]
 fn cold_passive_sources_warm_future_frames_without_publishing() {
     let notes = include_str!("../../src/notes/storage.rs");
-    let acp = include_str!("../../src/ai/acp/history.rs");
+    let agent_chat = include_str!("../../src/ai/agent_chat/ui/history.rs");
     let clipboard = include_str!("../../src/clipboard_history/cache.rs");
     let dictation = include_str!("../../src/dictation/history.rs");
 
@@ -216,10 +216,10 @@ fn cold_passive_sources_warm_future_frames_without_publishing() {
             "root-notes-search-cache",
         ),
         (
-            "acp_history",
-            acp,
+            "agent_chat_history",
+            agent_chat,
             "search_history_cached(",
-            "root-acp-history-cache",
+            "root-agent_chat-history-cache",
         ),
         (
             "clipboard_history",
@@ -356,7 +356,10 @@ fn root_file_test_provider_supports_multi_query_cancellation_fixture() {
 #[test]
 fn jsonl_history_sources_use_mtime_backed_foreground_indexes() {
     for (source_name, source) in [
-        ("acp_history", include_str!("../../src/ai/acp/history.rs")),
+        (
+            "agent_chat_history",
+            include_str!("../../src/ai/agent_chat/ui/history.rs"),
+        ),
         (
             "dictation_history",
             include_str!("../../src/dictation/history.rs"),
@@ -378,8 +381,8 @@ fn jsonl_history_sources_use_mtime_backed_foreground_indexes() {
 }
 
 #[test]
-fn acp_history_root_cache_bounds_search_text_before_foreground_ranking() {
-    let source = include_str!("../../src/ai/acp/history.rs");
+fn agent_chat_history_root_cache_bounds_search_text_before_foreground_ranking() {
+    let source = include_str!("../../src/ai/agent_chat/ui/history.rs");
     let rank_fn = source
         .split("fn rank_history_entries(")
         .nth(1)
@@ -390,12 +393,12 @@ fn acp_history_root_cache_bounds_search_text_before_foreground_ranking() {
         source.contains("const HISTORY_SEARCH_TEXT_MAX_CHARS")
             && source.contains("fn bounded_search_text(")
             && source.contains("entry.search_text = bounded_search_text(&entry.search_text);"),
-        "ACP history cache should clamp legacy multi-megabyte search_text fields before root ranking"
+        "Agent Chat history cache should clamp legacy multi-megabyte search_text fields before root ranking"
     );
     assert!(
         rank_fn.contains("let full = entry.search_text.as_str();")
             && !rank_fn.contains("normalize_search_text(&entry.search_text)"),
-        "foreground ACP history ranking should reuse normalized cached search_text without reallocating it per keystroke"
+        "foreground Agent Chat history ranking should reuse normalized cached search_text without reallocating it per keystroke"
     );
 }
 
@@ -409,7 +412,7 @@ fn passive_root_sections_share_score_cap_and_order() {
         "append_root_notes_section",
         "append_root_clipboard_history_section",
         "append_root_dictation_history_section",
-        "append_root_acp_history_section",
+        "append_root_agent_chat_history_section",
         "append_root_browser_history_section",
     ] {
         let section = grouping
@@ -440,11 +443,11 @@ fn passive_root_sections_share_score_cap_and_order() {
     );
     assert!(
         grouping.find("append_root_dictation_history_section(")
-            < grouping.find("append_root_acp_history_section("),
+            < grouping.find("append_root_agent_chat_history_section("),
         "Dictation History should remain before Agent Chat Conversations"
     );
     assert!(
-        grouping.find("append_root_acp_history_section(")
+        grouping.find("append_root_agent_chat_history_section(")
             < grouping.find("append_root_browser_history_section("),
         "Browser History should remain after Agent Chat Conversations"
     );

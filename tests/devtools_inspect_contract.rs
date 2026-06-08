@@ -64,7 +64,7 @@ fn automation_inspect_snapshot_exposes_runtime_surface_identity() {
         "fn app_view_variant(&self) -> &'static str",
         "AppView::ScriptList => \"ScriptList\"",
         "AppView::DivPrompt { .. } => \"DivPrompt\"",
-        "AppView::AcpChatView { .. } => \"AcpChatView\"",
+        "AppView::AgentChatView { .. } => \"AgentChatView\"",
     ] {
         assert!(
             APP_VIEW_STATE.contains(needle),
@@ -732,7 +732,7 @@ fn events_cli_reports_openai_pi_and_external_wrapper_signals() {
         "--wrapper-timeout-ms",
         "failureSignals",
         "openAi",
-        "statusNotAcpSeen",
+        "statusNotAgentChatSeen",
         "piWarm",
         "likelyOwners",
         "wrapperTimeoutIsNotBrowserSessionFailure",
@@ -873,7 +873,7 @@ fn dictation_cli_passively_reports_media_state_targets_and_delivery_gaps() {
         "passive current phase RPC",
         "target delivery generation receipt",
         "cursor insertion range",
-        "cursor insertion range for Notes/ACP/frontmost destinations",
+        "cursor insertion range for Notes/Agent Chat/frontmost destinations",
         "wrong-target refusal receipt",
         "blocked-by-missing-primitive",
     ] {

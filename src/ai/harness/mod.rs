@@ -913,7 +913,7 @@ pub const SCRIPT_READY_RECEIPT_MARKER: &str =
     "SCRIPT_READY path=~/.scriptkit/plugins/main/scripts/<name>.ts validated=true";
 
 /// Structured detection of which verification markers are present in a
-/// guidance block.  Used by both the ACP and PTY telemetry paths so marker
+/// guidance block.  Used by both the Agent Chat and PTY telemetry paths so marker
 /// detection cannot drift between surfaces.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct TabAiVerificationGuidanceMarkers {
@@ -949,7 +949,7 @@ struct TabAiCachedArtifactAuthoringGuidance {
 
 /// Fully resolved appendix for a single prompt invocation.
 ///
-/// This is the crate-visible structured result that PTY submission, ACP initial
+/// This is the crate-visible structured result that PTY submission, Agent Chat initial
 /// input, and surface-preference selection all consume directly.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct TabAiArtifactAuthoringAppendix {
@@ -1012,7 +1012,7 @@ fn resolve_tab_ai_artifact_authoring_appendix_for_prompt(
 
 /// Build the artifact-authoring guidance appendix for a Tab AI submission.
 ///
-/// Returns the full structured appendix so PTY submission, ACP initial input,
+/// Returns the full structured appendix so PTY submission, Agent Chat initial input,
 /// and surface-preference logic all consume the same resolved fields.
 pub(crate) fn build_tab_ai_artifact_authoring_appendix_for_prompt(
     prompt_type: &str,
@@ -1068,13 +1068,13 @@ pub fn tab_ai_surface_preference_for_prompt(
 }
 
 // ---------------------------------------------------------------------------
-// ACP initial-input builder (single-sourced)
+// Agent Chat initial-input builder (single-sourced)
 // ---------------------------------------------------------------------------
 
-/// Structured result from building ACP initial input, carrying telemetry
+/// Structured result from building Agent Chat initial input, carrying telemetry
 /// fields that record which verification markers were present.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct TabAiAcpInitialInput {
+pub(crate) struct TabAiAgentChatInitialInput {
     pub text: String,
     pub guidance_appended: bool,
     pub forced_by_script_list_submit: bool,
@@ -1085,19 +1085,19 @@ pub(crate) struct TabAiAcpInitialInput {
     pub includes_bun_execute_verification: bool,
 }
 
-/// Build the ACP initial input for a given prompt type and intent.
+/// Build the Agent Chat initial input for a given prompt type and intent.
 ///
-/// This is the single-sourced formatter that both the PTY and ACP paths
+/// This is the single-sourced formatter that both the PTY and Agent Chat paths
 /// consume, ensuring the mandatory Bun verification guidance cannot drift
 /// between the two surfaces.
-pub(crate) fn build_tab_ai_acp_initial_input_for_prompt(
+pub(crate) fn build_tab_ai_agent_chat_initial_input_for_prompt(
     prompt_type: &str,
     intent: &str,
-) -> TabAiAcpInitialInput {
+) -> TabAiAgentChatInitialInput {
     let intent = intent.trim();
 
     let result = if intent.is_empty() {
-        TabAiAcpInitialInput {
+        TabAiAgentChatInitialInput {
             text: String::new(),
             guidance_appended: false,
             forced_by_script_list_submit: false,
@@ -1113,7 +1113,7 @@ pub(crate) fn build_tab_ai_acp_initial_input_for_prompt(
         TabAiHarnessSubmissionMode::Submit,
     ) {
         let guidance = appendix.guidance;
-        TabAiAcpInitialInput {
+        TabAiAgentChatInitialInput {
             text: format!("{guidance}\n\nUser intent:\n{intent}\n"),
             guidance_appended: true,
             forced_by_script_list_submit: appendix.forced_by_script_list_submit,
@@ -1124,7 +1124,7 @@ pub(crate) fn build_tab_ai_acp_initial_input_for_prompt(
             includes_bun_execute_verification: appendix.markers.includes_bun_execute_verification,
         }
     } else {
-        TabAiAcpInitialInput {
+        TabAiAgentChatInitialInput {
             text: intent.to_string(),
             guidance_appended: false,
             forced_by_script_list_submit: false,
@@ -1137,7 +1137,7 @@ pub(crate) fn build_tab_ai_acp_initial_input_for_prompt(
     };
 
     tracing::info!(
-        event = "tab_ai_acp_initial_input_built",
+        event = "tab_ai_agent_chat_initial_input_built",
         prompt_type,
         guidance_appended = result.guidance_appended,
         forced_by_script_list_submit = result.forced_by_script_list_submit,
@@ -2533,7 +2533,7 @@ mod cleanup_contract_audits {
     }
 
     #[test]
-    fn selection_fallback_send_to_ai_opens_acp_chat() {
+    fn selection_fallback_send_to_ai_opens_agent_chat() {
         let source = compact(include_str!("../../app_impl/selection_fallback.rs"));
 
         assert!(
@@ -2541,8 +2541,8 @@ mod cleanup_contract_audits {
             "selection fallback must handle the harness-native send-to-ai result"
         );
         assert!(
-            source.contains(&compact("self.open_tab_ai_acp_with_entry_intent(")),
-            "send-to-ai fallback must route to ACP chat"
+            source.contains(&compact("self.open_tab_ai_agent_chat_with_entry_intent(")),
+            "send-to-ai fallback must route to Agent Chat chat"
         );
     }
 
@@ -2897,7 +2897,7 @@ mod cleanup_contract_audits {
             )),
             "close path must schedule a fresh prewarm for the next Tab press"
         );
-        // ACP close must NOT schedule prewarm.
+        // Agent Chat close must NOT schedule prewarm.
         assert!(
             body.contains(&compact("if closing_quick_terminal {")),
             "prewarm must be conditional on closing_quick_terminal"
@@ -3159,9 +3159,11 @@ mod cleanup_contract_audits {
     }
 
     #[test]
-    fn acp_initial_input_authoring_case_appends_guidance_with_all_markers_true() {
-        let input =
-            super::build_tab_ai_acp_initial_input_for_prompt("ScriptList", "clipboard cleanup");
+    fn agent_chat_initial_input_authoring_case_appends_guidance_with_all_markers_true() {
+        let input = super::build_tab_ai_agent_chat_initial_input_for_prompt(
+            "ScriptList",
+            "clipboard cleanup",
+        );
         assert!(input.guidance_appended);
         assert!(input.forced_by_script_list_submit);
         assert_eq!(input.artifact_kind, Some(super::TabAiArtifactKind::Script));
@@ -3176,9 +3178,11 @@ mod cleanup_contract_audits {
     }
 
     #[test]
-    fn acp_initial_input_non_authoring_case_omits_guidance_with_all_markers_false() {
-        let input =
-            super::build_tab_ai_acp_initial_input_for_prompt("FileSearch", "rename this file");
+    fn agent_chat_initial_input_non_authoring_case_omits_guidance_with_all_markers_false() {
+        let input = super::build_tab_ai_agent_chat_initial_input_for_prompt(
+            "FileSearch",
+            "rename this file",
+        );
         assert!(!input.guidance_appended);
         assert!(!input.forced_by_script_list_submit);
         assert!(input.artifact_kind.is_none());
@@ -3190,9 +3194,11 @@ mod cleanup_contract_audits {
     }
 
     #[test]
-    fn acp_initial_input_agent_intent_does_not_use_quick_terminal() {
-        let input =
-            super::build_tab_ai_acp_initial_input_for_prompt("ScriptList", "review PR agent");
+    fn agent_chat_initial_input_agent_intent_does_not_use_quick_terminal() {
+        let input = super::build_tab_ai_agent_chat_initial_input_for_prompt(
+            "ScriptList",
+            "review PR agent",
+        );
         assert!(input.guidance_appended);
         assert_eq!(input.artifact_kind, Some(super::TabAiArtifactKind::Agent));
         assert!(
@@ -3239,7 +3245,7 @@ mod cleanup_contract_audits {
     }
 
     #[test]
-    fn surface_preference_non_authoring_stays_acp() {
+    fn surface_preference_non_authoring_stays_agent_chat() {
         let pref = super::tab_ai_surface_preference_for_prompt(
             "FileSearch",
             Some("rename this file"),
@@ -3247,7 +3253,7 @@ mod cleanup_contract_audits {
         );
         assert!(
             !pref.use_quick_terminal,
-            "non-authoring flow must stay on ACP"
+            "non-authoring flow must stay on Agent Chat"
         );
         assert!(!pref.includes_script_authoring_skill);
         assert!(!pref.includes_bun_build_verification);

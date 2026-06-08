@@ -257,8 +257,8 @@ pub enum BuiltInFeature {
     DesignExplorer,
     /// Agent Chat window for conversing with AI assistants
     AiChat,
-    /// Agent Chat presentation experiment backed by the same ACP runtime.
-    AiChatVariant(crate::ai::acp::ui_variant::AcpChatUiVariant),
+    /// Agent Chat presentation experiment backed by the same Agent Chat runtime.
+    AiChatVariant(crate::ai::agent_chat::ui::ui_variant::AgentChatUiVariant),
     /// Notes window for quick notes and scratchpad
     Notes,
     /// Emoji picker for selecting and copying emojis
@@ -302,8 +302,8 @@ pub enum BuiltInFeature {
     DictationHistory,
     /// Settings hub for viewing configuration panels
     Settings,
-    /// ACP conversation history browser
-    AcpHistory,
+    /// Agent Chat conversation history browser
+    AgentChatHistory,
     AiVault,
     /// SDK reference browser — in-product view over `kit://sdk-reference`
     SdkReference,
@@ -528,7 +528,7 @@ impl BuiltInEntry {
             BuiltInFeature::DictationToNotes => "Start Dictation to Notes",
             BuiltInFeature::DictationHistory => "Open Dictation History",
             BuiltInFeature::Settings => "Open Script Kit Settings",
-            BuiltInFeature::AcpHistory => "Open Agent Chat History",
+            BuiltInFeature::AgentChatHistory => "Open Agent Chat History",
             BuiltInFeature::AiVault => "Open AI Vault",
             BuiltInFeature::SdkReference => "Open SDK Reference",
             BuiltInFeature::NewScriptFromTemplate => "Browse Templates",
@@ -644,7 +644,7 @@ impl BuiltInEntry {
             BuiltInFeature::DictationToNotes => "Dictate Notes",
             BuiltInFeature::DictationHistory => "History",
             BuiltInFeature::Settings => "Kit Settings",
-            BuiltInFeature::AcpHistory => "History",
+            BuiltInFeature::AgentChatHistory => "History",
             BuiltInFeature::AiVault => "Vault",
             BuiltInFeature::SdkReference => "SDK Docs",
             BuiltInFeature::NewScriptFromTemplate => "Templates",
@@ -768,7 +768,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         ));
         debug!("Added Agent Chat built-in entry");
 
-        for variant in crate::ai::acp::ui_variant::AcpChatUiVariant::EXPERIMENTS {
+        for variant in crate::ai::agent_chat::ui::ui_variant::AgentChatUiVariant::EXPERIMENTS {
             entries.push(BuiltInEntry::new_with_icon(
                 variant.menu_id(),
                 variant.menu_name(),
@@ -781,14 +781,14 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         debug!("Added Agent Chat UI variation built-in entries");
 
         entries.push(BuiltInEntry::new_with_icon(
-            "builtin/acp-history",
+            "builtin/agent_chat-history",
             "Agent Chat History",
             "Browse and manage past Agent Chat conversations",
             vec!["history", "conversations", "chat", "ai", "past", "previous"],
-            BuiltInFeature::AcpHistory,
+            BuiltInFeature::AgentChatHistory,
             "history",
         ));
-        debug!("Added ACP History built-in entry");
+        debug!("Added Agent Chat History built-in entry");
 
         entries.push(BuiltInEntry::new_with_icon(
             "builtin/vault",
@@ -1822,7 +1822,7 @@ fn hidden_builtin_entry(id: &str) -> Option<BuiltInEntry> {
                 "voice",
                 "microphone",
                 "app",
-                "acp",
+                "agent_chat",
                 "chat",
                 "ai",
             ],
@@ -2193,7 +2193,7 @@ mod tests {
         assert!(ai_chat.keywords.contains(&"claude".to_string()));
         assert!(ai_chat.keywords.contains(&"gpt".to_string()));
 
-        for variant in crate::ai::acp::ui_variant::AcpChatUiVariant::EXPERIMENTS {
+        for variant in crate::ai::agent_chat::ui::ui_variant::AgentChatUiVariant::EXPERIMENTS {
             let entry = entries.iter().find(|entry| entry.id == variant.menu_id());
             assert!(
                 entry.is_some(),

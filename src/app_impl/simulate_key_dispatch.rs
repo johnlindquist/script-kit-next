@@ -123,7 +123,7 @@ impl ScriptListApp {
         // mirrors the live GPUI handler at app_impl/startup.rs:1685 so
         // that stdin `simulateKey enter` against a popup-open surface
         // fires the highlighted action instead of the parent view's
-        // enter arm (e.g., ACP composer submit). Same applies to all
+        // enter arm (e.g., Agent Chat composer submit). Same applies to all
         // actions-popup navigation/activation keys across every host.
         let mut actions_popup_consumed_key = false;
         if view.show_actions_popup {
@@ -240,16 +240,16 @@ impl ScriptListApp {
                         // Mirrors the live GPUI handler at
                         // src/render_script_list/mod.rs:881-890: Cmd+Enter
                         // (no shift/alt/ctrl) routes the current ScriptList
-                        // selection into ACP as an explicit
+                        // selection into Agent Chat as an explicit
                         // FocusedTarget context part rather than the plain
                         // frontmost-app context. Without this arm, automation
                         // callers of SimulateKey fell through to the plain
                         // `enter` case and executed the selected item.
                         logging::log(
                             "STDIN",
-                            "SimulateKey: Cmd+Enter - route to ACP context capture",
+                            "SimulateKey: Cmd+Enter - route to Agent Chat context capture",
                         );
-                        view.try_route_global_cmd_enter_to_acp_context_capture(ctx);
+                        view.try_route_global_cmd_enter_to_agent_chat_context_capture(ctx);
                     } else if view.handle_menu_syntax_form_key_input(
                         &key_lower,
                         key_char,
@@ -572,7 +572,7 @@ impl ScriptListApp {
                                                 view.spine_cwd_revision.wrapping_add(1);
                                             view.cwd_pick_mode = false;
                                             view.invalidate_grouped_cache();
-                                            view.prewarm_acp_for_spine_cwd(ctx);
+                                            view.prewarm_agent_chat_for_spine_cwd(ctx);
                                             view.persist_spine_cwd();
                                             view.reset_to_script_list(ctx);
                                             view.clear_filter(window, ctx);
@@ -1604,10 +1604,10 @@ impl ScriptListApp {
                         }
                     }
                 }
-                AppView::AcpChatView { ref entity, .. } => {
+                AppView::AgentChatView { ref entity, .. } => {
                     logging::log(
                         "STDIN",
-                        &format!("SimulateKey: Dispatching '{}' to AcpChatView", key_lower),
+                        &format!("SimulateKey: Dispatching '{}' to AgentChatView", key_lower),
                     );
                     let entity_clone = entity.clone();
                     if has_cmd && key_lower == "k" {
@@ -1618,26 +1618,26 @@ impl ScriptListApp {
                             "STDIN",
                             "SimulateKey: Cmd+P - open history command from Agent Chat",
                         );
-                        view.handle_action("acp_show_history".into(), window, ctx);
+                        view.handle_action("agent_chat_show_history".into(), window, ctx);
                     } else if {
-                        // Spine projection in ACP owns Up/Down for row selection
+                        // Spine projection in Agent Chat owns Up/Down for row selection
                         // and Escape to dismiss. These short-circuit before the
                         // legacy actions / cancel-streaming paths.
                         let spine_handled = entity_clone.update(ctx, |chat, cx| {
-                            if !chat.acp_spine_owns_list() {
+                            if !chat.agent_chat_spine_owns_list() {
                                 return false;
                             }
                             match key_lower.as_str() {
                                 "up" | "arrowup" => {
-                                    chat.move_acp_spine_selection(-1, cx);
+                                    chat.move_agent_chat_spine_selection(-1, cx);
                                     true
                                 }
                                 "down" | "arrowdown" => {
-                                    chat.move_acp_spine_selection(1, cx);
+                                    chat.move_agent_chat_spine_selection(1, cx);
                                     true
                                 }
                                 "escape" if !view.show_actions_popup => {
-                                    chat.dismiss_acp_spine_projection(cx);
+                                    chat.dismiss_agent_chat_spine_projection(cx);
                                     true
                                 }
                                 _ => false,
@@ -1646,7 +1646,7 @@ impl ScriptListApp {
                         if spine_handled {
                             logging::log(
                                 "STDIN",
-                                &format!("SimulateKey: '{}' - spine handled (ACP)", key_lower),
+                                &format!("SimulateKey: '{}' - spine handled (Agent Chat)", key_lower),
                             );
                         }
                         spine_handled
@@ -1657,7 +1657,7 @@ impl ScriptListApp {
                             "STDIN",
                             "SimulateKey: Escape - close Agent Chat actions dialog",
                         );
-                        view.close_actions_popup(ActionsDialogHost::AcpChat, window, ctx);
+                        view.close_actions_popup(ActionsDialogHost::AgentChat, window, ctx);
                     } else if key_lower == "escape" {
                         let cancelled_streaming = entity_clone.update(ctx, |chat, cx| {
                             if chat.is_focused_text_mini()
@@ -1682,7 +1682,7 @@ impl ScriptListApp {
                                 "STDIN",
                                 "SimulateKey: Escape - hide focused-text quick prompt Agent Chat",
                             );
-                            view.close_acp_chat_main_window_state_first(ctx);
+                            view.close_agent_chat_main_window_state_first(ctx);
                         } else if view.opened_from_main_menu {
                             logging::log("STDIN", "SimulateKey: Escape - return to main menu from Agent Chat (opened from main menu)");
                             view.close_tab_ai_harness_terminal_with_window(window, ctx);
@@ -1691,21 +1691,21 @@ impl ScriptListApp {
                                 "STDIN",
                                 "SimulateKey: Escape - close Agent Chat window (opened directly)",
                             );
-                            view.close_acp_chat_main_window_state_first(ctx);
+                            view.close_agent_chat_main_window_state_first(ctx);
                         }
                     } else if has_cmd && key_lower == "w" {
                         logging::log("STDIN", "SimulateKey: Cmd+W - close window from Agent Chat");
                         view.close_tab_ai_harness_terminal_with_window(window, ctx);
                         view.close_and_reset_window(ctx);
                     } else if has_cmd && key_lower == "enter" && !has_shift {
-                        // Spine prompt submission takes precedence in ACP. If the
+                        // Spine prompt submission takes precedence in Agent Chat. If the
                         // composer parses a valid prompt plan (resolved context,
                         // free-text, etc.), submit it. Otherwise fall back to the
                         // focused-text mini replace action.
                         let spine_submitted = entity_clone
-                            .update(ctx, |chat, cx| chat.try_submit_acp_spine_prompt_plan(cx));
+                            .update(ctx, |chat, cx| chat.try_submit_agent_chat_spine_prompt_plan(cx));
                         if spine_submitted {
-                            logging::log("STDIN", "SimulateKey: Cmd+Enter - spine submitted (ACP)");
+                            logging::log("STDIN", "SimulateKey: Cmd+Enter - spine submitted (Agent Chat)");
                         } else {
                             logging::log(
                                 "STDIN",
@@ -1714,30 +1714,30 @@ impl ScriptListApp {
                             entity_clone.update(ctx, |chat, cx| {
                                 if chat.is_focused_text_mini() {
                                     chat.perform_focused_text_mini_action(
-                                        crate::ai::acp::view::FocusedTextMiniAction::Replace,
+                                        crate::ai::agent_chat::ui::view::FocusedTextMiniAction::Replace,
                                         cx,
                                     );
                                 }
                             });
                         }
                     } else if key_lower == "enter" && !has_shift && {
-                        // When the ACP composer's Spine projection owns the list,
+                        // When the Agent Chat composer's Spine projection owns the list,
                         // Enter must accept the selected sigil row, not submit the
                         // prompt. Protocol dispatch bypasses GPUI handle_key_down,
                         // so we must check here too.
                         let spine_consumed = entity_clone.update(ctx, |chat, cx| {
-                            if chat.acp_spine_owns_list() {
-                                chat.accept_acp_spine_projection_row(window, cx)
+                            if chat.agent_chat_spine_owns_list() {
+                                chat.accept_agent_chat_spine_projection_row(window, cx)
                             } else {
                                 false
                             }
                         });
                         if spine_consumed {
-                            logging::log("STDIN", "SimulateKey: Enter - spine accepted row (ACP)");
+                            logging::log("STDIN", "SimulateKey: Enter - spine accepted row (Agent Chat)");
                         }
                         !spine_consumed
                     } {
-                        logging::log("STDIN", "SimulateKey: Enter - submit ACP input");
+                        logging::log("STDIN", "SimulateKey: Enter - submit Agent Chat input");
                         entity_clone.update(ctx, |chat, cx| {
                             if chat.has_focused_text_context() {
                                 if let Err(error) = chat.submit_focused_text_from_enter(cx) {
@@ -1766,7 +1766,7 @@ impl ScriptListApp {
                         } else {
                             logging::log(
                                 "STDIN",
-                                "SimulateKey: Backspace - atomic token removed (ACP)",
+                                "SimulateKey: Backspace - atomic token removed (Agent Chat)",
                             );
                         }
                     } else if key_lower.chars().count() == 1 {
@@ -1782,7 +1782,7 @@ impl ScriptListApp {
                     } else {
                         logging::log(
                             "STDIN",
-                            &format!("SimulateKey: Unhandled key '{}' in AcpChatView", key_lower),
+                            &format!("SimulateKey: Unhandled key '{}' in AgentChatView", key_lower),
                         );
                     }
                 }

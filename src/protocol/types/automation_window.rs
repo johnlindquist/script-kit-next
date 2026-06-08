@@ -34,7 +34,7 @@ pub enum AutomationWindowKind {
     Notes,
     Ai,
     MiniAi,
-    AcpDetached,
+    AgentChatDetached,
     Dictation,
     DevStyleTool,
     ActionsDialog,
@@ -44,7 +44,7 @@ pub enum AutomationWindowKind {
 impl AutomationWindowKind {
     /// Canonical camelCase string for this kind — the exact form carried on
     /// the wire by `serde(rename_all = "camelCase")`. Used by automation
-    /// receipts (e.g. `AcpResolvedTarget.windowKind`) so agentic callers
+    /// receipts (e.g. `AgentChatResolvedTarget.windowKind`) so agentic callers
     /// see the same value they would receive from `listAutomationWindows`.
     pub fn as_camel_case(self) -> &'static str {
         match self {
@@ -52,7 +52,7 @@ impl AutomationWindowKind {
             AutomationWindowKind::Notes => "notes",
             AutomationWindowKind::Ai => "ai",
             AutomationWindowKind::MiniAi => "miniAi",
-            AutomationWindowKind::AcpDetached => "acpDetached",
+            AutomationWindowKind::AgentChatDetached => "agentChatDetached",
             AutomationWindowKind::Dictation => "dictation",
             AutomationWindowKind::DevStyleTool => "devStyleTool",
             AutomationWindowKind::ActionsDialog => "actionsDialog",
@@ -78,7 +78,7 @@ pub struct AutomationWindowBounds {
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct AutomationWindowInfo {
-    /// Stable automation ID (e.g. `"main"`, `"acpDetached:thread-1"`).
+    /// Stable automation ID (e.g. `"main"`, `"agentChatDetached:thread-1"`).
     pub id: String,
     /// The kind of window this represents.
     pub kind: AutomationWindowKind,

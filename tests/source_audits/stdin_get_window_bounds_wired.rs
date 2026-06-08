@@ -89,7 +89,7 @@ fn get_window_bounds_arm_reads_main_registry_bounds() {
         arm_body.contains(".id == \"main\""),
         "GetWindowBounds arm MUST filter the registry on `.id == \"main\"` \
          to select the main prompt window. Returning bounds of the first \
-         window in the Vec would silently report ACP / notes window bounds \
+         window in the Vec would silently report Agent Chat / notes window bounds \
          on sessions where those windows appear earlier in the registry."
     );
 }

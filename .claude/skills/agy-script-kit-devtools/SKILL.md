@@ -29,7 +29,7 @@ Important options:
 
 - `--prompt <text>`: required user report or inspection request.
 - `--prompt-file <path>`: read the user request from a file.
-- `--surface <id>`: optional hint such as `main`, `actions-dialog`, `notes`, `dictation`, `acp`, `file-search`, or `settings`.
+- `--surface <id>`: optional hint such as `main`, `actions-dialog`, `notes`, `dictation`, `agent_chat`, `file-search`, or `settings`.
 - `--session <name>`: DevTools session name hint passed to `agy`; defaults to `agy-devtools`.
 - `--trust-repo`: pass `--dangerously-skip-permissions` to `agy`; use only after reviewing the prompt and safety gates.
 - `--agy-sandbox on|off`: keep sandbox on by default; turn it off only when `agy` needs to run local DevTools commands.
@@ -89,7 +89,7 @@ For wrapper changes, run:
 scripts/agentic/agy-devtools.sh --help
 scripts/agentic/agy-devtools.sh infer --prompt "Cmd-K opens the actions popup but it is clipped" --surface auto
 scripts/agentic/agy-devtools.sh run --dry-run --prompt "inspect the main menu filter" --surface main
-scripts/agentic/agy-devtools.sh run --dry-run --fast --prompt "Open Agent Chat and submit what's for lunch" --surface acp --allow-act --allow-submit
+scripts/agentic/agy-devtools.sh run --dry-run --fast --prompt "Open Agent Chat and submit what's for lunch" --surface agent_chat --allow-act --allow-submit
 scripts/agentic/agy-devtools.sh run --dry-run --fast --prompt "Open the theme designer, change the accent color to red" --surface theme --allow-act --allow-submit --allow-real-data
 ```
 

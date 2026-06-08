@@ -73,7 +73,7 @@ interface ResolvedSurfaceTarget {
 }
 
 interface AttachedPopupHostSetup {
-  kind: "filterable-main" | "acp-chat";
+  kind: "filterable-main" | "agent_chat-chat";
   caseId?: string;
   trigger?: "slash";
   viewName: string;
@@ -253,7 +253,7 @@ async function enterAttachedPopupHostFixture(
     return null;
   }
   if (entry.hostFixture.kind !== "filterable-main") {
-    if (entry.hostFixture.kind !== "acp-chat") {
+    if (entry.hostFixture.kind !== "agent_chat-chat") {
       throw new Error(`${entry.id}: unsupported host fixture ${entry.hostFixture.kind}`);
     }
     const showReceipt = await sendAndAwaitParse(session, { type: "show" }, timeoutMs);
@@ -266,8 +266,8 @@ async function enterAttachedPopupHostFixture(
       session,
       {
         type: "waitFor",
-        requestId: `${entry.id}-acp-ready-${Date.now()}`,
-        condition: { type: "acpReady" },
+        requestId: `${entry.id}-agent_chat-ready-${Date.now()}`,
+        condition: { type: "agent_chatReady" },
         timeout: timeoutMs,
         pollInterval: 25,
         trace: "onFailure",
@@ -278,12 +278,12 @@ async function enterAttachedPopupHostFixture(
     const resolvedTarget = await promoteExactTarget(
       session,
       {
-        id: `${entry.id}-acp-host`,
-        surface: "acpChat",
-        viewName: "acp-chat",
-        imageLibraryName: "acp-chat.png",
+        id: `${entry.id}-agent_chat-host`,
+        surface: "agentChatChat",
+        viewName: "agent_chat-chat",
+        imageLibraryName: "agent_chat-chat.png",
         promptType: "ai",
-        listSemanticId: "list:acp-messages",
+        listSemanticId: "list:agent_chat-messages",
         entryCommand: { type: "triggerBuiltin", name: "tab-ai" },
         filterText: "",
         expectedElementChromeCount: 0,
@@ -299,17 +299,17 @@ async function enterAttachedPopupHostFixture(
     const observation = await rpc(
       session,
       {
-        type: "getAcpState",
-        requestId: `${entry.id}-acp-host-state-${Date.now()}`,
+        type: "getAgentChatState",
+        requestId: `${entry.id}-agent_chat-host-state-${Date.now()}`,
         target: resolvedTarget.targetJson,
       },
-      "acpStateResult",
+      "agent_chatStateResult",
       timeoutMs,
     );
     return {
-      kind: "acp-chat",
+      kind: "agent_chat-chat",
       trigger: entry.hostFixture.trigger,
-      viewName: "acp-chat",
+      viewName: "agent_chat-chat",
       promptType: "ai",
       entryReceipt,
       showReceipt,
@@ -359,8 +359,8 @@ async function openAttachedPopup(
     return sendAndAwaitParse(
       session,
       {
-        type: "setAcpInput",
-        requestId: `${entry.id}-set-acp-input-${Date.now()}`,
+        type: "setAgentChatInput",
+        requestId: `${entry.id}-set-agent_chat-input-${Date.now()}`,
         text: "/",
         submit: false,
       },

@@ -295,11 +295,11 @@ fn test_get_grouped_results_prefers_last_selected_builtin_for_exact_query() {
             group: BuiltInGroup::Core,
         },
         BuiltInEntry {
-            id: "builtin/acp-history".to_string(),
+            id: "builtin/agent_chat-history".to_string(),
             name: "Agent Chat History".to_string(),
             description: "Browse Agent Chat conversations".to_string(),
             keywords: vec!["history".to_string(), "conversation".to_string()],
-            feature: BuiltInFeature::AcpHistory,
+            feature: BuiltInFeature::AgentChatHistory,
             icon: None,
             group: BuiltInGroup::Core,
         },

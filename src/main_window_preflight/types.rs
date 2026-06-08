@@ -78,7 +78,7 @@ pub(crate) struct RootPassiveFrameReceipt {
     pub notes: RootPassiveSourceReceipt,
     pub clipboard_history: RootPassiveSourceReceipt,
     pub dictation_history: RootPassiveSourceReceipt,
-    pub acp_history: RootPassiveSourceReceipt,
+    pub agent_chat_history: RootPassiveSourceReceipt,
     pub ai_vault: RootPassiveSourceReceipt,
     pub browser_tabs: RootPassiveSourceReceipt,
     pub browser_history: RootPassiveSourceReceipt,

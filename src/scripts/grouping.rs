@@ -424,7 +424,7 @@ pub(crate) fn get_grouped_results_with_validation_query_and_root_files(
             scan_limit: 0,
         },
         &[],
-        crate::ai::acp::history::RootAcpHistorySectionOptions {
+        crate::ai::agent_chat::ui::history::RootAgentChatHistorySectionOptions {
             enabled: false,
             ..Default::default()
         },
@@ -480,8 +480,8 @@ pub(crate) fn get_grouped_results_with_validation_query_and_root_files_with_opti
     root_clipboard_history_options: crate::clipboard_history::RootClipboardHistorySectionOptions,
     root_dictation_history_hits: &[crate::dictation::RootDictationHistorySearchHit],
     root_dictation_history_options: crate::dictation::RootDictationHistorySectionOptions,
-    root_acp_history_hits: &[crate::ai::acp::history::AcpHistorySearchHit],
-    root_acp_history_options: crate::ai::acp::history::RootAcpHistorySectionOptions,
+    root_agent_chat_history_hits: &[crate::ai::agent_chat::ui::history::AgentChatHistorySearchHit],
+    root_agent_chat_history_options: crate::ai::agent_chat::ui::history::RootAgentChatHistorySectionOptions,
     root_ai_vault_hits: &[crate::ai_vault::AiVaultHit],
     root_ai_vault_options: crate::ai_vault::RootAiVaultSectionOptions,
     root_browser_tab_hits: &[crate::browser_tabs::RootBrowserTabSearchHit],
@@ -637,19 +637,19 @@ pub(crate) fn get_grouped_results_with_validation_query_and_root_files_with_opti
                         .includes(crate::menu_syntax::RootUnifiedSourceFilter::Dictation),
                 );
             }
-            crate::config::UnifiedSearchPassiveSource::AcpHistory => {
+            crate::config::UnifiedSearchPassiveSource::AgentChatHistory => {
                 if !root_source_filters
                     .allows(crate::menu_syntax::RootUnifiedSourceFilter::Conversations)
                 {
                     continue;
                 }
-                append_root_acp_history_section(
+                append_root_agent_chat_history_section(
                     &mut grouped,
                     &mut flat_results,
                     filter_text,
                     advanced_query,
-                    root_acp_history_hits,
-                    root_acp_history_options,
+                    root_agent_chat_history_hits,
+                    root_agent_chat_history_options,
                     &mut passive_budget,
                     root_source_filters
                         .includes(crate::menu_syntax::RootUnifiedSourceFilter::Conversations),
@@ -845,18 +845,21 @@ fn append_root_passive_section(
 }
 
 #[allow(clippy::too_many_arguments)]
-fn append_root_acp_history_section(
+fn append_root_agent_chat_history_section(
     grouped: &mut Vec<GroupedListItem>,
     flat_results: &mut Vec<SearchResult>,
     filter_text: &str,
     advanced_query: Option<&crate::menu_syntax::AdvancedQuery>,
-    hits: &[crate::ai::acp::history::AcpHistorySearchHit],
-    options: crate::ai::acp::history::RootAcpHistorySectionOptions,
+    hits: &[crate::ai::agent_chat::ui::history::AgentChatHistorySearchHit],
+    options: crate::ai::agent_chat::ui::history::RootAgentChatHistorySectionOptions,
     budget: &mut RootPassiveResultBudget,
     explicit_source_filter: bool,
 ) {
     if advanced_query.is_some()
-        || !crate::ai::acp::history::root_acp_history_query_is_eligible(filter_text, options)
+        || !crate::ai::agent_chat::ui::history::root_agent_chat_history_query_is_eligible(
+            filter_text,
+            options,
+        )
     {
         return;
     }
@@ -878,7 +881,7 @@ fn append_root_acp_history_section(
                 entry.message_count,
                 if entry.message_count == 1 { "" } else { "s" }
             );
-            SearchResult::AcpHistory(crate::scripts::AcpHistoryMatch {
+            SearchResult::AgentChatHistory(crate::scripts::AgentChatHistoryMatch {
                 entry,
                 score: root_passive_result_score(rank),
                 matched_field: hit.matched_field,
@@ -2113,12 +2116,12 @@ mod advanced_query_tests {
         }
     }
 
-    fn acp_history_hit(
+    fn agent_chat_history_hit(
         session_id: &str,
         title: &str,
-    ) -> crate::ai::acp::history::AcpHistorySearchHit {
-        crate::ai::acp::history::AcpHistorySearchHit {
-            entry: crate::ai::acp::history::AcpHistoryEntry {
+    ) -> crate::ai::agent_chat::ui::history::AgentChatHistorySearchHit {
+        crate::ai::agent_chat::ui::history::AgentChatHistorySearchHit {
+            entry: crate::ai::agent_chat::ui::history::AgentChatHistoryEntry {
                 timestamp: "2026-05-10T17:13:06Z".to_string(),
                 first_message: title.to_string(),
                 message_count: 3,
@@ -2128,7 +2131,7 @@ mod advanced_query_tests {
                 search_text: title.to_lowercase(),
             },
             score: 100,
-            matched_field: crate::ai::acp::history::AcpHistorySearchField::Title,
+            matched_field: crate::ai::agent_chat::ui::history::AgentChatHistorySearchField::Title,
         }
     }
 
@@ -2235,7 +2238,7 @@ mod advanced_query_tests {
                     SearchResult::File(_) => "rootFile",
                     SearchResult::Note(_)
                     | SearchResult::Todo(_)
-                    | SearchResult::AcpHistory(_)
+                    | SearchResult::AgentChatHistory(_)
                     | SearchResult::AiVault(_)
                     | SearchResult::ClipboardHistory(_)
                     | SearchResult::DictationHistory(_)
@@ -2259,7 +2262,7 @@ mod advanced_query_tests {
             let source = match result {
                 SearchResult::Note(_) => "Notes",
                 SearchResult::Todo(_) => "Todos",
-                SearchResult::AcpHistory(_) => "Agent Chat Conversations",
+                SearchResult::AgentChatHistory(_) => "Agent Chat Conversations",
                 SearchResult::AiVault(_) => "AI Vault",
                 SearchResult::ClipboardHistory(_) => "Clipboard History",
                 SearchResult::DictationHistory(_) => "Dictation History",
@@ -2342,7 +2345,10 @@ mod advanced_query_tests {
             "dictation-design",
             "design transcript",
         )];
-        let acp = vec![acp_history_hit("session-design", "design conversation")];
+        let agent_chat = vec![agent_chat_history_hit(
+            "session-design",
+            "design conversation",
+        )];
         let browser_history = vec![root_browser_history_hit(
             "history/design",
             "design history page",
@@ -2392,8 +2398,8 @@ mod advanced_query_tests {
                 min_query_chars: 3,
                 scan_limit: 10,
             },
-            &acp,
-            crate::ai::acp::history::RootAcpHistorySectionOptions::default(),
+            &agent_chat,
+            crate::ai::agent_chat::ui::history::RootAgentChatHistorySectionOptions::default(),
             &[],
             crate::ai_vault::RootAiVaultSectionOptions::default(),
             &browser_tabs,
@@ -2491,13 +2497,16 @@ mod advanced_query_tests {
             "dictation-design",
             "design transcript",
         )];
-        let acp = vec![acp_history_hit("session-design", "design conversation")];
+        let agent_chat = vec![agent_chat_history_hit(
+            "session-design",
+            "design conversation",
+        )];
         let browser_history = vec![root_browser_history_hit(
             "history/design",
             "design history page",
         )];
         let passive_order = [
-            crate::config::UnifiedSearchPassiveSource::AcpHistory,
+            crate::config::UnifiedSearchPassiveSource::AgentChatHistory,
             crate::config::UnifiedSearchPassiveSource::BrowserHistory,
             crate::config::UnifiedSearchPassiveSource::Notes,
             crate::config::UnifiedSearchPassiveSource::BrowserTabs,
@@ -2549,8 +2558,8 @@ mod advanced_query_tests {
                 min_query_chars: 3,
                 scan_limit: 10,
             },
-            &acp,
-            crate::ai::acp::history::RootAcpHistorySectionOptions::default(),
+            &agent_chat,
+            crate::ai::agent_chat::ui::history::RootAgentChatHistorySectionOptions::default(),
             &[],
             crate::ai_vault::RootAiVaultSectionOptions::default(),
             &browser_tabs,
@@ -2637,7 +2646,10 @@ mod advanced_query_tests {
             "dictation-design",
             "design transcript",
         )];
-        let acp = vec![acp_history_hit("session-design", "design conversation")];
+        let agent_chat = vec![agent_chat_history_hit(
+            "session-design",
+            "design conversation",
+        )];
         let browser_history = vec![root_browser_history_hit(
             "history/design",
             "design history page",
@@ -2723,8 +2735,9 @@ mod advanced_query_tests {
                         min_query_chars: 3,
                         scan_limit: 10,
                     },
-                    &acp,
-                    crate::ai::acp::history::RootAcpHistorySectionOptions::default(),
+                    &agent_chat,
+                    crate::ai::agent_chat::ui::history::RootAgentChatHistorySectionOptions::default(
+                    ),
                     &[],
                     crate::ai_vault::RootAiVaultSectionOptions::default(),
                     &browser_tabs,
@@ -2786,8 +2799,8 @@ mod advanced_query_tests {
                 root_dictation_history_hit(&format!("dictation-design-{i}"), "design transcript")
             })
             .collect::<Vec<_>>();
-        let acp = (0..3)
-            .map(|i| acp_history_hit(&format!("session-design-{i}"), "design conversation"))
+        let agent_chat = (0..3)
+            .map(|i| agent_chat_history_hit(&format!("session-design-{i}"), "design conversation"))
             .collect::<Vec<_>>();
         let browser_history = (0..3)
             .map(|i| {
@@ -2841,8 +2854,8 @@ mod advanced_query_tests {
                 min_query_chars: 3,
                 scan_limit: 10,
             },
-            &acp,
-            crate::ai::acp::history::RootAcpHistorySectionOptions {
+            &agent_chat,
+            crate::ai::agent_chat::ui::history::RootAgentChatHistorySectionOptions {
                 enabled: true,
                 max_results: 3,
                 min_query_chars: 3,
@@ -2961,7 +2974,7 @@ mod advanced_query_tests {
                 scan_limit: 10,
             },
             &[],
-            crate::ai::acp::history::RootAcpHistorySectionOptions {
+            crate::ai::agent_chat::ui::history::RootAgentChatHistorySectionOptions {
                 enabled: true,
                 max_results: 3,
                 min_query_chars: 3,
@@ -3070,7 +3083,7 @@ mod advanced_query_tests {
                     scan_limit: 10,
                 },
                 &[],
-                crate::ai::acp::history::RootAcpHistorySectionOptions::default(),
+                crate::ai::agent_chat::ui::history::RootAgentChatHistorySectionOptions::default(),
                 &[],
                 crate::ai_vault::RootAiVaultSectionOptions::default(),
                 &[],
@@ -3103,7 +3116,7 @@ mod advanced_query_tests {
     }
 
     #[test]
-    fn root_acp_history_rows_insert_after_primary_rows_before_fallbacks() {
+    fn root_agent_chat_history_rows_insert_after_primary_rows_before_fallbacks() {
         let mut grouped = vec![
             GroupedListItem::Item(0),
             GroupedListItem::SectionHeader("Use \"search\" with...".to_string(), None),
@@ -3117,15 +3130,15 @@ mod advanced_query_tests {
             )
             .unwrap(),
         ];
-        let hits = vec![acp_history_hit("session-1", "search design notes")];
+        let hits = vec![agent_chat_history_hit("session-1", "search design notes")];
 
-        append_root_acp_history_section(
+        append_root_agent_chat_history_section(
             &mut grouped,
             &mut flat,
             "search",
             None,
             &hits,
-            crate::ai::acp::history::RootAcpHistorySectionOptions::default(),
+            crate::ai::agent_chat::ui::history::RootAgentChatHistorySectionOptions::default(),
             &mut RootPassiveResultBudget::unbounded(),
             false,
         );
@@ -3135,7 +3148,7 @@ mod advanced_query_tests {
         );
         assert!(matches!(
             flat.get(2),
-            Some(SearchResult::AcpHistory(hit)) if hit.entry.session_id == "session-1"
+            Some(SearchResult::AgentChatHistory(hit)) if hit.entry.session_id == "session-1"
         ));
         assert!(
             matches!(&grouped[3], GroupedListItem::SectionHeader(label, None) if label.starts_with("Use \""))
@@ -3143,32 +3156,32 @@ mod advanced_query_tests {
     }
 
     #[test]
-    fn root_acp_history_rows_do_not_append_for_short_or_advanced_query() {
-        let hits = vec![acp_history_hit("session-1", "search design notes")];
+    fn root_agent_chat_history_rows_do_not_append_for_short_or_advanced_query() {
+        let hits = vec![agent_chat_history_hit("session-1", "search design notes")];
 
         let mut grouped = Vec::new();
         let mut flat = Vec::new();
-        append_root_acp_history_section(
+        append_root_agent_chat_history_section(
             &mut grouped,
             &mut flat,
             "ai",
             None,
             &hits,
-            crate::ai::acp::history::RootAcpHistorySectionOptions::default(),
+            crate::ai::agent_chat::ui::history::RootAgentChatHistorySectionOptions::default(),
             &mut RootPassiveResultBudget::unbounded(),
             false,
         );
         assert!(grouped.is_empty());
         assert!(flat.is_empty());
 
-        let query = advanced_query_from(":type:acp-history search");
-        append_root_acp_history_section(
+        let query = advanced_query_from(":type:agent_chat-history search");
+        append_root_agent_chat_history_section(
             &mut grouped,
             &mut flat,
             "search",
             Some(&query),
             &hits,
-            crate::ai::acp::history::RootAcpHistorySectionOptions::default(),
+            crate::ai::agent_chat::ui::history::RootAgentChatHistorySectionOptions::default(),
             &mut RootPassiveResultBudget::unbounded(),
             false,
         );
@@ -3177,18 +3190,18 @@ mod advanced_query_tests {
     }
 
     #[test]
-    fn root_acp_history_rows_do_not_append_when_disabled() {
-        let hits = vec![acp_history_hit("session-1", "search design notes")];
+    fn root_agent_chat_history_rows_do_not_append_when_disabled() {
+        let hits = vec![agent_chat_history_hit("session-1", "search design notes")];
         let mut grouped = Vec::new();
         let mut flat = Vec::new();
 
-        append_root_acp_history_section(
+        append_root_agent_chat_history_section(
             &mut grouped,
             &mut flat,
             "search",
             None,
             &hits,
-            crate::ai::acp::history::RootAcpHistorySectionOptions {
+            crate::ai::agent_chat::ui::history::RootAgentChatHistorySectionOptions {
                 enabled: false,
                 ..Default::default()
             },
@@ -3201,7 +3214,7 @@ mod advanced_query_tests {
     }
 
     #[test]
-    fn root_clipboard_history_rows_insert_before_acp_and_fallbacks() {
+    fn root_clipboard_history_rows_insert_before_agent_chat_and_fallbacks() {
         let mut grouped = vec![
             GroupedListItem::Item(0),
             GroupedListItem::SectionHeader("Use \"search\" with...".to_string(), None),
@@ -3220,7 +3233,7 @@ mod advanced_query_tests {
             "search copied text",
             true,
         )];
-        let acp = vec![acp_history_hit("session-1", "search design notes")];
+        let agent_chat = vec![agent_chat_history_hit("session-1", "search design notes")];
 
         append_root_clipboard_history_section(
             &mut grouped,
@@ -3235,13 +3248,13 @@ mod advanced_query_tests {
             &mut RootPassiveResultBudget::unbounded(),
             false,
         );
-        append_root_acp_history_section(
+        append_root_agent_chat_history_section(
             &mut grouped,
             &mut flat,
             "search",
             None,
-            &acp,
-            crate::ai::acp::history::RootAcpHistorySectionOptions::default(),
+            &agent_chat,
+            crate::ai::agent_chat::ui::history::RootAgentChatHistorySectionOptions::default(),
             &mut RootPassiveResultBudget::unbounded(),
             false,
         );
@@ -3258,12 +3271,12 @@ mod advanced_query_tests {
         ));
         assert!(matches!(
             flat.get(3),
-            Some(SearchResult::AcpHistory(hit)) if hit.entry.session_id == "session-1"
+            Some(SearchResult::AgentChatHistory(hit)) if hit.entry.session_id == "session-1"
         ));
     }
 
     #[test]
-    fn root_notes_rows_insert_after_primary_before_clipboard_acp_and_fallbacks() {
+    fn root_notes_rows_insert_after_primary_before_clipboard_agent_chat_and_fallbacks() {
         let mut grouped = vec![
             GroupedListItem::Item(0),
             GroupedListItem::SectionHeader("Use \"search\" with...".to_string(), None),
@@ -3287,7 +3300,7 @@ mod advanced_query_tests {
             "search copied text",
             true,
         )];
-        let acp = vec![acp_history_hit("session-1", "search design notes")];
+        let agent_chat = vec![agent_chat_history_hit("session-1", "search design notes")];
 
         append_root_notes_section(
             &mut grouped,
@@ -3315,13 +3328,13 @@ mod advanced_query_tests {
             &mut RootPassiveResultBudget::unbounded(),
             false,
         );
-        append_root_acp_history_section(
+        append_root_agent_chat_history_section(
             &mut grouped,
             &mut flat,
             "search",
             None,
-            &acp,
-            crate::ai::acp::history::RootAcpHistorySectionOptions::default(),
+            &agent_chat,
+            crate::ai::agent_chat::ui::history::RootAgentChatHistorySectionOptions::default(),
             &mut RootPassiveResultBudget::unbounded(),
             false,
         );
@@ -3484,7 +3497,7 @@ mod advanced_query_tests {
     }
 
     #[test]
-    fn root_acp_history_rows_do_not_split_files_section_or_file_handoff() {
+    fn root_agent_chat_history_rows_do_not_split_files_section_or_file_handoff() {
         let mut grouped = vec![
             GroupedListItem::Item(0),
             GroupedListItem::SectionHeader("Files".to_string(), None),
@@ -3510,15 +3523,15 @@ mod advanced_query_tests {
             )
             .unwrap(),
         ];
-        let hits = vec![acp_history_hit("session-1", "design notes")];
+        let hits = vec![agent_chat_history_hit("session-1", "design notes")];
 
-        append_root_acp_history_section(
+        append_root_agent_chat_history_section(
             &mut grouped,
             &mut flat,
             "design",
             None,
             &hits,
-            crate::ai::acp::history::RootAcpHistorySectionOptions::default(),
+            crate::ai::agent_chat::ui::history::RootAgentChatHistorySectionOptions::default(),
             &mut RootPassiveResultBudget::unbounded(),
             false,
         );
@@ -4963,7 +4976,7 @@ mod advanced_query_tests {
                     ..Default::default()
                 },
                 &[],
-                crate::ai::acp::history::RootAcpHistorySectionOptions {
+                crate::ai::agent_chat::ui::history::RootAgentChatHistorySectionOptions {
                     enabled: false,
                     ..Default::default()
                 },

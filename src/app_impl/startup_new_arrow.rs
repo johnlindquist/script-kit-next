@@ -15,19 +15,19 @@
                 // windows receive their own navigation key events.
                 let is_notes = crate::notes::is_notes_window(window);
                 let is_ai = crate::ai::is_ai_window(window);
-                let is_detached_acp = crate::ai::acp::chat_window::is_chat_window(window);
+                let is_detached_agent_chat = crate::ai::agent_chat::ui::chat_window::is_chat_window(window);
                 let is_actions = crate::actions::is_actions_window(window);
-                let skip_secondary = is_notes || is_ai || is_detached_acp || is_actions;
+                let skip_secondary = is_notes || is_ai || is_detached_agent_chat || is_actions;
                 if skip_secondary {
                     tracing::debug!(
                         target: "script_kit::keyboard",
                         event = "arrow_interceptor_skipped_secondary_window",
                         is_notes,
                         is_ai,
-                        is_detached_acp,
+                        is_detached_agent_chat,
                         is_actions,
                         skip_secondary,
-                        detached_acp_explicit_skip = is_detached_acp && !is_ai,
+                        detached_agent_chat_explicit_skip = is_detached_agent_chat && !is_ai,
                     );
                     return;
                 }
@@ -430,15 +430,15 @@
                                     }
                                     cx.stop_propagation();
                                 }
-                                AppView::AcpHistoryView {
+                                AppView::AgentChatHistoryView {
                                     selected_index,
                                     filter,
                                 } => {
                                     let filtered_len = if filter.is_empty() {
-                                        crate::ai::acp::history::load_history().len()
+                                        crate::ai::agent_chat::ui::history::load_history().len()
                                     } else {
                                         let filter_lower = filter.to_lowercase();
-                                        crate::ai::acp::history::load_history()
+                                        crate::ai::agent_chat::ui::history::load_history()
                                             .into_iter()
                                             .filter(|entry| {
                                                 entry.first_message
@@ -464,12 +464,12 @@
 
                                     if is_up && *selected_index > 0 {
                                         *selected_index -= 1;
-                                        this.acp_history_scroll_handle
+                                        this.agent_chat_history_scroll_handle
                                             .scroll_to_item(*selected_index);
                                         cx.notify();
                                     } else if is_down && *selected_index + 1 < filtered_len {
                                         *selected_index += 1;
-                                        this.acp_history_scroll_handle
+                                        this.agent_chat_history_scroll_handle
                                             .scroll_to_item(*selected_index);
                                         cx.notify();
                                     }
@@ -782,23 +782,23 @@
                 }
 
                 // Skip processing if this keystroke is from a secondary window.
-                // Observe detached ACP explicitly so runtime proof can tell whether
+                // Observe detached Agent Chat explicitly so runtime proof can tell whether
                 // `is_ai_window()` already subsumes it.
                 let is_notes = crate::notes::is_notes_window(window);
                 let is_ai = crate::ai::is_ai_window(window);
-                let is_detached_acp = crate::ai::acp::chat_window::is_chat_window(window);
+                let is_detached_agent_chat = crate::ai::agent_chat::ui::chat_window::is_chat_window(window);
                 let is_actions = crate::actions::is_actions_window(window);
-                let skip_secondary = is_notes || is_ai || is_detached_acp || is_actions;
+                let skip_secondary = is_notes || is_ai || is_detached_agent_chat || is_actions;
                 if skip_secondary {
                     tracing::debug!(
                         target: "script_kit::keyboard",
                         event = "home_end_interceptor_skipped_secondary_window",
                         is_notes,
                         is_ai,
-                        is_detached_acp,
+                        is_detached_agent_chat,
                         is_actions,
                         skip_secondary,
-                        detached_acp_explicit_skip = is_detached_acp && !is_ai,
+                        detached_agent_chat_explicit_skip = is_detached_agent_chat && !is_ai,
                     );
                     return;
                 }

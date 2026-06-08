@@ -40,7 +40,7 @@ impl ScriptListApp {
         &mut self,
         cx: &mut Context<Self>,
     ) -> bool {
-        let AppView::AcpChatView { entity } = self.current_view.clone() else {
+        let AppView::AgentChatView { entity } = self.current_view.clone() else {
             return false;
         };
 
@@ -92,7 +92,7 @@ impl ScriptListApp {
             );
         }
 
-        let AppView::AcpChatView { entity } = self.current_view.clone() else {
+        let AppView::AgentChatView { entity } = self.current_view.clone() else {
             return Err("focused text fixture did not open Agent Chat".to_string());
         };
 
@@ -161,7 +161,7 @@ impl ScriptListApp {
             cx,
         );
 
-        let AppView::AcpChatView { entity } = self.current_view.clone() else {
+        let AppView::AgentChatView { entity } = self.current_view.clone() else {
             return Err("focused text live fixture did not open Agent Chat".to_string());
         };
 
@@ -198,7 +198,7 @@ impl ScriptListApp {
         cx: &mut Context<Self>,
     ) {
         let source_view = self.current_view.clone();
-        self.seed_acp_return_origin_for_view(&source_view);
+        self.seed_agent_chat_return_origin_for_view(&source_view);
 
         tracing::info!(
             target: "script_kit::focused_text",
@@ -238,10 +238,10 @@ impl ScriptListApp {
 
         let view_entity = cx.new(|cx| {
             crate::ai::agent_chat::ui::AgentChatView::new(thread, cx)
-                .with_ui_variant(crate::ai::acp::ui_variant::AcpChatUiVariant::FocusedTextMini)
+                .with_ui_variant(crate::ai::agent_chat::ui::ui_variant::AgentChatUiVariant::FocusedTextMini)
         });
-        self.wire_embedded_acp_footer_callbacks(&view_entity, cx);
-        self.embedded_acp_chat = Some(view_entity.clone());
+        self.wire_embedded_agent_chat_footer_callbacks(&view_entity, cx);
+        self.embedded_agent_chat = Some(view_entity.clone());
         self.tab_ai_harness_return_view = Some(source_view);
         self.tab_ai_harness_return_focus_target = Some(self.tab_ai_return_focus_target());
         self.set_main_window_mode_state_only(
@@ -259,7 +259,7 @@ impl ScriptListApp {
             }
             chat.mark_focused_text_originated_from_quick_prompt();
         });
-        self.enter_embedded_acp_chat_surface(view_entity, cx);
+        self.enter_embedded_agent_chat_surface(view_entity, cx);
         self.request_focus(FocusTarget::ChatPrompt, cx);
         script_kit_gpui::request_show_main_window();
         crate::window_resize::resize_to_view_sync(
@@ -277,7 +277,7 @@ impl ScriptListApp {
         cx: &mut Context<Self>,
     ) {
         let source_view = self.current_view.clone();
-        self.seed_acp_return_origin_for_view(&source_view);
+        self.seed_agent_chat_return_origin_for_view(&source_view);
 
         tracing::info!(
             target: "script_kit::focused_text",
@@ -301,13 +301,13 @@ impl ScriptListApp {
             true,
             None,
             crate::ai::TabAiCaptureKind::DefaultContext,
-            // force_acp_surface: focused-text apply semantics must not route to the terminal.
+            // force_agent_chat_surface: focused-text apply semantics must not route to the terminal.
             true,
-            crate::ai::acp::ui_variant::AcpChatUiVariant::FocusedTextMini,
+            crate::ai::agent_chat::ui::ui_variant::AgentChatUiVariant::FocusedTextMini,
             cx,
         );
 
-        let AppView::AcpChatView { entity } = self.current_view.clone() else {
+        let AppView::AgentChatView { entity } = self.current_view.clone() else {
             tracing::warn!(
                 target: "script_kit::focused_text",
                 event = "focused_text_agent_chat_open_failed_no_embedded_view",
@@ -317,7 +317,7 @@ impl ScriptListApp {
 
         entity.update(cx, |chat, cx| {
             chat.set_ui_variant(
-                crate::ai::acp::ui_variant::AcpChatUiVariant::FocusedTextMini,
+                crate::ai::agent_chat::ui::ui_variant::AgentChatUiVariant::FocusedTextMini,
                 cx,
             );
             if let Err(error) = chat.stage_focused_text_from_host(snapshot, instruction, source, cx)
@@ -348,7 +348,7 @@ impl ScriptListApp {
     ) {
         let reason_code = error.reason_code();
         let source_view = self.current_view.clone();
-        self.seed_acp_return_origin_for_view(&source_view);
+        self.seed_agent_chat_return_origin_for_view(&source_view);
 
         tracing::warn!(
             target: "script_kit::focused_text",
@@ -372,11 +372,11 @@ impl ScriptListApp {
             None,
             crate::ai::TabAiCaptureKind::DefaultContext,
             true,
-            crate::ai::acp::ui_variant::AcpChatUiVariant::FocusedTextMini,
+            crate::ai::agent_chat::ui::ui_variant::AgentChatUiVariant::FocusedTextMini,
             cx,
         );
 
-        let AppView::AcpChatView { entity } = self.current_view.clone() else {
+        let AppView::AgentChatView { entity } = self.current_view.clone() else {
             tracing::warn!(
                 target: "script_kit::focused_text",
                 event = "focused_text_agent_chat_open_failed_no_embedded_view",
@@ -386,7 +386,7 @@ impl ScriptListApp {
 
         entity.update(cx, |chat, cx| {
             chat.set_ui_variant(
-                crate::ai::acp::ui_variant::AcpChatUiVariant::FocusedTextMini,
+                crate::ai::agent_chat::ui::ui_variant::AgentChatUiVariant::FocusedTextMini,
                 cx,
             );
             if let Err(stage_error) = chat.stage_focused_text_capture_failure_from_host(

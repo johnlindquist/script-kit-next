@@ -271,7 +271,7 @@ fn finish_dictation_returns_to_notes() {
 }
 
 #[test]
-fn finish_tab_ai_dictation_reveals_main_as_acp_chat_even_if_previously_hidden() {
+fn finish_tab_ai_dictation_reveals_main_as_agent_chat_even_if_previously_hidden() {
     let mut state = OrchestratorState::default();
     state.main.visibility = MainVisibility::Hidden(HiddenReason::Dismissed);
     state.key_surface = None;
@@ -283,7 +283,7 @@ fn finish_tab_ai_dictation_reveals_main_as_acp_chat_even_if_previously_hidden() 
 
     assert_eq!(state.dictation, DictationSurfaceState::Hidden);
     assert_eq!(state.main.visibility, MainVisibility::Visible);
-    assert_eq!(state.main.content, MainContentKind::AcpChat);
+    assert_eq!(state.main.content, MainContentKind::AgentChat);
     assert_eq!(state.main.return_focus, FocusToken::ChatComposer);
     assert_eq!(state.key_surface, Some(SurfaceId::Main));
     assert!(cmds.contains(&WindowCommand::RevealMain {
@@ -307,7 +307,7 @@ fn finish_tab_ai_dictation_does_not_return_focus_to_notes() {
 
     assert_eq!(state.dictation, DictationSurfaceState::Hidden);
     assert_eq!(state.main.visibility, MainVisibility::Visible);
-    assert_eq!(state.main.content, MainContentKind::AcpChat);
+    assert_eq!(state.main.content, MainContentKind::AgentChat);
     assert_eq!(state.main.return_focus, FocusToken::ChatComposer);
     assert_eq!(state.key_surface, Some(SurfaceId::Main));
     assert!(cmds.contains(&WindowCommand::RevealMain {
@@ -332,7 +332,7 @@ fn finish_tab_ai_dictation_does_not_return_focus_to_detached_ai() {
 
     assert_eq!(state.dictation, DictationSurfaceState::Hidden);
     assert_eq!(state.main.visibility, MainVisibility::Visible);
-    assert_eq!(state.main.content, MainContentKind::AcpChat);
+    assert_eq!(state.main.content, MainContentKind::AgentChat);
     assert_eq!(state.main.return_focus, FocusToken::ChatComposer);
     assert_eq!(state.key_surface, Some(SurfaceId::Main));
     assert!(cmds.contains(&WindowCommand::RevealMain {
@@ -480,7 +480,7 @@ fn dictation_phase_changed_updates_state() {
 #[test]
 fn surface_closed_by_system_resyncs_main() {
     let mut state = OrchestratorState::default();
-    state.main.content = MainContentKind::AcpChat;
+    state.main.content = MainContentKind::AgentChat;
     state.main.return_focus = FocusToken::ChatComposer;
     state.key_surface = Some(SurfaceId::Main);
 
@@ -527,11 +527,11 @@ fn main_content_changed_updates_content_and_focus() {
     let mut state = OrchestratorState::default();
 
     state.dispatch(WindowEvent::MainContentChanged {
-        content: MainContentKind::AcpChat,
+        content: MainContentKind::AgentChat,
         focus: FocusToken::ChatComposer,
     });
 
-    assert_eq!(state.main.content, MainContentKind::AcpChat);
+    assert_eq!(state.main.content, MainContentKind::AgentChat);
     assert_eq!(state.main.return_focus, FocusToken::ChatComposer);
 }
 

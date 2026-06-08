@@ -1,4 +1,4 @@
-//! Source-level contract for strict non-ACP screenshot capture.
+//! Source-level contract for strict non-Agent Chat screenshot capture.
 
 const VERIFY_SHOT: &str = include_str!("../scripts/agentic/verify-shot.ts");
 
@@ -15,12 +15,12 @@ fn verify_shot_parses_strict_window_flag() {
 }
 
 #[test]
-fn strict_window_extends_acp_identity_proof() {
+fn strict_window_extends_agent_chat_identity_proof() {
     assert!(
         VERIFY_SHOT.contains(
-            "const strictWindowProof = opts.strictWindow === true || hasAcpAssertions(opts);"
+            "const strictWindowProof = opts.strictWindow === true || hasAgentChatAssertions(opts);"
         ),
-        "strict window proof must apply to general captures, not only ACP assertions"
+        "strict window proof must apply to general captures, not only Agent Chat assertions"
     );
 }
 
@@ -40,7 +40,9 @@ fn strict_window_requires_exact_target_or_window_id() {
 #[test]
 fn strict_window_cannot_use_runtime_capture_fallback() {
     let strict_expr = VERIFY_SHOT
-        .find("const strictWindowProof = opts.strictWindow === true || hasAcpAssertions(opts);")
+        .find(
+            "const strictWindowProof = opts.strictWindow === true || hasAgentChatAssertions(opts);",
+        )
         .expect("strictWindowProof expression must exist");
     let fallback = VERIFY_SHOT
         .find("captureRouting = \"runtime-capture-window\"")

@@ -3,14 +3,14 @@ use super::*;
 impl NotesApp {
     /// Render the Agent Chat surface with a thin Notes-owned titlebar containing a
     /// mode switch so the user can toggle back to the Notes editor.
-    pub(super) fn render_acp_surface(&self, cx: &mut Context<Self>) -> AnyElement {
+    pub(super) fn render_agent_chat_surface(&self, cx: &mut Context<Self>) -> AnyElement {
         let muted_color = cx.theme().muted_foreground;
         let accent_color = cx.theme().accent;
         let window_hovered = self.window_hovered || self.force_hovered;
         let metrics = style::adopted_metrics();
 
         let titlebar = div()
-            .id("notes-acp-titlebar")
+            .id("notes-agent_chat-titlebar")
             .flex()
             .items_center()
             .h(px(metrics.titlebar_height))
@@ -46,7 +46,7 @@ impl NotesApp {
                     )
                     .child(
                         div()
-                            .id("notes-switch-acp")
+                            .id("notes-switch-agent_chat")
                             .text_sm()
                             .text_color(accent_color)
                             .child("Agent"),
@@ -63,7 +63,7 @@ impl NotesApp {
                     .when(window_hovered, |d| {
                         d.child(
                             div()
-                                .id("acp-titlebar-actions-icon")
+                                .id("agent_chat-titlebar-actions-icon")
                                 .min_w(px(MIN_TARGET_SIZE))
                                 .min_h(px(MIN_TARGET_SIZE))
                                 .flex()
@@ -74,41 +74,42 @@ impl NotesApp {
                                 .cursor_pointer()
                                 .hover(|s| s.text_color(muted_color))
                                 .on_click(cx.listener(|this, _, window, cx| {
-                                    this.toggle_acp_actions(window, cx);
+                                    this.toggle_agent_chat_actions(window, cx);
                                 }))
                                 .child("⌘"),
                         )
                     }),
             );
 
-        let (acp_body, acp_footer) = if let Some(ref acp_entity) = self.embedded_acp_chat {
-            let acp_footer = {
-                let view = acp_entity.read(cx);
-                view.build_external_host_footer(acp_entity.downgrade(), cx)
-            };
+        let (agent_chat_body, agent_chat_footer) =
+            if let Some(ref agent_chat_entity) = self.embedded_agent_chat {
+                let agent_chat_footer = {
+                    let view = agent_chat_entity.read(cx);
+                    view.build_external_host_footer(agent_chat_entity.downgrade(), cx)
+                };
 
-            (
-                div()
-                    .flex_1()
-                    .min_h(px(0.))
-                    .child(acp_entity.clone())
-                    .into_any_element(),
-                acp_footer,
-            )
-        } else {
-            (
-                div()
-                    .flex_1()
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .text_sm()
-                    .text_color(muted_color.opacity(OPACITY_MUTED))
-                    .child("Agent Chat is loading...")
-                    .into_any_element(),
-                None,
-            )
-        };
+                (
+                    div()
+                        .flex_1()
+                        .min_h(px(0.))
+                        .child(agent_chat_entity.clone())
+                        .into_any_element(),
+                    agent_chat_footer,
+                )
+            } else {
+                (
+                    div()
+                        .flex_1()
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .text_sm()
+                        .text_color(muted_color.opacity(OPACITY_MUTED))
+                        .child("Agent Chat is loading...")
+                        .into_any_element(),
+                    None,
+                )
+            };
 
         div()
             .flex_1()
@@ -116,8 +117,8 @@ impl NotesApp {
             .flex_col()
             .h_full()
             .child(titlebar)
-            .child(acp_body)
-            .when_some(acp_footer, |d, footer| d.child(footer))
+            .child(agent_chat_body)
+            .when_some(agent_chat_footer, |d, footer| d.child(footer))
             .into_any_element()
     }
 
@@ -160,7 +161,7 @@ impl Render for NotesApp {
         let theme_background_gradients =
             crate::ui_foundation::theme_background_gradient_layers("notes-bg-layer", &theme);
 
-        let in_acp_mode = self.surface_mode == NotesSurfaceMode::Acp;
+        let in_agent_chat_mode = self.surface_mode == NotesSurfaceMode::AgentChat;
 
         div()
             .id("notes-window-root")
@@ -198,10 +199,12 @@ impl Render for NotesApp {
             .capture_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
                 this.handle_key_down(event, window, cx);
             }))
-            // Surface dispatch: Notes editor or embedded ACP chat.
-            .when(!in_acp_mode, |d| d.child(self.render_editor(cx)))
-            .when(in_acp_mode, |d| d.child(self.render_acp_surface(cx)))
-            .when(show_actions && !in_acp_mode, |d| {
+            // Surface dispatch: Notes editor or embedded Agent Chat chat.
+            .when(!in_agent_chat_mode, |d| d.child(self.render_editor(cx)))
+            .when(in_agent_chat_mode, |d| {
+                d.child(self.render_agent_chat_surface(cx))
+            })
+            .when(show_actions && !in_agent_chat_mode, |d| {
                 d.child(self.render_actions_panel_overlay(cx))
             })
             .children(gpui_component::Root::render_dialog_layer(window, cx))

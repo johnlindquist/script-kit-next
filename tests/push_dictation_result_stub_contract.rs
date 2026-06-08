@@ -1,7 +1,7 @@
 //! Source-level contract test for the `pushDictationResult` stdin RPC.
 //!
 //! The RPC is an agentic-testing hook: it injects a synthetic transcript into
-//! the real dictation delivery pipeline so ACP reveal/focus behavior can be
+//! the real dictation delivery pipeline so Agent Chat reveal/focus behavior can be
 //! verified without microphone audio or a local transcription model.
 
 const STDIN_COMMANDS: &str = include_str!("../src/stdin_commands/mod.rs");
@@ -73,7 +73,7 @@ fn push_dictation_result_routes_through_real_delivery_helper() {
 }
 
 #[test]
-fn delivery_helper_preserves_active_session_target_and_accepts_acp_alias() {
+fn delivery_helper_preserves_active_session_target_and_accepts_agent_chat_alias() {
     assert!(
         BUILTIN_EXECUTION.contains("pub(crate) fn deliver_stdin_dictation_result(")
             && BUILTIN_EXECUTION.contains("resolve_delivery_target_request(")
@@ -84,9 +84,9 @@ fn delivery_helper_preserves_active_session_target_and_accepts_acp_alias() {
     );
     assert!(
         include_str!("../src/dictation/delivery.rs")
-            .contains("\"tabaiharness\" | \"acp\" | \"acpchat\" | \"ai\"")
+            .contains("\"tabaiharness\" | \"agentchat\" | \"agentchatchat\" | \"ai\"")
             && BUILTIN_EXECUTION.contains("DictationTarget::TabAiHarness"),
-        "pushDictationResult must accept acp/acpChat aliases for ACP-targeted verification"
+        "pushDictationResult must accept Agent Chat target aliases for Agent Chat-targeted verification"
     );
     assert!(
         BUILTIN_EXECUTION.contains("crate::dictation::abort_dictation()"),

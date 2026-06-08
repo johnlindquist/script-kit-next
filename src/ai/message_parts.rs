@@ -236,7 +236,7 @@ pub fn resolve_context_part_to_prompt_block(
             owner_label,
             ..
         } => {
-            let prompt = crate::ai::acp::build_staged_skill_prompt(
+            let prompt = crate::ai::agent_chat::ui::build_staged_skill_prompt(
                 skill_name,
                 owner_label,
                 std::path::Path::new(path),
@@ -673,7 +673,7 @@ fn resolve_context_part_for_preparation(
             owner_label,
             ..
         } => {
-            let prompt_block = crate::ai::acp::build_staged_skill_prompt(
+            let prompt_block = crate::ai::agent_chat::ui::build_staged_skill_prompt(
                 skill_name,
                 owner_label,
                 std::path::Path::new(path),

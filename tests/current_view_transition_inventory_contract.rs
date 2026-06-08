@@ -11,7 +11,8 @@ use serde_json::json;
 const GENERATOR: &str = include_str!("../scripts/generate-current-view-transitions.ts");
 const INVENTORY_JSON: &str = include_str!("../docs/ai/contracts/current-view-transitions.json");
 const AUTOMATION_SURFACE: &str = include_str!("../src/app_impl/automation_surface.rs");
-const ACP_SURFACE_TRANSITIONS: &str = include_str!("../src/app_impl/acp_surface_transitions.rs");
+const AGENT_CHAT_SURFACE_TRANSITIONS: &str =
+    include_str!("../src/app_impl/agent_chat_surface_transitions.rs");
 
 fn inventory_entries() -> Vec<serde_json::Value> {
     let parsed: serde_json::Value = serde_json::from_str(INVENTORY_JSON)
@@ -117,16 +118,16 @@ fn expected_transition_contract(helper: &str) -> serde_json::Value {
             "resize": "callerOwned",
             "stateSnapshot": "getState.surfaceContract"
         }),
-        "enter_embedded_acp_chat_surface" => json!({
+        "enter_embedded_agent_chat_surface" => json!({
             "oldView": "runtimeCurrentView",
-            "newView": "AppView::AcpChatView",
-            "surfaceKind": "AcpChat",
+            "newView": "AppView::AgentChatView",
+            "surfaceKind": "AgentChat",
             "embeddedAiWindowUpsert": true,
             "mainAutomationRekey": true,
-            "acpSurfaceEvent": "EmbeddedOpened",
+            "agent_chatSurfaceEvent": "EmbeddedOpened",
             "actionsCleanup": "clearActionsPopupState",
-            "focusTarget": "AcpChat",
-            "focusCoordinatorRequest": "FocusRequest::acp_chat",
+            "focusTarget": "AgentChat",
+            "focusCoordinatorRequest": "FocusRequest::agent_chat",
             "focusedInput": "None",
             "resize": "callerOwned",
             "stateSnapshot": "getState.surfaceContract"
@@ -229,9 +230,9 @@ fn inventory_captures_known_transition_classes() {
             "dynamic",
         ),
         (
-            "src/app_impl/acp_surface_transitions.rs",
-            "enter_embedded_acp_chat_surface",
-            "AppView::AcpChatView",
+            "src/app_impl/agent_chat_surface_transitions.rs",
+            "enter_embedded_agent_chat_surface",
+            "AppView::AgentChatView",
         ),
         (
             "src/app_impl/registries_state.rs",
@@ -270,22 +271,22 @@ fn inventory_captures_named_transition_helper_call_sites() {
     let entries = inventory_entries();
     for (file, owner, helper, target) in [
         (
-            "src/app_impl/tab_ai_mode/acp_setup.rs",
-            "show_embedded_acp_setup_view",
-            "enter_embedded_acp_chat_surface",
-            "AppView::AcpChatView",
+            "src/app_impl/tab_ai_mode/agent_chat_setup.rs",
+            "show_embedded_agent_chat_setup_view",
+            "enter_embedded_agent_chat_surface",
+            "AppView::AgentChatView",
         ),
         (
-            "src/app_impl/tab_ai_mode/acp_launch.rs",
+            "src/app_impl/tab_ai_mode/agent_chat_launch.rs",
             "open_standard_agent_chat_mock_fixture",
-            "enter_embedded_acp_chat_surface",
-            "AppView::AcpChatView",
+            "enter_embedded_agent_chat_surface",
+            "AppView::AgentChatView",
         ),
         (
             "src/app_impl/tab_ai_mode/mod.rs",
-            "try_reuse_embedded_acp_view",
-            "enter_embedded_acp_chat_surface",
-            "AppView::AcpChatView",
+            "try_reuse_embedded_agent_chat_view",
+            "enter_embedded_agent_chat_surface",
+            "AppView::AgentChatView",
         ),
         (
             "src/app_execute/builtin_execution.rs",
@@ -386,18 +387,21 @@ fn inventory_transition_helper_entries_expose_checked_transition_contracts() {
     assert_eq!(script_list["resize"], "callerOwned");
     assert_eq!(script_list["stateSnapshot"], "getState.surfaceContract");
 
-    let acp = helper_contract(&entries, "enter_embedded_acp_chat_surface");
-    assert_eq!(acp["newView"], "AppView::AcpChatView");
-    assert_eq!(acp["surfaceKind"], "AcpChat");
-    assert_eq!(acp["embeddedAiWindowUpsert"], true);
-    assert_eq!(acp["mainAutomationRekey"], true);
-    assert_eq!(acp["acpSurfaceEvent"], "EmbeddedOpened");
-    assert_eq!(acp["actionsCleanup"], "clearActionsPopupState");
-    assert_eq!(acp["focusTarget"], "AcpChat");
-    assert_eq!(acp["focusCoordinatorRequest"], "FocusRequest::acp_chat");
-    assert_eq!(acp["focusedInput"], "None");
-    assert_eq!(acp["resize"], "callerOwned");
-    assert_eq!(acp["stateSnapshot"], "getState.surfaceContract");
+    let agent_chat = helper_contract(&entries, "enter_embedded_agent_chat_surface");
+    assert_eq!(agent_chat["newView"], "AppView::AgentChatView");
+    assert_eq!(agent_chat["surfaceKind"], "AgentChat");
+    assert_eq!(agent_chat["embeddedAiWindowUpsert"], true);
+    assert_eq!(agent_chat["mainAutomationRekey"], true);
+    assert_eq!(agent_chat["agent_chatSurfaceEvent"], "EmbeddedOpened");
+    assert_eq!(agent_chat["actionsCleanup"], "clearActionsPopupState");
+    assert_eq!(agent_chat["focusTarget"], "AgentChat");
+    assert_eq!(
+        agent_chat["focusCoordinatorRequest"],
+        "FocusRequest::agent_chat"
+    );
+    assert_eq!(agent_chat["focusedInput"], "None");
+    assert_eq!(agent_chat["resize"], "callerOwned");
+    assert_eq!(agent_chat["stateSnapshot"], "getState.surfaceContract");
 }
 
 #[test]
@@ -442,43 +446,43 @@ fn transition_helper_bodies_match_declared_transition_contracts() {
         "self.rekey_main_automation_surface_from_current_view()",
     );
 
-    let acp = function_body(
-        ACP_SURFACE_TRANSITIONS,
-        "pub(crate) fn enter_embedded_acp_chat_surface(",
+    let agent_chat = function_body(
+        AGENT_CHAT_SURFACE_TRANSITIONS,
+        "pub(crate) fn enter_embedded_agent_chat_surface(",
     );
     assert_before(
-        acp,
-        "self.current_view = AppView::AcpChatView",
+        agent_chat,
+        "self.current_view = AppView::AgentChatView",
         "crate::windows::ensure_embedded_ai_window(true);",
     );
     assert_before(
-        acp,
+        agent_chat,
         "crate::windows::ensure_embedded_ai_window(true);",
         "self.rekey_main_automation_surface_from_current_view();",
     );
     assert_before(
-        acp,
+        agent_chat,
         "self.rekey_main_automation_surface_from_current_view();",
-        "self.transition_acp_surface(AcpSurfaceEvent::EmbeddedOpened);",
+        "self.transition_agent_chat_surface(AgentChatSurfaceEvent::EmbeddedOpened);",
     );
     assert_before(
-        acp,
+        agent_chat,
         "self.clear_actions_popup_state();",
         "self.focus_coordinator",
     );
     assert_before(
-        acp,
-        "self.transition_acp_surface(AcpSurfaceEvent::EmbeddedOpened);",
+        agent_chat,
+        "self.transition_agent_chat_surface(AgentChatSurfaceEvent::EmbeddedOpened);",
         "self.clear_actions_popup_state();",
     );
     assert_before(
-        acp,
+        agent_chat,
         "self.focused_input = FocusedInput::None;",
         "self.focus_coordinator",
     );
     assert_before(
-        acp,
-        ".request(crate::focus_coordinator::FocusRequest::acp_chat());",
+        agent_chat,
+        ".request(crate::focus_coordinator::FocusRequest::agent_chat());",
         "self.sync_coordinator_to_legacy();",
     );
 }
@@ -496,7 +500,7 @@ fn generator_scans_source_instead_of_hardcoding_transition_entries() {
         "assignmentRegex",
         "std::mem::replace",
         "TRANSITION_HELPERS",
-        "enter_embedded_acp_chat_surface",
+        "enter_embedded_agent_chat_surface",
         "restore_current_view_with_focus",
         "show_script_list_with_main_filter_focus",
         "--check",

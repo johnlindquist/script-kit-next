@@ -450,8 +450,8 @@ function expectedPostTargetForIntent(args: Args): JsonObject | null {
   if (args.submitIntent === "agent-chat-route") {
     return {
       intent: "agent-chat-route",
-      targetArgs: ["--main", "--strict", "--surface", "AcpChat"],
-      expectedSurfaceKind: "AcpChat",
+      targetArgs: ["--main", "--strict", "--surface", "AgentChat"],
+      expectedSurfaceKind: "AgentChat",
       expectedAutomationId: "main",
     };
   }
@@ -849,9 +849,9 @@ function isScopedAgentHandoffDryRun(
   if (!truthyEnv("SCRIPT_KIT_AGENT_HANDOFF_DRY_RUN")) return false;
   if (!process.env.SCRIPT_KIT_AGENT_HANDOFF_RECEIPT_PATH?.trim()) return false;
   const parentTarget = targetInfo(parentFocus ?? {});
-  return parentTarget?.targetKind === "AcpChat"
-    || parentTarget?.surfaceKind === "AcpChat"
-    || parentTarget?.appViewVariant === "AcpChatView"
+  return parentTarget?.targetKind === "AgentChat"
+    || parentTarget?.surfaceKind === "AgentChat"
+    || parentTarget?.appViewVariant === "AgentChatView"
     || parentTarget?.targetKind === "ScriptList"
     || parentTarget?.surfaceKind === "ScriptList"
     || parentTarget?.appViewVariant === "ScriptList"
@@ -872,7 +872,7 @@ function requestedActivationSemanticId(args: Args, before: JsonObject) {
 
 function isNonDestructivePromptPopupProfileActivation(semanticId: string | null) {
   if (!semanticId) return false;
-  return /^choice:\d+:(agent-chat-profile:)?(general|text|script-kit|acp)$/.test(semanticId);
+  return /^choice:\d+:(agent-chat-profile:)?(general|text|script-kit|agent_chat)$/.test(semanticId);
 }
 
 function isNonDestructiveSubmit(preflight: SubmitLifecycleState) {
@@ -1085,10 +1085,10 @@ async function submitPreflight(args: Args, targetReceipt: JsonObject, before: Js
         ],
       };
     }
-    if (actionId !== "acp_show_receipt_history") {
+    if (actionId !== "agent_chat_show_receipt_history") {
       return {
         state: "blocked-before-dispatch",
-        reason: "receipt-history-route requires the acp_show_receipt_history ActionsDialog row",
+        reason: "receipt-history-route requires the agent_chat_show_receipt_history ActionsDialog row",
         gateName: "receipt-history-route.action.required",
         selectedSemanticId: selectedSemanticId as string | null,
       };
@@ -1114,10 +1114,10 @@ async function submitPreflight(args: Args, targetReceipt: JsonObject, before: Js
         ],
       };
     }
-    if (!actionId.startsWith("acp_receipt_history:copy:")) {
+    if (!actionId.startsWith("agent_chat_receipt_history:copy:")) {
       return {
         state: "blocked-before-dispatch",
-        reason: "receipt-history-copy requires an acp_receipt_history:copy row",
+        reason: "receipt-history-copy requires an agent_chat_receipt_history:copy row",
         gateName: "receipt-history-copy.action.required",
         selectedSemanticId: selectedSemanticId as string | null,
       };

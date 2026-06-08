@@ -1,7 +1,7 @@
 const FOCUSED_TEXT_ENTRY: &str =
     include_str!("../../src/app_impl/tab_ai_mode/focused_text_entry.rs");
-const ACP_VIEW: &str = include_str!("../../src/ai/acp/view.rs");
-const ACP_THREAD: &str = include_str!("../../src/ai/acp/thread.rs");
+const AGENT_CHAT_VIEW: &str = include_str!("../../src/ai/agent_chat/ui/view.rs");
+const AGENT_CHAT_THREAD: &str = include_str!("../../src/ai/agent_chat/ui/thread.rs");
 const SIMULATE_KEY_DISPATCH: &str = include_str!("../../src/app_impl/simulate_key_dispatch.rs");
 
 fn source_between<'a>(source: &'a str, start_marker: &str, end_marker: &str) -> &'a str {
@@ -26,7 +26,7 @@ fn focused_text_turns_use_focused_prompt_blocks_not_generic_submit_input() {
         "focused_text_prompt_built",
     ] {
         assert!(
-            ACP_VIEW.contains(required),
+            AGENT_CHAT_VIEW.contains(required),
             "missing focused-text prompt submission contract: {required}"
         );
     }
@@ -35,12 +35,12 @@ fn focused_text_turns_use_focused_prompt_blocks_not_generic_submit_input() {
         "pub(crate) fn submit_blocks",
         "display_user_text",
         "clear_all_pending_context(\"submit_blocks\")",
-        "AcpThreadMessageRole::User",
+        "AgentChatThreadMessageRole::User",
         "start_turn(AgentChatTurnRequest",
     ] {
         assert!(
-            ACP_THREAD.contains(required),
-            "missing ACP explicit-block submit contract: {required}"
+            AGENT_CHAT_THREAD.contains(required),
+            "missing Agent Chat explicit-block submit contract: {required}"
         );
     }
 
@@ -50,7 +50,7 @@ fn focused_text_turns_use_focused_prompt_blocks_not_generic_submit_input() {
     );
     assert!(
         !FOCUSED_TEXT_ENTRY.contains("thread.submit_input(cx)"),
-        "focused-text entry must not submit captured text through generic ACP context"
+        "focused-text entry must not submit captured text through generic Agent Chat context"
     );
 }
 
@@ -63,7 +63,7 @@ fn focused_text_view_keeps_snapshot_in_memory_for_multiturn_prompting() {
         "assistant_output",
     ] {
         assert!(
-            ACP_VIEW.contains(required),
+            AGENT_CHAT_VIEW.contains(required),
             "missing focused-text retained snapshot/multiturn contract: {required}"
         );
     }
@@ -77,11 +77,11 @@ fn focused_text_result_followup_enter_expands_and_submits_chat_semantics() {
         "FocusedTextMiniPhase::Result",
         "expand_focused_text_to_full_chat",
         "FocusedTextEditSemantics::Chat",
-        "set_ui_variant(AcpChatUiVariant::Standard",
+        "set_ui_variant(AgentChatUiVariant::Standard",
         "on_focused_text_expand_requested",
     ] {
         assert!(
-            ACP_VIEW.contains(required),
+            AGENT_CHAT_VIEW.contains(required),
             "missing focused-text result follow-up expansion contract: {required}"
         );
     }
@@ -90,7 +90,7 @@ fn focused_text_result_followup_enter_expands_and_submits_chat_semantics() {
 #[test]
 fn focused_text_mini_result_input_is_not_submitted_prompt_locked() {
     let lock_fn = source_between(
-        ACP_VIEW,
+        AGENT_CHAT_VIEW,
         "fn focused_text_input_locked_for_thread",
         "fn focused_text_locked_input_allows_key",
     );
@@ -143,7 +143,7 @@ fn focused_text_initial_enter_remains_replace_semantics() {
         "submit_focused_text_turn",
     ] {
         assert!(
-            ACP_VIEW.contains(required),
+            AGENT_CHAT_VIEW.contains(required),
             "missing focused-text initial submit contract: {required}"
         );
     }
@@ -152,7 +152,7 @@ fn focused_text_initial_enter_remains_replace_semantics() {
 #[test]
 fn focused_text_mini_result_phase_requires_assistant_output() {
     let phase_fn = source_between(
-        ACP_VIEW,
+        AGENT_CHAT_VIEW,
         "fn focused_text_mini_phase_for_thread",
         "fn focused_text_mini_footer_visible_for_thread",
     );

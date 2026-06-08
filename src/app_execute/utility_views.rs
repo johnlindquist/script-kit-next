@@ -71,7 +71,7 @@ impl ScriptListApp {
         self.spine_cwd_label = Some(label.clone());
         self.spine_cwd_revision = self.spine_cwd_revision.wrapping_add(1);
         self.persist_spine_cwd();
-        self.prewarm_acp_for_spine_cwd(cx);
+        self.prewarm_agent_chat_for_spine_cwd(cx);
         tracing::info!(
             target: "script_kit::tab_ai",
             event = "quick_terminal_cwd_synced_to_agent_chat",

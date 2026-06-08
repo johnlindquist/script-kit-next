@@ -382,7 +382,7 @@ pub fn handle_ai_append_message(
 
 /// Handle AiSendMessage request - persist a user message for an existing chat.
 ///
-/// This storage-backed path does not own an active ACP turn, so it reports
+/// This storage-backed path does not own an active Agent Chat turn, so it reports
 /// `streamingStarted:false` instead of pretending a model response started.
 pub fn handle_ai_send_message(
     request_id: String,

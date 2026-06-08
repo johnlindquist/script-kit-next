@@ -105,7 +105,7 @@ fn source_filters_are_frame_keyed_and_gate_async_sources() {
     assert!(filtering.contains("dictation_history_options.enabled = true;"));
     assert!(filtering.contains("browser_tabs_options.enabled = true;"));
     assert!(filtering.contains("browser_history_options.enabled = true;"));
-    assert!(filtering.contains("acp_history_options.enabled = true;"));
+    assert!(filtering.contains("agent_chat_history_options.enabled = true;"));
     assert!(filtering
         .contains("crate::notes::search_root_notes_meta_direct(search_text, notes_options)"));
     assert!(filtering
@@ -114,7 +114,7 @@ fn source_filters_are_frame_keyed_and_gate_async_sources() {
         filtering.contains("crate::clipboard_history::search_root_clipboard_history_meta_direct(")
     );
     assert!(filtering.contains("crate::dictation::search_root_dictation_history_direct("));
-    assert!(filtering.contains("crate::ai::acp::history::search_history_direct("));
+    assert!(filtering.contains("crate::ai::agent_chat::ui::history::search_history_direct("));
     assert!(filtering.contains("search_root_browser_tabs_meta_direct"));
     assert!(filtering.contains("search_root_browser_history_meta_direct"));
     assert!(filtering.contains(".is_some_and(|query| query.has_source_filters())"));
@@ -144,7 +144,7 @@ fn explicit_source_filters_raise_passive_source_caps() {
         "todo_options.max_results",
         "clipboard_history_options.max_results",
         "dictation_history_options.max_results",
-        "acp_history_options.max_results",
+        "agent_chat_history_options.max_results",
         "browser_tabs_options.max_results",
         "browser_history_options.max_results",
     ] {

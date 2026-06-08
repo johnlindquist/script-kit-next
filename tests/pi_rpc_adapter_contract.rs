@@ -7,10 +7,10 @@ fn read(path: &str) -> String {
 #[test]
 fn pi_rpc_module_is_declared_under_agent_chat_only() {
     let agent_chat = read("src/ai/agent_chat/mod.rs");
-    let acp = read("src/ai/acp/mod.rs");
+    let agent_chat = read("src/ai/agent_chat/ui/mod.rs");
 
     assert!(agent_chat.contains("pub mod pi;"));
-    assert!(!acp.contains("PiRpcRuntime"));
+    assert!(!agent_chat.contains("PiRpcRuntime"));
 }
 
 #[test]
@@ -62,11 +62,11 @@ fn deterministic_mock_pi_rpc_shim_matches_runtime_command_surface() {
 }
 
 #[test]
-fn pi_rpc_event_mapper_targets_current_acp_shaped_aliases() {
+fn pi_rpc_event_mapper_targets_current_agent_chat_shaped_aliases() {
     let aliases = read("src/ai/agent_chat/events.rs");
     let mapper = read("src/ai/agent_chat/pi/events.rs");
 
-    assert!(aliases.contains("type AgentChatEvent = crate::ai::acp::AcpEvent"));
+    assert!(aliases.contains("type AgentChatEvent = crate::ai::agent_chat::ui::AgentChatEvent"));
     assert!(mapper.contains("split_text_delta_for_reveal"));
     assert!(mapper.contains("chunks.concat()"));
     assert!(mapper.contains("AgentChatEvent::AgentMessageDelta"));
@@ -92,9 +92,9 @@ fn pi_rpc_text_reveal_has_markdown_and_long_word_guards() {
 #[test]
 fn pi_rpc_adapter_is_routed_through_agent_chat_launch_helper() {
     let launch = read("src/ai/agent_chat/launch.rs");
-    let tab_launch = read("src/app_impl/tab_ai_mode/acp_launch.rs");
+    let tab_launch = read("src/app_impl/tab_ai_mode/agent_chat_launch.rs");
     let tab_mode = read("src/app_impl/tab_ai_mode/mod.rs");
-    let setup = read("src/app_impl/tab_ai_mode/acp_setup.rs");
+    let setup = read("src/app_impl/tab_ai_mode/agent_chat_setup.rs");
 
     assert!(launch.contains("PiRpcRuntime::spawn"));
     assert!(launch.contains("PiRpcLaunchSpec::new"));
@@ -104,7 +104,7 @@ fn pi_rpc_adapter_is_routed_through_agent_chat_launch_helper() {
     assert!(tab_mode.contains("dismiss_active_agent_chat_warm_lease"));
     assert!(
         !setup.contains("PiRpcRuntime") && !setup.contains("AgentChatBackend::Pi"),
-        "setup cards should stay ACP setup-owned; Pi routing belongs in launch"
+        "setup cards should stay Agent Chat setup-owned; Pi routing belongs in launch"
     );
 }
 

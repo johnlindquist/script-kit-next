@@ -25,7 +25,7 @@ impl ScriptListApp {
                     | AppView::CreateAiPresetView { .. }
                     | AppView::SettingsView { .. }
                     | AppView::FavoritesBrowseView { .. }
-                    | AppView::AcpHistoryView { .. }
+                    | AppView::AgentChatHistoryView { .. }
                     | AppView::BrowserHistoryView { .. }
                     | AppView::DictationHistoryView { .. }
                     | AppView::NotesBrowseView { .. }
@@ -57,7 +57,7 @@ impl ScriptListApp {
                         FocusTarget::TermPrompt
                     }
                     AppView::ChatPrompt { .. } => FocusTarget::ChatPrompt,
-                    AppView::AcpChatView { .. } => FocusTarget::AcpChat,
+                    AppView::AgentChatView { .. } => FocusTarget::AgentChat,
                     AppView::NamingPrompt { .. } => FocusTarget::NamingPrompt,
                     AppView::ConfirmPrompt { .. } => FocusTarget::AppRoot,
                     AppView::NonListStatesView { .. } => FocusTarget::AppRoot,
@@ -65,7 +65,7 @@ impl ScriptListApp {
                     AppView::DesignExplorerView { .. } => FocusTarget::AppRoot,
                 })
             }
-            crate::window_orchestrator::FocusToken::ChatComposer => Some(FocusTarget::AcpChat),
+            crate::window_orchestrator::FocusToken::ChatComposer => Some(FocusTarget::AgentChat),
             crate::window_orchestrator::FocusToken::TermInput => Some(FocusTarget::TermPrompt),
             crate::window_orchestrator::FocusToken::NotesEditor
             | crate::window_orchestrator::FocusToken::DetachedAiComposer

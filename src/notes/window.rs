@@ -160,15 +160,15 @@ pub enum NotesViewMode {
 /// Which surface is currently visible inside the Notes window.
 ///
 /// The Notes window is a persistent host that can show either the editor
-/// or an embedded ACP chat.  Switching modes does not destroy state — the
+/// or an embedded Agent Chat chat.  Switching modes does not destroy state — the
 /// inactive surface is hidden, not dropped.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum NotesSurfaceMode {
     /// The Notes editor (default).
     #[default]
     Notes,
-    /// An embedded ACP chat session inside the Notes window.
-    Acp,
+    /// An embedded Agent Chat chat session inside the Notes window.
+    AgentChat,
 }
 
 #[derive(Debug, Clone)]
@@ -453,21 +453,21 @@ pub struct NotesApp {
     /// Last ghost autocomplete action, redacted for DevTools receipts.
     notes_ghost_last_action: Option<NotesGhostActionReceipt>,
 
-    // ── ACP host surface ──────────────────────────────────────────────
-    /// Which surface is currently visible (Notes editor or embedded ACP).
+    // ── Agent Chat host surface ──────────────────────────────────────────────
+    /// Which surface is currently visible (Notes editor or embedded Agent Chat).
     surface_mode: NotesSurfaceMode,
 
-    /// Cached ACP chat entity — survives mode switches so conversation state
-    /// is preserved when toggling between Notes and ACP.
-    embedded_acp_chat: Option<Entity<crate::ai::agent_chat::ui::AgentChatView>>,
-    /// Generation for the currently embedded ACP view, used to reject stale popup actions.
-    notes_acp_generation: u64,
+    /// Cached Agent Chat chat entity — survives mode switches so conversation state
+    /// is preserved when toggling between Notes and Agent Chat.
+    embedded_agent_chat: Option<Entity<crate::ai::agent_chat::ui::AgentChatView>>,
+    /// Generation for the currently embedded Agent Chat view, used to reject stale popup actions.
+    notes_agent_chat_generation: u64,
     /// Active inline mention replacement session for note-local `@note`
     /// reopen/replace flows via the note switcher.
     mention_portal_edit: Option<NotesMentionPortalEditSession>,
 }
 
-mod acp_host;
+mod agent_chat_host;
 mod clipboard_ops;
 mod editor_formatting;
 mod editor_ops_a;
@@ -492,8 +492,8 @@ mod traits;
 mod vibrancy;
 mod window_ops;
 
-pub use acp_host::close_notes_embedded_acp;
-pub(crate) use acp_host::NOTES_EMBEDDED_AI_AUTOMATION_ID;
+pub use agent_chat_host::close_notes_embedded_agent_chat;
+pub(crate) use agent_chat_host::NOTES_EMBEDDED_AI_AUTOMATION_ID;
 pub use window_ops::{
     accept_notes_ghost_for_automation, apply_mcp_notes_mutation_on_main_thread, close_notes_window,
     get_notes_app_entity_and_handle, get_notes_editor_text, handle_notes_ghost_key_for_automation,

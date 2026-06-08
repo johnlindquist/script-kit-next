@@ -1,7 +1,7 @@
 /// Dispatch and execution of user-triggered actions (copy, paste, reveal, terminal, AI, etc.).
 
 use crate::action_helpers::{ActionOutcomeStatus, DispatchContext, DispatchOutcome};
-use crate::ai::acp::export::build_acp_conversation_markdown_from_thread;
+use crate::ai::agent_chat::ui::export::build_agent_chat_conversation_markdown_from_thread;
 
 /// A code block extracted from markdown with optional language hint.
 struct CodeBlock {
@@ -10,54 +10,54 @@ struct CodeBlock {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum AcpLastResponseHandlerAction {
+enum AgentChatLastResponseHandlerAction {
     CopyToClipboard,
     PasteToFrontmost,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum AcpConversationSessionHandlerAction {
+enum AgentChatConversationSessionHandlerAction {
     NewConversation,
     ClearConversation,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum AcpRetryLastHandlerAction {
+enum AgentChatRetryLastHandlerAction {
     RetryLastMessage,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum AcpCodeCopyHandlerAction {
+enum AgentChatCodeCopyHandlerAction {
     CopyAllCode,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum AcpConversationMarkdownHandlerAction {
+enum AgentChatConversationMarkdownHandlerAction {
     CopyToClipboard,
     SaveAsNote,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum AcpConversationMarkdownBlockedReason {
+enum AgentChatConversationMarkdownBlockedReason {
     NoMessages,
     EmptyRenderableMessages,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum AcpLastCodeBlockHandlerAction {
+enum AgentChatLastCodeBlockHandlerAction {
     SaveAsScript,
     RunLastCode,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum AcpPanelWindowHandlerAction {
+enum AgentChatPanelWindowHandlerAction {
     ShowHistory,
     DetachWindow,
     ReattachPanel,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum AcpHistoryMutationHandlerAction {
+enum AgentChatHistoryMutationHandlerAction {
     ClearHistory,
 }
 
@@ -68,7 +68,7 @@ enum AsyncExternalToolFeedbackAction {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum AcpModelSwitchHandlerAction {
+enum AgentChatModelSwitchHandlerAction {
     SwitchModel,
 }
 
@@ -77,11 +77,11 @@ enum AgentChatProfileSwitchHandlerAction {
     SwitchProfile,
 }
 
-impl AcpLastResponseHandlerAction {
+impl AgentChatLastResponseHandlerAction {
     fn from_action_id(action_id: &str) -> Option<Self> {
         match action_id {
-            "acp_copy_last_response" => Some(Self::CopyToClipboard),
-            "acp_paste_to_frontmost" => Some(Self::PasteToFrontmost),
+            "agent_chat_copy_last_response" => Some(Self::CopyToClipboard),
+            "agent_chat_paste_to_frontmost" => Some(Self::PasteToFrontmost),
             _ => None,
         }
     }
@@ -103,11 +103,11 @@ impl AsyncExternalToolFeedbackAction {
     }
 }
 
-impl AcpConversationSessionHandlerAction {
+impl AgentChatConversationSessionHandlerAction {
     fn from_action_id(action_id: &str) -> Option<Self> {
         match action_id {
-            "acp_new_conversation" => Some(Self::NewConversation),
-            "acp_clear_conversation" => Some(Self::ClearConversation),
+            "agent_chat_new_conversation" => Some(Self::NewConversation),
+            "agent_chat_clear_conversation" => Some(Self::ClearConversation),
             _ => None,
         }
     }
@@ -120,10 +120,10 @@ impl AcpConversationSessionHandlerAction {
     }
 }
 
-impl AcpRetryLastHandlerAction {
+impl AgentChatRetryLastHandlerAction {
     fn from_action_id(action_id: &str) -> Option<Self> {
         match action_id {
-            "acp_retry_last" => Some(Self::RetryLastMessage),
+            "agent_chat_retry_last" => Some(Self::RetryLastMessage),
             _ => None,
         }
     }
@@ -135,10 +135,10 @@ impl AcpRetryLastHandlerAction {
     }
 }
 
-impl AcpCodeCopyHandlerAction {
+impl AgentChatCodeCopyHandlerAction {
     fn from_action_id(action_id: &str) -> Option<Self> {
         match action_id {
-            "acp_copy_all_code" => Some(Self::CopyAllCode),
+            "agent_chat_copy_all_code" => Some(Self::CopyAllCode),
             _ => None,
         }
     }
@@ -151,11 +151,11 @@ impl AcpCodeCopyHandlerAction {
     }
 }
 
-impl AcpConversationMarkdownHandlerAction {
+impl AgentChatConversationMarkdownHandlerAction {
     fn from_action_id(action_id: &str) -> Option<Self> {
         match action_id {
-            "acp_export_markdown" => Some(Self::CopyToClipboard),
-            "acp_save_as_note" => Some(Self::SaveAsNote),
+            "agent_chat_export_markdown" => Some(Self::CopyToClipboard),
+            "agent_chat_save_as_note" => Some(Self::SaveAsNote),
             _ => None,
         }
     }
@@ -181,13 +181,13 @@ impl AcpConversationMarkdownHandlerAction {
         }
     }
 
-    fn blocked_reason(self, message_count: usize) -> AcpConversationMarkdownBlockedReason {
+    fn blocked_reason(self, message_count: usize) -> AgentChatConversationMarkdownBlockedReason {
         let _ = self;
-        AcpConversationMarkdownBlockedReason::from_message_count(message_count)
+        AgentChatConversationMarkdownBlockedReason::from_message_count(message_count)
     }
 }
 
-impl AcpConversationMarkdownBlockedReason {
+impl AgentChatConversationMarkdownBlockedReason {
     fn from_message_count(message_count: usize) -> Self {
         match message_count {
             0 => Self::NoMessages,
@@ -203,11 +203,11 @@ impl AcpConversationMarkdownBlockedReason {
     }
 }
 
-impl AcpLastCodeBlockHandlerAction {
+impl AgentChatLastCodeBlockHandlerAction {
     fn from_action_id(action_id: &str) -> Option<Self> {
         match action_id {
-            "acp_save_as_script" => Some(Self::SaveAsScript),
-            "acp_run_last_code" => Some(Self::RunLastCode),
+            "agent_chat_save_as_script" => Some(Self::SaveAsScript),
+            "agent_chat_run_last_code" => Some(Self::RunLastCode),
             _ => None,
         }
     }
@@ -268,12 +268,12 @@ impl AcpLastCodeBlockHandlerAction {
     }
 }
 
-impl AcpPanelWindowHandlerAction {
+impl AgentChatPanelWindowHandlerAction {
     fn from_action_id(action_id: &str) -> Option<Self> {
         match action_id {
-            "acp_show_history" => Some(Self::ShowHistory),
-            "acp_detach_window" => Some(Self::DetachWindow),
-            "acp_reattach_panel" => Some(Self::ReattachPanel),
+            "agent_chat_show_history" => Some(Self::ShowHistory),
+            "agent_chat_detach_window" => Some(Self::DetachWindow),
+            "agent_chat_reattach_panel" => Some(Self::ReattachPanel),
             _ => None,
         }
     }
@@ -294,23 +294,23 @@ impl AcpPanelWindowHandlerAction {
     }
 }
 
-impl AcpHistoryMutationHandlerAction {
+impl AgentChatHistoryMutationHandlerAction {
     fn from_action_id(action_id: &str) -> Option<Self> {
         match action_id {
-            "acp_clear_history" => Some(Self::ClearHistory),
+            "agent_chat_clear_history" => Some(Self::ClearHistory),
             _ => None,
         }
     }
 
     fn history_index_path(self, kit: &std::path::Path) -> std::path::PathBuf {
         match self {
-            Self::ClearHistory => kit.join("acp-history.jsonl"),
+            Self::ClearHistory => kit.join("agent_chat-history.jsonl"),
         }
     }
 
     fn conversations_dir(self, kit: &std::path::Path) -> std::path::PathBuf {
         match self {
-            Self::ClearHistory => kit.join("acp-conversations"),
+            Self::ClearHistory => kit.join("agent_chat-conversations"),
         }
     }
 
@@ -321,9 +321,9 @@ impl AcpHistoryMutationHandlerAction {
     }
 }
 
-impl AcpModelSwitchHandlerAction {
+impl AgentChatModelSwitchHandlerAction {
     fn from_action_id(action_id: &str) -> Option<Self> {
-        crate::actions::acp_switch_model_id_from_action(action_id).map(|_| Self::SwitchModel)
+        crate::actions::agent_chat_switch_model_id_from_action(action_id).map(|_| Self::SwitchModel)
     }
 
     fn unavailable_message(self, model_id: &str) -> String {
@@ -556,7 +556,7 @@ impl DeferredAiWindowAction {
         }
     }
 
-    fn apply_to_acp(
+    fn apply_to_agent_chat(
         self,
         entity: Entity<crate::ai::agent_chat::ui::AgentChatView>,
         cx: &mut App,
@@ -595,7 +595,7 @@ impl DeferredAiWindowAction {
                         DeferredAiImageAttachmentStage::DecodeClipboardImage.failure_message(error)
                     })?;
                 let temp_path = std::env::temp_dir().join(format!(
-                    "script-kit-acp-clipboard-{}.png",
+                    "script-kit-agent_chat-clipboard-{}.png",
                     uuid::Uuid::new_v4()
                 ));
                 std::fs::write(&temp_path, png_bytes).map_err(|error| {
@@ -804,7 +804,7 @@ impl ScriptListApp {
                 })
             } else {
                 match this.update(cx, |this, cx| {
-                    this.open_tab_ai_acp_with_entry_intent(None, cx);
+                    this.open_tab_ai_agent_chat_with_entry_intent(None, cx);
                     Ok::<(), String>(())
                 }) {
                     Ok(result) => result,
@@ -816,7 +816,7 @@ impl ScriptListApp {
                 let ready_now = if requires_legacy_ai_window {
                     cx.update(ai::is_ai_window_ready)
                 } else {
-                    this.update(cx, |this, _cx| this.active_acp_chat_entity().is_some())
+                    this.update(cx, |this, _cx| this.active_agent_chat_entity().is_some())
                         .unwrap_or(false)
                 };
                 if !ready_now {
@@ -838,10 +838,10 @@ impl ScriptListApp {
             } else {
                 open_result.and_then(|()| {
                     this.update(cx, |this, cx| {
-                        let Some(entity) = this.active_acp_chat_entity() else {
+                        let Some(entity) = this.active_agent_chat_entity() else {
                             return Err("Agent Chat not ready after open".to_string());
                         };
-                        deferred_action.apply_to_acp(entity, cx)
+                        deferred_action.apply_to_agent_chat(entity, cx)
                     })
                     .map_err(|error| error.to_string())?
                 })
@@ -885,9 +885,9 @@ impl ScriptListApp {
         .detach();
     }
 
-    fn active_acp_chat_entity(&self) -> Option<Entity<crate::ai::agent_chat::ui::AgentChatView>> {
-        crate::ai::acp::chat_window::get_detached_acp_view_entity().or_else(|| {
-            let AppView::AcpChatView { entity } = &self.current_view else {
+    fn active_agent_chat_entity(&self) -> Option<Entity<crate::ai::agent_chat::ui::AgentChatView>> {
+        crate::ai::agent_chat::ui::chat_window::get_detached_agent_chat_view_entity().or_else(|| {
+            let AppView::AgentChatView { entity } = &self.current_view else {
                 return None;
             };
             Some(entity.clone())
@@ -1079,7 +1079,7 @@ impl ScriptListApp {
     /// Return true when the current view has any available actions.
     fn has_actions(&mut self) -> bool {
         match &self.current_view {
-            AppView::AcpChatView { .. } => true,
+            AppView::AgentChatView { .. } => true,
             AppView::ClipboardHistoryView { .. } => {
                 let has = self.selected_clipboard_entry().is_some();
                 tracing::debug!(
@@ -1208,7 +1208,7 @@ impl ScriptListApp {
         self.set_spine_parse_from_filter_and_cursor(&raw, raw.len());
         let plan = crate::spine::prompt_plan::build_spine_prompt_plan(&self.spine_parse);
         let cwd = self
-            .spine_cwd_for_acp_launch()
+            .spine_cwd_for_agent_chat_launch()
             .or_else(|| std::env::current_dir().ok())
             .unwrap_or_else(|| std::path::PathBuf::from("/"));
         crate::ai::agent_prompt_handoff::compile_handoff_payload_from_spine_plan(
@@ -1345,20 +1345,20 @@ impl ScriptListApp {
     }
 
     /// Handle action selection from the actions dialog
-    fn handle_acp_chat_action(
+    fn handle_agent_chat_action(
         &mut self,
         action_id: &str,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> DispatchOutcome {
         tracing::info!(
-            event = "acp_actions_menu_selected",
+            event = "agent_chat_actions_menu_selected",
             host = "shared",
             action_id,
-            "Selected ACP Actions Menu item"
+            "Selected Agent Chat Actions Menu item"
         );
 
-        let AppView::AcpChatView { ref entity } = self.current_view else {
+        let AppView::AgentChatView { ref entity } = self.current_view else {
             return DispatchOutcome::not_handled();
         };
 
@@ -1436,7 +1436,7 @@ impl ScriptListApp {
             };
         }
 
-        if let Some(action) = crate::ai::acp::view::FocusedTextMiniAction::from_action_id(action_id)
+        if let Some(action) = crate::ai::agent_chat::ui::view::FocusedTextMiniAction::from_action_id(action_id)
         {
             let receipt = entity.update(cx, |view, cx| {
                 view.perform_focused_text_mini_action(action, cx)
@@ -1456,8 +1456,8 @@ impl ScriptListApp {
             return DispatchOutcome::success();
         }
 
-        if let Some(model_id) = crate::actions::acp_switch_model_id_from_action(action_id) {
-            let Some(model_action) = AcpModelSwitchHandlerAction::from_action_id(action_id) else {
+        if let Some(model_id) = crate::actions::agent_chat_switch_model_id_from_action(action_id) {
+            let Some(model_action) = AgentChatModelSwitchHandlerAction::from_action_id(action_id) else {
                 return DispatchOutcome::not_handled();
             };
             let Some((current_selected_model_id, model_display_name)) = ({
@@ -1496,7 +1496,7 @@ impl ScriptListApp {
 
             tracing::info!(
                 target: "script_kit::tab_ai",
-                event = "acp_switch_model_requested",
+                event = "agent_chat_switch_model_requested",
                 model_id,
                 model_display_name = %model_display_name,
             );
@@ -1569,8 +1569,8 @@ impl ScriptListApp {
             );
 
             self.close_tab_ai_harness_terminal(cx);
-            self.embedded_acp_chat = None;
-            self.open_tab_ai_acp_with_entry_intent(None, cx);
+            self.embedded_agent_chat = None;
+            self.open_tab_ai_agent_chat_with_entry_intent(None, cx);
 
             let mut outcome = DispatchOutcome::success();
             outcome.user_message = Some(profile_action.relaunch_message(&profile.name));
@@ -1578,7 +1578,7 @@ impl ScriptListApp {
         }
 
         if let Some(request_id) =
-            crate::actions::acp_receipt_history_request_id_from_action(action_id)
+            crate::actions::agent_chat_receipt_history_request_id_from_action(action_id)
         {
             let Some(entry) =
                 crate::agentic_protocol_bus::find_protocol_response_by_request_id(request_id)
@@ -1593,7 +1593,7 @@ impl ScriptListApp {
             cx.write_to_clipboard(gpui::ClipboardItem::new_string(json));
             tracing::info!(
                 target: "script_kit::tab_ai",
-                event = "acp_receipt_history_copied",
+                event = "agent_chat_receipt_history_copied",
                 request_id,
                 response_type = %entry.response_type,
                 "Copied protocol receipt history entry"
@@ -1605,9 +1605,9 @@ impl ScriptListApp {
         }
 
         match action_id {
-            "acp_copy_last_response" => {
+            "agent_chat_copy_last_response" => {
                 let Some(last_response_action) =
-                    AcpLastResponseHandlerAction::from_action_id(action_id)
+                    AgentChatLastResponseHandlerAction::from_action_id(action_id)
                 else {
                     return DispatchOutcome::not_handled();
                 };
@@ -1623,7 +1623,7 @@ impl ScriptListApp {
                             .find(|msg| {
                                 matches!(
                                     msg.role,
-                                    crate::ai::acp::thread::AcpThreadMessageRole::Assistant
+                                    crate::ai::agent_chat::ui::thread::AgentChatThreadMessageRole::Assistant
                                 )
                             })
                             .map(|msg| msg.body.to_string())
@@ -1639,16 +1639,16 @@ impl ScriptListApp {
                     DispatchOutcome::not_handled()
                 }
             }
-            "acp_new_conversation" | "acp_clear_conversation" => {
+            "agent_chat_new_conversation" | "agent_chat_clear_conversation" => {
                 let Some(session_action) =
-                    AcpConversationSessionHandlerAction::from_action_id(action_id)
+                    AgentChatConversationSessionHandlerAction::from_action_id(action_id)
                 else {
                     return DispatchOutcome::not_handled();
                 };
                 if !session_action.preserves_session() {
-                    // Close and reopen the ACP chat for a fresh session
+                    // Close and reopen the Agent Chat chat for a fresh session
                     self.close_tab_ai_harness_terminal(cx);
-                    self.open_tab_ai_acp_with_entry_intent(None, cx);
+                    self.open_tab_ai_agent_chat_with_entry_intent(None, cx);
                     return DispatchOutcome::success();
                 }
 
@@ -1667,9 +1667,9 @@ impl ScriptListApp {
                 });
                 DispatchOutcome::success()
             }
-            "acp_paste_to_frontmost" => {
+            "agent_chat_paste_to_frontmost" => {
                 let Some(last_response_action) =
-                    AcpLastResponseHandlerAction::from_action_id(action_id)
+                    AgentChatLastResponseHandlerAction::from_action_id(action_id)
                 else {
                     return DispatchOutcome::not_handled();
                 };
@@ -1684,7 +1684,7 @@ impl ScriptListApp {
                             .find(|msg| {
                                 matches!(
                                     msg.role,
-                                    crate::ai::acp::thread::AcpThreadMessageRole::Assistant
+                                    crate::ai::agent_chat::ui::thread::AgentChatThreadMessageRole::Assistant
                                 )
                             })
                             .map(|msg| msg.body.to_string())
@@ -1701,7 +1701,7 @@ impl ScriptListApp {
                         std::thread::sleep(std::time::Duration::from_millis(200));
                         let injector = crate::text_injector::TextInjector::new();
                         if let Err(e) = injector.paste_text(&text_for_paste) {
-                            tracing::warn!(%e, "acp_paste_to_frontmost_failed");
+                            tracing::warn!(%e, "agent_chat_paste_to_frontmost_failed");
                         }
                     });
                     let mut outcome = DispatchOutcome::success();
@@ -1711,8 +1711,8 @@ impl ScriptListApp {
                     DispatchOutcome::not_handled()
                 }
             }
-            "acp_copy_all_code" => {
-                let Some(code_copy_action) = AcpCodeCopyHandlerAction::from_action_id(action_id)
+            "agent_chat_copy_all_code" => {
+                let Some(code_copy_action) = AgentChatCodeCopyHandlerAction::from_action_id(action_id)
                 else {
                     return DispatchOutcome::not_handled();
                 };
@@ -1726,7 +1726,7 @@ impl ScriptListApp {
                     for msg in &messages {
                         if matches!(
                             msg.role,
-                            crate::ai::acp::thread::AcpThreadMessageRole::Assistant
+                            crate::ai::agent_chat::ui::thread::AgentChatThreadMessageRole::Assistant
                         ) {
                             // Extract all code blocks from this message
                             let mut in_block = false;
@@ -1767,8 +1767,8 @@ impl ScriptListApp {
                     o
                 }
             }
-            "acp_retry_last" => {
-                let Some(retry_action) = AcpRetryLastHandlerAction::from_action_id(action_id)
+            "agent_chat_retry_last" => {
+                let Some(retry_action) = AgentChatRetryLastHandlerAction::from_action_id(action_id)
                 else {
                     return DispatchOutcome::not_handled();
                 };
@@ -1782,7 +1782,7 @@ impl ScriptListApp {
                             .iter()
                             .rev()
                             .find(|m| {
-                                matches!(m.role, crate::ai::acp::thread::AcpThreadMessageRole::User)
+                                matches!(m.role, crate::ai::agent_chat::ui::thread::AgentChatThreadMessageRole::User)
                             })
                             .map(|m| m.body.to_string())
                     })
@@ -1804,9 +1804,9 @@ impl ScriptListApp {
                     o
                 }
             }
-            "acp_save_as_script" => {
+            "agent_chat_save_as_script" => {
                 let Some(code_block_action) =
-                    AcpLastCodeBlockHandlerAction::from_action_id(action_id)
+                    AgentChatLastCodeBlockHandlerAction::from_action_id(action_id)
                 else {
                     return DispatchOutcome::not_handled();
                 };
@@ -1822,7 +1822,7 @@ impl ScriptListApp {
                             .find(|m| {
                                 matches!(
                                     m.role,
-                                    crate::ai::acp::thread::AcpThreadMessageRole::Assistant
+                                    crate::ai::agent_chat::ui::thread::AgentChatThreadMessageRole::Assistant
                                 )
                             })
                             .map(|m| m.body.to_string())
@@ -1868,7 +1868,7 @@ impl ScriptListApp {
                             .join(format!("{name}.{ext}"));
 
                         if let Err(e) = std::fs::write(&path, &code) {
-                            tracing::warn!(%e, "acp_save_as_script_failed");
+                            tracing::warn!(%e, "agent_chat_save_as_script_failed");
                         } else {
                             let mut o = DispatchOutcome::success();
                             o.user_message = code_block_action.saved_script_message(&name, ext);
@@ -1880,9 +1880,9 @@ impl ScriptListApp {
                 o.user_message = Some(code_block_action.missing_code_message().to_string());
                 o
             }
-            "acp_run_last_code" => {
+            "agent_chat_run_last_code" => {
                 let Some(code_block_action) =
-                    AcpLastCodeBlockHandlerAction::from_action_id(action_id)
+                    AgentChatLastCodeBlockHandlerAction::from_action_id(action_id)
                 else {
                     return DispatchOutcome::not_handled();
                 };
@@ -1898,7 +1898,7 @@ impl ScriptListApp {
                             .find(|m| {
                                 matches!(
                                     m.role,
-                                    crate::ai::acp::thread::AcpThreadMessageRole::Assistant
+                                    crate::ai::agent_chat::ui::thread::AgentChatThreadMessageRole::Assistant
                                 )
                             })
                             .map(|m| m.body.to_string())
@@ -1927,7 +1927,7 @@ impl ScriptListApp {
                         let path = tmp_dir.join(&name);
 
                         if let Err(e) = std::fs::write(&path, &block.code) {
-                            tracing::warn!(%e, "acp_run_last_code_write_failed");
+                            tracing::warn!(%e, "agent_chat_run_last_code_write_failed");
                             let mut o = DispatchOutcome::success();
                             o.user_message = code_block_action.temp_write_failure_message(e);
                             return o;
@@ -2008,16 +2008,16 @@ impl ScriptListApp {
                 o.user_message = Some(code_block_action.missing_code_message().to_string());
                 o
             }
-            "acp_open_in_editor" => {
+            "agent_chat_open_in_editor" => {
                 let kit_path = crate::setup::get_kit_path();
                 if let Err(e) = open::that(&kit_path) {
-                    tracing::warn!(%e, "acp_open_in_editor_failed");
+                    tracing::warn!(%e, "agent_chat_open_in_editor_failed");
                 }
                 DispatchOutcome::success()
             }
-            "acp_export_markdown" => {
+            "agent_chat_export_markdown" => {
                 let Some(markdown_action) =
-                    AcpConversationMarkdownHandlerAction::from_action_id(action_id)
+                    AgentChatConversationMarkdownHandlerAction::from_action_id(action_id)
                 else {
                     return DispatchOutcome::not_handled();
                 };
@@ -2025,7 +2025,7 @@ impl ScriptListApp {
                 let markdown = {
                     let view = entity.read(cx);
                     view.thread().and_then(|thread| {
-                        build_acp_conversation_markdown_from_thread(&thread.read(cx))
+                        build_agent_chat_conversation_markdown_from_thread(&thread.read(cx))
                     })
                 };
                 let message_count = {
@@ -2037,19 +2037,19 @@ impl ScriptListApp {
 
                 tracing::info!(
                     target: "script_kit::tab_ai",
-                    event = "acp_export_markdown_started",
+                    event = "agent_chat_export_markdown_started",
                     message_count,
-                    "Starting ACP export-as-markdown"
+                    "Starting Agent Chat export-as-markdown"
                 );
 
                 let Some(markdown) = markdown else {
                     let reason = markdown_action.blocked_reason(message_count);
                     tracing::warn!(
                         target: "script_kit::tab_ai",
-                        event = "acp_export_markdown_blocked",
+                        event = "agent_chat_export_markdown_blocked",
                         reason = %reason.trace_value(),
                         message_count,
-                        "ACP export-as-markdown blocked"
+                        "Agent Chat export-as-markdown blocked"
                     );
                     let mut outcome = DispatchOutcome::success();
                     outcome.user_message = Some(markdown_action.empty_message().to_string());
@@ -2061,19 +2061,19 @@ impl ScriptListApp {
 
                 tracing::info!(
                     target: "script_kit::tab_ai",
-                    event = "acp_export_markdown_succeeded",
+                    event = "agent_chat_export_markdown_succeeded",
                     message_count,
                     char_count,
-                    "ACP export-as-markdown completed"
+                    "Agent Chat export-as-markdown completed"
                 );
 
                 let mut outcome = DispatchOutcome::success();
                 outcome.user_message = Some(markdown_action.success_message().to_string());
                 outcome
             }
-            "acp_save_as_note" => {
+            "agent_chat_save_as_note" => {
                 let Some(markdown_action) =
-                    AcpConversationMarkdownHandlerAction::from_action_id(action_id)
+                    AgentChatConversationMarkdownHandlerAction::from_action_id(action_id)
                 else {
                     return DispatchOutcome::not_handled();
                 };
@@ -2081,7 +2081,7 @@ impl ScriptListApp {
                 let markdown = {
                     let view = entity.read(cx);
                     view.thread().and_then(|thread| {
-                        build_acp_conversation_markdown_from_thread(&thread.read(cx))
+                        build_agent_chat_conversation_markdown_from_thread(&thread.read(cx))
                     })
                 };
                 let message_count = {
@@ -2093,19 +2093,19 @@ impl ScriptListApp {
 
                 tracing::info!(
                     target: "script_kit::tab_ai",
-                    event = "acp_save_as_note_started",
+                    event = "agent_chat_save_as_note_started",
                     message_count,
-                    "Starting ACP save-as-note"
+                    "Starting Agent Chat save-as-note"
                 );
 
                 let Some(markdown) = markdown else {
                     let reason = markdown_action.blocked_reason(message_count);
                     tracing::warn!(
                         target: "script_kit::tab_ai",
-                        event = "acp_save_as_note_blocked",
+                        event = "agent_chat_save_as_note_blocked",
                         reason = %reason.trace_value(),
                         message_count,
-                        "ACP save-as-note blocked"
+                        "Agent Chat save-as-note blocked"
                     );
                     let mut o = DispatchOutcome::success();
                     o.user_message = Some(markdown_action.empty_message().to_string());
@@ -2115,14 +2115,14 @@ impl ScriptListApp {
                 let char_count = markdown.chars().count();
                 match crate::notes::save_note_with_content(cx, markdown) {
                     Ok(_) => {
-                        self.close_acp_chat_to_script_list(false, cx);
+                        self.close_agent_chat_to_script_list(false, cx);
                         tracing::info!(
                             target: "script_kit::tab_ai",
-                            event = "acp_save_as_note_succeeded",
+                            event = "agent_chat_save_as_note_succeeded",
                             message_count,
                             char_count,
                             handoff = "notes_window",
-                            "ACP save-as-note completed"
+                            "Agent Chat save-as-note completed"
                         );
                         let mut o = DispatchOutcome::success();
                         o.user_message = Some(markdown_action.success_message().to_string());
@@ -2131,11 +2131,11 @@ impl ScriptListApp {
                     Err(e) => {
                         tracing::warn!(
                             target: "script_kit::tab_ai",
-                            event = "acp_save_as_note_failed",
+                            event = "agent_chat_save_as_note_failed",
                             message_count,
                             char_count,
                             error = %e,
-                            "ACP save-as-note failed"
+                            "Agent Chat save-as-note failed"
                         );
                         let message = markdown_action
                             .failure_message(e)
@@ -2144,14 +2144,14 @@ impl ScriptListApp {
                     }
                 }
             }
-            "acp_show_history" => {
-                let Some(panel_action) = AcpPanelWindowHandlerAction::from_action_id(action_id)
+            "agent_chat_show_history" => {
+                let Some(panel_action) = AgentChatPanelWindowHandlerAction::from_action_id(action_id)
                 else {
                     return DispatchOutcome::not_handled();
                 };
-                tracing::info!(event = "acp_history_action_invoked", action = "openHistory");
+                tracing::info!(event = "agent_chat_history_action_invoked", action = "openHistory");
                 self.open_builtin_filterable_view(
-                    AppView::AcpHistoryView {
+                    AppView::AgentChatHistoryView {
                         filter: String::new(),
                         selected_index: 0,
                     },
@@ -2163,9 +2163,9 @@ impl ScriptListApp {
                 outcome.user_message = panel_action.success_message().map(String::from);
                 outcome
             }
-            "acp_clear_history" => {
+            "agent_chat_clear_history" => {
                 let Some(history_action) =
-                    AcpHistoryMutationHandlerAction::from_action_id(action_id)
+                    AgentChatHistoryMutationHandlerAction::from_action_id(action_id)
                 else {
                     return DispatchOutcome::not_handled();
                 };
@@ -2177,7 +2177,7 @@ impl ScriptListApp {
                 o.user_message = Some(history_action.success_message().to_string());
                 o
             }
-            "acp_scroll_to_top" => {
+            "agent_chat_scroll_to_top" => {
                 let entity = entity.clone();
                 entity.update(cx, |chat, cx| {
                     if let Some(transcript) = &chat.transcript {
@@ -2190,7 +2190,7 @@ impl ScriptListApp {
                 });
                 DispatchOutcome::success()
             }
-            "acp_scroll_to_bottom" => {
+            "agent_chat_scroll_to_bottom" => {
                 let entity = entity.clone();
                 entity.update(cx, |chat, cx| {
                     if let Some(transcript) = &chat.transcript {
@@ -2200,7 +2200,7 @@ impl ScriptListApp {
                 });
                 DispatchOutcome::success()
             }
-            "acp_expand_all" => {
+            "agent_chat_expand_all" => {
                 let entity = entity.clone();
                 entity.update(cx, |chat, cx| {
                     // Add all collapsible message IDs to collapsed_ids (which means expanded)
@@ -2212,8 +2212,8 @@ impl ScriptListApp {
                             .filter(|m| {
                                 matches!(
                                     m.role,
-                                    crate::ai::acp::thread::AcpThreadMessageRole::Thought
-                                        | crate::ai::acp::thread::AcpThreadMessageRole::Tool
+                                    crate::ai::agent_chat::ui::thread::AgentChatThreadMessageRole::Thought
+                                        | crate::ai::agent_chat::ui::thread::AgentChatThreadMessageRole::Tool
                                 )
                             })
                             .map(|m| m.id)
@@ -2226,7 +2226,7 @@ impl ScriptListApp {
                 });
                 DispatchOutcome::success()
             }
-            "acp_collapse_all" => {
+            "agent_chat_collapse_all" => {
                 let entity = entity.clone();
                 entity.update(cx, |chat, cx| {
                     if let Some(transcript) = &chat.transcript {
@@ -2236,8 +2236,8 @@ impl ScriptListApp {
                 });
                 DispatchOutcome::success()
             }
-            "acp_detach_window" => {
-                let Some(panel_action) = AcpPanelWindowHandlerAction::from_action_id(action_id)
+            "agent_chat_detach_window" => {
+                let Some(panel_action) = AgentChatPanelWindowHandlerAction::from_action_id(action_id)
                 else {
                     return DispatchOutcome::not_handled();
                 };
@@ -2249,21 +2249,21 @@ impl ScriptListApp {
                     _ => Some(window.bounds()),
                 };
                 tracing::info!(
-                    event = "actions_detach_acp_requested",
+                    event = "actions_detach_agent_chat_requested",
                     has_inherited_bounds = true,
                 );
-                if let Err(e) = crate::ai::acp::chat_window::open_chat_window_with_thread(
+                if let Err(e) = crate::ai::agent_chat::ui::chat_window::open_chat_window_with_thread(
                     thread,
                     inherit_bounds,
                     cx,
                 ) {
-                    tracing::warn!(%e, "acp_detach_window_failed");
+                    tracing::warn!(%e, "agent_chat_detach_window_failed");
                     DispatchOutcome::success()
                 } else {
                     // Activation is handled inside open_chat_window_with_thread.
-                    self.close_acp_chat_to_script_list(false, cx);
+                    self.close_agent_chat_to_script_list(false, cx);
                     tracing::info!(
-                        event = "actions_detach_acp_completed",
+                        event = "actions_detach_agent_chat_completed",
                         detached_window_activated = true,
                     );
                     let mut o = DispatchOutcome::success();
@@ -2271,18 +2271,18 @@ impl ScriptListApp {
                     o
                 }
             }
-            "acp_reattach_panel" => {
-                let Some(panel_action) = AcpPanelWindowHandlerAction::from_action_id(action_id)
+            "agent_chat_reattach_panel" => {
+                let Some(panel_action) = AgentChatPanelWindowHandlerAction::from_action_id(action_id)
                 else {
                     return DispatchOutcome::not_handled();
                 };
-                crate::ai::acp::chat_window::close_chat_window(cx);
-                self.reattach_embedded_acp_from_detached(cx);
+                crate::ai::agent_chat::ui::chat_window::close_chat_window(cx);
+                self.reattach_embedded_agent_chat_from_detached(cx);
                 let mut o = DispatchOutcome::success();
                 o.user_message = panel_action.success_message().map(String::from);
                 o
             }
-            "acp_close" => {
+            "agent_chat_close" => {
                 self.close_tab_ai_harness_terminal(cx);
                 DispatchOutcome::success()
             }
@@ -2409,13 +2409,13 @@ impl ScriptListApp {
                                     if o.was_handled() {
                                         ("main_prompt_export", o)
                                     } else {
-                                        let o = self.handle_acp_chat_action(
+                                        let o = self.handle_agent_chat_action(
                                             &action_id_stripped,
                                             window,
                                             cx,
                                         );
                                         if o.was_handled() {
-                                            ("acp_chat", o)
+                                            ("agent_chat", o)
                                         } else {
                                             // SDK actions as final fallback — thread trace_id from dctx
                                             (

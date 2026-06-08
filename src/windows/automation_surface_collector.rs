@@ -1,7 +1,7 @@
 //! Secondary-surface semantic element collectors.
 //!
 //! Provides [`collect_surface_snapshot`] which returns semantic elements for
-//! non-main automation windows (Notes, AcpDetached, ActionsDialog, PromptPopup).
+//! non-main automation windows (Notes, AgentChatDetached, ActionsDialog, PromptPopup).
 //!
 //! Used by both `getElements` and `inspectAutomationWindow` so agents see one
 //! consistent semantic model regardless of which protocol command they use.
@@ -275,14 +275,15 @@ pub fn collect_surface_snapshot(
                 "panel_only_notes",
             )
         }),
-        AutomationWindowKind::AcpDetached => collect_acp_detached_snapshot(resolved, cx)
-            .unwrap_or_else(|| {
+        AutomationWindowKind::AgentChatDetached => {
+            collect_agent_chat_detached_snapshot(resolved, cx).unwrap_or_else(|| {
                 panel_only_fallback(
-                    "panel:acp-detached",
+                    "panel:agent_chat-detached",
                     resolved.title.clone(),
-                    "panel_only_acp_detached",
+                    "panel_only_agent_chat_detached",
                 )
-            }),
+            })
+        }
         AutomationWindowKind::ActionsDialog => collect_actions_dialog_snapshot(cx)
             .or_else(|| collect_cached_actions_dialog_snapshot(&resolved.id))
             .unwrap_or_else(|| {
@@ -1095,34 +1096,34 @@ fn collect_notes_snapshot(
 }
 
 // ---------------------------------------------------------------------------
-// Detached ACP collector
+// Detached Agent Chat collector
 // ---------------------------------------------------------------------------
 
-fn collect_acp_detached_snapshot(
+fn collect_agent_chat_detached_snapshot(
     _resolved: &AutomationWindowInfo,
     cx: &gpui::App,
 ) -> Option<SurfaceElementSnapshot> {
-    let entity = crate::ai::acp::chat_window::get_detached_acp_view_entity()?;
-    Some(collect_acp_detached_elements(&entity, 1000, cx))
+    let entity = crate::ai::agent_chat::ui::chat_window::get_detached_agent_chat_view_entity()?;
+    Some(collect_agent_chat_detached_elements(&entity, 1000, cx))
 }
 
-/// Collect semantic elements from a live detached ACP entity.
+/// Collect semantic elements from a live detached Agent Chat entity.
 ///
 /// Shared by the surface snapshot path (`getElements`) and the
-/// [`DetachedAcpTransactionProvider`](super::automation_transaction_provider::DetachedAcpTransactionProvider)
+/// [`DetachedAgentChatTransactionProvider`](super::automation_transaction_provider::DetachedAgentChatTransactionProvider)
 /// so both see the same semantic model.
-pub(crate) fn collect_acp_detached_elements(
-    entity: &gpui::Entity<crate::ai::acp::view::AcpChatView>,
+pub(crate) fn collect_agent_chat_detached_elements(
+    entity: &gpui::Entity<crate::ai::agent_chat::ui::view::AgentChatView>,
     limit: usize,
     cx: &gpui::App,
 ) -> SurfaceElementSnapshot {
-    let state = entity.read(cx).collect_acp_state_snapshot(cx);
+    let state = entity.read(cx).collect_agent_chat_state_snapshot(cx);
 
     let picker_open = state.picker.as_ref().map(|p| p.open).unwrap_or(false);
 
     let mut elements = vec![
         element(
-            "panel:acp-detached",
+            "panel:agent_chat-detached",
             ElementType::Panel,
             None,
             None,
@@ -1131,7 +1132,7 @@ pub(crate) fn collect_acp_detached_elements(
             None,
         ),
         element(
-            "input:acp-composer",
+            "input:agent_chat-composer",
             ElementType::Input,
             None,
             Some(state.input_text.clone()),
@@ -1140,7 +1141,7 @@ pub(crate) fn collect_acp_detached_elements(
             None,
         ),
         element(
-            "list:acp-messages",
+            "list:agent_chat-messages",
             ElementType::List,
             Some(format!("{} messages", state.message_count)),
             None,
@@ -1152,7 +1153,7 @@ pub(crate) fn collect_acp_detached_elements(
 
     if picker_open {
         elements.push(element(
-            "panel:acp-picker",
+            "panel:agent_chat-picker",
             ElementType::Panel,
             Some("open".to_string()),
             None,
@@ -1169,7 +1170,7 @@ pub(crate) fn collect_acp_detached_elements(
     SurfaceElementSnapshot {
         total_count: elements.len(),
         elements,
-        focused_semantic_id: Some("input:acp-composer".to_string()),
+        focused_semantic_id: Some("input:agent_chat-composer".to_string()),
         selected_semantic_id: None,
         warnings: Vec::new(),
         quality: SnapshotQuality::Full,
@@ -1345,7 +1346,7 @@ fn collect_cached_prompt_popup_snapshot(window_id: &str) -> Option<SurfaceElemen
 }
 
 fn collect_mention_picker_snapshot(cx: &gpui::App) -> Option<SurfaceElementSnapshot> {
-    let snap = crate::ai::acp::picker_popup::get_mention_popup_snapshot(cx)?;
+    let snap = crate::ai::agent_chat::ui::picker_popup::get_mention_popup_snapshot(cx)?;
 
     let mut elements = vec![element(
         "panel:mention-picker",
@@ -1399,7 +1400,7 @@ fn collect_mention_picker_snapshot(cx: &gpui::App) -> Option<SurfaceElementSnaps
 }
 
 fn collect_history_popup_snapshot(cx: &gpui::App) -> Option<SurfaceElementSnapshot> {
-    let snap = crate::ai::acp::history_popup::get_history_popup_snapshot(cx)?;
+    let snap = crate::ai::agent_chat::ui::history_popup::get_history_popup_snapshot(cx)?;
 
     let mut elements = vec![element(
         "panel:history-popup",

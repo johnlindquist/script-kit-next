@@ -1547,10 +1547,10 @@ impl ScriptListApp {
                     let has_shift = event.keystroke.modifiers.shift;
 
                     match key_str {
-                        "v" if this.route_large_script_list_paste_to_acp(cx) => {
+                        "v" if this.route_large_script_list_paste_to_agent_chat(cx) => {
                             logging::log(
                                 "KEY",
-                                "Shortcut Cmd+V -> route_large_script_list_paste_to_acp",
+                                "Shortcut Cmd+V -> route_large_script_list_paste_to_agent_chat",
                             );
                             cx.stop_propagation();
                             return;
@@ -1708,7 +1708,7 @@ impl ScriptListApp {
                 // ── Spine projection Enter intercept ──────────────
                 // Spine Enter routing:
                 // 1. Projection rows win (accept the selected row).
-                // 2. Complete prompt-builder plans submit to ACP chat.
+                // 2. Complete prompt-builder plans submit to Agent Chat chat.
                 // 3. Everything else falls through to normal execution.
                 if sk_is_key_enter(key_str)
                     && !event.keystroke.modifiers.platform
@@ -1733,7 +1733,7 @@ impl ScriptListApp {
                         && !event.keystroke.modifiers.alt
                         && !event.keystroke.modifiers.control =>
                     {
-                        if this.try_route_global_cmd_enter_to_acp_context_capture(cx) {
+                        if this.try_route_global_cmd_enter_to_agent_chat_context_capture(cx) {
                             cx.stop_propagation();
                         }
                     }
@@ -2101,7 +2101,7 @@ impl ScriptListApp {
                         }
                     }),
                     cx.listener(|this, _: &gpui::ClickEvent, _window, cx| {
-                        this.open_tab_ai_acp_with_entry_intent(None, cx);
+                        this.open_tab_ai_agent_chat_with_entry_intent(None, cx);
                     }),
                 );
             self.main_window_footer_slot(gpui_footer)

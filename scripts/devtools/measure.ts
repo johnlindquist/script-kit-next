@@ -90,7 +90,7 @@ function targetMatchesSurface(surfaceId: string | undefined, windowKind: unknown
   if (surfaceId === "actions-dialog") {
     return kind.includes("action");
   }
-  if (surfaceId === "notes" || surfaceId === "notes-acp") {
+  if (surfaceId === "notes" || surfaceId === "notes-agent_chat") {
     return kind.includes("notes");
   }
   if (surfaceId === "dictation" || surfaceId === "dictation-history") {

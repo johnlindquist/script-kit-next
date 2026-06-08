@@ -11,7 +11,7 @@ const RULES: CoverageRule[] = [
   {
     file: "kit-init/examples/README.md",
     mustInclude: [
-      "scriptlets/acp-chat/main.md",
+      "scriptlets/agent_chat-chat/main.md",
       "scriptlets/custom-actions/main.md",
       "scriptlets/notes/main.md",
     ],
@@ -19,7 +19,7 @@ const RULES: CoverageRule[] = [
   {
     file: "kit-init/skills/new-scriptlet/SKILL.md",
     mustInclude: [
-      "~/.scriptkit/plugins/examples/scriptlets/acp-chat/main.md",
+      "~/.scriptkit/plugins/examples/scriptlets/agent_chat-chat/main.md",
       "~/.scriptkit/plugins/examples/scriptlets/custom-actions/main.md",
       "~/.scriptkit/plugins/examples/scriptlets/custom-actions/main.actions.md",
       "~/.scriptkit/plugins/examples/scriptlets/notes/main.md",
@@ -29,8 +29,8 @@ const RULES: CoverageRule[] = [
     file: "kit-init/skills/start-chat/SKILL.md",
     mustInclude: [
       "## Related Examples",
-      "~/.scriptkit/plugins/examples/scriptlets/acp-chat/main.md",
-      "~/.scriptkit/plugins/examples/scriptlets/acp-chat.md",
+      "~/.scriptkit/plugins/examples/scriptlets/agent_chat-chat/main.md",
+      "~/.scriptkit/plugins/examples/scriptlets/agent_chat-chat.md",
     ],
   },
   {

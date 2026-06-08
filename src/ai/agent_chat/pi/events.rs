@@ -1,7 +1,7 @@
 use serde_json::Value;
 
-use crate::ai::acp::config::AcpModelEntry;
 use crate::ai::agent_chat::events::AgentChatEvent;
+use crate::ai::agent_chat::ui::config::AgentChatModelEntry;
 
 use super::protocol::{PiRpcLine, PiRpcResponse};
 
@@ -148,7 +148,7 @@ pub(crate) fn split_text_delta_for_reveal(delta: &str) -> Vec<String> {
         let joined = chunks.concat();
         if joined != delta {
             tracing::warn!(
-                target: "script_kit::acp",
+                target: "script_kit::agent_chat",
                 event = "reveal_chunk_mismatch",
                 delta_len = delta.len(),
                 chunks_len = chunks.len(),
@@ -348,7 +348,7 @@ fn push_word_with_suffix(prefix: &str, word: &str, suffix: &str, chunks: &mut Ve
     }
 }
 
-fn models_from_response_data(data: Option<&Value>) -> Vec<AcpModelEntry> {
+fn models_from_response_data(data: Option<&Value>) -> Vec<AgentChatModelEntry> {
     let models = data
         .and_then(|data| data.get("models").or(Some(data)))
         .and_then(Value::as_array)
@@ -368,7 +368,7 @@ fn models_from_response_data(data: Option<&Value>) -> Vec<AcpModelEntry> {
                 .and_then(Value::as_u64)
                 .and_then(|value| u32::try_from(value).ok());
 
-            Some(AcpModelEntry {
+            Some(AgentChatModelEntry {
                 id,
                 display_name: get_str(model, "name")
                     .or_else(|| get_str(model, "displayName"))

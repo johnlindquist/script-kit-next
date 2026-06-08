@@ -20,8 +20,8 @@ function mirrorHeader(sourceRelPath: string): string {
 
 const MIRRORS: ExampleMirror[] = [
   {
-    source: "kit-init/scriptlets/acp-chat/main.md",
-    target: "kit-init/scriptlets/examples/acp-chat.md",
+    source: "kit-init/scriptlets/agent_chat-chat/main.md",
+    target: "kit-init/scriptlets/examples/agent_chat-chat.md",
   },
   {
     source: "kit-init/scriptlets/custom-actions/main.md",

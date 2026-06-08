@@ -72,13 +72,13 @@
                             }
                             ExternalCommand::OpenAi => {
                                 logging::log("STDIN", "Opening Agent Chat via openAi compatibility alias");
-                                view.open_tab_ai_acp_with_entry_intent(None, ctx);
+                                view.open_tab_ai_agent_chat_with_entry_intent(None, ctx);
                             }
-                            ExternalCommand::OpenAcpDetachedFixture { ref request_id } => {
+                            ExternalCommand::OpenAgentChatDetachedFixture { ref request_id } => {
                                 let rid = request_id.as_ref().map(|id| id.as_str());
-                                let result = crate::ai::acp::chat_window::open_chat_window(ctx)
+                                let result = crate::ai::agent_chat::ui::chat_window::open_chat_window(ctx)
                                     .map(|_| {
-                                        crate::ai::acp::chat_window::set_chat_window_fixture_bounds(
+                                        crate::ai::agent_chat::ui::chat_window::set_chat_window_fixture_bounds(
                                             gpui::Bounds {
                                                 origin: gpui::point(gpui::px(585.0), gpui::px(177.0)),
                                                 size: gpui::size(gpui::px(640.0), gpui::px(520.0)),
@@ -88,17 +88,17 @@
                                     });
                                 tracing::info!(
                                     category = "STDIN",
-                                    event = "acp_detached_fixture_opened",
-                                    command = "openAcpDetachedFixture",
+                                    event = "agent_chat_detached_fixture_opened",
+                                    command = "openAgentChatDetachedFixture",
                                     request_id = ?rid,
                                     ok = result.as_ref().map(|moved| *moved).unwrap_or(false),
                                     error = result.err().map(|err| err.to_string()),
-                                    "Detached ACP fixture open result"
+                                    "Detached Agent Chat fixture open result"
                                 );
                             }
                             ExternalCommand::OpenMiniAi => {
                                 logging::log("STDIN", "Opening Agent Chat via openMiniAi compatibility alias");
-                                view.open_tab_ai_acp_with_entry_intent(None, ctx);
+                                view.open_tab_ai_agent_chat_with_entry_intent(None, ctx);
                             }
                             ExternalCommand::OpenAiWithMockData => {
                                 logging::log("STDIN", "Opening standard Agent Chat mock fixture");
@@ -134,7 +134,7 @@
                                     "STDIN",
                                     "Ignoring deprecated mini mock-data AI alias and opening Agent Chat",
                                 );
-                                view.open_tab_ai_acp_with_entry_intent(None, ctx);
+                                view.open_tab_ai_agent_chat_with_entry_intent(None, ctx);
                             }
                             ExternalCommand::OpenFocusedTextAgentChatWithMockData { text, instruction, request_id }
                             | ExternalCommand::OpenInlineAgentWithMockData { text, instruction, request_id } => {
@@ -445,20 +445,20 @@
                                     }
                                 }
                             }
-                            ExternalCommand::SetAcpInput { text, submit, ref request_id } => {
+                            ExternalCommand::SetAgentChatInput { text, submit, ref request_id } => {
                                 let request_id_value = request_id.clone();
                                 let request_id = request_id_value.as_deref();
                                 tracing::info!(
                                     category = "STDIN",
-                                    event = "stdin_acp_command_received",
-                                    command = "setAcpInput",
+                                    event = "stdin_agent_chat_command_received",
+                                    command = "setAgentChatInput",
                                     request_id = ?request_id,
                                     submit,
                                     text_len = text.len(),
-                                    "STDIN ACP command received"
+                                    "STDIN Agent Chat command received"
                                 );
                                 let result = match &view.current_view {
-                                    AppView::AcpChatView { entity } => {
+                                    AppView::AgentChatView { entity } => {
                                         let entity = entity.clone();
                                         entity.update(ctx, |chat, cx| {
                                             chat.set_input_in_window(text.clone(), window, cx);
@@ -476,28 +476,28 @@
                                     Ok(()) => {
                                         tracing::info!(
                                             category = "STDIN",
-                                            event = "stdin_acp_command_finished",
-                                            command = "setAcpInput",
+                                            event = "stdin_agent_chat_command_finished",
+                                            command = "setAgentChatInput",
                                             request_id = ?request_id,
                                             submit,
                                             status = "success",
-                                            "STDIN ACP command finished"
+                                            "STDIN Agent Chat command finished"
                                         );
                                     }
                                     Err(error) => {
                                         logging::log(
                                             "STDIN",
-                                            &format!("Failed to set ACP input: {}", error),
+                                            &format!("Failed to set Agent Chat input: {}", error),
                                         );
                                         tracing::error!(
                                             category = "STDIN",
-                                            event = "stdin_acp_command_finished",
-                                            command = "setAcpInput",
+                                            event = "stdin_agent_chat_command_finished",
+                                            command = "setAgentChatInput",
                                             request_id = ?request_id,
                                             submit,
                                             status = "error",
                                             error = %error,
-                                            "STDIN ACP command finished"
+                                            "STDIN Agent Chat command finished"
                                         );
                                     }
                                 }
@@ -506,7 +506,7 @@
                                         let _ = sender.try_send(
                                             crate::protocol::Message::external_command_result(
                                                 rid.to_string(),
-                                                "setAcpInput".to_string(),
+                                                "setAgentChatInput".to_string(),
                                                 result.is_ok(),
                                                 result
                                                     .as_ref()
@@ -518,7 +518,7 @@
                                     }
                                 }
                             }
-                            ExternalCommand::SetAcpTestFixture {
+                            ExternalCommand::SetAgentChatTestFixture {
                                 ref phase,
                                 ref user_text,
                                 ref assistant_text,
@@ -528,16 +528,16 @@
                                 let request_id = request_id_value.as_deref();
                                 tracing::info!(
                                     category = "STDIN",
-                                    event = "stdin_acp_command_received",
-                                    command = "setAcpTestFixture",
+                                    event = "stdin_agent_chat_command_received",
+                                    command = "setAgentChatTestFixture",
                                     request_id = ?request_id,
                                     phase = %phase,
                                     user_text_len = user_text.as_ref().map(|text| text.len()).unwrap_or(0),
                                     assistant_text_len = assistant_text.as_ref().map(|text| text.len()).unwrap_or(0),
-                                    "STDIN ACP command received"
+                                    "STDIN Agent Chat command received"
                                 );
                                 let result = match &view.current_view {
-                                    AppView::AcpChatView { entity } => {
+                                    AppView::AgentChatView { entity } => {
                                         let entity = entity.clone();
                                         entity.update(ctx, |chat, cx| {
                                             chat.apply_test_fixture(
@@ -554,28 +554,28 @@
                                     Ok(()) => {
                                         tracing::info!(
                                             category = "STDIN",
-                                            event = "stdin_acp_command_finished",
-                                            command = "setAcpTestFixture",
+                                            event = "stdin_agent_chat_command_finished",
+                                            command = "setAgentChatTestFixture",
                                             request_id = ?request_id,
                                             phase = %phase,
                                             status = "success",
-                                            "STDIN ACP command finished"
+                                            "STDIN Agent Chat command finished"
                                         );
                                     }
                                     Err(error) => {
                                         logging::log(
                                             "STDIN",
-                                            &format!("Failed to set ACP test fixture: {}", error),
+                                            &format!("Failed to set Agent Chat test fixture: {}", error),
                                         );
                                         tracing::error!(
                                             category = "STDIN",
-                                            event = "stdin_acp_command_finished",
-                                            command = "setAcpTestFixture",
+                                            event = "stdin_agent_chat_command_finished",
+                                            command = "setAgentChatTestFixture",
                                             request_id = ?request_id,
                                             phase = %phase,
                                             status = "error",
                                             error = %error,
-                                            "STDIN ACP command finished"
+                                            "STDIN Agent Chat command finished"
                                         );
                                     }
                                 }
@@ -584,7 +584,7 @@
                                         let _ = sender.try_send(
                                             crate::protocol::Message::external_command_result(
                                                 rid.to_string(),
-                                                "setAcpTestFixture".to_string(),
+                                                "setAgentChatTestFixture".to_string(),
                                                 result.is_ok(),
                                                 result
                                                     .as_ref()
@@ -596,17 +596,17 @@
                                     }
                                 }
                             }
-                            ExternalCommand::PasteClipboardIntoAcp { ref request_id } => {
+                            ExternalCommand::PasteClipboardIntoAgentChat { ref request_id } => {
                                 let request_id = request_id.as_ref().map(|id| id.as_str());
                                 tracing::info!(
                                     category = "STDIN",
-                                    event = "stdin_acp_command_received",
-                                    command = "pasteClipboardIntoAcp",
+                                    event = "stdin_agent_chat_command_received",
+                                    command = "pasteClipboardIntoAgentChat",
                                     request_id = ?request_id,
-                                    "STDIN ACP command received"
+                                    "STDIN Agent Chat command received"
                                 );
                                 let result = match &view.current_view {
-                                    AppView::AcpChatView { entity } => {
+                                    AppView::AgentChatView { entity } => {
                                         let entity = entity.clone();
                                         let pasted = entity
                                             .update(ctx, |chat, cx| chat.paste_text_from_clipboard(cx));
@@ -623,26 +623,26 @@
                                     Ok(()) => {
                                         tracing::info!(
                                             category = "STDIN",
-                                            event = "stdin_acp_command_finished",
-                                            command = "pasteClipboardIntoAcp",
+                                            event = "stdin_agent_chat_command_finished",
+                                            command = "pasteClipboardIntoAgentChat",
                                             request_id = ?request_id,
                                             status = "success",
-                                            "STDIN ACP command finished"
+                                            "STDIN Agent Chat command finished"
                                         );
                                     }
                                     Err(error) => {
                                         logging::log(
                                             "STDIN",
-                                            &format!("Failed to paste clipboard into ACP: {}", error),
+                                            &format!("Failed to paste clipboard into Agent Chat: {}", error),
                                         );
                                         tracing::error!(
                                             category = "STDIN",
-                                            event = "stdin_acp_command_finished",
-                                            command = "pasteClipboardIntoAcp",
+                                            event = "stdin_agent_chat_command_finished",
+                                            command = "pasteClipboardIntoAgentChat",
                                             request_id = ?request_id,
                                             status = "error",
                                             error = %error,
-                                            "STDIN ACP command finished"
+                                            "STDIN Agent Chat command finished"
                                         );
                                     }
                                 }

@@ -3,7 +3,6 @@ use std::sync::{Arc, OnceLock};
 
 use anyhow::{anyhow, Context as _, Result};
 
-use crate::ai::acp::config::AcpModelEntry;
 use crate::ai::agent_chat::pi::launch_spec::PiLaunchSpec;
 use crate::ai::agent_chat::pi::{PiRpcLaunchSpec, PiRpcRuntime};
 use crate::ai::agent_chat::profiles::{
@@ -11,6 +10,7 @@ use crate::ai::agent_chat::profiles::{
     BUILTIN_TEXT_PROFILE_ID,
 };
 use crate::ai::agent_chat::runtime::AgentChatConnection;
+use crate::ai::agent_chat::ui::config::AgentChatModelEntry;
 use crate::ai::agent_chat::warm_key::pi_warm_key;
 use crate::ai::agent_chat::warm_session::{AgentChatWarmSessionManager, AgentChatWarmSessionSpec};
 use crate::config::{AgentChatBackend, AiPreferences};
@@ -27,7 +27,7 @@ pub(crate) struct PiAgentChatLaunch {
     pub warm_key: String,
     pub cwd: PathBuf,
     pub selected_model_id: Option<String>,
-    pub available_models: Vec<AcpModelEntry>,
+    pub available_models: Vec<AgentChatModelEntry>,
 }
 
 impl PiAgentChatLaunch {
@@ -41,7 +41,7 @@ impl PiAgentChatLaunch {
     /// The Pi RPC worker bakes its `current_dir` from the launch spec at spawn
     /// time and ignores per-turn cwd, so the user's chosen working directory
     /// (the Spine cwd chip) must be applied here — before the warm session is
-    /// keyed and spawned — not via `AcpThread::set_cwd` afterward. Because
+    /// keyed and spawned — not via `AgentChatThread::set_cwd` afterward. Because
     /// `pi_warm_key` includes the cwd, an overridden cwd produces a distinct
     /// warm-session key so a default-cwd warm session is never reused for a
     /// different directory.
@@ -81,7 +81,7 @@ impl PiAgentChatLaunch {
         let available_models = selected_model_id
             .as_ref()
             .map(|id| {
-                vec![AcpModelEntry {
+                vec![AgentChatModelEntry {
                     id: id.clone(),
                     display_name: profile.model.clone().or_else(|| Some(id.clone())),
                     context_window: None,
@@ -304,7 +304,7 @@ mod tests {
     }
 
     #[test]
-    fn legacy_acp_backend_resolves_to_pi() {
+    fn legacy_agent_chat_backend_resolves_to_pi() {
         let ai = AiPreferences {
             pi_binary: Some("/tmp/test-pi".to_string()),
             selected_backend: Some(AgentChatBackend::Pi),
@@ -358,7 +358,7 @@ mod tests {
         let ai = AiPreferences {
             pi_binary: Some("/tmp/test-pi".to_string()),
             selected_profile_id: Some("custom-pi".to_string()),
-            profiles: vec![crate::config::AcpProfile {
+            profiles: vec![crate::config::AgentChatProfile {
                 id: Some("custom-pi".to_string()),
                 name: "Custom Pi".to_string(),
                 backend: Some(AgentChatBackend::Pi),

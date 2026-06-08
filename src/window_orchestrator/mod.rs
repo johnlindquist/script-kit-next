@@ -44,7 +44,7 @@ pub enum HiddenReason {
 pub enum MainContentKind {
     ScriptList,
     Prompt,
-    AcpChat,
+    AgentChat,
     QuickTerminal,
     FileSearch,
     Other,
@@ -337,7 +337,7 @@ pub fn reduce(state: &OrchestratorState, event: WindowEvent) -> Transition {
         }
 
         // ---------------------------------------------------------------
-        // Detached ACP Chat
+        // Detached Agent Chat Chat
         // ---------------------------------------------------------------
         WindowEvent::OpenDetachedAiChat => {
             next.detached_ai.visible = true;
@@ -420,7 +420,7 @@ pub fn reduce(state: &OrchestratorState, event: WindowEvent) -> Transition {
 
                 if target == DictationTarget::TabAiHarness {
                     next.main.visibility = MainVisibility::Visible;
-                    next.main.content = MainContentKind::AcpChat;
+                    next.main.content = MainContentKind::AgentChat;
                     next.main.return_focus = FocusToken::ChatComposer;
                     next.key_surface = Some(SurfaceId::Main);
                     cmds.push(WindowCommand::RevealMain {

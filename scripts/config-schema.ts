@@ -671,7 +671,7 @@
  * | theme.presetId     | string         | unset                       | no       |
  * | dictation.selectedDeviceId | string | unset                      | no       |
  * | ai.selectedModelId | string         | unset                       | no       |
- * | ai.selectedAcpAgentId | string      | unset                       | no       |
+ * | ai.selectedAgentChatAgentId | string      | unset                       | no       |
  * | ai.piBinary       | string         | bundled Pi sidecar          | no       |
  * | ai.profiles       | AiProfile[]    | unset                       | no       |
  * | ai.activeProfileId | string         | unset                       | no       |
@@ -1267,7 +1267,7 @@ export interface UpdatesConfig {
   autoCheck?: boolean;
 }
 
-export type AgentChatBackend = "acp" | "pi";
+export type AgentChatBackend = "agent_chat" | "pi";
 
 /**
  * Named Agent Chat configuration profile stored in `~/.scriptkit/config.ts`.
@@ -1334,9 +1334,9 @@ export interface AiProfile {
   /**
    * Legacy Agent Chat agent ID to use when this profile is active.
    *
-   * @example "codex-acp"
+   * @example "codex-agent_chat"
    */
-  selectedAcpAgentId?: string;
+  selectedAgentChatAgentId?: string;
 
   /**
    * System prompt slug to apply when this profile is active.
@@ -1360,9 +1360,9 @@ export interface AiPreferences {
   /**
    * Legacy last-selected Agent Chat agent ID.
    *
-   * @example "codex-acp"
+   * @example "codex-agent_chat"
    */
-  selectedAcpAgentId?: string;
+  selectedAgentChatAgentId?: string;
 
   /**
    * Last-selected Agent Chat profile id.
@@ -1446,7 +1446,7 @@ export interface Config extends BaseConfig {
    *   enabled: true,
    *   files: { enabled: true, globalSearch: true, recentFiles: true, directoryBrowse: true, promotion: "never" },
    *   notes: { enabled: true, maxResults: 3, minQueryChars: 3, searchContent: true },
-   *   acpHistory: { enabled: true, maxResults: 3, minQueryChars: 3 },
+   *   agent_chatHistory: { enabled: true, maxResults: 3, minQueryChars: 3 },
  *   aiVault: { enabled: true, maxResults: 3, minQueryChars: 3, providers: ["claude", "codex", "hermesAgent", "rovoDev"], cacheTtlMs: 30000, searchContent: false, resumeTerminal: "cmux", excludePatterns: [] },
    *   clipboardHistory: { enabled: true, maxResults: 3, minQueryChars: 3, scanLimit: 200 },
  *   dictationHistory: { enabled: true, maxResults: 3, minQueryChars: 4, scanLimit: 200 },
@@ -1733,7 +1733,7 @@ export interface UnifiedSearchConfig {
   /** Controls for passive root Notes rows backed by the local Notes index. */
   notes?: UnifiedSearchNotesConfig;
   /** Controls for passive root AI conversation rows backed by saved Agent Chat history. */
-  acpHistory?: UnifiedSearchAcpHistoryConfig;
+  agent_chatHistory?: UnifiedSearchAgentChatHistoryConfig;
   /** Controls for passive root AI Vault rows backed by cmux session metadata. */
   aiVault?: UnifiedSearchAiVaultConfig;
   /** Controls for passive root clipboard history rows. */
@@ -1751,7 +1751,7 @@ export type UnifiedSearchPassiveSource =
   | "notes"
   | "clipboardHistory"
   | "dictationHistory"
-  | "acpHistory"
+  | "agent_chatHistory"
   | "aiVault"
   | "browserHistory";
 
@@ -1782,7 +1782,7 @@ export interface UnifiedSearchFilesConfig {
   promotion?: "never" | "exactFilenameOnly";
 }
 
-export interface UnifiedSearchAcpHistoryConfig {
+export interface UnifiedSearchAgentChatHistoryConfig {
   /** Enable saved Agent Chat conversation rows in root launcher search. */
   enabled?: boolean;
   /** Maximum number of AI conversation rows to append. Clamped to 1-5. */

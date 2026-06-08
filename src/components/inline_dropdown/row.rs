@@ -1,6 +1,6 @@
 //! Shared dense-monoline picker row for InlineDropdown surfaces.
 //!
-//! All inline dropdown consumers (ACP popups, AI context pickers, model
+//! All inline dropdown consumers (Agent Chat popups, AI context pickers, model
 //! selectors, presets dropdown) render through these helpers so the chrome
 //! stays consistent: launcher-aligned row height, theme accent bar on
 //! selection, fuzzy-match highlights, and optional leading visual / accessory.
@@ -49,7 +49,7 @@ pub(crate) fn compact_synopsis_height_for_description(description: &str) -> f32 
 
 /// Render a single dense-monoline picker row.
 ///
-/// Shared by ACP popups, inline context pickers, model selectors, and any
+/// Shared by Agent Chat popups, inline context pickers, model selectors, and any
 /// future smart-input dropdown that wants the same launcher-aligned chrome.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn render_dense_monoline_picker_row(

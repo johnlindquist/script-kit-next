@@ -1402,7 +1402,7 @@ fn dictation_focus_settle_matches_reference_contract() {
 #[test]
 fn dictation_hotkey_routes_through_builtin_toggle_flow() {
     // Verify both entry-point files have a dictation hotkey listener that
-    // routes through the ACP submit builtin without introducing a
+    // routes through the Agent Chat submit builtin without introducing a
     // duplicate dictation implementation.
     for (label, path) in [
         (
@@ -3319,21 +3319,21 @@ fn silent_audio_path_never_attempts_paste_or_prompt_delivery() {
         "Ok(None) arm must NEVER call try_set_prompt_input — no transcript exists"
     );
     assert!(
-        !none_arm_src.contains("open_tab_ai_acp_with_entry_intent"),
-        "Ok(None) arm must NEVER open ACP — no transcript exists to seed or submit"
+        !none_arm_src.contains("open_tab_ai_agent_chat_with_entry_intent"),
+        "Ok(None) arm must NEVER open Agent Chat — no transcript exists to seed or submit"
     );
     assert!(
         none_arm_src.contains("WindowEvent::AbortDictation"),
-        "Ok(None) arm must abort the dictation session so ACP-targeted silence does not reveal ScriptList"
+        "Ok(None) arm must abort the dictation session so Agent Chat-targeted silence does not reveal ScriptList"
     );
     assert!(
         !none_arm_src.contains("WindowEvent::FinishDictation"),
-        "Ok(None) arm must not finish successfully because ACP finish reveals a transcript-backed chat"
+        "Ok(None) arm must not finish successfully because Agent Chat finish reveals a transcript-backed chat"
     );
 }
 
 #[test]
-fn acp_dictation_delivery_suppresses_focused_launcher_context() {
+fn agent_chat_dictation_delivery_suppresses_focused_launcher_context() {
     let src = std::fs::read_to_string("src/app_execute/builtin_execution.rs")
         .expect("read builtin_execution.rs");
 
@@ -3344,8 +3344,8 @@ fn acp_dictation_delivery_suppresses_focused_launcher_context() {
     let tab_ai_arm = &handler_src[tab_ai_arm_start..tab_ai_arm_start + 900];
 
     assert!(
-        tab_ai_arm.contains("open_tab_ai_acp_with_entry_intent_suppressing_focused_part"),
-        "ACP dictation should submit the transcript as the prompt without inheriting the selected ScriptList item as context"
+        tab_ai_arm.contains("open_tab_ai_agent_chat_with_entry_intent_suppressing_focused_part"),
+        "Agent Chat dictation should submit the transcript as the prompt without inheriting the selected ScriptList item as context"
     );
 }
 
@@ -3364,8 +3364,8 @@ fn orchestrator_focus_main_commands_queue_app_focus_after_reveal() {
         "FocusMain commands must queue ScriptListApp pending_focus after reveal so the next render applies keyboard focus"
     );
     assert!(
-        bridge_src.contains("FocusToken::ChatComposer => Some(FocusTarget::AcpChat)"),
-        "ACP dictation's ChatComposer token must map to the dedicated AcpChat focus target"
+        bridge_src.contains("FocusToken::ChatComposer => Some(FocusTarget::AgentChat)"),
+        "Agent Chat dictation's ChatComposer token must map to the dedicated AgentChat focus target"
     );
 }
 
@@ -4808,7 +4808,7 @@ fn external_app_badge_names_the_tracked_frontmost_app() {
 }
 
 #[test]
-fn builtin_dictation_configures_target_cycle_and_acp_alternate() {
+fn builtin_dictation_configures_target_cycle_and_agent_chat_alternate() {
     let builtin_src = std::fs::read_to_string("src/app_execute/builtin_execution.rs")
         .expect("read builtin_execution.rs");
 
@@ -4820,7 +4820,7 @@ fn builtin_dictation_configures_target_cycle_and_acp_alternate() {
         builtin_src.contains("set_dictation_target_cycle")
             && builtin_src.contains("DictationTarget::ExternalApp")
             && builtin_src.contains("DictationTarget::TabAiHarness"),
-        "dictation start paths must configure a cycle that includes ACP chat submit as an alternate"
+        "dictation start paths must configure a cycle that includes Agent Chat chat submit as an alternate"
     );
 }
 

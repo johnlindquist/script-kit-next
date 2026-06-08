@@ -182,14 +182,14 @@ fn main_target_penalizes_secondary_windows() {
 #[test]
 fn identical_candidates_tie() {
     let resolved = make_info(
-        AutomationWindowKind::AcpDetached,
+        AutomationWindowKind::AgentChatDetached,
         None,
         false,
         Some((600.0, 400.0)),
     );
 
-    let a = score(&resolved, "Script Kit ACP", false, 600, 400);
-    let b = score(&resolved, "Script Kit ACP", false, 600, 400);
+    let a = score(&resolved, "Script Kit Agent Chat", false, 600, 400);
+    let b = score(&resolved, "Script Kit Agent Chat", false, 600, 400);
 
     assert_eq!(a, b, "identical candidates must tie");
 }
@@ -197,14 +197,14 @@ fn identical_candidates_tie() {
 #[test]
 fn size_difference_breaks_tie() {
     let resolved = make_info(
-        AutomationWindowKind::AcpDetached,
+        AutomationWindowKind::AgentChatDetached,
         None,
         false,
         Some((600.0, 400.0)),
     );
 
-    let exact = score(&resolved, "Script Kit ACP", false, 600, 400);
-    let close = score(&resolved, "Script Kit ACP", false, 603, 401);
+    let exact = score(&resolved, "Script Kit Agent Chat", false, 600, 400);
+    let close = score(&resolved, "Script Kit Agent Chat", false, 603, 401);
 
     assert!(
         exact > close,
@@ -215,14 +215,14 @@ fn size_difference_breaks_tie() {
 #[test]
 fn focus_difference_breaks_tie_when_sizes_equal() {
     let resolved = make_info(
-        AutomationWindowKind::AcpDetached,
+        AutomationWindowKind::AgentChatDetached,
         None,
         true,
         Some((600.0, 400.0)),
     );
 
-    let focused = score(&resolved, "Script Kit ACP", true, 600, 400);
-    let unfocused = score(&resolved, "Script Kit ACP", false, 600, 400);
+    let focused = score(&resolved, "Script Kit Agent Chat", true, 600, 400);
+    let unfocused = score(&resolved, "Script Kit Agent Chat", false, 600, 400);
 
     assert!(
         focused > unfocused,
@@ -235,10 +235,10 @@ fn focus_difference_breaks_tie_when_sizes_equal() {
 #[test]
 fn ambiguous_error_message_contains_candidates_and_score() {
     // Simulate what capture_resolved_window would produce for a tie
-    let id = "acpDetached:thread-1";
-    let kind = AutomationWindowKind::AcpDetached;
-    let title_a = "Script Kit ACP";
-    let title_b = "Script Kit ACP";
+    let id = "agentChatDetached:thread-1";
+    let kind = AutomationWindowKind::AgentChatDetached;
+    let title_a = "Script Kit Agent Chat";
+    let title_b = "Script Kit Agent Chat";
     let tied_score = 5100;
 
     let error = format!(
@@ -249,7 +249,7 @@ fn ambiguous_error_message_contains_candidates_and_score() {
 
     assert!(error.contains("Ambiguous"));
     assert!(error.contains(id));
-    assert!(error.contains("AcpDetached"));
+    assert!(error.contains("AgentChatDetached"));
     assert!(error.contains(title_a));
     assert!(error.contains(&tied_score.to_string()));
 }
@@ -430,8 +430,8 @@ fn detached_window_bounds_at_origin_in_screenshot() {
     );
     make_registered(
         &p,
-        "acp",
-        AutomationWindowKind::AcpDetached,
+        "agent_chat",
+        AutomationWindowKind::AgentChatDetached,
         Some(AutomationWindowBounds {
             x: 900.0,
             y: 200.0,
@@ -441,7 +441,7 @@ fn detached_window_bounds_at_origin_in_screenshot() {
     );
 
     let target = AutomationWindowTarget::Id {
-        id: format!("{p}:acp"),
+        id: format!("{p}:agent_chat"),
     };
     let resolved =
         script_kit_gpui::windows::resolve_automation_window(Some(&target)).expect("should resolve");
@@ -466,7 +466,7 @@ fn detached_window_bounds_at_origin_in_screenshot() {
         "Height must match"
     );
 
-    shot_cleanup(&p, &["main", "acp"]);
+    shot_cleanup(&p, &["main", "agent_chat"]);
 }
 
 /// Target bounds must be contained within the parent screenshot dimensions
@@ -662,7 +662,7 @@ fn popup_receipt_attached_with_bounds() {
 fn popup_receipt_detached() {
     let receipt = make_popup_receipt(
         PopupCaptureStrategy::DirectWindowCapture,
-        "AcpDetached",
+        "AgentChatDetached",
         None,
         true,
     );

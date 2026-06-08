@@ -160,7 +160,7 @@ pub fn set_overlay_phase(phase: DictationSessionPhase) -> bool {
 /// Return the active dictation session's overlay phase, or `None` when no
 /// session is recording. Used by automation state receipts to surface the
 /// dictation lifecycle (`recording` → `confirming` → `transcribing` …) through
-/// `getAcpState.dictationPhase`.
+/// `getAgentChatState.dictationPhase`.
 pub fn current_dictation_phase() -> Option<DictationSessionPhase> {
     SESSION.lock().as_ref().map(|s| s.overlay_phase.clone())
 }

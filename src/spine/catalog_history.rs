@@ -67,7 +67,7 @@ pub(crate) fn build_recent_prompt_rows(
             } else {
                 "No matching recent prompts"
             },
-            "Prompt history will appear here after ACP conversations exist.",
+            "Prompt history will appear here after Agent Chat conversations exist.",
         ));
     }
     rows
@@ -108,22 +108,26 @@ pub(crate) fn build_conversation_rows(tail_query: &str) -> Vec<SpineListRow> {
             } else {
                 "No matching conversations"
             },
-            "Past ACP conversations will appear here.",
+            "Past Agent Chat conversations will appear here.",
         ));
     }
     rows
 }
 
-fn history_hits_for_tail(tail_query: &str) -> Vec<crate::ai::acp::history::AcpHistorySearchHit> {
+fn history_hits_for_tail(
+    tail_query: &str,
+) -> Vec<crate::ai::agent_chat::ui::history::AgentChatHistorySearchHit> {
     let query = tail_query.trim();
-    let cached = crate::ai::acp::history::search_history_cached(query, MAX_HISTORY_HITS);
+    let cached = crate::ai::agent_chat::ui::history::search_history_cached(query, MAX_HISTORY_HITS);
     if !cached.is_empty() || !query.is_empty() {
         return cached;
     }
-    crate::ai::acp::history::search_history_direct(query, MAX_HISTORY_HITS)
+    crate::ai::agent_chat::ui::history::search_history_direct(query, MAX_HISTORY_HITS)
 }
 
-fn conversation_subtitle(entry: &crate::ai::acp::history::AcpHistoryEntry) -> String {
+fn conversation_subtitle(
+    entry: &crate::ai::agent_chat::ui::history::AgentChatHistoryEntry,
+) -> String {
     let preview = single_line_truncate(entry.preview.trim(), 88);
     let count = message_count_label(entry.message_count);
     if preview.is_empty() {

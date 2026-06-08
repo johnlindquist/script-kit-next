@@ -9,7 +9,7 @@
 //! - Element types for UI querying
 //! - Error data types
 
-pub(crate) mod acp_state;
+pub(crate) mod agent_chat_state;
 mod ai;
 pub mod automation_inspect;
 pub mod automation_inspect_geometry;
@@ -25,12 +25,15 @@ mod primitives;
 pub mod simulated_gpui_event;
 mod system;
 
-pub use acp_state::{
-    AcpAcceptedItem, AcpFocusedTextActionReceipt, AcpFocusedTextState, AcpInputLayoutMetrics,
-    AcpInputLayoutTelemetry, AcpKeyRoute, AcpKeyRouteTelemetry, AcpLastInteractionTrace,
-    AcpPickerItemAcceptedTelemetry, AcpPickerState, AcpResolvedTarget, AcpSetupActionKind,
-    AcpSetupSnapshot, AcpSpineSnapshot, AcpStateSnapshot, AcpTestProbeSnapshot, AcpWaitCondition,
-    ACP_STATE_SCHEMA_VERSION, ACP_TEST_PROBE_MAX_EVENTS, ACP_TEST_PROBE_SCHEMA_VERSION,
+pub use agent_chat_state::{
+    AgentChatAcceptedItem, AgentChatFocusedTextActionReceipt, AgentChatFocusedTextState,
+    AgentChatInputLayoutMetrics, AgentChatInputLayoutTelemetry, AgentChatKeyRoute,
+    AgentChatKeyRouteTelemetry, AgentChatLastInteractionTrace,
+    AgentChatPickerItemAcceptedTelemetry, AgentChatPickerState, AgentChatResolvedTarget,
+    AgentChatSetupActionKind, AgentChatSetupSnapshot, AgentChatSpineSnapshot,
+    AgentChatStateSnapshot, AgentChatTestProbeSnapshot, AgentChatWaitCondition,
+    AGENT_CHAT_STATE_SCHEMA_VERSION, AGENT_CHAT_TEST_PROBE_MAX_EVENTS,
+    AGENT_CHAT_TEST_PROBE_SCHEMA_VERSION,
 };
 pub use ai::{AiChatInfo, AiContextPartInput, AiMessageInfo};
 #[allow(unused_imports)]

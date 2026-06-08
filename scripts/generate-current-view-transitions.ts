@@ -54,7 +54,7 @@ interface TransitionContractMetadata {
   stateSnapshot?: string;
   delegatesTo?: string;
   embeddedAiWindowUpsert?: boolean;
-  acpSurfaceEvent?: string;
+  agent_chatSurfaceEvent?: string;
   actionsCleanup?: string;
 }
 
@@ -76,23 +76,23 @@ const TRANSITION_HELPERS: Record<string, TransitionHelperContract> = {
       stateSnapshot: "getState.surfaceContract",
     },
   },
-  enter_embedded_acp_chat_surface: {
-    inferredTarget: "AppView::AcpChatView",
+  enter_embedded_agent_chat_surface: {
+    inferredTarget: "AppView::AgentChatView",
     requiresManualReview: false,
     rekeysMainAutomationSurface: true,
-    focusTarget: "AcpChat",
+    focusTarget: "AgentChat",
     embeddedAiWindowUpsert: true,
     clearsActionsPopupState: true,
     transitionContract: {
       oldView: "runtimeCurrentView",
-      newView: "AppView::AcpChatView",
-      surfaceKind: "AcpChat",
+      newView: "AppView::AgentChatView",
+      surfaceKind: "AgentChat",
       embeddedAiWindowUpsert: true,
       mainAutomationRekey: true,
-      acpSurfaceEvent: "EmbeddedOpened",
+      agent_chatSurfaceEvent: "EmbeddedOpened",
       actionsCleanup: "clearActionsPopupState",
-      focusTarget: "AcpChat",
-      focusCoordinatorRequest: "FocusRequest::acp_chat",
+      focusTarget: "AgentChat",
+      focusCoordinatorRequest: "FocusRequest::agent_chat",
       focusedInput: "None",
       resize: "callerOwned",
       stateSnapshot: "getState.surfaceContract",

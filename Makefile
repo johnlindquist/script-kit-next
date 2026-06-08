@@ -44,6 +44,6 @@ test-system:
 test-slow:
 	cargo test --features slow-tests
 
-# Plugin/skill smoke: discovery → search → ACP staging contract
+# Plugin/skill smoke: discovery → search → Agent Chat staging contract
 smoke-main-menu:
 	cargo nextest run --test smoke_main_menu --test plugin_inventory --test plugin_skill_search --test plugin_skill_launch --test plugin_skill_main_menu --test agent_workspace_contract

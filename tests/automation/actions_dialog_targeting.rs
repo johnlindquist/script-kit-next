@@ -184,14 +184,14 @@ fn backward_compat_get_elements_without_target() {
 }
 
 #[test]
-fn backward_compat_get_acp_state_without_target() {
-    let json = r#"{"type":"getAcpState","requestId":"legacy-acp-1"}"#;
+fn backward_compat_get_agent_chat_state_without_target() {
+    let json = r#"{"type":"getAgentChatState","requestId":"legacy-agent_chat-1"}"#;
     let msg: Message = serde_json::from_str(json).expect("parse");
     match msg {
-        Message::GetAcpState { target, .. } => {
+        Message::GetAgentChatState { target, .. } => {
             assert!(target.is_none());
         }
-        other => panic!("Expected GetAcpState, got: {:?}", other),
+        other => panic!("Expected GetAgentChatState, got: {:?}", other),
     }
 }
 
@@ -525,7 +525,7 @@ fn prompt_popup_batch_target_fails_closed() {
     let source = include_str!("../../src/prompt_handler/mod.rs");
     assert!(
         source.contains(
-            "supports Main, Ai, AcpDetached, Notes, ActionsDialog, and PromptPopup targets"
+            "supports Main, Ai, AgentChatDetached, Notes, ActionsDialog, and PromptPopup targets"
         ),
         "unsupported kind error message must list all supported targets including PromptPopup"
     );
@@ -576,42 +576,42 @@ fn actions_dialog_records_parent_identity_from_main() {
 #[test]
 fn actions_dialog_records_parent_identity_from_non_main_host() {
     let p = prefix();
-    let acp = AutomationWindowInfo {
-        id: format!("{p}:acp"),
-        kind: AutomationWindowKind::AcpDetached,
+    let agent_chat = AutomationWindowInfo {
+        id: format!("{p}:agent_chat"),
+        kind: AutomationWindowKind::AgentChatDetached,
         title: Some("Agent Chat".into()),
         focused: true,
         visible: true,
-        semantic_surface: Some("acpChat".into()),
+        semantic_surface: Some("agentChatChat".into()),
         bounds: None,
         parent_window_id: None,
         parent_kind: None,
         pid: None,
     };
-    script_kit_gpui::windows::upsert_automation_window(acp);
+    script_kit_gpui::windows::upsert_automation_window(agent_chat);
     script_kit_gpui::windows::register_attached_popup(
-        format!("{p}:acp-actions"),
+        format!("{p}:agent_chat-actions"),
         AutomationWindowKind::ActionsDialog,
         Some("Actions".into()),
         Some("actionsDialog".into()),
         None,
-        Some(&format!("{p}:acp")),
+        Some(&format!("{p}:agent_chat")),
     )
-    .expect("should register with ACP parent");
+    .expect("should register with Agent Chat parent");
     let resolved =
         script_kit_gpui::windows::resolve_automation_window(Some(&AutomationWindowTarget::Id {
-            id: format!("{p}:acp-actions"),
+            id: format!("{p}:agent_chat-actions"),
         }))
         .expect("should resolve");
     assert_eq!(
         resolved.parent_window_id.as_deref(),
-        Some(format!("{p}:acp").as_str()),
+        Some(format!("{p}:agent_chat").as_str()),
     );
     assert_eq!(
         resolved.parent_kind,
-        Some(AutomationWindowKind::AcpDetached)
+        Some(AutomationWindowKind::AgentChatDetached)
     );
-    cleanup(&p, &["acp", "acp-actions"]);
+    cleanup(&p, &["agent_chat", "agent_chat-actions"]);
 }
 
 #[test]
@@ -787,7 +787,7 @@ fn supported_non_main_kinds_all_have_panel_only_fallbacks() {
     let source = include_str!("../../src/windows/automation_surface_collector.rs");
     for (kind, expected_warning) in [
         ("Notes", "panel_only_notes"),
-        ("AcpDetached", "panel_only_acp_detached"),
+        ("AgentChatDetached", "panel_only_agent_chat_detached"),
         ("ActionsDialog", "panel_only_actions_dialog"),
         ("PromptPopup", "panel_only_prompt_popup"),
     ] {

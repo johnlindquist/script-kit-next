@@ -221,7 +221,7 @@ impl Render for ScriptListApp {
                 && !actions_popup_active_or_closing
                 && !confirm::is_confirm_window_open()
                 && !crate::dev_style_tool::window::is_dev_style_tool_open()
-                && !ai::acp::chat_window::is_chat_window_open()
+                && !ai::agent_chat::ui::chat_window::is_chat_window_open()
                 && !crate::dictation::is_dictation_overlay_open()
                 && !crate::dictation::is_dictation_recording()
                 && self.tab_ai_save_offer_state.is_none()
@@ -300,7 +300,7 @@ impl Render for ScriptListApp {
                 | AppView::CurrentAppCommandsView { .. }
                 | AppView::SearchAiPresetsView { .. }
                 | AppView::FavoritesBrowseView { .. }
-                | AppView::AcpHistoryView { .. }
+                | AppView::AgentChatHistoryView { .. }
                 | AppView::BrowserHistoryView { .. }
                 | AppView::DictationHistoryView { .. }
                 | AppView::NotesBrowseView { .. }
@@ -642,11 +642,11 @@ impl Render for ScriptListApp {
             } => self
                 .render_favorites_browse(filter, selected_index, cx)
                 .into_any_element(),
-            AppView::AcpHistoryView {
+            AppView::AgentChatHistoryView {
                 filter,
                 selected_index,
             } => self
-                .render_acp_history(filter, selected_index, cx)
+                .render_agent_chat_history(filter, selected_index, cx)
                 .into_any_element(),
             AppView::BrowserHistoryView {
                 filter,
@@ -666,7 +666,7 @@ impl Render for ScriptListApp {
             } => self
                 .render_notes_browse_portal(filter, selected_index, cx)
                 .into_any_element(),
-            AppView::AcpChatView { entity } => entity.into_any_element(),
+            AppView::AgentChatView { entity } => entity.into_any_element(),
             AppView::ConfirmPrompt {
                 options,
                 focused_button,

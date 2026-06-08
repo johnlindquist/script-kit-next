@@ -171,7 +171,7 @@ fn execute_fallback_action(
                     } else {
                         Some(normalized)
                     };
-                    app.open_tab_ai_acp_with_entry_intent(intent, cx);
+                    app.open_tab_ai_agent_chat_with_entry_intent(intent, cx);
                 }
             }
         }

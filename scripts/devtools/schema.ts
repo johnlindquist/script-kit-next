@@ -321,7 +321,7 @@ const primitiveSchemas = [
       "actionOutput.stdoutSummary.fingerprint",
       "actionOutput.stdoutJson.classification",
       "failureSignals.openAi.seen",
-      "failureSignals.acp.statusNotAcpSeen",
+      "failureSignals.agent_chat.statusNotAgentChatSeen",
       "externalSession.slug",
       "externalSession.outputLogPath",
       "eventSummary.appLog.byType",

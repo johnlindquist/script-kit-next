@@ -214,7 +214,7 @@ macro_rules! protocol_message_variants_query_ops {
         /// Identity (bare filename) of the most recent Tab AI screenshot
         /// captured in this process lifetime. `None` when no capture has
         /// occurred. Lets automation verify the identity-threading chain
-        /// from capture through ACP context without grepping the filesystem.
+        /// from capture through Agent Chat context without grepping the filesystem.
         #[serde(
             rename = "screenshotIdentity",
             default,
@@ -543,14 +543,14 @@ macro_rules! protocol_message_variants_query_ops {
     },
 
     // ============================================================
-    // ACP STATE QUERY
+    // Agent Chat STATE QUERY
     // ============================================================
-    /// Request machine-readable ACP chat view state for agentic testing.
+    /// Request machine-readable Agent Chat chat view state for agentic testing.
     ///
     /// Returns input text, cursor position, picker state, accepted item
     /// metadata, thread status, and layout stability metrics.
-    #[serde(rename = "getAcpState")]
-    GetAcpState {
+    #[serde(rename = "getAgentChatState")]
+    GetAgentChatState {
         #[serde(rename = "requestId")]
         request_id: String,
         /// Optional window target (defaults to focused window).
@@ -558,42 +558,42 @@ macro_rules! protocol_message_variants_query_ops {
         target: Option<AutomationWindowTarget>,
     },
 
-    /// Response with ACP chat view state snapshot.
-    #[serde(rename = "acpStateResult")]
-    AcpStateResult {
+    /// Response with Agent Chat chat view state snapshot.
+    #[serde(rename = "agent_chatStateResult")]
+    AgentChatStateResult {
         #[serde(rename = "requestId")]
         request_id: String,
-        /// Machine-readable ACP state snapshot.
+        /// Machine-readable Agent Chat state snapshot.
         #[serde(flatten)]
-        state: AcpStateSnapshot,
+        state: AgentChatStateSnapshot,
     },
 
     // ============================================================
-    // ACP TEST PROBE
+    // Agent Chat TEST PROBE
     // ============================================================
-    /// Reset the ACP test probe ring buffer, clearing prior events.
+    /// Reset the Agent Chat test probe ring buffer, clearing prior events.
     ///
-    /// Accepts an optional `target` to reset a specific ACP surface
-    /// (e.g. a detached ACP window). When omitted, resets the main
-    /// window's ACP probe (backward-compatible).
+    /// Accepts an optional `target` to reset a specific Agent Chat surface
+    /// (e.g. a detached Agent Chat window). When omitted, resets the main
+    /// window's Agent Chat probe (backward-compatible).
     ///
     /// Agents should call this before a test sequence to get a clean
     /// baseline for verifying picker acceptance and key routing.
-    #[serde(rename = "resetAcpTestProbe")]
-    ResetAcpTestProbe {
+    #[serde(rename = "resetAgentChatTestProbe")]
+    ResetAgentChatTestProbe {
         #[serde(rename = "requestId")]
         request_id: String,
-        /// Optional window target (defaults to main ACP view).
+        /// Optional window target (defaults to main Agent Chat view).
         #[serde(default, skip_serializing_if = "Option::is_none")]
         target: Option<AutomationWindowTarget>,
     },
 
-    /// Request a bounded snapshot of recent ACP test probe events.
+    /// Request a bounded snapshot of recent Agent Chat test probe events.
     ///
     /// Returns key-route, picker-acceptance, and input-layout telemetry
-    /// from the bounded ring buffer, plus the current ACP state.
-    #[serde(rename = "getAcpTestProbe")]
-    GetAcpTestProbe {
+    /// from the bounded ring buffer, plus the current Agent Chat state.
+    #[serde(rename = "getAgentChatTestProbe")]
+    GetAgentChatTestProbe {
         #[serde(rename = "requestId")]
         request_id: String,
         /// Maximum number of events to return per category (default: 32).
@@ -604,30 +604,30 @@ macro_rules! protocol_message_variants_query_ops {
         target: Option<AutomationWindowTarget>,
     },
 
-    /// Response with ACP test probe snapshot.
-    #[serde(rename = "acpTestProbeResult")]
-    AcpTestProbeResult {
+    /// Response with Agent Chat test probe snapshot.
+    #[serde(rename = "agent_chatTestProbeResult")]
+    AgentChatTestProbeResult {
         #[serde(rename = "requestId")]
         request_id: String,
         /// Bounded probe snapshot with telemetry events and current state.
         #[serde(flatten)]
-        probe: AcpTestProbeSnapshot,
+        probe: AgentChatTestProbeSnapshot,
     },
 
     // ============================================================
-    // ACP SETUP ACTIONS
+    // Agent Chat SETUP ACTIONS
     // ============================================================
-    /// Perform a setup action on the ACP setup card.
+    /// Perform a setup action on the Agent Chat setup card.
     ///
     /// Agents use this to drive setup recovery deterministically instead of
     /// simulating Tab/Enter keystrokes. Every success response includes a
-    /// fresh `AcpStateSnapshot` so the agent can verify the effect.
-    #[serde(rename = "performAcpSetupAction")]
-    PerformAcpSetupAction {
+    /// fresh `AgentChatStateSnapshot` so the agent can verify the effect.
+    #[serde(rename = "performAgentChatSetupAction")]
+    PerformAgentChatSetupAction {
         #[serde(rename = "requestId")]
         request_id: String,
         /// The action to perform.
-        action: AcpSetupActionKind,
+        action: AgentChatSetupActionKind,
         /// Agent ID for `selectAgent` action.
         #[serde(rename = "agentId", default, skip_serializing_if = "Option::is_none")]
         agent_id: Option<String>,
@@ -636,9 +636,9 @@ macro_rules! protocol_message_variants_query_ops {
         target: Option<AutomationWindowTarget>,
     },
 
-    /// Result of a `performAcpSetupAction` request.
-    #[serde(rename = "acpSetupActionResult")]
-    AcpSetupActionResult {
+    /// Result of a `performAgentChatSetupAction` request.
+    #[serde(rename = "agent_chatSetupActionResult")]
+    AgentChatSetupActionResult {
         #[serde(rename = "requestId")]
         request_id: String,
         /// Whether the action succeeded.
@@ -646,9 +646,9 @@ macro_rules! protocol_message_variants_query_ops {
         /// Error message if the action failed.
         #[serde(skip_serializing_if = "Option::is_none")]
         error: Option<String>,
-        /// Fresh ACP state snapshot after the action.
+        /// Fresh Agent Chat state snapshot after the action.
         #[serde(skip_serializing_if = "Option::is_none")]
-        state: Option<AcpStateSnapshot>,
+        state: Option<AgentChatStateSnapshot>,
     },
 
     // ============================================================

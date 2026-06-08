@@ -1438,7 +1438,7 @@ export interface DictationPreferences {
 /**
  * Agent Chat runtime preferences stored in `~/.scriptkit/config.ts`.
  */
-export type AgentChatBackend = "acp" | "pi";
+export type AgentChatBackend = "agent_chat" | "pi";
 
 export interface AiProfile {
   id?: string;
@@ -1473,9 +1473,9 @@ export interface AiPreferences {
   /**
    * Legacy last-selected Agent Chat agent ID.
    *
-   * @example "codex-acp"
+   * @example "codex-agent_chat"
    */
-  selectedAcpAgentId?: string;
+  selectedAgentChatAgentId?: string;
 
   /**
    * Last-selected Agent Chat profile id.

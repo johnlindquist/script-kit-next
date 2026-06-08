@@ -514,7 +514,7 @@ pub(crate) fn part_to_inline_token(part: &AiContextPart) -> Option<String> {
             }
 
             // Non-file targets use kind-specific prefixes so script, scriptlet,
-            // app, and other ACP attachments stay distinguishable inline.
+            // app, and other Agent Chat attachments stay distinguishable inline.
             Some(format_typed_label_mention_token(
                 typed_mention_prefix_for_target_kind(&target.kind),
                 &target.label,
