@@ -55,6 +55,46 @@ fn shortcut_recorder_and_confirm_popup_use_the_same_shell() {
 }
 
 #[test]
+fn confirm_popup_uses_shortcut_modal_button_and_chrome_tokens() {
+    let confirm = read("src/confirm/window.rs");
+    let render_block = confirm
+        .split("impl Render for ConfirmPopupWindow")
+        .nth(1)
+        .expect("ConfirmPopupWindow render implementation should be present");
+
+    assert!(
+        confirm.contains("components::button::{")
+            && confirm.contains("Button, ButtonColors, ButtonVariant as SharedButtonVariant")
+            && confirm.contains("BUTTON_GHOST_HEIGHT"),
+        "confirm popup must reuse the shared app Button component and button height tokens used by the shortcut modal"
+    );
+    assert!(
+        render_block.contains("ButtonColors::from_theme(&theme)")
+            && render_block.contains("Button::new(self.cancel_text.clone(), button_colors)")
+            && render_block.contains(".variant(SharedButtonVariant::Ghost)")
+            && render_block.contains("Button::new(self.confirm_text.clone(), button_colors)")
+            && render_block.contains(".variant(SharedButtonVariant::Primary)")
+            && render_block.contains(".shortcut(\"Esc\")")
+            && render_block.contains(".shortcut(\"↵\")"),
+        "confirm popup actions must use the same shared ghost/primary button pattern as the Add Shortcut modal"
+    );
+    assert!(
+        render_block.contains("gpui::rgb(chrome.accent_hex)")
+            && render_block.contains("gpui::rgb(chrome.text_primary_hex)")
+            && render_block.contains("gpui::rgba(chrome.border_rgba)")
+            && render_block.contains("gpui::rgba(chrome.popup_surface_rgba)"),
+        "confirm popup shell/header must use chrome theme tokens instead of local danger colors"
+    );
+    assert!(
+        !render_block.contains("theme.colors.ui.error.with_opacity")
+            && !render_block.contains("border_color = if is_danger")
+            && !render_block.contains("accent_color = if is_danger")
+            && !render_block.contains("on_mouse_down(MouseButton::Left"),
+        "confirm popup must not reintroduce red danger shell styling or hand-built mini buttons"
+    );
+}
+
+#[test]
 fn destructive_confirm_routes_use_shared_parent_confirm_helpers() {
     let scripts = read("src/app_actions/handle_action/scripts.rs");
     let files = read("src/app_actions/handle_action/files.rs");

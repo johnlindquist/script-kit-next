@@ -10,20 +10,22 @@ use std::{
 
 use gpui::{
     div, prelude::*, px, AnyElement, AnyWindowHandle, App, Bounds, Context, DisplayId, FocusHandle,
-    Focusable, MouseButton, Pixels, Point, Render, SharedString, Size, Task, Window,
-    WindowBackgroundAppearance, WindowBounds, WindowHandle, WindowKind, WindowOptions,
+    Focusable, Pixels, Point, Render, SharedString, Size, Task, Window, WindowBackgroundAppearance,
+    WindowBounds, WindowHandle, WindowKind, WindowOptions,
 };
-use gpui_component::button::ButtonVariant;
+use gpui_component::button::ButtonVariant as ConfirmButtonVariant;
 
 use crate::{
+    components::button::{
+        Button, ButtonColors, ButtonVariant as SharedButtonVariant, BUTTON_GHOST_HEIGHT,
+    },
     components::confirm_modal_shell::{
         confirm_modal_header, confirm_modal_shell, ConfirmModalShellConfig, CONFIRM_MODAL_RADIUS,
     },
     components::overlay_modal::{OverlayAnimation, BUTTON_GAP, MODAL_PADDING},
-    list_item::FONT_MONO,
     platform,
     theme::get_cached_theme,
-    ui_foundation::{is_key_enter, is_key_escape, is_key_left, is_key_tab, HexColorExt},
+    ui_foundation::{is_key_enter, is_key_escape, is_key_left, is_key_tab},
 };
 
 const CONFIRM_MODAL_WIDTH: f32 = 360.0;
@@ -31,7 +33,7 @@ const CONFIRM_PADDING_X: f32 = MODAL_PADDING;
 const CONFIRM_PADDING_Y: f32 = 20.0;
 const CONFIRM_SECTION_GAP: f32 = 10.0;
 const CONFIRM_BUTTON_GAP: f32 = BUTTON_GAP;
-const CONFIRM_BUTTON_HEIGHT: f32 = 24.0;
+const CONFIRM_BUTTON_HEIGHT: f32 = BUTTON_GHOST_HEIGHT;
 const CONFIRM_TITLE_LINE_HEIGHT: f32 = 16.0;
 const CONFIRM_BODY_LINE_HEIGHT: f32 = 16.0;
 const CONFIRM_MIN_HEIGHT: f32 = 132.0;
@@ -62,7 +64,7 @@ pub(crate) struct ConfirmWindowOptions {
     pub body: SharedString,
     pub confirm_text: SharedString,
     pub cancel_text: SharedString,
-    pub confirm_variant: ButtonVariant,
+    pub confirm_variant: ConfirmButtonVariant,
     pub width: Pixels,
 }
 
@@ -955,7 +957,7 @@ pub(crate) struct ConfirmPopupWindow {
     body: SharedString,
     confirm_text: SharedString,
     cancel_text: SharedString,
-    confirm_variant: ButtonVariant,
+    confirm_variant: ConfirmButtonVariant,
     focus_handle: FocusHandle,
     focused_button: FocusedButton,
     keep_open_while: Rc<dyn Fn() -> bool>,
@@ -1167,6 +1169,7 @@ impl Render for ConfirmPopupWindow {
             is_active,
             resolved = self.resolved,
             focused_button = ?self.focused_button,
+            confirm_variant_is_danger = matches!(self.confirm_variant, ConfirmButtonVariant::Danger),
             did_request_focus = self.did_request_focus,
             "ConfirmPopupWindow::render"
         );
@@ -1239,142 +1242,53 @@ impl Render for ConfirmPopupWindow {
 
         let theme = get_cached_theme();
         let chrome = crate::theme::AppChromeColors::from_theme(&theme);
-        let title_color = theme.colors.text.primary.to_rgb();
-        let body_color = theme.colors.text.secondary.to_rgb();
-        let muted_color = theme.colors.text.dimmed.to_rgb();
+        let title_color = gpui::rgb(chrome.text_primary_hex);
+        let body_color = gpui::rgb(chrome.text_secondary_hex);
         let surface_bg = gpui::transparent_black();
         let panel_bg = gpui::rgba(chrome.popup_surface_rgba);
-        let is_danger = matches!(self.confirm_variant, ButtonVariant::Danger);
-
-        let border_color = if is_danger {
-            theme.colors.ui.error.with_opacity(0.28)
-        } else {
-            theme.colors.ui.border.with_opacity(0.55)
-        };
-        let accent_color = if is_danger {
-            theme.colors.ui.error.to_rgb()
-        } else {
-            theme.colors.accent.selected.to_rgb()
-        };
+        let button_colors = ButtonColors::from_theme(&theme);
+        let border_color = gpui::rgba(chrome.border_rgba);
+        let accent_color = gpui::rgb(chrome.accent_hex);
 
         let current_focused = self.focused_button;
         let cancel_focused = current_focused == FocusedButton::Cancel;
         let confirm_focused = current_focused == FocusedButton::Confirm;
 
-        // Per-button accent: focused button uses theme accent (or error for danger
-        // Confirm), unfocused uses muted gray. This makes the active Tab target
-        // visually obvious instead of leaving the user guessing which button Enter
-        // will hit.
-        let accent = theme.colors.accent.selected;
-        let muted_keycap_bg = theme.colors.ui.border.with_opacity(0.06);
-
-        let (cancel_keycap_bg, cancel_keycap_color, cancel_label_color) = if cancel_focused {
-            (accent.with_opacity(0.06), accent.to_rgb(), title_color)
-        } else {
-            (muted_keycap_bg, muted_color, muted_color)
-        };
-
-        // Both keycaps use theme.accent.selected when focused so the Esc and
-        // Enter glyphs share a consistent visual key style. Danger only colors
-        // the *label* (the action verb) so the destructive intent still reads,
-        // without making the keycap glyph itself diverge from the Cancel side.
-        let confirm_label_color_focused = if is_danger {
-            theme.colors.ui.error.to_rgb()
-        } else {
-            title_color
-        };
-        let (confirm_keycap_bg, confirm_keycap_color, confirm_label_color) = if confirm_focused {
-            (
-                accent.with_opacity(0.06),
-                accent.to_rgb(),
-                confirm_label_color_focused,
-            )
-        } else {
-            (muted_keycap_bg, muted_color, muted_color)
-        };
-
         let entity = cx.entity();
         let cancel_entity = entity.clone();
         let confirm_entity = entity.clone();
 
-        let title_row =
-            confirm_modal_header(self.title.clone(), accent_color.into(), title_color.into());
+        let title_row = confirm_modal_header(self.title.clone(), accent_color, title_color);
 
-        // ── Keycap action row ───────────────────────────────────
         let action_row = div()
             .w_full()
             .flex()
             .flex_row()
             .justify_end()
             .gap(px(CONFIRM_BUTTON_GAP))
-            // Cancel: [Esc] Cancel
             .child(
-                div()
+                Button::new(self.cancel_text.clone(), button_colors)
                     .id("confirm-cancel-button")
-                    .flex()
-                    .flex_row()
-                    .items_center()
-                    .gap(px(3.))
-                    .cursor_pointer()
-                    .when(cancel_focused, |d| d.opacity(1.0))
-                    .when(!cancel_focused, |d| d.opacity(0.8))
-                    .on_mouse_down(MouseButton::Left, move |_, window, cx| {
+                    .variant(SharedButtonVariant::Ghost)
+                    .shortcut("Esc")
+                    .focused(cancel_focused)
+                    .on_click(Box::new(move |_, window, cx| {
                         cancel_entity.update(cx, |this: &mut Self, cx| {
                             this.resolve_and_close(false, window, cx);
                         });
-                    })
-                    .child(
-                        div()
-                            .px(px(4.))
-                            .py(px(2.))
-                            .rounded(px(3.))
-                            .bg(cancel_keycap_bg)
-                            .text_xs()
-                            .font_family(FONT_MONO)
-                            .text_color(cancel_keycap_color)
-                            .child("Esc"),
-                    )
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(cancel_label_color)
-                            .child(self.cancel_text.clone()),
-                    ),
+                    })),
             )
-            // Confirm: [↵] Clear/Delete
             .child(
-                div()
+                Button::new(self.confirm_text.clone(), button_colors)
                     .id("confirm-ok-button")
-                    .flex()
-                    .flex_row()
-                    .items_center()
-                    .gap(px(3.))
-                    .cursor_pointer()
-                    .when(confirm_focused, |d| d.opacity(1.0))
-                    .when(!confirm_focused, |d| d.opacity(0.8))
-                    .on_mouse_down(MouseButton::Left, move |_, window, cx| {
+                    .variant(SharedButtonVariant::Primary)
+                    .shortcut("↵")
+                    .focused(confirm_focused)
+                    .on_click(Box::new(move |_, window, cx| {
                         confirm_entity.update(cx, |this: &mut Self, cx| {
                             this.resolve_and_close(true, window, cx);
                         });
-                    })
-                    .child(
-                        div()
-                            .px(px(4.))
-                            .py(px(2.))
-                            .rounded(px(3.))
-                            .bg(confirm_keycap_bg)
-                            .text_xs()
-                            .font_family(FONT_MONO)
-                            .text_color(confirm_keycap_color)
-                            .child("↵"),
-                    )
-                    .child(
-                        div()
-                            .text_xs()
-                            .font_weight(gpui::FontWeight::MEDIUM)
-                            .text_color(confirm_label_color)
-                            .child(self.confirm_text.clone()),
-                    ),
+                    })),
             );
 
         let mut shell_children: Vec<AnyElement> = vec![title_row.into_any_element()];
@@ -1407,7 +1321,7 @@ impl Render for ConfirmPopupWindow {
                     padding_y: CONFIRM_PADDING_Y,
                     gap: CONFIRM_SECTION_GAP,
                     background: Some(panel_bg),
-                    border: border_color.into(),
+                    border: border_color,
                     radius: CONFIRM_MODAL_RADIUS,
                     offset_y: overlay_appear.modal_offset_y,
                     opacity: overlay_appear.modal_opacity,
