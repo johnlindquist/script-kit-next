@@ -214,6 +214,11 @@ pub fn prefix_span_for_input_with_targets(
     if raw.is_empty() {
         return None;
     }
+    if let Some(query_head) = advanced_query_head_span(raw).into_iter().next() {
+        if query_head.range.start == 0 {
+            return Some(query_head.range);
+        }
+    }
     if let Some(source_head) = source_filter_head_span(raw).into_iter().next() {
         if source_head.range.start == 0 {
             return Some(source_head.range);
@@ -288,6 +293,7 @@ pub fn input_spans_for_input_with_targets(
             role: MenuSyntaxFragmentRole::Prefix,
         });
     }
+    spans.extend(advanced_query_head_span(raw));
     spans.extend(source_filter_head_span(raw));
 
     let invocation = match parse_with_capture_targets(raw, registered_targets) {
@@ -422,6 +428,44 @@ fn source_filter_head_span(raw: &str) -> Vec<MenuSyntaxInputSpan> {
             if !descriptor.planned {
                 return None;
             }
+            let start = token.range.start + head_start_offset;
+            Some(MenuSyntaxInputSpan {
+                range: start..start + head.len(),
+                role: MenuSyntaxFragmentRole::Prefix,
+            })
+        })
+        .collect()
+}
+
+const ADVANCED_QUERY_INPUT_HEADS: &[&str] = &[
+    "has:",
+    "type:",
+    "shortcut:",
+    "source:",
+    "plugin:",
+    "name:",
+    "desc:",
+    "alias:",
+    "tag:",
+    "meta.",
+];
+
+fn advanced_query_head_span(raw: &str) -> Vec<MenuSyntaxInputSpan> {
+    raw_tokens(raw, 0)
+        .into_iter()
+        .filter_map(|token| {
+            if token.text.starts_with('"') || token.text.starts_with('\'') {
+                return None;
+            }
+            let (head_start_offset, body) = token
+                .text
+                .strip_prefix('-')
+                .map(|rest| (1, rest))
+                .unwrap_or((0, token.text));
+            let lower = body.to_ascii_lowercase();
+            let head = ADVANCED_QUERY_INPUT_HEADS
+                .iter()
+                .find(|head| lower.starts_with(**head))?;
             let start = token.range.start + head_start_offset;
             Some(MenuSyntaxInputSpan {
                 range: start..start + head.len(),
@@ -748,6 +792,13 @@ mod tests {
     }
 
     #[test]
+    fn prefix_span_highlights_advanced_query_head() {
+        assert_eq!(prefix_span_for_input("has:"), Some(0..4));
+        assert_eq!(prefix_span_for_input("has:sh"), Some(0..4));
+        assert_eq!(prefix_span_for_input("type:script deploy"), Some(0..5));
+    }
+
+    #[test]
     fn prefix_span_highlights_plus_capture() {
         assert_eq!(prefix_span_for_input(";todo Renew passport"), Some(0..5));
         assert_eq!(prefix_span_for_input(";note"), Some(0..5));
@@ -816,6 +867,18 @@ mod tests {
             .map(|span| &raw[span.range.clone()])
             .collect::<Vec<_>>();
         assert_eq!(highlighted, vec!["f:", "c:", "notes:"]);
+    }
+
+    #[test]
+    fn input_spans_highlight_advanced_query_heads_anywhere() {
+        let raw = "has:sh deploy -type:app meta.category:tool";
+        let spans = input_spans_for_input(raw);
+        let highlighted = spans
+            .iter()
+            .filter(|span| span.role == MenuSyntaxFragmentRole::Prefix)
+            .map(|span| &raw[span.range.clone()])
+            .collect::<Vec<_>>();
+        assert_eq!(highlighted, vec!["has:", "type:", "meta."]);
     }
 
     #[test]

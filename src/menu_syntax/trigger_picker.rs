@@ -644,120 +644,97 @@ struct AdvancedQueryHeadRowSpec {
 
 const ADVANCED_QUERY_HEAD_ROW_SPECS: &[AdvancedQueryHeadRowSpec] = &[
     AdvancedQueryHeadRowSpec {
+        id: "has",
+        display_token: "has:",
+        insert_token: "has:",
+        title: "has:",
+        subtitle: "Filter by available metadata fields.",
+    },
+    AdvancedQueryHeadRowSpec {
         id: "type",
         display_token: "type:",
-        insert_token: ":type:",
-        title: "Type",
+        insert_token: "type:",
+        title: "type:",
         subtitle: "Filter by result type.",
     },
     AdvancedQueryHeadRowSpec {
         id: "shortcut",
         display_token: "shortcut:",
-        insert_token: ":shortcut:",
-        title: "Shortcut",
+        insert_token: "shortcut:",
+        title: "shortcut:",
         subtitle: "Filter by keyboard shortcut.",
     },
     AdvancedQueryHeadRowSpec {
         id: "source",
         display_token: "source:",
-        insert_token: ":source:",
-        title: "Source",
+        insert_token: "source:",
+        title: "source:",
         subtitle: "Filter by plugin, kit, or source name.",
     },
     AdvancedQueryHeadRowSpec {
         id: "plugin",
         display_token: "plugin:",
-        insert_token: ":plugin:",
-        title: "Plugin",
+        insert_token: "plugin:",
+        title: "plugin:",
         subtitle: "Filter by plugin id.",
     },
     AdvancedQueryHeadRowSpec {
         id: "name",
         display_token: "name:",
-        insert_token: ":name:",
-        title: "Name",
+        insert_token: "name:",
+        title: "name:",
         subtitle: "Filter by result name.",
     },
     AdvancedQueryHeadRowSpec {
         id: "desc",
         display_token: "desc:",
-        insert_token: ":desc:",
-        title: "Description",
+        insert_token: "desc:",
+        title: "desc:",
         subtitle: "Filter by description text.",
     },
     AdvancedQueryHeadRowSpec {
         id: "alias",
         display_token: "alias:",
-        insert_token: ":alias:",
-        title: "Alias",
+        insert_token: "alias:",
+        title: "alias:",
         subtitle: "Filter by alias text.",
     },
     AdvancedQueryHeadRowSpec {
         id: "tag",
         display_token: "tag:",
-        insert_token: ":tag:",
-        title: "Tag",
+        insert_token: "tag:",
+        title: "tag:",
         subtitle: "Filter by tag name.",
-    },
-    AdvancedQueryHeadRowSpec {
-        id: "has",
-        display_token: "has:",
-        insert_token: ":has:",
-        title: "Has",
-        subtitle: "Filter by available metadata fields.",
     },
     AdvancedQueryHeadRowSpec {
         id: "meta",
         display_token: "meta.<path>:",
-        insert_token: ":meta.",
-        title: "Metadata Path",
+        insert_token: "meta.",
+        title: "meta.<path>:",
         subtitle: "Filter by a nested metadata path.",
     },
 ];
 
 fn bare_colon_filter_head_rows() -> Vec<TriggerPickerRow> {
-    let mut rows: Vec<TriggerPickerRow> = crate::menu_syntax::SOURCE_HEAD_SPECS
+    ADVANCED_QUERY_HEAD_ROW_SPECS
         .iter()
         .map(|spec| TriggerPickerRow {
-            id: format!("source-head:{}", spec.canonical),
+            id: format!("qualifier-head:{}", spec.id),
             mode: TriggerPickerMode::AdvancedQuery,
             kind: TriggerPickerRowKind::Qualifier,
-            title: spec.label.to_string(),
-            token: Some(spec.canonical.to_string()),
-            subtitle: Some(spec.description.to_string()),
+            title: spec.title.to_string(),
+            token: Some(spec.display_token.to_string()),
+            subtitle: Some(spec.subtitle.to_string()),
             detail: None,
             example: None,
             badges: Vec::new(),
             action: TriggerPickerAction::InsertToken {
-                token: spec.canonical.to_string(),
-                keep_open: false,
+                token: spec.insert_token.to_string(),
+                keep_open: true,
             },
             enabled: true,
         })
-        .collect();
-
-    rows.extend(
-        ADVANCED_QUERY_HEAD_ROW_SPECS
-            .iter()
-            .map(|spec| TriggerPickerRow {
-                id: format!("qualifier-head:{}", spec.id),
-                mode: TriggerPickerMode::AdvancedQuery,
-                kind: TriggerPickerRowKind::Qualifier,
-                title: spec.title.to_string(),
-                token: Some(spec.display_token.to_string()),
-                subtitle: Some(spec.subtitle.to_string()),
-                detail: None,
-                example: None,
-                badges: Vec::new(),
-                action: TriggerPickerAction::InsertToken {
-                    token: spec.insert_token.to_string(),
-                    keep_open: true,
-                },
-                enabled: true,
-            }),
-    );
-
-    rows
+        .collect()
 }
 
 fn static_qualifier_rows() -> Vec<TriggerPickerRow> {
@@ -1833,6 +1810,24 @@ mod tests {
             .collect();
 
         for expected in [
+            "has:",
+            "type:",
+            "shortcut:",
+            "source:",
+            "plugin:",
+            "name:",
+            "desc:",
+            "alias:",
+            "tag:",
+            "meta.<path>:",
+        ] {
+            assert!(
+                tokens.contains(&expected),
+                "bare ':' should list filter head {expected}, got {tokens:?}"
+            );
+        }
+
+        for forbidden in [
             "files:",
             "notes:",
             "todo:",
@@ -1846,24 +1841,6 @@ mod tests {
             "vault:",
             "dictation:",
             "windows:",
-            "type:",
-            "shortcut:",
-            "source:",
-            "plugin:",
-            "name:",
-            "desc:",
-            "alias:",
-            "tag:",
-            "has:",
-            "meta.<path>:",
-        ] {
-            assert!(
-                tokens.contains(&expected),
-                "bare ':' should list filter head {expected}, got {tokens:?}"
-            );
-        }
-
-        for forbidden in [
             "type:script",
             "type:scriptlet",
             "shortcut:any",
@@ -1885,6 +1862,11 @@ mod tests {
                 .iter()
                 .all(|row| row.detail.is_none() && row.example.is_none()),
             "bare ':' head rows should not reserve synopsis/help space"
+        );
+        assert_eq!(
+            snap.rows.first().and_then(|row| row.token.as_deref()),
+            Some("has:"),
+            "has: should be the first filter head"
         );
     }
 
@@ -2014,7 +1996,7 @@ mod tests {
             .expect("type head row");
         match &type_row.action {
             TriggerPickerAction::InsertToken { token, keep_open } => {
-                assert_eq!(token, ":type:");
+                assert_eq!(token, "type:");
                 assert!(*keep_open, "open-value qualifier must keep popup open");
             }
             other => panic!("expected InsertToken, got {other:?}"),

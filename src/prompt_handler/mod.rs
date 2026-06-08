@@ -10414,6 +10414,29 @@ impl ScriptListApp {
             .and_then(|index| index.parse::<usize>().ok())
             .ok_or_else(|| anyhow::anyhow!("Invalid main-menu semantic ID '{semantic_id}'"))?;
 
+        if self.menu_syntax_trigger_popup_state.owns_main_list() {
+            let Some(snapshot) = self.menu_syntax_trigger_popup_state.snapshot.as_ref() else {
+                anyhow::bail!(
+                    "No visible menu-syntax trigger picker matched semantic ID '{semantic_id}'"
+                );
+            };
+            let Some(row) = snapshot.rows.get(visible_choice_index) else {
+                anyhow::bail!(
+                    "No visible menu-syntax trigger picker matched semantic ID '{semantic_id}'"
+                );
+            };
+            if !row.enabled {
+                anyhow::bail!("Menu-syntax trigger picker row '{semantic_id}' is disabled");
+            }
+            let row_id = row.id.clone();
+            let selected = row.token.clone().unwrap_or_else(|| row.title.clone());
+            self.menu_syntax_trigger_popup_state.selected_row_id = Some(row_id.clone());
+            if submit {
+                self.accept_menu_syntax_trigger_popup_row(&row_id, None, cx);
+            }
+            return Ok(selected);
+        }
+
         self.get_grouped_results_cached();
         let Some((grouped_index, selected)) = self
             .main_menu_result_caches

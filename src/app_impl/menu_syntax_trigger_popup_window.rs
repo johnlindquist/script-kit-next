@@ -95,7 +95,45 @@ impl ScriptListApp {
             }
         );
 
+        let has_window = window.is_some();
         self.dispatch_menu_syntax_trigger_popup_outcome(outcome, window, cx);
+        if keep_open && !has_window {
+            let text = self.filter_text.clone();
+            let picker_ctx = self.menu_syntax_trigger_picker_context(&text);
+            let transition = crate::menu_syntax_trigger_popup::plan_trigger_popup_transition(
+                &self.menu_syntax_trigger_popup_state,
+                &text,
+                &picker_ctx,
+            );
+            use crate::menu_syntax_trigger_popup::TriggerPopupTransition;
+            match transition {
+                TriggerPopupTransition::NoChange => {}
+                TriggerPopupTransition::Close => {
+                    self.menu_syntax_trigger_popup_state = Default::default();
+                }
+                TriggerPopupTransition::Open {
+                    snapshot,
+                    selected_row_id,
+                }
+                | TriggerPopupTransition::Update {
+                    snapshot,
+                    selected_row_id,
+                } => {
+                    self.menu_syntax_trigger_popup_state =
+                        crate::menu_syntax_trigger_popup::MenuSyntaxTriggerPopupState {
+                            snapshot: Some(snapshot),
+                            selected_row_id,
+                            visible_start: 0,
+                        };
+                }
+            }
+            self.invalidate_grouped_cache();
+            self.reconcile_script_list_after_filter_change(
+                "menu_syntax_trigger_popup_keep_open_no_window",
+                cx,
+            );
+            cx.notify();
+        }
         keep_open
     }
 
@@ -250,7 +288,13 @@ impl ScriptListApp {
 
     fn parse_trigger_popup_form_suggestion_row_id(row_id: &str) -> Option<(&str, usize)> {
         let mut parts = row_id.split(':');
-        match (parts.next(), parts.next(), parts.next(), parts.next(), parts.next()) {
+        match (
+            parts.next(),
+            parts.next(),
+            parts.next(),
+            parts.next(),
+            parts.next(),
+        ) {
             (Some("form-suggestion"), Some(_target), Some(field_id), Some(index), None) => {
                 index.parse::<usize>().ok().map(|index| (field_id, index))
             }
@@ -266,11 +310,10 @@ impl ScriptListApp {
             .is_some_and(|target| target.starts_with("form:"))
     }
 
-    pub(crate) fn selected_menu_syntax_trigger_row_id_from_main_list(
-        &mut self,
-    ) -> Option<String> {
+    pub(crate) fn selected_menu_syntax_trigger_row_id_from_main_list(&mut self) -> Option<String> {
         let (grouped, flat) = self.get_grouped_results_cached();
-        let crate::list_item::GroupedListItem::Item(flat_index) = grouped.get(self.selected_index)?
+        let crate::list_item::GroupedListItem::Item(flat_index) =
+            grouped.get(self.selected_index)?
         else {
             return None;
         };
@@ -434,7 +477,9 @@ impl ScriptListApp {
                             self.menu_syntax_trigger_popup_state
                                 .snapshot
                                 .as_ref()
-                                .and_then(|snapshot| snapshot.rows.first().map(|row| row.id.clone()))
+                                .and_then(|snapshot| {
+                                    snapshot.rows.first().map(|row| row.id.clone())
+                                })
                         });
                     let Some(row_id) = selected_row_id else {
                         return false;

@@ -350,7 +350,7 @@ fn apply_advanced_query_token_insertion(raw_filter_text: &str, token: &str) -> S
     let token_body = token.trim_start_matches(':');
     let after_colon = colon_idx + 1;
     if raw_filter_text.len() <= after_colon {
-        return format!("{}:{token_body}", &raw_filter_text[..colon_idx]);
+        return format!("{}{token_body}", &raw_filter_text[..colon_idx]);
     }
 
     let tail = &raw_filter_text[after_colon..];
@@ -454,7 +454,7 @@ mod tests {
         let outcome = apply_intent(InlinePickerKeyIntent::Accept, &snap, Some(type_idx), ":");
         match outcome {
             TriggerPickerIntentOutcome::ReplaceInput { text, keep_open } => {
-                assert_eq!(text, ":type:");
+                assert_eq!(text, "type:");
                 assert!(keep_open, "Accept on advanced head should keep picker open");
             }
             other => panic!("expected ReplaceInput keep_open=true, got {other:?}"),
@@ -518,7 +518,7 @@ mod tests {
         let outcome = apply_intent(InlinePickerKeyIntent::Apply, &snap, Some(type_idx), ":");
         match outcome {
             TriggerPickerIntentOutcome::ReplaceInput { text, keep_open } => {
-                assert_eq!(text, ":type:");
+                assert_eq!(text, "type:");
                 assert!(
                     keep_open,
                     "Apply on open-value qualifier must keep picker open"
@@ -603,9 +603,9 @@ mod tests {
     #[test]
     fn accept_preserves_open_value_rows() {
         for (input, token, expected) in [
-            (":", "type:", ":type:"),
-            (":", "tag:", ":tag:"),
-            (":", "has:", ":has:"),
+            (":", "type:", "type:"),
+            (":", "tag:", "tag:"),
+            (":", "has:", "has:"),
         ] {
             let snap = build_trigger_picker_snapshot(input, &ctx()).expect("snapshot");
             let row_idx = snap

@@ -65,14 +65,18 @@ pub(crate) struct MenuSyntaxTriggerPopupState {
 }
 
 impl MenuSyntaxTriggerPopupState {
-    /// Only composer-style popup modes blank the main launcher list. Refine
-    /// mode (`:`) is structured search, so the normal result list should stay
-    /// visible while qualifier help is open.
+    /// Picker snapshots own the ScriptList main list while the user is choosing
+    /// a syntax head or value. Terminal structured queries stop producing a
+    /// snapshot, so normal launcher results take over again.
     #[allow(dead_code)] // Lib-crate copy has no consumer; binary crate uses this in filtering/render.
     pub(crate) fn owns_main_list(&self) -> bool {
         matches!(
             self.snapshot.as_ref().map(|snapshot| snapshot.mode),
-            Some(TriggerPickerMode::Capture | TriggerPickerMode::Command)
+            Some(
+                TriggerPickerMode::AdvancedQuery
+                    | TriggerPickerMode::Capture
+                    | TriggerPickerMode::Command
+            )
         )
     }
 }

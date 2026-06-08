@@ -2390,22 +2390,28 @@ fn active_head_context_for_filter(raw: &str) -> Option<ActiveHeadContext> {
         }
     }
 
-    // Bare `has:sh` (no leading `:`).
-    if trimmed.len() >= 4 && trimmed[..4].eq_ignore_ascii_case("has:") {
-        let value = &trimmed[4..];
-        let value_end = value.find(char::is_whitespace).unwrap_or(value.len());
-        return Some(ActiveHeadContext {
-            head: "has:".to_string(),
-            value_partial: value[..value_end].to_string(),
-            kind: ActiveHeadKind::Has,
-        });
+    // Bare qualifier heads inserted by the `:` filter-head picker.
+    let first_token_end = trimmed.find(char::is_whitespace).unwrap_or(trimmed.len());
+    let first_token = &trimmed[..first_token_end];
+    for (head, kind) in [
+        ("type", ActiveHeadKind::TypeQualifier),
+        ("kind", ActiveHeadKind::TypeQualifier),
+        ("tag", ActiveHeadKind::TagQualifier),
+        ("shortcut", ActiveHeadKind::ShortcutQualifier),
+        ("has", ActiveHeadKind::Has),
+    ] {
+        if let Some(value) = qualifier_value_partial(first_token, head) {
+            return Some(ActiveHeadContext {
+                head: format!("{head}:"),
+                value_partial: value,
+                kind,
+            });
+        }
     }
 
     // Source heads (`c:`, `clipboard:`, etc.) used as the very first
     // token of the filter. The active partial is everything up to the
     // first whitespace.
-    let first_token_end = trimmed.find(char::is_whitespace).unwrap_or(trimmed.len());
-    let first_token = &trimmed[..first_token_end];
     if let Some(colon_idx) = first_token.find(':') {
         let head_with_colon = &first_token[..=colon_idx];
         if let Some(spec) = source_head_spec_for_token(head_with_colon) {
@@ -4109,6 +4115,10 @@ mod tests {
 
         let ctx = active_head_context_for_filter(":type:scriptlet").expect(":type:");
         assert_eq!(ctx.head, ":type:");
+        assert_eq!(ctx.value_partial, "scriptlet");
+
+        let ctx = active_head_context_for_filter("type:scriptlet").expect("type:");
+        assert_eq!(ctx.head, "type:");
         assert_eq!(ctx.value_partial, "scriptlet");
 
         let ctx = active_head_context_for_filter(":tag:work").expect(":tag:");

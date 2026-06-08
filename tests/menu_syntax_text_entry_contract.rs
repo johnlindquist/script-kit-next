@@ -138,7 +138,7 @@ fn live_menu_syntax_ownership_bypasses_debounced_grouped_cache() {
 }
 
 #[test]
-fn refine_popup_does_not_blank_launcher_results() {
+fn refine_picker_owns_main_list_until_query_is_terminal() {
     let popup = fs::read_to_string("src/app_impl/menu_syntax_trigger_popup.rs")
         .expect("Failed to read src/app_impl/menu_syntax_trigger_popup.rs");
     let filtering_cache = fs::read_to_string("src/app_impl/filtering_cache.rs")
@@ -146,15 +146,32 @@ fn refine_popup_does_not_blank_launcher_results() {
     let render = fs::read_to_string("src/render_script_list/mod.rs")
         .expect("Failed to read src/render_script_list/mod.rs");
 
+    let owns_main_list_body = source_after(&popup, "fn owns_main_list(&self) -> bool");
     assert!(
-        popup.contains("fn owns_main_list(&self) -> bool")
-            && popup.contains("TriggerPickerMode::Capture | TriggerPickerMode::Command"),
-        "only capture and command trigger popups should blank the main launcher list"
+        owns_main_list_body.contains("TriggerPickerMode::AdvancedQuery")
+            && owns_main_list_body.contains("TriggerPickerMode::Capture")
+            && owns_main_list_body.contains("TriggerPickerMode::Command"),
+        "colon filter-head and value pickers should own ScriptList rows until the query is terminal"
     );
     assert!(
         filtering_cache.contains("self.menu_syntax_trigger_popup_state.owns_main_list()")
             && render.contains("self.menu_syntax_trigger_popup_state.owns_main_list()"),
-        "refine (`:`) popup snapshots should not suppress structured search results"
+        "refine (`:`) picker snapshots should suppress stale structured search results while selectable rows are open"
+    );
+    assert!(
+        render.contains("let menu_syntax_owns_main_list = popup_owns_main_list")
+            && filtering_cache.contains(
+                "let live_menu_syntax_owns_main_list = popup_owns_live_main_list"
+            )
+            && filtering_cache.contains(
+                "let menu_syntax_owns_main_list = popup_owns_computed_main_list"
+            ),
+        "main-owned filter/object picker rows must outrank spine/search ownership in render and grouped-cache gates"
+    );
+    assert!(
+        filtering_cache.contains("if !popup_owns_live_main_list")
+            && filtering_cache.contains("&& self.spine_projection_owns_main_list()"),
+        "the early Spine projection path must yield to main-owned filter/object picker snapshots"
     );
     assert!(
         filtering_cache.contains("free_text_for_search(&self.menu_syntax_mode, filter_text)")
@@ -172,9 +189,10 @@ fn exact_colon_drawer_uses_filter_head_catalog_not_static_examples() {
         trigger_picker.contains("fn is_exact_bare_colon(input: &str) -> bool")
             && trigger_picker.contains("fn bare_colon_filter_head_rows() -> Vec<TriggerPickerRow>")
             && trigger_picker.contains("ADVANCED_QUERY_HEAD_ROW_SPECS")
-            && trigger_picker.contains("SOURCE_HEAD_SPECS")
+            && !source_after(&trigger_picker, "fn bare_colon_filter_head_rows()")
+                .contains("SOURCE_HEAD_SPECS")
             && trigger_picker.contains("return bare_colon_filter_head_rows();"),
-        "bare ':' should use a dedicated filter-head catalog that includes source heads and advanced query heads"
+        "bare ':' should use only the dedicated filter-head catalog, not source heads like files:"
     );
     assert!(
         trigger_picker.contains(
@@ -184,7 +202,7 @@ fn exact_colon_drawer_uses_filter_head_catalog_not_static_examples() {
     );
     assert!(
         trigger_picker.contains("display_token: \"meta.<path>:\",")
-            && trigger_picker.contains("insert_token: \":meta.\","),
+            && trigger_picker.contains("insert_token: \"meta.\","),
         "bare ':' should advertise the generic meta.<path>: head instead of a concrete metadata example"
     );
 }
@@ -256,6 +274,18 @@ fn trigger_picker_main_list_contract_exposes_rows_without_detached_popup() {
             .contains("menu_syntax_trigger_popup_window::is_menu_syntax_trigger_popup_window_open"),
         "PromptPopup automation target resolution must not include main-owned trigger rows"
     );
+    assert!(
+        prompt_handler.contains("self.menu_syntax_trigger_popup_state.owns_main_list()")
+            && prompt_handler
+                .contains("self.accept_menu_syntax_trigger_popup_row(&row_id, None, cx)"),
+        "main-window batch selectBySemanticId should activate main-owned trigger picker rows"
+    );
+    assert!(
+        trigger_owner.contains("menu_syntax_trigger_popup_keep_open_no_window")
+            && trigger_owner.contains("self.invalidate_grouped_cache();")
+            && trigger_owner.contains("self.reconcile_script_list_after_filter_change("),
+        "batch selectBySemanticId keep-open transitions must invalidate rendered rows after rebuilding the picker snapshot"
+    );
 }
 
 #[test]
@@ -267,6 +297,7 @@ fn stdin_setfilter_runs_menu_syntax_popup_state_machine() {
 
     assert!(
         updates.contains("self.run_menu_syntax_trigger_popup_state_machine(&text, window, cx);")
+            && updates.contains("crate::menu_syntax::build_trigger_picker_snapshot(&text, &picker_ctx).is_some()")
             && updates.contains("self.invalidate_grouped_cache();"),
         "programmatic setFilter must run the same menu-syntax popup state machine as real typing and invalidate stale grouped rows"
     );
@@ -415,7 +446,7 @@ fn power_syntax_tags_and_command_picker_are_first_class() {
     );
     assert!(
         trigger_picker.contains("bang_command_snapshot(input, ctx)")
-            && popup.contains("trigger != ';' && trigger != ':'"),
+            && popup.contains("trigger != ';' && trigger != '+' && trigger != ':'"),
         "command trigger rows should be handled by the trigger picker while popup partial filtering stays scoped to text-composer triggers"
     );
 }

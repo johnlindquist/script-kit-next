@@ -287,6 +287,18 @@ impl ScriptListApp {
             self.sync_menu_syntax_form_inputs_from_filter(window, cx);
         }
 
+        if !handled_by_subview
+            && matches!(self.current_view, AppView::ScriptList)
+            && self.menu_syntax_trigger_popup_state.snapshot.is_none()
+            && self.menu_syntax_object_selector_state.snapshot.is_none()
+        {
+            let picker_ctx = self.menu_syntax_trigger_picker_context(&text);
+            if crate::menu_syntax::build_trigger_picker_snapshot(&text, &picker_ctx).is_some() {
+                self.run_menu_syntax_trigger_popup_state_machine(&text, window, cx);
+                self.invalidate_grouped_cache();
+            }
+        }
+
         if self.menu_syntax_mode.is_menu_syntax_for(&text)
             || self.menu_syntax_trigger_popup_state.snapshot.is_some()
             || self.menu_syntax_object_selector_state.snapshot.is_some()

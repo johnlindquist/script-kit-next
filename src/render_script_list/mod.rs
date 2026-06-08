@@ -890,12 +890,12 @@ impl ScriptListApp {
             && self.menu_syntax_object_selector_state.owns_main_list();
         let spine_owns_main_list_for_render = self.spine_projection_owns_main_list()
             && self.spine_parse.input == filter_text_for_render;
-        let menu_syntax_owns_main_list = !spine_owns_main_list_for_render
-            && (capture_composer_owns_main_list
-                || popup_owns_main_list
-                || self
-                    .menu_syntax_mode
-                    .command_owns_input_for(&filter_text_for_render));
+        let menu_syntax_owns_main_list = popup_owns_main_list
+            || (!spine_owns_main_list_for_render
+                && (capture_composer_owns_main_list
+                    || self
+                        .menu_syntax_mode
+                        .command_owns_input_for(&filter_text_for_render)));
         // Keep guide cards available for bare/partial `:` refine entry, but
         // let completed advanced queries render their filtered results first.
         // Empty-state hint cards are handled by the item-count branch below.

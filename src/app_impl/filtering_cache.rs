@@ -1076,15 +1076,16 @@ impl ScriptListApp {
         let computed_filter_text = self.computed_filter_text.as_str();
         let spine_owns_live_main_list = self.spine_projection_owns_main_list()
             && self.spine_parse.input == live_filter_text;
-        let live_menu_syntax_owns_main_list = !spine_owns_live_main_list
-            && (self.menu_syntax_object_selector_state.owns_main_list()
-                || self.menu_syntax_trigger_popup_state.owns_main_list()
-                || self
+        let popup_owns_live_main_list = self.menu_syntax_object_selector_state.owns_main_list()
+            || self.menu_syntax_trigger_popup_state.owns_main_list();
+        let live_menu_syntax_owns_main_list = popup_owns_live_main_list
+            || (!spine_owns_live_main_list
+                && (self
                     .menu_syntax_mode
                     .capture_composer_owns_input_for(live_filter_text)
-                || self
-                    .menu_syntax_mode
-                    .command_owns_input_for(live_filter_text));
+                    || self
+                        .menu_syntax_mode
+                        .command_owns_input_for(live_filter_text)));
         if live_menu_syntax_owns_main_list && live_filter_text != computed_filter_text {
             return (
                 Arc::<[GroupedListItem]>::from(Vec::new()),
@@ -1125,7 +1126,8 @@ impl ScriptListApp {
         // ── Spine projection path ──────────────────────────────────────
         // When a sigil segment owns the list, build rows from the Spine
         // model instead of running normal fuzzy/root grouping.
-        if self.spine_projection_owns_main_list()
+        if !popup_owns_live_main_list
+            && self.spine_projection_owns_main_list()
             && self.spine_parse.input == live_filter_text
         {
             if let Some(projection) = self.spine_projection.as_ref() {
@@ -1519,15 +1521,16 @@ impl ScriptListApp {
         let raw_filter_text = self.computed_filter_text.clone();
         let spine_owns_for_computed = self.spine_projection_owns_main_list()
             && self.spine_parse.input == raw_filter_text;
-        let menu_syntax_owns_main_list = !spine_owns_for_computed
-            && (self.menu_syntax_object_selector_state.owns_main_list()
-                || self.menu_syntax_trigger_popup_state.owns_main_list()
-                || self
+        let popup_owns_computed_main_list = self.menu_syntax_object_selector_state.owns_main_list()
+            || self.menu_syntax_trigger_popup_state.owns_main_list();
+        let menu_syntax_owns_main_list = popup_owns_computed_main_list
+            || (!spine_owns_for_computed
+                && (self
                     .menu_syntax_mode
                     .capture_composer_owns_input_for(&raw_filter_text)
-                || self
-                    .menu_syntax_mode
-                    .command_owns_input_for(&raw_filter_text));
+                    || self
+                        .menu_syntax_mode
+                        .command_owns_input_for(&raw_filter_text)));
 
         let (grouped_items, flat_results) = if self
             .menu_syntax_object_selector_state
