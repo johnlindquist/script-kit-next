@@ -63,20 +63,23 @@ fn confirm_popup_uses_shortcut_modal_button_and_chrome_tokens() {
         .expect("ConfirmPopupWindow render implementation should be present");
 
     assert!(
-        confirm.contains("components::button::{")
-            && confirm.contains("Button, ButtonColors, ButtonVariant as SharedButtonVariant")
-            && confirm.contains("BUTTON_GHOST_HEIGHT"),
-        "confirm popup must reuse the shared app Button component and button height tokens used by the shortcut modal"
+        confirm.contains("components::button::BUTTON_GHOST_HEIGHT")
+            && confirm.contains("render_footer_hint_button_like")
+            && confirm.contains("FooterHintButtonSpec")
+            && confirm.contains("FooterHintContentJustify")
+            && confirm.contains("themed_footer_button_hover_rgba")
+            && confirm.contains("themed_footer_button_active_rgba"),
+        "confirm popup must reuse footer button/keycap chrome instead of local modal-only action styling"
     );
     assert!(
-        render_block.contains("ButtonColors::from_theme(&theme)")
-            && render_block.contains("Button::new(self.cancel_text.clone(), button_colors)")
-            && render_block.contains(".variant(SharedButtonVariant::Ghost)")
-            && render_block.contains("Button::new(self.confirm_text.clone(), button_colors)")
-            && render_block.contains(".variant(SharedButtonVariant::Primary)")
-            && render_block.contains(".shortcut(\"Esc\")")
-            && render_block.contains(".shortcut(\"↵\")"),
-        "confirm popup actions must use the same shared ghost/primary button pattern as the Add Shortcut modal"
+        render_block.contains("render_footer_hint_button_like")
+            && render_block.contains("label: self.cancel_text.clone()")
+            && render_block.contains("key: \"Esc\".into()")
+            && render_block.contains("label: self.confirm_text.clone()")
+            && render_block.contains("key: \"↵\".into()")
+            && render_block.contains("key_first: true")
+            && render_block.contains("FooterHintContentJustify::Center"),
+        "confirm popup actions must use the same footer shortcut/keycap renderer as main footer buttons"
     );
     assert!(
         render_block.contains("gpui::rgb(chrome.accent_hex)")
@@ -89,8 +92,10 @@ fn confirm_popup_uses_shortcut_modal_button_and_chrome_tokens() {
         !render_block.contains("theme.colors.ui.error.with_opacity")
             && !render_block.contains("border_color = if is_danger")
             && !render_block.contains("accent_color = if is_danger")
+            && !render_block.contains("Button::new(self.cancel_text")
+            && !render_block.contains("Button::new(self.confirm_text")
             && !render_block.contains("on_mouse_down(MouseButton::Left"),
-        "confirm popup must not reintroduce red danger shell styling or hand-built mini buttons"
+        "confirm popup must not reintroduce red danger shell styling, generic action buttons, or hand-built mini buttons"
     );
 }
 

@@ -16,11 +16,14 @@ use gpui::{
 use gpui_component::button::ButtonVariant as ConfirmButtonVariant;
 
 use crate::{
-    components::button::{
-        Button, ButtonColors, ButtonVariant as SharedButtonVariant, BUTTON_GHOST_HEIGHT,
-    },
+    components::button::BUTTON_GHOST_HEIGHT,
     components::confirm_modal_shell::{
         confirm_modal_header, confirm_modal_shell, ConfirmModalShellConfig, CONFIRM_MODAL_RADIUS,
+    },
+    components::footer_chrome::{
+        render_footer_hint_button_like, themed_footer_button_active_rgba,
+        themed_footer_button_hover_rgba, FooterHintButtonSpec, FooterHintContentJustify,
+        FOOTER_ACTION_BUTTON_RADIUS_PX,
     },
     components::overlay_modal::{OverlayAnimation, BUTTON_GAP, MODAL_PADDING},
     platform,
@@ -1246,9 +1249,10 @@ impl Render for ConfirmPopupWindow {
         let body_color = gpui::rgb(chrome.text_secondary_hex);
         let surface_bg = gpui::transparent_black();
         let panel_bg = gpui::rgba(chrome.popup_surface_rgba);
-        let button_colors = ButtonColors::from_theme(&theme);
         let border_color = gpui::rgba(chrome.border_rgba);
         let accent_color = gpui::rgb(chrome.accent_hex);
+        let footer_button_hover_bg = gpui::rgba(themed_footer_button_hover_rgba(&theme));
+        let footer_button_active_bg = gpui::rgba(themed_footer_button_active_rgba(&theme));
 
         let current_focused = self.focused_button;
         let cancel_focused = current_focused == FocusedButton::Cancel;
@@ -1267,28 +1271,64 @@ impl Render for ConfirmPopupWindow {
             .justify_end()
             .gap(px(CONFIRM_BUTTON_GAP))
             .child(
-                Button::new(self.cancel_text.clone(), button_colors)
+                div()
                     .id("confirm-cancel-button")
-                    .variant(SharedButtonVariant::Ghost)
-                    .shortcut("Esc")
-                    .focused(cancel_focused)
-                    .on_click(Box::new(move |_, window, cx| {
+                    .rounded(px(FOOTER_ACTION_BUTTON_RADIUS_PX))
+                    .cursor_pointer()
+                    .when(cancel_focused, |style| style.bg(footer_button_active_bg))
+                    .hover(move |style| style.bg(footer_button_hover_bg))
+                    .active(move |style| style.bg(footer_button_active_bg))
+                    .on_click(move |_, window, cx| {
                         cancel_entity.update(cx, |this: &mut Self, cx| {
                             this.resolve_and_close(false, window, cx);
                         });
-                    })),
+                    })
+                    .child(render_footer_hint_button_like(
+                        FooterHintButtonSpec {
+                            label: self.cancel_text.clone(),
+                            key: "Esc".into(),
+                            slot_width_px: None,
+                            key_first: true,
+                            justify: FooterHintContentJustify::Center,
+                            label_font_size_px: None,
+                            keycap_font_size_px: None,
+                            keycap_height_px: None,
+                            hover_text_alpha: None,
+                            hover_glyph_alpha: None,
+                            hover_keycap_border_alpha: None,
+                        },
+                        &theme,
+                    )),
             )
             .child(
-                Button::new(self.confirm_text.clone(), button_colors)
+                div()
                     .id("confirm-ok-button")
-                    .variant(SharedButtonVariant::Primary)
-                    .shortcut("↵")
-                    .focused(confirm_focused)
-                    .on_click(Box::new(move |_, window, cx| {
+                    .rounded(px(FOOTER_ACTION_BUTTON_RADIUS_PX))
+                    .cursor_pointer()
+                    .when(confirm_focused, |style| style.bg(footer_button_active_bg))
+                    .hover(move |style| style.bg(footer_button_hover_bg))
+                    .active(move |style| style.bg(footer_button_active_bg))
+                    .on_click(move |_, window, cx| {
                         confirm_entity.update(cx, |this: &mut Self, cx| {
                             this.resolve_and_close(true, window, cx);
                         });
-                    })),
+                    })
+                    .child(render_footer_hint_button_like(
+                        FooterHintButtonSpec {
+                            label: self.confirm_text.clone(),
+                            key: "↵".into(),
+                            slot_width_px: None,
+                            key_first: true,
+                            justify: FooterHintContentJustify::Center,
+                            label_font_size_px: None,
+                            keycap_font_size_px: None,
+                            keycap_height_px: None,
+                            hover_text_alpha: None,
+                            hover_glyph_alpha: None,
+                            hover_keycap_border_alpha: None,
+                        },
+                        &theme,
+                    )),
             );
 
         let mut shell_children: Vec<AnyElement> = vec![title_row.into_any_element()];
