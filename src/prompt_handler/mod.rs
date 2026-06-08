@@ -8751,40 +8751,35 @@ impl ScriptListApp {
                 };
 
                 let send_confirm = send_response.clone();
-                let send_cancel = send_response.clone();
-                let send_fallback = send_response;
+                let send_cancel = send_response;
 
-                // Open parent confirm dialog via shared async helper
-                cx.spawn(
-                    async move |_this, cx| match crate::confirm::confirm_with_parent_dialog(
-                        cx,
-                        crate::confirm::ParentConfirmOptions {
-                            title: "Confirm".into(),
-                            body: gpui::SharedString::from(message),
-                            confirm_text: confirm_text
-                                .map(gpui::SharedString::from)
-                                .unwrap_or("OK".into()),
-                            cancel_text: cancel_text
-                                .map(gpui::SharedString::from)
-                                .unwrap_or("Cancel".into()),
-                            ..Default::default()
-                        },
-                        "prompt_handler_confirm",
-                    )
-                    .await
-                    {
-                        Ok(true) => send_confirm(true),
-                        Ok(false) => send_cancel(false),
-                        Err(error) => {
-                            tracing::error!(
-                                category = "ERROR",
-                                error = %error,
-                                "Failed to open confirm dialog window — failing closed"
-                            );
-                            send_fallback(false);
-                        }
+                self.prepare_window_for_prompt("UI", "confirm", "");
+
+                let (confirm_tx, confirm_rx) = async_channel::bounded::<bool>(1);
+                self.open_confirm_prompt(
+                    crate::confirm::ParentConfirmOptions {
+                        title: "Confirm".into(),
+                        body: gpui::SharedString::from(message),
+                        confirm_text: confirm_text
+                            .map(gpui::SharedString::from)
+                            .unwrap_or("OK".into()),
+                        cancel_text: cancel_text
+                            .map(gpui::SharedString::from)
+                            .unwrap_or("Cancel".into()),
+                        ..Default::default()
                     },
-                )
+                    confirm_tx,
+                    cx,
+                );
+
+                cx.spawn(async move |_this, _cx| {
+                    let confirmed = confirm_rx.recv().await.unwrap_or(false);
+                    if confirmed {
+                        send_confirm(true);
+                    } else {
+                        send_cancel(false);
+                    }
+                })
                 .detach();
 
                 cx.notify();

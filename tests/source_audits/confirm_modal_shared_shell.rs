@@ -160,3 +160,25 @@ fn confirm_prompt_simulate_key_routes_confirm_and_cancel() {
         "stdin simulateKey must route ConfirmPrompt Tab, Enter, and Escape through the shared confirm resolver"
     );
 }
+
+#[test]
+fn sdk_confirm_host_route_uses_shared_confirm_prompt_surface() {
+    let source = read("src/prompt_handler/mod.rs");
+    let show_confirm = source
+        .split("PromptMessage::ShowConfirm {\n                id,")
+        .nth(1)
+        .and_then(|section| section.split("PromptMessage::ShowChat").next())
+        .expect("ShowConfirm handler block should be present");
+
+    assert!(
+        show_confirm.contains("self.prepare_window_for_prompt(\"UI\", \"confirm\", \"\")")
+            && show_confirm.contains("self.open_confirm_prompt(")
+            && show_confirm.contains("async_channel::bounded::<bool>(1)")
+            && show_confirm.contains("Message::Submit"),
+        "SDK confirm() host route must open the shared in-window ConfirmPrompt and submit the bool result back to the script"
+    );
+    assert!(
+        !show_confirm.contains("confirm_with_parent_dialog"),
+        "SDK confirm() host route must not bypass the shared ConfirmPrompt surface via the native parent popup"
+    );
+}
