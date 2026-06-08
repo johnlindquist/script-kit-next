@@ -1100,6 +1100,84 @@ fn dispatch_detached_action(entity_weak: &WeakEntity<AcpChatView>, action_id: &s
         return;
     }
 
+    if let Some(adapter_id) = crate::ai::agent_prompt_handoff::adapter_from_action_id(action_id) {
+        if let Some(entity) = entity_weak.upgrade() {
+            let result = entity.update(cx, |chat, cx| {
+                chat.current_prompt_handoff_payload(adapter_id, cx)
+                    .and_then(|payload| {
+                        crate::ai::agent_prompt_handoff::launch_prompt_handoff(&payload)
+                    })
+            });
+            match result {
+                Ok(receipt) => {
+                    tracing::info!(
+                        target: "script_kit::agent_handoff",
+                        event = "detached_agent_prompt_handoff_succeeded",
+                        adapter_id = %receipt.adapter_id,
+                        action_id = %receipt.action_id,
+                        dry_run = receipt.dry_run,
+                        prompt_chars = receipt.prompt_chars,
+                        prompt_sha256 = %receipt.prompt_sha256,
+                        spawned = receipt.spawned,
+                        pid = ?receipt.pid,
+                    );
+                }
+                Err(error) => {
+                    tracing::warn!(
+                        target: "script_kit::agent_handoff",
+                        event = "detached_agent_prompt_handoff_failed",
+                        action_id,
+                        error = %error.user_message(),
+                    );
+                }
+            }
+        }
+        return;
+    }
+
+    if let Some(prompt_action) =
+        crate::ai::agent_prompt_handoff::prompt_action_from_action_id(action_id)
+    {
+        if let Some(entity) = entity_weak.upgrade() {
+            let result = entity.update(cx, |chat, cx| {
+                chat.current_prompt_handoff_payload(
+                    crate::ai::agent_prompt_handoff::AgentPromptHandoffAdapterId::CmuxCodex,
+                    cx,
+                )
+                .and_then(|payload| {
+                    crate::ai::agent_prompt_handoff::export_prompt(&payload, prompt_action)
+                })
+            });
+            match result {
+                Ok(receipt) => {
+                    tracing::info!(
+                        target: "script_kit::agent_handoff",
+                        event = "detached_agent_prompt_export_succeeded",
+                        action_id = %receipt.action_id,
+                        dry_run = receipt.dry_run,
+                        export_kind = %receipt.export_kind,
+                        context_part_count = receipt.context_part_count,
+                        prompt_builder_segment_count = receipt.prompt_builder_segment_count,
+                        clipboard_written = receipt.clipboard_written,
+                        prompt_chars = receipt.prompt_chars,
+                        prompt_sha256 = %receipt.prompt_sha256,
+                        path = ?receipt.path,
+                        url = ?receipt.url,
+                    );
+                }
+                Err(error) => {
+                    tracing::warn!(
+                        target: "script_kit::agent_handoff",
+                        event = "detached_agent_prompt_export_failed",
+                        action_id,
+                        error = %error.user_message(),
+                    );
+                }
+            }
+        }
+        return;
+    }
+
     match action_id {
         "acp_copy_last_response" => {
             if let Some(entity) = entity_weak.upgrade() {

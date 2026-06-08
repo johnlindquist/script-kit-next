@@ -729,12 +729,20 @@ export type ScriptCommandId = `script/${string}`;
 /** Scriptlet command ID: `scriptlet/{uuid-or-name}` */
 export type ScriptletCommandId = `scriptlet/${string}`;
 
+/** Prompt handoff target command ID: `prompt-target/{target-id}` */
+export type PromptTargetCommandId = `prompt-target/${string}`;
+
+/** Built prompt action command ID: `prompt-action/{action-id}` */
+export type PromptActionCommandId = `prompt-action/${string}`;
+
 /** Union of all valid command ID formats. */
 export type CommandId =
   | BuiltinCommandId
   | AppCommandId
   | ScriptCommandId
-  | ScriptletCommandId;
+  | ScriptletCommandId
+  | PromptTargetCommandId
+  | PromptActionCommandId;
 
 /** Map of command IDs to their configurations. */
 export type CommandsConfig = Partial<Record<CommandId, CommandConfig>>;
@@ -790,6 +798,21 @@ export interface CommandConfig {
    * @example true // Require confirmation dialog
    */
   confirmationRequired?: boolean;
+}
+
+/**
+ * User-defined prompt handoff target.
+ *
+ * Prompt targets appear in Actions as `prompt-target/{id}` commands and can be
+ * assigned shortcuts through `commands`.
+ */
+export interface PromptTargetConfig {
+  title?: string;
+  description?: string;
+  command: string;
+  args?: string[];
+  cwd?: string;
+  env?: Record<string, string>;
 }
 
 /**
@@ -1790,6 +1813,36 @@ export interface Config {
    * ```
    */
   commands?: Partial<Record<CommandId, CommandConfig>>;
+
+  /**
+   * User-defined prompt handoff targets shown in the Actions menu.
+   *
+   * @example
+   * ```typescript
+   * promptTargets: {
+   *   "my-app": {
+   *     title: "My App",
+   *     command: "/usr/local/bin/my-app",
+   *     args: ["--prompt", "{prompt}"]
+   *   }
+   * },
+   * commands: {
+   *   "prompt-target/my-app": {
+   *     shortcut: { modifiers: ["meta", "shift"], key: "KeyM" }
+   *   },
+   *   "prompt-action/export-file": {
+   *     shortcut: { modifiers: ["meta", "shift"], key: "KeyE" }
+   *   },
+   *   "prompt-action/copy-prompt": {
+   *     shortcut: { modifiers: ["meta", "shift"], key: "KeyC" }
+   *   },
+   *   "prompt-action/export-gist": {
+   *     shortcut: { modifiers: ["meta", "shift"], key: "KeyG" }
+   *   }
+   * }
+   * ```
+   */
+  promptTargets?: Record<string, PromptTargetConfig>;
 
   /**
    * Claude Code CLI provider configuration.

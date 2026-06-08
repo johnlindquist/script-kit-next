@@ -386,6 +386,7 @@ fn recover_config_fields(value: Value, correlation_id: &str) -> Config {
         ai: parse_optional_field(object, "ai", correlation_id),
         window_management: parse_optional_field(object, "windowManagement", correlation_id),
         commands: parse_optional_field(object, "commands", correlation_id),
+        prompt_targets: parse_optional_field(object, "promptTargets", correlation_id),
         claude_code: parse_optional_field(object, "claudeCode", correlation_id),
         mcp: parse_optional_field(object, "mcp", correlation_id),
         hidden_commands: parse_optional_field(object, "hiddenCommands", correlation_id),

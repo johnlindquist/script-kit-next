@@ -27,6 +27,18 @@ describe("parseCommandId", () => {
       category: "scriptlet",
       identifier: "abc-123",
     });
+    expect(parseCommandId("prompt-target/cmux-codex")).toEqual({
+      category: "prompt-target",
+      identifier: "cmux-codex",
+    });
+    expect(parseCommandId("prompt-action/export-file")).toEqual({
+      category: "prompt-action",
+      identifier: "export-file",
+    });
+    expect(parseCommandId("prompt-action/copy-prompt")).toEqual({
+      category: "prompt-action",
+      identifier: "copy-prompt",
+    });
   });
 
   it("rejects empty identifiers", () => {
@@ -34,6 +46,8 @@ describe("parseCommandId", () => {
     expect(parseCommandId("app/")).toBeNull();
     expect(parseCommandId("script/")).toBeNull();
     expect(parseCommandId("scriptlet/")).toBeNull();
+    expect(parseCommandId("prompt-target/")).toBeNull();
+    expect(parseCommandId("prompt-action/")).toBeNull();
   });
 
   it("exports all supported categories", () => {
@@ -42,6 +56,8 @@ describe("parseCommandId", () => {
       "app",
       "script",
       "scriptlet",
+      "prompt-target",
+      "prompt-action",
     ]);
   });
 });

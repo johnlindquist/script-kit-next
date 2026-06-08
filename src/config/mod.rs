@@ -61,6 +61,8 @@ pub use defaults::{
     DEFAULT_PADDING_RIGHT, DEFAULT_PADDING_TOP, DEFAULT_TERMINAL_FONT_SIZE, DEFAULT_UI_SCALE,
 };
 
+pub use types::PromptTargetConfig;
+
 #[cfg(test)]
 pub use types::{CommandConfig, ContentPadding, ProcessLimits};
 

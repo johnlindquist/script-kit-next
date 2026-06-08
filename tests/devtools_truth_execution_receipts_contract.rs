@@ -1976,3 +1976,28 @@ fn direct_devtools_actions_dialog_copy_submit_uses_parent_action_allowlist() {
         );
     }
 }
+
+#[test]
+fn direct_devtools_agent_handoff_submit_requires_scoped_dry_run_receipt_gate() {
+    let source = include_str!("../scripts/devtools/act.ts");
+    for expected in [
+        "isScopedAgentHandoffDryRun",
+        "agent-handoff-dry-run",
+        "prompt-target/cmux-codex",
+        "agent_chat:handoff:cmux_codex",
+        "prompt-action/export-file",
+        "prompt-action/export-gist",
+        "prompt-action/copy-prompt",
+        "SCRIPT_KIT_AGENT_HANDOFF_DRY_RUN",
+        "SCRIPT_KIT_AGENT_HANDOFF_RECEIPT_PATH",
+        "submitIntent:agent-handoff-dry-run",
+        "parentTarget?.targetKind === \"AcpChat\"",
+        "parentTarget?.targetKind === \"ScriptList\"",
+        "parentTarget?.targetKind === \"ActionsDialog\"",
+    ] {
+        assert!(
+            source.contains(expected),
+            "direct DevTools agent handoff submit safety should require the scoped dry-run receipt gate {expected}"
+        );
+    }
+}

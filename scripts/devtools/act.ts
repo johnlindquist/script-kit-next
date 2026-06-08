@@ -831,6 +831,40 @@ function isNotesSendToAgentChatRoute(args: Args, actionId: string | null, parent
   return parentTarget?.automationId === "notes" || parentTarget?.targetKind === "Notes";
 }
 
+function isScopedAgentHandoffDryRun(
+  args: Args,
+  actionId: string | null,
+  parentFocus: JsonObject | null,
+) {
+  if (args.submitIntent !== "agent-handoff-dry-run") return false;
+  if (!args.allowSubmit || !args.allowSubmitReason.trim()) return false;
+  const allowedPromptActions = new Set([
+    "prompt-target/cmux-codex",
+    "agent_chat:handoff:cmux_codex",
+    "prompt-action/export-file",
+    "prompt-action/export-gist",
+    "prompt-action/copy-prompt",
+  ]);
+  if (!actionId || !allowedPromptActions.has(actionId)) return false;
+  if (!truthyEnv("SCRIPT_KIT_AGENT_HANDOFF_DRY_RUN")) return false;
+  if (!process.env.SCRIPT_KIT_AGENT_HANDOFF_RECEIPT_PATH?.trim()) return false;
+  const parentTarget = targetInfo(parentFocus ?? {});
+  return parentTarget?.targetKind === "AcpChat"
+    || parentTarget?.surfaceKind === "AcpChat"
+    || parentTarget?.appViewVariant === "AcpChatView"
+    || parentTarget?.targetKind === "ScriptList"
+    || parentTarget?.surfaceKind === "ScriptList"
+    || parentTarget?.appViewVariant === "ScriptList"
+    || parentTarget?.targetKind === "ActionsDialog"
+    || parentTarget?.semanticSurface === "actionsDialog";
+}
+
+function truthyEnv(name: string) {
+  const value = process.env[name];
+  if (!value) return false;
+  return ["1", "true", "yes", "on"].includes(value.trim().toLowerCase());
+}
+
 function requestedActivationSemanticId(args: Args, before: JsonObject) {
   if (args.actionKind === "select" && args.semanticId) return args.semanticId;
   return typeof before.selectedSemanticId === "string" ? before.selectedSemanticId : null;
@@ -1037,6 +1071,14 @@ async function submitPreflight(args: Args, targetReceipt: JsonObject, before: Js
   if (!actionId) {
     return { state: "blocked-before-dispatch", reason: "submit requires selected ActionsDialog choice:* row", selectedSemanticId: selectedSemanticId as string | null };
   }
+  if (isScopedAgentHandoffDryRun(args, actionId, targetReceipt)) {
+    return {
+      state: "dispatched",
+      actionId,
+      allowedBy: "submitIntent:agent-handoff-dry-run",
+      proofIntent: args.submitIntent,
+    };
+  }
   const parentFocus = await parentFocusForTarget(args, targetReceipt);
   const parentSubject = selectedSubjectFromFocus(parentFocus);
   if (isNotesSendToAgentChatRoute(args, actionId, parentFocus)) {
@@ -1044,6 +1086,16 @@ async function submitPreflight(args: Args, targetReceipt: JsonObject, before: Js
       state: "dispatched",
       actionId,
       allowedBy: "submitIntent:notes-send-to-ai",
+      proofIntent: args.submitIntent,
+      parentSubjectId: parentSubject.id,
+      parentSubjectText: parentSubject.text,
+    };
+  }
+  if (isScopedAgentHandoffDryRun(args, actionId, parentFocus)) {
+    return {
+      state: "dispatched",
+      actionId,
+      allowedBy: "submitIntent:agent-handoff-dry-run",
       proofIntent: args.submitIntent,
       parentSubjectId: parentSubject.id,
       parentSubjectText: parentSubject.text,

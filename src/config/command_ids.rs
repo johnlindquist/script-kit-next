@@ -1,7 +1,7 @@
 //! Command ID parsing, building, validation, and deeplink round-tripping.
 //!
 //! Canonical command IDs use the format `{category}/{identifier}` where category
-//! is one of: `builtin`, `app`, `script`, `scriptlet`.
+//! is one of: `builtin`, `app`, `script`, `scriptlet`, `prompt-target`, `prompt-action`.
 
 use anyhow::{anyhow, bail, Result};
 
@@ -12,6 +12,8 @@ pub enum CommandCategory {
     App,
     Script,
     Scriptlet,
+    PromptTarget,
+    PromptAction,
 }
 
 /// All runtime-supported command categories.
@@ -20,6 +22,8 @@ pub const SUPPORTED_COMMAND_CATEGORIES: &[CommandCategory] = &[
     CommandCategory::App,
     CommandCategory::Script,
     CommandCategory::Scriptlet,
+    CommandCategory::PromptTarget,
+    CommandCategory::PromptAction,
 ];
 
 impl CommandCategory {
@@ -30,6 +34,8 @@ impl CommandCategory {
             Self::App => "app",
             Self::Script => "script",
             Self::Scriptlet => "scriptlet",
+            Self::PromptTarget => "prompt-target",
+            Self::PromptAction => "prompt-action",
         }
     }
 }
@@ -52,6 +58,8 @@ pub fn parse_command_id(value: &str) -> Result<(CommandCategory, &str)> {
         "app" => CommandCategory::App,
         "script" => CommandCategory::Script,
         "scriptlet" => CommandCategory::Scriptlet,
+        "prompt-target" => CommandCategory::PromptTarget,
+        "prompt-action" => CommandCategory::PromptAction,
         _ => bail!("unsupported command id category: {}", category),
     };
 

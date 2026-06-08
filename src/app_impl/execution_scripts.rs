@@ -701,6 +701,60 @@ impl ScriptListApp {
                     }
                     return false;
                 }
+                crate::config::CommandCategory::PromptTarget => {
+                    let Some(adapter_id) =
+                        crate::ai::agent_prompt_handoff::adapter_from_action_id(command_id)
+                    else {
+                        tracing::warn!(command_id = %command_id, "prompt_target_command_not_found");
+                        return true;
+                    };
+                    match self.launch_prompt_target_from_main_prompt(adapter_id, cx) {
+                        Ok(receipt) => {
+                            tracing::info!(
+                                target: "script_kit::agent_handoff",
+                                command_id = %command_id,
+                                adapter_id = %receipt.adapter_id,
+                                prompt_sha256 = %receipt.prompt_sha256,
+                                "prompt_target_command_resolved"
+                            );
+                        }
+                        Err(error) => {
+                            self.show_error_toast_with_code(
+                                error.user_message(),
+                                Some(crate::action_helpers::ERROR_ACTION_FAILED),
+                                cx,
+                            );
+                        }
+                    }
+                    return true;
+                }
+                crate::config::CommandCategory::PromptAction => {
+                    let Some(prompt_action) =
+                        crate::ai::agent_prompt_handoff::prompt_action_from_action_id(command_id)
+                    else {
+                        tracing::warn!(command_id = %command_id, "prompt_action_command_not_found");
+                        return true;
+                    };
+                    match self.export_prompt_from_main_prompt(prompt_action, cx) {
+                        Ok(receipt) => {
+                            tracing::info!(
+                                target: "script_kit::agent_handoff",
+                                command_id = %command_id,
+                                export_kind = %receipt.export_kind,
+                                prompt_sha256 = %receipt.prompt_sha256,
+                                "prompt_action_command_resolved"
+                            );
+                        }
+                        Err(error) => {
+                            self.show_error_toast_with_code(
+                                error.user_message(),
+                                Some(crate::action_helpers::ERROR_ACTION_FAILED),
+                                cx,
+                            );
+                        }
+                    }
+                    return true;
+                }
             }
         }
 

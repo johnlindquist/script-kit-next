@@ -172,6 +172,15 @@ interface CommandConfig {
   confirmationRequired?: boolean;
 }
 
+interface PromptTargetConfig {
+  title?: string;
+  description?: string;
+  command: string;
+  args?: string[];
+  cwd?: string;
+  env?: Record<string, string>;
+}
+
 type AiVaultProvider = "claude" | "codex" | "hermesAgent" | "rovoDev";
 type AiVaultResumeTerminal = "cmux" | "quickTerminal";
 
@@ -287,6 +296,7 @@ interface Config {
   windowManagement?: WindowManagementPreferences;
   windowAppearance?: WindowAppearanceConfig;
   commands?: Record<string, CommandConfig>;
+  promptTargets?: Record<string, PromptTargetConfig>;
   unifiedSearch?: UnifiedSearchConfig;
   claudeCode?: ClaudeCodeConfig;
   mcp?: McpConfig;
@@ -768,6 +778,12 @@ const CONFIG_SCHEMA: ConfigOption[] = [
     type: "Record<string, CommandConfig>",
     default: undefined,
     description: "Per-command shortcuts and visibility overrides"
+  },
+  {
+    key: "promptTargets",
+    type: "Record<string, PromptTargetConfig>",
+    default: undefined,
+    description: "Prompt handoff targets surfaced as prompt-target/<id> Actions and shortcut commands; built-in prompt actions use prompt-action/<id>"
   },
   {
     key: "claudeCode.enabled",

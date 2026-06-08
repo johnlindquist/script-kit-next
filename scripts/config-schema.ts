@@ -58,6 +58,19 @@
  *      - "scriptlet/a1b2c3d4-e5f6-7890-abcd-ef1234567890"
  *      - "scriptlet/clipboard-to-uppercase"
  *
+ * 5. PROMPT TARGET - Prompt handoff targets
+ *    Format: `prompt-target/{target-id}`
+ *    Examples:
+ *      - "prompt-target/cmux-codex"
+ *      - "prompt-target/my-app"
+ *
+ * 6. PROMPT ACTION - Built prompt export/share actions
+ *    Format: `prompt-action/{action-id}`
+ *    Examples:
+ *      - "prompt-action/export-file"
+ *      - "prompt-action/export-gist"
+ *      - "prompt-action/copy-prompt"
+ *
  * ═══════════════════════════════════════════════════════════════════════════
  * DEEPLINK MAPPING
  * ═══════════════════════════════════════════════════════════════════════════
@@ -787,6 +800,27 @@ export type ScriptCommandId = `script/${string}`;
 export type ScriptletCommandId = `scriptlet/${string}`;
 
 /**
+ * Prompt handoff target command ID.
+ *
+ * Format: `prompt-target/{target-id}`
+ *
+ * @example "prompt-target/cmux-codex"
+ * @example "prompt-target/my-app"
+ */
+export type PromptTargetCommandId = `prompt-target/${string}`;
+
+/**
+ * Built prompt action command ID.
+ *
+ * Format: `prompt-action/{action-id}`
+ *
+ * @example "prompt-action/export-file"
+ * @example "prompt-action/export-gist"
+ * @example "prompt-action/copy-prompt"
+ */
+export type PromptActionCommandId = `prompt-action/${string}`;
+
+/**
  * Union of all valid command ID formats.
  * 
  * This is the type to use when you need to accept any command ID.
@@ -797,6 +831,8 @@ export type ScriptletCommandId = `scriptlet/${string}`;
  * - `app/` - macOS applications (by bundle identifier)
  * - `script/` - User scripts (by filename)
  * - `scriptlet/` - Inline scriptlets (by UUID or name)
+ * - `prompt-target/` - Prompt handoff targets
+ * - `prompt-action/` - Built prompt export/share actions
  * 
  * @example
  * ```typescript
@@ -812,7 +848,9 @@ export type CommandId =
   | BuiltinCommandId 
   | AppCommandId 
   | ScriptCommandId 
-  | ScriptletCommandId;
+  | ScriptletCommandId
+  | PromptTargetCommandId
+  | PromptActionCommandId;
 
 // =============================================================================
 // COMMAND CONFIGURATION TYPES
@@ -915,6 +953,15 @@ export interface CommandConfig {
  * ```
  */
 export type CommandsConfig = Partial<Record<CommandId, CommandConfig>>;
+
+export interface PromptTargetConfig {
+  title?: string;
+  description?: string;
+  command: string;
+  args?: string[];
+  cwd?: string;
+  env?: Record<string, string>;
+}
 
 export type Cmd1Behavior = "picker" | "cycle";
 export type DesignDensityChoice = "compact" | "comfortable" | "spacious";
@@ -1425,6 +1472,8 @@ export interface Config extends BaseConfig {
    * - `app/{bundle-id}` - macOS applications (com.apple.Safari, etc.)
    * - `script/{name}` - User scripts (my-script, etc.)
    * - `scriptlet/{uuid}` - Inline scriptlets
+   * - `prompt-target/{id}` - Prompt handoff targets
+   * - `prompt-action/{id}` - Built prompt export/share actions
    * 
    * Each value is a CommandConfig object with optional shortcut and hidden fields.
    * 
@@ -1442,11 +1491,42 @@ export interface Config extends BaseConfig {
    *   },
    *   "script/deprecated-tool": {
    *     hidden: true
+   *   },
+   *   "prompt-action/export-file": {
+   *     shortcut: { modifiers: ["meta", "shift"], key: "KeyE" }
+   *   },
+   *   "prompt-action/copy-prompt": {
+   *     shortcut: { modifiers: ["meta", "shift"], key: "KeyC" }
    *   }
    * }
    * ```
    */
   commands?: CommandsConfig;
+
+  /**
+   * User-defined prompt handoff targets shown in the Actions menu.
+   *
+   * Targets can receive prompt text through the `SCRIPT_KIT_PROMPT`
+   * environment variable, or through `{prompt}` / `{promptFile}` placeholders
+   * in `args` and `env`.
+   *
+   * @example
+   * ```typescript
+   * promptTargets: {
+   *   "my-app": {
+   *     title: "My App",
+   *     command: "/usr/local/bin/my-app",
+   *     args: ["--prompt", "{prompt}"]
+   *   }
+   * },
+   * commands: {
+   *   "prompt-target/my-app": {
+   *     shortcut: { modifiers: ["meta", "shift"], key: "KeyM" }
+   *   }
+   * }
+   * ```
+   */
+  promptTargets?: Record<string, PromptTargetConfig>;
 
   /**
    * Canonical command IDs to hide from the launcher main menu.
@@ -1822,6 +1902,8 @@ export const COMMAND_ID_CATEGORIES = [
   "app",
   "script",
   "scriptlet",
+  "prompt-target",
+  "prompt-action",
 ] as const;
 
 export type RuntimeCommandIdCategory = (typeof COMMAND_ID_CATEGORIES)[number];

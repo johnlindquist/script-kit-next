@@ -56,6 +56,7 @@ fn test_config_serialization() {
         ai: None,
         window_management: None,
         commands: None,
+        prompt_targets: None,
         claude_code: None,
         mcp: None,
         hidden_commands: None,
@@ -116,6 +117,7 @@ fn test_config_with_bun_path() {
         ai: None,
         window_management: None,
         commands: None,
+        prompt_targets: None,
         claude_code: None,
         mcp: None,
         hidden_commands: None,
@@ -158,6 +160,7 @@ fn test_config_without_bun_path() {
         ai: None,
         window_management: None,
         commands: None,
+        prompt_targets: None,
         claude_code: None,
         mcp: None,
         hidden_commands: None,
@@ -200,6 +203,7 @@ fn test_config_serialization_skip_none_bun_path() {
         ai: None,
         window_management: None,
         commands: None,
+        prompt_targets: None,
         claude_code: None,
         mcp: None,
         hidden_commands: None,
@@ -247,6 +251,7 @@ fn test_config_serialization_preserves_multiple_modifiers() {
         ai: None,
         window_management: None,
         commands: None,
+        prompt_targets: None,
         claude_code: None,
         mcp: None,
         hidden_commands: None,
@@ -361,6 +366,7 @@ fn test_config_with_empty_modifiers_list() {
         ai: None,
         window_management: None,
         commands: None,
+        prompt_targets: None,
         claude_code: None,
         mcp: None,
         hidden_commands: None,
@@ -409,6 +415,7 @@ fn test_config_key_preservation() {
             ai: None,
             window_management: None,
             commands: None,
+            prompt_targets: None,
             claude_code: None,
             mcp: None,
             hidden_commands: None,
@@ -456,6 +463,7 @@ fn test_config_with_editor() {
         ai: None,
         window_management: None,
         commands: None,
+        prompt_targets: None,
         claude_code: None,
         mcp: None,
         hidden_commands: None,
@@ -503,6 +511,7 @@ fn test_config_without_editor() {
         ai: None,
         window_management: None,
         commands: None,
+        prompt_targets: None,
         claude_code: None,
         mcp: None,
         hidden_commands: None,
@@ -552,6 +561,7 @@ fn test_get_editor_from_config() {
         ai: None,
         window_management: None,
         commands: None,
+        prompt_targets: None,
         claude_code: None,
         mcp: None,
         hidden_commands: None,
@@ -602,6 +612,7 @@ fn test_get_editor_from_env() {
         ai: None,
         window_management: None,
         commands: None,
+        prompt_targets: None,
         claude_code: None,
         mcp: None,
         hidden_commands: None,
@@ -658,6 +669,7 @@ fn test_get_editor_default() {
         ai: None,
         window_management: None,
         commands: None,
+        prompt_targets: None,
         claude_code: None,
         mcp: None,
         hidden_commands: None,
@@ -714,6 +726,7 @@ fn test_config_editor_priority() {
         ai: None,
         window_management: None,
         commands: None,
+        prompt_targets: None,
         claude_code: None,
         mcp: None,
         hidden_commands: None,
@@ -839,6 +852,7 @@ fn test_config_get_padding_custom() {
         ai: None,
         window_management: None,
         commands: None,
+        prompt_targets: None,
         claude_code: None,
         mcp: None,
         hidden_commands: None,
@@ -891,6 +905,7 @@ fn test_config_get_editor_font_size_custom() {
         ai: None,
         window_management: None,
         commands: None,
+        prompt_targets: None,
         claude_code: None,
         mcp: None,
         hidden_commands: None,
@@ -951,6 +966,7 @@ fn test_config_get_terminal_font_size_custom() {
         ai: None,
         window_management: None,
         commands: None,
+        prompt_targets: None,
         claude_code: None,
         mcp: None,
         hidden_commands: None,
@@ -1072,6 +1088,7 @@ fn test_config_serialization_includes_set_ui_settings() {
         ai: None,
         window_management: None,
         commands: None,
+        prompt_targets: None,
         claude_code: None,
         mcp: None,
         hidden_commands: None,
@@ -1190,6 +1207,7 @@ fn test_config_with_builtins() {
         ai: None,
         window_management: None,
         commands: None,
+        prompt_targets: None,
         claude_code: None,
         mcp: None,
         hidden_commands: None,
@@ -1450,6 +1468,7 @@ fn test_config_serialization_includes_set_builtins() {
         ai: None,
         window_management: None,
         commands: None,
+        prompt_targets: None,
         claude_code: None,
         mcp: None,
         hidden_commands: None,
@@ -1612,6 +1631,7 @@ fn test_config_with_process_limits() {
         ai: None,
         window_management: None,
         commands: None,
+        prompt_targets: None,
         claude_code: None,
         mcp: None,
         hidden_commands: None,
@@ -1749,6 +1769,7 @@ fn test_config_serialization_includes_set_process_limits() {
         ai: None,
         window_management: None,
         commands: None,
+        prompt_targets: None,
         claude_code: None,
         mcp: None,
         hidden_commands: None,
@@ -1883,6 +1904,7 @@ fn test_requires_confirmation_user_override_disable() {
         ai: None,
         window_management: None,
         commands: Some(commands),
+        prompt_targets: None,
         claude_code: None,
         mcp: None,
         hidden_commands: None,
@@ -1940,6 +1962,7 @@ fn test_requires_confirmation_user_override_enable() {
         ai: None,
         window_management: None,
         commands: Some(commands),
+        prompt_targets: None,
         claude_code: None,
         mcp: None,
         hidden_commands: None,
@@ -2070,6 +2093,7 @@ fn test_requires_confirmation_with_partial_command_config() {
         ai: None,
         window_management: None,
         commands: Some(commands),
+        prompt_targets: None,
         claude_code: None,
         mcp: None,
         hidden_commands: None,
@@ -2123,6 +2147,18 @@ fn parse_command_id_accepts_all_categories() {
     let (cat, id) = parse_command_id("scriptlet/my-snippet").unwrap();
     assert_eq!(cat, CommandCategory::Scriptlet);
     assert_eq!(id, "my-snippet");
+
+    let (cat, id) = parse_command_id("prompt-target/cmux-codex").unwrap();
+    assert_eq!(cat, CommandCategory::PromptTarget);
+    assert_eq!(id, "cmux-codex");
+
+    let (cat, id) = parse_command_id("prompt-action/export-file").unwrap();
+    assert_eq!(cat, CommandCategory::PromptAction);
+    assert_eq!(id, "export-file");
+
+    let (cat, id) = parse_command_id("prompt-action/copy-prompt").unwrap();
+    assert_eq!(cat, CommandCategory::PromptAction);
+    assert_eq!(id, "copy-prompt");
 }
 
 #[test]
@@ -2147,6 +2183,9 @@ fn is_valid_command_id_accepts_supported_prefixes() {
     assert!(is_valid_command_id("app/com.apple.Safari"));
     assert!(is_valid_command_id("script/hello-world"));
     assert!(is_valid_command_id("scriptlet/my-snippet"));
+    assert!(is_valid_command_id("prompt-target/cmux-codex"));
+    assert!(is_valid_command_id("prompt-action/export-file"));
+    assert!(is_valid_command_id("prompt-action/copy-prompt"));
 }
 
 #[test]
@@ -2168,6 +2207,14 @@ fn build_command_id_constructs_canonical_ids() {
     assert_eq!(
         build_command_id(CommandCategory::App, "com.apple.Safari").unwrap(),
         "app/com.apple.Safari"
+    );
+    assert_eq!(
+        build_command_id(CommandCategory::PromptAction, "export-file").unwrap(),
+        "prompt-action/export-file"
+    );
+    assert_eq!(
+        build_command_id(CommandCategory::PromptAction, "copy-prompt").unwrap(),
+        "prompt-action/copy-prompt"
     );
     assert!(build_command_id(CommandCategory::Script, "").is_err());
 }

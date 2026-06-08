@@ -1007,6 +1007,26 @@ pub struct CommandConfig {
     pub confirmation_required: Option<bool>,
 }
 
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct PromptTargetConfig {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    /// Executable or shell command to launch for this prompt target.
+    pub command: String,
+    /// Arguments passed to `command`. Supports `{prompt}` and `{promptFile}` placeholders.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub args: Vec<String>,
+    /// Working directory override. When omitted, the current prompt cwd is used.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cwd: Option<String>,
+    /// Extra environment variables. Supports `{prompt}` and `{promptFile}` placeholders.
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    pub env: HashMap<String, String>,
+}
+
 // Command ID validation and deeplink helpers are now in `crate::config::command_ids`.
 
 // ============================================
@@ -1583,6 +1603,13 @@ pub struct Config {
     /// Per-command configuration overrides (shortcuts, visibility)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub commands: Option<HashMap<String, CommandConfig>>,
+    /// User-defined prompt handoff targets surfaced as `prompt-target/<id>` actions.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "promptTargets"
+    )]
+    pub prompt_targets: Option<HashMap<String, PromptTargetConfig>>,
     /// Claude Code CLI provider configuration.
     /// Enable and configure the local `claude` CLI as an AI provider.
     #[serde(
@@ -1639,6 +1666,7 @@ impl Default for Config {
             ai: None,               // Will use AiPreferences::default() via getter
             window_management: None, // Will use WindowManagementPreferences::default() via getter
             commands: None,         // No per-command overrides by default
+            prompt_targets: None,   // No custom prompt targets by default
             claude_code: None,      // Will use ClaudeCodeConfig::default() via getter
             mcp: None,              // External MCP servers are opt-in via config.ts
             hidden_commands: None,  // No commands hidden by default

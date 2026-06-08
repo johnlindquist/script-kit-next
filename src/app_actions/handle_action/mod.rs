@@ -1193,6 +1193,157 @@ impl ScriptListApp {
         }
     }
 
+    fn current_main_prompt_handoff_payload(
+        &mut self,
+        adapter_id: crate::ai::agent_prompt_handoff::AgentPromptHandoffAdapterId,
+    ) -> Result<
+        crate::ai::agent_prompt_handoff::AgentPromptHandoffPayload,
+        crate::ai::agent_prompt_handoff::AgentPromptHandoffError,
+    > {
+        let raw = self.filter_text().to_string();
+        if raw.trim().is_empty() {
+            return Err(crate::ai::agent_prompt_handoff::AgentPromptHandoffError::EmptyPrompt);
+        }
+
+        self.set_spine_parse_from_filter_and_cursor(&raw, raw.len());
+        let plan = crate::spine::prompt_plan::build_spine_prompt_plan(&self.spine_parse);
+        let cwd = self
+            .spine_cwd_for_acp_launch()
+            .or_else(|| std::env::current_dir().ok())
+            .unwrap_or_else(|| std::path::PathBuf::from("/"));
+        crate::ai::agent_prompt_handoff::compile_handoff_payload_from_spine_plan(
+            adapter_id,
+            raw,
+            cwd,
+            None,
+            Vec::new(),
+            plan,
+        )
+    }
+
+    pub(crate) fn launch_prompt_target_from_main_prompt(
+        &mut self,
+        adapter_id: crate::ai::agent_prompt_handoff::AgentPromptHandoffAdapterId,
+        cx: &mut Context<Self>,
+    ) -> Result<
+        crate::ai::agent_prompt_handoff::AgentPromptHandoffReceipt,
+        crate::ai::agent_prompt_handoff::AgentPromptHandoffError,
+    > {
+        let payload = self.current_main_prompt_handoff_payload(adapter_id)?;
+        let receipt = crate::ai::agent_prompt_handoff::launch_prompt_handoff(&payload)?;
+        tracing::info!(
+            target: "script_kit::agent_handoff",
+            event = "main_prompt_handoff_succeeded",
+            adapter_id = %receipt.adapter_id,
+            action_id = %receipt.action_id,
+            dry_run = receipt.dry_run,
+            prompt_chars = receipt.prompt_chars,
+            prompt_sha256 = %receipt.prompt_sha256,
+            spawned = receipt.spawned,
+            pid = ?receipt.pid,
+        );
+        cx.notify();
+        Ok(receipt)
+    }
+
+    pub(crate) fn export_prompt_from_main_prompt(
+        &mut self,
+        action: crate::ai::agent_prompt_handoff::AgentPromptActionId,
+        cx: &mut Context<Self>,
+    ) -> Result<
+        crate::ai::agent_prompt_handoff::AgentPromptExportReceipt,
+        crate::ai::agent_prompt_handoff::AgentPromptHandoffError,
+    > {
+        let payload = self.current_main_prompt_handoff_payload(
+            crate::ai::agent_prompt_handoff::AgentPromptHandoffAdapterId::CmuxCodex,
+        )?;
+        let receipt = crate::ai::agent_prompt_handoff::export_prompt(&payload, action)?;
+        tracing::info!(
+            target: "script_kit::agent_handoff",
+            event = "main_prompt_export_succeeded",
+            action_id = %receipt.action_id,
+            dry_run = receipt.dry_run,
+            export_kind = %receipt.export_kind,
+            context_part_count = receipt.context_part_count,
+            prompt_builder_segment_count = receipt.prompt_builder_segment_count,
+            clipboard_written = receipt.clipboard_written,
+            prompt_chars = receipt.prompt_chars,
+            prompt_sha256 = %receipt.prompt_sha256,
+            path = ?receipt.path,
+            url = ?receipt.url,
+        );
+        cx.notify();
+        Ok(receipt)
+    }
+
+    fn handle_main_prompt_handoff_action(
+        &mut self,
+        action_id: &str,
+        cx: &mut Context<Self>,
+    ) -> DispatchOutcome {
+        let Some(adapter_id) = crate::ai::agent_prompt_handoff::adapter_from_action_id(action_id)
+        else {
+            return DispatchOutcome::not_handled();
+        };
+
+        if !matches!(self.current_view, AppView::ScriptList) {
+            return DispatchOutcome::not_handled();
+        }
+
+        match self.launch_prompt_target_from_main_prompt(adapter_id, cx) {
+            Ok(receipt) => {
+                let mut outcome = DispatchOutcome::success();
+                outcome.user_message = Some(format!("Sent prompt to {}", receipt.adapter_id));
+                outcome
+            }
+            Err(error) => DispatchOutcome::error(
+                crate::action_helpers::ERROR_ACTION_FAILED,
+                error.user_message(),
+            ),
+        }
+    }
+
+    fn handle_main_prompt_export_action(
+        &mut self,
+        action_id: &str,
+        cx: &mut Context<Self>,
+    ) -> DispatchOutcome {
+        let Some(prompt_action) =
+            crate::ai::agent_prompt_handoff::prompt_action_from_action_id(action_id)
+        else {
+            return DispatchOutcome::not_handled();
+        };
+
+        if !matches!(self.current_view, AppView::ScriptList) {
+            return DispatchOutcome::not_handled();
+        }
+
+        match self.export_prompt_from_main_prompt(prompt_action, cx) {
+            Ok(receipt) => {
+                let mut outcome = DispatchOutcome::success();
+                outcome.user_message = Some(match receipt.export_kind.as_str() {
+                    "file" => receipt
+                        .path
+                        .as_deref()
+                        .map(|path| format!("Exported prompt to {path}"))
+                        .unwrap_or_else(|| "Exported prompt to file".to_string()),
+                    "gist" => receipt
+                        .url
+                        .as_deref()
+                        .map(|url| format!("Exported prompt to {url}"))
+                        .unwrap_or_else(|| "Exported prompt to gist".to_string()),
+                    "clipboard" => "Copied prompt to clipboard".to_string(),
+                    _ => "Exported prompt".to_string(),
+                });
+                outcome
+            }
+            Err(error) => DispatchOutcome::error(
+                crate::action_helpers::ERROR_ACTION_FAILED,
+                error.user_message(),
+            ),
+        }
+    }
+
     /// Handle action selection from the actions dialog
     fn handle_acp_chat_action(
         &mut self,
@@ -1233,6 +1384,49 @@ impl ScriptListApp {
                     );
                     let mut outcome = DispatchOutcome::success();
                     outcome.user_message = Some("Sent prompt to cmux Codex".to_string());
+                    outcome
+                }
+                Err(error) => DispatchOutcome::error(
+                    crate::action_helpers::ERROR_ACTION_FAILED,
+                    error.user_message(),
+                ),
+            };
+        }
+
+        if let Some(prompt_action) =
+            crate::ai::agent_prompt_handoff::prompt_action_from_action_id(action_id)
+        {
+            let payload = entity.update(cx, |view, cx| {
+                view.current_prompt_handoff_payload(
+                    crate::ai::agent_prompt_handoff::AgentPromptHandoffAdapterId::CmuxCodex,
+                    cx,
+                )
+            });
+            return match payload
+                .and_then(|payload| crate::ai::agent_prompt_handoff::export_prompt(&payload, prompt_action))
+            {
+                Ok(receipt) => {
+                    tracing::info!(
+                        target: "script_kit::agent_handoff",
+                        event = "agent_prompt_export_succeeded",
+                        action_id = %receipt.action_id,
+                        dry_run = receipt.dry_run,
+                        export_kind = %receipt.export_kind,
+                        context_part_count = receipt.context_part_count,
+                        prompt_builder_segment_count = receipt.prompt_builder_segment_count,
+                        clipboard_written = receipt.clipboard_written,
+                        prompt_chars = receipt.prompt_chars,
+                        prompt_sha256 = %receipt.prompt_sha256,
+                        path = ?receipt.path,
+                        url = ?receipt.url,
+                    );
+                    let mut outcome = DispatchOutcome::success();
+                    outcome.user_message = Some(match receipt.export_kind.as_str() {
+                        "file" => "Exported prompt to file".to_string(),
+                        "gist" => "Exported prompt to gist".to_string(),
+                        "clipboard" => "Copied prompt to clipboard".to_string(),
+                        _ => "Exported prompt".to_string(),
+                    });
                     outcome
                 }
                 Err(error) => DispatchOutcome::error(
@@ -2089,8 +2283,10 @@ impl ScriptListApp {
             "Action dispatch started"
         );
 
+        let is_prompt_action =
+            crate::ai::agent_prompt_handoff::is_prompt_action_id(&action_id_stripped);
         let should_transition_to_script_list =
-            should_transition_to_script_list_after_action(&self.current_view);
+            should_transition_to_script_list_after_action(&self.current_view) && !is_prompt_action;
 
         let selected_clipboard_entry = if action_id_stripped.starts_with("clipboard_") {
             self.selected_clipboard_entry()
@@ -2176,19 +2372,34 @@ impl ScriptListApp {
                             if o.was_handled() {
                                 ("scriptlet", o)
                             } else {
-                                let o =
-                                    self.handle_acp_chat_action(&action_id_stripped, window, cx);
+                                let o = self
+                                    .handle_main_prompt_handoff_action(&action_id_stripped, cx);
                                 if o.was_handled() {
-                                    ("acp_chat", o)
+                                    ("main_prompt_handoff", o)
                                 } else {
-                                    // SDK actions as final fallback — thread trace_id from dctx
-                                    (
-                                        "sdk_fallback",
-                                        self.trigger_sdk_action_with_trace(
+                                    let o = self
+                                        .handle_main_prompt_export_action(&action_id_stripped, cx);
+                                    if o.was_handled() {
+                                        ("main_prompt_export", o)
+                                    } else {
+                                        let o = self.handle_acp_chat_action(
                                             &action_id_stripped,
-                                            &dctx.trace_id,
-                                        ),
-                                    )
+                                            window,
+                                            cx,
+                                        );
+                                        if o.was_handled() {
+                                            ("acp_chat", o)
+                                        } else {
+                                            // SDK actions as final fallback — thread trace_id from dctx
+                                            (
+                                                "sdk_fallback",
+                                                self.trigger_sdk_action_with_trace(
+                                                    &action_id_stripped,
+                                                    &dctx.trace_id,
+                                                ),
+                                            )
+                                        }
+                                    }
                                 }
                             }
                         }

@@ -744,7 +744,8 @@ pub fn get_script_context_actions(script: &ScriptInfo) -> Vec<Action> {
 /// Predefined global actions surfaced in the Cmd+K dialog when the focused
 /// row offers no script-context entries (e.g. on the main script list).
 pub fn get_global_actions() -> Vec<Action> {
-    vec![
+    let config = crate::config::load_config();
+    let mut actions = vec![
         Action::new(
             "reload_scripts",
             "Reload Scripts",
@@ -763,7 +764,67 @@ pub fn get_global_actions() -> Vec<Action> {
             Some("Toggle the in-launcher log panel".into()),
             ActionCategory::GlobalOps,
         ),
-    ]
+    ];
+    actions.extend(get_prompt_export_actions(&config));
+    actions.extend(get_prompt_target_actions(&config));
+    actions
+}
+
+fn get_prompt_export_actions(config: &crate::config::Config) -> Vec<Action> {
+    crate::ai::agent_prompt_handoff::builtin_prompt_actions()
+        .into_iter()
+        .map(|action| {
+            let action_id = action.action_id();
+            let icon = match action {
+                crate::ai::agent_prompt_handoff::AgentPromptActionId::CopyPrompt => IconName::Copy,
+                _ => IconName::File,
+            };
+            let shortcut = config
+                .get_command_shortcut(action_id)
+                .map(|shortcut| shortcut.to_shortcut_string());
+            Action::new(
+                action_id,
+                action.title(),
+                Some(action.description().to_string()),
+                ActionCategory::GlobalOps,
+            )
+            .with_shortcut_opt(shortcut)
+            .with_icon(icon)
+            .with_section("Export")
+        })
+        .collect()
+}
+
+fn get_prompt_target_actions(config: &crate::config::Config) -> Vec<Action> {
+    crate::ai::agent_prompt_handoff::all_prompt_targets(config)
+        .into_iter()
+        .map(|target| {
+            let action_id = target.action_id();
+            let description = match &target {
+                crate::ai::agent_prompt_handoff::AgentPromptHandoffAdapterId::CmuxCodex => {
+                    Some("Open cmux with Codex using the current prompt".to_string())
+                }
+                crate::ai::agent_prompt_handoff::AgentPromptHandoffAdapterId::Command(target) => {
+                    target
+                        .description
+                        .clone()
+                        .or_else(|| Some(format!("Send the current prompt to {}", target.command)))
+                }
+            };
+            let shortcut = config
+                .get_command_shortcut(&action_id)
+                .map(|shortcut| shortcut.to_shortcut_string());
+            Action::new(
+                action_id,
+                format!("Send Prompt to {}", target.title()),
+                description,
+                ActionCategory::GlobalOps,
+            )
+            .with_shortcut_opt(shortcut)
+            .with_icon(IconName::ArrowRight)
+            .with_section("Handoff")
+        })
+        .collect()
 }
 
 #[allow(dead_code)] // Used by the binary ACP actions surface.
@@ -793,15 +854,17 @@ pub(crate) fn agent_chat_switch_profile_id_from_action(action_id: &str) -> Optio
 /// Actions available in the ACP chat view (Cmd+K menu).
 #[allow(dead_code)]
 pub fn get_acp_chat_actions() -> Vec<Action> {
-    vec![
-        Action::new(
-            crate::ai::agent_prompt_handoff::CMUX_CODEX_ACTION_ID,
-            "Send Prompt to cmux Codex",
-            Some("Open cmux with Codex using the current Agent Chat prompt".to_string()),
-            ActionCategory::ScriptContext,
-        )
-        .with_icon(IconName::ArrowRight)
-        .with_section("Handoff"),
+    let config = crate::config::load_config();
+    let mut actions = get_prompt_export_actions(&config)
+        .into_iter()
+        .chain(get_prompt_target_actions(&config))
+        .into_iter()
+        .map(|mut action| {
+            action.category = ActionCategory::ScriptContext;
+            action
+        })
+        .collect::<Vec<_>>();
+    actions.extend(vec![
         // ── Response ─────────────────────────────────────────
         Action::new(
             "acp_copy_last_response",
@@ -973,7 +1036,8 @@ pub fn get_acp_chat_actions() -> Vec<Action> {
         .with_shortcut("\u{2318}W")
         .with_icon(IconName::Close)
         .with_section("Window"),
-    ]
+    ]);
+    actions
 }
 
 pub(crate) fn get_focused_text_agent_chat_actions(expanded: bool) -> Vec<Action> {
