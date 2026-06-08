@@ -94,6 +94,79 @@ fn main_window_preflight_exposes_selection_key_and_frame_fingerprint() {
 }
 
 #[test]
+fn grouped_cache_store_preserves_selectable_bounds_contract() {
+    let app_state =
+        fs::read_to_string("src/main_sections/app_state.rs").expect("read app_state.rs");
+    let body = app_state
+        .split("fn store_grouped_results(")
+        .nth(1)
+        .and_then(|rest| rest.split("fn mark_apps_loaded").next())
+        .expect("store_grouped_results body should exist");
+
+    assert!(
+        body.contains("Self::is_selectable_result(result)"),
+        "store_grouped_results must compute displayed selectable bounds through the shared selectable-result predicate"
+    );
+    assert!(
+        !body.contains("if matches!(grouped_item, GroupedListItem::Item(_))"),
+        "store_grouped_results must not treat every item row as selectable"
+    );
+}
+
+#[test]
+fn preflight_visible_count_uses_selectable_result_count() {
+    let app_state =
+        fs::read_to_string("src/main_sections/app_state.rs").expect("read app_state.rs");
+    let build =
+        fs::read_to_string("src/main_window_preflight/build.rs").expect("read preflight builder");
+
+    assert!(
+        app_state.contains("fn grouped_selectable_result_count(&self) -> usize")
+            && app_state.contains("fn grouped_selectable_search_results("),
+        "MainMenuResultCacheState must expose selectable result helpers"
+    );
+    assert!(
+        build.contains("grouped_selectable_result_count()"),
+        "main-window preflight visible_result_count must use selectable count, not raw item count"
+    );
+    assert!(
+        build.contains("grouped_selectable_search_results()")
+            && build.contains("if !row.is_selectable"),
+        "preflight visible keys/results must exclude non-selectable SpineProjection placeholder rows"
+    );
+}
+
+#[test]
+fn root_file_frame_key_latches_visible_generation_and_loading() {
+    let app_state =
+        fs::read_to_string("src/main_sections/app_state.rs").expect("read app_state.rs");
+    let filtering = fs::read_to_string("src/app_impl/filtering_cache.rs")
+        .expect("read src/app_impl/filtering_cache.rs");
+
+    for required in [
+        "pub(crate) search_generation: u64",
+        "pub(crate) recent_file_revision: u64",
+        "pub(crate) visible_loading: bool",
+    ] {
+        assert!(
+            app_state.contains(required),
+            "RootFileFrameKey should include `{required}`"
+        );
+    }
+
+    for required in [
+        "search_generation: self.root_file_search_generation",
+        "recent_file_revision: self.root_recent_file_revision",
+        "visible_loading: self.root_file_search_loading",
+    ] {
+        assert!(
+            filtering.contains(required),
+            "root_file_frame_for_current_query should latch `{required}`"
+        );
+    }
+}
+
+#[test]
 fn preflight_visible_results_expose_search_safety_roles() {
     let types =
         fs::read_to_string("src/main_window_preflight/types.rs").expect("read preflight types");

@@ -83,7 +83,7 @@ fn visible_result_keys(app: &crate::ScriptListApp) -> Vec<String> {
         AppView::ScriptList if app.menu_syntax_capture_form_owns_input() => Vec::new(),
         AppView::ScriptList => app
             .main_menu_result_caches
-            .grouped_search_results()
+            .grouped_selectable_search_results()
             .filter_map(|result| result.stable_selection_key())
             .collect(),
         AppView::BrowserHistoryView { filter, .. } => {
@@ -267,6 +267,12 @@ fn visible_result_receipts(app: &crate::ScriptListApp) -> Vec<MainWindowPrefligh
             let result = app
                 .main_menu_result_caches
                 .search_result_for_flat_index(*flat_index)?;
+            if matches!(
+                result,
+                SearchResult::SpineProjection(row) if !row.is_selectable
+            ) {
+                return None;
+            }
             Some(MainWindowPreflightVisibleResult {
                 visible_rank: 0,
                 grouped_index,
@@ -473,7 +479,9 @@ pub(crate) fn build_main_window_preflight_receipt(
         visible_results,
         visible_result_key_fingerprint: visible_result_keys(app).join("|"),
         visible_row_fingerprint: visible_row_fingerprint(app),
-        visible_result_count: app.main_menu_result_caches.grouped_search_results().count(),
+        visible_result_count: app
+            .main_menu_result_caches
+            .grouped_selectable_result_count(),
         root_passive_frame: build_root_passive_frame_receipt(app),
         enter_action,
         tab_action: build_tab_action(app),

@@ -24,6 +24,10 @@
 const PROMPT_HANDLER: &str = include_str!("../src/prompt_handler/mod.rs");
 const FILTERING_CACHE: &str = include_str!("../src/app_impl/filtering_cache.rs");
 
+fn normalized(source: &str) -> String {
+    source.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
 #[test]
 fn scriptlist_choice_count_includes_skills() {
     // The exact expression — if `+ self.skills.len()` is dropped during a
@@ -36,9 +40,10 @@ fn scriptlist_choice_count_includes_skills() {
     // search continue to pass because they don't exercise getState.
     // This contract ties the sum's shape to the test file so the drop
     // is caught at build time.
+    let prompt_handler = normalized(PROMPT_HANDLER);
     assert!(
-        PROMPT_HANDLER.contains(
-            "self.scripts.len()\n                                + self.scriptlets.len()\n                                + self.builtin_entries.len()\n                                + self.apps.len()\n                                + self.skills.len(),"
+        prompt_handler.contains(
+            "self.scripts.len() + self.scriptlets.len() + self.builtin_entries.len() + self.apps.len() + self.skills.len(),"
         ),
         "src/prompt_handler/mod.rs: the `choiceCount` sum in the \
          ScriptList arm of `state_for_script_list` (around line 1953) \
@@ -64,15 +69,16 @@ fn search_entry_point_takes_exactly_five_collections() {
     // windows, fallbacks) as a search input would naturally update this
     // call site but might forget the sibling `choiceCount` sum. The
     // failure message here points them at the sum explicitly.
+    let filtering_cache = normalized(FILTERING_CACHE);
     assert!(
-        FILTERING_CACHE.contains(
-            "scripts::fuzzy_search_unified_all_with_skills(\n            &self.scripts,\n            &self.scriptlets,\n            &self.builtin_entries,\n            &self.apps,\n            &self.skills,\n            filter_text,\n        )"
+        filtering_cache.contains(
+            "scripts::fuzzy_search_unified_all_with_skills( &self.scripts, &self.scriptlets, &self.builtin_entries, &self.apps, &self.skills, search_text, )"
         ),
         "src/app_impl/filtering_cache.rs: `recompute_filtered_results` \
          must call `fuzzy_search_unified_all_with_skills` with exactly \
          the 5 collections `&self.scripts, &self.scriptlets, \
          &self.builtin_entries, &self.apps, &self.skills`, followed by \
-         `filter_text`. If a 6th collection is added here, also update \
+         normalized search text. If a 6th collection is added here, also update \
          the `choiceCount` sum in `src/prompt_handler/mod.rs` (around \
          line 1953, in the `ScriptList` arm of the `match &self.current_view` \
          block) to include it — otherwise the \

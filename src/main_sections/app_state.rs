@@ -105,6 +105,9 @@ pub(crate) struct RootFileFrameKey {
     pub(crate) source_filters: crate::menu_syntax::RootUnifiedSourceFilterSet,
     pub(crate) mode: Option<crate::file_search::RootFileSectionMode>,
     pub(crate) options: crate::file_search::RootFileSectionOptions,
+    pub(crate) search_generation: u64,
+    pub(crate) recent_file_revision: u64,
+    pub(crate) visible_loading: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -365,6 +368,22 @@ impl MainMenuResultCacheState {
             })
     }
 
+    fn is_selectable_result(result: &scripts::SearchResult) -> bool {
+        !matches!(
+            result,
+            scripts::SearchResult::SpineProjection(row) if !row.is_selectable
+        )
+    }
+
+    fn grouped_selectable_search_results(&self) -> impl Iterator<Item = &scripts::SearchResult> {
+        self.grouped_search_results()
+            .filter(|result| Self::is_selectable_result(result))
+    }
+
+    fn grouped_selectable_result_count(&self) -> usize {
+        self.grouped_selectable_search_results().count()
+    }
+
     fn grouped_index_for_stable_selection_key(&self, key: &str) -> Option<usize> {
         self.cached_grouped_items
             .iter()
@@ -422,12 +441,19 @@ impl MainMenuResultCacheState {
         let mut first_selectable_index = None;
         let mut last_selectable_index = None;
         for (index, grouped_item) in display_items.iter().enumerate() {
-            if matches!(grouped_item, GroupedListItem::Item(_)) {
-                if first_selectable_index.is_none() {
-                    first_selectable_index = Some(index);
-                }
-                last_selectable_index = Some(index);
+            let GroupedListItem::Item(result_idx) = grouped_item else {
+                continue;
+            };
+            let Some(result) = flat_results.get(*result_idx) else {
+                continue;
+            };
+            if !Self::is_selectable_result(result) {
+                continue;
             }
+            if first_selectable_index.is_none() {
+                first_selectable_index = Some(index);
+            }
+            last_selectable_index = Some(index);
         }
 
         self.cached_grouped_first_selectable_index = first_selectable_index;

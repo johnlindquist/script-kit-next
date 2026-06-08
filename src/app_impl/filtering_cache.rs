@@ -810,6 +810,9 @@ impl ScriptListApp {
             source_filters,
             mode: self.root_file_search_mode,
             options: root_file_options,
+            search_generation: self.root_file_search_generation,
+            recent_file_revision: self.root_recent_file_revision,
+            visible_loading: self.root_file_search_loading,
         };
 
         if let Some(frame) = self.root_file_frame.as_ref() {
