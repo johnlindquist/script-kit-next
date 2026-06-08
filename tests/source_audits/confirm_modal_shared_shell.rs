@@ -126,3 +126,22 @@ fn sdk_confirm_api_stays_single_word_and_avoids_modal_namespace() {
         "inventory must track the script-facing SDK confirm route"
     );
 }
+
+#[test]
+fn destructive_confirm_safety_scenario_uses_dry_run_confirm_fixture() {
+    let scenario = read("scripts/agentic/scenario.ts");
+
+    assert!(
+        scenario.contains("runDestructiveConfirmModalSafetyStressScenario")
+            && scenario.contains("dryRunOnlyRequired")
+            && scenario.contains("type: \"openConfirmPrompt\"")
+            && scenario.contains("agentic-destructive-confirm-open"),
+        "destructive confirm safety stress must drive a dry-run confirm fixture instead of staying a static missing-receipt stub"
+    );
+    assert!(
+        scenario.contains("destructiveCommandExecuted: false")
+            && scenario.contains("systemCommandRequested: false")
+            && scenario.contains("trashMutationRequested: false"),
+        "dry-run destructive confirm proof must explicitly guard against real destructive commands"
+    );
+}

@@ -21,6 +21,7 @@ modals for this goal.
 | Remove/delete script | `src/app_actions/handle_action/scripts.rs` | Entity-owned parent confirm helper before destructive action. | Shared popup shell via `src/confirm/window.rs`; representative runtime proof pending. |
 | Move file to trash | `src/app_actions/handle_action/files.rs` | `confirm_with_parent_dialog` with destructive options. | Shared popup shell via `src/confirm/window.rs`; representative runtime proof pending. |
 | Clipboard bulk delete / clear unpinned | `src/app_actions/handle_action/clipboard.rs` | `confirm_with_parent_dialog` with destructive options. | Shared popup shell via `src/confirm/window.rs`; representative runtime proof pending. |
+| Destructive dry-run safety fixture | `scripts/agentic/scenario.ts`, `src/stdin_commands/mod.rs` | `destructive-confirm-modal-safety-stress --dry-run-only` opens a deterministic `openConfirmPrompt` fixture and refuses non-dry-run execution. | Source guard added; runtime receipt currently fails because the app process exits after the fixture open in this scenario path. Receipt: `/tmp/confirm-modal-destructive-safety.json`. |
 | Built-in confirmation gate | `src/config/defaults.rs`, `src/config/types.rs`, execution/handler confirmation path | Command config requires confirmation for destructive built-ins. | Route audit pending in later iteration. |
 | SDK `confirm` | `scripts/kit-sdk.ts`, `src/execute_script/mod.rs`, `src/prompt_handler/mod.rs`, `src/stdin_commands/mod.rs` | SDK exposes single-word `confirm()` and sends protocol messages with `type: 'confirm'`. | Source guard added to prevent `modal.confirm` drift; host-route proof pending. |
 | `openConfirmPrompt` stdin fixture | `src/stdin_commands/mod.rs` | Deterministic fixture for DevTools/runtime confirm proof. | Runtime proof captured in `/tmp/confirm-modal-confirm-elements.json`, `/tmp/confirm-modal-confirm-keyboard.json`, and `/tmp/confirm-modal-confirm-escape.json`. |
@@ -80,3 +81,13 @@ Captured in session `confirm-modal-proof` against
 - Guarded behavior:
   - `scripts/kit-sdk.ts` retains `ConfirmConfig`, global `confirm()`, and protocol `type: 'confirm'`.
   - `scripts/kit-sdk.ts` and `.goals/modal-consistency-design-system.md` must not introduce `modal.confirm`.
+
+## Iteration 3 Destructive Dry-Run Proof
+
+- Source contract:
+  - `./scripts/agentic/agent-cargo.sh test --test source_audits confirm_modal_shared_shell`
+- Runtime attempt:
+  - `SCRIPT_KIT_GPUI_BINARY=/Users/johnlindquist/dev/script-kit-gpui/target-agent/pools/agent-debug/debug/script-kit-gpui bun scripts/agentic/index.ts destructive-confirm-modal-safety-stress --session confirm-modal-destructive-proof --dry-run-only --json > /tmp/confirm-modal-destructive-safety.json`
+- Current result:
+  - The scenario now starts the app, waits for readiness, attempts to open/parse `openConfirmPrompt`, and fail-closes with explicit `destructiveCommandExecuted=false`, `systemCommandRequested=false`, and `trashMutationRequested=false`.
+  - Runtime proof is still blocked: the app process exits before `getState` can inspect the opened dry-run confirm. The receipt records `parseOutcome=timeout` followed by `app_process_dead_before_rpc`.

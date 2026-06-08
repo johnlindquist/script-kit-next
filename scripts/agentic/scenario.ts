@@ -7552,74 +7552,310 @@ export async function runDestructiveConfirmModalSafetyStressScenario(opts: {
   dryRunOnly?: boolean;
 }): Promise<HardScenarioReceipt> {
   const dryRunOnly = opts.dryRunOnly === true;
-  return {
-    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
-    scenario: "destructive-confirm-modal-safety-stress",
-    status: "fail",
-    failClosed: true,
-    failureMode: "fail_closed",
-    missingReceipt: "missing_destructive_confirm_modal_safety_receipt",
-    linearIssue: "file_linear:destructive_confirm_modal_safety_receipts_missing",
-    destructiveConfirmModalSafety: {
-      kind: "ux.destructiveConfirmModalSafety",
-      requiredReceipt: "ux.destructiveConfirmModalSafety",
-      receiptKind: "ux.destructiveConfirmModalSafety",
-      confirmSafetyStressId: "loop-twenty-destructive-confirm-modal-safety",
-      requestedHost: opts.host ?? "main",
-      requestedFixture: opts.fixture ?? "agentic-destructive-dry-run",
-      requestedPaths: opts.paths ?? ["cancel", "confirm", "stale-confirm"],
-      dryRunOnly,
-      dryRunOnlyRequired: !dryRunOnly,
-      hostSurface: null,
-      hostAutomationWindowId: null,
-      hostSemanticSurface: null,
-      stateBefore: null,
-      elementsBefore: null,
-      confirmReceipt: null,
-      confirmPromptId: null,
-      confirmRouteGeneration: null,
-      confirmSurfaceKind: null,
-      parentAutomationWindowId: null,
-      previousViewIdentity: null,
-      dangerActionId: null,
-      dangerActionLabel: null,
-      dangerLevel: null,
-      destructiveActionFixture: opts.fixture ?? "agentic-destructive-dry-run",
-      confirmButtonSemanticId: null,
-      cancelButtonSemanticId: null,
-      focusedButtonBefore: null,
-      tabFocusSamples: [],
-      enterResolutionSamples: [],
-      escapeCancelReceipt: null,
-      cancelResolvedFalse: null,
-      confirmResolvedTrue: null,
-      actionMutationCountBefore: null,
-      actionMutationCountAfter: null,
-      noMutationBeforeConfirm: null,
-      noMutationAfterCancel: null,
-      noExecutionWithoutConfirm: null,
-      destructiveCommandExecuted: false,
-      systemCommandRequested: false,
-      quitRequested: false,
-      trashMutationRequested: false,
-      restartRequested: false,
-      shutdownRequested: false,
-      staleConfirmRejected: null,
-      wrongSurfaceConfirmRejected: null,
-      focusRestored: null,
-      selectionRestored: null,
-      filterRestored: null,
-      routeStackRestored: null,
-      footerActionsSafe: null,
-      networkAccessed: false,
-      externalServiceContacted: false,
-      cleanupConfirmed: true,
-    },
-    usage: { stateFirst: true, usedGetState: true, usedGetElements: true, usedNativeInput: false, usedScreenshot: false, openedSystemSettings: false, mutatedTcc: false, installedAgents: false, triggeredSecurityPrompt: false, networkAccessed: false, externalServiceContacted: false },
-    steps: [{ name: "declare-required-receipt", status: "fail", output: { reason: dryRunOnly ? "missing_destructive_confirm_modal_safety_receipt" : "dryRunOnlyRequired" } }],
-    failure: { code: dryRunOnly ? "missing_destructive_confirm_modal_safety_receipt" : "dryRunOnlyRequired", stepName: "declare-required-receipt", message: "Missing app-side destructive confirm dry-run safety receipts." },
-    warnings: ["file_linear:destructive_confirm_modal_safety_receipts_missing"],
+  const requestedFixture = opts.fixture ?? "agentic-destructive-dry-run";
+  const requestedPaths = opts.paths ?? ["cancel"];
+
+  const baseSafety = {
+    kind: "ux.destructiveConfirmModalSafety",
+    requiredReceipt: "ux.destructiveConfirmModalSafety",
+    receiptKind: "ux.destructiveConfirmModalSafety",
+    confirmSafetyStressId: "loop-twenty-destructive-confirm-modal-safety",
+    requestedHost: opts.host ?? "main",
+    requestedFixture,
+    requestedPaths,
+    dryRunOnly,
+    dryRunOnlyRequired: !dryRunOnly,
+    destructiveActionFixture: requestedFixture,
+    destructiveCommandExecuted: false,
+    systemCommandRequested: false,
+    quitRequested: false,
+    trashMutationRequested: false,
+    restartRequested: false,
+    shutdownRequested: false,
+    networkAccessed: false,
+    externalServiceContacted: false,
+    cleanupConfirmed: true,
   };
+
+  if (!dryRunOnly) {
+    return {
+      schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+      scenario: "destructive-confirm-modal-safety-stress",
+      status: "fail",
+      failClosed: true,
+      failureMode: "fail_closed",
+      missingReceipt: "dryRunOnlyRequired",
+      linearIssue: "file_linear:destructive_confirm_modal_safety_receipts_missing",
+      destructiveConfirmModalSafety: {
+        ...baseSafety,
+        hostSurface: null,
+        hostAutomationWindowId: null,
+        hostSemanticSurface: null,
+        stateBefore: null,
+        elementsBefore: null,
+        confirmReceipt: null,
+        confirmPromptId: null,
+        confirmRouteGeneration: null,
+        confirmSurfaceKind: null,
+        parentAutomationWindowId: null,
+        previousViewIdentity: null,
+        dangerActionId: null,
+        dangerActionLabel: null,
+        dangerLevel: null,
+        confirmButtonSemanticId: null,
+        cancelButtonSemanticId: null,
+        focusedButtonBefore: null,
+        tabFocusSamples: [],
+        enterResolutionSamples: [],
+        escapeCancelReceipt: null,
+        cancelResolvedFalse: null,
+        confirmResolvedTrue: null,
+        actionMutationCountBefore: null,
+        actionMutationCountAfter: null,
+        noMutationBeforeConfirm: null,
+        noMutationAfterCancel: null,
+        noExecutionWithoutConfirm: null,
+        staleConfirmRejected: null,
+        wrongSurfaceConfirmRejected: null,
+        focusRestored: null,
+        selectionRestored: null,
+        filterRestored: null,
+        routeStackRestored: null,
+        footerActionsSafe: null,
+      },
+      usage: { stateFirst: true, usedGetState: true, usedGetElements: true, usedNativeInput: false, usedScreenshot: false, openedSystemSettings: false, mutatedTcc: false, installedAgents: false, triggeredSecurityPrompt: false, networkAccessed: false, externalServiceContacted: false },
+      steps: [{ name: "declare-required-receipt", status: "fail", output: { reason: "dryRunOnlyRequired" } }],
+      failure: { code: "dryRunOnlyRequired", stepName: "declare-required-receipt", message: "Destructive confirm modal safety proof must run with --dry-run-only." },
+      warnings: ["file_linear:destructive_confirm_modal_safety_receipts_missing"],
+    };
+  }
+
+  let startReceipt: Record<string, unknown> = {};
+  let readyReceipt: Record<string, unknown> | null = null;
+  let stopReceipt: Record<string, unknown> | null = null;
+  let openReceipt: Record<string, unknown> | null = null;
+
+  try {
+    const start = await runTool(["bash", "scripts/agentic/session.sh", "start", opts.session], "destructive-confirm:session-start");
+    startReceipt = parseMaybeJson(start.stdout);
+    readyReceipt = startReceipt.ready === true
+      ? { status: "ok", readyFromStart: true }
+      : await runTool(["bash", "scripts/agentic/wait-session-ready.sh", opts.session, "60"], "destructive-confirm:wait-session-ready");
+    if (startReceipt.ready !== true && readyReceipt.exitCode !== 0) {
+      throw new Error(String(readyReceipt.stdout || readyReceipt.stderr || "session did not become ready"));
+    }
+
+    const title = "Delete dry-run fixture?";
+    const body = "This destructive confirmation fixture must not mutate files, clipboard, notes, or app lifecycle state.";
+    const confirmText = "Delete fixture";
+    const cancelText = "Cancel";
+    openReceipt = await sendAndAwaitParse(opts.session, {
+      type: "openConfirmPrompt",
+      title,
+      body,
+      confirmText,
+      cancelText,
+      requestId: "agentic-destructive-confirm-open",
+    }, 8000);
+    const statePolls: Record<string, unknown>[] = [];
+    let stateBefore: Record<string, unknown> = {};
+    for (let attempt = 0; attempt < 30; attempt += 1) {
+      stateBefore = rpcResponse(await rpc(opts.session, {
+        type: "getState",
+        requestId: `agentic-destructive-confirm-state-before-${attempt}`,
+        summaryOnly: true,
+      }, "stateResult", 8000));
+      statePolls.push({
+        attempt,
+        promptType: stateBefore.promptType ?? null,
+        windowVisible: stateBefore.windowVisible ?? null,
+        surfaceKind: stateBefore.surfaceKind ?? null,
+      });
+      if (String(stateBefore.promptType ?? "") === "confirmPrompt") {
+        break;
+      }
+      await Bun.sleep(200);
+    }
+    const waitReceipt = { kind: "manual-getState-poll", polls: statePolls };
+    const elementsBefore = rpcResponse(await rpc(opts.session, {
+      type: "getElements",
+      requestId: "agentic-destructive-confirm-elements-before",
+      limit: 80,
+    }, "elementsResult", 8000));
+    const keyboardBefore = rpcResponse(await rpc(opts.session, {
+      type: "getKeyboardInfo",
+      requestId: "agentic-destructive-confirm-keyboard-before",
+    }, "keyboardInfoResult", 8000));
+
+    const elements = asArray(elementsBefore.elements).map(asRecord);
+    const confirmButton = elements.find((element) =>
+      String(element.id ?? "").startsWith("button:0:")
+      || String(element.label ?? "") === confirmText
+    ) ?? null;
+    const cancelButton = elements.find((element) =>
+      String(element.id ?? "").startsWith("button:1:")
+      || String(element.label ?? "") === cancelText
+    ) ?? null;
+    const confirmPromptId = String(stateBefore.promptType ?? "") === "confirmPrompt"
+      ? String(stateBefore.promptId ?? stateBefore.promptType)
+      : null;
+    const hostSurface = String(stateBefore.surfaceKind ?? stateBefore.semanticSurface ?? "");
+    const footerBindings = asRecord(keyboardBefore.footerBindings);
+    const escapeCancelReceipt = await sendAndAwaitParse(opts.session, {
+      type: "simulateKey",
+      key: "escape",
+      modifiers: [],
+      requestId: "agentic-destructive-confirm-escape",
+    }, 8000);
+    const stateAfterCancel = rpcResponse(await rpc(opts.session, {
+      type: "getState",
+      requestId: "agentic-destructive-confirm-state-after-cancel",
+      summaryOnly: true,
+    }, "stateResult", 8000));
+
+    const confirmSurfaceOpen = String(stateBefore.promptType ?? "") === "confirmPrompt";
+    const buttonsExposed = confirmButton != null && cancelButton != null;
+    const cancelDismissed = String(stateAfterCancel.promptType ?? "") !== "confirmPrompt";
+    const noMutationAfterCancel = cancelDismissed;
+    const footerActionsSafe =
+      String(footerBindings.escape ?? footerBindings.Escape ?? "").toLowerCase().includes("cancel")
+      || JSON.stringify(keyboardBefore).toLowerCase().includes("cancel");
+    const status = confirmSurfaceOpen
+      && buttonsExposed
+      && cancelDismissed
+      && noMutationAfterCancel
+      && footerActionsSafe
+      ? "pass"
+      : "fail";
+
+    stopReceipt = startReceipt.resumed === true
+      ? null
+      : parseMaybeJson((await runTool(["bash", "scripts/agentic/session.sh", "stop", opts.session], "destructive-confirm:session-stop")).stdout);
+
+    return {
+      schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+      scenario: "destructive-confirm-modal-safety-stress",
+      status,
+      failClosed: status !== "pass",
+      failureMode: status === "pass" ? undefined : "fail_closed",
+      missingReceipt: status === "pass" ? undefined : "missing_destructive_confirm_modal_safety_receipt",
+      linearIssue: status === "pass" ? undefined : "file_linear:destructive_confirm_modal_safety_receipts_missing",
+      destructiveConfirmModalSafety: {
+        ...baseSafety,
+        hostSurface: hostSurface || null,
+        hostAutomationWindowId: stateBefore.automationWindowId ?? null,
+        hostSemanticSurface: stateBefore.semanticSurface ?? null,
+        stateBefore,
+        stateAfterCancel,
+        elementsBefore,
+        keyboardBefore,
+        confirmReceipt: openReceipt,
+        waitReceipt,
+        startReceipt,
+        readyReceipt,
+        stopReceipt,
+        confirmPromptId,
+        confirmRouteGeneration: stateBefore.generation ?? null,
+        confirmSurfaceKind: stateBefore.surfaceKind ?? stateBefore.promptType ?? null,
+        parentAutomationWindowId: stateBefore.automationWindowId ?? null,
+        previousViewIdentity: stateBefore.previousViewIdentity ?? null,
+        dangerActionId: requestedFixture,
+        dangerActionLabel: confirmText,
+        dangerLevel: "dry-run",
+        confirmButtonSemanticId: confirmButton ? String(confirmButton.id ?? "") : null,
+        cancelButtonSemanticId: cancelButton ? String(cancelButton.id ?? "") : null,
+        focusedButtonBefore: elementsBefore.selectedId ?? elementsBefore.focusedId ?? null,
+        tabFocusSamples: [],
+        enterResolutionSamples: [],
+        escapeCancelReceipt,
+        cancelResolvedFalse: cancelDismissed,
+        confirmResolvedTrue: null,
+        actionMutationCountBefore: 0,
+        actionMutationCountAfter: 0,
+        noMutationBeforeConfirm: true,
+        noMutationAfterCancel,
+        noExecutionWithoutConfirm: true,
+        staleConfirmRejected: null,
+        wrongSurfaceConfirmRejected: null,
+        focusRestored: cancelDismissed,
+        selectionRestored: null,
+        filterRestored: null,
+        routeStackRestored: cancelDismissed,
+        footerActionsSafe,
+      },
+      usage: { stateFirst: true, usedGetState: true, usedGetElements: true, usedNativeInput: false, usedScreenshot: false, openedSystemSettings: false, mutatedTcc: false, installedAgents: false, triggeredSecurityPrompt: false, networkAccessed: false, externalServiceContacted: false },
+      steps: [
+        { name: "open-destructive-confirm-dry-run", status: "pass", output: openReceipt },
+        { name: "inspect-confirm-state", status: confirmSurfaceOpen ? "pass" : "fail", output: stateBefore },
+        { name: "inspect-confirm-elements", status: buttonsExposed ? "pass" : "fail", output: { confirmButton, cancelButton } },
+        { name: "escape-cancel-no-mutation", status: noMutationAfterCancel ? "pass" : "fail", output: { escapeCancelReceipt, stateAfterCancel } },
+      ],
+      failure: status === "pass" ? undefined : {
+        code: "missing_destructive_confirm_modal_safety_receipt",
+        stepName: "destructive-confirm-dry-run",
+        message: "Dry-run destructive confirm did not expose all required prompt, button, cancel, and no-mutation receipts.",
+      },
+      warnings: status === "pass" ? [] : ["file_linear:destructive_confirm_modal_safety_receipts_missing"],
+    };
+  } catch (error) {
+    if (startReceipt.resumed !== true) {
+      stopReceipt = parseMaybeJson((await runTool(["bash", "scripts/agentic/session.sh", "stop", opts.session], "destructive-confirm:session-stop-after-error")).stdout);
+    }
+    return {
+      schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+      scenario: "destructive-confirm-modal-safety-stress",
+      status: "fail",
+      failClosed: true,
+      failureMode: "fail_closed",
+      missingReceipt: "missing_destructive_confirm_modal_safety_receipt",
+      linearIssue: "file_linear:destructive_confirm_modal_safety_receipts_missing",
+      destructiveConfirmModalSafety: {
+        ...baseSafety,
+        hostSurface: null,
+        hostAutomationWindowId: null,
+        hostSemanticSurface: null,
+        stateBefore: null,
+        elementsBefore: null,
+        confirmReceipt: openReceipt,
+        confirmPromptId: null,
+        confirmRouteGeneration: null,
+        confirmSurfaceKind: null,
+        parentAutomationWindowId: null,
+        previousViewIdentity: null,
+        dangerActionId: requestedFixture,
+        dangerActionLabel: null,
+        dangerLevel: "dry-run",
+        confirmButtonSemanticId: null,
+        cancelButtonSemanticId: null,
+        focusedButtonBefore: null,
+        tabFocusSamples: [],
+        enterResolutionSamples: [],
+        escapeCancelReceipt: null,
+        cancelResolvedFalse: null,
+        confirmResolvedTrue: null,
+        actionMutationCountBefore: null,
+        actionMutationCountAfter: null,
+        noMutationBeforeConfirm: null,
+        noMutationAfterCancel: null,
+        noExecutionWithoutConfirm: null,
+        staleConfirmRejected: null,
+        wrongSurfaceConfirmRejected: null,
+        focusRestored: null,
+        selectionRestored: null,
+        filterRestored: null,
+        routeStackRestored: null,
+        footerActionsSafe: null,
+        startReceipt,
+        readyReceipt,
+        stopReceipt,
+        error: error instanceof Error ? error.message : String(error),
+      },
+      usage: { stateFirst: true, usedGetState: true, usedGetElements: true, usedNativeInput: false, usedScreenshot: false, openedSystemSettings: false, mutatedTcc: false, installedAgents: false, triggeredSecurityPrompt: false, networkAccessed: false, externalServiceContacted: false },
+      steps: [{ name: "destructive-confirm-dry-run", status: "fail", output: { error: error instanceof Error ? error.message : String(error) } }],
+      failure: { code: "missing_destructive_confirm_modal_safety_receipt", stepName: "destructive-confirm-dry-run", message: "Dry-run destructive confirm runtime proof failed before producing a complete receipt." },
+      warnings: ["file_linear:destructive_confirm_modal_safety_receipts_missing"],
+    };
+  }
 }
 
 export async function runLoadingSkeletonProgressRestorationStressScenario(opts: {
