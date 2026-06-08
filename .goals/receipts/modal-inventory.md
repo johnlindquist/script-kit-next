@@ -38,6 +38,22 @@ modals for this goal.
 | Browse panels | `src/notes/window/render_overlays.rs` and related owners | Panel overlays, not confirm/deny interactions. |
 | Editor choice popup | `src/editor/mod.rs` | Choice completion popup, not a confirm/deny modal. |
 
+## Window And Button Anatomy
+
+- Confirm parent popups and actions dialogs both use GPUI popup windows:
+  confirm popups are registered for automation as `PromptPopup` with semantic
+  surface `confirmDialog`; actions popups are registered as `ActionsDialog`.
+- The visual background difference is intentional at the window level but must
+  be token-driven: actions popups avoid painting an extra GPUI container
+  background when vibrancy is active, while confirm popups paint the shared
+  confirm shell using `chrome.popup_surface_rgba` and `chrome.border_rgba`.
+- Confirm popup actions now reuse footer button/keycap chrome through
+  `render_footer_hint_button_like`, `FooterHintButtonSpec`, footer hover/active
+  tokens, and footer shortcut normalization for `Esc` / `↵`.
+- The source audit rejects regression to local mini-buttons, generic modal
+  `Button::new(...)` actions, hand-built mouse handlers, or red danger shell
+  styling.
+
 ## Iteration 1 Proof Plan
 
 - Source contracts:
@@ -170,3 +186,23 @@ Captured in session `confirm-modal-proof` against
     confirm helper path.
   - Runtime representatives remain pending for remove/delete script, file
     trash, clipboard bulk delete/clear-unpinned, and Notes delete.
+
+## Iteration 7 Footer Button And Shortcut Parity
+
+- Source contract:
+  - `./scripts/agentic/agent-cargo.sh test --test source_audits confirm_modal_shared_shell`
+- Build proof:
+  - `./scripts/agentic/agent-cargo.sh build --bin script-kit-gpui`
+- Guarded behavior:
+  - `src/confirm/window.rs` renders Cancel and Confirm actions with
+    `render_footer_hint_button_like` and `FooterHintContentJustify::Center`.
+  - `Esc` and `↵` are passed as footer-style shortcut keys with `key_first:
+    true`, so modal actions share footer keycap ordering and glyph treatment.
+  - Hover and active backgrounds come from footer chrome helpers rather than
+    modal-local button colors.
+- Current result:
+  - Quit confirm and generic parent confirm actions are source-contract proven
+    to share footer shortcut/button styling.
+  - Runtime proof for this cosmetic parity was intentionally not repeated in
+    this iteration because the separate fast-verification thread is handling
+    sub-second modal inspection automation.
