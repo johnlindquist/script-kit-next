@@ -125,6 +125,9 @@ mod scroll_reveal;
 #[path = "source_audits/main_menu_history_render_perf.rs"]
 mod main_menu_history_render_perf;
 
+#[path = "source_audits/launcher_speed_gate_contract.rs"]
+mod launcher_speed_gate_contract;
+
 #[path = "source_audits/actions_popup_contract.rs"]
 mod actions_popup_contract;
 

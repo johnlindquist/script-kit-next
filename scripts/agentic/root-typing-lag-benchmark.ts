@@ -35,6 +35,7 @@ const traceEnabled = !process.argv.includes("--no-trace");
 const passiveRefreshOverlap = process.argv.includes("--passive-refresh-overlap");
 const forceBrowserTabFailure = process.argv.includes("--force-browser-tabs-failure");
 const inputMode = argValue("--input-mode", "setFilter");
+const transportAckMode = "stateEcho";
 if (!["setFilter", "printable-key"].includes(inputMode)) {
   throw new Error(`unknown --input-mode '${inputMode}'`);
 }
@@ -210,6 +211,9 @@ function directRpc(command: Json, expect: string, timeout = timeoutMs): Json {
     }
     return null;
   });
+  if (envelope.kind === "protocolResponse" && envelope.responseType === expect) {
+    return envelope.response;
+  }
   if (envelope.status !== "ok" || envelope.responseType !== expect) {
     throw new Error(`unexpected direct rpc envelope: ${JSON.stringify(envelope)}`);
   }
@@ -217,18 +221,8 @@ function directRpc(command: Json, expect: string, timeout = timeoutMs): Json {
 }
 
 function directSend(command: Json): number {
-  const logPath = String(sessionStatus?.log ?? "");
-  const offset = fileSize(logPath);
   const start = performance.now();
   directWrite(command);
-  waitUntil(timeoutMs, () => {
-    const tail = readFrom(logPath, offset);
-    if (tail.includes("event_type=stdin_command_parsed")) return true;
-    if (tail.includes("event_type=stdin_parse_failed")) {
-      throw new Error(`stdin parse failed: ${tail.slice(-500)}`);
-    }
-    return null;
-  });
   return performance.now() - start;
 }
 
@@ -400,17 +394,17 @@ function hash(value: unknown): string {
 }
 
 function setFilter(text: string, tag: string) {
-  const parseMs = directSend({ type: "setFilter", text, requestId: `root-typing-set-${tag}-${Date.now()}` });
+  const sendMs = directSend({ type: "setFilter", text, requestId: `root-typing-set-${tag}-${Date.now()}` });
   const echoWaitMs = waitForInput(text);
   return {
     text,
-    parseMs: Number(parseMs.toFixed(3)),
-    inputEchoMs: Number((parseMs + echoWaitMs).toFixed(3)),
+    sendMs: Number(sendMs.toFixed(3)),
+    inputEchoMs: Number((sendMs + echoWaitMs).toFixed(3)),
   };
 }
 
 function printableKey(next: string, tag: string) {
-  const parseMs = directSend({
+  const sendMs = directSend({
     type: "setFilter",
     text: next,
     requestId: `root-typing-printable-key-${tag}-${Date.now()}`,
@@ -418,8 +412,8 @@ function printableKey(next: string, tag: string) {
   const echoWaitMs = waitForInput(next);
   return {
     text: next,
-    parseMs: Number(parseMs.toFixed(3)),
-    inputEchoMs: Number((parseMs + echoWaitMs).toFixed(3)),
+    sendMs: Number(sendMs.toFixed(3)),
+    inputEchoMs: Number((sendMs + echoWaitMs).toFixed(3)),
   };
 }
 
@@ -537,8 +531,9 @@ function parsePerfLogs(logPath: string) {
 async function main() {
   seedFixtures();
   runSession(["stop", session]);
-  runSession(["start", session]);
-  sessionStatus = runSession(["status", session]);
+  const startStatus = runSession(["start", session]);
+  const liveStatus = runSession(["status", session]);
+  sessionStatus = { ...startStatus, ...liveStatus };
 
   setFilter(scenarios[0] ?? "warm", "warm");
 
@@ -563,7 +558,7 @@ async function main() {
   const summary = {
     typing: {
       inputEcho: stats(events.map((event) => event.inputEchoMs)),
-      parse: stats(events.map((event) => event.parseMs)),
+      send: stats(events.map((event) => event.sendMs)),
       cadenceMs,
       cadenceOverrunMaxMs: Number(Math.max(0, ...typingReceipts.map((receipt) => receipt.cadenceOverrunMaxMs)).toFixed(3)),
       computedMismatchCount,
@@ -597,6 +592,7 @@ async function main() {
     samples,
     cadenceMs,
     inputMode,
+    transportAckMode,
     traceEnabled,
     passiveRefreshOverlap,
     forceBrowserTabFailure,
@@ -617,6 +613,7 @@ async function main() {
       name: session,
       logPath: sessionStatus.log,
       responsesPath: sessionStatus.responses,
+      protocolResponsesPath: sessionStatus.protocolResponses ?? null,
     },
     summary,
     typingReceipts,

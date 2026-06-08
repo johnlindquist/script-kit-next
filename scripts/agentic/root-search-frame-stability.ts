@@ -195,16 +195,73 @@ function assertSameFrame(baseline: Json, sample: Json, label: string) {
   }
 }
 
+function numericField(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
+}
+
+function hasWarmRootFileCache(status: Json): boolean {
+  return numericField(status.cacheEntryCount) > 0 && numericField(status.cacheResultCount) > 0;
+}
+
+function requireRootFileStatus(state: Json, label: string): Json {
+  const status = state.rootFileSearch;
+  if (status?.query !== query) {
+    throw new Error(
+      `${label}: root file search did not track query ${JSON.stringify(query)}: ${JSON.stringify(status)}`,
+    );
+  }
+  if (status?.mode !== "GlobalQuery") {
+    throw new Error(`${label}: expected GlobalQuery root file mode, got ${JSON.stringify(status)}`);
+  }
+  return status;
+}
+
+function classifyRootFileBaseline(status: Json): Json {
+  if (status.visibleLoading !== true) {
+    throw new Error(`baseline is not an early visible loading frame: ${JSON.stringify(status)}`);
+  }
+  if (status.loading === true) {
+    return {
+      kind: "loading",
+      observedLoading: true,
+      observedAsyncHandoff: false,
+    };
+  }
+  if (
+    status.loading === false &&
+    status.visibleResultCount === 0 &&
+    numericField(status.generation) >= 1 &&
+    hasWarmRootFileCache(status)
+  ) {
+    return {
+      kind: "settled-provider-early-visible-loading",
+      observedLoading: false,
+      observedAsyncHandoff: true,
+      generation: status.generation,
+      cacheEntryCount: status.cacheEntryCount,
+      cacheResultCount: status.cacheResultCount,
+      visibleResultCount: status.visibleResultCount,
+    };
+  }
+  throw new Error(
+    `unsupported root file baseline; expected loading frame or settled-provider early visible-loading frame: ${JSON.stringify(status)}`,
+  );
+}
+
 async function sampleUntilRootFileSettled(
   baseline: Json,
-  observedLoadingAtBaseline: boolean,
+  baselineProof: Json,
 ): Promise<{
   settled: Json;
   samples: Json[];
 }> {
   const deadline = Date.now() + timeoutMs;
   const samples: Json[] = [];
-  let observedLoading = observedLoadingAtBaseline;
+  let observedLoading = baselineProof.observedLoading === true;
+  let observedAsyncHandoff = baselineProof.observedAsyncHandoff === true;
+  let settledStableSamples = 0;
+  const requiredSettledStableSamples =
+    baselineProof.kind === "settled-provider-early-visible-loading" ? 2 : 1;
   let last = getState("sample-start");
 
   while (Date.now() < deadline) {
@@ -222,17 +279,23 @@ async function sampleUntilRootFileSettled(
       assertSameFrame(baseline, frame, `samples[${samples.length - 1}]`);
 
       if (status.loading === false) {
-        if (observedLoading !== true) {
-          throw new Error(
-            `loading !== true before settle; status=${JSON.stringify(status)}`,
-          );
-        }
-        if ((status.cacheResultCount ?? 0) <= 0) {
+        if (!hasWarmRootFileCache(status)) {
           throw new Error(
             `provider settled without warming cache; status=${JSON.stringify(status)}`,
           );
         }
-        return { settled: last, samples };
+        observedAsyncHandoff = true;
+        if (!observedLoading && baselineProof.kind !== "settled-provider-early-visible-loading") {
+          throw new Error(
+            `provider settled without an accepted async handoff proof; baselineProof=${JSON.stringify(
+              baselineProof,
+            )} status=${JSON.stringify(status)}`,
+          );
+        }
+        settledStableSamples += 1;
+        if (observedAsyncHandoff && settledStableSamples >= requiredSettledStableSamples) {
+          return { settled: last, samples };
+        }
       }
     }
 
@@ -262,26 +325,10 @@ async function main() {
   waitForInput();
 
   const before = getState("before");
-  if (before.rootFileSearch?.query !== query) {
-    throw new Error(
-      `root file search did not track query ${JSON.stringify(query)}: ${JSON.stringify(
-        before.rootFileSearch,
-      )}`,
-    );
-  }
-  if (before.rootFileSearch?.mode !== "GlobalQuery") {
-    throw new Error(
-      `expected GlobalQuery root file mode, got ${JSON.stringify(before.rootFileSearch)}`,
-    );
-  }
-  if (before.rootFileSearch?.loading !== true) {
-    throw new Error(
-      `loading !== true for delayed provider baseline: ${JSON.stringify(before.rootFileSearch)}`,
-    );
-  }
-
+  const beforeRootFileSearch = requireRootFileStatus(before, "before");
+  const baselineProof = classifyRootFileBaseline(beforeRootFileSearch);
   const baseline = comparable(before, "before");
-  const { settled, samples } = await sampleUntilRootFileSettled(baseline, true);
+  const { settled, samples } = await sampleUntilRootFileSettled(baseline, baselineProof);
   const settledFrame = comparable(settled, "settled");
   assertSameFrame(baseline, settledFrame, "settled");
 
@@ -290,9 +337,10 @@ async function main() {
     status: "pass",
     session,
     query,
+    baselineProof,
     baseline: {
       inputValue: before.inputValue,
-      rootFileSearch: before.rootFileSearch,
+      rootFileSearch: beforeRootFileSearch,
       mainWindowPreflight: baseline,
     },
     settled: {
