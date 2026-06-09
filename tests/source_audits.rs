@@ -143,6 +143,9 @@ mod agent_chat_boundary_and_frozen_contracts;
 #[path = "source_audits/main_window_footer_global_left_chips.rs"]
 mod main_window_footer_global_left_chips;
 
+#[path = "source_audits/main_window_header_input_parity.rs"]
+mod main_window_header_input_parity;
+
 #[path = "source_audits/scriptlist_hide_bounds_reset.rs"]
 mod scriptlist_hide_bounds_reset;
 

@@ -626,7 +626,6 @@ fn dev_style_tool_refreshes_native_footer_runtime_controls() {
         fs::read_to_string("src/app_impl/theme_focus.rs").expect("read theme focus source");
     let prompt_handler =
         fs::read_to_string("src/prompt_handler/mod.rs").expect("read prompt handler source");
-
     for required in [
         "runtime_style_generation",
         "runtime_overrides::generation()",
@@ -661,4 +660,84 @@ fn dev_style_tool_refreshes_native_footer_runtime_controls() {
     assert!(!prompt_handler.contains(
         "runtime_overrides::set_number_from_devtools(\n                                                &control,\n                                                &value,\n                                            )?;\n                                        this.update_theme(cx);\n                                        cx.notify();"
     ));
+}
+
+#[test]
+fn confirm_modal_styling_exposes_open_preview_target() {
+    let targets = fs::read_to_string("src/dev_style_tool/kitchen_sink_targets.rs")
+        .expect("read dev style kitchen sink targets");
+    let render =
+        fs::read_to_string("src/dev_style_tool/render.rs").expect("read dev style render source");
+    let catalog = fs::read_to_string("src/dev_style_tool/confirm_modal_catalog.rs")
+        .expect("read confirm modal style catalog");
+    let prompt_handler =
+        fs::read_to_string("src/prompt_handler/mod.rs").expect("read prompt handler source");
+    let scenario =
+        fs::read_to_string("scripts/agentic/scenario.ts").expect("read agentic scenario source");
+    let index = fs::read_to_string("scripts/agentic/index.ts").expect("read agentic index source");
+
+    for required in [
+        "OPEN_CONFIRM_MODAL_KITCHEN_SINK_BUTTON",
+        "ConfirmModal",
+        "openConfirmModalKitchenSink",
+        "Open Confirm Modal Preview",
+    ] {
+        assert!(
+            targets.contains(required),
+            "confirm modal kitchen sink target missing {required}"
+        );
+    }
+    assert!(
+        render.contains(
+            "DevStyleToolTab::ConfirmModalStyling => &[DevStyleKitchenSinkTarget::ConfirmModal]"
+        ) && render.contains("open_confirm_modal_kitchen_sink")
+            && render.contains("open_confirm_modal_kitchen_sink_fixture")
+            && render.contains(".saturating_add(CONFIRM_MODAL_KNOBS.len())")
+            && render.contains("ConfirmModalKnobGroup::Anatomy")
+            && render.contains("ConfirmModalKnobGroup::Actions")
+            && render.contains("confirm_modal_group_slug"),
+        "Confirm Modal Styling must expose a runtime preview target and shell/header/anatomy/actions designer groups beside the Agent Chat style controls"
+    );
+    for required in [
+        "ConfirmModalAnatomyStyle",
+        "ConfirmModalActionsStyle",
+        "\"confirmModal.anatomy.headerBodyGap\"",
+        "\"confirmModal.anatomy.bodyActionsGap\"",
+        "\"confirmModal.anatomy.bodyLineHeight\"",
+        "\"confirmModal.actions.gap\"",
+        "\"confirmModal.actions.buttonHeight\"",
+        "\"confirmModal.actions.cancelSlotWidth\"",
+        "\"confirmModal.actions.confirmSlotWidth\"",
+        "\"confirmModal.actions.buttonRadius\"",
+        "\"confirmModal.actions.paddingX\"",
+        "\"confirmModal.actions.edgePaddingX\"",
+        "\"confirmModal.actions.paddingY\"",
+        "\"confirmModal.actions.contentGap\"",
+        "CONFIRM_MODAL_ACTIONS_EDGE_PADDING_X_KNOB_ID",
+        "edge_padding_x",
+    ] {
+        assert!(
+            catalog.contains(required),
+            "confirm modal designer catalog missing {required}"
+        );
+    }
+    assert!(
+        prompt_handler.contains("OPEN_CONFIRM_MODAL_KITCHEN_SINK_BUTTON")
+            && prompt_handler.contains("openConfirmModalKitchenSink")
+            && prompt_handler.contains("open_confirm_modal_kitchen_sink_fixture"),
+        "devtools semantic action routing must be able to open the confirm modal preview"
+    );
+    assert!(
+        scenario.contains("runConfirmModalStylePreviewProofScenario")
+            && scenario.contains("confirm-modal-style-preview-proof")
+            && scenario.contains("button:dev-style-tool-open-confirm-modal-kitchen-sink")
+            && scenario.contains("confirmModal.actions.edgePaddingX")
+            && scenario.contains("confirmModal.actions.buttonRadius"),
+        "agentic runtime proof must exercise the live confirm modal preview and style control"
+    );
+    assert!(
+        index.contains("confirm-modal-style-preview-proof")
+            && index.contains("runConfirmModalStylePreviewProofScenario"),
+        "agentic index must expose the confirm modal style preview proof recipe"
+    );
 }
