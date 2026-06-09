@@ -378,6 +378,7 @@ cmd_start() {
   # Create session directory and pipe
   mkdir -p "${sdir}"
   printf '%s\n' "$keep_actions_window_open_requested" > "${sdir}/keep_actions_window_open"
+  printf '%s\n' "$BINARY" > "${sdir}/binary"
   local pipe_path="${sdir}/pipe"
   local pid_path="${sdir}/pid"
 
@@ -434,9 +435,17 @@ cmd_start() {
   else
     launch_prefix=("$BINARY")
   fi
+  local keep_actions_window_open_env=0
+  if [ "$keep_actions_window_open_requested" = true ]; then
+    keep_actions_window_open_env=1
+  fi
+  local agentic_rust_log="${SCRIPT_KIT_AGENTIC_RUST_LOG:-info,gpui::window=off,gpui=warn,hyper=warn,reqwest=warn}"
 
   nohup env \
     SCRIPT_KIT_AI_LOG=1 \
+    SCRIPT_KIT_SHORTCUT_DEBUG=1 \
+    RUST_LOG="$agentic_rust_log" \
+    SCRIPT_KIT_AGENTIC_KEEP_ACTIONS_WINDOW_OPEN="$keep_actions_window_open_env" \
     SCRIPT_KIT_AGENTIC_PROTOCOL_RESPONSES_PATH="$protocol_responses_path" \
     SCRIPT_KIT_AGENTIC_SESSION_NAME="$name" \
     SCRIPT_KIT_AGENTIC_SESSION_GENERATION="$session_generation" \
@@ -491,6 +500,9 @@ cmd_start() {
     "protocolResponses:\"${protocol_responses_path}\"" \
     "sessionGeneration:\"${session_generation}\"" \
     "lifecycle:\"${lifecycle_path}\"" \
+    "aiLog:true" \
+    "shortcutDebug:true" \
+    "rustLog:\"${agentic_rust_log}\"" \
     "resumed:false" \
     "ready:${ready}" \
     "readyWaitMs:${ready_wait_ms}" \
@@ -923,9 +935,13 @@ cmd_status() {
   local forwarder_alive="false"
   local fwd_pid="0"
   local keep_actions_window_open="false"
+  local launched_binary="$BINARY"
 
   if [ -f "${sdir}/keep_actions_window_open" ]; then
     keep_actions_window_open="$(cat "${sdir}/keep_actions_window_open")"
+  fi
+  if [ -f "${sdir}/binary" ]; then
+    launched_binary="$(cat "${sdir}/binary")"
   fi
 
   if [ -f "${sdir}/pid" ]; then
@@ -982,7 +998,7 @@ cmd_status() {
     "issues:${issues}" \
     "pipe:\"${pipe_path}\"" \
     "pipeWritable:${pipe_writable}" \
-    "binary:\"${BINARY}\"" \
+    "binary:\"${launched_binary}\"" \
     "keepActionsWindowOpen:${keep_actions_window_open}" \
     "log:\"${log_path}\"" \
     "responses:\"${responses_path}\"" \

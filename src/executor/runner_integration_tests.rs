@@ -83,3 +83,36 @@ fn test_send_receive_message_round_trip_when_channel_open() {
     let code = status.code().unwrap_or(-1);
     assert_eq!(code, 0, "echo script should exit successfully");
 }
+
+#[cfg(unix)]
+#[test]
+fn test_stdout_protocol_reader_ignores_noisy_stderr() {
+    let session = spawn_script(
+        "sh",
+        &[
+            "-c",
+            "printf 'stderr noise before protocol\\n' >&2; printf '{\"type\":\"beep\"}\\n'; sleep 0.05",
+        ],
+        "[test:runner_stdout_not_stderr]",
+    )
+    .expect("spawn should succeed");
+    let mut split = session.split();
+
+    let received = split
+        .stdout_reader
+        .next_message()
+        .expect("stdout reader should read protocol JSON from stdout")
+        .expect("script should emit one stdout protocol message");
+
+    assert!(
+        matches!(received, Message::Beep { .. }),
+        "expected stdout protocol beep despite stderr noise"
+    );
+
+    let status = split
+        .child
+        .wait()
+        .expect("wait should succeed after stdout protocol message");
+    let code = status.code().unwrap_or(-1);
+    assert_eq!(code, 0, "script should exit successfully");
+}

@@ -560,6 +560,7 @@ const devStyleKitchenSinkSubmitIds = new Set([
   "button:dev-style-tool-open-actions-popup-kitchen-sink",
   "button:dev-style-tool-open-actions-popup-no-match-kitchen-sink",
   "button:dev-style-tool-open-agent-chat-kitchen-sink",
+  "button:dev-style-tool-open-confirm-modal-kitchen-sink",
 ]);
 
 const nonDestructiveActionsDialogSubmitPairs = [

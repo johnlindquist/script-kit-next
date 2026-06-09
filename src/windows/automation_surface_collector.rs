@@ -803,6 +803,8 @@ fn confirm_modal_group_slug(group: crate::dev_style_tool::ConfirmModalKnobGroup)
     match group {
         crate::dev_style_tool::ConfirmModalKnobGroup::Shell => "shell",
         crate::dev_style_tool::ConfirmModalKnobGroup::Header => "header",
+        crate::dev_style_tool::ConfirmModalKnobGroup::Anatomy => "anatomy",
+        crate::dev_style_tool::ConfirmModalKnobGroup::Actions => "actions",
     }
 }
 

@@ -162,10 +162,14 @@ async function main() {
   }));
   const activePopup = (state.activePopupContract as JsonObject | undefined) ?? null;
   const actionsDialog = (state.actionsDialog as JsonObject | undefined) ?? null;
+  const actionsDialogShortcutParity = (actionsDialog?.shortcutParity as JsonObject | undefined)
+    ?? ((actionsDialog?.actions as JsonObject | undefined)?.shortcutParity as JsonObject | undefined)
+    ?? null;
   const popupActions = asArray(actionsDialog?.visibleActions).map((action) => ({
     source: "actionsDialog",
     action: action.id ?? null,
     key: action.shortcut ?? null,
+    canonicalKey: action.canonicalShortcut ?? null,
     label: action.label ?? null,
     section: action.section ?? null,
     enabled: action.enabled ?? null,
@@ -200,6 +204,7 @@ async function main() {
     },
     nativeFooter,
     activePopup,
+    actionsDialogShortcutParity,
     bindings,
     duplicateKeys: duplicates,
     missingPrimitives: [

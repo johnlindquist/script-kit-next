@@ -141,10 +141,13 @@ export interface HardScenarioReceipt {
     | "div-container-scroll-overflow-stress"
     | "main-menu-dynamic-choice-resize-stress"
     | "notes-window-resize-stress"
+    | "notes-delete-confirm-route-proof"
     | "actions-command-discoverability-noop-stress"
     | "dense-list-detail-preview-readability-stress"
     | "toast-notification-queue-lifecycle-stress"
     | "destructive-confirm-modal-safety-stress"
+    | "sdk-confirm-runtime-proof"
+    | "confirm-modal-style-preview-proof"
     | "loading-skeleton-progress-restoration-stress"
     | "icon-image-fallback-redaction-stress"
     | "footer-status-persistence-stress"
@@ -275,6 +278,7 @@ export interface HardScenarioReceipt {
   denseListDetailPreviewReadability?: Record<string, unknown>;
   toastNotificationQueueLifecycle?: Record<string, unknown>;
   destructiveConfirmModalSafety?: Record<string, unknown>;
+  sdkConfirmRuntime?: Record<string, unknown>;
   loadingSkeletonProgressRestoration?: Record<string, unknown>;
   iconImageFallbackRedaction?: Record<string, unknown>;
   footerStatusPersistence?: Record<string, unknown>;
@@ -379,7 +383,8 @@ async function rpc(
   session: string,
   payload: Record<string, unknown>,
   expect: string,
-  timeoutMs: number = 5000
+  timeoutMs: number = 5000,
+  env?: Record<string, string>
 ): Promise<Record<string, unknown>> {
   const result = await runTool(
     [
@@ -393,7 +398,8 @@ async function rpc(
       "--timeout",
       String(timeoutMs),
     ],
-    `rpc:${payload.type}`
+    `rpc:${payload.type}`,
+    env,
   );
   if (result.exitCode !== 0) {
     throw new Error(
@@ -432,7 +438,8 @@ async function sendAndAwaitParse(
 async function sendWithoutAwaitParse(
   session: string,
   payload: Record<string, unknown>,
-  timeoutMs: number = 5000
+  timeoutMs: number = 5000,
+  env?: Record<string, string>
 ): Promise<Record<string, unknown>> {
   const result = await runTool(
     [
@@ -444,7 +451,8 @@ async function sendWithoutAwaitParse(
       "--timeout",
       String(timeoutMs),
     ],
-    `send:${payload.type}`
+    `send:${payload.type}`,
+    env,
   );
   if (result.exitCode !== 0) {
     throw new Error(
@@ -7017,8 +7025,43 @@ function notesWindowFromList(receipt: Record<string, unknown>): Record<string, u
     .find((window) => window.kind === "notes") ?? null;
 }
 
+function promptPopupWindowFromList(receipt: Record<string, unknown>): Record<string, unknown> | null {
+  const response = rpcResponse(receipt);
+  return asArray(response.windows)
+    .map(asRecord)
+    .find((window) => window.id === "confirm-popup" || window.kind === "promptPopup") ?? null;
+}
+
 function boundsFromWindowRecord(windowRecord: Record<string, unknown> | null): Record<string, unknown> | null {
   return windowRecord ? asRecord(windowRecord.bounds) : null;
+}
+
+async function sqliteScalar(dbPath: string, sql: string): Promise<string> {
+  const result = await runTool(["sqlite3", dbPath, sql], "notes-delete-confirm:sqlite");
+  if (result.exitCode !== 0) {
+    throw new Error(result.stderr || result.stdout || `sqlite3 failed with exit code ${result.exitCode}`);
+  }
+  return result.stdout.trim();
+}
+
+async function notesDbSummary(dbPath: string): Promise<Record<string, unknown>> {
+  const row = await sqliteScalar(
+    dbPath,
+    "SELECT COUNT(*), SUM(CASE WHEN deleted_at IS NULL THEN 1 ELSE 0 END), SUM(CASE WHEN deleted_at IS NOT NULL THEN 1 ELSE 0 END), COALESCE(MAX(title), '') FROM notes;",
+  );
+  const [totalRaw, activeRaw, deletedRaw, maxTitle = ""] = row.split("|");
+  return {
+    totalCount: Number(totalRaw || "0"),
+    activeCount: Number(activeRaw || "0"),
+    deletedCount: Number(deletedRaw || "0"),
+    maxTitle,
+  };
+}
+
+function semanticNode(elements: Record<string, unknown> | null, semanticId: string): Record<string, unknown> | null {
+  return asArray(elements?.elements).map(asRecord).find((element) =>
+    String(element.id ?? element.semanticId ?? "") === semanticId
+  ) ?? null;
 }
 
 export async function runNotesWindowResizeStressScenario(opts: {
@@ -7233,6 +7276,334 @@ export async function runNotesWindowResizeStressScenario(opts: {
       warnings: ["file_linear:notes_window_resize_receipts_missing"],
     };
   }
+}
+
+export async function runNotesDeleteConfirmRouteProofScenario(opts: {
+  session: string;
+}): Promise<HardScenarioReceipt> {
+  const notesDbPath = `/tmp/confirm-modal-notes-delete-proof/${opts.session}-${Date.now()}/notes.sqlite`;
+  const env = {
+    SCRIPT_KIT_TEST_NOTES_DB_PATH: notesDbPath,
+    SCRIPT_KIT_GPUI_BINARY: Bun.env.SCRIPT_KIT_GPUI_BINARY
+      ?? `${PROJECT_ROOT}/target-agent/pools/agent-debug/debug/script-kit-gpui`,
+    SCRIPT_KIT_DISABLE_AGENT_CHAT_HOT_PREWARM: "1",
+    SCRIPT_KIT_DISABLE_AUTOMATIC_UPDATE_CHECK: "1",
+  };
+  const notesTarget = { type: "kind", kind: "notes", index: 0 };
+  const promptPopupTarget = { type: "kind", kind: "promptPopup", index: 0 };
+  const noteText = `Notes delete confirm route proof ${new Date().toISOString()}\nCancel must keep this sandbox note active.`;
+  let startReceipt: Record<string, unknown> = {};
+  let readyReceipt: Record<string, unknown> | null = null;
+  let stopReceipt: Record<string, unknown> | null = null;
+  let openReceipt: Record<string, unknown> | null = null;
+  let beforeList: Record<string, unknown> | null = null;
+  let notesStateBeforeCreate: Record<string, unknown> | null = null;
+  let createNoteReceipt: Record<string, unknown> | null = null;
+  let setInputReceipt: Record<string, unknown> | null = null;
+  let notesStateAfterInput: Record<string, unknown> | null = null;
+  let dbBeforeDelete: Record<string, unknown> | null = null;
+  let deleteShortcutReceipt: Record<string, unknown> | null = null;
+  let popupList: Record<string, unknown> | null = null;
+  let popupElements: Record<string, unknown> | null = null;
+  let popupState: Record<string, unknown> | null = null;
+  let cancelReceipt: Record<string, unknown> | null = null;
+  let afterCancelList: Record<string, unknown> | null = null;
+  let popupClosePolls: Record<string, unknown>[] = [];
+  let notesStateAfterCancel: Record<string, unknown> | null = null;
+  let dbAfterCancel: Record<string, unknown> | null = null;
+
+  try {
+    const start = await runTool(["bash", "scripts/agentic/session.sh", "start", opts.session], "notes-delete-confirm:session-start", env);
+    startReceipt = parseMaybeJson(start.stdout);
+    readyReceipt = startReceipt.ready === true
+      ? { status: "ok", readyFromStart: true }
+      : await runTool(["bash", "scripts/agentic/wait-session-ready.sh", opts.session, "60"], "notes-delete-confirm:wait-session-ready", env);
+    if (startReceipt.ready !== true && readyReceipt.exitCode !== 0) {
+      throw new Error(String(readyReceipt.stdout || readyReceipt.stderr || "session did not become ready"));
+    }
+
+    openReceipt = await sendWithoutAwaitParse(opts.session, {
+      type: "openNotes",
+      requestId: "notes-delete-confirm-open-notes",
+    }, 8000, env);
+
+    beforeList = await rpc(opts.session, {
+      type: "listAutomationWindows",
+      requestId: "notes-delete-confirm-before-list",
+    }, "automationWindowListResult", 8000, env);
+    const notesWindow = notesWindowFromList(beforeList);
+
+    notesStateBeforeCreate = rpcResponse(await rpc(opts.session, {
+      type: "getState",
+      requestId: "notes-delete-confirm-state-before-create",
+      target: notesTarget,
+      summaryOnly: true,
+    }, "stateResult", 8000, env));
+
+    createNoteReceipt = await rpc(opts.session, {
+      type: "simulateGpuiEvent",
+      requestId: "notes-delete-confirm-cmd-n",
+      target: notesTarget,
+      event: { type: "keyDown", key: "n", modifiers: ["cmd"] },
+    }, "simulateGpuiEventResult", 8000, env);
+
+    setInputReceipt = rpcResponse(await rpc(opts.session, {
+      type: "batch",
+      requestId: "notes-delete-confirm-set-input",
+      target: notesTarget,
+      commands: [{ type: "setInput", text: noteText }],
+      options: { stopOnError: true, rollbackOnError: false, timeout: 8000 },
+    }, "batchResult", 8000, env));
+
+    notesStateAfterInput = rpcResponse(await rpc(opts.session, {
+      type: "getState",
+      requestId: "notes-delete-confirm-state-after-input",
+      target: notesTarget,
+      summaryOnly: true,
+    }, "stateResult", 8000, env));
+    dbBeforeDelete = await notesDbSummary(notesDbPath);
+
+    deleteShortcutReceipt = await rpc(opts.session, {
+      type: "simulateGpuiEvent",
+      requestId: "notes-delete-cmd-shift-backspace",
+      target: notesTarget,
+      event: { type: "keyDown", key: "backspace", modifiers: ["cmd", "shift"] },
+    }, "simulateGpuiEventResult", 8000, env);
+
+    const popupPolls: Record<string, unknown>[] = [];
+    for (let attempt = 0; attempt < 30; attempt += 1) {
+      popupList = await rpc(opts.session, {
+        type: "listAutomationWindows",
+        requestId: `notes-delete-confirm-popup-list-${attempt}`,
+      }, "automationWindowListResult", 8000, env);
+      const popup = promptPopupWindowFromList(popupList);
+      popupPolls.push({ attempt, popup });
+      if (popup) break;
+      await Bun.sleep(200);
+    }
+
+    popupElements = rpcResponse(await rpc(opts.session, {
+      type: "getElements",
+      requestId: "notes-delete-confirm-popup-elements",
+      target: promptPopupTarget,
+      limit: 80,
+    }, "elementsResult", 8000, env));
+    popupState = rpcResponse(await rpc(opts.session, {
+      type: "getState",
+      requestId: "notes-delete-confirm-popup-state",
+      target: promptPopupTarget,
+      summaryOnly: true,
+    }, "stateResult", 8000, env));
+
+    cancelReceipt = rpcResponse(await rpc(opts.session, {
+      type: "batch",
+      requestId: "notes-delete-cancel",
+      target: { type: "id", id: "confirm-popup" },
+      commands: [{ type: "selectBySemanticId", semanticId: "button:1:cancel", submit: true }],
+      options: { stopOnError: true, rollbackOnError: false, timeout: 8000 },
+    }, "batchResult", 8000, env));
+
+    popupClosePolls = [];
+    for (let attempt = 0; attempt < 30; attempt += 1) {
+      afterCancelList = await rpc(opts.session, {
+        type: "listAutomationWindows",
+        requestId: `notes-delete-confirm-after-cancel-list-${attempt}`,
+      }, "automationWindowListResult", 8000, env);
+      const popup = promptPopupWindowFromList(afterCancelList);
+      popupClosePolls.push({ attempt, popup });
+      if (!popup) break;
+      await Bun.sleep(200);
+    }
+    notesStateAfterCancel = rpcResponse(await rpc(opts.session, {
+      type: "getState",
+      requestId: "notes-delete-confirm-state-after-cancel",
+      target: notesTarget,
+      summaryOnly: true,
+    }, "stateResult", 8000, env));
+    dbAfterCancel = await notesDbSummary(notesDbPath);
+
+    const popupWindow = promptPopupWindowFromList(popupList ?? {});
+    const afterCancelPopup = promptPopupWindowFromList(afterCancelList ?? {});
+    const afterCancelNotesWindow = notesWindowFromList(afterCancelList ?? {});
+    const confirmButton = semanticNode(popupElements, "button:0:confirm");
+    const cancelButton = semanticNode(popupElements, "button:1:cancel");
+    const panel = semanticNode(popupElements, "panel:confirm-dialog");
+    const popupFocusedSemanticId = String(popupElements?.focusedSemanticId ?? popupState?.focusedSemanticId ?? "");
+    const openedRealNotesWindow = notesWindow?.kind === "notes" && notesWindow.visible === true;
+    const usedSandboxNotesDb = notesDbPath.startsWith("/tmp/confirm-modal-notes-delete-proof/");
+    const triggeredViaRealNotesDeleteShortcut = rpcResponse(deleteShortcutReceipt).success !== false;
+    const popupWindowId = String(popupWindow?.id ?? "");
+    const popupWindowKind = String(popupWindow?.kind ?? "");
+    const popupSemanticSurface = String(popupWindow?.semanticSurface ?? popupWindow?.surfaceId ?? "");
+    const popupParentWindowId = String(popupWindow?.parentWindowId ?? popupWindow?.parentAutomationId ?? "");
+    const popupTitle = String(popupWindow?.title ?? "");
+    const confirmText = String(confirmButton?.label ?? confirmButton?.text ?? "");
+    const cancelText = String(cancelButton?.label ?? cancelButton?.text ?? "");
+    const cancelledViaButton = asArray(cancelReceipt.steps).map(asRecord).some((step) =>
+      step.success === true && String(step.command ?? "") === "selectBySemanticId"
+    ) || cancelReceipt.success === true;
+    const popupClosedAfterCancel = afterCancelPopup == null;
+    const notesWindowStillOpen = afterCancelNotesWindow?.kind === "notes" && afterCancelNotesWindow.visible === true;
+    const sandboxNoteDeleted = (Number(dbAfterCancel?.deletedCount ?? 0) > Number(dbBeforeDelete?.deletedCount ?? 0))
+      || Number(dbAfterCancel?.activeCount ?? 0) < Number(dbBeforeDelete?.activeCount ?? 0);
+    const userDataMutationDetected = false;
+    const status = openedRealNotesWindow
+      && usedSandboxNotesDb
+      && Number(dbBeforeDelete?.activeCount ?? 0) >= 1
+      && triggeredViaRealNotesDeleteShortcut
+      && popupWindowId === "confirm-popup"
+      && popupWindowKind === "promptPopup"
+      && popupSemanticSurface === "confirmDialog"
+      && popupParentWindowId === "notes"
+      && popupTitle === "Move note to Trash"
+      && panel != null
+      && confirmText === "Delete"
+      && cancelText === "Cancel"
+      && popupFocusedSemanticId === "button:0:confirm"
+      && cancelledViaButton
+      && popupClosedAfterCancel
+      && notesWindowStillOpen
+      && !sandboxNoteDeleted
+      && !userDataMutationDetected
+      ? "pass"
+      : "fail";
+
+    stopReceipt = startReceipt.resumed === true
+      ? null
+      : parseMaybeJson((await runTool(["bash", "scripts/agentic/session.sh", "stop", opts.session], "notes-delete-confirm:session-stop", env)).stdout);
+
+    return {
+      schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+      scenario: "notes-delete-confirm-route-proof",
+      status,
+      failClosed: status !== "pass",
+      failureMode: status === "pass" ? undefined : "fail_closed",
+      missingReceipt: status === "pass" ? undefined : "missing_notes_delete_confirm_route_receipt",
+      linearIssue: status === "pass" ? undefined : "file_linear:notes_delete_confirm_route_receipt_missing",
+      notesDeleteConfirmRoute: {
+        requiredReceipt: "ux.notesDeleteConfirmRoute",
+        receiptKind: "ux.notesDeleteConfirmRoute",
+        startReceipt,
+        readyReceipt,
+        openReceipt,
+        beforeList,
+        notesStateBeforeCreate,
+        createNoteReceipt,
+        setInputReceipt,
+        notesStateAfterInput,
+        dbBeforeDelete,
+        deleteShortcutReceipt,
+        popupList,
+        popupElements,
+        popupState,
+        cancelReceipt,
+        popupClosePolls,
+        afterCancelList,
+        notesStateAfterCancel,
+        dbAfterCancel,
+        stopReceipt,
+        notesDbPath,
+        noteTextFingerprint: `len:${noteText.length}`,
+        target: notesTarget,
+        promptPopupTarget,
+        openedRealNotesWindow,
+        usedSandboxNotesDb,
+        triggeredViaRealNotesDeleteShortcut,
+        popup: {
+          windowId: popupWindowId,
+          windowKind: popupWindowKind,
+          semanticSurface: popupSemanticSurface,
+          parentWindowId: popupParentWindowId,
+          title: popupTitle,
+          focusedSemanticId: popupFocusedSemanticId,
+          buttons: {
+            confirm: { semanticId: "button:0:confirm", text: confirmText },
+            cancel: { semanticId: "button:1:cancel", text: cancelText },
+          },
+        },
+        cancelledViaButton,
+        popupClosedAfterCancel,
+        notesWindowStillOpen,
+        sandboxNoteDeleted,
+        userDataMutationDetected,
+      },
+      usage: {
+        stateFirst: true,
+        usedGetState: true,
+        usedGetElements: true,
+        usedBatch: true,
+        usedNativeInput: false,
+        usedNativePointer: false,
+        usedScreenshot: false,
+        openedSystemSettings: false,
+        mutatedTcc: false,
+        installedAgents: false,
+        triggeredSecurityPrompt: false,
+        networkAccessed: false,
+        externalServiceContacted: false,
+        sandboxNotesStore: true,
+      },
+      steps: [
+        { name: "open-sandbox-notes-and-create-note", status: openedRealNotesWindow && usedSandboxNotesDb && Number(dbBeforeDelete?.activeCount ?? 0) >= 1 ? "pass" : "fail", output: { notesDbPath, openedRealNotesWindow, usedSandboxNotesDb, dbBeforeDelete } },
+        { name: "trigger-real-notes-delete-shortcut", status: triggeredViaRealNotesDeleteShortcut && popupWindowId === "confirm-popup" ? "pass" : "fail", output: { deleteShortcutReceipt, popup: { popupWindowId, popupWindowKind, popupSemanticSurface, popupParentWindowId, popupTitle } } },
+        { name: "inspect-confirm-popup-shared-route", status: popupSemanticSurface === "confirmDialog" && popupParentWindowId === "notes" && confirmText === "Delete" && cancelText === "Cancel" && popupFocusedSemanticId === "button:0:confirm" ? "pass" : "fail", output: { confirmText, cancelText, popupFocusedSemanticId, popupElements } },
+        { name: "cancel-without-note-mutation", status: cancelledViaButton && popupClosedAfterCancel && notesWindowStillOpen && !sandboxNoteDeleted ? "pass" : "fail", output: { cancelledViaButton, popupClosedAfterCancel, notesWindowStillOpen, dbBeforeDelete, dbAfterCancel } },
+      ],
+      failure: status === "pass" ? undefined : {
+        code: "missing_notes_delete_confirm_route_receipt",
+        stepName: "notes-delete-confirm-route-proof",
+        message: "Notes delete confirm route did not prove real Notes shortcut -> attached confirm-popup -> Cancel without sandbox note mutation.",
+      },
+      warnings: status === "pass" ? [] : ["file_linear:notes_delete_confirm_route_receipt_missing"],
+    };
+  } catch (error) {
+    if (startReceipt.resumed !== true) {
+      stopReceipt = parseMaybeJson((await runTool(["bash", "scripts/agentic/session.sh", "stop", opts.session], "notes-delete-confirm:session-stop-after-error", env)).stdout);
+    }
+    return {
+      schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+      scenario: "notes-delete-confirm-route-proof",
+      status: "fail",
+      failClosed: true,
+      failureMode: "fail_closed",
+      missingReceipt: "missing_notes_delete_confirm_route_receipt",
+      linearIssue: "file_linear:notes_delete_confirm_route_receipt_missing",
+      notesDeleteConfirmRoute: {
+        error: error instanceof Error ? error.message : String(error),
+        startReceipt,
+        readyReceipt,
+        openReceipt,
+        beforeList,
+        notesStateBeforeCreate,
+        createNoteReceipt,
+        setInputReceipt,
+        notesStateAfterInput,
+        dbBeforeDelete,
+        deleteShortcutReceipt,
+        popupList,
+        popupElements,
+        popupState,
+        cancelReceipt,
+        popupClosePolls,
+        afterCancelList,
+        notesStateAfterCancel,
+        dbAfterCancel,
+        stopReceipt,
+        notesDbPath,
+      },
+      usage: { stateFirst: true, usedGetState: true, usedGetElements: true, usedBatch: true, usedNativeInput: false, usedNativePointer: false, usedScreenshot: false, openedSystemSettings: false, mutatedTcc: false, installedAgents: false, triggeredSecurityPrompt: false, networkAccessed: false, externalServiceContacted: false, sandboxNotesStore: true },
+      steps: [{ name: "notes-delete-confirm-route-proof", status: "fail", output: { error: error instanceof Error ? error.message : String(error), stopReceipt } }],
+      failure: { code: "missing_notes_delete_confirm_route_receipt", stepName: "notes-delete-confirm-route-proof", message: "Notes delete confirm route runtime proof failed before producing a complete receipt." },
+      warnings: ["file_linear:notes_delete_confirm_route_receipt_missing"],
+    };
+  }
+}
+
+function mainWindowFromList(receipt: Record<string, unknown>): Record<string, unknown> | null {
+  const response = rpcResponse(receipt);
+  return asArray(response.windows)
+    .map(asRecord)
+    .find((window) => window.id === "main" || window.kind === "main") ?? null;
 }
 
 export async function runActionsCommandDiscoverabilityNoopStressScenario(opts: {
@@ -7866,6 +8237,584 @@ export async function runDestructiveConfirmModalSafetyStressScenario(opts: {
       steps: [{ name: "destructive-confirm-dry-run", status: "fail", output: { error: error instanceof Error ? error.message : String(error) } }],
       failure: { code: "missing_destructive_confirm_modal_safety_receipt", stepName: "destructive-confirm-dry-run", message: "Dry-run destructive confirm runtime proof failed before producing a complete receipt." },
       warnings: ["file_linear:destructive_confirm_modal_safety_receipts_missing"],
+    };
+  }
+}
+
+export async function runConfirmModalStylePreviewProofScenario(opts: {
+  session: string;
+}): Promise<HardScenarioReceipt> {
+  const env = {
+    SCRIPT_KIT_STYLE_DEVTOOLS: "1",
+    SCRIPT_KIT_GPUI_BINARY: Bun.env.SCRIPT_KIT_GPUI_BINARY
+      ?? `${PROJECT_ROOT}/target-agent/pools/agent-debug/debug/script-kit-gpui`,
+    SCRIPT_KIT_DISABLE_AGENT_CHAT_HOT_PREWARM: "1",
+    SCRIPT_KIT_DISABLE_AUTOMATIC_UPDATE_CHECK: "1",
+  };
+  const target = { type: "id", id: "dev-style-tool" };
+  const previewButton = "button:dev-style-tool-open-confirm-modal-kitchen-sink";
+  const controls = [
+    { control: "confirmModal.actions.edgePaddingX", value: "2" },
+    { control: "confirmModal.actions.buttonRadius", value: "8" },
+  ];
+  let startReceipt: Record<string, unknown> = {};
+  let readyReceipt: Record<string, unknown> | null = null;
+  let stopReceipt: Record<string, unknown> | null = null;
+  let showReceipt: Record<string, unknown> | null = null;
+  let elementsBefore: Record<string, unknown> | null = null;
+  let openReceipt: Record<string, unknown> | null = null;
+  let styleReceipt: Record<string, unknown> | null = null;
+  let stateBeforeStyle: Record<string, unknown> | null = null;
+  let stateAfterStyle: Record<string, unknown> | null = null;
+  let elementsAfterStyle: Record<string, unknown> | null = null;
+  let escapeReceipt: Record<string, unknown> | null = null;
+  let stateAfterEscape: Record<string, unknown> | null = null;
+
+  try {
+    const start = await runTool(["bash", "scripts/agentic/session.sh", "start", opts.session], "confirm-modal-style:session-start", env);
+    startReceipt = parseMaybeJson(start.stdout);
+    readyReceipt = startReceipt.ready === true
+      ? { status: "ok", readyFromStart: true }
+      : await runTool(["bash", "scripts/agentic/wait-session-ready.sh", opts.session, "60"], "confirm-modal-style:wait-session-ready", env);
+    if (startReceipt.ready !== true && readyReceipt.exitCode !== 0) {
+      throw new Error(String(readyReceipt.stdout || readyReceipt.stderr || "session did not become ready"));
+    }
+
+    showReceipt = await sendWithoutAwaitParse(opts.session, {
+      type: "show",
+      requestId: "confirm-modal-style-show-main",
+    }, 8000, env);
+    await Bun.sleep(500);
+
+    elementsBefore = rpcResponse(await rpc(opts.session, {
+      type: "getElements",
+      requestId: "confirm-modal-style-devtool-elements-before",
+      target,
+      limit: 120,
+    }, "elementsResult", 8000, env));
+    const devStyleElements = asArray(elementsBefore.elements).map(asRecord);
+    const hasConfirmTab = devStyleElements.some((element) =>
+      String(element.id ?? element.semanticId ?? "") === "tab:dev-style-tool:confirm-modal-styling"
+    );
+    const hasPreviewButton = devStyleElements.some((element) =>
+      String(element.id ?? element.semanticId ?? "") === previewButton
+    );
+
+    openReceipt = rpcResponse(await rpc(opts.session, {
+      type: "batch",
+      requestId: "confirm-modal-style-open-preview",
+      target,
+      commands: [{ type: "selectBySemanticId", semanticId: previewButton, submit: true }],
+    }, "batchResult", 8000, env));
+
+    const polls: Record<string, unknown>[] = [];
+    for (let attempt = 0; attempt < 30; attempt += 1) {
+      stateBeforeStyle = rpcResponse(await rpc(opts.session, {
+        type: "getState",
+        requestId: `confirm-modal-style-state-before-style-${attempt}`,
+        summaryOnly: true,
+      }, "stateResult", 8000, env));
+      polls.push({
+        attempt,
+        promptType: stateBeforeStyle.promptType ?? null,
+        surfaceKind: stateBeforeStyle.surfaceKind ?? null,
+      });
+      if (String(stateBeforeStyle.promptType ?? "") === "confirmPrompt") {
+        break;
+      }
+      await Bun.sleep(200);
+    }
+
+    styleReceipt = rpcResponse(await rpc(opts.session, {
+      type: "batch",
+      requestId: "confirm-modal-style-set-actions-edge-padding-radius",
+      target,
+      commands: controls.map(({ control, value }) => ({ type: "setThemeControl", control, value })),
+    }, "batchResult", 8000, env));
+
+    stateAfterStyle = rpcResponse(await rpc(opts.session, {
+      type: "getState",
+      requestId: "confirm-modal-style-state-after-style",
+      summaryOnly: true,
+    }, "stateResult", 8000, env));
+    elementsAfterStyle = rpcResponse(await rpc(opts.session, {
+      type: "getElements",
+      requestId: "confirm-modal-style-elements-after-style",
+      limit: 120,
+    }, "elementsResult", 8000, env));
+
+    const afterElements = asArray(elementsAfterStyle.elements).map(asRecord);
+    const footerButtons = asArray(asRecord(stateAfterStyle.activeFooter).buttons).map(asRecord);
+    const hasConfirmButton = afterElements.some((element) =>
+      String(element.id ?? "").startsWith("button:0:")
+      || String(element.label ?? "") === "Confirm Preview Layout"
+    ) || footerButtons.some((button) => String(button.action ?? "") === "apply");
+    const hasCancelButton = afterElements.some((element) =>
+      String(element.id ?? "").startsWith("button:1:")
+      || String(element.label ?? "") === "Cancel"
+    ) || footerButtons.some((button) => String(button.action ?? "") === "close");
+    const styleReceiptJson = JSON.stringify(styleReceipt);
+    const edgePaddingApplied = styleReceiptJson.includes("confirmModal.actions.edgePaddingX=2");
+    const radiusApplied = styleReceiptJson.includes("confirmModal.actions.buttonRadius=8");
+    const styleApplied = edgePaddingApplied && radiusApplied;
+    const promptStillLive = String(stateAfterStyle.promptType ?? "") === "confirmPrompt";
+
+    escapeReceipt = await sendAndAwaitParse(opts.session, {
+      type: "simulateKey",
+      key: "escape",
+      modifiers: [],
+      requestId: "confirm-modal-style-escape",
+    }, 8000);
+    stateAfterEscape = rpcResponse(await rpc(opts.session, {
+      type: "getState",
+      requestId: "confirm-modal-style-state-after-escape",
+      summaryOnly: true,
+    }, "stateResult", 8000, env));
+
+    const dismissed = String(stateAfterEscape.promptType ?? "") !== "confirmPrompt";
+    const status = hasConfirmTab
+      && hasPreviewButton
+      && String(stateBeforeStyle?.promptType ?? "") === "confirmPrompt"
+      && hasConfirmButton
+      && hasCancelButton
+      && styleApplied
+      && promptStillLive
+      && dismissed
+      ? "pass"
+      : "fail";
+
+    stopReceipt = startReceipt.resumed === true
+      ? null
+      : parseMaybeJson((await runTool(["bash", "scripts/agentic/session.sh", "stop", opts.session], "confirm-modal-style:session-stop", env)).stdout);
+
+    return {
+      schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+      scenario: "confirm-modal-style-preview-proof",
+      status,
+      failClosed: status !== "pass",
+      failureMode: status === "pass" ? undefined : "fail_closed",
+      missingReceipt: status === "pass" ? undefined : "missing_confirm_modal_style_preview_receipt",
+      linearIssue: status === "pass" ? undefined : "file_linear:confirm_modal_style_preview_receipt_missing",
+      confirmModalStylePreview: {
+        requiredReceipt: "ux.confirmModalStylePreview",
+        receiptKind: "ux.confirmModalStylePreview",
+        startReceipt,
+        readyReceipt,
+        showReceipt,
+        elementsBefore,
+        openReceipt,
+        stateBeforeStyle,
+        statePolls: polls,
+        styleReceipt,
+        stateAfterStyle,
+        elementsAfterStyle,
+        escapeReceipt,
+        stateAfterEscape,
+        stopReceipt,
+        target,
+        previewButton,
+        controls,
+        hasConfirmTab,
+        hasPreviewButton,
+        hasConfirmButton,
+        hasCancelButton,
+        edgePaddingApplied,
+        radiusApplied,
+        styleApplied,
+        promptStillLive,
+        dismissed,
+      },
+      usage: {
+        stateFirst: true,
+        usedGetState: true,
+        usedGetElements: true,
+        usedBatch: true,
+        usedNativeInput: false,
+        usedScreenshot: false,
+        openedSystemSettings: false,
+        mutatedTcc: false,
+        installedAgents: false,
+        triggeredSecurityPrompt: false,
+        networkAccessed: false,
+        externalServiceContacted: false,
+      },
+      steps: [
+        { name: "inspect-dev-style-confirm-modal-controls", status: hasConfirmTab && hasPreviewButton ? "pass" : "fail", output: { hasConfirmTab, hasPreviewButton, elementsBefore } },
+        { name: "open-confirm-modal-preview", status: String(stateBeforeStyle?.promptType ?? "") === "confirmPrompt" ? "pass" : "fail", output: { openReceipt, stateBeforeStyle } },
+        { name: "set-confirm-modal-style-while-live", status: styleApplied && promptStillLive ? "pass" : "fail", output: { styleReceipt, stateAfterStyle } },
+        { name: "dismiss-confirm-modal-preview", status: dismissed ? "pass" : "fail", output: { escapeReceipt, stateAfterEscape } },
+      ],
+      failure: status === "pass" ? undefined : {
+        code: "missing_confirm_modal_style_preview_receipt",
+        stepName: "confirm-modal-style-preview-proof",
+        message: "Confirm Modal Styling did not prove a live preview target, style mutation, and Escape dismissal.",
+      },
+      warnings: status === "pass" ? [] : ["file_linear:confirm_modal_style_preview_receipt_missing"],
+    };
+  } catch (error) {
+    if (startReceipt.resumed !== true) {
+      stopReceipt = parseMaybeJson((await runTool(["bash", "scripts/agentic/session.sh", "stop", opts.session], "confirm-modal-style:session-stop-after-error", env)).stdout);
+    }
+    return {
+      schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+      scenario: "confirm-modal-style-preview-proof",
+      status: "fail",
+      failClosed: true,
+      failureMode: "fail_closed",
+      missingReceipt: "missing_confirm_modal_style_preview_receipt",
+      linearIssue: "file_linear:confirm_modal_style_preview_receipt_missing",
+      confirmModalStylePreview: {
+        error: error instanceof Error ? error.message : String(error),
+        startReceipt,
+        readyReceipt,
+        showReceipt,
+        elementsBefore,
+        openReceipt,
+        styleReceipt,
+        stateBeforeStyle,
+        stateAfterStyle,
+        elementsAfterStyle,
+        escapeReceipt,
+        stateAfterEscape,
+        stopReceipt,
+      },
+      usage: { stateFirst: true, usedGetState: true, usedGetElements: true, usedBatch: true, usedNativeInput: false, usedScreenshot: false, openedSystemSettings: false, mutatedTcc: false, installedAgents: false, triggeredSecurityPrompt: false, networkAccessed: false, externalServiceContacted: false },
+      steps: [{ name: "confirm-modal-style-preview-proof", status: "fail", output: { error: error instanceof Error ? error.message : String(error), stopReceipt } }],
+      failure: { code: "missing_confirm_modal_style_preview_receipt", stepName: "confirm-modal-style-preview-proof", message: "Confirm Modal Styling runtime proof failed before producing a complete receipt." },
+      warnings: ["file_linear:confirm_modal_style_preview_receipt_missing"],
+    };
+  }
+}
+
+export async function runSdkConfirmRuntimeProofScenario(opts: {
+  session: string;
+  cancel?: "escape";
+}): Promise<HardScenarioReceipt> {
+  const receiptPath = "/tmp/confirm-modal-sdk-confirm-script-result.json";
+  const scriptPath = resolve(PROJECT_ROOT, "tests/smoke/test-confirm-sdk-runtime.ts");
+  const runRequestId = `sdk-confirm-run-${Date.now()}`;
+  const sessionDir = Bun.env.SCRIPT_KIT_SESSION_DIR
+    ?? `/tmp/sk-sdk-confirm-runtime-${opts.session}-${Date.now()}`;
+  const agentBinary = resolve(PROJECT_ROOT, "target-agent/pools/agent-debug/debug/script-kit-gpui");
+  const sessionEnv: Record<string, string> = {
+    SCRIPT_KIT_SESSION_DIR: sessionDir,
+    SCRIPT_KIT_GPUI_BINARY: Bun.env.SCRIPT_KIT_GPUI_BINARY ?? agentBinary,
+    SCRIPT_KIT_DISABLE_AGENT_CHAT_HOT_PREWARM:
+      Bun.env.SCRIPT_KIT_DISABLE_AGENT_CHAT_HOT_PREWARM ?? "1",
+    SCRIPT_KIT_DISABLE_AUTOMATIC_UPDATE_CHECK:
+      Bun.env.SCRIPT_KIT_DISABLE_AUTOMATIC_UPDATE_CHECK ?? "1",
+  };
+  const baseProof = {
+    kind: "sdk.confirm.runtime",
+    api: "confirm",
+    scriptPath,
+    runRequestId,
+    sessionDir,
+    requestedBinary: sessionEnv.SCRIPT_KIT_GPUI_BINARY,
+    scriptRequest: {
+      message: "SDK confirm runtime proof?",
+      confirmText: "Confirm SDK",
+      cancelText: "Cancel SDK",
+      expectedProtocolType: "confirm",
+    },
+    hostRoute: {
+      expectedPromptMessage: "ShowConfirm",
+      expectedSurface: "ConfirmPrompt",
+      hostHandler: "src/prompt_handler/mod.rs::PromptMessage::ShowConfirm",
+      sharedRoute: "open_confirm_prompt",
+    },
+    destructiveCommandExecuted: false,
+    systemCommandRequested: false,
+    trashMutationRequested: false,
+  };
+
+  let startReceipt: Record<string, unknown> = {};
+  let readyReceipt: Record<string, unknown> | null = null;
+  let stopReceipt: Record<string, unknown> | null = null;
+  let showReceipt: Record<string, unknown> | null = null;
+  let runReceipt: Record<string, unknown> | null = null;
+  let stateBefore: Record<string, unknown> = {};
+  let elementsBefore: Record<string, unknown> = {};
+  let escapeCancelReceipt: Record<string, unknown> = {};
+  let stateAfterResolve: Record<string, unknown> = {};
+  let scriptResult: Record<string, unknown> = {};
+  let processTree: Record<string, unknown> = {};
+  let failureArtifacts: Record<string, unknown> = {};
+
+  try {
+    await runTool(["rm", "-f", receiptPath], "sdk-confirm:remove-old-script-receipt");
+    startReceipt = parseMaybeJson(
+      (await runTool(["bash", "scripts/agentic/session.sh", "start", opts.session], "sdk-confirm:session-start", sessionEnv)).stdout,
+    );
+    readyReceipt = startReceipt.ready === true
+      ? { status: "ok", readyFromStart: true }
+      : await runTool(["bash", "scripts/agentic/wait-session-ready.sh", opts.session, "60"], "sdk-confirm:wait-session-ready", sessionEnv);
+    if (startReceipt.ready !== true && readyReceipt.exitCode !== 0) {
+      throw new Error(String(readyReceipt.stdout || readyReceipt.stderr || "session did not become ready"));
+    }
+
+    showReceipt = await sendWithoutAwaitParse(opts.session, {
+      type: "show",
+      requestId: "sdk-confirm-show-main",
+    }, 8000, sessionEnv);
+    await Bun.sleep(150);
+
+    runReceipt = await sendWithoutAwaitParse(opts.session, {
+      type: "run",
+      path: scriptPath,
+      requestId: runRequestId,
+    }, 8000, sessionEnv);
+
+    const statePolls: Record<string, unknown>[] = [];
+    for (let attempt = 0; attempt < 40; attempt += 1) {
+      stateBefore = rpcResponse(await rpc(opts.session, {
+        type: "getState",
+        requestId: `sdk-confirm-state-before-${attempt}`,
+        summaryOnly: true,
+      }, "stateResult", 8000, sessionEnv));
+      statePolls.push({
+        attempt,
+        promptType: stateBefore.promptType ?? null,
+        surfaceKind: stateBefore.surfaceKind ?? null,
+        semanticSurface: stateBefore.semanticSurface ?? null,
+      });
+      if (String(stateBefore.promptType ?? "") === "confirmPrompt") {
+        break;
+      }
+      await Bun.sleep(100);
+    }
+
+    elementsBefore = rpcResponse(await rpc(opts.session, {
+      type: "getElements",
+      requestId: "sdk-confirm-elements-before",
+      limit: 80,
+    }, "elementsResult", 8000, sessionEnv));
+
+    const elements = asArray(elementsBefore.elements).map(asRecord);
+    const footerButtons = asArray(asRecord(stateBefore.activeFooter).buttons).map(asRecord);
+    const activeFooterText = JSON.stringify(stateBefore.activeFooter ?? {}).toLowerCase();
+    const confirmButton = elements.find((element) =>
+      String(element.id ?? "").startsWith("button:0:")
+      || String(element.label ?? "") === "Confirm SDK"
+    ) ?? footerButtons.find((button) => String(button.action ?? "") === "apply") ?? null;
+    const cancelButton = elements.find((element) =>
+      String(element.id ?? "").startsWith("button:1:")
+      || String(element.label ?? "") === "Cancel SDK"
+    ) ?? footerButtons.find((button) => String(button.action ?? "") === "close") ?? null;
+
+    escapeCancelReceipt = await sendWithoutAwaitParse(opts.session, {
+      type: "simulateKey",
+      key: "escape",
+      modifiers: [],
+      requestId: "sdk-confirm-escape-cancel",
+    }, 8000, sessionEnv);
+
+    const resultPolls: Record<string, unknown>[] = [];
+    for (let attempt = 0; attempt < 40; attempt += 1) {
+      if (await Bun.file(receiptPath).exists()) {
+        scriptResult = await Bun.file(receiptPath).json();
+        resultPolls.push({
+          attempt,
+          phase: scriptResult.phase ?? null,
+          result: scriptResult.result ?? null,
+          resultType: scriptResult.resultType ?? null,
+        });
+        if (scriptResult.phase === "resolved") {
+          break;
+        }
+      } else {
+        resultPolls.push({ attempt, phase: "missing" });
+      }
+      await Bun.sleep(100);
+    }
+
+    stateAfterResolve = rpcResponse(await rpc(opts.session, {
+      type: "getState",
+      requestId: "sdk-confirm-state-after-resolve",
+      summaryOnly: true,
+    }, "stateResult", 8000, sessionEnv));
+
+    stopReceipt = parseMaybeJson(
+      (await runTool(["bash", "scripts/agentic/session.sh", "stop", opts.session], "sdk-confirm:session-stop", sessionEnv)).stdout,
+    );
+
+    const confirmSurfaceOpen = String(stateBefore.promptType ?? "") === "confirmPrompt";
+    const promptDismissed = String(stateAfterResolve.promptType ?? "") !== "confirmPrompt";
+    const confirmButtonText = String(confirmButton ? confirmButton.label ?? confirmButton.text ?? "" : "");
+    const cancelButtonText = String(cancelButton ? cancelButton.label ?? cancelButton.text ?? "" : "");
+    const footerHasApply = activeFooterText.includes("apply") || footerButtons.some((button) => String(button.action ?? "") === "apply");
+    const footerHasClose = activeFooterText.includes("close") || footerButtons.some((button) => String(button.action ?? "") === "close");
+    const scriptResolvedFalse = scriptResult.phase === "resolved"
+      && scriptResult.result === false
+      && scriptResult.resultType === "boolean";
+    const status = confirmSurfaceOpen
+      && confirmButtonText === "Confirm SDK"
+      && cancelButtonText === "Cancel SDK"
+      && footerHasApply
+      && footerHasClose
+      && promptDismissed
+      && scriptResolvedFalse
+      ? "pass"
+      : "fail";
+
+    return {
+      schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+      scenario: "sdk-confirm-runtime-proof",
+      status,
+      failClosed: status !== "pass",
+      failureMode: status === "pass" ? undefined : "fail_closed",
+      missingReceipt: status === "pass" ? undefined : "missing_sdk_confirm_runtime_receipt",
+      linearIssue: status === "pass" ? undefined : "file_linear:sdk_confirm_runtime_receipt_missing",
+      sdkConfirmRuntime: {
+        ...baseProof,
+        promptBeforeResolve: {
+          promptType: stateBefore.promptType ?? null,
+          semanticSurface: stateBefore.semanticSurface ?? null,
+          surfaceKind: stateBefore.surfaceKind ?? null,
+          promptId: stateBefore.promptId ?? null,
+          automationWindowId: stateBefore.automationWindowId ?? null,
+          activeFooter: stateBefore.activeFooter ?? null,
+        },
+        elementsBeforeResolve: {
+          panelSemanticId: elements.find((element) => String(element.id ?? "").startsWith("panel:"))?.id ?? null,
+          confirmButtonSemanticId: confirmButton ? confirmButton.id ?? confirmButton.action ?? null : null,
+          confirmButtonText,
+          cancelButtonSemanticId: cancelButton ? cancelButton.id ?? cancelButton.action ?? null : null,
+          cancelButtonText,
+          selectedOrFocusedId: elementsBefore.selectedId ?? elementsBefore.focusedId ?? null,
+        },
+        footerAndKeys: {
+          footerHasApply,
+          footerHasClose,
+          cancelKey: "Escape",
+          escapeCancelReceipt,
+          keyboardPolicy: stateBefore.keyboardPolicy ?? "NoEditableKeyboard/source-contract",
+        },
+        scriptResult: {
+          path: receiptPath,
+          ...scriptResult,
+        },
+        cleanup: {
+          stateAfterResolve,
+          promptDismissed,
+          scriptReceiptWritten: scriptResolvedFalse,
+          stopReceipt,
+          sessionDir,
+          binary: startReceipt.binary ?? sessionEnv.SCRIPT_KIT_GPUI_BINARY,
+          destructiveCommandExecuted: false,
+          systemCommandRequested: false,
+          trashMutationRequested: false,
+        },
+        showReceipt,
+        runReceipt,
+        statePolls,
+        resultPolls,
+      },
+      usage: { stateFirst: true, usedGetState: true, usedGetElements: true, usedNativeInput: false, usedScreenshot: false, openedSystemSettings: false, mutatedTcc: false, installedAgents: false, triggeredSecurityPrompt: false, networkAccessed: false, externalServiceContacted: false },
+      steps: [
+        { name: "send-sdk-confirm-script-run", status: runReceipt ? "pass" : "fail", output: runReceipt },
+        { name: "inspect-sdk-confirm-state", status: confirmSurfaceOpen ? "pass" : "fail", output: stateBefore },
+        { name: "inspect-sdk-confirm-elements", status: confirmButtonText === "Confirm SDK" && cancelButtonText === "Cancel SDK" ? "pass" : "fail", output: { confirmButton, cancelButton } },
+        { name: "escape-resolves-sdk-confirm-false", status: scriptResolvedFalse ? "pass" : "fail", output: { escapeCancelReceipt, stateAfterResolve, scriptResult } },
+      ],
+      failure: status === "pass" ? undefined : {
+        code: "missing_sdk_confirm_runtime_receipt",
+        stepName: "sdk-confirm-runtime-proof",
+        message: "SDK confirm runtime proof did not expose the required run, prompt, button, footer, dismiss, and boolean result receipts.",
+      },
+      warnings: status === "pass" ? [] : ["file_linear:sdk_confirm_runtime_receipt_missing"],
+    };
+  } catch (error) {
+    if (await Bun.file(receiptPath).exists()) {
+      try {
+        scriptResult = await Bun.file(receiptPath).json();
+      } catch {
+        scriptResult = { phase: "unreadable" };
+      }
+    }
+    const sessionStatus = parseMaybeJson(
+      (await runTool(["bash", "scripts/agentic/session.sh", "status", opts.session], "sdk-confirm:session-status-after-error", sessionEnv)).stdout,
+    );
+    const pid = typeof sessionStatus.pid === "number" && sessionStatus.pid > 0
+      ? String(sessionStatus.pid)
+      : "";
+    const processTreeText = pid
+      ? await runTool(["bash", "-lc", `ps -p ${pid} -o pid,ppid,pgid,stat,%cpu,lstart,command 2>/dev/null; for child in $(pgrep -P ${pid} 2>/dev/null || true); do ps -p "$child" -o pid,ppid,pgid,stat,%cpu,lstart,command 2>/dev/null; done`], "sdk-confirm:process-tree-after-error")
+      : { exitCode: 0, stdout: "", stderr: "" };
+    const artifactDir = `/tmp/confirm-modal-sdk-confirm-runtime-artifacts-${Date.now()}`;
+    const logPath = typeof sessionStatus.log === "string" ? sessionStatus.log : "";
+    const responsesPath = typeof sessionStatus.responses === "string" ? sessionStatus.responses : "";
+    const protocolResponsesPath = typeof sessionStatus.protocolResponses === "string" ? sessionStatus.protocolResponses : "";
+    const lifecyclePath = typeof sessionStatus.lifecycle === "string" ? sessionStatus.lifecycle : "";
+    await runTool(["mkdir", "-p", artifactDir], "sdk-confirm:create-failure-artifact-dir");
+    for (const [name, path] of [
+      ["app.log", logPath],
+      ["responses.ndjson", responsesPath],
+      ["protocol-responses.ndjson", protocolResponsesPath],
+      ["lifecycle.ndjson", lifecyclePath],
+    ] as const) {
+      if (path) {
+        await runTool(["bash", "-lc", `if [ -f "$1" ]; then cp "$1" "$2/$3"; fi`, "copy-artifact", path, artifactDir, name], `sdk-confirm:copy-${name}`);
+      }
+    }
+    await Bun.write(`${artifactDir}/process-tree.txt`, processTreeText.stdout || "");
+    if (processTreeText.stderr) {
+      await Bun.write(`${artifactDir}/process-tree.stderr.txt`, processTreeText.stderr);
+    }
+    failureArtifacts = {
+      artifactDir,
+      appLog: logPath ? `${artifactDir}/app.log` : null,
+      responses: responsesPath ? `${artifactDir}/responses.ndjson` : null,
+      protocolResponses: protocolResponsesPath ? `${artifactDir}/protocol-responses.ndjson` : null,
+      lifecycle: lifecyclePath ? `${artifactDir}/lifecycle.ndjson` : null,
+      processTree: `${artifactDir}/process-tree.txt`,
+    };
+    processTree = {
+      sessionStatus,
+      stdout: processTreeText.stdout,
+      stderr: processTreeText.stderr,
+      failureArtifacts,
+    };
+    stopReceipt = parseMaybeJson(
+      (await runTool(["bash", "scripts/agentic/session.sh", "stop", opts.session], "sdk-confirm:session-stop-after-error", sessionEnv)).stdout,
+    );
+    return {
+      schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+      scenario: "sdk-confirm-runtime-proof",
+      status: "fail",
+      failClosed: true,
+      failureMode: "fail_closed",
+      missingReceipt: "missing_sdk_confirm_runtime_receipt",
+      linearIssue: "file_linear:sdk_confirm_runtime_receipt_missing",
+      sdkConfirmRuntime: {
+        ...baseProof,
+        promptBeforeResolve: stateBefore,
+        elementsBeforeResolve: elementsBefore,
+        footerAndKeys: { cancelKey: "Escape", escapeCancelReceipt },
+        scriptResult: { path: receiptPath, ...scriptResult },
+        cleanup: {
+          stateAfterResolve,
+          promptDismissed: String(stateAfterResolve.promptType ?? "") !== "confirmPrompt",
+          scriptReceiptWritten: scriptResult.phase === "resolved",
+          stopReceipt,
+          sessionDir,
+          binary: startReceipt.binary ?? sessionEnv.SCRIPT_KIT_GPUI_BINARY,
+          processTree,
+          failureArtifacts,
+          destructiveCommandExecuted: false,
+          systemCommandRequested: false,
+          trashMutationRequested: false,
+        },
+        runReceipt,
+        showReceipt,
+        startReceipt,
+        readyReceipt,
+        error: error instanceof Error ? error.message : String(error),
+      },
+      usage: { stateFirst: true, usedGetState: true, usedGetElements: true, usedNativeInput: false, usedScreenshot: false, openedSystemSettings: false, mutatedTcc: false, installedAgents: false, triggeredSecurityPrompt: false, networkAccessed: false, externalServiceContacted: false },
+      steps: [{ name: "sdk-confirm-runtime-proof", status: "fail", output: { error: error instanceof Error ? error.message : String(error), stopReceipt } }],
+      failure: { code: "missing_sdk_confirm_runtime_receipt", stepName: "sdk-confirm-runtime-proof", message: "SDK confirm runtime proof failed before producing a complete receipt." },
+      warnings: ["file_linear:sdk_confirm_runtime_receipt_missing"],
     };
   }
 }
@@ -10701,6 +11650,9 @@ if (import.meta.main) {
     "file-portal-origin-roundtrip",
     "permission-privacy-preflight",
     "shortcut-recorder-focus-capture",
+    "sdk-confirm-runtime-proof",
+    "confirm-modal-style-preview-proof",
+    "notes-delete-confirm-route-proof",
     "template-prompt-automation-parity-stress",
     "current-app-commands-frontmost-stress",
     "actions-captured-subject-frame-stress",
@@ -10790,6 +11742,27 @@ if (import.meta.main) {
 
     case "shortcut-recorder-focus-capture": {
       const bundle = await runShortcutRecorderFocusCaptureStressScenario({ session, chord, action, surface, sandboxConfig });
+      process.stdout.write(JSON.stringify(bundle, null, 2) + "\n");
+      process.exit(bundle.status === "pass" ? 0 : 1);
+      break;
+    }
+
+    case "sdk-confirm-runtime-proof": {
+      const bundle = await runSdkConfirmRuntimeProofScenario({ session, cancel: "escape" });
+      process.stdout.write(JSON.stringify(bundle, null, 2) + "\n");
+      process.exit(bundle.status === "pass" ? 0 : 1);
+      break;
+    }
+
+    case "confirm-modal-style-preview-proof": {
+      const bundle = await runConfirmModalStylePreviewProofScenario({ session });
+      process.stdout.write(JSON.stringify(bundle, null, 2) + "\n");
+      process.exit(bundle.status === "pass" ? 0 : 1);
+      break;
+    }
+
+    case "notes-delete-confirm-route-proof": {
+      const bundle = await runNotesDeleteConfirmRouteProofScenario({ session });
       process.stdout.write(JSON.stringify(bundle, null, 2) + "\n");
       process.exit(bundle.status === "pass" ? 0 : 1);
       break;

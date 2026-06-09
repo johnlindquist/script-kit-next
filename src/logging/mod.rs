@@ -196,7 +196,7 @@ fn category_to_code(category: &str) -> char {
         "HOTKEY" => 'H',
         "VISIBILITY" => 'V',
         "EXEC" => 'E',
-        "KEY" => 'K',
+        "KEY" | "KEY_SETUP" | "KEY_BIND" | "KEY_ROUTE" => 'K',
         "FOCUS" => 'F',
         "THEME" => 'T',
         "CACHE" => 'C',

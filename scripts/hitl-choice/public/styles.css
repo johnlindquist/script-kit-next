@@ -4,6 +4,12 @@
   line-height: 1.45;
 }
 
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
 body {
   margin: 0;
   background: Canvas;
@@ -14,6 +20,8 @@ body {
   max-width: 1120px;
   margin: 0 auto;
   padding: 16px;
+  width: 100%;
+  min-width: 0;
 }
 
 .top,
@@ -32,6 +40,7 @@ body {
   justify-content: space-between;
   gap: 16px;
   padding: 16px;
+  min-width: 0;
 }
 
 .bottom {
@@ -46,6 +55,21 @@ body {
 
 .title-block {
   min-width: 0;
+}
+
+#job-title,
+#job-description,
+.option,
+.option-main > div,
+.option-meta,
+.description,
+.goal,
+.risk,
+.evidence,
+.overall,
+#message {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .eyebrow,
@@ -63,6 +87,7 @@ p {
 h1 {
   margin-bottom: 8px;
   font-size: 1.6rem;
+  line-height: 1.22;
 }
 
 h2 {
@@ -75,6 +100,7 @@ h2 {
   gap: 4px;
   white-space: nowrap;
   font-weight: 700;
+  min-width: max-content;
 }
 
 #save-status {
@@ -138,6 +164,7 @@ button:disabled {
   border: 1px solid color-mix(in srgb, CanvasText 18%, transparent);
   border-radius: 8px;
   padding: 14px;
+  min-width: 0;
 }
 
 .option:focus {
@@ -154,6 +181,7 @@ button:disabled {
   display: grid;
   grid-template-columns: 40px 1fr;
   gap: 10px;
+  min-width: 0;
 }
 
 .check {
@@ -166,6 +194,14 @@ button:disabled {
 .risk,
 .evidence {
   margin-bottom: 8px;
+  white-space: pre-wrap;
+}
+
+.proof {
+  max-width: 100%;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .wireframe {
@@ -256,6 +292,50 @@ button:disabled {
   border-radius: 6px;
   background: color-mix(in srgb, CanvasText 7%, transparent);
   white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  .shell {
+    padding: 10px;
+  }
+
+  .top {
+    position: static;
+    flex-direction: column;
+    gap: 12px;
+    width: 100%;
+  }
+
+  h1 {
+    font-size: 1.35rem;
+  }
+
+  .status {
+    min-width: 0;
+    white-space: normal;
+  }
+
+  .option {
+    padding: 12px;
+  }
+
+  .option-main {
+    grid-template-columns: 28px minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  .option-meta {
+    font-size: 0.78rem;
+  }
+
+  .bottom {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  button {
+    width: 100%;
+  }
 }
 
 .wf-key {
@@ -365,6 +445,7 @@ pre {
 @media (max-width: 700px) {
   .shell {
     padding: 10px;
+    max-width: 100vw;
   }
 
   .top,
@@ -375,6 +456,6 @@ pre {
   }
 
   .option-main {
-    grid-template-columns: 32px 1fr;
+    grid-template-columns: 28px minmax(0, 1fr);
   }
 }

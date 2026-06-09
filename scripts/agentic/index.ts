@@ -108,6 +108,8 @@
  *                         Pass-now dynamic choice-count window resize proof
  *   notes-window-resize-stress
  *                         Pass-now sandboxed Notes window grow/shrink resize proof
+ *   notes-delete-confirm-route-proof
+ *                         Pass-now sandboxed Notes delete confirm-popup route proof
  *   actions-command-discoverability-noop-stress
  *                         Pass-now actions popup row measurement proof
  *   dense-list-detail-preview-readability-stress
@@ -116,6 +118,10 @@
  *                         Fail-closed toast/notification queue lifecycle proof
  *   destructive-confirm-modal-safety-stress
  *                         Fail-closed destructive confirm dry-run safety proof
+ *   confirm-modal-style-preview-proof
+ *                         Pass-now dev style Confirm Modal preview and live style mutation proof
+ *   sdk-confirm-runtime-proof
+ *                         Pass-now SDK confirm script route proof
  *   loading-skeleton-progress-restoration-stress
  *                         Fail-closed loading skeleton/progress restoration proof
  *   icon-image-fallback-redaction-stress
@@ -292,10 +298,13 @@ import {
   runDivContainerScrollOverflowStressScenario,
   runMainMenuDynamicChoiceResizeStressScenario,
   runNotesWindowResizeStressScenario,
+  runNotesDeleteConfirmRouteProofScenario,
   runActionsCommandDiscoverabilityNoopStressScenario,
   runDenseListDetailPreviewReadabilityStressScenario,
   runToastNotificationQueueLifecycleStressScenario,
   runDestructiveConfirmModalSafetyStressScenario,
+  runConfirmModalStylePreviewProofScenario,
+  runSdkConfirmRuntimeProofScenario,
   runLoadingSkeletonProgressRestorationStressScenario,
   runIconImageFallbackRedactionStressScenario,
   runFooterStatusPersistenceStressScenario,
@@ -4253,6 +4262,27 @@ switch (recipe) {
     break;
   }
 
+  case "notes-delete-confirm-route-proof": {
+    const proofBundle = await runNotesDeleteConfirmRouteProofScenario({
+      session,
+    });
+    result = {
+      schemaVersion: SCHEMA_VERSION,
+      recipe: "notes-delete-confirm-route-proof",
+      status: proofBundle.status,
+      failClosed: proofBundle.failClosed,
+      failureMode: proofBundle.failureMode,
+      missingReceipt: proofBundle.missingReceipt,
+      linearIssue: proofBundle.linearIssue,
+      steps: proofBundle.steps as StepReceipt[],
+      summary: proofBundle.status === "pass"
+        ? "Notes delete confirm route used a sandbox Notes DB, real Notes shortcuts, attached confirm-popup, cancel button, and DB mutation check"
+        : "Notes delete confirm route failed; inspect proofBundle.notesDeleteConfirmRoute for missing popup identity, button, focus, cancel, or sandbox DB receipts",
+      proofBundle,
+    };
+    break;
+  }
+
   case "actions-command-discoverability-noop-stress": {
     const proofBundle = await runActionsCommandDiscoverabilityNoopStressScenario({
       session,
@@ -4340,6 +4370,45 @@ switch (recipe) {
       linearIssue: proofBundle.linearIssue,
       steps: proofBundle.steps as StepReceipt[],
       summary: "Destructive confirm modal safety stress failed closed; dry-run prompt identity, Enter/Escape, restore, stale rejection, and no-system-command receipts are missing",
+      proofBundle,
+    };
+    break;
+  }
+
+  case "confirm-modal-style-preview-proof": {
+    const proofBundle = await runConfirmModalStylePreviewProofScenario({
+      session,
+    });
+    result = {
+      schemaVersion: SCHEMA_VERSION,
+      recipe: "confirm-modal-style-preview-proof",
+      status: proofBundle.status,
+      failClosed: proofBundle.failClosed,
+      failureMode: proofBundle.failureMode,
+      missingReceipt: proofBundle.missingReceipt,
+      linearIssue: proofBundle.linearIssue,
+      steps: proofBundle.steps as StepReceipt[],
+      summary: "Confirm Modal Styling opens a live ConfirmPrompt preview, applies confirmModal style controls while it remains visible, and dismisses it with Escape",
+      proofBundle,
+    };
+    break;
+  }
+
+  case "sdk-confirm-runtime-proof": {
+    const proofBundle = await runSdkConfirmRuntimeProofScenario({
+      session,
+      cancel: "escape",
+    });
+    result = {
+      schemaVersion: SCHEMA_VERSION,
+      recipe: "sdk-confirm-runtime-proof",
+      status: proofBundle.status,
+      failClosed: proofBundle.failClosed,
+      failureMode: proofBundle.failureMode,
+      missingReceipt: proofBundle.missingReceipt,
+      linearIssue: proofBundle.linearIssue,
+      steps: proofBundle.steps as StepReceipt[],
+      summary: "SDK confirm runtime proof drives global confirm() through the script run route and verifies shared ConfirmPrompt cancellation returns boolean false",
       proofBundle,
     };
     break;
@@ -4831,10 +4900,13 @@ switch (recipe) {
           { name: "div-container-scroll-overflow-stress", description: "Pass-now real DivPrompt tall-container overflow layout and cleanup receipt", flags: ["--session", "--item-count", "--json"] },
           { name: "main-menu-dynamic-choice-resize-stress", description: "Pass-now small/large choice-count window height resize receipt", flags: ["--session", "--small-count", "--large-count", "--json"] },
           { name: "notes-window-resize-stress", description: "Pass-now sandboxed Notes window grow/shrink resize receipt", flags: ["--session", "--short-line-count", "--tall-line-count", "--json"] },
+          { name: "notes-delete-confirm-route-proof", description: "Pass-now sandboxed Notes delete shortcut confirm-popup cancel receipt", flags: ["--session", "--json"] },
           { name: "actions-command-discoverability-noop-stress", description: "Pass-now real Cmd-K action popup row measurement with safe no-execution guards", flags: ["--session", "--hosts", "--states", "--json"] },
           { name: "dense-list-detail-preview-readability-stress", description: "Fail-closed UX stress for dense list/detail preview readability during filter, selection, and resize churn", flags: ["--session", "--surfaces", "--query", "--filter-cycles", "--selection-cycles", "--resize-cycles", "--json"] },
           { name: "toast-notification-queue-lifecycle-stress", description: "Fail-closed UX stress for toast queue, notification bridge, duplicate collapse, autohide, dismiss, bounds, and stale rejection", flags: ["--session", "--surface", "--fixtures", "--cycles", "--json"] },
           { name: "destructive-confirm-modal-safety-stress", description: "Fail-closed UX stress for destructive confirm dry-run identity, Enter/Escape safety, parent restore, and no real system command", flags: ["--session", "--host", "--fixture", "--paths", "--dry-run-only", "--json"] },
+          { name: "confirm-modal-style-preview-proof", description: "Pass-now dev style Confirm Modal preview target and live style mutation proof", flags: ["--session", "--json"] },
+          { name: "sdk-confirm-runtime-proof", description: "Pass-now SDK confirm script route proof through shared ConfirmPrompt and Escape false result", flags: ["--session", "--json"] },
           { name: "loading-skeleton-progress-restoration-stress", description: "Fail-closed UX stress for local loading skeleton/progress generations, stale rejection, activation blocking, and restoration", flags: ["--session", "--surfaces", "--fixture", "--cycles", "--json"] },
           { name: "icon-image-fallback-redaction-stress", description: "Fail-closed UX stress for icon/image fallback, source redaction, stale image rejection, and accessible labels", flags: ["--session", "--surfaces", "--fixtures", "--json"] },
           { name: "footer-status-persistence-stress", description: "Fail-closed UX stress for footer/status owner, generation, transition persistence, duplicate rejection, and stale status", flags: ["--session", "--surfaces", "--transitions", "--json"] },
@@ -5122,6 +5194,8 @@ Recipes:
                          Pass-now dynamic choice-count window resize proof
   notes-window-resize-stress
                          Pass-now sandboxed Notes window grow/shrink resize proof
+  notes-delete-confirm-route-proof
+                         Pass-now sandboxed Notes delete confirm-popup route proof
   actions-command-discoverability-noop-stress
                          Pass-now action popup row measurement proof
   dense-list-detail-preview-readability-stress
@@ -5130,6 +5204,10 @@ Recipes:
                          Fail-closed toast/notification queue lifecycle proof
   destructive-confirm-modal-safety-stress
                          Fail-closed destructive confirm dry-run safety proof
+  confirm-modal-style-preview-proof
+                         Pass-now dev style Confirm Modal preview and live style mutation proof
+  sdk-confirm-runtime-proof
+                         Pass-now SDK confirm script route proof
   loading-skeleton-progress-restoration-stress
                          Fail-closed loading skeleton/progress restoration proof
   icon-image-fallback-redaction-stress
@@ -5286,6 +5364,10 @@ Available scenarios:
                          Emit fail-closed toast/notification queue lifecycle requirements
   destructive-confirm-modal-safety-stress
                          Emit fail-closed destructive confirm dry-run safety requirements
+  confirm-modal-style-preview-proof
+                         Prove Confirm Modal Styling opens and live-tweaks a shared ConfirmPrompt
+  sdk-confirm-runtime-proof
+                         Prove SDK global confirm() reaches shared ConfirmPrompt
   loading-skeleton-progress-restoration-stress
                          Emit fail-closed loading skeleton/progress restoration requirements
   icon-image-fallback-redaction-stress
@@ -5460,10 +5542,13 @@ Examples:
   bun scripts/agentic/index.ts div-container-scroll-overflow-stress --session default --item-count 80 --json
   bun scripts/agentic/index.ts main-menu-dynamic-choice-resize-stress --session default --small-count 3 --large-count 15 --json
   bun scripts/agentic/index.ts notes-window-resize-stress --session default --short-line-count 2 --tall-line-count 80 --json
+  bun scripts/agentic/index.ts notes-delete-confirm-route-proof --session default --json
   bun scripts/agentic/index.ts actions-command-discoverability-noop-stress --session default --hosts main,clipboard-history,emoji-picker,file-search,app-launcher --states actionable,disabled,no-op --json
   bun scripts/agentic/index.ts dense-list-detail-preview-readability-stress --session default --surfaces file-search,sdk-reference,script-template-catalog --query agentic-loop-nineteen-preview --filter-cycles 4 --selection-cycles 8 --resize-cycles 3 --json
   bun scripts/agentic/index.ts toast-notification-queue-lifecycle-stress --session default --surface main --fixtures success,duplicate,persistent,dismiss,autohide --cycles 3 --json
   bun scripts/agentic/index.ts destructive-confirm-modal-safety-stress --session default --host main --fixture agentic-destructive-dry-run --paths cancel,confirm,stale-confirm --dry-run-only --json
+  bun scripts/agentic/index.ts confirm-modal-style-preview-proof --session default --json
+  bun scripts/agentic/index.ts sdk-confirm-runtime-proof --session default --json
   bun scripts/agentic/index.ts loading-skeleton-progress-restoration-stress --session default --surfaces sdk-reference,script-template-catalog --fixture delayed-local --cycles 4 --json
   bun scripts/agentic/index.ts icon-image-fallback-redaction-stress --session default --surfaces app-launcher,file-search,clipboard-history --fixtures missing-file,corrupt-png,private-local-path,data-uri-redacted --json
   bun scripts/agentic/index.ts footer-status-persistence-stress --session default --surfaces main,clipboard-history,emoji-picker,file-search,actionsDialog --transitions filter,selection,cmd-k,escape,clear-filter --json

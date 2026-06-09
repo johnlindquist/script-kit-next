@@ -1,5 +1,27 @@
 {
     logging::init();
+    logging::log(
+        "KEY_SETUP",
+        &format!(
+            "SHORTCUT_DEBUG_BOOT pid={} exe={} ai_log={} rust_log={} session_name={} session_generation={} protocol_responses_path={} shortcut_debug={} keep_actions_window_open={}",
+            std::process::id(),
+            std::env::current_exe()
+                .map(|path| path.display().to_string())
+                .unwrap_or_else(|error| format!("<error:{error}>")),
+            std::env::var("SCRIPT_KIT_AI_LOG").unwrap_or_else(|_| "<unset>".to_string()),
+            std::env::var("RUST_LOG").unwrap_or_else(|_| "<unset>".to_string()),
+            std::env::var("SCRIPT_KIT_AGENTIC_SESSION_NAME")
+                .unwrap_or_else(|_| "<unset>".to_string()),
+            std::env::var("SCRIPT_KIT_AGENTIC_SESSION_GENERATION")
+                .unwrap_or_else(|_| "<unset>".to_string()),
+            std::env::var("SCRIPT_KIT_AGENTIC_PROTOCOL_RESPONSES_PATH")
+                .unwrap_or_else(|_| "<unset>".to_string()),
+            std::env::var("SCRIPT_KIT_SHORTCUT_DEBUG")
+                .unwrap_or_else(|_| "<unset>".to_string()),
+            std::env::var("SCRIPT_KIT_AGENTIC_KEEP_ACTIONS_WINDOW_OPEN")
+                .unwrap_or_else(|_| "<unset>".to_string()),
+        ),
+    );
 
     // Register the in-window confirm router so `confirm_with_parent_dialog`
     // can push `AppView::ConfirmPrompt` onto the main `ScriptListApp` entity
@@ -823,6 +845,9 @@ app.run(move |cx: &mut App| {
             // We poll `UpdateState` on the dispatcher's GPUI task whenever we
             // need to refresh the Version row — the worker thread itself
             // cannot mutate muda menu items (main-thread only on macOS).
+            if !std::env::var("SCRIPT_KIT_DISABLE_AUTOMATIC_UPDATE_CHECK")
+                .map(|value| value == "1" || value.eq_ignore_ascii_case("true"))
+                .unwrap_or(false)
             {
                 let state = tray_mgr.update_state_handle();
                 std::thread::spawn(move || {
