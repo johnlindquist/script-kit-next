@@ -10,6 +10,26 @@ mod arg_prompt_render_tests {
     }
 
     #[test]
+    fn arg_input_visible_chars_scale_with_width_and_char_size() {
+        // Wider window fits more characters at the same glyph width.
+        assert!(
+            arg_input_visible_chars_for_width(900.0, 8.0)
+                > arg_input_visible_chars_for_width(400.0, 8.0)
+        );
+        // Bigger glyphs fit fewer characters in the same window.
+        assert!(
+            arg_input_visible_chars_for_width(600.0, 7.0)
+                > arg_input_visible_chars_for_width(600.0, 10.0)
+        );
+        // Tiny windows clamp up to a useful minimum.
+        assert_eq!(arg_input_visible_chars_for_width(50.0, 10.0), 24);
+        // Huge windows clamp down so windowing never fully disables.
+        assert_eq!(arg_input_visible_chars_for_width(10_000.0, 1.0), 240);
+        // Degenerate glyph widths cannot divide by zero.
+        assert_eq!(arg_input_visible_chars_for_width(600.0, 0.0), 240);
+    }
+
+    #[test]
     fn prompt_actions_dialog_offsets_match_legacy_defaults() {
         let tokens = get_tokens(DesignVariant::Default);
         let spacing = tokens.spacing();
@@ -72,10 +92,12 @@ mod arg_prompt_render_tests {
         let footer = crate::components::prompt_footer::PromptFooterColors {
             accent: 0,
             text_muted: 0,
+            text_primary: 0,
             border: 0,
             surface: 0x123456,
             background: 0x000000,
             hover_alpha: 0,
+            selected_alpha: 0,
             is_light_mode: true,
         };
 

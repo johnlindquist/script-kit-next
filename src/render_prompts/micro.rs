@@ -199,7 +199,7 @@ impl ScriptListApp {
                                 )
                             })
                             .when(!input_is_empty, |d: gpui::Div| {
-                                d.child(self.render_arg_input_text(text_primary, accent_color))
+                                d.child(self.render_arg_input_text(text_primary, accent_color, cx))
                             })
                     }),
             )

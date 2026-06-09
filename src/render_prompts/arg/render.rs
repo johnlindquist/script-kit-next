@@ -1,9 +1,14 @@
 impl ScriptListApp {
     /// Render the arg input text with cursor and selection highlight
-    fn render_arg_input_text(&self, text_primary: u32, accent_color: u32) -> gpui::Div {
+    fn render_arg_input_text(
+        &self,
+        text_primary: u32,
+        accent_color: u32,
+        cx: &gpui::App,
+    ) -> gpui::Div {
         let text = self.arg_input.text();
         let text_muted = self.theme.colors.text.muted;
-        let max_visible_chars = self.arg_input_max_visible_chars();
+        let max_visible_chars = self.arg_input_max_visible_chars(cx);
         let (window_start, window_end) = self.arg_input.visible_window_range(max_visible_chars);
         let is_window_truncated_left = window_start > 0;
         let is_window_truncated_right = window_end < text.chars().count();
@@ -40,21 +45,32 @@ impl ScriptListApp {
         )
     }
 
-    fn arg_input_max_visible_chars(&self) -> usize {
+    fn arg_input_max_visible_chars(&self, cx: &gpui::App) -> usize {
         const DEFAULT_WINDOW_WIDTH: f64 = 750.0;
         const ARG_INPUT_WIDTH_PADDING_PX: f64 = (HEADER_PADDING_X as f64 * 2.0) + 12.0;
-        const ARG_INPUT_MIN_VISIBLE_CHARS: usize = 24;
-        const ARG_INPUT_MAX_VISIBLE_CHARS: usize = 240;
-        const ARG_INPUT_APPROX_CHAR_WIDTH_PX: f64 = 8.5;
+        // Fallback only for fonts whose `0` glyph cannot be measured.
+        const ARG_INPUT_FALLBACK_CHAR_WIDTH_PX: f64 = 8.5;
 
         let window_width = crate::platform::get_main_window_bounds()
             .map(|(_, _, width, _)| width)
             .filter(|width| width.is_finite() && *width > 0.0)
             .unwrap_or(DEFAULT_WINDOW_WIDTH);
-        let usable_width = (window_width - ARG_INPUT_WIDTH_PADDING_PX).max(200.0);
-        let visible_chars = (usable_width / ARG_INPUT_APPROX_CHAR_WIDTH_PX).floor() as usize;
 
-        visible_chars.clamp(ARG_INPUT_MIN_VISIBLE_CHARS, ARG_INPUT_MAX_VISIBLE_CHARS)
+        // Measure the `ch` advance (digit-zero width) of the font the input
+        // actually renders with, instead of assuming a flat 8.5px per char.
+        let render_context = PromptRenderContext::new(self.theme.as_ref(), self.current_design);
+        let typography = render_context.design_typography;
+        let micro_font_size = typography.font_size_lg - 1.0;
+        let text_system = cx.text_system();
+        let font_id = text_system.resolve_font(&gpui::font(typography.font_family));
+        let char_width = text_system
+            .ch_advance(font_id, gpui::px(micro_font_size))
+            .map(|advance| f64::from(f32::from(advance)))
+            .ok()
+            .filter(|width| width.is_finite() && *width > 0.0)
+            .unwrap_or(ARG_INPUT_FALLBACK_CHAR_WIDTH_PX);
+
+        arg_input_visible_chars_for_width(window_width - ARG_INPUT_WIDTH_PADDING_PX, char_width)
     }
     fn render_arg_prompt(
         &mut self,

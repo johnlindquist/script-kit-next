@@ -1,3 +1,15 @@
+/// Pure clamp step for the arg-input character window: how many characters of
+/// the measured `char_width` fit in `usable_width`, bounded so tiny windows
+/// still show a useful window and huge windows don't disable windowing.
+#[inline]
+fn arg_input_visible_chars_for_width(usable_width: f64, char_width: f64) -> usize {
+    const ARG_INPUT_MIN_VISIBLE_CHARS: usize = 24;
+    const ARG_INPUT_MAX_VISIBLE_CHARS: usize = 240;
+
+    let visible_chars = (usable_width.max(200.0) / char_width.max(1.0)).floor() as usize;
+    visible_chars.clamp(ARG_INPUT_MIN_VISIBLE_CHARS, ARG_INPUT_MAX_VISIBLE_CHARS)
+}
+
 #[inline]
 fn prompt_actions_dialog_offsets(padding_sm: f32, border_thin: f32) -> (f32, f32) {
     // Keep dialog anchored just below the shared header + divider.
