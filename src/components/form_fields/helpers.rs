@@ -86,13 +86,3 @@ pub(crate) fn form_field_type_allows_candidate_value(
         _ => true,
     }
 }
-
-// Tunables for click-to-position. These are *approximations*.
-#[allow(dead_code)]
-pub(crate) const TEXTFIELD_CHAR_WIDTH_PX: f32 = 8.0;
-#[allow(dead_code)]
-pub(crate) const TEXTAREA_LINE_HEIGHT_PX: f32 = 24.0;
-#[allow(dead_code)]
-pub(crate) const INPUT_PADDING_X_PX: f32 = 12.0;
-#[allow(dead_code)]
-pub(crate) const TEXTAREA_PADDING_Y_PX: f32 = 8.0;
