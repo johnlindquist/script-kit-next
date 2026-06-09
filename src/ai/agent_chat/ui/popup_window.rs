@@ -37,7 +37,6 @@ pub(crate) use crate::components::inline_popup_window::{
     footer_anchored_inline_popup_top as footer_anchored_popup_top,
     inline_popup_bounds as popup_bounds,
     inline_popup_height_for_row_height as dense_picker_height_for_row_height,
-    inline_popup_width_for_labels as dense_picker_width_for_labels,
     inline_popup_width_for_window as dense_picker_width_for_window,
     inline_popup_window_options as popup_window_options,
     set_inline_popup_window_bounds as set_popup_window_bounds,

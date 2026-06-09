@@ -45,10 +45,6 @@ pub const INLINE_POPUP_EDGE_GUTTER: f32 = 12.0;
 /// Left margin used by callers that anchor the popup to the composer gutter.
 pub const INLINE_POPUP_LEFT_MARGIN: f32 = 8.0;
 
-const INLINE_POPUP_LABEL_CHAR_WIDTH: f32 = 8.0;
-const INLINE_POPUP_WIDTH_PADDING: f32 = 76.0;
-const INLINE_POPUP_ACCESSORY_WIDTH: f32 = 18.0;
-
 #[cfg(target_os = "macos")]
 const NS_WINDOW_ABOVE: i64 = 1;
 
@@ -71,36 +67,6 @@ pub fn inline_popup_width_for_window(window_width: f32) -> f32 {
     let max_width =
         (window_width - (INLINE_POPUP_EDGE_GUTTER * 2.0)).min(INLINE_POPUP_DEFAULT_WIDTH);
     max_width.max(INLINE_POPUP_MIN_WIDTH)
-}
-
-/// Measure popup width against a set of row labels plus optional trailing
-/// accessory. Used by callers that size the popup to fit its contents.
-pub fn inline_popup_width_for_labels<'a, I>(
-    window_width: f32,
-    labels: I,
-    has_accessory: bool,
-) -> f32
-where
-    I: IntoIterator<Item = &'a str>,
-{
-    let longest_label_chars = labels
-        .into_iter()
-        .map(|label| label.chars().count())
-        .max()
-        .unwrap_or(0) as f32;
-    let accessory_width = if has_accessory {
-        INLINE_POPUP_ACCESSORY_WIDTH
-    } else {
-        0.0
-    };
-    let measured_width = (longest_label_chars * INLINE_POPUP_LABEL_CHAR_WIDTH)
-        + INLINE_POPUP_WIDTH_PADDING
-        + accessory_width;
-
-    measured_width.clamp(
-        INLINE_POPUP_MIN_WIDTH,
-        inline_popup_width_for_window(window_width),
-    )
 }
 
 /// Top anchor for popups that prefer to sit above the mini-shell hint strip.
@@ -323,8 +289,7 @@ pub fn attach_inline_popup_to_parent_window(
 mod tests {
     use super::{
         footer_anchored_inline_popup_top, inline_popup_bounds, inline_popup_height_for_row_height,
-        inline_popup_width_for_labels, inline_popup_width_for_window, INLINE_POPUP_DEFAULT_WIDTH,
-        INLINE_POPUP_MIN_WIDTH,
+        inline_popup_width_for_window, INLINE_POPUP_DEFAULT_WIDTH, INLINE_POPUP_MIN_WIDTH,
     };
 
     #[test]
@@ -356,19 +321,6 @@ mod tests {
             INLINE_POPUP_DEFAULT_WIDTH
         );
         assert_eq!(inline_popup_width_for_window(180.0), INLINE_POPUP_MIN_WIDTH);
-    }
-
-    #[test]
-    fn inline_popup_label_width_tracks_content_length() {
-        let compact_width = inline_popup_width_for_labels(480.0, ["Sonnet 4.6", "Haiku 4.5"], true);
-        let expanded_width = inline_popup_width_for_labels(
-            480.0,
-            ["A very long model name that should widen the popup"],
-            true,
-        );
-
-        assert!(compact_width < INLINE_POPUP_DEFAULT_WIDTH);
-        assert!(expanded_width > compact_width);
     }
 
     #[test]
