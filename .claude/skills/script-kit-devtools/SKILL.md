@@ -25,6 +25,38 @@ The loop is:
 7. After a code fix, rerun the same primitive stack for green proof.
 8. Promote only stable, valuable flows into `agentic-testing` recipes.
 
+## Agent Feature-Verification Loop
+
+When an agent is implementing a feature and needs to invoke APIs, push values, and verify UI state, prefer writing a small throwaway verification script over issuing many one-shot CLI calls. Each one-shot CLI invocation costs ~0.5-2s of process/session overhead; a driver script runs the same steps at ~10-50ms per step inside one process.
+
+The loop:
+
+1. Edit Rust code.
+2. Build with `./scripts/agentic/agent-cargo.sh build --bin script-kit-gpui`.
+3. Write a probe script that imports `Driver` from `scripts/devtools/driver.ts`, drives the exact user path (`setFilterAndWait`, `simulateKey`, `batch`, `waitForState`), asserts on `getState`/`getElements` output, and prints one JSON receipt.
+4. Run it in one shell call and read the receipt. Iterate.
+
+Binary-path gotcha: `agent-cargo.sh` builds into `target-agent/pools/agent-debug/debug/script-kit-gpui`, but the driver (and `session.sh`) default to `target/debug/script-kit-gpui`, which `./dev.sh` owns. After an agent-cargo build, point the driver at the binary you just built — `Driver.launch({ binary: "target-agent/pools/agent-debug/debug/script-kit-gpui" })` or `SCRIPT_KIT_GPUI_BINARY=...` — or you will verify a stale binary.
+
+Driver rules of thumb:
+
+- Use `sandboxHome: true` unless the bug specifically needs real user data; it keeps runs reproducible and protects real Script Kit state.
+- Whole-scenario `batch` (setInput → waitFor → select) is one round trip and the fastest proof shape; per-command calls are still fast and easier to interleave with assertions.
+- Always `await driver.close()` (use try/finally) so no app instance outlives the probe.
+- The one-shot CLIs below remain correct for single inspections, strict target-identity receipts, and red/green compare artifacts. `scripts/agentic/root-source-filter-matrix.ts` is the migration template for porting a session.sh script to the driver.
+
+### Parallel Feature Loops
+
+Multiple feature loops may run simultaneously on the same checkout. The isolation contract:
+
+- Driver sessions are conflict-free by default: `sessionName` is a label, and every `Driver.launch` derives a unique artifact directory (`/tmp/sk-driver-sessions/<name>-<pid>-<n>-<ts>`), so concurrent drivers — even with identical names, even in one process — never share app.log, protocol bus, or sandbox HOME. Read the actual path from `driver.sessionDir`. Only an explicit `sessionDir` opts out.
+- Always pair `sandboxHome: true` with parallel loops so app instances never contend on real Script Kit databases.
+- Builds: the shared agent pool serializes under one lock and produces ONE binary — two loops building different edits would overwrite each other. Give each loop its own pool: `SCRIPT_KIT_CARGO_TARGET_POOL=<loop-name> ./scripts/agentic/agent-cargo.sh build --bin script-kit-gpui`, then `Driver.launch({ binary: "target-agent/pools/<loop-name>/debug/script-kit-gpui" })`. A running app keeps its inode if the binary is rebuilt underneath it, but relaunch to pick up new code.
+- Legacy `session.sh` sessions are addressed purely by name: parallel loops MUST pass loop-unique session names (e.g. suffix the loop id/pid); reusing a name resumes or clobbers the other loop's session. Receipt scripts that write fixed `.test-output/<tool>` paths should namespace by session the way `root-source-filter-matrix.ts` does.
+- Screen-level proofs do not parallelize: only one window is frontmost, so `show`/`windowFocused` waits, native input, and screenshot identity checks from concurrent loops race each other. Keep parallel loops on hidden-window protocol proofs (state/elements/layout/batch — none require `show`) and serialize the focus/visual proof at the end.
+
+Proven: 3 concurrent drivers with the same label ran 30 batch scenarios in ~1s with distinct artifact dirs; 2 concurrent matrix runs both passed 48/48 with zero cross-talk and no slowdown.
+
 ## Use These Skills Together
 
 - `$protocol-automation` when changing stdin JSON, `Message`, `getState`, `getElements`, `getLayoutInfo`, `waitFor`, `batch`, parse receipts, or target identity.
@@ -36,6 +68,7 @@ The loop is:
 
 Prefer direct primitives over prewritten recipes:
 
+- Driver library: `scripts/devtools/driver.ts` is the persistent, event-driven protocol driver for multi-step and high-volume work. It owns the app process directly (stdin pipe in, stdout pipe out, responses matched by `requestId` with no polling and no per-command subprocess), so a full round trip costs single-digit-to-tens of milliseconds instead of the ~0.5-2s per command of subprocess-per-step flows. Import `Driver` from scenario scripts (`Driver.launch({ sandboxHome: true })`, then `setFilterAndWait`, `getState`, `waitForState`, `batch`, `simulateKey`, `close`). `bun scripts/devtools/driver.ts smoke` is the standalone health check; `bun scripts/agentic/driver-benchmark.ts` is the throughput receipt (~100 filter scenarios in ~6s vs ~0.5s/scenario via session.sh). Use the driver when a task runs more than a handful of protocol steps; use the one-shot CLIs below for single inspections and strict-receipt proofs.
 - Schema CLI: `bun scripts/devtools/schema.ts` reports the shared fail-closed receipt envelope, classifications, target identity fields, primitive schemas, and minimum acceptance bar for DevTools coverage.
 - Targets CLI: `bun scripts/devtools/targets.ts list|inspect` exposes target discovery and strict target identity receipts so later inspect, measure, act, and compare commands do not parse target identity out of broad reports.
 - Surface CLI: `bun scripts/devtools/surface.ts inspect --surface <SurfaceKind>` joins strict target identity to the generated surface contract, dismiss policy, runtime surface fields, capabilities, and missing primitive list.

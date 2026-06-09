@@ -581,6 +581,34 @@ function verifyArgs(
 }
 
 /**
+ * Post-show settle: wait until the window reports focused (frontmost)
+ * via server-side waitFor instead of a fixed wall-clock sleep. Returns
+ * as soon as the condition is met. Non-fatal by design — the follow-up
+ * command is the authoritative failure point, matching the old sleep's
+ * proceed-anyway semantics.
+ */
+async function settleWindowFocus(
+  session: string,
+  timeoutMs = 2000
+): Promise<void> {
+  try {
+    await rpc(
+      session,
+      JSON.stringify({
+        type: "waitFor",
+        requestId: `w-window-focused-${Date.now()}`,
+        condition: "windowFocused",
+        timeout: timeoutMs,
+        pollInterval: 25,
+      }),
+      { expect: "waitForResult", timeout: timeoutMs + 3000 }
+    );
+  } catch {
+    // best-effort settle; proceed like the old fixed sleep did
+  }
+}
+
+/**
  * Fire-and-forget send via session.sh send.
  */
 async function send(
@@ -2058,9 +2086,10 @@ async function recipeAgentChatOpen(
       await step("show", () => send(session, '{"type":"show"}'))
     );
 
-    // macOS focus-settling delay: the window needs a moment to
-    // become frontmost after show before triggerBuiltin can target it.
-    await Bun.sleep(300);
+    // macOS focus settle: the window needs to become frontmost after
+    // show before triggerBuiltin can target it — wait on the actual
+    // windowFocused condition instead of a fixed sleep.
+    await settleWindowFocus(session);
 
     // 2. Trigger Agent Chat
     steps.push(
@@ -2355,7 +2384,8 @@ async function recipeAgentChatSetupRecovery(
     await step("show", () => send(session, '{"type":"show"}'))
   );
 
-  await Bun.sleep(300);
+  // Post-show focus settle on the real windowFocused condition.
+  await settleWindowFocus(session);
 
   // 2. Trigger Agent Chat
   steps.push(

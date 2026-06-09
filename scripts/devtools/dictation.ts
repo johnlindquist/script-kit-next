@@ -137,7 +137,7 @@ async function openOverlayFixture(args: Args) {
     if (targetReceipt.classification === "ok") {
       break;
     }
-    await Bun.sleep(150);
+    await Bun.sleep(50);
   }
 
   return {

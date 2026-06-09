@@ -238,8 +238,31 @@ async function maybeOpenParentTarget(args: Args) {
     "--timeout",
     String(args.timeoutMs),
   ], "parent.open.notes");
-  await Bun.sleep(300);
+  // Settle on the real observable instead of a fixed sleep: poll strict
+  // target resolution until the Notes window is addressable (normally the
+  // first attempt).
+  await waitForNotesParentTarget(args);
   return receipt;
+}
+
+async function waitForNotesParentTarget(args: Args): Promise<void> {
+  const deadline = Date.now() + Math.min(args.timeoutMs, 5000);
+  while (Date.now() < deadline) {
+    const receipt = await run([
+      "bun",
+      "scripts/devtools/targets.ts",
+      "inspect",
+      "--session",
+      args.session,
+      "--target-kind",
+      "notes",
+      "--strict",
+    ], "targets.inspect.notes-parent");
+    if (receipt.classification === "ok") {
+      return;
+    }
+    await Bun.sleep(25);
+  }
 }
 
 function responseOf(envelope: JsonObject): JsonObject {

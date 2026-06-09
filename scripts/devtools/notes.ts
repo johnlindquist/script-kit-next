@@ -141,7 +141,10 @@ async function maybeOpenActions(args: Args) {
     "--timeout",
     String(args.timeoutMs),
   ], "open-actions");
-  await Bun.sleep(250);
+  // Settle on the real observable instead of a fixed sleep: the Notes
+  // actions command bar reports open in target-scoped state as soon as
+  // the batch applies (normally the first read).
+  await pollNotesState(args, "open-actions-settle", notesActionOpen);
   return receipt;
 }
 
@@ -167,7 +170,14 @@ async function maybeOpenAgentChat(args: Args) {
     "--timeout",
     String(args.timeoutMs),
   ], "open-agent_chat");
-  await Bun.sleep(350);
+  // Settle on the real observable instead of a fixed sleep: the Notes
+  // shortcut registry reports the embedded Agent Chat scope active once
+  // the surface mode switch applies.
+  await pollNotesState(
+    args,
+    "open-agent_chat-settle",
+    (runtimeNotes) => notesActiveScope(runtimeNotes) === "embeddedAgentChat",
+  );
   return receipt;
 }
 
@@ -303,7 +313,35 @@ async function waitForNotesTarget(args: Args) {
     if (last.classification === "ok") {
       return last;
     }
-    await Bun.sleep(100);
+    await Bun.sleep(25);
+  }
+  return last;
+}
+
+/**
+ * Poll target-scoped Notes runtime state until `predicate` passes.
+ * Replaces fixed settle sleeps with the actual observable; bounded by
+ * `timeoutMs` and non-fatal (returns the last envelope either way — the
+ * caller's subsequent receipts are the authoritative failure point).
+ */
+async function pollNotesState(
+  args: Args,
+  label: string,
+  predicate: (runtimeNotes: JsonObject) => boolean,
+  timeoutMs = 3000,
+): Promise<JsonObject | null> {
+  const deadline = Date.now() + timeoutMs;
+  let last: JsonObject | null = null;
+  while (Date.now() < deadline) {
+    last = await rpc(args.session, {
+      type: "getState",
+      requestId: requestId(label),
+      target: { type: "kind", kind: "notes", index: 0 },
+    }, "stateResult", timeoutMs);
+    if (predicate(notesRuntimeState(last))) {
+      return last;
+    }
+    await Bun.sleep(25);
   }
   return last;
 }
@@ -524,8 +562,25 @@ async function setNotesInput(args: Args, text: string, label: string) {
     options: { stopOnError: true, rollbackOnError: false, timeout: args.timeoutMs },
     trace: "on",
   }, "batchResult", args.timeoutMs);
-  await Bun.sleep(200);
+  // Autosize settle on the real observable: wait until the resolved notes
+  // window height is stable across two consecutive reads instead of a
+  // fixed sleep, so the follow-up grow/shrink measurements never read a
+  // mid-resize frame.
+  await waitForStableNotesHeight(args);
   return receipt;
+}
+
+async function waitForStableNotesHeight(args: Args, maxReads = 6): Promise<void> {
+  let previous: number | null = null;
+  for (let read = 0; read < maxReads; read += 1) {
+    const target = await inspectNotesTarget(args);
+    const height = targetHeight(target);
+    if (height != null && previous != null && height === previous) {
+      return;
+    }
+    previous = height;
+    await Bun.sleep(25);
+  }
 }
 
 async function runResizeCompare(args: Args) {

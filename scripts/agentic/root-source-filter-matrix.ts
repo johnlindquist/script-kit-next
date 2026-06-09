@@ -1,17 +1,33 @@
 #!/usr/bin/env bun
+// Transport: persistent event-driven Driver (scripts/devtools/driver.ts) —
+// ported from session.sh subprocess send/rpc as the migration template for
+// the other matrix scripts. Fixtures, assertions, receipt shape, and the
+// AI Vault poison-leak check are unchanged.
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { join, resolve } from "node:path";
+import { Driver } from "../devtools/driver";
 
 type Json = Record<string, any>;
 
 const repoRoot = resolve(import.meta.dir, "../..");
-const sessionScript = join(repoRoot, "scripts/agentic/session.sh");
-const session = argValue("--session", "root-source-filter-matrix");
+// Session defaults to a pid-unique name and namespaces all artifacts
+// (sandbox HOME, fixtures, receipts, driver session) under it so parallel
+// matrix runs on the same checkout never clobber each other. Pass
+// --session for a stable artifact path when a single run is intended.
+const session = argValue(
+  "--session",
+  `root-source-filter-matrix-${process.pid}`,
+);
 const query = argValue("--query", `codexsource${Date.now()}`);
 const timeoutMs = Number(argValue("--timeout", "12000"));
 const pollMs = Number(argValue("--poll", "50"));
-const outputDir = join(repoRoot, ".test-output", "root-source-filter-matrix");
+const outputDir = join(
+  repoRoot,
+  ".test-output",
+  "root-source-filter-matrix",
+  session,
+);
 const homeDir = join(outputDir, "home");
 const kitDir = join(homeDir, ".scriptkit");
 const dbDir = join(kitDir, "db");
@@ -97,69 +113,23 @@ function run(command: string, args: string[], options: { input?: string } = {}):
   return result.stdout;
 }
 
-function runSession(args: string[]): Json {
-  const stdout = run(sessionScript, args).trim();
-  if (!stdout) {
-    throw new Error(`session.sh ${args.join(" ")} produced no stdout`);
-  }
-  const parsed = JSON.parse(stdout);
-  if (parsed.status === "error") {
-    throw new Error(`session.sh ${args.join(" ")} failed: ${stdout}`);
-  }
-  return parsed;
+// The driver is launched in main() after fixtures are seeded so the app
+// inherits the sandbox HOME/SK_PATH and test-provider env set above.
+let driver: Driver;
+
+function send(command: Json): void {
+  driver.send(command);
 }
 
-function rpc(command: Json, expect: string, timeout = timeoutMs): Json {
-  const envelope = runSession([
-    "rpc",
-    session,
-    JSON.stringify(command),
-    "--expect",
-    expect,
-    "--timeout",
-    String(timeout),
-  ]);
-  return envelope.response;
-}
-
-function send(command: Json): Json {
-  return runSession([
-    "send",
-    session,
-    JSON.stringify(command),
-    "--await-parse",
-    "--timeout",
-    String(timeoutMs),
-  ]);
-}
-
-function waitForInput(input: string): Json {
-  return rpc(
-    {
-      type: "waitFor",
-      requestId: `source-filter-matrix-wait-${Date.now()}`,
-      condition: {
-        type: "stateMatch",
-        state: {
-          promptType: "none",
-          inputValue: input,
-        },
-      },
-      timeout: timeoutMs,
-      pollInterval: pollMs,
-    },
-    "waitForResult",
+async function waitForInput(input: string): Promise<Json> {
+  return driver.waitForState(
+    { promptType: "none", inputValue: input },
+    { timeoutMs, pollIntervalMs: pollMs },
   );
 }
 
-function getState(tag: string): Json {
-  return rpc(
-    {
-      type: "getState",
-      requestId: `source-filter-matrix-state-${tag}-${Date.now()}`,
-    },
-    "stateResult",
-  );
+async function getState(_tag: string): Promise<Json> {
+  return driver.getState({ timeoutMs });
 }
 
 function sql(path: string, input: string) {
@@ -400,12 +370,12 @@ async function runCase(head: string, spec: Json): Promise<Json> {
   const caseQuery = queryFor(spec);
   const input = `${head} ${caseQuery}`;
   send({ type: "setFilter", text: input, requestId: `source-filter-matrix-set-${Date.now()}` });
-  waitForInput(input);
+  await waitForInput(input);
 
   let lastFrame: Json | null = null;
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    const state = getState(head.replace(/[^a-z0-9]+/gi, "-"));
+    const state = await getState(head.replace(/[^a-z0-9]+/gi, "-"));
     lastFrame = state.mainWindowPreflight;
     try {
       assertFrame(state, input, spec, caseQuery);
@@ -424,12 +394,12 @@ async function runAttachedCase(head: string, spec: Json): Promise<Json> {
   const caseQuery = queryFor(spec);
   const input = `${head}${caseQuery}`;
   send({ type: "setFilter", text: input, requestId: `source-filter-matrix-attached-set-${Date.now()}` });
-  waitForInput(input);
+  await waitForInput(input);
 
   let lastFrame: Json | null = null;
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    const state = getState(`attached-${head.replace(/[^a-z0-9]+/gi, "-")}`);
+    const state = await getState(`attached-${head.replace(/[^a-z0-9]+/gi, "-")}`);
     lastFrame = state.mainWindowPreflight;
     try {
       assertFrame(state, input, spec, caseQuery);
@@ -447,7 +417,7 @@ async function runAttachedCase(head: string, spec: Json): Promise<Json> {
 async function runEmptyCase(head: string, spec: Json): Promise<Json> {
   const input = `${head} `;
   send({ type: "setFilter", text: input, requestId: `source-filter-matrix-empty-set-${Date.now()}` });
-  waitForInput(input);
+  await waitForInput(input);
 
   const emptySpec = {
     ...spec,
@@ -457,7 +427,7 @@ async function runEmptyCase(head: string, spec: Json): Promise<Json> {
   let lastFrame: Json | null = null;
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    const state = getState(`empty-${head.replace(/[^a-z0-9]+/gi, "-")}`);
+    const state = await getState(`empty-${head.replace(/[^a-z0-9]+/gi, "-")}`);
     lastFrame = state.mainWindowPreflight;
     try {
       assertFrame(state, input, emptySpec, "");
@@ -473,49 +443,57 @@ async function runEmptyCase(head: string, spec: Json): Promise<Json> {
 }
 
 async function main() {
+  const startedAt = performance.now();
   seedFixtures();
-  runSession(["stop", session]);
-  runSession(["start", session]);
+  driver = await Driver.launch({
+    sessionName: session,
+    sessionDir: join(sessionRoot, session),
+    readyTimeoutMs: 10_000,
+  });
 
+  const results: Json[] = [];
   try {
-    const results: Json[] = [];
+    await driver.getState({ timeoutMs });
     for (const spec of cases) {
       for (const head of spec.heads) {
         results.push(await runCase(head, spec));
         send({ type: "setFilter", text: "", requestId: `source-filter-matrix-reset-${Date.now()}` });
-        waitForInput("");
+        await waitForInput("");
         results.push(await runAttachedCase(head, spec));
         send({ type: "setFilter", text: "", requestId: `source-filter-matrix-attached-reset-${Date.now()}` });
-        waitForInput("");
+        await waitForInput("");
         results.push(await runEmptyCase(head, spec));
         send({ type: "setFilter", text: "", requestId: `source-filter-matrix-empty-reset-${Date.now()}` });
-        waitForInput("");
+        await waitForInput("");
       }
     }
-
-    const logPath = join(sessionRoot, session, "app.log");
-    const responsesPath = join(sessionRoot, session, "responses.ndjson");
-    const receipt = {
-      schemaVersion: 1,
-      status: "pass",
-      session,
-      query,
-      homeDir,
-      cases: results,
-      logExcerpt: readFileSync(logPath, "utf8").split("\n").slice(-80),
-      responsesPath,
-    };
-    const receiptText = `${JSON.stringify(receipt, null, 2)}\n`;
-    const leakHaystack = `${receiptText}\n${readFileSync(logPath, "utf8")}\n${readFileSync(responsesPath, "utf8")}`;
-    const leakedPoison = aiVaultPoisonStrings.filter((value) => leakHaystack.includes(value));
-    if (leakedPoison.length > 0) {
-      throw new Error(`AI Vault receipt leaked poison metadata: ${leakedPoison.join(", ")}`);
-    }
-    writeFileSync(join(outputDir, "receipt.json"), receiptText);
-    process.stdout.write(receiptText);
   } finally {
-    runSession(["stop", session]);
+    // Close before reading artifacts so the driver's log writer is flushed.
+    await driver.close();
   }
+
+  const logPath = driver.logPath;
+  const responsesPath = join(driver.sessionDir, "protocol-responses.ndjson");
+  const receipt = {
+    schemaVersion: 1,
+    status: "pass",
+    session,
+    transport: "driver",
+    durationMs: Math.round(performance.now() - startedAt),
+    query,
+    homeDir,
+    cases: results,
+    logExcerpt: readFileSync(logPath, "utf8").split("\n").slice(-80),
+    responsesPath,
+  };
+  const receiptText = `${JSON.stringify(receipt, null, 2)}\n`;
+  const leakHaystack = `${receiptText}\n${readFileSync(logPath, "utf8")}\n${readFileSync(responsesPath, "utf8")}`;
+  const leakedPoison = aiVaultPoisonStrings.filter((value) => leakHaystack.includes(value));
+  if (leakedPoison.length > 0) {
+    throw new Error(`AI Vault receipt leaked poison metadata: ${leakedPoison.join(", ")}`);
+  }
+  writeFileSync(join(outputDir, "receipt.json"), receiptText);
+  process.stdout.write(receiptText);
 }
 
 main().catch((error) => {
