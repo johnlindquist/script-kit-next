@@ -168,3 +168,107 @@ fn spawn_open_emits_open_failed_on_error() {
         "spawn_open_actions_window must emit OpenFailed on error"
     );
 }
+
+#[test]
+fn actions_popup_search_uses_requested_typography_and_synced_cursor_height() {
+    let theme = read("src/designs/core/actions_popup_theme.rs");
+    let dialog = read("src/actions/dialog.rs");
+
+    assert!(
+        theme.contains("height: 40.0"),
+        "actions popup search height must default to 40px"
+    );
+    assert!(
+        theme.contains("font_size: 16.0"),
+        "actions popup search font must default to 16pt"
+    );
+    assert!(
+        theme.contains("cursor_height: 16.0"),
+        "actions popup cursor height must default to the 16pt font height"
+    );
+    assert!(
+        theme.contains("def.search.cursor_height = def.search.font_size;"),
+        "actions popup cursor height must stay synced to search font size after overrides"
+    );
+    assert!(
+        dialog.contains(".line_height(px(popup_theme.search.font_size))"),
+        "actions popup search text line height must follow the search font size"
+    );
+    assert!(
+        dialog.contains("actions_search_cursor(\n                    popup_theme.search.cursor_width,\n                    popup_theme.search.font_size,"),
+        "actions popup search cursor render height must use the synced search font size"
+    );
+}
+
+#[test]
+fn actions_popup_search_placeholder_and_typed_text_share_origin() {
+    let dialog = read("src/actions/dialog.rs");
+
+    assert!(
+        dialog.contains("let build_search_content = |search_display: SharedString|"),
+        "top and bottom actions search fields must share one content builder"
+    );
+    assert!(
+        dialog.contains("fn actions_search_cursor(")
+            && dialog.contains(".relative()")
+            && dialog.contains(".w(px(0.0))"),
+        "actions search cursor must be zero-width so it cannot shift placeholder text"
+    );
+    assert!(
+        !dialog.contains(".mr(px(2.))") && !dialog.contains(".ml(px(2.))"),
+        "actions search cursor margins must not offset placeholder or typed text"
+    );
+}
+
+#[test]
+fn actions_popup_rows_use_shared_list_item_with_popup_font_override() {
+    let theme = read("src/designs/core/actions_popup_theme.rs");
+    let dialog = read("src/actions/dialog.rs");
+    let list_item = read("src/list_item/mod.rs");
+
+    assert!(
+        theme.contains("title_font_size: 14.0"),
+        "actions popup row title font must default to 14pt"
+    );
+    assert!(
+        list_item.contains("metrics_override: Option<ListItemMetricsOverride>")
+            && list_item
+                .contains("pub fn metrics_override(mut self, metrics: ListItemMetricsOverride)"),
+        "shared ListItem must expose an explicit metrics override hook"
+    );
+    assert!(
+        dialog.contains("actions_row_metrics.name_font_size =\n                                            popup_theme.row.title_font_size;")
+            && dialog.contains(".metrics_override(actions_row_metrics)"),
+        "actions popup rows must keep shared ListItem anatomy while applying popup font tokens"
+    );
+}
+
+#[test]
+fn actions_popup_state_exposes_shortcut_parity() {
+    let dialog = read("src/actions/dialog.rs");
+    let prompt_handler = read("src/prompt_handler/mod.rs");
+    let keyboard_cli = read("scripts/devtools/keyboard.ts");
+
+    assert!(
+        dialog.contains("action_shortcut_parity_report(&self.actions, &self.filtered_actions)"),
+        "ActionsDialog automation state must compute shortcut parity from visible action metadata"
+    );
+    assert!(
+        dialog.contains("\"canonicalShortcut\": canonical_shortcut"),
+        "visible action summaries must expose canonical shortcuts for DevTools receipts"
+    );
+    assert!(
+        dialog.contains("\"shortcutParity\"")
+            && dialog.contains("\"unroutableDisplayedShortcuts\"")
+            && dialog.contains("\"visibleShortcutBindings\""),
+        "ActionsDialog automation state must expose shortcut parity fields"
+    );
+    assert!(
+        prompt_handler.contains("\"shortcutParity\": shortcut_parity"),
+        "main getState actionsDialog summary must expose shortcut parity for DevTools receipts"
+    );
+    assert!(
+        keyboard_cli.contains("actionsDialogShortcutParity"),
+        "keyboard DevTools receipts must surface actions dialog shortcut parity directly"
+    );
+}

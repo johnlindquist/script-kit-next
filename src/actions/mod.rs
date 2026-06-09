@@ -55,6 +55,11 @@ pub(crate) use dialog::matching_filtered_action_id_for_keystroke;
 pub(crate) use dialog::ActionsHostContextSnapshot;
 pub(crate) use dialog::AgentChatActionsDialogContext;
 pub(crate) use dialog::GroupedActionItem;
+#[allow(unused_imports)] // Used by binary target through include!()-ed render/app_impl code.
+pub(crate) use dialog::{
+    displayed_action_keybinding_specs, matching_action_id_for_canonical_shortcut,
+    MainListDisplayedActionShortcut,
+};
 #[allow(unused_imports)]
 // Used by the binary target through include!()-ed prompt_handler code.
 pub(crate) use dialog::{is_destructive_action, matching_action_id_for_keystroke};

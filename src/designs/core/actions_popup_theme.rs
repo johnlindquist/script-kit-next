@@ -40,6 +40,8 @@ pub struct ActionsPopupListTokens {
     pub row_height: f32,
     pub empty_row_height: f32,
     pub section_header_height: f32,
+    pub padding_top: f32,
+    pub padding_bottom: f32,
     pub overdraw_px: f32,
 }
 
@@ -94,19 +96,21 @@ pub fn base_actions_popup_theme() -> ActionsPopupThemeDef {
             radius: crate::actions::constants::ACTIONS_POPUP_RADIUS,
         },
         search: ActionsPopupSearchTokens {
-            height: crate::actions::constants::SEARCH_INPUT_HEIGHT,
+            height: 40.0,
             inner_height: 28.0,
             padding_x: crate::actions::constants::ACTION_PADDING_X,
             padding_y_extra: 2.0,
-            font_size: 13.0,
+            font_size: 16.0,
             cursor_width: 2.0,
             cursor_height: 16.0,
             prefix_gap: 6.0,
         },
         list: ActionsPopupListTokens {
-            row_height: crate::actions::constants::ACTION_ITEM_HEIGHT,
-            empty_row_height: crate::actions::constants::ACTION_ITEM_HEIGHT,
-            section_header_height: crate::actions::constants::SECTION_HEADER_HEIGHT,
+            row_height: 36.0,
+            empty_row_height: 36.0,
+            section_header_height: 24.0,
+            padding_top: 0.0,
+            padding_bottom: 0.0,
             overdraw_px: 100.0,
         },
         row: ActionsPopupRowTokens {
@@ -143,5 +147,9 @@ pub fn base_actions_popup_theme() -> ActionsPopupThemeDef {
 }
 
 pub fn current_actions_popup_theme() -> ActionsPopupThemeDef {
-    crate::dev_style_tool::runtime_overrides::apply_to_actions_popup_def(base_actions_popup_theme())
+    let mut def = crate::dev_style_tool::runtime_overrides::apply_to_actions_popup_def(
+        base_actions_popup_theme(),
+    );
+    def.search.cursor_height = def.search.font_size;
+    def
 }

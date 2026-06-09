@@ -551,6 +551,224 @@ impl ScriptListApp {
         }
     }
 
+    fn main_list_actions_for_shortcut_routing(
+        &mut self,
+    ) -> (
+        Option<crate::actions::ScriptInfo>,
+        Vec<crate::actions::Action>,
+    ) {
+        let script_info = self.get_focused_script_info();
+        let mut actions = Vec::new();
+
+        if let Some(ref script) = script_info {
+            if script.is_scriptlet {
+                let focused_scriptlet = self.get_focused_scriptlet_with_actions();
+                actions.extend(crate::actions::get_scriptlet_context_actions_with_custom(
+                    script,
+                    focused_scriptlet.as_ref(),
+                ));
+            } else {
+                actions.extend(crate::actions::get_script_context_actions(script));
+            }
+        }
+
+        actions.extend(crate::actions::get_global_actions());
+        (script_info, actions)
+    }
+
+    pub(crate) fn sync_main_list_displayed_action_shortcut_keybindings(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) {
+        if !matches!(self.current_view, AppView::ScriptList) {
+            return;
+        }
+
+        let (_, actions) = self.main_list_actions_for_shortcut_routing();
+        let filtered_actions: Vec<usize> = (0..actions.len()).collect();
+        let specs = crate::actions::displayed_action_keybinding_specs(&actions, &filtered_actions);
+        let mut bindings = Vec::new();
+        let registered_before = self.registered_main_list_displayed_shortcuts.len();
+
+        for spec in specs {
+            if !self
+                .registered_main_list_displayed_shortcuts
+                .insert(spec.canonical.clone())
+            {
+                continue;
+            }
+            logging::log(
+                "KEY_BIND",
+                &format!(
+                    "MAIN_LIST_SHORTCUT_BIND canonical={} gpui={} context=script_list action=MainListDisplayedActionShortcut",
+                    spec.canonical, spec.gpui_keystroke
+                ),
+            );
+            bindings.push(gpui::KeyBinding::new(
+                &spec.gpui_keystroke,
+                crate::actions::MainListDisplayedActionShortcut {
+                    shortcut: spec.canonical,
+                },
+                Some("script_list"),
+            ));
+        }
+
+        if !bindings.is_empty() {
+            cx.bind_keys(bindings);
+        }
+        if self.registered_main_list_displayed_shortcuts.len() != registered_before {
+            logging::log(
+                "KEY_SETUP",
+                &format!(
+                    "MAIN_LIST_SHORTCUT_SYNC context=script_list current_view={} actions={} new_bindings={} registered_total={} env_shortcut_debug={}",
+                    self.app_view_name(),
+                    actions.len(),
+                    self.registered_main_list_displayed_shortcuts.len() - registered_before,
+                    self.registered_main_list_displayed_shortcuts.len(),
+                    std::env::var("SCRIPT_KIT_SHORTCUT_DEBUG")
+                        .unwrap_or_else(|_| "<unset>".to_string())
+                ),
+            );
+        }
+    }
+
+    pub(crate) fn try_execute_main_list_action_shortcut_canonical(
+        &mut self,
+        canonical_shortcut: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        if self.show_actions_popup || !matches!(self.current_view, AppView::ScriptList) {
+            logging::log(
+                "KEY_ROUTE",
+                &format!(
+                    "MAIN_LIST_DISPLAYED_SHORTCUT_BYPASS canonical={} reason=inactive_context popup={} view={}",
+                    canonical_shortcut,
+                    self.show_actions_popup,
+                    self.app_view_name()
+                ),
+            );
+            return false;
+        }
+
+        let (script_info, actions) = self.main_list_actions_for_shortcut_routing();
+        let filtered_actions: Vec<usize> = (0..actions.len()).collect();
+        let Some(action_id) = crate::actions::matching_action_id_for_canonical_shortcut(
+            &actions,
+            &filtered_actions,
+            canonical_shortcut,
+        ) else {
+            logging::log(
+                "KEY_ROUTE",
+                &format!(
+                    "Displayed shortcut route miss canonical={} actions={} focused={}",
+                    canonical_shortcut,
+                    actions.len(),
+                    script_info
+                        .as_ref()
+                        .map(|script| format!(
+                            "{} path={} shortcut={:?} alias={:?}",
+                            script.name, script.path, script.shortcut, script.alias
+                        ))
+                        .unwrap_or_else(|| "<none>".to_string())
+                ),
+            );
+            return false;
+        };
+
+        logging::log(
+            "KEY_ROUTE",
+            &format!(
+                "Displayed shortcut {} -> {} via Action.shortcut metadata",
+                canonical_shortcut, action_id
+            ),
+        );
+        self.handle_action(action_id, window, cx);
+        true
+    }
+
+    pub(crate) fn try_execute_main_list_action_shortcut_from_display(
+        &mut self,
+        key: &str,
+        modifiers: &gpui::Modifiers,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        if self.show_actions_popup || !matches!(self.current_view, AppView::ScriptList) {
+            logging::log(
+                "KEY_ROUTE",
+                &format!(
+                    "MAIN_LIST_DISPLAYED_SHORTCUT_KEY_BYPASS key={} shortcut={} reason=inactive_context popup={} view={}",
+                    key,
+                    crate::shortcuts::keystroke_to_shortcut(key, modifiers),
+                    self.show_actions_popup,
+                    self.app_view_name()
+                ),
+            );
+            return false;
+        }
+
+        let (script_info, actions) = self.main_list_actions_for_shortcut_routing();
+        let canonical_keystroke = crate::shortcuts::keystroke_to_shortcut(key, modifiers);
+        let shortcut_bindings: Vec<_> = actions
+            .iter()
+            .filter_map(|action| {
+                let shortcut = action.shortcut.as_deref()?;
+                let canonical =
+                    crate::components::hint_strip::canonical_shortcut_hint(shortcut);
+                Some((
+                    action.id.as_str(),
+                    action.title.as_str(),
+                    shortcut,
+                    canonical,
+                ))
+            })
+            .collect();
+        logging::log(
+            "KEY_ROUTE",
+            &format!(
+                "Shortcut route attempt key={} actions={} displayed_shortcuts={} view={} focused={}",
+                canonical_keystroke,
+                actions.len(),
+                shortcut_bindings.len(),
+                self.app_view_name(),
+                script_info
+                    .as_ref()
+                    .map(|script| format!(
+                        "{} path={} shortcut={:?} alias={:?}",
+                        script.name, script.path, script.shortcut, script.alias
+                    ))
+                    .unwrap_or_else(|| "<none>".to_string())
+            ),
+        );
+        for (action_id, title, shortcut, canonical) in &shortcut_bindings {
+            logging::log(
+                "KEY_BIND",
+                &format!(
+                    "Shortcut binding action_id={} title={:?} display={} canonical={}",
+                    action_id, title, shortcut, canonical
+                ),
+            );
+        }
+
+        if !self.try_execute_main_list_action_shortcut_canonical(
+            &canonical_keystroke,
+            window,
+            cx,
+        ) {
+            logging::log(
+                "KEY_ROUTE",
+                &format!(
+                    "Shortcut route miss key={} displayed_shortcuts={}",
+                    canonical_keystroke,
+                    shortcut_bindings.len()
+                ),
+            );
+            return false;
+        }
+        true
+    }
+
     pub(crate) fn route_key_to_actions_dialog(
         &mut self,
         key: &str,
@@ -560,8 +778,11 @@ impl ScriptListApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> ActionsRoute {
-        // Not open - let caller handle the key
-        if !self.show_actions_popup {
+        // Not open - let caller handle the key. Detached actions popups keep
+        // parent focus, so the parent router must stay active while their
+        // native child window is open even if the inline flag has already been
+        // cleared.
+        if !self.show_actions_popup && !crate::actions::is_actions_window_open() {
             return ActionsRoute::NotHandled;
         }
 
@@ -1445,6 +1666,17 @@ mod actions_dialog_wiring_regression_tests {
             source.contains("key.eq_ignore_ascii_case(\"k\")")
                 && source.contains("self.close_actions_popup(host, window, cx);"),
             "shared actions router should close the popup on Cmd+K"
+        );
+    }
+
+    #[test]
+    fn route_key_to_actions_dialog_keeps_detached_window_routable() {
+        let source = fs::read_to_string("src/app_impl/actions_dialog.rs")
+            .expect("Failed to read src/app_impl/actions_dialog.rs");
+
+        assert!(
+            source.contains("!self.show_actions_popup && !crate::actions::is_actions_window_open()"),
+            "shared actions router must keep routing keys while the detached actions window is open"
         );
     }
 

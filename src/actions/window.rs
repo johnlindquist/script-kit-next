@@ -19,6 +19,7 @@ use gpui::{
     WindowKind, WindowOptions,
 };
 // Root intentionally NOT used — its opaque bg blocks NSVisualEffectView vibrancy
+use std::collections::HashSet;
 use std::sync::{Mutex, OnceLock};
 
 #[cfg(test)]
@@ -340,6 +341,8 @@ pub struct ActionsWindow {
     close_requested: bool,
     parent_automation_id: String,
     parent_kind: AutomationWindowKind,
+    registered_displayed_shortcuts: HashSet<String>,
+    did_request_focus: bool,
 }
 
 impl ActionsWindow {
@@ -357,6 +360,61 @@ impl ActionsWindow {
             close_requested: false,
             parent_automation_id,
             parent_kind,
+            registered_displayed_shortcuts: HashSet::new(),
+            did_request_focus: false,
+        }
+    }
+
+    fn sync_displayed_action_shortcut_keybindings(&mut self, cx: &mut Context<Self>) {
+        let specs = {
+            let dialog = self.dialog.read(cx);
+            crate::actions::displayed_action_keybinding_specs(
+                &dialog.actions,
+                &dialog.filtered_actions,
+            )
+        };
+
+        let mut bindings = Vec::new();
+        let registered_before = self.registered_displayed_shortcuts.len();
+        for spec in specs {
+            if !self
+                .registered_displayed_shortcuts
+                .insert(spec.canonical.clone())
+            {
+                continue;
+            }
+            crate::logging::log(
+                "KEY_BIND",
+                &format!(
+                    "ACTIONS_POPUP_SHORTCUT_BIND canonical={} gpui={} context=actions_popup action=MainListDisplayedActionShortcut",
+                    spec.canonical, spec.gpui_keystroke
+                ),
+            );
+            bindings.push(gpui::KeyBinding::new(
+                &spec.gpui_keystroke,
+                crate::actions::MainListDisplayedActionShortcut {
+                    shortcut: spec.canonical,
+                },
+                Some("actions_popup"),
+            ));
+        }
+
+        if !bindings.is_empty() {
+            cx.bind_keys(bindings);
+        }
+        if self.registered_displayed_shortcuts.len() != registered_before {
+            crate::logging::log(
+                "KEY_SETUP",
+                &format!(
+                    "ACTIONS_POPUP_SHORTCUT_SYNC context=actions_popup new_bindings={} registered_total={} env_shortcut_debug={} parent_automation_id={} parent_kind={:?}",
+                    self.registered_displayed_shortcuts.len() - registered_before,
+                    self.registered_displayed_shortcuts.len(),
+                    std::env::var("SCRIPT_KIT_SHORTCUT_DEBUG")
+                        .unwrap_or_else(|_| "<unset>".to_string()),
+                    self.parent_automation_id,
+                    self.parent_kind
+                ),
+            );
         }
     }
 
@@ -550,27 +608,39 @@ impl Render for ActionsWindow {
             self.request_close(window, cx, "render_focus_lost", false);
         }
 
-        // NOTE: We intentionally do NOT focus this window's focus_handle.
-        // The parent window (AI window, Notes window, etc.) keeps keyboard focus
-        // and routes events to us via its capture_key_down handler.
-        // This approach works better on macOS where popup windows often don't
-        // receive keyboard events reliably.
-        //
-        // The on_key_down handler below is still registered as a fallback for
-        // cases where the popup window does receive focus (e.g., user clicks on it).
+        // Own the GPUI focus once the popup exists. Parent-window interceptors can
+        // still route keys while the parent is focused, but when AppKit makes this
+        // popup the key window its local context must be focusable too.
+        if !self.did_request_focus {
+            self.did_request_focus = true;
+            let focus_handle = self.focus_handle.clone();
+            window.defer(cx, move |window, cx| {
+                window.focus(&focus_handle, cx);
+                crate::logging::log(
+                    "KEY_SETUP",
+                    "ACTIONS_POPUP_FOCUS_REQUESTED context=actions_popup focus_handle=requested",
+                );
+            });
+        }
 
         // Key handler for the actions window
         // Since this is a separate window, it needs its own key handling
         // (the parent window can't route events to us)
+        self.sync_displayed_action_shortcut_keybindings(cx);
+
         let handle_key = cx.listener(move |this, event: &gpui::KeyDownEvent, window, cx| {
             let key = event.keystroke.key.as_str();
             let modifiers = &event.keystroke.modifiers;
 
             crate::logging::log(
-                "ACTIONS",
+                "KEY_ROUTE",
                 &format!(
-                    "ActionsWindow on_key_down received: key='{}', modifiers={:?}",
-                    key, modifiers
+                    "ACTIONS_POPUP_KEYDOWN key='{}' shortcut={} modifiers={:?} focus_handle_focused={} window_active={}",
+                    key,
+                    crate::shortcuts::keystroke_to_shortcut(key, modifiers),
+                    modifiers,
+                    this.focus_handle.is_focused(window),
+                    window.is_window_active()
                 ),
             );
 
@@ -772,7 +842,38 @@ impl Render for ActionsWindow {
         // Don't use size_full() - the dialog calculates its own dynamic height
         // This prevents unused window space from showing as a dark area
         div()
+            .key_context("actions_popup")
             .track_focus(&self.focus_handle)
+            .on_action(cx.listener(
+                |this, action: &crate::actions::MainListDisplayedActionShortcut, window, cx| {
+                    crate::logging::log(
+                        "KEY_ROUTE",
+                        &format!(
+                            "ActionsWindow displayed shortcut keybinding received canonical={} context=actions_popup",
+                            action.shortcut
+                        ),
+                    );
+                    let matched_action_id = {
+                        let dialog = this.dialog.read(cx);
+                        crate::actions::matching_action_id_for_canonical_shortcut(
+                            &dialog.actions,
+                            &dialog.filtered_actions,
+                            &action.shortcut,
+                        )
+                    };
+                    if let Some(action_id) = matched_action_id {
+                        let activation = this
+                            .dialog
+                            .update(cx, |d, cx| d.activate_action_id(action_id, cx));
+                        this.handle_dialog_activation(
+                            activation,
+                            window,
+                            cx,
+                            "displayed_shortcut_keybinding",
+                        );
+                    }
+                },
+            ))
             .on_key_down(handle_key)
             .child(self.dialog.clone())
     }
@@ -1019,9 +1120,11 @@ fn actions_window_dynamic_height(
     } else {
         0.0
     };
+    let list_padding_height = tokens.list.padding_top + tokens.list.padding_bottom;
     let max_height = max_height.min(tokens.shell.max_height);
-    let items_height = (num_actions as f32 * tokens.list.row_height + section_headers_height)
+    let items_height = ((num_actions as f32 * tokens.list.row_height + section_headers_height)
         .max(min_items_height)
+        + list_padding_height)
         .min(max_height - search_box_height - header_height - footer_height);
     let border_height = tokens.shell.border_height;
     items_height + search_box_height + header_height + footer_height + border_height
@@ -1600,8 +1703,7 @@ fn resolve_actions_popup_parent_automation_id(
 }
 
 /// Open the actions window as a separate floating window with vibrancy.
-/// It does NOT take keyboard focus - the parent window keeps focus and routes
-/// keyboard events to the shared ActionsDialog entity.
+/// It can take keyboard focus and also supports parent-routed keys.
 ///
 /// # Arguments
 /// * `cx` - The application context
@@ -1695,9 +1797,9 @@ pub fn open_actions_window(
         window_bounds: Some(WindowBounds::Windowed(bounds)),
         titlebar: None, // No titlebar = no drag affordance
         window_background,
-        // DON'T take focus - let the parent AI window keep focus and route keys to us
-        // macOS popup windows often don't receive keyboard events properly
-        focus: false,
+        // Let the popup own keyboard focus when AppKit promotes it to the key
+        // window; parent surfaces can still route keys while they remain focused.
+        focus: true,
         show: true,
         kind: WindowKind::PopUp, // Floating popup window
         display_id,              // CRITICAL: Position on same display as main window
@@ -1705,10 +1807,8 @@ pub fn open_actions_window(
     };
 
     // Create the window with the shared dialog entity
-    // NOTE: We DON'T focus the ActionsWindow's focus_handle here.
-    // The parent window (AI window, Notes window, etc.) keeps focus and routes
-    // keyboard events to us via its own capture_key_down handler.
-    // This avoids focus conflicts where both windows try to handle keys.
+    // The popup requests its GPUI focus handle from render after the window exists,
+    // while parent surfaces can still route keys through their interceptors.
     let parent_automation_id_for_window = parent_automation_id.clone();
     let handle = cx.open_window(window_options, |_window, cx| {
         cx.new(|cx| {

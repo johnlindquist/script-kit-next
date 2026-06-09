@@ -18,7 +18,7 @@ use crate::theme::types::BackgroundOpacity;
 use crate::theme::AppChromeColors;
 use gpui::{
     div, list, prelude::*, px, rgb, rgba, App, BoxShadow, Context, ElementId, FocusHandle,
-    Focusable, ListAlignment, ListState, Render, SharedString, Window,
+    Focusable, ListAlignment, ListState, Render, Rgba, SharedString, Window,
 };
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -98,6 +98,30 @@ fn hex_with_alpha(hex: u32, alpha: u8) -> u32 {
     DesignColors::hex_with_alpha(hex, alpha)
 }
 
+fn actions_search_cursor(
+    cursor_width: f32,
+    cursor_height: f32,
+    cursor_visible: bool,
+    accent_color: Rgba,
+) -> gpui::Div {
+    let mut cursor_bar = div()
+        .absolute()
+        .left(px(-(cursor_width / 2.0)))
+        .top(px(0.0))
+        .w(px(cursor_width))
+        .h(px(cursor_height))
+        .rounded(px(1.0));
+    if cursor_visible {
+        cursor_bar = cursor_bar.bg(accent_color);
+    }
+
+    div()
+        .relative()
+        .w(px(0.0))
+        .h(px(cursor_height))
+        .child(cursor_bar)
+}
+
 /// Action subtitle text shown in the popup row, if any.
 ///
 /// We intentionally suppress subtitle/description rendering to keep action rows
@@ -124,11 +148,183 @@ fn action_shortcut_tokens_for_render(action: &Action) -> Option<std::borrow::Cow
     ))
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct VisibleActionShortcutBinding {
+    pub action_id: String,
+    pub shortcut: String,
+    pub canonical: String,
+    pub routable: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ActionShortcutParityReport {
+    pub displayed_shortcut_count: usize,
+    pub routable_shortcut_count: usize,
+    pub duplicate_shortcut_count: usize,
+    pub unroutable_displayed_shortcuts: Vec<VisibleActionShortcutBinding>,
+    pub visible_shortcut_bindings: Vec<VisibleActionShortcutBinding>,
+}
+
+#[derive(Clone, Debug, PartialEq, gpui::Action)]
+#[action(namespace = script_kit, no_json, no_register)]
+pub(crate) struct MainListDisplayedActionShortcut {
+    pub shortcut: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct DisplayedShortcutKeyBindingSpec {
+    pub canonical: String,
+    pub gpui_keystroke: String,
+}
+
+fn action_canonical_shortcut(action: &Action) -> Option<String> {
+    let display_shortcut = action.shortcut.as_deref()?;
+    let canonical = crate::components::hint_strip::canonical_shortcut_hint(display_shortcut);
+    if canonical.is_empty() {
+        None
+    } else {
+        Some(canonical)
+    }
+}
+
 fn action_matches_keystroke_shortcut(action: &Action, normalized_keystroke_shortcut: &str) -> bool {
-    action.shortcut.as_ref().is_some_and(|display_shortcut| {
-        crate::components::hint_strip::canonical_shortcut_hint(display_shortcut)
-            == normalized_keystroke_shortcut
-    })
+    action_canonical_shortcut(action)
+        .is_some_and(|canonical| canonical == normalized_keystroke_shortcut)
+}
+
+pub(crate) fn visible_action_shortcut_bindings(
+    actions: &[Action],
+    filtered_actions: &[usize],
+) -> Vec<VisibleActionShortcutBinding> {
+    let mut canonical_counts: HashMap<String, usize> = HashMap::new();
+    let mut bindings = Vec::new();
+
+    for &action_idx in filtered_actions {
+        let Some(action) = actions.get(action_idx) else {
+            continue;
+        };
+        let Some(shortcut) = action.shortcut.clone() else {
+            continue;
+        };
+        let canonical = crate::components::hint_strip::canonical_shortcut_hint(&shortcut);
+        if canonical.is_empty() {
+            bindings.push(VisibleActionShortcutBinding {
+                action_id: action.id.clone(),
+                shortcut,
+                canonical,
+                routable: false,
+            });
+            continue;
+        }
+        *canonical_counts.entry(canonical.clone()).or_insert(0) += 1;
+        bindings.push(VisibleActionShortcutBinding {
+            action_id: action.id.clone(),
+            shortcut,
+            canonical,
+            routable: true,
+        });
+    }
+
+    for binding in &mut bindings {
+        if binding.canonical.is_empty()
+            || canonical_counts
+                .get(&binding.canonical)
+                .is_some_and(|count| *count > 1)
+        {
+            binding.routable = false;
+        }
+    }
+
+    bindings
+}
+
+pub(crate) fn action_shortcut_parity_report(
+    actions: &[Action],
+    filtered_actions: &[usize],
+) -> ActionShortcutParityReport {
+    let bindings = visible_action_shortcut_bindings(actions, filtered_actions);
+    let displayed_shortcut_count = bindings.len();
+    let routable_shortcut_count = bindings.iter().filter(|binding| binding.routable).count();
+    let duplicate_shortcut_count = bindings
+        .iter()
+        .filter(|binding| {
+            !binding.canonical.is_empty()
+                && bindings
+                    .iter()
+                    .filter(|other| other.canonical == binding.canonical)
+                    .count()
+                    > 1
+        })
+        .count();
+    let unroutable_displayed_shortcuts = bindings
+        .iter()
+        .filter(|binding| !binding.routable)
+        .cloned()
+        .collect();
+
+    ActionShortcutParityReport {
+        displayed_shortcut_count,
+        routable_shortcut_count,
+        duplicate_shortcut_count,
+        unroutable_displayed_shortcuts,
+        visible_shortcut_bindings: bindings,
+    }
+}
+
+pub(crate) fn gpui_keystroke_for_canonical_shortcut(canonical: &str) -> Option<String> {
+    let canonical = canonical.trim();
+    if canonical.is_empty() {
+        None
+    } else {
+        Some(canonical.replace('+', "-"))
+    }
+}
+
+pub(crate) fn displayed_action_keybinding_specs(
+    actions: &[Action],
+    filtered_actions: &[usize],
+) -> Vec<DisplayedShortcutKeyBindingSpec> {
+    action_shortcut_parity_report(actions, filtered_actions)
+        .visible_shortcut_bindings
+        .into_iter()
+        .filter(|binding| binding.routable)
+        .filter_map(|binding| {
+            let gpui_keystroke = gpui_keystroke_for_canonical_shortcut(&binding.canonical)?;
+            Some(DisplayedShortcutKeyBindingSpec {
+                canonical: binding.canonical,
+                gpui_keystroke,
+            })
+        })
+        .collect()
+}
+
+pub(crate) fn matching_action_id_for_canonical_shortcut(
+    actions: &[Action],
+    filtered_actions: &[usize],
+    canonical_shortcut: &str,
+) -> Option<String> {
+    let mut matches = filtered_actions.iter().filter_map(|&action_idx| {
+        let action = actions.get(action_idx)?;
+        let action_canonical = action_canonical_shortcut(action)?;
+        (action_canonical == canonical_shortcut).then(|| action.id.clone())
+    });
+
+    let first = matches.next()?;
+    if matches.next().is_some() {
+        None
+    } else {
+        Some(first)
+    }
+}
+
+pub(crate) fn resolve_visible_action_shortcut(
+    actions: &[Action],
+    filtered_actions: &[usize],
+    key: &str,
+    modifiers: &gpui::Modifiers,
+) -> Option<String> {
+    let keystroke_shortcut = crate::shortcuts::keystroke_to_shortcut(key, modifiers);
+    matching_action_id_for_canonical_shortcut(actions, filtered_actions, &keystroke_shortcut)
 }
 
 pub(crate) fn matching_action_id_for_keystroke(
@@ -136,14 +332,8 @@ pub(crate) fn matching_action_id_for_keystroke(
     key: &str,
     modifiers: &gpui::Modifiers,
 ) -> Option<String> {
-    let keystroke_shortcut = crate::shortcuts::keystroke_to_shortcut(key, modifiers);
-    actions.iter().find_map(|action| {
-        if action_matches_keystroke_shortcut(action, &keystroke_shortcut) {
-            Some(action.id.clone())
-        } else {
-            None
-        }
-    })
+    let filtered_actions: Vec<usize> = (0..actions.len()).collect();
+    resolve_visible_action_shortcut(actions, &filtered_actions, key, modifiers)
 }
 
 pub(crate) fn matching_filtered_action_id_for_keystroke(
@@ -152,16 +342,7 @@ pub(crate) fn matching_filtered_action_id_for_keystroke(
     key: &str,
     modifiers: &gpui::Modifiers,
 ) -> Option<String> {
-    let keystroke_shortcut = crate::shortcuts::keystroke_to_shortcut(key, modifiers);
-    filtered_actions.iter().find_map(|&action_idx| {
-        actions.get(action_idx).and_then(|action| {
-            if action_matches_keystroke_shortcut(action, &keystroke_shortcut) {
-                Some(action.id.clone())
-            } else {
-                None
-            }
-        })
-    })
+    resolve_visible_action_shortcut(actions, filtered_actions, key, modifiers)
 }
 
 fn clear_action_shortcut(action: &mut Action) {
@@ -430,8 +611,9 @@ pub(super) fn actions_dialog_scrollbar_viewport_height(
     } else {
         0.0
     };
+    let list_padding_height = tokens.list.padding_top + tokens.list.padding_bottom;
     let available_viewport_height =
-        (max_height - search_height - header_height - footer_height).max(0.0);
+        (max_height - search_height - header_height - footer_height - list_padding_height).max(0.0);
 
     total_content_height.min(available_viewport_height)
 }
@@ -2159,6 +2341,10 @@ impl ActionsDialog {
     }
 
     fn devtools_action_summary(action: &Action) -> serde_json::Value {
+        let canonical_shortcut = action
+            .shortcut
+            .as_deref()
+            .map(crate::components::hint_strip::canonical_shortcut_hint);
         serde_json::json!({
             "id": action.id.as_str(),
             "titleLength": action.title.chars().count(),
@@ -2169,6 +2355,7 @@ impl ActionsDialog {
             "category": format!("{:?}", action.category),
             "hasShortcut": action.shortcut.is_some(),
             "shortcut": action.shortcut.as_deref(),
+            "canonicalShortcut": canonical_shortcut,
             "hasAction": action.has_action,
         })
     }
@@ -2385,6 +2572,31 @@ impl ActionsDialog {
 
     pub(crate) fn automation_state(&self, surface: &str) -> serde_json::Value {
         let selected_action = self.get_selected_action();
+        let shortcut_parity = action_shortcut_parity_report(&self.actions, &self.filtered_actions);
+        let shortcut_bindings: Vec<serde_json::Value> = shortcut_parity
+            .visible_shortcut_bindings
+            .iter()
+            .map(|binding| {
+                serde_json::json!({
+                    "actionId": binding.action_id,
+                    "shortcut": binding.shortcut,
+                    "canonical": binding.canonical,
+                    "routable": binding.routable,
+                })
+            })
+            .collect();
+        let unroutable_shortcuts: Vec<serde_json::Value> = shortcut_parity
+            .unroutable_displayed_shortcuts
+            .iter()
+            .map(|binding| {
+                serde_json::json!({
+                    "actionId": binding.action_id,
+                    "shortcut": binding.shortcut,
+                    "canonical": binding.canonical,
+                    "routable": binding.routable,
+                })
+            })
+            .collect();
         let visible_actions: Vec<serde_json::Value> = self
             .filtered_actions
             .iter()
@@ -2450,6 +2662,13 @@ impl ActionsDialog {
                 "visibleSampleLimit": visible_actions.len(),
                 "visibleSample": visible_actions,
                 "shortcutCount": self.actions.iter().filter(|action| action.shortcut.is_some()).count(),
+                "shortcutParity": {
+                    "displayedShortcutCount": shortcut_parity.displayed_shortcut_count,
+                    "routableShortcutCount": shortcut_parity.routable_shortcut_count,
+                    "duplicateShortcutCount": shortcut_parity.duplicate_shortcut_count,
+                    "unroutableDisplayedShortcuts": unroutable_shortcuts,
+                    "visibleShortcutBindings": shortcut_bindings,
+                },
                 "sdkActionsActive": self.has_sdk_actions(),
             },
             "route": {
@@ -3568,7 +3787,6 @@ impl Render for ActionsDialog {
         let tokens = get_tokens(self.design_variant);
         let colors = tokens.colors();
         let spacing = tokens.spacing();
-        let visual = tokens.visual();
 
         // NOTE: Key handling is done by the parent (ScriptListApp in main.rs)
         // which routes all keyboard events to this dialog's methods.
@@ -3613,6 +3831,58 @@ impl Render for ActionsDialog {
         let separator_color = border_color;
         let hint_text_color = hint_text;
         let input_text_color = primary_text;
+        let search_is_empty = self.search_text.is_empty();
+        let build_search_content = |search_display: SharedString| {
+            let mut content = div()
+                .flex_1()
+                .h(px(popup_theme.search.inner_height))
+                .flex()
+                .flex_row()
+                .items_center()
+                .text_size(px(popup_theme.search.font_size))
+                .line_height(px(popup_theme.search.font_size))
+                .text_color(if search_is_empty {
+                    hint_text_color
+                } else {
+                    input_text_color
+                });
+
+            if let Some(prefix_marker) = style.prefix_marker {
+                content = content.child(
+                    div()
+                        .mr(px(popup_theme.search.prefix_gap))
+                        .text_color(hint_text_color)
+                        .font_family(if style.mono_font {
+                            crate::list_item::FONT_MONO
+                        } else {
+                            crate::list_item::FONT_SYSTEM_UI
+                        })
+                        .child(prefix_marker),
+                );
+            }
+
+            if search_is_empty {
+                content = content.child(actions_search_cursor(
+                    popup_theme.search.cursor_width,
+                    popup_theme.search.font_size,
+                    self.cursor_visible,
+                    accent_color,
+                ));
+            }
+
+            content = content.child(search_display);
+
+            if !search_is_empty {
+                content = content.child(actions_search_cursor(
+                    popup_theme.search.cursor_width,
+                    popup_theme.search.font_size,
+                    self.cursor_visible,
+                    accent_color,
+                ));
+            }
+
+            content
+        };
 
         let mut input_container = div()
             .w(px(popup_theme.shell.width)) // Match parent width exactly
@@ -3630,73 +3900,8 @@ impl Render for ActionsDialog {
             .flex_row()
             .items_center()
             .child(
-                // Full-width search input - no box styling, just text
-                div()
-                    .flex_1() // Take full width
-                    .h(px(popup_theme.search.inner_height))
-                    .flex()
-                    .flex_row()
-                    .items_center()
-                    .text_sm()
-                    // Placeholder or input text color
-                    .text_color(if self.search_text.is_empty() {
-                        hint_text_color
-                    } else {
-                        input_text_color
-                    })
-                    // Cursor at start when empty
-                    .when(self.search_text.is_empty(), |d| {
-                        let mut content = d;
-                        if let Some(prefix_marker) = style.prefix_marker {
-                            content = content.child(
-                                div()
-                                    .mr(px(popup_theme.search.prefix_gap))
-                                    .text_color(hint_text_color)
-                                    .font_family(if style.mono_font {
-                                        crate::list_item::FONT_MONO
-                                    } else {
-                                        crate::list_item::FONT_SYSTEM_UI
-                                    })
-                                    .child(prefix_marker),
-                            );
-                        }
-
-                        content.child(
-                            div()
-                                .w(px(popup_theme.search.cursor_width))
-                                .h(px(popup_theme.search.cursor_height))
-                                .mr(px(2.))
-                                .rounded(px(1.))
-                                .when(self.cursor_visible, |d| d.bg(accent_color)),
-                        )
-                    })
-                    .child(search_display.clone())
-                    // Cursor at end when has text
-                    .when(!self.search_text.is_empty(), |d| {
-                        let mut content = d;
-                        if let Some(prefix_marker) = style.prefix_marker {
-                            content = content.child(
-                                div()
-                                    .mr(px(popup_theme.search.prefix_gap))
-                                    .text_color(hint_text_color)
-                                    .font_family(if style.mono_font {
-                                        crate::list_item::FONT_MONO
-                                    } else {
-                                        crate::list_item::FONT_SYSTEM_UI
-                                    })
-                                    .child(prefix_marker),
-                            );
-                        }
-
-                        content.child(
-                            div()
-                                .w(px(popup_theme.search.cursor_width))
-                                .h(px(popup_theme.search.cursor_height))
-                                .ml(px(2.))
-                                .rounded(px(1.))
-                                .when(self.cursor_visible, |d| d.bg(accent_color)),
-                        )
-                    }),
+                // Full-width search input - no box styling, just text.
+                build_search_content(search_display.clone()),
             );
         if style.show_search_divider {
             input_container = input_container.border_t_1().border_color(separator_color);
@@ -3788,6 +3993,15 @@ impl Render for ActionsDialog {
                                             );
                                         let main_menu_theme =
                                             crate::designs::current_main_menu_theme();
+                                        let mut actions_row_metrics =
+                                            crate::list_item::ListItemMetricsOverride::from_main_menu_theme(
+                                                main_menu_theme,
+                                            );
+                                        actions_row_metrics.name_font_size =
+                                            popup_theme.row.title_font_size;
+                                        actions_row_metrics.name_line_height = actions_row_metrics
+                                            .name_line_height
+                                            .max(popup_theme.row.title_font_size);
                                         let shortcut = if style.shortcut_visible {
                                             action.shortcut.clone()
                                         } else {
@@ -3801,6 +4015,7 @@ impl Render for ActionsDialog {
                                         .selected(is_selected)
                                         .hovered(this.hovered_row == Some(ix))
                                         .main_menu_theme(main_menu_theme)
+                                        .metrics_override(actions_row_metrics)
                                         .semantic_id(format!("choice:{ix}:{}", action.id))
                                         .description_opt(
                                             action_subtitle_for_display(action)
@@ -3855,6 +4070,7 @@ impl Render for ActionsDialog {
                                             .h(px(style.row_height))
                                             .w_full()
                                             .px(px(popup_theme.row.inset_x))
+                                            .py(px(popup_theme.row.inner_y))
                                             .flex()
                                             .flex_col()
                                             .justify_center()
@@ -3938,6 +4154,8 @@ impl Render for ActionsDialog {
                 .flex_1()
                 .w_full()
                 .overflow_hidden()
+                .pt(px(popup_theme.list.padding_top))
+                .pb(px(popup_theme.list.padding_bottom))
                 .on_scroll_wheel(cx.listener(|this, _event, _window, cx| {
                     this.clear_pending_scrollbar_offset();
                     this.trigger_scrollbar_activity(cx);
@@ -3951,7 +4169,7 @@ impl Render for ActionsDialog {
                     d.child(
                         div()
                             .absolute()
-                            .top_0()
+                            .top(px(popup_theme.list.padding_top))
                             .left_0()
                             .w_full()
                             .h(px(style.row_height))
@@ -3985,7 +4203,7 @@ impl Render for ActionsDialog {
             0.0
         };
         let footer_height = 0.0;
-        let border_height = visual.border_thin * 2.0; // top + bottom border
+        let border_height = popup_theme.shell.border_height;
 
         // Count items and section headers separately for accurate height calculation
         let mut section_header_count = 0_usize;
@@ -4005,9 +4223,10 @@ impl Render for ActionsDialog {
         };
 
         // Calculate content height including both items and section headers
+        let list_padding_height = popup_theme.list.padding_top + popup_theme.list.padding_bottom;
         let content_height = (action_item_count as f32 * style.row_height)
             + (section_header_count as f32 * popup_theme.list.section_header_height);
-        let items_height = content_height
+        let items_height = (content_height.max(min_items_height) + list_padding_height)
             .max(min_items_height)
             .min(self.config.max_height - search_box_height - header_height - footer_height);
         let total_height =
@@ -4084,73 +4303,8 @@ impl Render for ActionsDialog {
                     .flex_row()
                     .items_center()
                     .child(
-                        // Full-width search input - no box styling, just text
-                        div()
-                            .flex_1() // Take full width
-                            .h(px(popup_theme.search.inner_height))
-                            .flex()
-                            .flex_row()
-                            .items_center()
-                            .text_sm()
-                            // Placeholder or input text color
-                            .text_color(if self.search_text.is_empty() {
-                                hint_text_color
-                            } else {
-                                input_text_color
-                            })
-                            // Cursor at start when empty
-                            .when(self.search_text.is_empty(), |d| {
-                                let mut content = d;
-                                if let Some(prefix_marker) = style.prefix_marker {
-                                    content = content.child(
-                                        div()
-                                            .mr(px(popup_theme.search.prefix_gap))
-                                            .text_color(hint_text_color)
-                                            .font_family(if style.mono_font {
-                                                crate::list_item::FONT_MONO
-                                            } else {
-                                                crate::list_item::FONT_SYSTEM_UI
-                                            })
-                                            .child(prefix_marker),
-                                    );
-                                }
-
-                                content.child(
-                                    div()
-                                        .w(px(popup_theme.search.cursor_width))
-                                        .h(px(popup_theme.search.cursor_height))
-                                        .mr(px(2.))
-                                        .rounded(px(1.))
-                                        .when(self.cursor_visible, |d| d.bg(accent_color)),
-                                )
-                            })
-                            .child(search_display.clone())
-                            // Cursor at end when has text
-                            .when(!self.search_text.is_empty(), |d| {
-                                let mut content = d;
-                                if let Some(prefix_marker) = style.prefix_marker {
-                                    content = content.child(
-                                        div()
-                                            .mr(px(popup_theme.search.prefix_gap))
-                                            .text_color(hint_text_color)
-                                            .font_family(if style.mono_font {
-                                                crate::list_item::FONT_MONO
-                                            } else {
-                                                crate::list_item::FONT_SYSTEM_UI
-                                            })
-                                            .child(prefix_marker),
-                                    );
-                                }
-
-                                content.child(
-                                    div()
-                                        .w(px(popup_theme.search.cursor_width))
-                                        .h(px(popup_theme.search.cursor_height))
-                                        .ml(px(2.))
-                                        .rounded(px(1.))
-                                        .when(self.cursor_visible, |d| d.bg(accent_color)),
-                                )
-                            }),
+                        // Full-width search input - no box styling, just text.
+                        build_search_content(search_display.clone()),
                     );
                 if style.show_search_divider {
                     top_input = top_input.border_b_1().border_color(separator_color);
@@ -4498,14 +4652,16 @@ fn emit_actions_dialog_runtime_audit(audit: &ActionsDialogRuntimeAudit) {
 #[cfg(test)]
 mod tests {
     use super::{
-        action_subtitle_for_display, actions_dialog_revealed_scroll_top,
-        actions_dialog_scrollbar_fade_duration, actions_dialog_scrollbar_fade_opacity,
-        actions_dialog_scrollbar_viewport_height, clear_duplicate_action_shortcuts,
+        action_shortcut_parity_report, action_subtitle_for_display,
+        actions_dialog_revealed_scroll_top, actions_dialog_scrollbar_fade_duration,
+        actions_dialog_scrollbar_fade_opacity, actions_dialog_scrollbar_viewport_height,
+        clear_duplicate_action_shortcuts, displayed_action_keybinding_specs,
         first_selectable_index, is_destructive_action, last_selectable_index,
         matching_action_id_for_keystroke, matching_filtered_action_id_for_keystroke,
-        selectable_index_at_or_after, selectable_index_at_or_before,
-        should_render_section_separator, ActionsDialog, ActionsDialogChromeAudit,
-        ActionsDialogRuntimeAudit, GroupedActionItem,
+        resolve_visible_action_shortcut, selectable_index_at_or_after,
+        selectable_index_at_or_before, should_render_section_separator, ActionsDialog,
+        ActionsDialogChromeAudit, ActionsDialogRuntimeAudit, GroupedActionItem,
+        MainListDisplayedActionShortcut,
     };
     use crate::actions::types::{Action, ActionCategory, ScriptInfo, SectionStyle};
     use crate::menu_syntax::{MenuSyntaxAction, MenuSyntaxActionKind};
@@ -4839,6 +4995,193 @@ mod tests {
             matching_filtered_action_id_for_keystroke(&actions, &[1], "r", &cmd_only),
             Some("file:refresh_directory".to_string())
         );
+    }
+
+    #[test]
+    fn cmd_shift_k_matches_add_shortcut_display_shortcut() {
+        let actions = vec![Action::new(
+            "add_shortcut",
+            "Add Keyboard Shortcut",
+            None,
+            ActionCategory::ScriptContext,
+        )
+        .with_shortcut("⌘⇧K")];
+        let mut shift_cmd = gpui::Modifiers::default();
+        shift_cmd.platform = true;
+        shift_cmd.shift = true;
+
+        assert_eq!(
+            matching_action_id_for_keystroke(&actions, "k", &shift_cmd),
+            Some("add_shortcut".to_string())
+        );
+    }
+
+    #[test]
+    fn cmd_shift_k_matches_builtin_add_shortcut_display_shortcut() {
+        let builtin = ScriptInfo::with_all(
+            "Theme Designer",
+            "builtin:builtin/choose-theme",
+            false,
+            "Open",
+            None,
+            None,
+        );
+        let actions = crate::actions::get_script_context_actions(&builtin);
+        let mut shift_cmd = gpui::Modifiers::default();
+        shift_cmd.platform = true;
+        shift_cmd.shift = true;
+
+        let add_shortcut = actions
+            .iter()
+            .find(|action| action.id == "add_shortcut")
+            .expect("built-ins without an assigned shortcut must expose add_shortcut");
+        assert_eq!(add_shortcut.shortcut.as_deref(), Some("⌘⇧K"));
+        assert_eq!(
+            matching_action_id_for_keystroke(&actions, "K", &shift_cmd),
+            Some("add_shortcut".to_string())
+        );
+    }
+
+    #[test]
+    fn cmd_shift_k_matches_update_shortcut_display_shortcut() {
+        let actions = vec![Action::new(
+            "update_shortcut",
+            "Edit Keyboard Shortcut",
+            None,
+            ActionCategory::ScriptContext,
+        )
+        .with_shortcut("⌘⇧K")];
+        let mut shift_cmd = gpui::Modifiers::default();
+        shift_cmd.platform = true;
+        shift_cmd.shift = true;
+
+        assert_eq!(
+            matching_action_id_for_keystroke(&actions, "k", &shift_cmd),
+            Some("update_shortcut".to_string())
+        );
+    }
+
+    #[test]
+    fn visible_shortcut_router_ignores_filtered_out_add_shortcut() {
+        let actions = vec![
+            Action::new(
+                "add_shortcut",
+                "Add Keyboard Shortcut",
+                None,
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut("⌘⇧K"),
+            Action::new(
+                "copy_path",
+                "Copy Path",
+                None,
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut("⌘⇧C"),
+        ];
+        let mut shift_cmd = gpui::Modifiers::default();
+        shift_cmd.platform = true;
+        shift_cmd.shift = true;
+
+        assert_eq!(
+            matching_filtered_action_id_for_keystroke(&actions, &[1], "k", &shift_cmd),
+            None
+        );
+    }
+
+    #[test]
+    fn duplicate_visible_shortcuts_do_not_create_two_executable_routes() {
+        let actions = vec![
+            Action::new(
+                "add_shortcut",
+                "Add Keyboard Shortcut",
+                None,
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut("⌘⇧K"),
+            Action::new(
+                "update_shortcut",
+                "Edit Keyboard Shortcut",
+                None,
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut("cmd+shift+k"),
+        ];
+        let mut shift_cmd = gpui::Modifiers::default();
+        shift_cmd.platform = true;
+        shift_cmd.shift = true;
+
+        assert_eq!(
+            resolve_visible_action_shortcut(&actions, &[0, 1], "k", &shift_cmd),
+            None
+        );
+        let report = action_shortcut_parity_report(&actions, &[0, 1]);
+        assert_eq!(report.displayed_shortcut_count, 2);
+        assert_eq!(report.routable_shortcut_count, 0);
+        assert_eq!(report.duplicate_shortcut_count, 2);
+        assert_eq!(report.unroutable_displayed_shortcuts.len(), 2);
+    }
+
+    #[test]
+    fn displayed_action_keybinding_specs_are_generated_from_routable_metadata() {
+        let actions = vec![Action::new(
+            "add_shortcut",
+            "Add Keyboard Shortcut",
+            None,
+            ActionCategory::ScriptContext,
+        )
+        .with_shortcut("⌘⇧K")];
+
+        let specs = displayed_action_keybinding_specs(&actions, &[0]);
+
+        assert_eq!(specs.len(), 1);
+        assert_eq!(specs[0].canonical, "cmd+shift+k");
+        assert_eq!(specs[0].gpui_keystroke, "cmd-shift-k");
+    }
+
+    #[test]
+    fn duplicate_displayed_action_shortcuts_do_not_generate_keybindings() {
+        let actions = vec![
+            Action::new(
+                "add_shortcut",
+                "Add Keyboard Shortcut",
+                None,
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut("⌘⇧K"),
+            Action::new(
+                "update_shortcut",
+                "Edit Keyboard Shortcut",
+                None,
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut("cmd+shift+k"),
+        ];
+
+        let specs = displayed_action_keybinding_specs(&actions, &[0, 1]);
+
+        assert!(specs.is_empty());
+    }
+
+    #[test]
+    fn generated_displayed_action_binding_is_receivable_in_script_list_context() {
+        let binding = gpui::KeyBinding::new(
+            "cmd-shift-k",
+            MainListDisplayedActionShortcut {
+                shortcut: "cmd+shift+k".to_string(),
+            },
+            Some("script_list"),
+        );
+        let mut keymap = gpui::Keymap::default();
+        keymap.add_bindings([binding]);
+
+        let (matches, pending) = keymap.bindings_for_input(
+            &[gpui::Keystroke::parse("cmd-shift-k").unwrap()],
+            &[gpui::KeyContext::parse("script_list").unwrap()],
+        );
+
+        assert!(!pending);
+        assert_eq!(matches.len(), 1);
     }
 
     #[test]

@@ -1,4 +1,5 @@
 use crate::designs::ActionsPopupThemeDef;
+use gpui::FontWeight;
 
 use super::catalog::{StyleUnit, StyleValue};
 
@@ -74,6 +75,19 @@ macro_rules! f32_knob {
     };
 }
 
+macro_rules! font_weight_knob {
+    ($id_const:ident, $get_fn:ident, $apply_fn:ident, $id:literal, $section:ident.$field:ident) => {
+        pub const $id_const: ActionsPopupKnobId = ActionsPopupKnobId::new($id);
+        fn $get_fn(def: &ActionsPopupThemeDef) -> StyleValue {
+            StyleValue::Number(def.$section.$field.0)
+        }
+        fn $apply_fn(def: &mut ActionsPopupThemeDef, value: StyleValue) {
+            let StyleValue::Number(value) = value;
+            def.$section.$field = FontWeight(value);
+        }
+    };
+}
+
 f32_knob!(
     ACTIONS_SHELL_WIDTH_KNOB_ID,
     get_actions_shell_width,
@@ -87,6 +101,13 @@ f32_knob!(
     apply_actions_shell_max_height,
     "actions.shell.maxHeight",
     shell.max_height
+);
+f32_knob!(
+    ACTIONS_SHELL_NOTES_RECENT_MAX_HEIGHT_KNOB_ID,
+    get_actions_shell_notes_recent_max_height,
+    apply_actions_shell_notes_recent_max_height,
+    "actions.shell.notesRecentMaxHeight",
+    shell.notes_recent_max_height
 );
 f32_knob!(
     ACTIONS_SHELL_MARGIN_X_KNOB_ID,
@@ -103,6 +124,27 @@ f32_knob!(
     shell.margin_y
 );
 f32_knob!(
+    ACTIONS_SHELL_TITLEBAR_OFFSET_Y_KNOB_ID,
+    get_actions_shell_titlebar_offset_y,
+    apply_actions_shell_titlebar_offset_y,
+    "actions.shell.titlebarOffsetY",
+    shell.titlebar_offset_y
+);
+f32_knob!(
+    ACTIONS_SHELL_BORDER_HEIGHT_KNOB_ID,
+    get_actions_shell_border_height,
+    apply_actions_shell_border_height,
+    "actions.shell.borderHeight",
+    shell.border_height
+);
+f32_knob!(
+    ACTIONS_SHELL_RADIUS_KNOB_ID,
+    get_actions_shell_radius,
+    apply_actions_shell_radius,
+    "actions.shell.radius",
+    shell.radius
+);
+f32_knob!(
     ACTIONS_SEARCH_HEIGHT_KNOB_ID,
     get_actions_search_height,
     apply_actions_search_height,
@@ -117,6 +159,48 @@ f32_knob!(
     search.inner_height
 );
 f32_knob!(
+    ACTIONS_SEARCH_PADDING_X_KNOB_ID,
+    get_actions_search_padding_x,
+    apply_actions_search_padding_x,
+    "actions.search.paddingX",
+    search.padding_x
+);
+f32_knob!(
+    ACTIONS_SEARCH_PADDING_Y_EXTRA_KNOB_ID,
+    get_actions_search_padding_y_extra,
+    apply_actions_search_padding_y_extra,
+    "actions.search.paddingYExtra",
+    search.padding_y_extra
+);
+f32_knob!(
+    ACTIONS_SEARCH_FONT_SIZE_KNOB_ID,
+    get_actions_search_font_size,
+    apply_actions_search_font_size,
+    "actions.search.fontSize",
+    search.font_size
+);
+f32_knob!(
+    ACTIONS_SEARCH_CURSOR_WIDTH_KNOB_ID,
+    get_actions_search_cursor_width,
+    apply_actions_search_cursor_width,
+    "actions.search.cursorWidth",
+    search.cursor_width
+);
+f32_knob!(
+    ACTIONS_SEARCH_CURSOR_HEIGHT_KNOB_ID,
+    get_actions_search_cursor_height,
+    apply_actions_search_cursor_height,
+    "actions.search.cursorHeight",
+    search.cursor_height
+);
+f32_knob!(
+    ACTIONS_SEARCH_PREFIX_GAP_KNOB_ID,
+    get_actions_search_prefix_gap,
+    apply_actions_search_prefix_gap,
+    "actions.search.prefixGap",
+    search.prefix_gap
+);
+f32_knob!(
     ACTIONS_LIST_ROW_HEIGHT_KNOB_ID,
     get_actions_list_row_height,
     apply_actions_list_row_height,
@@ -124,11 +208,39 @@ f32_knob!(
     list.row_height
 );
 f32_knob!(
+    ACTIONS_LIST_EMPTY_ROW_HEIGHT_KNOB_ID,
+    get_actions_list_empty_row_height,
+    apply_actions_list_empty_row_height,
+    "actions.list.emptyRowHeight",
+    list.empty_row_height
+);
+f32_knob!(
     ACTIONS_LIST_SECTION_HEADER_HEIGHT_KNOB_ID,
     get_actions_list_section_header_height,
     apply_actions_list_section_header_height,
     "actions.list.sectionHeaderHeight",
     list.section_header_height
+);
+f32_knob!(
+    ACTIONS_LIST_PADDING_TOP_KNOB_ID,
+    get_actions_list_padding_top,
+    apply_actions_list_padding_top,
+    "actions.list.paddingTop",
+    list.padding_top
+);
+f32_knob!(
+    ACTIONS_LIST_PADDING_BOTTOM_KNOB_ID,
+    get_actions_list_padding_bottom,
+    apply_actions_list_padding_bottom,
+    "actions.list.paddingBottom",
+    list.padding_bottom
+);
+f32_knob!(
+    ACTIONS_LIST_OVERDRAW_PX_KNOB_ID,
+    get_actions_list_overdraw_px,
+    apply_actions_list_overdraw_px,
+    "actions.list.overdrawPx",
+    list.overdraw_px
 );
 f32_knob!(
     ACTIONS_ROW_INSET_X_KNOB_ID,
@@ -166,6 +278,13 @@ f32_knob!(
     row.hover_opacity
 );
 f32_knob!(
+    ACTIONS_ROW_TITLE_FONT_SIZE_KNOB_ID,
+    get_actions_row_title_font_size,
+    apply_actions_row_title_font_size,
+    "actions.row.titleFontSize",
+    row.title_font_size
+);
+f32_knob!(
     ACTIONS_SECTION_PADDING_X_KNOB_ID,
     get_actions_section_padding_x,
     apply_actions_section_padding_x,
@@ -180,11 +299,67 @@ f32_knob!(
     section.padding_top
 );
 f32_knob!(
+    ACTIONS_SECTION_PADDING_BOTTOM_KNOB_ID,
+    get_actions_section_padding_bottom,
+    apply_actions_section_padding_bottom,
+    "actions.section.paddingBottom",
+    section.padding_bottom
+);
+f32_knob!(
+    ACTIONS_SECTION_FONT_SIZE_KNOB_ID,
+    get_actions_section_font_size,
+    apply_actions_section_font_size,
+    "actions.section.fontSize",
+    section.font_size
+);
+font_weight_knob!(
+    ACTIONS_SECTION_FONT_WEIGHT_KNOB_ID,
+    get_actions_section_font_weight,
+    apply_actions_section_font_weight,
+    "actions.section.fontWeight",
+    section.font_weight
+);
+f32_knob!(
     ACTIONS_CONTEXT_HEADER_HEIGHT_KNOB_ID,
     get_actions_context_header_height,
     apply_actions_context_header_height,
     "actions.contextHeader.height",
     context_header.height
+);
+f32_knob!(
+    ACTIONS_CONTEXT_HEADER_PADDING_X_KNOB_ID,
+    get_actions_context_header_padding_x,
+    apply_actions_context_header_padding_x,
+    "actions.contextHeader.paddingX",
+    context_header.padding_x
+);
+f32_knob!(
+    ACTIONS_CONTEXT_HEADER_PADDING_TOP_KNOB_ID,
+    get_actions_context_header_padding_top,
+    apply_actions_context_header_padding_top,
+    "actions.contextHeader.paddingTop",
+    context_header.padding_top
+);
+f32_knob!(
+    ACTIONS_CONTEXT_HEADER_PADDING_BOTTOM_KNOB_ID,
+    get_actions_context_header_padding_bottom,
+    apply_actions_context_header_padding_bottom,
+    "actions.contextHeader.paddingBottom",
+    context_header.padding_bottom
+);
+f32_knob!(
+    ACTIONS_CONTEXT_HEADER_FONT_SIZE_KNOB_ID,
+    get_actions_context_header_font_size,
+    apply_actions_context_header_font_size,
+    "actions.contextHeader.fontSize",
+    context_header.font_size
+);
+font_weight_knob!(
+    ACTIONS_CONTEXT_HEADER_FONT_WEIGHT_KNOB_ID,
+    get_actions_context_header_font_weight,
+    apply_actions_context_header_font_weight,
+    "actions.contextHeader.fontWeight",
+    context_header.font_weight
 );
 f32_knob!(
     ACTIONS_SHORTCUT_KEYCAP_HEIGHT_KNOB_ID,
@@ -194,11 +369,32 @@ f32_knob!(
     shortcut.keycap_height
 );
 f32_knob!(
+    ACTIONS_SHORTCUT_KEYCAP_PADDING_X_KNOB_ID,
+    get_actions_shortcut_keycap_padding_x,
+    apply_actions_shortcut_keycap_padding_x,
+    "actions.shortcut.keycapPaddingX",
+    shortcut.keycap_padding_x
+);
+f32_knob!(
+    ACTIONS_SHORTCUT_KEYCAP_PADDING_Y_KNOB_ID,
+    get_actions_shortcut_keycap_padding_y,
+    apply_actions_shortcut_keycap_padding_y,
+    "actions.shortcut.keycapPaddingY",
+    shortcut.keycap_padding_y
+);
+f32_knob!(
     ACTIONS_SHORTCUT_KEYCAP_FONT_SIZE_KNOB_ID,
     get_actions_shortcut_keycap_font_size,
     apply_actions_shortcut_keycap_font_size,
     "actions.shortcut.keycapFontSize",
     shortcut.keycap_font_size
+);
+f32_knob!(
+    ACTIONS_SHORTCUT_KEYCAP_RADIUS_KNOB_ID,
+    get_actions_shortcut_keycap_radius,
+    apply_actions_shortcut_keycap_radius,
+    "actions.shortcut.keycapRadius",
+    shortcut.keycap_radius
 );
 
 pub const ACTIONS_POPUP_KNOBS: &[ActionsPopupKnob] = &[
@@ -225,6 +421,17 @@ pub const ACTIONS_POPUP_KNOBS: &[ActionsPopupKnob] = &[
         apply: apply_actions_shell_max_height,
     },
     ActionsPopupKnob {
+        id: ACTIONS_SHELL_NOTES_RECENT_MAX_HEIGHT_KNOB_ID,
+        label: "Actions notes recent max height",
+        group: ActionsPopupKnobGroup::Shell,
+        unit: StyleUnit::Px,
+        min: 120.0,
+        max: 900.0,
+        step: 1.0,
+        get: get_actions_shell_notes_recent_max_height,
+        apply: apply_actions_shell_notes_recent_max_height,
+    },
+    ActionsPopupKnob {
         id: ACTIONS_SHELL_MARGIN_X_KNOB_ID,
         label: "Actions popup margin X",
         group: ActionsPopupKnobGroup::Shell,
@@ -245,6 +452,39 @@ pub const ACTIONS_POPUP_KNOBS: &[ActionsPopupKnob] = &[
         step: 1.0,
         get: get_actions_shell_margin_y,
         apply: apply_actions_shell_margin_y,
+    },
+    ActionsPopupKnob {
+        id: ACTIONS_SHELL_TITLEBAR_OFFSET_Y_KNOB_ID,
+        label: "Actions titlebar offset Y",
+        group: ActionsPopupKnobGroup::Shell,
+        unit: StyleUnit::Px,
+        min: 0.0,
+        max: 96.0,
+        step: 1.0,
+        get: get_actions_shell_titlebar_offset_y,
+        apply: apply_actions_shell_titlebar_offset_y,
+    },
+    ActionsPopupKnob {
+        id: ACTIONS_SHELL_BORDER_HEIGHT_KNOB_ID,
+        label: "Actions popup border height",
+        group: ActionsPopupKnobGroup::Shell,
+        unit: StyleUnit::Px,
+        min: 0.0,
+        max: 8.0,
+        step: 0.5,
+        get: get_actions_shell_border_height,
+        apply: apply_actions_shell_border_height,
+    },
+    ActionsPopupKnob {
+        id: ACTIONS_SHELL_RADIUS_KNOB_ID,
+        label: "Actions popup radius",
+        group: ActionsPopupKnobGroup::Shell,
+        unit: StyleUnit::Px,
+        min: 0.0,
+        max: 32.0,
+        step: 1.0,
+        get: get_actions_shell_radius,
+        apply: apply_actions_shell_radius,
     },
     ActionsPopupKnob {
         id: ACTIONS_SEARCH_HEIGHT_KNOB_ID,
@@ -269,6 +509,72 @@ pub const ACTIONS_POPUP_KNOBS: &[ActionsPopupKnob] = &[
         apply: apply_actions_search_inner_height,
     },
     ActionsPopupKnob {
+        id: ACTIONS_SEARCH_PADDING_X_KNOB_ID,
+        label: "Actions search padding X",
+        group: ActionsPopupKnobGroup::Search,
+        unit: StyleUnit::Px,
+        min: 0.0,
+        max: 48.0,
+        step: 1.0,
+        get: get_actions_search_padding_x,
+        apply: apply_actions_search_padding_x,
+    },
+    ActionsPopupKnob {
+        id: ACTIONS_SEARCH_PADDING_Y_EXTRA_KNOB_ID,
+        label: "Actions search padding Y extra",
+        group: ActionsPopupKnobGroup::Search,
+        unit: StyleUnit::Px,
+        min: -12.0,
+        max: 32.0,
+        step: 1.0,
+        get: get_actions_search_padding_y_extra,
+        apply: apply_actions_search_padding_y_extra,
+    },
+    ActionsPopupKnob {
+        id: ACTIONS_SEARCH_FONT_SIZE_KNOB_ID,
+        label: "Actions search font size",
+        group: ActionsPopupKnobGroup::Search,
+        unit: StyleUnit::Px,
+        min: 8.0,
+        max: 28.0,
+        step: 1.0,
+        get: get_actions_search_font_size,
+        apply: apply_actions_search_font_size,
+    },
+    ActionsPopupKnob {
+        id: ACTIONS_SEARCH_CURSOR_WIDTH_KNOB_ID,
+        label: "Actions search cursor width",
+        group: ActionsPopupKnobGroup::Search,
+        unit: StyleUnit::Px,
+        min: 0.0,
+        max: 8.0,
+        step: 0.5,
+        get: get_actions_search_cursor_width,
+        apply: apply_actions_search_cursor_width,
+    },
+    ActionsPopupKnob {
+        id: ACTIONS_SEARCH_CURSOR_HEIGHT_KNOB_ID,
+        label: "Actions search cursor height",
+        group: ActionsPopupKnobGroup::Search,
+        unit: StyleUnit::Px,
+        min: 4.0,
+        max: 40.0,
+        step: 1.0,
+        get: get_actions_search_cursor_height,
+        apply: apply_actions_search_cursor_height,
+    },
+    ActionsPopupKnob {
+        id: ACTIONS_SEARCH_PREFIX_GAP_KNOB_ID,
+        label: "Actions search prefix gap",
+        group: ActionsPopupKnobGroup::Search,
+        unit: StyleUnit::Px,
+        min: 0.0,
+        max: 24.0,
+        step: 1.0,
+        get: get_actions_search_prefix_gap,
+        apply: apply_actions_search_prefix_gap,
+    },
+    ActionsPopupKnob {
         id: ACTIONS_LIST_ROW_HEIGHT_KNOB_ID,
         label: "Action row height",
         group: ActionsPopupKnobGroup::List,
@@ -280,6 +586,17 @@ pub const ACTIONS_POPUP_KNOBS: &[ActionsPopupKnob] = &[
         apply: apply_actions_list_row_height,
     },
     ActionsPopupKnob {
+        id: ACTIONS_LIST_EMPTY_ROW_HEIGHT_KNOB_ID,
+        label: "Actions empty row height",
+        group: ActionsPopupKnobGroup::List,
+        unit: StyleUnit::Px,
+        min: 0.0,
+        max: 120.0,
+        step: 1.0,
+        get: get_actions_list_empty_row_height,
+        apply: apply_actions_list_empty_row_height,
+    },
+    ActionsPopupKnob {
         id: ACTIONS_LIST_SECTION_HEADER_HEIGHT_KNOB_ID,
         label: "Action section header height",
         group: ActionsPopupKnobGroup::List,
@@ -289,6 +606,39 @@ pub const ACTIONS_POPUP_KNOBS: &[ActionsPopupKnob] = &[
         step: 1.0,
         get: get_actions_list_section_header_height,
         apply: apply_actions_list_section_header_height,
+    },
+    ActionsPopupKnob {
+        id: ACTIONS_LIST_PADDING_TOP_KNOB_ID,
+        label: "Actions list padding top",
+        group: ActionsPopupKnobGroup::List,
+        unit: StyleUnit::Px,
+        min: 0.0,
+        max: 48.0,
+        step: 1.0,
+        get: get_actions_list_padding_top,
+        apply: apply_actions_list_padding_top,
+    },
+    ActionsPopupKnob {
+        id: ACTIONS_LIST_PADDING_BOTTOM_KNOB_ID,
+        label: "Actions list padding bottom",
+        group: ActionsPopupKnobGroup::List,
+        unit: StyleUnit::Px,
+        min: 0.0,
+        max: 48.0,
+        step: 1.0,
+        get: get_actions_list_padding_bottom,
+        apply: apply_actions_list_padding_bottom,
+    },
+    ActionsPopupKnob {
+        id: ACTIONS_LIST_OVERDRAW_PX_KNOB_ID,
+        label: "Actions list overdraw",
+        group: ActionsPopupKnobGroup::List,
+        unit: StyleUnit::Px,
+        min: 0.0,
+        max: 300.0,
+        step: 1.0,
+        get: get_actions_list_overdraw_px,
+        apply: apply_actions_list_overdraw_px,
     },
     ActionsPopupKnob {
         id: ACTIONS_ROW_INSET_X_KNOB_ID,
@@ -346,6 +696,17 @@ pub const ACTIONS_POPUP_KNOBS: &[ActionsPopupKnob] = &[
         apply: apply_actions_row_hover_opacity,
     },
     ActionsPopupKnob {
+        id: ACTIONS_ROW_TITLE_FONT_SIZE_KNOB_ID,
+        label: "Action title font size",
+        group: ActionsPopupKnobGroup::Row,
+        unit: StyleUnit::Px,
+        min: 8.0,
+        max: 24.0,
+        step: 1.0,
+        get: get_actions_row_title_font_size,
+        apply: apply_actions_row_title_font_size,
+    },
+    ActionsPopupKnob {
         id: ACTIONS_SECTION_PADDING_X_KNOB_ID,
         label: "Action section padding X",
         group: ActionsPopupKnobGroup::Section,
@@ -368,6 +729,39 @@ pub const ACTIONS_POPUP_KNOBS: &[ActionsPopupKnob] = &[
         apply: apply_actions_section_padding_top,
     },
     ActionsPopupKnob {
+        id: ACTIONS_SECTION_PADDING_BOTTOM_KNOB_ID,
+        label: "Action section padding bottom",
+        group: ActionsPopupKnobGroup::Section,
+        unit: StyleUnit::Px,
+        min: 0.0,
+        max: 32.0,
+        step: 1.0,
+        get: get_actions_section_padding_bottom,
+        apply: apply_actions_section_padding_bottom,
+    },
+    ActionsPopupKnob {
+        id: ACTIONS_SECTION_FONT_SIZE_KNOB_ID,
+        label: "Action section font size",
+        group: ActionsPopupKnobGroup::Section,
+        unit: StyleUnit::Px,
+        min: 8.0,
+        max: 24.0,
+        step: 1.0,
+        get: get_actions_section_font_size,
+        apply: apply_actions_section_font_size,
+    },
+    ActionsPopupKnob {
+        id: ACTIONS_SECTION_FONT_WEIGHT_KNOB_ID,
+        label: "Action section font weight",
+        group: ActionsPopupKnobGroup::Section,
+        unit: StyleUnit::Weight,
+        min: 100.0,
+        max: 900.0,
+        step: 50.0,
+        get: get_actions_section_font_weight,
+        apply: apply_actions_section_font_weight,
+    },
+    ActionsPopupKnob {
         id: ACTIONS_CONTEXT_HEADER_HEIGHT_KNOB_ID,
         label: "Action context header height",
         group: ActionsPopupKnobGroup::ContextHeader,
@@ -377,6 +771,61 @@ pub const ACTIONS_POPUP_KNOBS: &[ActionsPopupKnob] = &[
         step: 1.0,
         get: get_actions_context_header_height,
         apply: apply_actions_context_header_height,
+    },
+    ActionsPopupKnob {
+        id: ACTIONS_CONTEXT_HEADER_PADDING_X_KNOB_ID,
+        label: "Action context header padding X",
+        group: ActionsPopupKnobGroup::ContextHeader,
+        unit: StyleUnit::Px,
+        min: 0.0,
+        max: 48.0,
+        step: 1.0,
+        get: get_actions_context_header_padding_x,
+        apply: apply_actions_context_header_padding_x,
+    },
+    ActionsPopupKnob {
+        id: ACTIONS_CONTEXT_HEADER_PADDING_TOP_KNOB_ID,
+        label: "Action context header padding top",
+        group: ActionsPopupKnobGroup::ContextHeader,
+        unit: StyleUnit::Px,
+        min: 0.0,
+        max: 32.0,
+        step: 1.0,
+        get: get_actions_context_header_padding_top,
+        apply: apply_actions_context_header_padding_top,
+    },
+    ActionsPopupKnob {
+        id: ACTIONS_CONTEXT_HEADER_PADDING_BOTTOM_KNOB_ID,
+        label: "Action context header padding bottom",
+        group: ActionsPopupKnobGroup::ContextHeader,
+        unit: StyleUnit::Px,
+        min: 0.0,
+        max: 32.0,
+        step: 1.0,
+        get: get_actions_context_header_padding_bottom,
+        apply: apply_actions_context_header_padding_bottom,
+    },
+    ActionsPopupKnob {
+        id: ACTIONS_CONTEXT_HEADER_FONT_SIZE_KNOB_ID,
+        label: "Action context header font size",
+        group: ActionsPopupKnobGroup::ContextHeader,
+        unit: StyleUnit::Px,
+        min: 8.0,
+        max: 24.0,
+        step: 1.0,
+        get: get_actions_context_header_font_size,
+        apply: apply_actions_context_header_font_size,
+    },
+    ActionsPopupKnob {
+        id: ACTIONS_CONTEXT_HEADER_FONT_WEIGHT_KNOB_ID,
+        label: "Action context header font weight",
+        group: ActionsPopupKnobGroup::ContextHeader,
+        unit: StyleUnit::Weight,
+        min: 100.0,
+        max: 900.0,
+        step: 50.0,
+        get: get_actions_context_header_font_weight,
+        apply: apply_actions_context_header_font_weight,
     },
     ActionsPopupKnob {
         id: ACTIONS_SHORTCUT_KEYCAP_HEIGHT_KNOB_ID,
@@ -390,6 +839,28 @@ pub const ACTIONS_POPUP_KNOBS: &[ActionsPopupKnob] = &[
         apply: apply_actions_shortcut_keycap_height,
     },
     ActionsPopupKnob {
+        id: ACTIONS_SHORTCUT_KEYCAP_PADDING_X_KNOB_ID,
+        label: "Action shortcut keycap padding X",
+        group: ActionsPopupKnobGroup::Shortcut,
+        unit: StyleUnit::Px,
+        min: 0.0,
+        max: 32.0,
+        step: 1.0,
+        get: get_actions_shortcut_keycap_padding_x,
+        apply: apply_actions_shortcut_keycap_padding_x,
+    },
+    ActionsPopupKnob {
+        id: ACTIONS_SHORTCUT_KEYCAP_PADDING_Y_KNOB_ID,
+        label: "Action shortcut keycap padding Y",
+        group: ActionsPopupKnobGroup::Shortcut,
+        unit: StyleUnit::Px,
+        min: 0.0,
+        max: 24.0,
+        step: 1.0,
+        get: get_actions_shortcut_keycap_padding_y,
+        apply: apply_actions_shortcut_keycap_padding_y,
+    },
+    ActionsPopupKnob {
         id: ACTIONS_SHORTCUT_KEYCAP_FONT_SIZE_KNOB_ID,
         label: "Action shortcut font size",
         group: ActionsPopupKnobGroup::Shortcut,
@@ -399,6 +870,17 @@ pub const ACTIONS_POPUP_KNOBS: &[ActionsPopupKnob] = &[
         step: 1.0,
         get: get_actions_shortcut_keycap_font_size,
         apply: apply_actions_shortcut_keycap_font_size,
+    },
+    ActionsPopupKnob {
+        id: ACTIONS_SHORTCUT_KEYCAP_RADIUS_KNOB_ID,
+        label: "Action shortcut keycap radius",
+        group: ActionsPopupKnobGroup::Shortcut,
+        unit: StyleUnit::Px,
+        min: 0.0,
+        max: 32.0,
+        step: 1.0,
+        get: get_actions_shortcut_keycap_radius,
+        apply: apply_actions_shortcut_keycap_radius,
     },
 ];
 

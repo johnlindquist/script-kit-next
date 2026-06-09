@@ -35,6 +35,30 @@ fn shortcut_actions_use_launcher_command_ids() {
     );
 }
 
+#[test]
+fn add_update_shortcut_actions_advertise_cmd_shift_k() {
+    let script_context = super::read_source("src/actions/builders/script_context.rs");
+    let add_block = script_context
+        .split("\"add_shortcut\"")
+        .nth(1)
+        .and_then(|tail| tail.split("with_section(\"Edit\")").next())
+        .expect("add_shortcut action should be built in script context actions");
+    let update_block = script_context
+        .split("\"update_shortcut\"")
+        .nth(1)
+        .and_then(|tail| tail.split("with_section(\"Edit\")").next())
+        .expect("update_shortcut action should be built in script context actions");
+
+    assert!(
+        add_block.contains(".with_shortcut(\"⌘⇧K\")"),
+        "Add Keyboard Shortcut must advertise the Cmd+Shift+K shortcut consumed by the action router"
+    );
+    assert!(
+        update_block.contains(".with_shortcut(\"⌘⇧K\")"),
+        "Edit Keyboard Shortcut must advertise the Cmd+Shift+K shortcut consumed by the action router"
+    );
+}
+
 // ---------------------------------------------------------------------------
 // add_shortcut / update_shortcut — error path
 // ---------------------------------------------------------------------------

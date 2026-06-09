@@ -370,6 +370,7 @@ fn rebind_hotkey_transactional(
 ) -> bool {
     let new_hotkey = HotKey::new(Some(mods), code);
     let new_id = new_hotkey.id();
+    let action_label = hotkey_action_label(&action);
 
     // Check if already registered with same ID (no change needed)
     let current_id = {
@@ -386,12 +387,34 @@ fn rebind_hotkey_transactional(
     };
 
     if current_id == Some(new_id) {
+        logging::log(
+            "KEY_SETUP",
+            &format!(
+                "GLOBAL_HOTKEY_REGISTER_SKIP reason=already_registered action={} display={} id={}",
+                action_label, display, new_id
+            ),
+        );
         return true; // No change needed
     }
+
+    logging::log(
+        "KEY_SETUP",
+        &format!(
+            "GLOBAL_HOTKEY_REGISTER_ATTEMPT action={} display={} id={} mods={:?} code={:?}",
+            action_label, display, new_id, mods, code
+        ),
+    );
 
     // TRANSACTIONAL: Register new FIRST, before unregistering old
     // This ensures we never lose a working hotkey on registration failure
     if let Err(e) = manager.register(new_hotkey) {
+        logging::log(
+            "KEY_SETUP",
+            &format!(
+                "GLOBAL_HOTKEY_REGISTER_FAILED action={} display={} id={} error={}",
+                action_label, display, new_id, e
+            ),
+        );
         logging::log(
             "HOTKEY",
             &format!("Failed to register {}: {} - keeping existing", display, e),
@@ -429,6 +452,7 @@ fn rebind_hotkey_transactional(
     };
 
     // Unregister old hotkey (best-effort - it's already removed from routing)
+    let old_replaced = old_entry.is_some();
     if let Some(old) = old_entry {
         if let Err(e) = manager.unregister(old.hotkey) {
             logging::log(
@@ -443,10 +467,10 @@ fn rebind_hotkey_transactional(
     }
 
     logging::log(
-        "HOTKEY",
+        "KEY_SETUP",
         &format!(
-            "Hot-reloaded {:?} hotkey: {} (id: {})",
-            action, display, new_id
+            "GLOBAL_HOTKEY_REGISTERED action={} display={} id={} old_replaced={}",
+            action_label, display, new_id, old_replaced
         ),
     );
     true
@@ -771,6 +795,14 @@ pub fn update_script_hotkey(
     old_shortcut: Option<&str>,
     new_shortcut: Option<&str>,
 ) -> anyhow::Result<()> {
+    logging::log(
+        "KEY_SETUP",
+        &format!(
+            "SCRIPT_HOTKEY_UPDATE_REQUEST path={} old_shortcut={:?} new_shortcut={:?}",
+            path, old_shortcut, new_shortcut
+        ),
+    );
+
     let manager = MAIN_MANAGER
         .get()
         .ok_or_else(|| anyhow::anyhow!("Hotkey manager not initialized"))?;
@@ -785,6 +817,13 @@ pub fn update_script_hotkey(
         (old, Some(new)) => {
             let (mods, code) = shortcuts::parse_shortcut(new)
                 .ok_or_else(|| anyhow::anyhow!("Failed to parse shortcut: {}", new))?;
+            logging::log(
+                "KEY_SETUP",
+                &format!(
+                    "SCRIPT_HOTKEY_UPDATE_PARSED path={} shortcut={} mods={:?} code={:?}",
+                    path, new, mods, code
+                ),
+            );
             if rebind_hotkey_transactional(
                 &guard,
                 HotkeyAction::Script(path.to_string()),
@@ -798,11 +837,18 @@ pub fn update_script_hotkey(
                     "Registered"
                 };
                 logging::log(
-                    "HOTKEY",
+                    "KEY_SETUP",
                     &format!("{} script shortcut '{}' for {}", verb, new, path),
                 );
                 Ok(())
             } else {
+                logging::log(
+                    "KEY_SETUP",
+                    &format!(
+                        "SCRIPT_HOTKEY_UPDATE_FAILED path={} shortcut={} reason=rebind_failed",
+                        path, new
+                    ),
+                );
                 Err(anyhow::anyhow!("Failed to register hotkey '{}'", new))
             }
         }
@@ -850,6 +896,14 @@ pub fn register_dynamic_shortcut(
     shortcut: &str,
     display_name: &str,
 ) -> anyhow::Result<u32> {
+    logging::log(
+        "KEY_SETUP",
+        &format!(
+            "DYNAMIC_SHORTCUT_REGISTER_REQUEST command_id={} display_name={} shortcut={}",
+            command_id, display_name, shortcut
+        ),
+    );
+
     let manager = MAIN_MANAGER
         .get()
         .ok_or_else(|| anyhow::anyhow!("Hotkey manager not initialized"))?;
@@ -868,6 +922,18 @@ pub fn register_dynamic_shortcut(
     {
         let routes_guard = routes().read();
         if routes_guard.get_action(id).is_some() {
+            let existing = routes_guard
+                .routes
+                .get(&id)
+                .map(|entry| hotkey_action_label(&entry.action))
+                .unwrap_or_else(|| "<unknown>".to_string());
+            logging::log(
+                "KEY_SETUP",
+                &format!(
+                    "DYNAMIC_SHORTCUT_REGISTER_CONFLICT command_id={} shortcut={} id={} existing_action={}",
+                    command_id, shortcut, id, existing
+                ),
+            );
             return Err(anyhow::anyhow!(
                 "Shortcut '{}' is already registered",
                 shortcut
@@ -876,9 +942,27 @@ pub fn register_dynamic_shortcut(
     }
 
     // Register with OS
-    manager_guard
-        .register(hotkey)
-        .map_err(|e| anyhow::anyhow!("Failed to register hotkey '{}': {}", shortcut, e))?;
+    logging::log(
+        "KEY_SETUP",
+        &format!(
+            "DYNAMIC_SHORTCUT_OS_REGISTER_ATTEMPT command_id={} shortcut={} id={} mods={:?} code={:?}",
+            command_id, shortcut, id, mods, code
+        ),
+    );
+    if let Err(e) = manager_guard.register(hotkey) {
+        logging::log(
+            "KEY_SETUP",
+            &format!(
+                "DYNAMIC_SHORTCUT_OS_REGISTER_FAILED command_id={} shortcut={} id={} error={}",
+                command_id, shortcut, id, e
+            ),
+        );
+        return Err(anyhow::anyhow!(
+            "Failed to register hotkey '{}': {}",
+            shortcut,
+            e
+        ));
+    }
 
     // Add to routing table
     {
@@ -894,15 +978,16 @@ pub fn register_dynamic_shortcut(
     }
 
     logging::log(
-        "HOTKEY",
+        "KEY_SETUP",
         &format!(
-            "Registered dynamic shortcut '{}' for {} (id: {})",
-            shortcut, display_name, id
+            "DYNAMIC_SHORTCUT_REGISTERED command_id={} display_name={} shortcut={} id={}",
+            command_id, display_name, shortcut, id
         ),
     );
 
     Ok(id)
 }
+
 /// Unregister a dynamic shortcut by command_id.
 /// Returns Ok(()) even if the shortcut wasn't registered (no-op).
 #[allow(dead_code)]
@@ -1295,7 +1380,15 @@ fn register_builtin_hotkey(
     let hotkey = HotKey::new(Some(mods), code);
     let id = hotkey.id();
     let display = hotkey_config_to_display(cfg);
+    let action_label = hotkey_action_label(&action);
 
+    logging::log(
+        "KEY_SETUP",
+        &format!(
+            "BUILTIN_HOTKEY_REGISTER_ATTEMPT action={} display={} id={} mods={:?} code={:?}",
+            action_label, display, id, mods, code
+        ),
+    );
     match manager.register(hotkey) {
         Ok(()) => {
             let mut routes_guard = routes().write();
@@ -1308,12 +1401,22 @@ fn register_builtin_hotkey(
                 },
             );
             logging::log(
-                "HOTKEY",
-                &format!("Registered {:?} hotkey {} (id: {})", action, display, id),
+                "KEY_SETUP",
+                &format!(
+                    "BUILTIN_HOTKEY_REGISTERED action={} display={} id={}",
+                    action_label, display, id
+                ),
             );
             Some(id)
         }
         Err(e) => {
+            logging::log(
+                "KEY_SETUP",
+                &format!(
+                    "BUILTIN_HOTKEY_REGISTER_FAILED action={} display={} id={} error={}",
+                    action_label, display, id, e
+                ),
+            );
             logging::log("HOTKEY", &format_hotkey_error(&e, &display));
             None
         }
@@ -1330,6 +1433,13 @@ fn register_script_hotkey_internal(
     let hotkey = HotKey::new(Some(mods), code);
     let id = hotkey.id();
 
+    logging::log(
+        "KEY_SETUP",
+        &format!(
+            "SCRIPT_HOTKEY_REGISTER_ATTEMPT name={} path={} shortcut={} id={} mods={:?} code={:?}",
+            name, path, shortcut, id, mods, code
+        ),
+    );
     match manager.register(hotkey) {
         Ok(()) => {
             let mut routes_guard = routes().write();
@@ -1342,15 +1452,22 @@ fn register_script_hotkey_internal(
                 },
             );
             logging::log(
-                "HOTKEY",
+                "KEY_SETUP",
                 &format!(
-                    "Registered script shortcut '{}' for {} (id: {})",
-                    shortcut, name, id
+                    "SCRIPT_HOTKEY_REGISTERED name={} path={} shortcut={} id={}",
+                    name, path, shortcut, id
                 ),
             );
             Some(id)
         }
         Err(e) => {
+            logging::log(
+                "KEY_SETUP",
+                &format!(
+                    "SCRIPT_HOTKEY_REGISTER_FAILED name={} path={} shortcut={} id={} error={}",
+                    name, path, shortcut, id, e
+                ),
+            );
             logging::log(
                 "HOTKEY",
                 &format!("{} (script: {})", format_hotkey_error(&e, shortcut), name),
@@ -1509,15 +1626,31 @@ pub(crate) fn start_hotkey_listener(config: config::Config) {
         // Log routing table summary
         {
             let routes_guard = routes().read();
+            let route_details = routes_guard
+                .routes
+                .iter()
+                .map(|(id, entry)| {
+                    format!(
+                        "{}:{}=>{}",
+                        id,
+                        entry.display,
+                        hotkey_action_label(&entry.action)
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join(",");
             logging::log(
-                "HOTKEY",
+                "KEY_SETUP",
                 &format!(
-                    "Routing table: main={:?}, notes={:?}, ai={:?}, logs={:?}, scripts={}",
+                    "GLOBAL_HOTKEY_ROUTE_SUMMARY main={:?} notes={:?} ai={:?} logs={:?} dictation={:?} inline_ai={:?} scripts={} routes=[{}]",
                     routes_guard.main_id,
                     routes_guard.notes_id,
                     routes_guard.ai_id,
                     routes_guard.logs_id,
-                    routes_guard.script_paths.len()
+                    routes_guard.dictation_id,
+                    routes_guard.inline_ai_id,
+                    routes_guard.script_paths.len(),
+                    route_details
                 ),
             );
         }
@@ -1536,6 +1669,17 @@ pub(crate) fn start_hotkey_listener(config: config::Config) {
                     let routes_guard = routes().read();
                     routes_guard.get_action(event.id)
                 };
+                let action_label = action
+                    .as_ref()
+                    .map(hotkey_action_label)
+                    .unwrap_or_else(|| "<unmapped>".to_string());
+                logging::log(
+                    "KEY_ROUTE",
+                    &format!(
+                        "GLOBAL_HOTKEY_EVENT id={} state={:?} action={}",
+                        event.id, event.state, action_label
+                    ),
+                );
 
                 match action {
                     Some(HotkeyAction::Main) => {

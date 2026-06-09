@@ -249,6 +249,22 @@ impl ScriptListApp {
                         &key_lower, has_cmd, has_shift, _has_alt, _has_ctrl, window, ctx,
                     ) {
                         logging::log("STDIN", "SimulateKey: root file direct action shortcut");
+                    } else if view.try_execute_main_list_action_shortcut_from_display(
+                        &key_lower,
+                        &gpui::Modifiers {
+                            platform: has_cmd,
+                            shift: has_shift,
+                            control: _has_ctrl,
+                            alt: _has_alt,
+                            function: false,
+                        },
+                        window,
+                        ctx,
+                    ) {
+                        logging::log(
+                            "STDIN",
+                            "SimulateKey: displayed main-list action shortcut",
+                        );
                     } else if view.try_open_profile_search_from_script_list_shift_tab(
                         &key_lower,
                         &gpui::Modifiers {
