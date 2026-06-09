@@ -139,7 +139,19 @@ impl NotesApp {
             .get_cursor_line_info(cx)
             .map(|(line, _)| line.saturating_sub(1))
             .unwrap_or(0) as f32;
-        let x = metrics.editor_padding_x + prefix_cols * 7.4;
+        // The editor is monospace, so one measured advance positions any
+        // column exactly; measure it from the actual mono font instead of
+        // assuming 7.4px.
+        let text_system = cx.text_system();
+        let mono_font_id =
+            text_system.resolve_font(&gpui::font(cx.theme().mono_font_family.clone()));
+        let mono_advance = text_system
+            .em_advance(mono_font_id, cx.theme().mono_font_size)
+            .map(f32::from)
+            .ok()
+            .filter(|advance| advance.is_finite() && *advance > 0.0)
+            .unwrap_or(7.4);
+        let x = metrics.editor_padding_x + prefix_cols * mono_advance;
         let y = metrics.editor_padding_y + line_index * metrics.auto_resize_line_height;
 
         div()
