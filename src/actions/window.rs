@@ -1006,6 +1006,14 @@ mod window_lifecycle_tests {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::{Mutex, OnceLock};
+
+    fn runtime_test_guard() -> std::sync::MutexGuard<'static, ()> {
+        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+        LOCK.get_or_init(|| Mutex::new(()))
+            .lock()
+            .expect("actions window runtime test mutex should not be poisoned")
+    }
 
     #[test]
     fn test_actions_window_key_intent_supports_aliases_and_jump_keys() {
@@ -1086,10 +1094,40 @@ mod tests {
             "without_footer={without_footer}, with_footer={with_footer}"
         );
     }
+
+    #[test]
+    fn test_actions_window_dynamic_height_clamps_to_live_shell_max_height() {
+        let _guard = runtime_test_guard();
+        crate::dev_style_tool::runtime_overrides::reset_all();
+        crate::dev_style_tool::runtime_overrides::set_actions_number_from_devtools(
+            "actions.shell.maxHeight",
+            "240px",
+        )
+        .expect("actions shell max height should be settable");
+        crate::dev_style_tool::runtime_overrides::set_actions_number_from_devtools(
+            "actions.list.paddingTop",
+            "10px",
+        )
+        .expect("actions list top padding should be settable");
+        crate::dev_style_tool::runtime_overrides::set_actions_number_from_devtools(
+            "actions.list.paddingBottom",
+            "14px",
+        )
+        .expect("actions list bottom padding should be settable");
+
+        let height = actions_window_dynamic_height(20, 4, false, true, false, 400.0);
+
+        assert_eq!(height, 242.0);
+        crate::dev_style_tool::runtime_overrides::reset_all();
+    }
 }
 
+/// Single source of truth for the actions popup shell height. Both the
+/// NSWindow sizing (`compute_popup_height`) and the dialog's interior
+/// container (`ActionsDialog::render`) derive from this formula so the
+/// rendered content can never drift from the window bounds.
 #[inline]
-fn actions_window_dynamic_height(
+pub(super) fn actions_window_dynamic_height(
     num_actions: usize,
     section_header_count: usize,
     hide_search: bool,

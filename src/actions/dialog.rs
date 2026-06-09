@@ -30,10 +30,7 @@ use super::builders::{
     get_path_context_actions, get_script_context_actions,
     get_scriptlet_context_actions_with_custom, ChatPromptInfo, ClipboardEntryInfo, EmojiActionInfo,
 };
-use super::constants::{
-    ACTIONS_POPUP_RADIUS, ACTIONS_ROW_RADIUS, ACTION_ROW_INSET, HEADER_HEIGHT, POPUP_WIDTH,
-    SEARCH_INPUT_HEIGHT, SECTION_HEADER_HEIGHT,
-};
+use super::constants::{ACTIONS_POPUP_RADIUS, ACTIONS_ROW_RADIUS, ACTION_ROW_INSET, POPUP_WIDTH};
 use crate::file_search::FileInfo;
 use crate::scriptlets::Scriptlet;
 
@@ -569,6 +566,13 @@ pub(super) fn should_render_section_separator(
 }
 
 const ACTIONS_DIALOG_FOOTER_HEIGHT: f32 = 32.0;
+
+#[inline]
+fn actions_dialog_list_overdraw_px() -> f32 {
+    crate::designs::current_actions_popup_theme()
+        .list
+        .overdraw_px
+}
 const ACTIONS_DIALOG_SCROLLBAR_IDLE_DELAY: Duration = Duration::from_millis(900);
 const ACTIONS_DIALOG_SCROLLBAR_FADE_TICK: Duration = Duration::from_millis(16);
 
@@ -612,8 +616,12 @@ pub(super) fn actions_dialog_scrollbar_viewport_height(
         0.0
     };
     let list_padding_height = tokens.list.padding_top + tokens.list.padding_bottom;
-    let available_viewport_height =
-        (max_height - search_height - header_height - footer_height - list_padding_height).max(0.0);
+    let available_viewport_height = (max_height.min(tokens.shell.max_height)
+        - search_height
+        - header_height
+        - footer_height
+        - list_padding_height)
+        .max(0.0);
 
     total_content_height.min(available_viewport_height)
 }
@@ -840,8 +848,6 @@ mod empty_state_message_tests {
 
 // --- merged from part_02.rs ---
 // --- merged from part_01.rs ---
-const ACTIONS_DIALOG_LIST_OVERDRAW_PX: f32 = 100.0;
-
 impl ActionsDialog {
     fn shows_context_header(&self) -> bool {
         self.config.show_context_header && self.context_title.is_some()
@@ -1090,7 +1096,7 @@ impl ActionsDialog {
         let list_state = ListState::new(
             grouped_items.len(),
             ListAlignment::Top,
-            px(ACTIONS_DIALOG_LIST_OVERDRAW_PX),
+            px(actions_dialog_list_overdraw_px()),
         );
         let selected_index = initial_selection_index(&grouped_items);
 
@@ -1990,13 +1996,14 @@ impl ActionsDialog {
         let show_search =
             !matches!(self.config.search_position, SearchPosition::Hidden) && !self.hide_search;
         let search_at_top = matches!(self.config.search_position, SearchPosition::Top);
+        let popup_theme = crate::designs::current_actions_popup_theme();
         let search_height = if show_search {
-            SEARCH_INPUT_HEIGHT
+            popup_theme.search.height
         } else {
             0.0
         };
         let header_height = if self.shows_context_header() && style.show_header {
-            HEADER_HEIGHT
+            popup_theme.context_header.height
         } else {
             0.0
         };
@@ -2009,7 +2016,7 @@ impl ActionsDialog {
             match item {
                 GroupedActionItem::SectionHeader(_) => {
                     section_count += 1;
-                    raw_content_height += SECTION_HEADER_HEIGHT;
+                    raw_content_height += popup_theme.list.section_header_height;
                 }
                 GroupedActionItem::Item(_) => {
                     action_count += 1;
@@ -2037,7 +2044,7 @@ impl ActionsDialog {
             let (kind, height, label, action_id, shortcut, shortcut_tokens) = match item {
                 GroupedActionItem::SectionHeader(label) => (
                     "section",
-                    SECTION_HEADER_HEIGHT,
+                    popup_theme.list.section_header_height,
                     Some(label.as_str()),
                     None,
                     None,
@@ -2287,13 +2294,14 @@ impl ActionsDialog {
         let show_search =
             !matches!(self.config.search_position, SearchPosition::Hidden) && !self.hide_search;
         let search_at_top = matches!(self.config.search_position, SearchPosition::Top);
+        let popup_theme = crate::designs::current_actions_popup_theme();
         let search_height = if show_search {
-            SEARCH_INPUT_HEIGHT
+            popup_theme.search.height
         } else {
             0.0
         };
         let header_height = if self.shows_context_header() && style.show_header {
-            HEADER_HEIGHT
+            popup_theme.context_header.height
         } else {
             0.0
         };
@@ -2313,7 +2321,7 @@ impl ActionsDialog {
         let mut next_hovered_row = None;
         for (visual_index, item) in self.grouped_items.iter().enumerate() {
             let height = match item {
-                GroupedActionItem::SectionHeader(_) => SECTION_HEADER_HEIGHT,
+                GroupedActionItem::SectionHeader(_) => popup_theme.list.section_header_height,
                 GroupedActionItem::Item(_) => style.row_height,
             };
             if content_y >= cursor_y && content_y < cursor_y + height {
@@ -3094,7 +3102,7 @@ impl ActionsDialog {
             self.list_state = ListState::new(
                 new_count,
                 ListAlignment::Top,
-                px(ACTIONS_DIALOG_LIST_OVERDRAW_PX),
+                px(actions_dialog_list_overdraw_px()),
             );
         } else {
             self.list_state.splice(0..old_count, new_count);
@@ -3885,9 +3893,7 @@ impl Render for ActionsDialog {
         };
 
         let mut input_container = div()
-            .w(px(popup_theme.shell.width)) // Match parent width exactly
-            .min_w(px(popup_theme.shell.width))
-            .max_w(px(popup_theme.shell.width))
+            .w_full() // Fill the container, which owns the shell width
             .h(px(popup_theme.search.height)) // Fixed height for the input row
             .min_h(px(popup_theme.search.height))
             .max_h(px(popup_theme.search.height))
@@ -4192,19 +4198,6 @@ impl Render for ActionsDialog {
         let search_at_top = matches!(self.config.search_position, SearchPosition::Top);
         let show_search =
             !matches!(self.config.search_position, SearchPosition::Hidden) && !self.hide_search;
-        let search_box_height = if show_search {
-            popup_theme.search.height
-        } else {
-            0.0
-        };
-        let header_height = if self.shows_context_header() && style.show_header {
-            popup_theme.context_header.height
-        } else {
-            0.0
-        };
-        let footer_height = 0.0;
-        let border_height = popup_theme.shell.border_height;
-
         // Count items and section headers separately for accurate height calculation
         let mut section_header_count = 0_usize;
         let mut action_item_count = 0_usize;
@@ -4215,22 +4208,18 @@ impl Render for ActionsDialog {
             }
         }
 
-        // When no actions, still need space for "No actions match" message
-        let min_items_height = if action_item_count == 0 {
-            style.row_height
-        } else {
-            0.0
-        };
-
-        // Calculate content height including both items and section headers
-        let list_padding_height = popup_theme.list.padding_top + popup_theme.list.padding_bottom;
-        let content_height = (action_item_count as f32 * style.row_height)
-            + (section_header_count as f32 * popup_theme.list.section_header_height);
-        let items_height = (content_height.max(min_items_height) + list_padding_height)
-            .max(min_items_height)
-            .min(self.config.max_height - search_box_height - header_height - footer_height);
-        let total_height =
-            items_height + search_box_height + header_height + border_height + footer_height;
+        // Shell height comes from the same formula that sizes the popup
+        // NSWindow (`compute_popup_height` in window.rs), so the rendered
+        // interior can never drift from the window bounds. Action dialogs are
+        // footerless by contract (`config.show_footer` is forced off).
+        let total_height = super::window::actions_window_dynamic_height(
+            action_item_count,
+            section_header_count,
+            !show_search,
+            self.shows_context_header() && style.show_header,
+            false,
+            self.config.max_height,
+        );
 
         // Build header row (section header style - non-interactive label)
         // Styled to match render_section_header() from list_item.rs:
@@ -4288,9 +4277,7 @@ impl Render for ActionsDialog {
         let input_container_top = if search_at_top && show_search {
             Some({
                 let mut top_input = div()
-                    .w(px(popup_theme.shell.width)) // Match parent width exactly
-                    .min_w(px(popup_theme.shell.width))
-                    .max_w(px(popup_theme.shell.width))
+                    .w_full() // Fill the container, which owns the shell width
                     .h(px(popup_theme.search.height)) // Fixed height for the input row
                     .min_h(px(popup_theme.search.height))
                     .max_h(px(popup_theme.search.height))
@@ -4666,6 +4653,14 @@ mod tests {
     use crate::actions::types::{Action, ActionCategory, ScriptInfo, SectionStyle};
     use crate::menu_syntax::{MenuSyntaxAction, MenuSyntaxActionKind};
     use crate::menu_syntax_actions::{PowerSyntaxActionSection, SectionMode};
+    use std::sync::{Mutex, OnceLock};
+
+    fn runtime_test_guard() -> std::sync::MutexGuard<'static, ()> {
+        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+        LOCK.get_or_init(|| Mutex::new(()))
+            .lock()
+            .expect("actions dialog runtime test mutex should not be poisoned")
+    }
 
     #[test]
     fn selectable_index_helpers_skip_section_headers_directionally() {
@@ -4846,8 +4841,40 @@ mod tests {
             crate::actions::constants::POPUP_MAX_HEIGHT,
         );
 
-        // POPUP_MAX_HEIGHT (400) - SEARCH_INPUT_HEIGHT (40) - HEADER_HEIGHT (26) - footer (32)
+        // POPUP_MAX_HEIGHT (400) - search (40) - context header (26) - footer (32)
         assert_eq!(viewport_height, 302.0);
+    }
+
+    #[test]
+    fn test_scrollbar_viewport_uses_live_shell_height_and_list_padding_overrides() {
+        let _guard = runtime_test_guard();
+        crate::dev_style_tool::runtime_overrides::reset_all();
+        crate::dev_style_tool::runtime_overrides::set_actions_number_from_devtools(
+            "actions.shell.maxHeight",
+            "260px",
+        )
+        .expect("actions shell max height should be settable");
+        crate::dev_style_tool::runtime_overrides::set_actions_number_from_devtools(
+            "actions.list.paddingTop",
+            "11px",
+        )
+        .expect("actions list top padding should be settable");
+        crate::dev_style_tool::runtime_overrides::set_actions_number_from_devtools(
+            "actions.list.paddingBottom",
+            "13px",
+        )
+        .expect("actions list bottom padding should be settable");
+
+        let viewport_height = actions_dialog_scrollbar_viewport_height(
+            500.0,
+            true,
+            true,
+            true,
+            crate::actions::constants::POPUP_MAX_HEIGHT,
+        );
+
+        assert_eq!(viewport_height, 138.0);
+        crate::dev_style_tool::runtime_overrides::reset_all();
     }
 
     #[test]
