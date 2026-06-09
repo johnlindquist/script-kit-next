@@ -398,33 +398,6 @@ pub(crate) fn render_footer_hint_content(
     )
 }
 
-pub(crate) fn render_footer_hint_content_constrained(
-    label: SharedString,
-    key: SharedString,
-    mode: FooterHintKeyMode,
-    theme: &Theme,
-    slot_width_px: f32,
-    key_first: bool,
-    justify: FooterHintContentJustify,
-) -> AnyElement {
-    render_footer_hint_content_impl(
-        label,
-        key,
-        mode,
-        theme,
-        Some(slot_width_px),
-        key_first,
-        justify,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        FooterHintButtonLayoutOverrides::default(),
-    )
-}
-
 /// Flexbox-native footer hint content. Instead of estimating text width in
 /// Rust and truncating against a precomputed slot width, the label is a
 /// shrinkable flex item that ellipsizes under real layout pressure while the
@@ -834,25 +807,6 @@ pub(crate) fn footer_horizontal_run_origins_px(
             origin
         })
         .collect()
-}
-
-pub(crate) fn footer_hint_content_estimated_width_px(
-    label: &str,
-    key: &str,
-    mode: FooterHintKeyMode,
-) -> f32 {
-    let label_width_px = footer_labelcap_estimated_width_px(label);
-    let key_width_px = match mode {
-        FooterHintKeyMode::Shortcut => footer_shortcut_keycaps_width_px(key),
-    };
-    let content_gap = if !label.trim().is_empty() && key_width_px > 0.0 {
-        current_main_menu_footer_metrics().content_gap
-    } else {
-        0.0
-    };
-
-    let metrics = current_main_menu_footer_metrics();
-    metrics.button_padding_x * 2.0 + label_width_px + content_gap + key_width_px
 }
 
 pub(crate) fn footer_hint_action_visual_width_px(
