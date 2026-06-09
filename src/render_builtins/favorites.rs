@@ -303,6 +303,7 @@ impl ScriptListApp {
             format!("{} favorites", count),
             list_element,
             footer,
+            cx,
         )
     }
 

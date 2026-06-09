@@ -263,6 +263,7 @@ impl ScriptListApp {
             format!("{} presets", count),
             list_element,
             footer,
+            cx,
         )
     }
 

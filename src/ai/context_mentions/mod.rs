@@ -374,11 +374,14 @@ pub fn parse_inline_context_mentions_with_aliases(
 ) -> Vec<InlineContextMention> {
     let mut out = Vec::new();
     for span in inline_token_spans(text) {
-        // Resolution order: built-in → typed dictation entry → @file:/path → alias registry
+        // Resolution order: built-in → typed dictation entry → alias registry
+        // → literal @file:/path. Alias lookup must precede literal file
+        // parsing so compact selected-file tokens like `@file:demo.rs`
+        // keep resolving to their full attached path.
         let part = resolve_builtin_mention_token(&span.token)
             .or_else(|| parse_dictation_history_mention(&span.token))
-            .or_else(|| parse_file_mention(&span.token))
-            .or_else(|| aliases.get(&span.token).cloned());
+            .or_else(|| aliases.get(&span.token).cloned())
+            .or_else(|| parse_file_mention(&span.token));
 
         if let Some(part) = part {
             let canonical_token =

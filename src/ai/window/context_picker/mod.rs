@@ -856,7 +856,7 @@ impl AiApp {
 }
 
 /// Populate `items` with built-in context attachment entries and optional
-/// file/folder results. Shared by both `build_picker_items` and
+/// portal results. Shared by both `build_picker_items` and
 /// `build_slash_picker_items`.
 fn extend_builtin_picker_items(
     trigger: ContextPickerTrigger,
@@ -908,9 +908,14 @@ fn extend_builtin_picker_items(
         });
     }
 
-    // Portal-prefixed results stay inline after `@file:`, `@clipboard:`, etc.
+    // Portal-prefixed results stay inline after `@clipboard:`,
+    // `@browser-history:`, etc. File search is the exception: it must open
+    // the full built-in File Search surface so preview and folder browsing
+    // stay identical to the direct Search Files command.
     if let Some(inline_query) = inline_portal_query(trigger, query) {
-        collect_inline_portal_items(&inline_query, items);
+        if inline_query.kind != PortalKind::FileSearch {
+            collect_inline_portal_items(&inline_query, items);
+        }
         inject_full_portal_fallback(&inline_query, items);
         return;
     } else if file_search_query(trigger, query).is_none() {
@@ -1125,11 +1130,7 @@ fn collect_inline_portal_items(
     items: &mut Vec<ContextPickerItem>,
 ) {
     match inline_query.kind {
-        PortalKind::FileSearch => {
-            if let Ok(cwd) = std::env::current_dir() {
-                collect_file_items(&cwd, &inline_query.query, items);
-            }
-        }
+        PortalKind::FileSearch => {}
         PortalKind::BrowserHistory => {
             collect_browser_history_inline_items(&inline_query.query, items)
         }

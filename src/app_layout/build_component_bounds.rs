@@ -79,6 +79,26 @@ impl ScriptListApp {
                 | AppView::FileSearchView { .. }
                 | AppView::ClipboardHistoryView { .. }
                 | AppView::ProfileSearchView { .. }
+                | AppView::ThemeChooserView { .. }
+                | AppView::AppLauncherView { .. }
+                | AppView::WindowSwitcherView { .. }
+                | AppView::BrowserTabsView { .. }
+                | AppView::DesignGalleryView { .. }
+                | AppView::FooterGalleryView { .. }
+                | AppView::EmojiPickerView { .. }
+                | AppView::BrowseKitsView { .. }
+                | AppView::InstalledKitsView { .. }
+                | AppView::ProcessManagerView { .. }
+                | AppView::CurrentAppCommandsView { .. }
+                | AppView::SearchAiPresetsView { .. }
+                | AppView::SettingsView { .. }
+                | AppView::FavoritesBrowseView { .. }
+                | AppView::AgentChatHistoryView { .. }
+                | AppView::BrowserHistoryView { .. }
+                | AppView::DictationHistoryView { .. }
+                | AppView::NotesBrowseView { .. }
+                | AppView::SdkReferenceView { .. }
+                | AppView::ScriptTemplateCatalogView { .. }
                 | AppView::AgentChatView { .. }
         );
         let main_view_context_zone_height = menu_def.header_info_bar.height_px;
@@ -446,6 +466,26 @@ impl ScriptListApp {
                 | AppView::FileSearchView { .. }
                 | AppView::ClipboardHistoryView { .. }
                 | AppView::ProfileSearchView { .. }
+                | AppView::ThemeChooserView { .. }
+                | AppView::AppLauncherView { .. }
+                | AppView::WindowSwitcherView { .. }
+                | AppView::BrowserTabsView { .. }
+                | AppView::DesignGalleryView { .. }
+                | AppView::FooterGalleryView { .. }
+                | AppView::EmojiPickerView { .. }
+                | AppView::BrowseKitsView { .. }
+                | AppView::InstalledKitsView { .. }
+                | AppView::ProcessManagerView { .. }
+                | AppView::CurrentAppCommandsView { .. }
+                | AppView::SearchAiPresetsView { .. }
+                | AppView::SettingsView { .. }
+                | AppView::FavoritesBrowseView { .. }
+                | AppView::AgentChatHistoryView { .. }
+                | AppView::BrowserHistoryView { .. }
+                | AppView::DictationHistoryView { .. }
+                | AppView::NotesBrowseView { .. }
+                | AppView::SdkReferenceView { .. }
+                | AppView::ScriptTemplateCatalogView { .. }
                 | AppView::AgentChatView { .. }
         ) {
             if main_view_has_context_zone {

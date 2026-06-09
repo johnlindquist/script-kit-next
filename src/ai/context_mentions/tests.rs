@@ -800,6 +800,24 @@ fn part_to_inline_token_uses_typed_format_for_paths_with_spaces() {
     );
 }
 
+#[test]
+fn compact_file_alias_resolves_to_full_attached_path() {
+    let full_part = AiContextPart::FilePath {
+        path: "/Users/me/project/src/demo.rs".to_string(),
+        label: "demo.rs".to_string(),
+    };
+    let token = part_to_inline_token(&full_part).expect("file parts should have inline tokens");
+    assert_eq!(token, "@file:demo.rs");
+
+    let mut aliases = std::collections::HashMap::new();
+    aliases.insert(token.clone(), full_part.clone());
+
+    let parsed = parse_inline_context_mentions_with_aliases("Review @file:demo.rs", &aliases);
+    assert_eq!(parsed.len(), 1);
+    assert_eq!(parsed[0].part, full_part);
+    assert_eq!(parsed[0].canonical_token, token);
+}
+
 // ── Provider-backed mention gating ──────────────────────────────
 
 fn restore_env(key: &str, value: Option<std::ffi::OsString>) {

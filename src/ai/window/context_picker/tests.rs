@@ -265,6 +265,24 @@ fn every_portal_colon_query_enters_inline_search_mode_with_fallback() {
 }
 
 #[test]
+fn file_colon_query_opens_full_file_search_without_inline_results() {
+    let items = build_picker_items(ContextPickerTrigger::Mention, "file:demo");
+    let first = items.first().expect("@file: should offer full file search");
+
+    assert_eq!(first.id.as_ref(), "portal-full:file");
+    assert!(matches!(
+        first.kind,
+        ContextPickerItemKind::Portal(PortalKind::FileSearch)
+    ));
+    assert!(
+        items
+            .iter()
+            .all(|item| !matches!(item.kind, ContextPickerItemKind::PortalResult(_))),
+        "@file: must not use local inline file rows because they lack the built-in preview panel"
+    );
+}
+
+#[test]
 fn inline_script_list_portal_results_attach_like_full_portal_selection() {
     use std::sync::Arc;
 

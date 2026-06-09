@@ -1228,7 +1228,7 @@ impl ScriptListApp {
                     self.render_builtin_main_input_count_label(Self::kit_store_browse_count_label(
                         total_results,
                     )),
-                ]),
+                ], cx),
                 divider: crate::components::main_view_chrome::MainViewDividerChrome {
                     margin_x: shell.divider_margin_x,
                     height: shell.divider_height,
@@ -1576,7 +1576,7 @@ impl ScriptListApp {
                     self.render_builtin_main_input_count_label(
                         Self::kit_store_installed_count_label(dataset_kits),
                     ),
-                ]),
+                ], cx),
                 divider: crate::components::main_view_chrome::MainViewDividerChrome {
                     margin_x: shell.divider_margin_x,
                     height: shell.divider_height,

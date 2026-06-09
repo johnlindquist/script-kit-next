@@ -672,7 +672,7 @@ impl ScriptListApp {
                         item_count,
                         if item_count == 1 { "" } else { "s" }
                     )),
-                ]),
+                ], cx),
                 divider: crate::components::main_view_chrome::MainViewDividerChrome {
                     margin_x: shell.divider_margin_x,
                     height: shell.divider_height,

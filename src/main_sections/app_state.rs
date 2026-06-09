@@ -879,6 +879,8 @@ pub(crate) struct ScriptListApp {
     file_search_preview_thumbnail: FileSearchThumbnailPreviewState,
     // Actions popup overlay
     show_actions_popup: bool,
+    /// Displayed main-list action shortcuts registered into GPUI's focused keymap.
+    registered_main_list_displayed_shortcuts: std::collections::HashSet<String>,
     /// Timestamp of the last actions popup close, used to debounce reopen from
     /// activation-triggered close racing with the footer button click handler.
     actions_closed_at: Option<std::time::Instant>,

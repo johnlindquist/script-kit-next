@@ -112,3 +112,30 @@ fn file_search_builtin_and_attachment_portal_use_full_surface_path() {
         "shared file-search opener should use the full split-preview presentation"
     );
 }
+
+#[test]
+fn file_search_attachment_portal_accepts_with_basename_label() {
+    let file_search = source("src/render_builtins/file_search.rs");
+    let portal_accept = file_search
+        .split("// Portal mode: attach file to Agent Chat chat and return.")
+        .nth(1)
+        .expect("file search portal accept branch should exist")
+        .split("// Standard file search: open with the default app and close,")
+        .next()
+        .expect("file search portal accept branch should be bounded");
+
+    assert!(
+        portal_accept.contains("AiContextPart::FilePath")
+            && portal_accept.contains("path: file.path.clone()"),
+        "portal accept should attach the selected file path"
+    );
+    assert!(
+        portal_accept.contains(".file_name()")
+            && portal_accept.contains("unwrap_or_else(|| file.path.clone())"),
+        "portal accept should display only filename.ext while preserving full path fallback"
+    );
+    assert!(
+        portal_accept.contains("this.close_attachment_portal_with_part(part, cx);"),
+        "portal accept should return through the shared attachment close path"
+    );
+}

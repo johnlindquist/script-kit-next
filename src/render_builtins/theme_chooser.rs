@@ -3947,7 +3947,7 @@ impl ScriptListApp {
                 &self.theme,
                 menu_def,
                 crate::components::main_view_chrome::MainViewChrome {
-                    header: self.render_builtin_main_input_header(Vec::new()),
+                    header: self.render_builtin_main_input_header(Vec::new(), cx),
                     divider: crate::components::main_view_chrome::MainViewDividerChrome {
                         margin_x: shell.divider_margin_x,
                         height: shell.divider_height,
@@ -3991,7 +3991,7 @@ impl ScriptListApp {
             &self.theme,
             menu_def,
             crate::components::main_view_chrome::MainViewChrome {
-                header: self.render_builtin_main_input_header(Vec::new()),
+                header: self.render_builtin_main_input_header(Vec::new(), cx),
                 divider: crate::components::main_view_chrome::MainViewDividerChrome {
                     margin_x: shell.divider_margin_x,
                     height: shell.divider_height,

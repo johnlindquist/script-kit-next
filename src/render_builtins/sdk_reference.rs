@@ -351,23 +351,6 @@ impl ScriptListApp {
                 .into_any_element(),
         };
 
-        let header_element = div()
-            .flex_1()
-            .flex()
-            .flex_row()
-            .items_center()
-            .gap_3()
-            .child(
-                div().flex_1().flex().flex_row().items_center().child(
-                    self.render_search_input()
-                ),
-            )
-            .child(div().text_sm().text_color(text_secondary).child(format!(
-                "{} function{}",
-                entries.len(),
-                if entries.len() == 1 { "" } else { "s" },
-            )));
-
         let list_pane = div()
             .relative()
             .w_full()
@@ -389,18 +372,40 @@ impl ScriptListApp {
 
         let gpui_footer = crate::components::render_simple_hint_strip(hints, None);
         let footer = self.main_window_footer_slot(gpui_footer);
-
-        crate::components::render_expanded_view_scaffold_with_footer(
-            header_element,
-            list_pane,
+        let menu_def = self.current_main_menu_theme.def();
+        let shell = menu_def.shell;
+        let count_label = format!(
+            "{} function{}",
+            entries.len(),
+            if entries.len() == 1 { "" } else { "s" },
+        );
+        let main = self.render_builtin_split_main_content(
+            list_pane.into_any_element(),
             preview_panel,
-            footer,
+        );
+
+        crate::components::main_view_chrome::render_main_view_chrome(
+            crate::components::main_view_chrome::render_main_view_shell()
+                .text_color(text_primary)
+                .font_family(self.theme_font_family())
+                .key_context("sdk_reference")
+                .track_focus(&self.focus_handle)
+                .on_key_down(handle_key),
+            &self.theme,
+            menu_def,
+            crate::components::main_view_chrome::MainViewChrome {
+                header: self.render_builtin_main_input_header(vec![
+                    self.render_builtin_main_input_count_label(count_label),
+                ], cx),
+                divider: crate::components::main_view_chrome::MainViewDividerChrome {
+                    margin_x: shell.divider_margin_x,
+                    height: shell.divider_height,
+                    visible: shell.divider_height > 0.0,
+                },
+                main,
+                footer,
+                overlays: Vec::new(),
+            },
         )
-        .text_color(text_primary)
-        .font_family(self.theme_font_family())
-        .key_context("sdk_reference")
-        .track_focus(&self.focus_handle)
-        .on_key_down(handle_key)
-        .into_any_element()
     }
 }

@@ -837,6 +837,26 @@ impl AppView {
                 | AppView::FileSearchView { .. }
                 | AppView::ClipboardHistoryView { .. }
                 | AppView::ProfileSearchView { .. }
+                | AppView::ThemeChooserView { .. }
+                | AppView::AppLauncherView { .. }
+                | AppView::WindowSwitcherView { .. }
+                | AppView::BrowserTabsView { .. }
+                | AppView::DesignGalleryView { .. }
+                | AppView::FooterGalleryView { .. }
+                | AppView::EmojiPickerView { .. }
+                | AppView::BrowseKitsView { .. }
+                | AppView::InstalledKitsView { .. }
+                | AppView::ProcessManagerView { .. }
+                | AppView::CurrentAppCommandsView { .. }
+                | AppView::SearchAiPresetsView { .. }
+                | AppView::SettingsView { .. }
+                | AppView::FavoritesBrowseView { .. }
+                | AppView::AgentChatHistoryView { .. }
+                | AppView::BrowserHistoryView { .. }
+                | AppView::DictationHistoryView { .. }
+                | AppView::NotesBrowseView { .. }
+                | AppView::SdkReferenceView { .. }
+                | AppView::ScriptTemplateCatalogView { .. }
                 | AppView::AgentChatView { .. }
         )
     }

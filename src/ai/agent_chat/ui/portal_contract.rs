@@ -85,6 +85,22 @@ pub(crate) fn portal_kind_detail_label(kind: PortalKind) -> &'static str {
     }
 }
 
+fn portal_prefix_for_kind(kind: PortalKind) -> &'static str {
+    match kind {
+        PortalKind::FileSearch => "file",
+        PortalKind::BrowserHistory => "browser-history",
+        PortalKind::BrowserTabs => "tabs",
+        PortalKind::ClipboardHistory => "clipboard",
+        PortalKind::DictationHistory => "dictation",
+        PortalKind::ScriptSearch => "script",
+        PortalKind::ScriptletSearch => "scriptlet",
+        PortalKind::SkillSearch => "skill",
+        PortalKind::NotesBrowse => "note",
+        PortalKind::AgentChatHistory => "history",
+        PortalKind::Terminal => "terminal",
+    }
+}
+
 fn is_fileish_typed_prefix(prefix: &str) -> bool {
     matches!(
         prefix,
@@ -263,10 +279,20 @@ pub(crate) fn portal_target_from_inline_token(token: &str) -> Option<(PortalKind
 
 pub(crate) fn picker_portal_query(portal_kind: PortalKind, session_query: &str) -> String {
     if portal_kind == PortalKind::DictationHistory {
-        String::new()
-    } else {
-        session_query.to_string()
+        return String::new();
     }
+
+    let trimmed = session_query.trim();
+    if trimmed.eq_ignore_ascii_case(portal_prefix_for_kind(portal_kind)) {
+        return String::new();
+    }
+    let lower = trimmed.to_ascii_lowercase();
+    let prefix = portal_prefix_for_kind(portal_kind);
+    lower
+        .strip_prefix(&format!("{prefix}:"))
+        .and_then(|_| trimmed.get(prefix.len() + 1..))
+        .unwrap_or(trimmed)
+        .to_string()
 }
 
 pub(crate) fn decide_portal_open(
@@ -568,6 +594,15 @@ mod tests {
             format_intent_preview(&intent),
             "Pasted image attachment • replaces @img:paste1 • preview only"
         );
+    }
+
+    #[test]
+    fn picker_portal_query_strips_file_prefix_for_full_file_search() {
+        assert_eq!(
+            picker_portal_query(PortalKind::FileSearch, "file:demo.rs"),
+            "demo.rs"
+        );
+        assert_eq!(picker_portal_query(PortalKind::FileSearch, "file"), "");
     }
 
     #[test]

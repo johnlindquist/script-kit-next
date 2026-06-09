@@ -97,10 +97,12 @@ impl ScriptListApp {
     pub(crate) fn render_builtin_main_input_header(
         &self,
         trailing: Vec<gpui::AnyElement>,
+        cx: &mut gpui::Context<Self>,
     ) -> crate::components::main_view_chrome::MainViewHeaderChrome {
-        let shell = self.current_main_menu_theme.def().shell;
+        let menu_def = self.current_main_menu_theme.def();
+        let shell = menu_def.shell;
         crate::components::main_view_chrome::MainViewHeaderChrome {
-            context: None,
+            context: Some(self.render_clickable_main_view_context_zone(menu_def, cx)),
             input: self.render_builtin_main_input_shell(trailing),
             padding_x: shell.header_padding_x,
             padding_y: shell.header_padding_y,
@@ -114,6 +116,7 @@ impl ScriptListApp {
         trailing: Vec<gpui::AnyElement>,
         main: gpui::AnyElement,
         footer: Option<gpui::AnyElement>,
+        cx: &mut gpui::Context<Self>,
     ) -> gpui::AnyElement {
         let menu_def = self.current_main_menu_theme.def();
         let shell = menu_def.shell;
@@ -127,7 +130,7 @@ impl ScriptListApp {
             &self.theme,
             menu_def,
             crate::components::main_view_chrome::MainViewChrome {
-                header: self.render_builtin_main_input_header(trailing),
+                header: self.render_builtin_main_input_header(trailing, cx),
                 divider: crate::components::main_view_chrome::MainViewDividerChrome {
                     margin_x: shell.divider_margin_x,
                     height: shell.divider_height,
@@ -146,6 +149,7 @@ impl ScriptListApp {
         count_label: String,
         list_element: gpui::AnyElement,
         footer: Option<gpui::AnyElement>,
+        cx: &mut gpui::Context<Self>,
     ) -> gpui::AnyElement {
         let content = gpui::div()
             .flex_1()
@@ -159,7 +163,39 @@ impl ScriptListApp {
             vec![self.render_builtin_main_input_count_label(count_label)],
             content.into_any_element(),
             footer,
+            cx,
         )
+    }
+
+    pub(crate) fn render_builtin_split_main_content(
+        &self,
+        list_pane: gpui::AnyElement,
+        preview_pane: gpui::AnyElement,
+    ) -> gpui::AnyElement {
+        gpui::div()
+            .flex()
+            .flex_row()
+            .flex_1()
+            .min_h(gpui::px(0.))
+            .w_full()
+            .overflow_hidden()
+            .child(
+                gpui::div()
+                    .flex_1()
+                    .h_full()
+                    .min_h(gpui::px(0.))
+                    .overflow_hidden()
+                    .child(list_pane),
+            )
+            .child(
+                gpui::div()
+                    .flex_1()
+                    .h_full()
+                    .min_h(gpui::px(0.))
+                    .overflow_hidden()
+                    .child(preview_pane),
+            )
+            .into_any_element()
     }
 
     /// Emit a structured scroll log line for builtin views.

@@ -210,8 +210,9 @@ fn footer_native_host_uses_theme_vibrancy_and_reports_installed_surface() {
 
     for needle in [
         "pub unsafe fn configure_footer_popup_window(window: id, is_dark: bool)",
-        "configure_confirm_popup_window(window, is_dark)",
+        "configure_actions_popup_window(window, is_dark)",
         "setIgnoresMouseEvents: true",
+        "setHasShadow: false",
         "c\"Script Kit Footer\".as_ptr()",
         "\"Script Kit Footer\"",
         "should_refresh_secondary_window_appearance",

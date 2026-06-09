@@ -1417,6 +1417,20 @@ impl ScriptListApp {
                   window: &mut Window,
                   cx: &mut Context<Self>| {
                 if event.keystroke.modifiers.platform {
+                    logging::log(
+                        "KEY",
+                        &format!(
+                            "ScriptList key_down saw key={} shortcut={} view={} popup={} focused_input={:?}",
+                            event.keystroke.key,
+                            shortcuts::keystroke_to_shortcut(
+                                event.keystroke.key.as_str(),
+                                &event.keystroke.modifiers,
+                            ),
+                            this.app_view_name(),
+                            this.show_actions_popup,
+                            this.focused_input
+                        ),
+                    );
                     tracing::debug!(
                         event = "script_list.key_down",
                         key = %event.keystroke.key,
@@ -1545,8 +1559,9 @@ impl ScriptListApp {
 
                 if has_cmd {
                     let has_shift = event.keystroke.modifiers.shift;
+                    let key_match = key_str.to_ascii_lowercase();
 
-                    match key_str {
+                    match key_match.as_str() {
                         "v" if this.route_large_script_list_paste_to_agent_chat(cx) => {
                             logging::log(
                                 "KEY",
@@ -1563,10 +1578,14 @@ impl ScriptListApp {
                         // Script context shortcuts (require a selected script)
                         // Note: More specific patterns (with shift) must come BEFORE less specific ones
                         "k" if has_shift => {
-                            // Cmd+Shift+K - Add/Update Keyboard Shortcut
-                            logging::log("KEY", "Shortcut Cmd+Shift+K -> add_shortcut");
-                            this.handle_action("add_shortcut".to_string(), window, cx);
-                            return;
+                            if this.try_execute_main_list_action_shortcut_from_display(
+                                key_str,
+                                &event.keystroke.modifiers,
+                                window,
+                                cx,
+                            ) {
+                                return;
+                            }
                         }
                         "k" => {
                             // Cmd+K - Toggle actions menu (routed through shared dispatcher)
@@ -1875,12 +1894,33 @@ impl ScriptListApp {
         let shell = menu_def.shell;
         let search = menu_def.search;
 
+        self.sync_main_list_displayed_action_shortcut_keybindings(cx);
+
         let root = crate::components::main_view_chrome::render_main_view_shell()
             // NOTE: No shadow - shadows on transparent elements cause gray fill with vibrancy
             .text_color(rgb(text_primary))
             .font_family(font_family)
             .key_context("script_list")
             .track_focus(&self.focus_handle)
+            .on_action(cx.listener(
+                |this,
+                 action: &crate::actions::MainListDisplayedActionShortcut,
+                 window,
+                 cx| {
+                    logging::log(
+                        "KEY_ROUTE",
+                        &format!(
+                            "Displayed shortcut keybinding received canonical={} context=script_list",
+                            action.shortcut
+                        ),
+                    );
+                    this.try_execute_main_list_action_shortcut_canonical(
+                        &action.shortcut,
+                        window,
+                        cx,
+                    );
+                },
+            ))
             .on_key_down(handle_key)
             .on_key_up(handle_key_up);
 

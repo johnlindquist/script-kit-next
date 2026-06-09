@@ -501,7 +501,7 @@ impl ScriptListApp {
                     self.render_builtin_main_input_count_label(Self::design_gallery_count_label(
                         filtered_len,
                     )),
-                ]),
+                ], cx),
                 divider: crate::components::main_view_chrome::MainViewDividerChrome {
                     margin_x: shell.divider_margin_x,
                     height: shell.divider_height,

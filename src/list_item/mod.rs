@@ -1232,6 +1232,8 @@ pub struct ListItem {
     show_accent_bar: bool,
     /// Live cohesive theme exploration variation (main menu).
     main_menu_theme: crate::designs::MainMenuThemeVariant,
+    /// Optional metrics override for shared-row consumers that are not the main menu.
+    metrics_override: Option<ListItemMetricsOverride>,
     /// Character indices in the name that match the search query (for fuzzy highlight)
     /// When present, matched characters are rendered with accent color for visual emphasis
     highlight_indices: Option<Vec<usize>>,
@@ -1306,6 +1308,7 @@ impl ListItem {
             semantic_id: None,
             show_accent_bar: false,
             main_menu_theme: crate::designs::MainMenuThemeVariant::default(),
+            metrics_override: None,
             highlight_indices: None,
             description_highlight_indices: None,
             type_accessory: None,
@@ -1326,6 +1329,12 @@ impl ListItem {
     /// Set the live cohesive theme exploration variation for this row.
     pub fn main_menu_theme(mut self, theme: crate::designs::MainMenuThemeVariant) -> Self {
         self.main_menu_theme = theme;
+        self
+    }
+
+    /// Override row metrics while preserving the shared ListItem render anatomy.
+    pub fn metrics_override(mut self, metrics: ListItemMetricsOverride) -> Self {
+        self.metrics_override = Some(metrics);
         self
     }
 
@@ -1557,7 +1566,9 @@ impl ListItem {
 }
 impl RenderOnce for ListItem {
     fn render(self, window: &mut Window, _cx: &mut App) -> impl IntoElement {
-        let metrics = ListItemMetricsOverride::from_main_menu_theme(self.main_menu_theme);
+        let metrics = self
+            .metrics_override
+            .unwrap_or_else(|| ListItemMetricsOverride::from_main_menu_theme(self.main_menu_theme));
         let colors = self.colors;
         let index = self.index;
         let item_index = index.unwrap_or(0);
