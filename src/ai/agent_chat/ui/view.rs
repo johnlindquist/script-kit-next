@@ -1133,7 +1133,7 @@ impl AgentChatView {
         let input_text = self.live_thread().read(cx).input.text().to_string();
         let window_width = parent.bounds.size.width.as_f32();
         let (left, top, width) =
-            self.mention_picker_anchor_for_session(&session, &input_text, window_width);
+            self.mention_picker_anchor_for_session(&session, &input_text, window_width, cx);
 
         Some((
             crate::ai::agent_chat::ui::picker_popup::AgentChatMentionPopupSnapshot {
@@ -11100,8 +11100,9 @@ impl AgentChatView {
     /// Composer text size used for the inline Agent Chat input.
     const AGENT_CHAT_INPUT_FONT_SIZE: f32 = 17.0;
 
-    /// Approximate glyph width used for popup anchoring and visible-window math.
-    const AGENT_CHAT_INPUT_APPROX_CHAR_WIDTH: f32 = 8.5;
+    /// The composer inherits GPUI's default window font; measurements must
+    /// resolve the same family to stay anchored to real glyph positions.
+    const AGENT_CHAT_INPUT_FONT_FAMILY: &'static str = ".SystemUIFont";
 
     /// One-word focused-text quick prompt placeholder. The input chrome itself
     /// is rendered through the standard Agent Chat composer text renderer.
@@ -11125,12 +11126,21 @@ impl AgentChatView {
         anchor_left.clamp(min_left, max_left)
     }
 
-    fn measure_agent_chat_input_prefix_width(prefix: &str) -> f32 {
+    /// Measured width of `prefix` at the composer's real font and size.
+    /// Per-glyph advances from the text system replace the old flat
+    /// 8.5px-per-char estimate that drifted on wide or narrow glyph runs.
+    fn measure_agent_chat_input_prefix_width(prefix: &str, cx: &App) -> f32 {
         if prefix.is_empty() {
             return 0.0;
         }
 
-        prefix.chars().count() as f32 * Self::AGENT_CHAT_INPUT_APPROX_CHAR_WIDTH
+        let text_system = cx.text_system();
+        let font_id = text_system.resolve_font(&gpui::font(Self::AGENT_CHAT_INPUT_FONT_FAMILY));
+        let font_size = gpui::px(Self::AGENT_CHAT_INPUT_FONT_SIZE);
+        prefix
+            .chars()
+            .map(|ch| f32::from(text_system.layout_width(font_id, font_size, ch)))
+            .sum()
     }
 
     /// Returns the maximum text wrapping width for the Agent Chat composer.
@@ -11139,31 +11149,40 @@ impl AgentChatView {
     }
 
     /// Returns the Agent Chat composer cursor position `(x, y)` after rendering `text`,
-    /// accounting for explicit newlines and simple visual wrapping.
-    fn measure_agent_chat_input_cursor_position(text: &str, window_width: f32) -> (f32, f32) {
+    /// accounting for explicit newlines and real word-wrap boundaries from the
+    /// text system's line wrapper (the previous char-count modulo ignored
+    /// word breaks, so anchors drifted on wrapped lines).
+    fn measure_agent_chat_input_cursor_position(
+        text: &str,
+        window_width: f32,
+        cx: &App,
+    ) -> (f32, f32) {
         if text.is_empty() {
             return (0.0, 0.0);
         }
         let wrap_width = Self::composer_wrap_width_for_window(window_width);
+        let mut wrapper = cx.text_system().line_wrapper(
+            gpui::font(Self::AGENT_CHAT_INPUT_FONT_FAMILY),
+            gpui::px(Self::AGENT_CHAT_INPUT_FONT_SIZE),
+        );
         let logical_lines: Vec<&str> = text.split('\n').collect();
         let mut visual_row = 0usize;
         let mut cursor_x = 0.0f32;
         for (ix, logical_line) in logical_lines.iter().enumerate() {
-            let width = Self::measure_agent_chat_input_prefix_width(logical_line);
-            let wraps = if logical_line.is_empty() {
-                1usize
-            } else {
-                (width / wrap_width).floor() as usize + 1
-            };
+            let boundaries: Vec<usize> = wrapper
+                .wrap_line(
+                    &[gpui::LineFragment::text(logical_line)],
+                    gpui::px(wrap_width),
+                )
+                .map(|boundary| boundary.ix)
+                .collect();
             if ix + 1 == logical_lines.len() {
-                visual_row += wraps.saturating_sub(1);
-                cursor_x = if logical_line.is_empty() {
-                    0.0
-                } else {
-                    width % wrap_width
-                };
+                visual_row += boundaries.len();
+                let tail_start = boundaries.last().copied().unwrap_or(0);
+                cursor_x =
+                    Self::measure_agent_chat_input_prefix_width(&logical_line[tail_start..], cx);
             } else {
-                visual_row += wraps;
+                visual_row += boundaries.len() + 1;
             }
         }
         (
@@ -11179,6 +11198,7 @@ impl AgentChatView {
         session: &AgentChatMentionSession,
         input_text: &str,
         window_width: f32,
+        cx: &App,
     ) -> (f32, f32, f32) {
         let picker_width = Self::mention_picker_width_for_window(window_width);
         let trigger_start_byte = Self::char_to_byte_offset(input_text, session.trigger_range.start);
@@ -11188,10 +11208,11 @@ impl AgentChatView {
             ContextPickerTrigger::Slash => "/",
             ContextPickerTrigger::Profile => PROFILE_TRIGGER_STR,
         };
-        let trigger_width = Self::measure_agent_chat_input_prefix_width(trigger_text);
+        let trigger_width = Self::measure_agent_chat_input_prefix_width(trigger_text, cx);
         let (after_trigger_x, after_trigger_y) = Self::measure_agent_chat_input_cursor_position(
             &format!("{prefix}{trigger_text}"),
             window_width,
+            cx,
         );
         let unclamped_left =
             Self::AGENT_CHAT_INPUT_PADDING_X + (after_trigger_x - trigger_width).max(0.0);
