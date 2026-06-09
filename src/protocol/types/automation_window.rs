@@ -39,6 +39,8 @@ pub enum AutomationWindowKind {
     DevStyleTool,
     ActionsDialog,
     PromptPopup,
+    /// Transient HUD notification pill (floating, focusless, auto-dismissing).
+    Hud,
 }
 
 impl AutomationWindowKind {
@@ -57,6 +59,7 @@ impl AutomationWindowKind {
             AutomationWindowKind::DevStyleTool => "devStyleTool",
             AutomationWindowKind::ActionsDialog => "actionsDialog",
             AutomationWindowKind::PromptPopup => "promptPopup",
+            AutomationWindowKind::Hud => "hud",
         }
     }
 }

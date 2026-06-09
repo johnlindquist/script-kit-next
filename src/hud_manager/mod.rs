@@ -134,7 +134,6 @@ const MAX_SIMULTANEOUS_HUDS: usize = 3;
 const HUD_MIN_WIDTH: f32 = 220.0;
 const HUD_MAX_WIDTH: f32 = 420.0;
 const HUD_SINGLE_LINE_HEIGHT: f32 = 40.0;
-const HUD_MULTI_LINE_HEIGHT: f32 = 68.0;
 /// HUD with action button dimensions (wider to fit button)
 #[allow(dead_code)]
 const HUD_ACTION_WIDTH: f32 = 360.0;
@@ -256,22 +255,83 @@ impl HudView {
     }
 }
 
-fn hud_dimensions_for_text(text: &str) -> (f32, f32) {
-    let longest_line = text
-        .lines()
-        .map(|line| line.chars().count())
-        .max()
-        .unwrap_or(0);
-    let line_count = text.lines().count().max(1);
-    let estimated_width = 140.0 + (longest_line as f32 * 6.5);
-    let width = estimated_width.clamp(HUD_MIN_WIDTH, HUD_MAX_WIDTH);
-    let height = if line_count > 1 || text.chars().count() > 70 {
-        HUD_MULTI_LINE_HEIGHT
-    } else {
-        HUD_SINGLE_LINE_HEIGHT
-    };
+/// Horizontal padding of the HUD pill (`px(16.)` in `HudView::render`).
+const HUD_PADDING_X: f32 = 16.0;
+/// Vertical padding of the HUD pill (`px(8.)` in `HudView::render`).
+const HUD_PADDING_Y: f32 = 8.0;
+/// The HUD label renders with `.text_sm()` — 0.875rem at the default 16px rem.
+const HUD_TEXT_FONT_SIZE: f32 = 14.0;
+/// Default GPUI line height is `phi()` (1.618034 × font size).
+const HUD_TEXT_LINE_HEIGHT: f32 = HUD_TEXT_FONT_SIZE * 1.618_034;
+/// HUDs are pills, not dialogs: size for at most this many wrapped lines.
+/// Longer text clips inside the pill (the full text is in the tooltip).
+const HUD_MAX_TEXT_LINES: usize = 3;
 
-    (width, height)
+/// Pure clamp step shared by the measured and fallback paths, so tests can
+/// exercise the sizing contract without a live text system.
+fn hud_dimensions_from_measurement(text_width: f32, display_lines: usize) -> (f32, f32) {
+    let width = (text_width + HUD_PADDING_X * 2.0).clamp(HUD_MIN_WIDTH, HUD_MAX_WIDTH);
+    let lines = display_lines.clamp(1, HUD_MAX_TEXT_LINES) as f32;
+    let height = (lines * HUD_TEXT_LINE_HEIGHT + HUD_PADDING_Y * 2.0).max(HUD_SINGLE_LINE_HEIGHT);
+    (width.ceil(), height.ceil())
+}
+
+/// Size the HUD window by measuring the text with the real text system at the
+/// font the pill renders with, wrapped at the maximum text width. Replaces the
+/// old chars-times-6.5px estimate, which both clipped wide glyphs and reserved
+/// excess space for narrow ones.
+fn hud_dimensions_for_text(text: &str, cx: &App) -> (f32, f32) {
+    let max_text_width = HUD_MAX_WIDTH - HUD_PADDING_X * 2.0;
+    let text_system = cx.text_system();
+    let font = gpui::font(crate::list_item::FONT_SYSTEM_UI);
+    let font_id = text_system.resolve_font(&font);
+    let font_size = px(HUD_TEXT_FONT_SIZE);
+    let mut wrapper = text_system.line_wrapper(font, font_size);
+
+    let mut max_segment_width: f32 = 0.0;
+    let mut display_lines: usize = 0;
+
+    for line in text.lines() {
+        let line_width: f32 = line
+            .chars()
+            .map(|ch| f32::from(text_system.layout_width(font_id, font_size, ch)))
+            .sum();
+        let wraps = wrapper
+            .wrap_line(&[gpui::LineFragment::text(line)], px(max_text_width))
+            .count();
+        max_segment_width = max_segment_width.max(line_width.min(max_text_width));
+        display_lines += wraps + 1;
+    }
+
+    hud_dimensions_from_measurement(max_segment_width, display_lines)
+}
+
+/// Stable automation-registry ID for a HUD window.
+fn hud_automation_id(hud_id: u64) -> String {
+    format!("hud:{hud_id}")
+}
+
+/// Register a HUD window in the automation registry so DevTools callers can
+/// list it and target it with `captureScreenshot` (HUDs are focusless,
+/// titleless OS windows that are otherwise undiscoverable).
+fn register_hud_automation_window(hud_id: u64, text: &str, bounds: gpui::Bounds<gpui::Pixels>) {
+    crate::windows::upsert_automation_window(crate::protocol::AutomationWindowInfo {
+        id: hud_automation_id(hud_id),
+        kind: crate::protocol::AutomationWindowKind::Hud,
+        title: Some(format!("Script Kit HUD: {text}")),
+        focused: false,
+        visible: true,
+        semantic_surface: None,
+        bounds: Some(crate::protocol::AutomationWindowBounds {
+            x: f32::from(bounds.origin.x) as f64,
+            y: f32::from(bounds.origin.y) as f64,
+            width: f32::from(bounds.size.width) as f64,
+            height: f32::from(bounds.size.height) as f64,
+        }),
+        parent_window_id: None,
+        parent_kind: None,
+        pid: Some(std::process::id()),
+    });
 }
 impl Render for HudView {
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
@@ -313,6 +373,9 @@ impl Render for HudView {
                     .text_color(rgb(colors.text_primary))
                     .w_full()
                     .whitespace_normal()
+                    // Window height budgets HUD_MAX_TEXT_LINES wrapped lines;
+                    // clamp so overflow truncates at a line boundary.
+                    .line_clamp(HUD_MAX_TEXT_LINES)
                     .tooltip(move |window, cx| {
                         Tooltip::new(hud_label_text.clone()).build(window, cx)
                     })
@@ -503,7 +566,7 @@ pub fn show_hud(text: String, duration_ms: Option<u64>, cx: &mut App) {
         }
     };
 
-    let (hud_width, hud_height) = hud_dimensions_for_text(&text);
+    let (hud_width, hud_height) = hud_dimensions_for_text(&text, cx);
 
     // Calculate position - bottom center of screen with mouse
     let (hud_x, hud_y) = calculate_hud_position(hud_width);
@@ -540,6 +603,7 @@ pub fn show_hud(text: String, duration_ms: Option<u64>, cx: &mut App) {
 
             // Generate unique ID for this HUD
             let hud_id = next_hud_id();
+            register_hud_automation_window(hud_id, &text_for_log, bounds);
 
             // Track the active HUD and register slot
             {
@@ -635,7 +699,7 @@ pub fn show_hud_with_action(
         }
     };
 
-    let (message_width, _) = hud_dimensions_for_text(&text);
+    let (message_width, _) = hud_dimensions_for_text(&text, cx);
 
     // Calculate position - bottom center of screen with mouse
     let (hud_x, hud_y) = calculate_hud_position(HUD_ACTION_WIDTH.max(message_width));
@@ -674,6 +738,7 @@ pub fn show_hud_with_action(
 
             // Generate unique ID for this HUD
             let hud_id = next_hud_id();
+            register_hud_automation_window(hud_id, &text_for_log, bounds);
 
             // Track the active HUD and register slot
             {
@@ -834,6 +899,10 @@ fn configure_hud_window_by_size(expected_width: f32, expected_height: f32, click
                 };
                 let _: () = msg_send![window, setIgnoresMouseEvents: ignores_mouse];
 
+                // Ensure window content is shareable for captureScreenshot()
+                let sharing_type: i64 = 1; // NSWindowSharingReadOnly
+                let _: () = msg_send![window, setSharingType: sharing_type];
+
                 // Don't show in window menu
                 let _: () = msg_send![window, setExcludedFromWindowsMenu: true];
 
@@ -910,6 +979,7 @@ fn dismiss_hud_by_id(hud_id: u64, cx: &mut App) {
             })
             .ok();
 
+        crate::windows::remove_automation_window(&hud_automation_id(hud_id));
         logging::log("HUD", &format!("Dismissed HUD id={}", hud_id));
 
         // Show any pending HUDs
@@ -940,6 +1010,7 @@ fn cleanup_expired_huds(cx: &mut App) {
     // Release slots for expired HUDs
     for id in &expired_ids {
         state.release_slot_by_id(*id);
+        crate::windows::remove_automation_window(&hud_automation_id(*id));
     }
 
     state.active_huds.retain(|hud| !hud.is_expired());
@@ -974,7 +1045,14 @@ pub fn dismiss_all_huds(cx: &mut App) {
     // Collect window handles first, then close windows
     let windows_to_close: Vec<WindowHandle<HudView>> = {
         let mut state = manager.lock();
-        let windows: Vec<_> = state.active_huds.drain(..).map(|hud| hud.window).collect();
+        let windows: Vec<_> = state
+            .active_huds
+            .drain(..)
+            .map(|hud| {
+                crate::windows::remove_automation_window(&hud_automation_id(hud.id));
+                hud.window
+            })
+            .collect();
         state.hud_slots = [None; MAX_SIMULTANEOUS_HUDS]; // Clear all slots
         state.pending_queue.clear();
         windows
@@ -998,6 +1076,43 @@ pub fn dismiss_all_huds(cx: &mut App) {
 mod tests {
     // --- merged from part_000.rs ---
     use super::*;
+
+    #[test]
+    fn hud_width_tracks_measured_text_within_clamps() {
+        // Narrow text clamps up to the minimum pill width.
+        let (narrow_width, _) = hud_dimensions_from_measurement(40.0, 1);
+        assert_eq!(narrow_width, HUD_MIN_WIDTH);
+
+        // Mid-size text gets measured width plus the pill padding.
+        let (mid_width, _) = hud_dimensions_from_measurement(300.0, 1);
+        assert_eq!(mid_width, 300.0 + HUD_PADDING_X * 2.0);
+
+        // Wide text clamps down to the maximum pill width.
+        let (wide_width, _) = hud_dimensions_from_measurement(1000.0, 1);
+        assert_eq!(wide_width, HUD_MAX_WIDTH);
+    }
+
+    #[test]
+    fn hud_height_scales_with_wrapped_lines_up_to_cap() {
+        let (_, one_line) = hud_dimensions_from_measurement(100.0, 1);
+        let (_, two_lines) = hud_dimensions_from_measurement(100.0, 2);
+        let (_, three_lines) = hud_dimensions_from_measurement(100.0, 3);
+        let (_, many_lines) = hud_dimensions_from_measurement(100.0, 12);
+
+        assert!(one_line >= HUD_SINGLE_LINE_HEIGHT);
+        assert!(two_lines > one_line);
+        assert!(three_lines > two_lines);
+        // Pills cap at HUD_MAX_TEXT_LINES; longer text clips with a tooltip.
+        assert_eq!(many_lines, three_lines);
+    }
+
+    #[test]
+    fn hud_zero_lines_still_produces_a_visible_pill() {
+        let (width, height) = hud_dimensions_from_measurement(0.0, 0);
+        assert_eq!(width, HUD_MIN_WIDTH);
+        assert!(height >= HUD_SINGLE_LINE_HEIGHT);
+    }
+
     #[test]
     fn test_hud_notification_creation() {
         let notif = HudNotification {
@@ -1484,10 +1599,6 @@ mod tests {
         assert!(
             (HUD_SINGLE_LINE_HEIGHT as i32) > 0,
             "HUD single-line height should be positive"
-        );
-        assert!(
-            (HUD_MULTI_LINE_HEIGHT as i32) > 0,
-            "HUD multi-line height should be positive"
         );
         assert!(
             (HUD_ACTION_WIDTH as i32) > 0,

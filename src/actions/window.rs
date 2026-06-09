@@ -1502,6 +1502,7 @@ fn record_actions_popup_automation_snapshot(
             AutomationWindowKind::DevStyleTool => "devStyleTool.actions",
             AutomationWindowKind::ActionsDialog => "actionsDialog.actions",
             AutomationWindowKind::PromptPopup => "promptPopup.actions",
+            AutomationWindowKind::Hud => "hud.actions",
         },
         "parentAutomationId": parent_automation_id,
         "parentKind": format!("{parent_kind:?}"),

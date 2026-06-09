@@ -501,6 +501,28 @@ struct Candidate {
 /// meaningful screenshot targets.
 fn list_script_kit_candidates() -> Result<Vec<Candidate>, Box<dyn std::error::Error + Send + Sync>>
 {
+    list_script_kit_candidates_for(None)
+}
+
+/// Like [`list_script_kit_candidates`], but when the resolved automation
+/// target itself declares bounds smaller than the default size floor (e.g.
+/// the ~36px-tall footer overlay strip), admit candidates down to that
+/// declared size so registered small windows stay capturable without
+/// re-opening the filter to arbitrary tiny UI elements.
+fn list_script_kit_candidates_for(
+    resolved: Option<&crate::protocol::AutomationWindowInfo>,
+) -> Result<Vec<Candidate>, Box<dyn std::error::Error + Send + Sync>> {
+    let (min_width, min_height) = match resolved.and_then(|info| info.bounds.as_ref()) {
+        Some(bounds) => (
+            SCRIPT_KIT_CANDIDATE_MIN_WIDTH.min(bounds.width.round().max(1.0) as u32),
+            SCRIPT_KIT_CANDIDATE_MIN_HEIGHT.min(bounds.height.round().max(1.0) as u32),
+        ),
+        None => (
+            SCRIPT_KIT_CANDIDATE_MIN_WIDTH,
+            SCRIPT_KIT_CANDIDATE_MIN_HEIGHT,
+        ),
+    };
+
     let mut candidates = Vec::new();
     for window in Window::all()? {
         let title = window.title().unwrap_or_else(|_| String::new());
@@ -516,7 +538,7 @@ fn list_script_kit_candidates() -> Result<Vec<Candidate>, Box<dyn std::error::Er
 
         // Width >= 200 filters out small UI elements
         // Height >= 50 allows compact prompts (arg prompt without choices is ~76px)
-        let is_reasonable_size = width >= SCRIPT_KIT_CANDIDATE_MIN_WIDTH && height >= SCRIPT_KIT_CANDIDATE_MIN_HEIGHT;
+        let is_reasonable_size = width >= min_width && height >= min_height;
 
         if is_our_window && !is_minimized && is_reasonable_size {
             candidates.push(Candidate {
@@ -695,7 +717,7 @@ fn capture_resolved_window(
     resolved: &crate::protocol::AutomationWindowInfo,
     hi_dpi: bool,
 ) -> Result<(Vec<u8>, u32, u32), Box<dyn std::error::Error + Send + Sync>> {
-    let candidates = list_script_kit_candidates()?;
+    let candidates = list_script_kit_candidates_for(Some(resolved))?;
     let best = select_best_candidate(resolved, &candidates, "capture_png")?;
     capture_and_encode_png(&best.window, hi_dpi)
 }
@@ -748,6 +770,7 @@ fn is_detached_window(kind: crate::protocol::AutomationWindowKind) -> bool {
         crate::protocol::AutomationWindowKind::AgentChatDetached
             | crate::protocol::AutomationWindowKind::Dictation
             | crate::protocol::AutomationWindowKind::Notes
+            | crate::protocol::AutomationWindowKind::Hud
     )
 }
 
@@ -1112,7 +1135,7 @@ pub fn capture_targeted_rgba_image(
     let resolved =
         crate::windows::resolve_automation_window(target).map_err(|err| err.to_string())?;
 
-    let candidates = list_script_kit_candidates()?;
+    let candidates = list_script_kit_candidates_for(Some(&resolved))?;
     let best = select_best_candidate(&resolved, &candidates, "capture_rgba")?;
 
     let rgba_image = best.window.capture_image()?;
@@ -1141,7 +1164,7 @@ pub fn resolve_targeted_os_window_id(
     target: Option<&crate::protocol::AutomationWindowTarget>,
 ) -> Option<u32> {
     let resolved = crate::windows::resolve_automation_window(target).ok()?;
-    let candidates = list_script_kit_candidates().ok()?;
+    let candidates = list_script_kit_candidates_for(Some(&resolved)).ok()?;
     let best = select_best_candidate(&resolved, &candidates, "resolve_os_window_id").ok()?;
     best.window.id().ok()
 }

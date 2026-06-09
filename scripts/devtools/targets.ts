@@ -153,6 +153,7 @@ function stableWindowKind(value: unknown) {
   if (value === "ai") return "Ai";
   if (value === "main") return "Main";
   if (value === "notes") return "Notes";
+  if (value === "hud") return "Hud";
   return value ?? null;
 }
 
