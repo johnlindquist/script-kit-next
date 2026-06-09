@@ -133,7 +133,10 @@ fn script_issues_enter_routes_to_agent_chat_prompt_submission() {
 
 #[test]
 fn native_footer_visual_effect_refresh_invalidates_without_synchronous_redisplay() {
-    let refresh = function_body(FOOTER_POPUP_SOURCE, "unsafe fn refresh_main_footer_host");
+    // The shared host-refresh body lives in `refresh_footer_host_impl`;
+    // `refresh_main_footer_host` / `refresh_window_footer_host` are thin
+    // wrappers that only choose glyph ownership.
+    let refresh = function_body(FOOTER_POPUP_SOURCE, "unsafe fn refresh_footer_host_impl");
     let invalidate = function_body(
         FOOTER_POPUP_SOURCE,
         "unsafe fn invalidate_footer_effect_view_theme",
@@ -143,8 +146,9 @@ fn native_footer_visual_effect_refresh_invalidates_without_synchronous_redisplay
         refresh.contains("footer_content_changed")
             && refresh.contains("footer_visuals_changed")
             && refresh.contains("effect_theme_changed")
-            && refresh.contains("invalidate_footer_effect_view_theme(footer_view, effect_theme_changed);"),
-        "native footer refresh must invalidate the AppKit visual-effect background after theme/material changes"
+            && refresh.contains("invalidate_footer_effect_view_theme(")
+            && refresh.contains("effect_theme_changed\n            || footer_geometry_changed"),
+        "native footer refresh must invalidate the AppKit visual-effect background after theme/material/geometry changes"
     );
     assert!(
         refresh.contains("if footer_content_changed")
@@ -301,15 +305,22 @@ fn live_dictation_overlay_does_not_join_main_window_footer_ownership() {
 }
 
 #[test]
-fn experimental_gpui_footer_overlay_keeps_native_material_as_background_only() {
+fn gpui_footer_overlay_is_default_and_keeps_native_material_as_background_only() {
     assert!(
         FOOTER_POPUP_SOURCE.contains("struct GpuiFooterOverlay")
-            && FOOTER_POPUP_SOURCE.contains("render_footer_hint_content_constrained(")
+            && FOOTER_POPUP_SOURCE.contains("render_footer_hint_content_flex(")
             && FOOTER_POPUP_SOURCE.contains("left_pinned_buttons")
             && FOOTER_POPUP_SOURCE.contains("trailing_buttons")
             && FOOTER_POPUP_SOURCE.contains("render_left_info")
-            && FOOTER_POPUP_SOURCE.contains("SCRIPT_KIT_GPUI_FOOTER_OVERLAY_SPIKE"),
-        "footer overlay spike must be explicit, config-driven, and reuse the GPUI footer chrome renderer"
+            && FOOTER_POPUP_SOURCE.contains("SCRIPT_KIT_GPUI_FOOTER_OVERLAY"),
+        "footer overlay must be explicit, config-driven, and reuse the GPUI footer chrome renderer"
+    );
+    // Default-on promotion: the overlay renders unless explicitly disabled.
+    let enabled_fn = function_body(FOOTER_POPUP_SOURCE, "fn gpui_footer_overlay_enabled");
+    assert!(
+        enabled_fn.contains("SCRIPT_KIT_GPUI_FOOTER_OVERLAY")
+            && enabled_fn.contains(".unwrap_or(true)"),
+        "GPUI footer overlay must be the default main-window footer renderer with an explicit opt-out"
     );
     assert!(
         FOOTER_POPUP_SOURCE.contains("WindowBackgroundAppearance::Transparent")
@@ -317,12 +328,13 @@ fn experimental_gpui_footer_overlay_keeps_native_material_as_background_only() {
             && FOOTER_POPUP_SOURCE.contains("setIgnoresMouseEvents: NO")
             && FOOTER_POPUP_SOURCE.contains("setBecomesKeyOnlyIfNeeded: YES")
             && FOOTER_POPUP_SOURCE.contains("send_footer_action_to_channel(action, false)"),
-        "GPUI footer overlay spike must be a transparent child surface that owns hover/click without stealing key focus"
+        "GPUI footer overlay must be a transparent child surface that owns hover/click without stealing key focus"
     );
     assert!(
         FOOTER_POPUP_SOURCE.contains("layout_footer_hints(hints_view, text_color, &[], &theme)")
-            && FOOTER_POPUP_SOURCE.contains("layout_footer_hints(hints_view, text_color, &config.buttons, &theme)"),
-        "AppKit footer text must be bypassed only while the experimental GPUI overlay spike is enabled"
+            && FOOTER_POPUP_SOURCE
+                .contains("layout_footer_hints(hints_view, text_color, &config.buttons, &theme)"),
+        "AppKit footer text must be bypassed only while the GPUI overlay owns the glyphs"
     );
     assert!(
         FOOTER_POPUP_SOURCE.contains("layout_footer_left_info(left_info_view, None, text_color)")
@@ -331,14 +343,33 @@ fn experimental_gpui_footer_overlay_keeps_native_material_as_background_only() {
             ),
         "AppKit left-info text must also be bypassed only while GPUI overlay owns footer visuals"
     );
+    // Non-main footer hosts (detached Agent Chat, dictation overlay) have no
+    // GPUI overlay child window, so they must keep native glyph rendering.
+    let window_sync = function_body(
+        FOOTER_POPUP_SOURCE,
+        "pub(crate) fn sync_window_footer_popup",
+    );
     assert!(
-        FOOTER_POPUP_SOURCE.contains("footer_overlay_button_width_px")
-            && FOOTER_POPUP_SOURCE.contains("overlay_width_px")
-            && FOOTER_POPUP_SOURCE.contains(".min_w(px(slot_width))")
-            && FOOTER_POPUP_SOURCE.contains(".max_w(px(slot_width))")
+        window_sync.contains("refresh_window_footer_host(ns_window, config)"),
+        "reusable window footer hosts must render glyphs natively, not defer to the main-window GPUI overlay"
+    );
+    assert!(
+        function_body(FOOTER_POPUP_SOURCE, "unsafe fn refresh_window_footer_host")
+            .contains("refresh_footer_host_impl(ns_window, config, false)"),
+        "refresh_window_footer_host must never blank AppKit glyphs"
+    );
+    // Flexbox sizing contract: buttons take intrinsic (text-measured) width
+    // with a per-action slot minimum; only the Run slot is capped; the left
+    // group absorbs shrink pressure (flex_1 + min_w 0 + overflow_hidden) so
+    // groups can never overlap. No estimated character widths.
+    assert!(
+        FOOTER_POPUP_SOURCE.contains(".min_w(px(min_width))")
+            && FOOTER_POPUP_SOURCE.contains("FOOTER_RUN_SLOT_MAX_WIDTH_PX")
+            && FOOTER_POPUP_SOURCE.contains(".min_w(px(0.0))")
             && FOOTER_POPUP_SOURCE.contains(".overflow_hidden()")
             && FOOTER_POPUP_SOURCE.contains(".flex_1()")
-            && FOOTER_POPUP_SOURCE.contains(".flex_none()"),
-        "GPUI footer overlay buttons must allocate fixed slots and truncate before neighboring chips overlap"
+            && FOOTER_POPUP_SOURCE.contains(".flex_none()")
+            && !FOOTER_POPUP_SOURCE.contains("footer_hint_content_estimated_width_px"),
+        "GPUI footer overlay buttons must size intrinsically via flexbox with slot minimums, never via estimated text widths"
     );
 }

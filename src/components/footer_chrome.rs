@@ -425,6 +425,82 @@ pub(crate) fn render_footer_hint_content_constrained(
     )
 }
 
+/// Flexbox-native footer hint content. Instead of estimating text width in
+/// Rust and truncating against a precomputed slot width, the label is a
+/// shrinkable flex item that ellipsizes under real layout pressure while the
+/// keycaps keep their intrinsic size. Callers control overall pressure with
+/// `min_w`/`max_w` on the button container; no slot math is required.
+pub(crate) fn render_footer_hint_content_flex(
+    label: SharedString,
+    key: SharedString,
+    mode: FooterHintKeyMode,
+    theme: &Theme,
+    key_first: bool,
+    justify: FooterHintContentJustify,
+) -> AnyElement {
+    let footer_text = footer_hint_text_color(theme);
+    let hover_text = footer_hover_text_color(theme, None);
+    let hover_glyph = footer_hover_glyph_color(theme, None);
+    let metrics = current_main_menu_footer_metrics();
+    let edge_padding_x = if matches!(justify, FooterHintContentJustify::KeyAnchored) {
+        metrics.run_button_padding_x
+    } else {
+        metrics.button_padding_x
+    };
+
+    let labelcap = render_footer_labelcap_constrained(
+        label,
+        theme,
+        footer_text,
+        hover_text,
+        None,
+        false,
+        None,
+        true,
+    );
+    let keycaps = match mode {
+        FooterHintKeyMode::Shortcut => render_footer_shortcut_keycaps_with_metrics(
+            key.to_string(),
+            theme,
+            None,
+            None,
+            Some(metrics.content_gap),
+            Some(FooterKeycapHoverStyle {
+                text: hover_text,
+                glyph: hover_glyph,
+                border_alpha: None,
+            }),
+        ),
+    };
+    let keycaps = div().flex_none().child(keycaps);
+
+    let mut row = div()
+        .min_w(px(0.0))
+        .overflow_hidden()
+        .pl(px(edge_padding_x))
+        .pr(px(edge_padding_x))
+        .py(px(metrics.button_padding_y))
+        .rounded(px(metrics.button_radius))
+        .flex()
+        .flex_row()
+        .items_center()
+        .gap(px(metrics.content_gap))
+        .group("footer-action-button");
+
+    row = match justify {
+        FooterHintContentJustify::Start | FooterHintContentJustify::KeyAnchored => {
+            row.justify_start()
+        }
+        FooterHintContentJustify::Center => row.justify_center(),
+    };
+
+    if key_first {
+        row.child(keycaps).child(labelcap).into_any_element()
+    } else {
+        row.child(labelcap).child(keycaps).into_any_element()
+    }
+}
+
 pub(crate) fn render_footer_hint_button_like(
     spec: FooterHintButtonSpec,
     theme: &Theme,
@@ -632,6 +708,7 @@ fn render_footer_hint_content_impl(
             Some(max_width_px),
             matches!(justify, FooterHintContentJustify::KeyAnchored),
             label_font_size_px,
+            false,
         )
     } else {
         render_footer_labelcap(label, theme, footer_text, hover_text, label_font_size_px)
@@ -919,9 +996,11 @@ fn render_footer_labelcap(
         None,
         false,
         label_font_size_px,
+        false,
     )
 }
 
+#[allow(clippy::too_many_arguments)]
 fn render_footer_labelcap_constrained(
     label: SharedString,
     _theme: &Theme,
@@ -930,11 +1009,20 @@ fn render_footer_labelcap_constrained(
     max_width_px: Option<f32>,
     force_width: bool,
     label_font_size_px: Option<f32>,
+    shrinkable: bool,
 ) -> AnyElement {
     let metrics = current_main_menu_footer_metrics();
     let label_font_size = label_font_size_px.unwrap_or(metrics.label_font_size);
-    let mut cap = div()
-        .flex_none()
+    let mut cap = div();
+    // A shrinkable labelcap participates in flex shrink (ellipsizing under
+    // real layout pressure); the legacy path keeps its intrinsic width and
+    // relies on precomputed slot widths.
+    if shrinkable {
+        cap = cap.overflow_hidden();
+    } else {
+        cap = cap.flex_none();
+    }
+    let mut cap = cap
         .min_w(px(metrics.keycap_height))
         .min_h(px(metrics.keycap_height))
         .h(px(metrics.keycap_height))
