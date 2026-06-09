@@ -309,6 +309,27 @@ impl ScriptListApp {
         );
     }
 
+    pub(crate) fn open_confirm_modal_kitchen_sink_fixture(&mut self, cx: &mut gpui::Context<Self>) {
+        self.prepare_window_for_prompt("UI", "confirm-preview", "");
+        let (confirm_tx, confirm_rx) = async_channel::bounded::<bool>(1);
+        self.open_confirm_prompt(
+            crate::confirm::ParentConfirmOptions {
+                title: "Confirm Modal Preview".into(),
+                body: "This preview exercises the shared confirm shell, header accent, two-line body rhythm, footer-style confirm/cancel action frames, centered keycaps, and live confirmModal spacing overrides.".into(),
+                confirm_text: "Confirm Preview Layout".into(),
+                cancel_text: "Cancel".into(),
+                ..Default::default()
+            },
+            confirm_tx,
+            cx,
+        );
+        cx.spawn(async move |_this, _cx| {
+            let _ = confirm_rx.recv().await;
+        })
+        .detach();
+        cx.notify();
+    }
+
     fn install_actions_popup_kitchen_sink_fixture(
         &mut self,
         mode: crate::actions::ActionsPopupKitchenSinkMode,

@@ -8,6 +8,8 @@ pub(crate) const OPEN_ACTIONS_POPUP_NO_MATCH_KITCHEN_SINK_BUTTON: &str =
     "button:dev-style-tool-open-actions-popup-no-match-kitchen-sink";
 pub(crate) const OPEN_AGENT_CHAT_KITCHEN_SINK_BUTTON: &str =
     "button:dev-style-tool-open-agent-chat-kitchen-sink";
+pub(crate) const OPEN_CONFIRM_MODAL_KITCHEN_SINK_BUTTON: &str =
+    "button:dev-style-tool-open-confirm-modal-kitchen-sink";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum DevStyleKitchenSinkTarget {
@@ -16,6 +18,7 @@ pub(crate) enum DevStyleKitchenSinkTarget {
     ActionsPopupPopulated,
     ActionsPopupNoMatch,
     AgentChat,
+    ConfirmModal,
 }
 
 impl DevStyleKitchenSinkTarget {
@@ -25,6 +28,7 @@ impl DevStyleKitchenSinkTarget {
         Self::ActionsPopupPopulated,
         Self::ActionsPopupNoMatch,
         Self::AgentChat,
+        Self::ConfirmModal,
     ];
 
     pub(crate) const fn semantic_id(self) -> &'static str {
@@ -34,6 +38,7 @@ impl DevStyleKitchenSinkTarget {
             Self::ActionsPopupPopulated => OPEN_ACTIONS_POPUP_KITCHEN_SINK_BUTTON,
             Self::ActionsPopupNoMatch => OPEN_ACTIONS_POPUP_NO_MATCH_KITCHEN_SINK_BUTTON,
             Self::AgentChat => OPEN_AGENT_CHAT_KITCHEN_SINK_BUTTON,
+            Self::ConfirmModal => OPEN_CONFIRM_MODAL_KITCHEN_SINK_BUTTON,
         }
     }
 
@@ -44,6 +49,7 @@ impl DevStyleKitchenSinkTarget {
             Self::ActionsPopupPopulated => "Open Actions Popup Kitchen Sink",
             Self::ActionsPopupNoMatch => "Open Actions Popup No-Match Sink",
             Self::AgentChat => "Open Agent Chat Kitchen Sink",
+            Self::ConfirmModal => "Open Confirm Modal Preview",
         }
     }
 
@@ -54,6 +60,7 @@ impl DevStyleKitchenSinkTarget {
             Self::ActionsPopupPopulated => "openActionsPopupKitchenSink",
             Self::ActionsPopupNoMatch => "openActionsPopupNoMatchKitchenSink",
             Self::AgentChat => "openAgentChatKitchenSink",
+            Self::ConfirmModal => "openConfirmModalKitchenSink",
         }
     }
 }

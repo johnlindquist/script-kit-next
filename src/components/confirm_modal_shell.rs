@@ -32,16 +32,16 @@ pub(crate) fn confirm_modal_header(
     accent: Rgba,
     title_color: Rgba,
 ) -> Div {
-    let accent_width = confirm_modal_override(
+    let accent_width = confirm_modal_number_override(
         CONFIRM_MODAL_HEADER_ACCENT_WIDTH_KNOB_ID,
         CONFIRM_MODAL_HEADER_ACCENT_WIDTH,
     );
-    let accent_height = confirm_modal_override(
+    let accent_height = confirm_modal_number_override(
         CONFIRM_MODAL_HEADER_ACCENT_HEIGHT_KNOB_ID,
         CONFIRM_MODAL_HEADER_ACCENT_HEIGHT,
     );
     let header_gap =
-        confirm_modal_override(CONFIRM_MODAL_HEADER_GAP_KNOB_ID, CONFIRM_MODAL_HEADER_GAP);
+        confirm_modal_number_override(CONFIRM_MODAL_HEADER_GAP_KNOB_ID, CONFIRM_MODAL_HEADER_GAP);
 
     div()
         .w_full()
@@ -71,10 +71,12 @@ pub(crate) fn confirm_modal_shell(
     config: ConfirmModalShellConfig,
     children: Vec<AnyElement>,
 ) -> Stateful<Div> {
-    let padding_x = confirm_modal_override(CONFIRM_MODAL_PADDING_X_KNOB_ID, config.padding_x);
-    let padding_y = confirm_modal_override(CONFIRM_MODAL_PADDING_Y_KNOB_ID, config.padding_y);
-    let gap = confirm_modal_override(CONFIRM_MODAL_GAP_KNOB_ID, config.gap);
-    let radius = confirm_modal_override(CONFIRM_MODAL_RADIUS_KNOB_ID, config.radius);
+    let padding_x =
+        confirm_modal_number_override(CONFIRM_MODAL_PADDING_X_KNOB_ID, config.padding_x);
+    let padding_y =
+        confirm_modal_number_override(CONFIRM_MODAL_PADDING_Y_KNOB_ID, config.padding_y);
+    let gap = confirm_modal_number_override(CONFIRM_MODAL_GAP_KNOB_ID, config.gap);
+    let radius = confirm_modal_number_override(CONFIRM_MODAL_RADIUS_KNOB_ID, config.radius);
 
     let mut content = div()
         .id(config.content_id)
@@ -115,7 +117,10 @@ pub(crate) fn confirm_modal_shell(
     shell
 }
 
-fn confirm_modal_override(id: crate::dev_style_tool::ConfirmModalKnobId, fallback: f32) -> f32 {
+pub(crate) fn confirm_modal_number_override(
+    id: crate::dev_style_tool::ConfirmModalKnobId,
+    fallback: f32,
+) -> f32 {
     match runtime_overrides::current_confirm_modal_value(id) {
         Some(StyleValue::Number(value)) => value,
         None => fallback,

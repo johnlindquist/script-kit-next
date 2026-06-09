@@ -16,16 +16,28 @@ use gpui::{
 use gpui_component::button::ButtonVariant as ConfirmButtonVariant;
 
 use crate::{
-    components::button::BUTTON_GHOST_HEIGHT,
     components::confirm_modal_shell::{
-        confirm_modal_header, confirm_modal_shell, ConfirmModalShellConfig, CONFIRM_MODAL_RADIUS,
+        confirm_modal_header, confirm_modal_number_override, confirm_modal_shell,
+        ConfirmModalShellConfig, CONFIRM_MODAL_RADIUS,
     },
     components::footer_chrome::{
-        render_footer_hint_button_like, themed_footer_button_active_rgba,
-        themed_footer_button_hover_rgba, FooterHintButtonSpec, FooterHintContentJustify,
-        FOOTER_ACTION_BUTTON_RADIUS_PX,
+        current_main_menu_footer_height, current_main_menu_footer_metrics,
+        footer_action_slot_width, footer_button_height, render_footer_hint_action_button_frame,
+        FooterActionSlot, FooterHintActionButtonFrameSpec, FooterHintButtonLayoutOverrides,
+        FooterHintContentJustify,
     },
-    components::overlay_modal::{OverlayAnimation, BUTTON_GAP, MODAL_PADDING},
+    components::overlay_modal::{OverlayAnimation, MODAL_PADDING},
+    dev_style_tool::{
+        ConfirmModalKnobId, CONFIRM_MODAL_ACTIONS_BUTTON_HEIGHT_KNOB_ID,
+        CONFIRM_MODAL_ACTIONS_BUTTON_RADIUS_KNOB_ID,
+        CONFIRM_MODAL_ACTIONS_CANCEL_SLOT_WIDTH_KNOB_ID,
+        CONFIRM_MODAL_ACTIONS_CONFIRM_SLOT_WIDTH_KNOB_ID,
+        CONFIRM_MODAL_ACTIONS_CONTENT_GAP_KNOB_ID, CONFIRM_MODAL_ACTIONS_EDGE_PADDING_X_KNOB_ID,
+        CONFIRM_MODAL_ACTIONS_GAP_KNOB_ID, CONFIRM_MODAL_ACTIONS_PADDING_X_KNOB_ID,
+        CONFIRM_MODAL_ACTIONS_PADDING_Y_KNOB_ID, CONFIRM_MODAL_ANATOMY_BODY_ACTIONS_GAP_KNOB_ID,
+        CONFIRM_MODAL_ANATOMY_BODY_LINE_HEIGHT_KNOB_ID,
+        CONFIRM_MODAL_ANATOMY_HEADER_BODY_GAP_KNOB_ID,
+    },
     platform,
     theme::get_cached_theme,
     ui_foundation::{is_key_enter, is_key_escape, is_key_left, is_key_tab},
@@ -35,10 +47,7 @@ const CONFIRM_MODAL_WIDTH: f32 = 360.0;
 const CONFIRM_PADDING_X: f32 = MODAL_PADDING;
 const CONFIRM_PADDING_Y: f32 = 20.0;
 const CONFIRM_SECTION_GAP: f32 = 10.0;
-const CONFIRM_BUTTON_GAP: f32 = BUTTON_GAP;
-const CONFIRM_BUTTON_HEIGHT: f32 = BUTTON_GHOST_HEIGHT;
 const CONFIRM_TITLE_LINE_HEIGHT: f32 = 16.0;
-const CONFIRM_BODY_LINE_HEIGHT: f32 = 16.0;
 const CONFIRM_MIN_HEIGHT: f32 = 132.0;
 const CONFIRM_MAX_HEIGHT: f32 = 196.0;
 const CONFIRM_BODY_MAX_LINES: usize = 3;
@@ -128,13 +137,10 @@ fn estimate_wrapped_lines(text: &str, approx_chars_per_line: usize) -> usize {
         .max(1)
 }
 
-fn confirm_window_dynamic_height(width: Pixels, title: &str, body: &str) -> f32 {
+fn confirm_window_dynamic_height(width: Pixels, _title: &str, body: &str) -> f32 {
     let width_px: f32 = width.into();
-    let content_width = (width_px - (CONFIRM_PADDING_X * 2.0)).max(160.0);
+    let content_width = (width_px - (confirm_shell_padding_x() * 2.0)).max(160.0);
     let approx_chars_per_line = ((content_width / 7.4).floor() as usize).max(12);
-
-    let title_lines = estimate_wrapped_lines(title, approx_chars_per_line).min(2);
-    let title_height = title_lines as f32 * CONFIRM_TITLE_LINE_HEIGHT;
 
     let has_body = !body.trim().is_empty();
     let body_lines = if has_body {
@@ -142,16 +148,151 @@ fn confirm_window_dynamic_height(width: Pixels, title: &str, body: &str) -> f32 
     } else {
         0
     };
-    let body_height = body_lines as f32 * CONFIRM_BODY_LINE_HEIGHT;
-    let body_gap = if has_body { CONFIRM_SECTION_GAP } else { 0.0 };
+    let body_line_height = confirm_body_line_height();
+    let body_height = body_lines as f32 * body_line_height;
+    let gaps = confirm_modal_stack_gaps(has_body);
 
-    (CONFIRM_PADDING_Y * 2.0
-        + title_height
-        + body_gap
+    (confirm_shell_padding_y() * 2.0
+        + CONFIRM_TITLE_LINE_HEIGHT
+        + gaps.after_header_px
         + body_height
-        + CONFIRM_SECTION_GAP
-        + CONFIRM_BUTTON_HEIGHT)
-        .clamp(CONFIRM_MIN_HEIGHT, CONFIRM_MAX_HEIGHT)
+        + gaps.after_body_px.unwrap_or(0.0)
+        + confirm_action_button_height())
+    .clamp(CONFIRM_MIN_HEIGHT, CONFIRM_MAX_HEIGHT)
+}
+
+fn confirm_modal_number(id: ConfirmModalKnobId, fallback: f32) -> f32 {
+    confirm_modal_number_override(id, fallback)
+}
+
+fn confirm_shell_padding_x() -> f32 {
+    confirm_modal_number(
+        crate::dev_style_tool::CONFIRM_MODAL_PADDING_X_KNOB_ID,
+        CONFIRM_PADDING_X,
+    )
+}
+
+fn confirm_shell_padding_y() -> f32 {
+    confirm_modal_number(
+        crate::dev_style_tool::CONFIRM_MODAL_PADDING_Y_KNOB_ID,
+        CONFIRM_PADDING_Y,
+    )
+}
+
+fn confirm_shell_gap() -> f32 {
+    confirm_modal_number(
+        crate::dev_style_tool::CONFIRM_MODAL_GAP_KNOB_ID,
+        CONFIRM_SECTION_GAP,
+    )
+}
+
+fn confirm_action_button_height() -> f32 {
+    confirm_modal_number(
+        CONFIRM_MODAL_ACTIONS_BUTTON_HEIGHT_KNOB_ID,
+        footer_button_height(current_main_menu_footer_height()),
+    )
+}
+
+fn confirm_action_button_gap() -> f32 {
+    confirm_modal_number(
+        CONFIRM_MODAL_ACTIONS_GAP_KNOB_ID,
+        current_main_menu_footer_metrics().item_gap_px,
+    )
+}
+
+fn confirm_cancel_slot_width() -> f32 {
+    confirm_modal_number(
+        CONFIRM_MODAL_ACTIONS_CANCEL_SLOT_WIDTH_KNOB_ID,
+        footer_action_slot_width(FooterActionSlot::Close),
+    )
+}
+
+fn confirm_confirm_slot_width() -> f32 {
+    confirm_modal_number(
+        CONFIRM_MODAL_ACTIONS_CONFIRM_SLOT_WIDTH_KNOB_ID,
+        footer_action_slot_width(FooterActionSlot::Run),
+    )
+}
+
+fn confirm_action_button_radius() -> f32 {
+    confirm_modal_number(
+        CONFIRM_MODAL_ACTIONS_BUTTON_RADIUS_KNOB_ID,
+        current_main_menu_footer_metrics().button_radius,
+    )
+}
+
+fn confirm_action_button_layout() -> FooterHintButtonLayoutOverrides {
+    let metrics = current_main_menu_footer_metrics();
+    FooterHintButtonLayoutOverrides {
+        button_padding_x_px: Some(confirm_modal_number(
+            CONFIRM_MODAL_ACTIONS_PADDING_X_KNOB_ID,
+            metrics.button_padding_x,
+        )),
+        button_padding_y_px: Some(confirm_modal_number(
+            CONFIRM_MODAL_ACTIONS_PADDING_Y_KNOB_ID,
+            metrics.button_padding_y,
+        )),
+        content_gap_px: Some(confirm_modal_number(
+            CONFIRM_MODAL_ACTIONS_CONTENT_GAP_KNOB_ID,
+            metrics.content_gap,
+        )),
+        button_radius_px: Some(confirm_action_button_radius()),
+        edge_padding_x_px: Some(confirm_modal_number(
+            CONFIRM_MODAL_ACTIONS_EDGE_PADDING_X_KNOB_ID,
+            metrics.button_padding_x,
+        )),
+        shrink_frame_to_content_px: true,
+    }
+}
+
+fn confirm_anatomy_header_body_gap() -> f32 {
+    confirm_modal_number(
+        CONFIRM_MODAL_ANATOMY_HEADER_BODY_GAP_KNOB_ID,
+        confirm_shell_gap(),
+    )
+}
+
+fn confirm_anatomy_body_actions_gap() -> f32 {
+    confirm_modal_number(
+        CONFIRM_MODAL_ANATOMY_BODY_ACTIONS_GAP_KNOB_ID,
+        confirm_shell_gap(),
+    )
+}
+
+fn confirm_body_line_height() -> f32 {
+    confirm_modal_number(
+        CONFIRM_MODAL_ANATOMY_BODY_LINE_HEIGHT_KNOB_ID,
+        crate::dev_style_tool::CONFIRM_MODAL_DEFAULT_BODY_LINE_HEIGHT,
+    )
+}
+
+#[derive(Clone, Copy, Debug)]
+struct ConfirmModalStackGaps {
+    after_header_px: f32,
+    after_body_px: Option<f32>,
+}
+
+fn confirm_modal_stack_gaps(has_body: bool) -> ConfirmModalStackGaps {
+    if has_body {
+        ConfirmModalStackGaps {
+            after_header_px: confirm_anatomy_header_body_gap(),
+            after_body_px: Some(confirm_anatomy_body_actions_gap()),
+        }
+    } else {
+        ConfirmModalStackGaps {
+            after_header_px: confirm_anatomy_header_body_gap(),
+            after_body_px: None,
+        }
+    }
+}
+
+fn confirm_modal_spacer(id: &'static str, height_px: f32) -> AnyElement {
+    div()
+        .id(id)
+        .w_full()
+        .h(px(height_px.max(0.0)))
+        .flex_none()
+        .into_any_element()
 }
 
 fn confirm_window_bounds(
@@ -290,7 +431,7 @@ pub(crate) fn send_confirm_result(confirmed: bool) {
 /// the dialog. Returns `Some(value)` on success, `None` if the value is invalid
 /// or no confirm dialog is open.
 #[allow(dead_code)]
-pub(crate) fn batch_select_confirm_button_by_value(value: &str) -> Option<String> {
+pub(crate) fn batch_select_confirm_button_by_value(value: &str, cx: &mut App) -> Option<String> {
     let confirmed = match value {
         "confirm" => true,
         "cancel" => false,
@@ -301,6 +442,7 @@ pub(crate) fn batch_select_confirm_button_by_value(value: &str) -> Option<String
         return None;
     }
     send_confirm_result(confirmed);
+    close_confirm_window(cx);
     Some(value.to_string())
 }
 
@@ -309,13 +451,16 @@ pub(crate) fn batch_select_confirm_button_by_value(value: &str) -> Option<String
 /// Accepts `"button:0:confirm"` or `"button:1:cancel"`. Returns the semantic ID
 /// on success.
 #[allow(dead_code)]
-pub(crate) fn batch_select_confirm_button_by_semantic_id(semantic_id: &str) -> Option<String> {
+pub(crate) fn batch_select_confirm_button_by_semantic_id(
+    semantic_id: &str,
+    cx: &mut App,
+) -> Option<String> {
     let value = match semantic_id {
         "button:0:confirm" => "confirm",
         "button:1:cancel" => "cancel",
         _ => return None,
     };
-    batch_select_confirm_button_by_value(value)?;
+    batch_select_confirm_button_by_value(value, cx)?;
     Some(semantic_id.to_string())
 }
 
@@ -362,6 +507,11 @@ fn notify_confirm_window(cx: &mut App) {
             }
         }
     }
+}
+
+#[allow(dead_code)]
+pub(crate) fn refresh_confirm_popup_for_runtime_style(cx: &mut App) {
+    notify_confirm_window(cx);
 }
 
 #[allow(dead_code)]
@@ -1251,8 +1401,10 @@ impl Render for ConfirmPopupWindow {
         let panel_bg = gpui::rgba(chrome.popup_surface_rgba);
         let border_color = gpui::rgba(chrome.border_rgba);
         let accent_color = gpui::rgb(chrome.accent_hex);
-        let footer_button_hover_bg = gpui::rgba(themed_footer_button_hover_rgba(&theme));
-        let footer_button_active_bg = gpui::rgba(themed_footer_button_active_rgba(&theme));
+        let cancel_slot_width = confirm_cancel_slot_width();
+        let confirm_slot_width = confirm_confirm_slot_width();
+        let action_button_height = confirm_action_button_height();
+        let action_button_layout = confirm_action_button_layout();
 
         let current_focused = self.focused_button;
         let cancel_focused = current_focused == FocusedButton::Cancel;
@@ -1269,83 +1421,81 @@ impl Render for ConfirmPopupWindow {
             .flex()
             .flex_row()
             .justify_end()
-            .gap(px(CONFIRM_BUTTON_GAP))
+            .gap(px(confirm_action_button_gap()))
             .child(
-                div()
-                    .id("confirm-cancel-button")
-                    .rounded(px(FOOTER_ACTION_BUTTON_RADIUS_PX))
-                    .cursor_pointer()
-                    .when(cancel_focused, |style| style.bg(footer_button_active_bg))
-                    .hover(move |style| style.bg(footer_button_hover_bg))
-                    .active(move |style| style.bg(footer_button_active_bg))
-                    .on_click(move |_, window, cx| {
-                        cancel_entity.update(cx, |this: &mut Self, cx| {
-                            this.resolve_and_close(false, window, cx);
-                        });
-                    })
-                    .child(render_footer_hint_button_like(
-                        FooterHintButtonSpec {
-                            label: self.cancel_text.clone(),
-                            key: "Esc".into(),
-                            slot_width_px: None,
-                            key_first: true,
-                            justify: FooterHintContentJustify::Center,
-                            label_font_size_px: None,
-                            keycap_font_size_px: None,
-                            keycap_height_px: None,
-                            hover_text_alpha: None,
-                            hover_glyph_alpha: None,
-                            hover_keycap_border_alpha: None,
-                        },
-                        &theme,
-                    )),
+                render_footer_hint_action_button_frame(
+                    FooterHintActionButtonFrameSpec {
+                        id: "confirm-cancel-button",
+                        label: self.cancel_text.clone(),
+                        key: "Esc".into(),
+                        slot_width_px: cancel_slot_width,
+                        height_px: action_button_height,
+                        selected: cancel_focused,
+                        key_first: false,
+                        justify: FooterHintContentJustify::Center,
+                        layout: action_button_layout,
+                    },
+                    &theme,
+                )
+                .on_click(move |_, window, cx| {
+                    cancel_entity.update(cx, |this: &mut Self, cx| {
+                        this.resolve_and_close(false, window, cx);
+                    });
+                }),
             )
             .child(
-                div()
-                    .id("confirm-ok-button")
-                    .rounded(px(FOOTER_ACTION_BUTTON_RADIUS_PX))
-                    .cursor_pointer()
-                    .when(confirm_focused, |style| style.bg(footer_button_active_bg))
-                    .hover(move |style| style.bg(footer_button_hover_bg))
-                    .active(move |style| style.bg(footer_button_active_bg))
-                    .on_click(move |_, window, cx| {
-                        confirm_entity.update(cx, |this: &mut Self, cx| {
-                            this.resolve_and_close(true, window, cx);
-                        });
-                    })
-                    .child(render_footer_hint_button_like(
-                        FooterHintButtonSpec {
-                            label: self.confirm_text.clone(),
-                            key: "↵".into(),
-                            slot_width_px: None,
-                            key_first: true,
-                            justify: FooterHintContentJustify::Center,
-                            label_font_size_px: None,
-                            keycap_font_size_px: None,
-                            keycap_height_px: None,
-                            hover_text_alpha: None,
-                            hover_glyph_alpha: None,
-                            hover_keycap_border_alpha: None,
-                        },
-                        &theme,
-                    )),
+                render_footer_hint_action_button_frame(
+                    FooterHintActionButtonFrameSpec {
+                        id: "confirm-ok-button",
+                        label: self.confirm_text.clone(),
+                        key: "↵".into(),
+                        slot_width_px: confirm_slot_width,
+                        height_px: action_button_height,
+                        selected: confirm_focused,
+                        key_first: false,
+                        justify: FooterHintContentJustify::Center,
+                        layout: action_button_layout,
+                    },
+                    &theme,
+                )
+                .on_click(move |_, window, cx| {
+                    confirm_entity.update(cx, |this: &mut Self, cx| {
+                        this.resolve_and_close(true, window, cx);
+                    });
+                }),
             );
 
-        let mut shell_children: Vec<AnyElement> = vec![title_row.into_any_element()];
-        if !self.body.is_empty() {
-            shell_children.push(
-                div()
-                    .w_full()
-                    .min_h(px(0.))
-                    .overflow_hidden()
-                    .text_xs()
-                    .line_height(px(CONFIRM_BODY_LINE_HEIGHT))
-                    .text_color(body_color)
-                    .child(self.body.clone())
-                    .into_any_element(),
-            );
+        let has_body = !self.body.trim().is_empty();
+        let gaps = confirm_modal_stack_gaps(has_body);
+        let mut stack = div()
+            .id("confirm-modal-stack")
+            .w_full()
+            .min_h_0()
+            .flex()
+            .flex_col()
+            .child(title_row)
+            .child(confirm_modal_spacer(
+                "confirm-modal-gap:after-header",
+                gaps.after_header_px,
+            ));
+        if has_body {
+            stack = stack
+                .child(
+                    div()
+                        .w_full()
+                        .min_h(px(0.))
+                        .overflow_hidden()
+                        .text_xs()
+                        .line_height(px(confirm_body_line_height()))
+                        .text_color(body_color)
+                        .child(self.body.clone()),
+                )
+                .child(confirm_modal_spacer(
+                    "confirm-modal-gap:after-body",
+                    gaps.after_body_px.unwrap_or(0.0),
+                ));
         }
-        shell_children.push(action_row.into_any_element());
+        stack = stack.child(action_row);
 
         div()
             .size_full()
@@ -1359,14 +1509,14 @@ impl Render for ConfirmPopupWindow {
                     width: None,
                     padding_x: CONFIRM_PADDING_X,
                     padding_y: CONFIRM_PADDING_Y,
-                    gap: CONFIRM_SECTION_GAP,
+                    gap: 0.0,
                     background: Some(panel_bg),
                     border: border_color,
                     radius: CONFIRM_MODAL_RADIUS,
                     offset_y: overlay_appear.modal_offset_y,
                     opacity: overlay_appear.modal_opacity,
                 },
-                shell_children,
+                vec![stack.into_any_element()],
             ))
     }
 }

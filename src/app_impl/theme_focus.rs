@@ -162,6 +162,7 @@ impl ScriptListApp {
             crate::actions::resize_actions_window(cx, &dialog);
             crate::actions::notify_actions_window(cx);
         }
+        crate::confirm::refresh_confirm_popup_for_runtime_style(cx);
         cx.notify();
     }
 

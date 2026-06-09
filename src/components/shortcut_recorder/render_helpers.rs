@@ -17,11 +17,11 @@ impl ShortcutRecorder {
             if self.current_modifiers.alt {
                 keycaps.push("⌥".to_string());
             }
-            if self.current_modifiers.shift {
-                keycaps.push("⇧".to_string());
-            }
             if self.current_modifiers.platform {
                 keycaps.push("⌘".to_string());
+            }
+            if self.current_modifiers.shift {
+                keycaps.push("⇧".to_string());
             }
             keycaps
         } else {

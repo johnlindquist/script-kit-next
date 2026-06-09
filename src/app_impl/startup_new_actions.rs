@@ -66,13 +66,73 @@
                     }
                 }
 
-                // When the main window is hidden (e.g. Notes/AI open), main-menu
-                // key interceptors must not consume keystrokes from secondary windows.
-                if !script_kit_gpui::is_main_window_visible() {
+                if is_actions {
+                    let mut actions_key_routed = false;
+                    if let Some(app) = app_entity.upgrade() {
+                        app.update(cx, |this, cx| {
+                            logging::log(
+                                "KEY",
+                                &format!(
+                                    "Actions interceptor saw actions-window key={} shortcut={} popup={} focused_input={:?}",
+                                    key,
+                                    crate::shortcuts::keystroke_to_shortcut(
+                                        key,
+                                        &event.keystroke.modifiers,
+                                    ),
+                                    this.show_actions_popup,
+                                    this.focused_input
+                                ),
+                            );
+                            if let crate::app_impl::actions_dialog::ActionsSupport::SharedDialog(
+                                host,
+                            ) = this.actions_support_for_view()
+                            {
+                                match this.route_key_to_actions_dialog(
+                                    key,
+                                    key_char,
+                                    &event.keystroke.modifiers,
+                                    host,
+                                    window,
+                                    cx,
+                                ) {
+                                    ActionsRoute::NotHandled => {}
+                                    ActionsRoute::Handled => {
+                                        tracing::debug!(
+                                            target: "script_kit::actions",
+                                            event = "actions_interceptor_routed_from_actions_window",
+                                            host = ?host,
+                                            key = %key,
+                                        );
+                                        cx.stop_propagation();
+                                        actions_key_routed = true;
+                                    }
+                                    ActionsRoute::Execute {
+                                        action_id,
+                                        should_close,
+                                    } => {
+                                        this.execute_actions_route_action(
+                                            host,
+                                            action_id,
+                                            should_close,
+                                            window,
+                                            cx,
+                                        );
+                                        cx.stop_propagation();
+                                        actions_key_routed = true;
+                                    }
+                                }
+                            }
+                        });
+                    }
+                    if actions_key_routed {
+                        return;
+                    }
                     return;
                 }
 
-                if is_actions {
+                // When the main window is hidden (e.g. Notes/AI open), main-menu
+                // key interceptors must not consume keystrokes from secondary windows.
+                if !script_kit_gpui::is_main_window_visible() {
                     return;
                 }
 
@@ -112,6 +172,33 @@
                             has_key_char = key_char.is_some(),
                             show_actions_popup = this.show_actions_popup,
                         );
+                        if has_cmd {
+                            logging::log(
+                                "KEY",
+                                &format!(
+                                    "Actions interceptor saw key={} shortcut={} view={} popup={} focused_input={:?}",
+                                    key,
+                                    crate::shortcuts::keystroke_to_shortcut(
+                                        key,
+                                        &event.keystroke.modifiers,
+                                    ),
+                                    this.app_view_name(),
+                                    this.show_actions_popup,
+                                    this.focused_input
+                                ),
+                            );
+                        }
+
+                        // Route displayed action shortcuts even when the popup is closed.
+                        if this.try_execute_main_list_action_shortcut_from_display(
+                            key,
+                            &event.keystroke.modifiers,
+                            window,
+                            cx,
+                        ) {
+                            cx.stop_propagation();
+                            return;
+                        }
 
                         // Handle Cmd+K to toggle actions popup (works in ScriptList, FileSearchView, ArgPrompt, etc.)
                         // This MUST be intercepted here because the Input component has focus and
@@ -220,16 +307,6 @@
                         {
                             logging::log("KEY", "Interceptor: Cmd+I -> toggle_info (ScriptList)");
                             this.toggle_info_panel(cx);
-                            cx.stop_propagation();
-                            return;
-                        }
-
-                        // Handle Cmd+Shift+K for add_shortcut in ScriptList
-                        if has_cmd && key.eq_ignore_ascii_case("k") && has_shift
-                            && matches!(this.current_view, AppView::ScriptList)
-                        {
-                            logging::log("KEY", "Interceptor: Cmd+Shift+K -> add_shortcut (ScriptList)");
-                            this.handle_action("add_shortcut".to_string(), window, cx);
                             cx.stop_propagation();
                             return;
                         }

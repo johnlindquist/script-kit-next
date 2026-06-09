@@ -3,19 +3,75 @@ use gpui::{
     Window,
 };
 
-use crate::components::button::{Button, ButtonColors, ButtonVariant};
 use crate::components::confirm_modal_shell::{
-    confirm_modal_header, confirm_modal_shell, ConfirmModalShellConfig, CONFIRM_MODAL_RADIUS,
+    confirm_modal_header, confirm_modal_number_override, confirm_modal_shell,
+    ConfirmModalShellConfig, CONFIRM_MODAL_RADIUS,
+};
+use crate::components::footer_chrome::{
+    current_main_menu_footer_height, current_main_menu_footer_metrics, footer_action_slot_width,
+    footer_button_height, render_footer_hint_action_button_frame, FooterActionSlot,
+    FooterHintActionButtonFrameSpec, FooterHintButtonLayoutOverrides, FooterHintContentJustify,
 };
 use crate::components::overlay_modal::OverlayAnimation;
+use crate::dev_style_tool::{
+    ConfirmModalKnobId, CONFIRM_MODAL_ACTIONS_BUTTON_HEIGHT_KNOB_ID,
+    CONFIRM_MODAL_ACTIONS_BUTTON_RADIUS_KNOB_ID, CONFIRM_MODAL_ACTIONS_CONTENT_GAP_KNOB_ID,
+    CONFIRM_MODAL_ACTIONS_EDGE_PADDING_X_KNOB_ID, CONFIRM_MODAL_ACTIONS_GAP_KNOB_ID,
+    CONFIRM_MODAL_ACTIONS_PADDING_X_KNOB_ID, CONFIRM_MODAL_ACTIONS_PADDING_Y_KNOB_ID,
+};
 use crate::logging;
 use crate::ui_foundation::{is_key_enter, is_key_escape};
 
 use super::types::{
-    overlay_color_with_alpha, BUTTON_GAP, OVERLAY_BACKDROP_ALPHA, OVERLAY_BACKDROP_HOVER_ALPHA,
+    overlay_color_with_alpha, OVERLAY_BACKDROP_ALPHA, OVERLAY_BACKDROP_HOVER_ALPHA,
     RECORDER_MODAL_PADDING, RECORDER_MODAL_WIDTH,
 };
 use super::ShortcutRecorder;
+
+fn recorder_modal_number(id: ConfirmModalKnobId, fallback: f32) -> f32 {
+    confirm_modal_number_override(id, fallback)
+}
+
+fn recorder_action_button_height() -> f32 {
+    recorder_modal_number(
+        CONFIRM_MODAL_ACTIONS_BUTTON_HEIGHT_KNOB_ID,
+        footer_button_height(current_main_menu_footer_height()),
+    )
+}
+
+fn recorder_action_button_gap() -> f32 {
+    recorder_modal_number(
+        CONFIRM_MODAL_ACTIONS_GAP_KNOB_ID,
+        current_main_menu_footer_metrics().item_gap_px,
+    )
+}
+
+fn recorder_action_button_layout() -> FooterHintButtonLayoutOverrides {
+    let metrics = current_main_menu_footer_metrics();
+    FooterHintButtonLayoutOverrides {
+        button_padding_x_px: Some(recorder_modal_number(
+            CONFIRM_MODAL_ACTIONS_PADDING_X_KNOB_ID,
+            metrics.button_padding_x,
+        )),
+        button_padding_y_px: Some(recorder_modal_number(
+            CONFIRM_MODAL_ACTIONS_PADDING_Y_KNOB_ID,
+            metrics.button_padding_y,
+        )),
+        content_gap_px: Some(recorder_modal_number(
+            CONFIRM_MODAL_ACTIONS_CONTENT_GAP_KNOB_ID,
+            metrics.content_gap,
+        )),
+        button_radius_px: Some(recorder_modal_number(
+            CONFIRM_MODAL_ACTIONS_BUTTON_RADIUS_KNOB_ID,
+            metrics.button_radius,
+        )),
+        edge_padding_x_px: Some(recorder_modal_number(
+            CONFIRM_MODAL_ACTIONS_EDGE_PADDING_X_KNOB_ID,
+            metrics.button_padding_x,
+        )),
+        shrink_frame_to_content_px: true,
+    }
+}
 
 impl Focusable for ShortcutRecorder {
     fn focus_handle(&self, _cx: &App) -> FocusHandle {
@@ -32,7 +88,6 @@ impl Render for ShortcutRecorder {
 
         let colors = self.colors;
         let chrome = crate::theme::AppChromeColors::from_theme(&self.theme);
-        let button_colors = ButtonColors::from_theme(&self.theme);
         let overlay_appear = self.overlay_appear_style();
         let backdrop_bg = rgba(overlay_color_with_alpha(
             colors.overlay_bg,
@@ -72,6 +127,11 @@ impl Render for ShortcutRecorder {
             cx.notify();
         });
 
+        let action_button_height = recorder_action_button_height();
+        let action_button_layout = recorder_action_button_layout();
+        let close_slot_width = footer_action_slot_width(FooterActionSlot::Close);
+        let run_slot_width = footer_action_slot_width(FooterActionSlot::Run);
+
         let mut buttons = div()
             .w_full()
             .mt(px(12.))
@@ -79,35 +139,71 @@ impl Render for ShortcutRecorder {
             .flex_row()
             .items_center()
             .justify_end()
-            .gap(px(BUTTON_GAP));
+            .gap(px(recorder_action_button_gap()));
 
         if can_clear {
             buttons = buttons.child(
-                Button::new("Clear", button_colors)
-                    .variant(ButtonVariant::Ghost)
-                    .on_click(Box::new(move |event, window, cx| {
-                        clear_handler(event, window, cx);
-                    })),
+                render_footer_hint_action_button_frame(
+                    FooterHintActionButtonFrameSpec {
+                        id: "shortcut-clear-button",
+                        label: "Clear".into(),
+                        key: "".into(),
+                        slot_width_px: close_slot_width,
+                        height_px: action_button_height,
+                        selected: false,
+                        key_first: false,
+                        justify: FooterHintContentJustify::Center,
+                        layout: action_button_layout,
+                    },
+                    &self.theme,
+                )
+                .on_click(move |event, window, cx| {
+                    clear_handler(event, window, cx);
+                }),
             );
         }
 
         let buttons = buttons
             .child(
-                Button::new("Cancel", button_colors)
-                    .variant(ButtonVariant::Ghost)
-                    .shortcut("Esc")
-                    .on_click(Box::new(move |event, window, cx| {
-                        cancel_handler(event, window, cx);
-                    })),
+                render_footer_hint_action_button_frame(
+                    FooterHintActionButtonFrameSpec {
+                        id: "shortcut-cancel-button",
+                        label: "Cancel".into(),
+                        key: "Esc".into(),
+                        slot_width_px: close_slot_width,
+                        height_px: action_button_height,
+                        selected: false,
+                        key_first: false,
+                        justify: FooterHintContentJustify::Center,
+                        layout: action_button_layout,
+                    },
+                    &self.theme,
+                )
+                .on_click(move |event, window, cx| {
+                    cancel_handler(event, window, cx);
+                }),
             )
             .child(
-                Button::new("Save", button_colors)
-                    .variant(ButtonVariant::Primary)
-                    .shortcut("↵")
-                    .disabled(!can_save)
-                    .on_click(Box::new(move |event, window, cx| {
+                render_footer_hint_action_button_frame(
+                    FooterHintActionButtonFrameSpec {
+                        id: "shortcut-save-button",
+                        label: "Save".into(),
+                        key: "↵".into(),
+                        slot_width_px: run_slot_width,
+                        height_px: action_button_height,
+                        selected: can_save,
+                        key_first: false,
+                        justify: FooterHintContentJustify::Center,
+                        layout: action_button_layout,
+                    },
+                    &self.theme,
+                )
+                .when(!can_save, |style| style.opacity(0.45))
+                .on_click(move |event, window, cx| {
+                    if can_save {
                         save_handler(event, window, cx);
-                    })),
+                    }
+                }),
             );
 
         // Key down event handler - captures modifiers and keys

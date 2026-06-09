@@ -856,6 +856,7 @@ impl DevStyleToolApp {
         self.main_app.update(cx, |_view, cx| {
             cx.notify();
         });
+        crate::confirm::refresh_confirm_popup_for_runtime_style(cx);
     }
 
     fn save_current_settings(&mut self, window: &mut Window, cx: &mut gpui::Context<Self>) {
@@ -887,6 +888,15 @@ impl DevStyleToolApp {
         });
         self.active_tab = DevStyleToolTab::AgentChatStyling;
         self.save_status = Some("Opened Agent Chat Kitchen Sink".to_string());
+        cx.notify();
+    }
+
+    fn open_confirm_modal_kitchen_sink(&mut self, cx: &mut gpui::Context<Self>) {
+        self.main_app.update(cx, |view, cx| {
+            view.open_confirm_modal_kitchen_sink_fixture(cx);
+        });
+        self.active_tab = DevStyleToolTab::ConfirmModalStyling;
+        self.save_status = Some("Opened Confirm Modal Preview".to_string());
         cx.notify();
     }
 
@@ -945,7 +955,7 @@ impl DevStyleToolApp {
                 DevStyleKitchenSinkTarget::ActionsPopupNoMatch,
             ],
             DevStyleToolTab::AgentChatStyling => &[DevStyleKitchenSinkTarget::AgentChat],
-            DevStyleToolTab::ConfirmModalStyling => &[],
+            DevStyleToolTab::ConfirmModalStyling => &[DevStyleKitchenSinkTarget::ConfirmModal],
             DevStyleToolTab::TextCopy => &[],
         };
 
@@ -975,6 +985,9 @@ impl DevStyleToolApp {
                         }
                         DevStyleKitchenSinkTarget::AgentChat => {
                             this.open_agent_chat_kitchen_sink(cx);
+                        }
+                        DevStyleKitchenSinkTarget::ConfirmModal => {
+                            this.open_confirm_modal_kitchen_sink(cx);
                         }
                     })),
             );
@@ -2200,6 +2213,7 @@ impl Render for DevStyleToolApp {
                                             .saturating_add(COPY_CONTROLS.len())
                                             .saturating_add(ACTIONS_POPUP_KNOBS.len())
                                             .saturating_add(AGENT_CHAT_KNOBS.len())
+                                            .saturating_add(CONFIRM_MODAL_KNOBS.len())
                                     )),
                             )
                             .child(
@@ -2350,8 +2364,12 @@ const AGENT_CHAT_KNOB_GROUPS: &[AgentChatKnobGroup] = &[
     AgentChatKnobGroup::ErrorAndSystem,
 ];
 
-const CONFIRM_MODAL_KNOB_GROUPS: &[ConfirmModalKnobGroup] =
-    &[ConfirmModalKnobGroup::Shell, ConfirmModalKnobGroup::Header];
+const CONFIRM_MODAL_KNOB_GROUPS: &[ConfirmModalKnobGroup] = &[
+    ConfirmModalKnobGroup::Shell,
+    ConfirmModalKnobGroup::Header,
+    ConfirmModalKnobGroup::Anatomy,
+    ConfirmModalKnobGroup::Actions,
+];
 
 fn current_knob_value(knob_id: StyleKnobId) -> f32 {
     match runtime_overrides::current_value(knob_id).unwrap_or_else(|| {
@@ -2492,5 +2510,7 @@ fn confirm_modal_group_slug(group: ConfirmModalKnobGroup) -> &'static str {
     match group {
         ConfirmModalKnobGroup::Shell => "shell",
         ConfirmModalKnobGroup::Header => "header",
+        ConfirmModalKnobGroup::Anatomy => "anatomy",
+        ConfirmModalKnobGroup::Actions => "actions",
     }
 }

@@ -1,6 +1,6 @@
 use gpui::{
-    div, px, svg, AnyElement, FontWeight, InteractiveElement, IntoElement, ParentElement,
-    SharedString, Styled,
+    div, prelude::FluentBuilder, px, svg, AnyElement, FontWeight, InteractiveElement, IntoElement,
+    ParentElement, SharedString, Styled,
 };
 
 use crate::list_item::FONT_SYSTEM_UI;
@@ -104,6 +104,28 @@ pub(crate) struct FooterHintButtonSpec {
     pub(crate) hover_text_alpha: Option<u32>,
     pub(crate) hover_glyph_alpha: Option<u32>,
     pub(crate) hover_keycap_border_alpha: Option<u32>,
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub(crate) struct FooterHintButtonLayoutOverrides {
+    pub(crate) button_padding_x_px: Option<f32>,
+    pub(crate) button_padding_y_px: Option<f32>,
+    pub(crate) content_gap_px: Option<f32>,
+    pub(crate) button_radius_px: Option<f32>,
+    pub(crate) edge_padding_x_px: Option<f32>,
+    pub(crate) shrink_frame_to_content_px: bool,
+}
+
+pub(crate) struct FooterHintActionButtonFrameSpec {
+    pub(crate) id: &'static str,
+    pub(crate) label: SharedString,
+    pub(crate) key: SharedString,
+    pub(crate) slot_width_px: f32,
+    pub(crate) height_px: f32,
+    pub(crate) selected: bool,
+    pub(crate) key_first: bool,
+    pub(crate) justify: FooterHintContentJustify,
+    pub(crate) layout: FooterHintButtonLayoutOverrides,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -372,6 +394,7 @@ pub(crate) fn render_footer_hint_content(
         None,
         None,
         None,
+        FooterHintButtonLayoutOverrides::default(),
     )
 }
 
@@ -398,11 +421,24 @@ pub(crate) fn render_footer_hint_content_constrained(
         None,
         None,
         None,
+        FooterHintButtonLayoutOverrides::default(),
     )
 }
 
 pub(crate) fn render_footer_hint_button_like(
     spec: FooterHintButtonSpec,
+    theme: &Theme,
+) -> AnyElement {
+    render_footer_hint_button_like_with_layout(
+        spec,
+        FooterHintButtonLayoutOverrides::default(),
+        theme,
+    )
+}
+
+pub(crate) fn render_footer_hint_button_like_with_layout(
+    spec: FooterHintButtonSpec,
+    layout: FooterHintButtonLayoutOverrides,
     theme: &Theme,
 ) -> AnyElement {
     render_footer_hint_content_impl(
@@ -419,7 +455,81 @@ pub(crate) fn render_footer_hint_button_like(
         spec.hover_text_alpha,
         spec.hover_glyph_alpha,
         spec.hover_keycap_border_alpha,
+        layout,
     )
+}
+
+pub(crate) fn render_footer_hint_action_button_frame(
+    spec: FooterHintActionButtonFrameSpec,
+    theme: &Theme,
+) -> gpui::Stateful<gpui::Div> {
+    let metrics = current_main_menu_footer_metrics();
+    let radius = spec
+        .layout
+        .button_radius_px
+        .unwrap_or(metrics.button_radius);
+    let content_gap = spec.layout.content_gap_px.unwrap_or(metrics.content_gap);
+    let edge_padding_x = spec
+        .layout
+        .edge_padding_x_px
+        .or(spec.layout.button_padding_x_px)
+        .unwrap_or(metrics.button_padding_x);
+    let visual_width = if spec.layout.shrink_frame_to_content_px {
+        footer_hint_action_visual_width_px(
+            spec.label.as_ref(),
+            spec.key.as_ref(),
+            spec.slot_width_px,
+            edge_padding_x,
+            content_gap,
+        )
+    } else {
+        spec.slot_width_px
+    };
+    let content_layout = FooterHintButtonLayoutOverrides {
+        button_padding_x_px: Some(edge_padding_x),
+        ..spec.layout
+    };
+    let hover_bg = gpui::rgba(themed_footer_button_hover_rgba(theme));
+    let active_bg = gpui::rgba(themed_footer_button_active_rgba(theme));
+
+    div()
+        .id(spec.id)
+        .w(px(spec.slot_width_px))
+        .h(px(spec.height_px))
+        .flex()
+        .items_center()
+        .justify_center()
+        .cursor_pointer()
+        .group("footer-action-button-slot")
+        .child(
+            div()
+                .w(px(visual_width))
+                .h_full()
+                .flex()
+                .items_center()
+                .justify_center()
+                .overflow_hidden()
+                .rounded(px(radius))
+                .when(spec.selected, |style| style.bg(active_bg))
+                .group_hover("footer-action-button-slot", move |style| style.bg(hover_bg))
+                .child(render_footer_hint_button_like_with_layout(
+                    FooterHintButtonSpec {
+                        label: spec.label,
+                        key: spec.key,
+                        slot_width_px: Some(visual_width),
+                        key_first: spec.key_first,
+                        justify: spec.justify,
+                        label_font_size_px: None,
+                        keycap_font_size_px: None,
+                        keycap_height_px: None,
+                        hover_text_alpha: None,
+                        hover_glyph_alpha: None,
+                        hover_keycap_border_alpha: None,
+                    },
+                    content_layout,
+                    theme,
+                )),
+        )
 }
 
 fn footer_hover_text_color(theme: &Theme, alpha: Option<u32>) -> gpui::Hsla {
@@ -474,24 +584,43 @@ fn render_footer_hint_content_impl(
     hover_text_alpha: Option<u32>,
     hover_glyph_alpha: Option<u32>,
     hover_keycap_border_alpha: Option<u32>,
+    layout: FooterHintButtonLayoutOverrides,
 ) -> AnyElement {
     let footer_text = footer_hint_text_color(theme);
     let hover_text = footer_hover_text_color(theme, hover_text_alpha);
     let hover_glyph = footer_hover_glyph_color(theme, hover_glyph_alpha);
-    let key_width_px = match mode {
-        FooterHintKeyMode::Shortcut => footer_shortcut_keycaps_width_px(key.as_ref()),
-    };
     let metrics = current_main_menu_footer_metrics();
-    let edge_padding_x = if matches!(justify, FooterHintContentJustify::KeyAnchored) {
+    let default_edge_padding_x = if matches!(justify, FooterHintContentJustify::KeyAnchored) {
         metrics.run_button_padding_x
     } else {
         metrics.button_padding_x
     };
+    let edge_padding_x = layout.button_padding_x_px.unwrap_or(default_edge_padding_x);
+    let button_padding_y = layout
+        .button_padding_y_px
+        .unwrap_or(metrics.button_padding_y);
+    let content_gap = layout.content_gap_px.unwrap_or(metrics.content_gap);
+    let button_radius = layout.button_radius_px.unwrap_or(metrics.button_radius);
+    let key_width_px = match mode {
+        FooterHintKeyMode::Shortcut => {
+            footer_shortcut_keycaps_width_px_with_gap(key.as_ref(), content_gap)
+        }
+    };
     let label_max_width_px = slot_width_px.map(|slot| {
         if matches!(justify, FooterHintContentJustify::KeyAnchored) {
-            footer_labelcap_max_width_for_slot_with_padding(slot, key_width_px, edge_padding_x)
+            footer_labelcap_max_width_for_slot_with_padding_and_gap(
+                slot,
+                key_width_px,
+                edge_padding_x,
+                content_gap,
+            )
         } else {
-            footer_labelcap_max_width_for_slot(slot, key_width_px)
+            footer_labelcap_max_width_for_slot_with_padding_and_gap(
+                slot,
+                key_width_px,
+                edge_padding_x,
+                content_gap,
+            )
         }
     });
     let labelcap = if let Some(max_width_px) = label_max_width_px {
@@ -513,6 +642,7 @@ fn render_footer_hint_content_impl(
             theme,
             keycap_font_size_px,
             keycap_height_px,
+            Some(content_gap),
             Some(FooterKeycapHoverStyle {
                 text: hover_text,
                 glyph: hover_glyph,
@@ -524,12 +654,12 @@ fn render_footer_hint_content_impl(
     let mut row = div()
         .pl(px(edge_padding_x))
         .pr(px(edge_padding_x))
-        .py(px(metrics.button_padding_y))
-        .rounded(px(metrics.button_radius))
+        .py(px(button_padding_y))
+        .rounded(px(button_radius))
         .flex()
         .flex_row()
         .items_center()
-        .gap(px(metrics.content_gap))
+        .gap(px(content_gap))
         .group("footer-action-button")
         .min_w(px(0.0))
         .overflow_hidden();
@@ -552,12 +682,33 @@ fn render_footer_hint_content_impl(
 }
 
 pub(crate) fn footer_shortcut_keycaps_width_px(shortcut: &str) -> f32 {
-    let tokens = split_footer_shortcut(shortcut);
-    footer_shortcut_keycaps_width_px_from_tokens(tokens.iter().map(String::as_str))
+    footer_shortcut_keycaps_width_px_with_gap(
+        shortcut,
+        current_main_menu_footer_metrics().content_gap,
+    )
 }
 
+pub(crate) fn footer_shortcut_keycaps_width_px_with_gap(shortcut: &str, content_gap: f32) -> f32 {
+    let tokens = split_footer_shortcut(shortcut);
+    footer_shortcut_keycaps_width_px_from_tokens_with_gap(
+        tokens.iter().map(String::as_str),
+        content_gap,
+    )
+}
+
+#[allow(dead_code)]
 pub(crate) fn footer_shortcut_keycaps_width_px_from_tokens<'a>(
     tokens: impl IntoIterator<Item = &'a str>,
+) -> f32 {
+    footer_shortcut_keycaps_width_px_from_tokens_with_gap(
+        tokens,
+        current_main_menu_footer_metrics().content_gap,
+    )
+}
+
+fn footer_shortcut_keycaps_width_px_from_tokens_with_gap<'a>(
+    tokens: impl IntoIterator<Item = &'a str>,
+    content_gap: f32,
 ) -> f32 {
     let tokens = tokens.into_iter().collect::<Vec<_>>();
     if tokens.is_empty() {
@@ -568,8 +719,7 @@ pub(crate) fn footer_shortcut_keycaps_width_px_from_tokens<'a>(
         .iter()
         .map(|token| footer_keycap_estimated_width_px(token))
         .sum::<f32>();
-    keys_width
-        + tokens.len().saturating_sub(1) as f32 * current_main_menu_footer_metrics().content_gap
+    keys_width + tokens.len().saturating_sub(1) as f32 * content_gap
 }
 
 /// Total width of a horizontal run of items laid out with a constant gap
@@ -626,6 +776,26 @@ pub(crate) fn footer_hint_content_estimated_width_px(
 
     let metrics = current_main_menu_footer_metrics();
     metrics.button_padding_x * 2.0 + label_width_px + content_gap + key_width_px
+}
+
+pub(crate) fn footer_hint_action_visual_width_px(
+    label: &str,
+    key: &str,
+    slot_width_px: f32,
+    edge_padding_x_px: f32,
+    content_gap_px: f32,
+) -> f32 {
+    let label_width_px = footer_labelcap_estimated_width_px(label);
+    let key_width_px = footer_shortcut_keycaps_width_px_with_gap(key, content_gap_px);
+    let content_gap = if !label.trim().is_empty() && key_width_px > 0.0 {
+        content_gap_px
+    } else {
+        0.0
+    };
+    (label_width_px + content_gap + key_width_px + edge_padding_x_px.max(0.0) * 2.0)
+        .max(current_main_menu_footer_metrics().keycap_height)
+        .min(slot_width_px)
+        .ceil()
 }
 
 fn footer_labelcap_estimated_width_px(label: &str) -> f32 {
@@ -700,6 +870,7 @@ pub(crate) fn footer_icon_path_or_profile(token: &str) -> String {
     footer_icon_path(token).unwrap_or_else(|| FOOTER_PROFILE_ICON_PATH.to_string())
 }
 
+#[allow(dead_code)]
 pub(crate) fn footer_labelcap_max_width_for_slot(slot_width_px: f32, key_width_px: f32) -> f32 {
     footer_labelcap_max_width_for_slot_with_padding(
         slot_width_px,
@@ -708,16 +879,27 @@ pub(crate) fn footer_labelcap_max_width_for_slot(slot_width_px: f32, key_width_p
     )
 }
 
+#[allow(dead_code)]
 pub(crate) fn footer_labelcap_max_width_for_slot_with_padding(
     slot_width_px: f32,
     key_width_px: f32,
     edge_padding_x: f32,
 ) -> f32 {
-    let key_gap = if key_width_px > 0.0 {
-        current_main_menu_footer_metrics().content_gap
-    } else {
-        0.0
-    };
+    footer_labelcap_max_width_for_slot_with_padding_and_gap(
+        slot_width_px,
+        key_width_px,
+        edge_padding_x,
+        current_main_menu_footer_metrics().content_gap,
+    )
+}
+
+pub(crate) fn footer_labelcap_max_width_for_slot_with_padding_and_gap(
+    slot_width_px: f32,
+    key_width_px: f32,
+    edge_padding_x: f32,
+    content_gap: f32,
+) -> f32 {
+    let key_gap = if key_width_px > 0.0 { content_gap } else { 0.0 };
     (slot_width_px - (edge_padding_x * 2.0) - key_gap - key_width_px)
         .max(current_main_menu_footer_metrics().keycap_height)
 }
@@ -795,7 +977,7 @@ struct FooterKeycapHoverStyle {
 }
 
 pub(crate) fn render_footer_shortcut_keycaps(shortcut: String, theme: &Theme) -> AnyElement {
-    render_footer_shortcut_keycaps_with_metrics(shortcut, theme, None, None, None)
+    render_footer_shortcut_keycaps_with_metrics(shortcut, theme, None, None, None, None)
 }
 
 fn render_footer_shortcut_keycaps_with_metrics(
@@ -803,6 +985,7 @@ fn render_footer_shortcut_keycaps_with_metrics(
     theme: &Theme,
     keycap_font_size_px: Option<f32>,
     keycap_height_px: Option<f32>,
+    content_gap_px: Option<f32>,
     hover_style: Option<FooterKeycapHoverStyle>,
 ) -> AnyElement {
     let tokens = split_footer_shortcut(&shortcut);
@@ -811,6 +994,7 @@ fn render_footer_shortcut_keycaps_with_metrics(
         theme,
         keycap_font_size_px,
         keycap_height_px,
+        content_gap_px,
         hover_style,
     )
 }
@@ -832,7 +1016,7 @@ pub(crate) fn render_footer_shortcut_keycaps_from_tokens<'a>(
     tokens: impl IntoIterator<Item = &'a str>,
     theme: &Theme,
 ) -> AnyElement {
-    render_footer_shortcut_keycaps_from_tokens_with_metrics(tokens, theme, None, None, None)
+    render_footer_shortcut_keycaps_from_tokens_with_metrics(tokens, theme, None, None, None, None)
 }
 
 fn render_footer_shortcut_keycaps_from_tokens_with_metrics<'a>(
@@ -840,14 +1024,17 @@ fn render_footer_shortcut_keycaps_from_tokens_with_metrics<'a>(
     theme: &Theme,
     keycap_font_size_px: Option<f32>,
     keycap_height_px: Option<f32>,
+    content_gap_px: Option<f32>,
     hover_style: Option<FooterKeycapHoverStyle>,
 ) -> AnyElement {
+    let content_gap =
+        content_gap_px.unwrap_or_else(|| current_main_menu_footer_metrics().content_gap);
     div()
         .flex()
         .flex_none()
         .flex_row()
         .items_center()
-        .gap(px(current_main_menu_footer_metrics().content_gap))
+        .gap(px(content_gap))
         .children(tokens.into_iter().map(|token| {
             render_footer_keycap_with_metrics(
                 token.to_string(),
@@ -1055,6 +1242,26 @@ mod tests {
                 + FOOTER_ACTION_CONTENT_PADDING_X_PX * 2.0
                 <= FOOTER_RUN_SLOT_MIN_WIDTH_PX
         );
+    }
+
+    #[test]
+    fn footer_action_visual_width_shrinks_with_edge_padding_inside_fixed_slot() {
+        let slot = FOOTER_CLOSE_SLOT_WIDTH_PX;
+        let loose = footer_hint_action_visual_width_px("Cancel", "Esc", slot, 8.0, 4.0);
+        let tight = footer_hint_action_visual_width_px("Cancel", "Esc", slot, 2.0, 4.0);
+
+        assert!(tight < loose);
+        assert!(tight <= slot);
+        assert!(loose <= slot);
+    }
+
+    #[test]
+    fn footer_action_visual_width_clamps_long_labels_to_slot_width() {
+        let slot = FOOTER_RUN_SLOT_MIN_WIDTH_PX;
+        let width =
+            footer_hint_action_visual_width_px("Confirm Preview Layout", "↵", slot, 2.0, 4.0);
+
+        assert_eq!(width, slot);
     }
 
     #[test]

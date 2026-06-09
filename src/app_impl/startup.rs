@@ -992,6 +992,7 @@ impl ScriptListApp {
             file_search_selection_mode: FileSearchSelectionMode::AutoFirst,
             file_search_preview_thumbnail: FileSearchThumbnailPreviewState::Idle,
             show_actions_popup: false,
+            registered_main_list_displayed_shortcuts: std::collections::HashSet::new(),
             actions_closed_at: None,
             actions_dialog: None,
             cursor_visible: true,
@@ -2753,6 +2754,68 @@ impl ScriptListApp {
                     }
                 }
 
+                if is_actions {
+                    let mut actions_key_routed = false;
+                    if let Some(app) = app_entity.upgrade() {
+                        app.update(cx, |this, cx| {
+                            logging::log(
+                                "KEY",
+                                &format!(
+                                    "Actions interceptor saw actions-window key={} shortcut={} popup={} focused_input={:?}",
+                                    key,
+                                    crate::shortcuts::keystroke_to_shortcut(
+                                        key,
+                                        &event.keystroke.modifiers,
+                                    ),
+                                    this.show_actions_popup,
+                                    this.focused_input
+                                ),
+                            );
+                            let Some(host) = this.current_actions_host() else {
+                                return;
+                            };
+                            match this.route_key_to_actions_dialog(
+                                key,
+                                key_char,
+                                &event.keystroke.modifiers,
+                                host,
+                                window,
+                                cx,
+                            ) {
+                                ActionsRoute::NotHandled => {}
+                                ActionsRoute::Handled => {
+                                    tracing::debug!(
+                                        target: "script_kit::actions",
+                                        event = "actions_interceptor_routed_from_actions_window",
+                                        host = ?host,
+                                        key = %key,
+                                    );
+                                    cx.stop_propagation();
+                                    actions_key_routed = true;
+                                }
+                                ActionsRoute::Execute {
+                                    action_id,
+                                    should_close,
+                                } => {
+                                    this.execute_actions_route_action(
+                                        host,
+                                        action_id,
+                                        should_close,
+                                        window,
+                                        cx,
+                                    );
+                                    cx.stop_propagation();
+                                    actions_key_routed = true;
+                                }
+                            }
+                        });
+                    }
+                    if actions_key_routed {
+                        return;
+                    }
+                    return;
+                }
+
                 // When the main window is hidden (e.g. Notes/AI open), main-menu
                 // key interceptors must not consume keystrokes from secondary windows.
                 if !script_kit_gpui::is_main_window_visible() {
@@ -2764,10 +2827,6 @@ impl ScriptListApp {
                         is_detached_agent_chat,
                         is_actions,
                     );
-                    return;
-                }
-
-                if is_actions {
                     return;
                 }
 
@@ -2797,6 +2856,22 @@ impl ScriptListApp {
 
                 if let Some(app) = app_entity.upgrade() {
                     app.update(cx, |this, cx| {
+                        if has_cmd {
+                            logging::log(
+                                "KEY",
+                                &format!(
+                                    "Actions interceptor saw key={} shortcut={} view={} popup={} focused_input={:?}",
+                                    key,
+                                    crate::shortcuts::keystroke_to_shortcut(
+                                        key,
+                                        &event.keystroke.modifiers,
+                                    ),
+                                    this.app_view_name(),
+                                    this.show_actions_popup,
+                                    this.focused_input
+                                ),
+                            );
+                        }
                         // Route shared actions-dialog keys first; local actions
                         // key intents run only after the dialog declines the key.
                         let host = this.current_actions_host();
@@ -2849,6 +2924,17 @@ impl ScriptListApp {
 
                         if this.try_execute_root_file_action_shortcut(
                             &key_lower, has_cmd, has_shift, has_alt, has_ctrl, window, cx,
+                        ) {
+                            cx.stop_propagation();
+                            return;
+                        }
+
+                        // Route displayed action shortcuts even when the popup is closed.
+                        if this.try_execute_main_list_action_shortcut_from_display(
+                            key,
+                            &event.keystroke.modifiers,
+                            window,
+                            cx,
                         ) {
                             cx.stop_propagation();
                             return;
@@ -2950,21 +3036,6 @@ impl ScriptListApp {
                                     "Interceptor: Escape -> close Agent Chat window",
                                 );
                             }
-                            cx.stop_propagation();
-                            return;
-                        }
-
-                        // Handle Cmd+Shift+K for add_shortcut in ScriptList
-                        if has_cmd
-                            && key.eq_ignore_ascii_case("k")
-                            && has_shift
-                            && matches!(this.current_view, AppView::ScriptList)
-                        {
-                            logging::log(
-                                "KEY",
-                                "Interceptor: Cmd+Shift+K -> add_shortcut (ScriptList)",
-                            );
-                            this.handle_action("add_shortcut".to_string(), window, cx);
                             cx.stop_propagation();
                             return;
                         }

@@ -51,11 +51,32 @@ fn shortcut_recorder_and_confirm_popup_use_the_same_shell() {
             source.contains("confirm_modal_header("),
             "{label} must use the shared confirm modal header"
         );
+        assert!(
+            source.contains("render_footer_hint_action_button_frame")
+                && source.contains("FooterHintActionButtonFrameSpec")
+                && source.contains("FooterHintButtonLayoutOverrides")
+                && source.contains("FooterHintContentJustify::Center"),
+            "{label} must use the shared footer action button frame for modal actions"
+        );
+        assert!(
+            !source.contains("Button::new(")
+                && !source.contains("ButtonVariant::Ghost")
+                && !source.contains("ButtonVariant::Primary"),
+            "{label} must not render modal actions through the generic/local button component"
+        );
     }
+    assert!(
+        shortcut.contains("shortcut-cancel-button")
+            && shortcut.contains("shortcut-save-button")
+            && shortcut.contains("key_first: false")
+            && shortcut.contains("CONFIRM_MODAL_ACTIONS_EDGE_PADDING_X_KNOB_ID"),
+        "shortcut recorder buttons must follow confirm modal footer-button ordering and designer controls"
+    );
 }
 
 #[test]
 fn confirm_popup_uses_shortcut_modal_button_and_chrome_tokens() {
+    let footer = read("src/components/footer_chrome.rs");
     let confirm = read("src/confirm/window.rs");
     let render_block = confirm
         .split("impl Render for ConfirmPopupWindow")
@@ -63,22 +84,57 @@ fn confirm_popup_uses_shortcut_modal_button_and_chrome_tokens() {
         .expect("ConfirmPopupWindow render implementation should be present");
 
     assert!(
-        confirm.contains("components::button::BUTTON_GHOST_HEIGHT")
-            && confirm.contains("render_footer_hint_button_like")
-            && confirm.contains("FooterHintButtonSpec")
-            && confirm.contains("FooterHintContentJustify")
-            && confirm.contains("themed_footer_button_hover_rgba")
-            && confirm.contains("themed_footer_button_active_rgba"),
-        "confirm popup must reuse footer button/keycap chrome instead of local modal-only action styling"
+        footer.contains("FooterHintButtonLayoutOverrides")
+            && footer.contains("FooterHintActionButtonFrameSpec")
+            && footer.contains("render_footer_hint_button_like_with_layout")
+            && footer.contains("render_footer_hint_action_button_frame")
+            && footer.contains("footer_hint_action_visual_width_px")
+            && footer.contains("edge_padding_x_px")
+            && footer.contains("shrink_frame_to_content_px")
+            && footer.contains("footer-action-button-slot")
+            && footer.contains(".group_hover(\"footer-action-button-slot\"")
+            && footer.contains(".items_center()")
+            && footer.contains(".justify_center()")
+            && footer.contains("themed_footer_button_hover_rgba")
+            && footer.contains("themed_footer_button_active_rgba"),
+        "footer chrome must own the reusable action button frame, centering, hover, and active state used by confirm modal actions"
     );
     assert!(
-        render_block.contains("render_footer_hint_button_like")
+        confirm.contains("render_footer_hint_action_button_frame")
+            && confirm.contains("FooterHintActionButtonFrameSpec")
+            && confirm.contains("FooterHintButtonLayoutOverrides")
+            && confirm.contains("footer_action_slot_width")
+            && confirm.contains("FooterActionSlot::Close")
+            && confirm.contains("FooterActionSlot::Run")
+            && confirm.contains("footer_button_height")
+            && confirm.contains("current_main_menu_footer_height")
+            && confirm.contains("current_main_menu_footer_metrics().item_gap_px")
+            && confirm.contains("FooterHintContentJustify")
+            && confirm.contains("CONFIRM_MODAL_ACTIONS_BUTTON_HEIGHT_KNOB_ID")
+            && confirm.contains("CONFIRM_MODAL_ACTIONS_EDGE_PADDING_X_KNOB_ID")
+            && confirm.contains("edge_padding_x_px")
+            && confirm.contains("shrink_frame_to_content_px")
+            && confirm.contains("confirm_action_button_layout")
+            && confirm.contains("confirm_modal_stack_gaps")
+            && confirm.contains("confirm_modal_spacer")
+            && confirm.contains("confirm_anatomy_header_body_gap")
+            && confirm.contains("confirm_anatomy_body_actions_gap")
+            && confirm.contains("confirm_body_line_height"),
+        "confirm popup must reuse footer action frames and expose action/anatomy modal designer overrides"
+    );
+    assert!(
+        render_block.contains("render_footer_hint_action_button_frame")
+            && render_block.contains("confirm-cancel-button")
+            && render_block.contains("confirm-ok-button")
             && render_block.contains("label: self.cancel_text.clone()")
             && render_block.contains("key: \"Esc\".into()")
             && render_block.contains("label: self.confirm_text.clone()")
             && render_block.contains("key: \"↵\".into()")
-            && render_block.contains("key_first: true")
-            && render_block.contains("FooterHintContentJustify::Center"),
+            && render_block.contains("key_first: false")
+            && render_block.contains("FooterHintContentJustify::Center")
+            && render_block.contains("confirm-modal-stack")
+            && render_block.contains("confirm-modal-gap:after-header")
+            && render_block.contains("confirm-modal-gap:after-body"),
         "confirm popup actions must use the same footer shortcut/keycap renderer as main footer buttons"
     );
     assert!(
@@ -94,8 +150,64 @@ fn confirm_popup_uses_shortcut_modal_button_and_chrome_tokens() {
             && !render_block.contains("accent_color = if is_danger")
             && !render_block.contains("Button::new(self.cancel_text")
             && !render_block.contains("Button::new(self.confirm_text")
-            && !render_block.contains("on_mouse_down(MouseButton::Left"),
-        "confirm popup must not reintroduce red danger shell styling, generic action buttons, or hand-built mini buttons"
+            && !render_block.contains("on_mouse_down(MouseButton::Left")
+            && !render_block.contains("render_footer_hint_button_like(")
+            && !render_block.contains(".hover(move |style| style.bg(footer_button_hover_bg))")
+            && !render_block.contains(".active(move |style| style.bg(footer_button_active_bg))")
+            && !render_block.contains("FOOTER_ACTION_BUTTON_RADIUS_PX")
+            && !render_block.contains("Button::new(")
+            && !render_block.contains("key_first: true")
+            && !render_block.contains(".mt(px(confirm_anatomy_header_body_gap()))")
+            && !render_block.contains(".mt(px(if self.body.is_empty()")
+            && !confirm.contains("components::button::BUTTON_GHOST_HEIGHT")
+            && !confirm.contains("BUTTON_GAP"),
+        "confirm popup must not reintroduce red danger shell styling, generic action buttons, hand-built mini buttons, or modal-local button dimensions"
+    );
+}
+
+#[test]
+fn confirm_popup_native_background_matches_actions_popup_not_footer_flush_strip() {
+    let confirm = read("src/confirm/window.rs");
+    let actions = read("src/actions/window.rs");
+    let platform = read("src/platform/secondary_window_config.rs");
+    let confirm_options = confirm
+        .split("let handle = cx.open_window(")
+        .nth(1)
+        .and_then(|tail| tail.split("move |_window, cx|").next())
+        .expect("confirm popup WindowOptions should be present");
+    let actions_options = actions
+        .split("let window_options = WindowOptions")
+        .nth(1)
+        .and_then(|tail| tail.split("};").next())
+        .expect("actions popup WindowOptions should be present");
+    let confirm_config = platform
+        .split("pub unsafe fn configure_confirm_popup_window(window: id, is_dark: bool)")
+        .nth(1)
+        .and_then(|tail| tail.split("#[cfg(not(target_os = \"macos\"))]").next())
+        .expect("macOS confirm popup config should be present");
+    let footer_config = platform
+        .split("pub unsafe fn configure_footer_popup_window(window: id, is_dark: bool)")
+        .nth(1)
+        .and_then(|tail| tail.split("#[cfg(not(target_os = \"macos\"))]").next())
+        .expect("macOS footer popup config should be present");
+
+    assert!(
+        confirm_options.contains("kind: WindowKind::PopUp")
+            && actions_options.contains("kind: WindowKind::PopUp"),
+        "confirm and actions popup must stay on the same native GPUI WindowKind::PopUp surface"
+    );
+    assert!(
+        confirm_config.contains("configure_actions_popup_window(window, is_dark)")
+            && !confirm_config.contains("setHasShadow: false")
+            && !confirm_config.contains("setCornerRadius: 0.0_f64"),
+        "centered confirm popup must keep the same native background/depth configuration as actions popup"
+    );
+    assert!(
+        footer_config.contains("configure_actions_popup_window(window, is_dark)")
+            && footer_config.contains("setIgnoresMouseEvents: true")
+            && footer_config.contains("setHasShadow: false")
+            && footer_config.contains("setCornerRadius: 0.0_f64"),
+        "flush footer popup owns the no-shadow/no-corner exception instead of confirm popup"
     );
 }
 
@@ -227,6 +339,76 @@ fn destructive_confirm_safety_scenario_uses_dry_run_confirm_fixture() {
 }
 
 #[test]
+fn confirm_modal_dev_style_preview_uses_shared_confirm_prompt_route() {
+    let source = read("src/main_sections/kitchen_sink_fixture.rs");
+    let block = source
+        .split("open_confirm_modal_kitchen_sink_fixture")
+        .nth(1)
+        .expect("confirm modal preview fixture should exist");
+
+    assert!(
+        block.contains("open_confirm_prompt")
+            && block.contains("ParentConfirmOptions")
+            && block.contains("Confirm Modal Preview")
+            && !block.contains("confirm_with_parent_dialog")
+            && !block.contains("confirm_modal_shell("),
+        "dev style confirm modal preview must open the real shared ConfirmPrompt route instead of rendering a local fake modal"
+    );
+}
+
+#[test]
+fn sdk_confirm_runtime_proof_uses_real_script_run_route() {
+    let scenario = read("scripts/agentic/scenario.ts");
+    let index = read("scripts/agentic/index.ts");
+    let smoke = read("tests/smoke/test-confirm-sdk-runtime.ts");
+    let inventory = read(".goals/receipts/modal-inventory.md");
+
+    assert!(
+        scenario.contains("runSdkConfirmRuntimeProofScenario")
+            && scenario.contains("tests/smoke/test-confirm-sdk-runtime.ts")
+            && scenario.contains("type: \"run\"")
+            && scenario.contains("sdk-confirm-run-")
+            && scenario.contains("SCRIPT_KIT_SESSION_DIR")
+            && scenario.contains("SCRIPT_KIT_GPUI_BINARY")
+            && scenario.contains("SCRIPT_KIT_DISABLE_AUTOMATIC_UPDATE_CHECK")
+            && scenario.contains("expectedProtocolType: \"confirm\"")
+            && scenario.contains("expectedSurface: \"ConfirmPrompt\""),
+        "SDK confirm runtime proof must drive the real script run route into the shared ConfirmPrompt surface from an isolated session"
+    );
+    assert!(
+        scenario.contains("simulateKey")
+            && scenario.contains("sdk-confirm-escape-cancel")
+            && scenario.contains("scriptResult.result === false")
+            && scenario.contains("processTree")
+            && scenario.contains("failureArtifacts")
+            && scenario.contains("confirm-modal-sdk-confirm-runtime-artifacts")
+            && !scenario
+                .split("runSdkConfirmRuntimeProofScenario")
+                .nth(1)
+                .expect("SDK confirm runtime proof scenario should be present")
+                .contains("openConfirmPrompt"),
+        "SDK confirm runtime proof must resolve safely through Escape, preserve blocker artifacts on failure, and must not fall back to the stdin confirm fixture"
+    );
+    assert!(
+        index.contains("sdk-confirm-runtime-proof")
+            && index.contains("runSdkConfirmRuntimeProofScenario"),
+        "agentic index must expose a stable top-level SDK confirm runtime proof recipe"
+    );
+    assert!(
+        smoke.contains("await confirm({")
+            && smoke.contains("SDK confirm runtime proof?")
+            && smoke.contains("Confirm SDK")
+            && smoke.contains("Cancel SDK")
+            && smoke.contains("resultType: typeof result"),
+        "SDK confirm smoke script must call global confirm() and persist the boolean result receipt"
+    );
+    assert!(
+        inventory.contains("SDK `confirm`"),
+        "inventory must track the SDK confirm runtime proof status"
+    );
+}
+
+#[test]
 fn confirm_prompt_simulate_key_routes_confirm_and_cancel() {
     let source = read("src/app_impl/simulate_key_dispatch.rs");
 
@@ -238,6 +420,33 @@ fn confirm_prompt_simulate_key_routes_confirm_and_cancel() {
             && source.contains("view.resolve_confirm_prompt(confirmed, window, ctx)")
             && source.contains("view.toggle_confirm_prompt_focus(ctx)"),
         "stdin simulateKey must route ConfirmPrompt Tab, Enter, and Escape through the shared confirm resolver"
+    );
+}
+
+#[test]
+fn prompt_popup_batch_confirm_selection_closes_confirm_popup() {
+    let confirm = read("src/confirm/window.rs");
+    let prompt_handler = read("src/prompt_handler/mod.rs");
+    let by_value = confirm
+        .split("pub(crate) fn batch_select_confirm_button_by_value")
+        .nth(1)
+        .and_then(|section| {
+            section
+                .split("pub(crate) fn batch_select_confirm_button_by_semantic_id")
+                .next()
+        })
+        .expect("batch_select_confirm_button_by_value should be present");
+
+    assert!(
+        by_value.contains("send_confirm_result(confirmed)")
+            && by_value.contains("close_confirm_window(cx)"),
+        "PromptPopup batch activation must match mouse/key confirm behavior by closing the confirm popup after sending the result"
+    );
+    assert!(
+        prompt_handler.contains("batch_select_confirm_button_by_value(&value, cx)")
+            && prompt_handler
+                .contains("batch_select_confirm_button_by_semantic_id(&semantic_id, cx)"),
+        "PromptPopup batch routing must pass App context so confirm selection can close the popup"
     );
 }
 
@@ -260,5 +469,62 @@ fn sdk_confirm_host_route_uses_shared_confirm_prompt_surface() {
     assert!(
         !show_confirm.contains("confirm_with_parent_dialog"),
         "SDK confirm() host route must not bypass the shared ConfirmPrompt surface via the native parent popup"
+    );
+}
+
+#[test]
+fn notes_delete_confirm_route_proof_uses_real_notes_route() {
+    let scenario = read("scripts/agentic/scenario.ts");
+    let index = read("scripts/agentic/index.ts");
+    let notes = read("src/notes/window/notes.rs");
+    let keyboard = read("src/notes/window/keyboard.rs");
+
+    let scenario_block = scenario
+        .split("runNotesDeleteConfirmRouteProofScenario")
+        .nth(1)
+        .and_then(|section| {
+            section
+                .split("runActionsCommandDiscoverabilityNoopStressScenario")
+                .next()
+        })
+        .expect("Notes delete confirm route proof scenario should be present");
+
+    assert!(
+        scenario_block.contains("SCRIPT_KIT_TEST_NOTES_DB_PATH")
+            && scenario_block.contains("/tmp/confirm-modal-notes-delete-proof/")
+            && scenario_block.contains("type: \"openNotes\"")
+            && scenario_block.contains("notes-delete-confirm-cmd-n")
+            && scenario_block.contains("notes-delete-cmd-shift-backspace")
+            && scenario_block.contains("target: notesTarget")
+            && scenario_block.contains("button:1:cancel")
+            && scenario_block.contains("parentWindowId")
+            && scenario_block.contains("notes")
+            && scenario_block.contains("confirmDialog")
+            && scenario_block.contains("Move note to Trash")
+            && scenario_block.contains("Delete")
+            && scenario_block.contains("Cancel")
+            && scenario_block.contains("sandboxNoteDeleted")
+            && !scenario_block.contains("openConfirmPrompt")
+            && !scenario_block.contains("delete_note_by_id("),
+        "Notes delete route proof must use a sandboxed real Notes shortcut path into the attached confirm popup, then cancel without direct modal/deletion fallbacks"
+    );
+    assert!(
+        index.contains("notes-delete-confirm-route-proof")
+            && index.contains("runNotesDeleteConfirmRouteProofScenario"),
+        "agentic index must expose the Notes delete confirm route proof recipe"
+    );
+    assert!(
+        notes.contains("crate::confirm::open_parent_confirm_dialog_for_automation_parent(")
+            && notes.contains("\"notes\"")
+            && notes.contains("\"Move note to Trash\"")
+            && notes.contains("\"Delete\"")
+            && notes.contains("cancel_text: \"Cancel\".into()"),
+        "Notes delete confirmation must route through the shared parent confirm helper with Notes as the automation parent"
+    );
+    assert!(
+        keyboard.contains("handle_platform_delete_shortcut")
+            && keyboard.contains("request_delete_selected_note(window, cx)")
+            && keyboard.contains("notes-delete") == false,
+        "Notes keyboard delete shortcut should own the real route without adding test-only shortcut branches"
     );
 }

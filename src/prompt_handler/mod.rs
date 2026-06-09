@@ -44,8 +44,8 @@ fn run_dev_style_tool_semantic_action_for_batch(
 ) -> anyhow::Result<String> {
     use crate::dev_style_tool::{
         OPEN_ACTIONS_POPUP_KITCHEN_SINK_BUTTON, OPEN_ACTIONS_POPUP_NO_MATCH_KITCHEN_SINK_BUTTON,
-        OPEN_AGENT_CHAT_KITCHEN_SINK_BUTTON, OPEN_MAIN_WINDOW_KITCHEN_SINK_BUTTON,
-        OPEN_MAIN_WINDOW_NO_MATCH_KITCHEN_SINK_BUTTON,
+        OPEN_AGENT_CHAT_KITCHEN_SINK_BUTTON, OPEN_CONFIRM_MODAL_KITCHEN_SINK_BUTTON,
+        OPEN_MAIN_WINDOW_KITCHEN_SINK_BUTTON, OPEN_MAIN_WINDOW_NO_MATCH_KITCHEN_SINK_BUTTON,
     };
 
     let action_value = match semantic_id {
@@ -58,6 +58,7 @@ fn run_dev_style_tool_semantic_action_for_batch(
             "openActionsPopupNoMatchKitchenSink"
         }
         value if value == OPEN_AGENT_CHAT_KITCHEN_SINK_BUTTON => "openAgentChatKitchenSink",
+        value if value == OPEN_CONFIRM_MODAL_KITCHEN_SINK_BUTTON => "openConfirmModalKitchenSink",
         _ => anyhow::bail!("unknown dev style semantic id '{semantic_id}'"),
     };
 
@@ -96,6 +97,9 @@ fn run_dev_style_tool_semantic_action_for_batch(
         }
         value if value == OPEN_AGENT_CHAT_KITCHEN_SINK_BUTTON => {
             this.update(cx, |app, cx| app.open_agent_chat_kitchen_sink_fixture(cx))?;
+        }
+        value if value == OPEN_CONFIRM_MODAL_KITCHEN_SINK_BUTTON => {
+            this.update(cx, |app, cx| app.open_confirm_modal_kitchen_sink_fixture(cx))?;
         }
         _ => unreachable!("semantic id was validated above"),
     }
@@ -4577,16 +4581,27 @@ impl ScriptListApp {
                             .iter()
                             .filter_map(|action_idx| dialog.actions.get(*action_idx))
                             .map(|action| {
+                                let canonical_shortcut = action
+                                    .shortcut
+                                    .as_deref()
+                                    .map(crate::components::hint_strip::canonical_shortcut_hint);
                                 serde_json::json!({
                                     "id": action.id,
                                     "label": action.title,
                                     "section": action.section,
                                     "shortcut": action.shortcut,
+                                    "canonicalShortcut": canonical_shortcut,
                                     "destructive": crate::actions::is_destructive_action(action),
                                     "enabled": true,
                                 })
                             })
                             .collect::<Vec<_>>();
+                        let detailed_state = dialog.automation_state("actionsDialog");
+                        let shortcut_parity = detailed_state
+                            .get("actions")
+                            .and_then(|actions| actions.get("shortcutParity"))
+                            .cloned()
+                            .unwrap_or(serde_json::Value::Null);
                         let subject = self.pending_root_unified_actions_subject.as_ref();
                         let context_title = subject.map(|subject| subject.context_title());
                         let context_stable_key = subject.and_then(|subject| subject.stable_key());
@@ -4599,6 +4614,7 @@ impl ScriptListApp {
                             "contextSource": context_source,
                             "selectedActionId": dialog.get_selected_action_id(),
                             "visibleActions": visible_actions,
+                            "shortcutParity": shortcut_parity,
                         })
                     })
                     } else {
@@ -7103,7 +7119,7 @@ impl ScriptListApp {
                                         if let Some(v) = crate::ai::agent_chat::ui::picker_popup::batch_select_mention_item_by_value(&value, cx) {
                                             return Some(v);
                                         }
-                                        if let Some(v) = crate::confirm::batch_select_confirm_button_by_value(&value) {
+                                        if let Some(v) = crate::confirm::batch_select_confirm_button_by_value(&value, cx) {
                                             return Some(v);
                                         }
                                         if let Some(v) = crate::dictation::batch_select_dictation_microphone_popup_row_by_value(&value, cx) {
@@ -7153,7 +7169,7 @@ impl ScriptListApp {
                                         if let Some(v) = crate::ai::agent_chat::ui::picker_popup::batch_select_mention_item_by_semantic_id(&semantic_id, cx) {
                                             return Some(v);
                                         }
-                                        if let Some(v) = crate::confirm::batch_select_confirm_button_by_semantic_id(&semantic_id) {
+                                        if let Some(v) = crate::confirm::batch_select_confirm_button_by_semantic_id(&semantic_id, cx) {
                                             return Some(v);
                                         }
                                         if let Some(v) = crate::dictation::batch_select_dictation_microphone_popup_row_by_semantic_id(&semantic_id, cx) {

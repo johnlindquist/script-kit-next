@@ -637,24 +637,6 @@ pub fn configure_inline_dropdown_popup_window(_window: *mut std::ffi::c_void, _i
 #[cfg(target_os = "macos")]
 pub unsafe fn configure_confirm_popup_window(window: id, is_dark: bool) {
     configure_actions_popup_window(window, is_dark);
-
-    // SAFETY: `window` is a valid NSWindow. The confirm dialog sits flush
-    // at the bottom of the parent window, so rounded corners look wrong.
-    // Remove them by setting the contentView's layer cornerRadius to 0.
-    let content_view: id = msg_send![window, contentView];
-    if content_view != nil {
-        let layer: id = msg_send![content_view, layer];
-        if layer != nil {
-            let _: () = msg_send![layer, setCornerRadius: 0.0_f64];
-        }
-        let _: () = msg_send![content_view, setWantsLayer: true];
-        let layer: id = msg_send![content_view, layer];
-        if layer != nil {
-            let _: () = msg_send![layer, setCornerRadius: 0.0_f64];
-        }
-    }
-    // Also disable the window shadow since it's flush with parent
-    let _: () = msg_send![window, setHasShadow: false];
 }
 
 #[cfg(not(target_os = "macos"))]
@@ -670,8 +652,25 @@ pub fn configure_confirm_popup_window(_window: *mut std::ffi::c_void, _is_dark: 
 /// Same invariants as `configure_actions_popup_window`.
 #[cfg(target_os = "macos")]
 pub unsafe fn configure_footer_popup_window(window: id, is_dark: bool) {
-    configure_confirm_popup_window(window, is_dark);
+    configure_actions_popup_window(window, is_dark);
     let _: () = msg_send![window, setIgnoresMouseEvents: true];
+
+    // SAFETY: `window` is a valid NSWindow. The footer popup sits flush with
+    // the parent window, so remove native panel depth that is appropriate for
+    // centered confirm/actions popups but wrong for the footer strip.
+    let content_view: id = msg_send![window, contentView];
+    if content_view != nil {
+        let layer: id = msg_send![content_view, layer];
+        if layer != nil {
+            let _: () = msg_send![layer, setCornerRadius: 0.0_f64];
+        }
+        let _: () = msg_send![content_view, setWantsLayer: true];
+        let layer: id = msg_send![content_view, layer];
+        if layer != nil {
+            let _: () = msg_send![layer, setCornerRadius: 0.0_f64];
+        }
+    }
+    let _: () = msg_send![window, setHasShadow: false];
 
     let title: id = msg_send![
         class!(NSString),

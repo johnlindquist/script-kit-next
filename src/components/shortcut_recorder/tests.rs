@@ -15,7 +15,7 @@ fn test_recorded_shortcut_to_display_string() {
     shortcut.shift = true;
     shortcut.key = Some("K".to_string());
 
-    assert_eq!(shortcut.to_display_string(), "⇧⌘K");
+    assert_eq!(shortcut.to_display_string(), "⌘⇧K");
 }
 
 #[test]
@@ -25,7 +25,7 @@ fn test_recorded_shortcut_to_config_string() {
     shortcut.shift = true;
     shortcut.key = Some("K".to_string());
 
-    assert_eq!(shortcut.to_config_string(), "shift+cmd+k");
+    assert_eq!(shortcut.to_config_string(), "cmd+shift+k");
 }
 
 #[test]
@@ -58,7 +58,7 @@ fn test_recorded_shortcut_to_keycaps() {
     shortcut.key = Some("K".to_string());
 
     let keycaps = shortcut.to_keycaps();
-    assert_eq!(keycaps, vec!["⌃", "⌥", "⇧", "⌘", "K"]);
+    assert_eq!(keycaps, vec!["⌃", "⌥", "⌘", "⇧", "K"]);
 }
 
 #[test]

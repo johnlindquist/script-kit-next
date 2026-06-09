@@ -374,6 +374,7 @@ pub fn set_confirm_modal_value(
 
 pub fn reset_confirm_modal_value(id: ConfirmModalKnobId) -> Option<AppliedStyleChange> {
     let knob = confirm_modal_knob_by_id(id)?;
+    let base_value = (knob.get)(&base_confirm_modal_style());
     let mut guard = store()
         .write()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
@@ -385,7 +386,6 @@ pub fn reset_confirm_modal_value(id: ConfirmModalKnobId) -> Option<AppliedStyleC
     });
     guard.redo_stack.clear();
     guard.generation = guard.generation.saturating_add(1);
-    let base_value = (knob.get)(&base_confirm_modal_style());
     Some(AppliedStyleChange {
         generation: guard.generation,
         previous,

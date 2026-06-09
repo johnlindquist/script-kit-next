@@ -111,11 +111,11 @@ impl RecordedShortcut {
         if self.alt {
             parts.push("⌥");
         }
-        if self.shift {
-            parts.push("⇧");
-        }
         if self.cmd {
             parts.push("⌘");
+        }
+        if self.shift {
+            parts.push("⇧");
         }
 
         if let Some(ref key) = self.key {
@@ -135,11 +135,11 @@ impl RecordedShortcut {
         if self.alt {
             parts.push("alt".to_string());
         }
-        if self.shift {
-            parts.push("shift".to_string());
-        }
         if self.cmd {
             parts.push("cmd".to_string());
+        }
+        if self.shift {
+            parts.push("shift".to_string());
         }
 
         if let Some(ref key) = self.key {
@@ -159,11 +159,11 @@ impl RecordedShortcut {
         if self.alt {
             keycaps.push("⌥".to_string());
         }
-        if self.shift {
-            keycaps.push("⇧".to_string());
-        }
         if self.cmd {
             keycaps.push("⌘".to_string());
+        }
+        if self.shift {
+            keycaps.push("⇧".to_string());
         }
 
         if let Some(ref key) = self.key {

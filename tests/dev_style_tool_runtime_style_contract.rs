@@ -2,8 +2,9 @@ use gpui::FontWeight;
 use script_kit_gpui::designs::MainMenuThemeVariant;
 use script_kit_gpui::dev_style_tool::{
     base_agent_chat_style, base_confirm_modal_style, export, runtime_overrides, StyleValue,
-    ACTIONS_POPUP_KNOBS, CONFIRM_MODAL_KNOBS, CONFIRM_MODAL_PADDING_X_KNOB_ID, COPY_CONTROLS,
-    FOOTER_ACTIONS_SLOT_WIDTH_KNOB_ID, FOOTER_AI_SLOT_WIDTH_KNOB_ID,
+    ACTIONS_POPUP_KNOBS, CONFIRM_MODAL_ACTIONS_EDGE_PADDING_X_KNOB_ID,
+    CONFIRM_MODAL_ACTIONS_PADDING_X_KNOB_ID, CONFIRM_MODAL_KNOBS, CONFIRM_MODAL_PADDING_X_KNOB_ID,
+    COPY_CONTROLS, FOOTER_ACTIONS_SLOT_WIDTH_KNOB_ID, FOOTER_AI_SLOT_WIDTH_KNOB_ID,
     FOOTER_BUTTON_HOVER_BG_ALPHA_KNOB_ID, FOOTER_BUTTON_HOVER_BORDER_ALPHA_KNOB_ID,
     FOOTER_BUTTON_HOVER_GLYPH_ALPHA_KNOB_ID, FOOTER_BUTTON_HOVER_TEXT_ALPHA_KNOB_ID,
     FOOTER_FONT_WEIGHT_KNOB_ID, FOOTER_HEIGHT_KNOB_ID, FOOTER_KEYCAP_HEIGHT_KNOB_ID,
@@ -893,13 +894,37 @@ fn devtools_confirm_modal_setter_updates_effective_shell_style() {
     .expect("confirm modal shell radius should be settable by semantic control id");
     assert_eq!(applied, "confirmModal.shell.radius=13");
 
+    let applied = runtime_overrides::set_confirm_modal_number_from_devtools(
+        "input:dev-style-tool-confirm-modal:confirmModal.actions.paddingX",
+        "10",
+    )
+    .expect("confirm modal action padding should be settable by semantic control id");
+    assert_eq!(applied, "confirmModal.actions.paddingX=10");
+
+    let applied = runtime_overrides::set_confirm_modal_number_from_devtools(
+        "input:dev-style-tool-confirm-modal:confirmModal.actions.edgePaddingX",
+        "2",
+    )
+    .expect("confirm modal action edge padding should be settable by semantic control id");
+    assert_eq!(applied, "confirmModal.actions.edgePaddingX=2");
+
     let effective = runtime_overrides::effective_confirm_modal_style();
     assert_eq!(effective.shell.padding_x, 22.0);
     assert_eq!(effective.shell.radius, 13.0);
+    assert_eq!(effective.actions.padding_x, 10.0);
+    assert_eq!(effective.actions.edge_padding_x, 2.0);
 
     let change = runtime_overrides::reset_confirm_modal_value(CONFIRM_MODAL_PADDING_X_KNOB_ID)
         .expect("confirm modal padding should reset");
     assert_eq!(change.applied, StyleValue::Number(16.0));
+    let change =
+        runtime_overrides::reset_confirm_modal_value(CONFIRM_MODAL_ACTIONS_PADDING_X_KNOB_ID)
+            .expect("confirm modal action padding should reset");
+    assert_eq!(change.applied, StyleValue::Number(4.0));
+    let change =
+        runtime_overrides::reset_confirm_modal_value(CONFIRM_MODAL_ACTIONS_EDGE_PADDING_X_KNOB_ID)
+            .expect("confirm modal action edge padding should reset");
+    assert_eq!(change.applied, StyleValue::Number(4.0));
 
     runtime_overrides::reset_all();
 }
@@ -979,6 +1004,16 @@ fn export_current_settings_includes_agent_readable_overrides_and_effective_value
         .expect("confirm modal effective should be an array")
         .iter()
         .any(|entry| entry["id"] == "confirmModal.shell.radius"));
+    assert!(confirm_modal_style["effective"]
+        .as_array()
+        .expect("confirm modal effective should be an array")
+        .iter()
+        .any(|entry| entry["id"] == "confirmModal.actions.paddingX"));
+    assert!(confirm_modal_style["effective"]
+        .as_array()
+        .expect("confirm modal effective should be an array")
+        .iter()
+        .any(|entry| entry["id"] == "confirmModal.actions.edgePaddingX"));
     assert!(main_window_style["effective"]
         .as_array()
         .expect("effective should be an array")
