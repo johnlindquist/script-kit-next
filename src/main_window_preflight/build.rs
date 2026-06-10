@@ -175,6 +175,7 @@ fn result_role(result: &crate::scripts::SearchResult) -> MainWindowPreflightResu
         | crate::scripts::SearchResult::Window(_) => MainWindowPreflightResultRole::Primary,
         crate::scripts::SearchResult::File(_) => MainWindowPreflightResultRole::RootFile,
         crate::scripts::SearchResult::Note(_)
+        | crate::scripts::SearchResult::BrainHit(_)
         | crate::scripts::SearchResult::Todo(_)
         | crate::scripts::SearchResult::AgentChatHistory(_)
         | crate::scripts::SearchResult::AiVault(_)
@@ -202,6 +203,7 @@ fn enter_action_kind(result: &crate::scripts::SearchResult) -> MainWindowPreflig
         crate::scripts::SearchResult::Window(_) => MainWindowPreflightActionKind::SwitchWindow,
         crate::scripts::SearchResult::File(_) => MainWindowPreflightActionKind::OpenFile,
         crate::scripts::SearchResult::Note(_) => MainWindowPreflightActionKind::RunCommand,
+        crate::scripts::SearchResult::BrainHit(_) => MainWindowPreflightActionKind::RunCommand,
         crate::scripts::SearchResult::Todo(_) => MainWindowPreflightActionKind::RunCommand,
         crate::scripts::SearchResult::AgentChatHistory(_) => {
             MainWindowPreflightActionKind::RunCommand

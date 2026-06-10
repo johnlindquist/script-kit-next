@@ -613,6 +613,34 @@ fn render_focused_info_for_result(
                 .child(focused_info_type_indicator("Note", style));
         }
 
+        scripts::SearchResult::BrainHit(brain_match) => {
+            content = content.child(
+                div()
+                    .text_lg()
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .text_color(rgb(style.text_primary))
+                    .pb(px(s.padding_sm))
+                    .child(brain_match.hit.title.clone()),
+            );
+
+            if !brain_match.hit.excerpt.is_empty() {
+                content = content.child(focused_info_labeled_section(
+                    "MEMORY",
+                    &brain_match.hit.excerpt,
+                    style,
+                ));
+            }
+            content = content.child(focused_info_labeled_section(
+                "SOURCE",
+                brain_match.hit.source_label,
+                style,
+            ));
+
+            content = content
+                .child(focused_info_divider(style))
+                .child(focused_info_type_indicator("From Your Brain", style));
+        }
+
         scripts::SearchResult::Todo(todo_match) => {
             content = content.child(
                 div()
@@ -1187,6 +1215,7 @@ impl ScriptListApp {
                     }
                     scripts::SearchResult::File(m) => Some(format!("file/{}", m.file.path)),
                     scripts::SearchResult::Note(_) => None,
+                    scripts::SearchResult::BrainHit(_) => None,
                     scripts::SearchResult::Todo(_) => None,
                     scripts::SearchResult::AgentChatHistory(_) => None,
                     scripts::SearchResult::AiVault(_) => None,
@@ -1332,6 +1361,12 @@ impl ScriptListApp {
                     scripts::SearchResult::Note(m) => Some(ScriptInfo::with_action_verb(
                         &m.title,
                         format!("note:{}", m.hit.id.as_str()),
+                        false,
+                        "Open",
+                    )),
+                    scripts::SearchResult::BrainHit(m) => Some(ScriptInfo::with_action_verb(
+                        &m.hit.title,
+                        format!("brain:{}/{}", m.hit.source.as_str(), m.hit.source_id),
                         false,
                         "Open",
                     )),

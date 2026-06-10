@@ -3778,6 +3778,7 @@ impl ScriptListApp {
             scripts::SearchResult::Window(_) => "window",
             scripts::SearchResult::File(_) => "file",
             scripts::SearchResult::Note(_) => "note",
+            scripts::SearchResult::BrainHit(_) => "brain",
             scripts::SearchResult::Todo(_) => "todo",
             scripts::SearchResult::AgentChatHistory(_) => "agent_chatHistory",
             scripts::SearchResult::AiVault(_) => "aiVault",
@@ -3829,6 +3830,12 @@ impl ScriptListApp {
                 "updatedAt": m.hit.updated_at.to_rfc3339(),
                 "isPinned": m.hit.is_pinned,
                 "charCount": m.hit.char_count,
+            }),
+            scripts::SearchResult::BrainHit(m) => serde_json::json!({
+                "source": m.hit.source.as_str(),
+                "sourceId": m.hit.source_id,
+                "title": m.hit.title,
+                "excerpt": m.hit.excerpt,
             }),
             scripts::SearchResult::Todo(m) => serde_json::json!({
                 "stableKey": m.hit.stable_key,
