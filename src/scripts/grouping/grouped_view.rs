@@ -142,6 +142,8 @@ pub(super) fn build_grouped_view_results(
             // Brain rows never join frecency/grouping; passive search must not
             // feed usage memory (it would self-amplify).
             SearchResult::BrainHit(_) => None,
+            // Brain inbox rows are pinned synthetically, never grouped.
+            SearchResult::BrainInboxItem(_) => None,
             SearchResult::Todo(tm) => Some(tm.hit.stable_key.clone()),
             SearchResult::AgentChatHistory(am) => {
                 Some(format!("agent_chat-history/{}", am.entry.session_id))
@@ -212,6 +214,7 @@ pub(super) fn build_grouped_view_results(
                     SearchResult::File(_) => {}
                     SearchResult::Note(_) => {}
                     SearchResult::BrainHit(_) => {}
+                    SearchResult::BrainInboxItem(_) => {}
                     SearchResult::Todo(_) => {}
                     SearchResult::AgentChatHistory(_) => {}
                     SearchResult::AiVault(_) => {}
@@ -255,6 +258,7 @@ pub(super) fn build_grouped_view_results(
                 SearchResult::File(_) => {}
                 SearchResult::Note(_) => {}
                 SearchResult::BrainHit(_) => {}
+                SearchResult::BrainInboxItem(_) => {}
                 SearchResult::Todo(_) => {}
                 SearchResult::AgentChatHistory(_) => {}
                 SearchResult::AiVault(_) => {}

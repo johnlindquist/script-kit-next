@@ -372,6 +372,15 @@ pub struct BrainMatch {
     pub(crate) score: i32,
 }
 
+/// Represents an open "Brain Inbox" item pinned at the top of the empty
+/// root query (curator-filed commitments, questions, drift, stale pins).
+#[derive(Clone, Debug)]
+pub struct BrainInboxMatch {
+    pub(crate) item: crate::brain::InboxItem,
+    pub(crate) subtitle: String,
+    pub(crate) score: i32,
+}
+
 /// Represents a passive root-search match for a captured todo.
 #[derive(Clone, Debug)]
 pub struct TodoMatch {
@@ -451,6 +460,8 @@ pub enum SearchResult {
     Note(NoteMatch),
     /// Local brain memory surfaced as a passive root-search source.
     BrainHit(BrainMatch),
+    /// Open brain-inbox item pinned at the top of the empty root query.
+    BrainInboxItem(BrainInboxMatch),
     /// Captured todo surfaced as a root-search source.
     Todo(TodoMatch),
     /// Saved Agent Chat conversation surfaced as a passive root-search source.
@@ -504,7 +515,9 @@ impl SearchResult {
             SearchResult::Window(_) => Some(RootUnifiedSourceFilter::Windows),
             SearchResult::File(_) => Some(RootUnifiedSourceFilter::Files),
             SearchResult::Note(_) => Some(RootUnifiedSourceFilter::Notes),
-            SearchResult::BrainHit(_) => Some(RootUnifiedSourceFilter::Brain),
+            SearchResult::BrainHit(_) | SearchResult::BrainInboxItem(_) => {
+                Some(RootUnifiedSourceFilter::Brain)
+            }
             SearchResult::Todo(_) => Some(RootUnifiedSourceFilter::Todo),
             SearchResult::AgentChatHistory(_) => Some(RootUnifiedSourceFilter::Conversations),
             SearchResult::AiVault(_) => Some(RootUnifiedSourceFilter::AiVault),
@@ -531,6 +544,7 @@ impl SearchResult {
             SearchResult::File(fm) => &fm.file.name,
             SearchResult::Note(nm) => &nm.title,
             SearchResult::BrainHit(bm) => &bm.hit.title,
+            SearchResult::BrainInboxItem(bm) => &bm.item.title,
             SearchResult::Todo(tm) => &tm.hit.title,
             SearchResult::AgentChatHistory(am) => am.entry.title_display(),
             SearchResult::AiVault(am) => &am.hit.safe_title,
@@ -566,6 +580,7 @@ impl SearchResult {
             SearchResult::File(fm) => Some(fm.file.path.as_str()),
             SearchResult::Note(nm) => Some(nm.subtitle.as_str()),
             SearchResult::BrainHit(bm) => Some(bm.subtitle.as_str()),
+            SearchResult::BrainInboxItem(bm) => Some(bm.subtitle.as_str()),
             SearchResult::Todo(tm) => Some(tm.hit.subtitle.as_str()),
             SearchResult::AgentChatHistory(am) => Some(am.subtitle.as_str()),
             SearchResult::AiVault(am) => Some(am.subtitle.as_str()),
@@ -595,6 +610,7 @@ impl SearchResult {
             SearchResult::File(fm) => fm.score,
             SearchResult::Note(nm) => nm.score,
             SearchResult::BrainHit(bm) => bm.score,
+            SearchResult::BrainInboxItem(bm) => bm.score,
             SearchResult::Todo(tm) => tm.score,
             SearchResult::AgentChatHistory(am) => am.score,
             SearchResult::AiVault(am) => am.score,
@@ -630,6 +646,7 @@ impl SearchResult {
             SearchResult::File(_) => "File",
             SearchResult::Note(_) => "Note",
             SearchResult::BrainHit(_) => "Brain Memory",
+            SearchResult::BrainInboxItem(_) => "Brain Inbox",
             SearchResult::Todo(_) => "Todo",
             SearchResult::AgentChatHistory(_) => "Agent Chat Conversation",
             SearchResult::AiVault(_) => "Vault Conversation",
@@ -667,6 +684,7 @@ impl SearchResult {
             SearchResult::File(fm) => Some(format!("file/{}", fm.file.path)),
             SearchResult::Note(_) => None,
             SearchResult::BrainHit(_) => None,
+            SearchResult::BrainInboxItem(_) => None,
             SearchResult::Todo(_) => None,
             SearchResult::AgentChatHistory(_) => None,
             SearchResult::AiVault(_) => None,
@@ -702,6 +720,7 @@ impl SearchResult {
                 bm.hit.source.as_str(),
                 bm.hit.source_id
             )),
+            SearchResult::BrainInboxItem(bm) => Some(format!("brain-inbox/{}", bm.item.id)),
             SearchResult::Todo(tm) => Some(tm.hit.stable_key.clone()),
             SearchResult::ClipboardHistory(cm) => {
                 Some(format!("clipboard-history/{}", cm.entry.id))
@@ -759,6 +778,7 @@ impl SearchResult {
             SearchResult::File(_) => ("File", "file"),
             SearchResult::Note(_) => ("Note", "notebook-text"),
             SearchResult::BrainHit(_) => ("Brain", "brain"),
+            SearchResult::BrainInboxItem(_) => ("Brain Inbox", "inbox"),
             SearchResult::Todo(_) => ("Todo", "list-todo"),
             SearchResult::AgentChatHistory(_) => ("Agent Chat", "message-circle"),
             SearchResult::AiVault(_) => ("Vault", "vault"),
@@ -810,6 +830,7 @@ impl SearchResult {
             SearchResult::File(_) => Some("Files"),
             SearchResult::Note(_) => Some("Notes"),
             SearchResult::BrainHit(_) => Some("From Your Brain"),
+            SearchResult::BrainInboxItem(_) => Some("Brain Inbox"),
             SearchResult::Todo(_) => Some("Todos"),
             SearchResult::AgentChatHistory(_) => Some("Agent Chat Conversations"),
             SearchResult::AiVault(_) => Some("AI Vault"),
@@ -877,6 +898,13 @@ impl SearchResult {
                 crate::brain::DocSource::Clipboard | crate::brain::DocSource::Activity => {
                     "Ask Your Brain"
                 }
+            },
+            // Inbox sources use the DocSource string vocabulary; mirror the
+            // BrainHit routing (note → editor, chat turn → resume, else ask).
+            SearchResult::BrainInboxItem(bm) => match bm.item.source.as_str() {
+                "note" => "Open Note",
+                "chat_turn" => "Resume Conversation",
+                _ => "Ask Your Brain",
             },
             SearchResult::Todo(_) => "Copy Todo",
             SearchResult::AgentChatHistory(_) => "Resume Conversation",

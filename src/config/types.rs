@@ -61,6 +61,7 @@ pub struct UnifiedSearchConfig {
     pub files: UnifiedSearchFilesConfig,
     pub todos: UnifiedSearchTodosConfig,
     pub brain: UnifiedSearchBrainConfig,
+    pub brain_inbox: UnifiedSearchBrainInboxConfig,
     pub notes: UnifiedSearchNotesConfig,
     pub agent_chat_history: UnifiedSearchAgentChatHistoryConfig,
     pub ai_vault: UnifiedSearchAiVaultConfig,
@@ -79,6 +80,7 @@ impl Default for UnifiedSearchConfig {
             files: UnifiedSearchFilesConfig::default(),
             todos: UnifiedSearchTodosConfig::default(),
             brain: UnifiedSearchBrainConfig::default(),
+            brain_inbox: UnifiedSearchBrainInboxConfig::default(),
             notes: UnifiedSearchNotesConfig::default(),
             agent_chat_history: UnifiedSearchAgentChatHistoryConfig::default(),
             ai_vault: UnifiedSearchAiVaultConfig::default(),
@@ -242,6 +244,25 @@ impl Default for UnifiedSearchBrainConfig {
             enabled: DEFAULT_UNIFIED_SEARCH_BRAIN_ENABLED,
             max_results: DEFAULT_UNIFIED_SEARCH_BRAIN_MAX_RESULTS,
             min_query_chars: DEFAULT_UNIFIED_SEARCH_BRAIN_MIN_QUERY_CHARS,
+        }
+    }
+}
+
+/// Config for the pinned "Brain Inbox" section shown at the top of the
+/// empty root query (open curator inbox items: commitments, questions,
+/// drift, stale pins).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(default, rename_all = "camelCase")]
+pub struct UnifiedSearchBrainInboxConfig {
+    pub enabled: bool,
+    pub max_results: usize,
+}
+
+impl Default for UnifiedSearchBrainInboxConfig {
+    fn default() -> Self {
+        Self {
+            enabled: DEFAULT_UNIFIED_SEARCH_BRAIN_INBOX_ENABLED,
+            max_results: DEFAULT_UNIFIED_SEARCH_BRAIN_INBOX_MAX_RESULTS,
         }
     }
 }
@@ -517,6 +538,14 @@ impl UnifiedSearchConfig {
             enabled: self.enabled && self.brain.enabled,
             max_results: self.brain.max_results.clamp(1, 5),
             min_query_chars: self.brain.min_query_chars.clamp(2, 32),
+        }
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn brain_inbox_section_options(&self) -> crate::brain::RootBrainInboxSectionOptions {
+        crate::brain::RootBrainInboxSectionOptions {
+            enabled: self.enabled && self.brain_inbox.enabled,
+            max_results: self.brain_inbox.max_results.clamp(1, 5),
         }
     }
 

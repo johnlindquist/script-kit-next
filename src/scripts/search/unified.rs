@@ -28,6 +28,9 @@ fn result_type_order(r: &SearchResult) -> i32 {
         SearchResult::BrowserTab(_) => 7,
         SearchResult::Todo(_) => 8,
         SearchResult::BrainHit(_) => 9,
+        // Brain inbox rows are pinned separately via grouping; if encountered
+        // in sort, keep them beside other brain rows.
+        SearchResult::BrainInboxItem(_) => 9,
         SearchResult::Note(_) => 10,
         SearchResult::ClipboardHistory(_) => 11,
         SearchResult::DictationHistory(_) => 12,

@@ -2467,3 +2467,55 @@ fn test_load_config_reloads_updated_config_ts() {
         "second load must see the newly added bun_path"
     );
 }
+
+#[test]
+fn unified_search_brain_inbox_defaults_enabled_with_three_rows() {
+    let config = UnifiedSearchBrainInboxConfig::default();
+    assert!(config.enabled);
+    assert_eq!(config.max_results, 3);
+
+    let unified = UnifiedSearchConfig::default();
+    assert_eq!(
+        unified.brain_inbox,
+        UnifiedSearchBrainInboxConfig::default()
+    );
+
+    let options = unified.brain_inbox_section_options();
+    assert!(options.enabled);
+    assert_eq!(options.max_results, 3);
+}
+
+#[test]
+fn unified_search_brain_inbox_serde_round_trip_and_partial_json() {
+    // Partial JSON fills missing keys from defaults (serde(default)).
+    let parsed: UnifiedSearchBrainInboxConfig =
+        serde_json::from_str(r#"{ "enabled": false }"#).expect("partial brain inbox json");
+    assert!(!parsed.enabled);
+    assert_eq!(parsed.max_results, 3);
+
+    // camelCase key round trip.
+    let parsed: UnifiedSearchBrainInboxConfig =
+        serde_json::from_str(r#"{ "maxResults": 5 }"#).expect("camelCase maxResults");
+    assert_eq!(parsed.max_results, 5);
+    let json = serde_json::to_string(&parsed).expect("serialize brain inbox config");
+    assert!(json.contains("\"maxResults\":5"));
+
+    // Unified config without a brainInbox key still defaults the section on.
+    let unified: UnifiedSearchConfig =
+        serde_json::from_str(r#"{ "enabled": true }"#).expect("unified config json");
+    assert!(unified.brain_inbox.enabled);
+}
+
+#[test]
+fn unified_search_brain_inbox_options_respect_master_toggle_and_clamp() {
+    let mut unified = UnifiedSearchConfig::default();
+    unified.brain_inbox.max_results = 50;
+    assert_eq!(unified.brain_inbox_section_options().max_results, 5);
+
+    unified.enabled = false;
+    assert!(!unified.brain_inbox_section_options().enabled);
+
+    unified.enabled = true;
+    unified.brain_inbox.enabled = false;
+    assert!(!unified.brain_inbox_section_options().enabled);
+}

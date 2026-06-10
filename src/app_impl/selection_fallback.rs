@@ -385,6 +385,7 @@ impl ScriptListApp {
                     scripts::SearchResult::File(_) => None,
                     scripts::SearchResult::Note(_) => None,
                     scripts::SearchResult::BrainHit(_) => None,
+                    scripts::SearchResult::BrainInboxItem(_) => None,
                     scripts::SearchResult::Todo(_) => None,
                     scripts::SearchResult::AgentChatHistory(_) => None,
                     scripts::SearchResult::AiVault(_) => None,
@@ -527,6 +528,9 @@ impl ScriptListApp {
                     }
                     scripts::SearchResult::BrainHit(brain_match) => {
                         self.execute_root_brain_hit_open(&brain_match.hit, cx);
+                    }
+                    scripts::SearchResult::BrainInboxItem(inbox_match) => {
+                        self.execute_root_brain_inbox_open(inbox_match.item, cx);
                     }
                     scripts::SearchResult::Todo(todo_match) => {
                         self.execute_root_todo_copy(&todo_match.hit, cx);
@@ -682,6 +686,50 @@ impl ScriptListApp {
             }
             crate::brain::DocSource::Clipboard | crate::brain::DocSource::Activity => {
                 let prompt = self.filter_text.trim().to_string();
+                let entry_intent = (!prompt.is_empty()).then_some(prompt);
+                self.open_tab_ai_agent_chat_with_entry_intent_suppressing_focused_part(
+                    entry_intent,
+                    cx,
+                );
+            }
+        }
+    }
+
+    /// Enter on a pinned "Brain Inbox" row. Notification semantics: touching
+    /// the item resolves it first (the section shrinks immediately), then the
+    /// item's source is opened via the same routing as
+    /// [`Self::execute_root_brain_hit_open`] — notes open in the Notes
+    /// editor, chat turns resume their conversation, and everything else
+    /// hands a prompt-ready summary of the item to Agent Chat.
+    pub(crate) fn execute_root_brain_inbox_open(
+        &mut self,
+        item: crate::brain::InboxItem,
+        cx: &mut Context<Self>,
+    ) {
+        self.resolve_root_brain_inbox_item(item.id, cx);
+        match item.source.as_str() {
+            "note" => match crate::notes::NoteId::parse(&item.source_id) {
+                Some(note_id) => self.execute_root_note_open(note_id, cx),
+                None => {
+                    logging::log(
+                        "ERROR",
+                        &format!("Brain inbox item has invalid note id: {}", item.source_id),
+                    );
+                    self.show_hud("Failed to open note".to_string(), Some(HUD_MEDIUM_MS), cx);
+                }
+            },
+            "chat_turn" => {
+                // source_id is "{thread_id}#{turn_index}"; resume by thread id.
+                let prompt = crate::brain::response_prompt_for_inbox_item(&item);
+                let thread_id = item
+                    .source_id
+                    .split('#')
+                    .next()
+                    .unwrap_or(item.source_id.as_str());
+                self.resume_agent_chat_conversation_from_history(thread_id, &prompt, cx);
+            }
+            _ => {
+                let prompt = crate::brain::response_prompt_for_inbox_item(&item);
                 let entry_intent = (!prompt.is_empty()).then_some(prompt);
                 self.open_tab_ai_agent_chat_with_entry_intent_suppressing_focused_part(
                     entry_intent,

@@ -30,6 +30,56 @@ impl Default for RootBrainSectionOptions {
     }
 }
 
+/// Options for the pinned "Brain Inbox" section shown at the top of the
+/// empty root query. Sourced from config via
+/// `UnifiedSearchConfig::brain_inbox_section_options()`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RootBrainInboxSectionOptions {
+    pub enabled: bool,
+    pub max_results: usize,
+}
+
+impl Default for RootBrainInboxSectionOptions {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            max_results: 3,
+        }
+    }
+}
+
+/// Subtitle for a Brain Inbox launcher row: `"<kind label> · <detail>"` when
+/// the item carries a detail line, otherwise `"<kind label> · <relative age>"`
+/// so the row still explains itself ("Commitment · 3d ago").
+pub fn root_brain_inbox_subtitle(item: &super::inbox::InboxItem, now: i64) -> String {
+    let detail = item
+        .detail
+        .lines()
+        .map(str::trim)
+        .find(|line| !line.is_empty())
+        .unwrap_or("");
+    let context = if detail.is_empty() {
+        relative_age(now.saturating_sub(item.created_at))
+    } else {
+        excerpt_for_content(detail)
+    };
+    format!("{} · {}", item.kind.label(), context)
+}
+
+/// Coarse human age for inbox rows ("just now", "5m ago", "3h ago", "2d ago").
+fn relative_age(age_secs: i64) -> String {
+    let age_secs = age_secs.max(0);
+    if age_secs < 60 {
+        "just now".to_string()
+    } else if age_secs < 3_600 {
+        format!("{}m ago", age_secs / 60)
+    } else if age_secs < 86_400 {
+        format!("{}h ago", age_secs / 3_600)
+    } else {
+        format!("{}d ago", age_secs / 86_400)
+    }
+}
+
 /// A brain document projected down to exactly what the launcher row needs.
 /// Full document content intentionally stays behind in the store.
 #[derive(Debug, Clone)]
@@ -260,6 +310,67 @@ mod tests {
         let hits = semantic_root_brain_hits_for_query("fix bug", Some(&stored), &options)
             .expect("empty semantic batch is authoritative");
         assert!(hits.is_empty());
+    }
+
+    fn inbox_item(detail: &str, created_at: i64) -> crate::brain::InboxItem {
+        crate::brain::InboxItem {
+            id: 7,
+            kind: crate::brain::InboxKind::Commitment,
+            title: "Ship the launcher inbox".to_string(),
+            detail: detail.to_string(),
+            source: "chat_turn".to_string(),
+            source_id: "thread#3".to_string(),
+            created_at,
+            resolved_at: None,
+        }
+    }
+
+    #[test]
+    fn inbox_subtitle_prefers_detail_over_age() {
+        let now = 1_000_000;
+        let item = inbox_item(
+            "  \n promised in chat yesterday \nsecond line",
+            now - 3 * 86_400,
+        );
+        assert_eq!(
+            root_brain_inbox_subtitle(&item, now),
+            "Commitment · promised in chat yesterday"
+        );
+    }
+
+    #[test]
+    fn inbox_subtitle_falls_back_to_relative_age() {
+        let now = 1_000_000;
+        assert_eq!(
+            root_brain_inbox_subtitle(&inbox_item("", now - 30), now),
+            "Commitment · just now"
+        );
+        assert_eq!(
+            root_brain_inbox_subtitle(&inbox_item("", now - 5 * 60), now),
+            "Commitment · 5m ago"
+        );
+        assert_eq!(
+            root_brain_inbox_subtitle(&inbox_item("", now - 3 * 3_600), now),
+            "Commitment · 3h ago"
+        );
+        assert_eq!(
+            root_brain_inbox_subtitle(&inbox_item("", now - 2 * 86_400), now),
+            "Commitment · 2d ago"
+        );
+        // Clock skew (created in the future) clamps to "just now".
+        assert_eq!(
+            root_brain_inbox_subtitle(&inbox_item("", now + 600), now),
+            "Commitment · just now"
+        );
+    }
+
+    #[test]
+    fn inbox_subtitle_truncates_long_detail() {
+        let now = 1_000_000;
+        let item = inbox_item(&"d".repeat(300), now);
+        let subtitle = root_brain_inbox_subtitle(&item, now);
+        assert!(subtitle.starts_with("Commitment · "));
+        assert!(subtitle.ends_with('…'));
     }
 
     #[test]

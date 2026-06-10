@@ -36,12 +36,14 @@ mod tests;
 use anyhow::Result;
 
 pub use inbox::{
-    count_open_inbox, insert_inbox_item, open_inbox_items, resolve_inbox_item, InboxItem, InboxKind,
+    count_open_inbox, insert_inbox_item, open_inbox_items, resolve_inbox_item,
+    response_prompt_for_inbox_item, InboxItem, InboxKind,
 };
 pub use indexer::{ingest_chat_turn, start_brain_indexer, wake_indexer};
 pub use launcher::{
-    root_brain_query_is_eligible, search_root_brain_direct, search_root_brain_semantic,
-    semantic_root_brain_hits_for_query, RootBrainSearchHit, RootBrainSectionOptions,
+    root_brain_inbox_subtitle, root_brain_query_is_eligible, search_root_brain_direct,
+    search_root_brain_semantic, semantic_root_brain_hits_for_query, RootBrainInboxSectionOptions,
+    RootBrainSearchHit, RootBrainSectionOptions,
 };
 pub use search::{brain_search, render_context_block, BrainHit};
 pub use store::{init_brain_db, record_signal, DocSource};

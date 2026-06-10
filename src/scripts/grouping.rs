@@ -258,6 +258,63 @@ pub(crate) fn prepend_script_issues_row(
     grouped.insert(0, GroupedListItem::Item(0));
 }
 
+/// Pins the "Brain Inbox" section (header + up to `options.max_results` open
+/// inbox rows) at the very top of the empty-query grouped launcher view.
+///
+/// Mirrors [`prepend_script_issues_row`]: rows are inserted at the front of
+/// `flat_results` and every existing `GroupedListItem::Item(idx)` shifts by
+/// the number of inserted rows so the rest of the list keeps pointing at the
+/// original results. No-op on non-empty queries, when the section is
+/// disabled, or when there are no open items. `now` is a unix timestamp used
+/// for relative-age subtitles (injectable for tests).
+pub(crate) fn prepend_root_brain_inbox_section(
+    grouped: &mut Vec<GroupedListItem>,
+    flat_results: &mut Vec<SearchResult>,
+    filter_text: &str,
+    items: &[crate::brain::InboxItem],
+    options: crate::brain::RootBrainInboxSectionOptions,
+    now: i64,
+) {
+    if !filter_text.trim().is_empty()
+        || !options.enabled
+        || options.max_results == 0
+        || items.is_empty()
+    {
+        return;
+    }
+
+    let rows: Vec<SearchResult> = items
+        .iter()
+        .take(options.max_results)
+        .enumerate()
+        .map(|(rank, item)| {
+            SearchResult::BrainInboxItem(crate::scripts::BrainInboxMatch {
+                subtitle: crate::brain::root_brain_inbox_subtitle(item, now),
+                item: item.clone(),
+                score: root_passive_result_score(rank),
+            })
+        })
+        .collect();
+
+    let shift = rows.len();
+    for entry in grouped.iter_mut() {
+        if let GroupedListItem::Item(idx) = entry {
+            *idx += shift;
+        }
+    }
+    for (offset, row) in rows.into_iter().enumerate() {
+        flat_results.insert(offset, row);
+    }
+
+    let mut section = Vec::with_capacity(shift + 1);
+    section.push(GroupedListItem::SectionHeader(
+        "Brain Inbox".to_string(),
+        Some("inbox".to_string()),
+    ));
+    section.extend((0..shift).map(GroupedListItem::Item));
+    grouped.splice(0..0, section);
+}
+
 /// Moves the launcher row identified by `is_alias_target` to the very top of
 /// the grouped list so Enter runs it.
 ///
@@ -2465,6 +2522,7 @@ mod advanced_query_tests {
                     | SearchResult::BrowserHistory(_) => "rootPassive",
                     SearchResult::Fallback(_) => "fallback",
                     SearchResult::ScriptIssue(_) => "scriptIssue",
+                    SearchResult::BrainInboxItem(_) => "brainInbox",
                     SearchResult::Agent(_) => "agent",
                     SearchResult::SpineProjection(_) => "spine",
                 };
@@ -5787,5 +5845,225 @@ mod capture_mode_tests {
                 other => panic!("expected Script, got {other:?}"),
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod brain_inbox_section_tests {
+    use super::*;
+    use crate::brain::{InboxItem, InboxKind, RootBrainInboxSectionOptions};
+
+    const NOW: i64 = 1_000_000;
+
+    fn inbox_item(id: i64, title: &str) -> InboxItem {
+        InboxItem {
+            id,
+            kind: InboxKind::Commitment,
+            title: title.to_string(),
+            detail: String::new(),
+            source: "chat_turn".to_string(),
+            source_id: format!("thread-{id}#0"),
+            created_at: NOW - 3_600,
+            resolved_at: None,
+        }
+    }
+
+    fn existing_row() -> SearchResult {
+        SearchResult::ScriptIssue(ScriptIssueMatch {
+            title: "Script Issues (1)".into(),
+            description: None,
+            failed_count: 1,
+            fatal_count: 1,
+            warning_count: 0,
+            score: i32::MAX,
+        })
+    }
+
+    fn base_view() -> (Vec<GroupedListItem>, Vec<SearchResult>) {
+        (
+            vec![
+                GroupedListItem::SectionHeader("Main".to_string(), None),
+                GroupedListItem::Item(0),
+            ],
+            vec![existing_row()],
+        )
+    }
+
+    /// Asserts the view still looks exactly like [`base_view`] (no pin).
+    fn assert_unpinned(grouped: &[GroupedListItem], flat: &[SearchResult], context: &str) {
+        assert_eq!(grouped.len(), 2, "{context}: grouped length changed");
+        assert!(
+            matches!(&grouped[0], GroupedListItem::SectionHeader(label, None) if label == "Main"),
+            "{context}: header changed: {:?}",
+            grouped[0]
+        );
+        assert!(
+            matches!(grouped[1], GroupedListItem::Item(0)),
+            "{context}: item index shifted: {:?}",
+            grouped[1]
+        );
+        assert_eq!(flat.len(), 1, "{context}: flat length changed");
+        assert!(
+            matches!(flat[0], SearchResult::ScriptIssue(_)),
+            "{context}: flat row replaced"
+        );
+    }
+
+    #[test]
+    fn prepends_header_and_rows_at_top_and_shifts_existing_indices() {
+        let (mut grouped, mut flat) = base_view();
+        let items = vec![
+            inbox_item(1, "follow up with sam"),
+            inbox_item(2, "answer rust question"),
+        ];
+        prepend_root_brain_inbox_section(
+            &mut grouped,
+            &mut flat,
+            "",
+            &items,
+            RootBrainInboxSectionOptions::default(),
+            NOW,
+        );
+
+        assert!(
+            matches!(
+                &grouped[0],
+                GroupedListItem::SectionHeader(label, Some(icon))
+                    if label == "Brain Inbox" && icon == "inbox"
+            ),
+            "section header must be pinned at index 0, got {:?}",
+            grouped[0]
+        );
+        assert!(matches!(grouped[1], GroupedListItem::Item(0)));
+        assert!(matches!(grouped[2], GroupedListItem::Item(1)));
+        // Existing rows keep pointing at the original results (shifted by 2).
+        assert!(matches!(
+            &grouped[3],
+            GroupedListItem::SectionHeader(label, None) if label == "Main"
+        ));
+        assert!(matches!(grouped[4], GroupedListItem::Item(2)));
+        assert!(matches!(flat[2], SearchResult::ScriptIssue(_)));
+
+        // Rows preserve newest-first input order and carry inbox identity.
+        match &flat[0] {
+            SearchResult::BrainInboxItem(row) => {
+                assert_eq!(row.item.id, 1);
+                assert_eq!(
+                    flat[0].history_result_key().as_deref(),
+                    Some("brain-inbox/1")
+                );
+                assert!(
+                    row.subtitle.starts_with("Commitment · "),
+                    "subtitle should lead with the kind label, got {:?}",
+                    row.subtitle
+                );
+            }
+            other => panic!("expected BrainInboxItem at flat[0], got {other:?}"),
+        }
+        assert!(matches!(&flat[1], SearchResult::BrainInboxItem(row) if row.item.id == 2));
+    }
+
+    #[test]
+    fn caps_rows_at_max_results() {
+        let (mut grouped, mut flat) = base_view();
+        let items: Vec<InboxItem> = (1..=5)
+            .map(|id| inbox_item(id, &format!("item {id}")))
+            .collect();
+        prepend_root_brain_inbox_section(
+            &mut grouped,
+            &mut flat,
+            "",
+            &items,
+            RootBrainInboxSectionOptions {
+                enabled: true,
+                max_results: 3,
+            },
+            NOW,
+        );
+        let inbox_rows = flat
+            .iter()
+            .filter(|row| matches!(row, SearchResult::BrainInboxItem(_)))
+            .count();
+        assert_eq!(inbox_rows, 3, "rows must be capped at max_results");
+    }
+
+    #[test]
+    fn no_op_on_non_empty_query_disabled_section_or_empty_items() {
+        let items = vec![inbox_item(1, "follow up with sam")];
+
+        // Non-empty query (including whitespace-only being treated as empty).
+        let (mut grouped, mut flat) = base_view();
+        prepend_root_brain_inbox_section(
+            &mut grouped,
+            &mut flat,
+            "git",
+            &items,
+            RootBrainInboxSectionOptions::default(),
+            NOW,
+        );
+        assert_unpinned(&grouped, &flat, "non-empty query");
+
+        // Disabled section.
+        let (mut grouped, mut flat) = base_view();
+        prepend_root_brain_inbox_section(
+            &mut grouped,
+            &mut flat,
+            "",
+            &items,
+            RootBrainInboxSectionOptions {
+                enabled: false,
+                max_results: 3,
+            },
+            NOW,
+        );
+        assert_unpinned(&grouped, &flat, "disabled section");
+
+        // max_results == 0.
+        let (mut grouped, mut flat) = base_view();
+        prepend_root_brain_inbox_section(
+            &mut grouped,
+            &mut flat,
+            "",
+            &items,
+            RootBrainInboxSectionOptions {
+                enabled: true,
+                max_results: 0,
+            },
+            NOW,
+        );
+        assert_unpinned(&grouped, &flat, "max_results=0");
+
+        // No open items.
+        let (mut grouped, mut flat) = base_view();
+        prepend_root_brain_inbox_section(
+            &mut grouped,
+            &mut flat,
+            "",
+            &[],
+            RootBrainInboxSectionOptions::default(),
+            NOW,
+        );
+        assert_unpinned(&grouped, &flat, "empty items");
+    }
+
+    #[test]
+    fn whitespace_only_query_counts_as_empty() {
+        let (mut grouped, mut flat) = base_view();
+        let items = vec![inbox_item(1, "follow up with sam")];
+        prepend_root_brain_inbox_section(
+            &mut grouped,
+            &mut flat,
+            "   ",
+            &items,
+            RootBrainInboxSectionOptions::default(),
+            NOW,
+        );
+        assert!(
+            matches!(
+                &grouped[0],
+                GroupedListItem::SectionHeader(label, _) if label == "Brain Inbox"
+            ),
+            "whitespace-only filter is the empty query"
+        );
     }
 }

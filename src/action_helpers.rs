@@ -64,6 +64,9 @@ pub fn extract_path_for_reveal(
         Some(SearchResult::BrainHit(_)) => Err(PathExtractionError::UnsupportedType(
             SharedString::from("Brain row has no filesystem path"),
         )),
+        Some(SearchResult::BrainInboxItem(_)) => Err(PathExtractionError::UnsupportedType(
+            SharedString::from("Brain inbox row has no filesystem path"),
+        )),
         Some(SearchResult::Todo(_)) => Err(PathExtractionError::UnsupportedType(
             SharedString::from("Todos row has no filesystem path"),
         )),
@@ -122,6 +125,9 @@ pub fn extract_path_for_copy(
         )),
         Some(SearchResult::BrainHit(_)) => Err(PathExtractionError::UnsupportedType(
             SharedString::from("Brain row has no filesystem path"),
+        )),
+        Some(SearchResult::BrainInboxItem(_)) => Err(PathExtractionError::UnsupportedType(
+            SharedString::from("Brain inbox row has no filesystem path"),
         )),
         Some(SearchResult::Todo(_)) => Err(PathExtractionError::UnsupportedType(
             SharedString::from("Todos row has no filesystem path"),
@@ -191,6 +197,9 @@ pub fn extract_path_for_quick_terminal(
         )),
         Some(SearchResult::BrainHit(_)) => Err(PathExtractionError::UnsupportedType(
             SharedString::from("Cannot open brain memories in Quick Terminal"),
+        )),
+        Some(SearchResult::BrainInboxItem(_)) => Err(PathExtractionError::UnsupportedType(
+            SharedString::from("Cannot open brain inbox items in Quick Terminal"),
         )),
         Some(SearchResult::Todo(_)) => Err(PathExtractionError::UnsupportedType(
             SharedString::from("Cannot open todos in Quick Terminal"),
@@ -264,6 +273,9 @@ pub fn extract_path_for_edit(
         )),
         Some(SearchResult::BrainHit(_)) => Err(PathExtractionError::UnsupportedType(
             SharedString::from("Cannot edit brain memories from root search"),
+        )),
+        Some(SearchResult::BrainInboxItem(_)) => Err(PathExtractionError::UnsupportedType(
+            SharedString::from("Cannot edit brain inbox items from root search"),
         )),
         Some(SearchResult::Todo(_)) => Err(PathExtractionError::UnsupportedType(
             SharedString::from("Cannot edit todos from root search"),

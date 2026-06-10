@@ -38,9 +38,10 @@ pub use types::{
     McpStdioServerConfig, RootFilePromotionConfig, ScriptKitUserPreferences, SpineCommandConfig,
     SpineStyleConfig, SuggestedConfig, ThemeSelectionPreferences,
     UnifiedSearchAgentChatHistoryConfig, UnifiedSearchAiVaultConfig, UnifiedSearchBrainConfig,
-    UnifiedSearchBrowserHistoryConfig, UnifiedSearchBrowserTabsConfig, UnifiedSearchConfig,
-    UnifiedSearchFilesConfig, UnifiedSearchPassiveResultLimitsConfig, UnifiedSearchPassiveSource,
-    WatcherConfig, WindowManagementPreferences,
+    UnifiedSearchBrainInboxConfig, UnifiedSearchBrowserHistoryConfig,
+    UnifiedSearchBrowserTabsConfig, UnifiedSearchConfig, UnifiedSearchFilesConfig,
+    UnifiedSearchPassiveResultLimitsConfig, UnifiedSearchPassiveSource, WatcherConfig,
+    WindowManagementPreferences,
 };
 
 // Re-export loader

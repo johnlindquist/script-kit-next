@@ -131,6 +131,9 @@ fn show_main_window_helper(
     );
     let window_size = app_entity.update(cx, |view, ctx| {
         view.was_window_focused = false;
+        // Refresh the pinned "Brain Inbox" snapshot (throttled to 30s) before
+        // the grouped empty-query view is computed for this show.
+        view.refresh_root_brain_inbox_if_stale(ctx);
         if needs_reset_before_show {
             view.reset_to_script_list(ctx);
         } else if restore_after_focus_loss && matches!(view.current_view, AppView::ScriptList) {

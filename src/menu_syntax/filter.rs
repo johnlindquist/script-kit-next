@@ -54,6 +54,9 @@ pub fn result_kind(result: &SearchResult) -> ArtifactKind {
         // never renders alongside advanced queries, so map to Fallback like
         // SpineProjection.
         SearchResult::BrainHit(_) => ArtifactKind::Fallback,
+        // Brain inbox rows only render on the empty query, never alongside
+        // advanced queries — same Fallback mapping as BrainHit.
+        SearchResult::BrainInboxItem(_) => ArtifactKind::Fallback,
         SearchResult::Todo(_) => ArtifactKind::Todo,
         SearchResult::AgentChatHistory(_) => ArtifactKind::AgentChatHistory,
         SearchResult::AiVault(_) => ArtifactKind::AiVault,

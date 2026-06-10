@@ -2660,6 +2660,7 @@ impl ScriptListApp {
             scripts::SearchResult::File(m) => m.file.name.clone(),
             scripts::SearchResult::Note(m) => m.title.clone(),
             scripts::SearchResult::BrainHit(m) => m.hit.title.clone(),
+            scripts::SearchResult::BrainInboxItem(m) => m.item.title.clone(),
             scripts::SearchResult::Todo(m) => m.hit.title.clone(),
             scripts::SearchResult::AgentChatHistory(m) => m.entry.title_display().to_string(),
             scripts::SearchResult::AiVault(m) => m.hit.safe_title.clone(),

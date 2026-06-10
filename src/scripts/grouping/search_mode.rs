@@ -47,6 +47,9 @@ pub(super) fn build_search_mode_results(
                 // Brain rows never receive frecency boosts; passive search
                 // must not feed usage memory (it would self-amplify).
                 SearchResult::BrainHit(_) => None,
+                // Brain inbox rows are pinned on the empty query only and
+                // never receive frecency boosts.
+                SearchResult::BrainInboxItem(_) => None,
                 SearchResult::Todo(tm) => Some(tm.hit.stable_key.clone()),
                 SearchResult::AgentChatHistory(am) => {
                     Some(format!("agent_chat-history/{}", am.entry.session_id))

@@ -1502,14 +1502,15 @@ impl ScriptListApp {
         let browser_history_generation =
             crate::browser_history::root_browser_history_snapshot_status().generation;
         let root_windows_generation = self.root_windows_refresh_generation;
+        let brain_inbox_epoch = self.root_brain_inbox_epoch;
         let grouped_source_filter_key = format!("{grouped_source_filters:?}");
         let grouped_cache_key = match current_app_commands_app_name.as_deref() {
             Some(app_name) => format!(
-                "{}\x1Fsource-filters={grouped_source_filter_key}\x1Fcurrent-app={app_name}\x1Fai-vault-gen={ai_vault_generation}\x1Fwindows-gen={root_windows_generation}\x1Fbrowser-tabs-gen={browser_tabs_generation}\x1Fbrowser-history-gen={browser_history_generation}",
+                "{}\x1Fsource-filters={grouped_source_filter_key}\x1Fcurrent-app={app_name}\x1Fai-vault-gen={ai_vault_generation}\x1Fwindows-gen={root_windows_generation}\x1Fbrowser-tabs-gen={browser_tabs_generation}\x1Fbrowser-history-gen={browser_history_generation}\x1Fbrain-inbox-epoch={brain_inbox_epoch}",
                 self.computed_filter_text
             ),
             None => format!(
-                "{}\x1Fsource-filters={grouped_source_filter_key}\x1Fai-vault-gen={ai_vault_generation}\x1Fwindows-gen={root_windows_generation}\x1Fbrowser-tabs-gen={browser_tabs_generation}\x1Fbrowser-history-gen={browser_history_generation}",
+                "{}\x1Fsource-filters={grouped_source_filter_key}\x1Fai-vault-gen={ai_vault_generation}\x1Fwindows-gen={root_windows_generation}\x1Fbrowser-tabs-gen={browser_tabs_generation}\x1Fbrowser-history-gen={browser_history_generation}\x1Fbrain-inbox-epoch={brain_inbox_epoch}",
                 self.computed_filter_text
             ),
         };
@@ -1872,6 +1873,28 @@ impl ScriptListApp {
                         );
                     }
                 }
+            }
+            (grouped_items, flat_results)
+        };
+        // Brain Inbox: pin open curator inbox items at the very top of the
+        // empty-query grouped view (mirrors the Script Issues pinned row).
+        // The prepend helper itself no-ops on non-empty queries.
+        let (grouped_items, flat_results) = {
+            let (mut grouped_items, mut flat_results) = (grouped_items, flat_results);
+            if !menu_syntax_owns_main_list
+                && !spine_owns_for_computed
+                && !self.root_brain_inbox_items.is_empty()
+            {
+                crate::scripts::prepend_root_brain_inbox_section(
+                    &mut grouped_items,
+                    &mut flat_results,
+                    &raw_filter_text,
+                    &self.root_brain_inbox_items,
+                    self.config
+                        .get_unified_search()
+                        .brain_inbox_section_options(),
+                    chrono::Utc::now().timestamp(),
+                );
             }
             (grouped_items, flat_results)
         };

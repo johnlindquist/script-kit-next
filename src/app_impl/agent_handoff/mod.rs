@@ -3779,6 +3779,7 @@ impl ScriptListApp {
             scripts::SearchResult::File(_) => "file",
             scripts::SearchResult::Note(_) => "note",
             scripts::SearchResult::BrainHit(_) => "brain",
+            scripts::SearchResult::BrainInboxItem(_) => "brainInbox",
             scripts::SearchResult::Todo(_) => "todo",
             scripts::SearchResult::AgentChatHistory(_) => "agent_chatHistory",
             scripts::SearchResult::AiVault(_) => "aiVault",
@@ -3836,6 +3837,14 @@ impl ScriptListApp {
                 "sourceId": m.hit.source_id,
                 "title": m.hit.title,
                 "excerpt": m.hit.excerpt,
+            }),
+            scripts::SearchResult::BrainInboxItem(m) => serde_json::json!({
+                "id": m.item.id,
+                "kind": m.item.kind.as_str(),
+                "title": m.item.title,
+                "detail": m.item.detail,
+                "source": m.item.source,
+                "sourceId": m.item.source_id,
             }),
             scripts::SearchResult::Todo(m) => serde_json::json!({
                 "stableKey": m.hit.stable_key,

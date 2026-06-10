@@ -717,6 +717,15 @@ pub(crate) struct ScriptListApp {
     /// Bumped whenever `root_brain_semantic_results` changes; folded into
     /// `RootPassiveFrameKey` so stale lexical frames can't be reused.
     root_brain_semantic_epoch: u64,
+    // ── Root "Brain Inbox" pinned-section snapshot ──────────────────
+    /// Open brain-inbox items (newest first) pinned at the top of the empty
+    /// root query. Refreshed by `refresh_root_brain_inbox_if_stale`.
+    root_brain_inbox_items: Vec<crate::brain::InboxItem>,
+    /// When the inbox snapshot was last loaded; `None` until the first load.
+    root_brain_inbox_loaded_at: Option<std::time::Instant>,
+    /// Bumped whenever `root_brain_inbox_items` changes; folded into the
+    /// grouped cache key so stale views can't be served after a change.
+    root_brain_inbox_epoch: u64,
     // ── Spine @file: subsearch async state ─────────────────────────
     spine_file_search_query: String,
     pub(crate) spine_file_search_generation: u64,
