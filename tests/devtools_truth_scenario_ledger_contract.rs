@@ -41,22 +41,35 @@ fn truth_scenario_ledger_is_oracle_gated_and_runner_free() {
 
 #[test]
 fn truth_scenario_ledger_has_exactly_fifty_oracle_accepted_candidate_ids() {
-    let scenario_count = LEDGER.matches("\"id\": \"dt-truth-").count();
+    let ledger: serde_json::Value =
+        serde_json::from_str(LEDGER).expect("truth scenario ledger must be valid JSON");
+    let scenarios = ledger["scenarios"]
+        .as_array()
+        .expect("truth scenario ledger must have a scenarios array");
     assert_eq!(
-        scenario_count, 50,
+        scenarios.len(),
+        50,
         "truth scenario ledger must contain exactly 50 candidate scenarios"
     );
 
     for id in 1..=50 {
-        let needle = format!("\"id\": \"dt-truth-{id:03}-");
-        assert!(LEDGER.contains(&needle), "missing scenario id {needle}");
+        let prefix = format!("dt-truth-{id:03}-");
+        assert!(
+            scenarios.iter().any(|scenario| scenario["id"]
+                .as_str()
+                .is_some_and(|sid| sid.starts_with(&prefix))),
+            "missing scenario id prefix {prefix}"
+        );
     }
 
-    assert_eq!(
-        LEDGER.matches("\"oracleStatus\": \"accepted\"").count(),
-        50,
-        "each scenario must preserve Oracle acceptance"
-    );
+    for scenario in scenarios {
+        assert_eq!(
+            scenario["oracleStatus"].as_str(),
+            Some("accepted"),
+            "each scenario must preserve Oracle acceptance; offending scenario: {}",
+            scenario["id"]
+        );
+    }
 }
 
 #[test]

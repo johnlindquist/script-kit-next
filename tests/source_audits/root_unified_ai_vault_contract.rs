@@ -96,7 +96,12 @@ fn root_unified_ai_vault_contract() {
     assert!(ai_vault.contains("hydrate_rollout_search_terms"));
     assert!(ai_vault.contains("ai_vault_codex_state_db_unavailable"));
     assert!(ai_vault.contains("ai_vault_codex_state_db_unsupported"));
-    assert_eq!(ai_vault.matches("search_cmux_vault(").count(), 1);
+    assert!(ai_vault.contains("fn search_cmux_vault("));
+    assert_eq!(
+        ai_vault.matches("search_cmux_vault(").count(),
+        1,
+        "search_cmux_vault must remain defined exactly once with no in-file callers"
+    );
     assert!(ai_vault.contains("fn resume_local_vault_session("));
     assert!(ai_vault.contains("fn local_resume_command("));
     assert!(ai_vault.contains(".arg(\"new-workspace\")"));

@@ -16,6 +16,7 @@ set -e
 
 # --- Signal cleanup: one Ctrl+C must stop cargo-watch and all helper children ---
 SCRIPT_KIT_DEV_CACHE_PID=""
+SCRIPT_KIT_DEV_WATCHDOG_PID=""
 DEV_SH_CLEANED_UP=0
 DEV_SH_EXIT_CODE=0
 dev_sh_cleanup() {
@@ -28,6 +29,11 @@ dev_sh_cleanup() {
     if [ -n "${SCRIPT_KIT_DEV_CACHE_PID:-}" ]; then
         kill "$SCRIPT_KIT_DEV_CACHE_PID" 2>/dev/null || true
         wait "$SCRIPT_KIT_DEV_CACHE_PID" 2>/dev/null || true
+    fi
+
+    if [ -n "${SCRIPT_KIT_DEV_WATCHDOG_PID:-}" ]; then
+        kill "$SCRIPT_KIT_DEV_WATCHDOG_PID" 2>/dev/null || true
+        wait "$SCRIPT_KIT_DEV_WATCHDOG_PID" 2>/dev/null || true
     fi
 
     # Stop cargo-watch, dev-cycle, and any in-flight cargo build.
@@ -145,6 +151,15 @@ if [ "${SCRIPT_KIT_REPORT_CACHE_SIZE:-1}" = "1" ]; then
     SCRIPT_KIT_DEV_CACHE_PID=$!
 fi
 
+# --- Crash watchdog -----------------------------------------------------------
+# Supervise the session app pid: loud banner + auto-relaunch on abnormal death,
+# incremental-cache wipe on a repeat crash of the same binary, and a stop-and-
+# report banner when a clean rebuild still crashes (real bug, not cache rot).
+if [ "${SCRIPT_KIT_DEV_CRASH_WATCHDOG:-1}" = "1" ]; then
+    bash scripts/agentic/dev-crash-watchdog.sh "$SCRIPT_KIT_DEV_SESSION_NAME" &
+    SCRIPT_KIT_DEV_WATCHDOG_PID=$!
+fi
+
 # Check if cargo-watch is installed
 if ! command -v cargo-watch &> /dev/null; then
     echo "cargo-watch is not installed"
@@ -169,6 +184,7 @@ echo "   Cargo dev profile: debug=0 incremental=true codegen-units=256"
 echo "   Build target: script-kit-gpui only (skips smoke-test, vibrancy-poc, menu-syntax-doctor)"
 echo "   Session log: ~/.scriptkit/logs/latest-session.jsonl"
 echo "   Clear screen between rebuilds: SCRIPT_KIT_DEV_CLEAR=${SCRIPT_KIT_DEV_CLEAR:-0} (set =1 to enable cargo-watch -c)"
+echo "   Crash watchdog: SCRIPT_KIT_DEV_CRASH_WATCHDOG=${SCRIPT_KIT_DEV_CRASH_WATCHDOG:-1} (banner + auto-relaunch on app crash)"
 echo ""
 
 # Clear-screen is opt-in. cargo-watch -c wipes the heartbeat output, so default

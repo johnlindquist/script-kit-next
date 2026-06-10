@@ -43,7 +43,9 @@ pub fn recent(limit: usize) -> Vec<TerminalHistoryEntry> {
         .collect()
 }
 
-#[cfg(test)]
+// Not cfg(test)-gated: the bin test target reaches this module through the
+// lib re-export (`pub use script_kit_gpui::terminal_history`), and the lib
+// dependency is compiled without `test` cfg there.
 pub fn clear_for_tests() {
     history()
         .lock()

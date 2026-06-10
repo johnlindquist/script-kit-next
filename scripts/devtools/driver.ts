@@ -341,10 +341,43 @@ export class Driver {
     return this.request({ type: "listAutomationWindows" }, opts);
   }
 
+  /**
+   * Capture a screenshot of the app (whole main window by default, or a
+   * specific automation window via `target`). Returns the screenshotResult
+   * message ({ data: base64 PNG, width, height } or { error }). Pass
+   * `savePath` to also decode and write the PNG to disk.
+   */
+  async captureScreenshot(
+    opts: {
+      hiDpi?: boolean;
+      target?: Json;
+      savePath?: string;
+      timeoutMs?: number;
+    } = {},
+  ): Promise<Json> {
+    const command: Json = { type: "captureScreenshot" };
+    if (opts.hiDpi !== undefined) command.hiDpi = opts.hiDpi;
+    if (opts.target !== undefined) command.target = opts.target;
+    const result = (await this.request(command, {
+      expect: "screenshotResult",
+      timeoutMs: opts.timeoutMs ?? 10_000,
+    })) as { data?: string; error?: string };
+    if (opts.savePath && result.data && !result.error) {
+      const { writeFileSync } = await import("node:fs");
+      writeFileSync(opts.savePath, Buffer.from(result.data, "base64"));
+    }
+    return result as Json;
+  }
+
   // --- lifecycle ---------------------------------------------------------------
 
   get alive(): boolean {
     return !this.exited;
+  }
+
+  /** OS pid of the app process (for `sample`/profiling). */
+  get pid(): number | undefined {
+    return this.proc.pid;
   }
 
   async close(): Promise<void> {

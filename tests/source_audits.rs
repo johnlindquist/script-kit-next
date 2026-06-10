@@ -221,6 +221,9 @@ mod context_selector_portal_builtin_parity_contract;
 #[path = "source_audits/dev_style_tool_knob_catalog.rs"]
 mod dev_style_tool_knob_catalog;
 
+#[path = "source_audits/dev_style_tool_slider_drag.rs"]
+mod dev_style_tool_slider_drag;
+
 #[path = "source_audits/root_unified_dictation_history_contract.rs"]
 mod root_unified_dictation_history_contract;
 
