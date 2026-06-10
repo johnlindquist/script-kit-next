@@ -7,6 +7,7 @@ use super::inbox::{self, InboxKind};
 use super::indexer::extract_topics;
 use super::search::{aggregate_signals, cosine_top_ids, fuse_ranks};
 use super::store::{self, BrainDoc, BrainSignal, DocSource};
+use super::telegram;
 
 fn init_test_db() {
     static INIT: std::sync::Once = std::sync::Once::new();
@@ -503,6 +504,50 @@ fn prune_removes_only_old_resolved_inbox_items() {
 }
 
 #[test]
+fn inbox_response_prompt_includes_detail_and_source_context() {
+    init_test_db();
+    let source_id = "thread-inbox-response-prompt#2";
+    store::upsert_doc(
+        DocSource::ChatTurn,
+        source_id,
+        "Original chat turn",
+        "User said the second option should be shipped after checking the migration notes.",
+        200,
+    )
+    .unwrap();
+    assert!(
+        inbox::insert_inbox_item(
+            InboxKind::Question,
+            "Clarify the second option",
+            "The conversation left open whether second means the script or the build script.",
+            DocSource::ChatTurn.as_str(),
+            source_id,
+        )
+        .unwrap(),
+        "inbox item should insert"
+    );
+
+    let item = inbox::open_inbox_items(1000)
+        .unwrap()
+        .into_iter()
+        .find(|item| item.source_id == source_id)
+        .expect("inserted inbox item");
+    let prompt = inbox::response_prompt_for_inbox_item(&item);
+
+    assert!(prompt.contains("Follow up on this Brain Inbox item."));
+    assert!(prompt.contains("- Type: Open Question"));
+    assert!(prompt.contains("- Title: Clarify the second option"));
+    assert!(prompt.contains(
+        "- Details: The conversation left open whether second means the script or the build script."
+    ));
+    assert!(prompt.contains("- Source: chat_turn"));
+    assert!(prompt.contains("- Source ID: thread-inbox-response-prompt#2"));
+    assert!(prompt.contains("- Source title: Original chat turn"));
+    assert!(prompt.contains("User said the second option should be shipped"));
+    assert!(prompt.contains("Use the inbox details and source context above"));
+}
+
+#[test]
 fn parse_inbox_extraction_accepts_strict_json() {
     let raw = r#"{"commitments":[{"title":"Ship the inbox","detail":"Promised in chat.","sourceId":"thread-9#2"}],"questions":[{"title":"Which DB?","detail":"Never answered.","sourceId":""}],"drift":[{"title":"YouTube pipeline","detail":"No activity in a week."}]}"#;
     let parsed = curator::parse_inbox_extraction(raw).unwrap();
@@ -591,4 +636,117 @@ fn stale_pin_detection_flags_old_pinned_notes_only() {
             .any(|(_, _, id)| id == "note-fresh" || id == "note-unpinned"),
         "fresh or unpinned notes are never flagged"
     );
+}
+
+// ============================================================
+// Telegram bridge (pure core; no network)
+// ============================================================
+
+#[test]
+fn telegram_parse_updates_extracts_messages_and_next_offset() {
+    // 2 text messages + 1 non-message update (an edit): the messages route,
+    // and the offset still advances past the non-message update.
+    let body = r#"{
+        "ok": true,
+        "result": [
+            {
+                "update_id": 101,
+                "message": {
+                    "message_id": 7,
+                    "from": {"id": 42, "is_bot": false, "first_name": "John"},
+                    "chat": {"id": 42, "type": "private"},
+                    "date": 1700000000,
+                    "text": "what did I work on this week?"
+                }
+            },
+            {
+                "update_id": 102,
+                "edited_message": {"message_id": 7, "text": "ignored edit"}
+            },
+            {
+                "update_id": 103,
+                "message": {
+                    "message_id": 8,
+                    "from": {"id": 7},
+                    "chat": {"id": 7, "type": "private"},
+                    "date": 1700000001,
+                    "text": "/start"
+                }
+            }
+        ]
+    }"#;
+    let updates = telegram::parse_updates_json(body).expect("realistic getUpdates parses");
+    assert_eq!(updates.len(), 3, "non-message updates still parse");
+    let messages = telegram::incoming_messages(&updates);
+    assert_eq!(messages.len(), 2, "only text messages become incoming");
+    assert_eq!(messages[0].update_id, 101);
+    assert_eq!(messages[0].chat_id, 42);
+    assert_eq!(messages[0].user_id, 42);
+    assert_eq!(messages[0].text, "what did I work on this week?");
+    assert_eq!(messages[1].text, "/start");
+    assert_eq!(
+        telegram::next_offset(&updates),
+        Some(103),
+        "offset covers the non-message update too"
+    );
+    assert_eq!(telegram::next_offset(&[]), None, "empty batch keeps offset");
+}
+
+#[test]
+fn telegram_parse_tolerates_partial_messages_and_rejects_bad_envelopes() {
+    assert!(telegram::parse_updates_json("not json").is_err());
+    assert!(telegram::parse_updates_json(r#"{"ok": false, "result": []}"#).is_err());
+    // A message missing text/from is skipped, but its id still advances.
+    let updates = telegram::parse_updates_json(
+        r#"{"ok": true, "result": [{"update_id": 5, "message": {"chat": {"id": 1}}}]}"#,
+    )
+    .expect("partial message parses");
+    assert!(telegram::incoming_messages(&updates).is_empty());
+    assert_eq!(telegram::next_offset(&updates), Some(5));
+}
+
+#[test]
+fn telegram_authorization_requires_allowlist_membership() {
+    assert!(telegram::is_authorized(42, &[42, 7]));
+    assert!(!telegram::is_authorized(9, &[42, 7]));
+    assert!(
+        !telegram::is_authorized(42, &[]),
+        "empty allowlist authorizes nobody"
+    );
+}
+
+#[test]
+fn telegram_answer_prompt_grounds_question_in_context() {
+    let prompt =
+        telegram::build_answer_prompt("what is project bluefin?", "[memory] bluefin notes");
+    assert!(prompt.contains("what is project bluefin?"));
+    assert!(prompt.contains("[memory] bluefin notes"));
+    assert!(
+        prompt.contains("ONLY"),
+        "prompt restricts to memory context"
+    );
+    assert!(
+        prompt.contains("no markdown"),
+        "telegram replies are plain text"
+    );
+}
+
+#[test]
+fn telegram_replies_trim_and_truncate_at_cap() {
+    assert_eq!(telegram::truncate_reply("  short answer  "), "short answer");
+    let long = "x".repeat(5_000);
+    let capped = telegram::truncate_reply(&long);
+    assert_eq!(capped.chars().count(), 4_000, "capped under telegram limit");
+    assert!(capped.ends_with('…'), "truncation is marked");
+}
+
+#[test]
+fn telegram_redaction_strips_token_from_error_text() {
+    let redacted = telegram::redact_token(
+        "123456:ABC-secret",
+        "https://api.telegram.org/bot123456:ABC-secret/getUpdates: timeout",
+    );
+    assert!(!redacted.contains("123456:ABC-secret"));
+    assert!(redacted.contains("<redacted-token>"));
+    assert_eq!(telegram::redact_token("", "unchanged"), "unchanged");
 }

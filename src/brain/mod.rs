@@ -29,6 +29,7 @@ pub mod resources;
 pub mod search;
 pub mod seed;
 pub mod store;
+pub mod telegram;
 
 #[cfg(test)]
 mod tests;
@@ -75,6 +76,59 @@ pub fn recall_context_block(query: &str) -> Result<Option<String>> {
     }
     let block = render_context_block(&hits, BRAIN_CONTEXT_MAX_CHARS);
     Ok((!block.is_empty()).then_some(block))
+}
+
+/// Timeout for one-shot pi completions (curator, Telegram bridge).
+const PI_ONESHOT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(120);
+
+/// One-shot `pi -p --no-tools` completion, shared by the curator and the
+/// Telegram bridge. Uses the same binary resolution as Agent Chat; returns
+/// `Ok(None)` when no pi binary is installed (callers degrade gracefully).
+pub(crate) fn pi_oneshot(prompt: &str) -> Result<Option<String>> {
+    let Some(pi_binary) = crate::ai::agent_chat::pi::binary::default_pi_binary() else {
+        return Ok(None);
+    };
+    run_pi_print(&pi_binary, prompt).map(Some)
+}
+
+fn run_pi_print(pi_binary: &std::path::Path, prompt: &str) -> Result<String> {
+    use anyhow::Context as _;
+    let mut child = std::process::Command::new(pi_binary)
+        .args([
+            "-p",
+            "--no-tools",
+            "--provider",
+            crate::ai::agent_chat::profiles::DEFAULT_PI_PROVIDER,
+            "--model",
+            crate::ai::agent_chat::profiles::DEFAULT_PI_MODEL,
+            prompt,
+        ])
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .context("spawn brain pi")?;
+    let deadline = std::time::Instant::now() + PI_ONESHOT_TIMEOUT;
+    loop {
+        match child.try_wait().context("brain pi wait")? {
+            Some(status) => {
+                let mut output = String::new();
+                if let Some(mut stdout) = child.stdout.take() {
+                    use std::io::Read as _;
+                    let _ = stdout.read_to_string(&mut output);
+                }
+                if !status.success() {
+                    anyhow::bail!("brain pi exited with {status}");
+                }
+                return Ok(output);
+            }
+            None if std::time::Instant::now() > deadline => {
+                let _ = child.kill();
+                anyhow::bail!("brain pi timed out");
+            }
+            None => std::thread::sleep(std::time::Duration::from_millis(250)),
+        }
+    }
 }
 
 /// Record that the user asked the brain something (attention signal).

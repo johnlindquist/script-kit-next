@@ -32,11 +32,11 @@ pub use defaults::DEFAULT_SUGGESTED_HALF_LIFE_DAYS;
 #[allow(unused_imports)]
 pub use types::{
     AgentChatBackend, AgentChatPathPolicyConfig, AgentChatProfile, AgentChatToolPolicyConfig,
-    AiPreferences, AiVaultProvider, AiVaultResumeTerminal, BrowserHistoryProvider,
-    BrowserTabProvider, BuiltInConfig, ClaudeCodeConfig, Config, DictationPreferences,
-    HotkeyConfig, LayoutConfig, McpConfig, McpHttpServerConfig, McpServerConfig,
-    McpStdioServerConfig, RootFilePromotionConfig, ScriptKitUserPreferences, SpineCommandConfig,
-    SpineStyleConfig, SuggestedConfig, ThemeSelectionPreferences,
+    AiPreferences, AiVaultProvider, AiVaultResumeTerminal, BrainRemoteConfig,
+    BrowserHistoryProvider, BrowserTabProvider, BuiltInConfig, ClaudeCodeConfig, Config,
+    DictationPreferences, HotkeyConfig, LayoutConfig, McpConfig, McpHttpServerConfig,
+    McpServerConfig, McpStdioServerConfig, RootFilePromotionConfig, ScriptKitUserPreferences,
+    SpineCommandConfig, SpineStyleConfig, SuggestedConfig, ThemeSelectionPreferences,
     UnifiedSearchAgentChatHistoryConfig, UnifiedSearchAiVaultConfig, UnifiedSearchBrainConfig,
     UnifiedSearchBrainInboxConfig, UnifiedSearchBrowserHistoryConfig,
     UnifiedSearchBrowserTabsConfig, UnifiedSearchConfig, UnifiedSearchFilesConfig,

@@ -17,12 +17,9 @@
 use super::inbox::{self, InboxKind};
 use super::store::{self, DocSource};
 use anyhow::{Context as _, Result};
-use std::process::Command;
-use std::time::Duration;
 
 const LAST_RUN_MARKER: &str = "curator_last_run";
 const RUN_INTERVAL_SECS: i64 = 24 * 60 * 60;
-const PI_TIMEOUT: Duration = Duration::from_secs(120);
 const FOCUS_SOURCE_ID: &str = "focus-review";
 
 /// Inbox extraction evidence window: chat turns updated this recently.
@@ -80,9 +77,6 @@ pub fn run_focus_review() -> Result<bool> {
     if signals.is_empty() && journals.is_empty() {
         return Ok(false); // Nothing to distill yet.
     }
-    let Some(pi_binary) = crate::ai::agent_chat::pi::binary::default_pi_binary() else {
-        return Ok(false); // No agent setup — curator waits.
-    };
 
     let topics = super::search::aggregate_signals(&signals);
     let topics_block = topics
@@ -105,7 +99,9 @@ pub fn run_focus_review() -> Result<bool> {
          ACTIVITY JOURNALS (newest first):\n{journal_block}"
     );
 
-    let output = run_pi_print(&pi_binary, &prompt)?;
+    let Some(output) = super::pi_oneshot(&prompt)? else {
+        return Ok(false); // No agent setup — curator waits.
+    };
     let review = output.trim();
     if review.is_empty() {
         return Ok(false);
@@ -193,10 +189,6 @@ pub fn run_inbox_extraction() -> Result<usize> {
         tracing::debug!(target: "script_kit::brain", "inbox extraction: no evidence yet");
         return Ok(0);
     }
-    let Some(pi_binary) = crate::ai::agent_chat::pi::binary::default_pi_binary() else {
-        tracing::debug!(target: "script_kit::brain", "inbox extraction: no agent setup");
-        return Ok(0);
-    };
 
     let focus_block = focus
         .map(|doc| doc.content)
@@ -234,7 +226,10 @@ pub fn run_inbox_extraction() -> Result<usize> {
          RECENT CHATS (each labeled with its source id):\n{chat_block}"
     );
 
-    let output = run_pi_print(&pi_binary, &prompt)?;
+    let Some(output) = super::pi_oneshot(&prompt)? else {
+        tracing::debug!(target: "script_kit::brain", "inbox extraction: no agent setup");
+        return Ok(0);
+    };
     let extraction = parse_inbox_extraction(&output)?;
     let mut inserted = 0usize;
     for (kind, items) in [
@@ -350,43 +345,4 @@ pub(crate) fn stale_pins_from(
             (title, detail, note_id.clone())
         })
         .collect()
-}
-
-fn run_pi_print(pi_binary: &std::path::Path, prompt: &str) -> Result<String> {
-    let mut child = Command::new(pi_binary)
-        .args([
-            "-p",
-            "--no-tools",
-            "--provider",
-            crate::ai::agent_chat::profiles::DEFAULT_PI_PROVIDER,
-            "--model",
-            crate::ai::agent_chat::profiles::DEFAULT_PI_MODEL,
-            prompt,
-        ])
-        .stdin(std::process::Stdio::null())
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::null())
-        .spawn()
-        .context("spawn curator pi")?;
-    let deadline = std::time::Instant::now() + PI_TIMEOUT;
-    loop {
-        match child.try_wait().context("curator pi wait")? {
-            Some(status) => {
-                let mut output = String::new();
-                if let Some(mut stdout) = child.stdout.take() {
-                    use std::io::Read as _;
-                    let _ = stdout.read_to_string(&mut output);
-                }
-                if !status.success() {
-                    anyhow::bail!("curator pi exited with {status}");
-                }
-                return Ok(output);
-            }
-            None if std::time::Instant::now() > deadline => {
-                let _ = child.kill();
-                anyhow::bail!("curator pi timed out");
-            }
-            None => std::thread::sleep(Duration::from_millis(250)),
-        }
-    }
 }

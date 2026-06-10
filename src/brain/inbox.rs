@@ -14,6 +14,8 @@ use super::store;
 use anyhow::{Context as _, Result};
 use rusqlite::params;
 
+const INBOX_RESPONSE_SOURCE_CONTEXT_MAX_CHARS: usize = 4_000;
+
 /// An inbox item category. Stable string keys — stored in sqlite.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum InboxKind {
@@ -64,6 +66,71 @@ pub struct InboxItem {
     pub source_id: String,
     pub created_at: i64,
     pub resolved_at: Option<i64>,
+}
+
+fn truncate_context(value: &str, max_chars: usize) -> String {
+    if value.chars().count() <= max_chars {
+        return value.trim().to_string();
+    }
+
+    let split_at = value
+        .char_indices()
+        .nth(max_chars)
+        .map(|(idx, _)| idx)
+        .unwrap_or(value.len());
+    format!("{}...\n[truncated]", value[..split_at].trim())
+}
+
+/// Build the prompt submitted when the user selects a Brain Inbox row.
+///
+/// The launcher row only has room for a title/subtitle, but the actual
+/// handoff should preserve the stored inbox metadata and, when available, the
+/// source document that caused the item to be filed.
+pub fn response_prompt_for_inbox_item(item: &InboxItem) -> String {
+    let mut prompt = String::from("Follow up on this Brain Inbox item.\n\nBrain Inbox item:\n");
+    prompt.push_str(&format!("- Type: {}\n", item.kind.label()));
+    prompt.push_str(&format!("- Title: {}\n", item.title.trim()));
+
+    let detail = item.detail.trim();
+    if !detail.is_empty() {
+        prompt.push_str(&format!("- Details: {detail}\n"));
+    }
+
+    let source = item.source.trim();
+    if !source.is_empty() {
+        prompt.push_str(&format!("- Source: {source}\n"));
+    }
+
+    let source_id = item.source_id.trim();
+    if !source_id.is_empty() {
+        prompt.push_str(&format!("- Source ID: {source_id}\n"));
+    }
+
+    if let Some(doc_source) = store::DocSource::parse(source) {
+        if !source_id.is_empty() {
+            if let Ok(Some(doc)) = store::get_doc(doc_source, source_id) {
+                let doc_title = doc.title.trim();
+                let doc_content =
+                    truncate_context(&doc.content, INBOX_RESPONSE_SOURCE_CONTEXT_MAX_CHARS);
+                if !doc_title.is_empty() || !doc_content.is_empty() {
+                    prompt.push_str("\nSource context:\n");
+                    if !doc_title.is_empty() {
+                        prompt.push_str(&format!("- Source title: {doc_title}\n"));
+                    }
+                    if !doc_content.is_empty() {
+                        prompt.push_str("Source content:\n");
+                        prompt.push_str(&doc_content);
+                        prompt.push('\n');
+                    }
+                }
+            }
+        }
+    }
+
+    prompt.push_str(
+        "\nTask:\nUse the inbox details and source context above to help me respond or take the next step. If the evidence is insufficient, ask one specific clarifying question instead of guessing.",
+    );
+    prompt
 }
 
 /// Stable dedupe key: FNV-1a 64 hex of `kind|title`, with the title

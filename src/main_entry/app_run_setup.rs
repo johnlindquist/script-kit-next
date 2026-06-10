@@ -174,6 +174,9 @@
     match crate::brain::init_brain_db() {
         Ok(()) => {
             crate::brain::start_brain_indexer();
+            // Opt-in Telegram remote access to the brain (no-op unless the
+            // config enables it with a token and a non-empty allowlist).
+            crate::brain::telegram::start_telegram_bridge();
             if let Err(e) = crate::brain::seed::seed_constitution_if_needed() {
                 logging::log("BRAIN", &format!("Constitution seeding skipped: {}", e));
             }
@@ -575,6 +578,26 @@ app.run(move |cx: &mut App| {
 
         #[cfg(debug_assertions)]
         crate::dev_style_tool::window::maybe_open_startup_sidecar(window, app_entity.clone(), cx);
+
+        // Permission onboarding: fresh installs (or installs that never
+        // completed onboarding) with missing required permissions get the
+        // wizard; completed installs get a reminder. Deferred past first
+        // paint so it never races window setup.
+        {
+            let is_fresh_install = setup_result.is_fresh_install;
+            let app_entity_for_permissions = app_entity.clone();
+            cx.spawn(async move |cx: &mut gpui::AsyncApp| {
+                cx.background_executor()
+                    .timer(std::time::Duration::from_millis(800))
+                    .await;
+                let _ = cx.update(|cx| {
+                    app_entity_for_permissions.update(cx, |this, cx| {
+                        this.apply_permission_startup_intent(is_fresh_install, cx);
+                    });
+                });
+            })
+            .detach();
+        }
 
         let (mcp_computer_ui_tx, mcp_computer_ui_rx) = async_channel::bounded(16);
         mcp_computer_runtime.install(mcp_computer_ui_tx);

@@ -48,6 +48,9 @@ pub const DEFAULT_UNIFIED_SEARCH_BRAIN_MAX_RESULTS: usize = 4;
 pub const DEFAULT_UNIFIED_SEARCH_BRAIN_MIN_QUERY_CHARS: usize = 3;
 pub const DEFAULT_UNIFIED_SEARCH_BRAIN_INBOX_ENABLED: bool = true;
 pub const DEFAULT_UNIFIED_SEARCH_BRAIN_INBOX_MAX_RESULTS: usize = 3;
+
+/// Remote brain access (Telegram bridge) is opt-in.
+pub const DEFAULT_BRAIN_REMOTE_ENABLED: bool = false;
 pub const DEFAULT_UNIFIED_SEARCH_NOTES_ENABLED: bool = true;
 pub const DEFAULT_UNIFIED_SEARCH_NOTES_MAX_RESULTS: usize = 3;
 pub const DEFAULT_UNIFIED_SEARCH_NOTES_MIN_QUERY_CHARS: usize = 3;

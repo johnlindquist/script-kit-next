@@ -1559,6 +1559,53 @@ pub enum SeparatorStyleChoice {
 }
 
 // ============================================
+// BRAIN REMOTE ACCESS CONFIG
+// ============================================
+
+/// Opt-in remote access to the brain (local memory) over Telegram.
+///
+/// The bridge only runs when **all three** hold: `enabled` is true, a bot
+/// token is configured, and `telegramAllowedUserIds` is non-empty. An empty
+/// allowlist disables the bot entirely — it never answers unlisted users,
+/// so there is no "open" mode.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(default, rename_all = "camelCase")]
+pub struct BrainRemoteConfig {
+    /// Master switch for the Telegram bridge (default: false).
+    pub enabled: bool,
+    /// Telegram bot token from @BotFather (default: none). Treated as a
+    /// secret: never logged, and redacted from any error output.
+    pub telegram_bot_token: Option<String>,
+    /// Numeric Telegram user ids allowed to query the brain (default:
+    /// empty). Empty disables the bridge entirely; messages from any
+    /// unlisted user are rejected with a hint showing their own id.
+    pub telegram_allowed_user_ids: Vec<i64>,
+}
+
+impl Default for BrainRemoteConfig {
+    fn default() -> Self {
+        Self {
+            enabled: DEFAULT_BRAIN_REMOTE_ENABLED,
+            telegram_bot_token: None,
+            telegram_allowed_user_ids: Vec::new(),
+        }
+    }
+}
+
+impl BrainRemoteConfig {
+    /// True only when the bridge should actually run: enabled, with a
+    /// non-blank bot token AND a non-empty allowlist.
+    pub fn is_active(&self) -> bool {
+        self.enabled
+            && self
+                .telegram_bot_token
+                .as_deref()
+                .is_some_and(|token| !token.trim().is_empty())
+            && !self.telegram_allowed_user_ids.is_empty()
+    }
+}
+
+// ============================================
 // MAIN CONFIG
 // ============================================
 
@@ -1751,6 +1798,14 @@ pub struct Config {
         rename = "hiddenCommands"
     )]
     pub hidden_commands: Option<Vec<String>>,
+    /// Opt-in Telegram remote access to the brain (local memory). Inactive
+    /// unless enabled with a bot token and a non-empty user-id allowlist.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "brainRemote"
+    )]
+    pub brain_remote: Option<BrainRemoteConfig>,
 }
 
 // --- merged from part_03.rs ---
@@ -1791,6 +1846,7 @@ impl Default for Config {
             claude_code: None,      // Will use ClaudeCodeConfig::default() via getter
             mcp: None,              // External MCP servers are opt-in via config.ts
             hidden_commands: None,  // No commands hidden by default
+            brain_remote: None,     // Telegram brain bridge is opt-in via config.ts
             spine_styles: Vec::new(), // Built-in style catalog only by default
             spine_commands: Vec::new(), // Built-in command catalog only by default
         }

@@ -61,6 +61,7 @@ fn test_config_serialization() {
         claude_code: None,
         mcp: None,
         hidden_commands: None,
+        brain_remote: None,
         spine_styles: Vec::new(),
         spine_commands: Vec::new(),
     };
@@ -125,6 +126,7 @@ fn test_config_with_bun_path() {
         claude_code: None,
         mcp: None,
         hidden_commands: None,
+        brain_remote: None,
         spine_styles: Vec::new(),
         spine_commands: Vec::new(),
     };
@@ -171,6 +173,7 @@ fn test_config_without_bun_path() {
         claude_code: None,
         mcp: None,
         hidden_commands: None,
+        brain_remote: None,
         spine_styles: Vec::new(),
         spine_commands: Vec::new(),
     };
@@ -217,6 +220,7 @@ fn test_config_serialization_skip_none_bun_path() {
         claude_code: None,
         mcp: None,
         hidden_commands: None,
+        brain_remote: None,
         spine_styles: Vec::new(),
         spine_commands: Vec::new(),
     };
@@ -268,6 +272,7 @@ fn test_config_serialization_preserves_multiple_modifiers() {
         claude_code: None,
         mcp: None,
         hidden_commands: None,
+        brain_remote: None,
         spine_styles: Vec::new(),
         spine_commands: Vec::new(),
     };
@@ -386,6 +391,7 @@ fn test_config_with_empty_modifiers_list() {
         claude_code: None,
         mcp: None,
         hidden_commands: None,
+        brain_remote: None,
         spine_styles: Vec::new(),
         spine_commands: Vec::new(),
     };
@@ -438,6 +444,7 @@ fn test_config_key_preservation() {
             claude_code: None,
             mcp: None,
             hidden_commands: None,
+            brain_remote: None,
             spine_styles: Vec::new(),
             spine_commands: Vec::new(),
         };
@@ -489,6 +496,7 @@ fn test_config_with_editor() {
         claude_code: None,
         mcp: None,
         hidden_commands: None,
+        brain_remote: None,
         spine_styles: Vec::new(),
         spine_commands: Vec::new(),
     };
@@ -540,6 +548,7 @@ fn test_config_without_editor() {
         claude_code: None,
         mcp: None,
         hidden_commands: None,
+        brain_remote: None,
         spine_styles: Vec::new(),
         spine_commands: Vec::new(),
     };
@@ -593,6 +602,7 @@ fn test_get_editor_from_config() {
         claude_code: None,
         mcp: None,
         hidden_commands: None,
+        brain_remote: None,
         spine_styles: Vec::new(),
         spine_commands: Vec::new(),
     };
@@ -647,6 +657,7 @@ fn test_get_editor_from_env() {
         claude_code: None,
         mcp: None,
         hidden_commands: None,
+        brain_remote: None,
         spine_styles: Vec::new(),
         spine_commands: Vec::new(),
     };
@@ -707,6 +718,7 @@ fn test_get_editor_default() {
         claude_code: None,
         mcp: None,
         hidden_commands: None,
+        brain_remote: None,
         spine_styles: Vec::new(),
         spine_commands: Vec::new(),
     };
@@ -767,6 +779,7 @@ fn test_config_editor_priority() {
         claude_code: None,
         mcp: None,
         hidden_commands: None,
+        brain_remote: None,
         spine_styles: Vec::new(),
         spine_commands: Vec::new(),
     };
@@ -896,6 +909,7 @@ fn test_config_get_padding_custom() {
         claude_code: None,
         mcp: None,
         hidden_commands: None,
+        brain_remote: None,
         spine_styles: Vec::new(),
         spine_commands: Vec::new(),
     };
@@ -952,6 +966,7 @@ fn test_config_get_editor_font_size_custom() {
         claude_code: None,
         mcp: None,
         hidden_commands: None,
+        brain_remote: None,
         spine_styles: Vec::new(),
         spine_commands: Vec::new(),
     };
@@ -1016,6 +1031,7 @@ fn test_config_get_terminal_font_size_custom() {
         claude_code: None,
         mcp: None,
         hidden_commands: None,
+        brain_remote: None,
         spine_styles: Vec::new(),
         spine_commands: Vec::new(),
     };
@@ -1141,6 +1157,7 @@ fn test_config_serialization_includes_set_ui_settings() {
         claude_code: None,
         mcp: None,
         hidden_commands: None,
+        brain_remote: None,
         spine_styles: Vec::new(),
         spine_commands: Vec::new(),
     };
@@ -1263,6 +1280,7 @@ fn test_config_with_builtins() {
         claude_code: None,
         mcp: None,
         hidden_commands: None,
+        brain_remote: None,
         spine_styles: Vec::new(),
         spine_commands: Vec::new(),
     };
@@ -1529,6 +1547,7 @@ fn test_config_serialization_includes_set_builtins() {
         claude_code: None,
         mcp: None,
         hidden_commands: None,
+        brain_remote: None,
         spine_styles: Vec::new(),
         spine_commands: Vec::new(),
     };
@@ -1695,6 +1714,7 @@ fn test_config_with_process_limits() {
         claude_code: None,
         mcp: None,
         hidden_commands: None,
+        brain_remote: None,
         spine_styles: Vec::new(),
         spine_commands: Vec::new(),
     };
@@ -1836,6 +1856,7 @@ fn test_config_serialization_includes_set_process_limits() {
         claude_code: None,
         mcp: None,
         hidden_commands: None,
+        brain_remote: None,
         spine_styles: Vec::new(),
         spine_commands: Vec::new(),
     };
@@ -1974,6 +1995,7 @@ fn test_requires_confirmation_user_override_disable() {
         claude_code: None,
         mcp: None,
         hidden_commands: None,
+        brain_remote: None,
         spine_styles: Vec::new(),
         spine_commands: Vec::new(),
     };
@@ -2035,6 +2057,7 @@ fn test_requires_confirmation_user_override_enable() {
         claude_code: None,
         mcp: None,
         hidden_commands: None,
+        brain_remote: None,
         spine_styles: Vec::new(),
         spine_commands: Vec::new(),
     };
@@ -2169,6 +2192,7 @@ fn test_requires_confirmation_with_partial_command_config() {
         claude_code: None,
         mcp: None,
         hidden_commands: None,
+        brain_remote: None,
         spine_styles: Vec::new(),
         spine_commands: Vec::new(),
     };
@@ -2518,4 +2542,53 @@ fn unified_search_brain_inbox_options_respect_master_toggle_and_clamp() {
     unified.enabled = true;
     unified.brain_inbox.enabled = false;
     assert!(!unified.brain_inbox_section_options().enabled);
+}
+
+#[test]
+fn brain_remote_defaults_are_fully_disabled() {
+    let config = BrainRemoteConfig::default();
+    assert!(!config.enabled);
+    assert!(config.telegram_bot_token.is_none());
+    assert!(config.telegram_allowed_user_ids.is_empty());
+    assert!(!config.is_active());
+
+    // The root config carries no brainRemote section by default.
+    assert!(Config::default().brain_remote.is_none());
+    let parsed: Config = serde_json::from_str("{}").expect("empty config json");
+    assert!(parsed.brain_remote.is_none());
+}
+
+#[test]
+fn brain_remote_serde_partial_json_and_activation_gate() {
+    // Partial JSON fills missing keys from defaults (serde(default)).
+    let parsed: BrainRemoteConfig =
+        serde_json::from_str(r#"{ "enabled": true }"#).expect("partial brain remote json");
+    assert!(parsed.enabled);
+    assert!(parsed.telegram_bot_token.is_none());
+    assert!(parsed.telegram_allowed_user_ids.is_empty());
+    assert!(!parsed.is_active(), "enabled alone must not activate");
+
+    // camelCase keys round trip and the full triple activates.
+    let parsed: BrainRemoteConfig = serde_json::from_str(
+        r#"{ "enabled": true, "telegramBotToken": "123:abc", "telegramAllowedUserIds": [42, 7] }"#,
+    )
+    .expect("camelCase brain remote json");
+    assert_eq!(parsed.telegram_bot_token.as_deref(), Some("123:abc"));
+    assert_eq!(parsed.telegram_allowed_user_ids, vec![42, 7]);
+    assert!(parsed.is_active());
+    let json = serde_json::to_string(&parsed).expect("serialize brain remote config");
+    assert!(json.contains("\"telegramBotToken\":\"123:abc\""));
+    assert!(json.contains("\"telegramAllowedUserIds\":[42,7]"));
+
+    // An empty allowlist (or a blank token) disables the bridge entirely.
+    let parsed: BrainRemoteConfig = serde_json::from_str(
+        r#"{ "enabled": true, "telegramBotToken": "123:abc", "telegramAllowedUserIds": [] }"#,
+    )
+    .expect("empty allowlist json");
+    assert!(!parsed.is_active(), "empty allowlist must disable the bot");
+    let parsed: BrainRemoteConfig = serde_json::from_str(
+        r#"{ "enabled": true, "telegramBotToken": "   ", "telegramAllowedUserIds": [42] }"#,
+    )
+    .expect("blank token json");
+    assert!(!parsed.is_active(), "blank token must disable the bot");
 }
