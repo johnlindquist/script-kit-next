@@ -3,11 +3,11 @@ const WARM_SESSION_SOURCE: &str = include_str!("../src/ai/agent_chat/warm_sessio
 const AGENT_CHAT_LAUNCH_SOURCE: &str = include_str!("../src/ai/agent_chat/launch.rs");
 const AGENT_CHAT_VIEW_SOURCE: &str = include_str!("../src/ai/agent_chat/ui/view.rs");
 const AGENT_CHAT_THREAD_SOURCE: &str = include_str!("../src/ai/agent_chat/ui/thread.rs");
-const TAB_AI_MODE_SOURCE: &str = include_str!("../src/app_impl/tab_ai_mode/mod.rs");
+const TAB_AI_MODE_SOURCE: &str = include_str!("../src/app_impl/agent_handoff/mod.rs");
 const TAB_AI_AGENT_CHAT_LAUNCH_SOURCE: &str =
-    include_str!("../src/app_impl/tab_ai_mode/agent_chat_launch.rs");
+    include_str!("../src/app_impl/agent_handoff/agent_chat_launch.rs");
 const AGENT_CHAT_SETUP_SOURCE: &str =
-    include_str!("../src/app_impl/tab_ai_mode/agent_chat_setup.rs");
+    include_str!("../src/app_impl/agent_handoff/agent_chat_setup.rs");
 
 #[test]
 fn warm_session_manager_module_is_declared_under_agent_chat() {

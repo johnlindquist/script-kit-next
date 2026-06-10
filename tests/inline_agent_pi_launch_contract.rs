@@ -1,5 +1,5 @@
 const AGENT_CHAT_LAUNCH: &str = include_str!("../src/ai/agent_chat/launch.rs");
-const TAB_AI_MODE: &str = include_str!("../src/app_impl/tab_ai_mode/mod.rs");
+const TAB_AI_MODE: &str = include_str!("../src/app_impl/agent_handoff/mod.rs");
 const INLINE_AGENT_WINDOW: &str = include_str!("../src/inline_agent/window.rs");
 
 #[test]

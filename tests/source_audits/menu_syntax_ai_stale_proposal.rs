@@ -30,7 +30,7 @@ fn pending_menu_syntax_ai_proposals_carry_origin_and_guard_accept() {
 
 #[test]
 fn runtime_generation_and_render_paths_use_pending_origin() {
-    let tab_source = read_source("src/app_impl/tab_ai_mode/mod.rs");
+    let tab_source = read_source("src/app_impl/agent_handoff/mod.rs");
     assert!(
         tab_source.contains("PendingMenuSyntaxAiProposal::new("),
         "Cmd+Enter generation must store proposals with their raw-input origin"

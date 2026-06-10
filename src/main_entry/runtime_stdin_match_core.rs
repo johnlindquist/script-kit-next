@@ -135,7 +135,7 @@
                                 // Sibling teardown for the embedded AI (`kind: Ai`,
                                 // `id: "ai"`) registry entry. See the matching
                                 // `ensure_embedded_ai_window(false)` in
-                                // `src/app_impl/tab_ai_mode/mod.rs::close_agent_chat_to_script_list`
+                                // `src/app_impl/agent_handoff/mod.rs::close_agent_chat_to_script_list`
                                 // and the three-site lock-step across the Hide dispatchers
                                 // (this file, runtime_stdin.rs, app_run_setup.rs,
                                 // + window_visibility.rs::hide_main_window_helper).

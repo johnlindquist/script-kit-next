@@ -17,7 +17,7 @@
 //! guarantee. A source-level contract test is the tightest regression gate
 //! we can build without that fixture.
 
-const TAB_AI_MODE_SOURCE: &str = include_str!("../src/app_impl/tab_ai_mode/mod.rs");
+const TAB_AI_MODE_SOURCE: &str = include_str!("../src/app_impl/agent_handoff/mod.rs");
 const HANDLE_ACTION_SOURCE: &str = include_str!("../src/app_actions/handle_action/mod.rs");
 
 #[test]

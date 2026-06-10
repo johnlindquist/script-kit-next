@@ -57,7 +57,7 @@ default-filter = '''not (
     | binary(actions_builtin_list_live_host_contract)
     | binary(builtin_execution)
     | binary(design_gallery_triggerbuiltin_contract)
-    | binary(embedded_ai_window_tab_ai_mode_sites_contract)
+    | binary(embedded_ai_window_agent_handoff_sites_contract)
     | binary(file_search_drag_and_verbs)
     | binary(file_search_mutation_refresh)
     | binary(filter_input_updates_reconciliation)

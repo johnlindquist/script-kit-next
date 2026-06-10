@@ -19,7 +19,7 @@
 //! unit tests cannot pin:
 //!   1. No call site outside the mutator assigns the field directly.
 //!      (`self.agent_chat_surface_state = ...` must only exist in the mutator.)
-//!   2. Every Agent Chat open / close site in `tab_ai_mode.rs` fires the
+//!   2. Every Agent Chat open / close site in `agent_handoff.rs` fires the
 //!      matching `EmbeddedOpened` / `EmbeddedClosed` event.
 //!   3. Every attachment-portal open / close site in
 //!      `attachment_portal.rs` fires `PortalOpened { kind }` /
@@ -32,7 +32,7 @@
 const AGENT_CHAT_SURFACE_STATE: &str = include_str!("../src/ai/agent_chat/ui/surface_state.rs");
 const AGENT_CHAT_SURFACE_TRANSITIONS: &str =
     include_str!("../src/app_impl/agent_chat_surface_transitions.rs");
-const TAB_AI_MODE: &str = include_str!("../src/app_impl/tab_ai_mode/mod.rs");
+const TAB_AI_MODE: &str = include_str!("../src/app_impl/agent_handoff/mod.rs");
 const ATTACHMENT_PORTAL: &str = include_str!("../src/app_impl/attachment_portal.rs");
 const STARTUP: &str = include_str!("../src/app_impl/startup.rs");
 
@@ -40,7 +40,7 @@ const STARTUP: &str = include_str!("../src/app_impl/startup.rs");
 fn agent_chat_surface_state_raw_writes_only_in_mutator() {
     // `self.agent_chat_surface_state = ...` assignments must appear in exactly
     // one place — the mutator. Any drift (a future refactor poking the
-    // field directly from a tab_ai_mode / attachment_portal path)
+    // field directly from a agent_handoff / attachment_portal path)
     // defeats the tracing and debug-assert coverage the mutator adds.
     assert!(
         AGENT_CHAT_SURFACE_TRANSITIONS.contains("self.agent_chat_surface_state = next;"),
@@ -48,7 +48,7 @@ fn agent_chat_surface_state_raw_writes_only_in_mutator() {
     );
 
     for (label, source) in [
-        ("src/app_impl/tab_ai_mode/mod.rs", TAB_AI_MODE),
+        ("src/app_impl/agent_handoff/mod.rs", TAB_AI_MODE),
         ("src/app_impl/attachment_portal.rs", ATTACHMENT_PORTAL),
         ("src/app_impl/startup.rs", STARTUP),
     ] {
@@ -72,7 +72,7 @@ fn agent_chat_embedded_open_sites_fire_transition() {
         .count();
     assert!(
         opens >= 4,
-        "tab_ai_mode.rs must fire EmbeddedOpened from all four Agent Chat open paths \
+        "agent_handoff.rs must fire EmbeddedOpened from all four Agent Chat open paths \
          (fresh launch, reuse, setup card, not-ready); found {opens}"
     );
 
@@ -81,7 +81,7 @@ fn agent_chat_embedded_open_sites_fire_transition() {
         .count();
     assert!(
         closes >= 2,
-        "tab_ai_mode.rs must fire EmbeddedClosed from both close-to-script-list \
+        "agent_handoff.rs must fire EmbeddedClosed from both close-to-script-list \
          and harness-terminal-closing-chat paths; found {closes}"
     );
 }

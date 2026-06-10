@@ -1396,11 +1396,11 @@ mod tests {
             target: crate::ai::tab_context::TabAiTargetContext {
                 source: "FileSearch".to_string(),
                 kind: "file".to_string(),
-                semantic_id: "choice:0:tab_ai_mode.rs".to_string(),
-                label: "tab_ai_mode.rs".to_string(),
-                metadata: Some(serde_json::json!({ "path": "/tmp/tab_ai_mode.rs" })),
+                semantic_id: "choice:0:agent_handoff.rs".to_string(),
+                label: "agent_handoff.rs".to_string(),
+                metadata: Some(serde_json::json!({ "path": "/tmp/agent_handoff.rs" })),
             },
-            label: "File: tab_ai_mode.rs".to_string(),
+            label: "File: agent_handoff.rs".to_string(),
         };
 
         let block =
@@ -1409,9 +1409,9 @@ mod tests {
         assert!(block.contains("source=\"focusedTarget\""));
         assert!(block.contains("itemSource=\"FileSearch\""));
         assert!(block.contains("itemKind=\"file\""));
-        assert!(block.contains("semanticId=\"choice:0:tab_ai_mode.rs\""));
-        assert!(block.contains("Label: File: tab_ai_mode.rs"));
-        assert!(block.contains("/tmp/tab_ai_mode.rs"));
+        assert!(block.contains("semanticId=\"choice:0:agent_handoff.rs\""));
+        assert!(block.contains("Label: File: agent_handoff.rs"));
+        assert!(block.contains("/tmp/agent_handoff.rs"));
     }
 
     #[test]

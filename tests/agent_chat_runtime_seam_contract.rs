@@ -5,9 +5,9 @@ const AGENT_CHAT_LAUNCH_SOURCE: &str = include_str!("../src/ai/agent_chat/launch
 const AGENT_CHAT_THREAD_SOURCE: &str = include_str!("../src/ai/agent_chat/ui/thread.rs");
 const AGENT_CHAT_VIEW_SOURCE: &str = include_str!("../src/ai/agent_chat/ui/view.rs");
 const APP_STATE_SOURCE: &str = include_str!("../src/main_sections/app_state.rs");
-const TAB_AI_MODE_SOURCE: &str = include_str!("../src/app_impl/tab_ai_mode/mod.rs");
+const TAB_AI_MODE_SOURCE: &str = include_str!("../src/app_impl/agent_handoff/mod.rs");
 const TAB_AI_AGENT_CHAT_LAUNCH_SOURCE: &str =
-    include_str!("../src/app_impl/tab_ai_mode/agent_chat_launch.rs");
+    include_str!("../src/app_impl/agent_handoff/agent_chat_launch.rs");
 
 #[test]
 fn agent_chat_runtime_modules_are_declared() {

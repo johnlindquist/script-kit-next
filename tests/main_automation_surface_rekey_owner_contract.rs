@@ -4,10 +4,10 @@ const AUTOMATION_SURFACE_SOURCE: &str = include_str!("../src/app_impl/automation
 const ABOUT_ROUTE_SOURCE: &str = include_str!("../src/app_impl/about_route.rs");
 const TRIGGER_DISPATCH_SOURCE: &str = include_str!("../src/app_impl/trigger_builtin_dispatch.rs");
 const AGENT_CHAT_SETUP_SOURCE: &str =
-    include_str!("../src/app_impl/tab_ai_mode/agent_chat_setup.rs");
+    include_str!("../src/app_impl/agent_handoff/agent_chat_setup.rs");
 const AGENT_CHAT_LAUNCH_SOURCE: &str =
-    include_str!("../src/app_impl/tab_ai_mode/agent_chat_launch.rs");
-const TAB_AI_MODE_SOURCE: &str = include_str!("../src/app_impl/tab_ai_mode/mod.rs");
+    include_str!("../src/app_impl/agent_handoff/agent_chat_launch.rs");
+const TAB_AI_MODE_SOURCE: &str = include_str!("../src/app_impl/agent_handoff/mod.rs");
 const AGENT_CHAT_SURFACE_TRANSITIONS_SOURCE: &str =
     include_str!("../src/app_impl/agent_chat_surface_transitions.rs");
 
@@ -116,7 +116,7 @@ fn return_view_restore_paths_delegate_to_shared_owner() {
             "fn restore_attachment_portal_return_view",
         ),
         (
-            "tab_ai_mode/mod.rs",
+            "agent_handoff/mod.rs",
             TAB_AI_MODE_SOURCE,
             "fn close_tab_ai_harness_terminal_impl",
         ),
@@ -204,7 +204,7 @@ fn embedded_agent_chat_entry_and_return_paths_rekey_from_current_view_contract()
     for (name, source) in [
         ("agent_chat_setup.rs", AGENT_CHAT_SETUP_SOURCE),
         ("agent_chat_launch.rs", AGENT_CHAT_LAUNCH_SOURCE),
-        ("tab_ai_mode/mod.rs", TAB_AI_MODE_SOURCE),
+        ("agent_handoff/mod.rs", TAB_AI_MODE_SOURCE),
     ] {
         assert!(
             !source.contains("semantic_surface_for_main_view(&self.current_view)"),
@@ -214,11 +214,11 @@ fn embedded_agent_chat_entry_and_return_paths_rekey_from_current_view_contract()
 
     assert!(
         !TAB_AI_MODE_SOURCE.contains("semantic_surface_for_main_view(&self.current_view)"),
-        "tab_ai_mode/mod.rs must not hand-roll main semantic-surface re-keying"
+        "agent_handoff/mod.rs must not hand-roll main semantic-surface re-keying"
     );
     assert!(
         TAB_AI_MODE_SOURCE.contains("self.exit_embedded_agent_chat_surface("),
-        "tab_ai_mode/mod.rs must delegate embedded Agent Chat return-origin close to the lifecycle actor"
+        "agent_handoff/mod.rs must delegate embedded Agent Chat return-origin close to the lifecycle actor"
     );
     assert!(
         !AGENT_CHAT_SETUP_SOURCE.contains("self.rekey_main_automation_surface_from_current_view();")
@@ -240,7 +240,7 @@ fn embedded_agent_chat_entry_and_return_paths_rekey_from_current_view_contract()
     let entry_delegate_count: usize = [
         ("agent_chat_setup.rs", AGENT_CHAT_SETUP_SOURCE),
         ("agent_chat_launch.rs", AGENT_CHAT_LAUNCH_SOURCE),
-        ("tab_ai_mode/mod.rs", TAB_AI_MODE_SOURCE),
+        ("agent_handoff/mod.rs", TAB_AI_MODE_SOURCE),
     ]
     .iter()
     .map(|(_, source)| {

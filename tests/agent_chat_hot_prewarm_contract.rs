@@ -81,7 +81,8 @@ fn startup_schedules_agent_chat_connection_prewarm() {
 
 #[test]
 fn agent_chat_hot_prewarm_helper_uses_pi_warm_session() {
-    let tab_ai = fs::read_to_string("src/app_impl/tab_ai_mode/mod.rs").expect("read tab ai source");
+    let tab_ai =
+        fs::read_to_string("src/app_impl/agent_handoff/mod.rs").expect("read tab ai source");
     let body = fn_body(&tab_ai, "pub(crate) fn warm_agent_chat_on_startup(");
 
     assert!(
@@ -112,7 +113,8 @@ fn agent_chat_hot_prewarm_helper_uses_pi_warm_session() {
 
 #[test]
 fn profile_selection_starts_selected_profile_warm_session() {
-    let tab_ai = fs::read_to_string("src/app_impl/tab_ai_mode/mod.rs").expect("read tab ai source");
+    let tab_ai =
+        fs::read_to_string("src/app_impl/agent_handoff/mod.rs").expect("read tab ai source");
     let body = fn_body(&tab_ai, "fn select_agent_chat_profile_and_relaunch(");
 
     assert!(
@@ -131,7 +133,8 @@ fn profile_selection_starts_selected_profile_warm_session() {
 
 #[test]
 fn entry_intent_does_not_reuse_cached_setup_mode_agent_chat_view() {
-    let tab_ai = fs::read_to_string("src/app_impl/tab_ai_mode/mod.rs").expect("read tab ai source");
+    let tab_ai =
+        fs::read_to_string("src/app_impl/agent_handoff/mod.rs").expect("read tab ai source");
     let open_body = fn_body(&tab_ai, "fn open_tab_ai_agent_chat_with_options(");
     let reuse_body = fn_body(&tab_ai, "fn try_reuse_embedded_agent_chat_view(");
     let predicate_body = fn_body(
@@ -172,7 +175,8 @@ fn entry_intent_does_not_reuse_cached_setup_mode_agent_chat_view() {
 
 #[test]
 fn spine_profile_selection_starts_selected_profile_warm_session() {
-    let tab_ai = fs::read_to_string("src/app_impl/tab_ai_mode/mod.rs").expect("read tab ai source");
+    let tab_ai =
+        fs::read_to_string("src/app_impl/agent_handoff/mod.rs").expect("read tab ai source");
     let body = fn_body(
         &tab_ai,
         "pub(crate) fn try_submit_spine_prompt_plan_from_enter(",
@@ -220,7 +224,7 @@ fn codex_agent_chat_kill_switch_is_manual_not_dev_default() {
 
 #[test]
 fn agent_chat_open_uses_pi_warm_session_without_fresh_agent_chat_runtime() {
-    let agent_chat_launch = fs::read_to_string("src/app_impl/tab_ai_mode/agent_chat_launch.rs")
+    let agent_chat_launch = fs::read_to_string("src/app_impl/agent_handoff/agent_chat_launch.rs")
         .expect("read Agent Chat launch source");
     let body = fn_body(
         &agent_chat_launch,
@@ -239,7 +243,7 @@ fn agent_chat_open_uses_pi_warm_session_without_fresh_agent_chat_runtime() {
 
 #[test]
 fn pi_tab_open_does_not_prepare_warm_synchronously_before_view_switch() {
-    let agent_chat_launch = fs::read_to_string("src/app_impl/tab_ai_mode/agent_chat_launch.rs")
+    let agent_chat_launch = fs::read_to_string("src/app_impl/agent_handoff/agent_chat_launch.rs")
         .expect("read Agent Chat launch source");
     let body = fn_body(&agent_chat_launch, "fn open_tab_ai_pi_view_from_launch(");
 
@@ -259,7 +263,8 @@ fn pi_tab_open_does_not_prepare_warm_synchronously_before_view_switch() {
 
 #[test]
 fn startup_agent_chat_prewarm_uses_background_prepare() {
-    let tab_ai = fs::read_to_string("src/app_impl/tab_ai_mode/mod.rs").expect("read tab ai source");
+    let tab_ai =
+        fs::read_to_string("src/app_impl/agent_handoff/mod.rs").expect("read tab ai source");
     let body = fn_body(&tab_ai, "pub(crate) fn warm_agent_chat_on_startup(");
 
     assert!(body.contains("prepare_warm_background"));
@@ -271,7 +276,8 @@ fn startup_agent_chat_prewarm_uses_background_prepare() {
 
 #[test]
 fn pi_agent_chat_escape_reset_uses_background_dismiss() {
-    let tab_ai = fs::read_to_string("src/app_impl/tab_ai_mode/mod.rs").expect("read tab ai source");
+    let tab_ai =
+        fs::read_to_string("src/app_impl/agent_handoff/mod.rs").expect("read tab ai source");
     let body = fn_body(&tab_ai, "fn dismiss_agent_chat_warm_lease_background(");
 
     assert!(body.contains("dismiss_reset_background"));
@@ -283,7 +289,8 @@ fn pi_agent_chat_escape_reset_uses_background_dismiss() {
 
 #[test]
 fn prewarm_consume_requires_matching_default_launch() {
-    let tab_ai = fs::read_to_string("src/app_impl/tab_ai_mode/mod.rs").expect("read tab ai source");
+    let tab_ai =
+        fs::read_to_string("src/app_impl/agent_handoff/mod.rs").expect("read tab ai source");
     let body = fn_body(&tab_ai, "fn take_prewarmed_agent_chat_for_launch(");
 
     assert!(

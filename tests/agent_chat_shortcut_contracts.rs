@@ -53,7 +53,7 @@ fn notes_agent_chat_history_uses_actions_route() {
 
 #[test]
 fn global_cmd_enter_uses_return_preserving_agent_chat_entry_helper() {
-    let source = include_str!("../src/app_impl/tab_ai_mode/mod.rs");
+    let source = include_str!("../src/app_impl/agent_handoff/mod.rs");
     let fn_start = source
         .find("pub(crate) fn try_route_global_cmd_enter_to_agent_chat_context_capture(")
         .expect("global Cmd+Enter helper must exist");
@@ -68,7 +68,7 @@ fn global_cmd_enter_uses_return_preserving_agent_chat_entry_helper() {
 
 #[test]
 fn entry_intent_return_helper_restores_previous_state_on_short_circuit() {
-    let source = include_str!("../src/app_impl/tab_ai_mode/mod.rs");
+    let source = include_str!("../src/app_impl/agent_handoff/mod.rs");
     let fn_start = source
         .find("fn open_tab_ai_agent_chat_with_entry_intent_preserving_return_and_options(")
         .expect("entry-intent preserving helper must exist");

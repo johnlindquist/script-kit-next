@@ -4,7 +4,7 @@
 const STARTUP_SOURCE: &str = include_str!("../src/app_impl/startup.rs");
 const STARTUP_NEW_ACTIONS_SOURCE: &str = include_str!("../src/app_impl/startup_new_actions.rs");
 const APP_RUN_SETUP_SOURCE: &str = include_str!("../src/main_entry/app_run_setup.rs");
-const TAB_AI_MODE_SOURCE: &str = include_str!("../src/app_impl/tab_ai_mode/mod.rs");
+const TAB_AI_MODE_SOURCE: &str = include_str!("../src/app_impl/agent_handoff/mod.rs");
 const AGENT_CHAT_VIEW_SOURCE: &str = include_str!("../src/ai/agent_chat/ui/view.rs");
 
 fn section_between<'a>(source: &'a str, start: &str, end: &str) -> &'a str {

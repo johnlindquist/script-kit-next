@@ -92,9 +92,9 @@ fn pi_rpc_text_reveal_has_markdown_and_long_word_guards() {
 #[test]
 fn pi_rpc_adapter_is_routed_through_agent_chat_launch_helper() {
     let launch = read("src/ai/agent_chat/launch.rs");
-    let tab_launch = read("src/app_impl/tab_ai_mode/agent_chat_launch.rs");
-    let tab_mode = read("src/app_impl/tab_ai_mode/mod.rs");
-    let setup = read("src/app_impl/tab_ai_mode/agent_chat_setup.rs");
+    let tab_launch = read("src/app_impl/agent_handoff/agent_chat_launch.rs");
+    let tab_mode = read("src/app_impl/agent_handoff/mod.rs");
+    let setup = read("src/app_impl/agent_handoff/agent_chat_setup.rs");
 
     assert!(launch.contains("PiRpcRuntime::spawn"));
     assert!(launch.contains("PiRpcLaunchSpec::new"));

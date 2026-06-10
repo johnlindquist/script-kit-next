@@ -459,7 +459,7 @@ remain in the source.
 - Built-ins: `src/render_builtins/**`. Built-ins should model first-party use of
   the shared surface language.
 - Agent Chat/profiles: `src/ai/agent_chat/**`, `src/ai/agent_chat/ui/**`,
-  `src/app_impl/tab_ai_mode/**`. Product language should say Agent Chat even
+  `src/app_impl/agent_handoff/**`. Product language should say Agent Chat even
   where compatibility implementation names remain.
 - Plugin artifacts: `src/plugins/**`. Plugin profile artifacts are parsed and
   validated by the plugin profile module.

@@ -9,7 +9,7 @@
 //!
 //! Pass #50 fixes this by adding an `update_automation_semantic_surface("main",
 //! Some("scriptList".to_string()))` call to `close_agent_chat_to_script_list` in
-//! `src/app_impl/tab_ai_mode/mod.rs`, right after the view flip and before the
+//! `src/app_impl/agent_handoff/mod.rs`, right after the view flip and before the
 //! `agent_chat_restored_to_script_list` tracing emit. The call mirrors the
 //! existing hide-path re-key in `src/main_sections/window_visibility.rs:397`,
 //! which calls the same helper after `reset_to_script_list` for the same
@@ -20,13 +20,13 @@
 //! the re-key call to `close_agent_chat_to_script_list`'s body so the invariant
 //! can't drift silently.
 
-const TAB_AI_MODE_RS: &str = include_str!("../src/app_impl/tab_ai_mode/mod.rs");
+const TAB_AI_MODE_RS: &str = include_str!("../src/app_impl/agent_handoff/mod.rs");
 
 fn close_agent_chat_to_script_list_body(src: &str) -> &str {
     let start_marker = "pub(crate) fn close_agent_chat_to_script_list(";
     let start = src.find(start_marker).unwrap_or_else(|| {
         panic!(
-            "src/app_impl/tab_ai_mode/mod.rs must define `pub(crate) fn close_agent_chat_to_script_list`. \
+            "src/app_impl/agent_handoff/mod.rs must define `pub(crate) fn close_agent_chat_to_script_list`. \
              Did you rename or remove it? The function is the canonical entry point for the \
              Agent Chat-chat-detach-to-script-list transition; renaming it without updating this contract \
              breaks the surface-rekey pin."
@@ -50,7 +50,7 @@ fn close_agent_chat_to_script_list_rekeys_main_surface_to_scriptlist() {
         body.contains(
             "update_automation_semantic_surface(\"main\", Some(\"scriptList\".to_string()))"
         ),
-        "src/app_impl/tab_ai_mode/mod.rs `close_agent_chat_to_script_list` must call \
+        "src/app_impl/agent_handoff/mod.rs `close_agent_chat_to_script_list` must call \
          `update_automation_semantic_surface(\"main\", Some(\"scriptList\".to_string()))` \
          after the view flip to `AppView::ScriptList`. Without this call, \
          `listAutomationWindows[0].semanticSurface` stays `\"agentChatChat\"` after \

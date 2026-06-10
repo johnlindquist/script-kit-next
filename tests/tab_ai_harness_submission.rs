@@ -310,7 +310,7 @@ fn config_validation_rejects_nonexistent_binary() {
 // Session reuse contract (source-text assertions)
 // =========================================================================
 
-const TAB_AI_MODE_SOURCE: &str = include_str!("../src/app_impl/tab_ai_mode/mod.rs");
+const TAB_AI_MODE_SOURCE: &str = include_str!("../src/app_impl/agent_handoff/mod.rs");
 
 #[test]
 fn open_harness_terminal_saves_return_view_before_switching() {

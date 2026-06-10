@@ -6,7 +6,7 @@ fn read(path: &str) -> String {
 
 #[test]
 fn main_menu_skill_stages_on_target_agent_chat_view() {
-    let tab_ai = read("src/app_impl/tab_ai_mode/mod.rs");
+    let tab_ai = read("src/app_impl/agent_handoff/mod.rs");
     let body = tab_ai
         .split("pub(crate) fn open_agent_chat_with_selected_skill")
         .nth(1)

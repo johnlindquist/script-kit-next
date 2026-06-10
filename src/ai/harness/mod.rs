@@ -2493,7 +2493,7 @@ mod cleanup_contract_audits {
 
     #[test]
     fn close_tab_ai_harness_terminal_clears_session_and_rewarms() {
-        let source = include_str!("../../app_impl/tab_ai_mode/mod.rs");
+        let source = include_str!("../../app_impl/agent_handoff/mod.rs");
         let start = source
             .find("fn close_tab_ai_harness_terminal_impl(")
             .expect("close_tab_ai_harness_terminal_impl should exist");
@@ -2568,7 +2568,7 @@ mod cleanup_contract_audits {
 
     #[test]
     fn explicit_tab_entry_reuses_fresh_prewarm_once_then_forces_fresh() {
-        let source = include_str!("../../app_impl/tab_ai_mode/mod.rs");
+        let source = include_str!("../../app_impl/agent_handoff/mod.rs");
         let start = source
             .find("fn open_tab_ai_harness_terminal_from_request")
             .expect("open_tab_ai_harness_terminal_from_request should exist");
@@ -2608,7 +2608,7 @@ mod cleanup_contract_audits {
 
     #[test]
     fn prewarm_tags_cold_start_sessions_as_fresh() {
-        let source = include_str!("../../app_impl/tab_ai_mode/mod.rs");
+        let source = include_str!("../../app_impl/agent_handoff/mod.rs");
         let start = source
             .find("fn warm_tab_ai_harness_silently")
             .expect("warm_tab_ai_harness_silently should exist");
@@ -2657,7 +2657,7 @@ mod cleanup_contract_audits {
 
     #[test]
     fn startup_prewarm_delegates_to_silent_helper_with_opt_out() {
-        let source = include_str!("../../app_impl/tab_ai_mode/mod.rs");
+        let source = include_str!("../../app_impl/agent_handoff/mod.rs");
         let start = source
             .find("pub(crate) fn warm_tab_ai_harness_on_startup")
             .expect("warm_tab_ai_harness_on_startup should exist");
@@ -2676,7 +2676,7 @@ mod cleanup_contract_audits {
 
     #[test]
     fn silent_prewarm_helper_uses_encapsulated_helpers_not_raw_field_writes() {
-        let source = include_str!("../../app_impl/tab_ai_mode/mod.rs");
+        let source = include_str!("../../app_impl/agent_handoff/mod.rs");
         let start = source
             .find("fn warm_tab_ai_harness_silently")
             .expect("warm_tab_ai_harness_silently should exist");
@@ -2699,7 +2699,7 @@ mod cleanup_contract_audits {
 
     #[test]
     fn close_path_tears_down_session_and_reprewarms() {
-        let source = include_str!("../../app_impl/tab_ai_mode/mod.rs");
+        let source = include_str!("../../app_impl/agent_handoff/mod.rs");
 
         // The close fn delegates PTY teardown to the extracted helper.
         let close_body = compact(&extract_fn_body(
@@ -2760,7 +2760,7 @@ mod cleanup_contract_audits {
 
     #[test]
     fn force_fresh_path_propagates_terminate_failures() {
-        let source = include_str!("../../app_impl/tab_ai_mode/mod.rs");
+        let source = include_str!("../../app_impl/agent_handoff/mod.rs");
         let start = source
             .find("fn ensure_tab_ai_harness_terminal")
             .expect("ensure_tab_ai_harness_terminal should exist");
@@ -2816,7 +2816,7 @@ mod cleanup_contract_audits {
 
     #[test]
     fn tab_ai_open_path_reuses_fresh_prewarm_once_contract() {
-        let source = include_str!("../../app_impl/tab_ai_mode/mod.rs");
+        let source = include_str!("../../app_impl/agent_handoff/mod.rs");
         let body = compact(&extract_fn_body(
             source,
             "fn open_tab_ai_harness_terminal_from_request",
@@ -2840,7 +2840,7 @@ mod cleanup_contract_audits {
 
     #[test]
     fn force_fresh_path_clears_session_only_after_successful_terminate_contract() {
-        let source = include_str!("../../app_impl/tab_ai_mode/mod.rs");
+        let source = include_str!("../../app_impl/agent_handoff/mod.rs");
         let body = compact(&extract_fn_body(
             source,
             "fn ensure_tab_ai_harness_terminal",
@@ -2864,7 +2864,7 @@ mod cleanup_contract_audits {
 
     #[test]
     fn tab_ai_silent_prewarm_is_marked_fresh_on_cold_start_contract() {
-        let source = include_str!("../../app_impl/tab_ai_mode/mod.rs");
+        let source = include_str!("../../app_impl/agent_handoff/mod.rs");
         let body = compact(&extract_fn_body(source, "fn warm_tab_ai_harness_silently"));
         assert!(
             body.contains(&compact("if was_cold_start {")),
@@ -2882,7 +2882,7 @@ mod cleanup_contract_audits {
 
     #[test]
     fn tab_ai_close_path_reseeds_future_prewarm_contract() {
-        let source = include_str!("../../app_impl/tab_ai_mode/mod.rs");
+        let source = include_str!("../../app_impl/agent_handoff/mod.rs");
         let body = compact(&extract_fn_body(
             source,
             "fn close_tab_ai_harness_terminal_impl(",
@@ -2907,7 +2907,7 @@ mod cleanup_contract_audits {
     #[test]
     fn tab_ai_open_path_switches_view_before_waiting_for_capture_contract() {
         let body = extract_fn_body(
-            include_str!("../../app_impl/tab_ai_mode/mod.rs"),
+            include_str!("../../app_impl/agent_handoff/mod.rs"),
             "fn open_tab_ai_harness_terminal_from_request",
         );
 
@@ -2940,7 +2940,7 @@ mod cleanup_contract_audits {
 
     #[test]
     fn post_close_prewarm_uses_dedicated_helper_contract() {
-        let source = include_str!("../../app_impl/tab_ai_mode/mod.rs");
+        let source = include_str!("../../app_impl/agent_handoff/mod.rs");
         let schedule_body = compact(&extract_fn_body(
             source,
             "fn schedule_tab_ai_harness_prewarm",
@@ -2958,7 +2958,7 @@ mod cleanup_contract_audits {
 
     #[test]
     fn startup_and_post_close_prewarm_split_opt_out_contract() {
-        let source = include_str!("../../app_impl/tab_ai_mode/mod.rs");
+        let source = include_str!("../../app_impl/agent_handoff/mod.rs");
 
         let startup_body = compact(&extract_fn_body(
             source,
@@ -2981,7 +2981,7 @@ mod cleanup_contract_audits {
 
     #[test]
     fn silent_prewarm_helper_still_marks_cold_start_as_fresh_contract() {
-        let source = include_str!("../../app_impl/tab_ai_mode/mod.rs");
+        let source = include_str!("../../app_impl/agent_handoff/mod.rs");
         let body = compact(&extract_fn_body(source, "fn warm_tab_ai_harness_silently"));
 
         assert!(
@@ -3094,7 +3094,7 @@ mod cleanup_contract_audits {
 
     #[test]
     fn detect_source_type_delegates_to_canonical_function() {
-        let source = include_str!("../../app_impl/tab_ai_mode/source_classification.rs");
+        let source = include_str!("../../app_impl/agent_handoff/source_classification.rs");
         let body = compact(&extract_fn_body(source, "fn detect_tab_ai_source_type("));
 
         assert!(
@@ -3111,7 +3111,7 @@ mod cleanup_contract_audits {
 
     #[test]
     fn build_apply_back_hint_delegates_to_canonical_function() {
-        let source = include_str!("../../app_impl/tab_ai_mode/source_classification.rs");
+        let source = include_str!("../../app_impl/agent_handoff/source_classification.rs");
         let body = compact(&extract_fn_body(source, "fn build_tab_ai_apply_back_hint("));
 
         assert!(

@@ -1,6 +1,6 @@
 const AGENT_CHAT_SURFACE_TRANSITIONS_SOURCE: &str =
     include_str!("../src/app_impl/agent_chat_surface_transitions.rs");
-const TAB_AI_MODE_SOURCE: &str = include_str!("../src/app_impl/tab_ai_mode/mod.rs");
+const TAB_AI_MODE_SOURCE: &str = include_str!("../src/app_impl/agent_handoff/mod.rs");
 
 fn function_body<'a>(source: &'a str, signature: &str) -> &'a str {
     let start = source

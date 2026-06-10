@@ -3,8 +3,8 @@
 //!
 //! The detached popup has THREE cleanup sites that can run concurrently against
 //! the same `CHAT_WINDOW: OnceLock<Mutex<Option<ChatWindowState>>>`:
-//!   1. `chat_window_options`'s `on_window_should_close` (placeholder open path,
-//!      src/ai/agent_chat/ui/chat_window.rs ~line 116)
+//!   1. `open_chat_window`'s `on_window_should_close` (placeholder open path,
+//!      src/ai/agent_chat/ui/chat_window.rs)
 //!   2. `open_chat_window_with_thread`'s `on_window_should_close` (thread open
 //!      path, ~line 184)
 //!   3. `close_chat_window` helper (external TriggerAction path, ~line 525)
@@ -30,29 +30,57 @@ fn count_occurrences(haystack: &str, needle: &str) -> usize {
     haystack.matches(needle).count()
 }
 
+/// The three close sites that must each take state out of the CHAT_WINDOW mutex.
+const CLOSE_SITE_FNS: [&str; 3] = [
+    "pub fn open_chat_window(",
+    "pub fn open_chat_window_with_thread(",
+    "pub fn close_chat_window(",
+];
+
+/// Brace-matched body of the function starting at `signature`.
+fn function_body<'a>(source: &'a str, signature: &str) -> &'a str {
+    let start = source
+        .find(signature)
+        .unwrap_or_else(|| panic!("missing function: {signature}"));
+    let rest = &source[start..];
+    let open = rest.find('{').expect("function body open brace");
+    let mut depth = 0usize;
+    for (index, ch) in rest[open..].char_indices() {
+        match ch {
+            '{' => depth += 1,
+            '}' => {
+                depth -= 1;
+                if depth == 0 {
+                    return &rest[open..open + index + 1];
+                }
+            }
+            _ => {}
+        }
+    }
+    panic!("unterminated function body for {signature}");
+}
+
 #[test]
 fn every_close_site_takes_state_out_of_the_mutex() {
     // The `g.take()` pattern is what makes the three close sites race-safe:
     // whichever lock-holder runs first observes Some(state) and does the work;
     // any subsequent lock-holder observes None and becomes a no-op.
     //
-    // Expected count: 3 (one per close site).
+    // Each named close site must keep its own `g.take()`:
     // - chat_window_options placeholder on_window_should_close
     // - open_chat_window_with_thread on_window_should_close
     // - close_chat_window helper
-    let take_calls = count_occurrences(CHAT_WINDOW_RS, "g.take()");
-    assert!(
-        take_calls >= 3,
-        "src/ai/agent_chat/ui/chat_window.rs must call `g.take()` at every CHAT_WINDOW \
-         cleanup site to preserve exactly-once cleanup under concurrent close. \
-         Found {} occurrence(s); expected at least 3 (placeholder on_close, \
-         thread on_close, close_chat_window helper). If you refactored a close \
-         site to use `.as_ref()` or `.clone()` instead of `.take()`, both \
-         paths could observe the same state and double-run \
-         remove_runtime_window_handle / remove_automation_window, corrupting \
-         the registry.",
-        take_calls
-    );
+    for close_fn in CLOSE_SITE_FNS {
+        assert!(
+            function_body(CHAT_WINDOW_RS, close_fn).contains("g.take()"),
+            "{close_fn} in src/ai/agent_chat/ui/chat_window.rs must call `g.take()` \
+             at its CHAT_WINDOW cleanup site to preserve exactly-once cleanup under \
+             concurrent close. If you refactored this close site to use `.as_ref()` \
+             or `.clone()` instead of `.take()`, both paths could observe the same \
+             state and double-run remove_runtime_window_handle / \
+             remove_automation_window, corrupting the registry."
+        );
+    }
 }
 
 #[test]
@@ -74,23 +102,19 @@ fn close_sites_use_the_same_chat_window_mutex() {
         static_declarations
     );
 
-    // Every `slot.lock()` site must be preceded by a `CHAT_WINDOW.get_or_init`
-    // that points at the one-and-only static. We count `CHAT_WINDOW.get_or_init`
-    // occurrences as a lower bound on lock sites; a drift where some sites
-    // looked up a different static would reduce this count relative to
-    // `slot.lock().` occurrences.
-    let get_or_init_sites = count_occurrences(
-        CHAT_WINDOW_RS,
-        "CHAT_WINDOW.get_or_init(|| Mutex::new(None))",
-    );
-    assert!(
-        get_or_init_sites >= 3,
-        "src/ai/agent_chat/ui/chat_window.rs must initialize the CHAT_WINDOW Mutex at \
-         every close/cleanup site. Found {} occurrence(s); expected at least \
-         3 for the three close paths (placeholder on_close, thread on_close, \
-         close_chat_window helper).",
-        get_or_init_sites
-    );
+    // Every close site must look up the one-and-only static through
+    // `CHAT_WINDOW.get_or_init`; a drift where some site looked up a different
+    // static would break mutual exclusion between the close paths.
+    for close_fn in CLOSE_SITE_FNS {
+        assert!(
+            function_body(CHAT_WINDOW_RS, close_fn)
+                .contains("CHAT_WINDOW.get_or_init(|| Mutex::new(None))"),
+            "{close_fn} in src/ai/agent_chat/ui/chat_window.rs must acquire its lock \
+             through the single CHAT_WINDOW static (placeholder on_close, thread \
+             on_close, and close_chat_window must all serialize through the same \
+             mutex)."
+        );
+    }
 }
 
 #[test]
@@ -112,9 +136,8 @@ fn no_close_site_uses_non_take_extraction() {
         "\tg.clone()",
     ];
     for pattern in forbidden_patterns {
-        let count = count_occurrences(CHAT_WINDOW_RS, pattern);
-        assert_eq!(
-            count, 0,
+        assert!(
+            !CHAT_WINDOW_RS.contains(pattern),
             "src/ai/agent_chat/ui/chat_window.rs contains `{}` — cloning ChatWindowState \
              out of the mutex breaks exactly-once cleanup because a concurrent \
              close observing the clone would double-run remove_runtime_window_handle \

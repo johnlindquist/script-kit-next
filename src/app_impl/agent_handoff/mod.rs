@@ -350,7 +350,10 @@ impl ScriptListApp {
 
         self.set_spine_parse_from_filter_and_cursor(&raw, raw.len());
 
-        let plan = crate::spine::prompt_plan::build_spine_prompt_plan(&self.spine_parse);
+        let plan = crate::spine::prompt_plan::build_spine_prompt_plan_with_aliases(
+            &self.spine_parse,
+            &self.spine_mention_aliases,
+        );
         // Plain prose without sigils normally doesn't submit to chat. But when
         // the user has already established a working directory via the cwd
         // chip (typed `>` then picked a folder), Cmd+Enter on a non-empty
@@ -1006,7 +1009,12 @@ impl ScriptListApp {
         };
 
         let normalized = text.replace("\r\n", "\n").replace('\r', "\n");
-        let prepared = crate::pasted_text::prepare_pasted_text(&normalized, &[]);
+        // A5 decision (2026-06-09): the launcher input is single-line, so any
+        // multi-line paste routes to Agent Chat instead of being newline-
+        // stripped into the filter. Single-line pastes under the large-paste
+        // thresholds still paste inline.
+        let prepared =
+            crate::pasted_text::prepare_pasted_text_for_single_line_surface(&normalized, &[]);
         let Some(token) = prepared.token else {
             return false;
         };

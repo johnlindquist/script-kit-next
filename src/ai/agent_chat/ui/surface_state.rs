@@ -9,7 +9,7 @@
 //! `agent_chat-chat-state-machine-audit`. Overlay (picker / history /
 //! permission), thread turn status, portal contract, and resume
 //! lifecycle all stay where they are until PR2. The only purpose of
-//! this first slice is to give `tab_ai_mode.rs` and `attachment_portal.rs`
+//! this first slice is to give `agent_handoff.rs` and `attachment_portal.rs`
 //! *one* predicate to answer "should a launcher Tab / global Cmd+Enter
 //! route into Agent Chat right now?" — today that predicate is inferred from
 //! three different field shapes and drifts under refactor.

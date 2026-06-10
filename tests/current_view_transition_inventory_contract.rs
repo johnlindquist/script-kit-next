@@ -208,7 +208,7 @@ fn inventory_excludes_source_audit_fixture_strings() {
     );
     assert!(
         !entries.iter().any(|entry| {
-            entry["file"] == "src/app_impl/tab_ai_mode/mod.rs"
+            entry["file"] == "src/app_impl/agent_handoff/mod.rs"
                 && entry["expression"] == "AppView::QuickTerminalView\","
         }),
         "tab_ai source-audit fixture string must not appear as a current_view transition"
@@ -271,19 +271,19 @@ fn inventory_captures_named_transition_helper_call_sites() {
     let entries = inventory_entries();
     for (file, owner, helper, target) in [
         (
-            "src/app_impl/tab_ai_mode/agent_chat_setup.rs",
+            "src/app_impl/agent_handoff/agent_chat_setup.rs",
             "show_embedded_agent_chat_setup_view",
             "enter_embedded_agent_chat_surface",
             "AppView::AgentChatView",
         ),
         (
-            "src/app_impl/tab_ai_mode/agent_chat_launch.rs",
+            "src/app_impl/agent_handoff/agent_chat_launch.rs",
             "open_standard_agent_chat_mock_fixture",
             "enter_embedded_agent_chat_surface",
             "AppView::AgentChatView",
         ),
         (
-            "src/app_impl/tab_ai_mode/mod.rs",
+            "src/app_impl/agent_handoff/mod.rs",
             "try_reuse_embedded_agent_chat_view",
             "enter_embedded_agent_chat_surface",
             "AppView::AgentChatView",

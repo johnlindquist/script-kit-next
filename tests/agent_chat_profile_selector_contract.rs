@@ -9,8 +9,8 @@ const COLLECT_ELEMENTS_SOURCE: &str = include_str!("../src/app_layout/collect_el
 const ACT_TS: &str = include_str!("../scripts/devtools/act.ts");
 const APP_VIEW_STATE_SOURCE: &str = include_str!("../src/main_sections/app_view_state.rs");
 const AGENT_CHAT_LAUNCH_SOURCE: &str =
-    include_str!("../src/app_impl/tab_ai_mode/agent_chat_launch.rs");
-const TAB_AI_MODE_SOURCE: &str = include_str!("../src/app_impl/tab_ai_mode/mod.rs");
+    include_str!("../src/app_impl/agent_handoff/agent_chat_launch.rs");
+const TAB_AI_MODE_SOURCE: &str = include_str!("../src/app_impl/agent_handoff/mod.rs");
 const FILTER_INPUT_CORE_SOURCE: &str = include_str!("../src/app_impl/filter_input_core.rs");
 const FILTER_INPUT_UPDATES_SOURCE: &str = include_str!("../src/app_impl/filter_input_updates.rs");
 const AGENT_CHAT_VIEW_SOURCE: &str = include_str!("../src/ai/agent_chat/ui/view.rs");

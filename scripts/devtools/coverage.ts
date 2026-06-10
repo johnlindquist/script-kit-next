@@ -364,7 +364,7 @@ const surfaces: Surface[] = [
     status: "partial",
     domains: ["targets", "elements", "layout", "input", "screenshots", "accessibility", "console", "storage"],
     sourceFiles: [
-      "src/app_impl/tab_ai_mode/focused_text_entry.rs",
+      "src/app_impl/agent_handoff/focused_text_entry.rs",
       "src/ai/agent_chat/ui/view.rs",
       "src/ai/agent_chat/ui/ui_variant.rs",
       "src/ai/focused_text/platform_bridge.rs",

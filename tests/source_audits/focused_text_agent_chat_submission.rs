@@ -1,5 +1,5 @@
 const FOCUSED_TEXT_ENTRY: &str =
-    include_str!("../../src/app_impl/tab_ai_mode/focused_text_entry.rs");
+    include_str!("../../src/app_impl/agent_handoff/focused_text_entry.rs");
 const AGENT_CHAT_VIEW: &str = include_str!("../../src/ai/agent_chat/ui/view.rs");
 const AGENT_CHAT_THREAD: &str = include_str!("../../src/ai/agent_chat/ui/thread.rs");
 const SIMULATE_KEY_DISPATCH: &str = include_str!("../../src/app_impl/simulate_key_dispatch.rs");

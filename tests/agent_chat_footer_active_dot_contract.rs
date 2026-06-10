@@ -1,7 +1,7 @@
 //! Source-level contracts for the embedded Agent Chat footer activity indicator.
 
 const AGENT_CHAT_VIEW_SOURCE: &str = include_str!("../src/ai/agent_chat/ui/view.rs");
-const TAB_AI_MODE_SOURCE: &str = include_str!("../src/app_impl/tab_ai_mode/mod.rs");
+const TAB_AI_MODE_SOURCE: &str = include_str!("../src/app_impl/agent_handoff/mod.rs");
 const UI_WINDOW_SOURCE: &str = include_str!("../src/app_impl/ui_window.rs");
 const FOOTER_POPUP_SOURCE: &str = include_str!("../src/footer_popup.rs");
 const PROMPT_HANDLER_SOURCE: &str = include_str!("../src/prompt_handler/mod.rs");

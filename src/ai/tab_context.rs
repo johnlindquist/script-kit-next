@@ -902,7 +902,7 @@ mod tab_ai_experience_tests {
 
     #[test]
     fn file_studio_adds_clipboard_fusion() {
-        let focused = target("file", "tab_ai_mode.rs");
+        let focused = target("file", "agent_handoff.rs");
         let visible = vec![focused.clone()];
         let intents = build_tab_ai_experience_intents(
             Some(&focused),
@@ -953,7 +953,7 @@ mod tab_ai_experience_tests {
 
     #[test]
     fn experience_spec_uses_file_studio_for_focused_file() {
-        let focused = target("file", "tab_ai_mode.rs");
+        let focused = target("file", "agent_handoff.rs");
         let visible = vec![focused.clone()];
         let spec = build_tab_ai_experience_spec(Some(&focused), &visible, None, &[])
             .expect("file experience spec");
@@ -1006,7 +1006,7 @@ mod tab_ai_experience_tests {
 
     #[test]
     fn experience_spec_promotes_clipboard_fusion_into_top_three() {
-        let focused = target("file", "tab_ai_mode.rs");
+        let focused = target("file", "agent_handoff.rs");
         let visible = vec![focused.clone()];
         let spec =
             build_tab_ai_experience_spec(Some(&focused), &visible, Some(&clipboard("text")), &[])
@@ -4531,12 +4531,12 @@ mod tab_ai_source_type_tests {
     }
 
     // -----------------------------------------------------------------------
-    // Source-text contract tests: verify structural invariants of tab_ai_mode.rs
+    // Source-text contract tests: verify structural invariants of agent_handoff.rs
     // -----------------------------------------------------------------------
 
     const TAB_AI_MODE_SRC: &str = include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/src/app_impl/tab_ai_mode/mod.rs"
+        "/src/app_impl/agent_handoff/mod.rs"
     ));
 
     #[test]
@@ -4719,8 +4719,8 @@ mod tab_ai_apply_back_route_tests {
 
     #[test]
     fn tab_ai_apply_back_uses_running_command_prompt_reinjection() {
-        let source = std::fs::read_to_string("src/app_impl/tab_ai_mode/mod.rs")
-            .expect("read tab_ai_mode.rs");
+        let source = std::fs::read_to_string("src/app_impl/agent_handoff/mod.rs")
+            .expect("read agent_handoff.rs");
         assert!(
             source.contains("self.try_set_prompt_input(text.clone(), cx)"),
             "RunningCommand apply-back must reuse try_set_prompt_input"
@@ -4729,8 +4729,8 @@ mod tab_ai_apply_back_route_tests {
 
     #[test]
     fn tab_ai_frontmost_apply_back_hides_before_paste() {
-        let source = std::fs::read_to_string("src/app_impl/tab_ai_mode/mod.rs")
-            .expect("read tab_ai_mode.rs");
+        let source = std::fs::read_to_string("src/app_impl/agent_handoff/mod.rs")
+            .expect("read agent_handoff.rs");
         let hide_pos = source
             .find("crate::platform::defer_hide_main_window(cx)")
             .expect("apply-back must defer-hide the main window");
@@ -4752,8 +4752,8 @@ mod tab_ai_apply_back_route_tests {
 
     #[test]
     fn tab_ai_apply_back_route_cleared_on_close() {
-        let source = std::fs::read_to_string("src/app_impl/tab_ai_mode/mod.rs")
-            .expect("read tab_ai_mode.rs");
+        let source = std::fs::read_to_string("src/app_impl/agent_handoff/mod.rs")
+            .expect("read agent_handoff.rs");
         let close_fn_pos = source
             .find("fn close_tab_ai_harness_terminal")
             .expect("close_tab_ai_harness_terminal must exist");

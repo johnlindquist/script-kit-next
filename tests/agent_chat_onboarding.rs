@@ -3,9 +3,9 @@
 //! These are source-level contract tests that verify the launch path and setup
 //! surfaces no longer rely on Claude-specific copy or loaders.
 
-const TAB_AI_MODE_SOURCE: &str = include_str!("../src/app_impl/tab_ai_mode/mod.rs");
+const TAB_AI_MODE_SOURCE: &str = include_str!("../src/app_impl/agent_handoff/mod.rs");
 const AGENT_CHAT_LAUNCH_SOURCE: &str =
-    include_str!("../src/app_impl/tab_ai_mode/agent_chat_launch.rs");
+    include_str!("../src/app_impl/agent_handoff/agent_chat_launch.rs");
 const AGENT_CHAT_VIEW_SOURCE: &str = include_str!("../src/ai/agent_chat/ui/view.rs");
 const AGENT_CHAT_SETUP_CARD_SOURCE: &str =
     include_str!("../src/ai/agent_chat/ui/components/setup_card.rs");
@@ -20,14 +20,14 @@ const VERIFY_MACOS_BUNDLE_SOURCE: &str = include_str!("../scripts/verify-macos-b
 // ── Launch path uses catalog, not Claude-only loader ───────────────────
 
 #[test]
-fn tab_ai_mode_uses_pi_agent_chat_launch_not_legacy_catalog_loader() {
+fn agent_handoff_uses_pi_agent_chat_launch_not_legacy_catalog_loader() {
     assert!(
         AGENT_CHAT_LAUNCH_SOURCE.contains("open_tab_ai_pi_view_from_launch"),
-        "tab_ai_mode must route Agent Chat through Pi warm launch"
+        "agent_handoff must route Agent Chat through Pi warm launch"
     );
     assert!(
         !AGENT_CHAT_LAUNCH_SOURCE.contains("load_agent_chat_agent_catalog_entries"),
-        "tab_ai_mode must not use the legacy Agent Chat catalog runtime launch"
+        "agent_handoff must not use the legacy Agent Chat catalog runtime launch"
     );
 }
 
@@ -418,10 +418,10 @@ fn agent_chat_view_renders_runtime_setup_state() {
 // ── Launch requirements threaded into thread init ────────────────────
 
 #[test]
-fn tab_ai_mode_threads_launch_requirements_into_agent_chat_thread_init() {
+fn agent_handoff_threads_launch_requirements_into_agent_chat_thread_init() {
     assert!(
         TAB_AI_MODE_SOURCE.contains("launch_requirements: requirements"),
-        "tab_ai_mode must pass launch requirements into AgentChatThreadInit"
+        "agent_handoff must pass launch requirements into AgentChatThreadInit"
     );
 }
 

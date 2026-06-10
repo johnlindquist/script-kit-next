@@ -5053,6 +5053,7 @@ impl AgentChatView {
                 resolution_source, ..
             } => resolution_source.as_ref(),
             SpineListAction::OpenModeExit { .. } => "openModeExit",
+            SpineListAction::OpenFileSearchPortal { .. } => "openFileSearchPortal",
             SpineListAction::OpenConversation { .. } => "openConversation",
             SpineListAction::AwaitContextSubsearchInput { .. } => "awaitContextSubsearchInput",
             SpineListAction::Noop => "noop",
@@ -7446,6 +7447,32 @@ impl AgentChatView {
         cx: &mut Context<Self>,
     ) -> bool {
         match action {
+            SpineListAction::OpenFileSearchPortal {
+                segment_byte_range,
+                query,
+                ..
+            } => {
+                // The composer spine's Files row routes through the same
+                // portal contract as the context picker's top-level Files
+                // row: full built-in File Search with preview, accept
+                // replaces the `@file` segment with a compact token.
+                let text = self.live_thread().read(cx).input.text().to_string();
+                if segment_byte_range.end > text.len()
+                    || !text.is_char_boundary(segment_byte_range.start)
+                    || !text.is_char_boundary(segment_byte_range.end)
+                {
+                    return false;
+                }
+                let char_start = text[..segment_byte_range.start].chars().count();
+                let char_end = text[..segment_byte_range.end].chars().count();
+                self.open_picker_portal(
+                    crate::ai::window::context_picker::types::PortalKind::FileSearch,
+                    char_start..char_end,
+                    query.to_string(),
+                    cx,
+                );
+                true
+            }
             SpineListAction::InsertSegmentText {
                 segment_index,
                 segment_byte_range,
@@ -7495,10 +7522,16 @@ impl AgentChatView {
                 }
                 if resolution_source.as_ref() == "file" {
                     let full_path = resolution_id.as_ref().to_string();
-                    let short_path = crate::file_search::shorten_path(&full_path);
+                    // Compact token parity with portal attachments: show only
+                    // `basename.ext`; the alias registry preserves the full
+                    // path for context staging and the spine prompt plan.
+                    let basename = std::path::Path::new(&full_path)
+                        .file_name()
+                        .and_then(|name| name.to_str())
+                        .unwrap_or(&full_path);
                     let token = format!(
                         "@file:{}",
-                        crate::spine::catalog_subsearch::escape_ref_component(&short_path),
+                        crate::spine::catalog_subsearch::escape_ref_component(basename),
                     );
                     let part = crate::ai::message_parts::AiContextPart::FilePath {
                         path: full_path,
@@ -7674,8 +7707,10 @@ impl AgentChatView {
             (thread.input.text().to_string(), thread.input.cursor())
         };
         self.composer_spine.refresh(&text, cursor);
-        let plan =
-            crate::spine::prompt_plan::build_spine_prompt_plan(&self.composer_spine.input.parse);
+        let plan = crate::spine::prompt_plan::build_spine_prompt_plan_with_aliases(
+            &self.composer_spine.input.parse,
+            &self.typed_mention_aliases,
+        );
         if !plan.should_submit_to_chat() {
             return false;
         }
@@ -7732,8 +7767,10 @@ impl AgentChatView {
         }
 
         self.composer_spine.refresh(&raw_input, cursor);
-        let plan =
-            crate::spine::prompt_plan::build_spine_prompt_plan(&self.composer_spine.input.parse);
+        let plan = crate::spine::prompt_plan::build_spine_prompt_plan_with_aliases(
+            &self.composer_spine.input.parse,
+            &self.typed_mention_aliases,
+        );
         crate::ai::agent_prompt_handoff::compile_handoff_payload_from_spine_plan(
             adapter_id,
             raw_input,

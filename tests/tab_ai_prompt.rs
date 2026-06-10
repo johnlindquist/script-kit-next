@@ -244,7 +244,7 @@ fn build_tab_ai_user_prompt_mentions_clipboard_and_prior_automations() {
 // memory-hint rendering.
 
 /// The overlay source included once for all source-level assertions.
-const TAB_AI_SOURCE: &str = include_str!("../src/app_impl/tab_ai_mode/mod.rs");
+const TAB_AI_SOURCE: &str = include_str!("../src/app_impl/agent_handoff/mod.rs");
 const AGENT_CHAT_VIEW_SOURCE: &str = include_str!("../src/ai/agent_chat/ui/view.rs");
 
 #[test]

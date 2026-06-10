@@ -78,7 +78,7 @@ mod automation_surface;
 mod prompt_ai;
 #[path = "naming_dialog.rs"]
 mod naming_dialog;
-mod tab_ai_mode;
+mod agent_handoff;
 #[path = "attachment_portal.rs"]
 mod attachment_portal;
 #[path = "trigger_builtin_dispatch.rs"]

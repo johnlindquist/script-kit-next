@@ -39,19 +39,22 @@
 //!   5. the 3 Agent Chat entry paths call the shared owner
 //!   6. the `(false)` calls live inside both Agent Chat close bodies.
 
-const SRC: &str = include_str!("../src/app_impl/tab_ai_mode/mod.rs");
+const SRC: &str = include_str!("../src/app_impl/agent_handoff/mod.rs");
 const AGENT_CHAT_SETUP_SOURCE: &str =
-    include_str!("../src/app_impl/tab_ai_mode/agent_chat_setup.rs");
+    include_str!("../src/app_impl/agent_handoff/agent_chat_setup.rs");
 const AGENT_CHAT_LAUNCH_SOURCE: &str =
-    include_str!("../src/app_impl/tab_ai_mode/agent_chat_launch.rs");
+    include_str!("../src/app_impl/agent_handoff/agent_chat_launch.rs");
 const AGENT_CHAT_SURFACE_TRANSITIONS_SOURCE: &str =
     include_str!("../src/app_impl/agent_chat_surface_transitions.rs");
 
 fn production_sources() -> [(&'static str, &'static str); 3] {
     [
-        ("tab_ai_mode/mod.rs", SRC),
-        ("tab_ai_mode/agent_chat_setup.rs", AGENT_CHAT_SETUP_SOURCE),
-        ("tab_ai_mode/agent_chat_launch.rs", AGENT_CHAT_LAUNCH_SOURCE),
+        ("agent_handoff/mod.rs", SRC),
+        ("agent_handoff/agent_chat_setup.rs", AGENT_CHAT_SETUP_SOURCE),
+        (
+            "agent_handoff/agent_chat_launch.rs",
+            AGENT_CHAT_LAUNCH_SOURCE,
+        ),
     ]
 }
 
@@ -107,7 +110,7 @@ fn exactly_two_ensure_embedded_ai_window_false_calls() {
         .count();
     assert_eq!(
         count, 2,
-        "`src/app_impl/tab_ai_mode/mod.rs` MUST contain exactly 2 \
+        "`src/app_impl/agent_handoff/mod.rs` MUST contain exactly 2 \
          `ensure_embedded_ai_window(false)` calls: one forced ScriptList \
          detach/close path and one normal embedded Agent Chat return-origin \
          close path. Found {count}."

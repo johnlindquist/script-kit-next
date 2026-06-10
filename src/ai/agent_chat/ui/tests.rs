@@ -329,9 +329,9 @@ fn turn_finished_returns_to_idle_from_streaming() {
 // 4. Tab AI routing — source code contracts
 // =========================================================================
 
-const TAB_AI_MODE_SOURCE: &str = include_str!("../../../app_impl/tab_ai_mode/mod.rs");
+const TAB_AI_MODE_SOURCE: &str = include_str!("../../../app_impl/agent_handoff/mod.rs");
 const TAB_AI_AGENT_CHAT_LAUNCH_SOURCE: &str =
-    include_str!("../../../app_impl/tab_ai_mode/agent_chat_launch.rs");
+    include_str!("../../../app_impl/agent_handoff/agent_chat_launch.rs");
 const ACTIONS_TOGGLE_SOURCE: &str = include_str!("../../../app_impl/actions_toggle.rs");
 const STARTUP_SOURCE: &str = include_str!("../../../app_impl/startup.rs");
 const STARTUP_NEW_ACTIONS_SOURCE: &str = include_str!("../../../app_impl/startup_new_actions.rs");
@@ -381,19 +381,19 @@ fn app_view_has_agent_chat_view_variant() {
 }
 
 #[test]
-fn tab_ai_mode_creates_agent_chat_view_for_tab() {
+fn agent_handoff_creates_agent_chat_view_for_tab() {
     assert!(
         TAB_AI_AGENT_CHAT_LAUNCH_SOURCE.contains("AgentChatView::new"),
         "tab_ai Agent Chat launch helper must create an AgentChatView"
     );
     assert!(
         TAB_AI_AGENT_CHAT_LAUNCH_SOURCE.contains("enter_embedded_agent_chat_surface"),
-        "tab_ai_mode must set current_view to AgentChatView"
+        "agent_handoff must set current_view to AgentChatView"
     );
 }
 
 #[test]
-fn tab_ai_mode_creates_agent_chat_thread_with_connection() {
+fn agent_handoff_creates_agent_chat_thread_with_connection() {
     assert!(TAB_AI_AGENT_CHAT_LAUNCH_SOURCE.contains("AgentChatThread::new"));
     assert!(TAB_AI_AGENT_CHAT_LAUNCH_SOURCE.contains("open_tab_ai_pi_view_from_launch"));
     assert!(TAB_AI_AGENT_CHAT_LAUNCH_SOURCE.contains("warm_session_manager"));
@@ -401,7 +401,7 @@ fn tab_ai_mode_creates_agent_chat_thread_with_connection() {
 }
 
 #[test]
-fn tab_ai_mode_stages_context_on_agent_chat_thread() {
+fn agent_handoff_stages_context_on_agent_chat_thread() {
     assert!(
         TAB_AI_AGENT_CHAT_LAUNCH_SOURCE.contains("stage_agent_chat_initial_context_parts"),
         "tab_ai Agent Chat launch helper must stage context on the AgentChatThread"
@@ -409,7 +409,7 @@ fn tab_ai_mode_stages_context_on_agent_chat_thread() {
 }
 
 #[test]
-fn tab_ai_mode_supports_auto_submit_with_initial_input() {
+fn agent_handoff_supports_auto_submit_with_initial_input() {
     assert!(TAB_AI_AGENT_CHAT_LAUNCH_SOURCE.contains("initial_input"));
     assert!(TAB_AI_AGENT_CHAT_LAUNCH_SOURCE.contains("AgentChatThreadInit"));
 }
@@ -1783,19 +1783,19 @@ fn mention_picker_windowing_wrap_to_first() {
 // =========================================================================
 
 #[test]
-fn tab_ai_mode_uses_catalog_loader_not_claude_only_loader() {
+fn agent_handoff_uses_catalog_loader_not_claude_only_loader() {
     assert!(
         TAB_AI_MODE_SOURCE.contains("load_agent_chat_agent_catalog_entries"),
-        "tab_ai_mode must use the catalog loader, not Claude-only config"
+        "agent_handoff must use the catalog loader, not Claude-only config"
     );
     assert!(
         TAB_AI_MODE_SOURCE.contains("resolve_agent_chat_launch_with_requirements"),
-        "tab_ai_mode must use capability-aware preflight resolution"
+        "agent_handoff must use capability-aware preflight resolution"
     );
 }
 
 #[test]
-fn tab_ai_mode_routes_to_setup_mode_when_blocked() {
+fn agent_handoff_routes_to_setup_mode_when_blocked() {
     assert!(
         TAB_AI_AGENT_CHAT_LAUNCH_SOURCE.contains("show_pi_agent_chat_unavailable_setup_view"),
         "tab_ai Agent Chat launch helper must create setup-mode view when the Pi agent launch is blocked"
@@ -1803,7 +1803,7 @@ fn tab_ai_mode_routes_to_setup_mode_when_blocked() {
     assert!(
         TAB_AI_AGENT_CHAT_LAUNCH_SOURCE.contains("pi_agent_chat_launch_resolution_failed")
             || TAB_AI_AGENT_CHAT_LAUNCH_SOURCE.contains("pi_agent_chat_warm_failed_setup"),
-        "tab_ai_mode must log launch resolution event"
+        "agent_handoff must log launch resolution event"
     );
 }
 
@@ -1896,14 +1896,14 @@ fn ai_setup_surface_no_longer_mentions_claude_only_copy() {
 // =========================================================================
 
 #[test]
-fn tab_ai_mode_derives_launch_requirements() {
+fn agent_handoff_derives_launch_requirements() {
     assert!(
         TAB_AI_MODE_SOURCE.contains("AgentChatLaunchRequirements"),
-        "tab_ai_mode must derive AgentChatLaunchRequirements"
+        "agent_handoff must derive AgentChatLaunchRequirements"
     );
     assert!(
         TAB_AI_MODE_SOURCE.contains("agent_chat_open_retry_request_consumed"),
-        "tab_ai_mode must log retry request consumption with requirements"
+        "agent_handoff must log retry request consumption with requirements"
     );
 }
 
@@ -1967,13 +1967,13 @@ fn agent_chat_retry_request_from_setup_state_without_agent() {
 }
 
 #[test]
-fn tab_ai_mode_consumes_retry_request_on_open() {
+fn agent_handoff_consumes_retry_request_on_open() {
     // Verify the open path checks for a staged retry request from the view.
     // (The legacy per-agent preference fallback was removed — all sessions
     // use the Pi backend, so there is no agent preference to fall back to.)
     assert!(
         TAB_AI_AGENT_CHAT_LAUNCH_SOURCE.contains("take_agent_chat_retry_request_for_open"),
-        "tab_ai_mode must check for retry request from current view"
+        "agent_handoff must check for retry request from current view"
     );
 }
 
@@ -2986,8 +2986,8 @@ fn at_inline_portal_window_cannot_outlive_owner() {
 #[test]
 fn agent_chat_transient_trigger_exit_on_empty_composer() {
     let agent_chat_launch_source =
-        include_str!("../../../app_impl/tab_ai_mode/agent_chat_launch.rs");
-    let tab_ai_mode_source = include_str!("../../../app_impl/tab_ai_mode/mod.rs");
+        include_str!("../../../app_impl/agent_handoff/agent_chat_launch.rs");
+    let agent_handoff_source = include_str!("../../../app_impl/agent_handoff/mod.rs");
 
     // 1. AgentChatView has the opened_via_transient_trigger field
     assert!(
@@ -3014,7 +3014,7 @@ fn agent_chat_transient_trigger_exit_on_empty_composer() {
         "Agent Chat launch path must set opened_via_transient_trigger"
     );
     assert!(
-        tab_ai_mode_source.contains("chat.opened_via_transient_trigger = trigger;"),
+        agent_handoff_source.contains("chat.opened_via_transient_trigger = trigger;"),
         "Agent Chat reuse path must set opened_via_transient_trigger"
     );
 }

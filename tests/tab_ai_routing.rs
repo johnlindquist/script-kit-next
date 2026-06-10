@@ -9,9 +9,9 @@
 
 const TAB_SOURCE: &str = include_str!("../src/app_impl/startup.rs");
 const TAB_NEW_SOURCE: &str = include_str!("../src/app_impl/startup_new_tab.rs");
-const TAB_AI_MODE_SOURCE: &str = include_str!("../src/app_impl/tab_ai_mode/mod.rs");
+const TAB_AI_MODE_SOURCE: &str = include_str!("../src/app_impl/agent_handoff/mod.rs");
 const TAB_AI_AGENT_CHAT_LAUNCH_SOURCE: &str =
-    include_str!("../src/app_impl/tab_ai_mode/agent_chat_launch.rs");
+    include_str!("../src/app_impl/agent_handoff/agent_chat_launch.rs");
 const RENDER_IMPL_SOURCE: &str = include_str!("../src/main_sections/render_impl.rs");
 const SCRIPT_LIST_SOURCE: &str = include_str!("../src/render_script_list/mod.rs");
 const APP_STATE_SOURCE: &str = include_str!("../src/main_sections/app_state.rs");
@@ -445,11 +445,11 @@ fn harness_terminal_entry_derives_mode_from_intent() {
     );
     assert!(
         open_fn_body.contains("let submit_now = request"),
-        "tab_ai_mode.rs must derive submit flag from quick_submit_plan or entry_intent"
+        "agent_handoff.rs must derive submit flag from quick_submit_plan or entry_intent"
     );
     assert!(
         open_fn_body.contains("let submission_mode = if submit_now"),
-        "tab_ai_mode.rs must derive submission mode from resolved submit flag"
+        "agent_handoff.rs must derive submission mode from resolved submit flag"
     );
     assert!(
         open_fn_body.contains("TabAiHarnessSubmissionMode::Submit"),
@@ -738,7 +738,7 @@ fn app_view_state_no_longer_declares_tab_ai_overlay_state() {
 }
 
 #[test]
-fn tab_ai_mode_no_longer_renders_overlay() {
+fn agent_handoff_no_longer_renders_overlay() {
     assert!(
         !TAB_AI_MODE_SOURCE.contains("render_tab_ai_overlay"),
         "Tab AI should route through the harness terminal, not the overlay"
@@ -746,7 +746,7 @@ fn tab_ai_mode_no_longer_renders_overlay() {
 }
 
 #[test]
-fn tab_ai_mode_no_longer_has_overlay_open_close() {
+fn agent_handoff_no_longer_has_overlay_open_close() {
     assert!(
         !TAB_AI_MODE_SOURCE.contains("fn open_tab_ai_overlay"),
         "open_tab_ai_overlay must be removed"
@@ -1750,7 +1750,7 @@ fn legacy_inline_chat_absent_from_all_changed_harness_surfaces() {
     // guard for the changed harness-entry surfaces.
     let surfaces: &[(&str, &str)] = &[
         ("startup.rs (Tab interceptor)", TAB_SOURCE),
-        ("tab_ai_mode.rs (orchestration)", TAB_AI_MODE_SOURCE),
+        ("agent_handoff.rs (orchestration)", TAB_AI_MODE_SOURCE),
         (
             "render_prompts/term.rs (QuickTerminalView renderer)",
             TERM_RENDER_SOURCE,
@@ -1798,11 +1798,11 @@ fn startup_tab_interceptor_no_longer_routes_shift_tab_query_into_harness() {
 fn typed_command_enter_entry_uses_submit_mode_in_harness() {
     assert!(
         TAB_AI_MODE_SOURCE.contains("fn open_tab_ai_chat_with_entry_intent("),
-        "tab_ai_mode.rs must expose an entry-intent-aware harness entry point"
+        "agent_handoff.rs must expose an entry-intent-aware harness entry point"
     );
     assert!(
         TAB_AI_MODE_SOURCE.contains("let submit_now = request"),
-        "tab_ai_mode.rs must derive submit flag from quick_submit_plan or entry_intent"
+        "agent_handoff.rs must derive submit flag from quick_submit_plan or entry_intent"
     );
     assert!(
         TAB_AI_MODE_SOURCE.contains("crate::ai::TabAiHarnessSubmissionMode::Submit"),
@@ -2438,7 +2438,7 @@ fn script_list_branch_delegates_to_search_result_helper() {
 fn tab_ai_target_from_search_result_helper_exists() {
     assert!(
         TAB_AI_MODE_SOURCE.contains("fn tab_ai_target_from_search_result("),
-        "tab_ai_target_from_search_result helper must exist in tab_ai_mode.rs"
+        "tab_ai_target_from_search_result helper must exist in agent_handoff.rs"
     );
 }
 
@@ -2737,8 +2737,8 @@ fn legacy_ai_window_entries_stay_removed_while_manual_paths_stay_present() {
 
 #[test]
 fn live_quick_submit_uses_structured_submission_helper() {
-    let src =
-        std::fs::read_to_string("src/app_impl/tab_ai_mode/mod.rs").expect("read tab_ai_mode.rs");
+    let src = std::fs::read_to_string("src/app_impl/agent_handoff/mod.rs")
+        .expect("read agent_handoff.rs");
 
     let fn_start = src
         .find("pub(crate) fn submit_to_current_or_new_tab_ai_harness_from_text(")
@@ -2757,8 +2757,8 @@ fn live_quick_submit_uses_structured_submission_helper() {
 
 #[test]
 fn live_quick_submit_helper_builds_full_harness_submission() {
-    let src =
-        std::fs::read_to_string("src/app_impl/tab_ai_mode/mod.rs").expect("read tab_ai_mode.rs");
+    let src = std::fs::read_to_string("src/app_impl/agent_handoff/mod.rs")
+        .expect("read agent_handoff.rs");
 
     let helper_start = src
         .find("fn submit_live_tab_ai_harness_from_plan(")
@@ -3136,7 +3136,7 @@ fn agent_chat_view_has_empty_and_streaming_states() {
 
 #[test]
 fn agent_chat_mod_exports_required_types() {
-    // The Agent Chat module must re-export the key types used by tab_ai_mode.
+    // The Agent Chat module must re-export the key types used by agent_handoff.
     assert!(AGENT_CHAT_MOD_SOURCE.contains("AgentChatView"));
     assert!(AGENT_CHAT_MOD_SOURCE.contains("AgentChatThread"));
     assert!(AGENT_CHAT_MOD_SOURCE.contains("AgentChatPermissionBroker"));
@@ -4010,10 +4010,10 @@ fn detached_actions_window_routes_cmd_enter_to_send_to_agent_chat() {
 }
 
 #[test]
-fn tab_ai_mode_has_explicit_target_agent_chat_open_method() {
+fn agent_handoff_has_explicit_target_agent_chat_open_method() {
     assert!(
         TAB_AI_MODE_SOURCE.contains("fn open_tab_ai_agent_chat_with_explicit_target("),
-        "tab_ai_mode must define open_tab_ai_agent_chat_with_explicit_target for Cmd+Enter handoff"
+        "agent_handoff must define open_tab_ai_agent_chat_with_explicit_target for Cmd+Enter handoff"
     );
     // The method must stage a FocusedTarget chip, not synthesize prompt text
     let fn_start = TAB_AI_MODE_SOURCE

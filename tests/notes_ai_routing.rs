@@ -66,8 +66,8 @@ fn notes_keyboard_claims_cmd_enter() {
 
 #[test]
 fn chip_prefix_map_includes_action_and_note() {
-    let source = fs::read_to_string("src/app_impl/tab_ai_mode/mod.rs")
-        .expect("Failed to read src/app_impl/tab_ai_mode/mod.rs");
+    let source = fs::read_to_string("src/app_impl/agent_handoff/mod.rs")
+        .expect("Failed to read src/app_impl/agent_handoff/mod.rs");
 
     assert!(
         source.contains("\"action\" => \"Action\""),
@@ -162,13 +162,13 @@ fn shared_chip_label_formatter_exists_in_ai_module() {
 }
 
 #[test]
-fn tab_ai_mode_delegates_to_shared_chip_label_formatter() {
-    let source = fs::read_to_string("src/app_impl/tab_ai_mode/mod.rs")
-        .expect("Failed to read src/app_impl/tab_ai_mode/mod.rs");
+fn agent_handoff_delegates_to_shared_chip_label_formatter() {
+    let source = fs::read_to_string("src/app_impl/agent_handoff/mod.rs")
+        .expect("Failed to read src/app_impl/agent_handoff/mod.rs");
 
     assert!(
         source.contains("crate::ai::format_explicit_target_chip_label(target)"),
-        "tab_ai_mode chip label formatter must delegate to the shared formatter"
+        "agent_handoff chip label formatter must delegate to the shared formatter"
     );
 }
 

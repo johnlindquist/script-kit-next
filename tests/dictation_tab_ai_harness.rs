@@ -8,7 +8,7 @@
 const BUILTIN_EXECUTION_SOURCE: &str = include_str!("../src/app_execute/builtin_execution.rs");
 const BUILTINS_SOURCE: &str = include_str!("../src/builtins/mod.rs");
 const DICTATION_TYPES_SOURCE: &str = include_str!("../src/dictation/types.rs");
-const TAB_AI_MODE_SOURCE: &str = include_str!("../src/app_impl/tab_ai_mode/mod.rs");
+const TAB_AI_MODE_SOURCE: &str = include_str!("../src/app_impl/agent_handoff/mod.rs");
 
 // =========================================================================
 // Built-in variant exists

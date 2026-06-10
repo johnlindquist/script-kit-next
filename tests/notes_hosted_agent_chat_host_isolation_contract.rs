@@ -167,15 +167,26 @@ fn spawn_hosted_view_always_constructs_a_fresh_view() {
 
 #[test]
 fn freshly_constructed_agent_chat_view_has_no_pending_portal_session() {
-    let occurrences = VIEW_SOURCE.matches("pending_portal_session: None,").count();
-    assert!(
-        occurrences >= 2,
-        "AgentChatView::new must initialize pending_portal_session to None \
-         in BOTH constructor arms (Setup and Live) — found {occurrences} \
-         occurrences, expected >=2. A freshly spawned Notes-hosted view \
-         must not observe a portal staged in the main-host view a moment \
-         earlier."
-    );
+    // Locate each constructor arm by its `session:` initializer, then
+    // confirm the same struct literal initializes pending_portal_session
+    // to None. A freshly spawned Notes-hosted view must not observe a
+    // portal staged in the main-host view a moment earlier.
+    for arm_marker in [
+        "session: AgentChatSession::Live(thread),",
+        "session: AgentChatSession::Setup(Box::new(state)),",
+    ] {
+        let arm_start = VIEW_SOURCE
+            .find(arm_marker)
+            .unwrap_or_else(|| panic!("AgentChatView constructor lost its `{arm_marker}` arm"));
+        let tail = &VIEW_SOURCE[arm_start..];
+        let field_idx = tail.find("pending_portal_session:").unwrap_or_else(|| {
+            panic!("constructor arm `{arm_marker}` lost pending_portal_session initialization")
+        });
+        assert!(
+            tail[field_idx..].starts_with("pending_portal_session: None,"),
+            "constructor arm `{arm_marker}` must initialize pending_portal_session to None"
+        );
+    }
 }
 
 #[test]

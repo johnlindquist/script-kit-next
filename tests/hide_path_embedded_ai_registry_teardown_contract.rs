@@ -17,7 +17,7 @@
 //! The Fix adds `ensure_embedded_ai_window(false)` to ALL FOUR hide
 //! dispatcher sites, symmetric with the already-pinned
 //! `close_agent_chat_to_script_list` teardown at
-//! `src/app_impl/tab_ai_mode/mod.rs:3151`.
+//! `src/app_impl/agent_handoff/mod.rs:3151`.
 //!
 //! The hide path has since been split: the dispatcher tears down stale child
 //! automation entries before hiding, then schedules

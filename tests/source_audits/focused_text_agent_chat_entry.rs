@@ -1,12 +1,13 @@
 const APP_RUN_SETUP: &str = include_str!("../../src/main_entry/app_run_setup.rs");
 const RUNTIME_TRAY_HOTKEYS: &str = include_str!("../../src/main_entry/runtime_tray_hotkeys.rs");
 const FOCUSED_TEXT_ENTRY: &str =
-    include_str!("../../src/app_impl/tab_ai_mode/focused_text_entry.rs");
+    include_str!("../../src/app_impl/agent_handoff/focused_text_entry.rs");
 const AGENT_CHAT_VIEW: &str = include_str!("../../src/ai/agent_chat/ui/view.rs");
 const AGENT_CHAT_TRANSCRIPT: &str =
     include_str!("../../src/ai/agent_chat/ui/components/transcript.rs");
 const AGENT_CHAT_UI_VARIANT: &str = include_str!("../../src/ai/agent_chat/ui/ui_variant.rs");
-const AGENT_CHAT_LAUNCH: &str = include_str!("../../src/app_impl/tab_ai_mode/agent_chat_launch.rs");
+const AGENT_CHAT_LAUNCH: &str =
+    include_str!("../../src/app_impl/agent_handoff/agent_chat_launch.rs");
 const FOOTER_POPUP: &str = include_str!("../../src/footer_popup.rs");
 const STDIN_COMMANDS: &str = include_str!("../../src/stdin_commands/mod.rs");
 const RUNTIME_STDIN: &str = include_str!("../../src/main_entry/runtime_stdin.rs");
@@ -160,7 +161,7 @@ fn focused_text_footer_actions_are_explicit_and_dispatch_apply_back() {
     ] {
         assert!(
             AGENT_CHAT_VIEW.contains(required)
-                || include_str!("../../src/app_impl/tab_ai_mode/mod.rs").contains(required),
+                || include_str!("../../src/app_impl/agent_handoff/mod.rs").contains(required),
             "missing focused-text footer dispatch contract: {required}"
         );
     }
