@@ -51,6 +51,8 @@ const CONFIRM_TITLE_LINE_HEIGHT: f32 = 16.0;
 const CONFIRM_MIN_HEIGHT: f32 = 132.0;
 const CONFIRM_MAX_HEIGHT: f32 = 196.0;
 const CONFIRM_BODY_MAX_LINES: usize = 3;
+/// The body renders with `.text_xs()` — 0.75rem at the default 16px rem.
+const CONFIRM_BODY_FONT_SIZE: f32 = 12.0;
 const CONFIRM_LIFECYCLE_POLL_MS: u64 = 120;
 /// NSWindowOrderingMode::NSWindowAbove — place child above parent.
 const NS_WINDOW_ABOVE: i64 = 1;
@@ -126,30 +128,35 @@ fn confirm_window_key_intent(
     None
 }
 
-fn estimate_wrapped_lines(text: &str, approx_chars_per_line: usize) -> usize {
-    let approx_chars_per_line = approx_chars_per_line.max(1);
-    text.lines()
+/// Wrapped line count of `body` at the modal's real body font and width,
+/// using the text system's line wrapper. Replaces the old `width / 7.4`
+/// chars-per-line guess, which drifted whenever the body wrapped differently
+/// than the estimate (clipped text or excess bottom padding).
+fn confirm_body_wrapped_lines(body: &str, content_width: f32, cx: &App) -> usize {
+    let mut wrapper = cx.text_system().line_wrapper(
+        gpui::font(crate::list_item::FONT_SYSTEM_UI),
+        px(CONFIRM_BODY_FONT_SIZE),
+    );
+    body.lines()
         .map(|line| {
-            let line_len = line.chars().count().max(1);
-            line_len.div_ceil(approx_chars_per_line)
+            wrapper
+                .wrap_line(&[gpui::LineFragment::text(line)], px(content_width))
+                .count()
+                + 1
         })
         .sum::<usize>()
         .max(1)
 }
 
-fn confirm_window_dynamic_height(width: Pixels, _title: &str, body: &str) -> f32 {
-    let width_px: f32 = width.into();
-    let content_width = (width_px - (confirm_shell_padding_x() * 2.0)).max(160.0);
-    let approx_chars_per_line = ((content_width / 7.4).floor() as usize).max(12);
-
-    let has_body = !body.trim().is_empty();
+/// Pure clamp step shared by the measured path and the unit tests, so the
+/// sizing contract is testable without a live text system.
+fn confirm_window_height_from_body_lines(has_body: bool, body_lines: usize) -> f32 {
     let body_lines = if has_body {
-        estimate_wrapped_lines(body, approx_chars_per_line).min(CONFIRM_BODY_MAX_LINES)
+        body_lines.clamp(1, CONFIRM_BODY_MAX_LINES)
     } else {
         0
     };
-    let body_line_height = confirm_body_line_height();
-    let body_height = body_lines as f32 * body_line_height;
+    let body_height = body_lines as f32 * confirm_body_line_height();
     let gaps = confirm_modal_stack_gaps(has_body);
 
     (confirm_shell_padding_y() * 2.0
@@ -159,6 +166,19 @@ fn confirm_window_dynamic_height(width: Pixels, _title: &str, body: &str) -> f32
         + gaps.after_body_px.unwrap_or(0.0)
         + confirm_action_button_height())
     .clamp(CONFIRM_MIN_HEIGHT, CONFIRM_MAX_HEIGHT)
+}
+
+fn confirm_window_dynamic_height(width: Pixels, body: &str, cx: &App) -> f32 {
+    let width_px: f32 = width.into();
+    let content_width = (width_px - (confirm_shell_padding_x() * 2.0)).max(160.0);
+
+    let has_body = !body.trim().is_empty();
+    let body_lines = if has_body {
+        confirm_body_wrapped_lines(body, content_width, cx)
+    } else {
+        0
+    };
+    confirm_window_height_from_body_lines(has_body, body_lines)
 }
 
 fn confirm_modal_number(id: ConfirmModalKnobId, fallback: f32) -> f32 {
@@ -298,13 +318,24 @@ fn confirm_modal_spacer(id: &'static str, height_px: f32) -> AnyElement {
 fn confirm_window_bounds(
     parent_bounds: Bounds<Pixels>,
     width: Pixels,
-    title: &str,
     body: &str,
+    cx: &App,
 ) -> Bounds<Pixels> {
     let requested_width = width.min(px(CONFIRM_MODAL_WIDTH));
     let actual_width = requested_width.min(parent_bounds.size.width);
-    let height =
-        px(confirm_window_dynamic_height(actual_width, title, body)).min(parent_bounds.size.height);
+    let dynamic_height = confirm_window_dynamic_height(actual_width, body, cx);
+    confirm_window_bounds_from_height(parent_bounds, actual_width, dynamic_height)
+}
+
+/// Pure centering step: place a `width` × `height` popup centered over the
+/// parent, clamping height to the parent. Split from the measuring wrapper so
+/// tests can exercise the placement contract without a live text system.
+fn confirm_window_bounds_from_height(
+    parent_bounds: Bounds<Pixels>,
+    actual_width: Pixels,
+    dynamic_height: f32,
+) -> Bounds<Pixels> {
+    let height = px(dynamic_height).min(parent_bounds.size.height);
 
     let x = parent_bounds.origin.x + ((parent_bounds.size.width - actual_width) / 2.0);
     let y = parent_bounds.origin.y + ((parent_bounds.size.height - height) / 2.0);
@@ -668,8 +699,8 @@ pub(crate) fn open_confirm_popup_window(
     let bounds = confirm_window_bounds(
         parent_window.bounds,
         options.width,
-        options.title.as_ref(),
         options.body.as_ref(),
+        cx,
     );
 
     tracing::info!(
@@ -1560,16 +1591,20 @@ mod tests {
     }
 
     #[test]
-    fn confirm_window_dynamic_height_grows_with_body_length() {
-        let short = confirm_window_dynamic_height(px(448.), "Confirm", "Short body.");
-        let long = confirm_window_dynamic_height(
-            px(448.),
-            "Confirm",
-            &"This is a much longer confirmation body. ".repeat(40),
-        );
+    fn confirm_window_height_grows_with_body_lines_up_to_cap() {
+        let no_body = confirm_window_height_from_body_lines(false, 0);
+        let one_line = confirm_window_height_from_body_lines(true, 1);
+        let three_lines = confirm_window_height_from_body_lines(true, 3);
+        let many_lines = confirm_window_height_from_body_lines(true, 40);
 
-        assert!(long > short);
-        assert!(long <= CONFIRM_MAX_HEIGHT);
+        assert!(one_line >= no_body);
+        assert!(three_lines > one_line);
+        assert_eq!(
+            many_lines, three_lines,
+            "body lines must clamp at CONFIRM_BODY_MAX_LINES"
+        );
+        assert!(many_lines <= CONFIRM_MAX_HEIGHT);
+        assert!(no_body >= CONFIRM_MIN_HEIGHT);
     }
 
     #[test]
@@ -1585,13 +1620,14 @@ mod tests {
             },
         };
 
-        let bounds = confirm_window_bounds(parent_bounds, px(448.), "Confirm", "Body");
+        let expected_width = CONFIRM_MODAL_WIDTH;
+        let expected_height = confirm_window_height_from_body_lines(true, 1);
+        let bounds =
+            confirm_window_bounds_from_height(parent_bounds, px(expected_width), expected_height);
         let actual_x: f32 = bounds.origin.x.into();
         let actual_y: f32 = bounds.origin.y.into();
         let actual_w: f32 = bounds.size.width.into();
 
-        let expected_width = CONFIRM_MODAL_WIDTH;
-        let expected_height = confirm_window_dynamic_height(px(expected_width), "Confirm", "Body");
         let expected_x = 100.0 + ((750.0 - expected_width) / 2.0);
         let expected_y = 200.0 + ((500.0 - expected_height) / 2.0);
 
@@ -1613,11 +1649,11 @@ mod tests {
             },
         };
 
-        let bounds = confirm_window_bounds(
+        // Notes trash confirm: short two-line body at the compact width.
+        let bounds = confirm_window_bounds_from_height(
             parent_bounds,
             px(326.),
-            "Move note to Trash",
-            "Move this note to Trash? You can restore it later with \u{2318}\u{21e7}T.",
+            confirm_window_height_from_body_lines(true, 2),
         );
 
         let x: f32 = bounds.origin.x.into();
