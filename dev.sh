@@ -74,6 +74,11 @@ echo ""
 # Default to compact AI log mode unless explicitly overridden
 export SCRIPT_KIT_AI_LOG="${SCRIPT_KIT_AI_LOG:-1}"
 
+# Default cargo features for the dev build. local-llm enables the on-device
+# ghost-text predictor (Notes inline completions). Opt out with an explicit
+# empty value: SCRIPT_KIT_CARGO_FEATURES="" ./dev.sh
+export SCRIPT_KIT_CARGO_FEATURES="${SCRIPT_KIT_CARGO_FEATURES-local-llm}"
+
 # Dev startup profile: optimize for time-to-usable-session during cargo-watch loops.
 export SCRIPT_KIT_STARTUP_PROFILE="${SCRIPT_KIT_STARTUP_PROFILE:-dev-fast}"
 export SCRIPT_KIT_DEFER_SCHEDULER_STARTUP="${SCRIPT_KIT_DEFER_SCHEDULER_STARTUP:-1}"
@@ -195,6 +200,7 @@ else
 fi
 echo "   Agentic session: ${SCRIPT_KIT_DEV_SESSION_NAME}"
 echo "   Startup profile: ${SCRIPT_KIT_STARTUP_PROFILE}"
+echo "   Cargo features: ${SCRIPT_KIT_CARGO_FEATURES:-(none)} (opt out: SCRIPT_KIT_CARGO_FEATURES=\"\" ./dev.sh)"
 echo "   Quick Terminal warm PTY: disabled"
 echo "   Cargo dev profile: debug=0 incremental=true codegen-units=256"
 echo "   Build target: script-kit-gpui only (skips smoke-test, vibrancy-poc, menu-syntax-doctor)"
