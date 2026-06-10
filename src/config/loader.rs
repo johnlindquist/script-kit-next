@@ -47,6 +47,41 @@ fn config_json_cache_path() -> PathBuf {
         .join("config-loader-cache.v1.json")
 }
 
+/// Process-wide parsed-config memo keyed by the same `(path, len,
+/// modified_ms)` fingerprint as the on-disk JSON cache.
+///
+/// `load_config()` is called from hot paths (footer resolution, action
+/// builders during render, automation state collection). Without this memo
+/// every call re-read and re-parsed `config-loader-cache.v1.json` from disk
+/// (~1-3ms each), which showed up as per-frame I/O during arrow-key
+/// scrolling. The memo has identical staleness semantics to the disk cache:
+/// a `fs::metadata` fingerprint check per call, refreshed whenever
+/// `config.ts` changes.
+struct ConfigMemoEntry {
+    path: PathBuf,
+    fingerprint: ConfigSourceFingerprint,
+    config: Config,
+}
+
+static CONFIG_MEMO: LazyLock<Mutex<Option<ConfigMemoEntry>>> = LazyLock::new(|| Mutex::new(None));
+
+fn load_memoized_config(path: &Path, fingerprint: ConfigSourceFingerprint) -> Option<Config> {
+    let memo = CONFIG_MEMO.lock().ok()?;
+    memo.as_ref()
+        .filter(|entry| entry.path == path && entry.fingerprint == fingerprint)
+        .map(|entry| entry.config.clone())
+}
+
+fn store_memoized_config(path: &Path, fingerprint: ConfigSourceFingerprint, config: &Config) {
+    if let Ok(mut memo) = CONFIG_MEMO.lock() {
+        *memo = Some(ConfigMemoEntry {
+            path: path.to_path_buf(),
+            fingerprint,
+            config: config.clone(),
+        });
+    }
+}
+
 fn fingerprint_config_file(path: &Path) -> Option<ConfigSourceFingerprint> {
     let metadata = fs::metadata(path).ok()?;
     let modified_ms: u64 = metadata
@@ -673,8 +708,19 @@ pub fn save_user_preferences(prefs: &ScriptKitUserPreferences) -> anyhow::Result
 /// Returns Config::default() if any step fails.
 #[instrument(name = "load_config")]
 pub fn load_config() -> Config {
-    let correlation_id = format!("config_load:{}", uuid::Uuid::new_v4());
     let config_path = config_ts_path();
+
+    // Fingerprint the source file for cache lookup and later cache write.
+    let fingerprint = fingerprint_config_file(&config_path);
+
+    // Hot path: serve from the in-memory memo without disk reads or logging.
+    if let Some(fp) = fingerprint {
+        if let Some(config) = load_memoized_config(&config_path, fp) {
+            return config;
+        }
+    }
+
+    let correlation_id = format!("config_load:{}", uuid::Uuid::new_v4());
 
     if !config_path.exists() {
         info!(
@@ -685,12 +731,10 @@ pub fn load_config() -> Config {
         return Config::default();
     }
 
-    // Fingerprint the source file for cache lookup and later cache write.
-    let fingerprint = fingerprint_config_file(&config_path);
-
     // Cache path: try to serve from a previous Bun evaluation.
     if let Some(fp) = fingerprint {
         if let Some(config) = try_load_cached_config(&config_path, fp, &correlation_id) {
+            store_memoized_config(&config_path, fp, &config);
             return config;
         }
     } else {
@@ -721,6 +765,7 @@ pub fn load_config() -> Config {
             let config = parse_config_json(&json_str, &correlation_id);
             if let Some(fp) = fingerprint {
                 write_config_cache(&config_path, fp, &json_str, &correlation_id);
+                store_memoized_config(&config_path, fp, &config);
             }
             info!(
                 correlation_id = %correlation_id,
@@ -832,6 +877,7 @@ pub fn load_config() -> Config {
             let config = parse_config_json(&json_str, &correlation_id);
             if let Some(fp) = fingerprint {
                 write_config_cache(&config_path, fp, &json_str, &correlation_id);
+                store_memoized_config(&config_path, fp, &config);
             }
             info!(
                 correlation_id = %correlation_id,
