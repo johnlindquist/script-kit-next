@@ -334,8 +334,8 @@ pub(crate) fn agent_chat_empty_guidance_spec() -> InfoStateSpec {
         ]))
 }
 
-pub(crate) fn render_agent_chat_empty_guidance(theme: &theme::Theme) -> AnyElement {
-    render_info_state(agent_chat_empty_guidance_spec(), theme)
+pub(crate) fn render_agent_chat_empty_guidance(theme: &theme::Theme, cx: &gpui::App) -> AnyElement {
+    render_info_state(agent_chat_empty_guidance_spec(), theme, cx)
 }
 
 pub(crate) fn launcher_empty_or_no_results_spec(
@@ -358,10 +358,12 @@ pub(crate) fn render_launcher_empty_or_no_results(
     filter_text_for_render: &str,
     has_active_filter: bool,
     theme: &theme::Theme,
+    cx: &gpui::App,
 ) -> AnyElement {
     render_info_state(
         launcher_empty_or_no_results_spec(filter_text_for_render, has_active_filter),
         theme,
+        cx,
     )
 }
 
@@ -454,15 +456,20 @@ fn launcher_filter_display(filter_text: &str) -> String {
     }
 }
 
-pub(crate) fn render_info_state(spec: InfoStateSpec, theme: &theme::Theme) -> AnyElement {
+pub(crate) fn render_info_state(
+    spec: InfoStateSpec,
+    theme: &theme::Theme,
+    cx: &gpui::App,
+) -> AnyElement {
     let def = crate::designs::current_main_menu_theme().def();
-    render_info_state_with_main_view_def(spec, theme, def)
+    render_info_state_with_main_view_def(spec, theme, def, cx)
 }
 
 pub(crate) fn render_info_state_with_main_view_def(
     spec: InfoStateSpec,
     theme: &theme::Theme,
     def: crate::designs::MainMenuThemeDef,
+    cx: &gpui::App,
 ) -> AnyElement {
     let palette = info_palette(theme);
     let metrics = info_metrics(spec.density);
@@ -470,7 +477,7 @@ pub(crate) fn render_info_state_with_main_view_def(
         spec.layout,
         InfoStateLayout::ComposerEmpty | InfoStateLayout::MainViewColumns
     );
-    let content = render_info_content(&spec, theme, palette, metrics, !uses_main_view_columns);
+    let content = render_info_content(&spec, theme, palette, metrics, !uses_main_view_columns, cx);
 
     match spec.layout {
         InfoStateLayout::Centered => div()
@@ -535,6 +542,7 @@ fn render_info_content(
     palette: InfoPalette,
     metrics: InfoMetrics,
     cap_width: bool,
+    cx: &gpui::App,
 ) -> Div {
     let title_metric = match spec.density {
         InfoStateDensity::Compact => INFO_TYPE_SCALE.subhead,
@@ -595,6 +603,7 @@ fn render_info_content(
             theme,
             palette,
             metrics,
+            cx,
         ));
     }
 
@@ -607,7 +616,7 @@ fn render_info_content(
             .iter()
             .flat_map(|section| section.items.iter().cloned())
             .collect();
-        let shortcut_slot_width_px = info_guidance_shortcut_slot_width_px(&guidance_items);
+        let shortcut_slot_width_px = info_guidance_shortcut_slot_width_px(&guidance_items, cx);
         stack = stack.child(render_info_shortcut_note(
             note,
             metrics,
@@ -665,6 +674,7 @@ fn render_info_shortcut_note(
         .into_any_element()
 }
 
+#[allow(clippy::too_many_arguments)]
 fn render_info_section(
     section: &InfoSection,
     id: String,
@@ -672,6 +682,7 @@ fn render_info_section(
     theme: &theme::Theme,
     palette: InfoPalette,
     metrics: InfoMetrics,
+    cx: &gpui::App,
 ) -> AnyElement {
     let mut stack = div()
         .id(id)
@@ -698,6 +709,7 @@ fn render_info_section(
             density,
             theme,
             palette,
+            cx,
         ))
         .into_any_element()
 }
@@ -708,9 +720,10 @@ pub(crate) fn render_info_guidance_items(
     density: InfoStateDensity,
     theme: &theme::Theme,
     palette: InfoPalette,
+    cx: &gpui::App,
 ) -> AnyElement {
     let metrics = info_metrics(density);
-    let shortcut_slot_width_px = info_guidance_shortcut_slot_width_px(items);
+    let shortcut_slot_width_px = info_guidance_shortcut_slot_width_px(items, cx);
     div()
         .id(id)
         .w_full()
@@ -724,14 +737,24 @@ pub(crate) fn render_info_guidance_items(
         .into_any_element()
 }
 
-fn info_guidance_shortcut_slot_width_px(items: &[InfoGuidanceItem]) -> f32 {
+/// Shared column width for the shortcut slot: the widest keycap run across
+/// rows, with a floor of two square keycaps plus a gap. Width inputs come
+/// from real text-system measurement (see `footer_shortcut_keycaps_measured_width_px`),
+/// not per-character estimates.
+fn info_guidance_shortcut_slot_width_px(items: &[InfoGuidanceItem], cx: &gpui::App) -> f32 {
+    info_guidance_shortcut_slot_width_from_widths(items.iter().filter_map(|item| {
+        item.shortcut.map(|shortcut| {
+            crate::components::footer_chrome::footer_shortcut_keycaps_measured_width_px(
+                shortcut, cx,
+            )
+        })
+    }))
+}
+
+fn info_guidance_shortcut_slot_width_from_widths(widths: impl Iterator<Item = f32>) -> f32 {
     let min_shortcut_width = crate::components::footer_chrome::FOOTER_KEYCAP_HEIGHT_PX * 2.0
         + crate::components::footer_chrome::FOOTER_ACTION_CONTENT_GAP_PX;
-    let max_width = items
-        .iter()
-        .filter_map(|item| item.shortcut)
-        .map(crate::components::footer_chrome::footer_shortcut_keycaps_width_px)
-        .fold(0.0, f32::max);
+    let max_width = widths.fold(0.0, f32::max);
 
     if max_width > 0.0 {
         max_width.max(min_shortcut_width)
@@ -882,19 +905,25 @@ mod tests {
     }
 
     #[test]
-    fn guidance_shortcut_slot_width_tracks_footer_keycap_widths() {
-        let items = vec![
-            InfoGuidanceItem::new(Some("⌘P"), "Open previous chats"),
-            InfoGuidanceItem::new(Some(":tag:"), "Filter by tag name"),
-            InfoGuidanceItem::new(Some(";todo"), "Capture instead"),
-        ];
-        let width = info_guidance_shortcut_slot_width_px(&items);
+    fn guidance_shortcut_slot_width_tracks_widest_measured_run() {
+        let min_shortcut_width = crate::components::footer_chrome::FOOTER_KEYCAP_HEIGHT_PX * 2.0
+            + crate::components::footer_chrome::FOOTER_ACTION_CONTENT_GAP_PX;
 
+        // The widest measured keycap run wins.
+        let wide = min_shortcut_width + 24.0;
+        let width = info_guidance_shortcut_slot_width_from_widths([wide, 18.0, 30.0].into_iter());
+        assert_eq!(width, wide);
+
+        // Narrow runs are floored at two square keycaps plus a gap so rows
+        // with short shortcuts still align with wider neighbors.
+        let width = info_guidance_shortcut_slot_width_from_widths([10.0].into_iter());
+        assert_eq!(width, min_shortcut_width);
+
+        // No shortcuts at all collapses the slot entirely.
         assert_eq!(
-            width,
-            crate::components::footer_chrome::footer_shortcut_keycaps_width_px(":tag:")
+            info_guidance_shortcut_slot_width_from_widths(std::iter::empty()),
+            0.0
         );
-        assert!(width > crate::components::footer_chrome::footer_shortcut_keycaps_width_px("⌘P"));
     }
 
     #[test]

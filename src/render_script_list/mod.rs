@@ -690,11 +690,13 @@ fn render_script_list_empty_state(
     filter_text_for_render: &str,
     has_active_filter: bool,
     theme: &crate::theme::Theme,
+    cx: &gpui::App,
 ) -> AnyElement {
     crate::components::render_launcher_empty_or_no_results(
         filter_text_for_render,
         has_active_filter,
         theme,
+        cx,
     )
 }
 
@@ -971,6 +973,7 @@ impl ScriptListApp {
                     &filter_text_for_render,
                     has_active_filter,
                     &self.theme,
+                    cx,
                 )
             }
         } else {

@@ -782,6 +782,43 @@ pub(crate) fn footer_shortcut_keycaps_width_px(shortcut: &str) -> f32 {
     )
 }
 
+/// Measured keycap-run width: real glyph advances from the text system plus
+/// the same paddings/minimums `render_footer_keycap_with_metrics` applies.
+/// Use this instead of `footer_shortcut_keycaps_width_px` (per-char em
+/// guesses) whenever an `App` context is available.
+pub(crate) fn footer_shortcut_keycaps_measured_width_px(shortcut: &str, cx: &gpui::App) -> f32 {
+    let metrics = current_main_menu_footer_metrics();
+    let tokens = split_footer_shortcut(shortcut);
+    if tokens.is_empty() {
+        return 0.0;
+    }
+
+    let text_system = cx.text_system();
+    let font_id = text_system.resolve_font(&gpui::font(FONT_SYSTEM_UI));
+    let font_size = px(metrics.keycap_font_size);
+
+    let keys_width = tokens
+        .iter()
+        .map(|token| {
+            if is_footer_icon_token(token) {
+                // Icon keycaps render an svg of (font_size + 1).max(10) inside
+                // the keycap paddings, never narrower than the square keycap.
+                let icon = (metrics.keycap_font_size + 1.0).max(10.0);
+                (icon + metrics.keycap_padding_x * 2.0).max(metrics.keycap_height)
+            } else {
+                let glyphs_width: f32 = token
+                    .chars()
+                    .map(|ch| f32::from(text_system.layout_width(font_id, font_size, ch)))
+                    .sum();
+                (glyphs_width + metrics.keycap_padding_x * 2.0)
+                    .max(metrics.keycap_height)
+                    .ceil()
+            }
+        })
+        .sum::<f32>();
+    keys_width + tokens.len().saturating_sub(1) as f32 * metrics.content_gap
+}
+
 pub(crate) fn footer_shortcut_keycaps_width_px_with_gap(shortcut: &str, content_gap: f32) -> f32 {
     let tokens = split_footer_shortcut(shortcut);
     footer_shortcut_keycaps_width_px_from_tokens_with_gap(
