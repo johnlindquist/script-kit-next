@@ -249,8 +249,8 @@ mod tests {
         };
         let launch = resolve_selected_pi_launch(&ai, &ctx()).unwrap();
 
-        assert_eq!(launch.profile.name, "General");
-        assert_eq!(launch.cwd, PathBuf::from("/tmp/kit/agent-chat/general"));
+        assert_eq!(launch.profile.name, "Brain");
+        assert_eq!(launch.cwd, PathBuf::from("/tmp/kit/agent-chat/brain"));
         assert_eq!(launch.rpc_spec.command, PathBuf::from("/tmp/test-pi"));
         assert!(launch.rpc_spec.args.contains(&"--mode".to_string()));
         assert!(launch.rpc_spec.args.contains(&"rpc".to_string()));
@@ -313,7 +313,7 @@ mod tests {
 
         let launch = resolve_selected_pi_launch(&ai, &ctx()).unwrap();
         assert_eq!(launch.profile.backend, AgentChatBackend::Pi);
-        assert_eq!(launch.profile.id, "general");
+        assert_eq!(launch.profile.id, "brain");
     }
 
     #[test]
@@ -416,7 +416,7 @@ mod tests {
 
         let launch = resolve_selected_pi_launch(&ai, &ctx).unwrap();
 
-        assert_eq!(launch.cwd, kit_path.join("agent-chat").join("general"));
+        assert_eq!(launch.cwd, kit_path.join("agent-chat").join("brain"));
         assert!(launch.cwd.is_dir());
     }
 

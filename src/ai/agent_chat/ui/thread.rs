@@ -1258,6 +1258,21 @@ impl AgentChatThread {
     fn prepare_turn_blocks_with_receipt(&mut self, input: &str) -> PreparedTurnBlocks {
         let mut blocks = Vec::new();
 
+        // --- Brain recall: stage relevant local memory on every turn ---
+        // Lexical + attention-signal retrieval over the brain store (notes,
+        // past chat turns). Milliseconds on sqlite; hard-capped output so it
+        // can never crowd a prompt. Empty recall stages nothing.
+        let brain_block = crate::brain::recall_context_block(input).ok().flatten();
+        if let Some(recall) = brain_block {
+            tracing::info!(
+                target: "script_kit::brain",
+                event = "agent_chat_brain_recall_staged",
+                chars = recall.len(),
+            );
+            blocks.push(ContentBlock::Text(TextContent::new(recall)));
+        }
+        crate::brain::record_ask_signals(input);
+
         if let Some(turn) = self.take_pending_context_for_turn() {
             let receipt = turn.receipt;
             blocks.extend(turn.blocks);
@@ -1287,7 +1302,13 @@ impl AgentChatThread {
             };
         }
 
-        blocks.push(ContentBlock::Text(TextContent::new(input)));
+        if blocks.is_empty() {
+            blocks.push(ContentBlock::Text(TextContent::new(input)));
+        } else {
+            blocks.push(ContentBlock::Text(TextContent::new(format!(
+                "--- USER REQUEST ---\n{input}"
+            ))));
+        }
         PreparedTurnBlocks {
             blocks,
             receipt: None,
@@ -1607,6 +1628,49 @@ impl AgentChatThread {
                 // The finished turn appended a user message; refresh the
                 // rewind checkpoints so Cmd+K can offer it for editing.
                 self.refresh_fork_points(cx);
+
+                // --- Brain ingestion: every finished turn becomes memory ---
+                // The last user/assistant exchange is written into the brain
+                // store (hash-guarded, idempotent) on a background thread so
+                // future turns — in any thread — can recall it.
+                let last_user = self
+                    .messages
+                    .iter()
+                    .rev()
+                    .find(|m| matches!(m.role, AgentChatThreadMessageRole::User))
+                    .map(|m| m.body.to_string());
+                let last_assistant = self
+                    .messages
+                    .iter()
+                    .rev()
+                    .find(|m| matches!(m.role, AgentChatThreadMessageRole::Assistant))
+                    .map(|m| m.body.to_string());
+                if let Some(user_text) = last_user {
+                    let assistant_text = last_assistant.unwrap_or_default();
+                    let thread_id = self.ui_thread_id.clone();
+                    let turn_index = self
+                        .messages
+                        .iter()
+                        .filter(|m| matches!(m.role, AgentChatThreadMessageRole::User))
+                        .count()
+                        .saturating_sub(1);
+                    let _ = std::thread::Builder::new()
+                        .name("script-kit-brain-ingest".to_string())
+                        .spawn(move || {
+                            if let Err(error) = crate::brain::ingest_chat_turn(
+                                &thread_id,
+                                turn_index,
+                                &user_text,
+                                &assistant_text,
+                            ) {
+                                tracing::debug!(
+                                    target: "script_kit::brain",
+                                    error = %error,
+                                    "brain chat ingestion failed"
+                                );
+                            }
+                        });
+                }
             }
             AgentChatEvent::SetupRequired {
                 reason,

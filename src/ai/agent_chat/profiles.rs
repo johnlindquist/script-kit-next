@@ -12,6 +12,7 @@ use crate::plugins::profiles::{
 pub const BUILTIN_GENERAL_PROFILE_ID: &str = "general";
 pub const BUILTIN_SCRIPT_KIT_PROFILE_ID: &str = "script-kit";
 pub const BUILTIN_TEXT_PROFILE_ID: &str = "text";
+pub const BUILTIN_BRAIN_PROFILE_ID: &str = "brain";
 pub const DEFAULT_PI_PROVIDER: &str = "openai-codex";
 pub const DEFAULT_PI_MODEL: &str = "gpt-5.4";
 
@@ -95,9 +96,26 @@ pub const SCRIPT_KIT_PI_TOOLS: [&str; 9] = [
 /// (no fs, no skills, no extensions); see `built_in_text_profile`.
 pub const TEXT_PI_TOOLS: [&str; 1] = ["web_search"];
 
+/// The Brain profile answers from memory first: same safe toolset as General
+/// (read-only beyond its workspace), tuned for quick palette-launched
+/// questions that lean on staged brain recall.
+pub const BRAIN_PI_TOOLS: [&str; 7] = [
+    "web_search",
+    "desktop_search",
+    "read",
+    "create_file",
+    "grep",
+    "find",
+    "ls",
+];
+
 pub const GENERAL_BLOCKED_ACTION_MESSAGE: &str =
     "This action is blocked in the General profile. Please switch profiles to modify Script Kit.";
+pub const BRAIN_BLOCKED_ACTION_MESSAGE: &str =
+    "This action is blocked in the Brain profile. Please switch profiles to modify Script Kit.";
 pub const TEXT_BLOCKED_ACTION_MESSAGE: &str = "The Text profile can only transform captured focused text or search the web for public current information.";
+
+const BRAIN_APPEND_SYSTEM_PROMPT: &str = "You are the Brain profile: Script Kit's memory-aware assistant. Turns may include a 'Brain recall' block — relevant excerpts auto-retrieved from the user's local knowledge (their notes and past conversations with you). Treat recall as your own memory: answer personal or project questions from it directly and confidently, mention naturally where a memory came from (e.g. 'your note Egghead publish checklist'), and prefer newer memories when they conflict. If recall doesn't cover the question, say so plainly and answer from general knowledge or search — never invent memories. Users usually arrive here by typing a quick question into the launcher, so lead with the answer and keep replies tight. You may search the web, search the desktop, read files, and create files inside your workspace. Do not load skills, modify Script Kit, run shell commands, or write outside your workspace.";
 
 const GENERAL_APPEND_SYSTEM_PROMPT: &str = "You are the General Agent Chat profile for Script Kit. Answer everyday questions directly and helpfully. You may search the web, search the desktop, read files, create new files inside the General workspace, and inspect local context. Do not load skills, modify Script Kit, run shell commands, edit existing files, or write outside the General workspace. If a tool or requested action is blocked, say: \"This action is blocked in the General profile. Please switch profiles to modify Script Kit.\"";
 const SCRIPT_KIT_APPEND_SYSTEM_PROMPT: &str = "You are the Script Kit Agent Chat profile. Help manage ~/.scriptkit, including config.ts, scripts, scriptlets, plugins, and package.json. Make focused minimal edits. Explain risks before destructive file operations. Do not install packages or run long commands unless the user asks.";
@@ -132,6 +150,10 @@ impl AgentChatProfileContext {
 
     pub fn text_cwd(&self) -> PathBuf {
         self.kit_path.join("agent-chat").join("text")
+    }
+
+    pub fn brain_cwd(&self) -> PathBuf {
+        self.kit_path.join("agent-chat").join("brain")
     }
 }
 
@@ -183,6 +205,43 @@ impl AgentChatProfilePickerEntry {
             backend: profile.backend,
             source: profile.source,
         }
+    }
+}
+
+pub fn built_in_brain_profile(ctx: &AgentChatProfileContext) -> ResolvedAgentChatProfile {
+    ResolvedAgentChatProfile {
+        source: AgentChatProfileSource::BuiltIn,
+        id: BUILTIN_BRAIN_PROFILE_ID.to_string(),
+        name: "Brain".to_string(),
+        icon_name: Some("brain".to_string()),
+        backend: AgentChatBackend::Pi,
+        pi_binary: None,
+        agent: None,
+        provider: Some(DEFAULT_PI_PROVIDER.to_string()),
+        model: Some(DEFAULT_PI_MODEL.to_string()),
+        system_prompt: None,
+        append_system_prompt: Some(BRAIN_APPEND_SYSTEM_PROMPT.to_string()),
+        cwd: Some(ctx.brain_cwd()),
+        tools: Some(BRAIN_PI_TOOLS.iter().map(|tool| tool.to_string()).collect()),
+        tool_policy: Some(AgentChatToolPolicyConfig {
+            allow: Some(BRAIN_PI_TOOLS.iter().map(|tool| tool.to_string()).collect()),
+        }),
+        path_policy: Some(AgentChatPathPolicyConfig {
+            allow_read: Some(vec![ctx.brain_cwd().to_string_lossy().into_owned()]),
+            allow_write: Some(vec![ctx.brain_cwd().to_string_lossy().into_owned()]),
+            deny: None,
+        }),
+        blocked_action_message: Some(BRAIN_BLOCKED_ACTION_MESSAGE.to_string()),
+        disable_extensions: Some(true),
+        disable_skills: Some(true),
+        disable_prompt_templates: Some(true),
+        disable_context_files: Some(true),
+        hide_cwd_in_prompt: Some(true),
+        thinking: None,
+        extension_policy: None,
+        session_dir: None,
+        no_session: Some(false),
+        session_durability: None,
     }
 }
 
@@ -319,6 +378,7 @@ pub fn built_in_text_profile(ctx: &AgentChatProfileContext) -> ResolvedAgentChat
 
 pub fn built_in_profiles(ctx: &AgentChatProfileContext) -> Vec<ResolvedAgentChatProfile> {
     vec![
+        built_in_brain_profile(ctx),
         built_in_general_profile(ctx),
         built_in_text_profile(ctx),
         built_in_script_kit_profile(ctx),
@@ -386,7 +446,10 @@ pub fn resolve_effective_profile(
         }
     }
 
-    apply_ai_fallbacks(built_in_general_profile(ctx), ai)
+    // No explicit selection: the memory-aware Brain profile is the default —
+    // quick questions typed into the launcher should land on the profile that
+    // knows the user.
+    apply_ai_fallbacks(built_in_brain_profile(ctx), ai)
 }
 
 pub fn agent_chat_profile_picker_entries(

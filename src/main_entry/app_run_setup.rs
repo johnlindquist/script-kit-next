@@ -168,6 +168,19 @@
         logging::log("APP", "Clipboard history monitoring initialized");
     }
 
+    // Initialize the brain (local memory store) and its background indexer.
+    // Never blocks startup: the indexer thread sleeps before its first cycle
+    // and embedding work happens in the ghost-llm-helper subprocess.
+    match crate::brain::init_brain_db() {
+        Ok(()) => {
+            crate::brain::start_brain_indexer();
+            logging::log("BRAIN", "Brain store initialized; indexer started");
+        }
+        Err(e) => {
+            logging::log("BRAIN", &format!("Failed to initialize brain store: {}", e));
+        }
+    }
+
     // Initialize text expansion system (background thread with keyboard monitoring)
     // This must be done early, before the GPUI run loop starts
     // Uses a global singleton so the manager can be updated when scriptlet files change
