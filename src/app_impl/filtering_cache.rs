@@ -42,9 +42,7 @@ fn grouped_selectable_bounds(
         // placeholders are non-selectable but pushed as Items so they render).
         // Exclude them from selectable bounds so selectedIndex and
         // visibleChoiceCount don't treat them as targets.
-        if let Some(scripts::SearchResult::SpineProjection(row)) =
-            flat_results.get(*flat_idx)
-        {
+        if let Some(scripts::SearchResult::SpineProjection(row)) = flat_results.get(*flat_idx) {
             if !row.is_selectable {
                 continue;
             }
@@ -690,8 +688,11 @@ impl ScriptListApp {
                 }
             });
 
-        let agent_chat_history_hits =
-            timed_root_passive_source("agent_chat_history", search_text, explicit_conversations, || {
+        let agent_chat_history_hits = timed_root_passive_source(
+            "agent_chat_history",
+            search_text,
+            explicit_conversations,
+            || {
                 if !advanced_query_active
                     && allow_conversations
                     && crate::ai::agent_chat::ui::history::root_agent_chat_history_query_is_eligible(
@@ -713,7 +714,8 @@ impl ScriptListApp {
                 } else {
                     Vec::new()
                 }
-            });
+            },
+        );
 
         let ai_vault_hits =
             timed_root_passive_source("ai_vault", search_text, explicit_ai_vault, || {
@@ -1002,8 +1004,12 @@ impl ScriptListApp {
     pub(crate) fn invalidate_filter_cache(&mut self) {
         logging::log_debug("CACHE", "Filter cache INVALIDATED");
         self.main_menu_result_caches.invalidate_filtered_results();
-        self.main_menu_render_diagnostics.last_input_highlight_text.clear();
-        self.main_menu_render_diagnostics.last_input_highlight_ranges.clear();
+        self.main_menu_render_diagnostics
+            .last_input_highlight_text
+            .clear();
+        self.main_menu_render_diagnostics
+            .last_input_highlight_ranges
+            .clear();
     }
 
     fn active_script_list_attachment_portal_kind(
@@ -1074,8 +1080,8 @@ impl ScriptListApp {
         // live input is owned by the trigger popup or capture composer.
         let live_filter_text = self.filter_text.as_str();
         let computed_filter_text = self.computed_filter_text.as_str();
-        let spine_owns_live_main_list = self.spine_projection_owns_main_list()
-            && self.spine_parse.input == live_filter_text;
+        let spine_owns_live_main_list =
+            self.spine_projection_owns_main_list() && self.spine_parse.input == live_filter_text;
         let popup_owns_live_main_list = self.menu_syntax_object_selector_state.owns_main_list()
             || self.menu_syntax_trigger_popup_state.owns_main_list();
         let live_menu_syntax_owns_main_list = popup_owns_live_main_list
@@ -1109,10 +1115,8 @@ impl ScriptListApp {
                 } else {
                     crate::main_window_kitchen_sink_no_match_grouped_results()
                 };
-            self.main_menu_result_caches.store_filtered_results(
-                computed_filter_text.to_string(),
-                flat_results.clone(),
-            );
+            self.main_menu_result_caches
+                .store_filtered_results(computed_filter_text.to_string(), flat_results.clone());
             self.main_menu_result_caches.store_grouped_results(
                 computed_filter_text.to_string(),
                 grouped_items,
@@ -1168,18 +1172,15 @@ impl ScriptListApp {
                 // gets a selected guard row before native recents, so accepting
                 // the root subsearch row does not auto-arm the first concrete
                 // file/clipboard/history result; Down/click remains explicit.
-                if let Some((rich_source, rich_query)) =
-                    active_rich_spine_subsearch(projection)
-                {
+                if let Some((rich_source, rich_query)) = active_rich_spine_subsearch(projection) {
                     let rich_gen = match rich_source {
                         crate::spine::catalog_subsearch::ContextSubsearchSource::File => {
                             self.spine_file_search_generation
                         }
                         _ => 0,
                     };
-                    let rich_cache_key = format!(
-                        "{spine_cache_key}\x1Frich={rich_source:?}\x1Frich-gen={rich_gen}"
-                    );
+                    let rich_cache_key =
+                        format!("{spine_cache_key}\x1Frich={rich_source:?}\x1Frich-gen={rich_gen}");
                     if self
                         .main_menu_result_caches
                         .has_grouped_results_for(&rich_cache_key)
@@ -1210,7 +1211,8 @@ impl ScriptListApp {
                                 };
                             let hits =
                                 crate::clipboard_history::search_root_clipboard_history_meta_direct(
-                                    &rich_query, options,
+                                    &rich_query,
+                                    options,
                                 );
                             build_rich_clipboard_subsearch_rows(&rich_query, &hits)
                         }
@@ -1225,7 +1227,8 @@ impl ScriptListApp {
                                 };
                             let hits =
                                 crate::browser_history::search_root_browser_history_meta_direct(
-                                    &rich_query, options,
+                                    &rich_query,
+                                    options,
                                 );
                             build_rich_browser_history_rows(&rich_query, &hits)
                         }
@@ -1237,22 +1240,21 @@ impl ScriptListApp {
                                 min_query_chars: 0,
                                 ..Default::default()
                             };
-                            let hits = crate::notes::search_root_notes_meta_direct(
-                                &rich_query, options,
-                            );
+                            let hits =
+                                crate::notes::search_root_notes_meta_direct(&rich_query, options);
                             build_rich_notes_rows(&rich_query, &hits)
                         }
                         crate::spine::catalog_subsearch::ContextSubsearchSource::Dictation => {
-                            let options =
-                                crate::dictation::RootDictationHistorySectionOptions {
-                                    enabled: true,
-                                    max_results:
-                                        crate::spine::catalog_subsearch::SUBSEARCH_RENDER_LIMIT,
-                                    min_query_chars: 0,
-                                    ..Default::default()
-                                };
+                            let options = crate::dictation::RootDictationHistorySectionOptions {
+                                enabled: true,
+                                max_results:
+                                    crate::spine::catalog_subsearch::SUBSEARCH_RENDER_LIMIT,
+                                min_query_chars: 0,
+                                ..Default::default()
+                            };
                             let hits = crate::dictation::search_root_dictation_history_direct(
-                                &rich_query, options,
+                                &rich_query,
+                                options,
                             );
                             build_rich_dictation_rows(&rich_query, &hits)
                         }
@@ -1302,8 +1304,7 @@ impl ScriptListApp {
                     // inline `@file:` results keep an explicit full-portal
                     // fallback row that opens the built-in File Search
                     // surface with the current sub-query.
-                    if rich_source
-                        == crate::spine::catalog_subsearch::ContextSubsearchSource::File
+                    if rich_source == crate::spine::catalog_subsearch::ContextSubsearchSource::File
                     {
                         if let Some(segment) = self
                             .spine_parse
@@ -1354,9 +1355,7 @@ impl ScriptListApp {
                     let recent_dirs = self.recent_directory_results_from_frecency(
                         crate::spine::catalog_subsearch::SUBSEARCH_RENDER_LIMIT,
                     );
-                    let has_query = sub_query
-                        .as_ref()
-                        .is_some_and(|q| !q.trim().is_empty());
+                    let has_query = sub_query.as_ref().is_some_and(|q| !q.trim().is_empty());
                     if !recent_dirs.is_empty() {
                         let cwd_cache_key = format!(
                             "{spine_cache_key}\x1Fcwd-rich\x1Fcwd-rev={}",
@@ -1376,7 +1375,8 @@ impl ScriptListApp {
                         } else {
                             build_rich_cwd_root_rows(&recent_dirs)
                         };
-                        let (first_sel, last_sel) = grouped_selectable_bounds(&grouped_items, &flat_results);
+                        let (first_sel, last_sel) =
+                            grouped_selectable_bounds(&grouped_items, &flat_results);
                         self.main_menu_result_caches.store_grouped_results(
                             cwd_cache_key,
                             grouped_items,
@@ -1395,14 +1395,15 @@ impl ScriptListApp {
                     return self.main_menu_result_caches.clone_grouped_results();
                 }
 
-                let live_preview = preview_needs
-                    .map(|_| &self.spine_live_preview_cache.current);
+                let live_preview = preview_needs.map(|_| &self.spine_live_preview_cache.current);
 
-                let sections = crate::spine::list::build_spine_list_sections_full(
-                    &self.spine_parse,
-                    projection,
-                    live_preview,
-                );
+                let sections =
+                    crate::spine::list::build_spine_list_sections_full_with_resolved_tokens(
+                        &self.spine_parse,
+                        projection,
+                        live_preview,
+                        &|token| self.spine_mention_aliases.contains_key(token),
+                    );
                 let mut grouped_items = Vec::new();
                 let mut flat_results: Vec<scripts::SearchResult> = Vec::new();
                 for section in sections {
@@ -1420,8 +1421,7 @@ impl ScriptListApp {
                             // non-selectable rows render as section headers.
                             if matches!(row.kind, crate::spine::list::SpineListRowKind::Empty) {
                                 let flat_index = flat_results.len();
-                                flat_results
-                                    .push(scripts::SearchResult::SpineProjection(row));
+                                flat_results.push(scripts::SearchResult::SpineProjection(row));
                                 grouped_items.push(GroupedListItem::Item(flat_index));
                             } else {
                                 grouped_items.push(GroupedListItem::SectionHeader(
@@ -1432,13 +1432,13 @@ impl ScriptListApp {
                             continue;
                         }
                         let flat_index = flat_results.len();
-                        flat_results
-                            .push(scripts::SearchResult::SpineProjection(row));
+                        flat_results.push(scripts::SearchResult::SpineProjection(row));
                         grouped_items.push(GroupedListItem::Item(flat_index));
                     }
                 }
 
-                let (first_sel, last_sel) = grouped_selectable_bounds(&grouped_items, &flat_results);
+                let (first_sel, last_sel) =
+                    grouped_selectable_bounds(&grouped_items, &flat_results);
                 self.main_menu_result_caches.store_grouped_results(
                     spine_cache_key,
                     grouped_items,
@@ -1557,8 +1557,8 @@ impl ScriptListApp {
             );
         }
         let raw_filter_text = self.computed_filter_text.clone();
-        let spine_owns_for_computed = self.spine_projection_owns_main_list()
-            && self.spine_parse.input == raw_filter_text;
+        let spine_owns_for_computed =
+            self.spine_projection_owns_main_list() && self.spine_parse.input == raw_filter_text;
         let popup_owns_computed_main_list = self.menu_syntax_object_selector_state.owns_main_list()
             || self.menu_syntax_trigger_popup_state.owns_main_list();
         let menu_syntax_owns_main_list = popup_owns_computed_main_list
@@ -1579,8 +1579,7 @@ impl ScriptListApp {
             } else {
                 (Vec::new(), Vec::new())
             }
-        } else if self.menu_syntax_trigger_popup_state.owns_main_list()
-        {
+        } else if self.menu_syntax_trigger_popup_state.owns_main_list() {
             if let Some(snapshot) = self.menu_syntax_trigger_popup_state.snapshot.as_ref() {
                 build_menu_syntax_trigger_picker_main_list_results(snapshot)
             } else {
@@ -1622,7 +1621,8 @@ impl ScriptListApp {
             let mut root_file_options = unified_search.root_file_section_options();
             let mut todo_options = unified_search.todo_section_options();
             let mut notes_options = unified_search.notes_section_options();
-            let mut agent_chat_history_options = unified_search.agent_chat_history_section_options();
+            let mut agent_chat_history_options =
+                unified_search.agent_chat_history_section_options();
             let mut ai_vault_options = unified_search.ai_vault_section_options();
             let mut clipboard_history_options =
                 self.config.root_clipboard_history_section_options();
@@ -2203,9 +2203,9 @@ impl ScriptListApp {
         let is_alias_target: Box<dyn Fn(&SearchResult) -> bool> = match alias_match {
             AliasMatch::Script(script) => {
                 let path = script.path.clone();
-                Box::new(move |result| {
-                    matches!(result, SearchResult::Script(sm) if sm.script.path == path)
-                })
+                Box::new(
+                    move |result| matches!(result, SearchResult::Script(sm) if sm.script.path == path),
+                )
             }
             AliasMatch::Scriptlet(scriptlet) => {
                 let name = scriptlet.name.clone();
@@ -2220,15 +2220,15 @@ impl ScriptListApp {
             }
             AliasMatch::BuiltIn(entry) => {
                 let id = entry.id.clone();
-                Box::new(move |result| {
-                    matches!(result, SearchResult::BuiltIn(bm) if bm.entry.id == id)
-                })
+                Box::new(
+                    move |result| matches!(result, SearchResult::BuiltIn(bm) if bm.entry.id == id),
+                )
             }
             AliasMatch::App(app) => {
                 let path = app.path.clone();
-                Box::new(move |result| {
-                    matches!(result, SearchResult::App(am) if am.app.path == path)
-                })
+                Box::new(
+                    move |result| matches!(result, SearchResult::App(am) if am.app.path == path),
+                )
             }
         };
 
@@ -2297,10 +2297,7 @@ impl ScriptListApp {
         self.refresh_ghost_from_cached_results_with_cx(None);
     }
 
-    pub(crate) fn refresh_ghost_with_input(
-        &mut self,
-        cx: &mut gpui::Context<Self>,
-    ) {
+    pub(crate) fn refresh_ghost_with_input(&mut self, cx: &mut gpui::Context<Self>) {
         self.refresh_ghost_from_cached_results_with_cx(Some(cx));
     }
 
@@ -2506,8 +2503,8 @@ impl ScriptListApp {
         context_rev: u64,
         cx: &mut gpui::Context<Self>,
     ) {
-        use std::sync::atomic::{AtomicBool, Ordering};
         use std::sync::Arc;
+        use std::sync::atomic::{AtomicBool, Ordering};
 
         const GHOST_LLM_DEBOUNCE_MS: u64 = 320;
 
@@ -2857,10 +2854,7 @@ mod tests {
         let Some(scripts::SearchResult::SpineProjection(row)) = flat.first() else {
             panic!("first flat result must be the empty subsearch guard");
         };
-        assert_eq!(
-            row.id.as_ref(),
-            "spine:context-subsearch:file:empty-guard"
-        );
+        assert_eq!(row.id.as_ref(), "spine:context-subsearch:file:empty-guard");
         assert!(matches!(
             row.action,
             crate::spine::SpineListAction::AwaitContextSubsearchInput { .. }
@@ -3124,17 +3118,17 @@ fn build_rich_clipboard_subsearch_rows(
             if query.trim().is_empty() {
                 "Clipboard is empty".to_string()
             } else {
-                format!("No clipboard entries matching \u{201c}{}\u{201d}", query.trim())
+                format!(
+                    "No clipboard entries matching \u{201c}{}\u{201d}",
+                    query.trim()
+                )
             },
             None,
         ));
     } else {
         for entry in hits.iter().take(limit) {
             let idx = flat.len();
-            let title = crate::spine::text_preview::single_line_truncate(
-                &entry.text_preview,
-                72,
-            );
+            let title = crate::spine::text_preview::single_line_truncate(&entry.text_preview, 72);
             flat.push(scripts::SearchResult::ClipboardHistory(
                 scripts::ClipboardHistoryMatch {
                     entry: entry.clone(),
@@ -3406,15 +3400,13 @@ fn build_rich_scriptlet_rows(
     } else {
         for scriptlet in matches {
             let idx = flat.len();
-            flat.push(scripts::SearchResult::Scriptlet(
-                scripts::ScriptletMatch {
-                    scriptlet: std::sync::Arc::clone(scriptlet),
-                    score: 0,
-                    display_file_path: None,
-                    match_indices: scripts::MatchIndices::default(),
-                    match_evidence: None,
-                },
-            ));
+            flat.push(scripts::SearchResult::Scriptlet(scripts::ScriptletMatch {
+                scriptlet: std::sync::Arc::clone(scriptlet),
+                score: 0,
+                display_file_path: None,
+                match_indices: scripts::MatchIndices::default(),
+                match_evidence: None,
+            }));
             grouped.push(GroupedListItem::Item(idx));
         }
     }
@@ -3469,7 +3461,7 @@ fn build_rich_provider_json_rows(
     section_label: &str,
     icon: &str,
 ) -> (Vec<GroupedListItem>, Vec<scripts::SearchResult>) {
-    use crate::spine::list::{ss, SpineListAction, SpineListRow, SpineListRowKind};
+    use crate::spine::list::{SpineListAction, SpineListRow, SpineListRowKind, ss};
 
     let limit = crate::spine::catalog_subsearch::SUBSEARCH_RENDER_LIMIT;
     let mut grouped = Vec::new();
@@ -3509,7 +3501,10 @@ fn build_rich_provider_json_rows(
             ));
         } else {
             grouped.push(GroupedListItem::SectionHeader(
-                format!("No {section_label} matching \u{201c}{}\u{201d}", query.trim()),
+                format!(
+                    "No {section_label} matching \u{201c}{}\u{201d}",
+                    query.trim()
+                ),
                 None,
             ));
         }

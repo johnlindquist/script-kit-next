@@ -7398,10 +7398,11 @@ impl AgentChatView {
             }
         }
 
-        crate::spine::list::build_spine_list_sections_full(
+        crate::spine::list::build_spine_list_sections_full_with_resolved_tokens(
             &self.composer_spine.input.parse,
             projection,
             None,
+            &|token| self.typed_mention_aliases.contains_key(token),
         )
     }
 

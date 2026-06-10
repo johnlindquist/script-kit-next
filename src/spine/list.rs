@@ -592,7 +592,11 @@ fn prompt_builder_segment_label(
     };
 
     let label = normalize_prompt_builder_label(fallback);
-    if label.is_empty() { None } else { Some(label) }
+    if label.is_empty() {
+        None
+    } else {
+        Some(label)
+    }
 }
 
 fn normalize_prompt_builder_label(raw: &str) -> String {
@@ -854,14 +858,12 @@ mod tests {
         let sections = build_spine_list_sections(&parse, &proj);
         assert!(!sections.is_empty());
         let rows: Vec<_> = sections.iter().flat_map(|s| &s.rows).collect();
-        assert!(
-            rows.iter()
-                .any(|r| matches!(r.kind, SpineListRowKind::ContextBuiltin { .. }))
-        );
-        assert!(
-            rows.iter()
-                .any(|r| matches!(r.kind, SpineListRowKind::ContextSubSearch { .. }))
-        );
+        assert!(rows
+            .iter()
+            .any(|r| matches!(r.kind, SpineListRowKind::ContextBuiltin { .. })));
+        assert!(rows
+            .iter()
+            .any(|r| matches!(r.kind, SpineListRowKind::ContextSubSearch { .. })));
     }
 
     #[test]
@@ -870,10 +872,9 @@ mod tests {
         let proj = project_cursor(&parse, 1);
         let sections = build_spine_list_sections(&parse, &proj);
         let rows: Vec<_> = sections.iter().flat_map(|s| &s.rows).collect();
-        assert!(
-            rows.iter()
-                .any(|r| matches!(r.kind, SpineListRowKind::SlashCommand { .. }))
-        );
+        assert!(rows
+            .iter()
+            .any(|r| matches!(r.kind, SpineListRowKind::SlashCommand { .. })));
     }
 
     #[test]
@@ -882,10 +883,9 @@ mod tests {
         let proj = project_cursor(&parse, 1);
         let sections = build_spine_list_sections(&parse, &proj);
         let rows: Vec<_> = sections.iter().flat_map(|s| &s.rows).collect();
-        assert!(
-            rows.iter()
-                .any(|r| matches!(r.kind, SpineListRowKind::Profile { .. }))
-        );
+        assert!(rows
+            .iter()
+            .any(|r| matches!(r.kind, SpineListRowKind::Profile { .. })));
     }
 
     #[test]
@@ -894,10 +894,9 @@ mod tests {
         let proj = project_cursor(&parse, 1);
         let sections = build_spine_list_sections(&parse, &proj);
         let rows: Vec<_> = sections.iter().flat_map(|s| &s.rows).collect();
-        assert!(
-            rows.iter()
-                .any(|r| matches!(r.kind, SpineListRowKind::Style { .. }))
-        );
+        assert!(rows
+            .iter()
+            .any(|r| matches!(r.kind, SpineListRowKind::Style { .. })));
     }
 
     #[test]
