@@ -1272,6 +1272,58 @@ pub fn handle_notes_ghost_key_for_automation(
     .map_err(|error| format!("Failed to handle Notes ghost autocomplete key: {error}"))
 }
 
+/// Toggle a Notes popup from the automation/simulateKey path, mirroring the
+/// live Cmd+K ("actions" command bar) and Cmd+P ("noteSwitcher") keyboard arms
+/// so target-scoped `simulateKey` can drive the same popups the user sees.
+pub fn toggle_notes_popup_for_automation(
+    cx: &mut App,
+    popup: &str,
+) -> Result<serde_json::Value, String> {
+    let (entity, handle) =
+        get_notes_app_entity_and_handle().ok_or_else(|| "Notes window is not open".to_string())?;
+    // Must not lease Root: popup open/close reaches `request_focus_surface`,
+    // which reads Root via `window.has_active_dialog`.
+    update_notes_window_detached(handle, cx, |window, cx| {
+        entity.update(cx, |app, cx| {
+            let action = match popup {
+                "actions" => {
+                    if app.command_bar.is_open() {
+                        app.close_actions_panel(window, cx);
+                        "closeActionsPanel"
+                    } else {
+                        app.open_actions_panel(window, cx);
+                        "openActionsPanel"
+                    }
+                }
+                "noteSwitcher" => {
+                    app.close_actions_panel(window, cx);
+                    if app.note_switcher.is_open() {
+                        app.close_browse_panel(window, cx);
+                        "closeNoteSwitcher"
+                    } else {
+                        app.open_browse_panel(window, cx);
+                        "openNoteSwitcher"
+                    }
+                }
+                other => {
+                    return serde_json::json!({
+                        "handled": false,
+                        "target": "notes",
+                        "popup": other,
+                    });
+                }
+            };
+            serde_json::json!({
+                "handled": true,
+                "target": "notes",
+                "popup": popup,
+                "action": action,
+            })
+        })
+    })
+    .map_err(|error| format!("Failed to toggle Notes popup: {error}"))
+}
+
 /// Backward-compatible helper for older target-scoped DevTools `simulateKey Tab`
 /// proof. New callers should use `handle_notes_ghost_key_for_automation`.
 pub fn accept_notes_ghost_for_automation(cx: &mut App) -> Result<serde_json::Value, String> {

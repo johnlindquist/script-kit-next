@@ -354,12 +354,6 @@ pub struct NotesApp {
     /// Subscriptions to keep alive
     _subscriptions: Vec<Subscription>,
 
-    /// Whether the actions panel is shown (Cmd+K)
-    show_actions_panel: bool,
-
-    /// Whether the browse panel is shown (Cmd+P)
-    show_browse_panel: bool,
-
     /// Command bar component (Cmd+K) - uses unified CommandBar wrapper
     /// Opens in a separate vibrancy window for proper macOS blur effect
     command_bar: CommandBar,
@@ -473,6 +467,7 @@ pub use window_ops::{
     inject_text_into_notes, is_notes_window, is_notes_window_open, open_note_in_notes_window,
     open_notes_search, open_notes_window, open_notes_window_without_launcher_restore,
     quick_capture, save_note_with_content, save_note_with_content_and_source,
+    toggle_notes_popup_for_automation,
 };
 
 #[cfg(test)]

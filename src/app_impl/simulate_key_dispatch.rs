@@ -71,6 +71,39 @@ impl ScriptListApp {
                 return;
             }
         }
+        // Cmd+K / Cmd+P mirror the live Notes keyboard arms (actions command
+        // bar / note switcher) so target-scoped simulateKey can drive the same
+        // popups the user sees.
+        if has_cmd
+            && !has_shift
+            && !_has_alt
+            && !_has_ctrl
+            && simulate_key_target_is_notes
+            && (key_lower == "k" || key_lower == "p")
+        {
+            let popup = if key_lower == "k" {
+                "actions"
+            } else {
+                "noteSwitcher"
+            };
+            match notes::toggle_notes_popup_for_automation(ctx, popup) {
+                Ok(result) => {
+                    logging::log(
+                        "STDIN",
+                        &format!("SimulateKey: Cmd+{key_lower} - Notes popup toggle {result}"),
+                    );
+                    return;
+                }
+                Err(error) => {
+                    logging::log(
+                        "STDIN",
+                        &format!(
+                            "SimulateKey: Cmd+{key_lower} - Notes popup toggle unavailable: {error}"
+                        ),
+                    );
+                }
+            }
+        }
         if !has_cmd
             && !_has_alt
             && !_has_ctrl

@@ -91,5 +91,6 @@ pub use window::{
     get_notes_editor_text, handle_notes_ghost_key_for_automation, inject_text_into_notes,
     is_notes_window, is_notes_window_open, open_note_in_notes_window, open_notes_search,
     open_notes_window, open_notes_window_without_launcher_restore, quick_capture,
-    save_note_with_content, save_note_with_content_and_source, NotesApp, NotesSurfaceMode,
+    save_note_with_content, save_note_with_content_and_source, toggle_notes_popup_for_automation,
+    NotesApp, NotesSurfaceMode,
 };

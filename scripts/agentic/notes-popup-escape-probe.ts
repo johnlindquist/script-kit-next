@@ -9,8 +9,10 @@
  *  2. batch(target notes) openActions  -> Cmd+K command bar (detached window)
  *  3. simulateKey escape (target notes) -> must close the popup
  *  4. re-open, then escape targeted at the actionsDialog window itself
+ *  5. Cmd+P note switcher (target notes) -> escape must close it too
  *
- * Pass criteria: notesOpened, openedViaBatch, and closedViaNotesEscape true.
+ * Pass criteria: notesOpened, openedViaBatch, closedViaNotesEscape, and
+ * switcherClosedViaEscape true.
  * Known gap: leg 4 (closedViaDialogEscape) stays false because protocol
  * simulateKey targeted at the detached actions-dialog window only routes
  * through the MAIN view's popup handling (simulate_key_dispatch), not the
@@ -179,6 +181,48 @@ async function main() {
     } else {
       receipt.closedViaDialogEscape = "no-dialog-window-found";
     }
+
+    // Ensure the actions popup is gone before testing the switcher.
+    driver.send({
+      type: "simulateKey",
+      target: { type: "kind", kind: "notes" },
+      key: "escape",
+      modifiers: [],
+    });
+    await pollUntil("actions popup cleared", async () => {
+      const snap = popupSnapshot(await notesState(driver));
+      return snap.actionsOpen !== true;
+    });
+
+    // 5. Cmd+P note switcher: open targeted at notes, then escape closes it.
+    driver.send({
+      type: "simulateKey",
+      target: { type: "kind", kind: "notes" },
+      key: "p",
+      modifiers: ["cmd"],
+    });
+    const switcherOpened = await pollUntil("note switcher open", async () => {
+      const snap = popupSnapshot(await notesState(driver));
+      return snap.switcherOpen === true;
+    });
+    receipt.switcherOpened = switcherOpened;
+    receipt.afterSwitcherOpen = popupSnapshot(await notesState(driver));
+
+    driver.send({
+      type: "simulateKey",
+      target: { type: "kind", kind: "notes" },
+      key: "escape",
+      modifiers: [],
+    });
+    const switcherClosedViaEscape = await pollUntil(
+      "note switcher closed after escape",
+      async () => {
+        const snap = popupSnapshot(await notesState(driver));
+        return snap.switcherOpen !== true;
+      },
+    );
+    receipt.afterSwitcherEscape = popupSnapshot(await notesState(driver));
+    receipt.switcherClosedViaEscape = switcherClosedViaEscape;
 
     console.log(JSON.stringify(receipt, null, 2));
   } finally {
