@@ -621,11 +621,34 @@ impl ScriptListApp {
                 let mut elements: Vec<protocol::ElementInfo> = vec![
                     protocol::ElementInfo::input("theme-filter", Some(filter.as_str()), true),
                     protocol::ElementInfo::panel("theme-chooser"),
-                    protocol::ElementInfo::list("theme-chooser-catalog", filtered.len()),
+                    // Keep the list name under the 20-char slug cap so the
+                    // semantic id is not truncated ("theme-chooser-catalog"
+                    // would collapse to "theme-chooser-catalo").
+                    protocol::ElementInfo::list("theme-catalog", filtered.len()),
                 ];
                 let selected_entry =
                     Self::theme_chooser_selected_entry(&catalog, &filtered, *selected_index);
                 let management = self.theme_chooser_management_snapshot(selected_entry);
+
+                elements.push(protocol::ElementInfo {
+                    semantic_id: "control:theme-chooser:panel-mode".to_string(),
+                    element_type: protocol::ElementType::Toggle,
+                    text: Some("Panel Mode".to_string()),
+                    value: Some(self.theme_chooser_panel_mode.as_str().to_string()),
+                    selected: Some(matches!(
+                        self.theme_chooser_panel_mode,
+                        ThemeChooserPanelMode::Customize
+                    )),
+                    focused: None,
+                    index: None,
+                    role: Some("theme-control".to_string()),
+                    kind: Some("panel-mode".to_string()),
+                    source: None,
+                    source_name: None,
+                    selectable: Some(true),
+                    status_kind: None,
+                    action_disabled: None,
+                });
 
                 elements.push(protocol::ElementInfo {
                     semantic_id: "status:theme-chooser-dirty-state".to_string(),
@@ -760,6 +783,45 @@ impl ScriptListApp {
                     status_kind: None,
                     action_disabled: None,
                 });
+                let gradient_layer_count = self
+                    .theme
+                    .background_gradient
+                    .as_ref()
+                    .map(|gradient| gradient.layers.len())
+                    .unwrap_or(0);
+                elements.push(protocol::ElementInfo {
+                    semantic_id: "button:theme-chooser-gradient-layer-add".to_string(),
+                    element_type: protocol::ElementType::Button,
+                    text: Some("Add Layer".to_string()),
+                    value: Some("theme_chooser_gradient_layer_add".to_string()),
+                    selected: None,
+                    focused: None,
+                    index: None,
+                    role: Some("theme-action".to_string()),
+                    kind: Some("gradient-layer-add".to_string()),
+                    source: None,
+                    source_name: None,
+                    selectable: Some(true),
+                    status_kind: None,
+                    action_disabled: None,
+                });
+                elements.push(protocol::ElementInfo {
+                    semantic_id: "button:theme-chooser-gradient-layer-remove".to_string(),
+                    element_type: protocol::ElementType::Button,
+                    text: Some("Remove Layer".to_string()),
+                    value: Some("theme_chooser_gradient_layer_remove".to_string()),
+                    selected: None,
+                    focused: None,
+                    index: None,
+                    role: Some("theme-action".to_string()),
+                    kind: Some("gradient-layer-remove".to_string()),
+                    source: None,
+                    source_name: None,
+                    selectable: Some(gradient_layer_count > 0),
+                    status_kind: None,
+                    action_disabled: (gradient_layer_count == 0)
+                        .then_some("no_gradient_layers".to_string()),
+                });
 
                 let opacity = self.theme.get_opacity();
                 let fonts = self.theme.get_fonts();
@@ -808,6 +870,20 @@ impl ScriptListApp {
                     "accent-color-hex",
                 );
                 push_theme_control(
+                    "control:theme-chooser:background-color".to_string(),
+                    protocol::ElementType::ColorPicker,
+                    "Background Color",
+                    format!("#{:06X}", self.theme.colors.background.main),
+                    "background-color",
+                );
+                push_theme_control(
+                    "control:theme-chooser:background-color-hex".to_string(),
+                    protocol::ElementType::Input,
+                    "Background Color Hex",
+                    format!("#{:06X}", self.theme.colors.background.main),
+                    "background-color-hex",
+                );
+                push_theme_control(
                     "control:theme-chooser:surface-opacity".to_string(),
                     protocol::ElementType::Slider,
                     "Surface Opacity",
@@ -834,6 +910,20 @@ impl ScriptListApp {
                     "Vibrancy",
                     vibrancy_enabled.to_string(),
                     "vibrancy-enabled",
+                );
+                push_theme_control(
+                    "control:theme-chooser:vibrancy-material".to_string(),
+                    protocol::ElementType::Input,
+                    "Vibrancy Material",
+                    format!("{:?}", self.theme.get_vibrancy().material).to_lowercase(),
+                    "vibrancy-material",
+                );
+                push_theme_control(
+                    "control:theme-chooser:appearance-mode".to_string(),
+                    protocol::ElementType::Input,
+                    "Appearance Mode",
+                    format!("{:?}", self.theme.appearance).to_lowercase(),
+                    "appearance-mode",
                 );
                 push_theme_control(
                     "control:theme-chooser:gradient-enabled".to_string(),
@@ -2726,15 +2816,6 @@ impl ScriptListApp {
                 self.focused_input != FocusedInput::None,
             ),
         );
-        // The persistent cwd anchor token rendered inside the input area
-        // (see render_input_cwd_anchor_token); exposed so automation can
-        // verify the anchor is visible where the user types.
-        if let Some(cwd_label) = self.spine_cwd_label.as_ref() {
-            let mut token = protocol::ElementInfo::panel("input-cwd-anchor");
-            token.semantic_id = "status:input-cwd-anchor".to_string();
-            token.text = Some(cwd_label.clone());
-            Self::push_limited_element(&mut elements, limit, token);
-        }
         Self::push_limited_element(
             &mut elements,
             limit,

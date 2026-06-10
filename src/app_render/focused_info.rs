@@ -720,9 +720,13 @@ fn render_focused_info_for_result(
                 style,
             ));
 
-            content = content
-                .child(focused_info_divider(style))
-                .child(focused_info_type_indicator("Agent Chat Conversation", style));
+            content =
+                content
+                    .child(focused_info_divider(style))
+                    .child(focused_info_type_indicator(
+                        "Agent Chat Conversation",
+                        style,
+                    ));
         }
 
         scripts::SearchResult::AiVault(ai_vault_match) => {
@@ -743,7 +747,8 @@ fn render_focused_info_for_result(
                 style,
             ));
             if let Some(workspace) = hit.workspace_path.as_deref() {
-                content = content.child(focused_info_labeled_section("WORKSPACE", workspace, style));
+                content =
+                    content.child(focused_info_labeled_section("WORKSPACE", workspace, style));
             }
             if let Some(modified) = hit.modified_at.as_deref() {
                 content = content.child(focused_info_labeled_section("MODIFIED", modified, style));
@@ -1380,12 +1385,14 @@ impl ScriptListApp {
                             .with_frecency(is_suggested, frecency_path),
                         )
                     }
-                    scripts::SearchResult::AgentChatHistory(m) => Some(ScriptInfo::with_action_verb(
-                        m.entry.title_display(),
-                        format!("agent_chat-history:{}", m.entry.session_id),
-                        false,
-                        "Resume",
-                    )),
+                    scripts::SearchResult::AgentChatHistory(m) => {
+                        Some(ScriptInfo::with_action_verb(
+                            m.entry.title_display(),
+                            format!("agent_chat-history:{}", m.entry.session_id),
+                            false,
+                            "Resume",
+                        ))
+                    }
                     scripts::SearchResult::AiVault(m) => Some(ScriptInfo::with_action_verb(
                         &m.hit.safe_title,
                         m.hit.stable_key.clone(),
@@ -1416,36 +1423,34 @@ impl ScriptListApp {
                         false,
                         "Copy",
                     )),
-                    scripts::SearchResult::ClipboardHistory(m) => Some(
-                        ScriptInfo::with_action_verb(
+                    scripts::SearchResult::ClipboardHistory(m) => {
+                        Some(ScriptInfo::with_action_verb(
                             &m.title,
                             format!("clipboard-history:{}", m.entry.id),
                             false,
                             "Paste",
-                        ),
-                    ),
-                    scripts::SearchResult::DictationHistory(m) => Some(
-                        ScriptInfo::with_action_verb(
+                        ))
+                    }
+                    scripts::SearchResult::DictationHistory(m) => {
+                        Some(ScriptInfo::with_action_verb(
                             &m.preview,
                             format!("dictation-history:{}", m.id),
                             false,
                             "Paste",
-                        ),
-                    ),
+                        ))
+                    }
                     scripts::SearchResult::BrowserTab(m) => Some(ScriptInfo::with_action_verb(
                         &m.hit.title,
                         m.hit.url.clone(),
                         false,
                         "Switch to",
                     )),
-                    scripts::SearchResult::BrowserHistory(m) => Some(
-                        ScriptInfo::with_action_verb(
-                            &m.hit.title,
-                            m.hit.url.clone(),
-                            false,
-                            "Open Page",
-                        ),
-                    ),
+                    scripts::SearchResult::BrowserHistory(m) => Some(ScriptInfo::with_action_verb(
+                        &m.hit.title,
+                        m.hit.url.clone(),
+                        false,
+                        "Open Page",
+                    )),
                     scripts::SearchResult::Agent(m) => {
                         // Agents use their path as identifier
                         Some(

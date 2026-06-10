@@ -799,13 +799,22 @@ impl ScriptListApp {
         let grouped_items = grouped_items.clone();
         let flat_results = flat_results.clone();
 
+        // Unarmed empty colon mode (`@clipboard:` recents before Down/click):
+        // render with NO selected row. usize::MAX can never equal a grouped
+        // index, so every row's `is_selected` comparison stays false.
+        let spine_selection_render_index = if self.spine_empty_subsearch_selection_suppressed() {
+            usize::MAX
+        } else {
+            self.selected_index
+        };
+
         // --- Storybook live-spec override (read-only, no state mutation) ---
         // grouped_items / flat_results are Arc<[T]> from cache; when the storybook
         // spec requires overrides we swap them for fresh Vecs wrapped in Arc.
         #[cfg(feature = "storybook")]
         let (grouped_items, flat_results, selected_index_for_render, filter_text_for_render) = {
             let live_spec = crate::storybook::adopted_main_menu_live_spec();
-            let mut si = self.selected_index;
+            let mut si = spine_selection_render_index;
             let mut ft = self.filter_text.clone();
             let gi;
             let fr;
@@ -833,7 +842,7 @@ impl ScriptListApp {
         };
         #[cfg(not(feature = "storybook"))]
         let (selected_index_for_render, filter_text_for_render) =
-            (self.selected_index, self.filter_text.clone());
+            (spine_selection_render_index, self.filter_text.clone());
 
         // Get design tokens for current design variant
         let tokens = get_tokens(self.current_design);
@@ -1108,7 +1117,13 @@ impl ScriptListApp {
                                               event: &gpui::ClickEvent,
                                               window,
                                               cx| {
-                                            let was_selected = this.selected_index == ix;
+                                            // While the empty colon mode renders unarmed, no row
+                                            // reads as "already selected", so the first click
+                                            // arms + selects instead of submitting the internal
+                                            // selection the user never saw.
+                                            let was_selected = this.selected_index == ix
+                                                && !this.spine_empty_subsearch_selection_suppressed();
+                                            this.arm_spine_empty_subsearch_selection();
                                             // Always select the item on any click
                                             if !was_selected {
                                                 this.selected_index = ix;
@@ -1485,24 +1500,6 @@ impl ScriptListApp {
 
                 let key_char = event.keystroke.key_char.as_deref();
                 let has_cmd = event.keystroke.modifiers.platform;
-
-                // Alt+Left / Alt+Right cycle the live main-menu theme exploration
-                // variation. Real keyboard input is caught first by the global
-                // arrow interceptor (which stops propagation); this branch also
-                // serves automation (`simulateKey`), which routes directly here.
-                if matches!(this.current_view, AppView::ScriptList)
-                    && event.keystroke.modifiers.alt
-                    && !has_cmd
-                    && !event.keystroke.modifiers.control
-                    && !event.keystroke.modifiers.shift
-                    && (crate::ui_foundation::is_key_left(key_str)
-                        || crate::ui_foundation::is_key_right(key_str))
-                {
-                    let forward = crate::ui_foundation::is_key_right(key_str);
-                    this.cycle_main_menu_theme(forward, window, cx);
-                    cx.stop_propagation();
-                    return;
-                }
 
                 if matches!(this.current_view, AppView::ScriptList)
                     && this.handle_menu_syntax_form_control_key_input(
@@ -1980,29 +1977,12 @@ impl ScriptListApp {
             self.render_search_input_with_ghost(cx).into_any_element()
         };
 
-        // The persistent cwd anchor shows as a token inside the input area:
-        // it silently authorizes plain-prose Cmd+Enter submits, so it must be
-        // visible where the user types, not only in the footer chip.
-        let input_trailing = self
-            .spine_cwd_label
-            .clone()
-            .map(|label| {
-                vec![
-                    crate::components::main_view_chrome::render_input_cwd_anchor_token(
-                        &self.theme,
-                        menu_def,
-                        label,
-                    ),
-                ]
-            })
-            .unwrap_or_default();
-
         let input = crate::components::main_view_chrome::render_main_view_input_shell(
             &self.theme,
             menu_def,
             crate::components::main_view_chrome::MainViewInputChrome {
                 body: input_body,
-                trailing: input_trailing,
+                trailing: Vec::new(),
             },
         );
 

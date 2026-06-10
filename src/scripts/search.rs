@@ -22,6 +22,7 @@ pub(crate) mod ghost;
 pub use apps::fuzzy_search_apps;
 pub use builtins::fuzzy_search_builtins;
 pub use highlight::compute_match_indices_for_result;
+pub(crate) use highlight::SearchHighlightMatchCtx;
 
 pub(crate) fn highlight_indices_for(query: &str, haystack: &str) -> (bool, Vec<usize>) {
     let mut ctx = highlight::SearchHighlightMatchCtx::new(query);

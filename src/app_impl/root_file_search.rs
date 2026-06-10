@@ -389,7 +389,9 @@ impl ScriptListApp {
 
         cx.spawn(async move |this, cx| {
             cx.background_executor()
-                .timer(std::time::Duration::from_millis(ROOT_FILE_SEARCH_DEBOUNCE_MS))
+                .timer(std::time::Duration::from_millis(
+                    ROOT_FILE_SEARCH_DEBOUNCE_MS,
+                ))
                 .await;
 
             if cancel.load(std::sync::atomic::Ordering::Relaxed) {
@@ -554,9 +556,7 @@ fn emit_root_file_search_test_fixture(
             fixtures,
             passthrough_unmatched,
         } => {
-            let found = fixtures
-                .into_iter()
-                .find(|fixture| fixture.query == query);
+            let found = fixtures.into_iter().find(|fixture| fixture.query == query);
             if found.is_none() && !passthrough_unmatched {
                 let _ = tx.send(crate::file_search::SearchEvent::Done);
                 return true;
@@ -617,6 +617,31 @@ impl RootFileSearchTestFixtureResult {
 /// with user-typed sub-queries (contains a control character).
 const SPINE_FILE_RECENTS_SENTINEL: &str = "\u{1}spine-file-recents";
 
+/// Dedup-key prefixes for the `@project:` subsearch. Both embed the scope
+/// directory so a cwd switch mid-colon-mode restarts the search; the control
+/// character keeps them disjoint from raw `@file:` sub-queries.
+const SPINE_PROJECT_SEARCH_KEY_PREFIX: &str = "\u{1}spine-project\u{1f}";
+const SPINE_PROJECT_RECENTS_SENTINEL_PREFIX: &str = "\u{1}spine-project-recents\u{1f}";
+
+/// `mdfind -onlyin` scope for a directory, or `None` when Spotlight cannot
+/// serve it. Spotlight skips hidden directories, so scoping to a path with
+/// any dot-component (e.g. `~/.scriptkit`) returns zero results for every
+/// query.
+fn spotlight_indexable_scope(path: &std::path::Path) -> Option<String> {
+    let hidden = path.components().any(|component| {
+        matches!(
+            component,
+            std::path::Component::Normal(name)
+                if name.to_string_lossy().starts_with('.')
+        )
+    });
+    if hidden {
+        None
+    } else {
+        Some(path.to_string_lossy().to_string())
+    }
+}
+
 impl ScriptListApp {
     // ── Spine @file: subsearch ───────────────────────────────────────
 
@@ -635,8 +660,7 @@ impl ScriptListApp {
         self.spine_file_search_results.clear();
         self.spine_file_search_loading = false;
         if had_state {
-            self.spine_file_search_generation =
-                self.spine_file_search_generation.wrapping_add(1);
+            self.spine_file_search_generation = self.spine_file_search_generation.wrapping_add(1);
             self.invalidate_grouped_cache();
             cx.notify();
         }
@@ -657,11 +681,10 @@ impl ScriptListApp {
                 context_type,
                 sub_query,
             } => {
-                let (source, query) =
-                    crate::spine::catalog_subsearch::parse_context_subsearch(
-                        context_type,
-                        sub_query.as_deref(),
-                    )?;
+                let (source, query) = crate::spine::catalog_subsearch::parse_context_subsearch(
+                    context_type,
+                    sub_query.as_deref(),
+                )?;
                 Some((source, query.to_string()))
             }
             _ => None,
@@ -676,18 +699,27 @@ impl ScriptListApp {
             self.clear_spine_file_subsearch_state(cx);
             return;
         };
-        if source != crate::spine::catalog_subsearch::ContextSubsearchSource::File {
-            self.clear_spine_file_subsearch_state(cx);
-            return;
+        match source {
+            crate::spine::catalog_subsearch::ContextSubsearchSource::File => {
+                self.maybe_start_spine_file_subsearch(&query, cx);
+            }
+            crate::spine::catalog_subsearch::ContextSubsearchSource::Project => {
+                self.maybe_start_spine_project_subsearch(&query, cx);
+            }
+            _ => self.clear_spine_file_subsearch_state(cx),
         }
-        self.maybe_start_spine_file_subsearch(&query, cx);
     }
 
-    fn maybe_start_spine_file_subsearch(
-        &mut self,
-        query: &str,
-        cx: &mut Context<Self>,
-    ) {
+    /// Directory the `@project:` subsearch is scoped to: the global cwd chip,
+    /// falling back to home when no cwd is set.
+    fn spine_project_scope_dir(&self) -> Option<String> {
+        self.spine_cwd
+            .as_ref()
+            .map(|p| p.to_string_lossy().to_string())
+            .or_else(|| dirs::home_dir().map(|home| home.to_string_lossy().to_string()))
+    }
+
+    fn maybe_start_spine_file_subsearch(&mut self, query: &str, cx: &mut Context<Self>) {
         let query = query.trim();
         if query.is_empty() {
             // A3 recent-files decision (2026-06-09): an empty `@file:`
@@ -701,8 +733,7 @@ impl ScriptListApp {
         }
 
         self.cancel_spine_file_subsearch();
-        self.spine_file_search_generation =
-            self.spine_file_search_generation.wrapping_add(1);
+        self.spine_file_search_generation = self.spine_file_search_generation.wrapping_add(1);
         let generation = self.spine_file_search_generation;
         self.spine_file_search_query = query.to_string();
         self.spine_file_search_loading = true;
@@ -713,7 +744,6 @@ impl ScriptListApp {
         let cancel = crate::file_search::new_cancel_token();
         self.spine_file_search_cancel = Some(cancel.clone());
         let query_owned = query.to_string();
-        let onlyin = self.spine_cwd.as_ref().map(|p| p.to_string_lossy().to_string());
 
         cx.spawn(async move |this, cx| {
             cx.background_executor()
@@ -729,22 +759,22 @@ impl ScriptListApp {
             std::thread::spawn({
                 let cancel = cancel.clone();
                 let query_owned = query_owned.clone();
-                let onlyin = onlyin.clone();
                 move || {
-                    if emit_root_file_search_test_fixture(
-                        &query_owned,
-                        &cancel,
-                        &tx,
-                    ) {
+                    if emit_root_file_search_test_fixture(&query_owned, &cancel, &tx) {
                         return;
                     }
                     let provider_query =
-                        crate::file_search::root_file_provider_query_for_user_query(
-                            &query_owned,
-                        );
+                        crate::file_search::root_file_provider_query_for_user_query(&query_owned);
+                    // The spine cwd is the agent's working directory, not a
+                    // search filter. Typed `@file:` sub-queries search
+                    // globally, matching the "Open full File Search" portal
+                    // row rendered alongside these results — scoping mdfind
+                    // to the cwd (always set since the global cwd chip
+                    // landed, defaulting to `~/.scriptkit`, which Spotlight
+                    // does not index) emptied every inline result.
                     crate::file_search::search_files_streaming_with_options(
                         &provider_query,
-                        onlyin.as_deref(),
+                        None,
                         crate::file_search::ROOT_FILE_SOURCE_LIMIT,
                         cancel,
                         crate::file_search::SearchFilesStreamingOptions::root_search(),
@@ -776,11 +806,7 @@ impl ScriptListApp {
 
             let _ = cx.update(|cx| {
                 this.update(cx, |app, cx| {
-                    app.apply_spine_file_subsearch_results(
-                        generation,
-                        batch,
-                        cx,
-                    );
+                    app.apply_spine_file_subsearch_results(generation, batch, cx);
                 })
             });
         })
@@ -796,8 +822,7 @@ impl ScriptListApp {
         }
 
         self.cancel_spine_file_subsearch();
-        self.spine_file_search_generation =
-            self.spine_file_search_generation.wrapping_add(1);
+        self.spine_file_search_generation = self.spine_file_search_generation.wrapping_add(1);
         let generation = self.spine_file_search_generation;
         self.spine_file_search_query = SPINE_FILE_RECENTS_SENTINEL.to_string();
         self.spine_file_search_loading = true;
@@ -807,13 +832,15 @@ impl ScriptListApp {
 
         let cancel = crate::file_search::new_cancel_token();
         self.spine_file_search_cancel = Some(cancel.clone());
+        // Recents may scope to the picked cwd (a project-local landing state
+        // is useful), but only when Spotlight can actually serve it; hidden
+        // dot-directories like the default `~/.scriptkit` are unindexed and
+        // would yield a permanently empty "Recent Files" section.
         let onlyin = self
             .spine_cwd
-            .as_ref()
-            .map(|p| p.to_string_lossy().to_string())
-            .or_else(|| {
-                dirs::home_dir().map(|home| home.to_string_lossy().to_string())
-            });
+            .as_deref()
+            .and_then(spotlight_indexable_scope)
+            .or_else(|| dirs::home_dir().map(|home| home.to_string_lossy().to_string()));
 
         cx.spawn(async move |this, cx| {
             let (tx, rx) = std::sync::mpsc::channel();
@@ -864,11 +891,198 @@ impl ScriptListApp {
 
             let _ = cx.update(|cx| {
                 this.update(cx, |app, cx| {
-                    app.apply_spine_file_subsearch_results(
-                        generation,
-                        batch,
-                        cx,
+                    app.apply_spine_file_subsearch_results(generation, batch, cx);
+                })
+            });
+        })
+        .detach();
+    }
+
+    /// Typed `@project:` sub-query: mdfind scoped to the cwd, with the
+    /// filesystem-walk fallback so Spotlight-blind dot-directory cwds
+    /// (`~/.scriptkit`) still return results. The raw query is passed
+    /// through (no provider-query rewrite) so the fallback stays eligible.
+    fn maybe_start_spine_project_subsearch(&mut self, query: &str, cx: &mut Context<Self>) {
+        let query = query.trim();
+        if query.is_empty() {
+            self.maybe_start_spine_project_recents_search(cx);
+            return;
+        }
+        let Some(scope) = self.spine_project_scope_dir() else {
+            self.clear_spine_file_subsearch_state(cx);
+            return;
+        };
+        let dedup_key = format!("{SPINE_PROJECT_SEARCH_KEY_PREFIX}{scope}\u{1f}{query}");
+        if self.spine_file_search_query == dedup_key {
+            return;
+        }
+
+        self.cancel_spine_file_subsearch();
+        self.spine_file_search_generation = self.spine_file_search_generation.wrapping_add(1);
+        let generation = self.spine_file_search_generation;
+        self.spine_file_search_query = dedup_key;
+        self.spine_file_search_loading = true;
+        self.spine_file_search_results.clear();
+        self.invalidate_grouped_cache();
+        cx.notify();
+
+        let cancel = crate::file_search::new_cancel_token();
+        self.spine_file_search_cancel = Some(cancel.clone());
+        let query_owned = query.to_string();
+
+        cx.spawn(async move |this, cx| {
+            cx.background_executor()
+                .timer(std::time::Duration::from_millis(
+                    SPINE_FILE_SEARCH_DEBOUNCE_MS,
+                ))
+                .await;
+            if cancel.load(std::sync::atomic::Ordering::Relaxed) {
+                return;
+            }
+
+            let (tx, rx) = std::sync::mpsc::channel();
+            std::thread::spawn({
+                let cancel = cancel.clone();
+                let query_owned = query_owned.clone();
+                let scope = scope.clone();
+                move || {
+                    crate::file_search::search_files_streaming_with_options(
+                        &query_owned,
+                        Some(&scope),
+                        crate::file_search::ROOT_FILE_SOURCE_LIMIT,
+                        cancel,
+                        crate::file_search::SearchFilesStreamingOptions {
+                            skip_metadata: true,
+                            allow_filesystem_fallback: true,
+                        },
+                        |event| {
+                            let _ = tx.send(event);
+                        },
                     );
+                }
+            });
+
+            let mut batch = Vec::new();
+            loop {
+                if cancel.load(std::sync::atomic::Ordering::Relaxed) {
+                    return;
+                }
+                match rx.try_recv() {
+                    Ok(crate::file_search::SearchEvent::Result(result)) => {
+                        batch.push(result);
+                    }
+                    Ok(crate::file_search::SearchEvent::Done) => break,
+                    Err(std::sync::mpsc::TryRecvError::Empty) => {
+                        cx.background_executor()
+                            .timer(std::time::Duration::from_millis(16))
+                            .await;
+                    }
+                    Err(std::sync::mpsc::TryRecvError::Disconnected) => break,
+                }
+            }
+
+            let _ = cx.update(|cx| {
+                this.update(cx, |app, cx| {
+                    app.apply_spine_file_subsearch_results(generation, batch, cx);
+                })
+            });
+        })
+        .detach();
+    }
+
+    /// Empty `@project:` landing state: Spotlight recently-used files scoped
+    /// to the cwd when Spotlight can serve it, else (and when Spotlight
+    /// returns nothing) a bounded filesystem walk sorted by mtime.
+    fn maybe_start_spine_project_recents_search(&mut self, cx: &mut Context<Self>) {
+        let Some(scope) = self.spine_project_scope_dir() else {
+            self.clear_spine_file_subsearch_state(cx);
+            return;
+        };
+        let sentinel = format!("{SPINE_PROJECT_RECENTS_SENTINEL_PREFIX}{scope}");
+        if self.spine_file_search_query == sentinel {
+            return;
+        }
+
+        self.cancel_spine_file_subsearch();
+        self.spine_file_search_generation = self.spine_file_search_generation.wrapping_add(1);
+        let generation = self.spine_file_search_generation;
+        self.spine_file_search_query = sentinel;
+        self.spine_file_search_loading = true;
+        self.spine_file_search_results.clear();
+        self.invalidate_grouped_cache();
+        cx.notify();
+
+        let cancel = crate::file_search::new_cancel_token();
+        self.spine_file_search_cancel = Some(cancel.clone());
+        let spotlight_scope = spotlight_indexable_scope(std::path::Path::new(&scope));
+
+        cx.spawn(async move |this, cx| {
+            let (tx, rx) = std::sync::mpsc::channel();
+            std::thread::spawn({
+                let cancel = cancel.clone();
+                let scope = scope.clone();
+                move || {
+                    let mut spotlight_hits = 0usize;
+                    if let Some(spotlight_scope) = &spotlight_scope {
+                        crate::file_search::search_files_streaming_with_options(
+                            crate::file_search::RECENTLY_USED_FILES_MDQUERY,
+                            Some(spotlight_scope),
+                            crate::file_search::RECENTLY_USED_FILES_SOURCE_LIMIT,
+                            cancel,
+                            crate::file_search::SearchFilesStreamingOptions {
+                                skip_metadata: false,
+                                allow_filesystem_fallback: false,
+                            },
+                            |event| {
+                                if let crate::file_search::SearchEvent::Result(result) = event {
+                                    if !crate::file_search::is_noisy_recent_file_path(&result.path)
+                                    {
+                                        spotlight_hits += 1;
+                                        let _ = tx.send(
+                                            crate::file_search::SearchEvent::Result(result),
+                                        );
+                                    }
+                                }
+                            },
+                        );
+                    }
+                    if spotlight_hits == 0 {
+                        for result in crate::file_search::recent_files_filesystem(
+                            std::path::Path::new(&scope),
+                            crate::file_search::ROOT_FILE_RECENT_SEED_LIMIT,
+                        ) {
+                            let _ = tx.send(crate::file_search::SearchEvent::Result(result));
+                        }
+                    }
+                    let _ = tx.send(crate::file_search::SearchEvent::Done);
+                }
+            });
+
+            let mut batch = Vec::new();
+            loop {
+                if cancel.load(std::sync::atomic::Ordering::Relaxed) {
+                    return;
+                }
+                match rx.try_recv() {
+                    Ok(crate::file_search::SearchEvent::Result(result)) => {
+                        batch.push(result);
+                    }
+                    Ok(crate::file_search::SearchEvent::Done) => break,
+                    Err(std::sync::mpsc::TryRecvError::Empty) => {
+                        cx.background_executor()
+                            .timer(std::time::Duration::from_millis(16))
+                            .await;
+                    }
+                    Err(std::sync::mpsc::TryRecvError::Disconnected) => break,
+                }
+            }
+
+            batch.sort_by(|a, b| b.modified.cmp(&a.modified));
+            batch.truncate(crate::file_search::ROOT_FILE_RECENT_SEED_LIMIT);
+
+            let _ = cx.update(|cx| {
+                this.update(cx, |app, cx| {
+                    app.apply_spine_file_subsearch_results(generation, batch, cx);
                 })
             });
         })
@@ -894,5 +1108,34 @@ impl ScriptListApp {
             self.validate_selection_bounds(cx);
         }
         cx.notify();
+    }
+}
+
+#[cfg(test)]
+mod spine_file_scope_tests {
+    use super::spotlight_indexable_scope;
+    use std::path::Path;
+
+    #[test]
+    fn hidden_directories_are_not_spotlight_scopes() {
+        // The default spine cwd (`~/.scriptkit`) lives in a dot-directory
+        // that Spotlight never indexes; scoping recents there must fall back
+        // instead of silently returning an empty list forever.
+        assert_eq!(
+            spotlight_indexable_scope(Path::new("/Users/me/.scriptkit")),
+            None
+        );
+        assert_eq!(
+            spotlight_indexable_scope(Path::new("/Users/me/.config/nested")),
+            None
+        );
+    }
+
+    #[test]
+    fn visible_directories_are_usable_scopes() {
+        assert_eq!(
+            spotlight_indexable_scope(Path::new("/Users/me/dev/project")).as_deref(),
+            Some("/Users/me/dev/project")
+        );
     }
 }

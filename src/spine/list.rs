@@ -134,9 +134,6 @@ pub enum SpineListAction {
     OpenConversation {
         conversation_id: SharedString,
     },
-    AwaitContextSubsearchInput {
-        source: SharedString,
-    },
     /// Submit the current spine prompt plan to Agent Chat — the same path
     /// as Cmd+Enter. Used by the prompt-builder tail row so "Send" really
     /// sends instead of being a decorative Noop.
@@ -151,7 +148,6 @@ impl SpineListRow {
             .map(|label| label.as_ref())
             .unwrap_or(match self.action {
                 SpineListAction::Noop => "No Action",
-                SpineListAction::AwaitContextSubsearchInput { .. } => "Type",
                 SpineListAction::OpenModeExit { .. } => "Open",
                 SpineListAction::OpenFileSearchPortal { .. } => "Browse",
                 SpineListAction::OpenConversation { .. } => "Resume",

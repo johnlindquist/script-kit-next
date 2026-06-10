@@ -523,8 +523,8 @@ pub use directory::{
     shorten_path, ParsedDirPath,
 };
 pub use mdfind::{
-    new_cancel_token, search_files, search_files_streaming, search_files_streaming_with_options,
-    CancelToken, SearchEvent, SearchFilesStreamingOptions,
+    new_cancel_token, recent_files_filesystem, search_files, search_files_streaming,
+    search_files_streaming_with_options, CancelToken, SearchEvent, SearchFilesStreamingOptions,
 };
 pub use os_open::{
     duplicate_path, move_path, move_to_trash, open_file, open_with, prompt_move_destination_dir,

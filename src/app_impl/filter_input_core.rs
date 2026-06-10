@@ -165,6 +165,43 @@ impl ScriptListApp {
     pub(crate) fn set_spine_parse_from_filter_and_cursor(&mut self, raw: &str, cursor: usize) {
         self.spine_parse = crate::spine::parse_spine(raw);
         self.spine_projection = Some(crate::spine::project_cursor(&self.spine_parse, cursor));
+        // The Down/click arming of an empty `@source:` colon mode only
+        // survives while that exact empty colon mode persists; typing,
+        // deleting back, or switching sources re-suppresses the selection.
+        if self.spine_empty_subsearch_armed_for.is_some()
+            && self.spine_empty_subsearch_armed_for != self.active_empty_spine_subsearch_source()
+        {
+            self.spine_empty_subsearch_armed_for = None;
+        }
+    }
+
+    /// The active `@source:` subsearch when its sub-query is empty (the
+    /// colon-mode landing state), else `None`.
+    fn active_empty_spine_subsearch_source(
+        &self,
+    ) -> Option<crate::spine::catalog_subsearch::ContextSubsearchSource> {
+        self.active_spine_context_subsearch()
+            .filter(|(_, query)| query.trim().is_empty())
+            .map(|(source, _)| source)
+    }
+
+    /// Whether the main list renders UNARMED (no selected row): the empty
+    /// `@source:` colon mode shows recents, but the first concrete row must
+    /// not be Enter-able until the user explicitly chooses with Down or a
+    /// click. Replaces the old selectable "Type to search" guard row.
+    pub(crate) fn spine_empty_subsearch_selection_suppressed(&self) -> bool {
+        match self.active_empty_spine_subsearch_source() {
+            Some(source) => self.spine_empty_subsearch_armed_for != Some(source),
+            None => false,
+        }
+    }
+
+    /// Explicit choose gesture (Down or click) in an empty colon mode: arm
+    /// the selection so it renders and Enter works.
+    pub(crate) fn arm_spine_empty_subsearch_selection(&mut self) {
+        if let Some(source) = self.active_empty_spine_subsearch_source() {
+            self.spine_empty_subsearch_armed_for = Some(source);
+        }
     }
 
     /// Whether the Spine projection currently owns the main list (i.e., a sigil
@@ -643,8 +680,7 @@ mod tests {
         }
 
         for query in [
-            ">", ">deploy", "!dep", "/", "@", "|", ".", ";", "~/src", "@browser", "/tmp",
-            "foo", "",
+            ">", ">deploy", "!dep", "/", "@", "|", ".", ";", "~/src", "@browser", "/tmp", "foo", "",
         ] {
             assert!(
                 !ScriptListApp::is_transient_script_list_trigger(query),

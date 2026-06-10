@@ -474,7 +474,8 @@ impl ScriptListApp {
             } => {
                 self.filter_text = new_text.clone();
                 if Self::sync_builtin_query_state(filter, selected_index, &new_text) {
-                    self.agent_chat_history_scroll_handle.scroll_to_top_of_item(0);
+                    self.agent_chat_history_scroll_handle
+                        .scroll_to_top_of_item(0);
                     cx.notify();
                 }
                 return; // Don't run main menu filter logic
@@ -543,30 +544,13 @@ impl ScriptListApp {
             } => {
                 self.filter_text = new_text.clone();
                 let changed = Self::sync_builtin_query_state(filter, selected_index, &new_text);
-                let current_filter = filter.clone();
-                let current_selected_index = *selected_index;
 
                 if changed {
-                    let filtered = Self::theme_chooser_filtered_indices(&current_filter);
-                    let old_count = self.theme_chooser_list_state.item_count();
-                    if old_count != filtered.len() {
-                        self.theme_chooser_list_state
-                            .splice(0..old_count, filtered.len());
-                    }
-                    self.theme_chooser_list_state.scroll_to(ListOffset {
-                        item_ix: 0,
-                        offset_in_item: px(0.),
-                    });
-                    if filtered.is_empty() {
-                        cx.notify();
-                    } else {
-                        self.preview_theme_chooser_preset(
-                            &filtered,
-                            current_selected_index,
-                            "theme_chooser_filter_preview",
-                            cx,
-                        );
-                    }
+                    // Filter against the same unified catalog (user themes +
+                    // built-in presets) that the gallery renders, so typing
+                    // never desyncs the list, sizing, and preview. Shared with
+                    // the protocol setFilter path.
+                    self.apply_theme_chooser_filter_change_effects(cx);
                 }
                 return; // Don't run main menu filter logic
             }

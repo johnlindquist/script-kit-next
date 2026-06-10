@@ -122,6 +122,12 @@ impl ScriptListApp {
     fn move_selection_up(&mut self, cx: &mut Context<Self>) {
         self.enter_keyboard_mode(cx);
 
+        // Empty `@source:` colon mode renders unarmed: Up is not a choose
+        // gesture, so it neither arms nor moves the (invisible) selection.
+        if self.spine_empty_subsearch_selection_suppressed() {
+            return;
+        }
+
         let (target_index, reason) = {
             let (grouped_items, _) = self.get_grouped_results_cached();
             if grouped_items.is_empty() {
@@ -169,6 +175,21 @@ impl ScriptListApp {
 
     fn move_selection_down(&mut self, cx: &mut Context<Self>) {
         self.enter_keyboard_mode(cx);
+
+        // Empty `@source:` colon mode renders unarmed: the first Down is the
+        // explicit choose gesture and lands on the FIRST recent row (which
+        // was visible but unselected), not the second.
+        if self.spine_empty_subsearch_selection_suppressed() {
+            self.arm_spine_empty_subsearch_selection();
+            let _ = self.get_grouped_results_cached();
+            if let Some(first) = self.main_menu_result_caches.first_selectable_index() {
+                self.set_selected_index(first, "spine_empty_subsearch_arm", cx);
+            }
+            // set_selected_index early-exits when the index is unchanged;
+            // arming alone changes what renders, so always repaint.
+            cx.notify();
+            return;
+        }
 
         let (target_index, reason) = {
             let (grouped_items, _) = self.get_grouped_results_cached();

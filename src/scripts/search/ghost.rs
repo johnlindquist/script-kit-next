@@ -73,6 +73,10 @@ pub enum GhostPredictionKind {
     /// Deterministic, action-oriented fallback shown while the LLM is pending or
     /// unavailable. Faint and NOT Tab-acceptable so weak text never gets committed.
     AgentPromptStarter,
+    /// Decorative affordance for an empty spine colon mode (`@clipboard:`):
+    /// tells the user typing searches that source. NOT Tab-acceptable — it is
+    /// a hint, never insertable text.
+    ContextSubsearchHint,
 }
 
 #[derive(Clone, Debug)]
@@ -99,7 +103,29 @@ impl GhostPrediction {
             GhostPredictionKind::CommandCompletion => "command_completion",
             GhostPredictionKind::AgentPromptCompletion => "agent_prompt_completion",
             GhostPredictionKind::AgentPromptStarter => "agent_prompt_starter",
+            GhostPredictionKind::ContextSubsearchHint => "context_subsearch_hint",
         }
+    }
+}
+
+/// Ghost hint for an empty spine colon mode: `@clipboard:` shows a faint
+/// "search clipboard…" after the cursor. Replaces the removed selectable
+/// "Type to search" guard row — the typing affordance lives in the input,
+/// where typing happens, instead of occupying the first list row.
+pub fn context_subsearch_hint_prediction(
+    query: &str,
+    noun: &str,
+    revision: PredictionRevision,
+) -> GhostPrediction {
+    let ghost_suffix = format!("search {noun}\u{2026}");
+    GhostPrediction {
+        query: query.to_string(),
+        full_label: format!("{query}{ghost_suffix}"),
+        ghost_suffix,
+        confidence: 1.0,
+        revision,
+        ghost_id: 0,
+        kind: GhostPredictionKind::ContextSubsearchHint,
     }
 }
 
@@ -1501,6 +1527,25 @@ mod tests {
             },
             llm_excerpt: Some("Use the agent cargo wrapper for Rust checks.".to_string()),
         }
+    }
+
+    // -- context subsearch hint -------------------------------------------
+
+    #[test]
+    fn context_subsearch_hint_is_never_tab_acceptable() {
+        // The colon-mode ghost ("@clipboard:" + faint "search clipboard…")
+        // is an affordance, not a completion: accepting it would type the
+        // hint into the mention sub-query.
+        let hint = context_subsearch_hint_prediction(
+            "@clipboard:",
+            "clipboard",
+            PredictionRevision::default(),
+        );
+        assert_eq!(hint.ghost_suffix, "search clipboard\u{2026}");
+        assert!(
+            !hint.accepts_tab(),
+            "context subsearch hint must not be Tab/Right-acceptable"
+        );
     }
 
     // -- prefix / command completion (unchanged behavior) -----------------

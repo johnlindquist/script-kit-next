@@ -535,6 +535,76 @@ fn push_fallback_root(roots: &mut Vec<PathBuf>, path: PathBuf) {
     }
 }
 
+/// Most-recently-modified files under `root`, for scopes Spotlight cannot
+/// serve (hidden dot-directory cwds like `~/.scriptkit`). Bounded walk with
+/// the same skip rules as the search fallback, sorted by mtime descending.
+/// Hidden files are skipped for this landing-state seed; typing a sub-query
+/// still finds them through the search fallback.
+pub fn recent_files_filesystem(root: &Path, limit: usize) -> Vec<FileResult> {
+    if limit == 0 || !root.is_dir() {
+        return Vec::new();
+    }
+
+    let mut results = Vec::new();
+    let mut visited = 0usize;
+    let mut stack = vec![root.to_path_buf()];
+
+    while let Some(dir) = stack.pop() {
+        if visited >= FILESYSTEM_FALLBACK_MAX_VISITED {
+            break;
+        }
+
+        let Ok(entries) = std::fs::read_dir(&dir) else {
+            continue;
+        };
+
+        for entry in entries.flatten() {
+            if visited >= FILESYSTEM_FALLBACK_MAX_VISITED {
+                break;
+            }
+            visited += 1;
+
+            let path = entry.path();
+            let name = entry.file_name().to_string_lossy().to_string();
+            let Ok(metadata) = entry.metadata() else {
+                continue;
+            };
+
+            if metadata.is_dir() {
+                if !should_skip_fallback_dir(&name) && !name.starts_with('.') {
+                    stack.push(path);
+                }
+                continue;
+            }
+            if name.starts_with('.') {
+                continue;
+            }
+            let Some(path_str) = path.to_str().map(str::to_string) else {
+                continue;
+            };
+
+            let modified = metadata
+                .modified()
+                .ok()
+                .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
+                .map(|d| d.as_secs())
+                .unwrap_or(0);
+
+            results.push(FileResult {
+                path: path_str,
+                name,
+                size: metadata.len(),
+                modified,
+                file_type: detect_file_type(&path),
+            });
+        }
+    }
+
+    results.sort_by(|a, b| b.modified.cmp(&a.modified));
+    results.truncate(limit);
+    results
+}
+
 fn should_skip_fallback_dir(name: &str) -> bool {
     matches!(
         name,
@@ -579,11 +649,39 @@ mod tests {
 
         let results = search_files_filesystem_fallback("search-target", temp.path().to_str(), 10);
 
+        // The walker canonicalizes its roots (macOS tempdirs live behind the
+        // /var → /private/var symlink), so compare canonical paths.
+        let wanted = wanted.canonicalize().expect("canonicalize fixture path");
         assert!(
             results
                 .iter()
-                .any(|entry| entry.path == wanted.to_string_lossy()),
+                .any(|entry| std::path::Path::new(&entry.path) == wanted),
             "fallback should find filename matches under onlyin"
+        );
+    }
+
+    #[test]
+    fn recent_files_walk_skips_hidden_and_noise_dirs() {
+        let temp = tempfile::tempdir().expect("temp dir");
+        std::fs::write(temp.path().join("visible.txt"), "fixture").expect("write fixture");
+        std::fs::write(temp.path().join(".hidden.txt"), "fixture").expect("write fixture");
+        std::fs::create_dir(temp.path().join("node_modules")).expect("mkdir");
+        std::fs::write(temp.path().join("node_modules/dep.js"), "fixture").expect("write fixture");
+        std::fs::create_dir(temp.path().join("src")).expect("mkdir");
+        std::fs::write(temp.path().join("src/nested.rs"), "fixture").expect("write fixture");
+
+        let results = super::recent_files_filesystem(temp.path(), 10);
+        let names: Vec<&str> = results.iter().map(|entry| entry.name.as_str()).collect();
+
+        assert!(names.contains(&"visible.txt"), "top-level file: {names:?}");
+        assert!(names.contains(&"nested.rs"), "nested file: {names:?}");
+        assert!(
+            !names.contains(&".hidden.txt"),
+            "hidden files are not recents seeds: {names:?}"
+        );
+        assert!(
+            !names.contains(&"dep.js"),
+            "noise dirs (node_modules) are skipped: {names:?}"
         );
     }
 

@@ -7,6 +7,11 @@ pub(crate) const SUBSEARCH_RENDER_LIMIT: usize = 8;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ContextSubsearchSource {
     File,
+    /// Files scoped to the working directory (the global cwd chip). Unlike
+    /// `File` (global Spotlight), this searches `onlyin` the cwd with a
+    /// filesystem-walk fallback so Spotlight-blind dot-directory cwds
+    /// (`~/.scriptkit`) still return results.
+    Project,
     BrowserHistory,
     Clipboard,
     Dictation,
@@ -23,6 +28,7 @@ impl ContextSubsearchSource {
     pub(crate) fn from_prefix(prefix: &str) -> Option<Self> {
         match prefix {
             "file" => Some(Self::File),
+            "project" => Some(Self::Project),
             "browser-history" => Some(Self::BrowserHistory),
             "clipboard" => Some(Self::Clipboard),
             "dictation" => Some(Self::Dictation),
@@ -40,6 +46,7 @@ impl ContextSubsearchSource {
     pub(crate) fn prefix(self) -> &'static str {
         match self {
             Self::File => "file",
+            Self::Project => "project",
             Self::BrowserHistory => "browser-history",
             Self::Clipboard => "clipboard",
             Self::Dictation => "dictation",
@@ -56,6 +63,7 @@ impl ContextSubsearchSource {
     fn section_title(self) -> &'static str {
         match self {
             Self::File => "Files",
+            Self::Project => "Project Files",
             Self::BrowserHistory => "Browser History",
             Self::Clipboard => "Clipboard",
             Self::Dictation => "Dictation",
@@ -69,9 +77,29 @@ impl ContextSubsearchSource {
         }
     }
 
+    /// Lowercase noun for the empty colon-mode ghost hint in the filter
+    /// input ("search clipboard…", "search files…").
+    pub(crate) fn search_hint_noun(self) -> &'static str {
+        match self {
+            Self::File => "files",
+            Self::Project => "project files",
+            Self::BrowserHistory => "browser history",
+            Self::Clipboard => "clipboard",
+            Self::Dictation => "dictation",
+            Self::Scripts => "scripts",
+            Self::Scriptlets => "scriptlets",
+            Self::Skills => "skills",
+            Self::Notes => "notes",
+            Self::History => "conversations",
+            Self::Calendar => "calendar events",
+            Self::Notifications => "notifications",
+        }
+    }
+
     fn icon(self) -> &'static str {
         match self {
             Self::File => "file",
+            Self::Project => "folder",
             Self::BrowserHistory => "globe",
             Self::Clipboard => "clipboard",
             Self::Dictation => "mic",
@@ -108,6 +136,15 @@ pub(crate) fn build_context_subsearch_section(
             },
             "File results are loaded by the launcher",
             ContextSubsearchSource::File,
+        )],
+        ContextSubsearchSource::Project => vec![hint_row(
+            if query.trim().is_empty() {
+                "Recent project files"
+            } else {
+                "Searching project files\u{2026}"
+            },
+            "Project file results are loaded by the launcher",
+            ContextSubsearchSource::Project,
         )],
         ContextSubsearchSource::BrowserHistory
         | ContextSubsearchSource::Clipboard

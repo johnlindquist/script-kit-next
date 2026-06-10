@@ -219,7 +219,8 @@ impl ScriptListApp {
         // input), the render guard skips reapplying them and the input stays
         // unhighlighted.
         self.main_menu_render_diagnostics.last_input_highlight_text = String::new();
-        self.main_menu_render_diagnostics.last_input_highlight_ranges = Vec::new();
+        self.main_menu_render_diagnostics
+            .last_input_highlight_ranges = Vec::new();
         self.suppress_filter_events = false;
         self.pending_filter_sync = false;
 
@@ -231,6 +232,19 @@ impl ScriptListApp {
         // would never reflect the narrowed dataset. Sub-gap (2) of the
         // `empty-clipboard-state` story.
         let handled_by_subview = self.write_filter_to_current_subview(&text);
+        if handled_by_subview && matches!(self.current_view, AppView::ThemeChooserView { .. }) {
+            // Protocol setFilter must drive the same live preview side effects
+            // (hex paste accent preview, first-match repreview, list re-splice)
+            // as real typing, which is suppressed on this path.
+            self.computed_filter_text = text.clone();
+            self.filter_coalescer.reset();
+            self.apply_theme_chooser_filter_change_effects(cx);
+            if self.filter_change_can_affect_window_size() {
+                self.update_window_size_deferred(window, cx);
+            }
+            cx.notify();
+            return;
+        }
         if handled_by_subview && matches!(self.current_view, AppView::ProfileSearchView { .. }) {
             self.computed_filter_text = text.clone();
             self.filter_coalescer.reset();
@@ -966,14 +980,6 @@ impl ScriptListApp {
                 self.resume_agent_chat_conversation_from_history(conversation_id.as_ref(), "", cx);
                 true
             }
-            SpineListAction::AwaitContextSubsearchInput { source } => {
-                tracing::info!(
-                    target: "script_kit::spine",
-                    event = "empty_context_subsearch_enter_consumed",
-                    source = %source,
-                );
-                true
-            }
             SpineListAction::SubmitPromptPlan => {
                 tracing::info!(
                     target: "script_kit::spine",
@@ -1172,9 +1178,8 @@ impl ScriptListApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.pending_placeholder = Some(
-            crate::dev_style_tool::runtime_overrides::effective_main_input_placeholder(),
-        );
+        self.pending_placeholder =
+            Some(crate::dev_style_tool::runtime_overrides::effective_main_input_placeholder());
         self.sync_filter_input_if_needed(window, cx);
         cx.notify();
     }
@@ -1201,7 +1206,10 @@ mod spine_mention_atomic_delete_tests {
 
     #[test]
     fn detects_single_char_deletion() {
-        assert_eq!(single_char_deletion_index("@file:demo.rs ", "@file:demo.r "), Some(12));
+        assert_eq!(
+            single_char_deletion_index("@file:demo.rs ", "@file:demo.r "),
+            Some(12)
+        );
         assert_eq!(single_char_deletion_index("abc", "ac"), Some(1));
         assert_eq!(single_char_deletion_index("abc", "abc"), None);
         assert_eq!(single_char_deletion_index("abc", "a"), None);

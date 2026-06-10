@@ -61,6 +61,7 @@ impl ScriptListApp {
             AppView::SearchAiPresetsView { .. } => "SearchAiPresets",
             AppView::CreateAiPresetView { .. } => "CreateAiPreset",
             AppView::SettingsView { .. } => "Settings",
+            AppView::PermissionsWizardView { .. } => "PermissionsWizard",
             AppView::FavoritesBrowseView { .. } => "FavoritesBrowse",
             AppView::AgentChatHistoryView { .. } => "AgentChatHistory",
             AppView::BrowserHistoryView { .. } => "BrowserHistory",

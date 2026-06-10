@@ -22,6 +22,12 @@ const CONTEXT_SUBSEARCH_SPECS: &[ContextSubsearchSpec] = &[
         icon: "file-search",
     },
     ContextSubsearchSpec {
+        prefix: "project",
+        title: "Project Files",
+        subtitle: "Search files in the working directory",
+        icon: "folder",
+    },
+    ContextSubsearchSpec {
         prefix: "clipboard",
         title: "Clipboard History",
         subtitle: "Search clipboard history",
@@ -371,6 +377,24 @@ mod tests {
             ),
             "top-level Files row must complete inline to @file:, got {:?}",
             file.action,
+        );
+    }
+
+    #[test]
+    fn project_subsearch_row_completes_inline_to_project_colon() {
+        let rows = build_context_root_rows("@proj", 0, 0..5);
+        let project = rows
+            .iter()
+            .find(|row| row.id.as_ref() == "spine:@:subsearch:project")
+            .expect("expected @project: subsearch row for @proj");
+        assert!(
+            matches!(
+                &project.action,
+                SpineListAction::InsertSegmentText { text, trailing_space: false, .. }
+                    if text.as_ref() == "@project:"
+            ),
+            "Enter on the Project Files row must complete inline to @project:, got {:?}",
+            project.action,
         );
     }
 

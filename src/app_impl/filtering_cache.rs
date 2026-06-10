@@ -1197,18 +1197,32 @@ impl ScriptListApp {
                 );
                 // Rich subsearch bypass: @file:/@clipboard:/etc. produce native
                 // rows with proper icons and preview. An empty @source: prefix
-                // gets a selected guard row before native recents, so accepting
-                // the root subsearch row does not auto-arm the first concrete
-                // file/clipboard/history result; Down/click remains explicit.
+                // renders recents UNARMED (no selected row) so accepting the
+                // root subsearch row does not auto-arm the first concrete
+                // file/clipboard/history result; Down/click remains explicit
+                // (see spine_empty_subsearch_selection_suppressed). The typing
+                // affordance is ghost text in the input; the choose affordance
+                // rides the first section header.
                 if let Some((rich_source, rich_query)) = active_rich_spine_subsearch(projection) {
                     let rich_gen = match rich_source {
-                        crate::spine::catalog_subsearch::ContextSubsearchSource::File => {
+                        crate::spine::catalog_subsearch::ContextSubsearchSource::File
+                        | crate::spine::catalog_subsearch::ContextSubsearchSource::Project => {
                             self.spine_file_search_generation
                         }
                         _ => 0,
                     };
-                    let rich_cache_key =
-                        format!("{spine_cache_key}\x1Frich={rich_source:?}\x1Frich-gen={rich_gen}");
+                    // Project results depend on the picked cwd; fold its
+                    // revision into the key so a cwd switch mid-colon-mode
+                    // can't serve rows from the previous scope.
+                    let rich_scope_rev = match rich_source {
+                        crate::spine::catalog_subsearch::ContextSubsearchSource::Project => {
+                            self.spine_cwd_revision
+                        }
+                        _ => 0,
+                    };
+                    let rich_cache_key = format!(
+                        "{spine_cache_key}\x1Frich={rich_source:?}\x1Frich-gen={rich_gen}\x1Frich-scope-rev={rich_scope_rev}"
+                    );
                     if self
                         .main_menu_result_caches
                         .has_grouped_results_for(&rich_cache_key)
@@ -1222,6 +1236,34 @@ impl ScriptListApp {
                                 crate::file_search::ROOT_FILE_RECENT_SEED_LIMIT,
                             );
                             build_rich_file_subsearch_rows(
+                                FileSubsearchFlavor::Global,
+                                &rich_query,
+                                self.spine_file_search_loading,
+                                &self.spine_file_search_results,
+                                &recent,
+                            )
+                        }
+                        crate::spine::catalog_subsearch::ContextSubsearchSource::Project => {
+                            // Frecency recents are global; only the ones
+                            // inside the scoped cwd belong in the project
+                            // landing state.
+                            let cwd_prefix = self
+                                .spine_cwd
+                                .as_ref()
+                                .map(|p| p.to_string_lossy().to_string());
+                            let recent: Vec<crate::file_search::FileResult> = self
+                                .recent_file_results_from_frecency(
+                                    crate::file_search::ROOT_FILE_RECENT_SEED_LIMIT,
+                                )
+                                .into_iter()
+                                .filter(|file| {
+                                    cwd_prefix
+                                        .as_deref()
+                                        .is_some_and(|prefix| file.path.starts_with(prefix))
+                                })
+                                .collect();
+                            build_rich_file_subsearch_rows(
+                                FileSubsearchFlavor::Project,
                                 &rich_query,
                                 self.spine_file_search_loading,
                                 &self.spine_file_search_results,
@@ -1321,11 +1363,7 @@ impl ScriptListApp {
                     };
 
                     if rich_query.trim().is_empty() {
-                        prepend_empty_context_subsearch_guard(
-                            rich_source,
-                            &mut grouped_items,
-                            &mut flat_results,
-                        );
+                        append_choose_hint_to_first_section_header(&mut grouped_items);
                     }
 
                     // Colon-mode parity with the Agent Chat context picker:
@@ -2366,14 +2404,43 @@ impl ScriptListApp {
         &mut self,
         mut cx: Option<&mut gpui::Context<Self>>,
     ) {
-        let should_clear = !crate::scripts::search::ghost::GHOST_PREDICTIONS_ENABLED
-            || !matches!(self.current_view, AppView::ScriptList)
+        let structural_clear = !matches!(self.current_view, AppView::ScriptList)
             || self.show_actions_popup
             || self.menu_syntax_trigger_popup_state.owns_main_list()
             || self.menu_syntax_capture_form_owns_input()
             || self.inline_calculator.is_some();
 
-        if should_clear {
+        if structural_clear {
+            self.cancel_ghost_llm_prediction();
+            self.clear_ghost_prediction(cx.as_deref_mut());
+            return;
+        }
+
+        // Spine colon mode owns the ghost slot, independent of the
+        // LLM-prediction kill switch below: an empty sub-query shows the
+        // decorative "search clipboard…" affordance (never Tab-acceptable),
+        // and a typed sub-query clears the ghost entirely so result-derived
+        // completions never dangle off a mention token.
+        if let Some((source, sub_query)) = self.active_spine_context_subsearch() {
+            self.cancel_ghost_llm_prediction();
+            if sub_query.trim().is_empty() {
+                let hint = crate::scripts::search::ghost::context_subsearch_hint_prediction(
+                    &self.computed_filter_text,
+                    source.search_hint_noun(),
+                    crate::scripts::search::ghost::PredictionRevision {
+                        query_rev: self.ghost_llm_generation,
+                        catalog_rev: 0,
+                        context_rev: 0,
+                    },
+                );
+                self.apply_ghost_prediction(hint, cx.as_deref_mut());
+            } else {
+                self.clear_ghost_prediction(cx.as_deref_mut());
+            }
+            return;
+        }
+
+        if !crate::scripts::search::ghost::GHOST_PREDICTIONS_ENABLED {
             self.cancel_ghost_llm_prediction();
             self.clear_ghost_prediction(cx.as_deref_mut());
             return;
@@ -2609,7 +2676,6 @@ impl ScriptListApp {
             let query_for_model = query.trim_end().to_string();
             let config_for_model = config.clone();
             let ghost_context_for_model = ghost_context.clone();
-            let cwd_for_model = cwd.clone();
             let cancel_for_model = cancel.clone();
             // On-device GGUF (llama.cpp) generation — no network. Runs on a
             // dedicated actor thread; this background task just awaits the reply.
@@ -2619,9 +2685,10 @@ impl ScriptListApp {
                     crate::ai::local_llm::generate_ghost_completion(
                         &config_for_model,
                         crate::ai::local_llm::LocalGhostRequest {
-                            partial_query: query_for_model,
-                            context: ghost_context_for_model,
-                            cwd: cwd_for_model,
+                            prompt: crate::ai::local_llm::GhostPromptSpec::Launcher {
+                                partial_query: query_for_model,
+                                context: ghost_context_for_model,
+                            },
                             cancel: cancel_for_model,
                         },
                     )
@@ -2884,44 +2951,48 @@ mod tests {
             assert_eq!(
                 active_rich_spine_subsearch(&projection),
                 Some((expected_source, String::new())),
-                "{input} must route to rich rows so the empty guard can own selection"
+                "{input} must route to rich rows so unarmed recents render with the choose hint"
             );
         }
     }
 
     #[test]
-    fn empty_context_subsearch_guard_precedes_concrete_rows() {
+    fn empty_subsearch_choose_hint_rides_first_header_and_adds_no_row() {
         let mut grouped = vec![
             GroupedListItem::SectionHeader("Recent Files".to_string(), Some("file".to_string())),
             GroupedListItem::Item(0),
         ];
-        let mut flat = vec![scripts::SearchResult::File(scripts::FileMatch {
-            file: crate::file_search::FileResult {
-                path: "/tmp/README.md".to_string(),
-                name: "README.md".to_string(),
-                size: 0,
-                modified: 0,
-                file_type: crate::file_search::FileType::Document,
-            },
-            score: 0,
-        })];
 
-        prepend_empty_context_subsearch_guard(
-            crate::spine::catalog_subsearch::ContextSubsearchSource::File,
-            &mut grouped,
-            &mut flat,
+        append_choose_hint_to_first_section_header(&mut grouped);
+
+        assert_eq!(
+            grouped.len(),
+            2,
+            "the choose hint must not add list rows; it rides the existing header"
         );
-
-        let Some(scripts::SearchResult::SpineProjection(row)) = flat.first() else {
-            panic!("first flat result must be the empty subsearch guard");
+        let Some(GroupedListItem::SectionHeader(label, _)) = grouped.first() else {
+            panic!("first grouped entry must remain the section header");
         };
-        assert_eq!(row.id.as_ref(), "spine:context-subsearch:file:empty-guard");
-        assert!(matches!(
-            row.action,
-            crate::spine::SpineListAction::AwaitContextSubsearchInput { .. }
-        ));
-        assert!(matches!(grouped.first(), Some(GroupedListItem::Item(0))));
-        assert!(matches!(grouped.get(2), Some(GroupedListItem::Item(1))));
+        assert_eq!(label, "Recent Files \u{b7} \u{2193} to choose");
+        assert!(matches!(grouped.get(1), Some(GroupedListItem::Item(0))));
+    }
+
+    #[test]
+    fn choose_hint_skipped_when_no_selectable_rows() {
+        let mut grouped = vec![
+            GroupedListItem::SectionHeader("Files".to_string(), Some("file".to_string())),
+            GroupedListItem::SectionHeader("No recent files".to_string(), None),
+        ];
+
+        append_choose_hint_to_first_section_header(&mut grouped);
+
+        let Some(GroupedListItem::SectionHeader(label, _)) = grouped.first() else {
+            panic!("first grouped entry must remain the section header");
+        };
+        assert_eq!(
+            label, "Files",
+            "an empty list must not advertise \u{2193} to choose"
+        );
     }
 
     #[test]
@@ -2975,108 +3046,97 @@ fn active_rich_spine_subsearch(
     Some((source, query.trim().to_string()))
 }
 
-fn prepend_empty_context_subsearch_guard(
-    source: crate::spine::catalog_subsearch::ContextSubsearchSource,
-    grouped: &mut Vec<GroupedListItem>,
-    flat: &mut Vec<scripts::SearchResult>,
-) {
-    let mut shifted_grouped = Vec::with_capacity(grouped.len() + 1);
-    shifted_grouped.push(GroupedListItem::Item(0));
-    shifted_grouped.extend(grouped.iter().map(|item| match item {
-        GroupedListItem::Item(index) => GroupedListItem::Item(index + 1),
-        GroupedListItem::SectionHeader(..) | GroupedListItem::Status(_) => item.clone(),
-    }));
-
-    let mut shifted_flat = Vec::with_capacity(flat.len() + 1);
-    shifted_flat.push(scripts::SearchResult::SpineProjection(
-        empty_context_subsearch_guard_row(source),
-    ));
-    shifted_flat.extend(flat.iter().cloned());
-
-    *grouped = shifted_grouped;
-    *flat = shifted_flat;
+/// Empty colon-mode "press ↓ to choose" affordance, folded into the first
+/// section header ("Recent Clipboard · ↓ to choose"). Headers are
+/// non-selectable by construction, so unlike the old selectable guard row
+/// this can never be accepted, and the recents list stays unarmed until an
+/// explicit Down/click (see `spine_empty_subsearch_selection_suppressed`).
+/// Skipped when the list has no selectable item — "↓ to choose" over an
+/// empty list would be a lie.
+fn append_choose_hint_to_first_section_header(grouped: &mut [GroupedListItem]) {
+    if !grouped
+        .iter()
+        .any(|item| matches!(item, GroupedListItem::Item(_)))
+    {
+        return;
+    }
+    for item in grouped.iter_mut() {
+        if let GroupedListItem::SectionHeader(label, _) = item {
+            label.push_str(" \u{b7} \u{2193} to choose");
+            return;
+        }
+    }
 }
 
-fn empty_context_subsearch_guard_row(
-    source: crate::spine::catalog_subsearch::ContextSubsearchSource,
-) -> crate::spine::SpineListRow {
-    let prefix = source.prefix();
-    let (title, subtitle, icon) = match source {
-        crate::spine::catalog_subsearch::ContextSubsearchSource::File => (
-            "Type to search files",
-            "Press Down to choose a recent file",
-            "file-search",
-        ),
-        crate::spine::catalog_subsearch::ContextSubsearchSource::Clipboard => (
-            "Type to search clipboard",
-            "Press Down to choose a recent clipboard item",
-            "clipboard",
-        ),
-        crate::spine::catalog_subsearch::ContextSubsearchSource::History => (
-            "Type to search conversations",
-            "Press Down to choose a recent conversation",
-            "message-circle",
-        ),
-        crate::spine::catalog_subsearch::ContextSubsearchSource::BrowserHistory => (
-            "Type to search browser history",
-            "Press Down to choose a recent history item",
-            "globe",
-        ),
-        crate::spine::catalog_subsearch::ContextSubsearchSource::Notes => (
-            "Type to search notes",
-            "Press Down to choose a recent note",
-            "notebook-text",
-        ),
-        crate::spine::catalog_subsearch::ContextSubsearchSource::Dictation => (
-            "Type to search dictation",
-            "Press Down to choose a recent dictation",
-            "mic",
-        ),
-        crate::spine::catalog_subsearch::ContextSubsearchSource::Scripts => (
-            "Type to search scripts",
-            "Press Down to choose a script",
-            "file-code",
-        ),
-        crate::spine::catalog_subsearch::ContextSubsearchSource::Scriptlets => (
-            "Type to search scriptlets",
-            "Press Down to choose a scriptlet",
-            "scroll-text",
-        ),
-        crate::spine::catalog_subsearch::ContextSubsearchSource::Skills => (
-            "Type to search skills",
-            "Press Down to choose a skill",
-            "workflow",
-        ),
-        crate::spine::catalog_subsearch::ContextSubsearchSource::Calendar => (
-            "Type to search calendar",
-            "Press Down to choose an event",
-            "calendar",
-        ),
-        crate::spine::catalog_subsearch::ContextSubsearchSource::Notifications => (
-            "Type to search notifications",
-            "Press Down to choose a notification",
-            "bell",
-        ),
-    };
+/// Which file-backed colon mode the rows belong to: `@file:` (global
+/// Spotlight) or `@project:` (cwd-scoped). Same row anatomy, different
+/// header language and icon.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum FileSubsearchFlavor {
+    Global,
+    Project,
+}
 
-    crate::spine::SpineListRow {
-        id: crate::spine::list::ss(format!("spine:context-subsearch:{prefix}:empty-guard")),
-        kind: crate::spine::list::SpineListRowKind::Hint,
-        title: crate::spine::list::ss(title),
-        subtitle: Some(crate::spine::list::ss(subtitle)),
-        meta: None,
-        icon: Some(crate::spine::list::ss(icon)),
-        badges: vec![crate::spine::list::ss("@")],
-        score: i32::MAX,
-        is_selectable: true,
-        action_label: Some(crate::spine::list::ss("Type")),
-        action: crate::spine::SpineListAction::AwaitContextSubsearchInput {
-            source: crate::spine::list::ss(prefix),
-        },
+impl FileSubsearchFlavor {
+    fn icon(self) -> &'static str {
+        match self {
+            Self::Global => "file",
+            Self::Project => "folder",
+        }
+    }
+
+    fn recent_header(self) -> &'static str {
+        match self {
+            Self::Global => "Recent Files",
+            Self::Project => "Recent Project Files",
+        }
+    }
+
+    fn finding_header(self) -> &'static str {
+        match self {
+            Self::Global => "Finding recent files\u{2026}",
+            Self::Project => "Finding project files\u{2026}",
+        }
+    }
+
+    fn empty_section_header(self) -> &'static str {
+        match self {
+            Self::Global => "Files",
+            Self::Project => "Project Files",
+        }
+    }
+
+    fn no_recent_header(self) -> &'static str {
+        match self {
+            Self::Global => "No recent files",
+            Self::Project => "No recent project files",
+        }
+    }
+
+    fn matching_header(self, query: &str) -> String {
+        match self {
+            Self::Global => format!("Files matching \u{201c}{query}\u{201d}"),
+            Self::Project => format!("Project files matching \u{201c}{query}\u{201d}"),
+        }
+    }
+
+    fn searching_header(self) -> &'static str {
+        match self {
+            Self::Global => "Searching files\u{2026}",
+            Self::Project => "Searching project files\u{2026}",
+        }
+    }
+
+    fn no_match_header(self, query: &str) -> String {
+        match self {
+            Self::Global => format!("No files matching \u{201c}{query}\u{201d}"),
+            Self::Project => format!("No project files matching \u{201c}{query}\u{201d}"),
+        }
     }
 }
 
 fn build_rich_file_subsearch_rows(
+    flavor: FileSubsearchFlavor,
     query: &str,
     loading: bool,
     provider_results: &[crate::file_search::FileResult],
@@ -3084,14 +3144,15 @@ fn build_rich_file_subsearch_rows(
 ) -> (Vec<GroupedListItem>, Vec<scripts::SearchResult>) {
     let query = query.trim();
     let limit = crate::spine::catalog_subsearch::SUBSEARCH_RENDER_LIMIT;
+    let icon = flavor.icon().to_string();
 
     let mut grouped = Vec::new();
     let mut flat: Vec<scripts::SearchResult> = Vec::new();
 
     if query.is_empty() {
-        // A3 recent-files decision (2026-06-09): the empty `@file:` landing
-        // state blends frecency picks (files chosen through Script Kit)
-        // with Spotlight recently-used files, deduped by path.
+        // A3 recent-files decision (2026-06-09): the empty landing state
+        // blends frecency picks (files chosen through Script Kit) with the
+        // provider's recently-used seed, deduped by path.
         let mut seen = std::collections::HashSet::new();
         let combined: Vec<&crate::file_search::FileResult> = recent_results
             .iter()
@@ -3101,8 +3162,8 @@ fn build_rich_file_subsearch_rows(
             .collect();
         if !combined.is_empty() {
             grouped.push(GroupedListItem::SectionHeader(
-                "Recent Files".to_string(),
-                Some("file".to_string()),
+                flavor.recent_header().to_string(),
+                Some(icon),
             ));
             for file in combined {
                 let idx = flat.len();
@@ -3114,23 +3175,23 @@ fn build_rich_file_subsearch_rows(
             }
         } else if loading {
             grouped.push(GroupedListItem::SectionHeader(
-                "Finding recent files\u{2026}".to_string(),
-                Some("file".to_string()),
+                flavor.finding_header().to_string(),
+                Some(icon),
             ));
         } else {
             grouped.push(GroupedListItem::SectionHeader(
-                "Files".to_string(),
-                Some("file".to_string()),
+                flavor.empty_section_header().to_string(),
+                Some(icon),
             ));
             grouped.push(GroupedListItem::SectionHeader(
-                "No recent files".to_string(),
+                flavor.no_recent_header().to_string(),
                 None,
             ));
         }
     } else if !provider_results.is_empty() {
         grouped.push(GroupedListItem::SectionHeader(
-            format!("Files matching \u{201c}{query}\u{201d}"),
-            Some("file".to_string()),
+            flavor.matching_header(query),
+            Some(icon),
         ));
         for file in provider_results.iter().take(limit) {
             let idx = flat.len();
@@ -3142,13 +3203,13 @@ fn build_rich_file_subsearch_rows(
         }
     } else if loading {
         grouped.push(GroupedListItem::SectionHeader(
-            "Searching files\u{2026}".to_string(),
-            Some("file".to_string()),
+            flavor.searching_header().to_string(),
+            Some(icon),
         ));
     } else {
         grouped.push(GroupedListItem::SectionHeader(
-            format!("No files matching \u{201c}{query}\u{201d}"),
-            Some("file".to_string()),
+            flavor.no_match_header(query),
+            Some(icon),
         ));
     }
 

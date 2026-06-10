@@ -7,9 +7,10 @@
  *     spine attach resolver after its move to src/spine/attach.rs:
  *     "@calendar:standup" + Enter resolves to a compact token (input
  *     keeps the prompt; no launcher fall-through)
- *  2. the `>home` cwd anchor shows up as a token in the input area
- *     (status:input-cwd-anchor element) after the segment text is
- *     stripped
+ *
+ * (A former check #2 asserted the `>` cwd anchor rendered as a token
+ * inside the input area; that token was removed — the footer chip is
+ * the sole cwd-anchor surface — so the check was dropped.)
  *
  * Calendar data is injected via SCRIPT_KIT_CALENDAR_JSON so the
  * sandboxed app has a deterministic provider source.
@@ -18,7 +19,7 @@
  */
 
 import { join, resolve } from "node:path";
-import { Driver, type Json } from "../devtools/driver";
+import { Driver } from "../devtools/driver";
 
 const PROJECT_ROOT = resolve(import.meta.dir, "../..");
 const BINARY =
@@ -33,18 +34,6 @@ const CALENDAR_JSON = JSON.stringify({
 });
 
 const checks: Record<string, { pass: boolean; evidence: string[] }> = {};
-
-function flatten(node: Json, out: Record<string, string>[]) {
-  if (!node || typeof node !== "object") return;
-  if (Array.isArray(node)) return node.forEach((n) => flatten(n, out));
-  const rec = node as Record<string, Json>;
-  const entry: Record<string, string> = {};
-  for (const key of ["semanticId", "semantic_id", "text", "value"]) {
-    if (typeof rec[key] === "string") entry[key] = rec[key] as string;
-  }
-  if (Object.keys(entry).length > 0) out.push(entry);
-  for (const v of Object.values(rec)) flatten(v, out);
-}
 
 async function main() {
   const driver = await Driver.launch({
@@ -71,24 +60,6 @@ async function main() {
         `inputValue=${attachInput}`,
         `promptType=${afterAttach.promptType}`,
       ],
-    };
-
-    // 2. cwd anchor token in the input area after `>home` + Enter.
-    await driver.setFilterAndWait("");
-    await Bun.sleep(150);
-    await driver.setFilterAndWait(">home");
-    await Bun.sleep(400);
-    driver.simulateKey("enter");
-    await Bun.sleep(700);
-    const elements = await driver.getElements();
-    const flat: Record<string, string>[] = [];
-    flatten(elements as Json, flat);
-    const anchor = flat.find((e) =>
-      Object.values(e).some((v) => v.includes("input-cwd-anchor")),
-    );
-    checks.cwdAnchorTokenInInputArea = {
-      pass: anchor !== undefined && (anchor.text ?? "").length > 0,
-      evidence: [JSON.stringify(anchor ?? flat.slice(0, 6))],
     };
   } finally {
     await driver.close();

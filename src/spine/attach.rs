@@ -93,7 +93,13 @@ pub(crate) fn attach_outcome_for_result(
     segment_byte_range: Range<usize>,
 ) -> Option<SpineAttachOutcome> {
     match (source, result) {
-        (ContextSubsearchSource::File, SearchResult::File(file_match)) => {
+        // Project rows are files too: a `@project:` pick resolves into the
+        // same compact `@file:basename` token + "file" resolution source so
+        // alias dedup and the prompt plan treat it identically.
+        (
+            ContextSubsearchSource::File | ContextSubsearchSource::Project,
+            SearchResult::File(file_match),
+        ) => {
             // Alias registration owned by the ResolveSegment apply arm
             // ("file" source) for parity with the file-search portal.
             let token = spine_file_mention_token(&file_match.file.path);
@@ -397,6 +403,7 @@ pub(crate) fn composer_subsearch_section(
                 ("notifications", "bell", "Notifications", "Notifications")
             }
             ContextSubsearchSource::File
+            | ContextSubsearchSource::Project
             | ContextSubsearchSource::Clipboard
             | ContextSubsearchSource::Scripts
             | ContextSubsearchSource::Scriptlets
