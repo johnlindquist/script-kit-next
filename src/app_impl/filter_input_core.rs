@@ -175,6 +175,25 @@ impl ScriptListApp {
         }
         match &self.spine_projection {
             Some(proj) => {
+                // Committed postfix captures (`todo; …`) are owned by the
+                // menu-syntax capture composer (the restored form
+                // experience). The spine owns capture target *selection*
+                // (the `;to` prefix spelling) but classifies the committed
+                // postfix form only for highlighting and submit blocking.
+                if matches!(
+                    proj.active_segment_kind,
+                    crate::spine::SpineSegmentKind::Capture { .. }
+                ) {
+                    let raw = self
+                        .spine_parse
+                        .segments
+                        .get(proj.active_segment_index)
+                        .map(|segment| segment.raw.as_str())
+                        .unwrap_or("");
+                    if !raw.starts_with(';') {
+                        return false;
+                    }
+                }
                 !matches!(
                     proj.active_segment_kind,
                     crate::spine::SpineSegmentKind::FreeText

@@ -39,12 +39,48 @@ pub fn parse_spine(input: &str) -> SpineParse {
         }
     }
 
+    // Postfix capture (`todo; buy milk`): the canonical capture spelling
+    // since the A4 decision. The spine must classify it the same way as the
+    // `;` prefix form so highlighting, projection ownership, and prompt-plan
+    // blocking stay consistent with the capture grammar that executes it.
+    if let Some((target, args)) = split_postfix_capture_head(input) {
+        return SpineParse {
+            segments: vec![SpineSegment {
+                kind: SpineSegmentKind::Capture {
+                    target: target.to_string(),
+                    args: args.trim_start().to_string(),
+                },
+                byte_range: 0..input.len(),
+                raw: input.to_string(),
+                resolution: SpineSegmentResolution::Unresolved,
+            }],
+            input: input.to_string(),
+        };
+    }
+
     let segments = split_segments(input);
 
     SpineParse {
         segments,
         input: input.to_string(),
     }
+}
+
+/// Postfix capture head: `target;` at the very start of input, where the
+/// target is a plain identifier (`[A-Za-z0-9_-]+`). Mirrors
+/// `menu_syntax::parse::split_postfix_capture_head` so both grammars agree
+/// on what counts as a capture.
+fn split_postfix_capture_head(input: &str) -> Option<(&str, &str)> {
+    let semi = input.find(';')?;
+    let head = &input[..semi];
+    if head.is_empty()
+        || !head
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+    {
+        return None;
+    }
+    Some((head, &input[semi + 1..]))
 }
 
 /// Given a parsed `SpineParse` and a cursor byte offset, compute which segment
@@ -431,6 +467,36 @@ mod tests {
             &parse.segments[0].kind,
             SpineSegmentKind::Capture { target, args }
             if target == "todo" && args.is_empty()
+        ));
+    }
+
+    #[test]
+    fn postfix_capture_classifies_as_capture() {
+        // `todo; buy milk` is the canonical capture spelling (A4) — the
+        // spine must agree with the menu-syntax grammar that executes it.
+        let parse = parse_spine("todo; buy milk");
+        assert_eq!(parse.segments.len(), 1);
+        assert!(matches!(
+            &parse.segments[0].kind,
+            SpineSegmentKind::Capture { target, args }
+            if target == "todo" && args == "buy milk"
+        ));
+        assert_eq!(parse.segments[0].byte_range, 0..14);
+    }
+
+    #[test]
+    fn postfix_capture_requires_identifier_head_at_start() {
+        // A semicolon later in prose must not turn free text into a capture.
+        let parse = parse_spine("hello world; not a capture");
+        assert!(!matches!(
+            &parse.segments[0].kind,
+            SpineSegmentKind::Capture { .. }
+        ));
+        // URLs and paths before the semicolon disqualify the head.
+        let parse = parse_spine("https://example.com; nope");
+        assert!(!matches!(
+            &parse.segments[0].kind,
+            SpineSegmentKind::Capture { .. }
         ));
     }
 

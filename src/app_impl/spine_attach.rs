@@ -16,8 +16,8 @@ use std::ops::Range;
 
 use crate::ai::message_parts::AiContextPart;
 use crate::scripts::SearchResult;
-use crate::spine::catalog_subsearch::{escape_ref_component, ContextSubsearchSource};
 use crate::spine::SpineListAction;
+use crate::spine::catalog_subsearch::{ContextSubsearchSource, escape_ref_component};
 
 /// The result of intercepting Enter on a rich subsearch row: the segment
 /// resolution action plus the alias to register (token → content part)
@@ -94,10 +94,7 @@ pub(crate) fn attach_outcome_for_result(
             })
         }
         (ContextSubsearchSource::Clipboard, SearchResult::ClipboardHistory(clip_match)) => {
-            let token = format!(
-                "@clipboard:{}",
-                escape_ref_component(&clip_match.entry.id)
-            );
+            let token = format!("@clipboard:{}", escape_ref_component(&clip_match.entry.id));
             Some(SpineAttachOutcome {
                 action: resolve_action(
                     segment_index,
@@ -364,13 +361,9 @@ mod tests {
             match_indices: Default::default(),
             match_evidence: None,
         });
-        let outcome = attach_outcome_for_result(
-            ContextSubsearchSource::Scriptlets,
-            &result,
-            0,
-            0..12,
-        )
-        .expect("scriptlet rows must attach");
+        let outcome =
+            attach_outcome_for_result(ContextSubsearchSource::Scriptlets, &result, 0, 0..12)
+                .expect("scriptlet rows must attach");
         let (token, part) = outcome.alias.expect("scriptlet alias");
         assert!(token.starts_with("@scriptlets:"));
         match part {
@@ -403,13 +396,9 @@ mod tests {
             subtitle: "https://doc.rust-lang.org/book/".to_string(),
             score: 0,
         });
-        let outcome = attach_outcome_for_result(
-            ContextSubsearchSource::BrowserHistory,
-            &result,
-            0,
-            0..20,
-        )
-        .expect("browser history rows must attach");
+        let outcome =
+            attach_outcome_for_result(ContextSubsearchSource::BrowserHistory, &result, 0, 0..20)
+                .expect("browser history rows must attach");
         let (token, part) = outcome.alias.expect("browser alias");
         assert!(token.starts_with("@browser-history:"));
         match part {
