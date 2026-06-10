@@ -775,17 +775,8 @@ fn render_footer_hint_content_impl(
     }
 }
 
-pub(crate) fn footer_shortcut_keycaps_width_px(shortcut: &str) -> f32 {
-    footer_shortcut_keycaps_width_px_with_gap(
-        shortcut,
-        current_main_menu_footer_metrics().content_gap,
-    )
-}
-
 /// Measured keycap-run width: real glyph advances from the text system plus
 /// the same paddings/minimums `render_footer_keycap_with_metrics` applies.
-/// Use this instead of `footer_shortcut_keycaps_width_px` (per-char em
-/// guesses) whenever an `App` context is available.
 pub(crate) fn footer_shortcut_keycaps_measured_width_px(shortcut: &str, cx: &gpui::App) -> f32 {
     let metrics = current_main_menu_footer_metrics();
     let tokens = split_footer_shortcut(shortcut);
@@ -802,8 +793,7 @@ pub(crate) fn footer_shortcut_keycaps_measured_width_px(shortcut: &str, cx: &gpu
 
 /// Measured width of a single keycap: real glyph advances from the text
 /// system plus the same paddings/minimums `render_footer_keycap_with_metrics`
-/// applies. Prefer this over `footer_keycap_estimated_width_px` whenever an
-/// `App` context is available.
+/// applies.
 pub(crate) fn footer_keycap_measured_width_px(token: &str, cx: &gpui::App) -> f32 {
     let metrics = current_main_menu_footer_metrics();
     if is_footer_icon_token(token) {
@@ -823,40 +813,6 @@ pub(crate) fn footer_keycap_measured_width_px(token: &str, cx: &gpui::App) -> f3
     (glyphs_width + metrics.keycap_padding_x * 2.0)
         .max(metrics.keycap_height)
         .ceil()
-}
-
-pub(crate) fn footer_shortcut_keycaps_width_px_with_gap(shortcut: &str, content_gap: f32) -> f32 {
-    let tokens = split_footer_shortcut(shortcut);
-    footer_shortcut_keycaps_width_px_from_tokens_with_gap(
-        tokens.iter().map(String::as_str),
-        content_gap,
-    )
-}
-
-#[allow(dead_code)]
-pub(crate) fn footer_shortcut_keycaps_width_px_from_tokens<'a>(
-    tokens: impl IntoIterator<Item = &'a str>,
-) -> f32 {
-    footer_shortcut_keycaps_width_px_from_tokens_with_gap(
-        tokens,
-        current_main_menu_footer_metrics().content_gap,
-    )
-}
-
-fn footer_shortcut_keycaps_width_px_from_tokens_with_gap<'a>(
-    tokens: impl IntoIterator<Item = &'a str>,
-    content_gap: f32,
-) -> f32 {
-    let tokens = tokens.into_iter().collect::<Vec<_>>();
-    if tokens.is_empty() {
-        return 0.0;
-    }
-
-    let keys_width = tokens
-        .iter()
-        .map(|token| footer_keycap_estimated_width_px(token))
-        .sum::<f32>();
-    keys_width + tokens.len().saturating_sub(1) as f32 * content_gap
 }
 
 /// Total width of a horizontal run of items laid out with a constant gap
@@ -896,27 +852,6 @@ pub(crate) fn footer_horizontal_run_origins_px(
         .collect()
 }
 
-fn footer_keycap_estimated_width_px(token: &str) -> f32 {
-    let metrics = current_main_menu_footer_metrics();
-    if is_footer_icon_token(token) {
-        return metrics.keycap_height;
-    }
-
-    let estimated_text_width = token
-        .chars()
-        .map(|ch| {
-            if ch.is_ascii_alphanumeric() {
-                FOOTER_HINT_FONT_SIZE_PX * 0.62
-            } else {
-                FOOTER_HINT_FONT_SIZE_PX * 0.82
-            }
-        })
-        .sum::<f32>();
-    (estimated_text_width + metrics.keycap_padding_x * 2.0)
-        .max(metrics.keycap_height)
-        .ceil()
-}
-
 pub(crate) fn is_footer_icon_token(token: &str) -> bool {
     footer_icon_path(token).is_some()
 }
@@ -946,41 +881,6 @@ pub(crate) fn footer_icon_path(token: &str) -> Option<String> {
 
 pub(crate) fn footer_icon_path_or_profile(token: &str) -> String {
     footer_icon_path(token).unwrap_or_else(|| FOOTER_PROFILE_ICON_PATH.to_string())
-}
-
-#[allow(dead_code)]
-pub(crate) fn footer_labelcap_max_width_for_slot(slot_width_px: f32, key_width_px: f32) -> f32 {
-    footer_labelcap_max_width_for_slot_with_padding(
-        slot_width_px,
-        key_width_px,
-        current_main_menu_footer_metrics().button_padding_x,
-    )
-}
-
-#[allow(dead_code)]
-pub(crate) fn footer_labelcap_max_width_for_slot_with_padding(
-    slot_width_px: f32,
-    key_width_px: f32,
-    edge_padding_x: f32,
-) -> f32 {
-    footer_labelcap_max_width_for_slot_with_padding_and_gap(
-        slot_width_px,
-        key_width_px,
-        edge_padding_x,
-        current_main_menu_footer_metrics().content_gap,
-    )
-}
-
-#[allow(dead_code)]
-pub(crate) fn footer_labelcap_max_width_for_slot_with_padding_and_gap(
-    slot_width_px: f32,
-    key_width_px: f32,
-    edge_padding_x: f32,
-    content_gap: f32,
-) -> f32 {
-    let key_gap = if key_width_px > 0.0 { content_gap } else { 0.0 };
-    (slot_width_px - (edge_padding_x * 2.0) - key_gap - key_width_px)
-        .max(current_main_menu_footer_metrics().keycap_height)
 }
 
 fn render_footer_labelcap(
@@ -1138,64 +1038,23 @@ fn render_footer_shortcut_keycaps_from_tokens_with_metrics<'a>(
         .into_any_element()
 }
 
-pub(crate) fn footer_shortcut_keycap_layout_model<'a>(
-    tokens: impl IntoIterator<Item = &'a str>,
-    origin_x: f32,
-    origin_y: f32,
-) -> serde_json::Value {
-    footer_shortcut_keycap_layout_model_with_widths(
-        tokens,
-        origin_x,
-        origin_y,
-        footer_keycap_estimated_width_px,
-        FooterKeycapWidthFidelity::Estimated,
-    )
-}
-
-/// Layout model backed by real text-system glyph measurement. Produces exact
-/// per-token bounds (`widthExact: true`); prefer it over the estimated model
-/// whenever an `App` context is available.
+/// DevTools layout model for a keycap run, backed by real text-system glyph
+/// measurement (`footer_shortcut_keycap_layout_model` namespace). Every token
+/// bound is exact (`widthExact: true`).
 pub(crate) fn footer_shortcut_keycap_layout_model_measured<'a>(
     tokens: impl IntoIterator<Item = &'a str>,
     origin_x: f32,
     origin_y: f32,
     cx: &gpui::App,
 ) -> serde_json::Value {
-    footer_shortcut_keycap_layout_model_with_widths(
-        tokens,
-        origin_x,
-        origin_y,
-        |token| footer_keycap_measured_width_px(token, cx),
-        FooterKeycapWidthFidelity::Measured,
-    )
-}
-
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum FooterKeycapWidthFidelity {
-    Estimated,
-    Measured,
-}
-
-fn footer_shortcut_keycap_layout_model_with_widths<'a>(
-    tokens: impl IntoIterator<Item = &'a str>,
-    origin_x: f32,
-    origin_y: f32,
-    width_for_token: impl Fn(&str) -> f32,
-    fidelity: FooterKeycapWidthFidelity,
-) -> serde_json::Value {
     let tokens = tokens.into_iter().collect::<Vec<_>>();
     let metrics = current_main_menu_footer_metrics();
-    let exact = fidelity == FooterKeycapWidthFidelity::Measured;
-    let token_width_source = match fidelity {
-        FooterKeycapWidthFidelity::Estimated => "footer-keycap-estimate",
-        FooterKeycapWidthFidelity::Measured => "text-system-glyph-measure",
-    };
     let mut x = origin_x;
     let mut token_values = Vec::new();
     let mut token_bounds = Vec::new();
 
     for token in tokens {
-        let width = width_for_token(token);
+        let width = footer_keycap_measured_width_px(token, cx);
         token_values.push(token.to_string());
         token_bounds.push(serde_json::json!({
             "token": token,
@@ -1206,8 +1065,8 @@ fn footer_shortcut_keycap_layout_model_with_widths<'a>(
                 "width": width,
                 "height": metrics.keycap_height,
             },
-            "widthExact": exact,
-            "widthSource": token_width_source,
+            "widthExact": true,
+            "widthSource": "text-system-glyph-measure",
             "heightSource": "footer-metrics-keycap-height",
             "glyphNudgeY": footer_key_glyph_nudge_y(token),
             "borderWidth": 1.0,
@@ -1237,15 +1096,9 @@ fn footer_shortcut_keycap_layout_model_with_widths<'a>(
         "gap": metrics.content_gap,
         "heightSource": "footer-metrics-keycap-height",
         "widthSource": "footer-keycap-token-model",
-        "exactTokenBounds": exact,
+        "exactTokenBounds": true,
         "measurementSource": FOOTER_SHORTCUT_LAYOUT_MEASUREMENT_SOURCE,
-        "stopReason": if exact {
-            serde_json::Value::Null
-        } else {
-            serde_json::Value::String(
-                "text glyph widths use the footer keycap font estimate when no App context is available".to_string(),
-            )
-        },
+        "stopReason": serde_json::Value::Null,
     })
 }
 
@@ -1361,31 +1214,6 @@ mod tests {
     }
 
     #[test]
-    fn footer_shortcut_width_reserves_split_keycaps() {
-        assert_eq!(footer_shortcut_keycaps_width_px(""), 0.0);
-        assert!(
-            footer_shortcut_keycaps_width_px("⌘K")
-                >= (FOOTER_KEYCAP_HEIGHT_PX * 2.0) + FOOTER_ACTION_CONTENT_GAP_PX
-        );
-        assert!(footer_shortcut_keycaps_width_px("↵") >= FOOTER_KEYCAP_HEIGHT_PX);
-    }
-
-    #[test]
-    fn constrained_footer_content_leaves_room_for_keycaps() {
-        let key_width = footer_shortcut_keycaps_width_px("↵");
-        let label_max = footer_labelcap_max_width_for_slot(FOOTER_RUN_SLOT_MIN_WIDTH_PX, key_width);
-
-        assert!(label_max >= FOOTER_KEYCAP_HEIGHT_PX);
-        assert!(
-            label_max
-                + key_width
-                + FOOTER_ACTION_CONTENT_GAP_PX
-                + FOOTER_ACTION_CONTENT_PADDING_X_PX * 2.0
-                <= FOOTER_RUN_SLOT_MIN_WIDTH_PX
-        );
-    }
-
-    #[test]
     fn footer_action_frame_shrinks_with_flex_content_not_estimated_widths() {
         let source = include_str!("footer_chrome.rs");
         let frame_start = source
@@ -1412,23 +1240,7 @@ mod tests {
 
     #[test]
     fn key_anchored_footer_content_keeps_symmetric_outer_padding() {
-        let key_width = footer_shortcut_keycaps_width_px("↵");
-        let label_max = footer_labelcap_max_width_for_slot_with_padding(
-            FOOTER_RUN_SLOT_MIN_WIDTH_PX,
-            key_width,
-            FOOTER_KEY_ANCHORED_CONTENT_PADDING_X_PX,
-        );
-
         assert_eq!(FOOTER_KEY_ANCHORED_CONTENT_PADDING_X_PX, 6.0);
-        assert!(
-            (label_max
-                + key_width
-                + FOOTER_ACTION_CONTENT_GAP_PX
-                + FOOTER_KEY_ANCHORED_CONTENT_PADDING_X_PX * 2.0
-                - FOOTER_RUN_SLOT_MIN_WIDTH_PX)
-                .abs()
-                <= f32::EPSILON
-        );
     }
 
     #[test]
@@ -1473,18 +1285,6 @@ mod tests {
             footer_horizontal_run_origins_px(&[40.0, 20.0], FOOTER_ACTION_ITEM_GAP_PX, 10.0),
             vec![10.0, 52.0]
         );
-    }
-
-    #[test]
-    fn shortcut_keycap_width_uses_shared_content_gap() {
-        // The native AppKit keycap layout must advance by the SAME gap the width
-        // estimator reserves (FOOTER_ACTION_CONTENT_GAP_PX), so multi-key groups
-        // like ⇧⇥ and ⌘K are sized exactly as laid out.
-        let width = footer_shortcut_keycaps_width_px_from_tokens(["⇧", "⇥"]);
-        let expected = footer_keycap_estimated_width_px("⇧")
-            + FOOTER_ACTION_CONTENT_GAP_PX
-            + footer_keycap_estimated_width_px("⇥");
-        assert_eq!(width, expected);
     }
 
     #[test]

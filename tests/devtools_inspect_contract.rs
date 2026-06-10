@@ -483,7 +483,7 @@ fn actions_cli_reports_popup_route_geometry_shortcuts_and_gaps() {
     for needle in [
         "GetStateTargetResolution::ActionsDialog",
         "get_actions_dialog_entity(cx)",
-        "automation_state(\"actionsDialog\")",
+        "automation_state(\"actionsDialog\", cx)",
     ] {
         assert!(
             PROMPT_HANDLER.contains(needle),

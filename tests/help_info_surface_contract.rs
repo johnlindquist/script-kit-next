@@ -123,8 +123,10 @@ fn info_guidance_shortcuts_use_footer_keycaps_not_hint_strip() {
         "InfoState guidance shortcuts must render through footer keycaps"
     );
     assert!(
-        info.contains("crate::components::footer_chrome::footer_shortcut_keycaps_width_px"),
-        "InfoState guidance shortcut column must size from footer keycap widths"
+        info.contains(
+            "crate::components::footer_chrome::footer_shortcut_keycaps_measured_width_px"
+        ),
+        "InfoState guidance shortcut column must size from measured footer keycap widths"
     );
     assert!(
         !guidance_row.contains("crate::components::hint_strip::render_inline_shortcut_keys")
