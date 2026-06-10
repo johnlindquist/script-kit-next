@@ -332,7 +332,36 @@ impl ScriptListApp {
         if self.accept_spine_projection_row(window, ctx) {
             return true;
         }
-        self.try_submit_spine_prompt_plan_from_enter(ctx)
+        if self.try_submit_spine_prompt_plan_from_enter(ctx) {
+            return true;
+        }
+        // Structural guard: while a `@source:` subsearch segment is active,
+        // Enter must never fall through to the launcher's default row
+        // execution (opening the note / running the script / pasting the
+        // clipboard entry) — that destroys the prompt being built. Consume
+        // the Enter even when no row attached.
+        if let Some(projection) = self.spine_projection.as_ref() {
+            if let crate::spine::SpineSegmentKind::ContextMention {
+                context_type,
+                sub_query,
+            } = &projection.active_segment_kind
+            {
+                if crate::spine::catalog_subsearch::parse_context_subsearch(
+                    context_type,
+                    sub_query.as_deref(),
+                )
+                .is_some()
+                {
+                    tracing::info!(
+                        target: "script_kit::spine",
+                        event = "spine_subsearch_enter_consumed_without_attach",
+                        context_type = %context_type,
+                    );
+                    return true;
+                }
+            }
+        }
+        false
     }
 
     pub(crate) fn try_submit_spine_prompt_plan_from_enter(

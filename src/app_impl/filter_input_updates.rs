@@ -561,11 +561,21 @@ impl ScriptListApp {
         if !self.spine_projection_owns_main_list() {
             return false;
         }
-        // Rich subsearch rows (SearchResult::File, ClipboardHistory) need
-        // interception: resolve them into @file:path / @clipboard:id tokens
-        // instead of executing default file-open / clipboard-paste behavior.
-        if let Some(action) = self.selected_spine_rich_subsearch_action() {
-            return self.apply_spine_list_action(action, window, cx);
+        // Rich subsearch rows (files, clipboard, notes, scripts, history,
+        // calendar, …) need interception: resolve them into compact
+        // `@source:label` tokens + alias-registered context instead of
+        // executing default launcher behavior (file-open, script-run,
+        // note-open) while the user is mid-prompt.
+        if let Some(outcome) = self.selected_spine_rich_subsearch_outcome() {
+            if let Some((token, part)) = outcome.alias {
+                tracing::info!(
+                    target: "script_kit::spine",
+                    event = "spine_subsearch_alias_registered",
+                    token = %token,
+                );
+                self.spine_mention_aliases.insert(token, part);
+            }
+            return self.apply_spine_list_action(outcome.action, window, cx);
         }
         let Some(row) = self.selected_spine_projection_row() else {
             tracing::debug!(
@@ -586,7 +596,9 @@ impl ScriptListApp {
         self.apply_spine_list_action(action, window, cx)
     }
 
-    fn selected_spine_rich_subsearch_action(&mut self) -> Option<crate::spine::SpineListAction> {
+    fn selected_spine_rich_subsearch_outcome(
+        &mut self,
+    ) -> Option<super::spine_attach::SpineAttachOutcome> {
         let projection = self.spine_projection.as_ref()?;
         let crate::spine::SpineSegmentKind::ContextMention {
             context_type,
@@ -613,46 +625,12 @@ impl ScriptListApp {
         };
         let result = flat.get(result_idx)?;
 
-        match (source, result) {
-            (
-                crate::spine::catalog_subsearch::ContextSubsearchSource::File,
-                scripts::SearchResult::File(file_match),
-            ) => {
-                // Compact token parity with Agent Chat attachments: the
-                // visible token carries only `basename.ext`; the full path
-                // travels through the `spine_mention_aliases` registry
-                // (registered in the ResolveSegment arm below).
-                let replacement = Self::spine_file_mention_token(&file_match.file.path);
-                Some(crate::spine::SpineListAction::ResolveSegment {
-                    segment_index,
-                    segment_byte_range,
-                    replacement: replacement.into(),
-                    resolution_id: format!("file/{}", file_match.file.path).into(),
-                    resolution_label: file_match.file.name.clone().into(),
-                    resolution_source: "file".into(),
-                    trailing_space: true,
-                })
-            }
-            (
-                crate::spine::catalog_subsearch::ContextSubsearchSource::Clipboard,
-                scripts::SearchResult::ClipboardHistory(clip_match),
-            ) => {
-                let replacement = format!(
-                    "@clipboard:{}",
-                    crate::spine::catalog_subsearch::escape_ref_component(&clip_match.entry.id,),
-                );
-                Some(crate::spine::SpineListAction::ResolveSegment {
-                    segment_index,
-                    segment_byte_range,
-                    replacement: replacement.into(),
-                    resolution_id: format!("clipboard/{}", clip_match.entry.id).into(),
-                    resolution_label: clip_match.title.clone().into(),
-                    resolution_source: "clipboard".into(),
-                    trailing_space: true,
-                })
-            }
-            _ => None,
-        }
+        super::spine_attach::attach_outcome_for_result(
+            source,
+            result,
+            segment_index,
+            segment_byte_range,
+        )
     }
 
     /// Canonical compact spine token for a selected file: `@file:` plus the
