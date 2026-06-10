@@ -42,14 +42,21 @@ pub const BRAIN_CONTEXT_MAX_CHARS: usize = 4_000;
 pub const BRAIN_CONTEXT_HITS: usize = 5;
 
 /// Retrieve memory for a query and render it as a prompt-ready block.
-/// Lexical + signals only (fast path, no subprocess): used where latency is
-/// user-facing. Returns `None` when the brain has nothing relevant.
+/// Hybrid when the indexer's embedding model is warm (bounded by a hard
+/// ~200ms budget), lexical+signals otherwise. Returns `None` when the brain
+/// has nothing relevant.
 pub fn recall_context_block(query: &str) -> Result<Option<String>> {
     let query = query.trim();
     if query.len() < 3 {
         return Ok(None);
     }
-    let hits = brain_search(query, None, None, BRAIN_CONTEXT_HITS)?;
+    let query_embedding = indexer::embed_query_within_budget(query);
+    let hits = match &query_embedding {
+        Some((model_id, vector)) => {
+            brain_search(query, Some(vector), Some(model_id), BRAIN_CONTEXT_HITS)?
+        }
+        None => brain_search(query, None, None, BRAIN_CONTEXT_HITS)?,
+    };
     if hits.is_empty() {
         return Ok(None);
     }

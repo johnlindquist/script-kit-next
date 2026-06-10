@@ -22,16 +22,42 @@ const EMBED_BATCH: usize = 16;
 const MAX_EMBED_PER_CYCLE: usize = 256;
 /// Truncate doc text fed to the embedder; the index keeps full content.
 const EMBED_TEXT_CAP: usize = 6_000;
+/// Hard latency budget for query embedding on the submit path. When the
+/// model isn't warm yet the caller falls back to lexical recall.
+const QUERY_EMBED_BUDGET: Duration = Duration::from_millis(200);
 
-static WAKE: OnceLock<Sender<()>> = OnceLock::new();
+enum IndexerRequest {
+    Wake,
+    EmbedQuery {
+        text: String,
+        reply: Sender<Option<(String, Vec<f32>)>>,
+    },
+}
+
+static WAKE: OnceLock<Sender<IndexerRequest>> = OnceLock::new();
 static STARTED: AtomicBool = AtomicBool::new(false);
 
 /// Ask the indexer to run a cycle soon (e.g. after a chat turn ingests new
 /// docs). Cheap; coalesces with pending wakes.
 pub fn wake_indexer() {
     if let Some(tx) = WAKE.get() {
-        let _ = tx.send(());
+        let _ = tx.send(IndexerRequest::Wake);
     }
+}
+
+/// Embed a query using the indexer's warm model, within a hard latency
+/// budget. Returns `(model_id, vector)`, or `None` when no model is on disk,
+/// the model isn't warm yet, or the indexer is mid-cycle — callers fall back
+/// to lexical recall. Never blocks longer than [`QUERY_EMBED_BUDGET`].
+pub fn embed_query_within_budget(text: &str) -> Option<(String, Vec<f32>)> {
+    let tx = WAKE.get()?;
+    let (reply_tx, reply_rx) = mpsc::channel();
+    tx.send(IndexerRequest::EmbedQuery {
+        text: text.to_string(),
+        reply: reply_tx,
+    })
+    .ok()?;
+    reply_rx.recv_timeout(QUERY_EMBED_BUDGET).ok().flatten()
 }
 
 /// Start the background indexer thread. Idempotent.
@@ -39,7 +65,7 @@ pub fn start_brain_indexer() {
     if STARTED.swap(true, Ordering::SeqCst) {
         return;
     }
-    let (tx, rx) = mpsc::channel::<()>();
+    let (tx, rx) = mpsc::channel::<IndexerRequest>();
     let _ = WAKE.set(tx);
     let _ = std::thread::Builder::new()
         .name("script-kit-brain-indexer".to_string())
@@ -51,9 +77,29 @@ pub fn start_brain_indexer() {
                 if let Err(err) = run_cycle(&mut embedder) {
                     tracing::warn!(target: "script_kit::brain", error = %err, "brain index cycle failed");
                 }
-                match rx.recv_timeout(CYCLE_INTERVAL) {
-                    Ok(()) | Err(RecvTimeoutError::Timeout) => continue,
-                    Err(RecvTimeoutError::Disconnected) => break,
+                // Serve wake/embed requests until the next cycle is due.
+                let deadline = std::time::Instant::now() + CYCLE_INTERVAL;
+                loop {
+                    let remaining = deadline.saturating_duration_since(std::time::Instant::now());
+                    if remaining.is_zero() {
+                        break;
+                    }
+                    match rx.recv_timeout(remaining) {
+                        Ok(IndexerRequest::Wake) => break,
+                        Ok(IndexerRequest::EmbedQuery { text, reply }) => {
+                            let result = embedder.as_ref().and_then(|embedder| {
+                                embedder
+                                    .embed(vec![text])
+                                    .ok()
+                                    .and_then(|mut vectors| vectors.pop())
+                                    .filter(|vector| !vector.is_empty())
+                                    .map(|vector| (embedder.model_id().to_string(), vector))
+                            });
+                            let _ = reply.send(result);
+                        }
+                        Err(RecvTimeoutError::Timeout) => break,
+                        Err(RecvTimeoutError::Disconnected) => return,
+                    }
                 }
             }
         });
