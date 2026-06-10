@@ -62,7 +62,7 @@ impl ScriptListApp {
 
         if has_cmd && has_shift && key_lower == "p" && simulate_key_target_is_notes {
             if let Some((notes_entity, notes_handle)) = notes::get_notes_app_entity_and_handle() {
-                let _ = notes_handle.update(ctx, |_root, notes_window, cx| {
+                let _ = notes::update_notes_window_detached(notes_handle, ctx, |notes_window, cx| {
                     notes_entity.update(cx, |app, cx| {
                         app.toggle_preview(notes_window, cx);
                     });

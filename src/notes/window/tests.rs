@@ -148,8 +148,12 @@ fn test_notes_keyboard_checks_ghost_acceptance_before_tab_indentation() {
 }
 
 #[test]
-fn test_notes_keyboard_escape_dismisses_ghost_after_higher_priority_surfaces() {
+fn test_notes_keyboard_escape_routes_through_shared_dismiss_ladder() {
     const KEYBOARD_SOURCE: &str = include_str!("keyboard.rs");
+
+    // The live handler keeps popup/dialog/agent-chat routing before the editor
+    // escape branch, and the editor escape branch delegates to the shared
+    // dismiss ladder instead of re-implementing it.
     let handle_key_down = KEYBOARD_SOURCE
         .find("pub(super) fn handle_key_down(")
         .expect("live keyboard handler should exist");
@@ -170,23 +174,41 @@ fn test_notes_keyboard_escape_dismisses_ghost_after_higher_priority_surfaces() {
     let editor_escape = live_keyboard
         .find("if is_key_escape(key) {\n            cx.stop_propagation();")
         .expect("editor escape branch should exist");
-    let ghost_dismiss = live_keyboard[editor_escape..]
-        .find("if self.dismiss_notes_ghost(cx) {")
-        .expect("editor escape should dismiss ghost before fallback closing behavior")
+    let ladder_call = live_keyboard[editor_escape..]
+        .find("self.escape_dismiss_ladder(window, cx)")
+        .expect("editor escape must delegate to the shared dismiss ladder")
         + editor_escape;
-    let search_close = live_keyboard[ghost_dismiss..]
-        .find("if self.show_search {")
-        .expect("escape fallback should still close search")
-        + ghost_dismiss;
 
     assert!(
         dialog_guard < command_bar
             && command_bar < note_switcher
             && note_switcher < agent_chat_surface
             && agent_chat_surface < editor_escape
-            && editor_escape < ghost_dismiss
-            && ghost_dismiss < search_close,
-        "Notes ghost escape must run only inside the editor escape branch after higher-priority surfaces and before editor fallback closing"
+            && editor_escape < ladder_call,
+        "Notes escape must route popups/dialog/agent-chat first, then delegate to escape_dismiss_ladder"
+    );
+
+    // Inside the shared ladder: popups → agent chat → ghost → search, so a
+    // visible popup is always dismissed before ghost/search state.
+    let ladder = KEYBOARD_SOURCE
+        .find("pub(super) fn escape_dismiss_ladder(")
+        .expect("shared escape dismiss ladder should exist");
+    let ladder_src = &KEYBOARD_SOURCE[ladder..];
+    let popups = ladder_src
+        .find("self.close_actions_panel(window, cx);")
+        .expect("ladder should close the actions popup");
+    let switcher = ladder_src
+        .find("self.close_browse_panel(window, cx);")
+        .expect("ladder should close the note switcher popup");
+    let ghost = ladder_src
+        .find("if self.dismiss_notes_ghost(cx) {")
+        .expect("ladder should dismiss ghost autocomplete");
+    let search = ladder_src
+        .find("if self.show_search {")
+        .expect("ladder should close search");
+    assert!(
+        popups < switcher && switcher < ghost && ghost < search,
+        "escape_dismiss_ladder must dismiss popups before ghost and search"
     );
 }
 
@@ -649,7 +671,10 @@ fn test_notes_keyboard_stops_propagation_at_start_of_global_escape_chain() {
 #[test]
 fn test_notes_agent_chat_escape_dismisses_local_popup_before_leaving_surface() {
     const KEYBOARD_SOURCE: &str = include_str!("keyboard.rs");
-    let agent_chat_escape_branch = KEYBOARD_SOURCE
+
+    // The live Agent Chat escape branch must delegate to the shared ladder so
+    // it cannot drift from the automation path.
+    let live_branch = KEYBOARD_SOURCE
         .find("// In Agent Chat mode, intercept host-owned shortcuts before propagating to Agent Chat.")
         .and_then(|start| {
             KEYBOARD_SOURCE[start..]
@@ -657,33 +682,41 @@ fn test_notes_agent_chat_escape_dismisses_local_popup_before_leaving_surface() {
                 .map(|end| &KEYBOARD_SOURCE[start..start + end])
         })
         .expect("Expected Notes Agent Chat keyboard branch");
+    assert!(
+        live_branch.contains("self.escape_dismiss_ladder(window, cx)"),
+        "Notes Agent Chat escape must route through the shared dismiss ladder"
+    );
 
-    let dismiss_idx = agent_chat_escape_branch
+    // Inside the ladder's Agent Chat branch: detached actions popup first,
+    // then chat-local popups, then streaming cancel, then surface switch.
+    let ladder = KEYBOARD_SOURCE
+        .find("pub(super) fn escape_dismiss_ladder(")
+        .expect("shared escape dismiss ladder should exist");
+    let ladder_src = &KEYBOARD_SOURCE[ladder..];
+    let agent_chat_branch = ladder_src
+        .find("if self.surface_mode == NotesSurfaceMode::AgentChat {")
+        .expect("ladder should own the Agent Chat escape progression");
+    let branch_src = &ladder_src[agent_chat_branch..];
+    let actions_popup_idx = branch_src
+        .find("crate::actions::close_actions_window(cx);")
+        .expect("Agent Chat escape must close the detached Cmd+K actions popup");
+    let dismiss_idx = branch_src
         .find("chat.dismiss_escape_popup(cx)")
-        .expect("Notes Agent Chat escape should check for local popup dismissal");
-    let dismissed_branch_idx = agent_chat_escape_branch
-        .find("if dismissed {")
-        .expect("Notes Agent Chat escape should branch on dismissed popup state");
-    let stop_idx = agent_chat_escape_branch
-        .find("cx.stop_propagation();")
-        .expect(
-            "Notes Agent Chat escape should stop propagation after dismissing local popup state",
-        );
-    let return_idx = agent_chat_escape_branch
-        .find("return;")
-        .expect("Notes Agent Chat escape should return after dismissing local popup state");
-    let switch_idx = agent_chat_escape_branch
+        .expect("Agent Chat escape should check for local popup dismissal");
+    let cancel_idx = branch_src
+        .find("chat.cancel_streaming_from_escape(cx)")
+        .expect("Agent Chat escape should cancel streaming before leaving the surface");
+    let switch_idx = branch_src
         .find("self.switch_to_notes_surface(window, cx);")
-        .expect("Notes Agent Chat escape should still fall back to leaving Agent Chat mode");
+        .expect("Agent Chat escape should fall back to leaving Agent Chat mode");
 
     assert!(
-        dismiss_idx < switch_idx
-            && dismiss_idx < dismissed_branch_idx
-            && dismissed_branch_idx < stop_idx
-            && stop_idx < return_idx
-            && return_idx < switch_idx
-            && agent_chat_escape_branch.contains("event = \"notes_agent_chat_escape_dismissed_local_popup\""),
-        "Notes Agent Chat escape should dismiss local Agent Chat popup state before returning to the editor"
+        actions_popup_idx < dismiss_idx && dismiss_idx < cancel_idx && cancel_idx < switch_idx,
+        "Agent Chat escape ladder must dismiss the detached actions popup, then local popups, then streaming, then switch surfaces"
+    );
+    assert!(
+        branch_src.contains("event = \"notes_agent_chat_escape_dismissed_local_popup\""),
+        "Agent Chat escape ladder should keep the popup-dismissal tracing event"
     );
 }
 

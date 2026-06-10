@@ -82,6 +82,30 @@ fn notes_automation_bounds(
     }
 }
 
+/// Update the Notes window WITHOUT leasing the `Root` entity.
+///
+/// `WindowHandle<Root>::update` leases the `Root` view for the duration of the
+/// closure, so any inner code that touches `Root` again — `window.has_active_dialog`,
+/// `window.close_all_dialogs`, the focus-transition log behind
+/// `request_focus_surface`, or dialog open/close helpers — panics with
+/// "cannot read/update Root while it is already being updated"
+/// (gpui entity_map double-lease). Routing through `AnyWindowHandle::update`
+/// provides the same `&mut Window` + `&mut App` access with no `Root` lease,
+/// which matches the live keyboard/mouse listener environment.
+///
+/// Every automation/helper entry point that drives `NotesApp` from outside the
+/// window MUST use this instead of `handle.update(cx, |_root, ...|)`.
+pub(crate) fn update_notes_window_detached<C, R>(
+    handle: gpui::WindowHandle<Root>,
+    cx: &mut C,
+    f: impl FnOnce(&mut Window, &mut App) -> R,
+) -> Result<R>
+where
+    C: gpui::AppContext,
+{
+    gpui::AnyWindowHandle::from(handle).update(cx, |_root, window, cx| f(window, cx))
+}
+
 /// Toggle the notes window (open if closed, close if open)
 pub fn open_notes_window(cx: &mut App) -> Result<()> {
     open_notes_window_with_close_behavior(cx, NotesCloseBehavior::RestoreLauncher)
@@ -114,7 +138,7 @@ pub fn open_note_in_notes_window(cx: &mut App, note_id: NoteId) -> Result<()> {
             crate::platform::defer_hide_main_window(cx);
         }
 
-        let result = handle.update(cx, |_root, window, cx| {
+        let result = update_notes_window_detached(handle, cx, |window, cx| {
             window.activate_window();
             notes_app.update(cx, |app, cx| {
                 app.select_note_by_id_from_root(note_id, window, cx)
@@ -149,7 +173,7 @@ pub fn open_note_in_notes_window(cx: &mut App, note_id: NoteId) -> Result<()> {
     };
 
     if let (Some(handle), Some(notes_app)) = (handle, notes_app) {
-        let result = handle.update(cx, |_root, window, cx| {
+        let result = update_notes_window_detached(handle, cx, |window, cx| {
             window.activate_window();
             notes_app.update(cx, |app, cx| {
                 app.select_note_by_id_from_root(note_id, window, cx)
@@ -391,23 +415,22 @@ fn save_open_notes_window_if_dirty(cx: &mut App) -> Result<(), NotesMutationErro
     };
 
     if let (Some(handle), Some(notes_app)) = (existing_handle, existing_app) {
-        handle
-            .update(cx, |_root, _window, cx| {
-                notes_app.update(cx, |app, _cx| app.save_current_note())
-            })
-            .map_err(|error| {
-                NotesMutationError::new(
-                    NotesMutationErrorCode::Internal,
-                    format!("Failed to save open Notes window before MCP mutation: {error}"),
-                )
-            })?
-            .then_some(())
-            .ok_or_else(|| {
-                NotesMutationError::new(
-                    NotesMutationErrorCode::Conflict,
-                    "Failed to save dirty Notes editor before MCP mutation",
-                )
-            })?;
+        update_notes_window_detached(handle, cx, |_window, cx| {
+            notes_app.update(cx, |app, _cx| app.save_current_note())
+        })
+        .map_err(|error| {
+            NotesMutationError::new(
+                NotesMutationErrorCode::Internal,
+                format!("Failed to save open Notes window before MCP mutation: {error}"),
+            )
+        })?
+        .then_some(())
+        .ok_or_else(|| {
+            NotesMutationError::new(
+                NotesMutationErrorCode::Conflict,
+                "Failed to save dirty Notes editor before MCP mutation",
+            )
+        })?;
     }
     Ok(())
 }
@@ -432,19 +455,18 @@ fn refresh_or_open_notes_window_after_mcp_mutation(
     };
 
     if let (Some(handle), Some(notes_app)) = (existing_handle, existing_app) {
-        handle
-            .update(cx, |_root, window, cx| {
-                notes_app.update(cx, |app, cx| {
-                    app.reload_after_external_note_mutation(note_id, window, cx)
-                })
+        update_notes_window_detached(handle, cx, |window, cx| {
+            notes_app.update(cx, |app, cx| {
+                app.reload_after_external_note_mutation(note_id, window, cx)
             })
-            .map_err(|error| {
-                NotesMutationError::new(
-                    NotesMutationErrorCode::Internal,
-                    format!("Failed to refresh Notes window after MCP mutation: {error}"),
-                )
-            })?
-            .map_err(internal_notes_error)?;
+        })
+        .map_err(|error| {
+            NotesMutationError::new(
+                NotesMutationErrorCode::Internal,
+                format!("Failed to refresh Notes window after MCP mutation: {error}"),
+            )
+        })?
+        .map_err(internal_notes_error)?;
     }
 
     Ok(())
@@ -664,7 +686,7 @@ fn open_notes_window_with_close_behavior(
             }
         }
 
-        let _ = handle.update(cx, |_root, window, cx| {
+        let _ = update_notes_window_detached(handle, cx, |window, cx| {
             window.activate_window();
 
             // Focus the NotesApp's editor input and move cursor to end
@@ -731,7 +753,7 @@ pub fn quick_capture(cx: &mut App) -> Result<()> {
 
     // If window exists with valid app entity, create new note in existing window
     if let (Some(handle), Some(notes_app)) = (existing_handle, existing_app) {
-        let result = handle.update(cx, |_root, window, cx| {
+        let result = update_notes_window_detached(handle, cx, |window, cx| {
             notes_app.update(cx, |app, cx| {
                 app.create_note(window, cx);
             });
@@ -762,7 +784,7 @@ pub fn quick_capture(cx: &mut App) -> Result<()> {
     };
 
     if let (Some(handle), Some(notes_app)) = (handle, notes_app) {
-        let _ = handle.update(cx, |_root, window, cx| {
+        let _ = update_notes_window_detached(handle, cx, |window, cx| {
             notes_app.update(cx, |app, cx| {
                 app.create_note(window, cx);
             });
@@ -789,7 +811,7 @@ pub fn open_notes_search(cx: &mut App) -> Result<()> {
 
     // Window already open: just raise it and show the switcher.
     if let (Some(handle), Some(notes_app)) = (existing_handle, existing_app) {
-        let result = handle.update(cx, |_root, window, cx| {
+        let result = update_notes_window_detached(handle, cx, |window, cx| {
             window.activate_window();
             notes_app.update(cx, |app, cx| {
                 app.open_browse_panel(window, cx);
@@ -813,7 +835,7 @@ pub fn open_notes_search(cx: &mut App) -> Result<()> {
     };
 
     if let (Some(handle), Some(notes_app)) = (handle, notes_app) {
-        let _ = handle.update(cx, |_root, window, cx| {
+        let _ = update_notes_window_detached(handle, cx, |window, cx| {
             notes_app.update(cx, |app, cx| {
                 app.open_browse_panel(window, cx);
             });
@@ -873,7 +895,7 @@ pub fn save_note_with_content_and_source(
             crate::platform::defer_hide_main_window(cx);
         }
 
-        let result = handle.update(cx, |_root, window, cx| {
+        let result = update_notes_window_detached(handle, cx, |window, cx| {
             window.activate_window();
             notes_app.update(cx, |app, cx| {
                 app.create_note_with_content(content.clone(), window, cx)
@@ -907,7 +929,7 @@ pub fn save_note_with_content_and_source(
     };
 
     if let (Some(handle), Some(notes_app)) = (handle, notes_app) {
-        let result = handle.update(cx, |_root, window, cx| {
+        let result = update_notes_window_detached(handle, cx, |window, cx| {
             notes_app.update(cx, |app, cx| {
                 app.create_note_with_content(content, window, cx)
             })
@@ -951,11 +973,10 @@ pub fn inject_text_into_notes(cx: &mut App, text: &str) -> Result<serde_json::Va
         return Err("Notes window is not open".to_string());
     };
 
-    handle
-        .update(cx, |_root, window, cx| {
-            notes_app.update(cx, |app, cx| app.inject_dictation_text(text, window, cx))
-        })
-        .map_err(|e| format!("Failed to update notes window: {e}"))
+    update_notes_window_detached(handle, cx, |window, cx| {
+        notes_app.update(cx, |app, cx| app.inject_dictation_text(text, window, cx))
+    })
+    .map_err(|e| format!("Failed to update notes window: {e}"))
 }
 
 /// Close the notes window
@@ -971,10 +992,12 @@ pub fn close_notes_window(cx: &mut App) {
     crate::windows::remove_runtime_window_handle("notes");
 
     if let Some(handle) = handle {
-        match handle.update(cx, |_, window, cx| {
+        match update_notes_window_detached(handle, cx, |window, cx| {
             // Save window bounds before closing
             let wb = window.window_bounds();
             crate::window_state::save_window_from_gpui(crate::window_state::WindowRole::Notes, wb);
+            // Safe here: no Root lease is held, so the Root::update inside
+            // close_all_dialogs does not double-lease.
             window.close_all_dialogs(cx);
             window.remove_window();
         }) {
@@ -1214,38 +1237,39 @@ pub fn handle_notes_ghost_key_for_automation(
 ) -> Result<serde_json::Value, String> {
     let (entity, handle) =
         get_notes_app_entity_and_handle().ok_or_else(|| "Notes window is not open".to_string())?;
-    handle
-        .update(cx, |_root, window, cx| {
-            entity.update(cx, |app, cx| {
-                let key = key.to_ascii_lowercase();
-                let (action, handled) = match key.as_str() {
-                    "escape" | "esc" => app.handle_notes_escape_key_for_automation(window, cx),
-                    "tab" => (
-                        "acceptNotesGhostWord",
-                        app.try_accept_notes_ghost(
-                            super::keyboard::NotesGhostAcceptMode::Word,
-                            window,
-                            cx,
-                        ),
+    // Must not lease Root: the escape ladder reaches `close_actions_panel` →
+    // `request_focus_surface`, which reads Root via `window.has_active_dialog`.
+    update_notes_window_detached(handle, cx, |window, cx| {
+        entity.update(cx, |app, cx| {
+            let key = key.to_ascii_lowercase();
+            let (action, handled) = match key.as_str() {
+                "escape" | "esc" => app.escape_dismiss_ladder(window, cx),
+                "tab" => (
+                    "acceptNotesGhostWord",
+                    app.try_accept_notes_ghost(
+                        super::keyboard::NotesGhostAcceptMode::Word,
+                        window,
+                        cx,
                     ),
-                    "`" | "backtick" => (
-                        "acceptNotesGhostFull",
-                        app.try_accept_notes_ghost(
-                            super::keyboard::NotesGhostAcceptMode::Full,
-                            window,
-                            cx,
-                        ),
+                ),
+                "`" | "backtick" => (
+                    "acceptNotesGhostFull",
+                    app.try_accept_notes_ghost(
+                        super::keyboard::NotesGhostAcceptMode::Full,
+                        window,
+                        cx,
                     ),
-                    _ => ("unsupportedNotesGhostKey", false),
-                };
-                serde_json::json!({
-                    "handled": handled,
-                    "target": "notes",
-                    "action": action,
-                })
+                ),
+                _ => ("unsupportedNotesGhostKey", false),
+            };
+            serde_json::json!({
+                "handled": handled,
+                "target": "notes",
+                "action": action,
             })
         })
-        .map_err(|error| format!("Failed to handle Notes ghost autocomplete key: {error}"))
+    })
+    .map_err(|error| format!("Failed to handle Notes ghost autocomplete key: {error}"))
 }
 
 /// Backward-compatible helper for older target-scoped DevTools `simulateKey Tab`

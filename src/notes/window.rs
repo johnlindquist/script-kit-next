@@ -466,6 +466,7 @@ mod window_ops;
 
 pub use agent_chat_host::close_notes_embedded_agent_chat;
 pub(crate) use agent_chat_host::NOTES_EMBEDDED_AI_AUTOMATION_ID;
+pub(crate) use window_ops::update_notes_window_detached;
 pub use window_ops::{
     accept_notes_ghost_for_automation, apply_mcp_notes_mutation_on_main_thread, close_notes_window,
     get_notes_app_entity_and_handle, get_notes_editor_text, handle_notes_ghost_key_for_automation,

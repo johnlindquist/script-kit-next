@@ -6630,7 +6630,10 @@ impl ScriptListApp {
                                 protocol::BatchCommand::OpenNotesAgentChat => {
                                     let ne = notes_entity.clone();
                                     let nh = notes_handle;
-                                    let result = nh.update(cx, |_root, window, cx| {
+                                    // Detached update: focus-surface transitions inside
+                                    // open_or_focus_embedded_agent_chat read Root, which
+                                    // would double-lease under WindowHandle::update.
+                                    let result = crate::notes::update_notes_window_detached(nh, cx, |window, cx| {
                                         let open_result = ne.update(cx, |app, cx| {
                                             app.open_or_focus_embedded_agent_chat(None, window, cx)
                                         });

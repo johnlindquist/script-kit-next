@@ -37,7 +37,18 @@ pub(super) enum NotesGhostAcceptMode {
 }
 
 impl NotesApp {
-    pub(super) fn handle_notes_escape_key_for_automation(
+    /// Single escape "dismiss ladder" for the Notes window.
+    ///
+    /// Owns the order in which Escape dismisses transient chrome: detached
+    /// CommandBar popups (Cmd+K actions, Cmd+P switcher) → embedded Agent
+    /// Chat popups/streaming/surface → ghost autocomplete → search bar →
+    /// focus mode → trash view. Returns `(action, handled)`.
+    ///
+    /// Both the live `handle_key_down` Escape branch and the DevTools
+    /// automation route (`handle_notes_ghost_key_for_automation`) call this,
+    /// so the two paths cannot drift. Window close (the final live Escape
+    /// behavior) intentionally stays in `handle_key_down`.
+    pub(super) fn escape_dismiss_ladder(
         &mut self,
         window: &mut Window,
         cx: &mut Context<Self>,
@@ -51,14 +62,23 @@ impl NotesApp {
             return ("closeBrowsePanel", true);
         }
         if self.surface_mode == NotesSurfaceMode::AgentChat {
+            // The Agent Chat Cmd+K actions popup is a detached window owned by
+            // the shared actions-window singleton (not by self.command_bar), so
+            // it must be dismissed explicitly before any surface change.
+            if crate::actions::is_actions_window_open() {
+                crate::actions::close_actions_window(cx);
+                return ("closeAgentChatActionsPopup", true);
+            }
             if let Some(ref entity) = self.embedded_agent_chat {
                 let dismissed = entity.update(cx, |chat, cx| chat.dismiss_escape_popup(cx));
                 if dismissed {
+                    tracing::info!(event = "notes_agent_chat_escape_dismissed_local_popup");
                     return ("dismissAgentChatPopup", true);
                 }
                 let cancelled_streaming =
                     entity.update(cx, |chat, cx| chat.cancel_streaming_from_escape(cx));
                 if cancelled_streaming {
+                    tracing::info!(event = "notes_agent_chat_escape_cancelled_streaming");
                     return ("cancelAgentChatStreaming", true);
                 }
             }
@@ -431,22 +451,9 @@ impl NotesApp {
         // In Agent Chat mode, intercept host-owned shortcuts before propagating to Agent Chat.
         if self.surface_mode == NotesSurfaceMode::AgentChat {
             if is_key_escape(key) {
-                if let Some(ref entity) = self.embedded_agent_chat {
-                    let dismissed = entity.update(cx, |chat, cx| chat.dismiss_escape_popup(cx));
-                    if dismissed {
-                        tracing::info!(event = "notes_agent_chat_escape_dismissed_local_popup");
-                        cx.stop_propagation();
-                        return;
-                    }
-                    let cancelled_streaming =
-                        entity.update(cx, |chat, cx| chat.cancel_streaming_from_escape(cx));
-                    if cancelled_streaming {
-                        tracing::info!(event = "notes_agent_chat_escape_cancelled_streaming");
-                        cx.stop_propagation();
-                        return;
-                    }
-                }
-                self.switch_to_notes_surface(window, cx);
+                // Shared ladder: detached actions popup → chat-local popups →
+                // streaming cancel → switch back to the Notes surface.
+                let (_action, _handled) = self.escape_dismiss_ladder(window, cx);
                 cx.stop_propagation();
                 return;
             }
@@ -480,27 +487,9 @@ impl NotesApp {
 
         if is_key_escape(key) {
             cx.stop_propagation();
-            if self.dismiss_notes_ghost(cx) {
-                return;
-            }
-            if self.show_actions_panel || self.command_bar.is_open() {
-                self.close_actions_panel(window, cx);
-                return;
-            }
-            if self.note_switcher.is_open() {
-                self.close_browse_panel(window, cx);
-                return;
-            }
-            if self.show_search {
-                self.toggle_search(window, cx);
-                return;
-            }
-            if self.focus_mode {
-                self.toggle_focus_mode(cx);
-                return;
-            }
-            if self.view_mode == NotesViewMode::Trash {
-                self.set_view_mode(NotesViewMode::AllNotes, window, cx);
+            // Shared dismiss ladder (popups → ghost → search → focus → trash).
+            let (_action, handled) = self.escape_dismiss_ladder(window, cx);
+            if handled {
                 return;
             }
             let wb = window.window_bounds();
