@@ -269,6 +269,18 @@ pub(crate) fn build_spine_list_sections_full(
     projection: &SpineCursorProjection,
     live_preview: Option<&super::live_preview::SpineLivePreview>,
 ) -> Vec<SpineListSection> {
+    build_spine_list_sections_full_with_resolved_tokens(parse, projection, live_preview, &|_| false)
+}
+
+/// Variant that knows which compact mention tokens are alias-registered
+/// (`@file:basename`, `@notes:title`, …) so the tail summary can honestly
+/// distinguish tokens that will attach from tokens that will not.
+pub(crate) fn build_spine_list_sections_full_with_resolved_tokens(
+    parse: &SpineParse,
+    projection: &SpineCursorProjection,
+    live_preview: Option<&super::live_preview::SpineLivePreview>,
+    is_resolved_token: &dyn Fn(&str) -> bool,
+) -> Vec<SpineListSection> {
     let segment = active_segment(parse, projection);
     let raw = segment.map(|segment| segment.raw.as_str()).unwrap_or("");
 
@@ -333,7 +345,7 @@ pub(crate) fn build_spine_list_sections_full(
             )]
         }
         SpineSegmentKind::FreeText if projection_is_prompt_builder_tail(parse, projection) => {
-            vec![build_prompt_builder_tail_section(parse)]
+            vec![build_prompt_builder_tail_section(parse, is_resolved_token)]
         }
         SpineSegmentKind::FreeText => Vec::new(),
     }
@@ -518,9 +530,47 @@ fn build_mode_exit_section(
 
 const PROMPT_BUILDER_VISIBLE_LABEL_LIMIT: usize = 4;
 
-fn prompt_builder_segment_label(segment: &SpineSegment) -> Option<String> {
+/// Whether a context-mention segment will actually deliver content at
+/// submit. Mirrors the prompt plan's resolution ladder: exact builtin
+/// mention → alias-registered compact token → literal `@file:path` →
+/// explicit Resolved state. Everything else becomes a preflight warning at
+/// submit, and the tail summary must say so instead of pretending the
+/// context is attached.
+fn context_mention_will_attach(
+    segment: &SpineSegment,
+    is_resolved_token: &dyn Fn(&str) -> bool,
+) -> bool {
+    let text = segment.raw.trim();
+    if crate::ai::context_contract::ContextAttachmentKind::from_mention_line(text).is_some() {
+        return true;
+    }
+    if is_resolved_token(text) {
+        return true;
+    }
+    if let Some(path) = text.strip_prefix("@file:") {
+        if !path.trim().is_empty() {
+            return true;
+        }
+    }
+    matches!(segment.resolution, SpineSegmentResolution::Resolved { .. })
+}
+
+fn prompt_builder_segment_label(
+    segment: &SpineSegment,
+    is_resolved_token: &dyn Fn(&str) -> bool,
+) -> Option<String> {
     if !is_prompt_builder_segment_kind(&segment.kind) {
         return None;
+    }
+
+    if matches!(segment.kind, SpineSegmentKind::ContextMention { .. })
+        && !context_mention_will_attach(segment, is_resolved_token)
+    {
+        let raw = segment.raw.trim();
+        if raw.is_empty() {
+            return None;
+        }
+        return Some(format!("\u{26a0} {raw}"));
     }
 
     if let SpineSegmentResolution::Resolved { label, .. } = &segment.resolution {
@@ -542,11 +592,7 @@ fn prompt_builder_segment_label(segment: &SpineSegment) -> Option<String> {
     };
 
     let label = normalize_prompt_builder_label(fallback);
-    if label.is_empty() {
-        None
-    } else {
-        Some(label)
-    }
+    if label.is_empty() { None } else { Some(label) }
 }
 
 fn normalize_prompt_builder_label(raw: &str) -> String {
@@ -609,13 +655,25 @@ fn prompt_builder_tail_summary(labels: &[String]) -> String {
     summary
 }
 
-fn build_prompt_builder_tail_section(parse: &SpineParse) -> SpineListSection {
+fn build_prompt_builder_tail_section(
+    parse: &SpineParse,
+    is_resolved_token: &dyn Fn(&str) -> bool,
+) -> SpineListSection {
     let attached_labels: Vec<String> = parse
         .segments
         .iter()
-        .filter_map(prompt_builder_segment_label)
+        .filter_map(|segment| prompt_builder_segment_label(segment, is_resolved_token))
         .collect();
+    let has_warnings = attached_labels
+        .iter()
+        .any(|label| label.starts_with('\u{26a0}'));
     let attached_summary = prompt_builder_tail_summary(&attached_labels);
+
+    let (title, icon) = if has_warnings {
+        ("Some context won't attach", "triangle-alert")
+    } else {
+        ("Ready to send", "send")
+    };
 
     SpineListSection {
         id: ss("spine-section-tail-ready"),
@@ -625,10 +683,10 @@ fn build_prompt_builder_tail_section(parse: &SpineParse) -> SpineListSection {
         rows: vec![SpineListRow {
             id: ss("spine:tail:ready"),
             kind: SpineListRowKind::Hint,
-            title: ss("Ready to send"),
+            title: ss(title),
             subtitle: Some(ss(attached_summary)),
             meta: None,
-            icon: Some(ss("send")),
+            icon: Some(ss(icon)),
             badges: vec![],
             score: i32::MAX,
             is_selectable: true,
@@ -796,12 +854,14 @@ mod tests {
         let sections = build_spine_list_sections(&parse, &proj);
         assert!(!sections.is_empty());
         let rows: Vec<_> = sections.iter().flat_map(|s| &s.rows).collect();
-        assert!(rows
-            .iter()
-            .any(|r| matches!(r.kind, SpineListRowKind::ContextBuiltin { .. })));
-        assert!(rows
-            .iter()
-            .any(|r| matches!(r.kind, SpineListRowKind::ContextSubSearch { .. })));
+        assert!(
+            rows.iter()
+                .any(|r| matches!(r.kind, SpineListRowKind::ContextBuiltin { .. }))
+        );
+        assert!(
+            rows.iter()
+                .any(|r| matches!(r.kind, SpineListRowKind::ContextSubSearch { .. }))
+        );
     }
 
     #[test]
@@ -810,9 +870,10 @@ mod tests {
         let proj = project_cursor(&parse, 1);
         let sections = build_spine_list_sections(&parse, &proj);
         let rows: Vec<_> = sections.iter().flat_map(|s| &s.rows).collect();
-        assert!(rows
-            .iter()
-            .any(|r| matches!(r.kind, SpineListRowKind::SlashCommand { .. })));
+        assert!(
+            rows.iter()
+                .any(|r| matches!(r.kind, SpineListRowKind::SlashCommand { .. }))
+        );
     }
 
     #[test]
@@ -821,9 +882,10 @@ mod tests {
         let proj = project_cursor(&parse, 1);
         let sections = build_spine_list_sections(&parse, &proj);
         let rows: Vec<_> = sections.iter().flat_map(|s| &s.rows).collect();
-        assert!(rows
-            .iter()
-            .any(|r| matches!(r.kind, SpineListRowKind::Profile { .. })));
+        assert!(
+            rows.iter()
+                .any(|r| matches!(r.kind, SpineListRowKind::Profile { .. }))
+        );
     }
 
     #[test]
@@ -832,9 +894,10 @@ mod tests {
         let proj = project_cursor(&parse, 1);
         let sections = build_spine_list_sections(&parse, &proj);
         let rows: Vec<_> = sections.iter().flat_map(|s| &s.rows).collect();
-        assert!(rows
-            .iter()
-            .any(|r| matches!(r.kind, SpineListRowKind::Style { .. })));
+        assert!(
+            rows.iter()
+                .any(|r| matches!(r.kind, SpineListRowKind::Style { .. }))
+        );
     }
 
     #[test]
@@ -1019,6 +1082,44 @@ mod tests {
             Some("Selection · Rewrite → Cmd+Enter")
         );
         assert!(row.meta.is_none());
+    }
+
+    #[test]
+    fn tail_summary_warns_for_tokens_that_wont_attach() {
+        // `@notes:groceries` with no registered alias becomes a preflight
+        // warning at submit — the tail row must say so instead of listing
+        // "Notes" as if it were attached.
+        let input = "@selection @notes:groceries explain";
+        let parse = parse_spine(input);
+        let proj = project_cursor(&parse, input.len());
+        let sections = build_spine_list_sections(&parse, &proj);
+        assert_eq!(sections.len(), 1);
+        let row = sections[0].rows.first().expect("expected tail row");
+        assert_eq!(row.title.as_ref(), "Some context won't attach");
+        let subtitle = row.subtitle.as_ref().map(|s| s.as_ref()).unwrap_or("");
+        assert!(
+            subtitle.contains("\u{26a0} @notes:groceries"),
+            "warning label missing from summary: {subtitle}"
+        );
+        assert!(subtitle.contains("Selection"));
+    }
+
+    #[test]
+    fn tail_summary_trusts_alias_registered_tokens() {
+        let input = "@selection @notes:groceries explain";
+        let parse = parse_spine(input);
+        let proj = project_cursor(&parse, input.len());
+        let sections =
+            build_spine_list_sections_full_with_resolved_tokens(&parse, &proj, None, &|token| {
+                token == "@notes:groceries"
+            });
+        let row = sections[0].rows.first().expect("expected tail row");
+        assert_eq!(row.title.as_ref(), "Ready to send");
+        let subtitle = row.subtitle.as_ref().map(|s| s.as_ref()).unwrap_or("");
+        assert!(
+            !subtitle.contains('\u{26a0}'),
+            "alias-registered token must not warn: {subtitle}"
+        );
     }
 
     #[test]

@@ -26,13 +26,17 @@ pub(crate) struct SpinePromptProfile {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum SpinePromptProfileSource {
     ProfileSegment,
-    StyleSugar,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct SpinePromptStyle {
     pub id: String,
     pub label: String,
+    /// The rewrite instruction delivered to the agent. Styles are NOT Agent
+    /// Chat profiles — a previous implementation persisted the style id as a
+    /// profile selection, which always failed lookup and silently dropped
+    /// the tone. The instruction is the style's real payload.
+    pub instruction: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -238,26 +242,19 @@ pub(crate) fn build_spine_prompt_plan_with_aliases(
 }
 
 fn apply_style_sugar(plan: &mut SpinePromptPlan, segment_index: usize, id: String) {
+    let _ = segment_index;
+    let instruction = crate::spine::catalog_style::style_instruction(&id)
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| {
+            format!(
+                "Rewrite the attached selection in a {id} style. Preserve the meaning; return only the rewritten text."
+            )
+        });
     plan.selected_style = Some(SpinePromptStyle {
         id: id.clone(),
-        label: id.clone(),
-    });
-    plan.selected_profile = Some(SpinePromptProfile {
-        id: id.clone(),
         label: id,
-        source: SpinePromptProfileSource::StyleSugar,
+        instruction,
     });
-    if !plan
-        .slash_commands
-        .iter()
-        .any(|cmd| cmd.command == "/rewrite")
-    {
-        plan.slash_commands.push(SpinePromptSlashCommand {
-            command: "/rewrite".to_string(),
-            name: "rewrite".to_string(),
-            segment_index,
-        });
-    }
     let selection = ContextAttachmentKind::Selection.part();
     push_context_part_dedup(plan, selection);
 }
@@ -289,6 +286,13 @@ fn build_normalized_prompt_text(plan: &SpinePromptPlan, free_text_chunks: &[Stri
                 .collect::<Vec<_>>()
                 .join(" "),
         );
+    }
+
+    // The style's real payload: an explicit rewrite instruction. Without
+    // this the agent only ever saw a bare `/rewrite` and the chosen tone
+    // never reached it.
+    if let Some(style) = &plan.selected_style {
+        pieces.push(style.instruction.clone());
     }
 
     let prose = free_text_chunks
@@ -335,12 +339,19 @@ mod tests {
 
     #[test]
     fn style_only_plan_expands_to_selection_rewrite() {
-        // The auto-submitted plan must carry the rewrite-selection semantics.
+        // The auto-submitted plan must carry the rewrite-selection semantics:
+        // an explicit tone instruction in the prompt + the selection part.
         let plan = build_spine_prompt_plan(&parse_spine(".concise"));
         assert!(plan.should_submit_to_chat());
         assert_eq!(plan.selected_style.as_ref().unwrap().id, "concise");
-        assert!(plan.slash_commands.iter().any(|c| c.command == "/rewrite"));
+        assert!(
+            plan.normalized_prompt.contains("more concise"),
+            "style instruction must reach the prompt, got: {}",
+            plan.normalized_prompt,
+        );
         assert!(plan.context_parts.iter().any(|p| p.label() == "Selection"));
+        // Styles are not profiles — the plan must not pretend they are.
+        assert!(plan.selected_profile.is_none());
     }
 
     #[test]
@@ -360,10 +371,25 @@ mod tests {
         let plan = build_spine_prompt_plan(&parse);
         assert!(plan.should_submit_to_chat());
         assert_eq!(plan.selected_style.as_ref().unwrap().id, "professional");
-        assert_eq!(plan.selected_profile.as_ref().unwrap().id, "professional");
-        assert!(plan.slash_commands.iter().any(|c| c.command == "/rewrite"));
+        assert!(
+            plan.normalized_prompt.contains("professional"),
+            "tone instruction missing from prompt: {}",
+            plan.normalized_prompt,
+        );
         assert!(plan.context_parts.iter().any(|p| p.label() == "Selection"));
         assert_eq!(plan.free_text_tail, "make it shorter");
+        assert!(plan.selected_profile.is_none());
+    }
+
+    #[test]
+    fn unknown_style_id_still_produces_generic_instruction() {
+        let plan = build_spine_prompt_plan(&parse_spine(".pirate"));
+        assert!(plan.should_submit_to_chat());
+        assert!(
+            plan.normalized_prompt.contains("pirate"),
+            "generic style instruction must mention the id: {}",
+            plan.normalized_prompt,
+        );
     }
 
     #[test]

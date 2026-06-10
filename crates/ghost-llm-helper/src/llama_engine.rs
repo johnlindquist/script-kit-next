@@ -1,5 +1,5 @@
 use anyhow::{Context as _, Result};
-use llama_cpp_2::context::params::LlamaContextParams;
+use llama_cpp_2::context::params::{LlamaContextParams, LlamaPoolingType};
 use llama_cpp_2::context::LlamaContext;
 use llama_cpp_2::llama_backend::LlamaBackend;
 use llama_cpp_2::llama_batch::LlamaBatch;
@@ -14,6 +14,7 @@ use std::sync::{Arc, OnceLock};
 
 const GHOST_SAMPLER_SEED: u32 = 0x5C71_7ABB;
 const RAW_OUTPUT_BYTE_CAP: usize = 160;
+const EMBED_CTX_TOKENS: u32 = 2048;
 
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub(crate) struct GhostSamplingParams {
@@ -26,6 +27,86 @@ pub(crate) struct GhostSamplingParams {
     pub ctx_tokens: u32,
     pub batch_size: u32,
     pub gpu_layers: u32,
+}
+
+/// A GGUF embedding model (e.g. embeddinggemma) loaded for mean-pooled,
+/// L2-normalized sentence embeddings. Kept separate from [`LoadedLocalLlm`]
+/// so the brain's embedder and the ghost-text generator can coexist without
+/// evicting each other.
+pub(crate) struct LoadedEmbedder {
+    model_id: String,
+    backend: &'static LlamaBackend,
+    model: LlamaModel,
+}
+
+impl LoadedEmbedder {
+    pub(crate) fn load(model_path: &Path, model_id: &str, gpu_layers: u32) -> Result<Self> {
+        let backend = backend()?;
+        let model_params = LlamaModelParams::default()
+            .with_n_gpu_layers(gpu_layers)
+            .with_use_mmap(true);
+        let model = LlamaModel::load_from_file(backend, model_path, &model_params)
+            .with_context(|| format!("load embedding gguf {}", model_path.display()))?;
+        Ok(Self {
+            model_id: model_id.to_string(),
+            backend,
+            model,
+        })
+    }
+
+    pub(crate) fn model_id(&self) -> &str {
+        &self.model_id
+    }
+
+    pub(crate) fn embed_texts(&self, texts: &[String]) -> Result<Vec<Vec<f32>>> {
+        let ctx_params = LlamaContextParams::default()
+            .with_n_ctx(NonZeroU32::new(EMBED_CTX_TOKENS))
+            .with_n_batch(EMBED_CTX_TOKENS)
+            .with_n_ubatch(EMBED_CTX_TOKENS)
+            .with_embeddings(true)
+            .with_pooling_type(LlamaPoolingType::Mean);
+        let mut ctx: LlamaContext<'_> = self
+            .model
+            .new_context(self.backend, ctx_params)
+            .context("create embedding context")?;
+        let max_tokens = (EMBED_CTX_TOKENS as usize).saturating_sub(8).max(1);
+        let mut out = Vec::with_capacity(texts.len());
+        for text in texts {
+            let mut tokens = self
+                .model
+                .str_to_token(text, AddBos::Always)
+                .context("tokenize embedding input")?;
+            if tokens.is_empty() {
+                out.push(Vec::new());
+                continue;
+            }
+            if tokens.len() > max_tokens {
+                tokens.truncate(max_tokens);
+            }
+            let mut batch = LlamaBatch::new(tokens.len(), 1);
+            batch
+                .add_sequence(&tokens, 0, false)
+                .context("add embedding sequence")?;
+            ctx.clear_kv_cache();
+            ctx.decode(&mut batch).context("decode embedding batch")?;
+            let embedding = ctx
+                .embeddings_seq_ith(0)
+                .context("read pooled embedding")?
+                .to_vec();
+            out.push(l2_normalize(embedding));
+        }
+        Ok(out)
+    }
+}
+
+fn l2_normalize(mut v: Vec<f32>) -> Vec<f32> {
+    let norm = v.iter().map(|x| x * x).sum::<f32>().sqrt();
+    if norm > f32::EPSILON {
+        for x in &mut v {
+            *x /= norm;
+        }
+    }
+    v
 }
 
 fn backend() -> Result<&'static LlamaBackend> {

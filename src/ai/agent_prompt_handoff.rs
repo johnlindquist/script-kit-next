@@ -1266,7 +1266,9 @@ print('https://gist.github.com/fake/private-gist')
         assert_eq!(payload.prompt_builder_segment_count, 1);
         assert_compiled_prompt_contains_all_context_fingerprints(&payload.prompt, &fixture);
         assert!(
-            !payload.prompt.contains("PROMPT_EXPORT_AMBIENT_DISPLAY_ONLY_SENTINEL"),
+            !payload
+                .prompt
+                .contains("PROMPT_EXPORT_AMBIENT_DISPLAY_ONLY_SENTINEL"),
             "AmbientContext is display-only; staged content must arrive as a ResourceUri or TextBlock"
         );
     }
@@ -1370,10 +1372,12 @@ print('https://gist.github.com/fake/private-gist')
                 Some("creative"),
                 Some("briefing contents"),
             ),
+            // Styles are not profiles: `.professional` carries an explicit
+            // tone instruction in the prompt and selects no profile.
             (
                 ".professional make it shorter",
-                Some("professional"),
-                Some("/rewrite\n\nmake it shorter"),
+                None,
+                Some("professional workplace tone"),
             ),
             (">:demo explain setup", None, Some("explain setup")),
             ("@unknownThing summarize", None, Some("Preflight warning")),

@@ -6,7 +6,7 @@ mod catalog_filter;
 pub(crate) mod catalog_history;
 mod catalog_profile;
 mod catalog_slash;
-mod catalog_style;
+pub(crate) mod catalog_style;
 #[allow(dead_code)]
 pub(crate) mod catalog_subsearch;
 #[allow(dead_code)]

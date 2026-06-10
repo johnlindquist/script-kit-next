@@ -1,7 +1,7 @@
 mod llama_engine;
 
 use anyhow::{anyhow, Context as _, Result};
-use llama_engine::{GhostSamplingParams, LoadedLocalLlm};
+use llama_engine::{GhostSamplingParams, LoadedEmbedder, LoadedLocalLlm};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::io::{self, BufRead, Write};
@@ -25,6 +25,14 @@ enum WireRequest {
         prompt: String,
         sampling: GhostSamplingParams,
     },
+    Embed {
+        id: u64,
+        model_path: String,
+        model_id: String,
+        texts: Vec<String>,
+        #[serde(default)]
+        gpu_layers: u32,
+    },
     Cancel {
         id: u64,
     },
@@ -39,6 +47,8 @@ struct WireResponse {
     ok: bool,
     model_id: Option<String>,
     raw_completion: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    embeddings: Option<Vec<Vec<f32>>>,
     error: Option<String>,
 }
 
@@ -55,6 +65,13 @@ enum WorkerRequest {
         model_id: String,
         prompt: String,
         sampling: GhostSamplingParams,
+    },
+    Embed {
+        id: u64,
+        model_path: String,
+        model_id: String,
+        texts: Vec<String>,
+        gpu_layers: u32,
     },
     Shutdown {
         id: u64,
@@ -91,6 +108,7 @@ impl CancelRegistry {
 #[derive(Default)]
 struct HelperEngine {
     loaded: Option<LoadedLocalLlm>,
+    embedder: Option<LoadedEmbedder>,
 }
 
 impl HelperEngine {
@@ -126,6 +144,27 @@ impl HelperEngine {
             .context("ghost llm helper model not loaded")?
             .generate_one_line(prompt, cancel)
     }
+
+    fn embed(
+        &mut self,
+        model_path: &str,
+        model_id: &str,
+        texts: &[String],
+        gpu_layers: u32,
+    ) -> Result<Vec<Vec<f32>>> {
+        if !self
+            .embedder
+            .as_ref()
+            .is_some_and(|embedder| embedder.model_id() == model_id)
+        {
+            let path = PathBuf::from(model_path);
+            self.embedder = Some(LoadedEmbedder::load(&path, model_id, gpu_layers)?);
+        }
+        self.embedder
+            .as_ref()
+            .context("embedding model not loaded")?
+            .embed_texts(texts)
+    }
 }
 
 impl WireResponse {
@@ -135,6 +174,7 @@ impl WireResponse {
             ok: true,
             model_id: Some(model_id),
             raw_completion: None,
+            embeddings: None,
             error: None,
         }
     }
@@ -145,6 +185,18 @@ impl WireResponse {
             ok: true,
             model_id: Some(model_id),
             raw_completion: Some(raw_completion),
+            embeddings: None,
+            error: None,
+        }
+    }
+
+    fn ok_embed(id: u64, model_id: String, embeddings: Vec<Vec<f32>>) -> Self {
+        Self {
+            id,
+            ok: true,
+            model_id: Some(model_id),
+            raw_completion: None,
+            embeddings: Some(embeddings),
             error: None,
         }
     }
@@ -155,6 +207,7 @@ impl WireResponse {
             ok: true,
             model_id: None,
             raw_completion: None,
+            embeddings: None,
             error: None,
         }
     }
@@ -165,6 +218,7 @@ impl WireResponse {
             ok: false,
             model_id: None,
             raw_completion: None,
+            embeddings: None,
             error: Some(err.to_string()),
         }
     }
@@ -229,6 +283,21 @@ fn main() -> Result<()> {
                             sampling,
                         });
                     }
+                    WireRequest::Embed {
+                        id,
+                        model_path,
+                        model_id,
+                        texts,
+                        gpu_layers,
+                    } => {
+                        let _ = tx.send(WorkerRequest::Embed {
+                            id,
+                            model_path,
+                            model_id,
+                            texts,
+                            gpu_layers,
+                        });
+                    }
                     WireRequest::Shutdown { id } => {
                         let _ = tx.send(WorkerRequest::Shutdown { id });
                         break;
@@ -275,6 +344,19 @@ fn main() -> Result<()> {
                 if let Ok(mut cancels) = cancels.lock() {
                     cancels.unregister(id);
                 }
+                write_response(response)?;
+            }
+            WorkerRequest::Embed {
+                id,
+                model_path,
+                model_id,
+                texts,
+                gpu_layers,
+            } => {
+                let response = match engine.embed(&model_path, &model_id, &texts, gpu_layers) {
+                    Ok(embeddings) => WireResponse::ok_embed(id, model_id, embeddings),
+                    Err(err) => WireResponse::err(id, err),
+                };
                 write_response(response)?;
             }
             WorkerRequest::Shutdown { id } => {
