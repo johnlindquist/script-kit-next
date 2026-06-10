@@ -65,9 +65,7 @@ fn dev_style_tool_catalog_owns_search_height_descriptor() {
     );
     assert!(
         source.contains("HEADER_INFO_CONTEXT_EDGE_OUTSET_X_KNOB_ID")
-            && source.contains("\"headerInfo.contextEdgeOutsetX\"")
-            && source.contains("HEADER_INFO_VARIATION_BADGE_WIDTH_KNOB_ID")
-            && source.contains("\"headerInfo.variationBadgeWidth\""),
+            && source.contains("\"headerInfo.contextEdgeOutsetX\""),
         "header info context geometry must be controlled through the dev style tool catalog"
     );
     assert!(

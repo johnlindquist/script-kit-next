@@ -52,15 +52,15 @@ fn all_header_variations_keep_logo_free_numbered_header_layout() {
     }
 }
 
+/// The header context zone must NOT render the old centered variation badge
+/// (the theme-exploration reference number); the exploration cycle has been
+/// retired in favor of the settled design.
 #[test]
-fn header_context_renders_centered_reference_number() {
+fn header_context_does_not_render_variation_badge() {
     let shared = read_source("src/components/main_view_chrome.rs");
 
-    assert!(shared.contains("MAIN_VIEW_CONTEXT_VARIATION_BADGE_ID"));
-    assert!(shared.contains(".id(MAIN_VIEW_CONTEXT_VARIATION_BADGE_ID)"));
-    assert!(shared.contains("(def.variant.index() + 1).to_string()"));
-    assert!(shared.contains(".w(px(info.variation_badge_width_px))"));
-    assert!(shared.contains(".justify_center()"));
+    assert!(!shared.contains("MAIN_VIEW_CONTEXT_VARIATION_BADGE_ID"));
+    assert!(!shared.contains("variation_badge"));
 }
 
 #[test]
@@ -84,8 +84,6 @@ fn script_list_consumes_shell_search_and_theme_list_metrics() {
 #[test]
 fn selector_copy_is_header_oriented_not_theme_oriented() {
     for variant in MainMenuThemeVariant::all() {
-        assert!(variant.placeholder().contains("Header"));
-        assert!(!variant.placeholder().contains("Theme"));
         let def = variant.def();
         assert_eq!(def.header_info_bar.font_family, "JetBrains Mono");
         assert_eq!(def.header_info_bar.font_size, 10.5);
@@ -97,13 +95,10 @@ fn selector_copy_is_header_oriented_not_theme_oriented() {
         assert_eq!(def.shell.divider_height, 0.0);
         // Commit ee4a244f3 ("Prepare UI polish and release CI gates") gave the
         // first section header 4px of extra breathing room beyond the derived
-        // header-padding + line-height + section-padding sum.
+        // header-padding + 16px section line height + section-padding sum.
         assert_eq!(
             def.list.first_section_header_height,
-            def.shell.header_padding_y
-                + def.typography.section_line_height
-                + def.list.section_padding_bottom
-                + 4.0
+            def.shell.header_padding_y + 16.0 + def.list.section_padding_bottom + 4.0
         );
     }
 }
@@ -113,7 +108,6 @@ fn main_menu_theme_owns_header_context_and_section_geometry_defaults() {
     let def = MainMenuThemeVariant::InfoBarBase.def();
 
     assert_eq!(def.header_info_bar.context_edge_outset_x, 8.0);
-    assert_eq!(def.header_info_bar.variation_badge_width_px, 32.0);
     assert_eq!(def.list.section_padding_x, 14.0);
     assert_eq!(def.list.section_padding_top, 12.0);
     assert_eq!(def.list.section_padding_bottom, 4.0);

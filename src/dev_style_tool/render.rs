@@ -9,7 +9,6 @@ use gpui::{
 use gpui_component::{
     input::{Input, InputEvent, InputState},
     slider::{Slider, SliderEvent, SliderState, SliderValue},
-    tab::{Tab, TabBar},
     Root, Sizable,
 };
 
@@ -31,7 +30,7 @@ use crate::dev_style_tool::{
     },
     copy_catalog::{copy_control_by_id, CopyControlId, COPY_CONTROLS},
     export,
-    kitchen_sink_targets::{DevStyleKitchenSinkTarget, OPEN_AGENT_CHAT_KITCHEN_SINK_BUTTON},
+    kitchen_sink_targets::DevStyleKitchenSinkTarget,
     runtime_overrides,
     theme_catalog::{
         format_theme_color_hex, theme_color_knob_by_id, ThemeColorKnob, ThemeColorKnobGroup,
@@ -136,6 +135,50 @@ fn sync_live_input_text(
             input.set_value(label, window, cx);
         }
     });
+}
+
+fn sidebar_tab_has_groups(tab: DevStyleToolTab) -> bool {
+    matches!(
+        tab,
+        DevStyleToolTab::MainWindowStyling
+            | DevStyleToolTab::ActionsPopupStyling
+            | DevStyleToolTab::AgentChatStyling
+            | DevStyleToolTab::ConfirmModalStyling
+    )
+}
+
+fn sidebar_group_row(
+    id: String,
+    label: &'static str,
+    selected: bool,
+    chrome: theme::AppChromeColors,
+) -> gpui::Stateful<Div> {
+    div()
+        .id(ElementId::Name(id.into()))
+        .flex()
+        .items_center()
+        .gap(px(6.0))
+        .px(px(8.0))
+        .py(px(3.0))
+        .rounded(px(crate::ui::chrome::LIQUID_GLASS_COMPACT_RADIUS_PX))
+        .text_xs()
+        .cursor_pointer()
+        .text_color(if selected {
+            rgb(chrome.text_primary_hex)
+        } else {
+            rgb(chrome.text_secondary_hex)
+        })
+        .when(selected, |row| row.bg(rgba(chrome.hover_rgba)))
+        .hover(|style| style.bg(rgba(chrome.hover_rgba)))
+        .child(
+            div()
+                .flex_none()
+                .w(px(2.0))
+                .h(px(10.0))
+                .rounded(px(1.0))
+                .when(selected, |bar| bar.bg(rgb(chrome.accent_hex))),
+        )
+        .child(label)
 }
 
 pub(crate) struct DevStyleToolApp {
@@ -434,7 +477,7 @@ impl DevStyleToolApp {
         let knob_filter = cx.new(|cx| {
             InputState::new(window, cx)
                 .tab_navigation(true)
-                .placeholder("Filter controls by name or id (searches every group)")
+                .placeholder("Filter controls…")
         });
         subscriptions.push(cx.subscribe_in(
             &knob_filter,
@@ -1365,265 +1408,253 @@ impl DevStyleToolApp {
         panel
     }
 
-    fn render_group_tabs(
+    /// Storybook-style navigation rail: the cross-surface filter on top, then
+    /// every surface as a row with its style groups nested under the active
+    /// one. Replaces the previous stack of horizontal tab bars so the
+    /// surface/group hierarchy is visible at a glance.
+    fn render_sidebar(
         &self,
         chrome: theme::AppChromeColors,
         cx: &mut gpui::Context<Self>,
     ) -> impl IntoElement {
-        let selected_index = STYLE_KNOB_GROUPS
-            .iter()
-            .position(|group| *group == self.active_group)
-            .unwrap_or(0);
         div()
-            .id("tabs:dev-style-tool-groups")
-            .flex()
-            .items_center()
-            .gap(px(8.0))
-            .child(
-                div()
-                    .text_xs()
-                    .font_weight(gpui::FontWeight::MEDIUM)
-                    .text_color(rgb(chrome.text_secondary_hex))
-                    .child("Main"),
-            )
-            .child(
-                div()
-                    .flex_1()
-                    .min_w_0()
-                    .p(px(3.0))
-                    .rounded(px(crate::ui::chrome::LIQUID_GLASS_COMPACT_RADIUS_PX))
-                    .border(px(1.0))
-                    .border_color(rgba(chrome.border_rgba))
-                    .bg(rgba(chrome.input_surface_rgba))
-                    .child(
-                        TabBar::new("tabbar:dev-style-tool-groups")
-                            .segmented()
-                            .small()
-                            .selected_index(selected_index)
-                            .children(STYLE_KNOB_GROUPS.iter().map(|group| {
-                                let group = *group;
-                                Tab::new().label(group.label()).on_click(cx.listener(
-                                    move |this, _event, _window, cx| {
-                                        this.active_group = group;
-                                        cx.notify();
-                                    },
-                                ))
-                            })),
-                    ),
-            )
-            .text_color(rgb(chrome.text_primary_hex))
-    }
-
-    fn render_actions_group_tabs(
-        &self,
-        chrome: theme::AppChromeColors,
-        cx: &mut gpui::Context<Self>,
-    ) -> impl IntoElement {
-        let selected_index = ACTIONS_POPUP_KNOB_GROUPS
-            .iter()
-            .position(|group| *group == self.active_actions_group)
-            .unwrap_or(0);
-        div()
-            .id("tabs:dev-style-tool-actions-groups")
-            .flex()
-            .items_center()
-            .gap(px(8.0))
-            .child(
-                div()
-                    .text_xs()
-                    .font_weight(gpui::FontWeight::MEDIUM)
-                    .text_color(rgb(chrome.text_secondary_hex))
-                    .child("Actions"),
-            )
-            .child(
-                div()
-                    .flex_1()
-                    .min_w_0()
-                    .p(px(3.0))
-                    .rounded(px(crate::ui::chrome::LIQUID_GLASS_COMPACT_RADIUS_PX))
-                    .border(px(1.0))
-                    .border_color(rgba(chrome.border_rgba))
-                    .bg(rgba(chrome.input_surface_rgba))
-                    .child(
-                        TabBar::new("tabbar:dev-style-tool-actions-groups")
-                            .segmented()
-                            .small()
-                            .selected_index(selected_index)
-                            .children(ACTIONS_POPUP_KNOB_GROUPS.iter().map(|group| {
-                                let group = *group;
-                                Tab::new().label(group.label()).on_click(cx.listener(
-                                    move |this, _event, _window, cx| {
-                                        this.active_actions_group = group;
-                                        cx.notify();
-                                    },
-                                ))
-                            })),
-                    ),
-            )
-            .text_color(rgb(chrome.text_primary_hex))
-    }
-
-    fn render_agent_chat_group_tabs(
-        &self,
-        chrome: theme::AppChromeColors,
-        cx: &mut gpui::Context<Self>,
-    ) -> impl IntoElement {
-        let selected_index = AGENT_CHAT_KNOB_GROUPS
-            .iter()
-            .position(|group| *group == self.active_agent_chat_group)
-            .unwrap_or(0);
-        div()
-            .id("tabs:dev-style-tool-agent-chat-groups")
-            .flex()
-            .items_center()
-            .gap(px(8.0))
-            .child(
-                div()
-                    .text_xs()
-                    .font_weight(gpui::FontWeight::MEDIUM)
-                    .text_color(rgb(chrome.text_secondary_hex))
-                    .child("Agent Chat"),
-            )
-            .child(
-                div()
-                    .flex_1()
-                    .min_w_0()
-                    .p(px(3.0))
-                    .rounded(px(crate::ui::chrome::LIQUID_GLASS_COMPACT_RADIUS_PX))
-                    .border(px(1.0))
-                    .border_color(rgba(chrome.border_rgba))
-                    .bg(rgba(chrome.input_surface_rgba))
-                    .child(
-                        TabBar::new("tabbar:dev-style-tool-agent-chat-groups")
-                            .segmented()
-                            .small()
-                            .selected_index(selected_index)
-                            .children(AGENT_CHAT_KNOB_GROUPS.iter().map(|group| {
-                                let group = *group;
-                                Tab::new().label(group.label()).on_click(cx.listener(
-                                    move |this, _event, _window, cx| {
-                                        this.active_agent_chat_group = group;
-                                        cx.notify();
-                                    },
-                                ))
-                            })),
-                    ),
-            )
-            .text_color(rgb(chrome.text_primary_hex))
-    }
-
-    fn render_confirm_modal_group_tabs(
-        &self,
-        chrome: theme::AppChromeColors,
-        cx: &mut gpui::Context<Self>,
-    ) -> impl IntoElement {
-        let selected_index = CONFIRM_MODAL_KNOB_GROUPS
-            .iter()
-            .position(|group| *group == self.active_confirm_modal_group)
-            .unwrap_or(0);
-        div()
-            .id("tabs:dev-style-tool-confirm-modal-groups")
-            .flex()
-            .items_center()
-            .gap(px(8.0))
-            .child(
-                div()
-                    .text_xs()
-                    .font_weight(gpui::FontWeight::MEDIUM)
-                    .text_color(rgb(chrome.text_secondary_hex))
-                    .child("Confirm Modal"),
-            )
-            .child(
-                div()
-                    .flex_1()
-                    .min_w_0()
-                    .p(px(3.0))
-                    .rounded(px(crate::ui::chrome::LIQUID_GLASS_COMPACT_RADIUS_PX))
-                    .border(px(1.0))
-                    .border_color(rgba(chrome.border_rgba))
-                    .bg(rgba(chrome.input_surface_rgba))
-                    .child(
-                        TabBar::new("tabbar:dev-style-tool-confirm-modal-groups")
-                            .segmented()
-                            .small()
-                            .selected_index(selected_index)
-                            .children(CONFIRM_MODAL_KNOB_GROUPS.iter().map(|group| {
-                                let group = *group;
-                                Tab::new().label(group.label()).on_click(cx.listener(
-                                    move |this, _event, _window, cx| {
-                                        this.active_confirm_modal_group = group;
-                                        cx.notify();
-                                    },
-                                ))
-                            })),
-                    ),
-            )
-            .text_color(rgb(chrome.text_primary_hex))
-    }
-
-    fn render_primary_tabs(
-        &self,
-        chrome: theme::AppChromeColors,
-        cx: &mut gpui::Context<Self>,
-    ) -> impl IntoElement {
-        let selected_index = DevStyleToolTab::ALL
-            .iter()
-            .position(|tab| *tab == self.active_tab)
-            .unwrap_or(0);
-        div()
-            .id("tabs:dev-style-tool-primary")
+            .id("sidebar:dev-style-tool")
             .flex()
             .flex_col()
-            .gap(px(6.0))
-            .p(px(4.0))
+            .flex_none()
+            .w(px(216.0))
+            .min_h_0()
+            .gap(px(8.0))
+            .p(px(8.0))
             .rounded(px(crate::ui::chrome::LIQUID_GLASS_COMPACT_RADIUS_PX))
             .border(px(1.0))
             .border_color(rgba(chrome.border_rgba))
             .bg(rgba(chrome.input_surface_rgba))
+            .child(self.render_knob_filter(chrome, cx))
+            .child(
+                div()
+                    .id("tabs:dev-style-tool-primary")
+                    .flex()
+                    .flex_col()
+                    .flex_1()
+                    .min_h_0()
+                    .gap(px(2.0))
+                    .overflow_y_scroll()
+                    .children(DevStyleToolTab::ALL.iter().map(|tab| {
+                        let tab = *tab;
+                        let active = self.active_tab == tab;
+                        let has_groups = sidebar_tab_has_groups(tab);
+                        div()
+                            .flex()
+                            .flex_col()
+                            .child(
+                                div()
+                                    .id(tab.semantic_id())
+                                    .flex()
+                                    .items_center()
+                                    .gap(px(6.0))
+                                    .px(px(8.0))
+                                    .py(px(5.0))
+                                    .rounded(px(crate::ui::chrome::LIQUID_GLASS_COMPACT_RADIUS_PX))
+                                    .text_sm()
+                                    .cursor_pointer()
+                                    .text_color(if active {
+                                        rgb(chrome.text_primary_hex)
+                                    } else {
+                                        rgb(chrome.text_secondary_hex)
+                                    })
+                                    .when(active, |row| {
+                                        row.bg(rgba(chrome.hover_rgba))
+                                            .font_weight(gpui::FontWeight::SEMIBOLD)
+                                    })
+                                    .hover(|style| style.bg(rgba(chrome.hover_rgba)))
+                                    .on_click(cx.listener(move |this, _event, _window, cx| {
+                                        this.active_tab = tab;
+                                        cx.notify();
+                                    }))
+                                    .child(div().flex_1().min_w_0().truncate().child(tab.label()))
+                                    .when(has_groups, |row| {
+                                        row.child(
+                                            div()
+                                                .flex_none()
+                                                .text_xs()
+                                                .text_color(rgb(chrome.text_dimmed_hex))
+                                                .child(if active { "▾" } else { "▸" }),
+                                        )
+                                    }),
+                            )
+                            .when(active && has_groups, |column| {
+                                column.child(self.render_sidebar_groups(tab, chrome, cx))
+                            })
+                            .into_any_element()
+                    })),
+            )
+    }
+
+    /// Nested group rows for the active surface in the sidebar.
+    fn render_sidebar_groups(
+        &self,
+        tab: DevStyleToolTab,
+        chrome: theme::AppChromeColors,
+        cx: &mut gpui::Context<Self>,
+    ) -> gpui::AnyElement {
+        match tab {
+            DevStyleToolTab::MainWindowStyling => div()
+                .id("tabs:dev-style-tool-groups")
+                .flex()
+                .flex_col()
+                .gap(px(1.0))
+                .pl(px(10.0))
+                .pb(px(4.0))
+                .children(STYLE_KNOB_GROUPS.iter().map(|group| {
+                    let group = *group;
+                    let selected = self.active_group == group;
+                    sidebar_group_row(
+                        format!("tab:dev-style-tool-group:{}", group_slug(group)),
+                        group.label(),
+                        selected,
+                        chrome,
+                    )
+                    .on_click(cx.listener(move |this, _event, _window, cx| {
+                        this.active_group = group;
+                        cx.notify();
+                    }))
+                }))
+                .into_any_element(),
+            DevStyleToolTab::ActionsPopupStyling => div()
+                .id("tabs:dev-style-tool-actions-groups")
+                .flex()
+                .flex_col()
+                .gap(px(1.0))
+                .pl(px(10.0))
+                .pb(px(4.0))
+                .children(ACTIONS_POPUP_KNOB_GROUPS.iter().map(|group| {
+                    let group = *group;
+                    let selected = self.active_actions_group == group;
+                    sidebar_group_row(
+                        format!(
+                            "tab:dev-style-tool-group:{}",
+                            actions_popup_group_slug(group)
+                        ),
+                        group.label(),
+                        selected,
+                        chrome,
+                    )
+                    .on_click(cx.listener(move |this, _event, _window, cx| {
+                        this.active_actions_group = group;
+                        cx.notify();
+                    }))
+                }))
+                .into_any_element(),
+            DevStyleToolTab::AgentChatStyling => div()
+                .id("tabs:dev-style-tool-agent-chat-groups")
+                .flex()
+                .flex_col()
+                .gap(px(1.0))
+                .pl(px(10.0))
+                .pb(px(4.0))
+                .children(AGENT_CHAT_KNOB_GROUPS.iter().map(|group| {
+                    let group = *group;
+                    let selected = self.active_agent_chat_group == group;
+                    sidebar_group_row(
+                        format!("tab:dev-style-tool-group:{}", agent_chat_group_slug(group)),
+                        group.label(),
+                        selected,
+                        chrome,
+                    )
+                    .on_click(cx.listener(move |this, _event, _window, cx| {
+                        this.active_agent_chat_group = group;
+                        cx.notify();
+                    }))
+                }))
+                .into_any_element(),
+            DevStyleToolTab::ConfirmModalStyling => div()
+                .id("tabs:dev-style-tool-confirm-modal-groups")
+                .flex()
+                .flex_col()
+                .gap(px(1.0))
+                .pl(px(10.0))
+                .pb(px(4.0))
+                .children(CONFIRM_MODAL_KNOB_GROUPS.iter().map(|group| {
+                    let group = *group;
+                    let selected = self.active_confirm_modal_group == group;
+                    sidebar_group_row(
+                        format!(
+                            "tab:dev-style-tool-group:{}",
+                            confirm_modal_group_slug(group)
+                        ),
+                        group.label(),
+                        selected,
+                        chrome,
+                    )
+                    .on_click(cx.listener(move |this, _event, _window, cx| {
+                        this.active_confirm_modal_group = group;
+                        cx.notify();
+                    }))
+                }))
+                .into_any_element(),
+            DevStyleToolTab::TextCopy | DevStyleToolTab::ThemeInspector => {
+                gpui::Empty.into_any_element()
+            }
+        }
+    }
+
+    /// One-line context for the content header: the active group's anatomy
+    /// hint, or a surface-level description for leaf surfaces.
+    fn active_surface_description(&self) -> String {
+        match self.active_tab {
+            DevStyleToolTab::MainWindowStyling => self.active_group.description().to_string(),
+            DevStyleToolTab::ActionsPopupStyling => {
+                self.active_actions_group.description().to_string()
+            }
+            DevStyleToolTab::AgentChatStyling => {
+                self.active_agent_chat_group.description().to_string()
+            }
+            DevStyleToolTab::ConfirmModalStyling => {
+                self.active_confirm_modal_group.description().to_string()
+            }
+            DevStyleToolTab::TextCopy => "User-facing copy strings across the launcher".to_string(),
+            DevStyleToolTab::ThemeInspector => {
+                "Live theme colors, opacity tiers, and vibrancy".to_string()
+            }
+        }
+    }
+
+    /// Header above the preview/controls panes: active surface name, its
+    /// anatomy hint, the scope chip, and the surface's fixture launchers.
+    fn render_content_header(
+        &self,
+        chrome: theme::AppChromeColors,
+        cx: &mut gpui::Context<Self>,
+    ) -> impl IntoElement {
+        div()
+            .id("panel:dev-style-tool-content-header")
+            .flex()
+            .items_center()
+            .gap(px(8.0))
             .child(
                 div()
                     .flex()
-                    .items_center()
-                    .justify_between()
-                    .gap(px(8.0))
+                    .flex_col()
+                    .gap(px(1.0))
+                    .flex_1()
+                    .min_w_0()
                     .child(
                         div()
-                            .text_xs()
-                            .font_weight(gpui::FontWeight::MEDIUM)
-                            .text_color(rgb(chrome.text_secondary_hex))
-                            .child("Surface"),
+                            .text_sm()
+                            .font_weight(gpui::FontWeight::SEMIBOLD)
+                            .child(self.active_tab.label()),
                     )
                     .child(
                         div()
                             .text_xs()
                             .text_color(rgb(chrome.text_dimmed_hex))
-                            .child(self.active_tab.label()),
+                            .truncate()
+                            .child(self.active_surface_description()),
                     ),
             )
-            .child(
-                div().min_w_0().child(
-                    TabBar::new("tabbar:dev-style-tool-primary")
-                        .segmented()
-                        .small()
-                        .selected_index(selected_index)
-                        .children(DevStyleToolTab::ALL.iter().map(|tab| {
-                            let tab = *tab;
-                            Tab::new().label(tab.label()).on_click(cx.listener(
-                                move |this, _event, _window, cx| {
-                                    this.active_tab = tab;
-                                    cx.notify();
-                                },
-                            ))
-                        })),
-                ),
-            )
-            .child(
-                div()
-                    .id(self.active_tab.semantic_id())
-                    .h(px(0.0))
-                    .overflow_hidden(),
-            )
-            .text_color(rgb(chrome.text_primary_hex))
+            .child(self.render_active_scope_summary(chrome))
+            .child(self.render_kitchen_sink_controls(chrome, cx))
     }
 
     fn active_scope_label(&self) -> String {
@@ -1663,30 +1694,30 @@ impl DevStyleToolApp {
         }
     }
 
+    /// Compact "where am I" chip; sits in the navigation card's utility row.
     fn render_active_scope_summary(&self, chrome: theme::AppChromeColors) -> impl IntoElement {
         div()
             .id("summary:dev-style-tool-active-scope")
             .flex()
+            .flex_none()
             .items_center()
-            .justify_between()
-            .gap(px(8.0))
-            .px(px(10.0))
-            .py(px(6.0))
+            .gap(px(6.0))
+            .px(px(8.0))
+            .py(px(3.0))
             .rounded(px(crate::ui::chrome::LIQUID_GLASS_COMPACT_RADIUS_PX))
             .border(px(1.0))
             .border_color(rgba(chrome.border_rgba))
-            .bg(rgba(chrome.input_surface_rgba))
+            .bg(rgba(chrome.window_surface_rgba))
+            .text_xs()
+            .whitespace_nowrap()
             .child(
                 div()
-                    .text_xs()
-                    .font_weight(gpui::FontWeight::MEDIUM)
-                    .text_color(rgb(chrome.text_secondary_hex))
+                    .text_color(rgb(chrome.text_dimmed_hex))
                     .child("Editing"),
             )
             .child(
                 div()
-                    .text_xs()
-                    .text_color(rgb(chrome.text_primary_hex))
+                    .text_color(rgb(chrome.text_secondary_hex))
                     .child(self.active_scope_label()),
             )
     }
@@ -3098,29 +3129,45 @@ impl Render for DevStyleToolApp {
                     .id("panel:dev-style-tool")
                     .flex()
                     .items_center()
-                    .justify_between()
-                    .flex_wrap()
                     .gap(px(12.0))
                     .child(
                         div()
-                            .text_lg()
+                            .flex_none()
+                            .text_sm()
                             .font_weight(gpui::FontWeight::SEMIBOLD)
+                            .whitespace_nowrap()
                             .child(super::window::DEV_STYLE_TOOL_TITLE),
+                    )
+                    .child(
+                        // Inline status: save / kitchen-sink action feedback.
+                        div().flex_1().min_w_0().flex().items_center().when_some(
+                            self.save_status.as_ref(),
+                            |row, status| {
+                                row.child(
+                                    div()
+                                        .id("status:dev-style-tool-save")
+                                        .text_xs()
+                                        .min_w_0()
+                                        .truncate()
+                                        .text_color(rgb(chrome.text_secondary_hex))
+                                        .child(status.clone()),
+                                )
+                            },
+                        ),
                     )
                     .child(
                         div()
                             .flex()
                             .items_center()
-                            .flex_wrap()
+                            .flex_none()
                             .gap(px(8.0))
                             .child(
                                 div()
                                     .text_xs()
-                                    .min_w(px(230.0))
                                     .whitespace_nowrap()
-                                    .text_color(rgb(chrome.text_secondary_hex))
+                                    .text_color(rgb(chrome.text_dimmed_hex))
                                     .child(format!(
-                                        "{} controls | runtime generation {generation}",
+                                        "{} controls | gen {generation}",
                                         STYLE_KNOBS
                                             .len()
                                             .saturating_add(COPY_CONTROLS.len())
@@ -3129,19 +3176,6 @@ impl Render for DevStyleToolApp {
                                             .saturating_add(CONFIRM_MODAL_KNOBS.len())
                                             .saturating_add(THEME_COLOR_KNOBS.len())
                                     )),
-                            )
-                            .child(
-                                self.render_toolbar_button(
-                                    OPEN_AGENT_CHAT_KITCHEN_SINK_BUTTON,
-                                    "Open Agent Chat Kitchen Sink",
-                                    true,
-                                    chrome,
-                                )
-                                .on_click(cx.listener(
-                                    |this, _event, _window, cx| {
-                                        this.open_agent_chat_kitchen_sink(cx);
-                                    },
-                                )),
                             )
                             .child(
                                 self.render_toolbar_button(
@@ -3211,98 +3245,102 @@ impl Render for DevStyleToolApp {
                             ),
                     ),
             )
-            .when_some(self.save_status.as_ref(), |view, status| {
-                view.child(
-                    div()
-                        .id("status:dev-style-tool-save")
-                        .text_xs()
-                        .text_color(rgb(chrome.text_secondary_hex))
-                        .child(status.clone()),
-                )
-            })
             .when_some(self.save_path.as_ref(), |view, _| {
                 view.child(self.render_saved_markdown(chrome, cx))
             })
-            .child(self.render_primary_tabs(chrome, cx))
-            .child(self.render_kitchen_sink_controls(chrome, cx))
-            .when(
-                self.active_tab == DevStyleToolTab::MainWindowStyling,
-                |view| view.child(self.render_group_tabs(chrome, cx)),
-            )
-            .when(
-                self.active_tab == DevStyleToolTab::ActionsPopupStyling,
-                |view| view.child(self.render_actions_group_tabs(chrome, cx)),
-            )
-            .when(
-                self.active_tab == DevStyleToolTab::AgentChatStyling,
-                |view| view.child(self.render_agent_chat_group_tabs(chrome, cx)),
-            )
-            .when(
-                self.active_tab == DevStyleToolTab::ConfirmModalStyling,
-                |view| view.child(self.render_confirm_modal_group_tabs(chrome, cx)),
-            )
-            .child(self.render_active_scope_summary(chrome))
-            .child(self.render_knob_filter(chrome, cx))
             .child(
-                // Horizontal split: optional live component previews on the
-                // left, the existing scrollable knob controls on the right.
-                // Both columns share the space with flex (no fixed widths).
+                // Main row: navigation rail on the left, content (header +
+                // previews + controls) on the right.
                 div()
                     .flex()
                     .flex_row()
                     .flex_1()
                     .min_h_0()
                     .gap(px(10.0))
-                    .when(self.show_previews, |row| {
-                        row.child(
-                            div()
-                                .id("panel:dev-style-tool-previews")
-                                .flex()
-                                .flex_col()
-                                .flex_1()
-                                .min_w_0()
-                                .min_h_0()
-                                .gap(px(10.0))
-                                .pr(px(4.0))
-                                .overflow_y_scroll()
-                                .child(self.render_story_previews(chrome, window, cx)),
-                        )
-                    })
+                    .child(self.render_sidebar(chrome, cx))
                     .child(
                         div()
-                            .id("body:dev-style-tool-scroll")
                             .flex()
                             .flex_col()
                             .flex_1()
                             .min_w_0()
                             .min_h_0()
-                            .gap(px(10.0))
-                            .pr(px(4.0))
-                            .overflow_y_scroll()
-                            .child(match self.active_tab {
-                                DevStyleToolTab::MainWindowStyling => {
-                                    // While filtering, search every group so a knob can be
-                                    // found without knowing which group owns it.
-                                    if self.filter_active() {
-                                        self.render_groups(STYLE_KNOB_GROUPS, chrome, cx)
-                                    } else {
-                                        self.render_groups(&[self.active_group], chrome, cx)
-                                    }
-                                }
-                                DevStyleToolTab::TextCopy => self.render_copy_controls(chrome, cx),
-                                DevStyleToolTab::ActionsPopupStyling => {
-                                    self.render_actions_popup_controls(chrome, cx)
-                                }
-                                DevStyleToolTab::AgentChatStyling => {
-                                    self.render_agent_chat_controls(chrome, cx)
-                                }
-                                DevStyleToolTab::ConfirmModalStyling => {
-                                    self.render_confirm_modal_controls(chrome, cx)
-                                }
-                                DevStyleToolTab::ThemeInspector => {
-                                    self.render_theme_inspector_controls(&theme, chrome, cx)
-                                }
-                            }),
+                            .gap(px(8.0))
+                            .child(self.render_content_header(chrome, cx))
+                            .child(
+                                // Horizontal split: optional live component
+                                // previews beside the scrollable knob controls.
+                                div()
+                                    .flex()
+                                    .flex_row()
+                                    .flex_1()
+                                    .min_h_0()
+                                    .gap(px(10.0))
+                                    .when(self.show_previews, |row| {
+                                        row.child(
+                                            div()
+                                                .id("panel:dev-style-tool-previews")
+                                                .flex()
+                                                .flex_col()
+                                                .flex_1()
+                                                .min_w_0()
+                                                .min_h_0()
+                                                .gap(px(10.0))
+                                                .pr(px(4.0))
+                                                .overflow_y_scroll()
+                                                .child(
+                                                    self.render_story_previews(chrome, window, cx),
+                                                ),
+                                        )
+                                    })
+                                    .child(
+                                        div()
+                                            .id("body:dev-style-tool-scroll")
+                                            .flex()
+                                            .flex_col()
+                                            .flex_1()
+                                            .min_w_0()
+                                            .min_h_0()
+                                            .gap(px(10.0))
+                                            .pr(px(4.0))
+                                            .overflow_y_scroll()
+                                            .child(match self.active_tab {
+                                                DevStyleToolTab::MainWindowStyling => {
+                                                    // While filtering, search every group so a knob can be
+                                                    // found without knowing which group owns it.
+                                                    if self.filter_active() {
+                                                        self.render_groups(
+                                                            STYLE_KNOB_GROUPS,
+                                                            chrome,
+                                                            cx,
+                                                        )
+                                                    } else {
+                                                        self.render_groups(
+                                                            &[self.active_group],
+                                                            chrome,
+                                                            cx,
+                                                        )
+                                                    }
+                                                }
+                                                DevStyleToolTab::TextCopy => {
+                                                    self.render_copy_controls(chrome, cx)
+                                                }
+                                                DevStyleToolTab::ActionsPopupStyling => {
+                                                    self.render_actions_popup_controls(chrome, cx)
+                                                }
+                                                DevStyleToolTab::AgentChatStyling => {
+                                                    self.render_agent_chat_controls(chrome, cx)
+                                                }
+                                                DevStyleToolTab::ConfirmModalStyling => {
+                                                    self.render_confirm_modal_controls(chrome, cx)
+                                                }
+                                                DevStyleToolTab::ThemeInspector => self
+                                                    .render_theme_inspector_controls(
+                                                        &theme, chrome, cx,
+                                                    ),
+                                            }),
+                                    ),
+                            ),
                     ),
             )
     }
@@ -3445,7 +3483,6 @@ const ACTIONS_POPUP_KNOB_GROUPS: &[ActionsPopupKnobGroup] = &[
     ActionsPopupKnobGroup::Row,
     ActionsPopupKnobGroup::Section,
     ActionsPopupKnobGroup::ContextHeader,
-    ActionsPopupKnobGroup::Shortcut,
 ];
 
 fn actions_popup_group_slug(group: ActionsPopupKnobGroup) -> &'static str {
@@ -3456,7 +3493,6 @@ fn actions_popup_group_slug(group: ActionsPopupKnobGroup) -> &'static str {
         ActionsPopupKnobGroup::Row => "row",
         ActionsPopupKnobGroup::Section => "section",
         ActionsPopupKnobGroup::ContextHeader => "context-header",
-        ActionsPopupKnobGroup::Shortcut => "shortcut",
     }
 }
 

@@ -24,7 +24,6 @@ pub enum ActionsPopupKnobGroup {
     Row,
     Section,
     ContextHeader,
-    Shortcut,
 }
 
 impl ActionsPopupKnobGroup {
@@ -36,7 +35,6 @@ impl ActionsPopupKnobGroup {
             Self::Row => "Actions rows",
             Self::Section => "Actions sections",
             Self::ContextHeader => "Actions context header",
-            Self::Shortcut => "Actions shortcuts",
         }
     }
 
@@ -50,7 +48,6 @@ impl ActionsPopupKnobGroup {
             Self::Row => "Individual action rows: selection, hover",
             Self::Section => "Section headers between action groups",
             Self::ContextHeader => "Breadcrumb header above the list",
-            Self::Shortcut => "Keycap chips on the trailing edge of rows",
         }
     }
 }
@@ -115,13 +112,6 @@ f32_knob!(
     apply_actions_shell_max_height,
     "actions.shell.maxHeight",
     shell.max_height
-);
-f32_knob!(
-    ACTIONS_SHELL_NOTES_RECENT_MAX_HEIGHT_KNOB_ID,
-    get_actions_shell_notes_recent_max_height,
-    apply_actions_shell_notes_recent_max_height,
-    "actions.shell.notesRecentMaxHeight",
-    shell.notes_recent_max_height
 );
 f32_knob!(
     ACTIONS_SHELL_MARGIN_X_KNOB_ID,
@@ -264,13 +254,6 @@ f32_knob!(
     row.inset_x
 );
 f32_knob!(
-    ACTIONS_ROW_INNER_Y_KNOB_ID,
-    get_actions_row_inner_y,
-    apply_actions_row_inner_y,
-    "actions.row.innerY",
-    row.inner_y
-);
-f32_knob!(
     ACTIONS_ROW_RADIUS_KNOB_ID,
     get_actions_row_radius,
     apply_actions_row_radius,
@@ -375,41 +358,9 @@ font_weight_knob!(
     "actions.contextHeader.fontWeight",
     context_header.font_weight
 );
-f32_knob!(
-    ACTIONS_SHORTCUT_KEYCAP_HEIGHT_KNOB_ID,
-    get_actions_shortcut_keycap_height,
-    apply_actions_shortcut_keycap_height,
-    "actions.shortcut.keycapHeight",
-    shortcut.keycap_height
-);
-f32_knob!(
-    ACTIONS_SHORTCUT_KEYCAP_PADDING_X_KNOB_ID,
-    get_actions_shortcut_keycap_padding_x,
-    apply_actions_shortcut_keycap_padding_x,
-    "actions.shortcut.keycapPaddingX",
-    shortcut.keycap_padding_x
-);
-f32_knob!(
-    ACTIONS_SHORTCUT_KEYCAP_PADDING_Y_KNOB_ID,
-    get_actions_shortcut_keycap_padding_y,
-    apply_actions_shortcut_keycap_padding_y,
-    "actions.shortcut.keycapPaddingY",
-    shortcut.keycap_padding_y
-);
-f32_knob!(
-    ACTIONS_SHORTCUT_KEYCAP_FONT_SIZE_KNOB_ID,
-    get_actions_shortcut_keycap_font_size,
-    apply_actions_shortcut_keycap_font_size,
-    "actions.shortcut.keycapFontSize",
-    shortcut.keycap_font_size
-);
-f32_knob!(
-    ACTIONS_SHORTCUT_KEYCAP_RADIUS_KNOB_ID,
-    get_actions_shortcut_keycap_radius,
-    apply_actions_shortcut_keycap_radius,
-    "actions.shortcut.keycapRadius",
-    shortcut.keycap_radius
-);
+// NOTE: actions popup shortcut keycaps intentionally render through the shared
+// footer keycap model (src/components/footer_chrome.rs), so they are styled by
+// the footer.keycap* knobs — no popup-local keycap tokens exist.
 
 pub const ACTIONS_POPUP_KNOBS: &[ActionsPopupKnob] = &[
     ActionsPopupKnob {
@@ -433,17 +384,6 @@ pub const ACTIONS_POPUP_KNOBS: &[ActionsPopupKnob] = &[
         step: 1.0,
         get: get_actions_shell_max_height,
         apply: apply_actions_shell_max_height,
-    },
-    ActionsPopupKnob {
-        id: ACTIONS_SHELL_NOTES_RECENT_MAX_HEIGHT_KNOB_ID,
-        label: "Actions notes recent max height",
-        group: ActionsPopupKnobGroup::Shell,
-        unit: StyleUnit::Px,
-        min: 120.0,
-        max: 900.0,
-        step: 1.0,
-        get: get_actions_shell_notes_recent_max_height,
-        apply: apply_actions_shell_notes_recent_max_height,
     },
     ActionsPopupKnob {
         id: ACTIONS_SHELL_MARGIN_X_KNOB_ID,
@@ -666,17 +606,6 @@ pub const ACTIONS_POPUP_KNOBS: &[ActionsPopupKnob] = &[
         apply: apply_actions_row_inset_x,
     },
     ActionsPopupKnob {
-        id: ACTIONS_ROW_INNER_Y_KNOB_ID,
-        label: "Action row inner Y",
-        group: ActionsPopupKnobGroup::Row,
-        unit: StyleUnit::Px,
-        min: 0.0,
-        max: 16.0,
-        step: 1.0,
-        get: get_actions_row_inner_y,
-        apply: apply_actions_row_inner_y,
-    },
-    ActionsPopupKnob {
         id: ACTIONS_ROW_RADIUS_KNOB_ID,
         label: "Action row radius",
         group: ActionsPopupKnobGroup::Row,
@@ -840,61 +769,6 @@ pub const ACTIONS_POPUP_KNOBS: &[ActionsPopupKnob] = &[
         step: 50.0,
         get: get_actions_context_header_font_weight,
         apply: apply_actions_context_header_font_weight,
-    },
-    ActionsPopupKnob {
-        id: ACTIONS_SHORTCUT_KEYCAP_HEIGHT_KNOB_ID,
-        label: "Action shortcut keycap height",
-        group: ActionsPopupKnobGroup::Shortcut,
-        unit: StyleUnit::Px,
-        min: 12.0,
-        max: 40.0,
-        step: 1.0,
-        get: get_actions_shortcut_keycap_height,
-        apply: apply_actions_shortcut_keycap_height,
-    },
-    ActionsPopupKnob {
-        id: ACTIONS_SHORTCUT_KEYCAP_PADDING_X_KNOB_ID,
-        label: "Action shortcut keycap padding X",
-        group: ActionsPopupKnobGroup::Shortcut,
-        unit: StyleUnit::Px,
-        min: 0.0,
-        max: 32.0,
-        step: 1.0,
-        get: get_actions_shortcut_keycap_padding_x,
-        apply: apply_actions_shortcut_keycap_padding_x,
-    },
-    ActionsPopupKnob {
-        id: ACTIONS_SHORTCUT_KEYCAP_PADDING_Y_KNOB_ID,
-        label: "Action shortcut keycap padding Y",
-        group: ActionsPopupKnobGroup::Shortcut,
-        unit: StyleUnit::Px,
-        min: 0.0,
-        max: 24.0,
-        step: 1.0,
-        get: get_actions_shortcut_keycap_padding_y,
-        apply: apply_actions_shortcut_keycap_padding_y,
-    },
-    ActionsPopupKnob {
-        id: ACTIONS_SHORTCUT_KEYCAP_FONT_SIZE_KNOB_ID,
-        label: "Action shortcut font size",
-        group: ActionsPopupKnobGroup::Shortcut,
-        unit: StyleUnit::Px,
-        min: 8.0,
-        max: 24.0,
-        step: 1.0,
-        get: get_actions_shortcut_keycap_font_size,
-        apply: apply_actions_shortcut_keycap_font_size,
-    },
-    ActionsPopupKnob {
-        id: ACTIONS_SHORTCUT_KEYCAP_RADIUS_KNOB_ID,
-        label: "Action shortcut keycap radius",
-        group: ActionsPopupKnobGroup::Shortcut,
-        unit: StyleUnit::Px,
-        min: 0.0,
-        max: 32.0,
-        step: 1.0,
-        get: get_actions_shortcut_keycap_radius,
-        apply: apply_actions_shortcut_keycap_radius,
     },
 ];
 

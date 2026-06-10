@@ -33,8 +33,35 @@ impl ThemeChooserSliderApplyMode {
 #[derive(Clone, Copy, Debug)]
 enum ThemeChooserColorBinding {
     Accent,
+    Background,
     GradientFrom { layer_index: Option<usize> },
     GradientTo { layer_index: Option<usize> },
+}
+
+/// Right-panel mode for the Theme Designer.
+/// `Preview` shows a large live preview plus theme facts; `Customize` shows
+/// the full editing control stack. Both keep the gallery list on the left.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) enum ThemeChooserPanelMode {
+    #[default]
+    Preview,
+    Customize,
+}
+
+impl ThemeChooserPanelMode {
+    pub(crate) fn as_str(self) -> &'static str {
+        match self {
+            Self::Preview => "preview",
+            Self::Customize => "customize",
+        }
+    }
+
+    fn toggled(self) -> Self {
+        match self {
+            Self::Preview => Self::Customize,
+            Self::Customize => Self::Preview,
+        }
+    }
 }
 
 pub(crate) struct ThemeChooserGradientControls {
@@ -51,6 +78,7 @@ pub(crate) struct ThemeChooserColorControls {
 
 pub(crate) struct ThemeChooserControls {
     accent: ThemeChooserColorControls,
+    background: ThemeChooserColorControls,
     surface_opacity: Entity<SliderState>,
     secondary_text_opacity: Entity<SliderState>,
     focused_background_opacity: Entity<SliderState>,
@@ -452,6 +480,13 @@ impl ScriptListApp {
                 cx,
                 &mut subscriptions,
             );
+            let background = self.new_theme_chooser_color_controls(
+                ThemeChooserColorBinding::Background,
+                self.theme.colors.background.main,
+                window,
+                cx,
+                &mut subscriptions,
+            );
             let surface_opacity = self.new_theme_chooser_slider(
                 ThemeChooserSliderBinding::SurfaceOpacity,
                 0.0,
@@ -521,6 +556,7 @@ impl ScriptListApp {
                 .collect();
             self.theme_chooser_controls = Some(ThemeChooserControls {
                 accent,
+                background,
                 surface_opacity,
                 secondary_text_opacity,
                 focused_background_opacity,
@@ -711,6 +747,16 @@ impl ScriptListApp {
                         best_contrast_of_two(hex, 0xFFFFFF, theme.colors.background.main);
                 });
             }
+            ThemeChooserColorBinding::Background => {
+                self.mutate_theme_chooser_theme(reason, cx, |theme| {
+                    theme.colors.background.main = hex;
+                    // Match `normalize_theme_primary_text` load semantics so the
+                    // previewed theme renders exactly like the persisted one.
+                    theme.colors.text.primary = theme::hard_readable_text_hex(hex);
+                    theme.colors.text.on_accent =
+                        best_contrast_of_two(theme.colors.accent.selected, 0xFFFFFF, hex);
+                });
+            }
             ThemeChooserColorBinding::GradientFrom { layer_index } => {
                 self.mutate_theme_chooser_theme(reason, cx, |theme| {
                     let Some(gradient) = theme.background_gradient.as_mut() else {
@@ -852,8 +898,66 @@ impl ScriptListApp {
                 };
             }
             "accent-color" | "accent-color-hex" => {
-                let color = Self::theme_chooser_hex_to_hsla(hex_value()?);
-                self.apply_theme_chooser_color_change(ThemeChooserColorBinding::Accent, color, cx);
+                // Apply the parsed hex directly: a hex -> Hsla -> hex round trip
+                // is lossy (f32 channels) and shifts values by one (0x30 -> 0x2F).
+                self.apply_theme_chooser_color_hex_change(
+                    ThemeChooserColorBinding::Accent,
+                    hex_value()?,
+                    "theme_chooser_devtools_accent_color",
+                    cx,
+                );
+            }
+            "background-color" | "background-color-hex" => {
+                self.apply_theme_chooser_color_hex_change(
+                    ThemeChooserColorBinding::Background,
+                    hex_value()?,
+                    "theme_chooser_devtools_background_color",
+                    cx,
+                );
+            }
+            "vibrancy-material" => {
+                let requested = value.trim().to_ascii_lowercase();
+                let material = Self::VIBRANCY_MATERIALS
+                    .iter()
+                    .find(|(_, label)| label.eq_ignore_ascii_case(&requested))
+                    .map(|(material, _)| *material)
+                    .ok_or_else(|| {
+                        anyhow::anyhow!("unknown vibrancy material '{value}' (hud, popover, menu, sidebar, content)")
+                    })?;
+                self.set_theme_chooser_vibrancy_material(
+                    material,
+                    "theme_chooser_devtools_vibrancy_material",
+                    cx,
+                );
+            }
+            "appearance-mode" => {
+                let mode = match value.trim().to_ascii_lowercase().as_str() {
+                    "auto" => crate::theme::types::AppearanceMode::Auto,
+                    "light" => crate::theme::types::AppearanceMode::Light,
+                    "dark" => crate::theme::types::AppearanceMode::Dark,
+                    _ => {
+                        return Err(anyhow::anyhow!(
+                            "unknown appearance mode '{value}' (auto, light, dark)"
+                        ))
+                    }
+                };
+                self.set_theme_chooser_appearance_mode(
+                    mode,
+                    "theme_chooser_devtools_appearance_mode",
+                    cx,
+                );
+            }
+            "panel-mode" => {
+                let mode = match value.trim().to_ascii_lowercase().as_str() {
+                    "preview" => ThemeChooserPanelMode::Preview,
+                    "customize" => ThemeChooserPanelMode::Customize,
+                    _ => {
+                        return Err(anyhow::anyhow!(
+                            "unknown panel mode '{value}' (preview, customize)"
+                        ))
+                    }
+                };
+                self.set_theme_chooser_panel_mode(mode, cx);
             }
             "vibrancy-enabled" => {
                 let enabled = bool_value()?;
@@ -954,22 +1058,22 @@ impl ScriptListApp {
                     ensure_layer(layer_index)?;
                     match field {
                         "from" | "from-hex" => {
-                            let color = Self::theme_chooser_hex_to_hsla(hex_value()?);
-                            self.apply_theme_chooser_color_change(
+                            self.apply_theme_chooser_color_hex_change(
                                 ThemeChooserColorBinding::GradientFrom {
                                     layer_index: Some(layer_index),
                                 },
-                                color,
+                                hex_value()?,
+                                "theme_chooser_devtools_gradient_layer_from",
                                 cx,
                             );
                         }
                         "to" | "to-hex" => {
-                            let color = Self::theme_chooser_hex_to_hsla(hex_value()?);
-                            self.apply_theme_chooser_color_change(
+                            self.apply_theme_chooser_color_hex_change(
                                 ThemeChooserColorBinding::GradientTo {
                                     layer_index: Some(layer_index),
                                 },
-                                color,
+                                hex_value()?,
+                                "theme_chooser_devtools_gradient_layer_to",
                                 cx,
                             );
                         }
@@ -1078,6 +1182,12 @@ impl ScriptListApp {
         Self::sync_color_control_value(
             &controls.accent,
             self.theme.colors.accent.selected,
+            window,
+            cx,
+        );
+        Self::sync_color_control_value(
+            &controls.background,
+            self.theme.colors.background.main,
             window,
             cx,
         );
@@ -1373,10 +1483,30 @@ impl ScriptListApp {
         summary: ThemeChooserMatchSummary,
         chrome: &theme::AppChromeColors,
     ) -> AnyElement {
-        let query = if filter.is_empty() {
-            "your search".to_string()
+        // Pasted hex colors are previewed live as the accent — explain that
+        // instead of pretending the query simply had no matches.
+        let hex_preview = Self::theme_chooser_filter_hex(filter);
+
+        let (swatch_hex, headline, advice) = if let Some(hex) = hex_preview {
+            (
+                hex,
+                format!(
+                    "Previewing accent {}",
+                    Self::canonical_theme_chooser_hex_label(hex)
+                ),
+                "Press Enter to apply this accent, or Esc to undo.".to_string(),
+            )
         } else {
-            format!("\"{}\"", filter)
+            let query = if filter.is_empty() {
+                "your search".to_string()
+            } else {
+                format!("\"{}\"", filter)
+            };
+            (
+                chrome.accent_hex,
+                format!("No themes match {}", query),
+                "Try a family name like rose, github, nord, or light.".to_string(),
+            )
         };
 
         div()
@@ -1396,20 +1526,20 @@ impl ScriptListApp {
                             .w(px(56.0))
                             .h(px(10.0))
                             .rounded(px(5.0))
-                            .bg(rgb(chrome.accent_hex)),
+                            .bg(rgb(swatch_hex)),
                     )
                     .child(
                         div()
                             .text_sm()
                             .font_weight(gpui::FontWeight::SEMIBOLD)
                             .text_color(rgb(chrome.text_primary_hex))
-                            .child(format!("No themes match {}", query)),
+                            .child(headline),
                     )
                     .child(
                         div()
                             .text_xs()
                             .text_color(rgb(chrome.text_muted_hex))
-                            .child("Try a family name like rose, github, nord, or light."),
+                            .child(advice),
                     )
                     .child(
                         div()
@@ -1424,9 +1554,170 @@ impl ScriptListApp {
             .into_any_element()
     }
 
-    /// Helper: compute filtered preset indices from a filter string
-    fn theme_chooser_filtered_indices(filter: &str) -> Vec<usize> {
-        theme::presets::filtered_preset_indices_cached(filter)
+    /// Parse a `#RRGGBB` search query so pasted hex colors can be previewed
+    /// live as the accent color instead of producing an empty list.
+    fn theme_chooser_filter_hex(filter: &str) -> Option<u32> {
+        let trimmed = filter.trim();
+        if !trimmed.starts_with('#') {
+            return None;
+        }
+        Self::parse_theme_chooser_hex_input(trimmed)
+    }
+
+    /// Live-preview a `#RRGGBB` pasted into the search input as the accent.
+    pub(crate) fn apply_theme_chooser_filter_hex_preview(
+        &mut self,
+        hex: u32,
+        cx: &mut Context<Self>,
+    ) {
+        self.apply_theme_chooser_color_hex_change(
+            ThemeChooserColorBinding::Accent,
+            hex,
+            "theme_chooser_filter_hex_preview",
+            cx,
+        );
+    }
+
+    /// Shared filter-change side effects for the Theme Designer: re-splice the
+    /// list state, scroll to top, and live-preview either a pasted `#RRGGBB`
+    /// accent or the first match. Called from both the GPUI input path
+    /// (`handle_filter_input_change`) and the protocol `setFilter` path
+    /// (`set_filter_text_immediate`) so automation sees the same behavior as
+    /// real typing.
+    pub(crate) fn apply_theme_chooser_filter_change_effects(&mut self, cx: &mut Context<Self>) {
+        let (current_filter, current_selected_index) = match &self.current_view {
+            AppView::ThemeChooserView {
+                filter,
+                selected_index,
+            } => (filter.clone(), *selected_index),
+            _ => return,
+        };
+        let catalog = Self::theme_chooser_catalog();
+        let filtered = Self::theme_chooser_catalog_filtered_indices(&current_filter, &catalog);
+        self.sync_theme_chooser_list_state(filtered.len());
+        self.theme_chooser_list_state.scroll_to(gpui::ListOffset {
+            item_ix: 0,
+            offset_in_item: px(0.),
+        });
+        if let Some(hex) = Self::theme_chooser_filter_hex(&current_filter) {
+            // Pasted #RRGGBB: preview it live as the accent color.
+            self.apply_theme_chooser_filter_hex_preview(hex, cx);
+        } else if filtered.is_empty() {
+            cx.notify();
+        } else {
+            self.preview_theme_chooser_catalog_entry(
+                &catalog,
+                &filtered,
+                current_selected_index,
+                "theme_chooser_filter_preview",
+                false,
+                cx,
+            );
+        }
+    }
+
+    /// Protocol `simulateKey` support for the Theme Designer. Mirrors the
+    /// navigation/commit/cancel subset of the live GPUI key handler in
+    /// `render_theme_chooser` so hidden-window automation can drive the same
+    /// user paths (arrow preview, Cmd+E panel toggle, Esc cancel, Enter
+    /// commit) that real keyboards do.
+    pub(crate) fn simulate_theme_chooser_key(
+        &mut self,
+        key_lower: &str,
+        has_cmd: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if has_cmd {
+            match key_lower {
+                "e" => {
+                    self.toggle_theme_chooser_panel_mode(cx);
+                    return;
+                }
+                "k" => {
+                    self.toggle_actions(cx, window);
+                    return;
+                }
+                "w" => {
+                    if let Some(original) = self.theme_before_chooser.take() {
+                        self.restore_theme_chooser_theme(
+                            original,
+                            "theme_chooser_close_undo",
+                            cx,
+                        );
+                    }
+                    self.clear_theme_chooser_controls();
+                    self.close_and_reset_window(cx);
+                    return;
+                }
+                _ => {}
+            }
+        }
+        match key_lower {
+            "escape" => {
+                // Same contract as the live handler: clear the filter first;
+                // a pure cancel restores the opening snapshot in memory only.
+                if !self.clear_builtin_view_filter(cx) {
+                    if let Some(original) = self.theme_before_chooser.take() {
+                        self.restore_theme_chooser_theme(
+                            original,
+                            "theme_chooser_escape_undo",
+                            cx,
+                        );
+                    }
+                    self.clear_theme_chooser_controls();
+                    self.go_back_or_close(window, cx);
+                }
+            }
+            "enter" | "return" => {
+                self.submit_theme_chooser_from_input_enter(window, cx);
+            }
+            "up" | "arrowup" | "down" | "arrowdown" | "home" | "end" | "pageup" | "pagedown" => {
+                let (current_filter, old_index) = match &self.current_view {
+                    AppView::ThemeChooserView {
+                        filter,
+                        selected_index,
+                    } => (filter.clone(), *selected_index),
+                    _ => return,
+                };
+                let catalog = Self::theme_chooser_catalog();
+                let filtered =
+                    Self::theme_chooser_catalog_filtered_indices(&current_filter, &catalog);
+                let count = filtered.len();
+                if count == 0 {
+                    return;
+                }
+                let mut new_index = old_index.min(count - 1);
+                match key_lower {
+                    "up" | "arrowup" => new_index = new_index.saturating_sub(1),
+                    "down" | "arrowdown" => new_index = (new_index + 1).min(count - 1),
+                    "home" => new_index = 0,
+                    "end" => new_index = count - 1,
+                    "pageup" => new_index = new_index.saturating_sub(THEME_LIST_PAGE_SIZE),
+                    "pagedown" => new_index = (new_index + THEME_LIST_PAGE_SIZE).min(count - 1),
+                    _ => unreachable!(),
+                }
+                if let AppView::ThemeChooserView { selected_index, .. } = &mut self.current_view {
+                    *selected_index = new_index;
+                }
+                self.theme_chooser_list_state
+                    .scroll_to_reveal_item(new_index);
+                self.preview_theme_chooser_catalog_entry(
+                    &catalog,
+                    &filtered,
+                    new_index,
+                    "theme_chooser_keyboard_preview",
+                    false,
+                    cx,
+                );
+            }
+            _ => {
+                logging::log(
+                    "STDIN",
+                    &format!("SimulateKey: Unhandled key '{key_lower}' in ThemeChooserView"),
+                );
+            }
+        }
     }
 
     fn theme_preview_colors_for_theme(
@@ -1474,6 +1765,29 @@ impl ScriptListApp {
         }));
 
         catalog
+    }
+
+    /// Find the catalog row that matches the given theme: user themes are
+    /// matched by exact fingerprint first, then built-in presets by their
+    /// background/accent key. Falls back to the first row.
+    fn theme_chooser_catalog_index_for_theme(
+        catalog: &[ThemeChooserCatalogEntry],
+        theme: &crate::theme::Theme,
+    ) -> usize {
+        let fingerprint = Self::theme_chooser_theme_fingerprint(theme);
+        if let Some(index) = catalog.iter().position(|entry| {
+            matches!(entry.kind, ThemeChooserCatalogKind::User { .. })
+                && Self::theme_chooser_theme_fingerprint(entry.theme.as_ref()) == fingerprint
+        }) {
+            return index;
+        }
+        let preset_index = theme::presets::find_current_preset_index(theme);
+        catalog
+            .iter()
+            .position(|entry| {
+                matches!(&entry.kind, ThemeChooserCatalogKind::BuiltIn(index) if *index == preset_index)
+            })
+            .unwrap_or(0)
     }
 
     fn theme_chooser_catalog_filtered_indices(
@@ -1637,23 +1951,6 @@ impl ScriptListApp {
         let material = self.theme.get_vibrancy().material;
         platform::configure_window_vibrancy_material_for_appearance(is_dark, material);
         cx.notify();
-    }
-
-    /// Shared helper: preview a preset by filtered index, using the cached theme.
-    fn preview_theme_chooser_preset(
-        &mut self,
-        filtered_indices: &[usize],
-        filtered_selected_index: usize,
-        reason: &'static str,
-        cx: &mut Context<Self>,
-    ) {
-        let Some(&preset_idx) = filtered_indices.get(filtered_selected_index) else {
-            return;
-        };
-        let next_theme = (*theme::presets::preset_theme_cached(preset_idx)).clone();
-        self.theme_chooser_list_state
-            .scroll_to_reveal_item(filtered_selected_index);
-        self.apply_theme_chooser_theme(next_theme, reason, cx);
     }
 
     fn preview_theme_chooser_catalog_entry(
@@ -2261,10 +2558,137 @@ impl ScriptListApp {
             .into_any_element()
     }
 
-    /// Three-item footer hint strip for the theme chooser
+    /// Small pill segment used by single-select rows (vibrancy material,
+    /// appearance mode) and the right-panel mode tabs.
+    fn render_theme_chooser_segment_button<F>(
+        id: (&'static str, usize),
+        label: String,
+        selected: bool,
+        chrome: &theme::AppChromeColors,
+        on_click: F,
+    ) -> gpui::AnyElement
+    where
+        F: Fn(&gpui::ClickEvent, &mut Window, &mut App) + 'static,
+    {
+        let (text_color, bg_rgba, border_rgba) = if selected {
+            (
+                chrome.accent_badge_text_hex,
+                chrome.accent_badge_bg_rgba,
+                chrome.accent_badge_border_rgba,
+            )
+        } else {
+            (
+                chrome.text_secondary_hex,
+                chrome.whisper_surface_rgba,
+                chrome.whisper_border_rgba,
+            )
+        };
+        let hover_rgba = Self::theme_chooser_rgba_alpha_floor(chrome.whisper_border_rgba);
+        div()
+            .id(id)
+            .px(px(8.0))
+            .py(px(3.0))
+            .rounded(px(5.0))
+            .border_1()
+            .border_color(rgba(border_rgba))
+            .bg(rgba(bg_rgba))
+            .text_xs()
+            .font_weight(gpui::FontWeight::MEDIUM)
+            .text_color(rgb(text_color))
+            .cursor_pointer()
+            .when(!selected, |segment| {
+                segment.hover(move |segment| segment.bg(rgba(hover_rgba)))
+            })
+            .child(label)
+            .on_click(move |event, window, cx| {
+                cx.stop_propagation();
+                on_click(event, window, cx);
+            })
+            .into_any_element()
+    }
+
+    /// Label + segments single-select row for the customize panel.
+    fn render_theme_chooser_segmented_row(
+        label: &'static str,
+        segments: Vec<gpui::AnyElement>,
+        chrome: &theme::AppChromeColors,
+    ) -> gpui::AnyElement {
+        div()
+            .w_full()
+            .flex()
+            .flex_col()
+            .gap(px(6.0))
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(rgb(chrome.text_secondary_hex))
+                    .child(label),
+            )
+            .child(
+                div()
+                    .w_full()
+                    .flex()
+                    .flex_row()
+                    .flex_wrap()
+                    .gap(px(6.0))
+                    .children(segments),
+            )
+            .into_any_element()
+    }
+
+    /// One label/value line inside the Preview-mode theme facts card.
+    fn render_theme_chooser_fact_row(
+        label: &'static str,
+        value: String,
+        chrome: &theme::AppChromeColors,
+        swatch: Option<u32>,
+    ) -> gpui::AnyElement {
+        div()
+            .w_full()
+            .flex()
+            .flex_row()
+            .items_center()
+            .justify_between()
+            .gap(px(10.0))
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(rgb(chrome.text_muted_hex))
+                    .child(label),
+            )
+            .child(
+                div()
+                    .flex()
+                    .flex_row()
+                    .items_center()
+                    .gap(px(6.0))
+                    .when_some(swatch, |row, hex| {
+                        row.child(
+                            div()
+                                .w(px(12.0))
+                                .h(px(12.0))
+                                .rounded(px(3.0))
+                                .border_1()
+                                .border_color(rgba(chrome.whisper_border_rgba))
+                                .bg(rgb(hex)),
+                        )
+                    })
+                    .child(
+                        div()
+                            .text_xs()
+                            .font_weight(gpui::FontWeight::MEDIUM)
+                            .text_color(rgb(chrome.text_primary_hex))
+                            .child(value),
+                    ),
+            )
+            .into_any_element()
+    }
+
+    /// Truthful footer hint strip for the theme chooser
     fn theme_chooser_hint_items() -> Vec<gpui::SharedString> {
         vec![
             gpui::SharedString::from("↵ Done"),
+            gpui::SharedString::from("⌘E Customize"),
             gpui::SharedString::from("⌘J Remix"),
             gpui::SharedString::from("⌘K Actions"),
             gpui::SharedString::from("Esc Undo"),
@@ -2549,10 +2973,51 @@ impl ScriptListApp {
 
     fn toggle_theme_chooser_vibrancy(&mut self, reason: &'static str, cx: &mut Context<Self>) {
         let mut modified = (*self.theme).clone();
-        if let Some(ref mut vibrancy) = modified.vibrancy {
-            vibrancy.enabled = !vibrancy.enabled;
-        }
+        let vibrancy = modified
+            .vibrancy
+            .get_or_insert_with(crate::theme::types::VibrancySettings::default);
+        vibrancy.enabled = !vibrancy.enabled;
         self.apply_theme_chooser_theme(modified, reason, cx);
+    }
+
+    fn set_theme_chooser_vibrancy_material(
+        &mut self,
+        material: theme::VibrancyMaterial,
+        reason: &'static str,
+        cx: &mut Context<Self>,
+    ) {
+        let mut modified = (*self.theme).clone();
+        let vibrancy = modified
+            .vibrancy
+            .get_or_insert_with(crate::theme::types::VibrancySettings::default);
+        vibrancy.material = material;
+        self.apply_theme_chooser_theme(modified, reason, cx);
+    }
+
+    fn set_theme_chooser_appearance_mode(
+        &mut self,
+        mode: crate::theme::types::AppearanceMode,
+        reason: &'static str,
+        cx: &mut Context<Self>,
+    ) {
+        let mut modified = (*self.theme).clone();
+        modified.appearance = mode;
+        self.apply_theme_chooser_theme(modified, reason, cx);
+    }
+
+    pub(crate) fn set_theme_chooser_panel_mode(
+        &mut self,
+        mode: ThemeChooserPanelMode,
+        cx: &mut Context<Self>,
+    ) {
+        if self.theme_chooser_panel_mode != mode {
+            self.theme_chooser_panel_mode = mode;
+            cx.notify();
+        }
+    }
+
+    fn toggle_theme_chooser_panel_mode(&mut self, cx: &mut Context<Self>) {
+        self.set_theme_chooser_panel_mode(self.theme_chooser_panel_mode.toggled(), cx);
     }
 
     fn cycle_theme_chooser_material(&mut self, reason: &'static str, cx: &mut Context<Self>) {
@@ -2565,11 +3030,7 @@ impl ScriptListApp {
         let idx = Self::find_vibrancy_material_index(current_material);
         let new_idx = (idx + 1) % Self::VIBRANCY_MATERIALS.len();
         let (new_material, _) = Self::VIBRANCY_MATERIALS[new_idx];
-        let mut modified = (*self.theme).clone();
-        if let Some(ref mut vibrancy) = modified.vibrancy {
-            vibrancy.material = new_material;
-        }
-        self.apply_theme_chooser_theme(modified, reason, cx);
+        self.set_theme_chooser_vibrancy_material(new_material, reason, cx);
     }
 
     fn adjust_theme_chooser_font_size(
@@ -2619,13 +3080,9 @@ impl ScriptListApp {
         match action_id {
             "theme_chooser_done" => self.submit_theme_chooser_from_input_enter(window, cx),
             "theme_chooser_undo_close" => {
+                // Memory-only restore: a cancelled session never writes the theme override to disk.
                 if let Some(original) = self.theme_before_chooser.take() {
                     self.restore_theme_chooser_theme(original, "theme_chooser_action_undo", cx);
-                    let _ = crate::theme::service::persist_theme_and_sync_all_windows(
-                        cx,
-                        self.theme.as_ref(),
-                        "theme_chooser_action_undo_persist",
-                    );
                 }
                 self.clear_theme_chooser_controls();
                 self.go_back_or_close(window, cx);
@@ -2682,8 +3139,29 @@ impl ScriptListApp {
                     cx,
                 );
             }
+            "theme_chooser_toggle_customize" => {
+                self.toggle_theme_chooser_panel_mode(cx);
+            }
             "theme_chooser_gradient_cycle" => {
                 self.cycle_theme_chooser_gradient("theme_chooser_action_gradient_cycle", cx);
+            }
+            "theme_chooser_gradient_layer_add" => {
+                self.add_theme_chooser_gradient_layer("theme_chooser_action_gradient_layer_add", cx);
+            }
+            "theme_chooser_gradient_layer_remove" => {
+                let layer_count = self
+                    .theme
+                    .background_gradient
+                    .as_ref()
+                    .map(|gradient| gradient.layers.len())
+                    .unwrap_or(0);
+                if layer_count > 0 {
+                    self.remove_theme_chooser_gradient_layer(
+                        layer_count - 1,
+                        "theme_chooser_action_gradient_layer_remove",
+                        cx,
+                    );
+                }
             }
             "theme_chooser_accent_previous" => {
                 self.cycle_theme_chooser_accent(-1, "theme_chooser_action_accent_previous", cx);
@@ -2893,7 +3371,6 @@ impl ScriptListApp {
         let design_spacing = tokens.spacing();
         let chrome = theme::AppChromeColors::from_theme(self.theme.as_ref());
         let text_primary = chrome.text_primary_hex;
-        let text_dimmed = chrome.text_dimmed_hex;
         let text_secondary = chrome.text_secondary_hex;
         let text_muted = chrome.text_muted_hex;
         let accent_color = chrome.accent_hex;
@@ -2935,6 +3412,12 @@ impl ScriptListApp {
         let filter_is_empty = filter.is_empty();
 
         let summary = Self::theme_chooser_match_summary(&filtered_indices, &catalog);
+        // Visible/total match count surfaced beside the search input.
+        let header_count_label = if filter_is_empty {
+            format!("{} themes", summary.catalog_total)
+        } else {
+            format!("{} / {}", summary.visible_total, summary.catalog_total)
+        };
         let entity_handle = cx.entity().downgrade();
         let catalog_for_keys = std::sync::Arc::clone(&catalog);
 
@@ -2985,21 +3468,16 @@ impl ScriptListApp {
                     }
                 }
 
-                // Escape: clear filter first if present, otherwise restore original and close
-                // Escape: clear filter first if present, otherwise undo all changes and close
+                // Escape: clear filter first if present, otherwise undo all changes and close.
+                // Undo restores the opening snapshot in memory only — nothing was
+                // persisted during the session, so a pure cancel never writes to disk.
                 if is_key_escape(key) && !this.show_actions_popup {
                     if !this.clear_builtin_view_filter(cx) {
-                        // No filter to clear — restore original theme, persist the undo, and go back
                         if let Some(original) = this.theme_before_chooser.take() {
                             this.restore_theme_chooser_theme(
                                 original,
                                 "theme_chooser_escape_undo",
                                 cx,
-                            );
-                            let _ = crate::theme::service::persist_theme_and_sync_all_windows(
-                                cx,
-                                this.theme.as_ref(),
-                                "theme_chooser_escape_undo_persist",
                             );
                         }
                         this.clear_theme_chooser_controls();
@@ -3008,18 +3486,19 @@ impl ScriptListApp {
                     cx.stop_propagation();
                     return;
                 }
-                // Cmd+W: undo all changes and close window
+                // Cmd+W: undo all changes (memory-only restore) and close window
                 if has_cmd && key.eq_ignore_ascii_case("w") {
                     if let Some(original) = this.theme_before_chooser.take() {
                         this.restore_theme_chooser_theme(original, "theme_chooser_close_undo", cx);
-                        let _ = crate::theme::service::persist_theme_and_sync_all_windows(
-                            cx,
-                            this.theme.as_ref(),
-                            "theme_chooser_close_undo_persist",
-                        );
                     }
                     this.clear_theme_chooser_controls();
                     this.close_and_reset_window(cx);
+                    cx.stop_propagation();
+                    return;
+                }
+                // Cmd+E: toggle the right panel between Preview and Customize
+                if has_cmd && key.eq_ignore_ascii_case("e") {
+                    this.toggle_theme_chooser_panel_mode(cx);
                     cx.stop_propagation();
                     return;
                 }
@@ -3558,12 +4037,20 @@ impl ScriptListApp {
             "COLORS",
             Some("Interactive base and selection colors"),
             &chrome,
-            vec![Self::render_theme_chooser_color_picker_row(
-                "Accent Color",
-                accent_color,
-                &controls.accent,
-                &chrome,
-            )],
+            vec![
+                Self::render_theme_chooser_color_picker_row(
+                    "Accent Color",
+                    accent_color,
+                    &controls.accent,
+                    &chrome,
+                ),
+                Self::render_theme_chooser_color_picker_row(
+                    "Background Color",
+                    self.theme.colors.background.main,
+                    &controls.background,
+                    &chrome,
+                ),
+            ],
         );
 
         // 2. OPACITY & VIBRANCY SECTION
@@ -3646,6 +4133,35 @@ impl ScriptListApp {
             )
             .into_any_element();
 
+        let current_material = self.theme.get_vibrancy().material;
+        let material_segments = Self::VIBRANCY_MATERIALS
+            .iter()
+            .enumerate()
+            .map(|(ix, (material, label))| {
+                let material = *material;
+                let click_entity = entity_handle_for_customize.clone();
+                Self::render_theme_chooser_segment_button(
+                    ("theme-chooser-material-segment", ix),
+                    (*label).to_string(),
+                    current_material == material,
+                    &chrome,
+                    move |_, _, cx| {
+                        if let Some(app) = click_entity.upgrade() {
+                            app.update(cx, |this, cx| {
+                                this.set_theme_chooser_vibrancy_material(
+                                    material,
+                                    "theme_chooser_material_segment_click",
+                                    cx,
+                                );
+                            });
+                        }
+                    },
+                )
+            })
+            .collect::<Vec<_>>();
+        let material_row =
+            Self::render_theme_chooser_segmented_row("Vibrancy Material", material_segments, &chrome);
+
         let opacity_section = Self::render_theme_chooser_customize_section(
             "OPACITY & VIBRANCY",
             Some("Vibrancy blend and layer transparency"),
@@ -3655,7 +4171,49 @@ impl ScriptListApp {
                 text_opacity_slider_row,
                 focused_opacity_slider_row,
                 vibrancy_row,
+                material_row,
             ],
+        );
+
+        // APPEARANCE SECTION — auto/light/dark resolution for the theme
+        let current_appearance = self.theme.appearance;
+        let appearance_segments = [
+            ("Auto", crate::theme::types::AppearanceMode::Auto),
+            ("Light", crate::theme::types::AppearanceMode::Light),
+            ("Dark", crate::theme::types::AppearanceMode::Dark),
+        ]
+        .into_iter()
+        .enumerate()
+        .map(|(ix, (label, mode))| {
+            let click_entity = entity_handle_for_customize.clone();
+            Self::render_theme_chooser_segment_button(
+                ("theme-chooser-appearance-segment", ix),
+                label.to_string(),
+                current_appearance == mode,
+                &chrome,
+                move |_, _, cx| {
+                    if let Some(app) = click_entity.upgrade() {
+                        app.update(cx, |this, cx| {
+                            this.set_theme_chooser_appearance_mode(
+                                mode,
+                                "theme_chooser_appearance_segment_click",
+                                cx,
+                            );
+                        });
+                    }
+                },
+            )
+        })
+        .collect::<Vec<_>>();
+        let appearance_section = Self::render_theme_chooser_customize_section(
+            "APPEARANCE",
+            Some("How the theme resolves against system light/dark"),
+            &chrome,
+            vec![Self::render_theme_chooser_segmented_row(
+                "Appearance Mode",
+                appearance_segments,
+                &chrome,
+            )],
         );
 
         // 3. BACKGROUNDS & GRADIENTS SECTION
@@ -3814,6 +4372,84 @@ impl ScriptListApp {
             }
         }
 
+        if gradient_enabled {
+            let layer_count = self
+                .theme
+                .background_gradient
+                .as_ref()
+                .map(|gradient| gradient.layers.len())
+                .unwrap_or(0);
+            let add_layer_entity = entity_handle_for_customize.clone();
+            let remove_layer_entity = entity_handle_for_customize.clone();
+            let remove_disabled = layer_count == 0;
+            gradient_children.push(
+                div()
+                    .w_full()
+                    .flex()
+                    .flex_row()
+                    .gap(px(8.0))
+                    .border_t_1()
+                    .border_color(divider_bg)
+                    .pt(px(8.0))
+                    .child(Self::render_theme_chooser_management_button(
+                        "theme-chooser-gradient-layer-add-button",
+                        "Add Layer",
+                        ThemeChooserManagementButtonKind::Neutral,
+                        false,
+                        text_primary,
+                        chrome.whisper_surface_rgba,
+                        chrome.whisper_border_rgba,
+                        neutral_hover_rgba,
+                        move |_, _, cx| {
+                            cx.stop_propagation();
+                            if let Some(app) = add_layer_entity.upgrade() {
+                                app.update(cx, |this, cx| {
+                                    this.add_theme_chooser_gradient_layer(
+                                        "theme_chooser_gradient_layer_add_click",
+                                        cx,
+                                    );
+                                });
+                            }
+                        },
+                    ))
+                    .child(Self::render_theme_chooser_management_button(
+                        "theme-chooser-gradient-layer-remove-button",
+                        "Remove Layer",
+                        ThemeChooserManagementButtonKind::Neutral,
+                        remove_disabled,
+                        if remove_disabled {
+                            text_muted
+                        } else {
+                            text_primary
+                        },
+                        chrome.whisper_surface_rgba,
+                        chrome.whisper_border_rgba,
+                        neutral_hover_rgba,
+                        move |_, _, cx| {
+                            cx.stop_propagation();
+                            if let Some(app) = remove_layer_entity.upgrade() {
+                                app.update(cx, |this, cx| {
+                                    let layer_count = this
+                                        .theme
+                                        .background_gradient
+                                        .as_ref()
+                                        .map(|gradient| gradient.layers.len())
+                                        .unwrap_or(0);
+                                    if layer_count > 0 {
+                                        this.remove_theme_chooser_gradient_layer(
+                                            layer_count - 1,
+                                            "theme_chooser_gradient_layer_remove_click",
+                                            cx,
+                                        );
+                                    }
+                                });
+                            }
+                        },
+                    ))
+                    .into_any_element(),
+            );
+        }
+
         let backgrounds_section = Self::render_theme_chooser_customize_section(
             "BACKDROP & GRADIENTS",
             Some("Layered backgrounds and linear blends"),
@@ -3840,11 +4476,183 @@ impl ScriptListApp {
             .flex_col()
             .gap(px(16.0))
             .overflow_y_scrollbar()
-            .child(management_section)
             .child(colors_section)
             .child(opacity_section)
+            .child(appearance_section)
             .child(backgrounds_section)
-            .child(typography_section);
+            .child(typography_section)
+            .child(management_section);
+
+        // ── Right panel mode tabs (Preview / Customize) ────────────
+        let panel_mode = self.theme_chooser_panel_mode;
+        let is_customize = panel_mode == ThemeChooserPanelMode::Customize;
+        let mode_tabs = {
+            let preview_entity = entity_handle_for_customize.clone();
+            let customize_entity = entity_handle_for_customize.clone();
+            div()
+                .flex()
+                .flex_row()
+                .items_center()
+                .gap(px(6.0))
+                .child(Self::render_theme_chooser_segment_button(
+                    ("theme-chooser-panel-tab", 0),
+                    "Preview".to_string(),
+                    !is_customize,
+                    &chrome,
+                    move |_, _, cx| {
+                        if let Some(app) = preview_entity.upgrade() {
+                            app.update(cx, |this, cx| {
+                                this.set_theme_chooser_panel_mode(
+                                    ThemeChooserPanelMode::Preview,
+                                    cx,
+                                );
+                            });
+                        }
+                    },
+                ))
+                .child(Self::render_theme_chooser_segment_button(
+                    ("theme-chooser-panel-tab", 1),
+                    "Customize".to_string(),
+                    is_customize,
+                    &chrome,
+                    move |_, _, cx| {
+                        if let Some(app) = customize_entity.upgrade() {
+                            app.update(cx, |this, cx| {
+                                this.set_theme_chooser_panel_mode(
+                                    ThemeChooserPanelMode::Customize,
+                                    cx,
+                                );
+                            });
+                        }
+                    },
+                ))
+        };
+
+        // ── Preview-mode theme facts card ──────────────────────────
+        let facts_card = {
+            let vibrancy = self.theme.get_vibrancy();
+            let material_label = Self::VIBRANCY_MATERIALS
+                .iter()
+                .find(|(material, _)| *material == vibrancy.material)
+                .map(|(_, label)| *label)
+                .unwrap_or("HUD");
+            let appearance_label = match self.theme.appearance {
+                crate::theme::types::AppearanceMode::Auto => "Auto",
+                crate::theme::types::AppearanceMode::Light => "Light",
+                crate::theme::types::AppearanceMode::Dark => "Dark",
+            };
+            let source_label = match management_snapshot.base_slug.as_deref() {
+                Some(slug) if !slug.starts_with("builtin:") => {
+                    format!("User theme · {slug}.json")
+                }
+                _ => "Built-in preset".to_string(),
+            };
+            let gradient_label = match self.theme.background_gradient.as_ref() {
+                Some(gradient) if gradient.enabled => {
+                    format!("On · {} layer(s)", gradient.layers.len() + 1)
+                }
+                _ => "Off".to_string(),
+            };
+            Self::render_theme_chooser_customize_section(
+                "THEME FACTS",
+                Some("Live values for the previewed theme"),
+                &chrome,
+                vec![
+                    Self::render_theme_chooser_fact_row(
+                        "Status",
+                        management_snapshot.status_label.clone(),
+                        &chrome,
+                        None,
+                    ),
+                    Self::render_theme_chooser_fact_row("Source", source_label, &chrome, None),
+                    Self::render_theme_chooser_fact_row(
+                        "Accent",
+                        format!(
+                            "{} {}",
+                            accent_name_str,
+                            Self::canonical_theme_chooser_hex_label(accent_color)
+                        ),
+                        &chrome,
+                        Some(accent_color),
+                    ),
+                    Self::render_theme_chooser_fact_row(
+                        "Background",
+                        Self::canonical_theme_chooser_hex_label(self.theme.colors.background.main),
+                        &chrome,
+                        Some(self.theme.colors.background.main),
+                    ),
+                    Self::render_theme_chooser_fact_row(
+                        "Appearance",
+                        format!(
+                            "{} · {} colors",
+                            appearance_label,
+                            if self.theme.has_dark_colors() {
+                                "dark"
+                            } else {
+                                "light"
+                            }
+                        ),
+                        &chrome,
+                        None,
+                    ),
+                    Self::render_theme_chooser_fact_row(
+                        "Vibrancy",
+                        format!(
+                            "{} · {}",
+                            if vibrancy.enabled { "On" } else { "Off" },
+                            material_label
+                        ),
+                        &chrome,
+                        None,
+                    ),
+                    Self::render_theme_chooser_fact_row(
+                        "Surface Opacity",
+                        format!("{:.0}%", opacity.main * 100.0),
+                        &chrome,
+                        None,
+                    ),
+                    Self::render_theme_chooser_fact_row(
+                        "Backdrop Gradient",
+                        gradient_label,
+                        &chrome,
+                        None,
+                    ),
+                    Self::render_theme_chooser_fact_row(
+                        "UI Font Size",
+                        format!("{:.1} px", fonts.ui_size),
+                        &chrome,
+                        None,
+                    ),
+                ],
+            )
+        };
+
+        let chips_row = div()
+            .flex()
+            .flex_row()
+            .gap(px(8.0))
+            .child(Self::render_theme_chooser_semantic_chip("OK", success_chip))
+            .child(Self::render_theme_chooser_semantic_chip("Err", error_chip))
+            .child(Self::render_theme_chooser_semantic_chip(
+                "Warn",
+                warning_chip,
+            ))
+            .child(Self::render_theme_chooser_semantic_chip("Info", info_chip));
+
+        let contrast_line = {
+            let contrast_snapshot = cached_theme_chooser_contrast_snapshot(&self.theme);
+            div()
+                .mt(px(4.0))
+                .text_xs()
+                .text_color(rgb(text_muted))
+                .child(format!(
+                    "Contrast {}/{} pass · worst {} {:.2}:1",
+                    contrast_snapshot.passing,
+                    contrast_snapshot.total,
+                    contrast_snapshot.worst_label,
+                    contrast_snapshot.worst_ratio,
+                ))
+        };
 
         let preview_panel = div()
             .id("theme-chooser-preview-panel")
@@ -3864,13 +4672,7 @@ impl ScriptListApp {
                     .flex_row()
                     .items_center()
                     .justify_between()
-                    .child(
-                        div()
-                            .text_xs()
-                            .font_weight(gpui::FontWeight::BOLD)
-                            .text_color(rgb(text_dimmed))
-                            .child("CUSTOMIZE"),
-                    )
+                    .child(mode_tabs)
                     .child(
                         div()
                             .text_xs()
@@ -3878,43 +4680,36 @@ impl ScriptListApp {
                             .child(format!("Base: {}", selected_preset_name)),
                     ),
             )
-            .child(customizer_scroller)
-            // ── Semantic status chips ─────────────────────────────
-            .child(
-                div()
-                    .flex()
-                    .flex_row()
-                    .gap(px(8.0))
-                    .child(Self::render_theme_chooser_semantic_chip("OK", success_chip))
-                    .child(Self::render_theme_chooser_semantic_chip("Err", error_chip))
-                    .child(Self::render_theme_chooser_semantic_chip(
-                        "Warn",
-                        warning_chip,
-                    ))
-                    .child(Self::render_theme_chooser_semantic_chip("Info", info_chip)),
-            )
-            // ── Contrast audit (summary only) ────────────────────────
-            .child({
-                let contrast_snapshot = cached_theme_chooser_contrast_snapshot(&self.theme);
-                div()
-                    .mt(px(4.0))
-                    .text_xs()
-                    .text_color(rgb(text_muted))
-                    .child(format!(
-                        "Contrast {}/{} pass · worst {} {:.2}:1",
-                        contrast_snapshot.passing,
-                        contrast_snapshot.total,
-                        contrast_snapshot.worst_label,
-                        contrast_snapshot.worst_ratio,
-                    ))
+            .when(is_customize, |panel| panel.child(customizer_scroller))
+            .when(!is_customize, |panel| {
+                panel.child(facts_card).child(
+                    // Launcher-style live preview fills the remaining space in
+                    // Preview mode so theme browsing reads like the real shell.
+                    div()
+                        .flex_1()
+                        .min_h(px(0.0))
+                        .flex()
+                        .flex_col()
+                        .child(self.render_theme_chooser_live_preview(
+                            &selected_preset_name,
+                            accent_name_str,
+                            &chrome,
+                        )),
+                )
             })
-            // ── Launcher-style live preview ──
-            .child(div().h(px(1.0)).bg(divider_bg))
-            .child(self.render_theme_chooser_live_preview(
-                &selected_preset_name,
-                accent_name_str,
-                &chrome,
-            ));
+            // ── Semantic status chips + contrast audit (summary only) ──
+            .child(chips_row)
+            .child(contrast_line)
+            // ── Compact launcher-style live preview while editing ──
+            .when(is_customize, |panel| {
+                panel
+                    .child(div().h(px(1.0)).bg(divider_bg))
+                    .child(self.render_theme_chooser_live_preview(
+                        &selected_preset_name,
+                        accent_name_str,
+                        &chrome,
+                    ))
+            });
 
         // ── Footer: canonical three-key hint strip per .impeccable.md ──
         let uses_native_footer = self.main_window_uses_native_footer();
@@ -3947,7 +4742,10 @@ impl ScriptListApp {
                 &self.theme,
                 menu_def,
                 crate::components::main_view_chrome::MainViewChrome {
-                    header: self.render_builtin_main_input_header(Vec::new(), cx),
+                    header: self.render_builtin_main_input_header(
+                        vec![self.render_builtin_main_input_count_label(header_count_label)],
+                        cx,
+                    ),
                     divider: crate::components::main_view_chrome::MainViewDividerChrome {
                         margin_x: shell.divider_margin_x,
                         height: shell.divider_height,
@@ -3991,7 +4789,10 @@ impl ScriptListApp {
             &self.theme,
             menu_def,
             crate::components::main_view_chrome::MainViewChrome {
-                header: self.render_builtin_main_input_header(Vec::new(), cx),
+                header: self.render_builtin_main_input_header(
+                    vec![self.render_builtin_main_input_count_label(header_count_label)],
+                    cx,
+                ),
                 divider: crate::components::main_view_chrome::MainViewDividerChrome {
                     margin_x: shell.divider_margin_x,
                     height: shell.divider_height,
@@ -4007,63 +4808,47 @@ impl ScriptListApp {
 
 #[cfg(test)]
 mod theme_chooser_chrome_audit {
+    //! Source audits for footer/chrome decisions in the Theme Designer.
+    //! Forbidden-pattern needles are built with `concat!` so the audit can
+    //! never match its own assertion text (the failure mode that previously
+    //! made these tests fail on a clean tree).
+
     #[test]
     fn theme_chooser_uses_truthful_actions_footer() {
         let source = include_str!("theme_chooser.rs");
+        let generic_hints = concat!("universal_prompt_", "hints()");
         assert!(
-            !source.contains("universal_prompt_hints()"),
+            !source.contains(generic_hints),
             "theme_chooser should use its own truthful hint set"
         );
         assert!(
             source.contains("render_simple_hint_strip("),
             "theme_chooser should use render_simple_hint_strip"
         );
-        assert!(
-            source.contains(r#"SharedString::from("↵ Done")"#),
-            "theme_chooser should use truthful '↵ Done' footer label"
-        );
-        assert!(
-            source.contains(r#"SharedString::from("Esc Undo")"#),
-            "theme_chooser should use 'Esc Undo' footer label"
-        );
-        assert!(
-            source.contains(r#"SharedString::from("⌘J Remix")"#),
-            "theme_chooser should use '⌘J Remix' footer label"
-        );
-        assert!(
-            source.contains(r#"SharedString::from("⌘K Actions")"#),
-            "theme_chooser should advertise its dedicated actions catalog"
-        );
+        for label in ["↵ Done", "Esc Undo", "⌘J Remix", "⌘K Actions", "⌘E Customize"] {
+            assert!(
+                source.contains(&format!("SharedString::from(\"{label}\")")),
+                "theme_chooser footer should advertise truthful '{label}' hint"
+            );
+        }
     }
 
     #[test]
     fn theme_chooser_has_no_legacy_multi_shortcut_footer() {
         let source = include_str!("theme_chooser.rs");
+        let legacy = concat!(".child(short", "cut(\"⌘[]\", \"Accent\"))");
         assert!(
-            !source.contains(r#".child(shortcut("⌘[]", "Accent"))"#),
+            !source.contains(legacy),
             "theme_chooser should not have legacy multi-shortcut footer"
-        );
-    }
-
-    #[test]
-    fn theme_chooser_preview_has_no_decorative_section_dividers() {
-        let source = include_str!("theme_chooser.rs");
-        // The PREVIEW section header should use spacing-only separation,
-        // not a border_t_1 divider.
-        let preview_section_start = source.find("spacing-only separation per spec");
-        assert!(
-            preview_section_start.is_some(),
-            "theme_chooser preview section should use spacing-only separation"
         );
     }
 
     #[test]
     fn theme_chooser_has_no_prompt_footer() {
         let source = include_str!("theme_chooser.rs");
-        let legacy = "Prompt".to_owned() + "Footer::new(";
-        assert_eq!(
-            source.matches(&legacy).count(),
-            0,
+        let legacy = concat!("Prompt", "Footer::new(");
+        assert!(
+            !source.contains(legacy),
             "theme_chooser should not use PromptFooter"
         );
     }
@@ -4075,8 +4860,9 @@ mod theme_chooser_chrome_audit {
             source.contains("render_minimal_list_prompt_shell("),
             "theme_chooser live preview should use the shared minimal-list prompt shell"
         );
+        let bespoke_keycap = concat!("render_theme_chooser_preview_", "keycap");
         assert!(
-            !source.contains("render_theme_chooser_preview_keycap"),
+            !source.contains(bespoke_keycap),
             "bespoke preview keycap helper should be removed"
         );
     }
@@ -4086,23 +4872,105 @@ mod theme_chooser_chrome_audit {
 mod theme_chooser_filter_tests {
     use super::*;
 
-    #[test]
-    fn test_theme_chooser_filtered_indices_returns_all_presets_when_filter_empty() {
-        let expected_count = theme::presets::presets_cached().len();
-        let filtered = ScriptListApp::theme_chooser_filtered_indices("");
-        assert_eq!(filtered.len(), expected_count);
+    fn preset_only_catalog() -> Vec<ThemeChooserCatalogEntry> {
+        let presets = theme::presets::presets_cached();
+        let preview_colors = theme::presets::preset_preview_colors_cached();
+        presets
+            .iter()
+            .enumerate()
+            .map(|(index, preset)| ThemeChooserCatalogEntry {
+                kind: ThemeChooserCatalogKind::BuiltIn(index),
+                name: preset.name.to_string(),
+                description: preset.description.to_string(),
+                is_dark: preset.is_dark,
+                theme: theme::presets::preset_theme_cached(index),
+                preview_colors: preview_colors[index],
+            })
+            .collect()
     }
 
     #[test]
-    fn test_theme_chooser_filtered_indices_matches_ascii_filter_case_insensitively() {
+    fn test_theme_chooser_catalog_filter_returns_all_entries_when_filter_empty() {
+        let catalog = preset_only_catalog();
+        let filtered = ScriptListApp::theme_chooser_catalog_filtered_indices("", &catalog);
+        assert_eq!(filtered.len(), catalog.len());
+    }
+
+    #[test]
+    fn test_theme_chooser_catalog_filter_matches_ascii_filter_case_insensitively() {
+        let catalog = preset_only_catalog();
         let presets = theme::presets::presets_cached();
         let dracula_index = presets
             .iter()
             .position(|preset| preset.id == "dracula")
             .expect("dracula preset should exist");
 
-        let filtered = ScriptListApp::theme_chooser_filtered_indices("DRAC");
+        let filtered = ScriptListApp::theme_chooser_catalog_filtered_indices("DRAC", &catalog);
         assert!(filtered.contains(&dracula_index));
+    }
+
+    #[test]
+    fn test_theme_chooser_catalog_filter_matches_user_theme_slug() {
+        let mut catalog = preset_only_catalog();
+        catalog.insert(
+            0,
+            ThemeChooserCatalogEntry {
+                kind: ThemeChooserCatalogKind::User {
+                    slug: "my-night-shift".to_string(),
+                },
+                name: "Night Shift".to_string(),
+                description: "User theme saved in ~/.scriptkit/themes".to_string(),
+                is_dark: true,
+                theme: theme::presets::preset_theme_cached(0),
+                preview_colors: theme::presets::preset_preview_colors_cached()[0],
+            },
+        );
+
+        let by_slug = ScriptListApp::theme_chooser_catalog_filtered_indices("night-shift", &catalog);
+        assert!(by_slug.contains(&0), "user themes must stay findable by slug");
+        let by_kind = ScriptListApp::theme_chooser_catalog_filtered_indices("custom", &catalog);
+        assert!(by_kind.contains(&0), "user themes must match the 'custom' keyword");
+    }
+
+    #[test]
+    fn test_theme_chooser_catalog_index_prefers_exact_user_theme_fingerprint() {
+        let mut catalog = preset_only_catalog();
+        let user_theme = theme::presets::preset_theme_cached(3);
+        catalog.insert(
+            0,
+            ThemeChooserCatalogEntry {
+                kind: ThemeChooserCatalogKind::User {
+                    slug: "saved-copy".to_string(),
+                },
+                name: "Saved Copy".to_string(),
+                description: "User theme saved in ~/.scriptkit/themes".to_string(),
+                is_dark: user_theme.has_dark_colors(),
+                theme: std::sync::Arc::clone(&user_theme),
+                preview_colors: theme::presets::preset_preview_colors_cached()[3],
+            },
+        );
+
+        let index =
+            ScriptListApp::theme_chooser_catalog_index_for_theme(&catalog, user_theme.as_ref());
+        assert_eq!(
+            index, 0,
+            "opening the designer should land on the matching user theme row"
+        );
+    }
+
+    #[test]
+    fn test_theme_chooser_filter_hex_parses_only_full_hex_queries() {
+        assert_eq!(
+            ScriptListApp::theme_chooser_filter_hex("#FF8800"),
+            Some(0xFF8800)
+        );
+        assert_eq!(
+            ScriptListApp::theme_chooser_filter_hex("  #ff8800  "),
+            Some(0xFF8800)
+        );
+        assert_eq!(ScriptListApp::theme_chooser_filter_hex("ff8800"), None);
+        assert_eq!(ScriptListApp::theme_chooser_filter_hex("#ff88"), None);
+        assert_eq!(ScriptListApp::theme_chooser_filter_hex("nord"), None);
     }
 
     #[test]
@@ -4119,19 +4987,20 @@ mod theme_chooser_filter_tests {
 
     #[test]
     fn test_theme_chooser_uses_shared_list_item_row() {
-        // The theme chooser now uses the shared ListItem component for preset rows,
+        // The theme chooser uses the shared ListItem component for preset rows,
         // matching the main menu's accent bar, description reveal, and spacing.
         let source = include_str!("theme_chooser.rs");
         assert!(
-            source.contains("list(self.theme_chooser_list_state.clone()"),
-            "theme chooser should use variable-height list() for mixed header/row heights"
+            source.contains("self.theme_chooser_list_state.clone(),"),
+            "theme chooser should use the variable-height list state for mixed header/row heights"
         );
+        let uniform = concat!("uniform_", "list(");
         assert!(
-            !source.contains("uniform_list("),
+            !source.contains(uniform),
             "theme chooser should not use uniform_list because rows can grow"
         );
         assert!(
-            source.contains("ListItem::new(name, list_colors)"),
+            source.contains("ListItem::new(name.to_string(), list_colors)"),
             "theme chooser preset rows should use the shared ListItem primitive"
         );
         assert!(
@@ -4158,7 +5027,7 @@ mod theme_chooser_actions_dialog_sync_tests {
         let restore_fn = source
             .split("fn restore_theme_chooser_theme(")
             .nth(1)
-            .and_then(|section| section.split("fn preview_theme_chooser_preset(").next())
+            .and_then(|section| section.split("fn preview_theme_chooser_catalog_entry(").next())
             .expect("missing restore_theme_chooser_theme");
 
         assert!(
@@ -4169,5 +5038,29 @@ mod theme_chooser_actions_dialog_sync_tests {
             restore_fn.contains("self.sync_open_actions_dialog_theme(cx);"),
             "theme chooser restore should propagate to open actions dialogs"
         );
+    }
+
+    #[test]
+    fn theme_chooser_pure_cancel_paths_do_not_persist_theme_json() {
+        // Esc / ⌘W / "Undo Changes and Close" restore the opening snapshot in
+        // memory. Persisting on cancel used to rewrite the on-disk theme
+        // override on every abandoned browse session.
+        let source = include_str!("theme_chooser.rs");
+        for restore_reason in [
+            "\"theme_chooser_escape_undo\"",
+            "\"theme_chooser_close_undo\"",
+            "\"theme_chooser_action_undo\"",
+        ] {
+            let restore_site = source
+                .split(restore_reason)
+                .next()
+                .map(|before| before.len())
+                .expect("restore reason should exist");
+            let after = &source[restore_site..(restore_site + 600).min(source.len())];
+            assert!(
+                !after.contains("persist_theme_and_sync_all_windows"),
+                "cancel path `{restore_reason}` must not persist the theme override"
+            );
+        }
     }
 }

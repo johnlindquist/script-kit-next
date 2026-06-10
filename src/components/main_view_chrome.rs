@@ -15,8 +15,6 @@ pub(crate) const MAIN_VIEW_CONTEXT_LOGO_ID: &str = "main-view-context-logo";
 pub(crate) const MAIN_VIEW_CONTEXT_CWD_BUTTON_ID: &str = "main-view-context-cwd-button";
 #[allow(dead_code)]
 pub(crate) const MAIN_VIEW_CONTEXT_MODEL_BUTTON_ID: &str = "main-view-context-model-button";
-#[allow(dead_code)]
-pub(crate) const MAIN_VIEW_CONTEXT_VARIATION_BADGE_ID: &str = "main-view-context-variation-badge";
 pub(crate) const MAIN_VIEW_HEADER_ID: &str = "main-view-header";
 pub(crate) const MAIN_VIEW_CWD_UNAVAILABLE_LABEL: &str = "No cwd";
 pub(crate) const MAIN_VIEW_AGENT_MODEL_UNAVAILABLE_LABEL: &str = "Agent model unavailable";
@@ -328,14 +326,6 @@ pub(crate) fn render_main_view_context_zone_required(
         model_chip = model_chip.border_1().border_color(border).bg(rest_bg);
     }
 
-    let variation_badge = div()
-        .id(MAIN_VIEW_CONTEXT_VARIATION_BADGE_ID)
-        .font_family(info.font_family)
-        .text_size(px(info.font_size))
-        .text_color(text_color)
-        .opacity(info.opacity.clamp(0.0, 1.0))
-        .child((def.variant.index() + 1).to_string());
-
     let mut left_lane = div()
         .flex_1()
         .min_w(px(0.0))
@@ -381,14 +371,6 @@ pub(crate) fn render_main_view_context_zone_required(
         .items_center()
         .gap(px(info.gap_px))
         .child(left_lane)
-        .child(
-            div()
-                .w(px(info.variation_badge_width_px))
-                .flex()
-                .items_center()
-                .justify_center()
-                .child(variation_badge),
-        )
         .child(right_lane)
         .into_any_element()
 }
@@ -465,63 +447,6 @@ pub(crate) fn main_view_content_columns(def: MainMenuThemeDef) -> MainViewColumn
         content_right_inset_x: def.shell.header_padding_x,
         top_inset_y: def.list.first_section_header_height,
     }
-}
-
-pub(crate) const MAIN_VIEW_INPUT_CWD_TOKEN_ID: &str = "main-view-input-cwd-token";
-
-/// The persistent `>` cwd anchor rendered as a token inside the input area.
-///
-/// The anchor authorizes plain-prose Cmd+Enter submits long after the `>`
-/// segment text was stripped from the input, so the state must stay visible
-/// where the user is typing — not only in the footer chip.
-pub(crate) fn render_input_cwd_anchor_token(
-    theme: &crate::theme::Theme,
-    def: MainMenuThemeDef,
-    label: String,
-) -> AnyElement {
-    let info = def.header_info_bar;
-    let search = def.search;
-    let text_alpha = (info.opacity.clamp(0.0, 1.0) * 255.0).round() as u32;
-    let text_color = rgba((theme.colors.text.primary << 8) | text_alpha);
-    let border = rgba((theme.colors.ui.border << 8) | info.pill_border_alpha);
-    let pill_bg = rgba((theme.colors.background.search_box << 8) | info.pill_bg_alpha);
-
-    let icon_path = crate::designs::icon_variations::icon_name_from_str("folder")
-        .map(|icon| icon.external_path())
-        .unwrap_or_else(|| crate::designs::icon_variations::IconName::Folder.external_path());
-
-    div()
-        .id(MAIN_VIEW_INPUT_CWD_TOKEN_ID)
-        .flex_shrink_0()
-        .mr(px(search.text_inset_x * 0.5))
-        .flex()
-        .flex_row()
-        .items_center()
-        .gap(px(info.gap_px))
-        .px(px(info.pill_padding_x.max(6.0)))
-        .py(px(info.pill_padding_y))
-        .rounded(px(info.pill_radius))
-        .border_1()
-        .border_color(border)
-        .bg(pill_bg)
-        .font_family(info.font_family)
-        .text_size(px(info.font_size))
-        .text_color(text_color)
-        .child(
-            gpui::svg()
-                .external_path(icon_path)
-                .size(px(info.font_size))
-                .flex_shrink_0()
-                .text_color(text_color),
-        )
-        .child(
-            div()
-                .max_w(px(160.0))
-                .overflow_hidden()
-                .text_ellipsis()
-                .child(label),
-        )
-        .into_any_element()
 }
 
 pub(crate) fn render_main_view_input_shell(

@@ -1064,14 +1064,6 @@ f32_knob!(
     "typography.sectionFontSize",
     typography.section_font_size
 );
-f32_knob!(
-    TYPOGRAPHY_SECTION_LINE_HEIGHT_KNOB_ID,
-    get_typography_section_line_height,
-    apply_typography_section_line_height,
-    "typography.sectionLineHeight",
-    typography.section_line_height
-);
-
 f32_nested_knob!(
     FOOTER_HEIGHT_KNOB_ID,
     get_footer_height,
@@ -1403,14 +1395,6 @@ f32_knob!(
     "headerInfo.contextEdgeOutsetX",
     header_info_bar.context_edge_outset_x
 );
-f32_knob!(
-    HEADER_INFO_VARIATION_BADGE_WIDTH_KNOB_ID,
-    get_header_info_variation_badge_width,
-    apply_header_info_variation_badge_width,
-    "headerInfo.variationBadgeWidth",
-    header_info_bar.variation_badge_width_px
-);
-
 pub const STYLE_KNOBS: &[StyleKnob] = &[
     StyleKnob {
         id: SHELL_CONTENT_INSET_X_KNOB_ID,
@@ -2722,17 +2706,6 @@ pub const STYLE_KNOBS: &[StyleKnob] = &[
         apply: apply_typography_section_font_size,
     },
     StyleKnob {
-        id: TYPOGRAPHY_SECTION_LINE_HEIGHT_KNOB_ID,
-        label: "Section line height",
-        group: StyleKnobGroup::Typography,
-        unit: StyleUnit::Px,
-        min: 8.0,
-        max: 32.0,
-        step: 1.0,
-        get: get_typography_section_line_height,
-        apply: apply_typography_section_line_height,
-    },
-    StyleKnob {
         id: FOOTER_HEIGHT_KNOB_ID,
         label: "Footer height",
         group: StyleKnobGroup::Footer,
@@ -3248,17 +3221,6 @@ pub const STYLE_KNOBS: &[StyleKnob] = &[
         step: 1.0,
         get: get_header_info_context_edge_outset_x,
         apply: apply_header_info_context_edge_outset_x,
-    },
-    StyleKnob {
-        id: HEADER_INFO_VARIATION_BADGE_WIDTH_KNOB_ID,
-        label: "Header variation badge width",
-        group: StyleKnobGroup::HeaderInfoBar,
-        unit: StyleUnit::Px,
-        min: 0.0,
-        max: 96.0,
-        step: 1.0,
-        get: get_header_info_variation_badge_width,
-        apply: apply_header_info_variation_badge_width,
     },
 ];
 

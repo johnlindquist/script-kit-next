@@ -17,9 +17,8 @@ use script_kit_gpui::dev_style_tool::{
     FOOTER_SIDE_INSET_KNOB_ID, HEADER_INFO_CONTEXT_EDGE_OUTSET_X_KNOB_ID,
     HEADER_INFO_PILL_HOVER_BG_ALPHA_KNOB_ID, HEADER_INFO_PILL_HOVER_BORDER_ALPHA_KNOB_ID,
     HEADER_INFO_PILL_HOVER_KEY_ALPHA_KNOB_ID, HEADER_INFO_PILL_HOVER_TEXT_ALPHA_KNOB_ID,
-    HEADER_INFO_VARIATION_BADGE_WIDTH_KNOB_ID, LIST_INLINE_CALC_HINT_ALPHA_KNOB_ID,
-    LIST_INLINE_CALC_HINT_FONT_SIZE_KNOB_ID, LIST_INLINE_CALC_RESULT_FONT_SIZE_KNOB_ID,
-    LIST_INLINE_CALC_SELECTED_HINT_ALPHA_KNOB_ID,
+    LIST_INLINE_CALC_HINT_ALPHA_KNOB_ID, LIST_INLINE_CALC_HINT_FONT_SIZE_KNOB_ID,
+    LIST_INLINE_CALC_RESULT_FONT_SIZE_KNOB_ID, LIST_INLINE_CALC_SELECTED_HINT_ALPHA_KNOB_ID,
     LIST_INLINE_CALC_SELECTED_OVERLAY_MIN_ALPHA_KNOB_ID, LIST_ITEM_HEIGHT_KNOB_ID,
     LIST_ITEM_INNER_PADDING_Y_KNOB_ID, LIST_ITEM_OUTER_PADDING_Y_KNOB_ID,
     LIST_MAIN_HINT_BODY_FONT_SIZE_KNOB_ID, LIST_MAIN_HINT_CHIP_BORDER_ALPHA_KNOB_ID,
@@ -259,11 +258,6 @@ fn runtime_catalog_overrides_representative_main_window_geometry() {
     )
     .expect("footer paste response slot width knob should exist");
     runtime_overrides::set_value(
-        HEADER_INFO_VARIATION_BADGE_WIDTH_KNOB_ID,
-        StyleValue::Number(72.0),
-    )
-    .expect("header variation badge width knob should exist");
-    runtime_overrides::set_value(
         HEADER_INFO_CONTEXT_EDGE_OUTSET_X_KNOB_ID,
         StyleValue::Number(12.0),
     )
@@ -484,7 +478,6 @@ fn runtime_catalog_overrides_representative_main_window_geometry() {
     assert_eq!(def.footer.metrics.actions_slot_width, 106.0);
     assert_eq!(def.footer.metrics.ai_slot_width, 64.0);
     assert_eq!(def.footer.metrics.paste_response_slot_width, 156.0);
-    assert_eq!(def.header_info_bar.variation_badge_width_px, 72.0);
     assert_eq!(def.header_info_bar.context_edge_outset_x, 12.0);
     assert_eq!(def.header_info_bar.pill_hover_bg_alpha, 42);
     assert_eq!(def.header_info_bar.pill_hover_border_alpha, 77);

@@ -66,8 +66,11 @@ fn dev_style_tool_render_is_catalog_driven_and_narrow() {
     assert!(render_source.contains("active_actions_group"));
     assert!(render_source.contains("active_agent_chat_group"));
     assert!(render_source.contains("active_confirm_modal_group"));
-    assert!(render_source.contains("TabBar::new"));
-    assert!(render_source.contains("Tab::new"));
+    // Navigation is a Storybook-style sidebar (surface -> group tree), not
+    // horizontal tab bars; the legacy `tabs:*` ids live on its containers.
+    assert!(render_source.contains("fn render_sidebar"));
+    assert!(render_source.contains("sidebar:dev-style-tool"));
+    assert!(render_source.contains("render_content_header"));
     assert!(render_source.contains("Text / Copy"));
     assert!(render_source.contains("tab:dev-style-tool:text-copy"));
     assert!(render_source.contains("Actions Popup Styling"));

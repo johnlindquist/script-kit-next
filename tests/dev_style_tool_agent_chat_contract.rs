@@ -47,9 +47,8 @@ fn dev_style_tool_has_agent_chat_tab_and_controls() {
     assert!(RENDER_SOURCE.contains("tab:dev-style-tool:agent-chat-styling"));
     assert!(RENDER_SOURCE.contains("AgentChatControlState"));
     assert!(RENDER_SOURCE.contains("render_agent_chat_controls"));
-    assert!(RENDER_SOURCE.contains("render_agent_chat_group_tabs"));
+    assert!(RENDER_SOURCE.contains("render_sidebar_groups"));
     assert!(RENDER_SOURCE.contains("tabs:dev-style-tool-agent-chat-groups"));
-    assert!(RENDER_SOURCE.contains("tabbar:dev-style-tool-agent-chat-groups"));
     assert!(RENDER_SOURCE.contains("active_agent_chat_group"));
     assert!(RENDER_SOURCE.contains("agent_chat_group_slug"));
     assert!(RENDER_SOURCE.contains("agent-chat-style-section:{}"));
@@ -58,8 +57,9 @@ fn dev_style_tool_has_agent_chat_tab_and_controls() {
     assert!(RENDER_SOURCE.contains("open_agent_chat_kitchen_sink"));
     assert!(RENDER_SOURCE.contains("open_agent_chat_kitchen_sink_fixture"));
     assert!(TARGETS_SOURCE.contains("button:dev-style-tool-open-agent-chat-kitchen-sink"));
-    assert!(RENDER_SOURCE.contains("OPEN_AGENT_CHAT_KITCHEN_SINK_BUTTON"));
-    assert!(RENDER_SOURCE.contains("Open Agent Chat Kitchen Sink"));
+    // The launcher renders contextually from the targets catalog
+    // (target.semantic_id()/label()) inside the content header.
+    assert!(RENDER_SOURCE.contains("DevStyleKitchenSinkTarget::AgentChat"));
     assert!(RENDER_SOURCE.contains("render_kitchen_sink_controls"));
     assert!(RENDER_SOURCE.contains("open_main_window_kitchen_sink"));
     assert!(RENDER_SOURCE.contains("open_actions_popup_kitchen_sink"));
@@ -78,21 +78,22 @@ fn dev_style_tool_has_agent_chat_tab_and_controls() {
 }
 
 #[test]
-fn dev_style_tool_navigation_tabs_have_cleaner_chrome() {
+fn dev_style_tool_navigation_is_a_sidebar_tree() {
+    // Navigation is a Storybook-style rail: filter on top, surfaces as rows,
+    // the active surface's groups nested beneath it. The legacy `tabs:*` ids
+    // stay on the sidebar containers so automation keeps working.
+    assert!(RENDER_SOURCE.contains("fn render_sidebar"));
+    assert!(RENDER_SOURCE.contains("sidebar:dev-style-tool"));
     assert!(RENDER_SOURCE.contains("tabs:dev-style-tool-primary"));
     assert!(RENDER_SOURCE.contains("tabs:dev-style-tool-groups"));
     assert!(RENDER_SOURCE.contains("tabs:dev-style-tool-actions-groups"));
     assert!(RENDER_SOURCE.contains("tabs:dev-style-tool-agent-chat-groups"));
+    assert!(RENDER_SOURCE.contains("tab:dev-style-tool-group:{}"));
     assert!(RENDER_SOURCE.contains("summary:dev-style-tool-active-scope"));
-    assert!(RENDER_SOURCE.contains("tabbar:dev-style-tool-primary"));
-    assert!(RENDER_SOURCE.contains("tabbar:dev-style-tool-groups"));
-    assert!(RENDER_SOURCE.contains("tabbar:dev-style-tool-actions-groups"));
-    assert!(RENDER_SOURCE.contains("tabbar:dev-style-tool-agent-chat-groups"));
+    assert!(RENDER_SOURCE.contains("render_content_header"));
+    assert!(RENDER_SOURCE.contains("active_surface_description"));
     assert!(RENDER_SOURCE.contains("chrome.input_surface_rgba"));
     assert!(RENDER_SOURCE.contains("chrome.border_rgba"));
-    assert!(RENDER_SOURCE.contains(".flex_wrap()"));
-    assert!(RENDER_SOURCE.contains("\"Surface\""));
-    assert!(RENDER_SOURCE.contains("\"Main\""));
 }
 
 #[test]

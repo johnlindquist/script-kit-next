@@ -57,7 +57,7 @@ fn main_window_search_surfaces_use_shared_main_view_input_shell() {
     assert!(shared.contains("MAIN_VIEW_CONTEXT_ZONE_ID"));
     assert!(shared.contains("MAIN_VIEW_CONTEXT_CWD_BUTTON_ID"));
     assert!(shared.contains("MAIN_VIEW_CONTEXT_MODEL_BUTTON_ID"));
-    assert!(shared.contains("MAIN_VIEW_CONTEXT_VARIATION_BADGE_ID"));
+    assert!(!shared.contains("MAIN_VIEW_CONTEXT_VARIATION_BADGE_ID"));
     assert!(shared.contains("MAIN_VIEW_INPUT_SHELL_ID"));
     assert!(!shared.contains("MAIN_VIEW_INPUT_STATE_ICON_ID"));
     assert!(shared.contains("MAIN_VIEW_HEADER_DIVIDER_ID"));
@@ -66,7 +66,6 @@ fn main_window_search_surfaces_use_shared_main_view_input_shell() {
     assert!(shared.contains(".id(MAIN_VIEW_CONTEXT_ZONE_ID)"));
     assert!(shared.contains(".id(MAIN_VIEW_CONTEXT_CWD_BUTTON_ID)"));
     assert!(shared.contains(".id(MAIN_VIEW_CONTEXT_MODEL_BUTTON_ID)"));
-    assert!(shared.contains(".id(MAIN_VIEW_CONTEXT_VARIATION_BADGE_ID)"));
     assert!(shared.contains(".id(MAIN_VIEW_SHELL_ID)"));
     assert!(shared.contains(".id(MAIN_VIEW_INPUT_SHELL_ID)"));
     assert!(!shared.contains(".id(MAIN_VIEW_INPUT_STATE_ICON_ID)"));
@@ -89,9 +88,8 @@ fn main_window_search_surfaces_use_shared_main_view_input_shell() {
     assert!(shared.contains("render_footer_hint_button_like"));
     assert!(shared.contains("FooterHintButtonSpec"));
     assert!(shared.contains(".h(px(info.height_px))"));
-    assert!(shared.contains("(def.variant.index() + 1).to_string()"));
-    assert!(shared.contains(".w(px(info.variation_badge_width_px))"));
-    assert!(!shared.contains(".w(px(32.0))"));
+    assert!(!shared.contains("(def.variant.index() + 1).to_string()"));
+    assert!(!shared.contains("variation_badge"));
     assert!(!shared.contains("MAIN_VIEW_CONTEXT_EDGE_OUTSET_X: f32 = 8.0"));
     assert!(shared.contains("info.pill_hover_bg_alpha"));
     assert!(shared.contains("info.pill_hover_text_alpha"));

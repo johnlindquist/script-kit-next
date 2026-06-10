@@ -3,7 +3,6 @@ use std::sync::atomic::{AtomicU8, Ordering};
 use gpui::FontWeight;
 
 pub const MAIN_MENU_HEADER_CONTEXT_EDGE_OUTSET_X: f32 = 8.0;
-pub const MAIN_MENU_HEADER_VARIATION_BADGE_WIDTH_PX: f32 = 32.0;
 pub const MAIN_MENU_SECTION_PADDING_X: f32 = 14.0;
 pub const MAIN_MENU_SECTION_PADDING_TOP: f32 = 12.0;
 pub const MAIN_MENU_SECTION_PADDING_BOTTOM: f32 = 4.0;
@@ -209,7 +208,6 @@ pub struct MainMenuTypographyTokens {
     pub desc_line_height: f32,
     pub desc_weight: FontWeight,
     pub section_font_size: f32,
-    pub section_line_height: f32,
     pub section_weight: FontWeight,
 }
 
@@ -309,7 +307,6 @@ pub struct HeaderInfoBarTokens {
     pub pill_hover_text_alpha: u32,
     pub pill_hover_key_alpha: u32,
     pub context_edge_outset_x: f32,
-    pub variation_badge_width_px: f32,
     pub show_cwd: bool,
     pub show_agent_model: bool,
     pub show_keys: bool,
@@ -375,7 +372,6 @@ pub struct HeaderInfoBarSignature {
     pub pill_hover_text_alpha: u32,
     pub pill_hover_key_alpha: u32,
     pub context_edge_outset_x: u32,
-    pub variation_badge_width_px: u32,
     pub show_cwd: bool,
     pub show_agent_model: bool,
     pub show_keys: bool,
@@ -415,33 +411,12 @@ impl MainMenuThemeVariant {
             .unwrap_or_default()
     }
 
-    pub fn next(self) -> MainMenuThemeVariant {
-        let all = Self::all();
-        let idx = all.iter().position(|&v| v == self).unwrap_or(0);
-        all[(idx + 1) % all.len()]
-    }
-
-    pub fn prev(self) -> MainMenuThemeVariant {
-        let all = Self::all();
-        let idx = all.iter().position(|&v| v == self).unwrap_or(0);
-        all[if idx == 0 { all.len() - 1 } else { idx - 1 }]
-    }
-
     pub fn index(self) -> usize {
         Self::all().iter().position(|&v| v == self).unwrap_or(0)
     }
 
     pub fn name(self) -> &'static str {
         self.def().name
-    }
-
-    pub fn placeholder(self) -> String {
-        format!(
-            "Header {}/{} · {}   ·   alt+\u{2190}/\u{2192} to cycle",
-            self.index() + 1,
-            Self::COUNT,
-            self.name()
-        )
     }
 
     fn info_bar_name(self) -> &'static str {
@@ -586,7 +561,6 @@ impl MainMenuThemeVariant {
             pill_hover_text_alpha: tokens.pill_hover_text_alpha,
             pill_hover_key_alpha: tokens.pill_hover_key_alpha,
             context_edge_outset_x: q(tokens.context_edge_outset_x),
-            variation_badge_width_px: q(tokens.variation_badge_width_px),
             show_cwd: tokens.show_cwd,
             show_agent_model: tokens.show_agent_model,
             show_keys: tokens.show_keys,
@@ -655,7 +629,6 @@ fn header_info_bar_tokens(
         pill_hover_text_alpha,
         pill_hover_key_alpha,
         context_edge_outset_x: MAIN_MENU_HEADER_CONTEXT_EDGE_OUTSET_X,
-        variation_badge_width_px: MAIN_MENU_HEADER_VARIATION_BADGE_WIDTH_PX,
         show_cwd,
         show_agent_model,
         show_keys,
@@ -856,7 +829,6 @@ fn base_main_menu_theme_def(
             desc_line_height: 16.0,
             desc_weight: FontWeight::NORMAL,
             section_font_size: 12.0,
-            section_line_height: 16.0,
             section_weight: MAIN_MENU_SECTION_WEIGHT,
         },
         metadata: MainMenuMetadataTokens {
@@ -902,30 +874,9 @@ mod tests {
     }
 
     #[test]
-    fn header_info_bar_cycles_forward_and_backward() {
-        assert_eq!(
-            MainMenuThemeVariant::InfoBarUltraQuiet.next(),
-            MainMenuThemeVariant::InfoBarBase
-        );
-        assert_eq!(
-            MainMenuThemeVariant::InfoBarBase.prev(),
-            MainMenuThemeVariant::InfoBarUltraQuiet
-        );
-        let mut v = MainMenuThemeVariant::default();
-        for _ in 0..MainMenuThemeVariant::COUNT {
-            v = v.next();
-        }
-        assert_eq!(v, MainMenuThemeVariant::default());
-    }
-
-    #[test]
-    fn header_names_and_placeholders_are_identifiable() {
+    fn header_names_are_identifiable() {
         for theme in MainMenuThemeVariant::all() {
             assert!(!theme.name().trim().is_empty());
-            assert!(theme.placeholder().contains(theme.name()));
-            assert!(theme.placeholder().contains("Header"));
-            assert!(theme.placeholder().contains("/15"));
-            assert!(!theme.placeholder().contains("Theme"));
         }
     }
 

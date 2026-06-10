@@ -745,7 +745,7 @@ fn theme_chooser_slider_drag_preview_does_not_resync_native_vibrancy() {
             && source_between(
                 &chooser,
                 "fn restore_theme_chooser_theme(",
-                "fn preview_theme_chooser_preset("
+                "fn preview_theme_chooser_catalog_entry("
             )
             .contains("crate::theme::types::set_cached_theme_for_preview(self.theme.as_ref());"),
         "Theme Designer previews should update the in-memory theme cache so native footer chrome follows before persistence"

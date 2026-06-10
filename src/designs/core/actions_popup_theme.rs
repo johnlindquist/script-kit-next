@@ -8,14 +8,12 @@ pub struct ActionsPopupThemeDef {
     pub row: ActionsPopupRowTokens,
     pub section: ActionsPopupSectionTokens,
     pub context_header: ActionsPopupContextHeaderTokens,
-    pub shortcut: ActionsPopupShortcutTokens,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ActionsPopupShellTokens {
     pub width: f32,
     pub max_height: f32,
-    pub notes_recent_max_height: f32,
     pub margin_x: f32,
     pub margin_y: f32,
     pub titlebar_offset_y: f32,
@@ -48,7 +46,6 @@ pub struct ActionsPopupListTokens {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ActionsPopupRowTokens {
     pub inset_x: f32,
-    pub inner_y: f32,
     pub radius: f32,
     pub selection_opacity: f32,
     pub hover_opacity: f32,
@@ -74,21 +71,11 @@ pub struct ActionsPopupContextHeaderTokens {
     pub font_weight: FontWeight,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct ActionsPopupShortcutTokens {
-    pub keycap_height: f32,
-    pub keycap_padding_x: f32,
-    pub keycap_padding_y: f32,
-    pub keycap_font_size: f32,
-    pub keycap_radius: f32,
-}
-
 pub fn base_actions_popup_theme() -> ActionsPopupThemeDef {
     ActionsPopupThemeDef {
         shell: ActionsPopupShellTokens {
             width: crate::actions::constants::POPUP_WIDTH,
             max_height: crate::actions::constants::POPUP_MAX_HEIGHT,
-            notes_recent_max_height: crate::actions::constants::NOTES_RECENT_POPUP_MAX_HEIGHT,
             margin_x: 8.0,
             margin_y: 8.0,
             titlebar_offset_y: 36.0,
@@ -115,7 +102,6 @@ pub fn base_actions_popup_theme() -> ActionsPopupThemeDef {
         },
         row: ActionsPopupRowTokens {
             inset_x: crate::actions::constants::ACTION_ROW_INSET,
-            inner_y: 2.0,
             radius: crate::actions::constants::ACTIONS_ROW_RADIUS,
             selection_opacity: 0.72,
             hover_opacity: 0.56,
@@ -135,13 +121,6 @@ pub fn base_actions_popup_theme() -> ActionsPopupThemeDef {
             padding_bottom: 4.0,
             font_size: 12.0,
             font_weight: FontWeight::SEMIBOLD,
-        },
-        shortcut: ActionsPopupShortcutTokens {
-            keycap_height: crate::components::footer_chrome::FOOTER_KEYCAP_HEIGHT_PX,
-            keycap_padding_x: crate::components::footer_chrome::FOOTER_KEYCAP_PADDING_X_PX,
-            keycap_padding_y: 0.0,
-            keycap_font_size: crate::components::footer_chrome::FOOTER_HINT_FONT_SIZE_PX,
-            keycap_radius: crate::components::footer_chrome::FOOTER_KEYCAP_RADIUS_PX,
         },
     }
 }
