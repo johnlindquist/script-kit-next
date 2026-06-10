@@ -55,6 +55,8 @@ enum CommandBarKeyIntent {
     ExecuteSelected,
     Close,
     Backspace,
+    /// Option+Backspace: delete the trailing word, like the main search input.
+    BackspaceWord,
     TypeChar(char),
 }
 
@@ -122,7 +124,16 @@ fn command_bar_key_intent(key: &str, modifiers: &gpui::Modifiers) -> Option<Comm
         return Some(CommandBarKeyIntent::Close);
     }
     if is_key_backspace(key) || key.eq_ignore_ascii_case("delete") {
-        return Some(CommandBarKeyIntent::Backspace);
+        // Option+Backspace deletes a word like the main search input;
+        // Cmd+Backspace falls through so destructive action shortcuts
+        // (e.g. Delete Note ⌘⌫) can be handled by the host.
+        if modifiers.alt && !modifiers.platform && !modifiers.control {
+            return Some(CommandBarKeyIntent::BackspaceWord);
+        }
+        if !modifiers.platform && !modifiers.control {
+            return Some(CommandBarKeyIntent::Backspace);
+        }
+        return None;
     }
     if key.eq_ignore_ascii_case("space") {
         return Some(CommandBarKeyIntent::TypeChar(' '));
@@ -504,6 +515,10 @@ impl CommandBarConfig {
                 show_icons: true,
                 search_placeholder: Some("Search Notes".to_string()),
                 max_height: NOTES_RECENT_POPUP_MAX_HEIGHT,
+                // Switcher rows show note preview/metadata as a subtitle line
+                // with main-list row anatomy (see Action::description from
+                // get_note_switcher_actions).
+                show_subtitles: true,
                 ..ActionsDialogConfig::default()
             },
             ..Default::default()
@@ -731,7 +746,7 @@ impl CommandBar {
         if let Some(dialog) = &self.dialog {
             dialog.update(cx, |d, cx| {
                 d.actions = actions;
-                d.filtered_actions = (0..d.actions.len()).collect();
+                d.reset_filter_to_all();
                 d.search_text.clear();
                 d.grouped_items = rebuild_grouped_items_for_command_bar(
                     &d.actions,
@@ -959,6 +974,22 @@ impl CommandBar {
     pub fn handle_backspace(&mut self, cx: &mut App) {
         if let Some(dialog) = &self.dialog {
             dialog.update(cx, |d, cx| d.handle_backspace(cx));
+            resize_actions_window(cx, dialog);
+        }
+    }
+
+    /// Handle Option+Backspace word deletion
+    pub fn handle_backspace_word(&mut self, cx: &mut App) {
+        if let Some(dialog) = &self.dialog {
+            dialog.update(cx, |d, cx| d.handle_backspace_word(cx));
+            resize_actions_window(cx, dialog);
+        }
+    }
+
+    /// Handle Cmd+V paste into the search input
+    pub fn handle_paste(&mut self, cx: &mut App) {
+        if let Some(dialog) = &self.dialog {
+            dialog.update(cx, |d, cx| d.handle_paste(cx));
             resize_actions_window(cx, dialog);
         }
     }
@@ -1259,6 +1290,10 @@ pub trait CommandBarHost {
             }
             Some(CommandBarKeyIntent::Backspace) => {
                 self.command_bar_mut().handle_backspace(cx);
+                true
+            }
+            Some(CommandBarKeyIntent::BackspaceWord) => {
+                self.command_bar_mut().handle_backspace_word(cx);
                 true
             }
             Some(CommandBarKeyIntent::TypeChar(ch)) => {

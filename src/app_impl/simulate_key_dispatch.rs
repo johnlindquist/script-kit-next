@@ -62,11 +62,12 @@ impl ScriptListApp {
 
         if has_cmd && has_shift && key_lower == "p" && simulate_key_target_is_notes {
             if let Some((notes_entity, notes_handle)) = notes::get_notes_app_entity_and_handle() {
-                let _ = notes::update_notes_window_detached(notes_handle, ctx, |notes_window, cx| {
-                    notes_entity.update(cx, |app, cx| {
-                        app.toggle_preview(notes_window, cx);
+                let _ =
+                    notes::update_notes_window_detached(notes_handle, ctx, |notes_window, cx| {
+                        notes_entity.update(cx, |app, cx| {
+                            app.toggle_preview(notes_window, cx);
+                        });
                     });
-                });
                 logging::log("STDIN", "SimulateKey: Cmd+Shift+P - toggle Notes preview");
                 return;
             }
@@ -266,19 +267,7 @@ impl ScriptListApp {
                     }
 
                     // Main script list key handling
-                    if _has_alt
-                        && !has_cmd
-                        && !_has_ctrl
-                        && !has_shift
-                        && (crate::ui_foundation::is_key_left(&key_lower)
-                            || crate::ui_foundation::is_key_right(&key_lower))
-                    {
-                        // Alt+Left / Alt+Right cycle the main-menu theme exploration
-                        // variation (mirrors the live keyboard + interceptor paths).
-                        let forward = crate::ui_foundation::is_key_right(&key_lower);
-                        logging::log("STDIN", "SimulateKey: Alt+Arrow - cycle main menu theme");
-                        view.cycle_main_menu_theme(forward, window, ctx);
-                    } else if view.try_execute_root_file_action_shortcut(
+                    if view.try_execute_root_file_action_shortcut(
                         &key_lower, has_cmd, has_shift, _has_alt, _has_ctrl, window, ctx,
                     ) {
                         logging::log("STDIN", "SimulateKey: root file direct action shortcut");
@@ -294,10 +283,7 @@ impl ScriptListApp {
                         window,
                         ctx,
                     ) {
-                        logging::log(
-                            "STDIN",
-                            "SimulateKey: displayed main-list action shortcut",
-                        );
+                        logging::log("STDIN", "SimulateKey: displayed main-list action shortcut");
                     } else if view.try_open_profile_search_from_script_list_shift_tab(
                         &key_lower,
                         &gpui::Modifiers {
@@ -676,8 +662,7 @@ impl ScriptListApp {
                                     // src/render_builtins/file_search.rs: attach the
                                     // selection instead of opening it.
                                     if view.is_in_attachment_portal() {
-                                        if file.file_type
-                                            == crate::file_search::FileType::Directory
+                                        if file.file_type == crate::file_search::FileType::Directory
                                         {
                                             logging::log(
                                                 "STDIN",
@@ -950,6 +935,16 @@ impl ScriptListApp {
                             );
                         }
                     }
+                }
+                AppView::ThemeChooserView { .. } => {
+                    logging::log(
+                        "STDIN",
+                        &format!(
+                            "SimulateKey: Dispatching '{}' to ThemeChooserView",
+                            key_lower
+                        ),
+                    );
+                    view.simulate_theme_chooser_key(&key_lower, has_cmd, window, ctx);
                 }
                 AppView::FooterGalleryView { .. } => {
                     logging::log(
@@ -1790,7 +1785,10 @@ impl ScriptListApp {
                         if spine_handled {
                             logging::log(
                                 "STDIN",
-                                &format!("SimulateKey: '{}' - spine handled (Agent Chat)", key_lower),
+                                &format!(
+                                    "SimulateKey: '{}' - spine handled (Agent Chat)",
+                                    key_lower
+                                ),
                             );
                         }
                         spine_handled
@@ -1846,10 +1844,14 @@ impl ScriptListApp {
                         // composer parses a valid prompt plan (resolved context,
                         // free-text, etc.), submit it. Otherwise fall back to the
                         // focused-text mini replace action.
-                        let spine_submitted = entity_clone
-                            .update(ctx, |chat, cx| chat.try_submit_agent_chat_spine_prompt_plan(cx));
+                        let spine_submitted = entity_clone.update(ctx, |chat, cx| {
+                            chat.try_submit_agent_chat_spine_prompt_plan(cx)
+                        });
                         if spine_submitted {
-                            logging::log("STDIN", "SimulateKey: Cmd+Enter - spine submitted (Agent Chat)");
+                            logging::log(
+                                "STDIN",
+                                "SimulateKey: Cmd+Enter - spine submitted (Agent Chat)",
+                            );
                         } else {
                             logging::log(
                                 "STDIN",
@@ -1877,7 +1879,10 @@ impl ScriptListApp {
                             }
                         });
                         if spine_consumed {
-                            logging::log("STDIN", "SimulateKey: Enter - spine accepted row (Agent Chat)");
+                            logging::log(
+                                "STDIN",
+                                "SimulateKey: Enter - spine accepted row (Agent Chat)",
+                            );
                         }
                         !spine_consumed
                     } {
@@ -1926,7 +1931,10 @@ impl ScriptListApp {
                     } else {
                         logging::log(
                             "STDIN",
-                            &format!("SimulateKey: Unhandled key '{}' in AgentChatView", key_lower),
+                            &format!(
+                                "SimulateKey: Unhandled key '{}' in AgentChatView",
+                                key_lower
+                            ),
                         );
                     }
                 }

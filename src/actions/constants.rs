@@ -11,8 +11,15 @@ pub const POPUP_MAX_HEIGHT: f32 = 400.0;
 /// Taller popup cap for the Notes Cmd+P recent-note switcher.
 pub const NOTES_RECENT_POPUP_MAX_HEIGHT: f32 = 560.0;
 
-/// Fixed height for action items; matches the shared main-search row rhythm.
-pub const ACTION_ITEM_HEIGHT: f32 = crate::list_item::LIST_ITEM_HEIGHT;
+/// Canonical compact row height for action popups.
+///
+/// Intentionally SHORTER than the main-list `LIST_ITEM_HEIGHT` (40): action
+/// popups are a compact, title-only surface. The actions popup theme
+/// (`designs/core/actions_popup_theme.rs`) derives `list.row_height` from
+/// this token. Switcher-style hosts that opt into subtitles
+/// (`ActionsDialogConfig::show_subtitles`) use main-list row anatomy via
+/// `ActionsDialog::effective_row_height` instead.
+pub const ACTION_ITEM_HEIGHT: f32 = 36.0;
 
 /// Fixed height for the search input row
 pub const SEARCH_INPUT_HEIGHT: f32 = 40.0;
@@ -69,7 +76,10 @@ mod tests {
 
     #[test]
     fn test_action_item_height_constant() {
-        assert_eq!(ACTION_ITEM_HEIGHT, crate::list_item::LIST_ITEM_HEIGHT);
+        // Popup rows are deliberately more compact than main-list rows;
+        // see the ACTION_ITEM_HEIGHT doc comment for the contract.
+        assert_eq!(ACTION_ITEM_HEIGHT, 36.0);
+        assert!(ACTION_ITEM_HEIGHT < crate::list_item::LIST_ITEM_HEIGHT);
         const _: () = assert!(ACTION_ITEM_HEIGHT > 0.0);
         const _: () = assert!(ACTION_ITEM_HEIGHT < POPUP_MAX_HEIGHT);
     }

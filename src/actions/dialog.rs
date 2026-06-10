@@ -121,10 +121,16 @@ fn actions_search_cursor(
 
 /// Action subtitle text shown in the popup row, if any.
 ///
-/// We intentionally suppress subtitle/description rendering to keep action rows
-/// visually focused on title + shortcut + icon.
-pub(crate) fn action_subtitle_for_display(_action: &Action) -> Option<&str> {
-    None
+/// Action-menu hosts suppress subtitle/description rendering to keep rows
+/// visually focused on title + shortcut + icon. Switcher-style hosts (e.g.
+/// the Notes recent-note switcher) opt in via `config.show_subtitles` to
+/// surface `Action::description` as a preview/metadata line, matching
+/// main-list row anatomy.
+pub(crate) fn action_subtitle_for_display(action: &Action, show_subtitles: bool) -> Option<&str> {
+    if !show_subtitles {
+        return None;
+    }
+    action.description.as_deref().filter(|d| !d.is_empty())
 }
 
 /// Whether an action should render with destructive styling.
@@ -755,7 +761,14 @@ pub(crate) struct ActionsHostContextSnapshot {
 pub struct ActionsDialog {
     pub actions: Vec<Action>,
     pub filtered_actions: Vec<usize>, // Indices into actions
-    pub selected_index: usize,        // Index within grouped_items (visual row index)
+    /// Title match char indices for the current search, aligned positionally
+    /// with `filtered_actions`. Cleared whenever the filter is reset outside
+    /// the scored path (see `reset_filter_to_all`).
+    pub(crate) filtered_title_match_indices: Vec<Vec<usize>>,
+    /// Description match char indices, aligned with `filtered_actions`.
+    /// Only rendered when `config.show_subtitles` is set.
+    pub(crate) filtered_description_match_indices: Vec<Vec<usize>>,
+    pub selected_index: usize, // Index within grouped_items (visual row index)
     pub search_text: String,
     pub focus_handle: FocusHandle,
     pub on_select: ActionCallback,
@@ -857,6 +870,21 @@ mod empty_state_message_tests {
 impl ActionsDialog {
     fn shows_context_header(&self) -> bool {
         self.config.show_context_header && self.context_title.is_some()
+    }
+
+    /// Row height for this host's action rows.
+    ///
+    /// Switcher-style hosts (`config.show_subtitles`) render two-line rows
+    /// with main-list anatomy, so they use the shared `LIST_ITEM_HEIGHT`
+    /// token. Action menus stay on the compact popup row token. Window
+    /// sizing (`compute_popup_height`) and the dialog's interior scroll math
+    /// both derive from this so they can never disagree.
+    pub(crate) fn effective_row_height(&self) -> f32 {
+        if self.config.show_subtitles {
+            crate::list_item::LIST_ITEM_HEIGHT
+        } else {
+            actions_dialog_default_style().row_height
+        }
     }
 
     fn row_height_for_scroll(item: &GroupedActionItem, row_height: f32) -> f32 {
@@ -1012,8 +1040,11 @@ impl ActionsDialog {
                     Some(crate::storybook::ActionsDialogPresentationItem::Action(
                         crate::storybook::ActionsDialogPresentationAction {
                             title: SharedString::from(action.title.clone()),
-                            subtitle: action_subtitle_for_display(action)
-                                .map(|v| SharedString::from(v.to_string())),
+                            subtitle: action_subtitle_for_display(
+                                action,
+                                self.config.show_subtitles,
+                            )
+                            .map(|v| SharedString::from(v.to_string())),
                             shortcut: action.shortcut.clone().map(SharedString::from),
                             icon_svg_path: action
                                 .icon
@@ -1109,6 +1140,8 @@ impl ActionsDialog {
         ActionsDialog {
             actions,
             filtered_actions,
+            filtered_title_match_indices: Vec::new(),
+            filtered_description_match_indices: Vec::new(),
             selected_index,
             search_text: String::new(),
             focus_handle,
@@ -1736,7 +1769,7 @@ impl ActionsDialog {
     /// Apply a route's actions/title/placeholder to the live dialog (no state restore).
     fn apply_route_state_from_route(&mut self, route: &ActionsDialogRoute) {
         self.actions = route.actions.clone();
-        self.filtered_actions = (0..self.actions.len()).collect();
+        self.reset_filter_to_all();
         self.search_text.clear();
         self.context_title = route.context_title.clone();
         self.config.search_placeholder = route
@@ -1765,7 +1798,7 @@ impl ActionsDialog {
     /// Restore a full route state snapshot (search text + selection).
     fn apply_route_state(&mut self, state: &ActionsDialogRouteState, _cx: &mut Context<Self>) {
         self.actions = state.route.actions.clone();
-        self.filtered_actions = (0..self.actions.len()).collect();
+        self.reset_filter_to_all();
         self.search_text = state.search_text.clone();
         self.context_title = state.route.context_title.clone();
         self.config.search_placeholder = state
@@ -2004,7 +2037,8 @@ impl ActionsDialog {
     }
 
     fn devtools_row_geometry(&self, cx: &gpui::App) -> serde_json::Value {
-        let style = actions_dialog_default_style();
+        let mut style = actions_dialog_default_style();
+        style.row_height = self.effective_row_height();
         let attached_popup_generation = crate::actions::actions_popup_automation_snapshot()
             .and_then(|snapshot| {
                 snapshot
@@ -2312,7 +2346,8 @@ impl ActionsDialog {
     }
 
     fn update_hovered_row_from_popup_y(&mut self, popup_y: f32, cx: &mut Context<Self>) {
-        let style = actions_dialog_default_style();
+        let mut style = actions_dialog_default_style();
+        style.row_height = self.effective_row_height();
         let show_search =
             !matches!(self.config.search_position, SearchPosition::Hidden) && !self.hide_search;
         let search_at_top = matches!(self.config.search_position, SearchPosition::Top);
@@ -2818,7 +2853,7 @@ impl ActionsDialog {
         );
 
         self.actions = converted;
-        self.filtered_actions = (0..self.actions.len()).collect();
+        self.reset_filter_to_all();
         self.search_text.clear();
         self.sdk_actions = Some(actions);
         self.sdk_action_indices = sdk_action_indices;
@@ -2846,7 +2881,7 @@ impl ActionsDialog {
                 &self.focused_scriptlet,
                 &self.menu_syntax_section,
             );
-            self.filtered_actions = (0..self.actions.len()).collect();
+            self.reset_filter_to_all();
             self.search_text.clear();
             // Rebuild grouped items and reset selection
             self.rebuild_grouped_items();
@@ -3009,11 +3044,12 @@ impl ActionsDialog {
 
     /// Refilter actions based on current search_text using ranked fuzzy matching.
     ///
-    /// Scoring system:
-    /// - Prefix match on title: +100 (strongest signal)
-    /// - Fuzzy match on title: +50 + character bonus
-    /// - Contains match on description: +25
-    /// - Results are sorted by score (descending)
+    /// Matching uses the shared launcher matcher (`SearchHighlightMatchCtx`),
+    /// so popup rows match — and highlight — exactly like main-list rows.
+    /// Ranking keeps the legacy tiers:
+    /// - Title prefix match: +100; title substring: +50; title fuzzy: +25
+    /// - Description contains: +15; shortcut contains: +10
+    /// - Results are sorted by score (descending, stable on ties)
     fn refilter(&mut self) {
         self.clear_mouse_submit_arm();
         self.clear_pending_scrollbar_offset();
@@ -3028,31 +3064,46 @@ impl ActionsDialog {
             _ => None,
         };
 
-        if self.search_text.is_empty() {
-            self.filtered_actions = (0..self.actions.len()).collect();
+        if self.search_text.trim().is_empty() {
+            self.reset_filter_to_all();
         } else {
-            let search_lower = self.search_text.to_lowercase();
+            let search_lower = self.search_text.trim().to_lowercase();
+            let query_char_count = search_lower.chars().count();
+            // Shared with the main launcher search so popups match (and
+            // highlight) by exactly the same semantics.
+            let mut highlight_ctx =
+                crate::scripts::search::SearchHighlightMatchCtx::new(&self.search_text);
 
-            // Score each action and collect (index, score) pairs
-            let mut scored: Vec<(usize, i32)> = self
+            // Score each action; matched actions carry their highlight indices.
+            let mut scored: Vec<(usize, i32, Vec<usize>, Vec<usize>)> = self
                 .actions
                 .iter()
                 .enumerate()
                 .filter_map(|(idx, action)| {
-                    let score = Self::score_action(action, &search_lower);
-                    if score > 0 {
-                        Some((idx, score))
-                    } else {
-                        None
-                    }
+                    Self::score_action_with_highlights(
+                        action,
+                        &search_lower,
+                        query_char_count,
+                        &mut highlight_ctx,
+                    )
+                    .map(|(score, title_indices, description_indices)| {
+                        (idx, score, title_indices, description_indices)
+                    })
                 })
                 .collect();
 
-            // Sort by score descending
+            // Sort by score descending (stable: ties keep action order)
             scored.sort_by(|a, b| b.1.cmp(&a.1));
 
-            // Extract just the indices
-            self.filtered_actions = scored.into_iter().map(|(idx, _)| idx).collect();
+            self.filtered_actions = Vec::with_capacity(scored.len());
+            self.filtered_title_match_indices = Vec::with_capacity(scored.len());
+            self.filtered_description_match_indices = Vec::with_capacity(scored.len());
+            for (idx, _score, title_indices, description_indices) in scored {
+                self.filtered_actions.push(idx);
+                self.filtered_title_match_indices.push(title_indices);
+                self.filtered_description_match_indices
+                    .push(description_indices);
+            }
         }
 
         // Rebuild grouped items after filter change
@@ -3092,7 +3143,7 @@ impl ActionsDialog {
 
         // Only scroll if we have results
         if !self.grouped_items.is_empty() {
-            self.update_pending_scrollbar_reveal_offset(actions_dialog_default_style().row_height);
+            self.update_pending_scrollbar_reveal_offset(self.effective_row_height());
             self.list_state.scroll_to_reveal_item(self.selected_index);
         }
 
@@ -3157,45 +3208,92 @@ impl ActionsDialog {
         }
     }
 
+    /// Reset the filter to include every action and drop stale match
+    /// highlights. This is the single mutation point for `filtered_actions`
+    /// outside the scored path in `refilter`, so the highlight vectors can
+    /// never desync from the visible rows.
+    pub(crate) fn reset_filter_to_all(&mut self) {
+        self.filtered_actions = (0..self.actions.len()).collect();
+        self.filtered_title_match_indices.clear();
+        self.filtered_description_match_indices.clear();
+    }
+
     /// Score an action against a search query.
     /// Returns 0 if no match, higher scores for better matches.
     ///
-    /// PERFORMANCE: Uses pre-computed lowercase fields (title_lower, description_lower,
-    /// shortcut_lower) to avoid repeated to_lowercase() calls on every keystroke.
-    pub(crate) fn score_action(action: &Action, search_lower: &str) -> i32 {
+    /// Matching is delegated to the shared launcher matcher (case-insensitive,
+    /// Unicode-aware); ranking keeps the legacy prefix > contains > fuzzy tiers.
+    /// Production filtering goes through `score_action_with_highlights` inside
+    /// `refilter`; this wrapper is the scoring contract surface for tests.
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub(crate) fn score_action(action: &Action, search: &str) -> i32 {
+        let search_lower = search.trim().to_lowercase();
+        let mut highlight_ctx = crate::scripts::search::SearchHighlightMatchCtx::new(search);
+        Self::score_action_with_highlights(
+            action,
+            &search_lower,
+            search_lower.chars().count(),
+            &mut highlight_ctx,
+        )
+        .map(|(score, _, _)| score)
+        .unwrap_or(0)
+    }
+
+    /// Score one action and return its title/description highlight indices
+    /// (char positions in the rendered strings). `None` when it doesn't match.
+    ///
+    /// Title matching uses the SAME matcher as the main launcher search
+    /// (`SearchHighlightMatchCtx`: ASCII fast path + nucleo fallback), so a
+    /// query matches a popup row exactly when it would match a main-list row.
+    /// Description/shortcut keep their `contains` bonus semantics using the
+    /// pre-computed lowercase fields.
+    fn score_action_with_highlights(
+        action: &Action,
+        search_lower: &str,
+        query_char_count: usize,
+        highlight_ctx: &mut crate::scripts::search::SearchHighlightMatchCtx,
+    ) -> Option<(i32, Vec<usize>, Vec<usize>)> {
         let mut score = 0;
 
-        // Prefix match on title (strongest) - use cached lowercase
-        if action.title_lower.starts_with(search_lower) {
+        let mut title_indices = Vec::new();
+        if search_lower.is_empty() {
+            // Legacy contract: the empty query is a prefix of every title.
+            // (`refilter` short-circuits empty searches; this only affects
+            // direct `score_action` callers.)
             score += 100;
-        }
-        // Contains match on title
-        else if action.title_lower.contains(search_lower) {
-            score += 50;
-        }
-        // Fuzzy match on title (character-by-character subsequence)
-        else if Self::fuzzy_match(&action.title_lower, search_lower) {
-            score += 25;
-        }
-
-        // Description match (bonus) - use cached lowercase
-        if let Some(ref desc_lower) = action.description_lower {
-            if desc_lower.contains(search_lower) {
-                score += 15;
+        } else {
+            let (title_matched, indices) = highlight_ctx.indices_for(&action.title);
+            if title_matched {
+                score += Self::title_match_tier(&indices, query_char_count);
+                title_indices = indices;
             }
         }
 
-        // Shortcut match (bonus) - use cached lowercase
+        let mut description_indices = Vec::new();
+        if let Some(ref desc_lower) = action.description_lower {
+            if desc_lower.contains(search_lower) {
+                score += 15;
+                if let Some(desc) = action.description.as_deref() {
+                    let (_, indices) = highlight_ctx.indices_for(desc);
+                    description_indices = indices;
+                }
+            }
+        }
+
         if let Some(ref shortcut_lower) = action.shortcut_lower {
             if shortcut_lower.contains(search_lower) {
                 score += 10;
             }
         }
 
-        score
+        (score > 0).then_some((score, title_indices, description_indices))
     }
 
-    /// Simple fuzzy matching: check if all characters in needle appear in haystack in order.
+    /// Legacy case-sensitive subsequence matcher. Production matching goes
+    /// through the shared `SearchHighlightMatchCtx` (see `score_action`); this
+    /// is retained test-only because a large generated test corpus pins its
+    /// exact subsequence semantics as a reference implementation.
+    #[cfg(test)]
     pub(crate) fn fuzzy_match(haystack: &str, needle: &str) -> bool {
         let mut haystack_chars = haystack.chars();
         for needle_char in needle.chars() {
@@ -3208,6 +3306,22 @@ impl ActionsDialog {
             }
         }
         true
+    }
+
+    /// Derive the legacy prefix(100) > contains(50) > fuzzy(25) ranking tier
+    /// from the shape of the matcher's indices: a contiguous run covering the
+    /// whole query is a substring match; starting at 0 makes it a prefix.
+    fn title_match_tier(indices: &[usize], query_char_count: usize) -> i32 {
+        let contiguous = query_char_count > 0
+            && indices.len() == query_char_count
+            && indices.windows(2).all(|pair| pair[1] == pair[0] + 1);
+        if contiguous && indices.first() == Some(&0) {
+            100
+        } else if contiguous {
+            50
+        } else {
+            25
+        }
     }
 
     /// Handle character input
@@ -3224,6 +3338,45 @@ impl ActionsDialog {
             self.refilter();
             cx.notify();
         }
+    }
+
+    /// Delete the trailing word (Option+Backspace), matching the main
+    /// search-input convention: trim trailing whitespace, then delete back
+    /// to the previous word boundary.
+    pub fn handle_backspace_word(&mut self, cx: &mut Context<Self>) {
+        if self.search_text.is_empty() {
+            return;
+        }
+        let trimmed_len = self.search_text.trim_end().len();
+        let boundary = self.search_text[..trimmed_len]
+            .char_indices()
+            .rev()
+            .find(|(_, ch)| ch.is_whitespace())
+            .map(|(idx, ch)| idx + ch.len_utf8())
+            .unwrap_or(0);
+        self.search_text.truncate(boundary);
+        self.refilter();
+        cx.notify();
+    }
+
+    /// Paste clipboard text into the search (Cmd+V), matching the main
+    /// search-input convention: single-line surface, so newlines and other
+    /// control characters collapse to spaces.
+    pub fn handle_paste(&mut self, cx: &mut Context<Self>) {
+        let Some(text) = cx
+            .read_from_clipboard()
+            .and_then(|item| item.text())
+            .filter(|text| !text.is_empty())
+        else {
+            return;
+        };
+        let mut sanitized = String::with_capacity(text.len());
+        for ch in text.chars() {
+            sanitized.push(if ch.is_control() { ' ' } else { ch });
+        }
+        self.search_text.push_str(&sanitized);
+        self.refilter();
+        cx.notify();
     }
 
     /// Set search text directly (for automation batch `setInput`).
@@ -3257,7 +3410,7 @@ impl ActionsDialog {
 
         self.selected_index = grouped_idx;
         self.clear_mouse_submit_arm();
-        self.update_pending_scrollbar_reveal_offset(actions_dialog_default_style().row_height);
+        self.update_pending_scrollbar_reveal_offset(self.effective_row_height());
         self.list_state.scroll_to_reveal_item(self.selected_index);
         cx.notify();
         Some(action_id.to_string())
@@ -3439,7 +3592,7 @@ impl ActionsDialog {
 
     pub(crate) fn reveal_selection_after_navigation(&mut self, cx: &mut Context<Self>) {
         self.clear_mouse_submit_arm();
-        self.update_pending_scrollbar_reveal_offset(actions_dialog_default_style().row_height);
+        self.update_pending_scrollbar_reveal_offset(self.effective_row_height());
         self.list_state.scroll_to_reveal_item(self.selected_index);
         self.trigger_scrollbar_activity(cx);
         cx.notify();
@@ -3538,7 +3691,7 @@ impl ActionsDialog {
         }
         self.selected_index = ix;
         self.clear_mouse_submit_arm();
-        self.update_pending_scrollbar_reveal_offset(actions_dialog_default_style().row_height);
+        self.update_pending_scrollbar_reveal_offset(self.effective_row_height());
         self.list_state.scroll_to_reveal_item(self.selected_index);
         let action_id = self
             .get_selected_action()
@@ -3807,7 +3960,8 @@ impl Focusable for ActionsDialog {
 // --- merged from dialog_part_04_rewire.rs ---
 impl Render for ActionsDialog {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let style = actions_dialog_default_style();
+        let mut style = actions_dialog_default_style();
+        style.row_height = self.effective_row_height();
         let popup_theme = crate::designs::current_actions_popup_theme();
         crate::components::hint_strip::emit_shortcut_chrome_audit(
             "actions_dialog",
@@ -4036,6 +4190,17 @@ impl Render for ActionsDialog {
                                         } else {
                                             None
                                         };
+                                        // Match highlights are stored positionally alongside
+                                        // `filtered_actions` (see `refilter`), so `filter_idx`
+                                        // addresses both vectors.
+                                        let title_highlights = this
+                                            .filtered_title_match_indices
+                                            .get(*filter_idx)
+                                            .cloned();
+                                        let description_highlights = this
+                                            .filtered_description_match_indices
+                                            .get(*filter_idx)
+                                            .cloned();
                                         let mut list_item = crate::list_item::ListItem::new(
                                             action.title.clone(),
                                             list_colors,
@@ -4047,9 +4212,14 @@ impl Render for ActionsDialog {
                                         .metrics_override(actions_row_metrics)
                                         .semantic_id(format!("choice:{ix}:{}", action.id))
                                         .description_opt(
-                                            action_subtitle_for_display(action)
-                                                .map(str::to_string),
+                                            action_subtitle_for_display(
+                                                action,
+                                                this.config.show_subtitles,
+                                            )
+                                            .map(str::to_string),
                                         )
+                                        .highlight_indices_opt(title_highlights)
+                                        .description_highlight_indices_opt(description_highlights)
                                         .shortcut_opt(shortcut)
                                         .shortcut_visibility_policy(
                                             crate::list_item::RowShortcutVisibilityPolicy::AllRows,
@@ -4241,6 +4411,7 @@ impl Render for ActionsDialog {
             self.shows_context_header() && style.show_header,
             false,
             self.config.max_height,
+            self.effective_row_height(),
         );
 
         // Build header row (section header style - non-interactive label)
@@ -4962,7 +5133,7 @@ mod tests {
     }
 
     #[test]
-    fn test_action_subtitle_for_display_always_returns_none() {
+    fn test_action_subtitle_for_display_gates_on_show_subtitles() {
         let action_with_description = Action::new(
             "copy_path",
             "Copy Path",
@@ -4976,9 +5147,18 @@ mod tests {
             ActionCategory::ScriptContext,
         );
 
-        assert_eq!(action_subtitle_for_display(&action_with_description), None);
+        // Action-menu hosts (show_subtitles = false) stay title-only.
         assert_eq!(
-            action_subtitle_for_display(&action_without_description),
+            action_subtitle_for_display(&action_with_description, false),
+            None
+        );
+        // Switcher-style hosts opt in to render the description line.
+        assert_eq!(
+            action_subtitle_for_display(&action_with_description, true),
+            Some("Copy the selected path")
+        );
+        assert_eq!(
+            action_subtitle_for_display(&action_without_description, true),
             None
         );
     }

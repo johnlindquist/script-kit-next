@@ -824,9 +824,9 @@ fn score_action_exact_title_match() {
 }
 
 #[test]
-fn score_action_expects_lowercased_query() {
-    // score_action expects the caller to pass a pre-lowercased search string
-    // (matching ActionsDialog::handle_char which lowercases the query)
+fn score_action_is_case_insensitive() {
+    // Matching goes through the shared launcher matcher, which lowercases the
+    // query itself — uppercase queries score the same as lowercase ones.
     let action = Action::new("test", "Edit Script", None, ActionCategory::ScriptContext);
     let lower = ActionsDialog::score_action(&action, "edit");
     assert!(
@@ -834,11 +834,10 @@ fn score_action_expects_lowercased_query() {
         "Lowercased prefix should score high, got {}",
         lower
     );
-    // Uppercase query won't match because score_action compares against title_lower
     let upper = ActionsDialog::score_action(&action, "EDIT");
     assert_eq!(
-        upper, 0,
-        "Non-lowercased query should not match title_lower"
+        upper, lower,
+        "Uppercase query should match like the main search does"
     );
 }
 
@@ -859,32 +858,31 @@ fn score_action_partial_word_still_matches() {
 }
 
 // =========================================================================
-// 13. Fuzzy match — more edge cases
+// 13. Fuzzy match (via shared matcher) — more edge cases
 // =========================================================================
 
 #[test]
-fn fuzzy_match_single_char_at_end() {
-    assert!(ActionsDialog::fuzzy_match("hello world", "d"));
+fn score_action_fuzzy_single_char_at_end() {
+    let action = Action::new("test", "hello world", None, ActionCategory::ScriptContext);
+    assert!(ActionsDialog::score_action(&action, "d") > 0);
 }
 
 #[test]
-fn fuzzy_match_single_char_not_present() {
-    assert!(!ActionsDialog::fuzzy_match("hello world", "z"));
+fn score_action_fuzzy_single_char_not_present() {
+    let action = Action::new("test", "hello world", None, ActionCategory::ScriptContext);
+    assert_eq!(ActionsDialog::score_action(&action, "z"), 0);
 }
 
 #[test]
-fn fuzzy_match_full_string() {
-    assert!(ActionsDialog::fuzzy_match("test", "test"));
+fn score_action_fuzzy_unicode_chars() {
+    let action = Action::new("test", "café résumé", None, ActionCategory::ScriptContext);
+    assert!(ActionsDialog::score_action(&action, "cr") > 0);
 }
 
 #[test]
-fn fuzzy_match_unicode_chars() {
-    assert!(ActionsDialog::fuzzy_match("café résumé", "cr"));
-}
-
-#[test]
-fn fuzzy_match_interleaved_chars() {
-    assert!(ActionsDialog::fuzzy_match("abcdefghij", "acegi"));
+fn score_action_fuzzy_interleaved_chars() {
+    let action = Action::new("test", "abcdefghij", None, ActionCategory::ScriptContext);
+    assert!(ActionsDialog::score_action(&action, "acegi") > 0);
 }
 
 // =========================================================================

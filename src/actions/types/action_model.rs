@@ -155,6 +155,12 @@ pub struct ActionsDialogConfig {
     pub show_context_header: bool,
     /// Maximum popup height before the action list scrolls.
     pub max_height: f32,
+    /// Whether rows render `Action::description` as a subtitle line.
+    ///
+    /// Action menus stay title-only (compact rows); switcher-style hosts
+    /// (e.g. the Notes recent-note switcher) opt in to show preview/metadata
+    /// with main-list row anatomy.
+    pub show_subtitles: bool,
 }
 
 impl Default for ActionsDialogConfig {
@@ -168,6 +174,7 @@ impl Default for ActionsDialogConfig {
             search_placeholder: None,
             show_context_header: true,
             max_height: POPUP_MAX_HEIGHT,
+            show_subtitles: false,
         }
     }
 }

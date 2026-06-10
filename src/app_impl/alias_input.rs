@@ -62,7 +62,11 @@ impl ScriptListApp {
 
     /// Save the current alias and close the input.
     /// If alias_from_entity is provided, use that; otherwise fall back to state.alias_text.
-    pub(crate) fn save_alias_with_text(&mut self, alias_from_entity: Option<String>, cx: &mut Context<Self>) {
+    pub(crate) fn save_alias_with_text(
+        &mut self,
+        alias_from_entity: Option<String>,
+        cx: &mut Context<Self>,
+    ) {
         let Some(ref state) = self.alias_input_state else {
             logging::log("ALIAS", "No alias input state when trying to save");
             return;
@@ -235,5 +239,4 @@ impl ScriptListApp {
         // Return the entity's view as an element
         Some(input_entity.into_any_element())
     }
-
 }

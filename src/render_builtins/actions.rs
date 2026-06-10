@@ -163,6 +163,15 @@ impl ScriptListApp {
             .with_section("Theme")
             .with_icon(IconName::Check),
             Action::new(
+                "theme_chooser_toggle_customize",
+                "Toggle Customize Panel",
+                Some("Switch the right panel between Preview and Customize".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut("⌘E")
+            .with_section("Theme")
+            .with_icon(IconName::Settings),
+            Action::new(
                 "theme_chooser_undo_close",
                 "Undo Changes and Close",
                 Some("Restore the theme from when Theme Designer opened".to_string()),
@@ -248,6 +257,22 @@ impl ScriptListApp {
             )
             .with_section("Customize")
             .with_icon(IconName::BoltOutlined),
+            Action::new(
+                "theme_chooser_gradient_layer_add",
+                "Add Gradient Layer",
+                Some("Stack another gradient layer on the backdrop".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_section("Customize")
+            .with_icon(IconName::Plus),
+            Action::new(
+                "theme_chooser_gradient_layer_remove",
+                "Remove Last Gradient Layer",
+                Some("Remove the most recently added gradient layer".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_section("Customize")
+            .with_icon(IconName::Trash),
             Action::new(
                 "theme_chooser_accent_previous",
                 "Previous Accent Color",

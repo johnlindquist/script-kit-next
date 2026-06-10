@@ -313,7 +313,9 @@ impl ScriptListApp {
             }
             ActionsDialogHost::AgentChatDetached => {
                 let dispatched =
-                    crate::ai::agent_chat::ui::chat_window::dispatch_action_to_detached(&action_id, cx);
+                    crate::ai::agent_chat::ui::chat_window::dispatch_action_to_detached(
+                        &action_id, cx,
+                    );
                 tracing::info!(
                     target: "script_kit::actions",
                     event = "actions_host_execute_agent_chat_detached",
@@ -343,8 +345,9 @@ impl ScriptListApp {
         cx: &mut Context<Self>,
     ) {
         use crate::menu_syntax::{
-            action_effects::{apply_safe_effect, ActionEffect},
-            builtin_schema, current_menu_syntax_actions, MenuSyntaxActionState,
+            MenuSyntaxActionState,
+            action_effects::{ActionEffect, apply_safe_effect},
+            builtin_schema, current_menu_syntax_actions,
         };
 
         let raw = self.filter_text().to_string();
@@ -756,8 +759,7 @@ impl ScriptListApp {
             .iter()
             .filter_map(|action| {
                 let shortcut = action.shortcut.as_deref()?;
-                let canonical =
-                    crate::components::hint_strip::canonical_shortcut_hint(shortcut);
+                let canonical = crate::components::hint_strip::canonical_shortcut_hint(shortcut);
                 Some((
                     action.id.as_str(),
                     action.title.as_str(),
@@ -793,11 +795,7 @@ impl ScriptListApp {
             );
         }
 
-        if !self.try_execute_main_list_action_shortcut_canonical(
-            &canonical_keystroke,
-            window,
-            cx,
-        ) {
+        if !self.try_execute_main_list_action_shortcut_canonical(&canonical_keystroke, window, cx) {
             logging::log(
                 "KEY_ROUTE",
                 &format!(
@@ -823,8 +821,10 @@ impl ScriptListApp {
         // Not open - let caller handle the key. Detached actions popups keep
         // parent focus, so the parent router must stay active while their
         // native child window is open even if the inline flag has already been
-        // cleared.
-        if !self.show_actions_popup && !crate::actions::is_actions_window_open() {
+        // cleared. Only a MAIN-hosted detached popup counts: a popup hosted by
+        // a secondary window (Notes, etc.) belongs to that window's router and
+        // must not pull this one into swallowing keys against the wrong dialog.
+        if !self.show_actions_popup && !crate::actions::is_actions_window_open_for_main() {
             return ActionsRoute::NotHandled;
         }
 
@@ -1013,10 +1013,22 @@ impl ScriptListApp {
         }
 
         if is_key_backspace(key) {
-            dialog.update(cx, |d, cx| d.handle_backspace(cx));
-            crate::actions::notify_actions_window(cx);
-            crate::actions::resize_actions_window(cx, dialog);
-            return ActionsRoute::Handled;
+            // Option+Backspace deletes a word, like the main search input.
+            // Cmd+Backspace is intentionally NOT a clear-search binding: hosts
+            // bind it to destructive actions (e.g. Delete Note), so it falls
+            // through to shortcut matching below.
+            if modifiers.alt && !modifiers.platform && !modifiers.control {
+                dialog.update(cx, |d, cx| d.handle_backspace_word(cx));
+                crate::actions::notify_actions_window(cx);
+                crate::actions::resize_actions_window(cx, dialog);
+                return ActionsRoute::Handled;
+            }
+            if !modifiers.platform && !modifiers.control {
+                dialog.update(cx, |d, cx| d.handle_backspace(cx));
+                crate::actions::notify_actions_window(cx);
+                crate::actions::resize_actions_window(cx, dialog);
+                return ActionsRoute::Handled;
+            }
         }
 
         // Check for printable character input (only when no modifiers are held)
@@ -1089,6 +1101,21 @@ impl ScriptListApp {
                     return ActionsRoute::Handled;
                 }
             }
+        }
+
+        // Cmd+V pastes into the popup search, like the main search input.
+        // Runs AFTER shortcut matching so a host action that binds ⌘V keeps
+        // its row shortcut.
+        if modifiers.platform
+            && !modifiers.shift
+            && !modifiers.control
+            && !modifiers.alt
+            && key.eq_ignore_ascii_case("v")
+        {
+            dialog.update(cx, |d, cx| d.handle_paste(cx));
+            crate::actions::notify_actions_window(cx);
+            crate::actions::resize_actions_window(cx, dialog);
+            return ActionsRoute::Handled;
         }
 
         // Modal behavior: swallow all other keys while popup is open
@@ -1717,7 +1744,8 @@ mod actions_dialog_wiring_regression_tests {
             .expect("Failed to read src/app_impl/actions_dialog.rs");
 
         assert!(
-            source.contains("!self.show_actions_popup && !crate::actions::is_actions_window_open()"),
+            source
+                .contains("!self.show_actions_popup && !crate::actions::is_actions_window_open()"),
             "shared actions router must keep routing keys while the detached actions window is open"
         );
     }

@@ -2310,9 +2310,18 @@ impl ScriptListApp {
                 } else {
                     // Activation is handled inside open_chat_window_with_thread.
                     self.close_agent_chat_to_script_list(false, cx);
+                    // The chat just popped out into its own window; dismiss the
+                    // always-on-top launcher panel so it doesn't linger behind
+                    // the detached window (focus-loss auto-hide is disabled
+                    // while a detached chat exists).
+                    self.dispatch_window_event(
+                        crate::window_orchestrator::WindowEvent::DismissMain,
+                        cx,
+                    );
                     tracing::info!(
                         event = "actions_detach_agent_chat_completed",
                         detached_window_activated = true,
+                        main_window_dismissed = true,
                     );
                     let mut o = DispatchOutcome::success();
                     o.user_message = panel_action.success_message().map(String::from);
@@ -2324,7 +2333,9 @@ impl ScriptListApp {
                 else {
                     return DispatchOutcome::not_handled();
                 };
-                crate::ai::agent_chat::ui::chat_window::close_chat_window(cx);
+                // The reattach helper reads the live thread out of the
+                // detached view BEFORE closing the window — do not pre-close
+                // here or the conversation hand-off is lost.
                 self.reattach_embedded_agent_chat_from_detached(cx);
                 let mut o = DispatchOutcome::success();
                 o.user_message = panel_action.success_message().map(String::from);

@@ -259,7 +259,9 @@ impl RootUnifiedActionSubject {
             Self::Clipboard(entry) => Some(format!("clipboard-history/{}", entry.id)),
             Self::BrowserTab(hit) => Some(hit.stable_key.clone()),
             Self::BrowserHistory(hit) => Some(hit.stable_key.clone()),
-            Self::AgentChatHistory(entry) => Some(format!("agent_chat-history/{}", entry.session_id)),
+            Self::AgentChatHistory(entry) => {
+                Some(format!("agent_chat-history/{}", entry.session_id))
+            }
             Self::AiVault(hit) => Some(hit.stable_key.clone()),
             Self::Dictation { id, .. } => Some(format!("dictation-history/{id}")),
             Self::App(app) => Some(
@@ -335,9 +337,9 @@ pub(crate) fn root_unified_action_subject_from_result(
         SearchResult::BrowserHistory(history) => Some(RootUnifiedActionSubject::BrowserHistory(
             history.hit.clone(),
         )),
-        SearchResult::AgentChatHistory(history) => {
-            Some(RootUnifiedActionSubject::AgentChatHistory(history.entry.clone()))
-        }
+        SearchResult::AgentChatHistory(history) => Some(
+            RootUnifiedActionSubject::AgentChatHistory(history.entry.clone()),
+        ),
         SearchResult::AiVault(ai_vault) => {
             Some(RootUnifiedActionSubject::AiVault(ai_vault.hit.clone()))
         }

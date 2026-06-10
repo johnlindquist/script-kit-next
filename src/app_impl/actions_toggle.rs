@@ -278,13 +278,11 @@ impl ScriptListApp {
         host: ActionsDialogHost,
         parent_automation_id: Option<String>,
     ) -> crate::actions::ActionsHostContextSnapshot {
-        let parent_automation_id = parent_automation_id.or_else(|| {
-            matches!(host, ActionsDialogHost::MainList).then(|| "main".to_string())
-        });
-        let parent_info =
-            parent_automation_id
-                .as_deref()
-                .and_then(crate::windows::automation_window_by_id);
+        let parent_automation_id = parent_automation_id
+            .or_else(|| matches!(host, ActionsDialogHost::MainList).then(|| "main".to_string()));
+        let parent_info = parent_automation_id
+            .as_deref()
+            .and_then(crate::windows::automation_window_by_id);
         let parent_kind = parent_info.as_ref().map(|info| format!("{:?}", info.kind));
         let parent_semantic_surface = parent_info.and_then(|info| info.semantic_surface);
 
@@ -311,8 +309,8 @@ impl ScriptListApp {
                     crate::list_item::GroupedListItem::Item(result_idx) => {
                         if Some(grouped_index) == selected_grouped {
                             if let Some(result) = flat_results.get(*result_idx) {
-                                parent_subject_id = parent_subject_id
-                                    .or_else(|| result.stable_selection_key());
+                                parent_subject_id =
+                                    parent_subject_id.or_else(|| result.stable_selection_key());
                                 let label = Self::script_list_result_label(result);
                                 selected_semantic_id = Some(crate::protocol::generate_semantic_id(
                                     "choice", row_index, &label,
@@ -826,81 +824,83 @@ impl ScriptListApp {
             // Open actions as a separate window with vibrancy blur
             self.begin_actions_popup_window_open(cx, window);
 
-            let agent_chat_context = if let AppView::AgentChatView { ref entity } = self.current_view {
-                // Trigger a preflight `session/new` so the agent re-advertises its
-                // model catalog before we snapshot `available_models` for the
-                // Change Model drill-down. Fire-and-forget: this dialog opening
-                // uses whatever the thread has right now; subsequent openings pick
-                // up whatever the agent just advertised.
-                let thread_for_refresh = if let crate::ai::agent_chat::ui::AgentChatSession::Live(ref thread) =
-                    entity.read(cx).session
-                {
-                    Some(thread.clone())
+            let agent_chat_context =
+                if let AppView::AgentChatView { ref entity } = self.current_view {
+                    // Trigger a preflight `session/new` so the agent re-advertises its
+                    // model catalog before we snapshot `available_models` for the
+                    // Change Model drill-down. Fire-and-forget: this dialog opening
+                    // uses whatever the thread has right now; subsequent openings pick
+                    // up whatever the agent just advertised.
+                    let thread_for_refresh =
+                        if let crate::ai::agent_chat::ui::AgentChatSession::Live(ref thread) =
+                            entity.read(cx).session
+                        {
+                            Some(thread.clone())
+                        } else {
+                            None
+                        };
+                    if let Some(thread) = thread_for_refresh {
+                        thread.update(cx, |thread, cx| thread.refresh_models(cx));
+                    }
+
+                    let (
+                        selected_model_id,
+                        available_models,
+                        focused_text,
+                        focused_text_expanded,
+                        standing_approval_count,
+                        thread_summaries,
+                        fork_points,
+                    ) = {
+                        let view = entity.read(cx);
+                        let focused_text = view.has_focused_text_context();
+                        let focused_text_expanded = view.focused_text_actions_expanded();
+                        let thread_summaries = view.retained_thread_summaries(cx);
+                        match &view.session {
+                            crate::ai::agent_chat::ui::AgentChatSession::Setup(_) => (
+                                None,
+                                Vec::new(),
+                                focused_text,
+                                focused_text_expanded,
+                                0,
+                                thread_summaries,
+                                Vec::new(),
+                            ),
+                            crate::ai::agent_chat::ui::AgentChatSession::Live(thread) => {
+                                let thread = thread.read(cx);
+                                (
+                                    thread.selected_model_id().map(str::to_string),
+                                    thread.available_models().to_vec(),
+                                    focused_text,
+                                    focused_text_expanded,
+                                    thread.standing_approvals().len(),
+                                    thread_summaries,
+                                    thread.fork_points().to_vec(),
+                                )
+                            }
+                        }
+                    };
+
+                    tracing::info!(
+                        target: "script_kit::tab_ai",
+                        event = "agent_chat_actions_context_built",
+                        selected_model_id = ?selected_model_id,
+                        model_count = available_models.len(),
+                        focused_text,
+                    );
+
+                    Some((
+                        selected_model_id,
+                        available_models,
+                        focused_text,
+                        focused_text_expanded,
+                        standing_approval_count,
+                        thread_summaries,
+                        fork_points,
+                    ))
                 } else {
                     None
                 };
-                if let Some(thread) = thread_for_refresh {
-                    thread.update(cx, |thread, cx| thread.refresh_models(cx));
-                }
-
-                let (
-                    selected_model_id,
-                    available_models,
-                    focused_text,
-                    focused_text_expanded,
-                    standing_approval_count,
-                    thread_summaries,
-                    fork_points,
-                ) = {
-                    let view = entity.read(cx);
-                    let focused_text = view.has_focused_text_context();
-                    let focused_text_expanded = view.focused_text_actions_expanded();
-                    let thread_summaries = view.retained_thread_summaries(cx);
-                    match &view.session {
-                        crate::ai::agent_chat::ui::AgentChatSession::Setup(_) => (
-                            None,
-                            Vec::new(),
-                            focused_text,
-                            focused_text_expanded,
-                            0,
-                            thread_summaries,
-                            Vec::new(),
-                        ),
-                        crate::ai::agent_chat::ui::AgentChatSession::Live(thread) => {
-                            let thread = thread.read(cx);
-                            (
-                                thread.selected_model_id().map(str::to_string),
-                                thread.available_models().to_vec(),
-                                focused_text,
-                                focused_text_expanded,
-                                thread.standing_approvals().len(),
-                                thread_summaries,
-                                thread.fork_points().to_vec(),
-                            )
-                        }
-                    }
-                };
-
-                tracing::info!(
-                    target: "script_kit::tab_ai",
-                    event = "agent_chat_actions_context_built",
-                    selected_model_id = ?selected_model_id,
-                    model_count = available_models.len(),
-                    focused_text,
-                );
-
-                Some((
-                    selected_model_id,
-                    available_models,
-                    focused_text,
-                    focused_text_expanded,
-                    standing_approval_count,
-                    thread_summaries,
-                    fork_points,
-                ))
-            } else {
-                None
-            };
             // Defensive guard for any explicit BuiltinList host path: its
             // selected_index belongs to that built-in list, not the script list
             // cache read by `get_focused_script_info`.
@@ -1269,7 +1269,10 @@ impl ScriptListApp {
                 })
         });
 
-        (profile_label, Some(model_label.unwrap_or_else(|| model_id.to_string())))
+        (
+            profile_label,
+            Some(model_label.unwrap_or_else(|| model_id.to_string())),
+        )
     }
 
     /// Refresh the cached footer agent/model labels from persisted preferences.

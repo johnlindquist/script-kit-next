@@ -264,7 +264,7 @@ fn parse_keycaps_simple_symbol() {
 }
 
 #[test]
-fn action_subtitle_is_hidden_even_when_description_exists() {
+fn action_subtitle_is_hidden_unless_host_opts_in() {
     let action = Action::new(
         "copy",
         "Copy to Clipboard",
@@ -272,9 +272,14 @@ fn action_subtitle_is_hidden_even_when_description_exists() {
         ActionCategory::ScriptContext,
     );
     assert_eq!(
-        super::dialog::action_subtitle_for_display(&action),
+        super::dialog::action_subtitle_for_display(&action, false),
         None,
-        "Action subtitles should not be rendered in the popup UI"
+        "Action-menu popups should not render subtitles"
+    );
+    assert_eq!(
+        super::dialog::action_subtitle_for_display(&action, true),
+        Some("Copy without pasting"),
+        "Switcher-style hosts opt in via config.show_subtitles"
     );
 }
 
@@ -386,44 +391,24 @@ fn score_combined_title_and_description() {
 }
 
 // ============================================================
-// 6. ActionsDialog::fuzzy_match
+// 6. Fuzzy matching is delegated to the shared launcher matcher
+//    (crate::scripts::search::SearchHighlightMatchCtx); subsequence
+//    semantics are covered via score_action above and the matcher's
+//    own tests in src/scripts/search.
 // ============================================================
 
 #[test]
-fn fuzzy_match_basic() {
-    assert!(super::dialog::ActionsDialog::fuzzy_match(
-        "edit script",
-        "esc"
-    ));
-    assert!(super::dialog::ActionsDialog::fuzzy_match(
-        "hello world",
-        "hwd"
-    ));
-}
-
-#[test]
-fn fuzzy_match_exact() {
-    assert!(super::dialog::ActionsDialog::fuzzy_match("abc", "abc"));
-}
-
-#[test]
-fn fuzzy_match_empty_needle() {
-    assert!(super::dialog::ActionsDialog::fuzzy_match("anything", ""));
-}
-
-#[test]
-fn fuzzy_match_no_match() {
-    assert!(!super::dialog::ActionsDialog::fuzzy_match("abc", "xyz"));
-}
-
-#[test]
-fn fuzzy_match_needle_longer_than_haystack() {
-    assert!(!super::dialog::ActionsDialog::fuzzy_match("ab", "abc"));
-}
-
-#[test]
-fn fuzzy_match_repeated_chars() {
-    assert!(super::dialog::ActionsDialog::fuzzy_match("aabbc", "abc"));
+fn score_fuzzy_match_subsequence_semantics() {
+    let action = Action::new("id", "Hello World", None, ActionCategory::ScriptContext);
+    assert!(
+        super::dialog::ActionsDialog::score_action(&action, "hwd") > 0,
+        "subsequence 'hwd' should fuzzy match 'Hello World'"
+    );
+    assert_eq!(
+        super::dialog::ActionsDialog::score_action(&action, "xyz"),
+        0,
+        "'xyz' should not match 'Hello World'"
+    );
 }
 
 // ============================================================

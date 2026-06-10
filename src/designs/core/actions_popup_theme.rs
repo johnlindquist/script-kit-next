@@ -93,8 +93,8 @@ pub fn base_actions_popup_theme() -> ActionsPopupThemeDef {
             prefix_gap: 6.0,
         },
         list: ActionsPopupListTokens {
-            row_height: 36.0,
-            empty_row_height: 36.0,
+            row_height: crate::actions::constants::ACTION_ITEM_HEIGHT,
+            empty_row_height: crate::actions::constants::ACTION_ITEM_HEIGHT,
             section_header_height: 24.0,
             padding_top: 0.0,
             padding_bottom: 0.0,

@@ -336,6 +336,7 @@ impl PermissionAssistantBuiltinAction {
             builtins::PermissionCommandType::AllowAccessibility => Some(Self::Accessibility),
             builtins::PermissionCommandType::AllowScreenRecording => Some(Self::ScreenRecording),
             builtins::PermissionCommandType::CheckPermissions
+            | builtins::PermissionCommandType::SetupPermissions
             | builtins::PermissionCommandType::RequestAccessibility
             | builtins::PermissionCommandType::OpenAccessibilitySettings => None,
         }
@@ -381,6 +382,7 @@ impl PermissionAssistantBuiltinAction {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum PermissionCommandBuiltinAction {
     CheckPermissions,
+    SetupPermissions,
     RequestAccessibility,
     OpenAccessibilitySettings,
     Assistant(PermissionAssistantBuiltinAction),
@@ -390,6 +392,7 @@ impl PermissionCommandBuiltinAction {
     fn from_command(command: builtins::PermissionCommandType) -> Self {
         match command {
             builtins::PermissionCommandType::CheckPermissions => Self::CheckPermissions,
+            builtins::PermissionCommandType::SetupPermissions => Self::SetupPermissions,
             builtins::PermissionCommandType::RequestAccessibility => Self::RequestAccessibility,
             builtins::PermissionCommandType::OpenAccessibilitySettings => {
                 Self::OpenAccessibilitySettings
@@ -405,6 +408,7 @@ impl PermissionCommandBuiltinAction {
     fn success_detail(self) -> &'static str {
         match self {
             Self::CheckPermissions => "check_permissions",
+            Self::SetupPermissions => "setup_permissions",
             Self::RequestAccessibility => "request_accessibility",
             Self::OpenAccessibilitySettings => "open_accessibility_settings",
             Self::Assistant(action) => action.success_detail(),
@@ -415,30 +419,27 @@ impl PermissionCommandBuiltinAction {
         match self {
             Self::OpenAccessibilitySettings => "open_accessibility_settings_failed",
             Self::Assistant(action) => action.failure_detail(),
-            Self::CheckPermissions | Self::RequestAccessibility => "",
+            Self::CheckPermissions | Self::SetupPermissions | Self::RequestAccessibility => "",
         }
     }
 
     fn all_permissions_granted_hud(self) -> &'static str {
         match self {
             Self::CheckPermissions => "All permissions granted!",
-            Self::RequestAccessibility | Self::OpenAccessibilitySettings | Self::Assistant(_) => "",
-        }
-    }
-
-    fn missing_permissions_message(self, missing: &[&str]) -> String {
-        match self {
-            Self::CheckPermissions => format!("Missing permissions: {}", missing.join(", ")),
-            Self::RequestAccessibility | Self::OpenAccessibilitySettings | Self::Assistant(_) => {
-                String::new()
-            }
+            Self::SetupPermissions
+            | Self::RequestAccessibility
+            | Self::OpenAccessibilitySettings
+            | Self::Assistant(_) => "",
         }
     }
 
     fn accessibility_granted_hud(self) -> &'static str {
         match self {
             Self::RequestAccessibility => "Accessibility permission granted!",
-            Self::CheckPermissions | Self::OpenAccessibilitySettings | Self::Assistant(_) => "",
+            Self::CheckPermissions
+            | Self::SetupPermissions
+            | Self::OpenAccessibilitySettings
+            | Self::Assistant(_) => "",
         }
     }
 
@@ -447,16 +448,20 @@ impl PermissionCommandBuiltinAction {
             Self::RequestAccessibility => {
                 "Accessibility permission not granted. Some features may not work."
             }
-            Self::CheckPermissions | Self::OpenAccessibilitySettings | Self::Assistant(_) => "",
+            Self::CheckPermissions
+            | Self::SetupPermissions
+            | Self::OpenAccessibilitySettings
+            | Self::Assistant(_) => "",
         }
     }
 
     fn open_settings_failure_message(self, error: &dyn std::fmt::Display) -> String {
         match self {
             Self::OpenAccessibilitySettings => format!("Failed to open settings: {error}"),
-            Self::CheckPermissions | Self::RequestAccessibility | Self::Assistant(_) => {
-                String::new()
-            }
+            Self::CheckPermissions
+            | Self::SetupPermissions
+            | Self::RequestAccessibility
+            | Self::Assistant(_) => String::new(),
         }
     }
 }
@@ -3350,7 +3355,12 @@ impl ScriptListApp {
     fn open_theme_chooser_view(&mut self, cx: &mut Context<Self>) {
         self.theme_before_chooser = Some(self.theme.clone());
         self.theme_chooser_management = None;
-        let start_index = theme::presets::find_current_preset_index(&self.theme);
+        self.theme_chooser_panel_mode = ThemeChooserPanelMode::default();
+        // Use the unified catalog (user themes + built-in presets) so the
+        // initial selection, list sizing, and scroll target all agree with
+        // what the gallery actually renders.
+        let catalog = Self::theme_chooser_catalog();
+        let start_index = Self::theme_chooser_catalog_index_for_theme(&catalog, &self.theme);
 
         self.open_builtin_filterable_view(
             AppView::ThemeChooserView {
@@ -3362,7 +3372,7 @@ impl ScriptListApp {
             cx,
         );
 
-        let item_count = theme::presets::presets_cached().len();
+        let item_count = catalog.len();
         let old_count = self.theme_chooser_list_state.item_count();
         if old_count != item_count {
             self.theme_chooser_list_state
@@ -5620,28 +5630,41 @@ impl ScriptListApp {
     ) -> crate::action_helpers::DispatchOutcome {
         match action {
             PermissionCommandBuiltinAction::CheckPermissions => {
-                let status = permissions_wizard::check_all_permissions();
-                if status.all_granted() {
+                // Honest check across all five permission kinds (not just
+                // accessibility). Anything ungranted routes into the wizard
+                // so the user can fix it in place.
+                let snapshot = permissions_wizard::PermissionSnapshot::current();
+                let ungranted: Vec<&str> = snapshot
+                    .cards
+                    .iter()
+                    .filter(|card| {
+                        card.status
+                            != crate::platform::permiso_detect::PermissionStatus::Authorized
+                    })
+                    .map(|card| card.kind.name())
+                    .collect();
+                if ungranted.is_empty() {
                     self.show_hud(
                         action.all_permissions_granted_hud().to_string(),
                         Some(HUD_SHORT_MS),
                         cx,
                     );
                 } else {
-                    let missing: Vec<_> = status
-                        .missing_permissions()
-                        .iter()
-                        .map(|p| p.permission_type.name())
-                        .collect();
                     self.toast_manager.push(
                         components::toast::Toast::warning(
-                            action.missing_permissions_message(&missing),
+                            format!("Not yet granted: {}", ungranted.join(", ")),
                             &self.theme,
                         )
                         .duration_ms(Some(TOAST_WARNING_MS)),
                     );
+                    self.open_permissions_wizard(cx);
                 }
                 cx.notify();
+                Self::builtin_success(dctx, action.success_detail())
+            }
+            PermissionCommandBuiltinAction::SetupPermissions => {
+                self.opened_from_main_menu = true;
+                self.open_permissions_wizard(cx);
                 Self::builtin_success(dctx, action.success_detail())
             }
             PermissionCommandBuiltinAction::RequestAccessibility => {
@@ -6293,14 +6316,9 @@ impl ScriptListApp {
                     }
                     crate::dictation::DictationTarget::TabAiHarness => {
                         self.seed_agent_chat_dictation_return_origin();
-                        if crate::ai::agent_chat::ui::chat_window::is_chat_window_open() {
-                            tracing::info!(
-                                category = "DICTATION",
-                                event = "dictation_agent_chat_detached_closed_for_embedded_reveal",
-                                "Closing detached Agent Chat before Agent Chat-targeted dictation reveal"
-                            );
-                            crate::ai::agent_chat::ui::chat_window::close_chat_window(&mut **cx);
-                        }
+                        // A detached chat window is an independent workspace:
+                        // dictation reveals the embedded chat without
+                        // destroying the user's detached conversation.
                         self.open_tab_ai_agent_chat_with_entry_intent_suppressing_focused_part(
                             Some(transcript.clone()),
                             cx,

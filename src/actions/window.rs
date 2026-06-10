@@ -108,6 +108,11 @@ static ACTIONS_WINDOW: OnceLock<Mutex<Option<WindowHandle<ActionsWindow>>>> = On
 
 /// Track the position mode of the current actions window for resize behavior
 static ACTIONS_WINDOW_POSITION: OnceLock<Mutex<WindowPosition>> = OnceLock::new();
+/// Parent window kind of the currently open actions window (None when closed).
+/// The main app's key interceptors consult this so they only route keys for
+/// popups the main launcher actually hosts; popups hosted by secondary windows
+/// (Notes, detached Agent Chat) own their keys via ActionsWindow::on_key_down.
+static ACTIONS_WINDOW_PARENT_KIND: OnceLock<Mutex<Option<AutomationWindowKind>>> = OnceLock::new();
 static ACTIONS_POPUP_AUTOMATION_SNAPSHOT: OnceLock<Mutex<Option<serde_json::Value>>> =
     OnceLock::new();
 static ACTIONS_POPUP_AUTOMATION_GENERATION: OnceLock<Mutex<u64>> = OnceLock::new();
@@ -129,12 +134,15 @@ enum ActionsWindowKeyIntent {
     SendToAgentChat,
     Close,
     Backspace,
+    /// Option+Backspace: delete the trailing word, like the main search input.
+    BackspaceWord,
     TypeChar(char),
 }
 
 #[inline]
 fn actions_window_key_intent(
     key: &str,
+    key_char: Option<&str>,
     modifiers: &gpui::Modifiers,
 ) -> Option<ActionsWindowKeyIntent> {
     if is_key_up(key) {
@@ -179,9 +187,24 @@ fn actions_window_key_intent(
         return Some(ActionsWindowKeyIntent::Close);
     }
     if is_key_backspace(key) || key.eq_ignore_ascii_case("delete") {
-        return Some(ActionsWindowKeyIntent::Backspace);
+        // Option+Backspace deletes a word like the main search input.
+        // Cmd+Backspace intentionally falls through (returns None) so
+        // destructive action shortcuts (e.g. Delete Note ⌘⌫) can match.
+        if modifiers.alt && !modifiers.platform && !modifiers.control {
+            return Some(ActionsWindowKeyIntent::BackspaceWord);
+        }
+        if !modifiers.platform && !modifiers.control {
+            return Some(ActionsWindowKeyIntent::Backspace);
+        }
+        return None;
     }
     if !modifiers.platform && !modifiers.control && !modifiers.alt {
+        // Full printable charset via the produced character (matches the main
+        // search input), falling back to single-char `key` names for callers
+        // without a key_char (tests, synthetic events).
+        if let Some(ch) = crate::ui_foundation::printable_char(key_char) {
+            return Some(ActionsWindowKeyIntent::TypeChar(ch));
+        }
         if let Some(ch) = key.chars().next() {
             if ch.is_alphanumeric() || ch.is_whitespace() || ch == '-' || ch == '_' {
                 return Some(ActionsWindowKeyIntent::TypeChar(ch));
@@ -264,7 +287,37 @@ fn clear_window_slot<T>(slot: &mut Option<T>) -> bool {
     had_value
 }
 
+fn set_actions_window_parent_kind(kind: Option<AutomationWindowKind>) {
+    if let Ok(mut guard) = ACTIONS_WINDOW_PARENT_KIND
+        .get_or_init(|| Mutex::new(None))
+        .lock()
+    {
+        *guard = kind;
+    }
+}
+
+/// Parent window kind of the currently open actions window, if any.
+pub fn actions_window_parent_kind() -> Option<AutomationWindowKind> {
+    ACTIONS_WINDOW_PARENT_KIND
+        .get_or_init(|| Mutex::new(None))
+        .lock()
+        .ok()
+        .and_then(|guard| *guard)
+}
+
+/// True when the detached actions window is open AND hosted by the main
+/// launcher window. Secondary-window popups (Notes, etc.) must return false
+/// so the main app's routers leave their keys alone.
+pub fn is_actions_window_open_for_main() -> bool {
+    is_actions_window_open()
+        && matches!(
+            actions_window_parent_kind(),
+            Some(AutomationWindowKind::Main)
+        )
+}
+
 fn clear_actions_window_handle(reason: &str) {
+    set_actions_window_parent_kind(None);
     let Some(window_storage) = ACTIONS_WINDOW.get() else {
         crate::logging::log(
             "ACTIONS",
@@ -644,7 +697,11 @@ impl Render for ActionsWindow {
                 ),
             );
 
-            let handled = match actions_window_key_intent(key, modifiers) {
+            let handled = match actions_window_key_intent(
+                key,
+                event.keystroke.key_char.as_deref(),
+                modifiers,
+            ) {
                 Some(ActionsWindowKeyIntent::MoveUp) => {
                     crate::logging::log("ACTIONS", "ActionsWindow: handling UP arrow");
 
@@ -787,6 +844,16 @@ impl Render for ActionsWindow {
                     cx.notify();
                     true
                 }
+                Some(ActionsWindowKeyIntent::BackspaceWord) => {
+                    crate::logging::log("ACTIONS", "ActionsWindow: word backspace pressed");
+                    this.dialog.update(cx, |d, cx| d.handle_backspace_word(cx));
+                    let dialog = this.dialog.clone();
+                    window.defer(cx, move |window, cx| {
+                        resize_actions_window_direct(window, cx, &dialog);
+                    });
+                    cx.notify();
+                    true
+                }
                 Some(ActionsWindowKeyIntent::TypeChar(ch)) => {
                     crate::logging::log(
                         "ACTIONS",
@@ -827,6 +894,22 @@ impl Render for ActionsWindow {
                             .dialog
                             .update(cx, |d, cx| d.activate_action_id(action_id, cx));
                         this.handle_dialog_activation(activation, window, cx, "shortcut_execute");
+                        true
+                    } else if modifiers.platform
+                        && !modifiers.shift
+                        && !modifiers.control
+                        && !modifiers.alt
+                        && key.eq_ignore_ascii_case("v")
+                    {
+                        // Cmd+V pastes into the popup search, like the main
+                        // search input. Runs after shortcut matching so a host
+                        // action that binds ⌘V keeps its row shortcut.
+                        this.dialog.update(cx, |d, cx| d.handle_paste(cx));
+                        let dialog = this.dialog.clone();
+                        window.defer(cx, move |window, cx| {
+                            resize_actions_window_direct(window, cx, &dialog);
+                        });
+                        cx.notify();
                         true
                     } else {
                         false
@@ -954,20 +1037,20 @@ mod window_lifecycle_tests {
         let no_mods = gpui::Modifiers::default();
 
         assert_eq!(
-            actions_window_key_intent("up", &no_mods),
+            actions_window_key_intent("up", None, &no_mods),
             Some(ActionsWindowKeyIntent::MoveUp)
         );
         assert_eq!(
-            actions_window_key_intent("arrowup", &no_mods),
+            actions_window_key_intent("arrowup", None, &no_mods),
             Some(ActionsWindowKeyIntent::MoveUp)
         );
 
         assert_eq!(
-            actions_window_key_intent("down", &no_mods),
+            actions_window_key_intent("down", None, &no_mods),
             Some(ActionsWindowKeyIntent::MoveDown)
         );
         assert_eq!(
-            actions_window_key_intent("arrowdown", &no_mods),
+            actions_window_key_intent("arrowdown", None, &no_mods),
             Some(ActionsWindowKeyIntent::MoveDown)
         );
     }
@@ -979,25 +1062,58 @@ mod window_lifecycle_tests {
         cmd_only.platform = true;
 
         assert_eq!(
-            actions_window_key_intent("enter", &no_mods),
+            actions_window_key_intent("enter", None, &no_mods),
             Some(ActionsWindowKeyIntent::ExecuteSelected)
         );
         assert_eq!(
-            actions_window_key_intent("Enter", &no_mods),
+            actions_window_key_intent("Enter", None, &no_mods),
             Some(ActionsWindowKeyIntent::ExecuteSelected)
         );
 
         assert_eq!(
-            actions_window_key_intent("escape", &no_mods),
+            actions_window_key_intent("escape", None, &no_mods),
             Some(ActionsWindowKeyIntent::Close)
         );
         assert_eq!(
-            actions_window_key_intent("Escape", &no_mods),
+            actions_window_key_intent("Escape", None, &no_mods),
             Some(ActionsWindowKeyIntent::Close)
         );
         assert_eq!(
-            actions_window_key_intent("k", &cmd_only),
+            actions_window_key_intent("k", None, &cmd_only),
             Some(ActionsWindowKeyIntent::Close)
+        );
+    }
+
+    #[test]
+    fn test_actions_window_key_intent_search_input_upgrades() {
+        let no_mods = gpui::Modifiers::default();
+        let mut shift_only = gpui::Modifiers::default();
+        shift_only.shift = true;
+        let mut alt_only = gpui::Modifiers::default();
+        alt_only.alt = true;
+        let mut cmd_only = gpui::Modifiers::default();
+        cmd_only.platform = true;
+
+        // Option+Backspace deletes a word; Cmd+Backspace falls through so
+        // destructive action shortcuts (e.g. Delete Note ⌘⌫) can match.
+        assert_eq!(
+            actions_window_key_intent("backspace", None, &alt_only),
+            Some(ActionsWindowKeyIntent::BackspaceWord)
+        );
+        assert_eq!(
+            actions_window_key_intent("backspace", None, &cmd_only),
+            None
+        );
+
+        // Full printable charset arrives via key_char (shifted symbols,
+        // punctuation), matching the main search input.
+        assert_eq!(
+            actions_window_key_intent("1", Some("!"), &shift_only),
+            Some(ActionsWindowKeyIntent::TypeChar('!'))
+        );
+        assert_eq!(
+            actions_window_key_intent(".", Some("."), &no_mods),
+            Some(ActionsWindowKeyIntent::TypeChar('.'))
         );
     }
 }
@@ -1020,33 +1136,36 @@ mod tests {
         let no_mods = gpui::Modifiers::default();
 
         assert_eq!(
-            actions_window_key_intent("return", &no_mods),
+            actions_window_key_intent("return", None, &no_mods),
             Some(ActionsWindowKeyIntent::ExecuteSelected)
         );
         assert_eq!(
-            actions_window_key_intent("esc", &no_mods),
+            actions_window_key_intent("esc", None, &no_mods),
             Some(ActionsWindowKeyIntent::Close)
         );
         assert_eq!(
-            actions_window_key_intent("home", &no_mods),
+            actions_window_key_intent("home", None, &no_mods),
             Some(ActionsWindowKeyIntent::MoveHome)
         );
         assert_eq!(
-            actions_window_key_intent("end", &no_mods),
+            actions_window_key_intent("end", None, &no_mods),
             Some(ActionsWindowKeyIntent::MoveEnd)
         );
         assert_eq!(
-            actions_window_key_intent("pageup", &no_mods),
+            actions_window_key_intent("pageup", None, &no_mods),
             Some(ActionsWindowKeyIntent::MovePageUp)
         );
         assert_eq!(
-            actions_window_key_intent("pagedown", &no_mods),
+            actions_window_key_intent("pagedown", None, &no_mods),
             Some(ActionsWindowKeyIntent::MovePageDown)
         );
     }
 
     #[test]
     fn test_actions_window_dynamic_height_matches_single_row_when_empty() {
+        let row_height = crate::designs::current_actions_popup_theme()
+            .list
+            .row_height;
         let empty_height = actions_window_dynamic_height(
             0,
             0,
@@ -1054,6 +1173,7 @@ mod tests {
             false,
             false,
             crate::actions::constants::POPUP_MAX_HEIGHT,
+            row_height,
         );
         let single_row_height = actions_window_dynamic_height(
             1,
@@ -1062,6 +1182,7 @@ mod tests {
             false,
             false,
             crate::actions::constants::POPUP_MAX_HEIGHT,
+            row_height,
         );
 
         assert!(
@@ -1072,6 +1193,9 @@ mod tests {
 
     #[test]
     fn test_actions_window_dynamic_height_includes_footer_height() {
+        let row_height = crate::designs::current_actions_popup_theme()
+            .list
+            .row_height;
         let without_footer = actions_window_dynamic_height(
             3,
             1,
@@ -1079,6 +1203,7 @@ mod tests {
             true,
             false,
             crate::actions::constants::POPUP_MAX_HEIGHT,
+            row_height,
         );
         let with_footer = actions_window_dynamic_height(
             3,
@@ -1087,6 +1212,7 @@ mod tests {
             true,
             true,
             crate::actions::constants::POPUP_MAX_HEIGHT,
+            row_height,
         );
 
         assert!(
@@ -1115,7 +1241,10 @@ mod tests {
         )
         .expect("actions list bottom padding should be settable");
 
-        let height = actions_window_dynamic_height(20, 4, false, true, false, 400.0);
+        let row_height = crate::designs::current_actions_popup_theme()
+            .list
+            .row_height;
+        let height = actions_window_dynamic_height(20, 4, false, true, false, 400.0, row_height);
 
         assert_eq!(height, 242.0);
         crate::dev_style_tool::runtime_overrides::reset_all();
@@ -1134,6 +1263,7 @@ pub(super) fn actions_window_dynamic_height(
     has_header: bool,
     show_footer: bool,
     max_height: f32,
+    row_height: f32,
 ) -> f32 {
     const POPUP_FOOTER_HEIGHT: f32 = 32.0;
     let tokens = crate::designs::current_actions_popup_theme();
@@ -1160,7 +1290,7 @@ pub(super) fn actions_window_dynamic_height(
     };
     let list_padding_height = tokens.list.padding_top + tokens.list.padding_bottom;
     let max_height = max_height.min(tokens.shell.max_height);
-    let items_height = ((num_actions as f32 * tokens.list.row_height + section_headers_height)
+    let items_height = ((num_actions as f32 * row_height + section_headers_height)
         .max(min_items_height)
         + list_padding_height)
         .min(max_height - search_box_height - header_height - footer_height);
@@ -1188,6 +1318,7 @@ fn compute_popup_height(dialog: &ActionsDialog) -> f32 {
         has_header,
         show_footer,
         dialog.config.max_height,
+        dialog.effective_row_height(),
     )
 }
 
@@ -1780,6 +1911,7 @@ pub fn open_actions_window(
 
     // Close any existing actions window first
     close_actions_window(cx);
+    set_actions_window_parent_kind(Some(parent_kind));
 
     // Load theme for vibrancy settings
     let theme = get_cached_theme();
@@ -1978,6 +2110,7 @@ pub fn open_actions_window(
 
 /// Close the actions window if it's open
 pub fn close_actions_window(cx: &mut App) {
+    set_actions_window_parent_kind(None);
     // Unregister from automation registry before destroying the window
     unregister_actions_dialog_automation_surfaces();
 

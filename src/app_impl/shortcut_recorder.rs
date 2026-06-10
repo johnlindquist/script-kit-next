@@ -81,10 +81,7 @@ impl ScriptListApp {
         }
     }
 
-    pub(crate) fn remove_config_command_shortcut(
-        &self,
-        command_id: &str,
-    ) -> anyhow::Result<()> {
+    pub(crate) fn remove_config_command_shortcut(&self, command_id: &str) -> anyhow::Result<()> {
         let script_path = shortcut_config_script_path("remove-config-shortcut.ts")?;
         let output = std::process::Command::new(shortcut_config_bun_path())
             .arg(script_path)
@@ -661,8 +658,8 @@ export default {
                 // Create the recorder with its own focus handle from its own context
                 // This is CRITICAL for keyboard events to work
                 let conflict_command_id = command_id.clone();
-                let mut r = ShortcutRecorder::new(cx, theme).with_conflict_checker(
-                    move |recorded| {
+                let mut r =
+                    ShortcutRecorder::new(cx, theme).with_conflict_checker(move |recorded| {
                         crate::hotkeys::shortcut_conflict_for_recording(
                             &conflict_command_id,
                             &recorded.to_config_string(),
@@ -673,8 +670,7 @@ export default {
                                 shortcut: conflict.shortcut,
                             }
                         })
-                    },
-                );
+                    });
                 r.set_command_name(Some(command_name.clone()));
                 r.set_command_description(Some(format!("ID: {}", command_id)));
 
@@ -858,10 +854,7 @@ export default {
                 // Register the hotkey immediately so it works without restart
                 match crate::hotkeys::update_script_hotkey(&command_id, None, Some(&shortcut_str)) {
                     Ok(()) => {
-                        logging::log(
-                            "SHORTCUT",
-                            "Registered config shortcut immediately",
-                        );
+                        logging::log("SHORTCUT", "Registered config shortcut immediately");
                         self.show_hud(
                             format!("Shortcut set: {} (active now)", shortcut.display()),
                             Some(HUD_MEDIUM_MS),
@@ -873,7 +866,10 @@ export default {
                         // the live binding stays inactive until the user resolves the OS/global conflict.
                         logging::log(
                             "SHORTCUT",
-                            &format!("Shortcut saved but registration failed: {} - not active now", e),
+                            &format!(
+                                "Shortcut saved but registration failed: {} - not active now",
+                                e
+                            ),
                         );
                         self.show_hud(
                             format!("Shortcut saved: {} (not active now)", shortcut.display()),

@@ -280,31 +280,44 @@ fn get_state_exposes_submit_diagnostics_receipt() {
     );
 }
 
+/// WHY: an empty `@source:` colon mode (`@clipboard:` showing recents) must
+/// never let a reflexive double-Enter attach a recent item the user never
+/// chose. The old mechanism was a selectable "Type to search" guard row; the
+/// current one renders recents UNARMED (no selected row, hint in ghost text +
+/// section header) until an explicit Down/click. This locks the unarmed
+/// mechanism: no fake guard row may return, Enter must be consumed while
+/// suppressed, and Down must be the arming gesture.
 #[test]
 fn empty_spine_subsearch_prefixes_are_not_submit_armed() {
-    assert!(
-        FILTERING_CACHE.contains("gets a selected guard row before native recents")
-            && FILTERING_CACHE.contains("Down/click remains explicit")
-            && FILTERING_CACHE.contains("prepend_empty_context_subsearch_guard("),
-        "rich subsearch routing must document and install the neutral empty-prefix guard before native rows are armed"
-    );
+    const AGENT_HANDOFF: &str = include_str!("../src/app_impl/agent_handoff/mod.rs");
+    const IMPL_MOVEMENT: &str = include_str!("../src/app_navigation/impl_movement.rs");
 
     let rich_classifier = source_window(FILTERING_CACHE, "fn active_rich_spine_subsearch(", 900);
     assert!(
         rich_classifier.contains("query.trim().to_string()"),
-        "empty @file:/@clipboard:/@history: prefixes must keep using the rich path so the selected guard can precede native rows"
+        "empty @file:/@clipboard:/@history: prefixes must keep using the rich path so unarmed recents render"
     );
+
+    // The hint affordance must never be a selectable list row again: no
+    // guard-row id and no consuming placeholder action anywhere in the
+    // grouped-results builder.
     assert!(
-        FILTERING_CACHE.contains("SpineListAction::AwaitContextSubsearchInput")
-            && FILTERING_CACHE.contains("spine:context-subsearch:{prefix}:empty-guard"),
-        "empty context subsearch guard must be a selectable Spine row with a consuming action"
+        !FILTERING_CACHE.contains("empty-guard")
+            && !FILTERING_CACHE.contains("AwaitContextSubsearchInput"),
+        "the empty colon-mode hint must ride ghost text + the section header, not a selectable first row"
     );
+
+    let spine_enter = source_window(AGENT_HANDOFF, "fn try_handle_spine_enter(", 1400);
     assert!(
-        FILTERING_CACHE.contains("SpineListAction::AwaitContextSubsearchInput")
-            && include_str!("../src/app_impl/filter_input_updates.rs")
-                .contains("event = \"empty_context_subsearch_enter_consumed\"")
-            && include_str!("../src/app_impl/filter_input_updates.rs")
-                .contains("SpineListAction::AwaitContextSubsearchInput { source } =>"),
-        "empty context subsearch guard must consume Enter instead of falling through like Noop"
+        spine_enter.contains("spine_empty_subsearch_selection_suppressed()")
+            && spine_enter.contains("empty_context_subsearch_enter_consumed"),
+        "Enter in an unarmed empty colon mode must be consumed before any row acceptance or plan submission"
+    );
+
+    let down = source_window(IMPL_MOVEMENT, "fn move_selection_down(", 1200);
+    assert!(
+        down.contains("spine_empty_subsearch_selection_suppressed()")
+            && down.contains("arm_spine_empty_subsearch_selection()"),
+        "Down must be the explicit arming gesture for the unarmed empty colon mode"
     );
 }
