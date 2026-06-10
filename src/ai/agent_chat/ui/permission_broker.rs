@@ -72,6 +72,24 @@ impl AgentChatApprovalOption {
     }
 }
 
+/// A session-scoped permission grant recorded when the user picks a
+/// persistent "Allow always" option.
+///
+/// Pi's runtime owns the actual approval cache; this record exists so the UI
+/// can show the user which standing grants are active in the session instead
+/// of letting "Allow always" decisions vanish invisibly.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct AgentChatStandingApproval {
+    /// Human-readable tool name (e.g., "Write file", "bash").
+    pub tool_title: String,
+    /// Primary subject at grant time (file path, command), when known.
+    pub subject: Option<String>,
+    /// Semantic badge for the tool category (e.g., "Runs command").
+    pub kind_badge: &'static str,
+    /// The option the user chose, e.g. "Allow always (AllowAlways)".
+    pub option_label: String,
+}
+
 /// Build summary labels for a slice of approval options.
 pub(crate) fn summarize_approval_options(options: &[AgentChatApprovalOption]) -> Vec<String> {
     options

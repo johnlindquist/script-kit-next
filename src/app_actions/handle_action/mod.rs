@@ -1608,6 +1608,15 @@ impl ScriptListApp {
         }
 
         match action_id {
+            "agent_chat_review_approvals" => {
+                let entity = entity.clone();
+                entity.update(cx, |chat, cx| {
+                    if let Some(thread) = chat.thread() {
+                        thread.update(cx, |thread, cx| thread.review_standing_approvals(cx));
+                    }
+                });
+                DispatchOutcome::success()
+            }
             "agent_chat_copy_last_response" => {
                 let Some(last_response_action) =
                     AgentChatLastResponseHandlerAction::from_action_id(action_id)
@@ -2094,6 +2103,13 @@ impl ScriptListApp {
                         .unwrap_or(0)
                 };
 
+                let thread_source = {
+                    let view = entity.read(cx);
+                    view.thread().map(|thread| {
+                        crate::notes::agent_chat_thread_source(thread.read(cx).ui_thread_id())
+                    })
+                };
+
                 tracing::info!(
                     target: "script_kit::tab_ai",
                     event = "agent_chat_save_as_note_started",
@@ -2116,7 +2132,8 @@ impl ScriptListApp {
                 };
 
                 let char_count = markdown.chars().count();
-                match crate::notes::save_note_with_content(cx, markdown) {
+                match crate::notes::save_note_with_content_and_source(cx, markdown, thread_source)
+                {
                     Ok(_) => {
                         self.close_agent_chat_to_script_list(false, cx);
                         tracing::info!(

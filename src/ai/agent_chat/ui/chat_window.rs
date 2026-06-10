@@ -769,24 +769,26 @@ pub fn toggle_detached_actions(cx: &mut App) {
     let agent_chat_context: Option<(
         Option<String>,
         Vec<crate::ai::agent_chat::ui::config::AgentChatModelEntry>,
+        usize,
     )> = view_weak.as_ref().and_then(|weak| {
         weak.upgrade().map(|entity| {
             let view = entity.read(cx);
             match &view.session {
-                crate::ai::agent_chat::ui::AgentChatSession::Setup(_) => (None, Vec::new()),
+                crate::ai::agent_chat::ui::AgentChatSession::Setup(_) => (None, Vec::new(), 0),
                 crate::ai::agent_chat::ui::AgentChatSession::Live(thread) => {
                     let thread = thread.read(cx);
                     (
                         thread.selected_model_id().map(str::to_string),
                         thread.available_models().to_vec(),
+                        thread.standing_approvals().len(),
                     )
                 }
             }
         })
     });
 
-    let (selected_model_id, available_models) =
-        agent_chat_context.unwrap_or_else(|| (None, Vec::new()));
+    let (selected_model_id, available_models, standing_approval_count) =
+        agent_chat_context.unwrap_or_else(|| (None, Vec::new(), 0));
 
     let dialog = cx.new(|cx| {
         let focus_handle = cx.focus_handle();
@@ -798,6 +800,7 @@ pub fn toggle_detached_actions(cx: &mut App) {
                 selected_model_id: selected_model_id.as_deref(),
                 focused_text: false,
                 focused_text_expanded: false,
+                standing_approval_count,
             },
             theme_arc,
             crate::actions::AgentChatActionsDialogHost::Detached,
@@ -1208,6 +1211,16 @@ fn dispatch_detached_action(
     }
 
     match action_id {
+        "agent_chat_review_approvals" => {
+            if let Some(entity) = entity_weak.upgrade() {
+                entity.update(cx, |chat, cx| {
+                    if let Some(thread) = chat.thread() {
+                        thread.update(cx, |thread, cx| thread.review_standing_approvals(cx));
+                    }
+                });
+                tracing::info!(event = "detached_action_review_approvals");
+            }
+        }
         "agent_chat_copy_last_response" => {
             if let Some(entity) = entity_weak.upgrade() {
                 let maybe_last = {
@@ -1286,16 +1299,24 @@ fn dispatch_detached_action(
         }
         "agent_chat_save_as_note" => {
             if let Some(entity) = entity_weak.upgrade() {
-                let maybe_markdown = {
+                let (maybe_markdown, thread_source) = {
                     let view = entity.read(cx);
-                    view.thread().and_then(|thread| {
+                    let maybe_markdown = view.thread().and_then(|thread| {
                         super::export::build_agent_chat_conversation_markdown_from_thread(
                             thread.read(cx),
                         )
-                    })
+                    });
+                    let thread_source = view.thread().map(|thread| {
+                        crate::notes::agent_chat_thread_source(thread.read(cx).ui_thread_id())
+                    });
+                    (maybe_markdown, thread_source)
                 };
                 if let Some(markdown) = maybe_markdown {
-                    match crate::notes::save_note_with_content(cx, markdown) {
+                    match crate::notes::save_note_with_content_and_source(
+                        cx,
+                        markdown,
+                        thread_source,
+                    ) {
                         Ok(()) => {
                             close_chat_window(cx);
                             tracing::info!(

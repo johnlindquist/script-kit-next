@@ -420,15 +420,16 @@ impl NotesApp {
         }
 
         // Read Agent Chat model context from the cached view.
-        let (selected_model_id, available_models) = {
+        let (selected_model_id, available_models, standing_approval_count) = {
             let view = agent_chat_view.read(cx);
             match &view.session {
-                crate::ai::agent_chat::ui::AgentChatSession::Setup(_) => (None, Vec::new()),
+                crate::ai::agent_chat::ui::AgentChatSession::Setup(_) => (None, Vec::new(), 0),
                 crate::ai::agent_chat::ui::AgentChatSession::Live(thread) => {
                     let thread = thread.read(cx);
                     (
                         thread.selected_model_id().map(str::to_string),
                         thread.available_models().to_vec(),
+                        thread.standing_approvals().len(),
                     )
                 }
             }
@@ -456,6 +457,7 @@ impl NotesApp {
                     selected_model_id: selected_model_id.as_deref(),
                     focused_text: false,
                     focused_text_expanded: false,
+                    standing_approval_count,
                 },
                 theme_arc,
                 crate::actions::AgentChatActionsDialogHost::Notes,
@@ -817,6 +819,13 @@ fn dispatch_notes_agent_chat_action(
     }
 
     match action_id {
+        "agent_chat_review_approvals" => {
+            agent_chat_entity.update(cx, |chat, cx| {
+                if let Some(thread) = chat.thread() {
+                    thread.update(cx, |thread, cx| thread.review_standing_approvals(cx));
+                }
+            });
+        }
         "agent_chat_copy_last_response" => {
             let maybe_last = {
                 let view = agent_chat_entity.read(cx);

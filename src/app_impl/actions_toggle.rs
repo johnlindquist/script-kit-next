@@ -843,13 +843,19 @@ impl ScriptListApp {
                     thread.update(cx, |thread, cx| thread.refresh_models(cx));
                 }
 
-                let (selected_model_id, available_models, focused_text, focused_text_expanded) = {
+                let (
+                    selected_model_id,
+                    available_models,
+                    focused_text,
+                    focused_text_expanded,
+                    standing_approval_count,
+                ) = {
                     let view = entity.read(cx);
                     let focused_text = view.has_focused_text_context();
                     let focused_text_expanded = view.focused_text_actions_expanded();
                     match &view.session {
                         crate::ai::agent_chat::ui::AgentChatSession::Setup(_) => {
-                            (None, Vec::new(), focused_text, focused_text_expanded)
+                            (None, Vec::new(), focused_text, focused_text_expanded, 0)
                         }
                         crate::ai::agent_chat::ui::AgentChatSession::Live(thread) => {
                             let thread = thread.read(cx);
@@ -858,6 +864,7 @@ impl ScriptListApp {
                                 thread.available_models().to_vec(),
                                 focused_text,
                                 focused_text_expanded,
+                                thread.standing_approvals().len(),
                             )
                         }
                     }
@@ -876,6 +883,7 @@ impl ScriptListApp {
                     available_models,
                     focused_text,
                     focused_text_expanded,
+                    standing_approval_count,
                 ))
             } else {
                 None
@@ -949,6 +957,7 @@ impl ScriptListApp {
                     ref available_models,
                     focused_text,
                     focused_text_expanded,
+                    standing_approval_count,
                 )) = agent_chat_context
                 {
                     // Agent Chat chat view: use route-based dialog with drill-down model/profile pickers
@@ -960,6 +969,7 @@ impl ScriptListApp {
                             selected_model_id: selected_model_id.as_deref(),
                             focused_text,
                             focused_text_expanded,
+                            standing_approval_count,
                         },
                         std::sync::Arc::clone(&theme_arc),
                     )

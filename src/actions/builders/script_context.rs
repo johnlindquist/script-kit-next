@@ -851,6 +851,9 @@ pub(crate) fn agent_chat_switch_profile_id_from_action(action_id: &str) -> Optio
     action_id.strip_prefix(AGENT_CHAT_SWITCH_PROFILE_ACTION_PREFIX)
 }
 
+/// Action ID for reviewing session "Allow always" permission grants.
+pub(crate) const AGENT_CHAT_REVIEW_APPROVALS_ACTION_ID: &str = "agent_chat_review_approvals";
+
 /// Actions available in the Agent Chat chat view (Cmd+K menu).
 #[allow(dead_code)]
 pub fn get_agent_chat_actions() -> Vec<Action> {
@@ -1306,6 +1309,7 @@ fn agent_chat_profile_picker_actions(
 pub(crate) fn get_agent_chat_root_actions(
     available_models: &[crate::ai::agent_chat::ui::config::AgentChatModelEntry],
     selected_model_id: Option<&str>,
+    standing_approval_count: usize,
 ) -> Vec<Action> {
     let profile_entries = agent_chat_profile_picker_entries();
     let selected_profile_id = selected_agent_chat_profile_picker_id();
@@ -1339,6 +1343,19 @@ pub(crate) fn get_agent_chat_root_actions(
                 ActionCategory::ScriptContext,
             )
             .with_icon(IconName::Settings)
+            .with_section("Agent"),
+        );
+    }
+
+    if standing_approval_count > 0 {
+        actions.push(
+            Action::new(
+                AGENT_CHAT_REVIEW_APPROVALS_ACTION_ID,
+                format!("Review Auto-Approvals ({standing_approval_count})"),
+                Some("List the permissions this session was granted with Allow Always".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_icon(IconName::Check)
             .with_section("Agent"),
         );
     }
@@ -1518,6 +1535,7 @@ fn filter_agent_chat_actions_for_host(
 pub(crate) fn get_agent_chat_root_route_for_host(
     available_models: &[crate::ai::agent_chat::ui::config::AgentChatModelEntry],
     selected_model_id: Option<&str>,
+    standing_approval_count: usize,
     host: AgentChatActionsDialogHost,
 ) -> crate::actions::ActionsDialogRoute {
     let host_label = match host {
@@ -1528,7 +1546,7 @@ pub(crate) fn get_agent_chat_root_route_for_host(
 
     let actions = filter_agent_chat_actions_for_host(
         host,
-        get_agent_chat_root_actions(available_models, selected_model_id),
+        get_agent_chat_root_actions(available_models, selected_model_id, standing_approval_count),
     );
 
     let model_count = available_models.len();
@@ -1672,6 +1690,7 @@ pub(crate) fn get_agent_chat_root_route(
     get_agent_chat_root_route_for_host(
         available_models,
         selected_model_id,
+        0,
         AgentChatActionsDialogHost::Shared,
     )
 }
@@ -2148,11 +2167,11 @@ mod tests {
     #[test]
     fn test_agent_chat_close_shortcut_is_only_advertised_for_detached_host() {
         let shared =
-            get_agent_chat_root_route_for_host(&[], None, AgentChatActionsDialogHost::Shared);
+            get_agent_chat_root_route_for_host(&[], None, 0, AgentChatActionsDialogHost::Shared);
         let notes =
-            get_agent_chat_root_route_for_host(&[], None, AgentChatActionsDialogHost::Notes);
+            get_agent_chat_root_route_for_host(&[], None, 0, AgentChatActionsDialogHost::Notes);
         let detached =
-            get_agent_chat_root_route_for_host(&[], None, AgentChatActionsDialogHost::Detached);
+            get_agent_chat_root_route_for_host(&[], None, 0, AgentChatActionsDialogHost::Detached);
 
         let shared_close = shared
             .actions
@@ -2227,6 +2246,7 @@ mod tests {
                 sample_agent_chat_model("claude-opus-4-6", "Opus 4.6"),
             ],
             Some("claude-sonnet-4-6"),
+            0,
         );
 
         let change_model = actions
@@ -2241,9 +2261,28 @@ mod tests {
     }
 
     #[test]
+    fn test_agent_chat_root_actions_surface_review_approvals_only_when_grants_exist() {
+        let without_grants = get_agent_chat_root_actions(&[], None, 0);
+        assert!(
+            !without_grants
+                .iter()
+                .any(|action| action.id == AGENT_CHAT_REVIEW_APPROVALS_ACTION_ID),
+            "no review action when the session has no standing grants"
+        );
+
+        let with_grants = get_agent_chat_root_actions(&[], None, 2);
+        let review = with_grants
+            .iter()
+            .find(|action| action.id == AGENT_CHAT_REVIEW_APPROVALS_ACTION_ID)
+            .expect("review action should exist when standing grants exist");
+        assert_eq!(review.title, "Review Auto-Approvals (2)");
+        assert_eq!(review.section.as_deref(), Some("Agent"));
+    }
+
+    #[test]
     fn detached_agent_chat_history_routes_through_actions_dialog() {
         let detached =
-            get_agent_chat_root_route_for_host(&[], None, AgentChatActionsDialogHost::Detached);
+            get_agent_chat_root_route_for_host(&[], None, 0, AgentChatActionsDialogHost::Detached);
         assert!(
             detached
                 .actions

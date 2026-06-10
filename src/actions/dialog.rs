@@ -721,6 +721,8 @@ pub struct AgentChatActionsDialogContext<'a> {
     pub(crate) selected_model_id: Option<&'a str>,
     pub(crate) focused_text: bool,
     pub(crate) focused_text_expanded: bool,
+    /// Count of session "Allow always" grants; >0 adds the review action.
+    pub(crate) standing_approval_count: usize,
 }
 
 /// Immutable parent/subject identity captured when an ActionsDialog opens.
@@ -1814,6 +1816,7 @@ impl ActionsDialog {
             super::builders::get_agent_chat_root_route_for_host(
                 context.available_models,
                 context.selected_model_id,
+                context.standing_approval_count,
                 host,
             )
         };
@@ -2075,9 +2078,9 @@ impl ActionsDialog {
             let inner_rect = if kind == "action" {
                 Self::devtools_rect(
                     ACTION_ROW_INSET,
-                    viewport_y + 2.0,
+                    viewport_y,
                     POPUP_WIDTH - (ACTION_ROW_INSET * 2.0),
-                    (height - 4.0).max(0.0),
+                    height,
                 )
             } else {
                 Self::devtools_rect(0.0, viewport_y, POPUP_WIDTH, height)
@@ -2098,9 +2101,9 @@ impl ActionsDialog {
                     .and_then(serde_json::Value::as_f64)
                     .unwrap_or(0.0) as f32;
                 let inner_x = ACTION_ROW_INSET;
-                let inner_y = viewport_y + 2.0;
+                let inner_y = viewport_y;
                 let inner_width = POPUP_WIDTH - (ACTION_ROW_INSET * 2.0);
-                let inner_height = (height - 4.0).max(0.0);
+                let inner_height = height;
                 let shortcut_x = inner_x + (inner_width - shortcut_width).max(0.0);
                 let shortcut_y = inner_y + ((inner_height - shortcut_height).max(0.0) / 2.0);
                 let layout = crate::components::footer_chrome::footer_shortcut_keycap_layout_model(
@@ -4076,7 +4079,6 @@ impl Render for ActionsDialog {
                                             .h(px(style.row_height))
                                             .w_full()
                                             .px(px(popup_theme.row.inset_x))
-                                            .py(px(popup_theme.row.inner_y))
                                             .flex()
                                             .flex_col()
                                             .justify_center()

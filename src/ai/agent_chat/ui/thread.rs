@@ -308,6 +308,11 @@ pub(crate) struct AgentChatThread {
     active_tool_calls: Vec<AgentChatToolCallState>,
     /// O(1) lookup from tool_call_id to index in `active_tool_calls`.
     tool_call_lookup: HashMap<String, usize>,
+    /// Session-scoped "Allow always" grants the user has made, in grant
+    /// order. Pi owns the live approval cache; this mirror keeps the grants
+    /// visible and reviewable in the UI. Survives `clear_messages` (same Pi
+    /// session keeps its cache) and resets with the session.
+    standing_approvals: Vec<super::permission_broker::AgentChatStandingApproval>,
 
     /// The resolved catalog entry for the selected agent. Retained so
     /// runtime `SetupRequired` events can build recovery cards with
@@ -403,6 +408,7 @@ impl AgentChatThread {
             available_commands: Vec::new(),
             active_tool_calls: Vec::new(),
             tool_call_lookup: HashMap::new(),
+            standing_approvals: Vec::new(),
             selected_agent: init.selected_agent,
             available_agents: init.available_agents,
             launch_requirements: init.launch_requirements,
@@ -802,6 +808,7 @@ impl AgentChatThread {
 
         if let Some(request) = self.pending_permission.take() {
             let note = Self::permission_resolution_message(&request, selected_option_id.as_deref());
+            self.record_standing_approval(&request, selected_option_id.as_deref());
             let _ = request.reply_tx.send_blocking(selected_option_id);
             changed |= self.push_message(AgentChatThreadMessageRole::System, note);
             had_request = true;
@@ -816,6 +823,104 @@ impl AgentChatThread {
         if changed {
             cx.notify();
         }
+    }
+
+    /// Record a session-scoped grant when the chosen option is a persistent
+    /// "Allow always". Deduped by (tool, subject) so repeated grants for the
+    /// same tool do not stack.
+    fn record_standing_approval(
+        &mut self,
+        request: &AgentChatApprovalRequest,
+        selected_option_id: Option<&str>,
+    ) {
+        let Some(option) = selected_option_id
+            .and_then(|id| request.options.iter().find(|opt| opt.option_id == id))
+        else {
+            return;
+        };
+        if !option.is_persistent_allow() {
+            return;
+        }
+
+        let (tool_title, subject, kind_badge) = match request.preview.as_ref() {
+            Some(preview) => (
+                preview.tool_title.clone(),
+                preview.subject.clone(),
+                preview.kind.badge_label(),
+            ),
+            None => (
+                request.title.clone(),
+                None,
+                super::permission_broker::AgentChatApprovalPreviewKind::Generic.badge_label(),
+            ),
+        };
+
+        let already_recorded = self
+            .standing_approvals
+            .iter()
+            .any(|grant| grant.tool_title == tool_title && grant.subject == subject);
+        if already_recorded {
+            return;
+        }
+
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "agent_chat_standing_approval_recorded",
+            ui_thread = %self.ui_thread_id,
+            tool_title = %tool_title,
+            has_subject = subject.is_some(),
+            total = self.standing_approvals.len() + 1,
+        );
+        self.standing_approvals
+            .push(super::permission_broker::AgentChatStandingApproval {
+                tool_title,
+                subject,
+                kind_badge,
+                option_label: option.summary_label(),
+            });
+    }
+
+    /// Session-scoped "Allow always" grants recorded so far, in grant order.
+    pub(crate) fn standing_approvals(
+        &self,
+    ) -> &[super::permission_broker::AgentChatStandingApproval] {
+        &self.standing_approvals
+    }
+
+    /// Push a System transcript message listing every standing approval, so
+    /// the user can review what the session will no longer ask about.
+    pub(crate) fn review_standing_approvals(&mut self, cx: &mut Context<Self>) {
+        let body = if self.standing_approvals.is_empty() {
+            "**Auto-approvals** \u{00b7} none granted this session.".to_string()
+        } else {
+            let mut lines = vec![format!(
+                "**Auto-approvals** \u{00b7} {} standing grant{} this session:",
+                self.standing_approvals.len(),
+                if self.standing_approvals.len() == 1 {
+                    ""
+                } else {
+                    "s"
+                },
+            )];
+            for grant in &self.standing_approvals {
+                let subject = grant
+                    .subject
+                    .as_deref()
+                    .map(|subject| format!(" \u{00b7} `{subject}`"))
+                    .unwrap_or_default();
+                lines.push(format!(
+                    "- {} \u{00b7} {}{subject} \u{00b7} {}",
+                    grant.tool_title, grant.kind_badge, grant.option_label,
+                ));
+            }
+            lines.push(
+                "Grants live in the Pi session approval cache; starting a new session resets them."
+                    .to_string(),
+            );
+            lines.join("\n")
+        };
+        self.push_message(AgentChatThreadMessageRole::System, body);
+        cx.notify();
     }
 
     /// Build a human-readable audit message for a permission resolution.
@@ -2207,6 +2312,7 @@ impl AgentChatThread {
         self.active_plan_entries.clear();
         self.active_tool_calls.clear();
         self.tool_call_lookup.clear();
+        self.standing_approvals.clear();
         self.active_mode_id = None;
         self.available_commands.clear();
         self.usage_tokens = None;
@@ -2265,6 +2371,7 @@ impl AgentChatThread {
         self.active_plan_entries.clear();
         self.active_tool_calls.clear();
         self.tool_call_lookup.clear();
+        self.standing_approvals.clear();
         self.active_mode_id = None;
         self.available_commands.clear();
         self.usage_tokens = None;
@@ -2386,6 +2493,7 @@ impl AgentChatThread {
         self.active_plan_entries.clear();
         self.active_tool_calls.clear();
         self.tool_call_lookup.clear();
+        self.standing_approvals.clear();
         self.active_mode_id = None;
         self.available_commands.clear();
         self.usage_tokens = None;
@@ -2722,6 +2830,7 @@ impl AgentChatThread {
             available_commands: Vec::new(),
             active_tool_calls: Vec::new(),
             tool_call_lookup: HashMap::new(),
+            standing_approvals: Vec::new(),
             selected_agent: None,
             available_agents: Vec::new(),
             launch_requirements: crate::ai::agent_chat::ui::AgentChatLaunchRequirements::default(),
@@ -2961,6 +3070,7 @@ mod tests {
             available_commands: Vec::new(),
             active_tool_calls: Vec::new(),
             tool_call_lookup: HashMap::new(),
+            standing_approvals: Vec::new(),
             selected_agent: None,
             available_agents: Vec::new(),
             launch_requirements: crate::ai::agent_chat::ui::AgentChatLaunchRequirements::default(),
@@ -3540,6 +3650,66 @@ mod tests {
 
         // Two messages, one per tool call.
         assert_eq!(thread.messages.len(), 2);
+    }
+
+    fn approval_request_with_options(
+        reply_tx: async_channel::Sender<Option<String>>,
+    ) -> AgentChatApprovalRequest {
+        use super::super::permission_broker::AgentChatApprovalOption;
+        AgentChatApprovalRequest {
+            id: 1,
+            title: "Run command".into(),
+            body: "Agent wants to run a command".into(),
+            preview: Some(
+                super::super::permission_broker::AgentChatApprovalPreview::new("bash", "tc-1")
+                    .with_subject(Some("cargo test".to_string())),
+            ),
+            options: vec![
+                AgentChatApprovalOption {
+                    option_id: "allow-once".into(),
+                    name: "Allow".into(),
+                    kind: "AllowOnce".into(),
+                },
+                AgentChatApprovalOption {
+                    option_id: "allow-always".into(),
+                    name: "Allow always".into(),
+                    kind: "AllowAlways".into(),
+                },
+                AgentChatApprovalOption {
+                    option_id: "deny".into(),
+                    name: "Deny".into(),
+                    kind: "RejectOnce".into(),
+                },
+            ],
+            reply_tx,
+        }
+    }
+
+    #[test]
+    fn persistent_allow_records_standing_approval_once() {
+        let mut thread = test_thread(Vec::new(), true);
+        let (reply_tx, _reply_rx) = async_channel::bounded(1);
+        let request = approval_request_with_options(reply_tx);
+
+        // One-shot allow must NOT record a standing grant.
+        thread.record_standing_approval(&request, Some("allow-once"));
+        assert!(thread.standing_approvals().is_empty());
+
+        // Denial must not record either.
+        thread.record_standing_approval(&request, Some("deny"));
+        assert!(thread.standing_approvals().is_empty());
+
+        // Persistent allow records the grant with tool/subject context.
+        thread.record_standing_approval(&request, Some("allow-always"));
+        assert_eq!(thread.standing_approvals().len(), 1);
+        let grant = &thread.standing_approvals()[0];
+        assert_eq!(grant.tool_title, "bash");
+        assert_eq!(grant.subject.as_deref(), Some("cargo test"));
+        assert_eq!(grant.option_label, "Allow always (AllowAlways)");
+
+        // Repeating the same grant dedupes by (tool, subject).
+        thread.record_standing_approval(&request, Some("allow-always"));
+        assert_eq!(thread.standing_approvals().len(), 1);
     }
 
     #[test]
