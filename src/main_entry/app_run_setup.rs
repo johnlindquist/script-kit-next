@@ -448,7 +448,7 @@ app.run(move |cx: &mut App| {
         theme::service::ensure_theme_service(cx);
 
         // Calculate window bounds: try saved position first, then eye-line
-        let window_size = size(px(750.), initial_window_height());
+        let window_size = crate::window_resize::initial_window_size();
         let default_bounds = calculate_eye_line_bounds_on_mouse_display(window_size);
         let displays = platform::get_macos_displays();
         let bounds = window_state::get_initial_bounds(
@@ -2165,7 +2165,7 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
 
                                 // Use Window::defer via window_ops to coalesce and defer window move.
                                 // This avoids RefCell borrow conflicts from synchronous macOS window operations.
-                                let window_size = gpui::size(px(750.), initial_window_height());
+                                let window_size = crate::window_resize::initial_window_size();
                                 let bounds = platform::calculate_eye_line_bounds_on_mouse_display(window_size);
                                 window_ops::queue_move(bounds, window, ctx);
 

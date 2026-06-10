@@ -682,6 +682,12 @@ pub fn initial_window_height() -> Pixels {
     let layout_config = runtime_layout_config();
     initial_window_height_with_layout(&layout_config)
 }
+/// Initial main-window size for app startup: the shared main-window width
+/// plus the layout-config-driven initial height. Single source of truth so
+/// entry points never hardcode the 750px width.
+pub fn initial_window_size() -> gpui::Size<Pixels> {
+    gpui::size(gpui::px(MAIN_WINDOW_WIDTH), initial_window_height())
+}
 /// Defer a window resize to the end of the current effect cycle.
 ///
 /// This version uses `Window::defer()` for coalesced, deferred execution.

@@ -158,7 +158,7 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
 
                                 // Use Window::defer via window_ops to coalesce and defer window move.
                                 // This avoids RefCell borrow conflicts from synchronous macOS window operations.
-                                let window_size = gpui::size(px(750.), initial_window_height());
+                                let window_size = crate::window_resize::initial_window_size();
                                 let bounds = platform::calculate_eye_line_bounds_on_mouse_display(window_size);
                                 window_ops::queue_move(bounds, window, ctx);
 
@@ -197,7 +197,7 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                 platform::ensure_move_to_active_space();
 
                                 // Position window - try per-display saved position first, then fall back to eye-line
-                                let window_size = gpui::size(px(750.), initial_window_height());
+                                let window_size = crate::window_resize::initial_window_size();
                                 let displays = platform::get_macos_displays();
                                 let bounds = if let Some((mouse_x, mouse_y)) = platform::get_global_mouse_position() {
                                     // Try to restore saved position for the mouse display
