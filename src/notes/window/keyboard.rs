@@ -53,7 +53,7 @@ impl NotesApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> (&'static str, bool) {
-        if self.command_bar.is_open() || self.show_actions_panel {
+        if self.command_bar.is_open() {
             self.close_actions_panel(window, cx);
             return ("closeActionsPanel", true);
         }
@@ -178,6 +178,11 @@ impl NotesApp {
             }
             NotesGhostAcceptMode::Full => NotesGhostActionReceipt::accepted_full(&prediction),
         });
+        // Accepted brain-grounded hints reinforce the memories that produced
+        // them (fire-and-forget; never blocks the editor input path).
+        if prediction.source_kind == crate::notes::ghost::NotesGhostSourceKind::Brain {
+            crate::brain::record_ghost_accept_signals(&prediction.query_prefix, &accepted_suffix);
+        }
         self.notes_ghost_prediction = None;
         self.on_editor_change(window, cx);
         true
@@ -283,12 +288,6 @@ impl NotesApp {
         // popup-first branches below — making Cmd+P / Cmd+K appear dead.
         let command_bar_was_stale = self.command_bar.reconcile_open_state();
         let note_switcher_was_stale = self.note_switcher.reconcile_open_state();
-        if command_bar_was_stale {
-            self.show_actions_panel = false;
-        }
-        if note_switcher_was_stale {
-            self.show_browse_panel = false;
-        }
         if command_bar_was_stale || note_switcher_was_stale {
             // Detached action windows are visual-only; restore focus to the
             // Notes root so the next Cmd+P / Cmd+K is routable. Avoid forcing
@@ -370,13 +369,27 @@ impl NotesApp {
                     cx.stop_propagation();
                     return;
                 }
-                key if is_key_backspace(key) || is_key_delete(key) => {
-                    self.command_bar.handle_backspace(cx);
+                key if (is_key_backspace(key) || is_key_delete(key)) && !modifiers.platform => {
+                    if modifiers.alt {
+                        self.command_bar.handle_backspace_word(cx);
+                    } else {
+                        self.command_bar.handle_backspace(cx);
+                    }
                     cx.stop_propagation();
                     return;
                 }
                 _ => {
                     if !modifiers.platform && !modifiers.control && !modifiers.alt {
+                        // Full printable charset via the produced character,
+                        // matching the main search input; fall back to
+                        // single-char key names for synthetic events.
+                        if let Some(ch) = crate::ui_foundation::printable_char(
+                            event.keystroke.key_char.as_deref(),
+                        ) {
+                            self.command_bar.handle_char(ch, cx);
+                            cx.stop_propagation();
+                            return;
+                        }
                         if let Some(ch) = key.chars().next() {
                             let ch = ch.to_ascii_lowercase();
                             if ch.is_alphanumeric() || ch.is_whitespace() || ch == '-' || ch == '_'
@@ -389,6 +402,16 @@ impl NotesApp {
                     }
                     if modifiers.platform && key.eq_ignore_ascii_case("k") {
                         self.close_actions_panel(window, cx);
+                        cx.stop_propagation();
+                        return;
+                    }
+                    if modifiers.platform
+                        && !modifiers.shift
+                        && !modifiers.control
+                        && !modifiers.alt
+                        && key.eq_ignore_ascii_case("v")
+                    {
+                        self.command_bar.handle_paste(cx);
                         cx.stop_propagation();
                         return;
                     }
@@ -421,13 +444,27 @@ impl NotesApp {
                     cx.stop_propagation();
                     return;
                 }
-                key if is_key_backspace(key) || is_key_delete(key) => {
-                    self.note_switcher.handle_backspace(cx);
+                key if (is_key_backspace(key) || is_key_delete(key)) && !modifiers.platform => {
+                    if modifiers.alt {
+                        self.note_switcher.handle_backspace_word(cx);
+                    } else {
+                        self.note_switcher.handle_backspace(cx);
+                    }
                     cx.stop_propagation();
                     return;
                 }
                 _ => {
                     if !modifiers.platform && !modifiers.control && !modifiers.alt {
+                        // Full printable charset via the produced character,
+                        // matching the main search input; fall back to
+                        // single-char key names for synthetic events.
+                        if let Some(ch) = crate::ui_foundation::printable_char(
+                            event.keystroke.key_char.as_deref(),
+                        ) {
+                            self.note_switcher.handle_char(ch, cx);
+                            cx.stop_propagation();
+                            return;
+                        }
                         if let Some(ch) = key.chars().next() {
                             let ch = ch.to_ascii_lowercase();
                             if ch.is_alphanumeric() || ch.is_whitespace() || ch == '-' || ch == '_'
@@ -440,6 +477,16 @@ impl NotesApp {
                     }
                     if modifiers.platform && key.eq_ignore_ascii_case("p") {
                         self.close_browse_panel(window, cx);
+                        cx.stop_propagation();
+                        return;
+                    }
+                    if modifiers.platform
+                        && !modifiers.shift
+                        && !modifiers.control
+                        && !modifiers.alt
+                        && key.eq_ignore_ascii_case("v")
+                    {
+                        self.note_switcher.handle_paste(cx);
                         cx.stop_propagation();
                         return;
                     }
@@ -597,7 +644,7 @@ impl NotesApp {
                     }
                 }
                 key if key.eq_ignore_ascii_case("k") => {
-                    if self.command_bar.is_open() || self.show_actions_panel {
+                    if self.command_bar.is_open() {
                         self.close_actions_panel(window, cx);
                     } else {
                         self.open_actions_panel(window, cx);

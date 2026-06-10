@@ -37,7 +37,7 @@ use crate::actions::{
 use crate::confirm;
 use crate::theme;
 
-use super::actions_panel::{panel_height_for_rows, NotesAction};
+use super::actions_panel::NotesAction;
 use super::markdown;
 use super::markdown_highlighting::register_markdown_highlighter;
 use super::model::{ExportFormat, Note, NoteId};
@@ -265,6 +265,15 @@ impl NotesGhostActionReceipt {
     }
 }
 
+/// A cached, already-sanitized LLM ghost suffix (see `recompute_notes_ghost`).
+#[derive(Debug, Clone)]
+struct NotesGhostLlmCacheEntry {
+    note_id: Option<NoteId>,
+    line_prefix: String,
+    suffix: String,
+    inserted_at: Instant,
+}
+
 /// Sort mode for the notes list
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum NotesSortMode {
@@ -362,9 +371,6 @@ pub struct NotesApp {
     /// Opens in a separate vibrancy window for proper macOS blur effect
     note_switcher: CommandBar,
 
-    /// Previous height before showing the actions panel
-    actions_panel_prev_height: Option<f32>,
-
     /// Debounce: Whether the current note has unsaved changes
     has_unsaved_changes: bool,
 
@@ -419,6 +425,14 @@ pub struct NotesApp {
     notes_ghost_generation: u64,
     /// Last ghost autocomplete action, redacted for DevTools receipts.
     notes_ghost_last_action: Option<NotesGhostActionReceipt>,
+    /// Monotonic generation used to reject stale LLM ghost side-channel
+    /// results (bumped on cancel; see `cancel_notes_ghost_llm`).
+    notes_ghost_llm_generation: u64,
+    /// Cooperative cancel for the in-flight LLM ghost request, if any.
+    notes_ghost_llm_cancel: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
+    /// Tiny TTL cache of sanitized LLM ghost suffixes so backspacing over a
+    /// hint re-serves it without another model call.
+    notes_ghost_llm_cache: std::collections::VecDeque<NotesGhostLlmCacheEntry>,
 
     // ── Agent Chat host surface ──────────────────────────────────────────────
     /// Which surface is currently visible (Notes editor or embedded Agent Chat).

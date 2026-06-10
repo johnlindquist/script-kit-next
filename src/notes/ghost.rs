@@ -18,6 +18,10 @@ pub(crate) enum NotesGhostSourceKind {
     Clipboard,
     /// Note title completion inside an unclosed `[[wiki link`.
     NoteTitle,
+    /// On-device LLM continuation grounded in brain recall (see
+    /// [`super::ghost_llm`]). Produced by the debounced side-channel, never by
+    /// the deterministic scorer.
+    Brain,
 }
 
 impl NotesGhostSourceKind {
@@ -27,6 +31,7 @@ impl NotesGhostSourceKind {
             Self::OtherNote => "otherNote",
             Self::Clipboard => "clipboard",
             Self::NoteTitle => "noteTitle",
+            Self::Brain => "brain",
         }
     }
 
@@ -36,6 +41,9 @@ impl NotesGhostSourceKind {
             Self::OtherNote => 2,
             Self::Clipboard => 1,
             Self::NoteTitle => 4,
+            // Brain predictions never enter the deterministic scorer; the
+            // priority only matters if a candidate ever flows through it.
+            Self::Brain => 2,
         }
     }
 }
@@ -299,6 +307,10 @@ fn score_candidate(prefix: &str, candidate: NotesGhostCandidate) -> Option<Score
         // Wiki-link completions short-circuit before scoring, but keep them
         // top-ranked if a candidate ever flows through here.
         NotesGhostSourceKind::NoteTitle => 1100,
+        // Brain predictions are produced by the LLM side-channel
+        // (`super::ghost_llm`), never by this deterministic scorer; rank them
+        // between other-note and clipboard if one ever flows through.
+        NotesGhostSourceKind::Brain => 600,
     };
     score -= (candidate.source_rank.min(50) as i32) * 4;
     score += 80;
@@ -351,7 +363,7 @@ fn starts_with_markdown_list_marker(text: &str) -> bool {
             .is_some_and(|(head, _)| head.chars().all(|c| c.is_ascii_digit()))
 }
 
-fn looks_sensitive(text: &str) -> bool {
+pub(crate) fn looks_sensitive(text: &str) -> bool {
     let lower = text.to_lowercase();
     lower.contains("password")
         || lower.contains("secret")

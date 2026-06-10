@@ -37,6 +37,7 @@ mod actions_panel;
 pub(crate) mod code_highlight;
 pub(crate) mod file_mirror;
 pub(crate) mod ghost;
+pub(crate) mod ghost_llm;
 mod markdown;
 mod markdown_highlighting;
 pub(crate) mod menu_syntax_capture;

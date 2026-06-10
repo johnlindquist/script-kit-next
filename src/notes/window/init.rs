@@ -151,8 +151,6 @@ impl NotesApp {
             preview_scroll_handle: ScrollHandle::new(),
             focus_handle,
             _subscriptions: vec![editor_sub, search_sub],
-            show_actions_panel: false,
-            show_browse_panel: false,
             // Initialize CommandBar with notes-specific actions
             command_bar: CommandBar::new(
                 get_notes_command_bar_actions(&NotesInfo {
@@ -169,7 +167,6 @@ impl NotesApp {
                 CommandBarConfig::notes_recent_style(),
                 std::sync::Arc::new(theme::get_cached_theme()),
             ),
-            actions_panel_prev_height: None,
             has_unsaved_changes: false,
             last_save_time: None,
             last_persisted_bounds: None,
@@ -188,6 +185,9 @@ impl NotesApp {
             notes_ghost_prediction: None,
             notes_ghost_generation: 0,
             notes_ghost_last_action: None,
+            notes_ghost_llm_generation: 0,
+            notes_ghost_llm_cancel: None,
+            notes_ghost_llm_cache: std::collections::VecDeque::new(),
             surface_mode: NotesSurfaceMode::default(),
             embedded_agent_chat: None,
             notes_agent_chat_generation: 0,
@@ -342,12 +342,11 @@ impl NotesApp {
             || self.view_mode == NotesViewMode::Trash
             || self.surface_mode != NotesSurfaceMode::Notes
             || self.show_search
-            || self.show_actions_panel
-            || self.show_browse_panel
             || self.command_bar.is_open()
             || self.note_switcher.is_open()
         {
             self.notes_ghost_prediction = None;
+            self.cancel_notes_ghost_llm();
             return;
         }
 
@@ -360,13 +359,211 @@ impl NotesApp {
         self.notes_ghost_prediction = crate::notes::ghost::compute_notes_ghost_prediction(
             crate::notes::ghost::NotesGhostInput {
                 editor_text: &editor_text,
-                selection,
+                selection: selection.clone(),
                 selected_note_id: self.selected_note_id,
                 notes: &self.notes,
                 clipboard_texts: &clipboard_texts,
                 generation: self.notes_ghost_generation,
             },
         );
+
+        if self.notes_ghost_prediction.is_some() {
+            // Deterministic candidates win; abort any in-flight LLM hint.
+            self.cancel_notes_ghost_llm();
+        } else {
+            self.maybe_start_notes_ghost_llm(&editor_text, selection, cx);
+        }
+    }
+
+    /// Best-effort cancel of the in-flight LLM ghost request and a generation
+    /// bump so late results are dropped on arrival.
+    fn cancel_notes_ghost_llm(&mut self) {
+        if let Some(cancel) = self.notes_ghost_llm_cancel.take() {
+            cancel.store(true, std::sync::atomic::Ordering::Relaxed);
+        }
+        self.notes_ghost_llm_generation = self.notes_ghost_llm_generation.wrapping_add(1).max(1);
+    }
+
+    /// Debounced on-device LLM ghost side-channel for the Notes editor.
+    ///
+    /// Mirrors the launcher's `maybe_start_ghost_llm_prediction` discipline:
+    /// debounce, recall brain context, generate on the local-llm actor thread,
+    /// sanitize, and apply only while the editor line prefix is unchanged and
+    /// no deterministic prediction appeared in the meantime.
+    fn maybe_start_notes_ghost_llm(
+        &mut self,
+        editor_text: &str,
+        selection: std::ops::Range<usize>,
+        cx: &mut Context<Self>,
+    ) {
+        let line = crate::notes::ghost::current_line_prefix(editor_text, selection.clone());
+        let Some(line) = line else {
+            self.cancel_notes_ghost_llm();
+            return;
+        };
+        if !crate::notes::ghost_llm::line_prefix_is_eligible(&line.text) {
+            self.cancel_notes_ghost_llm();
+            return;
+        }
+
+        // Cache hit: serve instantly under the current accept generation.
+        if let Some(suffix) = self.cached_notes_ghost_llm_suffix(&line.text) {
+            self.cancel_notes_ghost_llm();
+            self.notes_ghost_prediction = Some(crate::notes::ghost_llm::prediction_from_suffix(
+                &line.text,
+                suffix,
+                self.notes_ghost_generation,
+            ));
+            return;
+        }
+
+        self.cancel_notes_ghost_llm();
+        let generation = self.notes_ghost_llm_generation;
+        let cancel = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        self.notes_ghost_llm_cancel = Some(cancel.clone());
+
+        let line_prefix = line.text;
+        let note_title = self
+            .selected_note_id
+            .and_then(|id| self.notes.iter().find(|note| note.id == id))
+            .map(|note| note.title.clone())
+            .unwrap_or_default();
+        let excerpt = crate::notes::ghost_llm::excerpt_around_cursor(editor_text, selection.start);
+        let note_id = self.selected_note_id;
+
+        cx.spawn(async move |this, cx| {
+            cx.background_executor()
+                .timer(Duration::from_millis(
+                    crate::notes::ghost_llm::NOTES_GHOST_LLM_DEBOUNCE_MS,
+                ))
+                .await;
+            if cancel.load(std::sync::atomic::Ordering::Relaxed) {
+                return;
+            }
+
+            let line_for_model = line_prefix.clone();
+            let title_for_model = note_title.clone();
+            let cancel_for_model = cancel.clone();
+            // Brain recall + on-device GGUF generation — no network. Runs on
+            // the background executor / local-llm actor thread.
+            let result = cx
+                .background_executor()
+                .spawn(async move {
+                    let config = crate::config::load_config();
+                    // No model on disk yet? Kick the first-run download and
+                    // bail; deterministic ghost keeps working meanwhile.
+                    crate::ai::local_llm::ensure_ghost_model_in_background(&config);
+                    let recall_query = if title_for_model.trim().is_empty() {
+                        line_for_model.clone()
+                    } else {
+                        format!("{title_for_model} {line_for_model}")
+                    };
+                    let brain_block = crate::brain::recall_context_block(&recall_query)
+                        .ok()
+                        .flatten();
+                    let prompt = crate::notes::ghost_llm::build_notes_ghost_prompt(
+                        &line_for_model,
+                        &title_for_model,
+                        &excerpt,
+                        brain_block.as_deref(),
+                    );
+                    crate::ai::local_llm::generate_ghost_completion(
+                        &config,
+                        crate::ai::local_llm::LocalGhostRequest {
+                            prompt: crate::ai::local_llm::GhostPromptSpec::NotesContinuation {
+                                prompt,
+                            },
+                            cancel: cancel_for_model,
+                        },
+                    )
+                    .map(|response| response.raw_completion)
+                })
+                .await;
+
+            let _ = cx.update(|cx| {
+                this.update(cx, |app, cx| {
+                    if app.notes_ghost_llm_generation != generation {
+                        return;
+                    }
+                    app.notes_ghost_llm_cancel = None;
+                    let raw_response = match result {
+                        Ok(raw) => raw,
+                        Err(error) => {
+                            // Silent fallback: no model / cancelled / backend
+                            // unavailable all keep the deterministic behavior.
+                            tracing::debug!(
+                                target: "script_kit::ghost_text",
+                                error = %format!("{error:#}"),
+                                "notes ghost llm generation failed; keeping deterministic ghost"
+                            );
+                            return;
+                        }
+                    };
+                    // Re-validate the editor against the request snapshot: a
+                    // deterministic prediction that appeared meanwhile wins,
+                    // and the line prefix must be unchanged.
+                    let (value, selection) = {
+                        let editor = app.editor_state.read(cx);
+                        (editor.value().to_string(), editor.selection())
+                    };
+                    let current_line = crate::notes::ghost::current_line_prefix(&value, selection);
+                    if !crate::notes::ghost_llm::should_apply_llm_result(
+                        app.notes_ghost_prediction.is_some(),
+                        &line_prefix,
+                        current_line.as_ref().map(|line| line.text.as_str()),
+                    ) {
+                        return;
+                    }
+                    let Some(prediction) = crate::notes::ghost_llm::llm_prediction_from_response(
+                        &line_prefix,
+                        &raw_response,
+                        app.notes_ghost_generation,
+                    ) else {
+                        return;
+                    };
+                    app.cache_notes_ghost_llm_suffix(note_id, &line_prefix, &prediction.suffix);
+                    app.notes_ghost_prediction = Some(prediction);
+                    cx.notify();
+                })
+            });
+        })
+        .detach();
+    }
+
+    /// Fresh cached suffix for the selected note + line prefix, if any.
+    fn cached_notes_ghost_llm_suffix(&mut self, line_prefix: &str) -> Option<String> {
+        self.notes_ghost_llm_cache.retain(|entry| {
+            entry.inserted_at.elapsed() <= crate::notes::ghost_llm::NOTES_GHOST_LLM_CACHE_TTL
+        });
+        let note_id = self.selected_note_id;
+        self.notes_ghost_llm_cache
+            .iter()
+            .find(|entry| entry.note_id == note_id && entry.line_prefix == line_prefix)
+            .map(|entry| entry.suffix.clone())
+    }
+
+    fn cache_notes_ghost_llm_suffix(
+        &mut self,
+        note_id: Option<NoteId>,
+        line_prefix: &str,
+        suffix: &str,
+    ) {
+        self.notes_ghost_llm_cache.retain(|entry| {
+            !(entry.note_id == note_id && entry.line_prefix == line_prefix)
+                && entry.inserted_at.elapsed() <= crate::notes::ghost_llm::NOTES_GHOST_LLM_CACHE_TTL
+        });
+        self.notes_ghost_llm_cache
+            .push_front(super::NotesGhostLlmCacheEntry {
+                note_id,
+                line_prefix: line_prefix.to_string(),
+                suffix: suffix.to_string(),
+                inserted_at: Instant::now(),
+            });
+        while self.notes_ghost_llm_cache.len()
+            > crate::notes::ghost_llm::NOTES_GHOST_LLM_CACHE_LIMIT
+        {
+            self.notes_ghost_llm_cache.pop_back();
+        }
     }
 
     fn collect_notes_ghost_clipboard_texts(

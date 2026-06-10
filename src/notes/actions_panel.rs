@@ -180,18 +180,11 @@ impl NotesAction {
     }
 }
 
-/// Standardized to match main ActionsDialog POPUP_MAX_HEIGHT
-pub const PANEL_MAX_HEIGHT: f32 = 400.0;
-pub const ACTION_ITEM_HEIGHT: f32 = 36.0;
-pub const PANEL_SEARCH_HEIGHT: f32 = 44.0;
-pub const PANEL_BORDER_HEIGHT: f32 = 2.0;
-
-/// Height of the detached CommandBar window for the given number of rows.
-pub fn panel_height_for_rows(row_count: usize) -> f32 {
-    let items_height = (row_count as f32 * ACTION_ITEM_HEIGHT)
-        .min(PANEL_MAX_HEIGHT - (PANEL_SEARCH_HEIGHT + 16.0));
-    items_height + PANEL_SEARCH_HEIGHT + PANEL_BORDER_HEIGHT
-}
+// Panel sizing constants and `panel_height_for_rows` were removed: the
+// detached CommandBar window is sized exclusively by the shared
+// `compute_popup_height` / `actions_window_dynamic_height` formula in
+// `crate::actions::window`, driven by `crate::actions::constants` and the
+// actions popup theme tokens. Do not reintroduce a parallel formula here.
 
 #[cfg(test)]
 mod tests {
@@ -303,18 +296,5 @@ mod tests {
         assert_eq!(NotesAction::MoveListItemUp.id(), "move_list_item_up");
         assert_eq!(NotesAction::MoveListItemDown.id(), "move_list_item_down");
         assert_eq!(NotesAction::Format.id(), "format");
-    }
-
-    #[test]
-    fn test_panel_height_for_rows_caps_at_max_height() {
-        let one_row = panel_height_for_rows(1);
-        assert_eq!(
-            one_row,
-            ACTION_ITEM_HEIGHT + PANEL_SEARCH_HEIGHT + PANEL_BORDER_HEIGHT
-        );
-
-        let many_rows = panel_height_for_rows(100);
-        assert!(many_rows <= PANEL_MAX_HEIGHT - 16.0 + PANEL_BORDER_HEIGHT);
-        assert!(many_rows > one_row);
     }
 }

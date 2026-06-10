@@ -384,11 +384,17 @@ fn test_notes_keyboard_handles_named_bracket_keys_when_platform_navigation_short
 #[test]
 fn test_notes_keyboard_stops_propagation_when_escape_closes_actions_panel() {
     const KEYBOARD_SOURCE: &str = include_str!("keyboard.rs");
-    let command_bar_branch = KEYBOARD_SOURCE
+    // Scope to the live handler: the escape_dismiss_ladder earlier in the file
+    // also checks command_bar.is_open() but has no propagation control.
+    let handle_key_down = KEYBOARD_SOURCE
+        .find("pub(super) fn handle_key_down(")
+        .expect("live keyboard handler should exist");
+    let live_keyboard = &KEYBOARD_SOURCE[handle_key_down..];
+    let command_bar_branch = live_keyboard
         .find("if self.command_bar.is_open() {")
-        .expect("Expected command bar branch in keyboard.rs");
+        .expect("Expected command bar branch in handle_key_down");
     let branch_slice =
-        &KEYBOARD_SOURCE[command_bar_branch..(command_bar_branch + 512).min(KEYBOARD_SOURCE.len())];
+        &live_keyboard[command_bar_branch..(command_bar_branch + 512).min(live_keyboard.len())];
 
     let close_idx = branch_slice
         .find("self.close_actions_panel(window, cx);")
@@ -933,8 +939,9 @@ fn test_notes_agent_chat_actions_close_requests_embedded_chat_refocus() {
         "Closing the Notes-hosted Agent Chat actions popup should restore Agent Chat focus"
     );
     assert!(
-        AGENT_CHAT_HOST_SOURCE
-            .contains("app.close_notes_agent_chat_actions_via_host(\"dialog_on_close\", None, cx);"),
+        AGENT_CHAT_HOST_SOURCE.contains(
+            "app.close_notes_agent_chat_actions_via_host(\"dialog_on_close\", None, cx);"
+        ),
         "Dialog on_close should route Notes Agent Chat actions close through the shared host helper"
     );
 }
@@ -975,7 +982,8 @@ fn test_notes_agent_chat_uses_shared_external_footer_renderer() {
         "Notes-hosted Agent Chat should opt into the shared externally rendered footer"
     );
     assert!(
-        RENDER_SOURCE.contains("view.build_external_host_footer(agent_chat_entity.downgrade(), cx)")
+        RENDER_SOURCE
+            .contains("view.build_external_host_footer(agent_chat_entity.downgrade(), cx)")
             && RENDER_SOURCE.contains(".when_some(agent_chat_footer, |d, footer| d.child(footer))"),
         "Notes Agent Chat surface should render the shared Agent Chat footer below the embedded chat view"
     );

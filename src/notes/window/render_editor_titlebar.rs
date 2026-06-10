@@ -41,7 +41,7 @@ impl NotesApp {
                                     .build(window, cx)
                             })
                             .on_click(cx.listener(|this, _, window, cx| {
-                                if this.show_actions_panel {
+                                if this.command_bar.is_open() {
                                     this.close_actions_panel(window, cx);
                                 } else {
                                     this.open_actions_panel(window, cx);
@@ -68,11 +68,10 @@ impl NotesApp {
                                 .build(window, cx)
                         })
                         .on_click(cx.listener(|this, _, window, cx| {
-                            if this.show_browse_panel {
+                            if this.note_switcher.is_open() {
                                 this.close_browse_panel(window, cx);
                             } else {
                                 this.close_actions_panel(window, cx);
-                                this.show_browse_panel = true;
                                 this.open_browse_panel(window, cx);
                             }
                         }))

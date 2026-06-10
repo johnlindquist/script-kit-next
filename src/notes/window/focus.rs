@@ -39,9 +39,9 @@ impl NotesApp {
     }
 
     pub(super) fn current_focus_surface(&self) -> NotesFocusSurface {
-        if self.command_bar.is_open() || self.show_actions_panel {
+        if self.command_bar.is_open() {
             NotesFocusSurface::ActionsPanel
-        } else if self.note_switcher.is_open() || self.show_browse_panel {
+        } else if self.note_switcher.is_open() {
             NotesFocusSurface::BrowsePanel
         } else if self.surface_mode == NotesSurfaceMode::AgentChat {
             NotesFocusSurface::AgentChat
@@ -92,9 +92,9 @@ impl NotesApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let surface = if self.command_bar.is_open() || self.show_actions_panel {
+        let surface = if self.command_bar.is_open() {
             NotesFocusSurface::ActionsPanel
-        } else if self.note_switcher.is_open() || self.show_browse_panel {
+        } else if self.note_switcher.is_open() {
             NotesFocusSurface::BrowsePanel
         } else if self.surface_mode == NotesSurfaceMode::AgentChat {
             NotesFocusSurface::AgentChat

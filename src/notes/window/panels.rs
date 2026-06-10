@@ -2,6 +2,13 @@ use itertools::Itertools;
 
 use super::*;
 
+/// Which Notes command-bar popup an activation callback routes for.
+#[derive(Clone, Copy, Debug)]
+enum NotesCommandBarRole {
+    Actions,
+    NoteSwitcher,
+}
+
 impl NotesApp {
     pub(crate) fn open_actions_panel(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         // Update command bar actions based on current state (dynamic - depends on selection, etc.)
@@ -20,49 +27,89 @@ impl NotesApp {
 
         self.command_bar.set_actions(actions, cx);
 
-        // Open the command bar (CommandBar handles window creation internally)
+        // Open the command bar (CommandBar handles window creation internally).
+        // CommandBar::is_open() is the single source of truth for popup state —
+        // there is intentionally no separate NotesApp flag to keep in sync.
         self.command_bar.open_centered(window, cx);
-
-        // Update state flags (before focus request so current_focus_surface() reflects the new state)
-        self.show_actions_panel = true;
-        self.show_browse_panel = false;
+        self.wire_command_bar_activation(NotesCommandBarRole::Actions, window, cx);
 
         // Route through NotesFocusSurface for structured logging and consistent focus management.
         // The ActionsWindow is a visual-only popup — it does NOT take keyboard focus.
         self.request_focus_surface(focus::NotesFocusSurface::ActionsPanel, window, cx);
     }
 
+    /// Route ActionsDialog activations back into NotesApp.
+    ///
+    /// The CommandBar wrapper creates its dialog with a no-op `on_select`
+    /// (keyboard Enter through the Notes router uses
+    /// `execute_selected_action` instead). Row clicks — and Enter/shortcut
+    /// activations handled by the detached ActionsWindow when AppKit makes it
+    /// the key window — only surface through the dialog's activation
+    /// callback, so without this hook they execute nothing.
+    fn wire_command_bar_activation(
+        &mut self,
+        role: NotesCommandBarRole,
+        window: &Window,
+        cx: &mut Context<Self>,
+    ) {
+        let bar = match role {
+            NotesCommandBarRole::Actions => &self.command_bar,
+            NotesCommandBarRole::NoteSwitcher => &self.note_switcher,
+        };
+        let Some(dialog) = bar.dialog().cloned() else {
+            return;
+        };
+        let resize_dialog = dialog.clone();
+        let notes_app = cx.entity().downgrade();
+        let notes_window = window.window_handle();
+        dialog.update(cx, |dialog, _cx| {
+            dialog.set_on_activation(std::sync::Arc::new(move |activation, _window, cx| {
+                match activation {
+                    crate::actions::ActionsDialogActivation::Executed { action_id, .. } => {
+                        let notes_app = notes_app.clone();
+                        // Defer out of the actions window's update stack: the
+                        // execute paths close the popup, and removing a window
+                        // from inside its own event dispatch fails and leaves
+                        // a zombie key window.
+                        cx.defer(move |cx| {
+                            let routed = notes_window.update(cx, |_root, window, cx| {
+                                let Some(notes_app) = notes_app.upgrade() else {
+                                    return;
+                                };
+                                notes_app.update(cx, |app, cx| match role {
+                                    NotesCommandBarRole::Actions => {
+                                        app.execute_action(&action_id, window, cx);
+                                    }
+                                    NotesCommandBarRole::NoteSwitcher => {
+                                        app.execute_note_switcher_action(&action_id, window, cx);
+                                    }
+                                });
+                            });
+                            if let Err(error) = routed {
+                                tracing::warn!(
+                                    target: "script_kit::actions",
+                                    ?role,
+                                    error = %error,
+                                    "notes_command_bar_activation_route_failed"
+                                );
+                            }
+                        });
+                    }
+                    crate::actions::ActionsDialogActivation::DrillDownPushed { .. } => {
+                        crate::actions::resize_actions_window(cx, &resize_dialog);
+                    }
+                    crate::actions::ActionsDialogActivation::NoSelection => {}
+                }
+            }));
+        });
+    }
+
     pub(super) fn close_actions_panel(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         // Close the command bar window
         self.command_bar.close(cx);
 
-        self.show_actions_panel = false;
-
         // Route through NotesFocusSurface for structured logging and consistent focus management.
         self.request_focus_surface(focus::NotesFocusSurface::Editor, window, cx);
-    }
-
-    pub(super) fn ensure_actions_panel_height(&mut self, window: &mut Window, row_count: usize) {
-        let panel_height = panel_height_for_rows(row_count);
-        let desired_height = panel_height + ACTIONS_PANEL_WINDOW_MARGIN;
-        let current_bounds = window.bounds();
-        let current_height: f32 = current_bounds.size.height.into();
-
-        if current_height + 1.0 < desired_height {
-            self.actions_panel_prev_height = Some(current_height);
-            window.resize(size(current_bounds.size.width, px(desired_height)));
-            self.last_window_height = desired_height;
-        }
-    }
-
-    pub(super) fn restore_actions_panel_height(&mut self, window: &mut Window) {
-        let Some(prev_height) = self.actions_panel_prev_height.take() else {
-            return;
-        };
-
-        let current_bounds = window.bounds();
-        window.resize(size(current_bounds.size.width, px(prev_height)));
-        self.last_window_height = prev_height;
     }
 
     /// Handle action from the actions panel (Cmd+K)
@@ -77,12 +124,10 @@ impl NotesApp {
             NotesAction::NewNote => self.create_note(window, cx),
             NotesAction::DuplicateNote => self.duplicate_selected_note(window, cx),
             NotesAction::BrowseNotes => {
-                // Close actions panel first, then open browse panel
-                // Don't call close_actions_panel here - it refocuses editor
-                // Instead, just clear the state and let open_browse_panel handle focus
-                self.show_actions_panel = false;
-                self.restore_actions_panel_height(window);
-                self.show_browse_panel = true;
+                // Close actions panel first, then open browse panel.
+                // Don't call close_actions_panel here - it refocuses the editor;
+                // open_browse_panel owns focus for this transition.
+                self.command_bar.close(cx);
                 self.open_browse_panel(window, cx);
                 cx.notify();
                 return; // Early return - browse panel handles its own focus
@@ -265,6 +310,7 @@ impl NotesApp {
 
         // Open the note switcher (CommandBar handles window creation internally)
         self.note_switcher.open_centered(window, cx);
+        self.wire_command_bar_activation(NotesCommandBarRole::NoteSwitcher, window, cx);
 
         // The recent-notes switcher should not show a context-title / count
         // chip. Clear any stale title so reopens after a config change render
@@ -277,10 +323,6 @@ impl NotesApp {
             });
         }
 
-        // Update state flags (before focus request so current_focus_surface() reflects the new state)
-        self.show_browse_panel = true;
-        self.show_actions_panel = false;
-
         // Route through NotesFocusSurface for structured logging and consistent focus management.
         // The ActionsWindow is a visual-only popup — it does NOT take keyboard focus.
         self.request_focus_surface(focus::NotesFocusSurface::BrowsePanel, window, cx);
@@ -291,7 +333,6 @@ impl NotesApp {
         // Close the note switcher CommandBar window
         self.note_switcher.close(cx);
 
-        self.show_browse_panel = false;
         self.mention_portal_edit = None;
 
         // Route through NotesFocusSurface for structured logging and consistent focus management.

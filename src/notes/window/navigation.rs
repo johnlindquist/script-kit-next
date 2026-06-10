@@ -13,9 +13,9 @@ impl NotesApp {
     }
 
     fn automation_shortcut_registry(&self) -> serde_json::Value {
-        let active_scope = if self.command_bar.is_open() || self.show_actions_panel {
+        let active_scope = if self.command_bar.is_open() {
             "actionsPanel"
-        } else if self.note_switcher.is_open() || self.show_browse_panel {
+        } else if self.note_switcher.is_open() {
             "noteSwitcher"
         } else if self.surface_mode == NotesSurfaceMode::AgentChat {
             "embeddedAgentChat"
@@ -36,14 +36,14 @@ impl NotesApp {
             "scopes": [
                 {
                     "id": "actionsPanel",
-                    "open": self.command_bar.is_open() || self.show_actions_panel,
+                    "open": self.command_bar.is_open(),
                     "owner": "Notes CommandBar",
                     "toggle": "Cmd+K",
                     "handles": ["Escape", "Cmd+K", "Enter", "ArrowUp", "ArrowDown", "Home", "End", "PageUp", "PageDown", "Backspace", "Delete", "text input"],
                 },
                 {
                     "id": "noteSwitcher",
-                    "open": self.note_switcher.is_open() || self.show_browse_panel,
+                    "open": self.note_switcher.is_open(),
                     "owner": "Notes note switcher",
                     "toggle": "Cmd+P",
                     "handles": ["Escape", "Cmd+P", "Enter", "ArrowUp", "ArrowDown", "Home", "End", "PageUp", "PageDown", "Backspace", "Delete", "text input"],
@@ -471,8 +471,8 @@ impl NotesApp {
                 "showSearch": self.show_search,
                 "showFormatToolbar": self.show_format_toolbar,
                 "previewEnabled": self.preview_enabled,
-                "showActionsPanel": self.show_actions_panel || self.command_bar.is_open(),
-                "showBrowsePanel": self.show_browse_panel || self.note_switcher.is_open(),
+                "showActionsPanel": self.command_bar.is_open(),
+                "showBrowsePanel": self.note_switcher.is_open(),
                 "autoSizingEnabled": self.auto_sizing_enabled,
                 "initialHeight": self.initial_height,
                 "lastWindowHeight": self.last_window_height,
@@ -677,7 +677,7 @@ impl NotesApp {
                 .with_explanation("Status/footer strip with save state, counts, and mode hints."),
         );
 
-        if self.command_bar.is_open() || self.show_actions_panel {
+        if self.command_bar.is_open() {
             components.push(
                 LayoutComponentInfo::new("NotesActionsPanel", LayoutComponentType::Panel)
                     .with_bounds(
@@ -698,7 +698,7 @@ impl NotesApp {
             );
         }
 
-        if self.note_switcher.is_open() || self.show_browse_panel {
+        if self.note_switcher.is_open() {
             components.push(
                 LayoutComponentInfo::new("NotesBrowsePanel", LayoutComponentType::Panel)
                     .with_bounds(

@@ -134,7 +134,7 @@ impl NotesApp {
                 action = "autosave",
                 has_selected_note = self.selected_note_id.is_some(),
                 has_unsaved_changes = self.has_unsaved_changes,
-                show_actions_panel = self.show_actions_panel,
+                show_actions_panel = self.command_bar.is_open(),
                 show_search = self.show_search,
                 preview_enabled = self.preview_enabled,
                 focus_mode = self.focus_mode,
