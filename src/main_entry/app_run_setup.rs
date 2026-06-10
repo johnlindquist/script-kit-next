@@ -2213,19 +2213,19 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                     let (grouped_items, _) = view.get_grouped_results_cached();
                                     let sizing = crate::window_resize::main_window_sizing_from_grouped_items(&grouped_items);
                                     gpui::size(
-                                        px(crate::window_resize::width_for_view(ViewType::MainWindow).unwrap_or(750.0)),
+                                        px(crate::window_resize::width_for_view(ViewType::MainWindow).unwrap_or(crate::window_resize::MAIN_WINDOW_WIDTH)),
                                         crate::window_resize::height_for_main_window(sizing),
                                     )
                                 } else if let Some((view_type, item_count)) = view.calculate_window_size_params_with_app(Some(&*ctx)) {
                                     gpui::size(
                                         px(crate::window_resize::width_for_view(view_type)
                                             .or(current_window_width)
-                                            .unwrap_or(750.0)),
+                                            .unwrap_or(crate::window_resize::MAIN_WINDOW_WIDTH)),
                                         crate::window_resize::height_for_view(view_type, item_count),
                                     )
                                 } else {
                                     gpui::size(
-                                        px(current_window_width.unwrap_or(750.0)),
+                                        px(current_window_width.unwrap_or(crate::window_resize::MAIN_WINDOW_WIDTH)),
                                         crate::window_resize::height_for_view(ViewType::ScriptList, 0),
                                     )
                                 };

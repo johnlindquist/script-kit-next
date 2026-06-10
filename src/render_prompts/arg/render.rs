@@ -46,7 +46,7 @@ impl ScriptListApp {
     }
 
     fn arg_input_max_visible_chars(&self, cx: &gpui::App) -> usize {
-        const DEFAULT_WINDOW_WIDTH: f64 = 750.0;
+        const DEFAULT_WINDOW_WIDTH: f64 = crate::window_resize::MAIN_WINDOW_WIDTH as f64;
         const ARG_INPUT_WIDTH_PADDING_PX: f64 = (HEADER_PADDING_X as f64 * 2.0) + 12.0;
         // Fallback only for fonts whose `0` glyph cannot be measured.
         const ARG_INPUT_FALLBACK_CHAR_WIDTH_PX: f64 = 8.5;

@@ -169,12 +169,12 @@ fn show_main_window_helper(
             gpui::size(
                 px(crate::window_resize::width_for_view(view_type)
                     .or(current_window_width)
-                    .unwrap_or(750.0)),
+                    .unwrap_or(crate::window_resize::MAIN_WINDOW_WIDTH)),
                 crate::window_resize::height_for_view(view_type, item_count),
             )
         } else {
             gpui::size(
-                px(current_window_width.unwrap_or(750.0)),
+                px(current_window_width.unwrap_or(crate::window_resize::MAIN_WINDOW_WIDTH)),
                 crate::window_resize::height_for_view(ViewType::ScriptList, 0),
             )
         }
