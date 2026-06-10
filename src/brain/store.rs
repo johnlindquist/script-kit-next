@@ -346,14 +346,19 @@ pub fn fts_search(query: &str, limit: usize) -> Result<Vec<i64>> {
     Ok(rows)
 }
 
-/// Quote each term so user punctuation can't break FTS5 query syntax.
+/// Quote each term (so punctuation can't break FTS5 syntax) and join with OR:
+/// recall queries are natural-language questions ("what branch does bluefin
+/// deploy from"), and FTS5's implicit AND would require every filler word to
+/// appear in a document. OR + BM25 ranking keeps precision: documents
+/// matching more terms rank higher.
 fn sanitize_fts_query(query: &str) -> String {
     query
         .split_whitespace()
-        .map(|term| format!("\"{}\"", term.replace('"', "")))
-        .filter(|term| term.len() > 2)
+        .map(|term| term.replace('"', ""))
+        .filter(|term| term.len() > 3)
+        .map(|term| format!("\"{term}\""))
         .collect::<Vec<_>>()
-        .join(" ")
+        .join(" OR ")
 }
 
 pub fn get_docs_by_ids(ids: &[i64]) -> Result<Vec<BrainDoc>> {

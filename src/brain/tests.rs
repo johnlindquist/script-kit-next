@@ -46,6 +46,23 @@ fn upsert_is_idempotent_and_updates_on_change() {
 }
 
 #[test]
+fn fts_matches_natural_language_questions() {
+    init_test_db();
+    let id = store::upsert_doc(
+        DocSource::Note,
+        "n-nlq",
+        "Project Bluefin launch checklist",
+        "Project Bluefin deploys from the zephyr-42 branch.",
+        100,
+    )
+    .unwrap();
+    // Question contains filler words absent from the doc — OR semantics must
+    // still surface it.
+    let hits = store::fts_search("what branch does project bluefin deploy from", 10).unwrap();
+    assert!(hits.contains(&id), "natural-language question should match");
+}
+
+#[test]
 fn fts_finds_doc_by_content_and_respects_deletion() {
     init_test_db();
     let id = store::upsert_doc(
