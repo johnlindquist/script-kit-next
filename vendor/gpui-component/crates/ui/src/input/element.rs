@@ -1600,15 +1600,24 @@ impl Element for TextElement {
                         (line_height - cursor_bounds.size.height).max(px(0.)) / 2.;
                     let p = point(first_line_x, cursor_bounds.origin.y - caret_centering);
 
-                    // Only paint the editor background fill in multi-line editor mode,
-                    // where ghost text overlays editor content and needs an opaque
-                    // backing. The single-line launcher input must NOT paint it: the
-                    // fill renders as a dark box behind the ghost suffix and also
-                    // covers vibrancy. Ghost text there is just dim foreground text.
+                    // Ghost text is dim foreground text with NO backing box by
+                    // default (standard inline-completion look). The opaque
+                    // editor-background fill exists only for the multi-line case
+                    // where real text follows the cursor on the same line — the
+                    // ghost overlays it and would double-draw unreadably. At end
+                    // of line there is nothing underneath, so paint no quad.
                     if focused && !is_single_line {
-                        let bg_bounds =
-                            Bounds::new(p, size(first_line.width + px(4.), line_height));
-                        window.paint_quad(fill(bg_bounds, cx.theme().editor_background()));
+                        let has_trailing_text_on_line = {
+                            let state = self.state.read(cx);
+                            let cursor = state.cursor();
+                            let row = state.cursor_position().line as usize;
+                            cursor < state.text().line_end_offset(row)
+                        };
+                        if has_trailing_text_on_line {
+                            let bg_bounds =
+                                Bounds::new(p, size(first_line.width + px(4.), line_height));
+                            window.paint_quad(fill(bg_bounds, cx.theme().editor_background()));
+                        }
                     }
 
                     _ = first_line.paint(p, line_height, text_align, None, window, cx);

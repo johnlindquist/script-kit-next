@@ -154,6 +154,7 @@ impl LoadedLocalLlm {
         &mut self,
         prompt: &str,
         cancel: &Arc<AtomicBool>,
+        request_id: u64,
     ) -> Result<String> {
         if cancel.load(Ordering::Relaxed) {
             anyhow::bail!("ghost_local_llm_cancelled");
@@ -200,7 +201,11 @@ impl LoadedLocalLlm {
             LlamaSampler::top_p(self.sampling.top_p, 1),
             LlamaSampler::min_p(self.sampling.min_p, 1),
             LlamaSampler::temp(self.sampling.temperature),
-            LlamaSampler::dist(GHOST_SAMPLER_SEED),
+            // Perturb the seed by request id: the client retries once when a
+            // completion sanitizes to empty, and a fixed seed would make that
+            // retry bit-identical. Stability for repeated prefixes comes from
+            // the app-side ghost cache, not sampler determinism.
+            LlamaSampler::dist(GHOST_SAMPLER_SEED ^ (request_id as u32)),
         ]);
         let mut out_bytes: Vec<u8> = Vec::new();
         let mut n_cur = tokens.len() as i32;

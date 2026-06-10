@@ -244,21 +244,35 @@ fn test_notes_keyboard_backtick_accepts_full_ghost_without_swallowing_plain_back
     );
 }
 
+/// Decision lock (2026-06-10): the Notes ghost suffix must render through the
+/// editor's native inline-completion channel, which shapes the ghost inside
+/// the editor's own text layout for exact caret alignment. A hand-positioned
+/// absolute overlay re-derives padding/advance/line-height and drifts from the
+/// Input's real metrics (the ghost appeared offset right/down from the caret).
 #[test]
-fn test_notes_render_wraps_editor_with_ghost_overlay() {
+fn test_notes_ghost_renders_via_native_inline_completion_not_overlay() {
     const RENDER_BODY: &str = include_str!("render_editor_body.rs");
-    for needle in [
-        "notes_ghost_prediction",
-        "render_notes_ghost_overlay",
-        ".relative()",
-        "Input::new(&self.editor_state)",
-        "\"notes-ghost-autocomplete\"",
-    ] {
+    assert!(
+        RENDER_BODY.contains("Input::new(&self.editor_state)"),
+        "Notes editor body must render the shared Input"
+    );
+    for forbidden in ["notes-ghost-autocomplete", "render_notes_ghost_overlay"] {
         assert!(
-            RENDER_BODY.contains(needle),
-            "Notes editor render path must expose ghost overlay hook: {needle}"
+            !RENDER_BODY.contains(forbidden),
+            "Notes editor must not reintroduce a hand-positioned ghost overlay: {forbidden}"
         );
     }
+
+    const INIT_SOURCE: &str = include_str!("init.rs");
+    let sync_body = INIT_SOURCE
+        .find("fn sync_notes_ghost_inline_completion")
+        .map(|start| &INIT_SOURCE[start..(start + 800).min(INIT_SOURCE.len())])
+        .expect("notes ghost must sync predictions into the editor inline completion");
+    assert!(
+        sync_body.contains("set_inline_completion_text")
+            && sync_body.contains("clear_inline_completion"),
+        "sync_notes_ghost_inline_completion must set and clear the editor's native inline completion"
+    );
 }
 
 #[test]

@@ -137,7 +137,7 @@ impl NotesApp {
         })
     }
 
-    fn automation_ghost_autocomplete_state(&self) -> serde_json::Value {
+    fn automation_ghost_autocomplete_state(&self, cx: &gpui::App) -> serde_json::Value {
         let prediction = self.notes_ghost_prediction.as_ref();
         let last_action = self.notes_ghost_last_action.as_ref().map(|action| {
             serde_json::json!({
@@ -174,6 +174,9 @@ impl NotesApp {
             "suffixFingerprint": prediction.map(|prediction| Self::devtools_text_fingerprint(&prediction.suffix)),
             "queryPrefixLength": prediction.map(|prediction| prediction.query_prefix.chars().count()),
             "queryPrefixFingerprint": prediction.map(|prediction| Self::devtools_text_fingerprint(&prediction.query_prefix)),
+            // The ghost renders through the editor's native inline completion;
+            // this proves the prediction↔render channel stayed in sync.
+            "editorInlineCompletionPresent": self.editor_state.read(cx).has_inline_completion(),
             "lastAction": last_action,
         })
     }
@@ -525,7 +528,7 @@ impl NotesApp {
             "embeddedAgentChat": self.automation_embedded_agent_chat_isolation_snapshot(),
             "shortcutRegistry": self.automation_shortcut_registry(),
             "focusTransitions": self.automation_focus_transition_timeline(),
-            "ghostAutocomplete": self.automation_ghost_autocomplete_state(),
+            "ghostAutocomplete": self.automation_ghost_autocomplete_state(cx),
             "search": {
                 "visible": self.show_search,
                 "queryLength": search_text.chars().count(),

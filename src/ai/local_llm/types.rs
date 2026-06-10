@@ -70,7 +70,10 @@ pub(crate) struct GhostSamplingParams {
 impl Default for GhostSamplingParams {
     fn default() -> Self {
         Self {
-            max_prediction_tokens: 12,
+            // ~16-18 words of completion; the prompt asks for 4-14 words and
+            // the client caps the suffix at 96/120 chars, so this is headroom
+            // for a full phrase rather than a hard target.
+            max_prediction_tokens: 24,
             temperature: 0.15,
             top_k: 40,
             top_p: 0.95,

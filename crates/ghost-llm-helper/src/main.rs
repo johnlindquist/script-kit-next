@@ -137,12 +137,13 @@ impl HelperEngine {
         prompt: &str,
         sampling: GhostSamplingParams,
         cancel: &Arc<AtomicBool>,
+        request_id: u64,
     ) -> Result<String> {
         self.load_if_needed(model_path, model_id, sampling)?;
         self.loaded
             .as_mut()
             .context("ghost llm helper model not loaded")?
-            .generate_one_line(prompt, cancel)
+            .generate_one_line(prompt, cancel, request_id)
     }
 
     fn embed(
@@ -335,7 +336,7 @@ fn main() -> Result<()> {
                     Arc::new(AtomicBool::new(false))
                 };
                 let response =
-                    match engine.generate(&model_path, &model_id, &prompt, sampling, &cancel) {
+                    match engine.generate(&model_path, &model_id, &prompt, sampling, &cancel, id) {
                         Ok(raw_completion) => {
                             WireResponse::ok_generate(id, model_id, raw_completion)
                         }

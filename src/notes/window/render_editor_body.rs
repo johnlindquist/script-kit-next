@@ -125,57 +125,18 @@ impl NotesApp {
                 .into_any_element();
         }
 
+        // Ghost text renders through the editor's native inline-completion
+        // channel (`sync_notes_ghost_inline_completion`), shaped inside the
+        // editor's own text layout, so it aligns with the caret exactly. Do
+        // not reintroduce an absolutely positioned overlay here: hand-derived
+        // padding/advance/line-height math drifts from the Input's real
+        // metrics and renders the ghost offset from the text.
         let editor = Input::new(&self.editor_state)
             .h_full()
             .appearance(false)
             .font_family(cx.theme().mono_font_family.clone())
             .text_size(cx.theme().mono_font_size);
 
-        div()
-            .relative()
-            .h_full()
-            .child(editor)
-            .when_some(self.notes_ghost_prediction.as_ref(), |this, prediction| {
-                this.child(self.render_notes_ghost_overlay(prediction, cx))
-            })
-            .into_any_element()
-    }
-
-    fn render_notes_ghost_overlay(
-        &self,
-        prediction: &crate::notes::ghost::NotesGhostPrediction,
-        cx: &mut Context<Self>,
-    ) -> AnyElement {
-        let metrics = style::adopted_metrics();
-        let prefix_cols = prediction.query_prefix.chars().count() as f32;
-        let line_index = self
-            .get_cursor_line_info(cx)
-            .map(|(line, _)| line.saturating_sub(1))
-            .unwrap_or(0) as f32;
-        // The editor is monospace, so one measured advance positions any
-        // column exactly; measure it from the actual mono font instead of
-        // assuming 7.4px.
-        let text_system = cx.text_system();
-        let mono_font_id =
-            text_system.resolve_font(&gpui::font(cx.theme().mono_font_family.clone()));
-        let mono_advance = text_system
-            .em_advance(mono_font_id, cx.theme().mono_font_size)
-            .map(f32::from)
-            .ok()
-            .filter(|advance| advance.is_finite() && *advance > 0.0)
-            .unwrap_or(7.4);
-        let x = metrics.editor_padding_x + prefix_cols * mono_advance;
-        let y = metrics.editor_padding_y + line_index * metrics.auto_resize_line_height;
-
-        div()
-            .id("notes-ghost-autocomplete")
-            .absolute()
-            .left(px(x))
-            .top(px(y))
-            .font_family(cx.theme().mono_font_family.clone())
-            .text_size(cx.theme().mono_font_size)
-            .text_color(cx.theme().muted_foreground.opacity(OPACITY_SUBTLE))
-            .child(prediction.suffix.clone())
-            .into_any_element()
+        div().h_full().child(editor).into_any_element()
     }
 }

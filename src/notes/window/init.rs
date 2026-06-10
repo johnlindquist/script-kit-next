@@ -347,6 +347,7 @@ impl NotesApp {
         {
             self.notes_ghost_prediction = None;
             self.cancel_notes_ghost_llm();
+            self.sync_notes_ghost_inline_completion(cx);
             return;
         }
 
@@ -373,6 +374,27 @@ impl NotesApp {
         } else {
             self.maybe_start_notes_ghost_llm(&editor_text, selection, cx);
         }
+        self.sync_notes_ghost_inline_completion(cx);
+    }
+
+    /// Mirror `notes_ghost_prediction` into the editor's native inline
+    /// completion so the ghost suffix is shaped inside the editor's own text
+    /// layout — exact caret/baseline alignment, like VS Code — instead of an
+    /// absolutely positioned overlay that re-derives padding and line metrics
+    /// by hand. Must be called after every `notes_ghost_prediction` mutation.
+    pub(super) fn sync_notes_ghost_inline_completion(&mut self, cx: &mut Context<Self>) {
+        let suffix = self
+            .notes_ghost_prediction
+            .as_ref()
+            .map(|prediction| prediction.suffix.clone());
+        self.editor_state.update(cx, |state, cx| match suffix {
+            Some(suffix) => state.set_inline_completion_text(suffix, cx),
+            None => {
+                if state.has_inline_completion() {
+                    state.clear_inline_completion(cx);
+                }
+            }
+        });
     }
 
     /// Best-effort cancel of the in-flight LLM ghost request and a generation
@@ -467,16 +489,37 @@ impl NotesApp {
                         &excerpt,
                         brain_block.as_deref(),
                     );
-                    crate::ai::local_llm::generate_ghost_completion(
-                        &config,
-                        crate::ai::local_llm::LocalGhostRequest {
-                            prompt: crate::ai::local_llm::GhostPromptSpec::NotesContinuation {
-                                prompt,
+                    let generate = |cancel| {
+                        crate::ai::local_llm::generate_ghost_completion(
+                            &config,
+                            crate::ai::local_llm::LocalGhostRequest {
+                                prompt: crate::ai::local_llm::GhostPromptSpec::NotesContinuation {
+                                    prompt: prompt.clone(),
+                                },
+                                cancel,
                             },
-                            cancel: cancel_for_model,
-                        },
-                    )
-                    .map(|response| response.raw_completion)
+                        )
+                        .map(|response| response.raw_completion)
+                    };
+                    let mut result = generate(cancel_for_model.clone());
+                    // Empty/unsafe completions sanitize to None and the user
+                    // sees nothing; sampling is stochastic, so one retry often
+                    // recovers a usable suffix. Never retry after cancel.
+                    let sanitized_empty = matches!(
+                        &result,
+                        Ok(raw)
+                            if crate::notes::ghost_llm::sanitize_notes_llm_suffix(
+                                raw,
+                                &line_for_model
+                            )
+                            .is_none()
+                    );
+                    if sanitized_empty
+                        && !cancel_for_model.load(std::sync::atomic::Ordering::Relaxed)
+                    {
+                        result = generate(cancel_for_model.clone());
+                    }
+                    result
                 })
                 .await;
 
@@ -523,6 +566,7 @@ impl NotesApp {
                     };
                     app.cache_notes_ghost_llm_suffix(note_id, &line_prefix, &prediction.suffix);
                     app.notes_ghost_prediction = Some(prediction);
+                    app.sync_notes_ghost_inline_completion(cx);
                     cx.notify();
                 })
             });

@@ -108,6 +108,7 @@ impl NotesApp {
             return false;
         };
         self.notes_ghost_last_action = Some(NotesGhostActionReceipt::dismissed(&prediction));
+        self.sync_notes_ghost_inline_completion(cx);
         cx.notify();
         true
     }
@@ -125,6 +126,15 @@ impl NotesApp {
             return false;
         }
 
+        // The editor clears its native inline completion on escape / mouse /
+        // selection changes (the rendering channel for this ghost). If it is
+        // gone, the user dismissed the ghost — never accept invisible text.
+        if !self.editor_state.read(cx).has_inline_completion() {
+            self.notes_ghost_prediction = None;
+            self.notes_ghost_last_action = Some(NotesGhostActionReceipt::dismissed(&prediction));
+            return false;
+        }
+
         let (value, selection) = {
             let editor = self.editor_state.read(cx);
             (editor.value().to_string(), editor.selection())
@@ -133,11 +143,13 @@ impl NotesApp {
         let Some(line) = crate::notes::ghost::current_line_prefix(&value, selection.clone()) else {
             self.notes_ghost_prediction = None;
             self.notes_ghost_last_action = Some(NotesGhostActionReceipt::stale(&prediction));
+            self.sync_notes_ghost_inline_completion(cx);
             return false;
         };
         if line.text != prediction.query_prefix {
             self.notes_ghost_prediction = None;
             self.notes_ghost_last_action = Some(NotesGhostActionReceipt::stale(&prediction));
+            self.sync_notes_ghost_inline_completion(cx);
             return false;
         }
 
@@ -145,6 +157,7 @@ impl NotesApp {
         if !value.is_char_boundary(cursor) {
             self.notes_ghost_prediction = None;
             self.notes_ghost_last_action = Some(NotesGhostActionReceipt::stale(&prediction));
+            self.sync_notes_ghost_inline_completion(cx);
             return false;
         }
 
@@ -157,6 +170,7 @@ impl NotesApp {
         if accepted_suffix.is_empty() {
             self.notes_ghost_prediction = None;
             self.notes_ghost_last_action = Some(NotesGhostActionReceipt::stale(&prediction));
+            self.sync_notes_ghost_inline_completion(cx);
             return false;
         }
 
@@ -346,6 +360,13 @@ impl NotesApp {
         }
 
         if self.command_bar.is_open() {
+            tracing::info!(
+                event = "notes_popup_key_routed",
+                popup = "command_bar",
+                key = %key,
+                platform = modifiers.platform,
+                alt = modifiers.alt,
+            );
             match key {
                 key if is_key_escape(key) => {
                     self.close_actions_panel(window, cx);
@@ -421,6 +442,13 @@ impl NotesApp {
         }
 
         if self.note_switcher.is_open() {
+            tracing::info!(
+                event = "notes_popup_key_routed",
+                popup = "note_switcher",
+                key = %key,
+                platform = modifiers.platform,
+                alt = modifiers.alt,
+            );
             match key {
                 key if is_key_escape(key) => {
                     self.close_browse_panel(window, cx);
