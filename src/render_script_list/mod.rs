@@ -411,6 +411,7 @@ fn render_menu_syntax_form(
     design_variant: DesignVariant,
     form: &crate::menu_syntax::MenuSyntaxFormSnapshot,
     inputs: &[(String, Entity<gpui_component::input::InputState>)],
+    field_bounds: std::rc::Rc<std::cell::RefCell<Vec<gpui::Bounds<gpui::Pixels>>>>,
     _cx: &mut Context<ScriptListApp>,
 ) -> AnyElement {
     let field_metrics =
@@ -422,6 +423,12 @@ fn render_menu_syntax_form(
         .items_start()
         .child(
             div()
+                // Record each field's real prepaint bounds so focus-driven
+                // reveal scrolls to measured positions, not estimated ones.
+                // (Attached before `.id()`: the listener lives on `Div`.)
+                .on_children_prepainted(move |bounds, _window, _cx| {
+                    *field_bounds.borrow_mut() = bounds;
+                })
                 .id("menu-syntax-handler-form-fields")
                 .min_w(px(0.0))
                 .flex_1()
@@ -445,6 +452,7 @@ fn render_menu_syntax_main_hint(
     list_tokens: crate::designs::MainMenuListTokens,
     design_variant: DesignVariant,
     form_inputs: &[(String, Entity<gpui_component::input::InputState>)],
+    form_field_bounds: std::rc::Rc<std::cell::RefCell<Vec<gpui::Bounds<gpui::Pixels>>>>,
     cx: &mut Context<ScriptListApp>,
 ) -> AnyElement {
     let palette = crate::components::non_list_palette(theme);
@@ -557,6 +565,7 @@ fn render_menu_syntax_main_hint(
                 design_variant,
                 form,
                 form_inputs,
+                form_field_bounds,
                 cx,
             ))
         })
@@ -924,6 +933,7 @@ impl ScriptListApp {
                         main_hint_list_tokens,
                         self.current_design,
                         &self.menu_syntax_form_inputs,
+                        self.menu_syntax_form_field_bounds.clone(),
                         cx,
                     )
                 })
@@ -936,6 +946,7 @@ impl ScriptListApp {
                 main_hint_list_tokens,
                 self.current_design,
                 &self.menu_syntax_form_inputs,
+                self.menu_syntax_form_field_bounds.clone(),
                 cx,
             )
         } else if item_count == 0 {
@@ -948,6 +959,7 @@ impl ScriptListApp {
                     main_hint_list_tokens,
                     self.current_design,
                     &self.menu_syntax_form_inputs,
+                    self.menu_syntax_form_field_bounds.clone(),
                     cx,
                 )
             } else {

@@ -419,8 +419,6 @@ impl ScriptListApp {
         _form: &crate::menu_syntax::MenuSyntaxFormSnapshot,
         _cx: &mut Context<Self>,
     ) {
-        const APPROX_FIELD_HEIGHT_PX: f32 = 76.0;
-        const APPROX_VISIBLE_FORM_HEIGHT_PX: f32 = APPROX_FIELD_HEIGHT_PX * 3.0;
         const REVEAL_MARGIN_PX: f32 = 20.0;
 
         let current = self.menu_syntax_main_hint_scroll_handle.offset();
@@ -429,25 +427,40 @@ impl ScriptListApp {
             return;
         }
 
-        let current_scroll_y = -current.y;
-        let field_top = gpui::px((index as f32) * APPROX_FIELD_HEIGHT_PX);
-        let field_bottom = field_top + gpui::px(APPROX_FIELD_HEIGHT_PX);
-        let visible_top = current_scroll_y + gpui::px(REVEAL_MARGIN_PX);
-        let visible_bottom =
-            current_scroll_y + gpui::px(APPROX_VISIBLE_FORM_HEIGHT_PX - REVEAL_MARGIN_PX);
+        // Real prepaint bounds recorded by the form-fields container.
+        // Fields vary in height (textarea vs text field), so the reveal must
+        // use measured positions, not an assumed per-field constant. Bounds
+        // include the scroll offset that was current when they were painted.
+        // If the form hasn't painted yet there's nothing to reveal from:
+        // the scroll starts at the top with the first field visible.
+        let Some(field) = self
+            .menu_syntax_form_field_bounds
+            .borrow()
+            .get(index)
+            .copied()
+        else {
+            return;
+        };
+        let viewport = self.menu_syntax_main_hint_scroll_handle.bounds();
 
-        let next_scroll_y = if field_top < visible_top {
-            (field_top - gpui::px(REVEAL_MARGIN_PX)).max(gpui::px(0.0))
-        } else if field_bottom > visible_bottom {
-            field_bottom - gpui::px(APPROX_VISIBLE_FORM_HEIGHT_PX - REVEAL_MARGIN_PX)
+        let margin = gpui::px(REVEAL_MARGIN_PX);
+        let visible_top = viewport.top() + margin;
+        let visible_bottom = viewport.bottom() - margin;
+
+        let delta_y = if field.top() < visible_top {
+            visible_top - field.top()
+        } else if field.bottom() > visible_bottom {
+            visible_bottom - field.bottom()
         } else {
-            current_scroll_y
-        }
-        .clamp(gpui::px(0.0), max.y);
+            gpui::px(0.0)
+        };
 
-        if next_scroll_y != current_scroll_y {
-            self.menu_syntax_main_hint_scroll_handle
-                .set_offset(gpui::point(current.x, -next_scroll_y));
+        if delta_y != gpui::px(0.0) {
+            let next_y = (current.y + delta_y).clamp(-max.y, gpui::px(0.0));
+            if next_y != current.y {
+                self.menu_syntax_main_hint_scroll_handle
+                    .set_offset(gpui::point(current.x, next_y));
+            }
         }
     }
 

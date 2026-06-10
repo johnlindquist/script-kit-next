@@ -808,6 +808,10 @@ pub(crate) struct ScriptListApp {
     main_list_row_generation: u64,
     // Free-scroll handle for the read-only menu syntax hint panel rendered in the main list area.
     menu_syntax_main_hint_scroll_handle: ScrollHandle,
+    /// Window-space bounds of each menu-syntax form field, recorded at
+    /// prepaint. Lets focus-driven reveal scroll to the field's real position
+    /// instead of assuming a fixed per-field height.
+    menu_syntax_form_field_bounds: std::rc::Rc<std::cell::RefCell<Vec<gpui::Bounds<gpui::Pixels>>>>,
     // Scroll handle for uniform_list (still used for backward compat in some views)
     list_scroll_handle: UniformListScrollHandle,
     // P0: Scroll handle for virtualized arg prompt choices

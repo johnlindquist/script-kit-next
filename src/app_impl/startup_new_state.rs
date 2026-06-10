@@ -125,6 +125,7 @@
             ),
             main_list_row_generation: 0,
             menu_syntax_main_hint_scroll_handle: ScrollHandle::new(),
+            menu_syntax_form_field_bounds: Default::default(),
             list_scroll_handle: UniformListScrollHandle::new(),
             arg_list_scroll_handle: UniformListScrollHandle::new(),
             clipboard_list_scroll_handle: UniformListScrollHandle::new(),

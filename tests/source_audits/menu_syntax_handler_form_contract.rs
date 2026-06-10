@@ -480,6 +480,12 @@ fn capture_form_scroll_owner_and_tab_reveal_are_natural() {
             && render.contains(".overflow_y_scroll()"),
         "capture form should keep the main-hint scroll surface as the single scroll owner"
     );
+    assert!(
+        render.contains(".id(\"menu-syntax-handler-form-fields\")")
+            && render.contains(".on_children_prepainted(")
+            && render.contains("*field_bounds.borrow_mut() = bounds;"),
+        "form fields container must record real prepaint bounds for focus reveal"
+    );
 
     let form_owner = read("src/app_impl/menu_syntax_main_hint.rs");
     let reveal_start = form_owner
@@ -492,16 +498,13 @@ fn capture_form_scroll_owner_and_tab_reveal_are_natural() {
     let reveal = &form_owner[reveal_start..reveal_end];
     assert!(
         !reveal.contains("target_y = gpui::px(-((index as f32) * APPROX_FIELD_HEIGHT_PX))")
-            && reveal.contains("REVEAL_MARGIN_PX")
-            && reveal.contains(
-                "const APPROX_VISIBLE_FORM_HEIGHT_PX: f32 = APPROX_FIELD_HEIGHT_PX * 3.0;"
-            )
+            && !reveal.contains("APPROX_FIELD_HEIGHT_PX")
             && reveal.contains("const REVEAL_MARGIN_PX: f32 = 20.0;")
-            && reveal.contains("field_top")
-            && reveal.contains("field_bottom")
-            && reveal.contains("current_scroll_y")
-            && reveal.contains("} else {\n            current_scroll_y\n        }"),
-        "Tab reveal should ensure the field is visible instead of top-aligning every focused field"
+            && reveal.contains("menu_syntax_form_field_bounds")
+            && reveal.contains("menu_syntax_main_hint_scroll_handle.bounds()")
+            && reveal.contains("visible_top")
+            && reveal.contains("visible_bottom"),
+        "Tab reveal should scroll measured field bounds into view instead of top-aligning every focused field from a fixed per-field height estimate"
     );
 }
 
