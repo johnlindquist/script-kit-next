@@ -1980,12 +1980,29 @@ impl ScriptListApp {
             self.render_search_input_with_ghost(cx).into_any_element()
         };
 
+        // The persistent cwd anchor shows as a token inside the input area:
+        // it silently authorizes plain-prose Cmd+Enter submits, so it must be
+        // visible where the user types, not only in the footer chip.
+        let input_trailing = self
+            .spine_cwd_label
+            .clone()
+            .map(|label| {
+                vec![
+                    crate::components::main_view_chrome::render_input_cwd_anchor_token(
+                        &self.theme,
+                        menu_def,
+                        label,
+                    ),
+                ]
+            })
+            .unwrap_or_default();
+
         let input = crate::components::main_view_chrome::render_main_view_input_shell(
             &self.theme,
             menu_def,
             crate::components::main_view_chrome::MainViewInputChrome {
                 body: input_body,
-                trailing: Vec::new(),
+                trailing: input_trailing,
             },
         );
 
