@@ -18,8 +18,9 @@ pub fn parse_spine(input: &str) -> SpineParse {
         };
     }
 
-    // Mode exit: if the input starts with ~, >, or ?, the entire input is one
+    // Mode exit: if the input starts with ~, ?, or !, the entire input is one
     // ModeExit segment. These sigils exit the grammar flow entirely.
+    // (`>` is a prompt-builder sigil — project cwd — not a mode exit.)
     if let Some(first) = input.chars().next() {
         if MODE_EXIT_SIGILS.contains(&first) {
             let rest = &input[first.len_utf8()..];

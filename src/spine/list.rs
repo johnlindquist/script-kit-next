@@ -353,7 +353,15 @@ pub(crate) fn build_spine_list_sections_full_with_resolved_tokens(
             )]
         }
         SpineSegmentKind::FreeText if projection_is_prompt_builder_tail(parse, projection) => {
-            vec![build_prompt_builder_tail_section(parse, is_resolved_token)]
+            let mut sections = vec![build_prompt_builder_tail_section(parse, is_resolved_token)];
+            // Only surface history sections that have real rows — the tail
+            // must not grow "No recent prompts yet" placeholders.
+            sections.extend(
+                build_tail_history_sections(parse, projection)
+                    .into_iter()
+                    .filter(|section| section.rows.iter().any(|row| row.is_selectable)),
+            );
+            sections
         }
         SpineSegmentKind::FreeText => Vec::new(),
     }
@@ -503,7 +511,7 @@ fn build_mode_exit_section(
 ) -> SpineListSection {
     let (title, subtitle, icon) = match sigil {
         '~' => ("Open File Search", "Browse files", "folder"),
-        '>' => ("Open Quick Terminal", "Run a shell command", "terminal"),
+        '!' => ("Open Quick Terminal", "Run a shell command", "terminal"),
         '?' => ("Open Actions Help", "Show available actions", "circle-help"),
         _ => (
             "Open Mode",
@@ -708,7 +716,6 @@ fn build_prompt_builder_tail_section(
     }
 }
 
-#[allow(dead_code)]
 fn build_tail_history_sections(
     parse: &SpineParse,
     projection: &SpineCursorProjection,
@@ -1058,7 +1065,7 @@ mod tests {
         let proj = project_cursor(&parse, parse.input.len());
         assert!(projection_is_prompt_builder_tail(&parse, &proj));
         let sections = build_spine_list_sections(&parse, &proj);
-        assert_eq!(sections.len(), 1);
+        assert!(!sections.is_empty());
         assert_eq!(sections[0].title.as_ref(), "Prompt Builder");
         let row = sections[0].rows.first().expect("expected ready row");
         assert_eq!(row.title.as_ref(), "Ready to send");
@@ -1081,7 +1088,10 @@ mod tests {
         };
         assert!(projection_is_prompt_builder_tail(&parse, &synthetic_proj));
         let sections = build_spine_list_sections(&parse, &synthetic_proj);
-        assert_eq!(sections.len(), 1);
+        // The first section is always the prompt-builder tail; history
+        // sections (Recent Prompts / Conversations) may follow when the
+        // environment has Agent Chat history.
+        assert!(!sections.is_empty());
         assert_eq!(sections[0].title.as_ref(), "Prompt Builder");
         let row = sections[0].rows.first().expect("expected ready row");
         assert_eq!(
@@ -1100,7 +1110,7 @@ mod tests {
         let parse = parse_spine(input);
         let proj = project_cursor(&parse, input.len());
         let sections = build_spine_list_sections(&parse, &proj);
-        assert_eq!(sections.len(), 1);
+        assert!(!sections.is_empty());
         let row = sections[0].rows.first().expect("expected tail row");
         assert_eq!(row.title.as_ref(), "Some context won't attach");
         let subtitle = row.subtitle.as_ref().map(|s| s.as_ref()).unwrap_or("");

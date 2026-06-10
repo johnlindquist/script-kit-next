@@ -919,10 +919,11 @@ impl ScriptListApp {
             SpineListAction::OpenConversation { conversation_id } => {
                 tracing::info!(
                     target: "script_kit::spine",
-                    event = "apply_spine_action_open_conversation_not_wired",
+                    event = "apply_spine_action_open_conversation",
                     conversation_id = %conversation_id,
                 );
-                false
+                self.resume_agent_chat_conversation_from_history(conversation_id.as_ref(), "", cx);
+                true
             }
             SpineListAction::AwaitContextSubsearchInput { source } => {
                 tracing::info!(
