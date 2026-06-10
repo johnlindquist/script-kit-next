@@ -357,6 +357,41 @@ pub fn retain_docs(source: DocSource, keep: &[String]) -> Result<usize> {
     Ok(removed)
 }
 
+/// Fetch one document by its source identity.
+pub fn get_doc(source: DocSource, source_id: &str) -> Result<Option<BrainDoc>> {
+    let db = get_db()?;
+    let conn = db.lock().map_err(|_| anyhow!("brain db lock poisoned"))?;
+    conn.query_row(
+        "SELECT id, source, source_id, title, content, updated_at
+         FROM brain_docs WHERE source = ?1 AND source_id = ?2",
+        params![source.as_str(), source_id],
+        |row| {
+            Ok((
+                row.get::<_, i64>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, String>(3)?,
+                row.get::<_, String>(4)?,
+                row.get::<_, i64>(5)?,
+            ))
+        },
+    )
+    .optional()
+    .context("get brain doc")
+    .map(|row| {
+        row.and_then(|(id, source, source_id, title, content, updated_at)| {
+            DocSource::parse(&source).map(|source| BrainDoc {
+                id,
+                source,
+                source_id,
+                title,
+                content,
+                updated_at,
+            })
+        })
+    })
+}
+
 /// Remove a document (e.g. when its source note is deleted).
 pub fn remove_doc(source: DocSource, source_id: &str) -> Result<()> {
     let db = get_db()?;

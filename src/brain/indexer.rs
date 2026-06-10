@@ -116,13 +116,21 @@ pub fn run_cycle(embedder: &mut Option<BrainEmbedder>) -> Result<()> {
         tracing::debug!(target: "script_kit::brain", error = %err, "clipboard sync skipped");
         0
     });
-    let embedded = embed_pending(embedder)?;
+    // Embedding trouble (missing helper binary, model load failure) must
+    // never take down the rest of the metabolism — lexical search, journal,
+    // and the curator all work without vectors.
+    let embedded = embed_pending(embedder).unwrap_or_else(|err| {
+        tracing::warn!(target: "script_kit::brain", error = %err, "embedding pass skipped");
+        0
+    });
     if synced > 0 || promoted > 0 || embedded > 0 {
         tracing::info!(
             target: "script_kit::brain",
             synced, promoted, embedded, "brain index cycle"
         );
     }
+    // Daily distillation pass (no-op until due; silently skips without pi).
+    super::curator::run_if_due();
     Ok(())
 }
 

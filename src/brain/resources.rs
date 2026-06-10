@@ -75,6 +75,18 @@ pub fn read_brain_resource(uri: &str) -> Result<(String, String), String> {
             .unwrap_or_else(|| "(no relevant memories)".to_string());
         return Ok(("text/markdown".to_string(), block));
     }
+    if uri.starts_with("kit://brain/focus") {
+        if query_param(uri, "refresh").as_deref() == Some("1") {
+            super::curator::run_focus_review()
+                .map_err(|error| format!("focus review failed: {error}"))?;
+        }
+        let review = store::get_doc(super::store::DocSource::Activity, "focus-review")
+            .map_err(|error| format!("focus read failed: {error}"))?;
+        let body = review.map(|doc| doc.content).unwrap_or_else(|| {
+            "(no focus review yet — add ?refresh=1 to generate one)".to_string()
+        });
+        return Ok(("text/markdown".to_string(), body));
+    }
     if uri.starts_with("kit://brain/signals") {
         let limit = query_param(uri, "limit")
             .and_then(|v| v.parse::<usize>().ok())
