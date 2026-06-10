@@ -220,6 +220,52 @@ fn chat_turn_ingestion_is_idempotent_and_searchable() {
 }
 
 #[test]
+fn retain_docs_forgets_deleted_sources() {
+    init_test_db();
+    // Uses the Clipboard source: tests share one DB and run in parallel, and
+    // retention is destructive within its source — Note docs belong to other
+    // tests.
+    store::upsert_doc(
+        DocSource::Clipboard,
+        "clip-keep",
+        "Keeper",
+        "clipstays",
+        100,
+    )
+    .unwrap();
+    store::upsert_doc(
+        DocSource::Clipboard,
+        "clip-gone",
+        "Goner",
+        "clipleaves",
+        100,
+    )
+    .unwrap();
+    store::upsert_doc(
+        DocSource::ChatTurn,
+        "chat-keep-ret",
+        "Chat",
+        "clipstays too",
+        100,
+    )
+    .unwrap();
+    let removed = store::retain_docs(DocSource::Clipboard, &["clip-keep".to_string()]).unwrap();
+    assert!(removed >= 1);
+    let hits = store::fts_search("clipleaves", 10).unwrap();
+    let docs = store::get_docs_by_ids(&hits).unwrap();
+    assert!(
+        !docs.iter().any(|d| d.source_id == "clip-gone"),
+        "deleted source must be forgotten"
+    );
+    let chat_hits = store::fts_search("clipstays", 20).unwrap();
+    let chat_docs = store::get_docs_by_ids(&chat_hits).unwrap();
+    assert!(
+        chat_docs.iter().any(|d| d.source_id == "chat-keep-ret"),
+        "other sources untouched"
+    );
+}
+
+#[test]
 fn activity_journal_appends_newest_first_and_recalls() {
     init_test_db();
     store::append_activity("searched files for \"png\" and opened CleanShot.png").unwrap();

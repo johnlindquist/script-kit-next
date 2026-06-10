@@ -133,6 +133,7 @@ pub fn run_cycle(embedder: &mut Option<BrainEmbedder>) -> Result<()> {
 fn sync_pinned_clipboard() -> Result<usize> {
     let entries = crate::clipboard_history::get_clipboard_history(500);
     let mut promoted = 0usize;
+    let mut pinned_ids = Vec::new();
     for entry in entries.iter().filter(|entry| entry.pinned) {
         let text = match entry.content_type {
             crate::clipboard_history::ContentType::Text => entry.content.clone(),
@@ -153,15 +154,21 @@ fn sync_pinned_clipboard() -> Result<usize> {
             text,
             entry.timestamp,
         )?;
+        pinned_ids.push(entry.id.clone());
         promoted += 1;
     }
+    // Unpinning is the user revoking the "this matters" signal — forget it.
+    let _ = store::retain_docs(DocSource::Clipboard, &pinned_ids)?;
     Ok(promoted)
 }
 
-/// Mirror active notes into brain_docs. Hash-guarded upserts make this cheap.
+/// Mirror active notes into brain_docs. Hash-guarded upserts make this
+/// cheap, and deletion sync forgets notes the user deleted — a brain that
+/// remembers what its owner erased is a bug, not a feature.
 fn sync_notes() -> Result<usize> {
     let notes = crate::notes::get_all_notes()?;
     let mut synced = 0usize;
+    let mut live_ids = Vec::with_capacity(notes.len());
     for note in &notes {
         let source_id = note.id.to_string();
         let updated_at = note.updated_at.timestamp();
@@ -172,15 +179,28 @@ fn sync_notes() -> Result<usize> {
             &note.content,
             updated_at,
         )?;
+        live_ids.push(source_id);
         synced += 1;
+    }
+    let removed = store::retain_docs(DocSource::Note, &live_ids)?;
+    if removed > 0 {
+        tracing::info!(target: "script_kit::brain", removed, "brain forgot deleted notes");
     }
     Ok(synced)
 }
 
 /// Embed docs with missing/stale vectors. Returns the number embedded.
 fn embed_pending(embedder: &mut Option<BrainEmbedder>) -> Result<usize> {
+    if resolve_embed_model().is_none() {
+        // Zero-setup semantic search: fetch the model once the brain has
+        // content worth embedding (politeness rules in brain::download).
+        let (docs, _, _) = store::doc_stats().unwrap_or((0, 0, 0));
+        if !super::download::ensure_embed_model(docs > 0) {
+            return Ok(0); // FTS-only mode: no model on disk (yet).
+        }
+    }
     let Some(model) = resolve_embed_model() else {
-        return Ok(0); // FTS-only mode: no model on disk.
+        return Ok(0);
     };
     if embedder
         .as_ref()

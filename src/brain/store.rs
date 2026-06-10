@@ -330,6 +330,33 @@ pub fn upsert_doc(
     Ok(id)
 }
 
+/// Remove all docs of a source whose source_id is NOT in `keep` — the
+/// deletion-sync primitive (a note deleted from notes.sqlite must also be
+/// forgotten by the brain). Returns the number removed.
+pub fn retain_docs(source: DocSource, keep: &[String]) -> Result<usize> {
+    let db = get_db()?;
+    let conn = db.lock().map_err(|_| anyhow!("brain db lock poisoned"))?;
+    let existing: Vec<String> = {
+        let mut stmt = conn.prepare("SELECT source_id FROM brain_docs WHERE source = ?1")?;
+        let rows = stmt
+            .query_map(params![source.as_str()], |row| row.get::<_, String>(0))?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+        rows
+    };
+    let keep: std::collections::HashSet<&str> = keep.iter().map(String::as_str).collect();
+    let mut removed = 0usize;
+    for source_id in existing {
+        if !keep.contains(source_id.as_str()) {
+            conn.execute(
+                "DELETE FROM brain_docs WHERE source = ?1 AND source_id = ?2",
+                params![source.as_str(), source_id],
+            )?;
+            removed += 1;
+        }
+    }
+    Ok(removed)
+}
+
 /// Remove a document (e.g. when its source note is deleted).
 pub fn remove_doc(source: DocSource, source_id: &str) -> Result<()> {
     let db = get_db()?;
