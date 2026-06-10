@@ -669,6 +669,48 @@ pub fn dispatch_action_to_detached(action_id: &str, cx: &mut App) -> bool {
     dispatch_detached_action_checked(&view_weak, action_id, cx)
 }
 
+/// Reattach the detached conversation into the main panel from the detached
+/// window's own actions menu.
+///
+/// Routes through `ScriptListApp::reattach_embedded_agent_chat_from_detached`
+/// (which pulls the live thread out of the detached view, closes this window,
+/// and rebuilds the embedded chat around the same thread), then reveals the
+/// main window. Falls back to a plain close when the main app entity is
+/// unreachable so the action never silently no-ops.
+fn reattach_detached_chat_into_main_panel(cx: &mut App) -> bool {
+    if crate::get_main_window_handle().is_none() {
+        tracing::warn!(event = "detached_reattach_no_main_window_handle");
+        close_chat_window(cx);
+        return false;
+    }
+    // Deferred: this action can arrive while the main app is already on the
+    // GPUI update stack (automation TriggerAction dispatch), so updating the
+    // app entity inline would re-enter it. Defer until the stack unwinds.
+    cx.defer(move |cx| {
+        let reattached = REATTACH_INTO_MAIN_HOOK
+            .get()
+            .map(|hook| hook(cx))
+            .unwrap_or(false);
+        if !reattached {
+            tracing::warn!(event = "detached_reattach_main_app_unreachable");
+            close_chat_window(cx);
+        }
+        tracing::info!(event = "detached_reattach_into_main_panel", reattached);
+    });
+    true
+}
+
+/// Binary-registered hook that reattaches the detached chat into the main
+/// panel. The main app type lives in the binary crate, so this dual-compiled
+/// file cannot downcast the main window's root view itself; the binary
+/// registers the downcast-and-reattach closure at app startup.
+static REATTACH_INTO_MAIN_HOOK: std::sync::OnceLock<fn(&mut App) -> bool> =
+    std::sync::OnceLock::new();
+
+pub fn register_reattach_into_main_hook(hook: fn(&mut App) -> bool) {
+    let _ = REATTACH_INTO_MAIN_HOOK.set(hook);
+}
+
 /// Activate (bring to front) the detached chat window.
 pub(crate) fn activate_chat_window(cx: &mut App) {
     let state = {
@@ -1489,8 +1531,8 @@ fn dispatch_detached_action(
             }
         }
         "agent_chat_reattach_panel" => {
-            close_chat_window(cx);
-            tracing::info!(event = "detached_action_reattach_panel");
+            let reattached = reattach_detached_chat_into_main_panel(cx);
+            tracing::info!(event = "detached_action_reattach_panel", reattached);
         }
         "agent_chat_close" => {
             close_chat_window(cx);

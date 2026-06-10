@@ -249,6 +249,12 @@ impl ScriptListApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
+        // The detached chat window code is compiled into the lib, which
+        // cannot name ScriptListApp; register the binary-side reattach hook
+        // it dispatches through.
+        crate::ai::agent_chat::ui::chat_window::register_reattach_into_main_hook(
+            Self::reattach_detached_chat_hook,
+        );
         // PERF: Parallelize script + scriptlet loading to reduce startup wall time.
         let load_start = std::time::Instant::now();
         let (script_report, scriptlets, scripts_elapsed, scriptlets_elapsed) = std::thread::scope(

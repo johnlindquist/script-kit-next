@@ -545,6 +545,35 @@ impl ScriptListApp {
         );
     }
 
+    /// Binary-side body for the detached chat window's "reattach into main
+    /// panel" action. Registered with
+    /// `chat_window::register_reattach_into_main_hook` at startup because the
+    /// dual-compiled chat window code cannot name `ScriptListApp`.
+    pub(crate) fn reattach_detached_chat_hook(cx: &mut gpui::App) -> bool {
+        let Some(handle) = crate::get_main_window_handle() else {
+            return false;
+        };
+        handle
+            .update(cx, |any_view, _window, cx| {
+                let Ok(root) = any_view.downcast::<gpui_component::Root>() else {
+                    return false;
+                };
+                let inner = root.read(cx).view().clone();
+                let Ok(app) = inner.downcast::<ScriptListApp>() else {
+                    return false;
+                };
+                app.update(cx, |app, cx| {
+                    app.reattach_embedded_agent_chat_from_detached(cx);
+                    app.dispatch_window_event(
+                        crate::window_orchestrator::WindowEvent::ShowMain { activate_app: true },
+                        cx,
+                    );
+                });
+                true
+            })
+            .unwrap_or(false)
+    }
+
     /// Reattach flow for the "Return to Panel" action on a detached Agent Chat chat.
     ///
     /// The detached window and the main embedded view share the same
