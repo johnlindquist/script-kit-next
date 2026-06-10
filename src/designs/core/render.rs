@@ -271,6 +271,12 @@ pub fn render_design_item(
                     None,
                     Some(IconKind::Svg("NotebookText".to_string())),
                 ),
+                SearchResult::BrainHit(bm) => (
+                    bm.hit.title.clone(),
+                    Some(bm.subtitle.clone()),
+                    None,
+                    Some(IconKind::Svg("brain".to_string())),
+                ),
                 SearchResult::Todo(tm) => (
                     tm.hit.title.clone(),
                     Some(tm.hit.subtitle.clone()),

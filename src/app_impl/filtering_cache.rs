@@ -542,6 +542,7 @@ impl ScriptListApp {
         advanced_query_active: bool,
         source_filters: crate::menu_syntax::RootUnifiedSourceFilterSet,
         todo_options: crate::menu_syntax::RootTodoSectionOptions,
+        brain_options: crate::brain::RootBrainSectionOptions,
         notes_options: crate::notes::RootNotesSectionOptions,
         clipboard_history_options: crate::clipboard_history::RootClipboardHistorySectionOptions,
         dictation_history_options: crate::dictation::RootDictationHistorySectionOptions,
@@ -558,6 +559,7 @@ impl ScriptListApp {
             advanced_query: advanced_query_active,
             source_filters: source_filters.clone(),
             todo_options,
+            brain_options,
             notes_options,
             clipboard_history_options,
             dictation_history_options,
@@ -576,6 +578,8 @@ impl ScriptListApp {
             }
         }
 
+        let explicit_brain =
+            source_filters.includes(crate::menu_syntax::RootUnifiedSourceFilter::Brain);
         let explicit_notes =
             source_filters.includes(crate::menu_syntax::RootUnifiedSourceFilter::Notes);
         let explicit_todos =
@@ -593,6 +597,7 @@ impl ScriptListApp {
         let explicit_browser_history =
             source_filters.includes(crate::menu_syntax::RootUnifiedSourceFilter::BrowserHistory);
 
+        let allow_brain = source_filters.allows(crate::menu_syntax::RootUnifiedSourceFilter::Brain);
         let allow_notes = source_filters.allows(crate::menu_syntax::RootUnifiedSourceFilter::Notes);
         let allow_todos = source_filters.allows(crate::menu_syntax::RootUnifiedSourceFilter::Todo);
         let allow_clipboard =
@@ -607,6 +612,17 @@ impl ScriptListApp {
             source_filters.allows(crate::menu_syntax::RootUnifiedSourceFilter::BrowserTabs);
         let allow_browser_history =
             source_filters.allows(crate::menu_syntax::RootUnifiedSourceFilter::BrowserHistory);
+
+        let brain_hits = timed_root_passive_source("brain", search_text, explicit_brain, || {
+            if !advanced_query_active
+                && allow_brain
+                && crate::brain::root_brain_query_is_eligible(search_text, brain_options)
+            {
+                crate::brain::search_root_brain_direct(search_text, &brain_options)
+            } else {
+                Vec::new()
+            }
+        });
 
         let note_hits = timed_root_passive_source("notes", search_text, explicit_notes, || {
             if !advanced_query_active
@@ -784,6 +800,7 @@ impl ScriptListApp {
         let frame = crate::RootPassiveFrame {
             key,
             note_hits,
+            brain_hits,
             todo_hits,
             clipboard_history_hits,
             dictation_history_hits,
@@ -1620,6 +1637,7 @@ impl ScriptListApp {
             let unified_search = self.config.get_unified_search();
             let mut root_file_options = unified_search.root_file_section_options();
             let mut todo_options = unified_search.todo_section_options();
+            let mut brain_options = unified_search.brain_section_options();
             let mut notes_options = unified_search.notes_section_options();
             let mut agent_chat_history_options =
                 unified_search.agent_chat_history_section_options();
@@ -1650,6 +1668,12 @@ impl ScriptListApp {
                     root_file_options.source_filter_browse_target_visible_rows =
                         Some(visible_limit);
                 }
+            }
+            if source_filters.includes(crate::menu_syntax::RootUnifiedSourceFilter::Brain) {
+                brain_options.enabled = true;
+                brain_options.min_query_chars = 0;
+                brain_options.max_results =
+                    brain_options.max_results.max(explicit_source_result_target);
             }
             if source_filters.includes(crate::menu_syntax::RootUnifiedSourceFilter::Notes) {
                 notes_options.enabled = true;
@@ -1714,6 +1738,7 @@ impl ScriptListApp {
                 advanced_predicate_active,
                 source_filters.clone(),
                 todo_options,
+                brain_options,
                 notes_options,
                 clipboard_history_options,
                 dictation_history_options,
@@ -1800,6 +1825,8 @@ impl ScriptListApp {
                 root_file_options,
                 &root_passive_frame.todo_hits,
                 todo_options,
+                &root_passive_frame.brain_hits,
+                brain_options,
                 &root_passive_frame.note_hits,
                 notes_options,
                 &root_passive_frame.clipboard_history_hits,
@@ -2503,8 +2530,8 @@ impl ScriptListApp {
         context_rev: u64,
         cx: &mut gpui::Context<Self>,
     ) {
-        use std::sync::Arc;
         use std::sync::atomic::{AtomicBool, Ordering};
+        use std::sync::Arc;
 
         const GHOST_LLM_DEBOUNCE_MS: u64 = 320;
 
@@ -3461,7 +3488,7 @@ fn build_rich_provider_json_rows(
     section_label: &str,
     icon: &str,
 ) -> (Vec<GroupedListItem>, Vec<scripts::SearchResult>) {
-    use crate::spine::list::{SpineListAction, SpineListRow, SpineListRowKind, ss};
+    use crate::spine::list::{ss, SpineListAction, SpineListRow, SpineListRowKind};
 
     let limit = crate::spine::catalog_subsearch::SUBSEARCH_RENDER_LIMIT;
     let mut grouped = Vec::new();

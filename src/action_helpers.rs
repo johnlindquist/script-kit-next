@@ -61,6 +61,9 @@ pub fn extract_path_for_reveal(
         Some(SearchResult::Note(_)) => Err(PathExtractionError::UnsupportedType(
             SharedString::from("Notes row has no filesystem path"),
         )),
+        Some(SearchResult::BrainHit(_)) => Err(PathExtractionError::UnsupportedType(
+            SharedString::from("Brain row has no filesystem path"),
+        )),
         Some(SearchResult::Todo(_)) => Err(PathExtractionError::UnsupportedType(
             SharedString::from("Todos row has no filesystem path"),
         )),
@@ -116,6 +119,9 @@ pub fn extract_path_for_copy(
         )),
         Some(SearchResult::Note(_)) => Err(PathExtractionError::UnsupportedType(
             SharedString::from("Notes row has no filesystem path"),
+        )),
+        Some(SearchResult::BrainHit(_)) => Err(PathExtractionError::UnsupportedType(
+            SharedString::from("Brain row has no filesystem path"),
         )),
         Some(SearchResult::Todo(_)) => Err(PathExtractionError::UnsupportedType(
             SharedString::from("Todos row has no filesystem path"),
@@ -182,6 +188,9 @@ pub fn extract_path_for_quick_terminal(
         )),
         Some(SearchResult::Note(_)) => Err(PathExtractionError::UnsupportedType(
             SharedString::from("Cannot open notes in Quick Terminal"),
+        )),
+        Some(SearchResult::BrainHit(_)) => Err(PathExtractionError::UnsupportedType(
+            SharedString::from("Cannot open brain memories in Quick Terminal"),
         )),
         Some(SearchResult::Todo(_)) => Err(PathExtractionError::UnsupportedType(
             SharedString::from("Cannot open todos in Quick Terminal"),
@@ -252,6 +261,9 @@ pub fn extract_path_for_edit(
         )),
         Some(SearchResult::Note(_)) => Err(PathExtractionError::UnsupportedType(
             SharedString::from("Cannot edit notes from root search"),
+        )),
+        Some(SearchResult::BrainHit(_)) => Err(PathExtractionError::UnsupportedType(
+            SharedString::from("Cannot edit brain memories from root search"),
         )),
         Some(SearchResult::Todo(_)) => Err(PathExtractionError::UnsupportedType(
             SharedString::from("Cannot edit todos from root search"),

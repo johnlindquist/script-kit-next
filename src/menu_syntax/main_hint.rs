@@ -2528,6 +2528,7 @@ fn source_zero_copy_label(spec: &crate::menu_syntax::payload::SourceHeadSpec) ->
     match spec.source {
         RootUnifiedSourceFilter::ClipboardHistory => "clipboard entries".to_string(),
         RootUnifiedSourceFilter::Conversations => "Agent Chat conversations".to_string(),
+        RootUnifiedSourceFilter::Brain => "brain memories".to_string(),
         RootUnifiedSourceFilter::Notes => "notes".to_string(),
         RootUnifiedSourceFilter::Todo => "todos".to_string(),
         RootUnifiedSourceFilter::Files => "files".to_string(),

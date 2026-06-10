@@ -27,19 +27,20 @@ fn result_type_order(r: &SearchResult) -> i32 {
         SearchResult::File(_) => 6,
         SearchResult::BrowserTab(_) => 7,
         SearchResult::Todo(_) => 8,
-        SearchResult::Note(_) => 9,
-        SearchResult::ClipboardHistory(_) => 10,
-        SearchResult::DictationHistory(_) => 11,
-        SearchResult::AgentChatHistory(_) => 12,
-        SearchResult::AiVault(_) => 13,
-        SearchResult::BrowserHistory(_) => 14,
-        SearchResult::Agent(_) => 15,
-        SearchResult::Fallback(_) => 16, // Fallbacks always last
+        SearchResult::BrainHit(_) => 9,
+        SearchResult::Note(_) => 10,
+        SearchResult::ClipboardHistory(_) => 11,
+        SearchResult::DictationHistory(_) => 12,
+        SearchResult::AgentChatHistory(_) => 13,
+        SearchResult::AiVault(_) => 14,
+        SearchResult::BrowserHistory(_) => 15,
+        SearchResult::Agent(_) => 16,
+        SearchResult::Fallback(_) => 17, // Fallbacks always last
         // Script issues are pinned separately via grouping; if encountered in
         // sort, treat like a high-priority header (above built-ins).
         SearchResult::ScriptIssue(_) => -1,
         // Spine projections sort after fallbacks
-        SearchResult::SpineProjection(_) => 17,
+        SearchResult::SpineProjection(_) => 18,
     }
 }
 

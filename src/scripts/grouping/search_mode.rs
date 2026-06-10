@@ -44,6 +44,9 @@ pub(super) fn build_search_mode_results(
                 }
                 SearchResult::File(fm) => Some(format!("file/{}", fm.file.path)),
                 SearchResult::Note(nm) => Some(format!("note/{}", nm.hit.id.as_str())),
+                // Brain rows never receive frecency boosts; passive search
+                // must not feed usage memory (it would self-amplify).
+                SearchResult::BrainHit(_) => None,
                 SearchResult::Todo(tm) => Some(tm.hit.stable_key.clone()),
                 SearchResult::AgentChatHistory(am) => {
                     Some(format!("agent_chat-history/{}", am.entry.session_id))

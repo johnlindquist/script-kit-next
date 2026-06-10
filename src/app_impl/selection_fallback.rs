@@ -384,6 +384,7 @@ impl ScriptListApp {
                     // execute_root_file_open is shared by Enter and the root-file Open action.
                     scripts::SearchResult::File(_) => None,
                     scripts::SearchResult::Note(_) => None,
+                    scripts::SearchResult::BrainHit(_) => None,
                     scripts::SearchResult::Todo(_) => None,
                     scripts::SearchResult::AgentChatHistory(_) => None,
                     scripts::SearchResult::AiVault(_) => None,
@@ -524,6 +525,9 @@ impl ScriptListApp {
                     scripts::SearchResult::Note(note_match) => {
                         self.execute_root_note_open(note_match.hit.id, cx);
                     }
+                    scripts::SearchResult::BrainHit(brain_match) => {
+                        self.execute_root_brain_hit_open(&brain_match.hit, cx);
+                    }
                     scripts::SearchResult::Todo(todo_match) => {
                         self.execute_root_todo_copy(&todo_match.hit, cx);
                     }
@@ -643,6 +647,46 @@ impl ScriptListApp {
             Err(error) => {
                 logging::log("ERROR", &format!("Failed to open root note: {error}"));
                 self.show_hud("Failed to open note".to_string(), Some(HUD_MEDIUM_MS), cx);
+            }
+        }
+    }
+
+    /// Enter on a "From Your Brain" passive row. Routes by document source:
+    /// notes open in the Notes editor, chat turns resume their Agent Chat
+    /// conversation, and everything else hands the current query to Agent
+    /// Chat as a plain prompt (the Brain profile is the default there).
+    pub(crate) fn execute_root_brain_hit_open(
+        &mut self,
+        hit: &crate::brain::RootBrainSearchHit,
+        cx: &mut Context<Self>,
+    ) {
+        match hit.source {
+            crate::brain::DocSource::Note => match crate::notes::NoteId::parse(&hit.source_id) {
+                Some(note_id) => self.execute_root_note_open(note_id, cx),
+                None => {
+                    logging::log(
+                        "ERROR",
+                        &format!("Brain hit has invalid note id: {}", hit.source_id),
+                    );
+                    self.show_hud("Failed to open note".to_string(), Some(HUD_MEDIUM_MS), cx);
+                }
+            },
+            crate::brain::DocSource::ChatTurn => {
+                // source_id is "{thread_id}#{turn_index}"; resume by thread id.
+                let thread_id = hit
+                    .source_id
+                    .split('#')
+                    .next()
+                    .unwrap_or(hit.source_id.as_str());
+                self.resume_agent_chat_conversation_from_history(thread_id, &hit.excerpt, cx);
+            }
+            crate::brain::DocSource::Clipboard | crate::brain::DocSource::Activity => {
+                let prompt = self.filter_text.trim().to_string();
+                let entry_intent = (!prompt.is_empty()).then_some(prompt);
+                self.open_tab_ai_agent_chat_with_entry_intent_suppressing_focused_part(
+                    entry_intent,
+                    cx,
+                );
             }
         }
     }

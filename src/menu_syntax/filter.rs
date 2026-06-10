@@ -50,6 +50,10 @@ pub fn result_kind(result: &SearchResult) -> ArtifactKind {
         SearchResult::Window(_) => ArtifactKind::Window,
         SearchResult::File(_) => ArtifactKind::File,
         SearchResult::Note(_) => ArtifactKind::Note,
+        // Brain rows have no dedicated ArtifactKind; the passive brain section
+        // never renders alongside advanced queries, so map to Fallback like
+        // SpineProjection.
+        SearchResult::BrainHit(_) => ArtifactKind::Fallback,
         SearchResult::Todo(_) => ArtifactKind::Todo,
         SearchResult::AgentChatHistory(_) => ArtifactKind::AgentChatHistory,
         SearchResult::AiVault(_) => ArtifactKind::AiVault,

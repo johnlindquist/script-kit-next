@@ -23,6 +23,7 @@ pub mod curator;
 pub mod download;
 pub mod embedder;
 pub mod indexer;
+pub mod launcher;
 pub mod resources;
 pub mod search;
 pub mod seed;
@@ -34,6 +35,10 @@ mod tests;
 use anyhow::Result;
 
 pub use indexer::{ingest_chat_turn, start_brain_indexer, wake_indexer};
+pub use launcher::{
+    root_brain_query_is_eligible, search_root_brain_direct, RootBrainSearchHit,
+    RootBrainSectionOptions,
+};
 pub use search::{brain_search, render_context_block, BrainHit};
 pub use store::{init_brain_db, record_signal, DocSource};
 

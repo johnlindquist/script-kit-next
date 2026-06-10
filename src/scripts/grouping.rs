@@ -456,6 +456,11 @@ pub(crate) fn get_grouped_results_with_validation_query_and_root_files(
             ..Default::default()
         },
         &[],
+        crate::brain::RootBrainSectionOptions {
+            enabled: false,
+            ..Default::default()
+        },
+        &[],
         crate::notes::RootNotesSectionOptions {
             enabled: false,
             ..Default::default()
@@ -523,6 +528,8 @@ pub(crate) fn get_grouped_results_with_validation_query_and_root_files_with_opti
     root_file_options: crate::file_search::RootFileSectionOptions,
     root_todo_hits: &[crate::menu_syntax::RootTodoSearchHit],
     root_todo_options: crate::menu_syntax::RootTodoSectionOptions,
+    root_brain_hits: &[crate::brain::RootBrainSearchHit],
+    root_brain_options: crate::brain::RootBrainSectionOptions,
     root_note_hits: &[crate::notes::RootNoteSearchHit],
     root_notes_options: crate::notes::RootNotesSectionOptions,
     root_clipboard_history_hits: &[crate::clipboard_history::ClipboardEntryMeta],
@@ -632,6 +639,22 @@ pub(crate) fn get_grouped_results_with_validation_query_and_root_files_with_opti
                     &mut passive_budget,
                     root_source_filters
                         .includes(crate::menu_syntax::RootUnifiedSourceFilter::BrowserTabs),
+                );
+            }
+            crate::config::UnifiedSearchPassiveSource::Brain => {
+                if !root_source_filters.allows(crate::menu_syntax::RootUnifiedSourceFilter::Brain) {
+                    continue;
+                }
+                append_root_brain_section(
+                    &mut grouped,
+                    &mut flat_results,
+                    filter_text,
+                    advanced_query,
+                    root_brain_hits,
+                    root_brain_options,
+                    &mut passive_budget,
+                    root_source_filters
+                        .includes(crate::menu_syntax::RootUnifiedSourceFilter::Brain),
                 );
             }
             crate::config::UnifiedSearchPassiveSource::Notes => {
@@ -955,6 +978,57 @@ fn append_root_agent_chat_history_section(
         rows,
         status,
     );
+}
+
+#[allow(clippy::too_many_arguments)]
+fn append_root_brain_section(
+    grouped: &mut Vec<GroupedListItem>,
+    flat_results: &mut Vec<SearchResult>,
+    filter_text: &str,
+    advanced_query: Option<&crate::menu_syntax::AdvancedQuery>,
+    hits: &[crate::brain::RootBrainSearchHit],
+    options: crate::brain::RootBrainSectionOptions,
+    budget: &mut RootPassiveResultBudget,
+    explicit_source_filter: bool,
+) {
+    if advanced_query.is_some() || !crate::brain::root_brain_query_is_eligible(filter_text, options)
+    {
+        return;
+    }
+
+    let limit = budget.limit_for_source(options.max_results);
+    if limit == 0 && !explicit_source_filter {
+        return;
+    }
+
+    let rows = hits
+        .iter()
+        .take(limit)
+        .enumerate()
+        .map(|(rank, hit)| {
+            let subtitle = if hit.excerpt.is_empty() {
+                hit.source_label.to_string()
+            } else {
+                format!("{} · {}", hit.source_label, hit.excerpt)
+            };
+            SearchResult::BrainHit(crate::scripts::BrainMatch {
+                hit: hit.clone(),
+                subtitle,
+                score: root_passive_result_score(rank),
+            })
+        })
+        .collect::<Vec<_>>();
+
+    budget.consume(rows.len());
+    let status = explicit_source_filter.then(|| {
+        source_chip_result_status(
+            crate::menu_syntax::RootUnifiedSourceFilter::Brain,
+            rows.len(),
+            hits.len(),
+            false,
+        )
+    });
+    append_root_passive_section(grouped, flat_results, "From Your Brain", rows, status);
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -2294,6 +2368,20 @@ mod advanced_query_tests {
         }
     }
 
+    fn root_brain_hit(
+        source: crate::brain::DocSource,
+        source_id: &str,
+        title: &str,
+    ) -> crate::brain::RootBrainSearchHit {
+        crate::brain::RootBrainSearchHit {
+            title: title.to_string(),
+            excerpt: "remembered context".to_string(),
+            source_label: source.label(),
+            source,
+            source_id: source_id.to_string(),
+        }
+    }
+
     fn root_browser_tab_hit(
         stable_key: &str,
         title: &str,
@@ -2367,6 +2455,7 @@ mod advanced_query_tests {
                     | SearchResult::Window(_) => "primary",
                     SearchResult::File(_) => "rootFile",
                     SearchResult::Note(_)
+                    | SearchResult::BrainHit(_)
                     | SearchResult::Todo(_)
                     | SearchResult::AgentChatHistory(_)
                     | SearchResult::AiVault(_)
@@ -2508,6 +2597,11 @@ mod advanced_query_tests {
             crate::file_search::RootFileSectionOptions::default(),
             &[],
             crate::menu_syntax::RootTodoSectionOptions {
+                enabled: false,
+                ..Default::default()
+            },
+            &[],
+            crate::brain::RootBrainSectionOptions {
                 enabled: false,
                 ..Default::default()
             },
@@ -2671,6 +2765,11 @@ mod advanced_query_tests {
                 enabled: false,
                 ..Default::default()
             },
+            &[],
+            crate::brain::RootBrainSectionOptions {
+                enabled: false,
+                ..Default::default()
+            },
             &notes,
             crate::notes::RootNotesSectionOptions {
                 enabled: true,
@@ -2754,6 +2853,142 @@ mod advanced_query_tests {
                 "Dictation History",
                 "Use \"design\" with...",
             ]
+        );
+    }
+
+    #[test]
+    fn root_brain_section_appends_only_when_enabled_with_hits() {
+        let frecency_store = FrecencyStore::new();
+        let query = "design";
+        let brain_hits = vec![root_brain_hit(
+            crate::brain::DocSource::Note,
+            "44444444-4444-4444-4444-444444444444",
+            "design memory",
+        )];
+
+        let run = |hits: &[crate::brain::RootBrainSearchHit], enabled: bool| {
+            get_grouped_results_with_validation_query_and_root_files_with_options(
+                &[],
+                &[],
+                &[builtin_entry("Design Gallery")],
+                &[],
+                &[],
+                crate::window_control::RootWindowsProviderStatus::Ready { count: 0 },
+                &[],
+                &frecency_store,
+                query,
+                &SuggestedConfig::default(),
+                &[],
+                None,
+                None,
+                None,
+                None,
+                &crate::menu_syntax::RootUnifiedSourceFilterSet::default(),
+                None,
+                false,
+                &[],
+                &[],
+                crate::file_search::RootFileSectionOptions::default(),
+                &[],
+                crate::menu_syntax::RootTodoSectionOptions {
+                    enabled: false,
+                    ..Default::default()
+                },
+                hits,
+                crate::brain::RootBrainSectionOptions {
+                    enabled,
+                    ..Default::default()
+                },
+                &[],
+                crate::notes::RootNotesSectionOptions {
+                    enabled: false,
+                    ..Default::default()
+                },
+                &[],
+                crate::clipboard_history::RootClipboardHistorySectionOptions {
+                    enabled: false,
+                    ..Default::default()
+                },
+                &[],
+                crate::dictation::RootDictationHistorySectionOptions {
+                    enabled: false,
+                    max_results: 0,
+                    min_query_chars: usize::MAX,
+                    scan_limit: 0,
+                },
+                &[],
+                crate::ai::agent_chat::ui::history::RootAgentChatHistorySectionOptions {
+                    enabled: false,
+                    ..Default::default()
+                },
+                &[],
+                crate::ai_vault::RootAiVaultSectionOptions {
+                    enabled: false,
+                    ..Default::default()
+                },
+                &[],
+                crate::browser_tabs::RootBrowserTabsSectionOptions {
+                    enabled: false,
+                    ..Default::default()
+                },
+                &[],
+                crate::browser_history::RootBrowserHistorySectionOptions {
+                    enabled: false,
+                    ..Default::default()
+                },
+                &crate::config::UnifiedSearchPassiveSource::DEFAULT_ORDER,
+                crate::config::UnifiedSearchPassiveResultLimitsConfig {
+                    max_total_results: 12,
+                    max_total_results_when_primary_visible: 12,
+                    max_results_per_source_when_primary_visible: 5,
+                },
+            )
+        };
+
+        let has_brain_header = |grouped: &[GroupedListItem]| {
+            grouped.iter().any(|item| {
+                matches!(
+                    item,
+                    GroupedListItem::SectionHeader(label, None) if label == "From Your Brain"
+                )
+            })
+        };
+
+        let (grouped, flat) = run(&brain_hits, true);
+        assert!(
+            has_brain_header(&grouped),
+            "enabled brain section with hits should append a From Your Brain header"
+        );
+        assert!(
+            flat.iter().any(|result| matches!(
+                result,
+                SearchResult::BrainHit(bm) if bm.hit.title == "design memory"
+            )),
+            "From Your Brain section should surface the brain hit row"
+        );
+
+        let (grouped, flat) = run(&brain_hits, false);
+        assert!(
+            !has_brain_header(&grouped),
+            "disabled brain section must not append a header"
+        );
+        assert!(
+            !flat
+                .iter()
+                .any(|result| matches!(result, SearchResult::BrainHit(_))),
+            "disabled brain section must not surface rows"
+        );
+
+        let (grouped, flat) = run(&[], true);
+        assert!(
+            !has_brain_header(&grouped),
+            "empty brain hits must not append a header"
+        );
+        assert!(
+            !flat
+                .iter()
+                .any(|result| matches!(result, SearchResult::BrainHit(_))),
+            "empty brain hits must not surface rows"
         );
     }
 
@@ -2845,6 +3080,11 @@ mod advanced_query_tests {
                     crate::file_search::RootFileSectionOptions::default(),
                     &[],
                     crate::menu_syntax::RootTodoSectionOptions {
+                        enabled: false,
+                        ..Default::default()
+                    },
+                    &[],
+                    crate::brain::RootBrainSectionOptions {
                         enabled: false,
                         ..Default::default()
                     },
@@ -2962,6 +3202,11 @@ mod advanced_query_tests {
             crate::file_search::RootFileSectionOptions::default(),
             &[],
             crate::menu_syntax::RootTodoSectionOptions {
+                enabled: false,
+                ..Default::default()
+            },
+            &[],
+            crate::brain::RootBrainSectionOptions {
                 enabled: false,
                 ..Default::default()
             },
@@ -3084,6 +3329,11 @@ mod advanced_query_tests {
                 enabled: false,
                 ..Default::default()
             },
+            &[],
+            crate::brain::RootBrainSectionOptions {
+                enabled: false,
+                ..Default::default()
+            },
             &notes,
             crate::notes::RootNotesSectionOptions {
                 enabled: true,
@@ -3192,6 +3442,11 @@ mod advanced_query_tests {
                 crate::file_search::RootFileSectionOptions::default(),
                 &[],
                 crate::menu_syntax::RootTodoSectionOptions {
+                    enabled: false,
+                    ..Default::default()
+                },
+                &[],
+                crate::brain::RootBrainSectionOptions {
                     enabled: false,
                     ..Default::default()
                 },
@@ -5087,6 +5342,11 @@ mod advanced_query_tests {
                 },
                 &[],
                 crate::menu_syntax::RootTodoSectionOptions {
+                    enabled: false,
+                    ..Default::default()
+                },
+                &[],
+                crate::brain::RootBrainSectionOptions {
                     enabled: false,
                     ..Default::default()
                 },

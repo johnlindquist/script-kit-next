@@ -124,6 +124,7 @@ impl AdvancedQuery {
 #[serde(rename_all = "camelCase")]
 pub enum RootUnifiedSourceFilter {
     Files,
+    Brain,
     Notes,
     Todo,
     ClipboardHistory,
@@ -143,6 +144,7 @@ impl RootUnifiedSourceFilter {
     pub fn receipt_label(self) -> &'static str {
         match self {
             Self::Files => "files",
+            Self::Brain => "brain",
             Self::Notes => "notes",
             Self::Todo => "todo",
             Self::ClipboardHistory => "clipboard",
@@ -162,6 +164,7 @@ impl RootUnifiedSourceFilter {
     pub fn label(self) -> &'static str {
         match self {
             Self::Files => "Files",
+            Self::Brain => "From Your Brain",
             Self::Notes => "Notes",
             Self::Todo => "Todos",
             Self::ClipboardHistory => "Clipboard",
@@ -196,6 +199,14 @@ pub const SOURCE_HEAD_SPECS: &[SourceHeadSpec] = &[
         short: Some("f:"),
         label: "Files",
         description: "Search local file results",
+        planned: true,
+    },
+    SourceHeadSpec {
+        source: RootUnifiedSourceFilter::Brain,
+        canonical: "brain:",
+        short: None,
+        label: "From Your Brain",
+        description: "Search your local brain memory",
         planned: true,
     },
     SourceHeadSpec {

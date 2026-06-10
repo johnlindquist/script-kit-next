@@ -69,11 +69,13 @@ pub(crate) struct RootPassiveFrameKey {
     pub(crate) advanced_query: bool,
     pub(crate) source_filters: crate::menu_syntax::RootUnifiedSourceFilterSet,
     pub(crate) todo_options: crate::menu_syntax::RootTodoSectionOptions,
+    pub(crate) brain_options: crate::brain::RootBrainSectionOptions,
     pub(crate) notes_options: crate::notes::RootNotesSectionOptions,
     pub(crate) clipboard_history_options:
         crate::clipboard_history::RootClipboardHistorySectionOptions,
     pub(crate) dictation_history_options: crate::dictation::RootDictationHistorySectionOptions,
-    pub(crate) agent_chat_history_options: crate::ai::agent_chat::ui::history::RootAgentChatHistorySectionOptions,
+    pub(crate) agent_chat_history_options:
+        crate::ai::agent_chat::ui::history::RootAgentChatHistorySectionOptions,
     pub(crate) ai_vault_options: crate::ai_vault::RootAiVaultSectionOptions,
     pub(crate) ai_vault_snapshot_generation: u64,
     pub(crate) browser_tabs_options: crate::browser_tabs::RootBrowserTabsSectionOptions,
@@ -86,10 +88,12 @@ pub(crate) struct RootPassiveFrameKey {
 pub(crate) struct RootPassiveFrame {
     pub(crate) key: RootPassiveFrameKey,
     pub(crate) note_hits: Vec<crate::notes::RootNoteSearchHit>,
+    pub(crate) brain_hits: Vec<crate::brain::RootBrainSearchHit>,
     pub(crate) todo_hits: Vec<crate::menu_syntax::RootTodoSearchHit>,
     pub(crate) clipboard_history_hits: Vec<crate::clipboard_history::ClipboardEntryMeta>,
     pub(crate) dictation_history_hits: Vec<crate::dictation::RootDictationHistorySearchHit>,
-    pub(crate) agent_chat_history_hits: Vec<crate::ai::agent_chat::ui::history::AgentChatHistorySearchHit>,
+    pub(crate) agent_chat_history_hits:
+        Vec<crate::ai::agent_chat::ui::history::AgentChatHistorySearchHit>,
     pub(crate) ai_vault_hits: Vec<crate::ai_vault::AiVaultHit>,
     pub(crate) browser_tab_hits: Vec<crate::browser_tabs::RootBrowserTabSearchHit>,
     pub(crate) browser_history_hits: Vec<crate::browser_history::RootBrowserHistorySearchHit>,
@@ -1158,7 +1162,8 @@ pub(crate) struct ScriptListApp {
     pub(crate) agent_chat_footer_model_display: Option<String>,
     /// Cached Agent Chat footer state so native footer labels refresh when composer
     /// or response-derived actions change.
-    pub(crate) agent_chat_footer_snapshot: Option<crate::ai::agent_chat::ui::view::AgentChatFooterSnapshot>,
+    pub(crate) agent_chat_footer_snapshot:
+        Option<crate::ai::agent_chat::ui::view::AgentChatFooterSnapshot>,
     /// Snapshot of shared launcher host state while an attachment portal owns
     /// the main window.
     pub(crate) attachment_portal_host_snapshot: Option<AttachmentPortalHostSnapshot>,
@@ -1186,7 +1191,8 @@ pub(crate) struct ScriptListApp {
     /// truth for the `blocks_launcher_ai_entry` and
     /// `is_attachment_portal` predicates. Written only through
     /// `transition_agent_chat_surface`; do not mutate directly.
-    pub(crate) agent_chat_surface_state: crate::ai::agent_chat::ui::surface_state::AgentChatSurfaceState,
+    pub(crate) agent_chat_surface_state:
+        crate::ai::agent_chat::ui::surface_state::AgentChatSurfaceState,
     /// Input history for shell-like up/down navigation through previous inputs
     input_history: input_history::InputHistory,
     /// Pending API key configuration - tracks which provider is being configured

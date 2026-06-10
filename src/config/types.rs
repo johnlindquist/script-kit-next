@@ -60,6 +60,7 @@ pub struct UnifiedSearchConfig {
     pub passive_result_limits: UnifiedSearchPassiveResultLimitsConfig,
     pub files: UnifiedSearchFilesConfig,
     pub todos: UnifiedSearchTodosConfig,
+    pub brain: UnifiedSearchBrainConfig,
     pub notes: UnifiedSearchNotesConfig,
     pub agent_chat_history: UnifiedSearchAgentChatHistoryConfig,
     pub ai_vault: UnifiedSearchAiVaultConfig,
@@ -77,6 +78,7 @@ impl Default for UnifiedSearchConfig {
             passive_result_limits: UnifiedSearchPassiveResultLimitsConfig::default(),
             files: UnifiedSearchFilesConfig::default(),
             todos: UnifiedSearchTodosConfig::default(),
+            brain: UnifiedSearchBrainConfig::default(),
             notes: UnifiedSearchNotesConfig::default(),
             agent_chat_history: UnifiedSearchAgentChatHistoryConfig::default(),
             ai_vault: UnifiedSearchAiVaultConfig::default(),
@@ -93,6 +95,7 @@ impl Default for UnifiedSearchConfig {
 pub enum UnifiedSearchPassiveSource {
     BrowserTabs,
     Todos,
+    Brain,
     Notes,
     ClipboardHistory,
     DictationHistory,
@@ -102,9 +105,10 @@ pub enum UnifiedSearchPassiveSource {
 }
 
 impl UnifiedSearchPassiveSource {
-    pub(crate) const DEFAULT_ORDER: [Self; 8] = [
+    pub(crate) const DEFAULT_ORDER: [Self; 9] = [
         Self::BrowserTabs,
         Self::Todos,
+        Self::Brain,
         Self::Notes,
         Self::ClipboardHistory,
         Self::DictationHistory,
@@ -220,6 +224,24 @@ impl Default for UnifiedSearchAiVaultConfig {
             search_content: DEFAULT_UNIFIED_SEARCH_AI_VAULT_SEARCH_CONTENT,
             resume_terminal: AiVaultResumeTerminal::default(),
             exclude_patterns: Vec::new(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(default, rename_all = "camelCase")]
+pub struct UnifiedSearchBrainConfig {
+    pub enabled: bool,
+    pub max_results: usize,
+    pub min_query_chars: usize,
+}
+
+impl Default for UnifiedSearchBrainConfig {
+    fn default() -> Self {
+        Self {
+            enabled: DEFAULT_UNIFIED_SEARCH_BRAIN_ENABLED,
+            max_results: DEFAULT_UNIFIED_SEARCH_BRAIN_MAX_RESULTS,
+            min_query_chars: DEFAULT_UNIFIED_SEARCH_BRAIN_MIN_QUERY_CHARS,
         }
     }
 }
@@ -486,6 +508,15 @@ impl UnifiedSearchConfig {
             cache_ttl_ms: self.ai_vault.cache_ttl_ms.clamp(5_000, 120_000),
             search_content: self.ai_vault.search_content,
             exclude_patterns: self.ai_vault.exclude_patterns.clone(),
+        }
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn brain_section_options(&self) -> crate::brain::RootBrainSectionOptions {
+        crate::brain::RootBrainSectionOptions {
+            enabled: self.enabled && self.brain.enabled,
+            max_results: self.brain.max_results.clamp(1, 5),
+            min_query_chars: self.brain.min_query_chars.clamp(2, 32),
         }
     }
 

@@ -37,7 +37,7 @@ pub use types::{
     HotkeyConfig, LayoutConfig, McpConfig, McpHttpServerConfig, McpServerConfig,
     McpStdioServerConfig, RootFilePromotionConfig, ScriptKitUserPreferences, SpineCommandConfig,
     SpineStyleConfig, SuggestedConfig, ThemeSelectionPreferences,
-    UnifiedSearchAgentChatHistoryConfig, UnifiedSearchAiVaultConfig,
+    UnifiedSearchAgentChatHistoryConfig, UnifiedSearchAiVaultConfig, UnifiedSearchBrainConfig,
     UnifiedSearchBrowserHistoryConfig, UnifiedSearchBrowserTabsConfig, UnifiedSearchConfig,
     UnifiedSearchFilesConfig, UnifiedSearchPassiveResultLimitsConfig, UnifiedSearchPassiveSource,
     WatcherConfig, WindowManagementPreferences,

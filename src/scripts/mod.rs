@@ -62,7 +62,7 @@ pub use self::search::{
 #[allow(unused_imports)]
 pub use self::types::{
     preview_cache_is_valid, preview_match_signature, AgentChatHistoryMatch, AgentMatch,
-    AiVaultMatch, AppMatch, BrowserHistoryMatch, BrowserTabMatch, BuiltInMatch,
+    AiVaultMatch, AppMatch, BrainMatch, BrowserHistoryMatch, BrowserTabMatch, BuiltInMatch,
     ClipboardHistoryMatch, DictationHistoryMatch, FallbackConfig, FallbackMatch, FileMatch,
     MatchEvidence, MatchEvidenceField, MatchIndices, NoteMatch, RootWindowEntry, Script,
     ScriptContentMatch, ScriptIssueMatch, ScriptMatch, ScriptMatchKind, Scriptlet, ScriptletMatch,
