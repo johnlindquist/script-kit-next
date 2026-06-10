@@ -476,6 +476,18 @@ fn test_notes_auto_resize_height_clamps_to_default_max_when_initial_height_is_sm
 }
 
 #[test]
+fn test_notes_auto_resize_counts_soft_wrapped_display_lines() {
+    const INIT_SOURCE: &str = include_str!("init.rs");
+    assert!(
+        INIT_SOURCE.contains("fn editor_display_line_count(")
+            && INIT_SOURCE.contains("soft_wrapped_lines_len()")
+            && !INIT_SOURCE.contains("note.content.lines().count()"),
+        "Notes auto-resize must count the editor's soft-wrapped display lines, \
+         not logical newline-separated lines, so wrapped paragraphs grow the window"
+    );
+}
+
+#[test]
 fn test_notes_keyboard_uses_cmd_shift_o_for_focused_note_mentions() {
     const KEYBOARD_SOURCE: &str = include_str!("keyboard.rs");
     assert!(

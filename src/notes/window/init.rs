@@ -318,13 +318,18 @@ impl NotesApp {
 
         if let Some(id) = self.selected_note_id {
             // Update the note in our cache (in-memory only)
-            if let Some(note) = self.notes.iter_mut().find(|n| n.id == id) {
-                note.set_content(content_string);
+            let content_updated = if let Some(note) = self.notes.iter_mut().find(|n| n.id == id) {
+                note.set_content(content_string.clone());
                 // Mark as dirty - actual save is debounced
                 self.has_unsaved_changes = true;
+                true
+            } else {
+                false
+            };
 
+            if content_updated {
                 // Auto-resize: adjust window height based on content
-                let new_line_count = note.content.lines().count().max(1);
+                let new_line_count = self.editor_display_line_count(&content_string, cx);
                 if new_line_count != self.last_line_count {
                     self.last_line_count = new_line_count;
                     self.update_window_height(window, new_line_count, cx);
@@ -399,11 +404,25 @@ impl NotesApp {
         });
         self.on_editor_change(window, cx);
 
-        let new_line_count = text.lines().count().max(1);
+        let new_line_count = self.editor_display_line_count(&text, cx);
         if new_line_count != self.last_line_count {
             self.last_line_count = new_line_count;
             self.update_window_height(window, new_line_count, cx);
         }
+    }
+
+    /// Visual line count for auto-resize: the editor's soft-wrapped display
+    /// lines (kept in sync by the input's text wrapper on every edit), so a
+    /// long wrapped paragraph grows the window like multiple lines do.
+    /// Falls back to logical lines before the editor's first layout.
+    fn editor_display_line_count(&self, content: &str, cx: &Context<Self>) -> usize {
+        let wrapped = self.editor_state.read(cx).soft_wrapped_lines_len();
+        if wrapped > 0 {
+            wrapped
+        } else {
+            content.lines().count()
+        }
+        .max(1)
     }
 
     /// Update window height based on content line count

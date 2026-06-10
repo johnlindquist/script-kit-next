@@ -869,6 +869,13 @@ impl InputState {
         self
     }
 
+    /// Total number of display lines after soft wrap (logical lines plus
+    /// wrapped continuations). Before the first layout no wrap width is
+    /// known, so this equals the logical line count.
+    pub fn soft_wrapped_lines_len(&self) -> usize {
+        self.text_wrapper.len()
+    }
+
     /// Set the soft wrap mode for multi-line input, default is true.
     pub fn soft_wrap(mut self, wrap: bool) -> Self {
         debug_assert!(self.mode.is_multi_line());
