@@ -420,12 +420,18 @@ impl NotesApp {
         }
 
         // Read Agent Chat model context from the cached view.
-        let (selected_model_id, available_models, standing_approval_count, thread_summaries) = {
+        let (
+            selected_model_id,
+            available_models,
+            standing_approval_count,
+            thread_summaries,
+            fork_points,
+        ) = {
             let view = agent_chat_view.read(cx);
             let thread_summaries = view.retained_thread_summaries(cx);
             match &view.session {
                 crate::ai::agent_chat::ui::AgentChatSession::Setup(_) => {
-                    (None, Vec::new(), 0, thread_summaries)
+                    (None, Vec::new(), 0, thread_summaries, Vec::new())
                 }
                 crate::ai::agent_chat::ui::AgentChatSession::Live(thread) => {
                     let thread = thread.read(cx);
@@ -434,6 +440,7 @@ impl NotesApp {
                         thread.available_models().to_vec(),
                         thread.standing_approvals().len(),
                         thread_summaries,
+                        thread.fork_points().to_vec(),
                     )
                 }
             }
@@ -463,6 +470,7 @@ impl NotesApp {
                     focused_text_expanded: false,
                     standing_approval_count,
                     thread_summaries: &thread_summaries,
+                    fork_points: &fork_points,
                 },
                 theme_arc,
                 crate::actions::AgentChatActionsDialogHost::Notes,
@@ -828,6 +836,19 @@ fn dispatch_notes_agent_chat_action(
         let thread_id = thread_id.to_string();
         agent_chat_entity.update(cx, |chat, cx| {
             chat.switch_to_thread(&thread_id, cx);
+        });
+        return;
+    }
+
+    // Handle rewind-and-edit.
+    if let Some(entry_id) = crate::actions::agent_chat_fork_edit_entry_from_action(action_id) {
+        let entry_id = entry_id.to_string();
+        agent_chat_entity.update(cx, |chat, cx| {
+            if let Some(thread) = chat.thread() {
+                thread.update(cx, |thread, cx| {
+                    thread.fork_to_message(&entry_id, cx);
+                });
+            }
         });
         return;
     }

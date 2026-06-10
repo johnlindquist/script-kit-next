@@ -1617,6 +1617,19 @@ impl ScriptListApp {
             return DispatchOutcome::success();
         }
 
+        if let Some(entry_id) = crate::actions::agent_chat_fork_edit_entry_from_action(action_id) {
+            let entry_id = entry_id.to_string();
+            let entity = entity.clone();
+            entity.update(cx, |chat, cx| {
+                if let Some(thread) = chat.thread() {
+                    thread.update(cx, |thread, cx| {
+                        thread.fork_to_message(&entry_id, cx);
+                    });
+                }
+            });
+            return DispatchOutcome::success();
+        }
+
         match action_id {
             "agent_chat_new_thread" => {
                 let entity = entity.clone();

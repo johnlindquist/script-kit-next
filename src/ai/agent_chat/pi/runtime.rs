@@ -14,9 +14,10 @@ use crate::ai::agent_chat::ui::events::AgentChatEventTx;
 
 use super::events::map_rpc_line_to_events;
 use super::protocol::{
-    build_abort_command, build_get_available_models_command, build_prompt_command,
-    build_prompt_payload, build_set_model_command, encode_json_line, parse_rpc_line,
-    PiRpcLaunchSpec, PiRpcModelSelection, PiRpcResponse,
+    build_abort_command, build_fork_command, build_get_available_models_command,
+    build_get_fork_messages_command, build_prompt_command, build_prompt_payload,
+    build_set_model_command, encode_json_line, parse_rpc_line, PiRpcLaunchSpec,
+    PiRpcModelSelection, PiRpcResponse,
 };
 
 type PendingResponses = Arc<Mutex<HashMap<String, PendingResponse>>>;
@@ -49,6 +50,13 @@ pub(crate) enum PiRpcRuntimeCommand {
     },
     CancelTurn {
         ui_thread_id: String,
+    },
+    GetForkPoints {
+        event_tx: AgentChatEventTx,
+    },
+    Fork {
+        entry_id: String,
+        event_tx: AgentChatEventTx,
     },
 }
 
@@ -143,6 +151,22 @@ impl AgentChatConnection for PiRpcRuntime {
                 cwd,
                 event_tx,
             })
+            .context("Pi RPC worker channel closed")?;
+        Ok(event_rx)
+    }
+
+    fn fork_points(&self) -> Result<AgentChatEventRx> {
+        let (event_tx, event_rx) = async_channel::bounded(8);
+        self.tx
+            .send_blocking(PiRpcRuntimeCommand::GetForkPoints { event_tx })
+            .context("Pi RPC worker channel closed")?;
+        Ok(event_rx)
+    }
+
+    fn fork_to_entry(&self, entry_id: String) -> Result<AgentChatEventRx> {
+        let (event_tx, event_rx) = async_channel::bounded(8);
+        self.tx
+            .send_blocking(PiRpcRuntimeCommand::Fork { entry_id, event_tx })
             .context("Pi RPC worker channel closed")?;
         Ok(event_rx)
     }
@@ -269,6 +293,25 @@ async fn run_pi_rpc_event_loop(
                             .await;
                     }
                 }
+            }
+            PiRpcRuntimeCommand::GetForkPoints { event_tx } => {
+                let id = format!("fork-msgs-{counter}");
+                pending
+                    .lock()
+                    .insert(id.clone(), PendingResponse::Events(event_tx));
+                write_json(&mut stdin, &build_get_fork_messages_command(id)).await?;
+            }
+            PiRpcRuntimeCommand::Fork { entry_id, event_tx } => {
+                tracing::info!(
+                    target: "script_kit::tab_ai",
+                    event = "pi_rpc_fork_sent",
+                    entry_id = %entry_id,
+                );
+                let id = format!("fork-{counter}");
+                pending
+                    .lock()
+                    .insert(id.clone(), PendingResponse::Events(event_tx));
+                write_json(&mut stdin, &build_fork_command(id, &entry_id)).await?;
             }
             PiRpcRuntimeCommand::CancelTurn { ui_thread_id } => {
                 let active = active_turn.lock().clone();

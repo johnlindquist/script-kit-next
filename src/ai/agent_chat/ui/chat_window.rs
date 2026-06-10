@@ -771,13 +771,14 @@ pub fn toggle_detached_actions(cx: &mut App) {
         Vec<crate::ai::agent_chat::ui::config::AgentChatModelEntry>,
         usize,
         Vec<crate::ai::agent_chat::ui::AgentChatThreadSummary>,
+        Vec<crate::ai::agent_chat::ui::AgentChatForkPoint>,
     )> = view_weak.as_ref().and_then(|weak| {
         weak.upgrade().map(|entity| {
             let view = entity.read(cx);
             let thread_summaries = view.retained_thread_summaries(cx);
             match &view.session {
                 crate::ai::agent_chat::ui::AgentChatSession::Setup(_) => {
-                    (None, Vec::new(), 0, thread_summaries)
+                    (None, Vec::new(), 0, thread_summaries, Vec::new())
                 }
                 crate::ai::agent_chat::ui::AgentChatSession::Live(thread) => {
                     let thread = thread.read(cx);
@@ -786,14 +787,20 @@ pub fn toggle_detached_actions(cx: &mut App) {
                         thread.available_models().to_vec(),
                         thread.standing_approvals().len(),
                         thread_summaries,
+                        thread.fork_points().to_vec(),
                     )
                 }
             }
         })
     });
 
-    let (selected_model_id, available_models, standing_approval_count, thread_summaries) =
-        agent_chat_context.unwrap_or_else(|| (None, Vec::new(), 0, Vec::new()));
+    let (
+        selected_model_id,
+        available_models,
+        standing_approval_count,
+        thread_summaries,
+        fork_points,
+    ) = agent_chat_context.unwrap_or_else(|| (None, Vec::new(), 0, Vec::new(), Vec::new()));
 
     let dialog = cx.new(|cx| {
         let focus_handle = cx.focus_handle();
@@ -807,6 +814,7 @@ pub fn toggle_detached_actions(cx: &mut App) {
                 focused_text_expanded: false,
                 standing_approval_count,
                 thread_summaries: &thread_summaries,
+                fork_points: &fork_points,
             },
             theme_arc,
             crate::actions::AgentChatActionsDialogHost::Detached,
@@ -1223,6 +1231,21 @@ fn dispatch_detached_action(
                 chat.switch_to_thread(&thread_id, cx);
             });
             tracing::info!(event = "detached_action_switch_thread");
+        }
+        return;
+    }
+
+    if let Some(entry_id) = crate::actions::agent_chat_fork_edit_entry_from_action(action_id) {
+        if let Some(entity) = entity_weak.upgrade() {
+            let entry_id = entry_id.to_string();
+            entity.update(cx, |chat, cx| {
+                if let Some(thread) = chat.thread() {
+                    thread.update(cx, |thread, cx| {
+                        thread.fork_to_message(&entry_id, cx);
+                    });
+                }
+            });
+            tracing::info!(event = "detached_action_fork_edit");
         }
         return;
     }

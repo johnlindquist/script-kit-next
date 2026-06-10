@@ -850,6 +850,7 @@ impl ScriptListApp {
                     focused_text_expanded,
                     standing_approval_count,
                     thread_summaries,
+                    fork_points,
                 ) = {
                     let view = entity.read(cx);
                     let focused_text = view.has_focused_text_context();
@@ -863,6 +864,7 @@ impl ScriptListApp {
                             focused_text_expanded,
                             0,
                             thread_summaries,
+                            Vec::new(),
                         ),
                         crate::ai::agent_chat::ui::AgentChatSession::Live(thread) => {
                             let thread = thread.read(cx);
@@ -873,6 +875,7 @@ impl ScriptListApp {
                                 focused_text_expanded,
                                 thread.standing_approvals().len(),
                                 thread_summaries,
+                                thread.fork_points().to_vec(),
                             )
                         }
                     }
@@ -893,6 +896,7 @@ impl ScriptListApp {
                     focused_text_expanded,
                     standing_approval_count,
                     thread_summaries,
+                    fork_points,
                 ))
             } else {
                 None
@@ -968,6 +972,7 @@ impl ScriptListApp {
                     focused_text_expanded,
                     standing_approval_count,
                     ref thread_summaries,
+                    ref fork_points,
                 )) = agent_chat_context
                 {
                     // Agent Chat chat view: use route-based dialog with drill-down model/profile pickers
@@ -981,6 +986,7 @@ impl ScriptListApp {
                             focused_text_expanded,
                             standing_approval_count,
                             thread_summaries,
+                            fork_points,
                         },
                         std::sync::Arc::clone(&theme_arc),
                     )

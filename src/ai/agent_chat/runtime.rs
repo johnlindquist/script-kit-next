@@ -35,6 +35,18 @@ pub(crate) trait AgentChatConnection: Send + Sync + 'static {
     }
     fn cancel_turn(&self, ui_thread_id: String) -> Result<()>;
     fn prepare_session(&self, ui_thread_id: String, cwd: PathBuf) -> Result<AgentChatEventRx>;
+    /// List the user messages the session can rewind to. Responds with a
+    /// `ForkPointsAvailable` event. Backends without checkpointing keep the
+    /// default refusal so the UI never advertises a rewind it cannot honor.
+    fn fork_points(&self) -> Result<AgentChatEventRx> {
+        anyhow::bail!("this agent connection does not support rewind")
+    }
+    /// Rewind the live session to just before the given user message entry.
+    /// Responds with a `ForkCompleted` event carrying the message text.
+    fn fork_to_entry(&self, entry_id: String) -> Result<AgentChatEventRx> {
+        let _ = entry_id;
+        anyhow::bail!("this agent connection does not support rewind")
+    }
 }
 
 #[cfg(test)]

@@ -1,6 +1,6 @@
 use serde_json::Value;
 
-use crate::ai::agent_chat::events::AgentChatEvent;
+use crate::ai::agent_chat::events::{AgentChatEvent, AgentChatForkPoint};
 use crate::ai::agent_chat::ui::config::AgentChatModelEntry;
 
 use super::protocol::{PiRpcLine, PiRpcResponse};
@@ -31,7 +31,55 @@ pub(crate) fn map_rpc_response_to_events(response: &PiRpcResponse) -> Vec<AgentC
         }];
     }
 
+    if response.command.as_deref() == Some("get_fork_messages") {
+        return vec![AgentChatEvent::ForkPointsAvailable {
+            entries: fork_points_from_response_data(response.data.as_ref()),
+        }];
+    }
+
+    if response.command.as_deref() == Some("fork") {
+        return vec![AgentChatEvent::ForkCompleted {
+            text: response
+                .data
+                .as_ref()
+                .and_then(|data| data.get("text"))
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+                .to_string(),
+        }];
+    }
+
     Vec::new()
+}
+
+/// Parse `{"messages":[{"entryId","text"}]}` from a `get_fork_messages`
+/// response into fork points. Entries without an entryId cannot be forked
+/// to and are dropped.
+fn fork_points_from_response_data(data: Option<&Value>) -> Vec<AgentChatForkPoint> {
+    let Some(messages) = data
+        .and_then(|data| data.get("messages"))
+        .and_then(Value::as_array)
+    else {
+        return Vec::new();
+    };
+
+    messages
+        .iter()
+        .filter_map(|message| {
+            let entry_id = message.get("entryId").and_then(Value::as_str)?;
+            if entry_id.is_empty() {
+                return None;
+            }
+            let text = message
+                .get("text")
+                .and_then(Value::as_str)
+                .unwrap_or_default();
+            Some(AgentChatForkPoint {
+                entry_id: entry_id.to_string(),
+                text: text.to_string(),
+            })
+        })
+        .collect()
 }
 
 pub(crate) fn map_rpc_event_to_events(event: &Value) -> Vec<AgentChatEvent> {
@@ -717,6 +765,71 @@ mod tests {
         assert!(matches!(
             events.as_slice(),
             [AgentChatEvent::TurnFinished { stop_reason }] if stop_reason == "stop"
+        ));
+    }
+
+    #[test]
+    fn pi_rpc_get_fork_messages_response_maps_to_fork_points() {
+        let response = PiRpcResponse {
+            id: Some("fork-msgs-1".to_string()),
+            command: Some("get_fork_messages".to_string()),
+            success: true,
+            data: Some(json!({
+                "messages": [
+                    {"entryId": "entry-1", "text": "first prompt"},
+                    {"entryId": "", "text": "unforkable"},
+                    {"entryId": "entry-2", "text": null},
+                ]
+            })),
+            error: None,
+            raw: json!({}),
+        };
+
+        let events = map_rpc_response_to_events(&response);
+        assert!(matches!(
+            events.as_slice(),
+            [AgentChatEvent::ForkPointsAvailable { entries }]
+                if entries.len() == 2
+                    && entries[0].entry_id == "entry-1"
+                    && entries[0].text == "first prompt"
+                    && entries[1].entry_id == "entry-2"
+                    && entries[1].text.is_empty()
+        ));
+    }
+
+    #[test]
+    fn pi_rpc_fork_response_maps_to_fork_completed_with_selected_text() {
+        let response = PiRpcResponse {
+            id: Some("fork-1".to_string()),
+            command: Some("fork".to_string()),
+            success: true,
+            data: Some(json!({"text": "original prompt", "cancelled": false})),
+            error: None,
+            raw: json!({}),
+        };
+
+        let events = map_rpc_response_to_events(&response);
+        assert!(matches!(
+            events.as_slice(),
+            [AgentChatEvent::ForkCompleted { text }] if text == "original prompt"
+        ));
+    }
+
+    #[test]
+    fn pi_rpc_failed_fork_response_maps_to_failed() {
+        let response = PiRpcResponse {
+            id: Some("fork-1".to_string()),
+            command: Some("fork".to_string()),
+            success: false,
+            data: None,
+            error: Some("entry not found".to_string()),
+            raw: json!({}),
+        };
+
+        let events = map_rpc_response_to_events(&response);
+        assert!(matches!(
+            events.as_slice(),
+            [AgentChatEvent::Failed { error }] if error == "entry not found"
         ));
     }
 

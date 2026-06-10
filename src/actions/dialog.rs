@@ -725,6 +725,8 @@ pub struct AgentChatActionsDialogContext<'a> {
     pub(crate) standing_approval_count: usize,
     /// Retained background threads, surfaced as a "Threads" switcher section.
     pub(crate) thread_summaries: &'a [crate::ai::agent_chat::ui::AgentChatThreadSummary],
+    /// Rewindable user messages (Pi fork checkpoints) for "Rewind & Edit".
+    pub(crate) fork_points: &'a [crate::ai::agent_chat::ui::AgentChatForkPoint],
 }
 
 /// Immutable parent/subject identity captured when an ActionsDialog opens.
@@ -1820,6 +1822,7 @@ impl ActionsDialog {
                 context.selected_model_id,
                 context.standing_approval_count,
                 context.thread_summaries,
+                context.fork_points,
                 host,
             )
         };
@@ -1854,6 +1857,15 @@ impl ActionsDialog {
             super::builders::AGENT_CHAT_SHOW_RECEIPT_HISTORY_ACTION_ID,
             crate::actions::get_agent_chat_receipt_history_route(),
         );
+        if !context.fork_points.is_empty() {
+            dialog.register_drill_down_route(
+                super::builders::AGENT_CHAT_REWIND_ACTION_ID,
+                super::builders::get_agent_chat_fork_picker_route_for_host(
+                    context.fork_points,
+                    host,
+                ),
+            );
+        }
         if matches!(
             host,
             super::builders::AgentChatActionsDialogHost::Detached

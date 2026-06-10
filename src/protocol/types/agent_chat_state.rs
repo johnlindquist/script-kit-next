@@ -65,6 +65,11 @@ pub struct AgentChatStateSnapshot {
     #[serde(default)]
     pub retained_thread_count: usize,
 
+    /// Number of rewindable user messages (Pi fork checkpoints) the
+    /// "Rewind & Edit" action can target.
+    #[serde(default)]
+    pub fork_point_count: usize,
+
     /// True when a submitted user turn is streaming before assistant text lands.
     #[serde(default)]
     pub awaiting_first_assistant_text: bool,
@@ -141,6 +146,7 @@ impl Default for AgentChatStateSnapshot {
             selection_range: None,
             message_count: 0,
             retained_thread_count: 0,
+            fork_point_count: 0,
             awaiting_first_assistant_text: false,
             picker: None,
             spine: None,
@@ -968,6 +974,7 @@ mod tests {
             selection_range: None,
             message_count: 3,
             retained_thread_count: 0,
+            fork_point_count: 0,
             awaiting_first_assistant_text: true,
             picker: None,
             spine: Some(AgentChatSpineSnapshot {

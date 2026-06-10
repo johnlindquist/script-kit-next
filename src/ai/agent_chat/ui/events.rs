@@ -8,6 +8,15 @@
 pub(crate) type AgentChatEventTx = async_channel::Sender<AgentChatEvent>;
 pub(crate) type AgentChatEventRx = async_channel::Receiver<AgentChatEvent>;
 
+/// A user message the live session can rewind to (Pi fork checkpoint).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct AgentChatForkPoint {
+    /// Pi session entry id for the user message.
+    pub entry_id: String,
+    /// The user message text (used for switcher labels and composer prefill).
+    pub text: String,
+}
+
 /// Typed events emitted by the Agent Chat worker for a single turn.
 ///
 /// Each variant maps to a specific `SessionUpdate` notification from
@@ -63,6 +72,12 @@ pub(crate) enum AgentChatEvent {
         current_model_id: Option<String>,
         models: Vec<super::config::AgentChatModelEntry>,
     },
+    /// The session advertised the user messages it can rewind to.
+    ForkPointsAvailable { entries: Vec<AgentChatForkPoint> },
+    /// The session was rewound to just before a user message; `text` is that
+    /// message's original text, returned so the composer can prefill it for
+    /// editing.
+    ForkCompleted { text: String },
     /// The turn completed normally.
     TurnFinished { stop_reason: String },
     /// Agent requires setup (authentication, install, etc.).

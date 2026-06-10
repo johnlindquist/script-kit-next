@@ -869,6 +869,37 @@ pub(crate) fn agent_chat_switch_thread_id_from_action(action_id: &str) -> Option
     action_id.strip_prefix(AGENT_CHAT_SWITCH_THREAD_ACTION_PREFIX)
 }
 
+/// Action ID for the "Rewind & Edit Message" drill-down trigger.
+pub(crate) const AGENT_CHAT_REWIND_ACTION_ID: &str = "agent_chat_rewind_edit";
+
+/// Route ID for the rewind checkpoint picker sub-route.
+pub(crate) const AGENT_CHAT_FORK_PICKER_ROUTE_ID: &str = "agent_chat:fork_picker";
+
+const AGENT_CHAT_FORK_EDIT_ACTION_PREFIX: &str = "agent_chat_fork_edit:";
+
+fn agent_chat_fork_edit_action_id(entry_id: &str) -> String {
+    format!("{AGENT_CHAT_FORK_EDIT_ACTION_PREFIX}{entry_id}")
+}
+
+#[allow(dead_code)] // Used by Agent Chat action dispatch in the binary target.
+pub(crate) fn agent_chat_fork_edit_entry_from_action(action_id: &str) -> Option<&str> {
+    action_id.strip_prefix(AGENT_CHAT_FORK_EDIT_ACTION_PREFIX)
+}
+
+/// Truncate a user message to a single action-row title line.
+fn agent_chat_message_action_title(text: &str) -> String {
+    const MAX_CHARS: usize = 64;
+    let line = text.lines().next().unwrap_or("").trim();
+    if line.is_empty() {
+        return "(empty message)".to_string();
+    }
+    if line.chars().count() <= MAX_CHARS {
+        return line.to_string();
+    }
+    let truncated: String = line.chars().take(MAX_CHARS).collect();
+    format!("{}\u{2026}", truncated.trim_end())
+}
+
 /// Actions available in the Agent Chat chat view (Cmd+K menu).
 #[allow(dead_code)]
 pub fn get_agent_chat_actions() -> Vec<Action> {
@@ -1326,6 +1357,7 @@ pub(crate) fn get_agent_chat_root_actions(
     selected_model_id: Option<&str>,
     standing_approval_count: usize,
     thread_summaries: &[crate::ai::agent_chat::ui::AgentChatThreadSummary],
+    fork_points: &[crate::ai::agent_chat::ui::AgentChatForkPoint],
 ) -> Vec<Action> {
     let profile_entries = agent_chat_profile_picker_entries();
     let selected_profile_id = selected_agent_chat_profile_picker_id();
@@ -1410,6 +1442,22 @@ pub(crate) fn get_agent_chat_root_actions(
             )
             .with_icon(IconName::MessageCircle)
             .with_section("Threads"),
+        );
+    }
+
+    if !fork_points.is_empty() {
+        actions.push(
+            Action::new(
+                AGENT_CHAT_REWIND_ACTION_ID,
+                "Rewind & Edit Message",
+                Some(
+                    "Pick an earlier message: the conversation rewinds to that point and the text returns to the composer for editing"
+                        .to_string(),
+                ),
+                ActionCategory::ScriptContext,
+            )
+            .with_icon(IconName::Pencil)
+            .with_section("Session"),
         );
     }
 
@@ -1513,9 +1561,11 @@ fn agent_chat_host_action_plan(
                     | "agent_chat_clear_history"
                     | "agent_chat_close"
                     | AGENT_CHAT_NEW_THREAD_ACTION_ID
+                    | AGENT_CHAT_REWIND_ACTION_ID
             ) || action_id.starts_with(AGENT_CHAT_SWITCH_PROFILE_ACTION_PREFIX)
                 || action_id.starts_with(AGENT_CHAT_SWITCH_MODEL_ACTION_PREFIX)
                 || action_id.starts_with(AGENT_CHAT_SWITCH_THREAD_ACTION_PREFIX)
+                || action_id.starts_with(AGENT_CHAT_FORK_EDIT_ACTION_PREFIX)
             {
                 if action_id == "agent_chat_close" {
                     AgentChatHostActionPlan::IncludeWithoutShortcut
@@ -1544,8 +1594,10 @@ fn agent_chat_host_action_plan(
                     | "agent_chat_clear_history"
                     | "agent_chat_close"
                     | AGENT_CHAT_NEW_THREAD_ACTION_ID
+                    | AGENT_CHAT_REWIND_ACTION_ID
             ) || action_id.starts_with(AGENT_CHAT_SWITCH_MODEL_ACTION_PREFIX)
                 || action_id.starts_with(AGENT_CHAT_SWITCH_THREAD_ACTION_PREFIX)
+                || action_id.starts_with(AGENT_CHAT_FORK_EDIT_ACTION_PREFIX)
             {
                 AgentChatHostActionPlan::IncludeWithShortcut
             } else {
@@ -1594,6 +1646,7 @@ pub(crate) fn get_agent_chat_root_route_for_host(
     selected_model_id: Option<&str>,
     standing_approval_count: usize,
     thread_summaries: &[crate::ai::agent_chat::ui::AgentChatThreadSummary],
+    fork_points: &[crate::ai::agent_chat::ui::AgentChatForkPoint],
     host: AgentChatActionsDialogHost,
 ) -> crate::actions::ActionsDialogRoute {
     let host_label = match host {
@@ -1609,6 +1662,7 @@ pub(crate) fn get_agent_chat_root_route_for_host(
             selected_model_id,
             standing_approval_count,
             thread_summaries,
+            fork_points,
         ),
     );
 
@@ -1645,6 +1699,46 @@ pub(crate) fn get_agent_chat_model_picker_route_for_host(
         context_title: Some("Change Model".to_string()),
         search_placeholder: Some("Search models...".to_string()),
         initial_selected_action_id: selected_model_id.map(agent_chat_switch_model_action_id),
+    }
+}
+
+/// Build the second-level rewind checkpoint picker actions (latest first,
+/// since the most recent message is the most likely edit target).
+pub(crate) fn get_agent_chat_fork_picker_actions(
+    fork_points: &[crate::ai::agent_chat::ui::AgentChatForkPoint],
+) -> Vec<Action> {
+    fork_points
+        .iter()
+        .rev()
+        .map(|point| {
+            Action::new(
+                agent_chat_fork_edit_action_id(&point.entry_id),
+                agent_chat_message_action_title(&point.text),
+                Some("Rewind here and edit this message; later replies are discarded".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_icon(IconName::Pencil)
+            .with_section("Messages")
+        })
+        .collect()
+}
+
+/// Build an `ActionsDialogRoute` for the rewind checkpoint picker.
+pub(crate) fn get_agent_chat_fork_picker_route_for_host(
+    fork_points: &[crate::ai::agent_chat::ui::AgentChatForkPoint],
+    host: AgentChatActionsDialogHost,
+) -> crate::actions::ActionsDialogRoute {
+    crate::actions::ActionsDialogRoute {
+        id: AGENT_CHAT_FORK_PICKER_ROUTE_ID.to_string(),
+        actions: filter_agent_chat_actions_for_host(
+            host,
+            get_agent_chat_fork_picker_actions(fork_points),
+        ),
+        context_title: Some("Rewind & Edit".to_string()),
+        search_placeholder: Some("Search messages...".to_string()),
+        initial_selected_action_id: fork_points
+            .last()
+            .map(|point| agent_chat_fork_edit_action_id(&point.entry_id)),
     }
 }
 
@@ -1754,6 +1848,7 @@ pub(crate) fn get_agent_chat_root_route(
         available_models,
         selected_model_id,
         0,
+        &[],
         &[],
         AgentChatActionsDialogHost::Shared,
     )
@@ -2235,6 +2330,7 @@ mod tests {
             None,
             0,
             &[],
+            &[],
             AgentChatActionsDialogHost::Shared,
         );
         let notes = get_agent_chat_root_route_for_host(
@@ -2242,12 +2338,14 @@ mod tests {
             None,
             0,
             &[],
+            &[],
             AgentChatActionsDialogHost::Notes,
         );
         let detached = get_agent_chat_root_route_for_host(
             &[],
             None,
             0,
+            &[],
             &[],
             AgentChatActionsDialogHost::Detached,
         );
@@ -2327,6 +2425,7 @@ mod tests {
             Some("claude-sonnet-4-6"),
             0,
             &[],
+            &[],
         );
 
         let change_model = actions
@@ -2342,7 +2441,7 @@ mod tests {
 
     #[test]
     fn test_agent_chat_root_actions_surface_review_approvals_only_when_grants_exist() {
-        let without_grants = get_agent_chat_root_actions(&[], None, 0, &[]);
+        let without_grants = get_agent_chat_root_actions(&[], None, 0, &[], &[]);
         assert!(
             !without_grants
                 .iter()
@@ -2350,7 +2449,7 @@ mod tests {
             "no review action when the session has no standing grants"
         );
 
-        let with_grants = get_agent_chat_root_actions(&[], None, 2, &[]);
+        let with_grants = get_agent_chat_root_actions(&[], None, 2, &[], &[]);
         let review = with_grants
             .iter()
             .find(|action| action.id == AGENT_CHAT_REVIEW_APPROVALS_ACTION_ID)
@@ -2367,7 +2466,7 @@ mod tests {
             unread: 3,
             is_streaming: true,
         }];
-        let actions = get_agent_chat_root_actions(&[], None, 0, &summaries);
+        let actions = get_agent_chat_root_actions(&[], None, 0, &summaries, &[]);
 
         let new_thread = actions
             .iter()
@@ -2394,11 +2493,72 @@ mod tests {
     }
 
     #[test]
+    fn test_agent_chat_root_actions_surface_rewind_only_with_fork_points() {
+        let points = vec![crate::ai::agent_chat::ui::AgentChatForkPoint {
+            entry_id: "entry-7".to_string(),
+            text: "fix the parser bug".to_string(),
+        }];
+
+        let without = get_agent_chat_root_actions(&[], None, 0, &[], &[]);
+        assert!(
+            !without
+                .iter()
+                .any(|action| action.id == AGENT_CHAT_REWIND_ACTION_ID),
+            "no rewind action without checkpoints"
+        );
+
+        let with = get_agent_chat_root_actions(&[], None, 0, &[], &points);
+        let rewind = with
+            .iter()
+            .find(|action| action.id == AGENT_CHAT_REWIND_ACTION_ID)
+            .expect("rewind action should exist when fork points exist");
+        assert_eq!(rewind.section.as_deref(), Some("Session"));
+
+        let picker = get_agent_chat_fork_picker_actions(&points);
+        assert_eq!(picker.len(), 1);
+        assert_eq!(picker[0].id, "agent_chat_fork_edit:entry-7");
+        assert_eq!(picker[0].title, "fix the parser bug");
+
+        assert_eq!(
+            agent_chat_fork_edit_entry_from_action("agent_chat_fork_edit:entry-7"),
+            Some("entry-7")
+        );
+        assert_eq!(
+            agent_chat_fork_edit_entry_from_action("agent_chat_rewind_edit"),
+            None
+        );
+    }
+
+    #[test]
+    fn test_agent_chat_fork_picker_lists_latest_first() {
+        let points = vec![
+            crate::ai::agent_chat::ui::AgentChatForkPoint {
+                entry_id: "e0".to_string(),
+                text: "older".to_string(),
+            },
+            crate::ai::agent_chat::ui::AgentChatForkPoint {
+                entry_id: "e1".to_string(),
+                text: "newest".to_string(),
+            },
+        ];
+        let route =
+            get_agent_chat_fork_picker_route_for_host(&points, AgentChatActionsDialogHost::Shared);
+        assert_eq!(route.id, AGENT_CHAT_FORK_PICKER_ROUTE_ID);
+        assert_eq!(route.actions[0].title, "newest");
+        assert_eq!(
+            route.initial_selected_action_id.as_deref(),
+            Some("agent_chat_fork_edit:e1"),
+            "latest message preselected"
+        );
+    }
+
+    #[test]
     fn detached_agent_chat_history_routes_through_actions_dialog() {
         let detached = get_agent_chat_root_route_for_host(
             &[],
             None,
             0,
+            &[],
             &[],
             AgentChatActionsDialogHost::Detached,
         );

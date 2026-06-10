@@ -357,6 +357,8 @@ fn map_agent_chat_event(event: AgentChatEvent) -> Option<InlineAgentProviderEven
         | AgentChatEvent::PlanUpdated { .. }
         | AgentChatEvent::AvailableCommandsUpdated { .. }
         | AgentChatEvent::ModeChanged { .. }
-        | AgentChatEvent::ModelsAvailable { .. } => None,
+        | AgentChatEvent::ModelsAvailable { .. }
+        | AgentChatEvent::ForkPointsAvailable { .. }
+        | AgentChatEvent::ForkCompleted { .. } => None,
     }
 }

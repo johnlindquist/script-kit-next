@@ -9,3 +9,4 @@ pub(crate) type AgentChatEventRx = crate::ai::agent_chat::ui::AgentChatEventRx;
 pub(crate) type AgentChatApprovalRequest = crate::ai::agent_chat::ui::AgentChatApprovalRequest;
 pub(crate) type AgentChatApprovalRx = async_channel::Receiver<AgentChatApprovalRequest>;
 pub(crate) type AgentChatModelEntry = crate::ai::agent_chat::ui::config::AgentChatModelEntry;
+pub(crate) type AgentChatForkPoint = crate::ai::agent_chat::ui::events::AgentChatForkPoint;

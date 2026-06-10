@@ -158,6 +158,21 @@ pub(crate) fn build_set_model_command(
     })
 }
 
+pub(crate) fn build_get_fork_messages_command(id: impl Into<String>) -> Value {
+    json!({
+        "id": id.into(),
+        "type": "get_fork_messages",
+    })
+}
+
+pub(crate) fn build_fork_command(id: impl Into<String>, entry_id: &str) -> Value {
+    json!({
+        "id": id.into(),
+        "type": "fork",
+        "entryId": entry_id,
+    })
+}
+
 pub(crate) fn encode_json_line(value: &Value) -> String {
     format!("{value}\n")
 }
@@ -234,6 +249,18 @@ mod tests {
         let command = build_get_available_models_command("models-1");
         assert_eq!(command["id"], "models-1");
         assert_eq!(command["type"], "get_available_models");
+    }
+
+    #[test]
+    fn pi_rpc_fork_commands_use_pi_rpc_shapes() {
+        let list = build_get_fork_messages_command("fork-msgs-1");
+        assert_eq!(list["id"], "fork-msgs-1");
+        assert_eq!(list["type"], "get_fork_messages");
+
+        let fork = build_fork_command("fork-1", "entry-42");
+        assert_eq!(fork["id"], "fork-1");
+        assert_eq!(fork["type"], "fork");
+        assert_eq!(fork["entryId"], "entry-42");
     }
 
     #[test]

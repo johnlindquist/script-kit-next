@@ -314,6 +314,13 @@ pub(crate) struct AgentChatThread {
     /// session keeps its cache) and resets with the session.
     standing_approvals: Vec<super::permission_broker::AgentChatStandingApproval>,
 
+    /// User messages the live Pi session can rewind to, in conversation
+    /// order (refreshed after every finished turn via `get_fork_messages`).
+    fork_points: Vec<super::events::AgentChatForkPoint>,
+    /// Ordinal (index into `fork_points`) of an in-flight rewind request.
+    /// Consumed when the matching `ForkCompleted` event arrives.
+    pending_fork_ordinal: Option<usize>,
+
     /// The resolved catalog entry for the selected agent. Retained so
     /// runtime `SetupRequired` events can build recovery cards with
     /// agent-specific context.
@@ -409,6 +416,8 @@ impl AgentChatThread {
             active_tool_calls: Vec::new(),
             tool_call_lookup: HashMap::new(),
             standing_approvals: Vec::new(),
+            fork_points: Vec::new(),
+            pending_fork_ordinal: None,
             selected_agent: init.selected_agent,
             available_agents: init.available_agents,
             launch_requirements: init.launch_requirements,
@@ -1526,6 +1535,15 @@ impl AgentChatThread {
             } => {
                 changed |= self.apply_agent_models(current_model_id, models);
             }
+            AgentChatEvent::ForkPointsAvailable { entries } => {
+                if self.fork_points != entries {
+                    self.fork_points = entries;
+                    changed = true;
+                }
+            }
+            AgentChatEvent::ForkCompleted { text } => {
+                changed |= self.apply_fork_completed(text, cx);
+            }
             AgentChatEvent::TurnFinished { .. } => {
                 if self.pending_permission.take().is_some() {
                     changed = true;
@@ -1585,6 +1603,10 @@ impl AgentChatThread {
                         super::history::save_history_entry(&entry);
                     }
                 }
+
+                // The finished turn appended a user message; refresh the
+                // rewind checkpoints so Cmd+K can offer it for editing.
+                self.refresh_fork_points(cx);
             }
             AgentChatEvent::SetupRequired {
                 reason,
@@ -2190,6 +2212,171 @@ impl AgentChatThread {
     ///
     /// If the worker is unreachable the call is a no-op; the picker will fall
     /// back to whatever `available_models` already held.
+    /// User messages the live session can rewind to, in conversation order.
+    pub(crate) fn fork_points(&self) -> &[super::events::AgentChatForkPoint] {
+        &self.fork_points
+    }
+
+    /// Refresh the rewindable user-message list from the agent session.
+    /// No-op (with a debug log) for connections without rewind support.
+    pub(crate) fn refresh_fork_points(&mut self, cx: &mut Context<Self>) {
+        let rx = match self.connection.fork_points() {
+            Ok(rx) => rx,
+            Err(error) => {
+                tracing::debug!(
+                    target: "script_kit::tab_ai",
+                    event = "agent_chat_fork_points_unsupported",
+                    error = %error,
+                );
+                return;
+            }
+        };
+        self.spawn_fork_event_task(rx, "fork_points", cx);
+    }
+
+    /// Rewind the session to just before the given user message. On
+    /// completion the transcript truncates at that message and the composer
+    /// is prefilled with its text for editing. Rejected while a turn is
+    /// streaming or another rewind is in flight.
+    pub(crate) fn fork_to_message(&mut self, entry_id: &str, cx: &mut Context<Self>) -> bool {
+        if matches!(
+            self.status,
+            AgentChatThreadStatus::Streaming | AgentChatThreadStatus::WaitingForPermission
+        ) {
+            tracing::warn!(
+                target: "script_kit::tab_ai",
+                event = "agent_chat_fork_rejected_busy",
+                status = ?self.status,
+            );
+            return false;
+        }
+        if self.pending_fork_ordinal.is_some() {
+            return false;
+        }
+        let Some(ordinal) = self
+            .fork_points
+            .iter()
+            .position(|point| point.entry_id == entry_id)
+        else {
+            tracing::warn!(
+                target: "script_kit::tab_ai",
+                event = "agent_chat_fork_unknown_entry",
+                entry_id,
+            );
+            return false;
+        };
+        let rx = match self.connection.fork_to_entry(entry_id.to_string()) {
+            Ok(rx) => rx,
+            Err(error) => {
+                tracing::warn!(
+                    target: "script_kit::tab_ai",
+                    event = "agent_chat_fork_request_failed",
+                    error = %error,
+                );
+                return false;
+            }
+        };
+        self.pending_fork_ordinal = Some(ordinal);
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "agent_chat_fork_requested",
+            entry_id,
+            ordinal,
+        );
+        self.spawn_fork_event_task(rx, "fork", cx);
+        cx.notify();
+        true
+    }
+
+    /// Pump fork RPC responses into `apply_event`, downgrading failures to a
+    /// system note: a failed background refresh or rewind must not flip the
+    /// thread into the turn-failure error state.
+    fn spawn_fork_event_task(
+        &self,
+        rx: AgentChatEventRx,
+        context_label: &'static str,
+        cx: &mut Context<Self>,
+    ) {
+        let entity = cx.entity().downgrade();
+        cx.spawn(async move |_this, cx| {
+            while let Ok(event) = rx.recv().await {
+                let Some(weak) = entity.upgrade() else {
+                    break;
+                };
+                cx.update(|cx| {
+                    weak.update(cx, |this, cx| {
+                        let is_fork_event = matches!(
+                            event,
+                            AgentChatEvent::ForkPointsAvailable { .. }
+                                | AgentChatEvent::ForkCompleted { .. }
+                        );
+                        if is_fork_event {
+                            this.apply_event(event, cx);
+                        } else if let AgentChatEvent::Failed { error } = event {
+                            tracing::warn!(
+                                target: "script_kit::tab_ai",
+                                event = "agent_chat_fork_rpc_failed",
+                                context = context_label,
+                                error = %error,
+                            );
+                            if this.pending_fork_ordinal.take().is_some() {
+                                this.push_system_message(format!("Rewind failed: {error}"), cx);
+                            }
+                        }
+                    });
+                });
+            }
+        })
+        .detach();
+    }
+
+    /// Apply a completed session rewind: truncate the transcript at the
+    /// forked user message and stage its text in the composer for editing.
+    fn apply_fork_completed(&mut self, text: String, cx: &mut Context<Self>) -> bool {
+        let Some(ordinal) = self.pending_fork_ordinal.take() else {
+            tracing::warn!(
+                target: "script_kit::tab_ai",
+                event = "agent_chat_fork_completed_without_request",
+            );
+            return false;
+        };
+        Self::truncate_messages_at_user_ordinal(&mut self.messages, ordinal);
+        self.active_tool_calls.clear();
+        self.tool_call_lookup.clear();
+        self.transcript_generation = self.transcript_generation.wrapping_add(1);
+        self.input.set_text(text.clone());
+        self.input.set_cursor(text.chars().count());
+        self.set_status(AgentChatThreadStatus::Idle);
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "agent_chat_fork_completed",
+            ordinal,
+            message_count = self.messages.len(),
+            prefill_chars = text.chars().count(),
+        );
+        // Pi rebuilt the session with fresh entry ids; refetch the list.
+        self.fork_points.clear();
+        self.refresh_fork_points(cx);
+        true
+    }
+
+    /// Drop the `ordinal`-th user message and everything after it.
+    fn truncate_messages_at_user_ordinal(
+        messages: &mut Vec<AgentChatThreadMessage>,
+        ordinal: usize,
+    ) {
+        let mut seen = 0usize;
+        for index in 0..messages.len() {
+            if matches!(messages[index].role, AgentChatThreadMessageRole::User) {
+                if seen == ordinal {
+                    messages.truncate(index);
+                    return;
+                }
+                seen += 1;
+            }
+        }
+    }
+
     pub(crate) fn refresh_models(&mut self, cx: &mut Context<Self>) {
         let rx = match self
             .connection
@@ -2831,6 +3018,8 @@ impl AgentChatThread {
             active_tool_calls: Vec::new(),
             tool_call_lookup: HashMap::new(),
             standing_approvals: Vec::new(),
+            fork_points: Vec::new(),
+            pending_fork_ordinal: None,
             selected_agent: None,
             available_agents: Vec::new(),
             launch_requirements: crate::ai::agent_chat::ui::AgentChatLaunchRequirements::default(),
@@ -3005,6 +3194,21 @@ impl AgentChatThread {
             } => {
                 self.apply_agent_models(current_model_id, models);
             }
+            super::AgentChatEvent::ForkPointsAvailable { entries } => {
+                self.fork_points = entries;
+            }
+            super::AgentChatEvent::ForkCompleted { text } => {
+                // Test path mirrors `apply_fork_completed` minus the GPUI
+                // refresh: truncate locally and stage the text for editing.
+                if let Some(ordinal) = self.pending_fork_ordinal.take() {
+                    Self::truncate_messages_at_user_ordinal(&mut self.messages, ordinal);
+                    self.active_tool_calls.clear();
+                    self.tool_call_lookup.clear();
+                    self.input.set_text(text.clone());
+                    self.input.set_cursor(text.chars().count());
+                    self.set_status(AgentChatThreadStatus::Idle);
+                }
+            }
             super::AgentChatEvent::TurnFinished { .. } => {
                 self.set_status(AgentChatThreadStatus::Idle);
             }
@@ -3038,6 +3242,90 @@ mod tests {
 
     /// Helper to build an `AgentChatThread` without a real connection or GPUI context.
     /// Only for testing pure logic methods that don't need cx or connection.
+    fn fork_point(entry_id: &str, text: &str) -> super::super::events::AgentChatForkPoint {
+        super::super::events::AgentChatForkPoint {
+            entry_id: entry_id.to_string(),
+            text: text.to_string(),
+        }
+    }
+
+    #[test]
+    fn fork_points_event_replaces_rewind_list() {
+        let mut thread = test_thread(Vec::new(), false);
+        thread.apply_event_test(AgentChatEvent::ForkPointsAvailable {
+            entries: vec![
+                fork_point("e0", "first ask"),
+                fork_point("e1", "second ask"),
+            ],
+        });
+        assert_eq!(thread.fork_points().len(), 2);
+        assert_eq!(thread.fork_points()[0].entry_id, "e0");
+
+        thread.apply_event_test(AgentChatEvent::ForkPointsAvailable {
+            entries: vec![fork_point("e0", "first ask")],
+        });
+        assert_eq!(
+            thread.fork_points().len(),
+            1,
+            "list is replaced, not appended"
+        );
+    }
+
+    #[test]
+    fn fork_completed_truncates_at_user_ordinal_and_prefills_composer() {
+        let mut thread = test_thread(Vec::new(), false);
+        thread.push_message(AgentChatThreadMessageRole::User, "first ask");
+        thread.push_message(AgentChatThreadMessageRole::Assistant, "first answer");
+        thread.push_message(AgentChatThreadMessageRole::User, "second ask");
+        thread.push_message(AgentChatThreadMessageRole::Assistant, "second answer");
+        thread.fork_points = vec![
+            fork_point("e0", "first ask"),
+            fork_point("e1", "second ask"),
+        ];
+        thread.pending_fork_ordinal = Some(1);
+
+        thread.apply_event_test(AgentChatEvent::ForkCompleted {
+            text: "second ask".to_string(),
+        });
+
+        assert_eq!(
+            thread.messages.len(),
+            2,
+            "second user message and its answer are dropped"
+        );
+        assert_eq!(thread.messages[0].body.as_ref(), "first ask");
+        assert_eq!(thread.messages[1].body.as_ref(), "first answer");
+        assert_eq!(thread.input.text(), "second ask");
+        assert_eq!(thread.status, AgentChatThreadStatus::Idle);
+        assert!(thread.pending_fork_ordinal.is_none());
+    }
+
+    #[test]
+    fn fork_completed_without_pending_request_is_ignored() {
+        let mut thread = test_thread(Vec::new(), false);
+        thread.push_message(AgentChatThreadMessageRole::User, "only ask");
+
+        thread.apply_event_test(AgentChatEvent::ForkCompleted {
+            text: "stray".to_string(),
+        });
+
+        assert_eq!(thread.messages.len(), 1, "transcript untouched");
+        assert!(thread.input.text().is_empty(), "composer untouched");
+    }
+
+    #[test]
+    fn truncate_at_user_ordinal_zero_clears_from_first_user_message() {
+        let mut thread = test_thread(Vec::new(), false);
+        thread.push_message(AgentChatThreadMessageRole::System, "context note");
+        thread.push_message(AgentChatThreadMessageRole::User, "first ask");
+        thread.push_message(AgentChatThreadMessageRole::Assistant, "answer");
+
+        AgentChatThread::truncate_messages_at_user_ordinal(&mut thread.messages, 0);
+
+        assert_eq!(thread.messages.len(), 1);
+        assert_eq!(thread.messages[0].body.as_ref(), "context note");
+    }
+
     fn test_thread(
         pending_context_blocks: Vec<ContentBlock>,
         pending_context_consumed: bool,
@@ -3071,6 +3359,8 @@ mod tests {
             active_tool_calls: Vec::new(),
             tool_call_lookup: HashMap::new(),
             standing_approvals: Vec::new(),
+            fork_points: Vec::new(),
+            pending_fork_ordinal: None,
             selected_agent: None,
             available_agents: Vec::new(),
             launch_requirements: crate::ai::agent_chat::ui::AgentChatLaunchRequirements::default(),

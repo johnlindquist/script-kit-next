@@ -65,7 +65,7 @@ pub(crate) use context::{
     build_tab_ai_agent_chat_context_blocks, build_tab_ai_agent_chat_guidance_blocks,
     build_tab_ai_agent_chat_guidance_blocks_for_prompt,
 };
-pub(crate) use events::{AgentChatEvent, AgentChatEventRx};
+pub(crate) use events::{AgentChatEvent, AgentChatEventRx, AgentChatForkPoint};
 pub(crate) use permission_broker::{
     approval_request_input, AgentChatApprovalOption, AgentChatApprovalPreview,
     AgentChatApprovalPreviewKind, AgentChatApprovalRequest, AgentChatApprovalRequestInput,

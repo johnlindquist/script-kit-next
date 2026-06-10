@@ -2130,7 +2130,9 @@ impl AgentChatView {
             | AgentChatEvent::AvailableCommandsUpdated { .. }
             | AgentChatEvent::ModeChanged { .. }
             | AgentChatEvent::UsageUpdated { .. }
-            | AgentChatEvent::ModelsAvailable { .. } => {}
+            | AgentChatEvent::ModelsAvailable { .. }
+            | AgentChatEvent::ForkPointsAvailable { .. }
+            | AgentChatEvent::ForkCompleted { .. } => {}
         }
 
         self.select_first_completed_focused_text_variation();
@@ -5053,6 +5055,7 @@ impl AgentChatView {
             selection_range,
             message_count: thread.messages.len(),
             retained_thread_count: self.retained_threads.len(),
+            fork_point_count: thread.fork_points().len(),
             awaiting_first_assistant_text: thread.awaiting_first_assistant_text(),
             picker: self.build_agent_chat_picker_state_snapshot(),
             spine: self.build_agent_chat_spine_state_snapshot(),
