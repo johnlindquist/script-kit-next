@@ -1724,6 +1724,12 @@ impl ScriptListApp {
                             "SimulateKey: Cmd+P - open history command from Agent Chat",
                         );
                         view.handle_action("agent_chat_show_history".into(), window, ctx);
+                    } else if has_cmd && key_lower == "n" {
+                        logging::log(
+                            "STDIN",
+                            "SimulateKey: Cmd+N - start new Agent Chat thread (retain current)",
+                        );
+                        entity_clone.update(ctx, |chat, cx| chat.start_new_thread(cx));
                     } else if {
                         // Spine projection in Agent Chat owns Up/Down for row selection
                         // and Escape to dismiss. These short-circuit before the

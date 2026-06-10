@@ -420,16 +420,20 @@ impl NotesApp {
         }
 
         // Read Agent Chat model context from the cached view.
-        let (selected_model_id, available_models, standing_approval_count) = {
+        let (selected_model_id, available_models, standing_approval_count, thread_summaries) = {
             let view = agent_chat_view.read(cx);
+            let thread_summaries = view.retained_thread_summaries(cx);
             match &view.session {
-                crate::ai::agent_chat::ui::AgentChatSession::Setup(_) => (None, Vec::new(), 0),
+                crate::ai::agent_chat::ui::AgentChatSession::Setup(_) => {
+                    (None, Vec::new(), 0, thread_summaries)
+                }
                 crate::ai::agent_chat::ui::AgentChatSession::Live(thread) => {
                     let thread = thread.read(cx);
                     (
                         thread.selected_model_id().map(str::to_string),
                         thread.available_models().to_vec(),
                         thread.standing_approvals().len(),
+                        thread_summaries,
                     )
                 }
             }
@@ -458,6 +462,7 @@ impl NotesApp {
                     focused_text: false,
                     focused_text_expanded: false,
                     standing_approval_count,
+                    thread_summaries: &thread_summaries,
                 },
                 theme_arc,
                 crate::actions::AgentChatActionsDialogHost::Notes,
@@ -818,7 +823,19 @@ fn dispatch_notes_agent_chat_action(
         return;
     }
 
+    // Handle thread switch.
+    if let Some(thread_id) = crate::actions::agent_chat_switch_thread_id_from_action(action_id) {
+        let thread_id = thread_id.to_string();
+        agent_chat_entity.update(cx, |chat, cx| {
+            chat.switch_to_thread(&thread_id, cx);
+        });
+        return;
+    }
+
     match action_id {
+        "agent_chat_new_thread" => {
+            agent_chat_entity.update(cx, |chat, cx| chat.start_new_thread(cx));
+        }
         "agent_chat_review_approvals" => {
             agent_chat_entity.update(cx, |chat, cx| {
                 if let Some(thread) = chat.thread() {

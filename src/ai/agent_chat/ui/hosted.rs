@@ -24,12 +24,13 @@ pub(crate) fn spawn_hosted_thread(
         crate::ai::agent_chat::launch::resolve_selected_pi_launch(&ai_preferences, &profile_ctx)
             .map_err(|error| error.to_string())?;
     let manager = crate::ai::agent_chat::launch::warm_session_manager();
-    manager
-        .prepare_warm(pi_launch.warm_spec())
-        .map_err(|error| format!("Failed to prepare Pi Agent Chat warm session: {error}"))?;
-    let lease = manager
-        .acquire_warm(&pi_launch.warm_key)
-        .ok_or_else(|| "Failed to start Pi Agent Chat warm session".to_string())?;
+    // Acquire-or-cold-spawn instead of prepare+acquire: when the warm slot for
+    // this key is already leased to a live thread (e.g. starting a second
+    // thread in the same profile/cwd), this path spawns a fresh connection
+    // rather than failing on the Acquired slot.
+    let (lease, _origin) = manager
+        .acquire_ready_or_spawn_cold(pi_launch.warm_spec())
+        .map_err(|error| format!("Failed to start Pi Agent Chat session: {error}"))?;
 
     let (_broker, permission_rx) = AgentChatPermissionBroker::new();
 

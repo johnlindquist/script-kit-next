@@ -1607,7 +1607,22 @@ impl ScriptListApp {
             return outcome;
         }
 
+        if let Some(thread_id) = crate::actions::agent_chat_switch_thread_id_from_action(action_id)
+        {
+            let thread_id = thread_id.to_string();
+            let entity = entity.clone();
+            entity.update(cx, |chat, cx| {
+                chat.switch_to_thread(&thread_id, cx);
+            });
+            return DispatchOutcome::success();
+        }
+
         match action_id {
+            "agent_chat_new_thread" => {
+                let entity = entity.clone();
+                entity.update(cx, |chat, cx| chat.start_new_thread(cx));
+                DispatchOutcome::success()
+            }
             "agent_chat_review_approvals" => {
                 let entity = entity.clone();
                 entity.update(cx, |chat, cx| {

@@ -854,6 +854,21 @@ pub(crate) fn agent_chat_switch_profile_id_from_action(action_id: &str) -> Optio
 /// Action ID for reviewing session "Allow always" permission grants.
 pub(crate) const AGENT_CHAT_REVIEW_APPROVALS_ACTION_ID: &str = "agent_chat_review_approvals";
 
+/// Action ID for starting a fresh thread while the current one keeps
+/// streaming in the background.
+pub(crate) const AGENT_CHAT_NEW_THREAD_ACTION_ID: &str = "agent_chat_new_thread";
+
+const AGENT_CHAT_SWITCH_THREAD_ACTION_PREFIX: &str = "agent_chat_switch_thread:";
+
+fn agent_chat_switch_thread_action_id(ui_thread_id: &str) -> String {
+    format!("{AGENT_CHAT_SWITCH_THREAD_ACTION_PREFIX}{ui_thread_id}")
+}
+
+#[allow(dead_code)] // Used by Agent Chat action dispatch in the binary target.
+pub(crate) fn agent_chat_switch_thread_id_from_action(action_id: &str) -> Option<&str> {
+    action_id.strip_prefix(AGENT_CHAT_SWITCH_THREAD_ACTION_PREFIX)
+}
+
 /// Actions available in the Agent Chat chat view (Cmd+K menu).
 #[allow(dead_code)]
 pub fn get_agent_chat_actions() -> Vec<Action> {
@@ -1002,7 +1017,7 @@ pub fn get_agent_chat_actions() -> Vec<Action> {
             Some("Clear messages, keep session".to_string()),
             ActionCategory::ScriptContext,
         )
-        .with_shortcut("\u{2318}N")
+        .with_shortcut("\u{2318}L")
         .with_icon(IconName::Plus)
         .with_section("Session"),
         Action::new(
@@ -1310,6 +1325,7 @@ pub(crate) fn get_agent_chat_root_actions(
     available_models: &[crate::ai::agent_chat::ui::config::AgentChatModelEntry],
     selected_model_id: Option<&str>,
     standing_approval_count: usize,
+    thread_summaries: &[crate::ai::agent_chat::ui::AgentChatThreadSummary],
 ) -> Vec<Action> {
     let profile_entries = agent_chat_profile_picker_entries();
     let selected_profile_id = selected_agent_chat_profile_picker_id();
@@ -1357,6 +1373,43 @@ pub(crate) fn get_agent_chat_root_actions(
             )
             .with_icon(IconName::Check)
             .with_section("Agent"),
+        );
+    }
+
+    actions.push(
+        Action::new(
+            AGENT_CHAT_NEW_THREAD_ACTION_ID,
+            "New Thread",
+            Some(
+                "Start a fresh thread; the current conversation keeps running in the background"
+                    .to_string(),
+            ),
+            ActionCategory::ScriptContext,
+        )
+        .with_shortcut("\u{2318}N")
+        .with_icon(IconName::Plus)
+        .with_section("Threads"),
+    );
+
+    for summary in thread_summaries {
+        let mut title = format!("Switch to: {}", summary.title);
+        if summary.unread > 0 {
+            title.push_str(&format!(" ({} new)", summary.unread));
+        }
+        let description = if summary.is_streaming {
+            "Streaming in the background — switch to view live output"
+        } else {
+            "Resume this background thread"
+        };
+        actions.push(
+            Action::new(
+                agent_chat_switch_thread_action_id(&summary.ui_thread_id),
+                title,
+                Some(description.to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_icon(IconName::MessageCircle)
+            .with_section("Threads"),
         );
     }
 
@@ -1459,8 +1512,10 @@ fn agent_chat_host_action_plan(
                     | "agent_chat_new_conversation"
                     | "agent_chat_clear_history"
                     | "agent_chat_close"
+                    | AGENT_CHAT_NEW_THREAD_ACTION_ID
             ) || action_id.starts_with(AGENT_CHAT_SWITCH_PROFILE_ACTION_PREFIX)
                 || action_id.starts_with(AGENT_CHAT_SWITCH_MODEL_ACTION_PREFIX)
+                || action_id.starts_with(AGENT_CHAT_SWITCH_THREAD_ACTION_PREFIX)
             {
                 if action_id == "agent_chat_close" {
                     AgentChatHostActionPlan::IncludeWithoutShortcut
@@ -1488,7 +1543,9 @@ fn agent_chat_host_action_plan(
                     | "agent_chat_new_conversation"
                     | "agent_chat_clear_history"
                     | "agent_chat_close"
+                    | AGENT_CHAT_NEW_THREAD_ACTION_ID
             ) || action_id.starts_with(AGENT_CHAT_SWITCH_MODEL_ACTION_PREFIX)
+                || action_id.starts_with(AGENT_CHAT_SWITCH_THREAD_ACTION_PREFIX)
             {
                 AgentChatHostActionPlan::IncludeWithShortcut
             } else {
@@ -1536,6 +1593,7 @@ pub(crate) fn get_agent_chat_root_route_for_host(
     available_models: &[crate::ai::agent_chat::ui::config::AgentChatModelEntry],
     selected_model_id: Option<&str>,
     standing_approval_count: usize,
+    thread_summaries: &[crate::ai::agent_chat::ui::AgentChatThreadSummary],
     host: AgentChatActionsDialogHost,
 ) -> crate::actions::ActionsDialogRoute {
     let host_label = match host {
@@ -1546,7 +1604,12 @@ pub(crate) fn get_agent_chat_root_route_for_host(
 
     let actions = filter_agent_chat_actions_for_host(
         host,
-        get_agent_chat_root_actions(available_models, selected_model_id, standing_approval_count),
+        get_agent_chat_root_actions(
+            available_models,
+            selected_model_id,
+            standing_approval_count,
+            thread_summaries,
+        ),
     );
 
     let model_count = available_models.len();
@@ -1691,6 +1754,7 @@ pub(crate) fn get_agent_chat_root_route(
         available_models,
         selected_model_id,
         0,
+        &[],
         AgentChatActionsDialogHost::Shared,
     )
 }
@@ -2166,12 +2230,27 @@ mod tests {
 
     #[test]
     fn test_agent_chat_close_shortcut_is_only_advertised_for_detached_host() {
-        let shared =
-            get_agent_chat_root_route_for_host(&[], None, 0, AgentChatActionsDialogHost::Shared);
-        let notes =
-            get_agent_chat_root_route_for_host(&[], None, 0, AgentChatActionsDialogHost::Notes);
-        let detached =
-            get_agent_chat_root_route_for_host(&[], None, 0, AgentChatActionsDialogHost::Detached);
+        let shared = get_agent_chat_root_route_for_host(
+            &[],
+            None,
+            0,
+            &[],
+            AgentChatActionsDialogHost::Shared,
+        );
+        let notes = get_agent_chat_root_route_for_host(
+            &[],
+            None,
+            0,
+            &[],
+            AgentChatActionsDialogHost::Notes,
+        );
+        let detached = get_agent_chat_root_route_for_host(
+            &[],
+            None,
+            0,
+            &[],
+            AgentChatActionsDialogHost::Detached,
+        );
 
         let shared_close = shared
             .actions
@@ -2247,6 +2326,7 @@ mod tests {
             ],
             Some("claude-sonnet-4-6"),
             0,
+            &[],
         );
 
         let change_model = actions
@@ -2262,7 +2342,7 @@ mod tests {
 
     #[test]
     fn test_agent_chat_root_actions_surface_review_approvals_only_when_grants_exist() {
-        let without_grants = get_agent_chat_root_actions(&[], None, 0);
+        let without_grants = get_agent_chat_root_actions(&[], None, 0, &[]);
         assert!(
             !without_grants
                 .iter()
@@ -2270,7 +2350,7 @@ mod tests {
             "no review action when the session has no standing grants"
         );
 
-        let with_grants = get_agent_chat_root_actions(&[], None, 2);
+        let with_grants = get_agent_chat_root_actions(&[], None, 2, &[]);
         let review = with_grants
             .iter()
             .find(|action| action.id == AGENT_CHAT_REVIEW_APPROVALS_ACTION_ID)
@@ -2280,9 +2360,48 @@ mod tests {
     }
 
     #[test]
+    fn test_agent_chat_root_actions_surface_thread_switcher() {
+        let summaries = vec![crate::ai::agent_chat::ui::AgentChatThreadSummary {
+            ui_thread_id: "thread-abc".to_string(),
+            title: "Refactor the parser".to_string(),
+            unread: 3,
+            is_streaming: true,
+        }];
+        let actions = get_agent_chat_root_actions(&[], None, 0, &summaries);
+
+        let new_thread = actions
+            .iter()
+            .find(|action| action.id == AGENT_CHAT_NEW_THREAD_ACTION_ID)
+            .expect("New Thread action should always exist");
+        assert_eq!(new_thread.section.as_deref(), Some("Threads"));
+        assert_eq!(new_thread.shortcut.as_deref(), Some("⌘N"));
+
+        let switch = actions
+            .iter()
+            .find(|action| action.id == "agent_chat_switch_thread:thread-abc")
+            .expect("switch action should exist per retained thread");
+        assert_eq!(switch.title, "Switch to: Refactor the parser (3 new)");
+        assert_eq!(switch.section.as_deref(), Some("Threads"));
+
+        assert_eq!(
+            agent_chat_switch_thread_id_from_action("agent_chat_switch_thread:thread-abc"),
+            Some("thread-abc")
+        );
+        assert_eq!(
+            agent_chat_switch_thread_id_from_action("agent_chat_new_thread"),
+            None
+        );
+    }
+
+    #[test]
     fn detached_agent_chat_history_routes_through_actions_dialog() {
-        let detached =
-            get_agent_chat_root_route_for_host(&[], None, 0, AgentChatActionsDialogHost::Detached);
+        let detached = get_agent_chat_root_route_for_host(
+            &[],
+            None,
+            0,
+            &[],
+            AgentChatActionsDialogHost::Detached,
+        );
         assert!(
             detached
                 .actions

@@ -7,31 +7,30 @@
 // action menu as a compact overlay popup.
 
 use crate::components::scrollbar::{Scrollbar, ScrollbarColors, ScrollbarMetrics};
-use crate::designs::{DesignColors, DesignVariant, get_tokens};
+use crate::designs::{get_tokens, DesignColors, DesignVariant};
 use crate::logging;
 use crate::menu_syntax_actions::{
-    PowerSyntaxActionSection, SectionMode, power_syntax_section_to_actions,
+    power_syntax_section_to_actions, PowerSyntaxActionSection, SectionMode,
 };
 use crate::protocol::ProtocolAction;
 use crate::theme;
-use crate::theme::AppChromeColors;
 use crate::theme::types::BackgroundOpacity;
+use crate::theme::AppChromeColors;
 use gpui::{
-    App, BoxShadow, Context, ElementId, FocusHandle, Focusable, ListAlignment, ListState, Render,
-    Rgba, SharedString, Window, div, list, prelude::*, px, rgb, rgba,
+    div, list, prelude::*, px, rgb, rgba, App, BoxShadow, Context, ElementId, FocusHandle,
+    Focusable, ListAlignment, ListState, Render, Rgba, SharedString, Window,
 };
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use super::builders::{
-    ChatPromptInfo, ClipboardEntryInfo, EmojiActionInfo,
     format_shortcut_hint as format_shortcut_hint_shared, get_clipboard_history_context_actions,
     get_emoji_context_actions, get_file_context_actions, get_global_actions,
     get_path_context_actions, get_script_context_actions,
-    get_scriptlet_context_actions_with_custom,
+    get_scriptlet_context_actions_with_custom, ChatPromptInfo, ClipboardEntryInfo, EmojiActionInfo,
 };
-use super::constants::{ACTION_ROW_INSET, ACTIONS_POPUP_RADIUS, ACTIONS_ROW_RADIUS, POPUP_WIDTH};
+use super::constants::{ACTIONS_POPUP_RADIUS, ACTIONS_ROW_RADIUS, ACTION_ROW_INSET, POPUP_WIDTH};
 use crate::file_search::FileInfo;
 use crate::scriptlets::Scriptlet;
 
@@ -724,6 +723,8 @@ pub struct AgentChatActionsDialogContext<'a> {
     pub(crate) focused_text_expanded: bool,
     /// Count of session "Allow always" grants; >0 adds the review action.
     pub(crate) standing_approval_count: usize,
+    /// Retained background threads, surfaced as a "Threads" switcher section.
+    pub(crate) thread_summaries: &'a [crate::ai::agent_chat::ui::AgentChatThreadSummary],
 }
 
 /// Immutable parent/subject identity captured when an ActionsDialog opens.
@@ -879,7 +880,11 @@ impl ActionsDialog {
             .grouped_items
             .iter()
             .any(|item| matches!(item, GroupedActionItem::Item(_)));
-        if has_action { 0.0 } else { row_height }
+        if has_action {
+            0.0
+        } else {
+            row_height
+        }
     }
 
     fn actions_scroll_content_height(&self, row_height: f32) -> f32 {
@@ -1814,6 +1819,7 @@ impl ActionsDialog {
                 context.available_models,
                 context.selected_model_id,
                 context.standing_approval_count,
+                context.thread_summaries,
                 host,
             )
         };
@@ -3022,7 +3028,11 @@ impl ActionsDialog {
                 .enumerate()
                 .filter_map(|(idx, action)| {
                     let score = Self::score_action(action, &search_lower);
-                    if score > 0 { Some((idx, score)) } else { None }
+                    if score > 0 {
+                        Some((idx, score))
+                    } else {
+                        None
+                    }
                 })
                 .collect();
 
@@ -3667,10 +3677,11 @@ impl ActionsDialog {
 #[cfg(test)]
 mod actions_dialog_opacity_consistency_tests {
     use super::{
-        ACTIONS_DIALOG_CONTAINER_BORDER_MIN_ALPHA, actions_dialog_container_background_alpha,
-        actions_dialog_container_border_alpha, actions_dialog_container_text_color,
-        actions_dialog_main_window_background_alpha, actions_dialog_rgba_with_alpha,
-        actions_dialog_search_border_alpha, actions_dialog_search_text_colors, semantic_text_rgba,
+        actions_dialog_container_background_alpha, actions_dialog_container_border_alpha,
+        actions_dialog_container_text_color, actions_dialog_main_window_background_alpha,
+        actions_dialog_rgba_with_alpha, actions_dialog_search_border_alpha,
+        actions_dialog_search_text_colors, semantic_text_rgba,
+        ACTIONS_DIALOG_CONTAINER_BORDER_MIN_ALPHA,
     };
     use crate::theme::{AppChromeColors, Theme};
     use gpui::rgba;
@@ -4474,7 +4485,11 @@ impl ActionsDialogExpectedContract {
 
 #[inline]
 fn actions_dialog_bool_name(value: bool) -> &'static str {
-    if value { "true" } else { "false" }
+    if value {
+        "true"
+    } else {
+        "false"
+    }
 }
 
 impl ActionsDialogRuntimeAudit {
@@ -4583,8 +4598,8 @@ impl ActionsDialogRuntimeAudit {
     }
 }
 
-fn seen_actions_dialog_runtime_audits()
--> &'static std::sync::Mutex<std::collections::HashSet<ActionsDialogRuntimeAudit>> {
+fn seen_actions_dialog_runtime_audits(
+) -> &'static std::sync::Mutex<std::collections::HashSet<ActionsDialogRuntimeAudit>> {
     static SEEN: std::sync::OnceLock<
         std::sync::Mutex<std::collections::HashSet<ActionsDialogRuntimeAudit>>,
     > = std::sync::OnceLock::new();
@@ -4634,16 +4649,16 @@ fn emit_actions_dialog_runtime_audit(audit: &ActionsDialogRuntimeAudit) {
 #[cfg(test)]
 mod tests {
     use super::{
-        ActionsDialog, ActionsDialogChromeAudit, ActionsDialogRuntimeAudit, GroupedActionItem,
-        MainListDisplayedActionShortcut, action_shortcut_parity_report,
-        action_subtitle_for_display, actions_dialog_revealed_scroll_top,
-        actions_dialog_scrollbar_fade_duration, actions_dialog_scrollbar_fade_opacity,
-        actions_dialog_scrollbar_viewport_height, clear_duplicate_action_shortcuts,
-        displayed_action_keybinding_specs, first_selectable_index, is_destructive_action,
-        last_selectable_index, matching_action_id_for_keystroke,
-        matching_filtered_action_id_for_keystroke, resolve_visible_action_shortcut,
-        selectable_index_at_or_after, selectable_index_at_or_before,
-        should_render_section_separator,
+        action_shortcut_parity_report, action_subtitle_for_display,
+        actions_dialog_revealed_scroll_top, actions_dialog_scrollbar_fade_duration,
+        actions_dialog_scrollbar_fade_opacity, actions_dialog_scrollbar_viewport_height,
+        clear_duplicate_action_shortcuts, displayed_action_keybinding_specs,
+        first_selectable_index, is_destructive_action, last_selectable_index,
+        matching_action_id_for_keystroke, matching_filtered_action_id_for_keystroke,
+        resolve_visible_action_shortcut, selectable_index_at_or_after,
+        selectable_index_at_or_before, should_render_section_separator, ActionsDialog,
+        ActionsDialogChromeAudit, ActionsDialogRuntimeAudit, GroupedActionItem,
+        MainListDisplayedActionShortcut,
     };
     use crate::actions::types::{Action, ActionCategory, ScriptInfo, SectionStyle};
     use crate::menu_syntax::{MenuSyntaxAction, MenuSyntaxActionKind};
@@ -5021,15 +5036,13 @@ mod tests {
 
     #[test]
     fn cmd_shift_k_matches_add_shortcut_display_shortcut() {
-        let actions = vec![
-            Action::new(
-                "add_shortcut",
-                "Add Keyboard Shortcut",
-                None,
-                ActionCategory::ScriptContext,
-            )
-            .with_shortcut("⌘⇧K"),
-        ];
+        let actions = vec![Action::new(
+            "add_shortcut",
+            "Add Keyboard Shortcut",
+            None,
+            ActionCategory::ScriptContext,
+        )
+        .with_shortcut("⌘⇧K")];
         let mut shift_cmd = gpui::Modifiers::default();
         shift_cmd.platform = true;
         shift_cmd.shift = true;
@@ -5068,15 +5081,13 @@ mod tests {
 
     #[test]
     fn cmd_shift_k_matches_update_shortcut_display_shortcut() {
-        let actions = vec![
-            Action::new(
-                "update_shortcut",
-                "Edit Keyboard Shortcut",
-                None,
-                ActionCategory::ScriptContext,
-            )
-            .with_shortcut("⌘⇧K"),
-        ];
+        let actions = vec![Action::new(
+            "update_shortcut",
+            "Edit Keyboard Shortcut",
+            None,
+            ActionCategory::ScriptContext,
+        )
+        .with_shortcut("⌘⇧K")];
         let mut shift_cmd = gpui::Modifiers::default();
         shift_cmd.platform = true;
         shift_cmd.shift = true;
@@ -5150,15 +5161,13 @@ mod tests {
 
     #[test]
     fn displayed_action_keybinding_specs_are_generated_from_routable_metadata() {
-        let actions = vec![
-            Action::new(
-                "add_shortcut",
-                "Add Keyboard Shortcut",
-                None,
-                ActionCategory::ScriptContext,
-            )
-            .with_shortcut("⌘⇧K"),
-        ];
+        let actions = vec![Action::new(
+            "add_shortcut",
+            "Add Keyboard Shortcut",
+            None,
+            ActionCategory::ScriptContext,
+        )
+        .with_shortcut("⌘⇧K")];
 
         let specs = displayed_action_keybinding_specs(&actions, &[0]);
 
@@ -5413,11 +5422,9 @@ mod tests {
         let violations = audit.validate();
         assert!(violations.iter().any(|v| v.field == "shows_search_divider"));
         assert!(violations.iter().any(|v| v.field == "section_mode"));
-        assert!(
-            violations
-                .iter()
-                .any(|v| v.field == "show_container_border")
-        );
+        assert!(violations
+            .iter()
+            .any(|v| v.field == "show_container_border"));
     }
 }
 

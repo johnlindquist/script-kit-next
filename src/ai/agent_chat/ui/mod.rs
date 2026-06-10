@@ -83,7 +83,8 @@ pub(crate) use thread::{
 };
 pub(crate) use view::{
     build_skill_context_part, build_skill_slash_command_text, build_staged_skill_prompt,
-    AgentChatHistoryResumeRequest, AgentChatRetryRequest, AgentChatSession, AgentChatView,
+    AgentChatHistoryResumeRequest, AgentChatRetryRequest, AgentChatSession, AgentChatThreadSummary,
+    AgentChatView,
 };
 
 pub(crate) fn open_or_focus_chat_with_input(

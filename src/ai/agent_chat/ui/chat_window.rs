@@ -770,25 +770,30 @@ pub fn toggle_detached_actions(cx: &mut App) {
         Option<String>,
         Vec<crate::ai::agent_chat::ui::config::AgentChatModelEntry>,
         usize,
+        Vec<crate::ai::agent_chat::ui::AgentChatThreadSummary>,
     )> = view_weak.as_ref().and_then(|weak| {
         weak.upgrade().map(|entity| {
             let view = entity.read(cx);
+            let thread_summaries = view.retained_thread_summaries(cx);
             match &view.session {
-                crate::ai::agent_chat::ui::AgentChatSession::Setup(_) => (None, Vec::new(), 0),
+                crate::ai::agent_chat::ui::AgentChatSession::Setup(_) => {
+                    (None, Vec::new(), 0, thread_summaries)
+                }
                 crate::ai::agent_chat::ui::AgentChatSession::Live(thread) => {
                     let thread = thread.read(cx);
                     (
                         thread.selected_model_id().map(str::to_string),
                         thread.available_models().to_vec(),
                         thread.standing_approvals().len(),
+                        thread_summaries,
                     )
                 }
             }
         })
     });
 
-    let (selected_model_id, available_models, standing_approval_count) =
-        agent_chat_context.unwrap_or_else(|| (None, Vec::new(), 0));
+    let (selected_model_id, available_models, standing_approval_count, thread_summaries) =
+        agent_chat_context.unwrap_or_else(|| (None, Vec::new(), 0, Vec::new()));
 
     let dialog = cx.new(|cx| {
         let focus_handle = cx.focus_handle();
@@ -801,6 +806,7 @@ pub fn toggle_detached_actions(cx: &mut App) {
                 focused_text: false,
                 focused_text_expanded: false,
                 standing_approval_count,
+                thread_summaries: &thread_summaries,
             },
             theme_arc,
             crate::actions::AgentChatActionsDialogHost::Detached,
@@ -1210,7 +1216,24 @@ fn dispatch_detached_action(
         return;
     }
 
+    if let Some(thread_id) = crate::actions::agent_chat_switch_thread_id_from_action(action_id) {
+        if let Some(entity) = entity_weak.upgrade() {
+            let thread_id = thread_id.to_string();
+            entity.update(cx, |chat, cx| {
+                chat.switch_to_thread(&thread_id, cx);
+            });
+            tracing::info!(event = "detached_action_switch_thread");
+        }
+        return;
+    }
+
     match action_id {
+        "agent_chat_new_thread" => {
+            if let Some(entity) = entity_weak.upgrade() {
+                entity.update(cx, |chat, cx| chat.start_new_thread(cx));
+                tracing::info!(event = "detached_action_new_thread");
+            }
+        }
         "agent_chat_review_approvals" => {
             if let Some(entity) = entity_weak.upgrade() {
                 entity.update(cx, |chat, cx| {

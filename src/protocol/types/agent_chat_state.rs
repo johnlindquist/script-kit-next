@@ -60,6 +60,11 @@ pub struct AgentChatStateSnapshot {
     /// Number of messages in the thread history.
     pub message_count: usize,
 
+    /// Number of retained background threads in the live thread pool
+    /// (threads kept streaming after Cmd+N / thread switching).
+    #[serde(default)]
+    pub retained_thread_count: usize,
+
     /// True when a submitted user turn is streaming before assistant text lands.
     #[serde(default)]
     pub awaiting_first_assistant_text: bool,
@@ -135,6 +140,7 @@ impl Default for AgentChatStateSnapshot {
             has_selection: false,
             selection_range: None,
             message_count: 0,
+            retained_thread_count: 0,
             awaiting_first_assistant_text: false,
             picker: None,
             spine: None,
@@ -961,6 +967,7 @@ mod tests {
             has_selection: false,
             selection_range: None,
             message_count: 3,
+            retained_thread_count: 0,
             awaiting_first_assistant_text: true,
             picker: None,
             spine: Some(AgentChatSpineSnapshot {

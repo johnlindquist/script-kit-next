@@ -660,6 +660,18 @@ pub(crate) struct AgentChatHistoryMenuState {
     pub(crate) hits: Vec<super::history::AgentChatHistorySearchHit>,
 }
 
+/// Lightweight descriptor of a retained background thread, consumed by the
+/// Cmd+K "Threads" section so the switcher can label rows without touching
+/// the live thread entities.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct AgentChatThreadSummary {
+    pub ui_thread_id: String,
+    pub title: String,
+    /// Messages appended since the user last viewed this thread.
+    pub unread: usize,
+    pub is_streaming: bool,
+}
+
 /// Parsed `SCRIPT_READY path=... validated=true` receipt from assistant output.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ScriptReadyReceipt {
@@ -692,6 +704,16 @@ pub(crate) fn parse_script_ready_receipt(text: &str) -> Option<ScriptReadyReceip
 pub(crate) struct AgentChatView {
     /// The Agent Chat session — either a live thread or inline setup state.
     pub(crate) session: AgentChatSession,
+    /// Live background threads retained when the user starts or switches
+    /// threads. Each owns its own Pi connection and keeps streaming while
+    /// inactive; the Cmd+K "Threads" section switches back to them.
+    retained_threads: Vec<Entity<AgentChatThread>>,
+    /// Message count last seen per `ui_thread_id`, for unread badges in the
+    /// thread switcher.
+    thread_last_seen: std::collections::HashMap<String, usize>,
+    /// Observer subscriptions keyed by thread entity id (session + retained),
+    /// so swapping the session thread never double-registers an observer.
+    thread_observers: std::collections::HashMap<gpui::EntityId, gpui::Subscription>,
     focus_handle: FocusHandle,
     /// Virtualized variable-height message list state.
     permission_index: usize,
@@ -4788,6 +4810,151 @@ impl AgentChatView {
         }
     }
 
+    /// Summaries of retained background threads for the Cmd+K "Threads"
+    /// section, ordered oldest-retained first.
+    pub(crate) fn retained_thread_summaries(&self, cx: &gpui::App) -> Vec<AgentChatThreadSummary> {
+        self.retained_threads
+            .iter()
+            .map(|thread| {
+                let t = thread.read(cx);
+                let title = t
+                    .messages
+                    .iter()
+                    .find(|m| matches!(m.role, AgentChatThreadMessageRole::User))
+                    .map(|m| Self::thread_summary_title(m.body.as_ref()))
+                    .unwrap_or_else(|| "New Thread".to_string());
+                let seen = self
+                    .thread_last_seen
+                    .get(t.ui_thread_id())
+                    .copied()
+                    .unwrap_or(0);
+                AgentChatThreadSummary {
+                    ui_thread_id: t.ui_thread_id().to_string(),
+                    title,
+                    unread: t.messages.len().saturating_sub(seen),
+                    is_streaming: matches!(
+                        t.status,
+                        super::thread::AgentChatThreadStatus::Streaming
+                    ),
+                }
+            })
+            .collect()
+    }
+
+    /// First line of the first user message, truncated for switcher rows.
+    fn thread_summary_title(body: &str) -> String {
+        const MAX_CHARS: usize = 48;
+        let line = body.lines().next().unwrap_or("").trim();
+        if line.is_empty() {
+            return "New Thread".to_string();
+        }
+        if line.chars().count() <= MAX_CHARS {
+            return line.to_string();
+        }
+        let truncated: String = line.chars().take(MAX_CHARS).collect();
+        format!("{}…", truncated.trim_end())
+    }
+
+    /// Activate `thread` as the session thread, retaining the previous live
+    /// thread so it keeps streaming on its own connection in the background.
+    pub(crate) fn activate_session_thread(
+        &mut self,
+        thread: Entity<AgentChatThread>,
+        cx: &mut Context<Self>,
+    ) {
+        if let AgentChatSession::Live(current) = &self.session {
+            if current.entity_id() == thread.entity_id() {
+                return;
+            }
+            let current = current.clone();
+            let (current_id, current_len) = {
+                let t = current.read(cx);
+                (t.ui_thread_id().to_string(), t.messages.len())
+            };
+            self.thread_last_seen.insert(current_id, current_len);
+            if !self
+                .retained_threads
+                .iter()
+                .any(|t| t.entity_id() == current.entity_id())
+            {
+                self.retained_threads.push(current);
+            }
+        }
+        self.retained_threads
+            .retain(|t| t.entity_id() != thread.entity_id());
+        {
+            let t = thread.read(cx);
+            self.thread_last_seen
+                .insert(t.ui_thread_id().to_string(), t.messages.len());
+        }
+        if !self.thread_observers.contains_key(&thread.entity_id()) {
+            self.thread_observers.insert(
+                thread.entity_id(),
+                Self::observe_session_thread(&thread, cx),
+            );
+        }
+        self.session = AgentChatSession::Live(thread.clone());
+        if let Some(transcript) = &self.transcript {
+            transcript.update(cx, |t, cx| t.clear_collapsed_ids(cx));
+        }
+        // One observer pass resyncs transcript/toolbar/composer from the
+        // newly active thread.
+        thread.update(cx, |_, cx| cx.notify());
+        cx.notify();
+    }
+
+    /// Start a fresh thread on a new Pi connection. The current thread keeps
+    /// streaming in the background and appears in the Cmd+K Threads section.
+    pub(crate) fn start_new_thread(&mut self, cx: &mut Context<Self>) {
+        let AgentChatSession::Live(current) = &self.session else {
+            return;
+        };
+        let requirements = current.read(cx).current_setup_requirements();
+        match super::hosted::spawn_hosted_thread(None, requirements, cx) {
+            Ok(thread) => {
+                thread.update(cx, |thread, cx| thread.refresh_models(cx));
+                self.activate_session_thread(thread, cx);
+                tracing::info!(
+                    target: "script_kit::tab_ai",
+                    event = "agent_chat_new_thread_started",
+                    retained_count = self.retained_threads.len(),
+                );
+            }
+            Err(error) => {
+                tracing::warn!(
+                    target: "script_kit::tab_ai",
+                    event = "agent_chat_new_thread_failed",
+                    error = %error,
+                );
+            }
+        }
+    }
+
+    /// Switch the session to a retained background thread by `ui_thread_id`.
+    /// Returns false when no retained thread matches.
+    pub(crate) fn switch_to_thread(&mut self, ui_thread_id: &str, cx: &mut Context<Self>) -> bool {
+        let Some(thread) = self
+            .retained_threads
+            .iter()
+            .find(|t| t.read(cx).ui_thread_id() == ui_thread_id)
+            .cloned()
+        else {
+            tracing::warn!(
+                target: "script_kit::tab_ai",
+                event = "agent_chat_switch_thread_missing",
+                ui_thread_id,
+            );
+            return false;
+        };
+        self.activate_session_thread(thread, cx);
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "agent_chat_switched_thread",
+            ui_thread_id,
+        );
+        true
+    }
+
     /// Build a machine-readable Agent Chat state snapshot for agentic testing.
     ///
     /// Returns cursor, picker, accepted item, thread status, layout metrics,
@@ -4885,6 +5052,7 @@ impl AgentChatView {
             has_selection,
             selection_range,
             message_count: thread.messages.len(),
+            retained_thread_count: self.retained_threads.len(),
             awaiting_first_assistant_text: thread.awaiting_first_assistant_text(),
             picker: self.build_agent_chat_picker_state_snapshot(),
             spine: self.build_agent_chat_spine_state_snapshot(),
@@ -5153,15 +5321,26 @@ impl AgentChatView {
         }
     }
 
-    pub(crate) fn new(thread: Entity<AgentChatThread>, cx: &mut Context<Self>) -> Self {
-        // Preflight the Agent Chat session so the agent's advertised model list lands
-        // in `thread.available_models` before the user opens the Change Model
-        // picker. Fire-and-forget; `apply_event` handles the resulting
-        // `ModelsAvailable` and `SetupRequired` events.
-        thread.update(cx, |thread, cx| thread.refresh_models(cx));
+    /// Observe a thread entity and sync the shared transcript/toolbar/composer
+    /// whenever it notifies — but only while it is the active session thread.
+    /// Retained background threads keep streaming on their own connections;
+    /// their notifications only repaint unread indicators, never the shared UI.
+    fn observe_session_thread(
+        thread: &Entity<AgentChatThread>,
+        cx: &mut Context<Self>,
+    ) -> gpui::Subscription {
+        cx.observe(thread, |this: &mut Self, thread, cx| {
+            let is_session_thread = matches!(
+                &this.session,
+                AgentChatSession::Live(active) if active.entity_id() == thread.entity_id()
+            );
+            if !is_session_thread {
+                // Background thread streamed; repaint so any visible unread
+                // badge stays current, but leave the shared UI alone.
+                cx.notify();
+                return;
+            }
 
-        // Auto-scroll when thread state changes (new messages, streaming updates).
-        cx.observe(&thread, |this: &mut Self, thread, cx| {
             // Extract data from thread before mutable operations.
             let (
                 activity_row_visible,
@@ -5172,6 +5351,7 @@ impl AgentChatView {
                 new_ready,
                 focused_text_phase,
                 focused_text_input_locked,
+                ui_thread_id,
             ) = {
                 let thread_ref = thread.read(cx);
                 let activity = thread_ref.awaiting_first_assistant_text();
@@ -5192,8 +5372,12 @@ impl AgentChatView {
                     .find_map(|m| parse_script_ready_receipt(m.body.as_ref()))
                     .filter(|r| r.validated)
                     .map(|r| r.path);
-                (activity, msgs, st, pd, md, ready, phase, locked)
+                let tid = thread_ref.ui_thread_id().to_string();
+                (activity, msgs, st, pd, md, ready, phase, locked, tid)
             };
+
+            // The active thread's messages are on screen — mark them seen.
+            this.thread_last_seen.insert(ui_thread_id, messages.len());
 
             let focused_text_mini_active = focused_text_phase.is_some();
             if focused_text_mini_active
@@ -5255,8 +5439,21 @@ impl AgentChatView {
                 );
             }
         })
-        .detach();
+    }
 
+    pub(crate) fn new(thread: Entity<AgentChatThread>, cx: &mut Context<Self>) -> Self {
+        // Preflight the Agent Chat session so the agent's advertised model list lands
+        // in `thread.available_models` before the user opens the Change Model
+        // picker. Fire-and-forget; `apply_event` handles the resulting
+        // `ModelsAvailable` and `SetupRequired` events.
+        thread.update(cx, |thread, cx| thread.refresh_models(cx));
+
+        // Auto-scroll when thread state changes (new messages, streaming updates).
+        let mut thread_observers = std::collections::HashMap::new();
+        thread_observers.insert(
+            thread.entity_id(),
+            Self::observe_session_thread(&thread, cx),
+        );
         // Cursor blink loop (530ms interval, same as ChatPrompt).
         let blink_task = cx.spawn(async move |this, cx| loop {
             cx.background_executor()
@@ -5298,6 +5495,9 @@ impl AgentChatView {
 
         Self {
             session: AgentChatSession::Live(thread),
+            retained_threads: Vec::new(),
+            thread_last_seen: std::collections::HashMap::new(),
+            thread_observers,
             focus_handle: cx.focus_handle(),
             permission_index: 0,
             permission_options_open: false,
@@ -5380,6 +5580,9 @@ impl AgentChatView {
         let noop_slash = cx.spawn(async move |_this, _cx| {});
         Self {
             session: AgentChatSession::Setup(Box::new(state)),
+            retained_threads: Vec::new(),
+            thread_last_seen: std::collections::HashMap::new(),
+            thread_observers: std::collections::HashMap::new(),
             focus_handle: cx.focus_handle(),
             permission_index: 0,
             permission_options_open: false,
@@ -12582,8 +12785,16 @@ impl AgentChatView {
             return;
         }
 
-        // ── Cmd+N / Cmd+L → new conversation (clear messages, keep session) ──
-        if modifiers.platform && (key.eq_ignore_ascii_case("n") || key.eq_ignore_ascii_case("l")) {
+        // ── Cmd+N → new thread (current keeps streaming in background) ──
+        if modifiers.platform && key.eq_ignore_ascii_case("n") {
+            self.start_new_thread(cx);
+            cx.notify();
+            cx.stop_propagation();
+            return;
+        }
+
+        // ── Cmd+L → new conversation (clear messages, keep session) ──
+        if modifiers.platform && key.eq_ignore_ascii_case("l") {
             self.live_thread().update(cx, |thread, cx| {
                 thread.clear_messages(cx);
             });
@@ -13759,6 +13970,19 @@ mod tests {
             shift: true,
             ..Default::default()
         }
+    }
+
+    #[test]
+    fn thread_summary_title_uses_first_line_truncated() {
+        assert_eq!(
+            AgentChatView::thread_summary_title("Refactor the parser\nwith details"),
+            "Refactor the parser"
+        );
+        assert_eq!(AgentChatView::thread_summary_title("   \n"), "New Thread");
+        let long = "x".repeat(80);
+        let title = AgentChatView::thread_summary_title(&long);
+        assert_eq!(title.chars().count(), 49, "48 chars + ellipsis");
+        assert!(title.ends_with('…'));
     }
 
     #[test]
