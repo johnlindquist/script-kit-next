@@ -112,14 +112,50 @@ pub fn run_cycle(embedder: &mut Option<BrainEmbedder>) -> Result<()> {
         tracing::debug!(target: "script_kit::brain", error = %err, "notes sync skipped");
         0
     });
+    let promoted = sync_pinned_clipboard().unwrap_or_else(|err| {
+        tracing::debug!(target: "script_kit::brain", error = %err, "clipboard sync skipped");
+        0
+    });
     let embedded = embed_pending(embedder)?;
-    if synced > 0 || embedded > 0 {
+    if synced > 0 || promoted > 0 || embedded > 0 {
         tracing::info!(
             target: "script_kit::brain",
-            synced, embedded, "brain index cycle"
+            synced, promoted, embedded, "brain index cycle"
         );
     }
     Ok(())
+}
+
+/// Promote PINNED clipboard entries into the brain. Pinning is an explicit
+/// "this matters" act — the cleanest ambient-learning signal the clipboard
+/// emits, with zero surveillance creep (raw history stays in its own store
+/// with its own retention). Image entries contribute their OCR text.
+fn sync_pinned_clipboard() -> Result<usize> {
+    let entries = crate::clipboard_history::get_clipboard_history(500);
+    let mut promoted = 0usize;
+    for entry in entries.iter().filter(|entry| entry.pinned) {
+        let text = match entry.content_type {
+            crate::clipboard_history::ContentType::Text => entry.content.clone(),
+            _ => entry.ocr_text.clone().unwrap_or_default(),
+        };
+        let text = text.trim();
+        if text.is_empty() {
+            continue;
+        }
+        let title: String = format!(
+            "Pinned clipboard: {}",
+            text.chars().take(60).collect::<String>()
+        );
+        store::upsert_doc(
+            DocSource::Clipboard,
+            &entry.id,
+            &title,
+            text,
+            entry.timestamp,
+        )?;
+        promoted += 1;
+    }
+    Ok(promoted)
 }
 
 /// Mirror active notes into brain_docs. Hash-guarded upserts make this cheap.
