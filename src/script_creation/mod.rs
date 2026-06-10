@@ -754,6 +754,8 @@ mod tests {
             claude_code: None,
             mcp: None,
             hidden_commands: None,
+            spine_styles: Vec::new(),
+            spine_commands: Vec::new(),
         };
         assert_eq!(default_config.get_editor(), "code");
 
@@ -793,6 +795,8 @@ mod tests {
             claude_code: None,
             mcp: None,
             hidden_commands: None,
+            spine_styles: Vec::new(),
+            spine_commands: Vec::new(),
         };
         assert_eq!(custom_config.get_editor(), "vim");
 

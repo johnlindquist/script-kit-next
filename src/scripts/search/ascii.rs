@@ -147,7 +147,6 @@ pub(crate) fn fuzzy_match_with_indices_ascii(
 }
 
 /// Check if a pattern is a fuzzy match for haystack (characters appear in order)
-#[cfg(test)]
 pub(crate) fn is_fuzzy_match(haystack: &str, pattern: &str) -> bool {
     let mut pattern_chars = pattern.chars().peekable();
     for ch in haystack.chars() {

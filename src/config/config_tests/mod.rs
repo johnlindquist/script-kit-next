@@ -61,6 +61,8 @@ fn test_config_serialization() {
         claude_code: None,
         mcp: None,
         hidden_commands: None,
+        spine_styles: Vec::new(),
+        spine_commands: Vec::new(),
     };
 
     let json = serde_json::to_string(&config).unwrap();
@@ -123,6 +125,8 @@ fn test_config_with_bun_path() {
         claude_code: None,
         mcp: None,
         hidden_commands: None,
+        spine_styles: Vec::new(),
+        spine_commands: Vec::new(),
     };
     assert_eq!(config.bun_path, Some("/custom/path/bun".to_string()));
 }
@@ -167,6 +171,8 @@ fn test_config_without_bun_path() {
         claude_code: None,
         mcp: None,
         hidden_commands: None,
+        spine_styles: Vec::new(),
+        spine_commands: Vec::new(),
     };
     assert_eq!(config.bun_path, None);
 }
@@ -211,6 +217,8 @@ fn test_config_serialization_skip_none_bun_path() {
         claude_code: None,
         mcp: None,
         hidden_commands: None,
+        spine_styles: Vec::new(),
+        spine_commands: Vec::new(),
     };
 
     let json = serde_json::to_string(&config).unwrap();
@@ -260,6 +268,8 @@ fn test_config_serialization_preserves_multiple_modifiers() {
         claude_code: None,
         mcp: None,
         hidden_commands: None,
+        spine_styles: Vec::new(),
+        spine_commands: Vec::new(),
     };
 
     let json = serde_json::to_string(&config).unwrap();
@@ -376,6 +386,8 @@ fn test_config_with_empty_modifiers_list() {
         claude_code: None,
         mcp: None,
         hidden_commands: None,
+        spine_styles: Vec::new(),
+        spine_commands: Vec::new(),
     };
 
     assert_eq!(config.hotkey.modifiers.len(), 0);
@@ -426,6 +438,8 @@ fn test_config_key_preservation() {
             claude_code: None,
             mcp: None,
             hidden_commands: None,
+            spine_styles: Vec::new(),
+            spine_commands: Vec::new(),
         };
 
         let json = serde_json::to_string(&config).unwrap();
@@ -475,6 +489,8 @@ fn test_config_with_editor() {
         claude_code: None,
         mcp: None,
         hidden_commands: None,
+        spine_styles: Vec::new(),
+        spine_commands: Vec::new(),
     };
 
     let json = serde_json::to_string(&config).unwrap();
@@ -524,6 +540,8 @@ fn test_config_without_editor() {
         claude_code: None,
         mcp: None,
         hidden_commands: None,
+        spine_styles: Vec::new(),
+        spine_commands: Vec::new(),
     };
 
     let json = serde_json::to_string(&config).unwrap();
@@ -575,6 +593,8 @@ fn test_get_editor_from_config() {
         claude_code: None,
         mcp: None,
         hidden_commands: None,
+        spine_styles: Vec::new(),
+        spine_commands: Vec::new(),
     };
 
     // Config editor takes precedence
@@ -627,6 +647,8 @@ fn test_get_editor_from_env() {
         claude_code: None,
         mcp: None,
         hidden_commands: None,
+        spine_styles: Vec::new(),
+        spine_commands: Vec::new(),
     };
 
     // Should fall back to EDITOR env var
@@ -685,6 +707,8 @@ fn test_get_editor_default() {
         claude_code: None,
         mcp: None,
         hidden_commands: None,
+        spine_styles: Vec::new(),
+        spine_commands: Vec::new(),
     };
 
     // Should fall back to "code" default
@@ -743,6 +767,8 @@ fn test_config_editor_priority() {
         claude_code: None,
         mcp: None,
         hidden_commands: None,
+        spine_styles: Vec::new(),
+        spine_commands: Vec::new(),
     };
 
     // Config editor should win
@@ -870,6 +896,8 @@ fn test_config_get_padding_custom() {
         claude_code: None,
         mcp: None,
         hidden_commands: None,
+        spine_styles: Vec::new(),
+        spine_commands: Vec::new(),
     };
 
     let padding = config.get_padding();
@@ -924,6 +952,8 @@ fn test_config_get_editor_font_size_custom() {
         claude_code: None,
         mcp: None,
         hidden_commands: None,
+        spine_styles: Vec::new(),
+        spine_commands: Vec::new(),
     };
 
     assert_eq!(config.get_editor_font_size(), 16.0);
@@ -986,6 +1016,8 @@ fn test_config_get_terminal_font_size_custom() {
         claude_code: None,
         mcp: None,
         hidden_commands: None,
+        spine_styles: Vec::new(),
+        spine_commands: Vec::new(),
     };
 
     assert_eq!(config.get_terminal_font_size(), 12.0);
@@ -1109,6 +1141,8 @@ fn test_config_serialization_includes_set_ui_settings() {
         claude_code: None,
         mcp: None,
         hidden_commands: None,
+        spine_styles: Vec::new(),
+        spine_commands: Vec::new(),
     };
 
     let json = serde_json::to_string(&config).unwrap();
@@ -1229,6 +1263,8 @@ fn test_config_with_builtins() {
         claude_code: None,
         mcp: None,
         hidden_commands: None,
+        spine_styles: Vec::new(),
+        spine_commands: Vec::new(),
     };
 
     let builtins = config.get_builtins();
@@ -1493,6 +1529,8 @@ fn test_config_serialization_includes_set_builtins() {
         claude_code: None,
         mcp: None,
         hidden_commands: None,
+        spine_styles: Vec::new(),
+        spine_commands: Vec::new(),
     };
 
     let json = serde_json::to_string(&config).unwrap();
@@ -1657,6 +1695,8 @@ fn test_config_with_process_limits() {
         claude_code: None,
         mcp: None,
         hidden_commands: None,
+        spine_styles: Vec::new(),
+        spine_commands: Vec::new(),
     };
 
     let limits = config.get_process_limits();
@@ -1796,6 +1836,8 @@ fn test_config_serialization_includes_set_process_limits() {
         claude_code: None,
         mcp: None,
         hidden_commands: None,
+        spine_styles: Vec::new(),
+        spine_commands: Vec::new(),
     };
 
     let json = serde_json::to_string(&config).unwrap();
@@ -1932,6 +1974,8 @@ fn test_requires_confirmation_user_override_disable() {
         claude_code: None,
         mcp: None,
         hidden_commands: None,
+        spine_styles: Vec::new(),
+        spine_commands: Vec::new(),
     };
 
     // Should NOT require confirmation because user disabled it
@@ -1991,6 +2035,8 @@ fn test_requires_confirmation_user_override_enable() {
         claude_code: None,
         mcp: None,
         hidden_commands: None,
+        spine_styles: Vec::new(),
+        spine_commands: Vec::new(),
     };
 
     // Should require confirmation because user enabled it
@@ -2123,6 +2169,8 @@ fn test_requires_confirmation_with_partial_command_config() {
         claude_code: None,
         mcp: None,
         hidden_commands: None,
+        spine_styles: Vec::new(),
+        spine_commands: Vec::new(),
     };
 
     // Should still require confirmation (falls back to default)

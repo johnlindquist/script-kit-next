@@ -244,7 +244,6 @@ pub(crate) fn build_spine_prompt_plan_with_aliases(
 fn apply_style_sugar(plan: &mut SpinePromptPlan, segment_index: usize, id: String) {
     let _ = segment_index;
     let instruction = crate::spine::catalog_style::style_instruction(&id)
-        .map(|s| s.to_string())
         .unwrap_or_else(|| {
             format!(
                 "Rewrite the attached selection in a {id} style. Preserve the meaning; return only the rewritten text."

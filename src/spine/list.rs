@@ -222,7 +222,13 @@ fn stripped_query(query: &str) -> String {
 
 pub(super) fn matches_query(value: &str, query: &str) -> bool {
     let query = stripped_query(query);
-    query.is_empty() || value.to_ascii_lowercase().contains(&query)
+    if query.is_empty() {
+        return true;
+    }
+    let value_lower = value.to_ascii_lowercase();
+    // Substring first (cheap), then the launcher's fuzzy subsequence match
+    // so catalog filtering behaves like the main list (`/rw` → /rewrite).
+    value_lower.contains(&query) || crate::scripts::search::is_fuzzy_match(&value_lower, &query)
 }
 
 fn section_with_empty(
@@ -1099,6 +1105,20 @@ mod tests {
             Some("Selection · Rewrite → Cmd+Enter")
         );
         assert!(row.meta.is_none());
+    }
+
+    #[test]
+    fn slash_catalog_matches_fuzzy_subsequence() {
+        // Catalog filtering should behave like the main list: a fuzzy
+        // subsequence ("rwt" → rewrite) still finds the command.
+        let parse = parse_spine("/rwt");
+        let proj = project_cursor(&parse, 4);
+        let sections = build_spine_list_sections(&parse, &proj);
+        let rows: Vec<_> = sections.iter().flat_map(|section| &section.rows).collect();
+        assert!(
+            rows.iter().any(|row| row.id.as_ref() == "spine:/:rewrite"),
+            "fuzzy subsequence must match /rewrite"
+        );
     }
 
     #[test]

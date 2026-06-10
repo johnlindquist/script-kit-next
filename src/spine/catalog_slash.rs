@@ -49,27 +49,62 @@ fn capitalize(s: &str) -> String {
     }
 }
 
+/// A catalog command after merging built-ins with user-defined commands
+/// from `config.ts` (`spineCommands`). User entries with a matching name
+/// override built-ins; new names extend the catalog.
+#[derive(Clone, Debug)]
+struct ResolvedSlashCommand {
+    name: String,
+    description: String,
+    icon: String,
+}
+
+fn resolved_slash_commands() -> Vec<ResolvedSlashCommand> {
+    let mut commands: Vec<ResolvedSlashCommand> = SPINE_SLASH_COMMANDS
+        .iter()
+        .map(|spec| ResolvedSlashCommand {
+            name: spec.name.to_string(),
+            description: spec.description.to_string(),
+            icon: spec.icon.to_string(),
+        })
+        .collect();
+
+    for user in crate::config::load_config().spine_commands {
+        let resolved = ResolvedSlashCommand {
+            description: user.description.unwrap_or_default(),
+            icon: user.icon.unwrap_or_else(|| "terminal".to_string()),
+            name: user.name,
+        };
+        if let Some(existing) = commands.iter_mut().find(|c| c.name == resolved.name) {
+            *existing = resolved;
+        } else {
+            commands.push(resolved);
+        }
+    }
+    commands
+}
+
 pub(super) fn build_slash_command_rows(
     query: &str,
     segment_index: usize,
     segment_byte_range: Range<usize>,
 ) -> Vec<SpineListRow> {
-    SPINE_SLASH_COMMANDS
-        .iter()
+    resolved_slash_commands()
+        .into_iter()
         .enumerate()
         .filter(|(_, spec)| {
             let slash_text = format!("/{}", spec.name);
-            matches_query(spec.name, query)
+            matches_query(&spec.name, query)
                 || matches_query(&slash_text, query)
-                || matches_query(spec.description, query)
+                || matches_query(&spec.description, query)
         })
         .map(|(rank, spec)| {
             let replacement = format!("/{}", spec.name);
-            let capitalized = capitalize(spec.name);
+            let capitalized = capitalize(&spec.name);
             SpineListRow {
                 id: ss(format!("spine:/:{}", spec.name)),
                 kind: SpineListRowKind::SlashCommand {
-                    command: ss(spec.name),
+                    command: ss(spec.name.clone()),
                 },
                 title: ss(capitalized),
                 subtitle: Some(ss(spec.description)),

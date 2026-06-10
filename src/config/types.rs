@@ -820,6 +820,33 @@ pub enum AgentChatBackend {
     Pi,
 }
 
+/// A user-defined `.style` for the spine prompt builder, declared in
+/// `config.ts`. The `instruction` is the payload delivered to the agent.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SpineStyleConfig {
+    pub id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub icon: Option<String>,
+    pub instruction: String,
+}
+
+/// A user-defined `/command` for the spine prompt builder, declared in
+/// `config.ts`.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SpineCommandConfig {
+    pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub icon: Option<String>,
+}
+
 /// AI chat preferences loaded from `config.ts`.
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -1614,6 +1641,18 @@ pub struct Config {
     /// Agent Chat runtime preferences, including the preferred agent and model.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ai: Option<AiPreferences>,
+    /// User-defined spine prompt-builder styles (`.style` sigil). Merged
+    /// over the built-in catalog; matching ids override built-ins.
+    #[serde(default, skip_serializing_if = "Vec::is_empty", rename = "spineStyles")]
+    pub spine_styles: Vec<SpineStyleConfig>,
+    /// User-defined spine slash commands (`/command` sigil). Merged over
+    /// the built-in catalog; matching names override built-ins.
+    #[serde(
+        default,
+        skip_serializing_if = "Vec::is_empty",
+        rename = "spineCommands"
+    )]
+    pub spine_commands: Vec<SpineCommandConfig>,
     /// Window-management preferences such as snap mode.
     #[serde(
         default,
@@ -1692,6 +1731,8 @@ impl Default for Config {
             claude_code: None,      // Will use ClaudeCodeConfig::default() via getter
             mcp: None,              // External MCP servers are opt-in via config.ts
             hidden_commands: None,  // No commands hidden by default
+            spine_styles: Vec::new(), // Built-in style catalog only by default
+            spine_commands: Vec::new(), // Built-in command catalog only by default
         }
     }
 }

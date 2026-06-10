@@ -86,6 +86,7 @@ const CONTEXT_SUBSEARCH_SPECS: &[ContextSubsearchSpec] = &[
 const PENALTY_EXACT: i32 = 0;
 const PENALTY_PREFIX: i32 = 100;
 const PENALTY_SUBSTRING: i32 = 1000;
+const PENALTY_FUZZY: i32 = 5000;
 
 const CATEGORY_PENALTY_BUILTIN: i32 = 0;
 const CATEGORY_PENALTY_SUBSEARCH: i32 = 50;
@@ -119,6 +120,8 @@ fn context_value_match_penalty(value: &str, normalized_query: &str) -> Option<i3
         Some(PENALTY_PREFIX)
     } else if value_lower.contains(normalized_query) {
         Some(PENALTY_SUBSTRING)
+    } else if crate::scripts::search::is_fuzzy_match(&value_lower, normalized_query) {
+        Some(PENALTY_FUZZY)
     } else {
         None
     }
