@@ -636,6 +636,9 @@ impl Render for ScriptListApp {
                 filter,
                 selected_index,
             } => self.render_settings(filter, selected_index, cx),
+            AppView::PermissionsWizardView { selected_index } => {
+                self.render_permissions_wizard(selected_index, cx)
+            }
             AppView::FavoritesBrowseView {
                 filter,
                 selected_index,

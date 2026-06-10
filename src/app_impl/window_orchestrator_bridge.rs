@@ -7,64 +7,63 @@ impl ScriptListApp {
     ) -> Option<FocusTarget> {
         match token {
             crate::window_orchestrator::FocusToken::MainFilter => Some(FocusTarget::MainFilter),
-            crate::window_orchestrator::FocusToken::PromptInput => {
-                Some(match &self.current_view {
-                    AppView::ScriptList
-                    | AppView::ClipboardHistoryView { .. }
-                    | AppView::AppLauncherView { .. }
-                    | AppView::WindowSwitcherView { .. }
-                    | AppView::BrowserTabsView { .. }
-                    | AppView::FileSearchView { .. }
-                    | AppView::ProfileSearchView { .. }
-                    | AppView::ThemeChooserView { .. }
-                    | AppView::EmojiPickerView { .. }
-                    | AppView::BrowseKitsView { .. }
-                    | AppView::InstalledKitsView { .. }
-                    | AppView::ProcessManagerView { .. }
-                    | AppView::SearchAiPresetsView { .. }
-                    | AppView::CreateAiPresetView { .. }
-                    | AppView::SettingsView { .. }
-                    | AppView::FavoritesBrowseView { .. }
-                    | AppView::AgentChatHistoryView { .. }
-                    | AppView::BrowserHistoryView { .. }
-                    | AppView::DictationHistoryView { .. }
-                    | AppView::NotesBrowseView { .. }
-                    | AppView::CurrentAppCommandsView { .. }
-                    | AppView::DesignGalleryView { .. }
-                    | AppView::FooterGalleryView { .. }
-                    | AppView::CreationFeedback { .. }
-                    | AppView::ScriptIssuesView { .. }
-                    | AppView::SdkReferenceView { .. }
-                    | AppView::ScriptTemplateCatalogView { .. }
-                    | AppView::ActionsDialog => FocusTarget::MainFilter,
-                    AppView::About { .. } => FocusTarget::AppRoot,
-                    AppView::ArgPrompt { .. }
-                    | AppView::MiniPrompt { .. }
-                    | AppView::MicroPrompt { .. }
-                    | AppView::DivPrompt { .. }
-                    | AppView::HotkeyPrompt { .. }
-                    | AppView::WebcamView { .. } => FocusTarget::AppRoot,
-                    AppView::FormPrompt { .. } => FocusTarget::FormPrompt,
-                    AppView::EditorPrompt { .. } | AppView::ScratchPadView { .. } => {
-                        FocusTarget::EditorPrompt
-                    }
-                    AppView::SelectPrompt { .. } => FocusTarget::SelectPrompt,
-                    AppView::PathPrompt { .. } => FocusTarget::PathPrompt,
-                    AppView::EnvPrompt { .. } => FocusTarget::EnvPrompt,
-                    AppView::DropPrompt { .. } => FocusTarget::DropPrompt,
-                    AppView::TemplatePrompt { .. } => FocusTarget::TemplatePrompt,
-                    AppView::TermPrompt { .. } | AppView::QuickTerminalView { .. } => {
-                        FocusTarget::TermPrompt
-                    }
-                    AppView::ChatPrompt { .. } => FocusTarget::ChatPrompt,
-                    AppView::AgentChatView { .. } => FocusTarget::AgentChat,
-                    AppView::NamingPrompt { .. } => FocusTarget::NamingPrompt,
-                    AppView::ConfirmPrompt { .. } => FocusTarget::AppRoot,
-                    AppView::NonListStatesView { .. } => FocusTarget::AppRoot,
-                    #[cfg(feature = "storybook")]
-                    AppView::DesignExplorerView { .. } => FocusTarget::AppRoot,
-                })
-            }
+            crate::window_orchestrator::FocusToken::PromptInput => Some(match &self.current_view {
+                AppView::ScriptList
+                | AppView::ClipboardHistoryView { .. }
+                | AppView::AppLauncherView { .. }
+                | AppView::WindowSwitcherView { .. }
+                | AppView::BrowserTabsView { .. }
+                | AppView::FileSearchView { .. }
+                | AppView::ProfileSearchView { .. }
+                | AppView::ThemeChooserView { .. }
+                | AppView::EmojiPickerView { .. }
+                | AppView::BrowseKitsView { .. }
+                | AppView::InstalledKitsView { .. }
+                | AppView::ProcessManagerView { .. }
+                | AppView::SearchAiPresetsView { .. }
+                | AppView::CreateAiPresetView { .. }
+                | AppView::SettingsView { .. }
+                | AppView::FavoritesBrowseView { .. }
+                | AppView::AgentChatHistoryView { .. }
+                | AppView::BrowserHistoryView { .. }
+                | AppView::DictationHistoryView { .. }
+                | AppView::NotesBrowseView { .. }
+                | AppView::CurrentAppCommandsView { .. }
+                | AppView::DesignGalleryView { .. }
+                | AppView::FooterGalleryView { .. }
+                | AppView::CreationFeedback { .. }
+                | AppView::ScriptIssuesView { .. }
+                | AppView::SdkReferenceView { .. }
+                | AppView::ScriptTemplateCatalogView { .. }
+                | AppView::ActionsDialog => FocusTarget::MainFilter,
+                AppView::About { .. } => FocusTarget::AppRoot,
+                AppView::ArgPrompt { .. }
+                | AppView::MiniPrompt { .. }
+                | AppView::MicroPrompt { .. }
+                | AppView::DivPrompt { .. }
+                | AppView::HotkeyPrompt { .. }
+                | AppView::WebcamView { .. } => FocusTarget::AppRoot,
+                AppView::FormPrompt { .. } => FocusTarget::FormPrompt,
+                AppView::EditorPrompt { .. } | AppView::ScratchPadView { .. } => {
+                    FocusTarget::EditorPrompt
+                }
+                AppView::SelectPrompt { .. } => FocusTarget::SelectPrompt,
+                AppView::PathPrompt { .. } => FocusTarget::PathPrompt,
+                AppView::EnvPrompt { .. } => FocusTarget::EnvPrompt,
+                AppView::DropPrompt { .. } => FocusTarget::DropPrompt,
+                AppView::TemplatePrompt { .. } => FocusTarget::TemplatePrompt,
+                AppView::TermPrompt { .. } | AppView::QuickTerminalView { .. } => {
+                    FocusTarget::TermPrompt
+                }
+                AppView::ChatPrompt { .. } => FocusTarget::ChatPrompt,
+                AppView::AgentChatView { .. } => FocusTarget::AgentChat,
+                AppView::NamingPrompt { .. } => FocusTarget::NamingPrompt,
+                AppView::ConfirmPrompt { .. } => FocusTarget::AppRoot,
+                AppView::NonListStatesView { .. } => FocusTarget::AppRoot,
+                AppView::PermissionsWizardView { .. } => FocusTarget::AppRoot,
+                #[cfg(feature = "storybook")]
+                AppView::DesignExplorerView { .. } => FocusTarget::AppRoot,
+            }),
             crate::window_orchestrator::FocusToken::ChatComposer => Some(FocusTarget::AgentChat),
             crate::window_orchestrator::FocusToken::TermInput => Some(FocusTarget::TermPrompt),
             crate::window_orchestrator::FocusToken::NotesEditor
@@ -109,8 +108,7 @@ impl ScriptListApp {
 
                 let _ = this.update(cx, |this, cx| {
                     let pending_focus = commands.iter().rev().find_map(|command| {
-                        if let crate::window_orchestrator::WindowCommand::FocusMain(token) =
-                            command
+                        if let crate::window_orchestrator::WindowCommand::FocusMain(token) = command
                         {
                             this.focus_target_for_orchestrator_token(*token)
                         } else {

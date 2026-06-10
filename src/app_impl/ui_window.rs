@@ -151,6 +151,14 @@ impl ScriptListApp {
             _ => return "Run".to_string(),
         }
 
+        // Unarmed empty colon mode: no row is selected, so the footer must
+        // not advertise the internal selection's verb ("Attach ↵") while
+        // Enter is consumed without attaching. Mirror the ghost-text
+        // affordance instead.
+        if self.spine_empty_subsearch_selection_suppressed() {
+            return "Type to Search".to_string();
+        }
+
         let Some(selected_index) = crate::list_item::coerce_selection(
             &self.main_menu_result_caches.grouped_items(),
             self.selected_index,
@@ -477,7 +485,8 @@ impl ScriptListApp {
         text_override: Option<String>,
         cx: &mut Context<Self>,
     ) {
-        let Some(text) = text_override.or_else(|| self.latest_agent_chat_assistant_response(cx)) else {
+        let Some(text) = text_override.or_else(|| self.latest_agent_chat_assistant_response(cx))
+        else {
             tracing::info!(
                 target: "script_kit::footer_popup",
                 event = "agent_chat_footer_paste_response_ignored",
@@ -630,13 +639,16 @@ impl ScriptListApp {
         let can_apply = self.quick_terminal_can_apply_back();
         let can_attach_to_agent = self.quick_terminal_can_attach_to_agent_chat();
 
-        let mut buttons = Vec::with_capacity(if can_apply || can_attach_to_agent { 2 } else { 1 });
+        let mut buttons = Vec::with_capacity(if can_apply || can_attach_to_agent {
+            2
+        } else {
+            1
+        });
         if can_apply {
             buttons
                 .push(FooterButtonConfig::new(FooterAction::Apply, "⌘↩", "Apply").enabled(enabled));
         } else if can_attach_to_agent {
-            buttons
-                .push(FooterButtonConfig::new(FooterAction::Ai, "⌘↩", "Agent").enabled(enabled));
+            buttons.push(FooterButtonConfig::new(FooterAction::Ai, "⌘↩", "Agent").enabled(enabled));
         }
         buttons.push(FooterButtonConfig::new(FooterAction::Close, "⌘W", "Close").enabled(enabled));
 
@@ -997,7 +1009,8 @@ impl ScriptListApp {
         }
 
         vec![
-            FooterButtonConfig::new(FooterAction::Run, "↵", "Send").disabled_reason("loading_agent_chat"),
+            FooterButtonConfig::new(FooterAction::Run, "↵", "Send")
+                .disabled_reason("loading_agent_chat"),
             FooterButtonConfig::new(FooterAction::Actions, "⌘K", "Actions")
                 .selected(actions_open)
                 .enabled(enabled),
@@ -1510,19 +1523,11 @@ impl ScriptListApp {
                 self.profile_search_visible_len(filter),
             )),
             AppView::ThemeChooserView { ref filter, .. } => {
-                let presets = theme::presets::presets_cached();
-                let filtered_count = if filter.is_empty() {
-                    presets.len()
-                } else {
-                    let f = filter.to_lowercase();
-                    presets
-                        .iter()
-                        .filter(|p| {
-                            p.name.to_lowercase().contains(&f)
-                                || p.description.to_lowercase().contains(&f)
-                        })
-                        .count()
-                };
+                // Size against the unified catalog (user themes + presets) so
+                // the window height matches what the gallery actually shows.
+                let catalog = Self::theme_chooser_catalog();
+                let filtered_count =
+                    Self::theme_chooser_catalog_filtered_indices(filter, &catalog).len();
                 Some((ViewType::MainWindow, filtered_count))
             }
             AppView::CreationFeedback { .. } => Some((ViewType::DivPrompt, 0)),
@@ -1561,6 +1566,7 @@ impl ScriptListApp {
                 Some((ViewType::ArgPromptNoChoices, 0))
             }
             AppView::SettingsView { .. } => Some((ViewType::MainWindow, 0)),
+            AppView::PermissionsWizardView { .. } => Some((ViewType::MainWindow, 0)),
             AppView::FavoritesBrowseView { .. } => Some((ViewType::MainWindow, 0)),
             AppView::AgentChatHistoryView { filter, .. } => {
                 let entries = crate::ai::agent_chat::ui::history::load_history();

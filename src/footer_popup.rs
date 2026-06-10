@@ -2596,8 +2596,9 @@ fn is_footer_left_pinned_button(button_cfg: &FooterButtonConfig) -> bool {
 }
 
 /// Extra trailing slack added to a hint item's minimum width. The trailing
-/// action buttons reserve a comfortable 12px so their bordered chrome doesn't
-/// crowd the rail edge. The Run button and the left-pinned chips (Cwd /
+/// action buttons reserve a comfortable
+/// `FOOTER_TRAILING_ACTION_EXTRA_PADDING_X_PX` so their bordered chrome
+/// doesn't crowd the rail edge. The Run button and the left-pinned chips (Cwd /
 /// Agent·Model) are start-anchored, so that slack would land as dead space
 /// *after* their keycaps — which is exactly what made the left group's gaps look
 /// uneven versus the right group. They get no extra padding so every group
@@ -2606,7 +2607,7 @@ fn footer_hint_legacy_extra_padding(button_cfg: &FooterButtonConfig) -> f64 {
     if matches!(button_cfg.action, FooterAction::Run) || is_footer_left_pinned_button(button_cfg) {
         0.0
     } else {
-        12.0
+        crate::components::footer_chrome::FOOTER_TRAILING_ACTION_EXTRA_PADDING_X_PX as f64
     }
 }
 

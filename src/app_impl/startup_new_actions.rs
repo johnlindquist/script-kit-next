@@ -9,6 +9,14 @@
                 let is_detached_agent_chat = crate::ai::agent_chat::ui::chat_window::is_chat_window(window);
                 let is_actions = crate::actions::is_actions_window(window);
 
+                // A detached actions popup hosted by a secondary window (Notes,
+                // detached Agent Chat) owns its keys via ActionsWindow::on_key_down.
+                // Routing them through the main app's dialog router would land on
+                // the wrong (or absent) dialog entity and swallow every keystroke.
+                if is_actions && !crate::actions::is_actions_window_open_for_main() {
+                    return;
+                }
+
                 let key = event.keystroke.key.as_str();
                 let has_cmd = event.keystroke.modifiers.platform;
                 let has_shift = event.keystroke.modifiers.shift;
@@ -26,7 +34,7 @@
                         app.update(cx, |this, cx| {
                             if !is_actions
                                 && !this.show_actions_popup
-                                && !crate::actions::is_actions_window_open()
+                                && !crate::actions::is_actions_window_open_for_main()
                             {
                                 return;
                             }

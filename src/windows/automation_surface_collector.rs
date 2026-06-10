@@ -795,7 +795,6 @@ fn actions_popup_group_slug(group: crate::dev_style_tool::ActionsPopupKnobGroup)
         crate::dev_style_tool::ActionsPopupKnobGroup::Row => "row",
         crate::dev_style_tool::ActionsPopupKnobGroup::Section => "section",
         crate::dev_style_tool::ActionsPopupKnobGroup::ContextHeader => "context-header",
-        crate::dev_style_tool::ActionsPopupKnobGroup::Shortcut => "shortcut",
     }
 }
 

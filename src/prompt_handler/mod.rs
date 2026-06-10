@@ -4339,6 +4339,22 @@ impl ScriptListApp {
                             selected_value,
                         )
                     }
+                    AppView::PermissionsWizardView { selected_index } => {
+                        let kinds = crate::permissions_wizard::PermissionKind::all();
+                        let selected_value = kinds
+                            .get(*selected_index)
+                            .map(|kind| kind.name().to_string());
+                        (
+                            "permissionsWizard".to_string(),
+                            None,
+                            None,
+                            String::new(),
+                            kinds.len(),
+                            kinds.len(),
+                            *selected_index as i32,
+                            selected_value,
+                        )
+                    }
                     AppView::FavoritesBrowseView {
                         filter,
                         selected_index,

@@ -222,16 +222,13 @@ impl ScriptListApp {
                 self.close_and_reset_window(cx);
             }
             AppView::ThemeChooserView { .. } => {
+                // Memory-only restore: a cancelled Theme Designer session never
+                // writes theme.json (nothing was persisted while previewing).
                 if let Some(original) = self.theme_before_chooser.take() {
                     self.restore_theme_chooser_theme(
                         original,
                         "theme_chooser_top_level_cmd_w_undo",
                         cx,
-                    );
-                    let _ = crate::theme::service::persist_theme_and_sync_all_windows(
-                        cx,
-                        self.theme.as_ref(),
-                        "theme_chooser_top_level_cmd_w_undo_persist",
                     );
                 }
                 self.clear_theme_chooser_controls();
@@ -578,7 +575,9 @@ impl ScriptListApp {
 
         let gpui_input_state = cx.new(|cx| {
             InputState::new(window, cx)
-                .placeholder(crate::dev_style_tool::runtime_overrides::effective_main_input_placeholder())
+                .placeholder(
+                    crate::dev_style_tool::runtime_overrides::effective_main_input_placeholder(),
+                )
                 .inline_completion_visible_without_focus(true)
         });
         let gpui_input_subscription = cx.subscribe_in(&gpui_input_state, window, {
@@ -916,6 +915,7 @@ impl ScriptListApp {
             spine_file_search_loading: false,
             spine_file_search_results: Vec::new(),
             spine_file_search_cancel: None,
+            spine_empty_subsearch_armed_for: None,
             pending_root_file_actions_file: None,
             pending_root_unified_actions_subject: None,
             cached_processes: Vec::new(),
@@ -1076,6 +1076,7 @@ impl ScriptListApp {
             theme_before_chooser: None,
             theme_chooser_management: None,
             theme_chooser_controls: None,
+            theme_chooser_panel_mode: ThemeChooserPanelMode::default(),
             main_menu_render_diagnostics: MainMenuRenderDiagnosticsState::default(),
             // Pending path action - starts as None (Arc<Mutex<>> for callback access)
             pending_path_action: Arc::new(Mutex::new(None)),
@@ -1158,7 +1159,8 @@ impl ScriptListApp {
             active_attachment_portal_kind: None,
             spine_mention_portal_segment: None,
             spine_mention_aliases: std::collections::HashMap::new(),
-            agent_chat_surface_state: crate::ai::agent_chat::ui::surface_state::AgentChatSurfaceState::Hidden,
+            agent_chat_surface_state:
+                crate::ai::agent_chat::ui::surface_state::AgentChatSurfaceState::Hidden,
             // Input history for shell-like up/down navigation
             input_history: {
                 let mut history = input_history::InputHistory::new();
@@ -1268,10 +1270,17 @@ impl ScriptListApp {
 
                 let is_notes = crate::notes::is_notes_window(window);
                 let is_ai = crate::ai::is_ai_window(window);
-                let is_detached_agent_chat = crate::ai::agent_chat::ui::chat_window::is_chat_window(window);
+                let is_detached_agent_chat =
+                    crate::ai::agent_chat::ui::chat_window::is_chat_window(window);
                 let is_actions = crate::actions::is_actions_window(window);
 
                 if is_notes || is_ai || is_detached_agent_chat {
+                    return;
+                }
+
+                // Actions popups hosted by secondary windows are not the main
+                // launcher's to close.
+                if is_actions && !crate::actions::is_actions_window_open_for_main() {
                     return;
                 }
 
@@ -1850,32 +1859,6 @@ impl ScriptListApp {
                 let no_direction_modifiers = !event.keystroke.modifiers.platform
                     && !event.keystroke.modifiers.alt
                     && !event.keystroke.modifiers.control;
-
-                // Alt+Left / Alt+Right cycle the live accent-color exploration
-                // variation on the main menu. The emoji-grid branch below requires
-                // no_direction_modifiers (which excludes alt), so there is no clash.
-                let alt_direction = event.keystroke.modifiers.alt
-                    && !event.keystroke.modifiers.platform
-                    && !event.keystroke.modifiers.control
-                    && !event.keystroke.modifiers.shift;
-                if (is_left || is_right) && alt_direction {
-                    if let Some(app) = app_entity.upgrade() {
-                        app.update(cx, |this, cx| {
-                            // Scope to the main menu; leave other surfaces untouched.
-                            if !matches!(this.current_view, AppView::ScriptList) {
-                                return;
-                            }
-                            if this.show_actions_popup
-                                || crate::actions::is_actions_window_open()
-                            {
-                                return;
-                            }
-                            this.cycle_main_menu_theme(is_right, window, cx);
-                        });
-                    }
-                    cx.stop_propagation();
-                    return;
-                }
 
                 // Emoji picker uses Left/Right to navigate the grid and must consume
                 // those keys before the search input moves its text cursor.
@@ -2729,6 +2712,14 @@ impl ScriptListApp {
                 let is_detached_agent_chat = crate::ai::agent_chat::ui::chat_window::is_chat_window(window);
                 let is_actions = crate::actions::is_actions_window(window);
 
+                // A detached actions popup hosted by a secondary window (Notes,
+                // detached Agent Chat) owns its keys via ActionsWindow::on_key_down.
+                // Routing them through the main app's dialog router would land on
+                // the wrong (or absent) dialog entity and swallow every keystroke.
+                if is_actions && !crate::actions::is_actions_window_open_for_main() {
+                    return;
+                }
+
                 let key = event.keystroke.key.as_str();
                 let key_lower = key.to_ascii_lowercase();
                 let has_cmd = event.keystroke.modifiers.platform;
@@ -2749,7 +2740,7 @@ impl ScriptListApp {
                         app.update(cx, |this, cx| {
                             if !is_actions
                                 && !this.show_actions_popup
-                                && !crate::actions::is_actions_window_open()
+                                && !crate::actions::is_actions_window_open_for_main()
                             {
                                 return;
                             }

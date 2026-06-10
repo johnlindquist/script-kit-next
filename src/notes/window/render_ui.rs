@@ -1,5 +1,5 @@
 use super::*;
-use crate::ui_foundation::{compact_action_row, log_ui_action, UiActionSpec, UiSurface};
+use crate::ui_foundation::{UiActionSpec, UiSurface, compact_action_row, log_ui_action};
 
 #[derive(Clone, Copy)]
 struct NotesToolbarAction {

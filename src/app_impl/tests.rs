@@ -38,16 +38,40 @@ fn test_clear_builtin_query_state_clears_text_and_resets_selection() {
 
 #[test]
 fn test_theme_chooser_filter_changes_repreview_first_match() {
-    let source = fs::read_to_string("src/app_impl/filter_input_change.rs")
+    // Both filter entry points — real typing (handle_filter_input_change)
+    // and protocol setFilter (set_filter_text_immediate) — must route
+    // through the shared side-effects helper so automation and users see
+    // identical preview behavior.
+    let typing_path = fs::read_to_string("src/app_impl/filter_input_change.rs")
         .expect("Failed to read src/app_impl/filter_input_change.rs");
-
+    let protocol_path = fs::read_to_string("src/app_impl/filter_input_updates.rs")
+        .expect("Failed to read src/app_impl/filter_input_updates.rs");
     assert!(
-        source.contains("theme_chooser_filter_preview"),
+        typing_path.contains("self.apply_theme_chooser_filter_change_effects(cx);"),
+        "Typed theme chooser filter changes should run the shared preview side effects"
+    );
+    assert!(
+        protocol_path.contains("self.apply_theme_chooser_filter_change_effects(cx);"),
+        "Protocol setFilter on ThemeChooserView should run the shared preview side effects"
+    );
+
+    let helper = fs::read_to_string("src/render_builtins/theme_chooser.rs")
+        .expect("Failed to read src/render_builtins/theme_chooser.rs");
+    assert!(
+        helper.contains("theme_chooser_filter_preview"),
         "Theme chooser filter changes should trigger a live preview refresh"
     );
     assert!(
-        source.contains("self.preview_theme_chooser_preset("),
-        "Theme chooser filter branch should reuse the preset preview pipeline"
+        helper.contains("self.preview_theme_chooser_catalog_entry("),
+        "Theme chooser filter effects should reuse the unified catalog preview pipeline"
+    );
+    assert!(
+        helper.contains("Self::theme_chooser_catalog_filtered_indices("),
+        "Theme chooser filter effects must filter the unified catalog, not presets only"
+    );
+    assert!(
+        helper.contains("self.apply_theme_chooser_filter_hex_preview(hex, cx);"),
+        "Pasted #RRGGBB queries should live-preview as the accent color"
     );
 }
 
@@ -170,7 +194,12 @@ fn test_browser_tabs_builtin_is_available_to_stdin_trigger_routes() {
     // resolve to TriggerBuiltin::BrowserTabs. If this fails, no amount
     // of dispatcher wiring will route browser-tabs correctly.
     use crate::builtins::trigger_registry::{registry, TriggerBuiltin};
-    for alias in ["browser-tabs", "browsertabs", "tabs", "builtin/browser-tabs"] {
+    for alias in [
+        "browser-tabs",
+        "browsertabs",
+        "tabs",
+        "builtin/browser-tabs",
+    ] {
         assert_eq!(
             registry().resolve(alias),
             Some(TriggerBuiltin::BrowserTabs),
@@ -444,7 +473,8 @@ fn script_list_cmd_v_routes_large_pastes_into_agent_chat() {
         .expect("Failed to read src/app_impl/agent_handoff/mod.rs");
 
     assert!(
-        render_script_list.contains("\"v\" if this.route_large_script_list_paste_to_agent_chat(cx)"),
+        render_script_list
+            .contains("\"v\" if this.route_large_script_list_paste_to_agent_chat(cx)"),
         "Cmd+V in ScriptList should first try the large-paste Agent Chat handoff"
     );
     // The focused filter input consumes Cmd+V (and strips newlines) before the
@@ -480,8 +510,8 @@ fn script_list_cmd_v_routes_clipboard_images_into_agent_chat() {
 
 #[test]
 fn agent_chat_launch_staging_preserves_pasted_text_pills_for_clipboard_text_blocks() {
-    let agent_chat_view =
-        fs::read_to_string("src/ai/agent_chat/ui/view.rs").expect("Failed to read src/ai/agent_chat/ui/view.rs");
+    let agent_chat_view = fs::read_to_string("src/ai/agent_chat/ui/view.rs")
+        .expect("Failed to read src/ai/agent_chat/ui/view.rs");
     let agent_handoff = fs::read_to_string("src/app_impl/agent_handoff/mod.rs")
         .expect("Failed to read src/app_impl/agent_handoff/mod.rs");
 
@@ -499,8 +529,8 @@ fn agent_chat_launch_staging_preserves_pasted_text_pills_for_clipboard_text_bloc
 
 #[test]
 fn agent_chat_clipboard_image_parts_stage_as_pasted_image_pills() {
-    let agent_chat_view =
-        fs::read_to_string("src/ai/agent_chat/ui/view.rs").expect("Failed to read src/ai/agent_chat/ui/view.rs");
+    let agent_chat_view = fs::read_to_string("src/ai/agent_chat/ui/view.rs")
+        .expect("Failed to read src/ai/agent_chat/ui/view.rs");
     let context_mentions = fs::read_to_string("src/ai/context_mentions/mod.rs")
         .expect("Failed to read src/ai/context_mentions/mod.rs");
 

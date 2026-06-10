@@ -270,6 +270,10 @@ enum AppView {
         filter: String,
         selected_index: usize,
     },
+    /// Guided macOS permission grant flow (onboarding wizard).
+    /// Cards for each `crate::permissions_wizard::PermissionKind` with live
+    /// TCC status; Enter fires the native prompt or opens System Settings.
+    PermissionsWizardView { selected_index: usize },
     /// Browsing favorites with search/filter
     /// Supports Enter to run, D to remove, U/J to reorder, Esc to go back
     FavoritesBrowseView {
@@ -369,6 +373,7 @@ pub(crate) enum SurfaceKind {
     KitStoreInstalled,
     ProcessManager,
     CurrentAppCommands,
+    PermissionsWizard,
     DesignGallery,
     FooterGallery,
     NonListStates,
@@ -720,6 +725,7 @@ impl AppView {
             AppView::BrowseKitsView { .. } => "BrowseKitsView",
             AppView::InstalledKitsView { .. } => "InstalledKitsView",
             AppView::SettingsView { .. } => "SettingsView",
+            AppView::PermissionsWizardView { .. } => "PermissionsWizardView",
             AppView::SearchAiPresetsView { .. } => "SearchAiPresetsView",
             AppView::FavoritesBrowseView { .. } => "FavoritesBrowseView",
             AppView::ProcessManagerView { .. } => "ProcessManagerView",
@@ -782,6 +788,7 @@ impl AppView {
             AppView::BrowseKitsView { .. } => SurfaceKind::KitStoreBrowse,
             AppView::InstalledKitsView { .. } => SurfaceKind::KitStoreInstalled,
             AppView::SettingsView { .. } => SurfaceKind::Settings,
+            AppView::PermissionsWizardView { .. } => SurfaceKind::PermissionsWizard,
             AppView::SearchAiPresetsView { .. } | AppView::FavoritesBrowseView { .. } => {
                 SurfaceKind::GenericFilterableList
             }
@@ -914,6 +921,7 @@ impl AppView {
             AppView::CurrentAppCommandsView { .. } => Some("current_app_commands"),
             AppView::SearchAiPresetsView { .. } => Some("search_ai_presets"),
             AppView::SettingsView { .. } => Some("settings"),
+            AppView::PermissionsWizardView { .. } => Some("permissions_wizard"),
             AppView::BrowseKitsView { .. } => Some("kit_store_browse"),
             AppView::InstalledKitsView { .. } => Some("kit_store_installed"),
             AppView::FavoritesBrowseView { .. } => Some("favorites"),
@@ -1200,6 +1208,24 @@ impl SurfaceKind {
                 CompactLauncherVisual,
                 explicit,
                 "currentAppCommands",
+            ),
+
+            // Wizard intentionally uses the explicit dismiss policy: the grant
+            // flow sends users to System Settings and back, so window blur must
+            // not tear the wizard down mid-flow.
+            SurfaceKind::PermissionsWizard => LauncherSurfaceContract::new(
+                LauncherSurfaceContractVocabulary::new(
+                    UtilityWorkspace,
+                    NoEditableInput,
+                    NoPersistentPreview,
+                ),
+                NoEditableFocus,
+                NoEditableKeyboard,
+                NoSurfaceActions,
+                StateAndElementsProof,
+                CompactLauncherVisual,
+                explicit,
+                "permissionsWizard",
             ),
 
             SurfaceKind::DesignGallery => LauncherSurfaceContract::new(

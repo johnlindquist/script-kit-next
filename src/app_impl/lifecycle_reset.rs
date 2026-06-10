@@ -520,7 +520,8 @@ impl ScriptListApp {
                 selected_index,
             } => {
                 Self::clear_builtin_query_state(filter, selected_index);
-                self.agent_chat_history_scroll_handle.scroll_to_top_of_item(0);
+                self.agent_chat_history_scroll_handle
+                    .scroll_to_top_of_item(0);
             }
             AppView::BrowserHistoryView {
                 filter,

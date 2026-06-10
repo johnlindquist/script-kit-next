@@ -68,11 +68,7 @@ impl NotesApp {
                 ));
             }
 
-            if parts.is_empty() {
-                None
-            } else {
-                Some(parts)
-            }
+            if parts.is_empty() { None } else { Some(parts) }
         });
         let navigate_back_click = cx.listener(|this, _: &gpui::ClickEvent, window, cx| {
             this.navigate_back(window, cx);

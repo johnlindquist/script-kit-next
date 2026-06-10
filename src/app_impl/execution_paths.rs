@@ -1,5 +1,5 @@
-use super::*;
 use super::path_action::PathAction;
+use super::*;
 
 impl ScriptListApp {
     pub(crate) fn execute_path_action(
@@ -79,7 +79,11 @@ impl ScriptListApp {
                             "UI",
                             &format!("Revealed in {}: {}", file_manager, path_info.path),
                         );
-                        self.show_hud(format!("Opened in {}", file_manager), Some(HUD_SHORT_MS), cx);
+                        self.show_hud(
+                            format!("Opened in {}", file_manager),
+                            Some(HUD_SHORT_MS),
+                            cx,
+                        );
                         self.hide_main_and_reset(cx);
                     }
                     Err(e) => {
@@ -87,7 +91,10 @@ impl ScriptListApp {
                             "ERROR",
                             &format!("Failed to reveal in {}: {}", file_manager, e),
                         );
-                        self.show_error_toast(format!("Failed to open in {}: {}", file_manager, e), cx);
+                        self.show_error_toast(
+                            format!("Failed to open in {}: {}", file_manager, e),
+                            cx,
+                        );
                     }
                 }
             }
@@ -117,18 +124,15 @@ impl ScriptListApp {
                     &path_info.path,
                 )) {
                     Ok(cwd) => {
-                        logging::log("UI", &format!("Opened Quick Terminal at: {}", cwd.display()));
+                        logging::log(
+                            "UI",
+                            &format!("Opened Quick Terminal at: {}", cwd.display()),
+                        );
                         self.open_quick_terminal(Some(cwd), cx);
                     }
                     Err(e) => {
-                        logging::log(
-                            "ERROR",
-                            &format!("Failed to open Quick Terminal: {}", e),
-                        );
-                        self.show_error_toast(
-                            format!("Failed to open Quick Terminal: {}", e),
-                            cx,
-                        );
+                        logging::log("ERROR", &format!("Failed to open Quick Terminal: {}", e));
+                        self.show_error_toast(format!("Failed to open Quick Terminal: {}", e), cx);
                     }
                 }
             }
@@ -176,7 +180,11 @@ impl ScriptListApp {
                                 logging::log("UI", &format!("Moved to trash: {}", path_str));
                                 this.last_output =
                                     Some(SharedString::from(format!("Moved to Trash: {}", name)));
-                                this.show_hud(format!("Moved to Trash: {}", name), Some(HUD_MEDIUM_MS), cx);
+                                this.show_hud(
+                                    format!("Moved to Trash: {}", name),
+                                    Some(HUD_MEDIUM_MS),
+                                    cx,
+                                );
                                 // Refresh the path prompt to show the file is gone
                                 path_prompt_entity.update(cx, |prompt, cx| {
                                     let current = prompt.current_path.clone();
@@ -187,7 +195,10 @@ impl ScriptListApp {
                                 logging::log("ERROR", &format!("Failed to move to trash: {}", e));
                                 this.last_output =
                                     Some(SharedString::from("Failed to move to Trash"));
-                                this.show_error_toast(format!("Failed to move to Trash: {}", e), cx);
+                                this.show_error_toast(
+                                    format!("Failed to move to Trash: {}", e),
+                                    cx,
+                                );
                             }
                         }
                         cx.notify();

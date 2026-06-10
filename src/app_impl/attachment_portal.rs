@@ -383,7 +383,8 @@ impl ScriptListApp {
             query = %portal_query,
         );
 
-        if let Some(AppView::AgentChatView { entity }) = self.attachment_portal_return_view.as_ref() {
+        if let Some(AppView::AgentChatView { entity }) = self.attachment_portal_return_view.as_ref()
+        {
             let entity = entity.clone();
             entity.update(cx, |view, cx| {
                 view.prepare_for_attachment_portal_open(cx);
@@ -563,7 +564,9 @@ impl ScriptListApp {
         // can only have been opened from an embedded Agent Chat host, so
         // EmbeddedOpened from a non-chat return means host state has
         // drifted; downgrade to Hidden rather than a silent no-op.
-        self.transition_agent_chat_surface(crate::ai::agent_chat::ui::surface_state::AgentChatSurfaceEvent::PortalClosed);
+        self.transition_agent_chat_surface(
+            crate::ai::agent_chat::ui::surface_state::AgentChatSurfaceEvent::PortalClosed,
+        );
         if !matches!(return_view, AppView::AgentChatView { .. }) {
             self.transition_agent_chat_surface(
                 crate::ai::agent_chat::ui::surface_state::AgentChatSurfaceEvent::EmbeddedClosed,
@@ -617,7 +620,9 @@ impl ScriptListApp {
         // Same split as the accept path: PortalClosed first (the
         // default return lands back in Embedded), then EmbeddedClosed
         // if the restored view is not the Agent Chat chat.
-        self.transition_agent_chat_surface(crate::ai::agent_chat::ui::surface_state::AgentChatSurfaceEvent::PortalClosed);
+        self.transition_agent_chat_surface(
+            crate::ai::agent_chat::ui::surface_state::AgentChatSurfaceEvent::PortalClosed,
+        );
         if !matches!(return_view, AppView::AgentChatView { .. }) {
             self.transition_agent_chat_surface(
                 crate::ai::agent_chat::ui::surface_state::AgentChatSurfaceEvent::EmbeddedClosed,

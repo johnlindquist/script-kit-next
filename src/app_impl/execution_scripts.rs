@@ -38,6 +38,8 @@ fn builtin_entry_needs_main_window(entry: &builtins::BuiltInEntry) -> bool {
             | builtins::PermissionCommandType::OpenAccessibilitySettings
             | builtins::PermissionCommandType::AllowAccessibility
             | builtins::PermissionCommandType::AllowScreenRecording => false,
+            // The wizard renders inside the main window.
+            builtins::PermissionCommandType::SetupPermissions => true,
         },
         builtins::BuiltInFeature::UtilityCommand(command) => match command {
             builtins::UtilityCommandType::StopAllProcesses
@@ -501,7 +503,10 @@ impl ScriptListApp {
 
                     self.toast_manager.push(
                         components::toast::Toast::error(
-                            format!("{} · {} failed: {}", plugin_source, scriptlet.name, error_msg),
+                            format!(
+                                "{} · {} failed: {}",
+                                plugin_source, scriptlet.name, error_msg
+                            ),
                             &self.theme,
                         )
                         .duration_ms(Some(TOAST_ERROR_MS)),
@@ -801,9 +806,10 @@ impl ScriptListApp {
 #[cfg(test)]
 mod builtin_command_window_visibility_tests {
     use super::{
-        InteractiveTempFileMode, build_terminal_command, build_terminal_command_with_env_and_args,
+        build_terminal_command, build_terminal_command_with_env_and_args,
         builtin_entry_needs_main_window, builtin_needs_main_window_for_command_id,
         create_interactive_temp_script, interactive_script_needs_main_window,
+        InteractiveTempFileMode,
     };
     use std::path::Path;
 
@@ -836,9 +842,7 @@ mod builtin_command_window_visibility_tests {
     #[test]
     fn test_headless_builtin_commands_do_not_show_main_window_after_hotkey_execution() {
         let config = crate::config::BuiltInConfig::default();
-        for command_id in [
-            "builtin/reset-window-positions",
-        ] {
+        for command_id in ["builtin/reset-window-positions"] {
             let entry = crate::builtins::resolve_builtin_entry(command_id, &config)
                 .unwrap_or_else(|| panic!("{command_id} should resolve"));
             assert!(

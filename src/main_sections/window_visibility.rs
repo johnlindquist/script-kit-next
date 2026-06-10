@@ -301,7 +301,9 @@ fn show_main_window_helper(
             cx.update(move |cx: &mut gpui::App| {
                 app_entity.update(cx, |view, ctx| {
                     let agent_chat_focus_handle = match &view.current_view {
-                        AppView::AgentChatView { entity } => Some(entity.read(ctx).focus_handle(ctx)),
+                        AppView::AgentChatView { entity } => {
+                            Some(entity.read(ctx).focus_handle(ctx))
+                        }
                         _ => None,
                     };
                     let focus_handle = agent_chat_focus_handle

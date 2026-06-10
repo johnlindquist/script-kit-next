@@ -5,9 +5,9 @@
 
 use anyhow::Result;
 use gpui::{
-    div, prelude::*, px, rgba, size, AnyElement, App, Context, CursorStyle, Entity, FocusHandle,
-    Focusable, IntoElement, KeyDownEvent, MouseMoveEvent, ParentElement, Render, ScrollHandle,
-    Styled, Subscription, Window, WindowBounds, WindowOptions,
+    AnyElement, App, Context, CursorStyle, Entity, FocusHandle, Focusable, IntoElement,
+    KeyDownEvent, MouseMoveEvent, ParentElement, Render, ScrollHandle, Styled, Subscription,
+    Window, WindowBounds, WindowOptions, div, prelude::*, px, rgba, size,
 };
 
 #[cfg(target_os = "macos")]
@@ -15,13 +15,13 @@ use cocoa::appkit::NSApp;
 #[cfg(target_os = "macos")]
 use cocoa::base::{id, nil};
 use gpui_component::{
+    IconName, Root, Sizable, WindowExt as _,
     button::{Button, ButtonVariants},
     input::{Input, InputEvent, InputState, Search},
     kbd::Kbd,
     scroll::ScrollableElement,
     theme::ActiveTheme,
     tooltip::Tooltip,
-    IconName, Root, Sizable, WindowExt as _,
 };
 #[cfg(target_os = "macos")]
 use objc::{msg_send, sel, sel_impl};
@@ -31,8 +31,8 @@ use tracing::{debug, info};
 
 // Use the unified ActionsDialog/CommandBar system
 use crate::actions::{
-    get_note_switcher_actions, get_notes_command_bar_actions, CommandBar, CommandBarConfig,
-    NoteSwitcherNoteInfo, NotesInfo,
+    CommandBar, CommandBarConfig, NoteSwitcherNoteInfo, NotesInfo, get_note_switcher_actions,
+    get_notes_command_bar_actions,
 };
 use crate::confirm;
 use crate::theme;
@@ -472,8 +472,8 @@ mod traits;
 mod vibrancy;
 mod window_ops;
 
-pub use agent_chat_host::close_notes_embedded_agent_chat;
 pub(crate) use agent_chat_host::NOTES_EMBEDDED_AI_AUTOMATION_ID;
+pub use agent_chat_host::close_notes_embedded_agent_chat;
 pub(crate) use window_ops::update_notes_window_detached;
 pub use window_ops::{
     accept_notes_ghost_for_automation, apply_mcp_notes_mutation_on_main_thread, close_notes_window,

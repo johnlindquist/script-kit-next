@@ -134,7 +134,9 @@ impl ScriptListApp {
 
         let create_result = match result.target {
             prompts::NamingTarget::Script => script_creation::create_new_script(&filename_stem),
-            prompts::NamingTarget::Extension => script_creation::create_new_scriptlet(&filename_stem),
+            prompts::NamingTarget::Extension => {
+                script_creation::create_new_scriptlet(&filename_stem)
+            }
         };
 
         match create_result {
@@ -258,10 +260,7 @@ impl ScriptListApp {
                     logging::log("ERROR", &format!("Failed to open in editor: {}", e));
                     self.toast_manager.push(
                         components::toast::Toast::error(
-                            format!(
-                                "Created {} but failed to open editor: {}",
-                                item_type, e
-                            ),
+                            format!("Created {} but failed to open editor: {}", item_type, e),
                             &self.theme,
                         )
                         .duration_ms(Some(TOAST_ERROR_MS)),

@@ -732,6 +732,14 @@ pub(crate) struct ScriptListApp {
     pub(crate) spine_file_search_loading: bool,
     pub(crate) spine_file_search_results: Vec<file_search::FileResult>,
     spine_file_search_cancel: Option<file_search::CancelToken>,
+    /// Which empty `@source:` colon mode the user has explicitly armed with
+    /// Down/click. While the active subsearch has an empty sub-query and this
+    /// does NOT name its source, the recents list renders with no selected
+    /// row and Enter is consumed, so a reflexive double-Enter can never
+    /// attach an unseen recent item. Cleared whenever the empty colon-mode
+    /// context changes (typing, deleting, switching sources, exiting).
+    pub(crate) spine_empty_subsearch_armed_for:
+        Option<crate::spine::catalog_subsearch::ContextSubsearchSource>,
 
     /// File row captured when opening the root-file actions palette.
     pending_root_file_actions_file: Option<file_search::FileResult>,
@@ -1049,8 +1057,7 @@ pub(crate) struct ScriptListApp {
     scriptlet_preview_cache_lines: Vec<syntax::HighlightedLine>,
     // Current design variant for hot-swappable UI designs
     current_design: DesignVariant,
-    // Live cohesive theme exploration variation for the main menu.
-    // Cycled with alt+left/alt+right; surfaced in the search placeholder.
+    // Live cohesive theme variation for the main menu.
     pub(crate) current_main_menu_theme: crate::designs::MainMenuThemeVariant,
     // Toast manager for notification queue
     toast_manager: ToastManager,
@@ -1072,6 +1079,8 @@ pub(crate) struct ScriptListApp {
     pub(crate) theme_chooser_management: Option<ThemeChooserManagementState>,
     /// Theme Chooser's cached view-local component controls (Sliders & ColorPickers)
     pub(crate) theme_chooser_controls: Option<ThemeChooserControls>,
+    /// Theme Designer right-panel mode (Preview gallery vs Customize controls)
+    pub(crate) theme_chooser_panel_mode: ThemeChooserPanelMode,
     /// Main script-list render diagnostics and input-to-render timing receipts.
     main_menu_render_diagnostics: MainMenuRenderDiagnosticsState,
     // Pending path action - when set, show ActionsDialog for this path

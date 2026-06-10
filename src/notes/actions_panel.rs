@@ -241,9 +241,11 @@ mod tests {
 
         // PermanentlyDeleteNote has no shortcut
         assert!(NotesAction::PermanentlyDeleteNote.shortcut_hint().is_none());
-        assert!(NotesAction::PermanentlyDeleteNote
-            .shortcut_tokens()
-            .is_empty());
+        assert!(
+            NotesAction::PermanentlyDeleteNote
+                .shortcut_tokens()
+                .is_empty()
+        );
         assert_eq!(NotesAction::PermanentlyDeleteNote.shortcut_display(), "");
     }
 

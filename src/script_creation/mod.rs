@@ -754,6 +754,7 @@ mod tests {
             claude_code: None,
             mcp: None,
             hidden_commands: None,
+            brain_remote: None,
             spine_styles: Vec::new(),
             spine_commands: Vec::new(),
         };
@@ -795,6 +796,7 @@ mod tests {
             claude_code: None,
             mcp: None,
             hidden_commands: None,
+            brain_remote: None,
             spine_styles: Vec::new(),
             spine_commands: Vec::new(),
         };
