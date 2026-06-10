@@ -76,14 +76,15 @@ fn actions_dialog_row_shortcuts_use_footer_keycaps_not_hint_strip_inline_rendere
 fn actions_dialog_devtools_shortcut_layout_uses_footer_keycap_model() {
     let geometry_section = section_between(
         ACTIONS_DIALOG,
-        "fn devtools_row_geometry(&self)",
+        "fn devtools_row_geometry(&self, cx: &gpui::App)",
         "fn devtools_text_fingerprint",
     );
 
     assert!(
-        geometry_section
-            .contains("crate::components::footer_chrome::footer_shortcut_keycap_layout_model"),
-        "Actions dialog DevTools shortcutLayout must use footer keycap geometry"
+        geometry_section.contains(
+            "crate::components::footer_chrome::footer_shortcut_keycap_layout_model_measured"
+        ),
+        "Actions dialog DevTools shortcutLayout must use measured footer keycap geometry"
     );
     assert!(
         geometry_section.contains("FOOTER_SHORTCUT_LAYOUT_MEASUREMENT_SOURCE"),

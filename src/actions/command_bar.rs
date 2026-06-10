@@ -652,7 +652,7 @@ impl CommandBar {
         });
 
         if let Some(dialog) = &self.dialog {
-            let dialog_state = dialog.read(cx).automation_state(surface);
+            let dialog_state = dialog.read(cx).automation_state(surface, cx);
             serde_json::json!({
                 "schemaVersion": 1,
                 "surface": surface,

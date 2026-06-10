@@ -307,7 +307,7 @@ fn actions_dialog_stores_immutable_host_context_snapshot() {
 fn actions_dialog_automation_state_emits_host_context_fields() {
     let automation_state = source_between(
         ACTIONS_DIALOG,
-        "pub(crate) fn automation_state(&self, surface: &str)",
+        "pub(crate) fn automation_state(&self, surface: &str, cx: &gpui::App)",
         "    /// Set actions from SDK",
     );
 

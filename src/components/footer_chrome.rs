@@ -793,30 +793,36 @@ pub(crate) fn footer_shortcut_keycaps_measured_width_px(shortcut: &str, cx: &gpu
         return 0.0;
     }
 
+    let keys_width = tokens
+        .iter()
+        .map(|token| footer_keycap_measured_width_px(token, cx))
+        .sum::<f32>();
+    keys_width + tokens.len().saturating_sub(1) as f32 * metrics.content_gap
+}
+
+/// Measured width of a single keycap: real glyph advances from the text
+/// system plus the same paddings/minimums `render_footer_keycap_with_metrics`
+/// applies. Prefer this over `footer_keycap_estimated_width_px` whenever an
+/// `App` context is available.
+pub(crate) fn footer_keycap_measured_width_px(token: &str, cx: &gpui::App) -> f32 {
+    let metrics = current_main_menu_footer_metrics();
+    if is_footer_icon_token(token) {
+        // Icon keycaps render an svg of (font_size + 1).max(10) inside
+        // the keycap paddings, never narrower than the square keycap.
+        let icon = (metrics.keycap_font_size + 1.0).max(10.0);
+        return (icon + metrics.keycap_padding_x * 2.0).max(metrics.keycap_height);
+    }
+
     let text_system = cx.text_system();
     let font_id = text_system.resolve_font(&gpui::font(FONT_SYSTEM_UI));
     let font_size = px(metrics.keycap_font_size);
-
-    let keys_width = tokens
-        .iter()
-        .map(|token| {
-            if is_footer_icon_token(token) {
-                // Icon keycaps render an svg of (font_size + 1).max(10) inside
-                // the keycap paddings, never narrower than the square keycap.
-                let icon = (metrics.keycap_font_size + 1.0).max(10.0);
-                (icon + metrics.keycap_padding_x * 2.0).max(metrics.keycap_height)
-            } else {
-                let glyphs_width: f32 = token
-                    .chars()
-                    .map(|ch| f32::from(text_system.layout_width(font_id, font_size, ch)))
-                    .sum();
-                (glyphs_width + metrics.keycap_padding_x * 2.0)
-                    .max(metrics.keycap_height)
-                    .ceil()
-            }
-        })
-        .sum::<f32>();
-    keys_width + tokens.len().saturating_sub(1) as f32 * metrics.content_gap
+    let glyphs_width: f32 = token
+        .chars()
+        .map(|ch| f32::from(text_system.layout_width(font_id, font_size, ch)))
+        .sum();
+    (glyphs_width + metrics.keycap_padding_x * 2.0)
+        .max(metrics.keycap_height)
+        .ceil()
 }
 
 pub(crate) fn footer_shortcut_keycaps_width_px_with_gap(shortcut: &str, content_gap: f32) -> f32 {
@@ -1137,14 +1143,59 @@ pub(crate) fn footer_shortcut_keycap_layout_model<'a>(
     origin_x: f32,
     origin_y: f32,
 ) -> serde_json::Value {
+    footer_shortcut_keycap_layout_model_with_widths(
+        tokens,
+        origin_x,
+        origin_y,
+        footer_keycap_estimated_width_px,
+        FooterKeycapWidthFidelity::Estimated,
+    )
+}
+
+/// Layout model backed by real text-system glyph measurement. Produces exact
+/// per-token bounds (`widthExact: true`); prefer it over the estimated model
+/// whenever an `App` context is available.
+pub(crate) fn footer_shortcut_keycap_layout_model_measured<'a>(
+    tokens: impl IntoIterator<Item = &'a str>,
+    origin_x: f32,
+    origin_y: f32,
+    cx: &gpui::App,
+) -> serde_json::Value {
+    footer_shortcut_keycap_layout_model_with_widths(
+        tokens,
+        origin_x,
+        origin_y,
+        |token| footer_keycap_measured_width_px(token, cx),
+        FooterKeycapWidthFidelity::Measured,
+    )
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum FooterKeycapWidthFidelity {
+    Estimated,
+    Measured,
+}
+
+fn footer_shortcut_keycap_layout_model_with_widths<'a>(
+    tokens: impl IntoIterator<Item = &'a str>,
+    origin_x: f32,
+    origin_y: f32,
+    width_for_token: impl Fn(&str) -> f32,
+    fidelity: FooterKeycapWidthFidelity,
+) -> serde_json::Value {
     let tokens = tokens.into_iter().collect::<Vec<_>>();
     let metrics = current_main_menu_footer_metrics();
+    let exact = fidelity == FooterKeycapWidthFidelity::Measured;
+    let token_width_source = match fidelity {
+        FooterKeycapWidthFidelity::Estimated => "footer-keycap-estimate",
+        FooterKeycapWidthFidelity::Measured => "text-system-glyph-measure",
+    };
     let mut x = origin_x;
     let mut token_values = Vec::new();
     let mut token_bounds = Vec::new();
 
     for token in tokens {
-        let width = footer_keycap_estimated_width_px(token);
+        let width = width_for_token(token);
         token_values.push(token.to_string());
         token_bounds.push(serde_json::json!({
             "token": token,
@@ -1155,8 +1206,8 @@ pub(crate) fn footer_shortcut_keycap_layout_model<'a>(
                 "width": width,
                 "height": metrics.keycap_height,
             },
-            "widthExact": false,
-            "widthSource": "footer-keycap-estimate",
+            "widthExact": exact,
+            "widthSource": token_width_source,
             "heightSource": "footer-metrics-keycap-height",
             "glyphNudgeY": footer_key_glyph_nudge_y(token),
             "borderWidth": 1.0,
@@ -1186,9 +1237,15 @@ pub(crate) fn footer_shortcut_keycap_layout_model<'a>(
         "gap": metrics.content_gap,
         "heightSource": "footer-metrics-keycap-height",
         "widthSource": "footer-keycap-token-model",
-        "exactTokenBounds": false,
+        "exactTokenBounds": exact,
         "measurementSource": FOOTER_SHORTCUT_LAYOUT_MEASUREMENT_SOURCE,
-        "stopReason": "text glyph widths use the footer keycap font estimate until GPUI exposes measured text layout",
+        "stopReason": if exact {
+            serde_json::Value::Null
+        } else {
+            serde_json::Value::String(
+                "text glyph widths use the footer keycap font estimate when no App context is available".to_string(),
+            )
+        },
     })
 }
 

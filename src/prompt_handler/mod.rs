@@ -87,7 +87,9 @@ fn run_dev_style_tool_semantic_action_for_batch(
         }
         value if value == OPEN_ACTIONS_POPUP_NO_MATCH_KITCHEN_SINK_BUTTON => {
             let Some(handle) = main_window_handle else {
-                anyhow::bail!("main window handle unavailable for actions popup no-match kitchen sink");
+                anyhow::bail!(
+                    "main window handle unavailable for actions popup no-match kitchen sink"
+                );
             };
             handle.update(cx, |_root, window, cx| {
                 this.update(cx, |app, cx| {
@@ -99,7 +101,9 @@ fn run_dev_style_tool_semantic_action_for_batch(
             this.update(cx, |app, cx| app.open_agent_chat_kitchen_sink_fixture(cx))?;
         }
         value if value == OPEN_CONFIRM_MODAL_KITCHEN_SINK_BUTTON => {
-            this.update(cx, |app, cx| app.open_confirm_modal_kitchen_sink_fixture(cx))?;
+            this.update(cx, |app, cx| {
+                app.open_confirm_modal_kitchen_sink_fixture(cx)
+            })?;
         }
         _ => unreachable!("semantic id was validated above"),
     }
@@ -383,7 +387,9 @@ fn resolve_get_state_target(
                     },
                 }
             }
-            Ok(resolved) if resolved.kind == crate::protocol::AutomationWindowKind::ActionsDialog => {
+            Ok(resolved)
+                if resolved.kind == crate::protocol::AutomationWindowKind::ActionsDialog =>
+            {
                 match crate::actions::get_actions_dialog_entity(cx) {
                     Some(entity) => {
                         let _ = entity.read(cx);
@@ -579,7 +585,9 @@ fn batch_target_kind_for_resolved_target(
 ) -> AutomationBatchTargetKind {
     match target {
         AutomationReadTarget::Main { .. } => AutomationBatchTargetKind::Main,
-        AutomationReadTarget::AgentChatDetached { .. } => AutomationBatchTargetKind::AgentChatDetached,
+        AutomationReadTarget::AgentChatDetached { .. } => {
+            AutomationBatchTargetKind::AgentChatDetached
+        }
         AutomationReadTarget::Notes { .. } => AutomationBatchTargetKind::Notes,
         AutomationReadTarget::ActionsDialog { .. } => AutomationBatchTargetKind::ActionsDialog,
         AutomationReadTarget::PromptPopup { .. } => AutomationBatchTargetKind::PromptPopup,
@@ -662,7 +670,8 @@ fn is_agent_chat_wait_condition(condition: &protocol::WaitCondition) -> bool {
 fn active_agent_chat_entity(
     embedded: Option<&gpui::Entity<crate::ai::agent_chat::ui::AgentChatView>>,
 ) -> Option<gpui::Entity<crate::ai::agent_chat::ui::AgentChatView>> {
-    crate::ai::agent_chat::ui::chat_window::get_detached_agent_chat_view_entity().or_else(|| embedded.cloned())
+    crate::ai::agent_chat::ui::chat_window::get_detached_agent_chat_view_entity()
+        .or_else(|| embedded.cloned())
 }
 
 /// Resolve an automation target that accepts Main, AgentChatDetached, Notes, and ActionsDialog.
@@ -718,26 +727,28 @@ fn resolve_automation_read_target(
                 ))),
             }
         }
-        crate::protocol::AutomationWindowKind::Ai => match active_agent_chat_entity(embedded_agent_chat) {
-            Some(entity) => {
-                tracing::info!(
-                    target: "script_kit::automation",
-                    request_id = %request_id,
-                    op = op,
-                    window_id = %resolved.id,
-                    kind = ?resolved.kind,
-                    "automation.target.ai_routed_to_agent_chat_entity"
-                );
-                Ok(AutomationReadTarget::AgentChatDetached {
-                    info: resolved,
-                    entity,
-                })
+        crate::protocol::AutomationWindowKind::Ai => {
+            match active_agent_chat_entity(embedded_agent_chat) {
+                Some(entity) => {
+                    tracing::info!(
+                        target: "script_kit::automation",
+                        request_id = %request_id,
+                        op = op,
+                        window_id = %resolved.id,
+                        kind = ?resolved.kind,
+                        "automation.target.ai_routed_to_agent_chat_entity"
+                    );
+                    Ok(AutomationReadTarget::AgentChatDetached {
+                        info: resolved,
+                        entity,
+                    })
+                }
+                None => Err(crate::protocol::TransactionError::action_failed(format!(
+                    "{op} resolved Ai target {} but no live Agent Chat chat view is available",
+                    resolved.id
+                ))),
             }
-            None => Err(crate::protocol::TransactionError::action_failed(format!(
-                "{op} resolved Ai target {} but no live Agent Chat chat view is available",
-                resolved.id
-            ))),
-        },
+        }
         crate::protocol::AutomationWindowKind::Notes => {
             match crate::notes::get_notes_app_entity_and_handle() {
                 Some((entity, handle)) => {
@@ -935,35 +946,37 @@ fn resolve_agent_chat_read_target(
                 }
             }
         }
-        crate::protocol::AutomationWindowKind::Ai => match active_agent_chat_entity(embedded_agent_chat) {
-            Some(entity) => {
-                tracing::info!(
-                    target: "script_kit::automation",
-                    request_id = %request_id,
-                    op = op,
-                    window_id = %resolved.id,
-                    kind = ?resolved.kind,
-                    "automation.agent_chat_target.ai_resolved_to_entity"
-                );
-                Ok(AgentChatReadTarget::Detached {
-                    info: resolved,
-                    entity,
-                })
+        crate::protocol::AutomationWindowKind::Ai => {
+            match active_agent_chat_entity(embedded_agent_chat) {
+                Some(entity) => {
+                    tracing::info!(
+                        target: "script_kit::automation",
+                        request_id = %request_id,
+                        op = op,
+                        window_id = %resolved.id,
+                        kind = ?resolved.kind,
+                        "automation.agent_chat_target.ai_resolved_to_entity"
+                    );
+                    Ok(AgentChatReadTarget::Detached {
+                        info: resolved,
+                        entity,
+                    })
+                }
+                None => {
+                    tracing::info!(
+                        target: "script_kit::automation",
+                        request_id = %request_id,
+                        op = op,
+                        window_id = %resolved.id,
+                        kind = ?resolved.kind,
+                        "automation.agent_chat_target.ai_fallback_main_collector"
+                    );
+                    Ok(AgentChatReadTarget::Main {
+                        info: Some(resolved),
+                    })
+                }
             }
-            None => {
-                tracing::info!(
-                    target: "script_kit::automation",
-                    request_id = %request_id,
-                    op = op,
-                    window_id = %resolved.id,
-                    kind = ?resolved.kind,
-                    "automation.agent_chat_target.ai_fallback_main_collector"
-                );
-                Ok(AgentChatReadTarget::Main {
-                    info: Some(resolved),
-                })
-            }
-        },
+        }
         other_kind => {
             tracing::warn!(
                 target: "script_kit::automation",
@@ -1092,9 +1105,10 @@ fn build_agent_chat_detached_ui_snapshot(
 ) -> crate::protocol::UiStateSnapshot {
     let view = entity.read(cx);
     let state = view.collect_agent_chat_state_snapshot(cx);
-    let surface = crate::windows::automation_surface_collector::collect_agent_chat_detached_elements(
-        entity, 200, cx,
-    );
+    let surface =
+        crate::windows::automation_surface_collector::collect_agent_chat_detached_elements(
+            entity, 200, cx,
+        );
     crate::protocol::UiStateSnapshot {
         window_visible: true,
         window_focused: true,
@@ -2423,8 +2437,12 @@ impl ScriptListApp {
             return;
         };
 
-        let prompt =
-            build_script_error_agent_chat_prompt(script_path, error_message, exit_code, suggestions);
+        let prompt = build_script_error_agent_chat_prompt(
+            script_path,
+            error_message,
+            exit_code,
+            suggestions,
+        );
         if let Err(error) =
             Self::stage_script_error_context_on_agent_chat_view(view_entity, bundle, prompt, cx)
         {
@@ -2956,7 +2974,8 @@ impl ScriptListApp {
                 );
 
                 let keep_tab_ai_save_offer_open = self.tab_ai_save_offer_state.is_some();
-                let keep_agent_chat_open = matches!(self.current_view, AppView::AgentChatView { .. });
+                let keep_agent_chat_open =
+                    matches!(self.current_view, AppView::AgentChatView { .. });
 
                 if keep_tab_ai_save_offer_open {
                     tracing::info!(
@@ -3348,7 +3367,8 @@ impl ScriptListApp {
                     }
                     GetStateTargetResolution::ActionsDialog { resolved, entity } => {
                         if let Some(ref sender) = self.response_sender {
-                            let actions_state = entity.read(cx).automation_state("actionsDialog");
+                            let actions_state =
+                                entity.read(cx).automation_state("actionsDialog", cx);
                             let _ = sender.try_send(Message::state_result(
                                 request_id.clone(),
                                 "actionsDialog".to_string(),
@@ -4640,7 +4660,7 @@ impl ScriptListApp {
                                 })
                             })
                             .collect::<Vec<_>>();
-                        let detailed_state = dialog.automation_state("actionsDialog");
+                        let detailed_state = dialog.automation_state("actionsDialog", cx);
                         let shortcut_parity = detailed_state
                             .get("actions")
                             .and_then(|actions| actions.get("shortcutParity"))
@@ -4791,8 +4811,11 @@ impl ScriptListApp {
                     }
                 };
 
-                let resolved_target =
-                    build_agent_chat_resolved_target(&request_id, "getAgentChatState", &agent_chat_target);
+                let resolved_target = build_agent_chat_resolved_target(
+                    &request_id,
+                    "getAgentChatState",
+                    &agent_chat_target,
+                );
 
                 let mut state = match &agent_chat_target {
                     AgentChatReadTarget::Main { .. } => self.collect_agent_chat_state(cx),
@@ -4914,8 +4937,11 @@ impl ScriptListApp {
                     "automation.agent_chat_action_target_resolved"
                 );
 
-                let resolved_target =
-                    build_agent_chat_resolved_target(&request_id, "performAgentChatSetupAction", &agent_chat_target);
+                let resolved_target = build_agent_chat_resolved_target(
+                    &request_id,
+                    "performAgentChatSetupAction",
+                    &agent_chat_target,
+                );
 
                 // Dispatch the action to the resolved Agent Chat view.
                 let result = match agent_chat_target.clone() {
@@ -4925,9 +4951,11 @@ impl ScriptListApp {
                         }),
                         _ => Err("current main view is not AgentChatView".to_string()),
                     },
-                    AgentChatReadTarget::Detached { entity, .. } => entity.update(cx, |view, cx| {
-                        view.perform_setup_automation_action(action, agent_id.as_deref(), cx)
-                    }),
+                    AgentChatReadTarget::Detached { entity, .. } => {
+                        entity.update(cx, |view, cx| {
+                            view.perform_setup_automation_action(action, agent_id.as_deref(), cx)
+                        })
+                    }
                     AgentChatReadTarget::Notes { entity, .. } => entity.update(cx, |view, cx| {
                         view.perform_setup_automation_action(action, agent_id.as_deref(), cx)
                     }),
@@ -4947,7 +4975,9 @@ impl ScriptListApp {
                 state.resolved_target = resolved_target;
 
                 let response = match result {
-                    Ok(()) => Message::agent_chat_setup_action_result_success(request_id.clone(), state),
+                    Ok(()) => {
+                        Message::agent_chat_setup_action_result_success(request_id.clone(), state)
+                    }
                     Err(error_msg) => {
                         tracing::warn!(
                             category = "AGENT_CHAT_SETUP_ACTION",
@@ -4990,7 +5020,8 @@ impl ScriptListApp {
                     Err(error) => {
                         let mut probe = protocol::AgentChatTestProbeSnapshot::default();
                         probe.warnings = vec![format!("target_unsupported: {}", error.message)];
-                        let response = Message::agent_chat_test_probe_result(request_id.clone(), probe);
+                        let response =
+                            Message::agent_chat_test_probe_result(request_id.clone(), probe);
                         if let Some(ref sender) = self.response_sender {
                             let _ = sender.try_send(response);
                         }
@@ -4998,8 +5029,11 @@ impl ScriptListApp {
                     }
                 };
 
-                let resolved_target =
-                    build_agent_chat_resolved_target(&request_id, "resetAgentChatTestProbe", &agent_chat_target);
+                let resolved_target = build_agent_chat_resolved_target(
+                    &request_id,
+                    "resetAgentChatTestProbe",
+                    &agent_chat_target,
+                );
 
                 match &agent_chat_target {
                     AgentChatReadTarget::Main { .. } => {
@@ -5019,9 +5053,10 @@ impl ScriptListApp {
 
                 // Respond with the current (now-empty) probe snapshot.
                 let mut probe = match &agent_chat_target {
-                    AgentChatReadTarget::Main { .. } => {
-                        self.collect_agent_chat_test_probe(protocol::AGENT_CHAT_TEST_PROBE_MAX_EVENTS, cx)
-                    }
+                    AgentChatReadTarget::Main { .. } => self.collect_agent_chat_test_probe(
+                        protocol::AGENT_CHAT_TEST_PROBE_MAX_EVENTS,
+                        cx,
+                    ),
                     AgentChatReadTarget::Detached { entity, .. } => {
                         let view = entity.read(cx);
                         view.test_probe_snapshot(protocol::AGENT_CHAT_TEST_PROBE_MAX_EVENTS, cx)
@@ -5084,7 +5119,8 @@ impl ScriptListApp {
                     Err(error) => {
                         let mut probe = protocol::AgentChatTestProbeSnapshot::default();
                         probe.warnings = vec![format!("target_unsupported: {}", error.message)];
-                        let response = Message::agent_chat_test_probe_result(request_id.clone(), probe);
+                        let response =
+                            Message::agent_chat_test_probe_result(request_id.clone(), probe);
                         if let Some(ref sender) = self.response_sender {
                             let _ = sender.try_send(response);
                         }
@@ -5092,11 +5128,16 @@ impl ScriptListApp {
                     }
                 };
 
-                let resolved_target =
-                    build_agent_chat_resolved_target(&request_id, "getAgentChatTestProbe", &agent_chat_target);
+                let resolved_target = build_agent_chat_resolved_target(
+                    &request_id,
+                    "getAgentChatTestProbe",
+                    &agent_chat_target,
+                );
 
                 let mut probe = match &agent_chat_target {
-                    AgentChatReadTarget::Main { .. } => self.collect_agent_chat_test_probe(tail, cx),
+                    AgentChatReadTarget::Main { .. } => {
+                        self.collect_agent_chat_test_probe(tail, cx)
+                    }
                     AgentChatReadTarget::Detached { entity, .. } => {
                         let view = entity.read(cx);
                         view.test_probe_snapshot(tail, cx)
@@ -5316,7 +5357,8 @@ impl ScriptListApp {
                                 == crate::protocol::AutomationWindowKind::ActionsDialog =>
                         {
                             if let Some(entity) = crate::actions::get_actions_dialog_entity(cx) {
-                                let layout_info = entity.read(cx).automation_layout_info(&resolved);
+                                let layout_info =
+                                    entity.read(cx).automation_layout_info(&resolved, cx);
                                 let response =
                                     Message::layout_info_result(request_id.clone(), layout_info);
                                 if let Some(ref sender) = self.response_sender {
@@ -5488,7 +5530,9 @@ impl ScriptListApp {
                             Ok(AgentChatReadTarget::Notes { entity, info }) => {
                                 AutomationReadTarget::AgentChatDetached { entity, info }
                             }
-                            Ok(AgentChatReadTarget::Main { info }) => AutomationReadTarget::Main { info },
+                            Ok(AgentChatReadTarget::Main { info }) => {
+                                AutomationReadTarget::Main { info }
+                            }
                             Err(error) => {
                                 if let Some(ref sender) = self.response_sender {
                                     let _ = sender.try_send(Message::wait_for_result(
@@ -5530,7 +5574,9 @@ impl ScriptListApp {
                 // Extract the detached Agent Chat entity for backward-compatible condition checking.
                 let detached_entity: Option<
                     gpui::Entity<crate::ai::agent_chat::ui::AgentChatView>,
-                > = if let AutomationReadTarget::AgentChatDetached { ref entity, .. } = resolved_target {
+                > = if let AutomationReadTarget::AgentChatDetached { ref entity, .. } =
+                    resolved_target
+                {
                     Some(entity.clone())
                 } else {
                     None
@@ -6005,7 +6051,8 @@ impl ScriptListApp {
 
                 let detached_batch_entity: Option<
                     gpui::Entity<crate::ai::agent_chat::ui::AgentChatView>,
-                > = if let AutomationReadTarget::AgentChatDetached { ref entity, .. } = batch_target {
+                > = if let AutomationReadTarget::AgentChatDetached { ref entity, .. } = batch_target
+                {
                     Some(entity.clone())
                 } else {
                     None
@@ -9744,7 +9791,8 @@ impl ScriptListApp {
 
                 // Agent Chat condition with a detached entity — read from it.
                 let state = self.collect_agent_chat_state_for_target(detached_entity, cx);
-                let probe_fn = || self.collect_agent_chat_test_probe_for_target(detached_entity, 1, cx);
+                let probe_fn =
+                    || self.collect_agent_chat_test_probe_for_target(detached_entity, 1, cx);
 
                 match detailed {
                     protocol::WaitDetailedCondition::AgentChatReady => {
@@ -9805,14 +9853,18 @@ impl ScriptListApp {
                         })
                     }
                     protocol::WaitDetailedCondition::AgentChatSetupVisible => state.setup.is_some(),
-                    protocol::WaitDetailedCondition::AgentChatSetupReasonCode { reason_code } => state
-                        .setup
-                        .as_ref()
-                        .is_some_and(|s| s.reason_code == *reason_code),
-                    protocol::WaitDetailedCondition::AgentChatSetupPrimaryAction { action } => state
-                        .setup
-                        .as_ref()
-                        .is_some_and(|s| s.primary_action == *action),
+                    protocol::WaitDetailedCondition::AgentChatSetupReasonCode { reason_code } => {
+                        state
+                            .setup
+                            .as_ref()
+                            .is_some_and(|s| s.reason_code == *reason_code)
+                    }
+                    protocol::WaitDetailedCondition::AgentChatSetupPrimaryAction { action } => {
+                        state
+                            .setup
+                            .as_ref()
+                            .is_some_and(|s| s.primary_action == *action)
+                    }
                     protocol::WaitDetailedCondition::AgentChatSetupAgentPickerOpen => {
                         state.setup.as_ref().is_some_and(|s| s.agent_picker_open)
                     }
@@ -10384,9 +10436,7 @@ impl ScriptListApp {
 
         if semantic_id == "footer:quick_terminal:ai" || semantic_id == "footer:prompt:ai" {
             let AppView::QuickTerminalView { entity } = &self.current_view else {
-                anyhow::bail!(
-                    "Quick Terminal Agent footer is only available in QuickTerminalView"
-                );
+                anyhow::bail!("Quick Terminal Agent footer is only available in QuickTerminalView");
             };
             if submit {
                 self.open_agent_chat_with_quick_terminal_output(entity.clone(), cx);
@@ -10760,14 +10810,14 @@ fn menu_syntax_object_refs_by_range_for_filter(
 #[cfg(test)]
 mod prompt_handler_message_tests {
     use super::{
-        build_script_error_agent_chat_prompt, build_script_error_report_markdown,
-        classify_prompt_message_route, escape_windows_cmd_open_target,
-        persist_script_error_agent_chat_context_bundle_in_dir, prompt_coming_soon_warning,
-        resolve_ai_start_chat_provider, should_restore_main_window_after_script_exit,
-        unhandled_message_warning, PromptMessageRoute,
+        PromptMessageRoute, build_script_error_agent_chat_prompt,
+        build_script_error_report_markdown, classify_prompt_message_route,
+        escape_windows_cmd_open_target, persist_script_error_agent_chat_context_bundle_in_dir,
+        prompt_coming_soon_warning, resolve_ai_start_chat_provider,
+        should_restore_main_window_after_script_exit, unhandled_message_warning,
     };
-    use crate::ai::providers::OpenAiProvider;
     use crate::PromptMessage;
+    use crate::ai::providers::OpenAiProvider;
 
     #[test]
     fn test_handle_prompt_message_routes_confirm_request_to_confirm_window() {
