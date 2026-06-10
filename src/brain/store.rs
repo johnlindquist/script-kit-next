@@ -192,7 +192,21 @@ fn ensure_brain_schema(conn: &Connection) -> Result<()> {
         CREATE TABLE IF NOT EXISTS brain_meta (
             key TEXT PRIMARY KEY,
             value TEXT NOT NULL
-        );",
+        );
+
+        CREATE TABLE IF NOT EXISTS brain_inbox (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            kind TEXT NOT NULL,
+            title TEXT NOT NULL,
+            detail TEXT NOT NULL DEFAULT '',
+            source TEXT NOT NULL DEFAULT '',
+            source_id TEXT NOT NULL DEFAULT '',
+            dedupe_hash TEXT NOT NULL UNIQUE,
+            created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+            resolved_at INTEGER
+        );
+        CREATE INDEX IF NOT EXISTS idx_brain_inbox_open
+            ON brain_inbox(resolved_at, created_at DESC);",
     )
     .context("ensure brain schema")?;
     migrate_fts_tokenizer(conn)
@@ -276,6 +290,15 @@ fn get_db() -> Result<Arc<Mutex<Connection>>> {
         .get()
         .cloned()
         .ok_or_else(|| anyhow!("brain db not initialized"))
+}
+
+/// Run a closure against the shared brain connection (one lock acquisition).
+/// Sibling modules that own their own table (e.g. [`super::inbox`]) use this
+/// instead of reimplementing connection management.
+pub(crate) fn with_conn<T>(f: impl FnOnce(&Connection) -> Result<T>) -> Result<T> {
+    let db = get_db()?;
+    let conn = db.lock().map_err(|_| anyhow!("brain db lock poisoned"))?;
+    f(&conn)
 }
 
 fn content_hash(title: &str, content: &str) -> String {
@@ -567,6 +590,47 @@ pub fn get_docs_by_ids(ids: &[i64]) -> Result<Vec<BrainDoc>> {
         .collect())
 }
 
+/// Docs of one source updated at/after `since`, newest first. Evidence
+/// gathering for the curator (e.g. recent chat turns for inbox extraction).
+pub fn recent_docs_for_source(
+    source: DocSource,
+    since: i64,
+    limit: usize,
+) -> Result<Vec<BrainDoc>> {
+    let db = get_db()?;
+    let conn = db.lock().map_err(|_| anyhow!("brain db lock poisoned"))?;
+    let mut stmt = conn.prepare(
+        "SELECT id, source, source_id, title, content, updated_at
+         FROM brain_docs WHERE source = ?1 AND updated_at >= ?2
+         ORDER BY updated_at DESC LIMIT ?3",
+    )?;
+    let rows = stmt
+        .query_map(params![source.as_str(), since, limit as i64], |row| {
+            Ok((
+                row.get::<_, i64>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, String>(3)?,
+                row.get::<_, String>(4)?,
+                row.get::<_, i64>(5)?,
+            ))
+        })?
+        .collect::<std::result::Result<Vec<_>, _>>()?;
+    Ok(rows
+        .into_iter()
+        .filter_map(|(id, source, source_id, title, content, updated_at)| {
+            DocSource::parse(&source).map(|source| BrainDoc {
+                id,
+                source,
+                source_id,
+                title,
+                content,
+                updated_at,
+            })
+        })
+        .collect())
+}
+
 /// Append an attention signal. Topics are free-form lowercase strings.
 pub fn record_signal(topic: &str, weight: i64, source: &str) -> Result<()> {
     let topic = topic.trim().to_lowercase();
@@ -609,21 +673,25 @@ pub fn recent_signals(limit: usize) -> Result<Vec<BrainSignal>> {
 /// the brain wrote for itself ages out.
 const ACTIVITY_RETENTION_DAYS: i64 = 90;
 const SIGNAL_RETENTION_DAYS: i64 = 30;
+/// Resolved inbox items linger this long (recently-dismissed context), then
+/// age out. Open items are never pruned.
+const INBOX_RESOLVED_RETENTION_DAYS: i64 = 30;
 /// Backstop row cap so a runaway signal source can't bloat the db inside the
 /// retention window.
 const SIGNAL_MAX_ROWS: i64 = 20_000;
 
 /// Prune aged ambient data: daily activity journals older than
-/// [`ACTIVITY_RETENTION_DAYS`] and attention signals older than
-/// [`SIGNAL_RETENTION_DAYS`] (plus the row-cap backstop). The focus-review
-/// doc is exempt (its source_id doesn't match the `activity:` day prefix).
-/// Returns (journals_removed, signals_removed).
-pub fn prune_ambient_data() -> Result<(usize, usize)> {
+/// [`ACTIVITY_RETENTION_DAYS`], attention signals older than
+/// [`SIGNAL_RETENTION_DAYS`] (plus the row-cap backstop), and resolved inbox
+/// items older than [`INBOX_RESOLVED_RETENTION_DAYS`]. The focus-review doc
+/// is exempt (its source_id doesn't match the `activity:` day prefix).
+/// Returns (journals_removed, signals_removed, inbox_removed).
+pub fn prune_ambient_data() -> Result<(usize, usize, usize)> {
     prune_ambient_data_at(chrono::Utc::now().timestamp())
 }
 
 /// Testable core of [`prune_ambient_data`] — `now` is injectable.
-pub(crate) fn prune_ambient_data_at(now: i64) -> Result<(usize, usize)> {
+pub(crate) fn prune_ambient_data_at(now: i64) -> Result<(usize, usize, usize)> {
     let db = get_db()?;
     let conn = db.lock().map_err(|_| anyhow!("brain db lock poisoned"))?;
     let journal_cutoff = now - ACTIVITY_RETENTION_DAYS * 86_400;
@@ -650,7 +718,15 @@ pub(crate) fn prune_ambient_data_at(now: i64) -> Result<(usize, usize)> {
             params![SIGNAL_MAX_ROWS],
         )
         .context("prune brain signals by cap")?;
-    Ok((journals, signals))
+    let inbox_cutoff = now - INBOX_RESOLVED_RETENTION_DAYS * 86_400;
+    let inbox = conn
+        .execute(
+            "DELETE FROM brain_inbox
+             WHERE resolved_at IS NOT NULL AND resolved_at < ?1",
+            params![inbox_cutoff],
+        )
+        .context("prune resolved brain inbox items")?;
+    Ok((journals, signals, inbox))
 }
 
 /// Doc counts per source, for the health surface.

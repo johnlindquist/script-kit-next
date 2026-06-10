@@ -2,6 +2,8 @@
 //! `SCRIPT_KIT_TEST_BRAIN_DB_PATH` (set per-process; tests share one DB and
 //! use distinct source_ids).
 
+use super::curator;
+use super::inbox::{self, InboxKind};
 use super::indexer::extract_topics;
 use super::search::{aggregate_signals, cosine_top_ids, fuse_ranks};
 use super::store::{self, BrainDoc, BrainSignal, DocSource};
@@ -290,7 +292,7 @@ fn prune_ages_out_old_journals_but_keeps_fresh_data() {
     .unwrap();
     store::record_signal("prune-test-topic", 1, "test").unwrap();
 
-    let (journals, _signals) = store::prune_ambient_data_at(now).unwrap();
+    let (journals, _signals, _inbox) = store::prune_ambient_data_at(now).unwrap();
     assert!(journals >= 1, "ancient journal should be pruned");
     assert!(
         store::get_doc(DocSource::Activity, "activity:2020-01-01")
@@ -373,4 +375,220 @@ fn recall_context_block_formats_and_caps() {
     // Irrelevant queries return None, not noise.
     let none = super::recall_context_block("zzqx unrelated nonsense").unwrap();
     assert!(none.is_none());
+}
+
+#[test]
+fn inbox_insert_dedupes_resolves_and_orders() {
+    init_test_db();
+    let first = inbox::insert_inbox_item(
+        InboxKind::Commitment,
+        "Inbox-test ship the gizmo",
+        "said in chat yesterday",
+        "chat_turn",
+        "thread-inbox#1",
+    )
+    .unwrap();
+    assert!(first, "first insert lands");
+    // Same kind + title modulo case/whitespace → deduped.
+    let dup = inbox::insert_inbox_item(
+        InboxKind::Commitment,
+        "  inbox-test SHIP   the gizmo ",
+        "different detail",
+        "chat_turn",
+        "thread-inbox#2",
+    )
+    .unwrap();
+    assert!(!dup, "normalized kind|title must dedupe");
+    // Same title, different kind → distinct item.
+    let other_kind = inbox::insert_inbox_item(
+        InboxKind::Question,
+        "Inbox-test ship the gizmo",
+        "is this even a question",
+        "chat_turn",
+        "",
+    )
+    .unwrap();
+    assert!(other_kind, "kind participates in the dedupe key");
+    // Blank titles are rejected, not stored.
+    assert!(!inbox::insert_inbox_item(InboxKind::Drift, "   ", "", "", "").unwrap());
+
+    let open = inbox::open_inbox_items(1000).unwrap();
+    let pos_question = open
+        .iter()
+        .position(|i| i.kind == InboxKind::Question && i.title == "Inbox-test ship the gizmo")
+        .expect("question item open");
+    let pos_commitment = open
+        .iter()
+        .position(|i| i.kind == InboxKind::Commitment && i.title == "Inbox-test ship the gizmo")
+        .expect("commitment item open");
+    assert!(pos_question < pos_commitment, "newest first");
+    let commitment = &open[pos_commitment];
+    assert_eq!(commitment.source, "chat_turn");
+    assert_eq!(commitment.source_id, "thread-inbox#1", "first insert wins");
+    assert!(commitment.resolved_at.is_none());
+    assert!(inbox::count_open_inbox().unwrap() >= 2);
+
+    assert!(inbox::resolve_inbox_item(commitment.id).unwrap());
+    assert!(
+        !inbox::resolve_inbox_item(commitment.id).unwrap(),
+        "second resolve is a no-op"
+    );
+    let open = inbox::open_inbox_items(1000).unwrap();
+    assert!(
+        !open.iter().any(|i| i.id == commitment.id),
+        "resolved item leaves the open list"
+    );
+}
+
+#[test]
+fn inbox_kind_roundtrips_and_labels() {
+    for kind in [
+        InboxKind::Commitment,
+        InboxKind::Question,
+        InboxKind::Drift,
+        InboxKind::StalePin,
+    ] {
+        assert_eq!(InboxKind::parse(kind.as_str()), Some(kind));
+        assert!(!kind.label().is_empty());
+    }
+    assert_eq!(InboxKind::parse("nonsense"), None);
+    assert_eq!(InboxKind::StalePin.label(), "Stale Pin");
+    assert_eq!(InboxKind::Question.label(), "Open Question");
+    assert_eq!(InboxKind::Drift.label(), "Drifting");
+}
+
+#[test]
+fn prune_removes_only_old_resolved_inbox_items() {
+    init_test_db();
+    let now = chrono::Utc::now().timestamp();
+    // Tests share one DB and other tests may also run prune concurrently, so
+    // assert end states (rows gone/kept) rather than this call's counts.
+    inbox::insert_inbox_item(InboxKind::Drift, "Inbox-prune ancient resolved", "", "", "").unwrap();
+    inbox::insert_inbox_item(InboxKind::Drift, "Inbox-prune fresh resolved", "", "", "").unwrap();
+    inbox::insert_inbox_item(InboxKind::Drift, "Inbox-prune still open", "", "", "").unwrap();
+    let open = inbox::open_inbox_items(1000).unwrap();
+    let id_of = |title: &str| {
+        open.iter()
+            .find(|i| i.title == title)
+            .unwrap_or_else(|| panic!("missing {title}"))
+            .id
+    };
+    // Backdate one resolution past the 30-day retention window.
+    assert!(
+        inbox::resolve_inbox_item_at(id_of("Inbox-prune ancient resolved"), now - 40 * 86_400)
+            .unwrap()
+    );
+    assert!(inbox::resolve_inbox_item_at(id_of("Inbox-prune fresh resolved"), now).unwrap());
+
+    let (_journals, _signals, _inbox_removed) = store::prune_ambient_data_at(now).unwrap();
+
+    // The aged resolved row is gone: its dedupe hash is freed, so the same
+    // title inserts again.
+    assert!(
+        inbox::insert_inbox_item(InboxKind::Drift, "Inbox-prune ancient resolved", "", "", "")
+            .unwrap(),
+        "aged resolved item must be deleted"
+    );
+    // The freshly resolved row survives: its hash still blocks re-insertion.
+    assert!(
+        !inbox::insert_inbox_item(InboxKind::Drift, "Inbox-prune fresh resolved", "", "", "")
+            .unwrap(),
+        "recently resolved item must be retained"
+    );
+    // Open items are never pruned regardless of age.
+    assert!(inbox::open_inbox_items(1000)
+        .unwrap()
+        .iter()
+        .any(|i| i.title == "Inbox-prune still open"));
+}
+
+#[test]
+fn parse_inbox_extraction_accepts_strict_json() {
+    let raw = r#"{"commitments":[{"title":"Ship the inbox","detail":"Promised in chat.","sourceId":"thread-9#2"}],"questions":[{"title":"Which DB?","detail":"Never answered.","sourceId":""}],"drift":[{"title":"YouTube pipeline","detail":"No activity in a week."}]}"#;
+    let parsed = curator::parse_inbox_extraction(raw).unwrap();
+    assert_eq!(parsed.commitments.len(), 1);
+    assert_eq!(parsed.commitments[0].title, "Ship the inbox");
+    assert_eq!(parsed.commitments[0].source_id, "thread-9#2");
+    assert_eq!(parsed.questions.len(), 1);
+    assert_eq!(parsed.questions[0].source_id, "");
+    assert_eq!(parsed.drift.len(), 1);
+    assert_eq!(parsed.drift[0].source_id, "", "drift omits sourceId");
+}
+
+#[test]
+fn parse_inbox_extraction_tolerates_fences_and_prose() {
+    let raw = "Sure! Here is the extraction you asked for:\n```json\n{\"commitments\":[],\"questions\":[{\"title\":\"What port?\",\"detail\":\"\",\"sourceId\":\"t#0\"}],\"drift\":[]}\n```\nLet me know if you need anything else.";
+    let parsed = curator::parse_inbox_extraction(raw).unwrap();
+    assert_eq!(parsed.questions.len(), 1);
+    assert_eq!(parsed.questions[0].title, "What port?");
+    assert!(parsed.commitments.is_empty());
+}
+
+#[test]
+fn parse_inbox_extraction_rejects_garbage_and_caps_items() {
+    assert!(
+        curator::parse_inbox_extraction("no json anywhere").is_err(),
+        "prose without an object is an error"
+    );
+    assert!(
+        curator::parse_inbox_extraction("{this is not json}").is_err(),
+        "malformed object is an error"
+    );
+    assert!(curator::parse_inbox_extraction("} backwards {").is_err());
+    // Blank titles dropped; categories capped at 8.
+    let many = (0..12)
+        .map(|i| format!("{{\"title\":\"q{i}\",\"detail\":\"\"}}"))
+        .collect::<Vec<_>>()
+        .join(",");
+    let raw = format!(
+        "{{\"commitments\":[{{\"title\":\"   \",\"detail\":\"blank title\"}}],\"questions\":[{many}],\"drift\":[]}}"
+    );
+    let parsed = curator::parse_inbox_extraction(&raw).unwrap();
+    assert!(parsed.commitments.is_empty(), "blank titles skipped");
+    assert_eq!(parsed.questions.len(), 8, "per-category cap enforced");
+}
+
+#[test]
+fn stale_pin_detection_flags_old_pinned_notes_only() {
+    let now = chrono::Utc::now();
+    let old = now - chrono::Duration::days(30);
+    let fresh = now - chrono::Duration::days(2);
+    let notes = vec![
+        ("Old pinned".to_string(), old, true, "note-old".to_string()),
+        (
+            "Fresh pinned".to_string(),
+            fresh,
+            true,
+            "note-fresh".to_string(),
+        ),
+        (
+            "Old unpinned".to_string(),
+            old,
+            false,
+            "note-unpinned".to_string(),
+        ),
+        ("   ".to_string(), old, true, "note-untitled".to_string()),
+    ];
+    let stale = curator::stale_pins_from(&notes, now);
+    assert_eq!(stale.len(), 2, "only old pinned notes qualify");
+    let old_pin = stale
+        .iter()
+        .find(|(_, _, id)| id == "note-old")
+        .expect("old pinned note flagged");
+    assert_eq!(old_pin.0, "Old pinned");
+    assert_eq!(
+        old_pin.1,
+        format!("Pinned but untouched since {}", old.format("%Y-%m-%d"))
+    );
+    let untitled = stale
+        .iter()
+        .find(|(_, _, id)| id == "note-untitled")
+        .expect("untitled pinned note flagged");
+    assert_eq!(untitled.0, "Pinned note", "blank title gets fallback");
+    assert!(
+        !stale
+            .iter()
+            .any(|(_, _, id)| id == "note-fresh" || id == "note-unpinned"),
+        "fresh or unpinned notes are never flagged"
+    );
 }

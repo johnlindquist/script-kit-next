@@ -22,6 +22,7 @@
 pub mod curator;
 pub mod download;
 pub mod embedder;
+pub mod inbox;
 pub mod indexer;
 pub mod launcher;
 pub mod resources;
@@ -34,6 +35,9 @@ mod tests;
 
 use anyhow::Result;
 
+pub use inbox::{
+    count_open_inbox, insert_inbox_item, open_inbox_items, resolve_inbox_item, InboxItem, InboxKind,
+};
 pub use indexer::{ingest_chat_turn, start_brain_indexer, wake_indexer};
 pub use launcher::{
     root_brain_query_is_eligible, search_root_brain_direct, search_root_brain_semantic,
@@ -96,6 +100,24 @@ pub fn record_search_selection_signals(query: &str, selected_result_key: &str) {
             let _ = record_signal(&tail.replace(['-', '_'], " "), 2, "selection");
             let _ = store::append_activity(&format!(
                 "in the launcher, searched \"{query}\" and chose {selected}"
+            ));
+        });
+}
+
+/// Record that the user accepted a brain-grounded ghost suggestion in Notes
+/// (attention signals + activity journal), so the memories that produced a
+/// useful hint get reinforced. Fire-and-forget off-thread; never blocks the
+/// editor input path.
+pub fn record_ghost_accept_signals(line_prefix: &str, accepted_suffix: &str) {
+    let line = format!("{line_prefix}{accepted_suffix}");
+    let _ = std::thread::Builder::new()
+        .name("script-kit-brain-ghost-accept".to_string())
+        .spawn(move || {
+            for topic in indexer::extract_topics(&line) {
+                let _ = record_signal(&topic, 2, "ghost_accept");
+            }
+            let _ = store::append_activity(&format!(
+                "in notes, accepted a brain ghost suggestion on the line \"{line}\""
             ));
         });
 }

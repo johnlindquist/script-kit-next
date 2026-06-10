@@ -156,10 +156,10 @@ fn prune_ambient_if_due() {
     }
     let _ = store::meta_set("ambient_prune_last", &now.to_string());
     match store::prune_ambient_data() {
-        Ok((journals, signals)) if journals > 0 || signals > 0 => {
+        Ok((journals, signals, inbox)) if journals > 0 || signals > 0 || inbox > 0 => {
             tracing::info!(
                 target: "script_kit::brain",
-                journals, signals, "brain pruned aged ambient data"
+                journals, signals, inbox, "brain pruned aged ambient data"
             );
         }
         Ok(_) => {}
