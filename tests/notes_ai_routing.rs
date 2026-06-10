@@ -56,10 +56,11 @@ fn notes_keyboard_claims_cmd_enter() {
         "Notes keyboard must claim Cmd+Enter before general platform shortcuts"
     );
 
+    // Whitespace-insensitive: rustfmt may wrap the receiver and call across lines.
+    let normalized = source.split_whitespace().collect::<Vec<_>>().join(" ");
     assert!(
-        source.contains(
-            "self.open_selected_note_cart_in_embedded_agent_chat(\"NotesWindowCmdEnter\""
-        ),
+        normalized
+            .contains("open_selected_note_cart_in_embedded_agent_chat(\"NotesWindowCmdEnter\""),
         "Notes Cmd+Enter must route through the note-cart Agent Chat handoff"
     );
 }
@@ -182,10 +183,11 @@ fn notes_cart_first_open_uses_shared_notes_host_contract() {
             && host_source.contains("PortalKind::AgentChatHistory"),
         "Notes host contract must keep Agent Chat history as the only locally hosted portal kind"
     );
+    // Assert the routing (set_on_open_portal → shared static handler) without
+    // pinning the exact closure argument shapes, which refactors legitimately change.
     assert!(
         host_source.contains("chat.set_on_open_portal(move |kind, cx|")
-            && host_source
-                .contains("Self::handle_agent_chat_portal_static(chat_entity, kind, cx);"),
+            && host_source.contains("Self::handle_agent_chat_portal_static("),
         "Notes host wiring must continue to route portal opens through the shared static handler"
     );
 }
