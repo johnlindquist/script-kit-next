@@ -266,6 +266,67 @@ fn retain_docs_forgets_deleted_sources() {
 }
 
 #[test]
+fn prune_ages_out_old_journals_but_keeps_fresh_data() {
+    init_test_db();
+    let now = chrono::Utc::now().timestamp();
+    // An ancient daily journal (well past the 90-day window)...
+    store::upsert_doc(
+        DocSource::Activity,
+        "activity:2020-01-01",
+        "Activity journal 2020-01-01",
+        "prunable ancient action",
+        now - 200 * 86_400,
+    )
+    .unwrap();
+    // ...and the focus review, which shares the source but must survive
+    // regardless of age (it's keyed without the `activity:` day prefix).
+    store::upsert_doc(
+        DocSource::Activity,
+        "focus-review",
+        "Focus review",
+        "current focus distillation",
+        now - 200 * 86_400,
+    )
+    .unwrap();
+    store::record_signal("prune-test-topic", 1, "test").unwrap();
+
+    let (journals, _signals) = store::prune_ambient_data_at(now).unwrap();
+    assert!(journals >= 1, "ancient journal should be pruned");
+    assert!(
+        store::get_doc(DocSource::Activity, "activity:2020-01-01")
+            .unwrap()
+            .is_none(),
+        "ancient journal must be gone"
+    );
+    assert!(
+        store::get_doc(DocSource::Activity, "focus-review")
+            .unwrap()
+            .is_some(),
+        "focus review is exempt from journal pruning"
+    );
+    // Fresh signals survive a prune at the current time (guards against an
+    // inverted cutoff wiping everything).
+    let signals = store::recent_signals(500).unwrap();
+    assert!(
+        signals.iter().any(|s| s.topic == "prune-test-topic"),
+        "fresh signals must survive pruning"
+    );
+}
+
+#[test]
+fn brain_status_resource_reports_health() {
+    init_test_db();
+    let (mime, body) = super::resources::read_brain_resource("kit://brain").unwrap();
+    assert_eq!(mime, "application/json");
+    let value: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert!(value.get("docsBySource").is_some(), "per-source counts");
+    assert!(value.get("embedHelperFound").is_some(), "helper presence");
+    assert!(value.get("lastIndexCycle").is_some(), "indexer heartbeat");
+    assert_eq!(value["ftsVersion"], "2", "fts migration recorded");
+    assert!(value["dbSizeBytes"].as_u64().unwrap_or(0) > 0, "db on disk");
+}
+
+#[test]
 fn activity_journal_appends_newest_first_and_recalls() {
     init_test_db();
     store::append_activity("searched files for \"png\" and opened CleanShot.png").unwrap();

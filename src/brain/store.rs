@@ -604,6 +604,77 @@ pub fn recent_signals(limit: usize) -> Result<Vec<BrainSignal>> {
     Ok(rows)
 }
 
+/// Retention windows for the brain's own ambient records. Content the user
+/// explicitly created (notes, pinned clipboard) is never pruned — only what
+/// the brain wrote for itself ages out.
+const ACTIVITY_RETENTION_DAYS: i64 = 90;
+const SIGNAL_RETENTION_DAYS: i64 = 30;
+/// Backstop row cap so a runaway signal source can't bloat the db inside the
+/// retention window.
+const SIGNAL_MAX_ROWS: i64 = 20_000;
+
+/// Prune aged ambient data: daily activity journals older than
+/// [`ACTIVITY_RETENTION_DAYS`] and attention signals older than
+/// [`SIGNAL_RETENTION_DAYS`] (plus the row-cap backstop). The focus-review
+/// doc is exempt (its source_id doesn't match the `activity:` day prefix).
+/// Returns (journals_removed, signals_removed).
+pub fn prune_ambient_data() -> Result<(usize, usize)> {
+    prune_ambient_data_at(chrono::Utc::now().timestamp())
+}
+
+/// Testable core of [`prune_ambient_data`] — `now` is injectable.
+pub(crate) fn prune_ambient_data_at(now: i64) -> Result<(usize, usize)> {
+    let db = get_db()?;
+    let conn = db.lock().map_err(|_| anyhow!("brain db lock poisoned"))?;
+    let journal_cutoff = now - ACTIVITY_RETENTION_DAYS * 86_400;
+    let journals = conn
+        .execute(
+            "DELETE FROM brain_docs
+             WHERE source = 'activity'
+               AND source_id LIKE 'activity:%'
+               AND updated_at < ?1",
+            params![journal_cutoff],
+        )
+        .context("prune brain activity journals")?;
+    let signal_cutoff = now - SIGNAL_RETENTION_DAYS * 86_400;
+    let mut signals = conn
+        .execute(
+            "DELETE FROM brain_signals WHERE created_at < ?1",
+            params![signal_cutoff],
+        )
+        .context("prune brain signals by age")?;
+    signals += conn
+        .execute(
+            "DELETE FROM brain_signals WHERE id NOT IN (
+                SELECT id FROM brain_signals ORDER BY id DESC LIMIT ?1)",
+            params![SIGNAL_MAX_ROWS],
+        )
+        .context("prune brain signals by cap")?;
+    Ok((journals, signals))
+}
+
+/// Doc counts per source, for the health surface.
+pub fn source_counts() -> Result<Vec<(String, i64)>> {
+    let db = get_db()?;
+    let conn = db.lock().map_err(|_| anyhow!("brain db lock poisoned"))?;
+    let mut stmt =
+        conn.prepare("SELECT source, COUNT(*) FROM brain_docs GROUP BY source ORDER BY source")?;
+    let rows = stmt
+        .query_map([], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
+        })?
+        .collect::<std::result::Result<Vec<_>, _>>()?;
+    Ok(rows)
+}
+
+/// On-disk size of the brain database file, for the health surface.
+/// 0 when unreadable.
+pub fn db_size_bytes() -> u64 {
+    std::fs::metadata(brain_db_path())
+        .map(|meta| meta.len())
+        .unwrap_or(0)
+}
+
 pub fn meta_get(key: &str) -> Result<Option<String>> {
     let db = get_db()?;
     let conn = db.lock().map_err(|_| anyhow!("brain db lock poisoned"))?;

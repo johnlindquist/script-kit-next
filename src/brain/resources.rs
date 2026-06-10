@@ -1,9 +1,11 @@
 //! `kit://brain` MCP resources: the brain's transparency and agent-access
 //! surface.
 //!
-//! - `kit://brain` — status: doc/embedding/signal counts, model presence.
+//! - `kit://brain` — status + health: doc/embedding/signal counts, per-source
+//!   breakdown, model and helper presence, last index/curator/prune runs.
 //! - `kit://brain/recall?q=...` — hybrid retrieval rendered as a context
 //!   block (what Agent Chat stages per turn, available to any MCP consumer).
+//! - `kit://brain/focus[?refresh=1]` — the curator's latest focus review.
 //! - `kit://brain/signals?limit=...` — recent attention signals ("why does
 //!   the brain think I care about X").
 
@@ -54,12 +56,35 @@ pub fn read_brain_resource(uri: &str) -> Result<(String, String), String> {
         let (docs, embedded, signals) =
             store::doc_stats().map_err(|error| format!("brain stats failed: {error}"))?;
         let model = super::embedder::resolve_embed_model();
+        let docs_by_source: serde_json::Map<String, serde_json::Value> = store::source_counts()
+            .unwrap_or_default()
+            .into_iter()
+            .map(|(source, count)| (source, serde_json::json!(count)))
+            .collect();
+        // Meta timestamps double as health checks: a stale lastIndexCycle
+        // means the indexer thread died or the app hasn't run lately.
+        let meta_ts = |key: &str| -> serde_json::Value {
+            store::meta_get(key)
+                .ok()
+                .flatten()
+                .and_then(|value| value.parse::<i64>().ok())
+                .map(|ts| serde_json::json!(ts))
+                .unwrap_or(serde_json::Value::Null)
+        };
         let body = serde_json::json!({
             "docs": docs,
+            "docsBySource": docs_by_source,
             "embedded": embedded,
             "signals": signals,
             "semanticSearch": model.is_some(),
             "embedModel": model.map(|m| m.model_id),
+            "embedHelperFound": super::embedder::helper_available(),
+            "lastIndexCycle": meta_ts("last_index_cycle"),
+            "lastCuratorRun": meta_ts("curator_last_run"),
+            "lastAmbientPrune": meta_ts("ambient_prune_last"),
+            "lastModelDownloadAttempt": meta_ts("embed_model_download_attempt"),
+            "ftsVersion": store::meta_get("fts_version").ok().flatten(),
+            "dbSizeBytes": store::db_size_bytes(),
             "store": "~/.scriptkit/db/brain.sqlite",
         });
         return Ok(("application/json".to_string(), body.to_string()));

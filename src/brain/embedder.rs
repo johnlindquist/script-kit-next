@@ -205,6 +205,12 @@ impl Drop for BrainEmbedder {
     }
 }
 
+/// Whether the embed helper binary is locatable — health surface only;
+/// spawning still does its own resolution.
+pub fn helper_available() -> bool {
+    resolve_helper_path().is_ok()
+}
+
 /// Same resolution order as the ghost-text helper client (env override, then
 /// the stable install dir, then a sibling of the current executable).
 fn resolve_helper_path() -> Result<PathBuf> {

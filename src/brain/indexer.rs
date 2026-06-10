@@ -132,7 +132,41 @@ pub fn run_cycle(embedder: &mut Option<BrainEmbedder>) -> Result<()> {
     }
     // Daily distillation pass (no-op until due; silently skips without pi).
     super::curator::run_if_due();
+    prune_ambient_if_due();
+    // Heartbeat for the kit://brain health surface.
+    let _ = store::meta_set(
+        "last_index_cycle",
+        &chrono::Utc::now().timestamp().to_string(),
+    );
     Ok(())
+}
+
+/// Once a day, age out the brain's own ambient records (old activity
+/// journals, stale attention signals). User-created content is never pruned.
+fn prune_ambient_if_due() {
+    const PRUNE_INTERVAL_SECS: i64 = 24 * 60 * 60;
+    let now = chrono::Utc::now().timestamp();
+    let last = store::meta_get("ambient_prune_last")
+        .ok()
+        .flatten()
+        .and_then(|value| value.parse::<i64>().ok())
+        .unwrap_or(0);
+    if now - last < PRUNE_INTERVAL_SECS {
+        return;
+    }
+    let _ = store::meta_set("ambient_prune_last", &now.to_string());
+    match store::prune_ambient_data() {
+        Ok((journals, signals)) if journals > 0 || signals > 0 => {
+            tracing::info!(
+                target: "script_kit::brain",
+                journals, signals, "brain pruned aged ambient data"
+            );
+        }
+        Ok(_) => {}
+        Err(error) => {
+            tracing::debug!(target: "script_kit::brain", error = %error, "ambient prune skipped");
+        }
+    }
 }
 
 /// Promote PINNED clipboard entries into the brain. Pinning is an explicit
