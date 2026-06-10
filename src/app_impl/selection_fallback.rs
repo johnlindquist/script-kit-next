@@ -178,9 +178,7 @@ impl ScriptListApp {
         }
 
         if self.filter_text != self.computed_filter_text {
-            self.record_blocked_script_list_submit(
-                "main_list_submit_blocked.stale_filter_domain",
-            );
+            self.record_blocked_script_list_submit("main_list_submit_blocked.stale_filter_domain");
             return None;
         }
 
@@ -681,6 +679,15 @@ impl ScriptListApp {
         file: &crate::file_search::FileResult,
         cx: &mut Context<Self>,
     ) {
+        // Journal the query → choice pair so the brain can answer
+        // "what did I just search for?".
+        let query = self.filter_text.trim();
+        if !query.is_empty() {
+            crate::brain::record_activity(
+                "searched for",
+                &format!("\"{}\" and opened {}", query, file.path),
+            );
+        }
         if let Err(error) = crate::file_search::open_file(&file.path) {
             logging::log(
                 "ROOT_FILE_SEARCH",
@@ -1086,7 +1093,9 @@ impl ScriptListApp {
             return;
         }
 
-        self.record_blocked_script_list_submit("execute_selected_fallback.no_live_grouped_fallback");
+        self.record_blocked_script_list_submit(
+            "execute_selected_fallback.no_live_grouped_fallback",
+        );
     }
 
     /// Execute a built-in fallback action without window reference

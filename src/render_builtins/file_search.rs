@@ -842,6 +842,15 @@ impl ScriptListApp {
 
                                     // Standard file search: open with the default app and close,
                                     // even when the selected item is a directory.
+                                    // Journal the query → choice pair so the brain
+                                    // can answer "what did I just search for?".
+                                    let query = this.filter_text.trim();
+                                    if !query.is_empty() {
+                                        crate::brain::record_activity(
+                                            "searched files for",
+                                            &format!("\"{}\" and opened {}", query, file.path),
+                                        );
+                                    }
                                     let _ = file_search::open_file(&file.path);
                                     this.close_and_reset_window(cx);
                                 }

@@ -220,6 +220,34 @@ fn chat_turn_ingestion_is_idempotent_and_searchable() {
 }
 
 #[test]
+fn activity_journal_appends_newest_first_and_recalls() {
+    init_test_db();
+    store::append_activity("searched files for \"png\" and opened CleanShot.png").unwrap();
+    store::append_activity("ran script kill-port").unwrap();
+    let hits = store::fts_search("what was the last thing I searched for", 10).unwrap();
+    let docs = store::get_docs_by_ids(&hits).unwrap();
+    let journal = docs
+        .iter()
+        .find(|d| d.source == DocSource::Activity)
+        .expect("activity journal should match a 'searched' question");
+    // Newest first: the script run line must appear before the search line.
+    let script_pos = journal.content.find("kill-port").unwrap();
+    let search_pos = journal.content.find("CleanShot").unwrap();
+    assert!(script_pos < search_pos, "journal must be newest-first");
+    // One doc per day, not one per event.
+    let all =
+        store::get_docs_by_ids(&store::fts_search("kill-port CleanShot", 50).unwrap()).unwrap();
+    let journals: Vec<_> = all
+        .iter()
+        .filter(|d| d.source == DocSource::Activity)
+        .collect();
+    assert_eq!(journals.len(), 1);
+    // And recall renders it.
+    let block = super::recall_context_block("what did I search for recently").unwrap();
+    assert!(block.is_some_and(|b| b.contains("CleanShot")));
+}
+
+#[test]
 fn recall_context_block_formats_and_caps() {
     init_test_db();
     store::upsert_doc(

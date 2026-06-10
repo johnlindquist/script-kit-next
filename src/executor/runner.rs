@@ -631,6 +631,10 @@ fn execute_script_interactive_impl(
         .to_str()
         .ok_or_else(|| "Invalid path encoding".to_string())?;
 
+    // Brain activity journal: running a script is a decision worth
+    // remembering ("what script did I run earlier?"). Off-thread.
+    crate::brain::record_activity("ran script", path_str);
+
     // Find SDK for preloading
     let sdk_path = find_sdk_path();
 

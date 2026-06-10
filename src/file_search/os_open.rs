@@ -20,6 +20,12 @@ fn escape_windows_cmd_open_target(value: &str) -> String {
 pub fn open_file(path: &str) -> Result<(), String> {
     use std::process::Command;
 
+    // Brain activity journal: opening a file is a user decision the brain
+    // should be able to answer questions about ("what was that png I just
+    // opened?"). Single chokepoint — every open path (enter, mouse, action
+    // dialog, automation) funnels through here. Off-thread, never blocks.
+    crate::brain::record_activity("opened file", path);
+
     #[cfg(target_os = "macos")]
     {
         Command::new("open")

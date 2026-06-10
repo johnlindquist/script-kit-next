@@ -27,6 +27,7 @@ pub enum DocSource {
     Note,
     ChatTurn,
     Clipboard,
+    Activity,
 }
 
 impl DocSource {
@@ -35,6 +36,7 @@ impl DocSource {
             DocSource::Note => "note",
             DocSource::ChatTurn => "chat_turn",
             DocSource::Clipboard => "clipboard",
+            DocSource::Activity => "activity",
         }
     }
 
@@ -43,6 +45,7 @@ impl DocSource {
             "note" => Some(DocSource::Note),
             "chat_turn" => Some(DocSource::ChatTurn),
             "clipboard" => Some(DocSource::Clipboard),
+            "activity" => Some(DocSource::Activity),
             _ => None,
         }
     }
@@ -53,8 +56,57 @@ impl DocSource {
             DocSource::Note => "Note",
             DocSource::ChatTurn => "Past conversation",
             DocSource::Clipboard => "Clipboard",
+            DocSource::Activity => "Activity journal",
         }
     }
+}
+
+/// Max lines retained in a daily activity journal (newest first).
+const ACTIVITY_JOURNAL_MAX_LINES: usize = 400;
+
+/// Append a line to today's activity journal — the brain's record of what
+/// the user actually DID (searches run, files opened, items chosen). One doc
+/// per day, newest line first, so recall excerpts always lead with the most
+/// recent actions. The whole read-modify-write happens under one lock.
+pub fn append_activity(line: &str) -> Result<()> {
+    let line = line.trim();
+    if line.is_empty() {
+        return Ok(());
+    }
+    let db = get_db()?;
+    let conn = db.lock().map_err(|_| anyhow!("brain db lock poisoned"))?;
+    let now = chrono::Local::now();
+    let day = now.format("%Y-%m-%d").to_string();
+    let source_id = format!("activity:{day}");
+    let title = format!("Activity journal {day}");
+    let stamped = format!("{} — {}", now.format("%H:%M"), line);
+
+    let existing: Option<String> = conn
+        .query_row(
+            "SELECT content FROM brain_docs WHERE source = 'activity' AND source_id = ?1",
+            params![source_id],
+            |row| row.get(0),
+        )
+        .optional()?;
+    let mut lines: Vec<String> = vec![stamped];
+    if let Some(existing) = existing {
+        lines.extend(existing.lines().map(str::to_string));
+        lines.truncate(ACTIVITY_JOURNAL_MAX_LINES);
+    }
+    let content = lines.join("\n");
+    let hash = content_hash(&title, &content);
+    conn.execute(
+        "INSERT INTO brain_docs (source, source_id, title, content, content_hash, updated_at)
+         VALUES ('activity', ?1, ?2, ?3, ?4, unixepoch())
+         ON CONFLICT(source, source_id) DO UPDATE SET
+            title = excluded.title,
+            content = excluded.content,
+            content_hash = excluded.content_hash,
+            updated_at = excluded.updated_at",
+        params![source_id, title, content, hash],
+    )
+    .context("append brain activity")?;
+    Ok(())
 }
 
 #[derive(Debug, Clone)]
@@ -100,7 +152,8 @@ fn ensure_brain_schema(conn: &Connection) -> Result<()> {
         CREATE INDEX IF NOT EXISTS idx_brain_docs_updated ON brain_docs(updated_at DESC);
 
         CREATE VIRTUAL TABLE IF NOT EXISTS brain_docs_fts USING fts5(
-            title, content, content='brain_docs', content_rowid='id'
+            title, content, content='brain_docs', content_rowid='id',
+            tokenize='porter unicode61'
         );
 
         CREATE TRIGGER IF NOT EXISTS brain_docs_ai AFTER INSERT ON brain_docs BEGIN
@@ -141,7 +194,59 @@ fn ensure_brain_schema(conn: &Connection) -> Result<()> {
             value TEXT NOT NULL
         );",
     )
-    .context("ensure brain schema")
+    .context("ensure brain schema")?;
+    migrate_fts_tokenizer(conn)
+}
+
+/// FTS schema version. v2 = porter stemming ("search" matches "searched").
+/// Bump + extend the match arm below when the tokenizer changes again.
+const FTS_VERSION: &str = "2";
+
+fn migrate_fts_tokenizer(conn: &Connection) -> Result<()> {
+    let current: Option<String> = conn
+        .query_row(
+            "SELECT value FROM brain_meta WHERE key = 'fts_version'",
+            [],
+            |row| row.get(0),
+        )
+        .optional()?;
+    if current.as_deref() == Some(FTS_VERSION) {
+        return Ok(());
+    }
+    conn.execute_batch(
+        "DROP TRIGGER IF EXISTS brain_docs_ai;
+         DROP TRIGGER IF EXISTS brain_docs_ad;
+         DROP TRIGGER IF EXISTS brain_docs_au;
+         DROP TABLE IF EXISTS brain_docs_fts;
+         CREATE VIRTUAL TABLE brain_docs_fts USING fts5(
+            title, content, content='brain_docs', content_rowid='id',
+            tokenize='porter unicode61'
+         );
+         INSERT INTO brain_docs_fts(rowid, title, content)
+            SELECT id, title, content FROM brain_docs;
+         CREATE TRIGGER brain_docs_ai AFTER INSERT ON brain_docs BEGIN
+            INSERT INTO brain_docs_fts(rowid, title, content)
+            VALUES (new.id, new.title, new.content);
+         END;
+         CREATE TRIGGER brain_docs_ad AFTER DELETE ON brain_docs BEGIN
+            INSERT INTO brain_docs_fts(brain_docs_fts, rowid, title, content)
+            VALUES ('delete', old.id, old.title, old.content);
+         END;
+         CREATE TRIGGER brain_docs_au AFTER UPDATE ON brain_docs BEGIN
+            INSERT INTO brain_docs_fts(brain_docs_fts, rowid, title, content)
+            VALUES ('delete', old.id, old.title, old.content);
+            INSERT INTO brain_docs_fts(rowid, title, content)
+            VALUES (new.id, new.title, new.content);
+         END;",
+    )
+    .context("migrate brain fts tokenizer")?;
+    conn.execute(
+        "INSERT INTO brain_meta (key, value) VALUES ('fts_version', ?1)
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        params![FTS_VERSION],
+    )
+    .context("record brain fts version")?;
+    Ok(())
 }
 
 /// Initialize (or return) the global brain DB connection. Idempotent.

@@ -87,5 +87,23 @@ pub fn record_search_selection_signals(query: &str, selected_result_key: &str) {
             // that "kill-port" matters.
             let tail = selected.rsplit(':').next().unwrap_or(&selected);
             let _ = record_signal(&tail.replace(['-', '_'], " "), 2, "selection");
+            let _ = store::append_activity(&format!(
+                "in the launcher, searched \"{query}\" and chose {selected}"
+            ));
+        });
+}
+
+/// Record a user decision/action into today's activity journal — the brain's
+/// answer to "what did I just do?". Fire-and-forget off-thread; never blocks
+/// the action path. `kind` is a short verb phrase ("opened file",
+/// "ran script"), `detail` the specifics.
+pub fn record_activity(kind: &str, detail: &str) {
+    let line = format!("{kind} {detail}");
+    let _ = std::thread::Builder::new()
+        .name("script-kit-brain-activity".to_string())
+        .spawn(move || {
+            if let Err(error) = store::append_activity(&line) {
+                tracing::debug!(target: "script_kit::brain", error = %error, "activity append failed");
+            }
         });
 }
