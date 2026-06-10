@@ -18,8 +18,6 @@ mod filter_input_change;
 mod filter_input_updates;
 #[path = "root_file_search.rs"]
 mod root_file_search;
-#[path = "spine_attach.rs"]
-mod spine_attach;
 #[path = "root_unified_result_actions.rs"]
 pub(crate) mod root_unified_result_actions;
 #[path = "submit_diagnostics.rs"]

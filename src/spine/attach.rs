@@ -10,8 +10,6 @@
 //! to default launcher execution (opening the note, running the script) and
 //! destroyed the prompt being built.
 
-use super::*;
-
 use std::ops::Range;
 
 use crate::ai::message_parts::AiContextPart;
@@ -30,16 +28,28 @@ pub(crate) struct SpineAttachOutcome {
     pub alias: Option<(String, AiContextPart)>,
 }
 
+/// Canonical compact spine token for a selected file: `@file:` plus the
+/// friendly escaped basename. Both the inline subsearch accept and the
+/// file-search portal accept must produce the same token so the alias
+/// registry and the prompt plan resolve it identically.
+pub(crate) fn spine_file_mention_token(path: &str) -> String {
+    let basename = std::path::Path::new(path)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or(path);
+    // Friendly token: whitespace runs become `-` so the token reads as
+    // one word instead of `%20` soup; reserved chars stay escaped.
+    let friendly = basename.split_whitespace().collect::<Vec<_>>().join("-");
+    format!("@file:{}", escape_ref_component(&friendly))
+}
+
 /// Compact display token for a resolved subsearch result: `@prefix:value`.
 /// Whitespace runs become `-` so the token stays one contiguous, readable
 /// word (`@notes:grocery-list`, not `@notes:grocery%20list`); remaining
 /// reserved characters are escaped.
 pub(crate) fn compact_subsearch_token(prefix: &str, value: &str) -> String {
     let compact = crate::spine::text_preview::single_line_truncate(value, 40);
-    let friendly = compact
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .join("-");
+    let friendly = compact.split_whitespace().collect::<Vec<_>>().join("-");
     format!("@{}:{}", prefix, escape_ref_component(&friendly))
 }
 
@@ -86,7 +96,7 @@ pub(crate) fn attach_outcome_for_result(
         (ContextSubsearchSource::File, SearchResult::File(file_match)) => {
             // Alias registration owned by the ResolveSegment apply arm
             // ("file" source) for parity with the file-search portal.
-            let token = ScriptListApp::spine_file_mention_token(&file_match.file.path);
+            let token = spine_file_mention_token(&file_match.file.path);
             Some(SpineAttachOutcome {
                 action: resolve_action(
                     segment_index,
@@ -327,6 +337,278 @@ pub(crate) fn attach_outcome_for_result(
                 None
             }
         }
+        _ => None,
+    }
+}
+
+/// A composer-facing rich subsearch row: the displayable spine row plus the
+/// alias (token → content part) the composer registers when the row is
+/// accepted.
+pub(crate) struct ComposerSubsearchRow {
+    pub row: crate::spine::SpineListRow,
+    pub alias: Option<(String, AiContextPart)>,
+}
+
+/// A composer-facing rich subsearch section for one `@source:` query.
+pub(crate) struct ComposerSubsearchSection {
+    pub source_id: &'static str,
+    pub title: String,
+    pub icon: &'static str,
+    pub rows: Vec<ComposerSubsearchRow>,
+}
+
+/// Shared resolver for `@source:` subsearch in the Agent Chat composer.
+///
+/// Covers every source whose backing store is directly queryable without
+/// `ScriptListApp` state (notes, browser history, dictation, chat history,
+/// calendar, notifications). File and Clipboard keep the composer's existing
+/// dedicated paths; Scripts/Scriptlets/Skills need the launcher's loaded
+/// registries and return `None`.
+pub(crate) fn composer_subsearch_section(
+    source: ContextSubsearchSource,
+    query: &str,
+    segment_index: usize,
+    segment_byte_range: Range<usize>,
+) -> Option<ComposerSubsearchSection> {
+    let limit = crate::spine::catalog_subsearch::SUBSEARCH_RENDER_LIMIT;
+    let trimmed = query.trim();
+    let (source_id, icon, empty_title, match_title): (&'static str, &'static str, &str, &str) =
+        match source {
+            ContextSubsearchSource::Notes => ("notes", "notebook-text", "Recent Notes", "Notes"),
+            ContextSubsearchSource::BrowserHistory => (
+                "browser-history",
+                "globe",
+                "Recent Browser History",
+                "Browser history",
+            ),
+            ContextSubsearchSource::Dictation => {
+                ("dictation", "mic", "Recent Dictation", "Dictation")
+            }
+            ContextSubsearchSource::History => (
+                "history",
+                "message-square",
+                "Recent Agent Chat",
+                "Chat history",
+            ),
+            ContextSubsearchSource::Calendar => {
+                ("calendar", "calendar", "Calendar Events", "Calendar events")
+            }
+            ContextSubsearchSource::Notifications => {
+                ("notifications", "bell", "Notifications", "Notifications")
+            }
+            ContextSubsearchSource::File
+            | ContextSubsearchSource::Clipboard
+            | ContextSubsearchSource::Scripts
+            | ContextSubsearchSource::Scriptlets
+            | ContextSubsearchSource::Skills => return None,
+        };
+
+    let results = composer_subsearch_results(source, query, limit);
+    let rows = results
+        .into_iter()
+        .enumerate()
+        .filter_map(|(index, result)| {
+            let outcome = attach_outcome_for_result(
+                source,
+                &result,
+                segment_index,
+                segment_byte_range.clone(),
+            )?;
+            let (title, subtitle) = composer_result_display(&result)?;
+            Some(ComposerSubsearchRow {
+                row: crate::spine::SpineListRow {
+                    id: format!("agent_chat-spine:{source_id}:{index}").into(),
+                    kind: crate::spine::SpineListRowKind::ContextResult {
+                        context_type: source_id.into(),
+                        result_id: index.to_string().into(),
+                    },
+                    title: title.into(),
+                    subtitle: subtitle.map(Into::into),
+                    meta: None,
+                    icon: Some(icon.into()),
+                    badges: Vec::new(),
+                    score: 0,
+                    is_selectable: true,
+                    action_label: None,
+                    action: outcome.action,
+                },
+                alias: outcome.alias,
+            })
+        })
+        .collect();
+
+    let title = if trimmed.is_empty() {
+        empty_title.to_string()
+    } else {
+        format!("{match_title} matching \u{201c}{trimmed}\u{201d}")
+    };
+    Some(ComposerSubsearchSection {
+        source_id,
+        title,
+        icon,
+        rows,
+    })
+}
+
+fn composer_subsearch_results(
+    source: ContextSubsearchSource,
+    query: &str,
+    limit: usize,
+) -> Vec<SearchResult> {
+    match source {
+        ContextSubsearchSource::Notes => {
+            let options = crate::notes::RootNotesSectionOptions {
+                enabled: true,
+                max_results: limit,
+                min_query_chars: 0,
+                ..Default::default()
+            };
+            crate::notes::search_root_notes_meta_direct(query, options)
+                .into_iter()
+                .map(|hit| {
+                    let subtitle = format!("{} chars", hit.char_count);
+                    SearchResult::Note(crate::scripts::NoteMatch {
+                        title: hit.title.clone(),
+                        subtitle,
+                        score: 0,
+                        hit,
+                    })
+                })
+                .collect()
+        }
+        ContextSubsearchSource::BrowserHistory => {
+            let options = crate::browser_history::RootBrowserHistorySectionOptions {
+                enabled: true,
+                max_results: limit,
+                min_query_chars: 0,
+                ..Default::default()
+            };
+            crate::browser_history::search_root_browser_history_meta_direct(query, options)
+                .into_iter()
+                .map(|hit| {
+                    SearchResult::BrowserHistory(crate::scripts::BrowserHistoryMatch {
+                        subtitle: hit.url.clone(),
+                        score: 0,
+                        hit,
+                    })
+                })
+                .collect()
+        }
+        ContextSubsearchSource::Dictation => {
+            let options = crate::dictation::RootDictationHistorySectionOptions {
+                enabled: true,
+                max_results: limit,
+                min_query_chars: 0,
+                ..Default::default()
+            };
+            crate::dictation::search_root_dictation_history_direct(query, options)
+                .into_iter()
+                .map(|hit| {
+                    SearchResult::DictationHistory(crate::scripts::DictationHistoryMatch {
+                        id: hit.id.clone(),
+                        preview: hit.preview.clone(),
+                        target: hit.target.clone(),
+                        timestamp: hit.timestamp.clone(),
+                        audio_duration_ms: hit.audio_duration_ms,
+                        subtitle: hit.target.clone(),
+                        score: 0,
+                        matched_field: hit.matched_field,
+                    })
+                })
+                .collect()
+        }
+        ContextSubsearchSource::History => {
+            crate::ai::agent_chat::ui::history::search_history_direct(query, limit)
+                .into_iter()
+                .map(|hit| {
+                    let subtitle = hit.entry.title_display().to_string();
+                    SearchResult::AgentChatHistory(crate::scripts::AgentChatHistoryMatch {
+                        entry: hit.entry,
+                        score: 0,
+                        matched_field: hit.matched_field,
+                        subtitle,
+                    })
+                })
+                .collect()
+        }
+        ContextSubsearchSource::Calendar | ContextSubsearchSource::Notifications => {
+            let (kind, prefix, icon) = match source {
+                ContextSubsearchSource::Calendar => (
+                    crate::mcp_resources::ProviderJsonResourceKind::Calendar,
+                    "calendar",
+                    "calendar",
+                ),
+                _ => (
+                    crate::mcp_resources::ProviderJsonResourceKind::Notifications,
+                    "notifications",
+                    "bell",
+                ),
+            };
+            let query_lower = query.trim().to_lowercase();
+            crate::mcp_resources::read_provider_json_items(kind)
+                .into_iter()
+                .filter(|item| {
+                    query_lower.is_empty()
+                        || item.title.to_lowercase().contains(&query_lower)
+                        || item
+                            .subtitle
+                            .as_deref()
+                            .is_some_and(|s| s.to_lowercase().contains(&query_lower))
+                })
+                .take(limit)
+                .enumerate()
+                .map(|(rank, item)| {
+                    SearchResult::SpineProjection(crate::spine::SpineListRow {
+                        id: format!("spine:provider-json:{prefix}:{rank}").into(),
+                        kind: crate::spine::SpineListRowKind::ContextResult {
+                            context_type: prefix.into(),
+                            result_id: rank.to_string().into(),
+                        },
+                        title: item.title.into(),
+                        subtitle: item.subtitle.map(Into::into),
+                        meta: None,
+                        icon: Some(icon.into()),
+                        badges: Vec::new(),
+                        score: 0,
+                        is_selectable: true,
+                        action_label: None,
+                        action: SpineListAction::Noop,
+                    })
+                })
+                .collect()
+        }
+        _ => Vec::new(),
+    }
+}
+
+/// Display title/subtitle for a composer subsearch row.
+fn composer_result_display(result: &SearchResult) -> Option<(String, Option<String>)> {
+    match result {
+        SearchResult::Note(note_match) => Some((
+            note_match.hit.title.clone(),
+            Some(note_match.subtitle.clone()),
+        )),
+        SearchResult::BrowserHistory(history_match) => {
+            let hit = &history_match.hit;
+            let title = if hit.title.trim().is_empty() {
+                hit.domain.clone()
+            } else {
+                hit.title.clone()
+            };
+            Some((title, Some(hit.url.clone())))
+        }
+        SearchResult::DictationHistory(dictation_match) => Some((
+            dictation_match.preview.clone(),
+            Some(dictation_match.target.clone()),
+        )),
+        SearchResult::AgentChatHistory(history_match) => Some((
+            history_match.entry.title_display().to_string(),
+            Some(history_match.entry.preview_display().to_string()),
+        )),
+        SearchResult::SpineProjection(row) => Some((
+            row.title.to_string(),
+            row.subtitle.as_ref().map(|s| s.to_string()),
+        )),
         _ => None,
     }
 }

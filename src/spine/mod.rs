@@ -1,3 +1,4 @@
+pub(crate) mod attach;
 mod catalog_capture;
 mod catalog_context;
 mod catalog_cwd;

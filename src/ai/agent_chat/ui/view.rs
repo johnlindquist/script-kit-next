@@ -7365,36 +7365,49 @@ impl AgentChatView {
                             &hits,
                         )]
                     }
-                    crate::spine::catalog_subsearch::ContextSubsearchSource::Notes => {
-                        vec![Self::agent_chat_spine_pending_subsearch_section(
-                            "notes", "@notes:", "note", rich_query,
-                        )]
+                    crate::spine::catalog_subsearch::ContextSubsearchSource::Notes
+                    | crate::spine::catalog_subsearch::ContextSubsearchSource::BrowserHistory
+                    | crate::spine::catalog_subsearch::ContextSubsearchSource::Dictation
+                    | crate::spine::catalog_subsearch::ContextSubsearchSource::History
+                    | crate::spine::catalog_subsearch::ContextSubsearchSource::Calendar
+                    | crate::spine::catalog_subsearch::ContextSubsearchSource::Notifications => {
+                        // Composer parity with the main window: these sources
+                        // resolve through the shared spine attach resolver.
+                        match crate::spine::attach::composer_subsearch_section(
+                            source,
+                            rich_query,
+                            segment_index,
+                            segment_byte_range,
+                        ) {
+                            Some(section) => {
+                                vec![Self::agent_chat_rich_shared_subsearch_section(
+                                    section, rich_query,
+                                )]
+                            }
+                            None => Vec::new(),
+                        }
                     }
-                    crate::spine::catalog_subsearch::ContextSubsearchSource::BrowserHistory => {
+                    crate::spine::catalog_subsearch::ContextSubsearchSource::Scripts => {
                         vec![Self::agent_chat_spine_pending_subsearch_section(
-                            "browser",
-                            "@browser:",
-                            "globe",
+                            "scripts",
+                            "@scripts:",
+                            "file-code",
                             rich_query,
                         )]
                     }
-                    crate::spine::catalog_subsearch::ContextSubsearchSource::Dictation => {
+                    crate::spine::catalog_subsearch::ContextSubsearchSource::Scriptlets => {
                         vec![Self::agent_chat_spine_pending_subsearch_section(
-                            "dictation",
-                            "@dictation:",
-                            "mic",
+                            "scriptlets",
+                            "@scriptlets:",
+                            "file-code",
                             rich_query,
                         )]
                     }
-                    crate::spine::catalog_subsearch::ContextSubsearchSource::Notifications => {
+                    crate::spine::catalog_subsearch::ContextSubsearchSource::Skills => {
                         vec![Self::agent_chat_spine_pending_subsearch_section(
-                            "notifications",
-                            "@notifications:",
-                            "bell",
-                            rich_query,
+                            "skills", "@skills:", "sparkles", rich_query,
                         )]
                     }
-                    _ => Vec::new(),
                 };
             }
         }
@@ -7553,6 +7566,65 @@ impl AgentChatView {
             icon: Some(SharedString::from("clipboard")),
             rows,
         }
+    }
+
+    /// Convert a shared-resolver subsearch section into the composer's
+    /// dropdown section, with an explicit empty row when nothing matches.
+    fn agent_chat_rich_shared_subsearch_section(
+        section: crate::spine::attach::ComposerSubsearchSection,
+        query: &str,
+    ) -> SpineListSection {
+        let trimmed = query.trim();
+        let rows = if section.rows.is_empty() {
+            vec![Self::agent_chat_spine_hint_row(
+                "No results",
+                if trimmed.is_empty() {
+                    "Nothing to attach from this source yet"
+                } else {
+                    "No matching entries"
+                },
+                Some(section.icon),
+            )]
+        } else {
+            section.rows.into_iter().map(|row| row.row).collect()
+        };
+        SpineListSection {
+            id: SharedString::from(format!(
+                "agent_chat-spine-section-subsearch:{}",
+                section.source_id
+            )),
+            title: SharedString::from(section.title),
+            subtitle: Some(SharedString::from(format!("@{}:", section.source_id))),
+            icon: Some(SharedString::from(section.icon.to_string())),
+            rows,
+        }
+    }
+
+    /// Re-derive the alias content for a shared-resolver subsearch token at
+    /// accept time. The projection still reflects the pre-replacement input,
+    /// so re-running the same deterministic query finds the accepted row.
+    fn agent_chat_rich_subsearch_alias(
+        &self,
+        token: &str,
+    ) -> Option<crate::ai::message_parts::AiContextPart> {
+        let projection = self.composer_spine.input.projection.as_ref()?;
+        let crate::spine::SpineSegmentKind::ContextMention {
+            context_type,
+            sub_query,
+        } = &projection.active_segment_kind
+        else {
+            return None;
+        };
+        let (source, rich_query) = crate::spine::catalog_subsearch::parse_context_subsearch(
+            context_type,
+            sub_query.as_deref(),
+        )?;
+        let section =
+            crate::spine::attach::composer_subsearch_section(source, rich_query, 0, 0..0)?;
+        section.rows.into_iter().find_map(|row| match row.alias {
+            Some((alias_token, part)) if alias_token == token => Some(part),
+            _ => None,
+        })
     }
 
     fn agent_chat_spine_pending_subsearch_section(
@@ -7778,6 +7850,14 @@ impl AgentChatView {
                         self.sync_inline_mentions(cx);
                     }
                     return ok;
+                }
+                // Shared-resolver sources (notes, browser history, dictation,
+                // chat history, calendar, notifications): register the alias
+                // so sync_inline_mentions stages the real content, exactly
+                // like the main window's spine_mention_aliases path.
+                if let Some(part) = self.agent_chat_rich_subsearch_alias(replacement.as_ref()) {
+                    self.typed_mention_aliases
+                        .insert(replacement.as_ref().to_string(), part);
                 }
                 let ok = self.replace_agent_chat_spine_segment(
                     segment_index,

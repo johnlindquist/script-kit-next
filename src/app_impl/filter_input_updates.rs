@@ -598,7 +598,7 @@ impl ScriptListApp {
 
     fn selected_spine_rich_subsearch_outcome(
         &mut self,
-    ) -> Option<super::spine_attach::SpineAttachOutcome> {
+    ) -> Option<crate::spine::attach::SpineAttachOutcome> {
         let projection = self.spine_projection.as_ref()?;
         let crate::spine::SpineSegmentKind::ContextMention {
             context_type,
@@ -625,7 +625,7 @@ impl ScriptListApp {
         };
         let result = flat.get(result_idx)?;
 
-        let mut outcome = super::spine_attach::attach_outcome_for_result(
+        let mut outcome = crate::spine::attach::attach_outcome_for_result(
             source,
             result,
             segment_index,
@@ -655,17 +655,7 @@ impl ScriptListApp {
     /// portal accept must produce the same token so the alias registry and
     /// the prompt plan resolve it identically.
     pub(crate) fn spine_file_mention_token(path: &str) -> String {
-        let basename = std::path::Path::new(path)
-            .file_name()
-            .and_then(|name| name.to_str())
-            .unwrap_or(path);
-        // Friendly token: whitespace runs become `-` so the token reads as
-        // one word instead of `%20` soup; reserved chars stay escaped.
-        let friendly = basename.split_whitespace().collect::<Vec<_>>().join("-");
-        format!(
-            "@file:{}",
-            crate::spine::catalog_subsearch::escape_ref_component(&friendly),
-        )
+        crate::spine::attach::spine_file_mention_token(path)
     }
 
     /// `spine_file_mention_token`, deduplicated against the live alias
