@@ -86,7 +86,7 @@ pub(super) fn build_style_rows(
                 badges: vec![ss(".")],
                 score: i32::MAX.saturating_sub(rank as i32),
                 is_selectable: true,
-                action_label: Some(ss("Insert")),
+                action_label: None,
                 action: SpineListAction::ResolveSegment {
                     segment_index,
                     segment_byte_range: segment_byte_range.clone(),

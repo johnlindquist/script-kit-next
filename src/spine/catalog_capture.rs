@@ -67,7 +67,7 @@ pub(super) fn build_capture_rows(
             badges: vec![ss(";")],
             score: i32::MAX.saturating_sub(rank as i32),
             is_selectable: true,
-            action_label: Some(ss("Insert")),
+            action_label: None,
             // A4 decision (2026-06-09): accepting a capture target converts
             // the typed `;to` prefix into the canonical postfix spelling
             // (`todo; `), which hands the input to the capture form.

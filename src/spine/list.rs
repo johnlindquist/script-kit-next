@@ -137,6 +137,10 @@ pub enum SpineListAction {
     AwaitContextSubsearchInput {
         source: SharedString,
     },
+    /// Submit the current spine prompt plan to Agent Chat — the same path
+    /// as Cmd+Enter. Used by the prompt-builder tail row so "Send" really
+    /// sends instead of being a decorative Noop.
+    SubmitPromptPlan,
     Noop,
 }
 
@@ -149,10 +153,14 @@ impl SpineListRow {
                 SpineListAction::Noop => "No Action",
                 SpineListAction::AwaitContextSubsearchInput { .. } => "Type",
                 SpineListAction::OpenModeExit { .. } => "Open",
-                SpineListAction::OpenFileSearchPortal { .. } => "Search Files",
-                SpineListAction::OpenConversation { .. } => "Open Conversation",
-                SpineListAction::InsertSegmentText { .. }
-                | SpineListAction::ResolveSegment { .. } => "Insert",
+                SpineListAction::OpenFileSearchPortal { .. } => "Browse",
+                SpineListAction::OpenConversation { .. } => "Resume",
+                SpineListAction::SubmitPromptPlan => "Send",
+                // One verb per Enter mechanic: rows that insert text and
+                // keep you typing say "Refine"; rows that resolve into a
+                // prompt segment say "Attach".
+                SpineListAction::InsertSegmentText { .. } => "Refine",
+                SpineListAction::ResolveSegment { .. } => "Attach",
             })
     }
 }
@@ -694,8 +702,8 @@ fn build_prompt_builder_tail_section(
             badges: vec![],
             score: i32::MAX,
             is_selectable: true,
-            action_label: Some(ss("Send")),
-            action: SpineListAction::Noop,
+            action_label: None,
+            action: SpineListAction::SubmitPromptPlan,
         }],
     }
 }

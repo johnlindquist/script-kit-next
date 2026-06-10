@@ -211,7 +211,7 @@ fn build_builtin_context_row(
         badges: vec![],
         score: context_row_score(match_penalty, CATEGORY_PENALTY_BUILTIN, rank),
         is_selectable: true,
-        action_label: Some(ss("Attach")),
+        action_label: None,
         action: SpineListAction::ResolveSegment {
             segment_index,
             segment_byte_range,
@@ -240,15 +240,12 @@ fn build_subsearch_context_row(
     // prompt must never clear/replace the `@` input; the full File Search
     // portal stays reachable via the explicit "Open full File Search" row
     // inside `@file:` colon mode.
-    let (action_label, action) = (
-        ss("Browse"),
-        SpineListAction::InsertSegmentText {
-            segment_index,
-            segment_byte_range,
-            text: ss(prefix_text),
-            trailing_space: false,
-        },
-    );
+    let action = SpineListAction::InsertSegmentText {
+        segment_index,
+        segment_byte_range,
+        text: ss(prefix_text),
+        trailing_space: false,
+    };
 
     Some(SpineListRow {
         id: ss(format!("spine:@:subsearch:{}", spec.prefix)),
@@ -262,7 +259,7 @@ fn build_subsearch_context_row(
         badges: vec![],
         score: context_row_score(match_penalty, CATEGORY_PENALTY_SUBSEARCH, rank),
         is_selectable: true,
-        action_label: Some(action_label),
+        action_label: None,
         action,
     })
 }

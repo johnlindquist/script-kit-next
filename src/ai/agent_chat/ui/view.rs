@@ -5227,6 +5227,7 @@ impl AgentChatView {
             SpineListAction::OpenFileSearchPortal { .. } => "openFileSearchPortal",
             SpineListAction::OpenConversation { .. } => "openConversation",
             SpineListAction::AwaitContextSubsearchInput { .. } => "awaitContextSubsearchInput",
+            SpineListAction::SubmitPromptPlan => "submitPromptPlan",
             SpineListAction::Noop => "noop",
         };
         Self::agent_chat_spine_hash_parts(&[
@@ -7791,8 +7792,11 @@ impl AgentChatView {
                 ok
             }
             SpineListAction::AwaitContextSubsearchInput { .. } => true,
+            // SubmitPromptPlan falls through (false) so the composer's
+            // normal Enter-to-send path delivers the message.
             SpineListAction::OpenModeExit { .. }
             | SpineListAction::OpenConversation { .. }
+            | SpineListAction::SubmitPromptPlan
             | SpineListAction::Noop => false,
         }
     }

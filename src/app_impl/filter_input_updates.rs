@@ -932,6 +932,13 @@ impl ScriptListApp {
                 );
                 true
             }
+            SpineListAction::SubmitPromptPlan => {
+                tracing::info!(
+                    target: "script_kit::spine",
+                    event = "apply_spine_action_submit_prompt_plan",
+                );
+                self.try_submit_spine_prompt_plan_from_enter(cx)
+            }
             SpineListAction::Noop => false,
         }
     }

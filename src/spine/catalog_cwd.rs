@@ -36,7 +36,7 @@ pub(super) fn build_cwd_root_rows(
             badges: vec![],
             score: i32::MAX.saturating_sub(rank as i32),
             is_selectable: true,
-            action_label: Some(ss("Set CWD")),
+            action_label: None,
             action: SpineListAction::ResolveSegment {
                 segment_index,
                 segment_byte_range: segment_byte_range.clone(),

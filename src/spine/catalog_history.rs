@@ -46,7 +46,7 @@ pub(crate) fn build_recent_prompt_rows(
             badges: vec![],
             score: hit.score as i32,
             is_selectable: true,
-            action_label: Some(SharedString::from("Use")),
+            action_label: None,
             action: SpineListAction::InsertSegmentText {
                 segment_index,
                 segment_byte_range: segment_byte_range.clone(),
@@ -93,7 +93,7 @@ pub(crate) fn build_conversation_rows(tail_query: &str) -> Vec<SpineListRow> {
             badges: vec![],
             score: hit.score as i32,
             is_selectable: true,
-            action_label: Some(SharedString::from("Resume")),
+            action_label: None,
             action: SpineListAction::OpenConversation {
                 conversation_id: SharedString::from(entry.session_id),
             },
