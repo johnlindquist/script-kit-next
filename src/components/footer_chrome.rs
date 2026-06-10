@@ -699,39 +699,34 @@ fn render_footer_hint_content_impl(
         .unwrap_or(metrics.button_padding_y);
     let content_gap = layout.content_gap_px.unwrap_or(metrics.content_gap);
     let button_radius = layout.button_radius_px.unwrap_or(metrics.button_radius);
-    let key_width_px = match mode {
-        FooterHintKeyMode::Shortcut => {
-            footer_shortcut_keycaps_width_px_with_gap(key.as_ref(), content_gap)
-        }
-    };
-    let label_max_width_px = slot_width_px.map(|slot| {
-        if matches!(justify, FooterHintContentJustify::KeyAnchored) {
-            footer_labelcap_max_width_for_slot_with_padding_and_gap(
-                slot,
-                key_width_px,
-                edge_padding_x,
-                content_gap,
-            )
-        } else {
-            footer_labelcap_max_width_for_slot_with_padding_and_gap(
-                slot,
-                key_width_px,
-                edge_padding_x,
-                content_gap,
-            )
-        }
-    });
-    let labelcap = if let Some(max_width_px) = label_max_width_px {
-        render_footer_labelcap_constrained(
+    // Flexbox-native slot layout: the keycaps keep their intrinsic flex_none
+    // width and the label is a shrinkable flex item, so the label's budget is
+    // whatever the slot leaves over — no estimated keycap text widths.
+    let labelcap = if slot_width_px.is_some() {
+        let shrinkable_labelcap = render_footer_labelcap_constrained(
             label,
             theme,
             footer_text,
             hover_text,
-            Some(max_width_px),
-            matches!(justify, FooterHintContentJustify::KeyAnchored),
-            label_font_size_px,
+            None,
             false,
-        )
+            label_font_size_px,
+            true,
+        );
+        if matches!(justify, FooterHintContentJustify::KeyAnchored) {
+            // Key-anchored: the label claims all leftover slot width so the
+            // keycaps sit pinned at the slot's trailing edge.
+            div()
+                .flex_1()
+                .min_w(px(0.0))
+                .overflow_hidden()
+                .flex()
+                .justify_start()
+                .child(shrinkable_labelcap)
+                .into_any_element()
+        } else {
+            shrinkable_labelcap
+        }
     } else {
         render_footer_labelcap(label, theme, footer_text, hover_text, label_font_size_px)
     };
@@ -933,6 +928,7 @@ pub(crate) fn footer_labelcap_max_width_for_slot_with_padding(
     )
 }
 
+#[allow(dead_code)]
 pub(crate) fn footer_labelcap_max_width_for_slot_with_padding_and_gap(
     slot_width_px: f32,
     key_width_px: f32,
