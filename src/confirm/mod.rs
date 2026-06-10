@@ -30,6 +30,7 @@ pub(crate) use parent_dialog::{
     confirm_with_parent_dialog, open_parent_confirm_dialog,
     open_parent_confirm_dialog_for_automation_parent, open_parent_confirm_dialog_for_entity,
     open_parent_confirm_dialog_with_lifecycle, ParentConfirmOptions,
+    PARENT_CONFIRM_DIALOG_WIDTH_PX,
 };
 
 #[allow(unused_imports)]

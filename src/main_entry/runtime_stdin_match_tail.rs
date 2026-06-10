@@ -66,7 +66,7 @@
                                     confirm_text: confirm_text.unwrap_or_else(|| "Delete".to_string()).into(),
                                     cancel_text: cancel_text.unwrap_or_else(|| "Cancel".to_string()).into(),
                                     confirm_variant: gpui_component::button::ButtonVariant::Danger,
-                                    width: gpui::px(448.),
+                                    width: gpui::px(crate::confirm::PARENT_CONFIRM_DIALOG_WIDTH_PX),
                                 };
                                 view.open_confirm_prompt(options, sender, ctx);
                             }

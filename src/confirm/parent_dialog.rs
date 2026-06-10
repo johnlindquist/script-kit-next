@@ -55,6 +55,10 @@ impl std::fmt::Debug for ParentConfirmOptions {
     }
 }
 
+/// Shared default width for parent-attached confirm dialogs so callers do
+/// not re-hardcode the dialog footprint.
+pub(crate) const PARENT_CONFIRM_DIALOG_WIDTH_PX: f32 = 448.0;
+
 impl Default for ParentConfirmOptions {
     fn default() -> Self {
         Self {
@@ -63,7 +67,7 @@ impl Default for ParentConfirmOptions {
             confirm_text: "OK".into(),
             cancel_text: "Cancel".into(),
             confirm_variant: ButtonVariant::Primary,
-            width: px(448.),
+            width: px(PARENT_CONFIRM_DIALOG_WIDTH_PX),
         }
     }
 }
@@ -81,7 +85,7 @@ impl ParentConfirmOptions {
             confirm_text: confirm_text.into(),
             cancel_text: "Cancel".into(),
             confirm_variant: ButtonVariant::Danger,
-            width: px(448.),
+            width: px(PARENT_CONFIRM_DIALOG_WIDTH_PX),
         }
     }
 }

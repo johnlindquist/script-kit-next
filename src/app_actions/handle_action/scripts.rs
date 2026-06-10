@@ -441,7 +441,7 @@ impl ScriptListApp {
                         confirm_text: removal_action.confirm_title().into(),
                         cancel_text: "Cancel".into(),
                         confirm_variant: gpui_component::button::ButtonVariant::Danger,
-                        width: gpui::px(448.),
+                        width: gpui::px(crate::confirm::PARENT_CONFIRM_DIALOG_WIDTH_PX),
                     },
                     {
                         let trace_id = trace_id.clone();
