@@ -5,9 +5,9 @@
 //! shortcut formatting, shortcut keycap parsing, fuzzy matching, and scoring.
 
 use super::dialog::{
-    build_grouped_items_static, coerce_action_selection, initial_selection_index,
-    resolve_selected_protocol_action_index, should_rebuild_grouped_items_for_config_change,
-    GroupedActionItem,
+    GroupedActionItem, build_grouped_items_static, coerce_action_selection,
+    initial_selection_index, resolve_selected_protocol_action_index,
+    should_rebuild_grouped_items_for_config_change,
 };
 use super::types::{
     Action, ActionCategory, ActionsDialogConfig, AnchorPosition, SearchPosition, SectionStyle,
@@ -579,7 +579,10 @@ fn route_initial_selection_carries_through_to_grouped_items() {
 #[test]
 fn route_preserves_context_title_and_placeholder() {
     let route = make_route("agent_chat:root", &["change_model", "copy"]);
-    assert_eq!(route.context_title.as_deref(), Some("agent_chat:root title"));
+    assert_eq!(
+        route.context_title.as_deref(),
+        Some("agent_chat:root title")
+    );
     assert_eq!(
         route.search_placeholder.as_deref(),
         Some("agent_chat:root placeholder")
@@ -640,7 +643,7 @@ fn route_state_back_stack_restore_preserves_search_and_selection() {
 fn agent_chat_root_route_initial_selection_is_change_profile() {
     // Verify the Agent Chat root route builder sets initial selection
     // to the "Change Profile" action.
-    use super::builders::{get_agent_chat_root_route, AGENT_CHAT_CHANGE_PROFILE_ACTION_ID};
+    use super::builders::{AGENT_CHAT_CHANGE_PROFILE_ACTION_ID, get_agent_chat_root_route};
 
     let models = vec![];
     let route = get_agent_chat_root_route(&models, None);

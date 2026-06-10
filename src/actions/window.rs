@@ -2388,7 +2388,20 @@ pub fn resize_actions_window_direct(
 ///
 /// The window is "pinned to bottom" - the search input stays in place and
 /// the window shrinks/grows from the top.
+///
+/// The resize is deferred: callers are frequently inside the actions
+/// window's own event dispatch (the main-window keystroke interceptor fires
+/// while the popup is the key window), and `WindowHandle::update` on a
+/// window from within its own dispatch fails with "window not found" —
+/// which silently froze the popup height for main-hosted popups. Same
+/// re-entrancy class as the activation-callback close path in
+/// `notes/window/panels.rs`.
 pub fn resize_actions_window(cx: &mut App, dialog_entity: &Entity<ActionsDialog>) {
+    let dialog_entity = dialog_entity.clone();
+    cx.defer(move |cx| resize_actions_window_now(cx, &dialog_entity));
+}
+
+fn resize_actions_window_now(cx: &mut App, dialog_entity: &Entity<ActionsDialog>) {
     crate::logging::log("ACTIONS", "resize_actions_window called");
     if let Some(handle) = get_actions_window_handle() {
         // Read dialog state to calculate new height

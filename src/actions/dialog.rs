@@ -5035,7 +5035,8 @@ mod tests {
         );
 
         // POPUP_MAX_HEIGHT (400) - search (40) - context header (26) - footer (32)
-        assert_eq!(viewport_height, 302.0);
+        // - list padding (top 0 + bottom 6)
+        assert_eq!(viewport_height, 296.0);
     }
 
     #[test]

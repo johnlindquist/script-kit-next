@@ -97,7 +97,10 @@ pub fn base_actions_popup_theme() -> ActionsPopupThemeDef {
             empty_row_height: crate::actions::constants::ACTION_ITEM_HEIGHT,
             section_header_height: 24.0,
             padding_top: 0.0,
-            padding_bottom: 0.0,
+            // Breathing room below the last row so it doesn't sit flush
+            // against the popup's bottom edge. Flows through window sizing
+            // (actions_window_dynamic_height) and scrollbar viewport math.
+            padding_bottom: 6.0,
             overdraw_px: 100.0,
         },
         row: ActionsPopupRowTokens {

@@ -258,8 +258,7 @@ impl Action {
     /// Add an optional shortcut to the action
     pub fn with_shortcut_opt(mut self, shortcut: Option<String>) -> Self {
         if let Some(s) = shortcut {
-            let shortcut_tokens =
-                crate::components::hint_strip::shortcut_tokens_from_hint(&s);
+            let shortcut_tokens = crate::components::hint_strip::shortcut_tokens_from_hint(&s);
             tracing::trace!(
                 target: "script_kit::actions",
                 action_id = %self.id,

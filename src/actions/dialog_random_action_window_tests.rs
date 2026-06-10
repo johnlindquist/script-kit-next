@@ -6,21 +6,21 @@
 //! Each test picks a specific scenario and validates expected behavior.
 
 use super::builders::{
-    get_ai_command_bar_actions, get_chat_context_actions, get_chat_model_picker_actions,
-    get_clipboard_history_context_actions, get_file_context_actions, get_new_chat_actions,
-    get_note_switcher_actions, get_notes_command_bar_actions, get_path_context_actions,
-    get_script_context_actions, get_scriptlet_context_actions_with_custom, to_deeplink_name,
     ChatModelInfo, ChatPromptInfo, ClipboardEntryInfo, NewChatModelInfo, NewChatPresetInfo,
-    NoteSwitcherNoteInfo, NotesInfo,
+    NoteSwitcherNoteInfo, NotesInfo, get_ai_command_bar_actions, get_chat_context_actions,
+    get_chat_model_picker_actions, get_clipboard_history_context_actions, get_file_context_actions,
+    get_new_chat_actions, get_note_switcher_actions, get_notes_command_bar_actions,
+    get_path_context_actions, get_script_context_actions,
+    get_scriptlet_context_actions_with_custom, to_deeplink_name,
 };
 use super::command_bar::CommandBarConfig;
 use super::dialog::{
-    build_grouped_items_static, coerce_action_selection, ActionsDialog, GroupedActionItem,
+    ActionsDialog, GroupedActionItem, build_grouped_items_static, coerce_action_selection,
 };
 use super::types::{
     Action, ActionCategory, AnchorPosition, ScriptInfo, SearchPosition, SectionStyle,
 };
-use super::window::{count_section_headers, WindowPosition};
+use super::window::{WindowPosition, count_section_headers};
 use crate::clipboard_history::ContentType;
 use crate::designs::icon_variations::IconName;
 use crate::file_search::{FileInfo, FileType};
@@ -680,9 +680,11 @@ fn new_chat_only_last_used() {
     ];
     let actions = get_new_chat_actions(&last, &[], &[]);
     assert_eq!(actions.len(), 2);
-    assert!(actions
-        .iter()
-        .all(|a| a.section.as_deref() == Some("Last Used Settings")));
+    assert!(
+        actions
+            .iter()
+            .all(|a| a.section.as_deref() == Some("Last Used Settings"))
+    );
     assert!(actions.iter().all(|a| a.icon == Some(IconName::BoltFilled)));
 }
 
@@ -803,7 +805,12 @@ fn note_switcher_large_char_count() {
 
 #[test]
 fn score_action_single_char_search() {
-    let action = Action::new("script:run", "Run Script", None, ActionCategory::ScriptContext);
+    let action = Action::new(
+        "script:run",
+        "Run Script",
+        None,
+        ActionCategory::ScriptContext,
+    );
     let score = ActionsDialog::score_action(&action, "r");
     assert!(
         score >= 100,

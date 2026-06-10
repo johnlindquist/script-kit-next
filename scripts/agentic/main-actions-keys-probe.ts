@@ -84,7 +84,9 @@ try {
     filteredState?.search?.textLength === 3 &&
       typeof openBounds?.height === "number" &&
       typeof filteredBounds?.height === "number" &&
-      filteredBounds.height <= openBounds.height,
+      // STRICT shrink: the main-hosted popup resize used to silently fail
+      // ("window not found" re-entrancy) and a <= check let it pass.
+      filteredBounds.height < openBounds.height,
     {
       searchTextLength: filteredState?.search?.textLength,
       heightOpen: openBounds?.height,
