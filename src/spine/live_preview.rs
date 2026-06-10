@@ -49,11 +49,18 @@ struct ExpensiveSlot {
     ready: Option<(u64, ExpensiveResult)>,
 }
 
+/// How long a pasteboard read stays fresh before `refresh_cheap_fields`
+/// touches the system clipboard again. The "cheap" refresh runs per
+/// keystroke while the context root is open; without a TTL every keypress
+/// performs a synchronous NSPasteboard round trip.
+pub(crate) const CLIPBOARD_PREVIEW_TTL: std::time::Duration = std::time::Duration::from_millis(750);
+
 #[derive(Debug)]
 pub(crate) struct SpineLivePreviewCache {
     pub current: SpineLivePreview,
     pub generation: u64,
     last_expensive_kick: Option<std::time::Instant>,
+    last_clipboard_read: Option<std::time::Instant>,
     pending_expensive: Arc<Mutex<ExpensiveSlot>>,
 }
 
@@ -63,6 +70,7 @@ impl Default for SpineLivePreviewCache {
             current: SpineLivePreview::default(),
             generation: 0,
             last_expensive_kick: None,
+            last_clipboard_read: None,
             pending_expensive: Arc::new(Mutex::new(ExpensiveSlot::default())),
         }
     }
@@ -93,10 +101,12 @@ impl SpineLivePreviewCache {
             _ => Some("No tracked app".to_string()),
         };
 
-        let new_clipboard = arboard::Clipboard::new()
-            .ok()
-            .and_then(|mut cb| cb.get_text().ok())
-            .filter(|t| !t.trim().is_empty());
+        let new_clipboard = self.clipboard_text_with_ttl(|| {
+            arboard::Clipboard::new()
+                .ok()
+                .and_then(|mut cb| cb.get_text().ok())
+                .filter(|t| !t.trim().is_empty())
+        });
 
         if new_app != self.current.frontmost_app_name
             || new_title != self.current.active_window_title
@@ -109,6 +119,19 @@ impl SpineLivePreviewCache {
             self.current.clipboard_text = new_clipboard;
             self.generation = self.generation.wrapping_add(1);
         }
+    }
+
+    /// Return the cached clipboard preview while the last read is fresher
+    /// than [`CLIPBOARD_PREVIEW_TTL`]; otherwise run `read` and restamp.
+    fn clipboard_text_with_ttl(&mut self, read: impl FnOnce() -> Option<String>) -> Option<String> {
+        if self
+            .last_clipboard_read
+            .is_some_and(|at| at.elapsed() < CLIPBOARD_PREVIEW_TTL)
+        {
+            return self.current.clipboard_text.clone();
+        }
+        self.last_clipboard_read = Some(std::time::Instant::now());
+        read()
     }
 
     fn collect_pending_expensive(&mut self) {
@@ -374,4 +397,44 @@ impl SpineLivePreview {
 
 fn truncate_preview(input: &str, max_chars: usize) -> String {
     super::text_preview::single_line_truncate(input, max_chars)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn clipboard_read_is_skipped_within_ttl() {
+        let mut cache = SpineLivePreviewCache::default();
+        cache.current.clipboard_text = Some("cached".to_string());
+        cache.last_clipboard_read = Some(std::time::Instant::now());
+
+        let value = cache.clipboard_text_with_ttl(|| panic!("must not touch the pasteboard"));
+        assert_eq!(value.as_deref(), Some("cached"));
+    }
+
+    #[test]
+    fn clipboard_read_runs_after_ttl_expires() {
+        let mut cache = SpineLivePreviewCache::default();
+        cache.current.clipboard_text = Some("stale".to_string());
+        cache.last_clipboard_read = Some(
+            std::time::Instant::now() - CLIPBOARD_PREVIEW_TTL - std::time::Duration::from_millis(1),
+        );
+
+        let value = cache.clipboard_text_with_ttl(|| Some("fresh".to_string()));
+        assert_eq!(value.as_deref(), Some("fresh"));
+        assert!(
+            cache
+                .last_clipboard_read
+                .is_some_and(|at| at.elapsed() < CLIPBOARD_PREVIEW_TTL)
+        );
+    }
+
+    #[test]
+    fn clipboard_read_runs_on_first_refresh() {
+        let mut cache = SpineLivePreviewCache::default();
+        let value = cache.clipboard_text_with_ttl(|| Some("first".to_string()));
+        assert_eq!(value.as_deref(), Some("first"));
+        assert!(cache.last_clipboard_read.is_some());
+    }
 }
