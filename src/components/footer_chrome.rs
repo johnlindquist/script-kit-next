@@ -32,6 +32,13 @@ pub(crate) const FOOTER_BUTTON_VERTICAL_INSET_PX: f32 = 2.0;
 pub(crate) const FOOTER_ACTION_ITEM_GAP_PX: f32 = 2.0;
 pub(crate) const FOOTER_ACTION_CONTENT_GAP_PX: f32 = 4.0;
 pub(crate) const FOOTER_ACTION_CONTENT_PADDING_X_PX: f32 = 4.0;
+// Extra inner x width (total, split across both sides) that trailing centered
+// action buttons (Actions, Agent, Apply, Close, ...) reserve beyond
+// `button_padding_x`, so their content and hover pill don't hug the
+// label/keycaps. Consumed by both the native AppKit footer
+// (`footer_hint_legacy_extra_padding`) and the GPUI flexbox footer overlay so
+// the two renderers stay in lockstep.
+pub(crate) const FOOTER_TRAILING_ACTION_EXTRA_PADDING_X_PX: f32 = 12.0;
 pub(crate) const FOOTER_KEY_ANCHORED_CONTENT_PADDING_X_PX: f32 = 6.0;
 pub(crate) const FOOTER_ACTION_BUTTON_RADIUS_PX: f32 = 14.0;
 pub(crate) const FOOTER_RUN_SLOT_MIN_WIDTH_PX: f32 = 92.0;
@@ -411,15 +418,46 @@ pub(crate) fn render_footer_hint_content_flex(
     key_first: bool,
     justify: FooterHintContentJustify,
 ) -> AnyElement {
+    render_footer_hint_content_flex_with_layout(
+        label,
+        key,
+        mode,
+        theme,
+        key_first,
+        justify,
+        FooterHintButtonLayoutOverrides::default(),
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn render_footer_hint_content_flex_with_layout(
+    label: SharedString,
+    key: SharedString,
+    mode: FooterHintKeyMode,
+    theme: &Theme,
+    key_first: bool,
+    justify: FooterHintContentJustify,
+    layout: FooterHintButtonLayoutOverrides,
+) -> AnyElement {
     let footer_text = footer_hint_text_color(theme);
     let hover_text = footer_hover_text_color(theme, None);
     let hover_glyph = footer_hover_glyph_color(theme, None);
     let metrics = current_main_menu_footer_metrics();
-    let edge_padding_x = if matches!(justify, FooterHintContentJustify::KeyAnchored) {
-        metrics.run_button_padding_x
-    } else {
-        metrics.button_padding_x
+    let default_edge_padding_x = match justify {
+        FooterHintContentJustify::KeyAnchored => metrics.run_button_padding_x,
+        // Trailing centered action buttons keep the same comfortable inner x
+        // padding the native AppKit footer reserves via
+        // `footer_hint_legacy_extra_padding` (half of the extra per side on
+        // top of the base button padding).
+        FooterHintContentJustify::Center => {
+            metrics.button_padding_x + FOOTER_TRAILING_ACTION_EXTRA_PADDING_X_PX / 2.0
+        }
+        FooterHintContentJustify::Start => metrics.button_padding_x,
     };
+    let edge_padding_x = layout
+        .edge_padding_x_px
+        .or(layout.button_padding_x_px)
+        .unwrap_or(default_edge_padding_x);
 
     let labelcap = render_footer_labelcap_constrained(
         label,
@@ -431,13 +469,14 @@ pub(crate) fn render_footer_hint_content_flex(
         None,
         true,
     );
+    let content_gap = layout.content_gap_px.unwrap_or(metrics.content_gap);
     let keycaps = match mode {
         FooterHintKeyMode::Shortcut => render_footer_shortcut_keycaps_with_metrics(
             key.to_string(),
             theme,
             None,
             None,
-            Some(metrics.content_gap),
+            Some(content_gap),
             Some(FooterKeycapHoverStyle {
                 text: hover_text,
                 glyph: hover_glyph,
@@ -452,12 +491,14 @@ pub(crate) fn render_footer_hint_content_flex(
         .overflow_hidden()
         .pl(px(edge_padding_x))
         .pr(px(edge_padding_x))
-        .py(px(metrics.button_padding_y))
-        .rounded(px(metrics.button_radius))
+        .py(px(layout
+            .button_padding_y_px
+            .unwrap_or(metrics.button_padding_y)))
+        .rounded(px(layout.button_radius_px.unwrap_or(metrics.button_radius)))
         .flex()
         .flex_row()
         .items_center()
-        .gap(px(metrics.content_gap))
+        .gap(px(content_gap))
         .group("footer-action-button");
 
     row = match justify {
@@ -517,29 +558,51 @@ pub(crate) fn render_footer_hint_action_button_frame(
         .layout
         .button_radius_px
         .unwrap_or(metrics.button_radius);
-    let content_gap = spec.layout.content_gap_px.unwrap_or(metrics.content_gap);
     let edge_padding_x = spec
         .layout
         .edge_padding_x_px
         .or(spec.layout.button_padding_x_px)
         .unwrap_or(metrics.button_padding_x);
-    let visual_width = if spec.layout.shrink_frame_to_content_px {
-        footer_hint_action_visual_width_px(
-            spec.label.as_ref(),
-            spec.key.as_ref(),
-            spec.slot_width_px,
-            edge_padding_x,
-            content_gap,
-        )
-    } else {
-        spec.slot_width_px
-    };
     let content_layout = FooterHintButtonLayoutOverrides {
         button_padding_x_px: Some(edge_padding_x),
         ..spec.layout
     };
     let hover_bg = gpui::rgba(themed_footer_button_hover_rgba(theme));
     let active_bg = gpui::rgba(themed_footer_button_active_rgba(theme));
+
+    // Flexbox-native frame: when shrinking to content, the highlight pill hugs
+    // the rendered label + keycaps (no estimated text widths), bounded by the
+    // slot. Otherwise it fills the fixed slot exactly as before.
+    let shrink_to_content = spec.layout.shrink_frame_to_content_px;
+    let content = if shrink_to_content {
+        render_footer_hint_content_flex_with_layout(
+            spec.label,
+            spec.key,
+            FooterHintKeyMode::Shortcut,
+            theme,
+            spec.key_first,
+            spec.justify,
+            content_layout,
+        )
+    } else {
+        render_footer_hint_button_like_with_layout(
+            FooterHintButtonSpec {
+                label: spec.label,
+                key: spec.key,
+                slot_width_px: Some(spec.slot_width_px),
+                key_first: spec.key_first,
+                justify: spec.justify,
+                label_font_size_px: None,
+                keycap_font_size_px: None,
+                keycap_height_px: None,
+                hover_text_alpha: None,
+                hover_glyph_alpha: None,
+                hover_keycap_border_alpha: None,
+            },
+            content_layout,
+            theme,
+        )
+    };
 
     div()
         .id(spec.id)
@@ -552,7 +615,9 @@ pub(crate) fn render_footer_hint_action_button_frame(
         .group("footer-action-button-slot")
         .child(
             div()
-                .w(px(visual_width))
+                .when(!shrink_to_content, |style| style.w(px(spec.slot_width_px)))
+                .max_w(px(spec.slot_width_px))
+                .min_w(px(0.0))
                 .h_full()
                 .flex()
                 .items_center()
@@ -561,23 +626,7 @@ pub(crate) fn render_footer_hint_action_button_frame(
                 .rounded(px(radius))
                 .when(spec.selected, |style| style.bg(active_bg))
                 .group_hover("footer-action-button-slot", move |style| style.bg(hover_bg))
-                .child(render_footer_hint_button_like_with_layout(
-                    FooterHintButtonSpec {
-                        label: spec.label,
-                        key: spec.key,
-                        slot_width_px: Some(visual_width),
-                        key_first: spec.key_first,
-                        justify: spec.justify,
-                        label_font_size_px: None,
-                        keycap_font_size_px: None,
-                        keycap_height_px: None,
-                        hover_text_alpha: None,
-                        hover_glyph_alpha: None,
-                        hover_keycap_border_alpha: None,
-                    },
-                    content_layout,
-                    theme,
-                )),
+                .child(content),
         )
 }
 
@@ -807,46 +856,6 @@ pub(crate) fn footer_horizontal_run_origins_px(
             origin
         })
         .collect()
-}
-
-pub(crate) fn footer_hint_action_visual_width_px(
-    label: &str,
-    key: &str,
-    slot_width_px: f32,
-    edge_padding_x_px: f32,
-    content_gap_px: f32,
-) -> f32 {
-    let label_width_px = footer_labelcap_estimated_width_px(label);
-    let key_width_px = footer_shortcut_keycaps_width_px_with_gap(key, content_gap_px);
-    let content_gap = if !label.trim().is_empty() && key_width_px > 0.0 {
-        content_gap_px
-    } else {
-        0.0
-    };
-    (label_width_px + content_gap + key_width_px + edge_padding_x_px.max(0.0) * 2.0)
-        .max(current_main_menu_footer_metrics().keycap_height)
-        .min(slot_width_px)
-        .ceil()
-}
-
-fn footer_labelcap_estimated_width_px(label: &str) -> f32 {
-    let estimated_text_width = label
-        .chars()
-        .map(|ch| {
-            if ch.is_ascii_alphanumeric() {
-                FOOTER_HINT_FONT_SIZE_PX * 0.62
-            } else if ch.is_whitespace() {
-                FOOTER_HINT_FONT_SIZE_PX * 0.35
-            } else {
-                FOOTER_HINT_FONT_SIZE_PX * 0.82
-            }
-        })
-        .sum::<f32>();
-
-    let metrics = current_main_menu_footer_metrics();
-    (estimated_text_width + metrics.keycap_padding_x * 2.0)
-        .max(metrics.keycap_height)
-        .ceil()
 }
 
 fn footer_keycap_estimated_width_px(token: &str) -> f32 {
@@ -1287,23 +1296,28 @@ mod tests {
     }
 
     #[test]
-    fn footer_action_visual_width_shrinks_with_edge_padding_inside_fixed_slot() {
-        let slot = FOOTER_CLOSE_SLOT_WIDTH_PX;
-        let loose = footer_hint_action_visual_width_px("Cancel", "Esc", slot, 8.0, 4.0);
-        let tight = footer_hint_action_visual_width_px("Cancel", "Esc", slot, 2.0, 4.0);
+    fn footer_action_frame_shrinks_with_flex_content_not_estimated_widths() {
+        let source = include_str!("footer_chrome.rs");
+        let frame_start = source
+            .find("pub(crate) fn render_footer_hint_action_button_frame")
+            .expect("action button frame renderer should exist");
+        let frame_source = &source[frame_start..];
+        let frame_body = &frame_source[..frame_source
+            .find("\n}\n")
+            .expect("frame renderer should terminate")];
 
-        assert!(tight < loose);
-        assert!(tight <= slot);
-        assert!(loose <= slot);
-    }
-
-    #[test]
-    fn footer_action_visual_width_clamps_long_labels_to_slot_width() {
-        let slot = FOOTER_RUN_SLOT_MIN_WIDTH_PX;
-        let width =
-            footer_hint_action_visual_width_px("Confirm Preview Layout", "↵", slot, 2.0, 4.0);
-
-        assert_eq!(width, slot);
+        assert!(
+            frame_body.contains("render_footer_hint_content_flex_with_layout"),
+            "shrink-to-content frames must hug the rendered flex content"
+        );
+        assert!(
+            !frame_body.contains("footer_hint_action_visual_width_px"),
+            "shrink-to-content frames must not derive widths from per-char text estimates"
+        );
+        assert!(
+            frame_body.contains(".max_w(px(spec.slot_width_px))"),
+            "the content-hugging frame must stay bounded by the fixed slot"
+        );
     }
 
     #[test]
