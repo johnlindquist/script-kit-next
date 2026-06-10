@@ -1087,8 +1087,22 @@ impl App {
                     // this didn't cause any issues on non windows platforms as it seems we always won the race to on_request_frame
                     // on windows we quite frequently lose the race and return a window that has never rendered, which leads to a crash
                     // where DispatchTree::root_node_id asserts on empty nodes
-                    let clear = window.draw(cx);
-                    clear.clear();
+                    //
+                    // SAFETY GUARD: if open_window runs while another window's draw is
+                    // in progress (e.g. a render() that opens a child window), drawing
+                    // here would allocate into — and then CLEAR — the shared per-App
+                    // element arena, dangling every element of the caller's
+                    // in-progress draw (use-after-free on its next layout pass). Skip
+                    // the eager draw; the new window draws on its first frame callback.
+                    if crate::window::draw_in_progress() {
+                        log::warn!(
+                            "open_window called during an in-progress window draw; \
+                             skipping eager first draw to protect the element arena"
+                        );
+                    } else {
+                        let clear = window.draw(cx);
+                        clear.clear();
+                    }
 
                     cx.window_handles.insert(id, window.handle);
                     cx.windows.get_mut(id).unwrap().replace(Box::new(window));

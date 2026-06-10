@@ -994,20 +994,36 @@ pub(crate) fn sync_main_footer_popup(
         }
     }
 
-    if let Some(config) = config {
-        sync_gpui_footer_overlay(
-            cx,
-            parent_window_handle,
-            parent_bounds,
-            display_id,
-            config.clone(),
-        );
-    } else {
-        close_gpui_footer_overlay(cx);
-    }
+    defer_gpui_footer_overlay_sync(cx, parent_window_handle, parent_bounds, display_id, config);
 
     #[cfg(not(target_os = "macos"))]
     let _ = (window, config);
+}
+
+/// Sync the GPUI footer overlay child window OUTSIDE the caller's draw.
+///
+/// `sync_main_footer_popup`/`notify_main_footer_popup` are called from the main
+/// window's `render()`. Opening or drawing another window mid-draw allocates
+/// into — and `open_window` then clears — the shared per-App element arena,
+/// dangling every element of the in-progress draw (real SIGSEGV: dangling
+/// `Rc<InspectorElementPath>` drop in `Drawable::request_layout` on the first
+/// hotkey show). Deferring runs the overlay sync after the current update
+/// cycle, when no draw is in progress.
+fn defer_gpui_footer_overlay_sync(
+    cx: &mut App,
+    parent_window_handle: AnyWindowHandle,
+    parent_bounds: Bounds<Pixels>,
+    display_id: Option<DisplayId>,
+    config: Option<&MainWindowFooterConfig>,
+) {
+    let config = config.cloned();
+    cx.defer(move |cx| {
+        if let Some(config) = config {
+            sync_gpui_footer_overlay(cx, parent_window_handle, parent_bounds, display_id, config);
+        } else {
+            close_gpui_footer_overlay(cx);
+        }
+    });
 }
 
 pub(crate) fn sync_window_footer_popup(window: &mut Window, config: &MainWindowFooterConfig) {
@@ -1073,17 +1089,7 @@ pub(crate) fn notify_main_footer_popup(
         }
     }
 
-    if let Some(config) = config {
-        sync_gpui_footer_overlay(
-            cx,
-            parent_window_handle,
-            parent_bounds,
-            display_id,
-            config.clone(),
-        );
-    } else {
-        close_gpui_footer_overlay(cx);
-    }
+    defer_gpui_footer_overlay_sync(cx, parent_window_handle, parent_bounds, display_id, config);
 
     #[cfg(not(target_os = "macos"))]
     let _ = (window, config);
