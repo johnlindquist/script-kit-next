@@ -684,7 +684,9 @@ impl ScriptListApp {
                     .unwrap_or(hit.source_id.as_str());
                 self.resume_agent_chat_conversation_from_history(thread_id, &hit.excerpt, cx);
             }
-            crate::brain::DocSource::Clipboard | crate::brain::DocSource::Activity => {
+            crate::brain::DocSource::Clipboard
+            | crate::brain::DocSource::Activity
+            | crate::brain::DocSource::Capture => {
                 let prompt = self.filter_text.trim().to_string();
                 let entry_intent = (!prompt.is_empty()).then_some(prompt);
                 self.open_tab_ai_agent_chat_with_entry_intent_suppressing_focused_part(
@@ -1197,7 +1199,7 @@ impl ScriptListApp {
         input: &str,
         cx: &mut Context<Self>,
     ) {
-        use crate::fallbacks::builtins::{get_builtin_fallbacks, FallbackResult};
+        use crate::fallbacks::builtins::{FallbackResult, get_builtin_fallbacks};
 
         logging::log(
             "FALLBACK",

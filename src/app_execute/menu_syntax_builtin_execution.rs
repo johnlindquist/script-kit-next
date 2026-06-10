@@ -40,6 +40,11 @@ impl ScriptListApp {
 
         match result {
             Ok(message) => {
+                crate::brain::record_capture_signals(
+                    &invocation.target,
+                    &invocation.body,
+                    &invocation.tags,
+                );
                 self.show_hud(message, Some(HUD_MEDIUM_MS), cx);
                 self.close_and_reset_window(cx);
                 AppOwnedCaptureOutcome::Handled
@@ -139,13 +144,9 @@ fn update_app_owned_todo_ref_in_sk_path(
     object_refs: &[crate::menu_syntax::CaptureObjectRef],
     sk_path: &std::path::Path,
 ) -> Result<(), String> {
-    let mut record = read_app_owned_jsonl_record_by_key_in_sk_path(
-        sk_path,
-        "todos.jsonl",
-        "id",
-        todo_id,
-    )
-    .ok_or_else(|| "Todo not found.".to_string())?;
+    let mut record =
+        read_app_owned_jsonl_record_by_key_in_sk_path(sk_path, "todos.jsonl", "id", todo_id)
+            .ok_or_else(|| "Todo not found.".to_string())?;
     if record
         .get("deletedAt")
         .and_then(|value| value.as_str())
@@ -243,8 +244,12 @@ fn write_app_owned_note_capture(
     let result = crate::notes::menu_syntax_capture::apply_menu_syntax_note_capture(invocation)?;
     Ok(match result.operation {
         crate::notes::menu_syntax_capture::NoteCaptureOperation::Create => "Saved note".to_string(),
-        crate::notes::menu_syntax_capture::NoteCaptureOperation::Update => "Updated note".to_string(),
-        crate::notes::menu_syntax_capture::NoteCaptureOperation::Delete => "Deleted note".to_string(),
+        crate::notes::menu_syntax_capture::NoteCaptureOperation::Update => {
+            "Updated note".to_string()
+        }
+        crate::notes::menu_syntax_capture::NoteCaptureOperation::Delete => {
+            "Deleted note".to_string()
+        }
     })
 }
 
@@ -279,7 +284,9 @@ fn primary_resolved_object_ref(
     object_refs: &[crate::menu_syntax::CaptureObjectRef],
     kind: crate::menu_syntax::CaptureObjectKind,
 ) -> Result<Option<&crate::menu_syntax::CaptureObjectRef>, String> {
-    let Some(object_ref) = object_refs.iter().find(|object_ref| object_ref.role == "primary")
+    let Some(object_ref) = object_refs
+        .iter()
+        .find(|object_ref| object_ref.role == "primary")
     else {
         return Ok(None);
     };
@@ -358,7 +365,7 @@ fn append_app_owned_jsonl_in_sk_path(
     std::fs::create_dir_all(&dir)
         .map_err(|err| format!("Menu syntax: failed to create artifact dir: {err}"))?;
     let path = dir.join(filename);
-    
+
     // Read existing file if it exists
     let existing = match std::fs::read_to_string(&path) {
         Ok(contents) => contents,
@@ -405,11 +412,20 @@ fn append_app_owned_jsonl_in_sk_path(
     let temp_path = dir.join(&temp_filename);
     if let Err(e) = std::fs::write(&temp_path, &contents) {
         let _ = std::fs::remove_file(&temp_path);
-        return Err(format!("Menu syntax: failed to write to temp file {}: {}", temp_path.display(), e));
+        return Err(format!(
+            "Menu syntax: failed to write to temp file {}: {}",
+            temp_path.display(),
+            e
+        ));
     }
     if let Err(e) = std::fs::rename(&temp_path, &path) {
         let _ = std::fs::remove_file(&temp_path);
-        return Err(format!("Menu syntax: failed to rename temp file {} to {}: {}", temp_path.display(), path.display(), e));
+        return Err(format!(
+            "Menu syntax: failed to rename temp file {} to {}: {}",
+            temp_path.display(),
+            path.display(),
+            e
+        ));
     }
     Ok(())
 }
@@ -561,11 +577,20 @@ fn upsert_app_owned_jsonl_by_key_in_sk_path(
     let temp_path = dir.join(&temp_filename);
     if let Err(e) = std::fs::write(&temp_path, &contents) {
         let _ = std::fs::remove_file(&temp_path);
-        return Err(format!("Menu syntax: failed to write to temp file {}: {}", temp_path.display(), e));
+        return Err(format!(
+            "Menu syntax: failed to write to temp file {}: {}",
+            temp_path.display(),
+            e
+        ));
     }
     if let Err(e) = std::fs::rename(&temp_path, &path) {
         let _ = std::fs::remove_file(&temp_path);
-        return Err(format!("Menu syntax: failed to rename temp file {} to {}: {}", temp_path.display(), path.display(), e));
+        return Err(format!(
+            "Menu syntax: failed to rename temp file {} to {}: {}",
+            temp_path.display(),
+            path.display(),
+            e
+        ));
     }
     Ok(())
 }
@@ -610,7 +635,7 @@ fn default_app_owned_sk_path() -> std::path::PathBuf {
 #[cfg(test)]
 mod menu_syntax_builtin_execution_tests {
     use super::*;
-    use crate::menu_syntax::capture::{parse_capture, CaptureParse};
+    use crate::menu_syntax::capture::{CaptureParse, parse_capture};
     use std::sync::{Mutex, OnceLock};
     use tempfile::TempDir;
 
@@ -708,7 +733,10 @@ mod menu_syntax_builtin_execution_tests {
 
         assert_eq!(err, "Todo not found.");
         let path = tmp.path().join("menu-syntax").join("todos.jsonl");
-        assert!(!path.exists(), "missing selected todo must not create a row");
+        assert!(
+            !path.exists(),
+            "missing selected todo must not create a row"
+        );
     }
 
     #[test]
@@ -739,8 +767,8 @@ mod menu_syntax_builtin_execution_tests {
         let tmp = TempDir::new().expect("tempdir");
         let invocation = invocation(";defer @todo:not_a_real_todo tomorrow");
         let err = write_app_owned_todo_capture_in_sk_path(
-                &invocation,
-                crate::menu_syntax::CaptureOperation::Defer,
+            &invocation,
+            crate::menu_syntax::CaptureOperation::Defer,
             tmp.path(),
         )
         .expect_err("missing todo should reject");
@@ -772,7 +800,8 @@ mod menu_syntax_builtin_execution_tests {
         let create = invocation(";link https://example.com Old Example #docs");
         write_app_owned_link_capture_in_sk_path(&create, tmp.path()).expect("create link");
 
-        let invocation = invocation(r#";link update @link:https://example.com title:"New Example""#);
+        let invocation =
+            invocation(r#";link update @link:https://example.com title:"New Example""#);
         let message =
             write_app_owned_link_capture_in_sk_path(&invocation, tmp.path()).expect("update link");
 
@@ -795,7 +824,10 @@ mod menu_syntax_builtin_execution_tests {
 
         assert_eq!(err, "Link not found.");
         let path = crate::scriptlets::link_markdown_store::links_markdown_path(tmp.path());
-        assert!(!path.exists(), "missing selected link must not create a row");
+        assert!(
+            !path.exists(),
+            "missing selected link must not create a row"
+        );
     }
 
     #[test]
@@ -824,7 +856,12 @@ mod menu_syntax_builtin_execution_tests {
         assert!(!content.contains('{'));
         assert!(!content.contains('}'));
         assert!(content.contains("Hello there!"));
-        assert!(!tmp.path().join("menu-syntax").join("snippets.jsonl").exists());
+        assert!(
+            !tmp.path()
+                .join("menu-syntax")
+                .join("snippets.jsonl")
+                .exists()
+        );
     }
 
     #[test]
@@ -861,6 +898,9 @@ mod menu_syntax_builtin_execution_tests {
             .join("main")
             .join("scriptlets")
             .join("snippets.md");
-        assert!(!path.exists(), "missing selected snippet must not create a row");
+        assert!(
+            !path.exists(),
+            "missing selected snippet must not create a row"
+        );
     }
 }

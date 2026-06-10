@@ -750,3 +750,76 @@ fn telegram_redaction_strips_token_from_error_text() {
     assert!(redacted.contains("<redacted-token>"));
     assert_eq!(telegram::redact_token("", "unchanged"), "unchanged");
 }
+
+#[test]
+fn capture_stores_sync_into_brain_and_respect_deletion() {
+    init_test_db();
+    let tmp = tempfile::TempDir::new().expect("tempdir");
+
+    // Todos: one open, one already deleted.
+    let menu_syntax_dir = tmp.path().join("menu-syntax");
+    std::fs::create_dir_all(&menu_syntax_dir).expect("mkdir");
+    std::fs::write(
+        menu_syntax_dir.join("todos.jsonl"),
+        concat!(
+            r#"{"schema":"menu-syntax.todo.v1","kind":"todo","id":"todo_open","body":"Renew passport","status":"open","tags":["errands"],"updatedAt":"2026-06-01T10:00:00Z","deletedAt":null}"#,
+            "\n",
+            r#"{"schema":"menu-syntax.todo.v1","kind":"todo","id":"todo_gone","body":"Old thing","status":"deleted","updatedAt":"2026-06-01T10:00:00Z","deletedAt":"2026-06-02T10:00:00Z"}"#,
+            "\n",
+        ),
+    )
+    .expect("seed todos");
+
+    // Link + snippet through their real stores (same writers the `;` capture
+    // path uses).
+    let link = match crate::menu_syntax::capture::parse_capture(
+        ";link https://example.com Example description:Docs",
+    ) {
+        crate::menu_syntax::capture::CaptureParse::Ok(invocation) => invocation,
+        _ => panic!("link capture should parse"),
+    };
+    let draft = crate::menu_syntax::parse_link_scriptlet_capture(&link).expect("link draft");
+    crate::scriptlets::link_markdown_store::upsert_link_section(tmp.path(), &draft)
+        .expect("write link");
+    let snippet =
+        match crate::menu_syntax::capture::parse_capture(";snippet Hello there keyword:hi name:Hi")
+        {
+            crate::menu_syntax::capture::CaptureParse::Ok(invocation) => invocation,
+            _ => panic!("snippet capture should parse"),
+        };
+    let draft =
+        crate::menu_syntax::parse_snippet_scriptlet_capture(&snippet).expect("snippet draft");
+    crate::scriptlets::snippet_markdown_store::upsert_snippet_section(tmp.path(), &draft)
+        .expect("write snippet");
+
+    let synced = super::indexer::sync_capture_stores_in_sk_path(tmp.path()).expect("sync");
+    assert_eq!(
+        synced, 3,
+        "open todo + link + snippet (deleted todo skipped)"
+    );
+
+    let todo = store::get_doc(DocSource::Capture, "todo:todo_open")
+        .unwrap()
+        .expect("open todo mirrored");
+    assert!(todo.content.contains("Renew passport"));
+    assert!(todo.content.contains("errands"));
+    assert!(
+        store::get_doc(DocSource::Capture, "todo:todo_gone")
+            .unwrap()
+            .is_none(),
+        "deleted todo must not enter the brain"
+    );
+    let docs = store::recent_docs_for_source(DocSource::Capture, 0, 10).unwrap();
+    assert!(docs.iter().any(|d| d.title == "Link: Example"));
+    assert!(docs.iter().any(|d| d.title.starts_with("Snippet:")));
+
+    // Deleting the todo from its store must make the brain forget it.
+    std::fs::write(menu_syntax_dir.join("todos.jsonl"), "").expect("clear todos");
+    super::indexer::sync_capture_stores_in_sk_path(tmp.path()).expect("resync");
+    assert!(
+        store::get_doc(DocSource::Capture, "todo:todo_open")
+            .unwrap()
+            .is_none(),
+        "brain forgets a todo the user erased"
+    );
+}

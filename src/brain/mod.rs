@@ -160,6 +160,31 @@ pub fn record_search_selection_signals(query: &str, selected_result_key: &str) {
         });
 }
 
+/// Record a deliberate `;` capture — the single strongest attention signal
+/// the launcher emits (the user stopped what they were doing to write this
+/// down). Topic + tag signals at chat-turn weight, an activity-journal line,
+/// and an immediate indexer wake so the captured content becomes brain-
+/// searchable without waiting for the next timer cycle. Fire-and-forget
+/// off-thread; never blocks the capture path.
+pub fn record_capture_signals(target: &str, body: &str, tags: &[String]) {
+    let target = target.to_string();
+    let body = body.to_string();
+    let tags = tags.to_vec();
+    let _ = std::thread::Builder::new()
+        .name("script-kit-brain-capture".to_string())
+        .spawn(move || {
+            for topic in indexer::extract_topics(&body) {
+                let _ = record_signal(&topic, 2, "capture");
+            }
+            for tag in &tags {
+                let _ = record_signal(tag, 2, "capture");
+            }
+            let excerpt: String = body.chars().take(120).collect();
+            let _ = store::append_activity(&format!("captured {target} \"{excerpt}\""));
+            indexer::wake_indexer();
+        });
+}
+
 /// Record that the user accepted a brain-grounded ghost suggestion in Notes
 /// (attention signals + activity journal), so the memories that produced a
 /// useful hint get reinforced. Fire-and-forget off-thread; never blocks the

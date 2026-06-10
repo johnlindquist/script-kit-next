@@ -895,9 +895,9 @@ impl SearchResult {
             SearchResult::BrainHit(bm) => match bm.hit.source {
                 crate::brain::DocSource::Note => "Open Note",
                 crate::brain::DocSource::ChatTurn => "Resume Conversation",
-                crate::brain::DocSource::Clipboard | crate::brain::DocSource::Activity => {
-                    "Ask Your Brain"
-                }
+                crate::brain::DocSource::Clipboard
+                | crate::brain::DocSource::Activity
+                | crate::brain::DocSource::Capture => "Ask Your Brain",
             },
             // Inbox sources use the DocSource string vocabulary; mirror the
             // BrainHit routing (note → editor, chat turn → resume, else ask).

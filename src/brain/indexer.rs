@@ -116,6 +116,10 @@ pub fn run_cycle(embedder: &mut Option<BrainEmbedder>) -> Result<()> {
         tracing::debug!(target: "script_kit::brain", error = %err, "clipboard sync skipped");
         0
     });
+    let captured = sync_capture_stores().unwrap_or_else(|err| {
+        tracing::debug!(target: "script_kit::brain", error = %err, "capture sync skipped");
+        0
+    });
     sync_browser_attention();
     // Embedding trouble (missing helper binary, model load failure) must
     // never take down the rest of the metabolism — lexical search, journal,
@@ -124,10 +128,10 @@ pub fn run_cycle(embedder: &mut Option<BrainEmbedder>) -> Result<()> {
         tracing::warn!(target: "script_kit::brain", error = %err, "embedding pass skipped");
         0
     });
-    if synced > 0 || promoted > 0 || embedded > 0 {
+    if synced > 0 || promoted > 0 || captured > 0 || embedded > 0 {
         tracing::info!(
             target: "script_kit::brain",
-            synced, promoted, embedded, "brain index cycle"
+            synced, promoted, captured, embedded, "brain index cycle"
         );
     }
     // Daily distillation pass (no-op until due; silently skips without pi).
@@ -271,6 +275,162 @@ fn sync_notes() -> Result<usize> {
     let removed = store::retain_docs(DocSource::Note, &live_ids)?;
     if removed > 0 {
         tracing::info!(target: "script_kit::brain", removed, "brain forgot deleted notes");
+    }
+    Ok(synced)
+}
+
+/// Mirror `;` capture stores into brain_docs: todos (todos.jsonl), links
+/// (links.md), and snippets (snippets.md). Notes captured via `;note` already
+/// arrive through [`sync_notes`]. Same contract as the other mirrors:
+/// hash-guarded upserts, and deletion sync so a todo/link/snippet the user
+/// removed is forgotten by the brain.
+fn sync_capture_stores() -> Result<usize> {
+    sync_capture_stores_in_sk_path(&capture_sk_path())
+}
+
+fn capture_sk_path() -> std::path::PathBuf {
+    if let Ok(path) = std::env::var(crate::setup::SK_PATH_ENV) {
+        if !path.trim().is_empty() {
+            return std::path::PathBuf::from(path);
+        }
+    }
+    dirs::home_dir()
+        .map(|home| home.join(".scriptkit"))
+        .unwrap_or_else(|| std::path::PathBuf::from(".scriptkit"))
+}
+
+fn file_mtime_timestamp(path: &std::path::Path) -> i64 {
+    std::fs::metadata(path)
+        .and_then(|meta| meta.modified())
+        .ok()
+        .and_then(|mtime| {
+            mtime
+                .duration_since(std::time::UNIX_EPOCH)
+                .ok()
+                .map(|d| d.as_secs() as i64)
+        })
+        .unwrap_or(0)
+}
+
+pub(crate) fn sync_capture_stores_in_sk_path(sk_path: &std::path::Path) -> Result<usize> {
+    let mut synced = 0usize;
+    let mut live_ids: Vec<String> = Vec::new();
+
+    // Todos: ~/.scriptkit/menu-syntax/todos.jsonl. Done todos stay (a kept
+    // commitment is still memory); deleted ones are erased here too.
+    let todos_path = sk_path.join("menu-syntax").join("todos.jsonl");
+    if let Ok(contents) = std::fs::read_to_string(&todos_path) {
+        let fallback_ts = file_mtime_timestamp(&todos_path);
+        for line in contents.lines() {
+            let Ok(record) = serde_json::from_str::<serde_json::Value>(line.trim()) else {
+                continue;
+            };
+            let deleted = record
+                .get("deletedAt")
+                .and_then(|v| v.as_str())
+                .map(|v| !v.trim().is_empty())
+                .unwrap_or(false)
+                || record
+                    .get("status")
+                    .and_then(|v| v.as_str())
+                    .map(|v| v.eq_ignore_ascii_case("deleted"))
+                    .unwrap_or(false);
+            if deleted {
+                continue;
+            }
+            let Some(id) = record.get("id").and_then(|v| v.as_str()) else {
+                continue;
+            };
+            let body = record.get("body").and_then(|v| v.as_str()).unwrap_or("");
+            if body.trim().is_empty() {
+                continue;
+            }
+            let mut content = body.to_string();
+            for (key, label) in [
+                ("status", "status"),
+                ("due", "due"),
+                ("remindAt", "remind at"),
+                ("snoozeUntil", "snoozed until"),
+                ("deferUntil", "deferred until"),
+            ] {
+                if let Some(value) = record.get(key).and_then(|v| v.as_str()) {
+                    content.push_str(&format!("\n{label}: {value}"));
+                }
+            }
+            if let Some(tags) = record.get("tags").and_then(|v| v.as_array()) {
+                let tags: Vec<&str> = tags.iter().filter_map(|t| t.as_str()).collect();
+                if !tags.is_empty() {
+                    content.push_str(&format!("\ntags: {}", tags.join(", ")));
+                }
+            }
+            let updated_at = record
+                .get("updatedAt")
+                .and_then(|v| v.as_str())
+                .and_then(|v| chrono::DateTime::parse_from_rfc3339(v).ok())
+                .map(|dt| dt.timestamp())
+                .unwrap_or(fallback_ts);
+            let title: String = format!("Todo: {}", body.chars().take(60).collect::<String>());
+            let source_id = format!("todo:{id}");
+            store::upsert_doc(DocSource::Capture, &source_id, &title, &content, updated_at)?;
+            live_ids.push(source_id);
+            synced += 1;
+        }
+    }
+
+    // Links: plugins/main/scriptlets/links.md sections.
+    let links_path = crate::scriptlets::link_markdown_store::links_markdown_path(sk_path);
+    let links_ts = file_mtime_timestamp(&links_path);
+    if let Ok(sections) = crate::scriptlets::link_markdown_store::load_link_sections(&links_path) {
+        for section in sections {
+            if section.id.trim().is_empty() {
+                continue;
+            }
+            let mut content = section.url.clone().unwrap_or_default();
+            if let Some(description) = &section.description {
+                content.push_str(&format!("\n{description}"));
+            }
+            let title = format!("Link: {}", section.title);
+            let source_id = format!("link:{}", section.id);
+            store::upsert_doc(DocSource::Capture, &source_id, &title, &content, links_ts)?;
+            live_ids.push(source_id);
+            synced += 1;
+        }
+    }
+
+    // Snippets: plugins/main/scriptlets/snippets.md sections.
+    let snippets_path = crate::scriptlets::snippet_markdown_store::snippets_markdown_path(sk_path);
+    let snippets_ts = file_mtime_timestamp(&snippets_path);
+    if let Ok(sections) =
+        crate::scriptlets::snippet_markdown_store::load_snippet_sections(&snippets_path)
+    {
+        for section in sections {
+            if section.id.trim().is_empty() {
+                continue;
+            }
+            let mut content = section.body.clone();
+            if let Some(keyword) = &section.keyword {
+                content.push_str(&format!("\nkeyword: {keyword}"));
+            }
+            if let Some(description) = &section.description {
+                content.push_str(&format!("\n{description}"));
+            }
+            let title = format!("Snippet: {}", section.name);
+            let source_id = format!("snippet:{}", section.id);
+            store::upsert_doc(
+                DocSource::Capture,
+                &source_id,
+                &title,
+                &content,
+                snippets_ts,
+            )?;
+            live_ids.push(source_id);
+            synced += 1;
+        }
+    }
+
+    let removed = store::retain_docs(DocSource::Capture, &live_ids)?;
+    if removed > 0 {
+        tracing::info!(target: "script_kit::brain", removed, "brain forgot deleted captures");
     }
     Ok(synced)
 }

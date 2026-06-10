@@ -17,8 +17,7 @@ use anyhow::{Context as _, Result};
 use std::io::{Read as _, Write as _};
 use std::path::PathBuf;
 
-const MODEL_URL: &str =
-    "https://huggingface.co/ggml-org/embeddinggemma-300M-GGUF/resolve/main/embeddinggemma-300M-Q8_0.gguf";
+const MODEL_URL: &str = "https://huggingface.co/ggml-org/embeddinggemma-300M-GGUF/resolve/main/embeddinggemma-300M-Q8_0.gguf";
 const MODEL_FILE: &str = "embeddinggemma-300M-Q8_0.gguf";
 const MODEL_SIZE: u64 = 333_590_944;
 const ATTEMPT_MARKER: &str = "embed_model_download_attempt";

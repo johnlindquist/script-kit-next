@@ -202,8 +202,11 @@ impl ScriptListApp {
             .map(|spec| spec.accepts)
             .unwrap_or_default();
         let clock = crate::menu_syntax::MenuSyntaxClock::local_now();
-        let resolved =
-            crate::menu_syntax::date::resolve_capture_dates_with_accepts(&invocation, &clock, &accepts);
+        let resolved = crate::menu_syntax::date::resolve_capture_dates_with_accepts(
+            &invocation,
+            &clock,
+            &accepts,
+        );
 
         let command_id = format!(
             "{}:{}",
@@ -288,6 +291,7 @@ impl ScriptListApp {
                     pid,
                     "Capture handler spawned detached"
                 );
+                crate::brain::record_capture_signals(&payload.target, &payload.body, &payload.tags);
                 self.show_hud(
                     format!("Captured to {}", payload.target),
                     Some(HUD_MEDIUM_MS),
@@ -303,11 +307,7 @@ impl ScriptListApp {
                     error = %err,
                     "Failed to spawn capture handler"
                 );
-                self.show_hud(
-                    format!("Capture failed: {err}"),
-                    Some(HUD_MEDIUM_MS),
-                    cx,
-                );
+                self.show_hud(format!("Capture failed: {err}"), Some(HUD_MEDIUM_MS), cx);
             }
         }
     }
@@ -382,9 +382,7 @@ fn spawn_capture_handler_detached(
     command
         .spawn()
         .map(|child| child.id())
-        .map_err(|e| {
-            MenuSyntaxCaptureSpawnAction::DetachedHandler.failure_message(&executable, e)
-        })
+        .map_err(|e| MenuSyntaxCaptureSpawnAction::DetachedHandler.failure_message(&executable, e))
 }
 
 fn menu_syntax_payload_dir() -> std::path::PathBuf {

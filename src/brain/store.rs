@@ -28,6 +28,7 @@ pub enum DocSource {
     ChatTurn,
     Clipboard,
     Activity,
+    Capture,
 }
 
 impl DocSource {
@@ -37,6 +38,7 @@ impl DocSource {
             DocSource::ChatTurn => "chat_turn",
             DocSource::Clipboard => "clipboard",
             DocSource::Activity => "activity",
+            DocSource::Capture => "capture",
         }
     }
 
@@ -46,6 +48,7 @@ impl DocSource {
             "chat_turn" => Some(DocSource::ChatTurn),
             "clipboard" => Some(DocSource::Clipboard),
             "activity" => Some(DocSource::Activity),
+            "capture" => Some(DocSource::Capture),
             _ => None,
         }
     }
@@ -57,6 +60,7 @@ impl DocSource {
             DocSource::ChatTurn => "Past conversation",
             DocSource::Clipboard => "Clipboard",
             DocSource::Activity => "Activity journal",
+            DocSource::Capture => "Capture",
         }
     }
 }
