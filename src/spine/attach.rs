@@ -14,8 +14,8 @@ use std::ops::Range;
 
 use crate::ai::message_parts::AiContextPart;
 use crate::scripts::SearchResult;
+use crate::spine::catalog_subsearch::{escape_ref_component, ContextSubsearchSource};
 use crate::spine::SpineListAction;
-use crate::spine::catalog_subsearch::{ContextSubsearchSource, escape_ref_component};
 
 /// The result of intercepting Enter on a rich subsearch row: the segment
 /// resolution action plus the alias to register (token → content part)
@@ -733,5 +733,65 @@ mod tests {
             outcome.action,
             SpineListAction::ResolveSegment { .. }
         ));
+    }
+
+    /// Composer parity end-to-end: a provider-backed source queried through
+    /// `composer_subsearch_section` yields displayable rows whose actions
+    /// resolve the segment and whose aliases carry the real content.
+    #[test]
+    fn composer_section_builds_rows_and_aliases_from_calendar_slot() {
+        crate::mcp_resources::publish_calendar_json(
+            r#"{"items":[
+                {"title":"Standup","subtitle":"9:30 AM Daily"},
+                {"title":"Design Review","subtitle":"2:00 PM"}
+            ]}"#,
+        );
+
+        let section = composer_subsearch_section(ContextSubsearchSource::Calendar, "design", 3, 5..14)
+            .expect("calendar is a composer-shared source");
+        crate::mcp_resources::clear_provider_json_slots();
+
+        assert_eq!(section.source_id, "calendar");
+        assert_eq!(section.rows.len(), 1, "query should filter to one event");
+        let row = &section.rows[0];
+        assert_eq!(row.row.title.as_ref(), "Design Review");
+        assert!(row.row.is_selectable);
+        match &row.row.action {
+            SpineListAction::ResolveSegment {
+                segment_index,
+                segment_byte_range,
+                resolution_source,
+                replacement,
+                ..
+            } => {
+                assert_eq!(*segment_index, 3);
+                assert_eq!(segment_byte_range.clone(), 5..14);
+                assert_eq!(resolution_source.as_ref(), "calendar");
+                assert!(replacement.starts_with("@calendar:"));
+            }
+            other => panic!("expected ResolveSegment, got {other:?}"),
+        }
+        let (token, part) = row.alias.clone().expect("calendar alias");
+        assert!(token.starts_with("@calendar:Design-Review"));
+        match part {
+            AiContextPart::TextBlock { text, .. } => {
+                assert_eq!(text, "Design Review\n2:00 PM");
+            }
+            other => panic!("expected TextBlock, got {other:?}"),
+        }
+    }
+
+    /// Sources that need launcher state stay out of the composer resolver.
+    #[test]
+    fn composer_section_rejects_launcher_only_sources() {
+        for source in [
+            ContextSubsearchSource::File,
+            ContextSubsearchSource::Clipboard,
+            ContextSubsearchSource::Scripts,
+            ContextSubsearchSource::Scriptlets,
+            ContextSubsearchSource::Skills,
+        ] {
+            assert!(composer_subsearch_section(source, "", 0, 0..0).is_none());
+        }
     }
 }

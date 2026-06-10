@@ -2724,6 +2724,15 @@ impl ScriptListApp {
                 self.focused_input != FocusedInput::None,
             ),
         );
+        // The persistent cwd anchor token rendered inside the input area
+        // (see render_input_cwd_anchor_token); exposed so automation can
+        // verify the anchor is visible where the user types.
+        if let Some(cwd_label) = self.spine_cwd_label.as_ref() {
+            let mut token = protocol::ElementInfo::panel("input-cwd-anchor");
+            token.semantic_id = "status:input-cwd-anchor".to_string();
+            token.text = Some(cwd_label.clone());
+            Self::push_limited_element(&mut elements, limit, token);
+        }
         Self::push_limited_element(
             &mut elements,
             limit,
