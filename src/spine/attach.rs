@@ -747,8 +747,9 @@ mod tests {
             ]}"#,
         );
 
-        let section = composer_subsearch_section(ContextSubsearchSource::Calendar, "design", 3, 5..14)
-            .expect("calendar is a composer-shared source");
+        let section =
+            composer_subsearch_section(ContextSubsearchSource::Calendar, "design", 3, 5..14)
+                .expect("calendar is a composer-shared source");
         crate::mcp_resources::clear_provider_json_slots();
 
         assert_eq!(section.source_id, "calendar");

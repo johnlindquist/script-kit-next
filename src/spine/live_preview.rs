@@ -423,11 +423,9 @@ mod tests {
 
         let value = cache.clipboard_text_with_ttl(|| Some("fresh".to_string()));
         assert_eq!(value.as_deref(), Some("fresh"));
-        assert!(
-            cache
-                .last_clipboard_read
-                .is_some_and(|at| at.elapsed() < CLIPBOARD_PREVIEW_TTL)
-        );
+        assert!(cache
+            .last_clipboard_read
+            .is_some_and(|at| at.elapsed() < CLIPBOARD_PREVIEW_TTL));
     }
 
     #[test]
