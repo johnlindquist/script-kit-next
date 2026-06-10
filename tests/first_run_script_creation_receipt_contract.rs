@@ -50,9 +50,22 @@ fn receipt_plumbing_is_script_only_and_scriptlets_stay_unverified() {
     );
 
     let receipt_guard = "if result.target == prompts::NamingTarget::Script";
+    let first_guard = body
+        .find(receipt_guard)
+        .expect("template overwrite must be guarded to NamingTarget::Script");
+    let after_first = &body[first_guard + receipt_guard.len()..];
+    let second_guard = after_first
+        .find(receipt_guard)
+        .expect("receipt plumbing must have its own NamingTarget::Script guard");
+    let template_arm = &after_first[..second_guard];
+    let receipt_arm = &after_first[second_guard..];
     assert!(
-        body.matches(receipt_guard).count() >= 2,
-        "template and receipt plumbing must be guarded to NamingTarget::Script"
+        template_arm.contains("find_script_template"),
+        "first NamingTarget::Script guard must own the template-overwrite plumbing"
+    );
+    assert!(
+        receipt_arm.contains("write_script_creation_receipt_for_path"),
+        "second NamingTarget::Script guard must own the receipt plumbing"
     );
     assert!(
         body.contains("prompts::NamingTarget::Extension => script_creation::create_new_scriptlet"),

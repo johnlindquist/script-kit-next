@@ -203,9 +203,9 @@ fn footer_native_host_uses_theme_vibrancy_and_reports_installed_surface() {
         .and_then(|tail| tail.split("pub(crate) fn sync_window_footer_popup(").next())
         .expect("sync_main_footer_popup body should be present");
     assert!(
-        !sync_main_footer.contains("SCRIPT_KIT_GPUI_FOOTER_OVERLAY_SPIKE")
-            && !sync_main_footer.contains("gpui_footer_overlay_spike_enabled()"),
-        "default native footer host proof must not depend on the experimental GPUI footer overlay spike"
+        !sync_main_footer.contains("SCRIPT_KIT_GPUI_FOOTER_OVERLAY")
+            && !sync_main_footer.contains("gpui_footer_overlay_enabled()"),
+        "footer overlay gating must stay inside the overlay/refresh helpers, not the sync entry point"
     );
 
     for needle in [

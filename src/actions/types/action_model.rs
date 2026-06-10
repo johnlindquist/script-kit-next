@@ -232,7 +232,9 @@ impl Action {
         let shortcut_str = shortcut.into();
         let shortcut_tokens =
             crate::components::hint_strip::shortcut_tokens_from_hint(&shortcut_str);
-        tracing::info!(
+        // trace!: action vectors are rebuilt on hot paths (render-time
+        // keybinding sync); info-level logging here is per-frame I/O.
+        tracing::trace!(
             target: "script_kit::actions",
             action_id = %self.id,
             shortcut = %shortcut_str,
@@ -251,7 +253,7 @@ impl Action {
         if let Some(s) = shortcut {
             let shortcut_tokens =
                 crate::components::hint_strip::shortcut_tokens_from_hint(&s);
-            tracing::info!(
+            tracing::trace!(
                 target: "script_kit::actions",
                 action_id = %self.id,
                 shortcut = %s,

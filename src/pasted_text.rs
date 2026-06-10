@@ -34,6 +34,31 @@ pub(crate) fn prepare_pasted_text(
         };
     }
 
+    collapse_pasted_text(text, existing_tokens)
+}
+
+/// Variant for single-line surfaces (the main launcher input).
+///
+/// A5 decision (2026-06-09): a single-line input can never faithfully hold a
+/// multi-line paste — stripping newlines mangles the text. So ANY multi-line
+/// paste collapses to a token (and routes to Agent Chat), not just pastes over
+/// the large-paste thresholds. Multi-line composers (Agent Chat) keep using
+/// [`prepare_pasted_text`] with the size thresholds.
+pub(crate) fn prepare_pasted_text_for_single_line_surface(
+    text: &str,
+    existing_tokens: &[PastedTextToken],
+) -> PreparedPastedText {
+    if !is_multiline(text) && !should_collapse_pasted_text(text) {
+        return PreparedPastedText {
+            insertion_text: text.to_string(),
+            token: None,
+        };
+    }
+
+    collapse_pasted_text(text, existing_tokens)
+}
+
+fn collapse_pasted_text(text: &str, existing_tokens: &[PastedTextToken]) -> PreparedPastedText {
     let label = build_pasted_text_label(text, next_token_index(existing_tokens));
     let token = format!("@text:\"{label}\"");
 
@@ -153,11 +178,15 @@ fn should_collapse_pasted_text(text: &str) -> bool {
     line_count >= PASTED_TEXT_LINE_THRESHOLD || char_count >= PASTED_TEXT_CHAR_THRESHOLD
 }
 
+fn is_multiline(text: &str) -> bool {
+    text.lines().count() > 1
+}
+
 fn build_pasted_text_label(text: &str, index: usize) -> String {
     let line_count = text.lines().count().max(1);
     let char_count = text.chars().count();
 
-    if line_count >= PASTED_TEXT_LINE_THRESHOLD {
+    if line_count > 1 {
         format!("Pasted text #{index} +{line_count} lines")
     } else {
         format!("Pasted text #{index} +{char_count} chars")
@@ -187,6 +216,37 @@ mod tests {
         let prepared = prepare_pasted_text("short note", &[]);
         assert_eq!(prepared.insertion_text, "short note");
         assert!(prepared.token.is_none());
+    }
+
+    #[test]
+    fn prepare_pasted_text_keeps_small_multiline_pastes_inline_for_composers() {
+        // Multi-line composers (Agent Chat) only collapse over the thresholds.
+        let prepared = prepare_pasted_text("two\nlines", &[]);
+        assert_eq!(prepared.insertion_text, "two\nlines");
+        assert!(prepared.token.is_none());
+    }
+
+    #[test]
+    fn single_line_surface_collapses_any_multiline_paste() {
+        let prepared = super::prepare_pasted_text_for_single_line_surface("two\nlines", &[]);
+        let token = prepared.token.expect("multi-line paste should collapse");
+        assert_eq!(token.label, "Pasted text #1 +2 lines");
+        assert_eq!(token.text, "two\nlines");
+    }
+
+    #[test]
+    fn single_line_surface_keeps_small_single_line_pastes_inline() {
+        let prepared = super::prepare_pasted_text_for_single_line_surface("short note", &[]);
+        assert_eq!(prepared.insertion_text, "short note");
+        assert!(prepared.token.is_none());
+    }
+
+    #[test]
+    fn single_line_surface_collapses_large_single_line_paste() {
+        let text = "x".repeat(700);
+        let prepared = super::prepare_pasted_text_for_single_line_surface(&text, &[]);
+        let token = prepared.token.expect("large paste should collapse");
+        assert_eq!(token.label, "Pasted text #1 +700 chars");
     }
 
     #[test]

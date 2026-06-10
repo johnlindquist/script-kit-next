@@ -229,6 +229,14 @@ thread_local! {
     static CURRENT_ELEMENT_ARENA: Cell<Option<*const RefCell<Arena>>> = const { Cell::new(None) };
 }
 
+/// True when a window draw is in progress on this thread (the per-App element
+/// arena scope is active). Drawing another window while this is true would
+/// allocate into — and then clear — the same arena, leaving every element of
+/// the in-progress draw dangling (use-after-free on the next layout pass).
+pub(crate) fn draw_in_progress() -> bool {
+    CURRENT_ELEMENT_ARENA.with(|current| current.get().is_some())
+}
+
 /// Allocates an element in the current arena. Uses the app-specific arena if one
 /// is active (during draw), otherwise falls back to the thread-local ELEMENT_ARENA.
 pub(crate) fn with_element_arena<R>(f: impl FnOnce(&mut Arena) -> R) -> R {

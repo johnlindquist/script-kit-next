@@ -18,7 +18,7 @@ const CONTEXT_SUBSEARCH_SPECS: &[ContextSubsearchSpec] = &[
     ContextSubsearchSpec {
         prefix: "file",
         title: "Files",
-        subtitle: "Search files inline",
+        subtitle: "Search files",
         icon: "file-search",
     },
     ContextSubsearchSpec {
@@ -235,6 +235,30 @@ fn build_subsearch_context_row(
     let normalized_query = normalized_context_query(query);
     let match_penalty = subsearch_spec_match_penalty(spec, &prefix_text, &normalized_query)?;
 
+    // The top-level Files row opens the full built-in File Search surface
+    // (split preview) as a portal, matching the Agent Chat `@` picker.
+    // Typed colon mode (`@file:query`) keeps owning inline subsearch.
+    let (action_label, action) = if spec.prefix == "file" {
+        (
+            ss("Search"),
+            SpineListAction::OpenFileSearchPortal {
+                segment_index,
+                segment_byte_range,
+                query: ss(""),
+            },
+        )
+    } else {
+        (
+            ss("Browse"),
+            SpineListAction::InsertSegmentText {
+                segment_index,
+                segment_byte_range,
+                text: ss(prefix_text),
+                trailing_space: false,
+            },
+        )
+    };
+
     Some(SpineListRow {
         id: ss(format!("spine:@:subsearch:{}", spec.prefix)),
         kind: SpineListRowKind::ContextSubSearch {
@@ -247,13 +271,8 @@ fn build_subsearch_context_row(
         badges: vec![],
         score: context_row_score(match_penalty, CATEGORY_PENALTY_SUBSEARCH, rank),
         is_selectable: true,
-        action_label: Some(ss("Browse")),
-        action: SpineListAction::InsertSegmentText {
-            segment_index,
-            segment_byte_range,
-            text: ss(prefix_text),
-            trailing_space: false,
-        },
+        action_label: Some(action_label),
+        action,
     })
 }
 
@@ -341,6 +360,33 @@ mod tests {
             file.score,
             notifications.score,
         );
+    }
+
+    #[test]
+    fn file_subsearch_row_opens_full_file_search_portal() {
+        let rows = build_context_root_rows("@file", 0, 0..5);
+        let file = rows
+            .iter()
+            .find(|row| row.id.as_ref() == "spine:@:subsearch:file")
+            .expect("expected @file subsearch row");
+        assert!(
+            matches!(file.action, SpineListAction::OpenFileSearchPortal { .. }),
+            "top-level Files row must open the full File Search portal, got {:?}",
+            file.action,
+        );
+    }
+
+    #[test]
+    fn non_file_subsearch_rows_keep_inline_insert_action() {
+        let rows = build_context_root_rows("@clipboard", 0, 0..10);
+        let clipboard = rows
+            .iter()
+            .find(|row| row.id.as_ref() == "spine:@:subsearch:clipboard")
+            .expect("expected @clipboard subsearch row");
+        assert!(matches!(
+            clipboard.action,
+            SpineListAction::InsertSegmentText { .. }
+        ));
     }
 
     #[test]

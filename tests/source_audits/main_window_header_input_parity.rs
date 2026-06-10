@@ -284,20 +284,16 @@ fn searchable_shared_header_inventory_stays_in_sync_across_root_and_layout_model
     let app_view_state = read_source("src/main_sections/app_view_state.rs");
 
     for variant in searchable_shared_header_variants() {
-        let layout_count = layout_info.matches(variant).count();
-        let bounds_count = component_bounds.matches(variant).count();
-        let ownership_count = app_view_state.matches(variant).count();
-
         assert!(
-            layout_count > 0,
+            layout_info.contains(variant),
             "{variant} must be present in layout info's main-view context-zone model"
         );
         assert!(
-            bounds_count > 0,
+            component_bounds.contains(variant),
             "{variant} must be present in component bounds' main-view context-zone model"
         );
         assert!(
-            ownership_count > 0,
+            app_view_state.contains(variant),
             "{variant} must be present in AppView shared-header ownership"
         );
     }

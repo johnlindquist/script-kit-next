@@ -2,7 +2,7 @@
 //! (Run 2 Pass #24) updated for unified simulateKey dispatcher.
 
 const CANONICAL_SIMULATEKEY: &str = include_str!("../src/app_impl/simulate_key_dispatch.rs");
-const TAB_AI_MODE: &str = include_str!("../src/app_impl/tab_ai_mode/mod.rs");
+const TAB_AI_MODE: &str = include_str!("../src/app_impl/agent_handoff/mod.rs");
 const STARTUP_SOURCE: &str = include_str!("../src/app_impl/startup.rs");
 const APP_RUN_SETUP: &str = include_str!("../src/main_entry/app_run_setup.rs");
 const RUNTIME_MATCH_SIMULATEKEY: &str =

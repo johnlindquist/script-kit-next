@@ -403,6 +403,64 @@ fn build_root_passive_frame_receipt(app: &crate::ScriptListApp) -> Option<RootPa
     })
 }
 
+fn selection_warnings(
+    app: &crate::ScriptListApp,
+    result: Option<&crate::scripts::SearchResult>,
+) -> Vec<String> {
+    let mut warnings = Vec::new();
+
+    if let Some(result) = result {
+        if matches!(result, crate::scripts::SearchResult::Agent(_)) {
+            warnings.push(
+                "Agent execution is not fully implemented in execute_selected yet.".to_string(),
+            );
+        }
+    }
+
+    if app.filter_text.trim().is_empty() {
+        warnings
+            .push("Command+Enter Agent Chat is inactive until the filter has text.".to_string());
+    } else if app.menu_syntax_capture_form_owns_input() {
+        warnings.push(
+            "Command+Enter Agent Chat is disabled while the handler form owns input.".to_string(),
+        );
+    }
+
+    warnings
+}
+
+fn build_enter_action(
+    app: &crate::ScriptListApp,
+    result: Option<&crate::scripts::SearchResult>,
+) -> Option<MainWindowPreflightAction> {
+    result.map(|result| MainWindowPreflightAction {
+        kind: enter_action_kind(result),
+        label: app.main_window_primary_action_label(),
+        subject: result.name().to_string(),
+        type_label: result.type_label().to_string(),
+        source_name: result.source_name().map(ToString::to_string),
+        description: result.description().map(ToString::to_string),
+    })
+}
+
+/// Refresh only the selection-dependent fields of a cached receipt.
+///
+/// Arrow-key navigation changes `selected_index` many times per second while
+/// the visible rows, fingerprints, counts, and filter-derived fields stay
+/// identical. Rebuilding the full receipt is O(visible rows) of string
+/// allocation per keypress; this selection-only refresh is O(1).
+pub(crate) fn refresh_main_window_preflight_selection(
+    app: &crate::ScriptListApp,
+    receipt: &mut MainWindowPreflightReceipt,
+) {
+    let result = selected_result(app);
+    receipt.selected_index = app.selected_index;
+    receipt.selected_result_key = result.as_ref().and_then(|r| r.stable_selection_key());
+    receipt.selected_result_role = result.as_ref().map(result_role);
+    receipt.enter_action = build_enter_action(app, result.as_ref());
+    receipt.warnings = selection_warnings(app, result.as_ref());
+}
+
 pub(crate) fn build_main_window_preflight_receipt(
     app: &crate::ScriptListApp,
 ) -> Option<MainWindowPreflightReceipt> {
@@ -427,33 +485,8 @@ pub(crate) fn build_main_window_preflight_receipt(
     }
 
     let result = selected_result(app);
-    let mut warnings = Vec::new();
-
-    if let Some(result) = &result {
-        if matches!(result, crate::scripts::SearchResult::Agent(_)) {
-            warnings.push(
-                "Agent execution is not fully implemented in execute_selected yet.".to_string(),
-            );
-        }
-    }
-
-    if app.filter_text.trim().is_empty() {
-        warnings
-            .push("Command+Enter Agent Chat is inactive until the filter has text.".to_string());
-    } else if app.menu_syntax_capture_form_owns_input() {
-        warnings.push(
-            "Command+Enter Agent Chat is disabled while the handler form owns input.".to_string(),
-        );
-    }
-
-    let enter_action = result.as_ref().map(|result| MainWindowPreflightAction {
-        kind: enter_action_kind(result),
-        label: app.main_window_primary_action_label(),
-        subject: result.name().to_string(),
-        type_label: result.type_label().to_string(),
-        source_name: result.source_name().map(ToString::to_string),
-        description: result.description().map(ToString::to_string),
-    });
+    let warnings = selection_warnings(app, result.as_ref());
+    let enter_action = build_enter_action(app, result.as_ref());
     let visible_results = visible_result_receipts(app);
     let selected_result_role = result.as_ref().map(result_role);
     let computed_search_text =

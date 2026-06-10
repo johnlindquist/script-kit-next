@@ -16,8 +16,8 @@ fn file_search_key_handler_routes_cmd_enter_to_ai() {
 
 #[test]
 fn file_search_view_is_eligible_for_shared_global_cmd_enter_route() {
-    let source = fs::read_to_string("src/app_impl/tab_ai_mode/mod.rs")
-        .expect("Failed to read src/app_impl/tab_ai_mode/mod.rs");
+    let source = fs::read_to_string("src/app_impl/agent_handoff/mod.rs")
+        .expect("Failed to read src/app_impl/agent_handoff/mod.rs");
 
     assert!(
         source.contains("AppView::FileSearchView { .. }"),
@@ -56,13 +56,13 @@ fn file_search_cmd_shift_enter_preserves_local_ai_path() {
 }
 
 #[test]
-fn tab_ai_mode_has_file_search_intent_builder() {
-    let source = fs::read_to_string("src/app_impl/tab_ai_mode/mod.rs")
-        .expect("Failed to read src/app_impl/tab_ai_mode/mod.rs");
+fn agent_handoff_has_file_search_intent_builder() {
+    let source = fs::read_to_string("src/app_impl/agent_handoff/mod.rs")
+        .expect("Failed to read src/app_impl/agent_handoff/mod.rs");
 
     assert!(
         source.contains("build_file_search_ai_entry_intent"),
-        "tab_ai_mode must define build_file_search_ai_entry_intent"
+        "agent_handoff must define build_file_search_ai_entry_intent"
     );
     assert!(
         source.contains("\"directory\""),

@@ -94,9 +94,8 @@ fn file_search_sizing_branches_on_presentation() {
         "FileSearchView sizing must inspect FileSearchPresentation"
     );
     assert!(
-        file_search_arm.contains("FileSearchPresentation::Mini")
-            && file_search_arm.contains("FileSearchPresentation::Full")
-            && file_search_arm.matches("ViewType::MainWindow").count() >= 2,
-        "file search presentations must size through the unified MainWindow view type"
+        file_search_arm.contains("FileSearchPresentation::Mini => ViewType::MainWindow")
+            && file_search_arm.contains("FileSearchPresentation::Full => ViewType::MainWindow"),
+        "both file search presentations must size through the unified MainWindow view type"
     );
 }

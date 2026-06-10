@@ -671,6 +671,15 @@ impl ScriptListApp {
             _ => {} // Continue with main menu logic
         }
 
+        // Token-atomic delete parity with the Agent Chat composer: a single
+        // backspace inside an alias-registered `@file:` token removes the
+        // whole token (and its trailing space) instead of leaving a damaged
+        // mention that would re-trigger subsearch on a broken basename.
+        if let Some(fixed) = self.spine_mention_atomic_delete_fixup(&self.filter_text, &new_text) {
+            self.set_filter_text_immediate(fixed, window, cx);
+            return;
+        }
+
         // ── First-character ScriptList entry routes ──────────────────
         // Prompt-builder sigils (@, /, |, .) are handled by the Spine
         // projection and stay in the main list. Only mode-exit sigils and
@@ -841,7 +850,7 @@ impl ScriptListApp {
             return;
         }
 
-        let previous_text = std::mem::replace(&mut self.filter_text, new_text.clone());
+        self.filter_text = new_text.clone();
         self.sync_menu_syntax_form_inputs_from_filter(window, cx);
 
         // Reset input history navigation when user types (they're no longer navigating history)
@@ -864,30 +873,10 @@ impl ScriptListApp {
         // Instead, we'll reset selection when the cache actually updates.
         self.last_scrolled_index = None;
 
-        if !self.menu_syntax_mode.is_menu_syntax_for(&new_text) && new_text.ends_with(' ') {
-            let trimmed = new_text.trim_end_matches(' ');
-            if !trimmed.is_empty() && trimmed == previous_text {
-                if let Some(alias_match) = self.find_alias_match(trimmed) {
-                    logging::log("ALIAS", &format!("Alias '{}' triggered execution", trimmed));
-                    match alias_match {
-                        AliasMatch::Script(script) => {
-                            self.execute_interactive(&script, cx);
-                        }
-                        AliasMatch::Scriptlet(scriptlet) => {
-                            self.execute_scriptlet(&scriptlet, cx);
-                        }
-                        AliasMatch::BuiltIn(entry) => {
-                            self.execute_builtin(&entry, cx);
-                        }
-                        AliasMatch::App(app) => {
-                            self.execute_app(&app, cx);
-                        }
-                    }
-                    self.clear_filter(window, cx);
-                    return;
-                }
-            }
-        }
+        // A1 decision (2026-06-09): aliases no longer auto-execute on a
+        // trailing space. An exact alias match instead pins the aliased
+        // command at index 0 during grouping (see
+        // `pin_alias_match_into_grouped_results`) so Enter runs it.
 
         if let Some(pred) = self.ghost_prediction.take() {
             self.ghost_prediction = crate::scripts::search::ghost::reconcile_typed_through(

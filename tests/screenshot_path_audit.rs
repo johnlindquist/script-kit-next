@@ -11,6 +11,17 @@ fn ai_commands_source() -> String {
     read_source("src/platform/ai_commands.rs")
 }
 
+/// Slice the source from a function head to the next top-level `pub fn`,
+/// approximating the function body without depending on formatting.
+fn function_section<'a>(src: &'a str, head: &str) -> &'a str {
+    let start = src
+        .find(head)
+        .unwrap_or_else(|| panic!("ai_commands.rs must contain `{head}`"));
+    let tail = &src[start + head.len()..];
+    let end = tail.find("\npub fn ").unwrap_or(tail.len());
+    &tail[..end]
+}
+
 // ---------------------------------------------------------------------------
 // Script Kit frontmost → self-excluding capture
 // ---------------------------------------------------------------------------
@@ -87,12 +98,15 @@ fn metadata_detects_script_kit_frontmost() {
         "capture_focused_window_metadata must exist"
     );
     // Both functions must share the same frontmost detection pattern.
-    let frontmost_count = src.matches("script_kit_is_frontmost = true").count();
-    assert!(
-        frontmost_count >= 2,
-        "both screenshot and metadata functions must detect Script Kit \
-         frontmost status (found {frontmost_count} instances, expected >= 2)"
-    );
+    for head in [
+        "pub fn capture_focused_window_screenshot(",
+        "pub fn capture_focused_window_metadata(",
+    ] {
+        assert!(
+            function_section(&src, head).contains("script_kit_is_frontmost = true"),
+            "`{head}` must detect Script Kit frontmost status"
+        );
+    }
 }
 
 #[test]
@@ -101,12 +115,15 @@ fn metadata_frontmost_uses_same_synthetic_title() {
 
     // The metadata frontmost branch must also call
     // script_kit_excluded_capture_title() for consistency.
-    let title_call_count = src.matches("script_kit_excluded_capture_title()").count();
-    assert!(
-        title_call_count >= 2,
-        "both screenshot and metadata paths must call \
-         script_kit_excluded_capture_title() (found {title_call_count}, expected >= 2)"
-    );
+    for head in [
+        "pub fn capture_focused_window_screenshot(",
+        "pub fn capture_focused_window_metadata(",
+    ] {
+        assert!(
+            function_section(&src, head).contains("script_kit_excluded_capture_title()"),
+            "`{head}` must call script_kit_excluded_capture_title() in its frontmost path"
+        );
+    }
 }
 
 // ---------------------------------------------------------------------------

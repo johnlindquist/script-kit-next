@@ -258,8 +258,8 @@ fn plain_tab_in_script_list_no_longer_routes_to_agent_chat_in_standard_startup()
 
 #[test]
 fn plain_tab_agent_chat_helper_is_removed() {
-    let source = fs::read_to_string("src/app_impl/tab_ai_mode/mod.rs")
-        .expect("Failed to read src/app_impl/tab_ai_mode/mod.rs");
+    let source = fs::read_to_string("src/app_impl/agent_handoff/mod.rs")
+        .expect("Failed to read src/app_impl/agent_handoff/mod.rs");
 
     assert!(
         !source.contains("try_route_plain_tab_to_agent_chat_context_capture")
@@ -272,8 +272,8 @@ fn plain_tab_agent_chat_helper_is_removed() {
 
 #[test]
 fn focused_part_staging_suppression_stays_available_for_explicit_handoffs() {
-    let source = fs::read_to_string("src/app_impl/tab_ai_mode/mod.rs")
-        .expect("Failed to read src/app_impl/tab_ai_mode/mod.rs");
+    let source = fs::read_to_string("src/app_impl/agent_handoff/mod.rs")
+        .expect("Failed to read src/app_impl/agent_handoff/mod.rs");
 
     assert!(
         source.contains("suppress_focused_part: bool"),
@@ -294,8 +294,8 @@ fn focused_part_staging_suppression_stays_available_for_explicit_handoffs() {
 
 #[test]
 fn direct_prompt_agent_chat_handoff_can_suppress_focused_part_staging() {
-    let source = fs::read_to_string("src/app_impl/tab_ai_mode/mod.rs")
-        .expect("Failed to read src/app_impl/tab_ai_mode/mod.rs");
+    let source = fs::read_to_string("src/app_impl/agent_handoff/mod.rs")
+        .expect("Failed to read src/app_impl/agent_handoff/mod.rs");
 
     assert!(
         source.contains("open_tab_ai_agent_chat_with_entry_intent_suppressing_focused_part")
@@ -438,30 +438,40 @@ fn render_impl_routes_modifier_aware_keys_into_confirm_popup_guard() {
 fn script_list_cmd_v_routes_large_pastes_into_agent_chat() {
     let render_script_list = fs::read_to_string("src/render_script_list/mod.rs")
         .expect("Failed to read src/render_script_list/mod.rs");
-    let tab_ai_mode = fs::read_to_string("src/app_impl/tab_ai_mode/mod.rs")
-        .expect("Failed to read src/app_impl/tab_ai_mode/mod.rs");
+    let startup = fs::read_to_string("src/app_impl/startup.rs")
+        .expect("Failed to read src/app_impl/startup.rs");
+    let agent_handoff = fs::read_to_string("src/app_impl/agent_handoff/mod.rs")
+        .expect("Failed to read src/app_impl/agent_handoff/mod.rs");
 
     assert!(
         render_script_list.contains("\"v\" if this.route_large_script_list_paste_to_agent_chat(cx)"),
         "Cmd+V in ScriptList should first try the large-paste Agent Chat handoff"
     );
+    // The focused filter input consumes Cmd+V (and strips newlines) before the
+    // render_script_list key listener can see it, so the live route MUST also
+    // exist in the window-level actions interceptor, which runs first.
     assert!(
-        tab_ai_mode.contains("script_list_large_paste_routed_to_agent_chat")
-            && tab_ai_mode.contains("clipboard://pasted-text/")
-            && tab_ai_mode.contains("open_tab_ai_agent_chat_with_context_part(part, \"script_list_large_paste\", cx);"),
+        startup.contains("&& this.route_large_script_list_paste_to_agent_chat(cx)"),
+        "The startup.rs actions interceptor must route ScriptList Cmd+V multi-line/large \
+         pastes to Agent Chat before the filter input's newline-stripping paste handler runs"
+    );
+    assert!(
+        agent_handoff.contains("script_list_large_paste_routed_to_agent_chat")
+            && agent_handoff.contains("clipboard://pasted-text/")
+            && agent_handoff.contains("open_tab_ai_agent_chat_with_context_part(part, \"script_list_large_paste\", cx);"),
         "Large ScriptList pastes should become Agent Chat text-block context instead of staying in the launcher filter"
     );
 }
 
 #[test]
 fn script_list_cmd_v_routes_clipboard_images_into_agent_chat() {
-    let tab_ai_mode = fs::read_to_string("src/app_impl/tab_ai_mode/mod.rs")
-        .expect("Failed to read src/app_impl/tab_ai_mode/mod.rs");
+    let agent_handoff = fs::read_to_string("src/app_impl/agent_handoff/mod.rs")
+        .expect("Failed to read src/app_impl/agent_handoff/mod.rs");
 
     assert!(
-        tab_ai_mode.contains("clipboard.get_image()")
-            && tab_ai_mode.contains("script_list_clipboard_image_routed_to_agent_chat")
-            && tab_ai_mode.contains(
+        agent_handoff.contains("clipboard.get_image()")
+            && agent_handoff.contains("script_list_clipboard_image_routed_to_agent_chat")
+            && agent_handoff.contains(
                 "open_tab_ai_agent_chat_with_context_part(part, \"script_list_clipboard_image\", cx);"
             ),
         "ScriptList Cmd+V should route clipboard images straight into Agent Chat as file attachments"
@@ -472,8 +482,8 @@ fn script_list_cmd_v_routes_clipboard_images_into_agent_chat() {
 fn agent_chat_launch_staging_preserves_pasted_text_pills_for_clipboard_text_blocks() {
     let agent_chat_view =
         fs::read_to_string("src/ai/agent_chat/ui/view.rs").expect("Failed to read src/ai/agent_chat/ui/view.rs");
-    let tab_ai_mode = fs::read_to_string("src/app_impl/tab_ai_mode/mod.rs")
-        .expect("Failed to read src/app_impl/tab_ai_mode/mod.rs");
+    let agent_handoff = fs::read_to_string("src/app_impl/agent_handoff/mod.rs")
+        .expect("Failed to read src/app_impl/agent_handoff/mod.rs");
 
     assert!(
         agent_chat_view.contains("source.starts_with(\"clipboard://pasted-text/\")")
@@ -482,7 +492,7 @@ fn agent_chat_launch_staging_preserves_pasted_text_pills_for_clipboard_text_bloc
         "Agent Chat should recognize staged clipboard text blocks as pasted-text pills"
     );
     assert!(
-        tab_ai_mode.contains("view.register_inline_owned_context_part(token, part);"),
+        agent_handoff.contains("view.register_inline_owned_context_part(token, part);"),
         "Agent Chat launch staging should register routed clipboard text with the pasted-text pill registry"
     );
 }

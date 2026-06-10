@@ -152,6 +152,17 @@ impl ScriptListApp {
             text
         };
 
+        // Token-atomic delete parity with the Agent Chat composer: a single
+        // backspace inside an alias-registered `@file:` token (any keyboard
+        // routing path, including legacy simulateKey) removes the whole token
+        // instead of leaving a damaged mention.
+        let text = if matches!(self.current_view, AppView::ScriptList) {
+            self.spine_mention_atomic_delete_fixup(&self.filter_text, &text)
+                .unwrap_or(text)
+        } else {
+            text
+        };
+
         self.pending_menu_syntax_ai_proposal = None;
 
         if let AppView::AgentChatView { entity } = &self.current_view {
@@ -599,11 +610,11 @@ impl ScriptListApp {
                 crate::spine::catalog_subsearch::ContextSubsearchSource::File,
                 scripts::SearchResult::File(file_match),
             ) => {
-                let short = crate::file_search::shorten_path(&file_match.file.path);
-                let replacement = format!(
-                    "@file:{}",
-                    crate::spine::catalog_subsearch::escape_ref_component(&short),
-                );
+                // Compact token parity with Agent Chat attachments: the
+                // visible token carries only `basename.ext`; the full path
+                // travels through the `spine_mention_aliases` registry
+                // (registered in the ResolveSegment arm below).
+                let replacement = Self::spine_file_mention_token(&file_match.file.path);
                 Some(crate::spine::SpineListAction::ResolveSegment {
                     segment_index,
                     segment_byte_range,
@@ -634,6 +645,78 @@ impl ScriptListApp {
             }
             _ => None,
         }
+    }
+
+    /// Canonical compact spine token for a selected file: `@file:` plus the
+    /// escaped basename. Both the inline subsearch accept and the file-search
+    /// portal accept must produce the same token so the alias registry and
+    /// the prompt plan resolve it identically.
+    pub(crate) fn spine_file_mention_token(path: &str) -> String {
+        let basename = std::path::Path::new(path)
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or(path);
+        format!(
+            "@file:{}",
+            crate::spine::catalog_subsearch::escape_ref_component(basename),
+        )
+    }
+
+    /// Register the alias that maps a compact spine `@file:` token back to its
+    /// full-path context part for prompt-plan resolution and atomic delete.
+    pub(crate) fn register_spine_file_mention_alias(&mut self, token: String, path: String) {
+        let label = std::path::Path::new(&path)
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or(&path)
+            .to_string();
+        tracing::info!(
+            target: "script_kit::spine",
+            event = "spine_file_mention_alias_registered",
+            token = %token,
+        );
+        self.spine_mention_aliases.insert(
+            token,
+            crate::ai::message_parts::AiContextPart::FilePath { path, label },
+        );
+    }
+
+    /// Token-atomic delete parity with the Agent Chat composer: when `next`
+    /// is `previous` with exactly one character deleted from inside an
+    /// alias-registered mention token, return `previous` with the whole token
+    /// (plus one trailing space) removed. Only registered tokens qualify, so
+    /// in-progress `@file:query` subsearch typing keeps per-character editing.
+    pub(crate) fn spine_mention_atomic_delete_fixup(
+        &self,
+        previous: &str,
+        next: &str,
+    ) -> Option<String> {
+        if self.spine_mention_aliases.is_empty() {
+            return None;
+        }
+        let deleted_char_index = single_char_deletion_index(previous, next)?;
+        let span = crate::ai::context_mentions::inline_token_spans(previous)
+            .into_iter()
+            .find(|span| {
+                deleted_char_index >= span.range.start
+                    && deleted_char_index < span.range.end
+                    && self.spine_mention_aliases.contains_key(&span.token)
+            })?;
+
+        let chars: Vec<char> = previous.chars().collect();
+        let mut end = span.range.end;
+        if chars.get(end) == Some(&' ') {
+            end += 1;
+        }
+        tracing::info!(
+            target: "script_kit::spine",
+            event = "spine_mention_deleted_atomically",
+            token = %span.token,
+        );
+        let mut out = String::with_capacity(previous.len());
+        out.extend(chars[..span.range.start].iter());
+        out.extend(chars[end..].iter());
+        Some(out)
     }
 
     /// Return the `SpineListRow` at the current `selected_index`, if any.
@@ -708,6 +791,14 @@ impl ScriptListApp {
                     resolution_source = %resolution_source,
                     trailing_space,
                 );
+                if resolution_source.as_ref() == "file" {
+                    if let Some(path) = resolution_id.as_ref().strip_prefix("file/") {
+                        self.register_spine_file_mention_alias(
+                            replacement.as_ref().to_string(),
+                            path.to_string(),
+                        );
+                    }
+                }
                 if resolution_source.as_ref() == "cwd" {
                     let path = std::path::PathBuf::from(resolution_id.as_ref());
                     self.spine_cwd = Some(path);
@@ -767,6 +858,24 @@ impl ScriptListApp {
                     }
                     _ => false,
                 }
+            }
+            SpineListAction::OpenFileSearchPortal {
+                segment_index,
+                segment_byte_range,
+                query,
+            } => {
+                tracing::info!(
+                    target: "script_kit::spine",
+                    event = "apply_spine_action_open_file_search_portal",
+                    segment_index,
+                    query = %query,
+                );
+                self.open_spine_file_search_attachment_portal(
+                    segment_byte_range,
+                    query.to_string(),
+                    cx,
+                );
+                true
             }
             SpineListAction::OpenConversation { conversation_id } => {
                 tracing::info!(
@@ -980,5 +1089,42 @@ impl ScriptListApp {
         );
         self.sync_filter_input_if_needed(window, cx);
         cx.notify();
+    }
+}
+
+/// Character index of the single deleted char when `next` equals `previous`
+/// with exactly one character removed; `None` for any other edit shape.
+fn single_char_deletion_index(previous: &str, next: &str) -> Option<usize> {
+    let prev: Vec<char> = previous.chars().collect();
+    let nxt: Vec<char> = next.chars().collect();
+    if prev.len() != nxt.len() + 1 {
+        return None;
+    }
+    let mut idx = 0;
+    while idx < nxt.len() && prev[idx] == nxt[idx] {
+        idx += 1;
+    }
+    (prev[idx + 1..] == nxt[idx..]).then_some(idx)
+}
+
+#[cfg(test)]
+mod spine_mention_atomic_delete_tests {
+    use super::single_char_deletion_index;
+
+    #[test]
+    fn detects_single_char_deletion() {
+        assert_eq!(single_char_deletion_index("@file:demo.rs ", "@file:demo.r "), Some(12));
+        assert_eq!(single_char_deletion_index("abc", "ac"), Some(1));
+        assert_eq!(single_char_deletion_index("abc", "abc"), None);
+        assert_eq!(single_char_deletion_index("abc", "a"), None);
+        assert_eq!(single_char_deletion_index("abc", "abd"), None);
+    }
+
+    #[test]
+    fn deletion_within_repeated_chars_reports_end_of_equal_run() {
+        // Deleting either `a` of "aab" yields "ab"; the scanner attributes the
+        // deletion to the position after the shared prefix, which is the same
+        // token span either way.
+        assert_eq!(single_char_deletion_index("aab", "ab"), Some(1));
     }
 }

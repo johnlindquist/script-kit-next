@@ -1206,7 +1206,10 @@ impl ScriptListApp {
         }
 
         self.set_spine_parse_from_filter_and_cursor(&raw, raw.len());
-        let plan = crate::spine::prompt_plan::build_spine_prompt_plan(&self.spine_parse);
+        let plan = crate::spine::prompt_plan::build_spine_prompt_plan_with_aliases(
+            &self.spine_parse,
+            &self.spine_mention_aliases,
+        );
         let cwd = self
             .spine_cwd_for_agent_chat_launch()
             .or_else(|| std::env::current_dir().ok())

@@ -128,10 +128,24 @@ fn main_get_state_includes_surface_contract_but_target_diagnostics_do_not() {
         get_state.contains("\"unsupported\".to_string()")
             && get_state.contains("target_unsupported:{:?}")
             && get_state.contains("\"target_resolution_failed\".to_string()")
-            && get_state.contains("target_error:{}")
-            && get_state.matches("None,").count() >= 8,
-        "secondary-window diagnostics should omit surfaceContract because they are not main AppView receipts"
+            && get_state.contains("target_error:{}"),
+        "secondary-window diagnostics should keep the unsupported/target_resolution_failed paths"
     );
+    for field in [
+        "surface_kind: None,",
+        "app_view_variant: None,",
+        "native_footer_surface: None,",
+        "target_generation: None,",
+        "surface_generation: None,",
+        "data_generation: None,",
+        "title: None,",
+        "resolved_bounds: None,",
+    ] {
+        assert!(
+            get_state.contains(field),
+            "secondary-window diagnostics should omit surfaceContract because they are not main AppView receipts (missing `{field}`)"
+        );
+    }
 }
 
 #[test]

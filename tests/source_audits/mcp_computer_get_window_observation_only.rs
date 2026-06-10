@@ -74,10 +74,13 @@ fn computer_get_window_reads_automation_registry_only() {
         "computer/get_window must require id"
     );
     let properties_block = extract_json_object_block(input_schema_body, "\"properties\":");
-    let property_count = properties_block.matches("\": {").count();
+    let normalized_properties: String = properties_block
+        .chars()
+        .filter(|ch| !ch.is_whitespace())
+        .collect();
     assert_eq!(
-        property_count, 1,
-        "computer/get_window schema properties must contain exactly one field"
+        normalized_properties, r#"{"id":{"type":"string"}}"#,
+        "computer/get_window schema properties must contain exactly the id field"
     );
     for needle in [
         "\"target\"",

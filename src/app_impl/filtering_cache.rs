@@ -1298,6 +1298,44 @@ impl ScriptListApp {
                         );
                     }
 
+                    // Colon-mode parity with the Agent Chat context picker:
+                    // inline `@file:` results keep an explicit full-portal
+                    // fallback row that opens the built-in File Search
+                    // surface with the current sub-query.
+                    if rich_source
+                        == crate::spine::catalog_subsearch::ContextSubsearchSource::File
+                    {
+                        if let Some(segment) = self
+                            .spine_parse
+                            .segments
+                            .get(projection.active_segment_index)
+                        {
+                            let idx = flat_results.len();
+                            flat_results.push(scripts::SearchResult::SpineProjection(
+                                crate::spine::SpineListRow {
+                                    id: "spine:@:file-full-search".into(),
+                                    kind: crate::spine::SpineListRowKind::ContextSubSearch {
+                                        context_type: "file".into(),
+                                    },
+                                    title: "Open full File Search".into(),
+                                    subtitle: Some("Browse files with preview".into()),
+                                    meta: None,
+                                    icon: Some("file-search".into()),
+                                    badges: vec![],
+                                    score: 0,
+                                    is_selectable: true,
+                                    action_label: Some("Search".into()),
+                                    action: crate::spine::SpineListAction::OpenFileSearchPortal {
+                                        segment_index: projection.active_segment_index,
+                                        segment_byte_range: segment.byte_range.clone(),
+                                        query: rich_query.clone().into(),
+                                    },
+                                },
+                            ));
+                            grouped_items.push(GroupedListItem::Item(idx));
+                        }
+                    }
+
                     let (first_sel, last_sel) =
                         grouped_selectable_bounds(&grouped_items, &flat_results);
                     self.main_menu_result_caches.store_grouped_results(
@@ -1780,6 +1818,25 @@ impl ScriptListApp {
                 root_passive_result_limits,
             )
         };
+        // A1 decision (2026-06-09): an exact alias match pins the aliased
+        // command at the top of the list so Enter runs it. This replaces the
+        // old alias-plus-trailing-space auto-execution.
+        let (grouped_items, flat_results) = {
+            let (mut grouped_items, mut flat_results) = (grouped_items, flat_results);
+            if !menu_syntax_owns_main_list && !spine_owns_for_computed {
+                let trimmed = raw_filter_text.trim();
+                if !trimmed.is_empty() {
+                    if let Some(alias_match) = self.find_alias_match(trimmed) {
+                        self.pin_alias_match_into_grouped_results(
+                            &alias_match,
+                            &mut grouped_items,
+                            &mut flat_results,
+                        );
+                    }
+                }
+            }
+            (grouped_items, flat_results)
+        };
         let (grouped_items, flat_results) = if menu_syntax_owns_main_list {
             (grouped_items, flat_results)
         } else {
@@ -2130,6 +2187,112 @@ impl ScriptListApp {
         self.preview_cache_lines.clear();
     }
 
+    /// Builds the matcher + synthetic-result fallback for the resolved alias
+    /// target and pins it at grouped index 0 (A1: "alias means index 0").
+    fn pin_alias_match_into_grouped_results(
+        &self,
+        alias_match: &AliasMatch,
+        grouped_items: &mut Vec<crate::list_item::GroupedListItem>,
+        flat_results: &mut Vec<crate::scripts::SearchResult>,
+    ) {
+        use crate::scripts::SearchResult;
+
+        // Pinned positionally; the score only matters if a later pass re-sorts.
+        let pin_score = i32::MAX;
+
+        let is_alias_target: Box<dyn Fn(&SearchResult) -> bool> = match alias_match {
+            AliasMatch::Script(script) => {
+                let path = script.path.clone();
+                Box::new(move |result| {
+                    matches!(result, SearchResult::Script(sm) if sm.script.path == path)
+                })
+            }
+            AliasMatch::Scriptlet(scriptlet) => {
+                let name = scriptlet.name.clone();
+                let file_path = scriptlet.file_path.clone();
+                Box::new(move |result| {
+                    matches!(
+                        result,
+                        SearchResult::Scriptlet(sm)
+                            if sm.scriptlet.name == name && sm.scriptlet.file_path == file_path
+                    )
+                })
+            }
+            AliasMatch::BuiltIn(entry) => {
+                let id = entry.id.clone();
+                Box::new(move |result| {
+                    matches!(result, SearchResult::BuiltIn(bm) if bm.entry.id == id)
+                })
+            }
+            AliasMatch::App(app) => {
+                let path = app.path.clone();
+                Box::new(move |result| {
+                    matches!(result, SearchResult::App(am) if am.app.path == path)
+                })
+            }
+        };
+
+        let fallback: Box<dyn Fn() -> SearchResult> = match alias_match {
+            AliasMatch::Script(script) => {
+                let script = script.clone();
+                Box::new(move || {
+                    SearchResult::Script(crate::scripts::ScriptMatch {
+                        script: script.clone(),
+                        score: pin_score,
+                        filename: script
+                            .path
+                            .file_name()
+                            .map(|name| name.to_string_lossy().to_string())
+                            .unwrap_or_default(),
+                        match_indices: crate::scripts::MatchIndices::default(),
+                        match_kind: crate::scripts::ScriptMatchKind::default(),
+                        content_match: None,
+                        match_evidence: None,
+                    })
+                })
+            }
+            AliasMatch::Scriptlet(scriptlet) => {
+                let scriptlet = scriptlet.clone();
+                Box::new(move || {
+                    SearchResult::Scriptlet(crate::scripts::ScriptletMatch {
+                        scriptlet: scriptlet.clone(),
+                        score: pin_score,
+                        display_file_path: None,
+                        match_indices: crate::scripts::MatchIndices::default(),
+                        match_evidence: None,
+                    })
+                })
+            }
+            AliasMatch::BuiltIn(entry) => {
+                let entry = entry.clone();
+                Box::new(move || {
+                    SearchResult::BuiltIn(crate::scripts::BuiltInMatch {
+                        entry: (*entry).clone(),
+                        score: pin_score,
+                        match_evidence: None,
+                    })
+                })
+            }
+            AliasMatch::App(app) => {
+                let app = app.clone();
+                Box::new(move || {
+                    SearchResult::App(crate::scripts::AppMatch {
+                        app: (*app).clone(),
+                        score: pin_score,
+                        match_evidence: None,
+                    })
+                })
+            }
+        };
+
+        crate::scripts::pin_alias_match_first(
+            grouped_items,
+            flat_results,
+            is_alias_target.as_ref(),
+            fallback.as_ref(),
+        );
+    }
+
     pub(crate) fn refresh_ghost_from_cached_results(&mut self) {
         self.refresh_ghost_from_cached_results_with_cx(None);
     }
@@ -2145,7 +2308,8 @@ impl ScriptListApp {
         &mut self,
         mut cx: Option<&mut gpui::Context<Self>>,
     ) {
-        let should_clear = !matches!(self.current_view, AppView::ScriptList)
+        let should_clear = !crate::scripts::search::ghost::GHOST_PREDICTIONS_ENABLED
+            || !matches!(self.current_view, AppView::ScriptList)
             || self.show_actions_popup
             || self.menu_syntax_trigger_popup_state.owns_main_list()
             || self.menu_syntax_capture_form_owns_input()

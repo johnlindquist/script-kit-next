@@ -1257,38 +1257,43 @@ impl ScriptListApp {
                 let footer_overlay_height = main_list_footer_overlay_total_padding();
                 let viewport_height = self.main_list_state.viewport_bounds().size.height;
                 let safe_viewport_height = (viewport_height - footer_overlay_height).max(px(0.0));
+                // Resolve the per-kind heights once: `effective_*_for_theme`
+                // rebuilds the full metrics override struct per call, which is
+                // too expensive to repeat per item on every render.
+                let hide_initial_section_header = current_main_menu_theme
+                    .def()
+                    .header_info_bar
+                    .hide_initial_section_header;
+                let first_section_header_height =
+                    crate::list_item::effective_first_section_header_height_for_theme(
+                        current_main_menu_theme,
+                    );
+                let section_header_height =
+                    crate::list_item::effective_section_header_height_for_theme(
+                        current_main_menu_theme,
+                    );
+                let status_row_height =
+                    crate::list_item::effective_source_status_row_height_for_theme(
+                        current_main_menu_theme,
+                    );
+                let list_item_height = crate::list_item::effective_list_item_height_for_theme(
+                    current_main_menu_theme,
+                );
                 let content_height = px(grouped_items
                     .iter()
                     .enumerate()
                     .map(|(ix, item)| match item {
                         GroupedListItem::SectionHeader(..) => {
-                            if ix == 0
-                                && current_main_menu_theme
-                                    .def()
-                                    .header_info_bar
-                                    .hide_initial_section_header
-                            {
+                            if ix == 0 && hide_initial_section_header {
                                 0.0
                             } else if ix == 0 {
-                                crate::list_item::effective_first_section_header_height_for_theme(
-                                    current_main_menu_theme,
-                                )
+                                first_section_header_height
                             } else {
-                                crate::list_item::effective_section_header_height_for_theme(
-                                    current_main_menu_theme,
-                                )
+                                section_header_height
                             }
                         }
-                        GroupedListItem::Status(..) => {
-                            crate::list_item::effective_source_status_row_height_for_theme(
-                                current_main_menu_theme,
-                            )
-                        }
-                        GroupedListItem::Item(..) => {
-                            crate::list_item::effective_list_item_height_for_theme(
-                                current_main_menu_theme,
-                            )
-                        }
+                        GroupedListItem::Status(..) => status_row_height,
+                        GroupedListItem::Item(..) => list_item_height,
                     })
                     .sum::<f32>());
 

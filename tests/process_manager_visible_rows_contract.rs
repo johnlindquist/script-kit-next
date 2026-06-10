@@ -6,7 +6,7 @@
 const PROCESS_MANAGER: &str = include_str!("../src/render_builtins/process_manager.rs");
 const COLLECT_ELEMENTS: &str = include_str!("../src/app_layout/collect_elements.rs");
 const PROMPT_HANDLER: &str = include_str!("../src/prompt_handler/mod.rs");
-const TAB_AI_MODE: &str = include_str!("../src/app_impl/tab_ai_mode/mod.rs");
+const TAB_AI_MODE: &str = include_str!("../src/app_impl/agent_handoff/mod.rs");
 
 fn source_between<'a>(source: &'a str, start_pat: &str, end_pat: &str) -> &'a str {
     let start = source

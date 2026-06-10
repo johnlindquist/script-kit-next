@@ -154,6 +154,7 @@
             file_search_display_indices: Vec::new(),
             show_actions_popup: false,
             registered_main_list_displayed_shortcuts: std::collections::HashSet::new(),
+            main_list_shortcut_sync_key: None,
             actions_closed_at: None,
             actions_dialog: None,
             cursor_visible: true,

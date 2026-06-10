@@ -13,7 +13,7 @@ const SCRIPT_TEMPLATES_RENDER: &str = include_str!("../src/render_builtins/scrip
 const COLLECT_ELEMENTS: &str = include_str!("../src/app_layout/collect_elements.rs");
 const PROMPT_HANDLER: &str = include_str!("../src/prompt_handler/mod.rs");
 const NAMING_DIALOG: &str = include_str!("../src/app_impl/naming_dialog.rs");
-const TAB_AI_MODE: &str = include_str!("../src/app_impl/tab_ai_mode/mod.rs");
+const TAB_AI_MODE: &str = include_str!("../src/app_impl/agent_handoff/mod.rs");
 const UI_WINDOW: &str = include_str!("../src/app_impl/ui_window.rs");
 
 fn source_between<'a>(source: &'a str, start_pat: &str, end_pat: &str) -> &'a str {

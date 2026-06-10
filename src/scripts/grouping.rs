@@ -258,6 +258,55 @@ pub(crate) fn prepend_script_issues_row(
     grouped.insert(0, GroupedListItem::Item(0));
 }
 
+/// Moves the launcher row identified by `is_alias_target` to the very top of
+/// the grouped list so Enter runs it.
+///
+/// Decision (2026-06-09): typing text that exactly matches a registered alias
+/// means "pin the aliased command at index 0, no matter what" — replacing the
+/// old behavior where an alias plus a trailing space executed immediately.
+/// When the aliased command is not present in `flat_results` (the raw query
+/// may no longer fuzzy-match it, e.g. a trailing space), `fallback` supplies
+/// a synthetic result so the pin always lands.
+pub(crate) fn pin_alias_match_first(
+    grouped: &mut Vec<GroupedListItem>,
+    flat_results: &mut Vec<SearchResult>,
+    is_alias_target: &dyn Fn(&SearchResult) -> bool,
+    fallback: &dyn Fn() -> SearchResult,
+) {
+    let flat_idx = match flat_results.iter().position(is_alias_target) {
+        Some(idx) => idx,
+        None => {
+            flat_results.push(fallback());
+            flat_results.len() - 1
+        }
+    };
+
+    let Some(pos) = grouped
+        .iter()
+        .position(|item| matches!(item, GroupedListItem::Item(idx) if *idx == flat_idx))
+    else {
+        grouped.insert(0, GroupedListItem::Item(flat_idx));
+        return;
+    };
+    if pos == 0 {
+        return;
+    }
+
+    let entry = grouped.remove(pos);
+    // Drop a section header orphaned by the move (a header directly above the
+    // pinned row with no row left underneath it).
+    if pos > 0
+        && matches!(
+            grouped.get(pos - 1),
+            Some(GroupedListItem::SectionHeader(..))
+        )
+        && !matches!(grouped.get(pos), Some(GroupedListItem::Item(_)))
+    {
+        grouped.remove(pos - 1);
+    }
+    grouped.insert(0, entry);
+}
+
 /// Validation-aware sibling of [`get_grouped_results_with_input_history`].
 ///
 /// When `validation` is `Some` and it recorded failed scripts, a synthetic
@@ -2068,6 +2117,87 @@ mod advanced_query_tests {
 
         let m = MatchIndices::default();
         let _ = m.clone();
+    }
+
+    #[test]
+    fn pin_alias_match_first_moves_existing_result_to_top() {
+        let mut flat = vec![
+            builtin_result("Other Command"),
+            builtin_result("Aliased Command"),
+        ];
+        let mut grouped = vec![
+            GroupedListItem::SectionHeader("Main".to_string(), None),
+            GroupedListItem::Item(0),
+            GroupedListItem::Item(1),
+        ];
+
+        pin_alias_match_first(
+            &mut grouped,
+            &mut flat,
+            &|result| matches!(result, SearchResult::BuiltIn(bm) if bm.entry.id == "builtin/aliased-command"),
+            &|| builtin_result("Aliased Command"),
+        );
+
+        assert!(
+            matches!(grouped.first(), Some(GroupedListItem::Item(1))),
+            "alias target must be the first grouped entry, got {grouped:?}"
+        );
+        assert_eq!(
+            flat.len(),
+            2,
+            "no synthetic result when target already present"
+        );
+    }
+
+    #[test]
+    fn pin_alias_match_first_inserts_fallback_when_target_missing() {
+        let mut flat = vec![builtin_result("Other Command")];
+        let mut grouped = vec![GroupedListItem::Item(0)];
+
+        pin_alias_match_first(
+            &mut grouped,
+            &mut flat,
+            &|result| matches!(result, SearchResult::BuiltIn(bm) if bm.entry.id == "builtin/aliased-command"),
+            &|| builtin_result("Aliased Command"),
+        );
+
+        assert_eq!(flat.len(), 2, "fallback result must be appended");
+        assert!(
+            matches!(grouped.first(), Some(GroupedListItem::Item(1))),
+            "fallback alias target must be pinned first, got {grouped:?}"
+        );
+        assert!(
+            matches!(flat[1], SearchResult::BuiltIn(ref bm) if bm.entry.id == "builtin/aliased-command")
+        );
+    }
+
+    #[test]
+    fn pin_alias_match_first_drops_orphaned_section_header() {
+        let mut flat = vec![
+            builtin_result("Other Command"),
+            builtin_result("Aliased Command"),
+        ];
+        let mut grouped = vec![
+            GroupedListItem::Item(0),
+            GroupedListItem::SectionHeader("Lonely".to_string(), None),
+            GroupedListItem::Item(1),
+        ];
+
+        pin_alias_match_first(
+            &mut grouped,
+            &mut flat,
+            &|result| matches!(result, SearchResult::BuiltIn(bm) if bm.entry.id == "builtin/aliased-command"),
+            &|| builtin_result("Aliased Command"),
+        );
+
+        assert!(matches!(grouped.first(), Some(GroupedListItem::Item(1))));
+        assert!(
+            !grouped.iter().any(|item| matches!(
+                item,
+                GroupedListItem::SectionHeader(label, _) if label == "Lonely"
+            )),
+            "header left without rows must be dropped, got {grouped:?}"
+        );
     }
 
     #[test]

@@ -993,6 +993,7 @@ impl ScriptListApp {
             file_search_preview_thumbnail: FileSearchThumbnailPreviewState::Idle,
             show_actions_popup: false,
             registered_main_list_displayed_shortcuts: std::collections::HashSet::new(),
+            main_list_shortcut_sync_key: None,
             actions_closed_at: None,
             actions_dialog: None,
             cursor_visible: true,
@@ -1141,6 +1142,8 @@ impl ScriptListApp {
             attachment_portal_return_focus_target: None,
             attachment_portal_return_width: None,
             active_attachment_portal_kind: None,
+            spine_mention_portal_segment: None,
+            spine_mention_aliases: std::collections::HashMap::new(),
             agent_chat_surface_state: crate::ai::agent_chat::ui::surface_state::AgentChatSurfaceState::Hidden,
             // Input history for shell-like up/down navigation
             input_history: {
@@ -1552,10 +1555,16 @@ impl ScriptListApp {
                             // FileSearchView that `>` used to open; the
                             // user's first typed char inside it transitions
                             // into ordinary file navigation.
+                            //
+                            // A2 decision (2026-06-09): the picker only opens
+                            // when the main input is EMPTY. With text typed,
+                            // Tab must never teleport the user into file
+                            // search mid-query.
                             if matches!(this.current_view, AppView::ScriptList)
                                 && !has_shift
                                 && this.spine_enabled
                                 && !this.show_actions_popup
+                                && this.filter_text.trim().is_empty()
                             {
                                 tracing::info!(
                                     target: "script_kit::spine",
@@ -2457,7 +2466,7 @@ impl ScriptListApp {
                                             grouped_item_count = grouped_items.len(),
                                             route = if source_filter_mode {
                                                 "source_filter_list_up"
-                                            } else if filter_has_text {
+                                            } else if filter_has_text && !in_history {
                                                 "filter_text_up_noop"
                                             } else if in_history || at_top_of_list {
                                                 "history_up"
@@ -2465,7 +2474,17 @@ impl ScriptListApp {
                                                 "list_up"
                                             },
                                         );
-                                        if !source_filter_mode && filter_has_text && at_top_of_list {
+                                        // A8 decision (2026-06-09): history
+                                        // recall only ENTERS from an empty
+                                        // input at the top of the list, but
+                                        // once in history, Up keeps walking
+                                        // older entries even though the
+                                        // recalled text fills the input.
+                                        if !source_filter_mode
+                                            && filter_has_text
+                                            && at_top_of_list
+                                            && !in_history
+                                        {
                                             cx.stop_propagation();
                                             return;
                                         }
@@ -2936,6 +2955,28 @@ impl ScriptListApp {
                             window,
                             cx,
                         ) {
+                            cx.stop_propagation();
+                            return;
+                        }
+
+                        // A5 decision (2026-06-09): Cmd+V on the ScriptList must be
+                        // intercepted BEFORE the focused filter input's paste handler,
+                        // which strips newlines. Multi-line/large pastes route to
+                        // Agent Chat; small single-line pastes fall through to the
+                        // input's normal paste.
+                        if has_cmd
+                            && !has_shift
+                            && !has_alt
+                            && !has_ctrl
+                            && key_lower == "v"
+                            && matches!(this.current_view, AppView::ScriptList)
+                            && !this.show_actions_popup
+                            && this.route_large_script_list_paste_to_agent_chat(cx)
+                        {
+                            logging::log(
+                                "KEY",
+                                "Interceptor Cmd+V -> route_large_script_list_paste_to_agent_chat",
+                            );
                             cx.stop_propagation();
                             return;
                         }

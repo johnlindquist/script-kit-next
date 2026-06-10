@@ -12,67 +12,96 @@ pub(crate) fn main_list_footer_overlay_total_padding() -> gpui::Pixels {
     main_list_footer_overlay_height() + main_list_footer_reveal_clearance_height()
 }
 
-#[inline]
-fn script_list_row_height_for_theme(
-    item: &GroupedListItem,
-    ix: usize,
-    theme: crate::designs::MainMenuThemeVariant,
-) -> f32 {
-    match item {
-        GroupedListItem::SectionHeader(..) => {
-            if ix == 0 {
-                crate::list_item::effective_first_section_header_height_for_theme(theme)
-            } else {
-                crate::list_item::effective_section_header_height_for_theme(theme)
+/// Per-kind row heights resolved once per measurement pass.
+///
+/// `effective_*_height_for_theme` resolves the full theme metrics override
+/// struct on every call; doing that per item turned the O(n) height walks
+/// below into the arrow-key scroll hotspot (~92% of key handling time in
+/// `sample` profiles). Resolving the four heights once keeps the walks to a
+/// match + f32 add per item.
+#[derive(Clone, Copy)]
+struct ScriptListRowHeights {
+    first_section_header: f32,
+    section_header: f32,
+    status: f32,
+    item: f32,
+}
+
+impl ScriptListRowHeights {
+    #[inline]
+    fn current() -> Self {
+        Self::for_theme(crate::designs::current_main_menu_theme())
+    }
+
+    #[inline]
+    fn for_theme(theme: crate::designs::MainMenuThemeVariant) -> Self {
+        Self {
+            first_section_header:
+                crate::list_item::effective_first_section_header_height_for_theme(theme),
+            section_header: crate::list_item::effective_section_header_height_for_theme(theme),
+            status: crate::list_item::effective_source_status_row_height_for_theme(theme),
+            item: crate::list_item::effective_list_item_height_for_theme(theme),
+        }
+    }
+
+    #[inline]
+    fn row_height(&self, item: &GroupedListItem, ix: usize) -> f32 {
+        match item {
+            GroupedListItem::SectionHeader(..) => {
+                if ix == 0 {
+                    self.first_section_header
+                } else {
+                    self.section_header
+                }
             }
+            GroupedListItem::Status(..) => self.status,
+            GroupedListItem::Item(..) => self.item,
         }
-        GroupedListItem::Status(..) => {
-            crate::list_item::effective_source_status_row_height_for_theme(theme)
-        }
-        GroupedListItem::Item(..) => crate::list_item::effective_list_item_height_for_theme(theme),
     }
 }
 
-#[inline]
-fn script_list_row_height(item: &GroupedListItem, ix: usize) -> f32 {
-    script_list_row_height_for_theme(item, ix, crate::designs::current_main_menu_theme())
-}
-
 pub(crate) fn script_list_content_height(items: &[GroupedListItem]) -> f32 {
-    let theme = crate::designs::current_main_menu_theme();
-    script_list_content_height_for_theme(items, theme)
+    script_list_content_height_with(items, ScriptListRowHeights::current())
 }
 
-fn script_list_content_height_for_theme(
+fn script_list_content_height_with(
     items: &[GroupedListItem],
-    theme: crate::designs::MainMenuThemeVariant,
+    heights: ScriptListRowHeights,
 ) -> f32 {
     items
         .iter()
         .enumerate()
-        .map(|(ix, item)| script_list_row_height_for_theme(item, ix, theme))
+        .map(|(ix, item)| heights.row_height(item, ix))
         .sum()
 }
 
-fn script_list_pixel_top_for_item(items: &[GroupedListItem], ix: usize) -> f32 {
-    let theme = crate::designs::current_main_menu_theme();
+fn script_list_pixel_top_for_item(
+    items: &[GroupedListItem],
+    ix: usize,
+    heights: ScriptListRowHeights,
+) -> f32 {
     items
         .iter()
         .take(ix)
         .enumerate()
-        .map(|(item_ix, item)| script_list_row_height_for_theme(item, item_ix, theme))
+        .map(|(item_ix, item)| heights.row_height(item, item_ix))
         .sum()
 }
 
-fn script_list_pixel_top_for_offset(items: &[GroupedListItem], offset: gpui::ListOffset) -> f32 {
+fn script_list_pixel_top_for_offset(
+    items: &[GroupedListItem],
+    offset: gpui::ListOffset,
+    heights: ScriptListRowHeights,
+) -> f32 {
     let offset_in_item = offset.offset_in_item.as_f32().max(0.0);
     let clamped_item_ix = offset.item_ix.min(items.len());
-    script_list_pixel_top_for_item(items, clamped_item_ix) + offset_in_item
+    script_list_pixel_top_for_item(items, clamped_item_ix, heights) + offset_in_item
 }
 
 fn script_list_offset_for_pixel_top(
     items: &[GroupedListItem],
     scroll_top_px: f32,
+    heights: ScriptListRowHeights,
 ) -> gpui::ListOffset {
     if items.is_empty() {
         return gpui::ListOffset {
@@ -83,7 +112,7 @@ fn script_list_offset_for_pixel_top(
 
     let mut accumulated = 0.0_f32;
     for (ix, item) in items.iter().enumerate() {
-        let item_height = script_list_row_height(item, ix);
+        let item_height = heights.row_height(item, ix);
         let item_bottom = accumulated + item_height;
         if scroll_top_px < item_bottom {
             return gpui::ListOffset {
@@ -111,13 +140,15 @@ fn footer_safe_scroll_offset_for_item(
         return None;
     }
 
+    let heights = ScriptListRowHeights::current();
     let viewport_height = viewport_height.as_f32();
     let footer_overlay_height = footer_overlay_height.as_f32();
     let safe_viewport_height = viewport_height - footer_overlay_height;
-    let max_scroll_top = (script_list_content_height(items) - safe_viewport_height).max(0.0);
-    let current_scroll_top = script_list_pixel_top_for_offset(items, current_offset);
-    let target_top = script_list_pixel_top_for_item(items, target_ix);
-    let target_bottom = target_top + script_list_row_height(&items[target_ix], target_ix);
+    let max_scroll_top =
+        (script_list_content_height_with(items, heights) - safe_viewport_height).max(0.0);
+    let current_scroll_top = script_list_pixel_top_for_offset(items, current_offset, heights);
+    let target_top = script_list_pixel_top_for_item(items, target_ix, heights);
+    let target_bottom = target_top + heights.row_height(&items[target_ix], target_ix);
     let safe_bottom = current_scroll_top + safe_viewport_height;
 
     if target_bottom <= safe_bottom {
@@ -125,7 +156,7 @@ fn footer_safe_scroll_offset_for_item(
     }
 
     let safe_scroll_top = (current_scroll_top + (target_bottom - safe_bottom)).min(max_scroll_top);
-    Some(script_list_offset_for_pixel_top(items, safe_scroll_top))
+    Some(script_list_offset_for_pixel_top(items, safe_scroll_top, heights))
 }
 
 #[inline]
@@ -145,14 +176,15 @@ impl ScriptListApp {
         let viewport_height = self.main_list_state.viewport_bounds().size.height;
         let footer_height = main_list_footer_overlay_total_padding();
         let scroll_offset = self.main_list_state.logical_scroll_top();
+        let heights = ScriptListRowHeights::current();
         let (content_height, selected_row_top, selected_row_bottom, item_count) = {
             let (grouped_items, _) = self.get_grouped_results_cached();
-            let content_height = script_list_content_height(&grouped_items);
-            let selected_row_top = grouped_items
-                .get(self.selected_index)
-                .map(|_| script_list_pixel_top_for_item(&grouped_items, self.selected_index));
+            let content_height = script_list_content_height_with(&grouped_items, heights);
+            let selected_row_top = grouped_items.get(self.selected_index).map(|_| {
+                script_list_pixel_top_for_item(&grouped_items, self.selected_index, heights)
+            });
             let selected_row_bottom = grouped_items.get(self.selected_index).map(|item| {
-                selected_row_top.unwrap_or(0.0) + script_list_row_height(item, self.selected_index)
+                selected_row_top.unwrap_or(0.0) + heights.row_height(item, self.selected_index)
             });
             (
                 content_height,
@@ -163,7 +195,7 @@ impl ScriptListApp {
         };
         let scroll_top = {
             let (grouped_items, _) = self.get_grouped_results_cached();
-            script_list_pixel_top_for_offset(&grouped_items, scroll_offset)
+            script_list_pixel_top_for_offset(&grouped_items, scroll_offset, heights)
         };
         let viewport_height_px = viewport_height.as_f32().max(0.0);
         let footer_height_px = footer_height.as_f32().max(0.0);

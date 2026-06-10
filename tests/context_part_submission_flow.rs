@@ -507,14 +507,14 @@ fn e2e_submit_no_parts_no_message_is_ready_empty() {
 #[test]
 fn focused_target_part_resolves_to_prompt_block() {
     let part = AiContextPart::FocusedTarget {
-        label: "File: tab_ai_mode.rs".to_string(),
+        label: "File: agent_handoff.rs".to_string(),
         target: script_kit_gpui::ai::TabAiTargetContext {
             source: "FileSearch".to_string(),
             kind: "file".to_string(),
-            semantic_id: "choice:0:tab_ai_mode.rs".to_string(),
-            label: "tab_ai_mode.rs".to_string(),
+            semantic_id: "choice:0:agent_handoff.rs".to_string(),
+            label: "agent_handoff.rs".to_string(),
             metadata: Some(serde_json::json!({
-                "path": "/tmp/tab_ai_mode.rs"
+                "path": "/tmp/agent_handoff.rs"
             })),
         },
     };
@@ -525,8 +525,8 @@ fn focused_target_part_resolves_to_prompt_block() {
     assert_eq!(receipt.resolved, 1);
     assert!(!receipt.has_failures());
     assert!(receipt.prompt_prefix.contains("focusedTarget"));
-    assert!(receipt.prompt_prefix.contains("tab_ai_mode.rs"));
-    assert!(receipt.prompt_prefix.contains("/tmp/tab_ai_mode.rs"));
+    assert!(receipt.prompt_prefix.contains("agent_handoff.rs"));
+    assert!(receipt.prompt_prefix.contains("/tmp/agent_handoff.rs"));
     assert!(receipt.prompt_prefix.contains("itemSource=\"FileSearch\""));
     assert!(receipt.prompt_prefix.contains("itemKind=\"file\""));
 }

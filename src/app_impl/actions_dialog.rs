@@ -584,6 +584,32 @@ impl ScriptListApp {
             return;
         }
 
+        // Memo: this runs on every render frame, but the displayed-shortcut
+        // specs only depend on the focused row (and the append-only
+        // registered set). Rebuilding the full script-context + global
+        // action vectors per frame was the arrow-key scroll render hotspot
+        // (O(rows) cache clones + config load per frame).
+        let sync_key = {
+            let (grouped_items, flat_results) = self.get_grouped_results_cached();
+            let selected_name = match grouped_items.get(self.selected_index) {
+                Some(GroupedListItem::Item(idx)) => {
+                    flat_results.get(*idx).map(|result| result.name())
+                }
+                _ => None,
+            };
+            format!(
+                "{}|{}|{}|{}",
+                self.selected_index,
+                selected_name.unwrap_or(""),
+                grouped_items.len(),
+                self.filter_text
+            )
+        };
+        if self.main_list_shortcut_sync_key.as_deref() == Some(sync_key.as_str()) {
+            return;
+        }
+        self.main_list_shortcut_sync_key = Some(sync_key);
+
         let (_, actions) = self.main_list_actions_for_shortcut_routing();
         let filtered_actions: Vec<usize> = (0..actions.len()).collect();
         let specs = crate::actions::displayed_action_keybinding_specs(&actions, &filtered_actions);
@@ -694,6 +720,22 @@ impl ScriptListApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> bool {
+        // Bare navigation keys can never be displayed action shortcuts: the
+        // arrow/home-end interceptors consume them before the actions
+        // interceptor on the live keyboard path. Skip the O(actions) routing
+        // (full context-action rebuild + per-action logging) on the key-repeat
+        // scroll hot path instead of rebuilding the action list per keypress.
+        if !modifiers.platform && !modifiers.control && !modifiers.alt && !modifiers.shift {
+            let is_bare_navigation_key = crate::ui_foundation::is_key_up(key)
+                || crate::ui_foundation::is_key_down(key)
+                || crate::ui_foundation::is_key_left(key)
+                || crate::ui_foundation::is_key_right(key)
+                || matches!(key, "home" | "end" | "pageup" | "pagedown");
+            if is_bare_navigation_key {
+                return false;
+            }
+        }
+
         if self.show_actions_popup || !matches!(self.current_view, AppView::ScriptList) {
             logging::log(
                 "KEY_ROUTE",

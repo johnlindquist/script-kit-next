@@ -339,15 +339,26 @@ fn launcher_input_accents_power_syntax_prefixes() {
 }
 
 #[test]
-fn trailing_space_alias_execution_is_disabled_for_menu_syntax() {
+fn typing_an_alias_never_auto_executes() {
+    // A1 decision (2026-06-09): aliases pin the aliased command at index 0
+    // (see `pin_alias_match_into_grouped_results`) instead of executing on a
+    // trailing space. Typing in the main input must never run a command
+    // directly — execution requires Enter on the pinned row.
     let source = fs::read_to_string("src/app_impl/filter_input_change.rs")
         .expect("Failed to read src/app_impl/filter_input_change.rs");
 
     assert!(
-        source.contains(
-            "!self.menu_syntax_mode.is_menu_syntax_for(&new_text) && new_text.ends_with(' ')"
-        ),
-        "alias auto-run on trailing space must not fire while menu syntax owns input"
+        !source.contains("find_alias_match"),
+        "handle_filter_input_change must not resolve aliases for auto-execution; \
+         alias handling lives in the grouping pin (pin_alias_match_into_grouped_results)"
+    );
+
+    let cache = fs::read_to_string("src/app_impl/filtering_cache.rs")
+        .expect("Failed to read src/app_impl/filtering_cache.rs");
+    assert!(
+        cache.contains("fn pin_alias_match_into_grouped_results")
+            && cache.contains("pin_alias_match_first"),
+        "exact alias matches must pin the aliased command at the top of the grouped list"
     );
 }
 

@@ -242,6 +242,21 @@ impl ScriptListApp {
         self.current_view = AppView::ScriptList;
         self.set_main_window_mode_state_only(MainWindowMode::Mini, cx, "reset_to_script_list");
 
+        // A force-reset bypasses the portal close paths; drop any
+        // ScriptList-hosted spine file portal so `is_in_attachment_portal`
+        // cannot stay latched after the window reopens.
+        if self.spine_mention_portal_segment.take().is_some() {
+            self.attachment_portal_return_view = None;
+            self.attachment_portal_return_focus_target = None;
+            self.attachment_portal_return_width = None;
+            self.attachment_portal_host_snapshot = None;
+            self.active_attachment_portal_kind = None;
+            tracing::info!(
+                target: "script_kit::spine",
+                event = "spine_attachment_portal_force_reset",
+            );
+        }
+
         if closing_agent_chat {
             self.agent_chat_ready_script_path = None;
             self.agent_chat_footer_dot_status = None;

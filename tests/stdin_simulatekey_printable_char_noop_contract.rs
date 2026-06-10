@@ -79,9 +79,14 @@ fn emoji_picker_unhandled_arm_returns_without_side_effect() {
     let anchor = SIMULATE_KEY_HELPER
         .find(EMOJI_UNHANDLED)
         .unwrap_or_else(|| panic!("simulate_key_dispatch.rs lost the EmojiPicker anchor"));
-    let window = &SIMULATE_KEY_HELPER[anchor..(anchor + 150).min(SIMULATE_KEY_HELPER.len())];
+    // The Unhandled-key log call ends at the first `;` after the anchor;
+    // the very next statement must be `return;` (indentation-independent).
+    let after_log = &SIMULATE_KEY_HELPER[anchor..];
+    let semi = after_log
+        .find(';')
+        .expect("EmojiPicker Unhandled-key log must terminate with a statement");
     assert!(
-        window.contains("return;"),
+        after_log[semi + 1..].trim_start().starts_with("return;"),
         "EmojiPicker `_ =>` arm in simulate_key_dispatch.rs must `return;` immediately after the Unhandled-key log"
     );
 }

@@ -123,6 +123,14 @@ pub enum SpineListAction {
         sigil: char,
         rest: SharedString,
     },
+    /// Open the full built-in File Search surface (split preview) as a
+    /// ScriptList-hosted attachment portal. Accepting a file resolves the
+    /// originating `@file` segment into a compact `@file:basename` token.
+    OpenFileSearchPortal {
+        segment_index: usize,
+        segment_byte_range: Range<usize>,
+        query: SharedString,
+    },
     OpenConversation {
         conversation_id: SharedString,
     },
@@ -141,6 +149,7 @@ impl SpineListRow {
                 SpineListAction::Noop => "No Action",
                 SpineListAction::AwaitContextSubsearchInput { .. } => "Type",
                 SpineListAction::OpenModeExit { .. } => "Open",
+                SpineListAction::OpenFileSearchPortal { .. } => "Search Files",
                 SpineListAction::OpenConversation { .. } => "Open Conversation",
                 SpineListAction::InsertSegmentText { .. }
                 | SpineListAction::ResolveSegment { .. } => "Insert",

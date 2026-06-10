@@ -639,6 +639,53 @@ impl ScriptListApp {
                                         }
                                         return;
                                     }
+                                    // Portal mode parity with the GPUI handler at
+                                    // src/render_builtins/file_search.rs: attach the
+                                    // selection instead of opening it.
+                                    if view.is_in_attachment_portal() {
+                                        if file.file_type
+                                            == crate::file_search::FileType::Directory
+                                        {
+                                            logging::log(
+                                                "STDIN",
+                                                "SimulateKey: Enter (portal) - navigate into directory",
+                                            );
+                                            let next_query = format!(
+                                                "{}/",
+                                                crate::file_search::shorten_path(&file.path)
+                                                    .trim_end_matches('/')
+                                            );
+                                            let next_presentation = match &view.current_view {
+                                                AppView::FileSearchView {
+                                                    presentation, ..
+                                                } => *presentation,
+                                                _ => FileSearchPresentation::Full,
+                                            };
+                                            view.open_file_search_view_preserving_current_results(
+                                                next_query,
+                                                next_presentation,
+                                                ctx,
+                                            );
+                                            return;
+                                        }
+                                        logging::log(
+                                            "STDIN",
+                                            &format!(
+                                                "SimulateKey: Enter (portal) - attach file {}",
+                                                &file.path
+                                            ),
+                                        );
+                                        let part =
+                                            crate::ai::message_parts::AiContextPart::FilePath {
+                                                path: file.path.clone(),
+                                                label: std::path::Path::new(&file.path)
+                                                    .file_name()
+                                                    .map(|n| n.to_string_lossy().to_string())
+                                                    .unwrap_or_else(|| file.path.clone()),
+                                            };
+                                        view.close_attachment_portal_with_part(part, ctx);
+                                        return;
+                                    }
                                     logging::log(
                                         "STDIN",
                                         &format!("SimulateKey: Enter - open file {}", &file.path),
@@ -666,6 +713,14 @@ impl ScriptListApp {
                                 }
                             }
                             "escape" => {
+                                if view.is_in_attachment_portal() {
+                                    logging::log(
+                                        "STDIN",
+                                        "SimulateKey: Escape (portal) - cancel attachment portal",
+                                    );
+                                    view.close_attachment_portal_cancel(ctx);
+                                    return;
+                                }
                                 logging::log("STDIN", "SimulateKey: Escape - close FileSearchView");
                                 view.close_and_reset_window(ctx);
                             }

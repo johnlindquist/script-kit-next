@@ -688,7 +688,7 @@ impl ScriptListApp {
         } = &self.current_view
         {
             let buttons = self.confirm_prompt_footer_buttons(options, *focused_button);
-            tracing::info!(
+            tracing::debug!(
                 target: "script_kit::footer_popup",
                 event = "main_window_footer_buttons_resolved",
                 view = ?self.current_view,
@@ -701,7 +701,7 @@ impl ScriptListApp {
         // Quick Terminal: scoped Close (+ optional Apply) — never Run/AI/Actions.
         if matches!(self.current_view, AppView::QuickTerminalView { .. }) {
             let buttons = self.quick_terminal_footer_buttons();
-            tracing::info!(
+            tracing::debug!(
                 target: "script_kit::footer_popup",
                 event = "main_window_footer_buttons_resolved",
                 view = ?self.current_view,
@@ -714,7 +714,7 @@ impl ScriptListApp {
         // Agent Chat owns its own footer state: Send/Paste Response/Stop + Actions.
         if matches!(self.current_view, AppView::AgentChatView { .. }) {
             let buttons = self.agent_chat_footer_buttons();
-            tracing::info!(
+            tracing::debug!(
                 target: "script_kit::footer_popup",
                 event = "main_window_footer_buttons_resolved",
                 view = ?self.current_view,
@@ -737,7 +737,7 @@ impl ScriptListApp {
                     .selected(actions_open)
                     .enabled(enabled),
             ];
-            tracing::info!(
+            tracing::debug!(
                 target: "script_kit::footer_popup",
                 event = "main_window_footer_buttons_resolved",
                 view = ?self.current_view,
@@ -755,7 +755,7 @@ impl ScriptListApp {
             let buttons = vec![
                 FooterButtonConfig::new(FooterAction::Close, "Esc", "Cancel").enabled(enabled),
             ];
-            tracing::info!(
+            tracing::debug!(
                 target: "script_kit::footer_popup",
                 event = "main_window_footer_buttons_resolved",
                 view = ?self.current_view,
@@ -774,7 +774,7 @@ impl ScriptListApp {
                 FooterButtonConfig::new(FooterAction::Run, "↵", "Fix in Agent").enabled(enabled),
                 FooterButtonConfig::new(FooterAction::Apply, "⌘C", "Copy Issues").enabled(enabled),
             ];
-            tracing::info!(
+            tracing::debug!(
                 target: "script_kit::footer_popup",
                 event = "main_window_footer_buttons_resolved",
                 view = ?self.current_view,
@@ -791,7 +791,7 @@ impl ScriptListApp {
             let enabled = !footer_disabled;
             let buttons =
                 vec![FooterButtonConfig::new(FooterAction::Run, "↵", "Submit").enabled(enabled)];
-            tracing::info!(
+            tracing::debug!(
                 target: "script_kit::footer_popup",
                 event = "main_window_footer_buttons_resolved",
                 view = ?self.current_view,
@@ -813,7 +813,7 @@ impl ScriptListApp {
                     .selected(actions_open)
                     .enabled(enabled),
             ];
-            tracing::info!(
+            tracing::debug!(
                 target: "script_kit::footer_popup",
                 event = "main_window_footer_buttons_resolved",
                 view = ?self.current_view,
@@ -835,7 +835,7 @@ impl ScriptListApp {
                     .selected(actions_open)
                     .enabled(enabled),
             ];
-            tracing::info!(
+            tracing::debug!(
                 target: "script_kit::footer_popup",
                 event = "main_window_footer_buttons_resolved",
                 view = ?self.current_view,
@@ -870,7 +870,7 @@ impl ScriptListApp {
                     .selected(actions_open)
                     .enabled(!footer_disabled),
             ];
-            tracing::info!(
+            tracing::debug!(
                 target: "script_kit::footer_popup",
                 event = "main_window_footer_buttons_resolved",
                 view = ?self.current_view,
@@ -888,7 +888,7 @@ impl ScriptListApp {
             let buttons =
                 vec![FooterButtonConfig::new(FooterAction::Run, "↵", "Select")
                     .enabled(!footer_disabled)];
-            tracing::info!(
+            tracing::debug!(
                 target: "script_kit::footer_popup",
                 event = "main_window_footer_buttons_resolved",
                 view = ?self.current_view,
@@ -919,7 +919,7 @@ impl ScriptListApp {
                 FooterButtonConfig::new(FooterAction::Close, "Esc", secondary_label)
                     .enabled(!footer_disabled),
             ];
-            tracing::info!(
+            tracing::debug!(
                 target: "script_kit::footer_popup",
                 event = "main_window_footer_buttons_resolved",
                 view = ?self.current_view,
@@ -946,7 +946,7 @@ impl ScriptListApp {
                 FooterButtonConfig::new(FooterAction::Run, "↵", "Update").enabled(enabled),
                 FooterButtonConfig::new(FooterAction::Apply, "⌦", "Remove").enabled(enabled),
             ];
-            tracing::info!(
+            tracing::debug!(
                 target: "script_kit::footer_popup",
                 event = "main_window_footer_buttons_resolved",
                 view = ?self.current_view,
@@ -957,7 +957,7 @@ impl ScriptListApp {
         }
 
         let buttons = self.standard_main_window_footer_buttons();
-        tracing::info!(
+        tracing::debug!(
             target: "script_kit::footer_popup",
             event = "main_window_footer_buttons_resolved",
             view = ?self.current_view,
@@ -1033,7 +1033,9 @@ impl ScriptListApp {
         let surface = self.main_window_footer_surface()?;
         let buttons = self.main_window_footer_buttons_for_current_view(cx);
 
-        tracing::info!(
+        // debug!: resolved on every render frame and every state collection;
+        // info-level logging here is per-frame I/O during arrow-key scroll.
+        tracing::debug!(
             target: "script_kit::footer_popup",
             event = "main_window_footer_config_resolved",
             view = ?self.current_view,
@@ -1138,7 +1140,7 @@ impl ScriptListApp {
             self.enrich_footer_config_with_agent_chat_info(cfg);
         }
 
-        tracing::info!(
+        tracing::debug!(
             target: "script_kit::footer_popup",
             event = "main_window_footer_sync",
             view = ?self.current_view,
@@ -2025,15 +2027,33 @@ impl ScriptListApp {
     /// Rebuild the preflight receipt when the cache key has changed.
     /// Call this from mutation paths (filter change, selection change)
     /// — never from `render()`.
+    ///
+    /// The cache key covers the row-shaping inputs (filter text + view).
+    /// When only `selected_index` changed — the arrow-key scroll hot path —
+    /// the cached receipt's visible rows/fingerprints/counts are still valid,
+    /// so only the selection-dependent fields are refreshed (O(1)) instead of
+    /// rebuilding the full O(visible rows) receipt on every keypress.
     pub(crate) fn rebuild_main_window_preflight_if_needed(&mut self) {
-        let new_key = format!(
-            "{}:{}:{:?}",
-            self.filter_text, self.selected_index, self.current_view
-        );
-        if new_key == self.main_window_preflight_cache_key {
+        let rows_key = format!("{}:{:?}", self.filter_text, self.current_view);
+        if rows_key == self.main_window_preflight_cache_key {
+            let Some(mut receipt) = self.cached_main_window_preflight.take() else {
+                // Rows unchanged and the view is not preflight-eligible;
+                // selection changes cannot make it eligible.
+                return;
+            };
+            if receipt.selected_index != self.selected_index {
+                crate::main_window_preflight::refresh_main_window_preflight_selection(
+                    self,
+                    &mut receipt,
+                );
+                if crate::logging::filter_perf_trace_enabled() {
+                    crate::main_window_preflight::log_main_window_preflight_receipt(&receipt);
+                }
+            }
+            self.cached_main_window_preflight = Some(receipt);
             return;
         }
-        self.main_window_preflight_cache_key = new_key;
+        self.main_window_preflight_cache_key = rows_key;
         let receipt = crate::main_window_preflight::build_main_window_preflight_receipt(self);
         if crate::logging::filter_perf_trace_enabled() {
             if let Some(ref r) = receipt {

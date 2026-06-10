@@ -12,7 +12,7 @@ const UI_WINDOW_SOURCE: &str = include_str!("../src/app_impl/ui_window.rs");
 const APP_VIEW_STATE_SOURCE: &str = include_str!("../src/main_sections/app_view_state.rs");
 const RENDER_TERM_PROMPT_SOURCE: &str = include_str!("../src/render_prompts/term.rs");
 const PROMPT_HANDLER_SOURCE: &str = include_str!("../src/prompt_handler/mod.rs");
-const TAB_AI_MODE_SOURCE: &str = include_str!("../src/app_impl/tab_ai_mode/mod.rs");
+const TAB_AI_MODE_SOURCE: &str = include_str!("../src/app_impl/agent_handoff/mod.rs");
 const SIMULATE_KEY_DISPATCH_SOURCE: &str = include_str!("../src/app_impl/simulate_key_dispatch.rs");
 const UTILITY_VIEWS_SOURCE: &str = include_str!("../src/app_execute/utility_views.rs");
 

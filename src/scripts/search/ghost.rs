@@ -3,6 +3,16 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
+/// Kill switch for main-window ghost predictions.
+///
+/// Decision (2026-06-09, A2/A7): ghost text in the main launcher input is
+/// disabled pending a redesign — it competed with Tab's cwd-picker role and
+/// its async arrival made Tab's behavior timing-dependent. The prediction
+/// pipeline is kept compiled so it can be re-enabled (likely for the Notes
+/// window first). With this false, no prediction is ever produced, so the
+/// Tab/backquote acceptance paths are inert.
+pub(crate) const GHOST_PREDICTIONS_ENABLED: bool = false;
+
 /// Confidence carried by an accepted, sanitized LLM completion. The LLM is the
 /// real predictor now; deterministic logic only seeds the request and provides
 /// a low-confidence starter when the model has nothing yet.

@@ -4,6 +4,9 @@ mod render;
 mod tests;
 mod types;
 
-pub(crate) use build::{build_main_window_preflight_receipt, log_main_window_preflight_receipt};
+pub(crate) use build::{
+    build_main_window_preflight_receipt, log_main_window_preflight_receipt,
+    refresh_main_window_preflight_selection,
+};
 pub(crate) use render::render_main_window_preflight_receipt;
 pub(crate) use types::MainWindowPreflightReceipt;

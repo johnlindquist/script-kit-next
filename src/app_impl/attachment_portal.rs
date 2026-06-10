@@ -147,14 +147,125 @@ impl ScriptListApp {
     }
 
     /// Whether the app is currently in an attachment portal (file search or
-    /// clipboard history opened from the Agent Chat chat context picker).
+    /// clipboard history opened from the Agent Chat chat context picker, or
+    /// file search opened from the main-menu `@file` spine flow).
     ///
-    /// Reads from the app-owned `agent_chat_surface_state` machine rather
-    /// than probing `attachment_portal_return_view.is_some()`. The
-    /// the Cmd+Enter launcher-entry guard calls this, so a single source of
-    /// truth prevents it from drifting against the portal snapshot fields.
+    /// Agent-chat-hosted portals read from the app-owned
+    /// `agent_chat_surface_state` machine rather than probing
+    /// `attachment_portal_return_view.is_some()`. The Cmd+Enter launcher-entry
+    /// guard calls this, so a single source of truth prevents it from drifting
+    /// against the portal snapshot fields. ScriptList-hosted spine portals are
+    /// tracked by `spine_mention_portal_segment` because the agent-chat
+    /// machine deliberately rejects `PortalOpened` while `Hidden`.
     pub(crate) fn is_in_attachment_portal(&self) -> bool {
         self.agent_chat_surface_state.is_attachment_portal()
+            || self.spine_mention_portal_segment.is_some()
+    }
+
+    /// Open the full built-in File Search surface as a ScriptList-hosted
+    /// attachment portal for the main-menu `@file` spine flow. Enter resolves
+    /// the originating segment into a compact `@file:basename` token; Escape
+    /// restores the pre-portal filter text.
+    pub(crate) fn open_spine_file_search_attachment_portal(
+        &mut self,
+        segment_byte_range: std::ops::Range<usize>,
+        query: String,
+        cx: &mut Context<Self>,
+    ) {
+        if self.is_in_attachment_portal() {
+            tracing::warn!(
+                target: "script_kit::spine",
+                event = "spine_attachment_portal_nested_prevented",
+            );
+            return;
+        }
+        if !matches!(self.current_view, AppView::ScriptList) {
+            tracing::warn!(
+                target: "script_kit::spine",
+                event = "spine_attachment_portal_requires_script_list",
+                current_view = ?self.current_view,
+            );
+            return;
+        }
+
+        self.attachment_portal_return_view = Some(AppView::ScriptList);
+        self.attachment_portal_return_focus_target = Some(FocusTarget::MainFilter);
+        self.attachment_portal_return_width = Self::current_main_window_width();
+        self.attachment_portal_host_snapshot = Some(self.capture_attachment_portal_host_snapshot());
+        self.active_attachment_portal_kind =
+            Some(crate::ai::window::context_picker::types::PortalKind::FileSearch);
+        self.spine_mention_portal_segment = Some(segment_byte_range);
+
+        tracing::info!(
+            target: "script_kit::spine",
+            event = "spine_attachment_portal_opened",
+            query = %query,
+            return_width = ?self.attachment_portal_return_width,
+        );
+
+        self.open_file_search(query, cx);
+        self.record_attachment_portal_open_width();
+        cx.notify();
+    }
+
+    /// Resolve the `@file` spine segment that opened a ScriptList-hosted
+    /// portal: replace the segment text with the compact token, register the
+    /// full-path alias, and re-run the spine/filter pipeline. Runs after the
+    /// host snapshot restore, so `filter_text` is the pre-portal text the
+    /// stored byte range was captured against.
+    fn resolve_spine_mention_from_portal_part(
+        &mut self,
+        segment_byte_range: std::ops::Range<usize>,
+        part: &crate::ai::message_parts::AiContextPart,
+        cx: &mut Context<Self>,
+    ) {
+        let crate::ai::message_parts::AiContextPart::FilePath { path, .. } = part else {
+            tracing::warn!(
+                target: "script_kit::spine",
+                event = "spine_attachment_portal_part_not_file",
+            );
+            return;
+        };
+
+        let token = Self::spine_file_mention_token(path);
+        self.register_spine_file_mention_alias(token.clone(), path.clone());
+
+        let current = self.filter_text.clone();
+        let new_text = if segment_byte_range.end <= current.len()
+            && current.is_char_boundary(segment_byte_range.start)
+            && current.is_char_boundary(segment_byte_range.end)
+        {
+            let prefix = &current[..segment_byte_range.start];
+            let suffix = current[segment_byte_range.end..].trim_start();
+            if suffix.is_empty() {
+                format!("{prefix}{token} ")
+            } else {
+                format!("{prefix}{token} {suffix}")
+            }
+        } else {
+            // The stored range no longer fits the restored filter; append
+            // rather than dropping the accepted file.
+            let trimmed = current.trim_end();
+            if trimmed.is_empty() {
+                format!("{token} ")
+            } else {
+                format!("{trimmed} {token} ")
+            }
+        };
+
+        tracing::info!(
+            target: "script_kit::spine",
+            event = "spine_attachment_portal_segment_resolved",
+            token = %token,
+        );
+
+        self.filter_text = new_text.clone();
+        self.computed_filter_text = new_text.clone();
+        self.pending_filter_sync = true;
+        self.set_spine_parse_from_filter_and_cursor(&new_text, new_text.len());
+        self.maybe_start_spine_file_subsearch_for_current_projection(cx);
+        self.invalidate_grouped_cache();
+        self.sync_list_state();
     }
 
     pub(crate) fn active_attachment_portal_kind(
@@ -413,12 +524,15 @@ impl ScriptListApp {
         cx.notify();
     }
 
-    /// Close the attachment portal and attach the selected part to the Agent Chat chat.
+    /// Close the attachment portal and attach the selected part: to the Agent
+    /// Chat chat for agent-chat-hosted portals, or as a resolved compact
+    /// `@file:` token for ScriptList-hosted spine portals.
     pub(crate) fn close_attachment_portal_with_part(
         &mut self,
         part: crate::ai::message_parts::AiContextPart,
         cx: &mut Context<Self>,
     ) {
+        let spine_segment = self.spine_mention_portal_segment.take();
         let return_view = self
             .attachment_portal_return_view
             .take()
@@ -435,6 +549,15 @@ impl ScriptListApp {
         );
 
         self.restore_attachment_portal_return_view(return_view.clone(), return_focus_target);
+
+        // ScriptList-hosted spine portal: resolve the `@file` segment in the
+        // restored filter and skip the agent-chat surface transitions — the
+        // agent-chat machine never entered its portal state for this host.
+        if let Some(segment_byte_range) = spine_segment {
+            self.resolve_spine_mention_from_portal_part(segment_byte_range, &part, cx);
+            cx.notify();
+            return;
+        }
         // Drive the placement machine back to Embedded when the portal
         // is returning to the chat view, otherwise Hidden — the portal
         // can only have been opened from an embedded Agent Chat host, so
@@ -464,6 +587,7 @@ impl ScriptListApp {
 
     /// Close the attachment portal without attaching anything (Escape).
     pub(crate) fn close_attachment_portal_cancel(&mut self, cx: &mut Context<Self>) {
+        let spine_segment = self.spine_mention_portal_segment.take();
         let portal_kind = self.active_attachment_portal_kind;
         let return_view = self
             .attachment_portal_return_view
@@ -482,6 +606,14 @@ impl ScriptListApp {
         );
 
         self.restore_attachment_portal_return_view(return_view.clone(), return_focus_target);
+
+        // ScriptList-hosted spine portal: the snapshot restore already put the
+        // pre-portal `@file` filter text back; no agent-chat surface
+        // transitions or entity hooks apply to this host.
+        if spine_segment.is_some() {
+            cx.notify();
+            return;
+        }
         // Same split as the accept path: PortalClosed first (the
         // default return lands back in Embedded), then EmbeddedClosed
         // if the restored view is not the Agent Chat chat.

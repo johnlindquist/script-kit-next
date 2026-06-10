@@ -881,6 +881,10 @@ pub(crate) struct ScriptListApp {
     show_actions_popup: bool,
     /// Displayed main-list action shortcuts registered into GPUI's focused keymap.
     registered_main_list_displayed_shortcuts: std::collections::HashSet<String>,
+    /// Identity of the focused row the displayed-shortcut keybindings were
+    /// last synced for. Skips rebuilding the full action vectors on every
+    /// render frame (the rebuild is the arrow-key scroll render hotspot).
+    main_list_shortcut_sync_key: Option<String>,
     /// Timestamp of the last actions popup close, used to debounce reopen from
     /// activation-triggered close racing with the footer button click handler.
     actions_closed_at: Option<std::time::Instant>,
@@ -1163,6 +1167,17 @@ pub(crate) struct ScriptListApp {
     /// Which attachment portal is currently active, when any.
     pub(crate) active_attachment_portal_kind:
         Option<crate::ai::window::context_picker::types::PortalKind>,
+    /// Byte range of the `@file` spine segment that opened a ScriptList-hosted
+    /// file-search attachment portal. `Some` marks the portal as spine-hosted:
+    /// accept resolves the segment into a compact `@file:basename` token
+    /// instead of attaching to Agent Chat. Mirrors the agent-chat host fields
+    /// above; both feed `is_in_attachment_portal`.
+    pub(crate) spine_mention_portal_segment: Option<std::ops::Range<usize>>,
+    /// Session alias registry for compact spine mention tokens inserted into
+    /// the main filter (`@file:basename` → full `AiContextPart::FilePath`).
+    /// The launcher-side mirror of `AgentChatView::typed_mention_aliases`.
+    pub(crate) spine_mention_aliases:
+        std::collections::HashMap<String, crate::ai::message_parts::AiContextPart>,
     /// App-owned placement machine for the Agent Chat surface. Source of
     /// truth for the `blocks_launcher_ai_entry` and
     /// `is_attachment_portal` predicates. Written only through

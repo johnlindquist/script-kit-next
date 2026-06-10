@@ -569,7 +569,7 @@ fn agent_chat_component_bounds_model_uses_main_view_chrome() {
 
 #[test]
 fn standard_agent_chat_mock_fixture_bypasses_provider_warmup() {
-    let agent_chat_launch = read_source("src/app_impl/tab_ai_mode/agent_chat_launch.rs");
+    let agent_chat_launch = read_source("src/app_impl/agent_handoff/agent_chat_launch.rs");
     let runtime_stdin = read_source("src/main_entry/runtime_stdin.rs");
     let app_run_setup = read_source("src/main_entry/app_run_setup.rs");
     let runtime_tail = read_source("src/main_entry/runtime_stdin_match_tail.rs");

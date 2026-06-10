@@ -225,15 +225,33 @@ fn filterable_view_builtins_use_shared_helper() {
         "Expected shared open_builtin_filterable_view helper"
     );
 
-    fn count_occurrences(haystack: &str, needle: &str) -> usize {
-        haystack.matches(needle).count()
+    // Named filterable builtins that must each route through the shared helper:
+    // the helper call's first argument is the AppView the builtin opens.
+    fn helper_opens_view(content: &str, view: &str) -> bool {
+        let callee = "self.open_builtin_filterable_view(";
+        let mut search = content;
+        while let Some(index) = search.find(callee) {
+            let after = &search[index + callee.len()..];
+            if after.trim_start().starts_with(view) {
+                return true;
+            }
+            search = after;
+        }
+        false
     }
 
-    let use_count = count_occurrences(&content, "self.open_builtin_filterable_view(");
-    assert!(
-        use_count >= 5,
-        "Expected at least 5 builtin arms to use open_builtin_filterable_view (found {use_count})"
-    );
+    for view in [
+        "AppView::FavoritesBrowseView",
+        "AppView::AppLauncherView",
+        "AppView::DesignGalleryView",
+        "AppView::FooterGalleryView",
+        "AppView::EmojiPickerView",
+    ] {
+        assert!(
+            helper_opens_view(&content, view),
+            "Expected the {view} builtin arm to open through open_builtin_filterable_view"
+        );
+    }
 }
 
 #[test]

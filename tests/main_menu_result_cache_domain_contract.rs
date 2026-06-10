@@ -12,7 +12,7 @@ const STARTUP_NEW_STATE: &str = include_str!("../src/app_impl/startup_new_state.
 const FILTERING_CACHE: &str = include_str!("../src/app_impl/filtering_cache.rs");
 const UI_WINDOW: &str = include_str!("../src/app_impl/ui_window.rs");
 const MAIN_WINDOW_PREFLIGHT: &str = include_str!("../src/main_window_preflight/build.rs");
-const TAB_AI_MODE: &str = include_str!("../src/app_impl/tab_ai_mode/mod.rs");
+const TAB_AI_MODE: &str = include_str!("../src/app_impl/agent_handoff/mod.rs");
 const SELECTION_FALLBACK: &str = include_str!("../src/app_impl/selection_fallback.rs");
 const PREVIEW_PANEL: &str = include_str!("../src/app_render/preview_panel.rs");
 const IMPL_MOVEMENT: &str = include_str!("../src/app_navigation/impl_movement.rs");
@@ -185,7 +185,7 @@ fn grouped_cache_readers_use_behavior_named_accessors() {
             &[".cloned_first_search_result_at_or_after_grouped_item("][..],
         ),
         (
-            "tab_ai_mode",
+            "agent_handoff",
             TAB_AI_MODE,
             &[
                 ".search_result_for_grouped_item(",
@@ -254,7 +254,7 @@ fn production_cache_consumers_do_not_read_storage_fields_directly() {
         ("filtering_cache", FILTERING_CACHE),
         ("ui_window", UI_WINDOW),
         ("main_window_preflight", MAIN_WINDOW_PREFLIGHT),
-        ("tab_ai_mode", TAB_AI_MODE),
+        ("agent_handoff", TAB_AI_MODE),
         ("selection_fallback", SELECTION_FALLBACK),
         ("preview_panel", PREVIEW_PANEL),
         ("impl_movement", IMPL_MOVEMENT),

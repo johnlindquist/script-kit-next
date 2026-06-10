@@ -75,6 +75,18 @@ impl SpinePromptPlan {
 }
 
 pub(crate) fn build_spine_prompt_plan(parse: &SpineParse) -> SpinePromptPlan {
+    build_spine_prompt_plan_with_aliases(parse, &std::collections::HashMap::new())
+}
+
+/// Alias-aware variant: compact mention tokens (`@file:basename.ext`) are
+/// resolved through the session alias registry before the literal `@file:`
+/// path fallback, so the visible token can stay short while the attached
+/// context keeps the absolute path. Mirrors
+/// `context_mentions::parse_inline_context_mentions_with_aliases` ordering.
+pub(crate) fn build_spine_prompt_plan_with_aliases(
+    parse: &SpineParse,
+    mention_aliases: &std::collections::HashMap<String, AiContextPart>,
+) -> SpinePromptPlan {
     let raw_input = parse.input.clone();
     let mut plan = SpinePromptPlan {
         raw_input: raw_input.clone(),
@@ -107,6 +119,8 @@ pub(crate) fn build_spine_prompt_plan(parse: &SpineParse) -> SpinePromptPlan {
                 if let Some(kind) = ContextAttachmentKind::from_mention_line(&text) {
                     let part = kind.part();
                     push_context_part_dedup(&mut plan, part);
+                } else if let Some(part) = mention_aliases.get(&text) {
+                    push_context_part_dedup(&mut plan, part.clone());
                 } else if text.starts_with("@file:") {
                     let path = text.strip_prefix("@file:").unwrap_or("").trim();
                     if !path.is_empty() {
@@ -325,6 +339,41 @@ mod tests {
             plan.blocked_reason,
             Some(SpinePromptPlanBlockReason::ListFilter)
         );
+    }
+
+    #[test]
+    fn prompt_plan_resolves_compact_file_tokens_via_aliases() {
+        let parse = parse_spine("@file:demo.rs summarize");
+        let mut aliases = std::collections::HashMap::new();
+        aliases.insert(
+            "@file:demo.rs".to_string(),
+            AiContextPart::FilePath {
+                path: "/tmp/nested/demo.rs".to_string(),
+                label: "demo.rs".to_string(),
+            },
+        );
+        let plan = build_spine_prompt_plan_with_aliases(&parse, &aliases);
+        assert!(plan.should_submit_to_chat());
+        assert!(
+            plan.context_parts.iter().any(|part| matches!(
+                part,
+                AiContextPart::FilePath { path, label }
+                    if path == "/tmp/nested/demo.rs" && label == "demo.rs"
+            )),
+            "compact @file token must resolve to its aliased full path, got {:?}",
+            plan.context_parts,
+        );
+        assert_eq!(plan.free_text_tail, "summarize");
+    }
+
+    #[test]
+    fn prompt_plan_without_alias_falls_back_to_literal_file_path() {
+        let parse = parse_spine("@file:/tmp/demo.rs summarize");
+        let plan = build_spine_prompt_plan(&parse);
+        assert!(plan.context_parts.iter().any(|part| matches!(
+            part,
+            AiContextPart::FilePath { path, .. } if path == "/tmp/demo.rs"
+        )));
     }
 
     #[test]

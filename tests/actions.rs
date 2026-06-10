@@ -1351,7 +1351,7 @@ fn favorites_browse_renderer_uses_named_list_action_states() {
         content.contains("action.selection_required_message()")
             && content.contains("action.success_message(&id)")
             && content.contains("action.missing_favorite_message(&id)")
-            && content.contains("action.boundary_message(&id)")
+            && content.contains(".boundary_message(&id)")
             && content.contains("action.failure_message(e)"),
         "Favorites run/remove/reorder results should derive selection, success, boundary, and failure copy from the named state"
     );

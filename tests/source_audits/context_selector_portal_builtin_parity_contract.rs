@@ -114,6 +114,54 @@ fn file_search_builtin_and_attachment_portal_use_full_surface_path() {
 }
 
 #[test]
+fn main_menu_spine_file_flow_matches_agent_chat_portal_parity() {
+    let catalog = source("src/spine/catalog_context.rs");
+    let portal = source("src/app_impl/attachment_portal.rs");
+    let updates = source("src/app_impl/filter_input_updates.rs");
+    let plan = source("src/spine/prompt_plan.rs");
+    let filtering = source("src/app_impl/filtering_cache.rs");
+
+    // 1. The top-level @ Files row must open the full built-in File Search
+    //    surface (split preview) through the shared opener, like the Agent
+    //    Chat context picker — not an inline-only subsearch prefix.
+    assert!(
+        catalog.contains("SpineListAction::OpenFileSearchPortal"),
+        "main-menu @ Files row must open the full File Search portal"
+    );
+    assert!(
+        portal.contains("fn open_spine_file_search_attachment_portal")
+            && portal.contains("self.open_file_search(query, cx);"),
+        "spine portal open path must reuse the shared full file-search opener"
+    );
+
+    // 2. Colon-mode inline `@file:` results keep an explicit full-portal
+    //    fallback row, mirroring inject_full_portal_fallback in the picker.
+    assert!(
+        filtering.contains("spine:@:file-full-search"),
+        "inline @file: subsearch must keep a full File Search fallback row"
+    );
+
+    // 3. Accepted files insert compact `@file:basename` tokens whose full
+    //    path travels through the alias registry into the prompt plan.
+    assert!(
+        updates.contains("fn spine_file_mention_token")
+            && updates.contains("register_spine_file_mention_alias"),
+        "main-menu file accepts must insert compact tokens with full-path aliases"
+    );
+    assert!(
+        plan.contains("fn build_spine_prompt_plan_with_aliases"),
+        "spine prompt plan must resolve compact tokens through the alias registry"
+    );
+
+    // 4. Damaged alias tokens delete atomically, like Agent Chat's
+    //    remove_inline_mention_at_cursor path.
+    assert!(
+        updates.contains("fn spine_mention_atomic_delete_fixup"),
+        "main filter must remove damaged alias tokens atomically"
+    );
+}
+
+#[test]
 fn file_search_attachment_portal_accepts_with_basename_label() {
     let file_search = source("src/render_builtins/file_search.rs");
     let portal_accept = file_search

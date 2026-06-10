@@ -1810,6 +1810,50 @@ impl ScriptListApp {
         }
 
         match message {
+            Message::CaptureScreenshot {
+                request_id,
+                hi_dpi,
+                target,
+            } => {
+                let hi_dpi_mode = hi_dpi.unwrap_or(false);
+                let response = match crate::platform::capture_targeted_screenshot(
+                    target.as_ref(),
+                    hi_dpi_mode,
+                ) {
+                    Ok((png_data, width, height)) => {
+                        use base64::Engine;
+                        let base64_data =
+                            base64::engine::general_purpose::STANDARD.encode(&png_data);
+                        tracing::info!(
+                            category = "STDIN",
+                            request_id = %request_id,
+                            width,
+                            height,
+                            hi_dpi = hi_dpi_mode,
+                            data_len = base64_data.len(),
+                            "captureScreenshot receipt"
+                        );
+                        Message::screenshot_result(request_id, base64_data, width, height)
+                    }
+                    Err(e) => {
+                        tracing::error!(
+                            category = "STDIN",
+                            request_id = %request_id,
+                            error = %e,
+                            "captureScreenshot failed"
+                        );
+                        Message::screenshot_error(request_id, e.to_string())
+                    }
+                };
+                if let Some(ref sender) = self.response_sender {
+                    let _ = sender.try_send(response);
+                } else {
+                    tracing::warn!(
+                        category = "STDIN",
+                        "No response sender available for captureScreenshot"
+                    );
+                }
+            }
             Message::ListAutomationWindows { request_id } => {
                 let windows = crate::windows::list_automation_windows();
                 let focused_window_id = crate::windows::focused_automation_window_id();
@@ -7724,6 +7768,32 @@ impl ScriptListApp {
                                                 &control,
                                                 &value,
                                             )?
+                                        } else if control
+                                            .strip_prefix("control:dev-style-tool-theme:")
+                                            .or_else(|| {
+                                                control.strip_prefix(
+                                                    "input:dev-style-tool-theme:",
+                                                )
+                                            })
+                                            .or_else(|| {
+                                                control.strip_prefix(
+                                                    "button:dev-style-tool-theme-reset:",
+                                                )
+                                            })
+                                            .is_some()
+                                            || control.starts_with("theme.colors.")
+                                        {
+                                            let applied = crate::dev_style_tool::runtime_overrides::set_theme_color_from_devtools(
+                                                &control,
+                                                &value,
+                                            )?;
+                                            // Theme colors live in the cached Theme, not a
+                                            // design def: rebuild the cache (which layers the
+                                            // override) and propagate to every window.
+                                            crate::theme::service::reapply_runtime_theme_overrides(
+                                                cx,
+                                            );
+                                            applied
                                         } else {
                                             crate::dev_style_tool::runtime_overrides::set_number_from_devtools(
                                                 &control,
@@ -10690,7 +10760,9 @@ fn menu_syntax_object_refs_by_range_for_filter(
 #[cfg(test)]
 mod prompt_handler_message_tests {
     use super::{
-        classify_prompt_message_route, escape_windows_cmd_open_target, prompt_coming_soon_warning,
+        build_script_error_agent_chat_prompt, build_script_error_report_markdown,
+        classify_prompt_message_route, escape_windows_cmd_open_target,
+        persist_script_error_agent_chat_context_bundle_in_dir, prompt_coming_soon_warning,
         resolve_ai_start_chat_provider, should_restore_main_window_after_script_exit,
         unhandled_message_warning, PromptMessageRoute,
     };
