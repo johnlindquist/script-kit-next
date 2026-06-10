@@ -68,12 +68,48 @@ pub(super) fn build_capture_rows(
             score: i32::MAX.saturating_sub(rank as i32),
             is_selectable: true,
             action_label: Some(ss("Insert")),
+            // A4 decision (2026-06-09): accepting a capture target converts
+            // the typed `;to` prefix into the canonical postfix spelling
+            // (`todo; `), which hands the input to the capture form.
             action: SpineListAction::InsertSegmentText {
                 segment_index,
                 segment_byte_range: segment_byte_range.clone(),
-                text: ss(format!(";{}", spec.id)),
+                text: ss(format!("{};", spec.id)),
                 trailing_space: true,
             },
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn bare_semicolon_lists_all_capture_targets() {
+        let rows = build_capture_rows("", 0, 0..1);
+        assert_eq!(rows.len(), CAPTURE_SPECS.len());
+    }
+
+    /// A4 decision (2026-06-09): accepting `;to` → Todo converts the input to
+    /// the postfix spelling `todo; `, which hands off to the capture form.
+    #[test]
+    fn accepting_target_inserts_postfix_spelling() {
+        let rows = build_capture_rows("to", 0, 0..3);
+        let todo = rows
+            .iter()
+            .find(|row| row.id.as_ref() == "spine:;:todo")
+            .expect("todo row for ';to'");
+        match &todo.action {
+            SpineListAction::InsertSegmentText {
+                text,
+                trailing_space,
+                ..
+            } => {
+                assert_eq!(text.as_ref(), "todo;");
+                assert!(*trailing_space);
+            }
+            other => panic!("expected InsertSegmentText, got {other:?}"),
+        }
+    }
 }

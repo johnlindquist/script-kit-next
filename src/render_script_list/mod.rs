@@ -1873,10 +1873,12 @@ impl ScriptListApp {
             if self.spine_enabled {
                 let accent_color: gpui::Hsla = rgb(self.theme.colors.accent.selected).into();
                 let spine_projection = self.spine_projection.as_ref();
-                let spine_accent_ranges = crate::spine::input_spans::accent_ranges_for_parse(
-                    &self.spine_parse,
-                    spine_projection,
-                );
+                let spine_accent_ranges =
+                    crate::spine::input_spans::accent_ranges_for_parse_with_resolved_tokens(
+                        &self.spine_parse,
+                        spine_projection,
+                        &|token| self.spine_mention_aliases.contains_key(token),
+                    );
                 let gpui_input_value = self.gpui_input_state.read(cx).value().to_string();
                 if gpui_input_value == self.spine_parse.input {
                     let input_len = gpui_input_value.len();

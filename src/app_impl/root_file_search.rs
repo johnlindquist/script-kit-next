@@ -613,6 +613,10 @@ impl RootFileSearchTestFixtureResult {
     }
 }
 
+/// Internal marker query for the empty `@file:` recents seed; cannot collide
+/// with user-typed sub-queries (contains a control character).
+const SPINE_FILE_RECENTS_SENTINEL: &str = "\u{1}spine-file-recents";
+
 impl ScriptListApp {
     // ── Spine @file: subsearch ───────────────────────────────────────
 
@@ -686,7 +690,10 @@ impl ScriptListApp {
     ) {
         let query = query.trim();
         if query.is_empty() {
-            self.clear_spine_file_subsearch_state(cx);
+            // A3 recent-files decision (2026-06-09): an empty `@file:`
+            // sub-query seeds Spotlight recently-used files instead of
+            // clearing, so the colon-mode landing state shows real recents.
+            self.maybe_start_spine_file_recents_search(cx);
             return;
         }
         if self.spine_file_search_query == query {
@@ -766,6 +773,94 @@ impl ScriptListApp {
                     Err(std::sync::mpsc::TryRecvError::Disconnected) => break,
                 }
             }
+
+            let _ = cx.update(|cx| {
+                this.update(cx, |app, cx| {
+                    app.apply_spine_file_subsearch_results(
+                        generation,
+                        batch,
+                        cx,
+                    );
+                })
+            });
+        })
+        .detach();
+    }
+
+    /// Kick the async Spotlight "recently used files" seed for the empty
+    /// `@file:` colon mode. Results merge after frecency recents in
+    /// `build_rich_file_subsearch_rows`.
+    fn maybe_start_spine_file_recents_search(&mut self, cx: &mut Context<Self>) {
+        if self.spine_file_search_query == SPINE_FILE_RECENTS_SENTINEL {
+            return;
+        }
+
+        self.cancel_spine_file_subsearch();
+        self.spine_file_search_generation =
+            self.spine_file_search_generation.wrapping_add(1);
+        let generation = self.spine_file_search_generation;
+        self.spine_file_search_query = SPINE_FILE_RECENTS_SENTINEL.to_string();
+        self.spine_file_search_loading = true;
+        self.spine_file_search_results.clear();
+        self.invalidate_grouped_cache();
+        cx.notify();
+
+        let cancel = crate::file_search::new_cancel_token();
+        self.spine_file_search_cancel = Some(cancel.clone());
+        let onlyin = self
+            .spine_cwd
+            .as_ref()
+            .map(|p| p.to_string_lossy().to_string())
+            .or_else(|| {
+                dirs::home_dir().map(|home| home.to_string_lossy().to_string())
+            });
+
+        cx.spawn(async move |this, cx| {
+            let (tx, rx) = std::sync::mpsc::channel();
+            std::thread::spawn({
+                let cancel = cancel.clone();
+                let onlyin = onlyin.clone();
+                move || {
+                    crate::file_search::search_files_streaming_with_options(
+                        crate::file_search::RECENTLY_USED_FILES_MDQUERY,
+                        onlyin.as_deref(),
+                        crate::file_search::RECENTLY_USED_FILES_SOURCE_LIMIT,
+                        cancel,
+                        crate::file_search::SearchFilesStreamingOptions {
+                            // Need real modified timestamps to order recents.
+                            skip_metadata: false,
+                            allow_filesystem_fallback: false,
+                        },
+                        |event| {
+                            let _ = tx.send(event);
+                        },
+                    );
+                }
+            });
+
+            let mut batch = Vec::new();
+            loop {
+                if cancel.load(std::sync::atomic::Ordering::Relaxed) {
+                    return;
+                }
+                match rx.try_recv() {
+                    Ok(crate::file_search::SearchEvent::Result(result)) => {
+                        if !crate::file_search::is_noisy_recent_file_path(&result.path) {
+                            batch.push(result);
+                        }
+                    }
+                    Ok(crate::file_search::SearchEvent::Done) => break,
+                    Err(std::sync::mpsc::TryRecvError::Empty) => {
+                        cx.background_executor()
+                            .timer(std::time::Duration::from_millis(16))
+                            .await;
+                    }
+                    Err(std::sync::mpsc::TryRecvError::Disconnected) => break,
+                }
+            }
+
+            batch.sort_by(|a, b| b.modified.cmp(&a.modified));
+            batch.truncate(crate::file_search::ROOT_FILE_RECENT_SEED_LIMIT);
 
             let _ = cx.update(|cx| {
                 this.update(cx, |app, cx| {

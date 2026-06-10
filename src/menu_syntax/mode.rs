@@ -147,6 +147,12 @@ pub fn capture_body_boundary_has_started_with_targets(
     registered_targets: &[String],
 ) -> bool {
     let raw = raw.trim_start();
+    // Postfix spelling: the trailing `;` IS the body boundary.
+    if let Some((head, _)) = super::parse::split_postfix_capture_head(raw) {
+        if is_capture_target_registered(head, registered_targets) {
+            return true;
+        }
+    }
     if let Some(rest) = raw.strip_prefix(';') {
         let target_end = rest.find(char::is_whitespace).unwrap_or(rest.len());
         if target_end == 0 {
@@ -175,6 +181,15 @@ fn capture_target_is_committed_with_targets(
     registered_targets: &[String],
 ) -> bool {
     let raw = raw.trim_start();
+    // A4 decision (2026-06-09): the trailing `;` commits a postfix capture
+    // target (`todo;`), with or without a body.
+    if let Some((head, _)) = super::parse::split_postfix_capture_head(raw) {
+        if head.eq_ignore_ascii_case(target)
+            && is_capture_target_registered(head, registered_targets)
+        {
+            return true;
+        }
+    }
     if let Some(rest) = raw.strip_prefix(';').or_else(|| raw.strip_prefix('+')) {
         let target_end = rest.find(char::is_whitespace).unwrap_or(rest.len());
         if target_end == 0 {
@@ -258,6 +273,13 @@ pub fn prefix_span_for_input_with_targets(
             return Some(0..1 + head_end_in_rest);
         }
         return Some(0..1);
+    }
+    // Postfix capture head (`todo;`) gets the same accent chrome as the
+    // other capture spellings.
+    if let Some((head, _)) = super::parse::split_postfix_capture_head(raw) {
+        if is_capture_target_registered(head, registered_targets) {
+            return Some(0..head.len() + 1);
+        }
     }
     if let Some(colon_idx) = raw.find(':') {
         let head = &raw[..colon_idx];
@@ -368,6 +390,16 @@ fn capture_body_start(raw: &str) -> Option<usize> {
     if let Some(rest) = raw.strip_prefix(';').or_else(|| raw.strip_prefix('+')) {
         let head_end = rest.find(char::is_whitespace).unwrap_or(rest.len());
         let start = 1 + head_end;
+        return Some(
+            start
+                + raw[start..]
+                    .bytes()
+                    .take_while(|b| b.is_ascii_whitespace())
+                    .count(),
+        );
+    }
+    if let Some((head, _)) = super::parse::split_postfix_capture_head(raw) {
+        let start = head.len() + 1;
         return Some(
             start
                 + raw[start..]
@@ -728,6 +760,27 @@ mod tests {
 
         let composing = MenuSyntaxMode::from_input_with_capture_targets("+github issue", &targets);
         assert!(composing.capture_composer_owns_input_for("+github issue"));
+    }
+
+    #[test]
+    fn postfix_capture_is_composer_with_or_without_body() {
+        // A4 decision (2026-06-09): trailing `;` commits the capture target.
+        for raw in ["todo;", "todo; ", "todo; Take out trash"] {
+            assert!(
+                MenuSyntaxMode::from_input(raw).capture_composer_owns_input_for(raw),
+                "expected composer ownership for {raw:?}"
+            );
+        }
+        assert!(
+            !MenuSyntaxMode::from_input("unknown; x").capture_composer_owns_input_for("unknown; x")
+        );
+    }
+
+    #[test]
+    fn prefix_span_highlights_postfix_capture_head() {
+        assert_eq!(prefix_span_for_input("todo; Renew passport"), Some(0..5));
+        assert_eq!(prefix_span_for_input("note;"), Some(0..5));
+        assert_eq!(prefix_span_for_input("unknown; stuff"), None);
     }
 
     #[test]

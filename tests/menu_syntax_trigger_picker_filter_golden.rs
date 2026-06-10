@@ -73,7 +73,7 @@ fn bare_semicolon_lists_all_targets_original_order() {
     assert!(snap.target.is_none());
     assert_eq!(
         target_tokens(&snap),
-        vec![";todo", ";note", ";link", ";snippet", ";cal", ";social"]
+        vec!["todo;", "note;", "link;", "snippet;", "cal;", "social;"]
     );
     assert_eq!(
         target_titles(&snap),
@@ -91,7 +91,7 @@ fn bare_semicolon_lists_all_targets_original_order() {
         "Create capture handler…"
     );
     assert!(
-        !target_tokens(&snap).contains(&";mcal"),
+        !target_tokens(&snap).contains(&"mcal;"),
         "mcal is schema-known but must not appear in the bare picker unless metadata registers it"
     );
 }
@@ -104,7 +104,7 @@ fn exact_todo_focuses_target() {
 
     assert_eq!(snap.target.as_deref(), Some("todo"));
     assert_eq!(rows.len(), 1);
-    assert_eq!(rows[0].token.as_deref(), Some(";todo"));
+    assert_eq!(rows[0].token.as_deref(), Some("todo;"));
     assert_eq!(rows[0].title, "Todo inbox");
 }
 
@@ -116,7 +116,7 @@ fn partial_dai_ranks_daily_note_first() {
 
     assert_eq!(snap.target, None);
     assert_eq!(rows[0].title, "Note");
-    assert_eq!(rows[0].token.as_deref(), Some(";note"));
+    assert_eq!(rows[0].token.as_deref(), Some("note;"));
 }
 
 #[test]
@@ -126,7 +126,7 @@ fn partial_daily_ranks_daily_note_first() {
     let rows = target_rows(&snap);
 
     assert_eq!(rows[0].title, "Note");
-    assert_eq!(rows[0].token.as_deref(), Some(";note"));
+    assert_eq!(rows[0].token.as_deref(), Some("note;"));
 }
 
 #[test]
@@ -136,7 +136,7 @@ fn partial_cal_ranks_calendar_event_first() {
     let rows = target_rows(&snap);
 
     assert_eq!(rows[0].title, "Calendar event");
-    assert_eq!(rows[0].token.as_deref(), Some(";cal"));
+    assert_eq!(rows[0].token.as_deref(), Some("cal;"));
 }
 
 #[test]
@@ -165,7 +165,7 @@ fn daily_does_not_leave_todo_first() {
     let snap = snapshot(";daily", &ctx);
     let rows = target_rows(&snap);
 
-    assert_ne!(rows[0].token.as_deref(), Some(";todo"));
+    assert_ne!(rows[0].token.as_deref(), Some("todo;"));
     assert_eq!(rows[0].title, "Note");
 }
 
@@ -173,23 +173,23 @@ fn daily_does_not_leave_todo_first() {
 fn typed_search_finds_todo_aliases_without_showing_them_by_default() {
     let ctx = TriggerPickerContext::default();
     let bare = snapshot(";", &ctx);
-    assert!(!target_tokens(&bare).contains(&";reminder"));
-    assert!(!target_tokens(&bare).contains(&";snooze"));
-    assert!(!target_tokens(&bare).contains(&";defer"));
+    assert!(!target_tokens(&bare).contains(&"reminder;"));
+    assert!(!target_tokens(&bare).contains(&"snooze;"));
+    assert!(!target_tokens(&bare).contains(&"defer;"));
 
     let rem = snapshot(";rem", &ctx);
     let rows = target_rows(&rem);
-    assert_eq!(rows[0].token.as_deref(), Some(";reminder"));
+    assert_eq!(rows[0].token.as_deref(), Some("reminder;"));
     assert_eq!(rows[0].title, "Todo reminder");
 
     let snooze = snapshot(";sno", &ctx);
     let rows = target_rows(&snooze);
-    assert_eq!(rows[0].token.as_deref(), Some(";snooze"));
+    assert_eq!(rows[0].token.as_deref(), Some("snooze;"));
     assert_eq!(rows[0].title, "Todo snooze");
 
     let defer = snapshot(";def", &ctx);
     let rows = target_rows(&defer);
-    assert_eq!(rows[0].token.as_deref(), Some(";defer"));
+    assert_eq!(rows[0].token.as_deref(), Some("defer;"));
     assert_eq!(rows[0].title, "Todo defer");
 }
 
@@ -197,12 +197,12 @@ fn typed_search_finds_todo_aliases_without_showing_them_by_default() {
 fn typed_search_finds_notes_compat_alias_without_showing_it_by_default() {
     let ctx = TriggerPickerContext::default();
     let bare = snapshot(";", &ctx);
-    assert!(!target_tokens(&bare).contains(&";notes"));
+    assert!(!target_tokens(&bare).contains(&"notes;"));
 
     let snap = snapshot(";notes", &ctx);
     let rows = target_rows(&snap);
     assert_eq!(snap.target.as_deref(), Some("notes"));
-    assert_eq!(rows[0].token.as_deref(), Some(";notes"));
+    assert_eq!(rows[0].token.as_deref(), Some("notes;"));
     assert_eq!(rows[0].title, "Note compatibility alias");
 }
 
@@ -220,7 +220,7 @@ fn dynamic_target_label_participates_in_filter() {
     let rows = target_rows(&snap);
 
     assert_eq!(rows[0].title, "GitHub issue");
-    assert_eq!(rows[0].token.as_deref(), Some(";github"));
+    assert_eq!(rows[0].token.as_deref(), Some("github;"));
 }
 
 fn mcal_context() -> TriggerPickerContext {
@@ -241,7 +241,7 @@ fn registered_mcal_uses_metadata_label_in_filtered_path() {
     let rows = target_rows(&snap);
 
     assert_eq!(snap.target, None);
-    assert_eq!(rows[0].token.as_deref(), Some(";mcal"));
+    assert_eq!(rows[0].token.as_deref(), Some("mcal;"));
     assert_eq!(rows[0].title, "Add event to macOS Calendar");
     assert_eq!(rows[0].detail.as_deref(), Some("Registered capture target"));
 }
@@ -255,7 +255,7 @@ fn exact_dynamic_slug_uses_metadata_label() {
     assert_eq!(snap.mode, TriggerPickerMode::Capture);
     assert_eq!(snap.target.as_deref(), Some("mcal"));
     assert_eq!(rows.len(), 1);
-    assert_eq!(rows[0].token.as_deref(), Some(";mcal"));
+    assert_eq!(rows[0].token.as_deref(), Some("mcal;"));
     assert_eq!(rows[0].title, "Add event to macOS Calendar");
     assert_eq!(rows[0].detail.as_deref(), Some("Registered capture target"));
 }
@@ -268,7 +268,7 @@ fn exact_dynamic_slug_focused_path_matches_filter_path_label() {
 
     let filtered_row = target_rows(&filtered)
         .into_iter()
-        .find(|row| row.token.as_deref() == Some(";mcal"))
+        .find(|row| row.token.as_deref() == Some("mcal;"))
         .expect("filtered mcal row");
     let focused_rows = target_rows(&focused);
 

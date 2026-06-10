@@ -50,15 +50,48 @@ pub fn accent_ranges_for_parse(
     parse: &SpineParse,
     projection: Option<&SpineCursorProjection>,
 ) -> Vec<(Range<usize>, &'static str)> {
+    accent_ranges_for_parse_with_resolved_tokens(parse, projection, &|_| false)
+}
+
+/// Like [`accent_ranges_for_parse`], but tokens recognized by
+/// `is_resolved_token` (e.g. registered in the spine mention alias registry
+/// after the user picked a concrete file/clipboard entry) are treated as
+/// completed: the FULL token gets the accent color, even while the cursor
+/// sits inside it. In-progress subsearch typing (`@file:quer`) keeps the
+/// prefix-only treatment because those tokens are not registered yet.
+pub fn accent_ranges_for_parse_with_resolved_tokens(
+    parse: &SpineParse,
+    projection: Option<&SpineCursorProjection>,
+    is_resolved_token: &dyn Fn(&str) -> bool,
+) -> Vec<(Range<usize>, &'static str)> {
     let active_index = projection.map(|p| p.active_segment_index);
     let mut ranges = Vec::new();
 
     for (index, segment) in parse.segments.iter().enumerate() {
+        if matches!(segment.kind, SpineSegmentKind::ContextMention { .. })
+            && is_resolved_token(segment.raw.trim())
+        {
+            ranges.push((segment.byte_range.clone(), "spine.context.completed"));
+            continue;
+        }
+
         let is_active = active_index == Some(index);
         if is_active {
             // For active context mentions with sub_query, color just the prefix
             if let Some(prefix_range) = context_prefix_byte_range(segment) {
                 ranges.push((prefix_range, "spine.context.completed"));
+                continue;
+            }
+            // A completed segment (exact catalog match, e.g. `@selection` or
+            // `/rewrite`) is accent colored immediately — completion must not
+            // wait for the cursor to move out of the segment.
+            if matches!(
+                tone_for_segment(index, segment),
+                Some(SpineInputSpanTone::Resolved)
+            ) {
+                if let Some(role) = completed_segment_role(&segment.kind) {
+                    ranges.push((segment.byte_range.clone(), role));
+                }
             }
             continue;
         }
@@ -81,20 +114,26 @@ pub fn accent_ranges_for_parse(
             continue;
         }
 
-        let role = match &segment.kind {
-            SpineSegmentKind::ContextMention { .. } => "spine.context.completed",
-            SpineSegmentKind::SlashCommand { .. } => "spine.command.completed",
-            SpineSegmentKind::Profile { .. } => "spine.profile.completed",
-            SpineSegmentKind::Style { .. } => "spine.style.completed",
-            SpineSegmentKind::Capture { .. } => "spine.capture.completed",
-            SpineSegmentKind::ProjectCwd { .. } => "spine.cwd.completed",
-            _ => continue,
+        let Some(role) = completed_segment_role(&segment.kind) else {
+            continue;
         };
 
         ranges.push((segment.byte_range.clone(), role));
     }
 
     ranges
+}
+
+fn completed_segment_role(kind: &SpineSegmentKind) -> Option<&'static str> {
+    match kind {
+        SpineSegmentKind::ContextMention { .. } => Some("spine.context.completed"),
+        SpineSegmentKind::SlashCommand { .. } => Some("spine.command.completed"),
+        SpineSegmentKind::Profile { .. } => Some("spine.profile.completed"),
+        SpineSegmentKind::Style { .. } => Some("spine.style.completed"),
+        SpineSegmentKind::Capture { .. } => Some("spine.capture.completed"),
+        SpineSegmentKind::ProjectCwd { .. } => Some("spine.cwd.completed"),
+        _ => None,
+    }
 }
 
 pub fn spine_input_span_role_name(span: &SpineInputSpan) -> &'static str {
@@ -385,6 +424,62 @@ mod tests {
             assert!(raw.is_char_boundary(span.range.start), "{span:?}");
             assert!(raw.is_char_boundary(span.range.end), "{span:?}");
         }
+    }
+
+    #[test]
+    fn resolved_file_token_gets_full_range_accent() {
+        // After a file is selected, the compact token is registered in the
+        // mention alias registry; the WHOLE token must be accent colored,
+        // even with the cursor at the end of the input (active segment).
+        let token = "@file:AddPass_Icon%402x.png";
+        for raw in [token.to_string(), format!("{token} ")] {
+            let parse = parse_spine(&raw);
+            let projection = project_cursor(&parse, raw.len());
+            let ranges = accent_ranges_for_parse_with_resolved_tokens(
+                &parse,
+                Some(&projection),
+                &|candidate| candidate == token,
+            );
+            assert_eq!(ranges.len(), 1, "raw={raw:?} ranges={ranges:?}");
+            assert_eq!(&raw[ranges[0].0.clone()], token, "raw={raw:?}");
+            assert_eq!(ranges[0].1, "spine.context.completed");
+        }
+    }
+
+    #[test]
+    fn active_exact_match_mention_gets_full_range_accent() {
+        // `@selection ` with the cursor at the end is a completed sigil; the
+        // accent must not wait for the cursor to leave the segment.
+        let raw = "@selection ";
+        let parse = parse_spine(raw);
+        let projection = project_cursor(&parse, raw.len());
+        let ranges = accent_ranges_for_parse(&parse, Some(&projection));
+        assert_eq!(ranges.len(), 1, "ranges={ranges:?}");
+        assert_eq!(&raw[ranges[0].0.clone()], "@selection");
+        assert_eq!(ranges[0].1, "spine.context.completed");
+    }
+
+    #[test]
+    fn active_partial_mention_has_no_accent() {
+        // Mid-typing (`@selec`) is not complete — no accent yet.
+        let raw = "@selec";
+        let parse = parse_spine(raw);
+        let projection = project_cursor(&parse, raw.len());
+        let ranges = accent_ranges_for_parse(&parse, Some(&projection));
+        assert!(ranges.is_empty(), "ranges={ranges:?}");
+    }
+
+    #[test]
+    fn unresolved_file_subsearch_keeps_prefix_only_accent() {
+        // While the user is still typing a subsearch query the token is not
+        // registered, so only the `@file:` prefix is accent colored.
+        let raw = "@file:addpa";
+        let parse = parse_spine(raw);
+        let projection = project_cursor(&parse, raw.len());
+        let ranges =
+            accent_ranges_for_parse_with_resolved_tokens(&parse, Some(&projection), &|_| false);
+        assert_eq!(ranges.len(), 1, "ranges={ranges:?}");
+        assert_eq!(&raw[ranges[0].0.clone()], "@file:");
     }
 
     #[test]

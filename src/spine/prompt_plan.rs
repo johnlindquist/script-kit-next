@@ -74,6 +74,24 @@ impl SpinePromptPlan {
     }
 }
 
+/// A9 decision (2026-06-09): `.` + picking a style is a single-keystroke
+/// "rewrite selected text" flow. When the style segment is the ENTIRE input
+/// (no other prose or sigil segments), accepting a style row auto-submits
+/// the prompt plan — which style sugar expands to `@selection` + `/rewrite`
+/// + the style profile. Mixed inputs (`fix this .formal`) keep the normal
+/// insert-and-keep-typing behavior.
+pub(crate) fn spine_parse_is_style_only(parse: &SpineParse) -> bool {
+    let mut saw_style = false;
+    for segment in &parse.segments {
+        match &segment.kind {
+            SpineSegmentKind::Style { .. } => saw_style = true,
+            SpineSegmentKind::FreeText if segment.raw.trim().is_empty() => {}
+            _ => return false,
+        }
+    }
+    saw_style
+}
+
 pub(crate) fn build_spine_prompt_plan(parse: &SpineParse) -> SpinePromptPlan {
     build_spine_prompt_plan_with_aliases(parse, &std::collections::HashMap::new())
 }
@@ -295,6 +313,35 @@ fn build_normalized_prompt_text(plan: &SpinePromptPlan, free_text_chunks: &[Stri
 mod tests {
     use super::*;
     use crate::spine::parse_spine;
+
+    #[test]
+    fn style_only_parse_detection_gates_auto_submit() {
+        // A9: `.concise` alone (with or without trailing space) auto-submits.
+        assert!(spine_parse_is_style_only(&parse_spine(".concise")));
+        assert!(spine_parse_is_style_only(&parse_spine(".concise ")));
+        // Mixed prose or other sigils keep manual submit.
+        assert!(!spine_parse_is_style_only(&parse_spine(
+            "fix this .concise"
+        )));
+        assert!(!spine_parse_is_style_only(&parse_spine(
+            ".concise extra words"
+        )));
+        assert!(!spine_parse_is_style_only(&parse_spine(
+            "@selection .concise"
+        )));
+        assert!(!spine_parse_is_style_only(&parse_spine("")));
+        assert!(!spine_parse_is_style_only(&parse_spine("plain text")));
+    }
+
+    #[test]
+    fn style_only_plan_expands_to_selection_rewrite() {
+        // The auto-submitted plan must carry the rewrite-selection semantics.
+        let plan = build_spine_prompt_plan(&parse_spine(".concise"));
+        assert!(plan.should_submit_to_chat());
+        assert_eq!(plan.selected_style.as_ref().unwrap().id, "concise");
+        assert!(plan.slash_commands.iter().any(|c| c.command == "/rewrite"));
+        assert!(plan.context_parts.iter().any(|p| p.label() == "Selection"));
+    }
 
     #[test]
     fn prompt_plan_builds_rewrite_selection_plan() {

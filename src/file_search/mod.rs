@@ -147,6 +147,31 @@ pub const ROOT_FILE_BROWSE_RENDER_LIMIT: usize = 12;
 /// Minimum visible query length before root launcher file search starts.
 pub const ROOT_FILE_MIN_QUERY_CHARS: usize = 3;
 
+/// Spotlight query for files the user actually opened recently (Finder
+/// "Recents" semantics: last-used within 30 days, folders excluded). Seeds
+/// the empty `@file:` subsearch so it shows real recents instead of only
+/// frecency picks made through Script Kit itself.
+pub const RECENTLY_USED_FILES_MDQUERY: &str =
+    r#"kMDItemLastUsedDate >= $time.now(-2592000) && kMDItemContentTypeTree != "public.folder""#;
+
+/// Source-collection cap for the recently-used seed (sorted by modified
+/// time, then truncated to `ROOT_FILE_RECENT_SEED_LIMIT` for display).
+pub const RECENTLY_USED_FILES_SOURCE_LIMIT: usize = 96;
+
+/// Drop noisy recently-used Spotlight hits: app bundles, anything under a
+/// `Library/` tree (except iCloud Drive's `Mobile Documents`), and files
+/// inside hidden (dot) directories.
+pub fn is_noisy_recent_file_path(path: &str) -> bool {
+    if path.ends_with(".app") || path.contains(".app/") {
+        return true;
+    }
+    if path.contains("/Library/") && !path.contains("/Library/Mobile Documents/") {
+        return true;
+    }
+    path.split('/')
+        .any(|component| component.len() > 1 && component.starts_with('.'))
+}
+
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum RootFilePromotionPolicy {
     #[default]
@@ -1165,6 +1190,22 @@ mod tests {
     fn test_escape_md_string_mixed() {
         assert_eq!(escape_md_string(r#"file\"name"#), r#"file\\\"name"#);
     }
+    #[test]
+    fn noisy_recent_path_filter_drops_library_and_apps_keeps_icloud() {
+        assert!(is_noisy_recent_file_path("/Applications/Safari.app"));
+        assert!(is_noisy_recent_file_path(
+            "/Applications/Safari.app/Contents/Info.plist"
+        ));
+        assert!(is_noisy_recent_file_path(
+            "/Users/me/Library/Application Support/CleanShot/media/shot.png"
+        ));
+        assert!(is_noisy_recent_file_path("/Users/me/.cache/some/file.txt"));
+        assert!(!is_noisy_recent_file_path(
+            "/Users/me/Library/Mobile Documents/com~apple~CloudDocs/Documents/notes.md"
+        ));
+        assert!(!is_noisy_recent_file_path("/Users/me/Downloads/report.pdf"));
+    }
+
     #[test]
     fn recent_file_hydration_skips_missing_paths() {
         let path = std::env::temp_dir()

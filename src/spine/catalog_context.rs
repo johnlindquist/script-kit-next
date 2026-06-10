@@ -235,29 +235,20 @@ fn build_subsearch_context_row(
     let normalized_query = normalized_context_query(query);
     let match_penalty = subsearch_spec_match_penalty(spec, &prefix_text, &normalized_query)?;
 
-    // The top-level Files row opens the full built-in File Search surface
-    // (split preview) as a portal, matching the Agent Chat `@` picker.
-    // Typed colon mode (`@file:query`) keeps owning inline subsearch.
-    let (action_label, action) = if spec.prefix == "file" {
-        (
-            ss("Search"),
-            SpineListAction::OpenFileSearchPortal {
-                segment_index,
-                segment_byte_range,
-                query: ss(""),
-            },
-        )
-    } else {
-        (
-            ss("Browse"),
-            SpineListAction::InsertSegmentText {
-                segment_index,
-                segment_byte_range,
-                text: ss(prefix_text),
-                trailing_space: false,
-            },
-        )
-    };
+    // A3 decision (2026-06-09): every subsearch row — including Files —
+    // completes the segment inline to its `@prefix:` colon mode. Building the
+    // prompt must never clear/replace the `@` input; the full File Search
+    // portal stays reachable via the explicit "Open full File Search" row
+    // inside `@file:` colon mode.
+    let (action_label, action) = (
+        ss("Browse"),
+        SpineListAction::InsertSegmentText {
+            segment_index,
+            segment_byte_range,
+            text: ss(prefix_text),
+            trailing_space: false,
+        },
+    );
 
     Some(SpineListRow {
         id: ss(format!("spine:@:subsearch:{}", spec.prefix)),
@@ -363,15 +354,40 @@ mod tests {
     }
 
     #[test]
-    fn file_subsearch_row_opens_full_file_search_portal() {
+    fn file_subsearch_row_completes_inline_not_portal() {
+        // A3 decision (2026-06-09): the Files row must never replace the
+        // prompt with the File Search portal; it completes inline to @file:
+        // colon mode. The portal stays reachable via the explicit
+        // "Open full File Search" row inside colon mode.
         let rows = build_context_root_rows("@file", 0, 0..5);
         let file = rows
             .iter()
             .find(|row| row.id.as_ref() == "spine:@:subsearch:file")
             .expect("expected @file subsearch row");
         assert!(
-            matches!(file.action, SpineListAction::OpenFileSearchPortal { .. }),
-            "top-level Files row must open the full File Search portal, got {:?}",
+            matches!(
+                &file.action,
+                SpineListAction::InsertSegmentText { text, .. } if text.as_ref() == "@file:"
+            ),
+            "top-level Files row must complete inline to @file:, got {:?}",
+            file.action,
+        );
+    }
+
+    #[test]
+    fn files_row_for_at_fi_completes_inline_to_file_colon() {
+        let rows = build_context_root_rows("@fi", 0, 0..3);
+        let file = rows
+            .iter()
+            .find(|row| row.id.as_ref() == "spine:@:subsearch:file")
+            .expect("expected @file: subsearch row for @fi");
+        assert!(
+            matches!(
+                &file.action,
+                SpineListAction::InsertSegmentText { text, trailing_space: false, .. }
+                    if text.as_ref() == "@file:"
+            ),
+            "Enter on the Files row for @fi must complete inline to @file:, got {:?}",
             file.action,
         );
     }

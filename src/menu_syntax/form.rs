@@ -79,7 +79,10 @@ pub fn empty_capture_invocation(target: &str, raw: &str) -> CaptureInvocation {
     let trimmed = raw.trim_start();
     CaptureInvocation {
         target: target.to_ascii_lowercase(),
-        alias_form: if trimmed.starts_with(';') || trimmed.starts_with('+') {
+        alias_form: if trimmed.starts_with(';')
+            || trimmed.starts_with('+')
+            || raw_is_postfix_capture(raw, target)
+        {
             CaptureAlias::CapturePrefix
         } else {
             CaptureAlias::Keyword
@@ -310,13 +313,25 @@ fn serialize_capture_invocation(invocation: &CaptureInvocation) -> String {
 }
 
 fn capture_invocation_head(invocation: &CaptureInvocation) -> String {
-    if invocation.raw.starts_with('+') {
+    if raw_is_postfix_capture(&invocation.raw, &invocation.target) {
+        // A4 decision (2026-06-09): postfix `todo;` is the canonical capture
+        // spelling; rewrites must not flip it back to `;todo`/`todo:`.
+        format!("{};", invocation.target)
+    } else if invocation.raw.starts_with('+') {
         format!("+{}", invocation.target)
     } else if matches!(invocation.alias_form, super::payload::CaptureAlias::Keyword) {
         format!("{}:", invocation.target)
     } else {
         format!(";{}", invocation.target)
     }
+}
+
+fn raw_is_postfix_capture(raw: &str, target: &str) -> bool {
+    let trimmed = raw.trim_start();
+    trimmed.len() > target.len()
+        && trimmed.is_char_boundary(target.len())
+        && trimmed[..target.len()].eq_ignore_ascii_case(target)
+        && trimmed[target.len()..].starts_with(';')
 }
 
 fn should_serialize_snippet_body_after_delimiter(invocation: &CaptureInvocation) -> bool {
@@ -913,6 +928,20 @@ mod tests {
             rewritten,
             ";todo Renew passport #travel #work p1 due:tomorrow"
         );
+    }
+
+    #[test]
+    fn editing_postfix_capture_preserves_postfix_head() {
+        // A4 decision (2026-06-09): form field edits on a `todo;` capture
+        // must rewrite using the postfix spelling, not `;todo`/`todo:`.
+        let parsed = crate::menu_syntax::parse::parse("todo; Renew passport #errands p1");
+        let invocation = match parsed {
+            crate::menu_syntax::parse::MenuSyntaxParse::Capture(inv) => inv,
+            other => panic!("expected postfix capture, got {other:?}"),
+        };
+        let rewritten = apply_capture_form_field_edit(&invocation, "tags", "#travel")
+            .expect("tags edit should serialize");
+        assert_eq!(rewritten, "todo; Renew passport #travel p1");
     }
 
     #[test]

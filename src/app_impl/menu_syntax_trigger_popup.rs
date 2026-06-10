@@ -896,13 +896,13 @@ mod tests {
         let row = snap
             .rows
             .iter()
-            .find(|row| row.token.as_deref() == Some(";todo"))
+            .find(|row| row.token.as_deref() == Some("todo;"))
             .expect("todo target row");
 
         let highlights = trigger_popup_row_highlight_indices(row, "+to");
 
         assert_eq!(highlights.title, vec![0, 1]);
-        assert_eq!(highlights.meta, vec![0, 1, 2]);
+        assert_eq!(highlights.meta, vec![0, 1]);
     }
 
     #[test]
@@ -911,13 +911,13 @@ mod tests {
         let row = snap
             .rows
             .iter()
-            .find(|row| row.token.as_deref() == Some(";todo"))
+            .find(|row| row.token.as_deref() == Some("todo;"))
             .expect("todo target row");
 
         let highlights = trigger_popup_row_highlight_indices(row, ";todo");
 
         assert_eq!(highlights.title, vec![0, 1, 2, 3]);
-        assert_eq!(highlights.meta, vec![0, 1, 2, 3, 4]);
+        assert_eq!(highlights.meta, vec![0, 1, 2, 3]);
     }
 
     #[test]
@@ -979,9 +979,10 @@ mod tests {
                     .rows
                     .iter()
                     .filter_map(|row| {
+                        // Postfix capture spelling: `todo;` → slug `todo`.
                         row.token
                             .as_deref()
-                            .and_then(|t| t.strip_prefix(';'))
+                            .and_then(|t| t.strip_suffix(';'))
                             .map(str::to_string)
                     })
                     .collect();

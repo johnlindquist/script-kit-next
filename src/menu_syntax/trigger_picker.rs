@@ -1380,18 +1380,21 @@ fn humanize_target_slug(target: &str) -> String {
 }
 
 fn capture_target_row_from_entry(entry: &CaptureTargetEntry) -> TriggerPickerRow {
+    // A4 decision (2026-06-09): accepting a capture target converts the input
+    // to the canonical postfix spelling (`todo; `), which commits the target
+    // and hands the input to the capture form.
     TriggerPickerRow {
         id: format!("target:{}", entry.slug),
         mode: TriggerPickerMode::Capture,
         kind: TriggerPickerRowKind::CaptureTarget,
         title: entry.title.clone(),
-        token: Some(format!(";{}", entry.slug)),
+        token: Some(format!("{};", entry.slug)),
         subtitle: None,
         detail: Some(entry.detail.clone()),
         example: entry.example.clone(),
         badges: Vec::new(),
         action: TriggerPickerAction::InsertToken {
-            token: format!(";{} ", entry.slug),
+            token: format!("{}; ", entry.slug),
             keep_open: false,
         },
         enabled: true,
@@ -1728,7 +1731,7 @@ mod tests {
 
         let snapshot = build_capture_snapshot(Some("notes"), &ctx);
         assert!(snapshot.rows.iter().all(|row| {
-            row.token.as_deref() != Some(";notes")
+            row.token.as_deref() != Some("notes;")
                 && !row.title.contains(";notes")
                 && !row.detail.as_deref().unwrap_or("").contains(";notes")
                 && !row.example.as_deref().unwrap_or("").contains(";notes")
@@ -1737,8 +1740,8 @@ mod tests {
             snapshot
                 .rows
                 .iter()
-                .any(|row| row.token.as_deref() == Some(";note")),
-            "hidden alias should point at the public ;note row"
+                .any(|row| row.token.as_deref() == Some("note;")),
+            "hidden alias should point at the public note; row"
         );
         assert!(snapshot.rows.iter().all(|row| {
             !matches!(
@@ -1776,8 +1779,8 @@ mod tests {
                 snapshot
                     .rows
                     .iter()
-                    .any(|row| row.token.as_deref() == Some(";todo")),
-                "hidden {alias} alias should point at the public ;todo row"
+                    .any(|row| row.token.as_deref() == Some("todo;")),
+                "hidden {alias} alias should point at the public todo; row"
             );
             assert!(snapshot.rows.iter().all(|row| {
                 !matches!(
@@ -2121,7 +2124,7 @@ mod tests {
             .collect();
         assert_eq!(
             targets,
-            vec![";todo", ";note", ";link", ";snippet", ";cal", ";social"]
+            vec!["todo;", "note;", "link;", "snippet;", "cal;", "social;"]
         );
     }
 
@@ -2141,7 +2144,7 @@ mod tests {
         assert!(bare
             .rows
             .iter()
-            .any(|row| row.token.as_deref() == Some(";github")));
+            .any(|row| row.token.as_deref() == Some("github;")));
 
         let focused = build_trigger_picker_snapshot("+github", &ctx).expect("snapshot");
         assert_eq!(focused.target.as_deref(), Some("github"));
@@ -2172,7 +2175,7 @@ mod tests {
             .filter(|r| r.kind == TriggerPickerRowKind::CaptureTarget)
             .collect();
         assert_eq!(target_rows.len(), 1);
-        assert_eq!(target_rows[0].token.as_deref(), Some(";todo"));
+        assert_eq!(target_rows[0].token.as_deref(), Some("todo;"));
     }
 
     #[test]

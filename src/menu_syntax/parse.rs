@@ -100,6 +100,16 @@ pub fn parse_with_config_and_capture_targets(
         }
     }
 
+    // A4 decision (2026-06-09): postfix capture spelling — `todo; body`.
+    // The capture target is committed by the trailing `;` on the first
+    // token, freeing leading `;` for the spine target picker and `:` for
+    // source heads/filters.
+    if let Some((head, rest)) = split_postfix_capture_head(input) {
+        if is_capture_target_registered(head, registered_capture_targets) {
+            return finalize_postfix_capture(input, head, rest, registered_capture_targets);
+        }
+    }
+
     if let Some(colon_idx) = input.find(':') {
         let head = &input[..colon_idx];
         if super::payload::source_for_head(&input[..=colon_idx]).is_some() {
@@ -120,6 +130,48 @@ pub fn parse_with_config_and_capture_targets(
     }
 
     MenuSyntaxParse::None
+}
+
+/// Split a postfix capture head: `todo; body` → `("todo", " body")`.
+/// The head must be the first token (sigil-free identifier) immediately
+/// followed by `;`.
+pub(super) fn split_postfix_capture_head(input: &str) -> Option<(&str, &str)> {
+    let semi = input.find(';')?;
+    let head = &input[..semi];
+    if head.is_empty()
+        || !head
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+    {
+        return None;
+    }
+    Some((head, &input[semi + 1..]))
+}
+
+/// Parse a postfix capture by canonicalizing to the prefix form the body
+/// grammar understands, then restoring the original raw text so input
+/// rewrites preserve the postfix spelling.
+fn finalize_postfix_capture(
+    input: &str,
+    head: &str,
+    rest: &str,
+    registered_capture_targets: &[String],
+) -> MenuSyntaxParse {
+    let canonical = format!(";{} {}", head, rest.trim_start());
+    match parse_capture_with_targets(&canonical, registered_capture_targets) {
+        CaptureParse::Ok(mut inv) => {
+            inv.raw = input.to_string();
+            if capture_has_content(&inv) {
+                MenuSyntaxParse::Capture(inv)
+            } else {
+                MenuSyntaxParse::Incomplete(IncompleteSyntax {
+                    kind: IncompleteKind::MissingCaptureBody(inv.target.clone()),
+                    hint: missing_body_hint(&inv.target),
+                })
+            }
+        }
+        CaptureParse::Incomplete(s) => MenuSyntaxParse::Incomplete(s),
+    }
 }
 
 fn finalize_capture(input: &str, registered_capture_targets: &[String]) -> MenuSyntaxParse {
@@ -153,9 +205,9 @@ fn capture_has_content(inv: &CaptureInvocation) -> bool {
 fn missing_body_hint(target: &str) -> String {
     match target {
         "link" => {
-            "Provide a URL or body for ;link (e.g. `;link https://zed.dev #rust`)".to_string()
+            "Provide a URL or body for link; (e.g. `link; https://zed.dev #rust`)".to_string()
         }
-        other => format!("Type what you want to capture for ;{other} (body, tags, dates, etc.)"),
+        other => format!("Type what you want to capture for {other}; (body, tags, dates, etc.)"),
     }
 }
 
@@ -391,6 +443,61 @@ mod tests {
             }
             other => panic!("expected Capture, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn postfix_semicolon_routes_to_capture() {
+        // A4 decision (2026-06-09): `todo;` is the canonical capture spelling.
+        match parse("todo; Renew passport #errands p1") {
+            MenuSyntaxParse::Capture(inv) => {
+                assert_eq!(inv.target, "todo");
+                assert_eq!(inv.body, "Renew passport");
+                assert_eq!(inv.tags, vec!["errands".to_string()]);
+                assert_eq!(inv.priority, Some(1));
+                assert_eq!(
+                    inv.raw, "todo; Renew passport #errands p1",
+                    "postfix raw spelling must be preserved for input rewrites"
+                );
+            }
+            other => panic!("expected Capture, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn postfix_semicolon_without_body_is_missing_body() {
+        for input in ["todo;", "todo; ", "note;"] {
+            match parse(input) {
+                MenuSyntaxParse::Incomplete(s) => {
+                    assert!(
+                        matches!(s.kind, IncompleteKind::MissingCaptureBody(_)),
+                        "expected MissingCaptureBody for {input:?}, got {s:?}"
+                    );
+                }
+                other => panic!("expected Incomplete for {input:?}, got {other:?}"),
+            }
+        }
+    }
+
+    #[test]
+    fn postfix_semicolon_registered_target_parses() {
+        let targets = vec!["github".to_string()];
+        assert_eq!(parse("github; issue"), MenuSyntaxParse::None);
+        match parse_with_capture_targets("github; issue #bug", &targets) {
+            MenuSyntaxParse::Capture(inv) => {
+                assert_eq!(inv.target, "github");
+                assert_eq!(inv.body, "issue");
+                assert_eq!(inv.tags, vec!["bug".to_string()]);
+            }
+            other => panic!("expected Capture, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn mid_text_semicolon_is_not_postfix_capture() {
+        assert_eq!(parse("search term; other"), MenuSyntaxParse::None);
+        assert_eq!(parse("unknown; stuff"), MenuSyntaxParse::None);
+        // Head must be a clean identifier token.
+        assert_eq!(parse("a b; c"), MenuSyntaxParse::None);
     }
 
     #[test]

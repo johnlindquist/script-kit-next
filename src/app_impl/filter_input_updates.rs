@@ -210,6 +210,14 @@ impl ScriptListApp {
             let len = text.len();
             state.set_selection(len, len, window, cx);
         });
+        // The input's highlight ranges were just cleared, so the render-side
+        // cache must be invalidated too. Otherwise, when the recomputed ranges
+        // happen to equal the cached ones (e.g. the `@file:` prefix accent is
+        // byte-identical before and after a file selection rewrites the
+        // input), the render guard skips reapplying them and the input stays
+        // unhighlighted.
+        self.main_menu_render_diagnostics.last_input_highlight_text = String::new();
+        self.main_menu_render_diagnostics.last_input_highlight_ranges = Vec::new();
         self.suppress_filter_events = false;
         self.pending_filter_sync = false;
 
@@ -681,6 +689,35 @@ impl ScriptListApp {
         );
     }
 
+    /// Register the alias that maps a compact spine `@clipboard:` token back
+    /// to its clipboard entry content. Parity with `@file:` tokens: the
+    /// registered token gets full-token accent highlighting, atomic delete,
+    /// and prompt-plan resolution (previously `@clipboard:<id>` lost its
+    /// resolution on reparse and submitted as an unknown-context warning).
+    pub(crate) fn register_spine_clipboard_mention_alias(
+        &mut self,
+        token: String,
+        id: String,
+        label: String,
+    ) {
+        let text = crate::clipboard_history::get_entry_content(&id).unwrap_or_default();
+        tracing::info!(
+            target: "script_kit::spine",
+            event = "spine_clipboard_mention_alias_registered",
+            token = %token,
+            bytes = text.len(),
+        );
+        self.spine_mention_aliases.insert(
+            token,
+            crate::ai::message_parts::AiContextPart::TextBlock {
+                label,
+                source: format!("spine:clipboard:{id}"),
+                text,
+                mime_type: None,
+            },
+        );
+    }
+
     /// Token-atomic delete parity with the Agent Chat composer: when `next`
     /// is `previous` with exactly one character deleted from inside an
     /// alias-registered mention token, return `previous` with the whole token
@@ -799,6 +836,15 @@ impl ScriptListApp {
                         );
                     }
                 }
+                if resolution_source.as_ref() == "clipboard" {
+                    if let Some(id) = resolution_id.as_ref().strip_prefix("clipboard/") {
+                        self.register_spine_clipboard_mention_alias(
+                            replacement.as_ref().to_string(),
+                            id.to_string(),
+                            resolution_label.as_ref().to_string(),
+                        );
+                    }
+                }
                 if resolution_source.as_ref() == "cwd" {
                     let path = std::path::PathBuf::from(resolution_id.as_ref());
                     self.spine_cwd = Some(path);
@@ -818,14 +864,29 @@ impl ScriptListApp {
                         cx,
                     )
                 } else {
-                    self.replace_active_segment_text(
+                    // A9 decision (2026-06-09): picking a style when the
+                    // style segment is the whole input is a single-keystroke
+                    // "rewrite selected text" — auto-submit the prompt plan
+                    // (style sugar adds `@selection` + `/rewrite`).
+                    let style_auto_submit = resolution_source.as_ref() == "style"
+                        && crate::spine::prompt_plan::spine_parse_is_style_only(&self.spine_parse);
+                    let applied = self.replace_active_segment_text(
                         segment_index,
                         segment_byte_range,
                         replacement.as_ref(),
                         trailing_space,
                         window,
                         cx,
-                    )
+                    );
+                    if applied && style_auto_submit {
+                        tracing::info!(
+                            target: "script_kit::spine",
+                            event = "spine_style_only_auto_submit",
+                            replacement = %replacement,
+                        );
+                        self.try_submit_spine_prompt_plan_from_enter(cx);
+                    }
+                    applied
                 }
             }
             SpineListAction::OpenModeExit { sigil, rest } => {

@@ -472,7 +472,8 @@ mod tests {
         let outcome = apply_intent(InlinePickerKeyIntent::Apply, &snap, Some(todo_idx), "+");
         match outcome {
             TriggerPickerIntentOutcome::ReplaceInput { text, keep_open } => {
-                assert_eq!(text, ";todo ");
+                // A4 decision (2026-06-09): postfix capture spelling.
+                assert_eq!(text, "todo; ");
                 assert!(
                     !keep_open,
                     "Tab on a capture target should commit the target and enter composer mode"

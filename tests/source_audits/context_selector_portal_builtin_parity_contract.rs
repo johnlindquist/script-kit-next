@@ -121,12 +121,15 @@ fn main_menu_spine_file_flow_matches_agent_chat_portal_parity() {
     let plan = source("src/spine/prompt_plan.rs");
     let filtering = source("src/app_impl/filtering_cache.rs");
 
-    // 1. The top-level @ Files row must open the full built-in File Search
-    //    surface (split preview) through the shared opener, like the Agent
-    //    Chat context picker — not an inline-only subsearch prefix.
+    // 1. A3 decision (2026-06-09): the top-level @ Files row completes
+    //    inline to `@file:` colon mode — building the prompt must never
+    //    replace the `@` input with the portal surface. The portal stays
+    //    reachable only via the explicit fallback row inside colon mode,
+    //    so the catalog must not mint portal actions itself.
     assert!(
-        catalog.contains("SpineListAction::OpenFileSearchPortal"),
-        "main-menu @ Files row must open the full File Search portal"
+        !catalog.contains("SpineListAction::OpenFileSearchPortal"),
+        "main-menu @ Files row must complete inline to @file:, not open the portal; \
+         the portal fallback row lives in filtering_cache colon mode"
     );
     assert!(
         portal.contains("fn open_spine_file_search_attachment_portal")

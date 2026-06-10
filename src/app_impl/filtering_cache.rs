@@ -3034,19 +3034,34 @@ fn build_rich_file_subsearch_rows(
     let mut flat: Vec<scripts::SearchResult> = Vec::new();
 
     if query.is_empty() {
-        if !recent_results.is_empty() {
+        // A3 recent-files decision (2026-06-09): the empty `@file:` landing
+        // state blends frecency picks (files chosen through Script Kit)
+        // with Spotlight recently-used files, deduped by path.
+        let mut seen = std::collections::HashSet::new();
+        let combined: Vec<&crate::file_search::FileResult> = recent_results
+            .iter()
+            .chain(provider_results.iter())
+            .filter(|file| seen.insert(file.path.as_str()))
+            .take(limit)
+            .collect();
+        if !combined.is_empty() {
             grouped.push(GroupedListItem::SectionHeader(
                 "Recent Files".to_string(),
                 Some("file".to_string()),
             ));
-            for file in recent_results.iter().take(limit) {
+            for file in combined {
                 let idx = flat.len();
                 flat.push(scripts::SearchResult::File(scripts::FileMatch {
-                    file: file.clone(),
+                    file: (*file).clone(),
                     score: 0,
                 }));
                 grouped.push(GroupedListItem::Item(idx));
             }
+        } else if loading {
+            grouped.push(GroupedListItem::SectionHeader(
+                "Finding recent files\u{2026}".to_string(),
+                Some("file".to_string()),
+            ));
         } else {
             grouped.push(GroupedListItem::SectionHeader(
                 "Files".to_string(),
