@@ -58,6 +58,15 @@ fn is_term_prompt_escape_key_variant(key: &str) -> bool {
     crate::ui_foundation::is_key_escape(key)
 }
 
+/// Round a measured glyph advance up to the next hundredth of a pixel.
+/// Keeps the "never tell the PTY more columns than can render" contract by
+/// absorbing sub-pixel accumulation across long rows, while wasting far less
+/// width than the old flat 8.5px guess.
+#[inline]
+fn conservative_cell_width(advance: f32) -> f32 {
+    (advance * 100.0).ceil() / 100.0
+}
+
 /// Truncate a string to at most `max_bytes` bytes, ensuring the result is valid UTF-8.
 /// Truncates at a character boundary, never in the middle of a multibyte character.
 fn truncate_str(s: &str, max_bytes: usize) -> &str {
@@ -121,6 +130,10 @@ pub struct TermPrompt {
     /// 0.0 keeps the original "cells touch the panel border" behavior.
     /// QuickTerminalView sets this to a small value so cells get a tiny gutter.
     pub edge_to_edge_inset_px: f32,
+    /// Real FONT_MONO advance at the configured font size, measured from the
+    /// text system on first render. `None` until measured (falls back to the
+    /// conservative `BASE_CELL_WIDTH` scale).
+    measured_cell_width: Option<f32>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -240,6 +253,7 @@ impl TermPrompt {
             wheel_scroll_remainder: 0.0,
             edge_to_edge: false,
             edge_to_edge_inset_px: 0.0,
+            measured_cell_width: None,
         }
     }
 
@@ -606,9 +620,29 @@ impl TermPrompt {
         self.config.get_terminal_font_size()
     }
 
-    /// Get cell width scaled to configured font size
+    /// Get cell width: the measured FONT_MONO advance when available,
+    /// otherwise the conservative `BASE_CELL_WIDTH` scale.
     fn cell_width(&self) -> f32 {
-        BASE_CELL_WIDTH * (self.font_size() / BASE_FONT_SIZE)
+        self.measured_cell_width
+            .unwrap_or_else(|| BASE_CELL_WIDTH * (self.font_size() / BASE_FONT_SIZE))
+    }
+
+    /// Measure the real FONT_MONO advance at the configured font size and
+    /// cache it. Replaces the flat `8.5px × font_size/14` estimate (documented
+    /// actual at 14pt: 8.4287px), so PTY cols/rows and mouse pixel→cell
+    /// mapping track the glyphs the renderer actually shapes.
+    fn ensure_measured_cell_width(&mut self, cx: &gpui::App) {
+        if self.measured_cell_width.is_some() {
+            return;
+        }
+        let text_system = cx.text_system();
+        let font_id = text_system.resolve_font(&gpui::font(FONT_MONO));
+        self.measured_cell_width = text_system
+            .em_advance(font_id, px(self.font_size()))
+            .map(f32::from)
+            .ok()
+            .filter(|advance| advance.is_finite() && *advance > 0.0)
+            .map(conservative_cell_width);
     }
 
     /// Get cell height scaled to configured font size
@@ -1305,6 +1339,7 @@ impl Render for TermPrompt {
 
         // Get window bounds and resize terminal if needed
         // Use content_height if set (for constrained layouts), otherwise use window height
+        self.ensure_measured_cell_width(cx);
         let window_bounds = window.bounds();
         let effective_height = self.content_height.unwrap_or(window_bounds.size.height);
         self.resize_if_needed(window_bounds.size.width, effective_height);
@@ -2090,6 +2125,20 @@ mod tests {
         // FONT_MONO at 14pt should have reasonable cell dimensions
         const _: () = assert!(CELL_WIDTH > 5.0 && CELL_WIDTH < 15.0);
         const _: () = assert!(CELL_HEIGHT > 10.0 && CELL_HEIGHT < 25.0);
+    }
+
+    #[test]
+    fn conservative_cell_width_rounds_up_to_hundredth() {
+        // Documented FONT_MONO advance at 14pt: 8.4287px → 8.43px cell.
+        assert!((conservative_cell_width(8.4287) - 8.43).abs() < 1e-4);
+        // Exact hundredths stay put instead of inflating a full hundredth.
+        assert!((conservative_cell_width(8.43) - 8.43).abs() < 1e-4);
+        // Never rounds down: a cell is at least as wide as the real glyph.
+        for advance in [6.1004, 7.77, 8.4287, 10.333] {
+            assert!(conservative_cell_width(advance) >= advance);
+        }
+        // Far tighter than the old flat estimate at 14pt.
+        assert!(conservative_cell_width(8.4287) < BASE_CELL_WIDTH);
     }
     #[test]
     fn test_refresh_interval_is_reasonable() {
