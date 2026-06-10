@@ -57,5 +57,6 @@ Searchable utility lists available directly from the launcher.
 | **App Launcher** | Search and launch installed local applications. | `AppLauncher` | [app_launcher.rs](file:///Users/johnlindquist/dev/script-kit-gpui/src/render_builtins/app_launcher.rs) |
 | **Notes Browse** | List and search local Markdown notes. | `NotesBrowseView` | [notes_browse.rs](file:///Users/johnlindquist/dev/script-kit-gpui/src/notes_browse.rs) |
 | **File Search** | Browse files on the local filesystem. | `FileSearchView` | [file_search.rs](file:///Users/johnlindquist/dev/script-kit-gpui/src/render_builtins/file_search.rs) |
+| **Permissions Wizard** | Guided grant flow for the macOS permissions Script Kit needs (Accessibility, Screen Recording, Event Synthesizing, Input Monitoring, Microphone) with live TCC status cards. Opens on fresh installs and via "Set Up Permissions". | `PermissionsWizardView` | [permissions_wizard.rs](file:///Users/johnlindquist/dev/script-kit-gpui/src/render_builtins/permissions_wizard.rs) & [permissions_wizard.rs](file:///Users/johnlindquist/dev/script-kit-gpui/src/permissions_wizard.rs) |
 
 ---
