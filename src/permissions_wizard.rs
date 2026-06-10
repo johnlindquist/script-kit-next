@@ -262,6 +262,33 @@ pub fn detect_permission(
     }
 }
 
+/// Fire the native macOS grant flow for `kind` and return the resulting status.
+///
+/// Accessibility and the CG-based permissions show the one-time OS prompt
+/// (or are silently denied if the user already refused once — callers should
+/// fall back to [`open_permission_settings`] when the result is not
+/// `Authorized`). Microphone has no useful programmatic prompt outside an
+/// active capture session, so it is detect-only here.
+pub fn request_permission(
+    kind: PermissionKind,
+) -> crate::platform::permiso_detect::PermissionStatus {
+    use crate::platform::permiso_detect;
+    info!(permission = %kind, "Requesting permission via native prompt");
+    match kind {
+        PermissionKind::Accessibility => {
+            if request_accessibility_permission() {
+                permiso_detect::PermissionStatus::Authorized
+            } else {
+                permiso_detect::PermissionStatus::Denied
+            }
+        }
+        PermissionKind::ScreenRecording => permiso_detect::request_screen_capture_access(),
+        PermissionKind::InputMonitoring => permiso_detect::request_input_monitoring_access(),
+        PermissionKind::EventSynthesizing => permiso_detect::request_event_synthesizing_access(),
+        PermissionKind::Microphone => permiso_detect::microphone_authorized(),
+    }
+}
+
 // ============================================================================
 // Startup Intent
 // ============================================================================

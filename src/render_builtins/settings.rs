@@ -14,6 +14,7 @@ enum SettingsAction {
     SelectMicrophone,
     ClearSuggested,
     CheckPermissions,
+    SetupPermissions,
     AllowAccessibility,
     AllowScreenRecording,
     RequestAccessibilityPermission,
@@ -93,6 +94,12 @@ fn get_settings_items() -> Vec<SettingsItem> {
             description: "Run a check for the macOS permissions Script Kit needs",
             icon: "circle-check",
             action: SettingsAction::CheckPermissions,
+        },
+        SettingsItem {
+            name: "Set Up Permissions",
+            description: "Open the guided wizard for granting macOS permissions",
+            icon: "shield-check",
+            action: SettingsAction::SetupPermissions,
         },
         SettingsItem {
             name: "Accessibility Permission Assistant",
@@ -295,6 +302,14 @@ impl ScriptListApp {
                 };
 
                 self.execute_builtin(&entry, cx);
+            }
+            SettingsAction::SetupPermissions => {
+                tracing::info!(
+                    correlation_id = "settings-hub",
+                    action = "setup_permissions",
+                    "settings.action_executed"
+                );
+                self.open_permissions_wizard(cx);
             }
             SettingsAction::AllowAccessibility => {
                 let entry = crate::builtins::BuiltInEntry {

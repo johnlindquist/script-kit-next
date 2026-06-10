@@ -19,6 +19,7 @@ include!("process_manager.rs");
 include!("current_app_commands.rs");
 include!("ai_presets.rs");
 include!("settings.rs");
+include!("permissions_wizard.rs");
 include!("favorites.rs");
 include!("agent_chat_history.rs");
 include!("browser_history.rs");

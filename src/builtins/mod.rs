@@ -157,6 +157,7 @@ pub enum ScriptCommandType {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PermissionCommandType {
     CheckPermissions,
+    SetupPermissions,
     RequestAccessibility,
     OpenAccessibilitySettings,
     AllowAccessibility,
@@ -493,6 +494,7 @@ impl BuiltInEntry {
             },
             BuiltInFeature::PermissionCommand(action) => match action {
                 PermissionCommandType::CheckPermissions => "Check Permissions",
+                PermissionCommandType::SetupPermissions => "Set Up Permissions",
                 PermissionCommandType::RequestAccessibility => "Request Accessibility Access",
                 PermissionCommandType::OpenAccessibilitySettings => "Open Accessibility Settings",
                 PermissionCommandType::AllowAccessibility => "Open Accessibility Assistant",
@@ -609,6 +611,7 @@ impl BuiltInEntry {
             },
             BuiltInFeature::PermissionCommand(action) => match action {
                 PermissionCommandType::CheckPermissions => "Check Access",
+                PermissionCommandType::SetupPermissions => "Permissions",
                 PermissionCommandType::RequestAccessibility => "Request Access",
                 PermissionCommandType::OpenAccessibilitySettings => "Accessibility",
                 PermissionCommandType::AllowAccessibility => "Accessibility",
@@ -1462,6 +1465,26 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
             vec!["check", "permissions", "accessibility", "privacy"],
             BuiltInFeature::PermissionCommand(PermissionCommandType::CheckPermissions),
             "circle-check",
+        ));
+
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin/setup-permissions",
+            "Set Up Permissions",
+            "Open the guided wizard for granting macOS permissions",
+            vec![
+                "setup",
+                "permissions",
+                "wizard",
+                "onboarding",
+                "grant",
+                "accessibility",
+                "screen",
+                "recording",
+                "microphone",
+                "privacy",
+            ],
+            BuiltInFeature::PermissionCommand(PermissionCommandType::SetupPermissions),
+            "shield-check",
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
