@@ -38,6 +38,10 @@ The loop:
 
 Binary-path gotcha: `agent-cargo.sh` builds into `target-agent/pools/agent-debug/debug/script-kit-gpui`, but the driver (and `session.sh`) default to `target/debug/script-kit-gpui`, which `./dev.sh` owns. After an agent-cargo build, point the driver at the binary you just built — `Driver.launch({ binary: "target-agent/pools/agent-debug/debug/script-kit-gpui" })` or `SCRIPT_KIT_GPUI_BINARY=...` — or you will verify a stale binary. For a stable per-task path that survives later rebuilds, export an artifact clone: `SCRIPT_KIT_AGENT_ARTIFACT_NAME=<task> ./scripts/agentic/agent-cargo.sh build --bin script-kit-gpui` then launch `target-agent/artifacts/<task>/script-kit-gpui`.
 
+### Pi Sidecar Availability (Agent Chat)
+
+Dev/agent-built binaries run outside a `.app` bundle, so the bundled `Contents/MacOS/pi` sidecar never resolves; debug builds fall back to `target/pi-sidecar/pi`, then `~/dev/pi_agent_rust/target/{release,debug}/pi` (see `src/ai/agent_chat/pi/binary.rs`). When this skill is invoked, run `bash scripts/agentic/ensure-pi-sidecar.sh` once before launching or driving the app — it exits instantly when a Pi binary already resolves and otherwise builds the repo-local sidecar via `scripts/prepare-pi-sidecar.sh`. Without it, cmd+enter / Agent Chat surfaces show "Pi Agent Chat is unavailable", which is an environment gap, not an app bug. `./dev.sh` runs the same check automatically.
+
 Driver rules of thumb:
 
 - Use `sandboxHome: true` unless the bug specifically needs real user data; it keeps runs reproducible and protects real Script Kit state.
