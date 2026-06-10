@@ -36,8 +36,8 @@ use anyhow::Result;
 
 pub use indexer::{ingest_chat_turn, start_brain_indexer, wake_indexer};
 pub use launcher::{
-    root_brain_query_is_eligible, search_root_brain_direct, RootBrainSearchHit,
-    RootBrainSectionOptions,
+    root_brain_query_is_eligible, search_root_brain_direct, search_root_brain_semantic,
+    semantic_root_brain_hits_for_query, RootBrainSearchHit, RootBrainSectionOptions,
 };
 pub use search::{brain_search, render_context_block, BrainHit};
 pub use store::{init_brain_db, record_signal, DocSource};

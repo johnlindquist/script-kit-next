@@ -16,6 +16,8 @@ mod filter_input_core;
 mod filter_input_change;
 #[path = "filter_input_updates.rs"]
 mod filter_input_updates;
+#[path = "root_brain_search.rs"]
+mod root_brain_search;
 #[path = "root_file_search.rs"]
 mod root_file_search;
 #[path = "root_unified_result_actions.rs"]

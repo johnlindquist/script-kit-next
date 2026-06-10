@@ -70,6 +70,10 @@ pub(crate) struct RootPassiveFrameKey {
     pub(crate) source_filters: crate::menu_syntax::RootUnifiedSourceFilterSet,
     pub(crate) todo_options: crate::menu_syntax::RootTodoSectionOptions,
     pub(crate) brain_options: crate::brain::RootBrainSectionOptions,
+    /// Bumped whenever async semantic brain results change, so a cached frame
+    /// holding lexical-only brain hits can never be served after semantic
+    /// results land for the same query.
+    pub(crate) brain_semantic_epoch: u64,
     pub(crate) notes_options: crate::notes::RootNotesSectionOptions,
     pub(crate) clipboard_history_options:
         crate::clipboard_history::RootClipboardHistorySectionOptions,
@@ -700,6 +704,19 @@ pub(crate) struct ScriptListApp {
     root_file_source_chip_visible_limit: usize,
     /// Frozen cache-refreshable passive rows for the current root-search query frame.
     root_passive_frame: Option<RootPassiveFrame>,
+    // ── Root "From Your Brain" async semantic pass state ────────────
+    /// Async hybrid (FTS+cosine) brain hits keyed by the trimmed search text
+    /// they were computed for. Preferred over the sync lexical pass while the
+    /// stored query matches the live query; lexical otherwise.
+    root_brain_semantic_results: Option<(String, Vec<crate::brain::RootBrainSearchHit>)>,
+    /// Generation counter used to ignore stale semantic brain batches.
+    root_brain_search_generation: u64,
+    /// Last requested semantic brain search (trimmed query + options), used to
+    /// avoid re-spawning identical background searches per recompute.
+    root_brain_search_request: Option<(String, crate::brain::RootBrainSectionOptions)>,
+    /// Bumped whenever `root_brain_semantic_results` changes; folded into
+    /// `RootPassiveFrameKey` so stale lexical frames can't be reused.
+    root_brain_semantic_epoch: u64,
     // ── Spine @file: subsearch async state ─────────────────────────
     spine_file_search_query: String,
     pub(crate) spine_file_search_generation: u64,

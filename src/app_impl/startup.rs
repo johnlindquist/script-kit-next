@@ -904,6 +904,10 @@ impl ScriptListApp {
             root_file_source_chip_visible_limit:
                 crate::file_search::ROOT_FILE_SOURCE_CHIP_INITIAL_VISIBLE_ROWS,
             root_passive_frame: None,
+            root_brain_semantic_results: None,
+            root_brain_search_generation: 0,
+            root_brain_search_request: None,
+            root_brain_semantic_epoch: 0,
             spine_file_search_query: String::new(),
             spine_file_search_generation: 0,
             spine_file_search_loading: false,

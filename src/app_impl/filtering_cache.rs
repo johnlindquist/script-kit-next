@@ -560,6 +560,7 @@ impl ScriptListApp {
             source_filters: source_filters.clone(),
             todo_options,
             brain_options,
+            brain_semantic_epoch: self.root_brain_semantic_epoch,
             notes_options,
             clipboard_history_options,
             dictation_history_options,
@@ -613,12 +614,22 @@ impl ScriptListApp {
         let allow_browser_history =
             source_filters.allows(crate::menu_syntax::RootUnifiedSourceFilter::BrowserHistory);
 
+        // Prefer the async hybrid (semantic) batch when it was computed for
+        // exactly this query; the sync lexical pass below is the instant
+        // first paint while semantic results are still in flight.
+        let brain_semantic_hits = crate::brain::semantic_root_brain_hits_for_query(
+            search_text,
+            self.root_brain_semantic_results.as_ref(),
+            &brain_options,
+        );
         let brain_hits = timed_root_passive_source("brain", search_text, explicit_brain, || {
             if !advanced_query_active
                 && allow_brain
                 && crate::brain::root_brain_query_is_eligible(search_text, brain_options)
             {
-                crate::brain::search_root_brain_direct(search_text, &brain_options)
+                brain_semantic_hits.unwrap_or_else(|| {
+                    crate::brain::search_root_brain_direct(search_text, &brain_options)
+                })
             } else {
                 Vec::new()
             }
