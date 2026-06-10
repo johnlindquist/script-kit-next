@@ -154,7 +154,7 @@ pub fn get_resource_definitions() -> Vec<McpResource> {
             uri: NOTES_RESOURCE_URI.to_string(),
             name: "Notes".to_string(),
             description: Some(
-                "Active Script Kit notes. Read kit://notes for a bounded list with metadata, kit://notes?tag=... to filter organized notes, or kit://notes/{id} for a full note."
+                "Active Script Kit notes. Read kit://notes for a bounded list with metadata, kit://notes?tag=... to filter organized notes, add &full=true for full bodies, or kit://notes/{id} for a full note."
                     .to_string(),
             ),
             mime_type: "application/json".to_string(),
@@ -479,12 +479,26 @@ fn read_notes_list_resource(uri: &str) -> Result<ResourceContent, String> {
     };
 
     let original_len = notes.len();
+    // full=true swaps the 240-char preview for the full note body, bounded
+    // tighter so instruction-note loads stay a sane context size.
+    let full_content = query_bool(uri, "full");
+    let default_limit = if full_content { 20 } else { 100 };
+    let max_limit = if full_content { 50 } else { 500 };
     let limit = parse_u64_query_param(uri, "limit")
-        .unwrap_or(100)
-        .clamp(1, 500) as usize;
+        .unwrap_or(default_limit)
+        .clamp(1, max_limit) as usize;
     notes.truncate(limit);
 
-    let summaries: Vec<Value> = notes.iter().map(note_summary_json).collect();
+    let summaries: Vec<Value> = notes
+        .iter()
+        .map(|note| {
+            if full_content {
+                note_full_json(note)
+            } else {
+                note_summary_json(note)
+            }
+        })
+        .collect();
     let json = serde_json::json!({
         "schemaVersion": NOTES_RESOURCE_SCHEMA_VERSION,
         "uri": NOTES_RESOURCE_URI,
@@ -546,6 +560,27 @@ fn note_summary_json(note: &crate::notes::Note) -> Value {
         "sortOrder": note.sort_order,
         "metadata": metadata,
     })
+}
+
+/// Per-note body cap when `full=true` is requested on the notes list resource.
+const NOTE_FULL_CONTENT_MAX_CHARS: usize = 20_000;
+
+fn note_full_json(note: &crate::notes::Note) -> Value {
+    let mut json = note_summary_json(note);
+    let content: String = note
+        .content
+        .chars()
+        .take(NOTE_FULL_CONTENT_MAX_CHARS)
+        .collect();
+    if let Some(object) = json.as_object_mut() {
+        object.insert(
+            "contentTruncated".to_string(),
+            Value::Bool(note.content.chars().count() > NOTE_FULL_CONTENT_MAX_CHARS),
+        );
+        object.insert("content".to_string(), Value::String(content));
+        object.remove("preview");
+    }
+    json
 }
 
 fn note_metadata_json(note_id: crate::notes::NoteId) -> Value {
@@ -4571,6 +4606,43 @@ mod tests {
         let json = serde_json::to_string(&item).expect("serialize");
         let parsed: FocusedItemInfo = serde_json::from_str(&json).expect("deserialize");
         assert_eq!(item, parsed);
+    }
+
+    #[test]
+    fn test_notes_list_resource_full_param_returns_full_content() {
+        let _guard = provider_json_test_lock()
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
+        crate::notes::init_notes_db().expect("notes db should initialize before resource test");
+        let token = unique_notes_resource_token("resource_full");
+        let body: String = format!(
+            "---\ntags: [{token}]\n---\n# Full Body\n{}",
+            "x".repeat(600)
+        );
+        let note = crate::notes::Note::with_content(body.clone());
+        let note_id = note.id;
+        crate::notes::save_note(&note).expect("failed to save notes full-content test note");
+
+        let content = read_notes_list_resource(&format!("kit://notes?tag={token}&full=true"))
+            .expect("full-content notes resource should resolve");
+        let value: serde_json::Value = serde_json::from_str(&content.text).expect("valid JSON");
+        let notes = value["notes"].as_array().expect("notes array");
+        let entry = notes
+            .iter()
+            .find(|candidate| candidate["id"] == note_id.as_str())
+            .expect("created note should be returned by full-content resource");
+        let entry = entry.clone();
+
+        crate::notes::delete_note_permanently(note_id)
+            .expect("cleanup failed for notes full-content test");
+
+        assert_eq!(
+            entry["content"].as_str().expect("content string"),
+            body,
+            "full=true should return the complete note body, not a preview"
+        );
+        assert!(entry.get("preview").is_none(), "full entries drop preview");
+        assert_eq!(entry["contentTruncated"], serde_json::Value::Bool(false));
     }
 
     #[test]

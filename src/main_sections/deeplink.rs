@@ -18,6 +18,7 @@ fn deeplink_channel() -> &'static (
 /// - scriptkit://commands/{command_id} - Execute any command (app/builtin/script/scriptlet)
 /// - scriptkit://run/{script_name} - Execute a script by name (legacy)
 /// - scriptkit://notes/{note_id} - Open a specific note
+/// - scriptkit://agent-chat/{thread_id} - Open Agent Chat (provenance links)
 fn parse_deeplink_url(url: &str) -> Option<String> {
     // Remove the scheme
     let path = url.strip_prefix("scriptkit://")?;
@@ -49,6 +50,11 @@ fn parse_deeplink_url(url: &str) -> Option<String> {
     if let Some(note_id) = path.strip_prefix("notes/") {
         // Notes deeplink - handled specially (runtime-only namespace)
         return Some(format!("notes/{}", note_id));
+    }
+
+    if let Some(thread_id) = path.strip_prefix("agent-chat/") {
+        // Agent Chat provenance deeplink (from note `source:` frontmatter)
+        return Some(format!("agent-chat/{}", thread_id));
     }
 
     tracing::warn!(url = %url, "unknown_deeplink_format");

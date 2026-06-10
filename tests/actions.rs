@@ -1577,7 +1577,8 @@ fn notes_command_builtin_uses_named_action_states() {
     assert!(
         content.contains("NotesCommandBuiltinAction::from_command(*cmd_type)")
             && content.contains("fn execute_notes_command_builtin(")
-            && content.contains("action.opens_notes_window()")
+            && content
+                .contains("NotesCommandBuiltinAction::SearchNotes => notes::open_notes_search(cx)")
             && content.contains("action.success_detail()")
             && content.contains("action.failure_message(&e)")
             && content.contains("action.failure_detail()"),

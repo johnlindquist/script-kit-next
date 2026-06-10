@@ -39,6 +39,52 @@ impl NotesApp {
         cx.notify();
     }
 
+    /// Toggle a task checkbox at the given source byte range.
+    ///
+    /// Invoked from the markdown preview when a `- [ ]` / `- [x]` marker is
+    /// clicked. `marker_range` is the byte range pulldown-cmark reported for
+    /// the task marker; the checkbox char inside it is flipped in place.
+    pub(super) fn toggle_task_marker_at(
+        &mut self,
+        marker_range: std::ops::Range<usize>,
+        currently_checked: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let mut toggled = false;
+        self.editor_state.update(cx, |state, cx| {
+            let value = state.value().to_string();
+            let end = marker_range.end.min(value.len());
+            let start = marker_range.start.min(end);
+            let slice = &value[start..end];
+
+            // Find the checkbox interior relative to the marker slice.
+            let needle = if currently_checked {
+                ["[x]", "[X]"]
+            } else {
+                ["[ ]", "[ ]"]
+            };
+            let found = needle
+                .iter()
+                .find_map(|n| slice.find(n).map(|i| (i, n.len())));
+            let Some((offset, len)) = found else {
+                return;
+            };
+
+            let replacement = if currently_checked { "[ ]" } else { "[x]" };
+            let abs = start + offset;
+            let new_value = format!("{}{}{}", &value[..abs], replacement, &value[abs + len..]);
+            state.set_value(&new_value, window, cx);
+            toggled = true;
+        });
+
+        if toggled {
+            self.has_unsaved_changes = true;
+            info!("Toggled task checkbox from preview");
+            cx.notify();
+        }
+    }
+
     /// Insert a horizontal rule (---) at cursor position (Cmd+Shift+-)
     pub(super) fn insert_horizontal_rule(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.editor_state.update(cx, |state, cx| {

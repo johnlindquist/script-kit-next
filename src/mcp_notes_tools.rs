@@ -65,6 +65,11 @@ pub struct NotesCreateArgs {
     pub tags: Vec<String>,
     #[serde(default)]
     pub aliases: Vec<String>,
+    /// Provenance link recorded as `source:` frontmatter (e.g. an agent
+    /// thread deeplink). Lets notes point back at the conversation or tool
+    /// that produced them.
+    #[serde(default)]
+    pub source: Option<String>,
     #[serde(default)]
     pub is_pinned: bool,
     #[serde(default)]
@@ -164,6 +169,11 @@ pub fn get_notes_tool_definitions() -> Vec<ToolDefinition> {
                         "maxItems": NOTE_METADATA_MAX_ITEMS,
                         "items": { "type": "string", "maxLength": NOTE_METADATA_ITEM_MAX_BYTES },
                         "description": "Optional aliases to merge into visible note frontmatter."
+                    },
+                    "source": {
+                        "type": "string",
+                        "maxLength": NOTE_METADATA_ITEM_MAX_BYTES,
+                        "description": "Optional provenance link (e.g. an agent thread deeplink) recorded as `source:` frontmatter."
                     },
                     "isPinned": { "type": "boolean", "default": false },
                     "sortOrder": { "type": "integer" },

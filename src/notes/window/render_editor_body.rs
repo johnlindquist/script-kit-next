@@ -99,6 +99,15 @@ impl NotesApp {
         if is_preview {
             let content = self.editor_state.read(cx).value().to_string();
             let metrics = style::adopted_metrics();
+            let entity = cx.entity().downgrade();
+            let on_toggle_task: markdown::TaskToggleHandler =
+                std::rc::Rc::new(move |marker_range, checked, window, cx| {
+                    if let Some(app) = entity.upgrade() {
+                        app.update(cx, |app, cx| {
+                            app.toggle_task_marker_at(marker_range, checked, window, cx);
+                        });
+                    }
+                });
             return div()
                 .id("notes-markdown-preview")
                 .flex_1()
@@ -108,7 +117,11 @@ impl NotesApp {
                 .vertical_scrollbar(&self.preview_scroll_handle)
                 .px(px(metrics.editor_padding_x))
                 .py(px(metrics.editor_padding_y))
-                .child(markdown::render_markdown_preview(&content, cx.theme()))
+                .child(markdown::render_markdown_preview_interactive(
+                    &content,
+                    cx.theme(),
+                    on_toggle_task,
+                ))
                 .into_any_element();
         }
 

@@ -4856,7 +4856,7 @@ mod from_dialog_builtin_action_validation_tests_3 {
             "notes_style should show icons"
         );
         assert!(
-            config.dialog_config.show_footer,
+            !config.dialog_config.show_footer,
             "notes_style should not show footer"
         );
         assert!(config.close_on_escape);
@@ -9770,9 +9770,10 @@ mod from_dialog_builtin_action_validation_tests_5 {
                 auto_sizing_enabled: false,
             };
             let actions = get_notes_command_bar_actions(&info);
-            // new_note, duplicate, delete, browse, find, format, copy_note_as,
-            // copy_deeplink, create_quicklink, export, send_to_ai, enable_auto_sizing = 12
-            assert_eq!(actions.len(), 12);
+            // new_note, duplicate, delete, browse, find, format, move_list_item_up,
+            // move_list_item_down, copy_note_as, copy_deeplink, create_quicklink,
+            // copy_backlinks, export, send_to_ai, enable_auto_sizing = 15
+            assert_eq!(actions.len(), 15);
         }
 
         #[test]
@@ -14277,11 +14278,12 @@ mod from_dialog_builtin_action_validation_tests_7 {
                 auto_sizing_enabled: false,
             };
             let actions = get_notes_command_bar_actions(&info);
-            // new_note + duplicate + delete + browse_notes + find + format + copy_note_as + copy_deeplink
-            // + create_quicklink + export + send_to_ai + enable_auto_sizing = 12
+            // new_note + duplicate + delete + browse_notes + find + format + move_list_item_up
+            // + move_list_item_down + copy_note_as + copy_deeplink + create_quicklink
+            // + copy_backlinks + export + send_to_ai + enable_auto_sizing = 15
             assert_eq!(
                 actions.len(),
-                12,
+                15,
                 "Full feature: {:?}",
                 action_ids(&actions)
             );

@@ -26,7 +26,6 @@ use gpui_component::{
 #[cfg(target_os = "macos")]
 use objc::{msg_send, sel, sel_impl};
 use std::ops::Range;
-use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use tracing::{debug, info};
 
@@ -38,13 +37,7 @@ use crate::actions::{
 use crate::confirm;
 use crate::theme;
 
-// Keep legacy types for backwards compatibility during transition
-use super::actions_panel::{
-    panel_height_for_rows, NotesAction, NotesActionItem, NotesActionsPanel,
-};
-// Note: BrowsePanel is no longer used - note switcher now uses CommandBar
-// Keeping NoteAction and NoteListItem for backwards compatibility during transition
-use super::browse_panel::{NoteAction, NoteListItem};
+use super::actions_panel::{panel_height_for_rows, NotesAction};
 use super::markdown;
 use super::markdown_highlighting::register_markdown_highlighter;
 use super::model::{ExportFormat, Note, NoteId};
@@ -74,10 +67,10 @@ static NOTES_CLOSE_BEHAVIOR: std::sync::OnceLock<std::sync::Mutex<NotesCloseBeha
 // Layout constants — all on the 4 px micro-grid / 8 px base grid
 // =============================================================================
 
-/// Browse-panel inline fallback width.
+/// Note-switcher panel width (used by DevTools layout introspection).
 const BROWSE_PANEL_WIDTH: f32 = 500.0;
 
-/// Browse-panel inline fallback max height.
+/// Note-switcher panel max height (used by DevTools layout introspection).
 const BROWSE_PANEL_MAX_HEIGHT: f32 = 400.0;
 
 /// Actions-panel overlay top offset (keeps search input stable).
@@ -367,36 +360,16 @@ pub struct NotesApp {
     /// Whether the browse panel is shown (Cmd+P)
     show_browse_panel: bool,
 
-    /// Entity for the actions panel (when shown)
-    actions_panel: Option<Entity<NotesActionsPanel>>,
-
     /// Command bar component (Cmd+K) - uses unified CommandBar wrapper
     /// Opens in a separate vibrancy window for proper macOS blur effect
     command_bar: CommandBar,
 
     /// Note switcher command bar (Cmd+P) - uses unified CommandBar wrapper
     /// Opens in a separate vibrancy window for proper macOS blur effect
-    /// This replaces the legacy BrowsePanel for consistent theming and behavior
     note_switcher: CommandBar,
-
-    /// Entity for the browse panel (when shown) - LEGACY, kept for backwards compatibility
-    /// Will be removed once note_switcher is fully tested
-    browse_panel: Option<Entity<super::browse_panel::BrowsePanel>>,
-
-    /// Pending action from actions panel clicks
-    pending_action: Arc<Mutex<Option<NotesAction>>>,
 
     /// Previous height before showing the actions panel
     actions_panel_prev_height: Option<f32>,
-
-    /// Pending note selection from browse panel
-    pending_browse_select: Arc<Mutex<Option<NoteId>>>,
-
-    /// Pending close request from browse panel
-    pending_browse_close: Arc<Mutex<bool>>,
-
-    /// Pending action from browse panel (note id + action)
-    pending_browse_action: Arc<Mutex<Option<(NoteId, NoteAction)>>>,
 
     /// Debounce: Whether the current note has unsaved changes
     has_unsaved_changes: bool,
@@ -486,7 +459,6 @@ mod render_editor;
 mod render_editor_body;
 mod render_editor_footer;
 mod render_editor_titlebar;
-mod render_overlays;
 mod render_ui;
 mod traits;
 mod vibrancy;
@@ -498,8 +470,8 @@ pub use window_ops::{
     accept_notes_ghost_for_automation, apply_mcp_notes_mutation_on_main_thread, close_notes_window,
     get_notes_app_entity_and_handle, get_notes_editor_text, handle_notes_ghost_key_for_automation,
     inject_text_into_notes, is_notes_window, is_notes_window_open, open_note_in_notes_window,
-    open_notes_window, open_notes_window_without_launcher_restore, quick_capture,
-    save_note_with_content,
+    open_notes_search, open_notes_window, open_notes_window_without_launcher_restore,
+    quick_capture, save_note_with_content, save_note_with_content_and_source,
 };
 
 #[cfg(test)]

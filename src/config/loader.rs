@@ -397,6 +397,7 @@ fn recover_config_fields(value: Value, correlation_id: &str) -> Config {
         suggested: parse_optional_field(object, "suggested", correlation_id),
         unified_search: parse_optional_field(object, "unifiedSearch", correlation_id),
         notes_hotkey: parse_optional_field(object, "notesHotkey", correlation_id),
+        notes_hotkey_enabled: parse_optional_field(object, "notesHotkeyEnabled", correlation_id),
         ai_hotkey: parse_optional_field(object, "aiHotkey", correlation_id),
         ai_hotkey_enabled: parse_optional_field(object, "aiHotkeyEnabled", correlation_id),
         logs_hotkey: parse_optional_field(object, "logsHotkey", correlation_id),

@@ -277,8 +277,20 @@ fn notes_batch_supports_target_scoped_open_actions() {
         );
     }
 
+    // Whitespace-insensitive: rustfmt may wrap the supported-commands list.
+    let prompt_handler_condensed: String = PROMPT_HANDLER
+        .chars()
+        .filter(|c| !c.is_whitespace())
+        .collect();
+    assert!(
+        prompt_handler_condensed.contains(
+            "supported_commands:&[\"setInput\",\"openActions\",\"togglePreview\",\"openNotesAgentChat\",\"waitFor\",]"
+        ) || prompt_handler_condensed.contains(
+            "supported_commands:&[\"setInput\",\"openActions\",\"togglePreview\",\"openNotesAgentChat\",\"waitFor\"]"
+        ),
+        "Notes batch routing must advertise the Notes supported-commands set"
+    );
     for needle in [
-        "supported_commands: &[\"setInput\", \"openActions\", \"togglePreview\", \"openNotesAgentChat\", \"waitFor\"]",
         "protocol::BatchCommand::OpenActions",
         "transaction_notes_open_actions",
         "window.defer(cx, move |window, cx|",
@@ -363,7 +375,7 @@ fn simulate_key_supports_target_scoped_notes_shortcuts() {
 #[test]
 fn notes_state_exposes_redacted_command_bar_runtime_state() {
     for needle in [
-        "pub(crate) fn automation_state(&self, surface: &str)",
+        "pub(crate) fn automation_state(&self, surface: &str",
         "\"route\"",
         "\"stack\"",
         "\"filteredCount\"",

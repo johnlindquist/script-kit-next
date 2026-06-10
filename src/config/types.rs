@@ -1231,6 +1231,16 @@ impl HotkeyConfig {
         }
     }
 
+    /// Create the default Notes window toggle hotkey (Cmd+Ctrl+N).
+    /// Chosen over Cmd+Shift+N (Finder "New Folder", Chrome incognito) to
+    /// minimize collisions with common per-app shortcuts.
+    pub fn default_notes_hotkey() -> Self {
+        HotkeyConfig {
+            modifiers: vec!["meta".to_string(), "ctrl".to_string()],
+            key: "KeyN".to_string(),
+        }
+    }
+
     /// Create a default logs capture hotkey (Cmd+Shift+L)
     pub fn default_logs_hotkey() -> Self {
         HotkeyConfig {
@@ -1360,6 +1370,10 @@ fn default_main_hotkey() -> HotkeyConfig {
 
 fn default_ai_hotkey_enabled() -> bool {
     DEFAULT_AI_HOTKEY_ENABLED
+}
+
+fn default_notes_hotkey_enabled() -> bool {
+    DEFAULT_NOTES_HOTKEY_ENABLED
 }
 
 fn default_logs_hotkey_enabled() -> bool {
@@ -1523,6 +1537,13 @@ pub struct Config {
         rename = "notesHotkey"
     )]
     pub notes_hotkey: Option<HotkeyConfig>,
+    /// Whether notes hotkey is enabled (default: true)
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "notesHotkeyEnabled"
+    )]
+    pub notes_hotkey_enabled: Option<bool>,
     /// Hotkey for opening Agent Chat window (default: Cmd+Shift+Space)
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "aiHotkey")]
     pub ai_hotkey: Option<HotkeyConfig>,
@@ -1649,7 +1670,8 @@ impl Default for Config {
             clipboard_history_max_text_length: None, // Will use default via getter
             suggested: None,          // Will use SuggestedConfig::default() via getter
             unified_search: None,     // Will use UnifiedSearchConfig::default() via getter
-            notes_hotkey: None,       // No default shortcut; must be explicitly configured
+            notes_hotkey: None,       // Will use HotkeyConfig::default_notes_hotkey() via getter
+            notes_hotkey_enabled: None, // Defaults to true via getter
             ai_hotkey: None,          // Will use HotkeyConfig::default_ai_hotkey() via getter
             ai_hotkey_enabled: None,  // Defaults to true via getter
             logs_hotkey: None,        // Will use HotkeyConfig::default_logs_hotkey() via getter
@@ -1768,11 +1790,24 @@ impl Config {
         }
     }
 
-    /// Returns the notes hotkey configuration, or None if not configured.
-    /// No default shortcut is provided - users must explicitly configure one.
+    /// Returns true if notes hotkey registration is enabled.
+    pub fn is_notes_hotkey_enabled(&self) -> bool {
+        self.notes_hotkey_enabled
+            .unwrap_or_else(default_notes_hotkey_enabled)
+    }
+
+    /// Returns the notes hotkey configuration when enabled.
+    /// Falls back to default (Cmd+Ctrl+N) when enabled but not configured.
     #[allow(dead_code)]
     pub fn get_notes_hotkey(&self) -> Option<HotkeyConfig> {
-        self.notes_hotkey.clone()
+        if !self.is_notes_hotkey_enabled() {
+            return None;
+        }
+        Some(
+            self.notes_hotkey
+                .clone()
+                .unwrap_or_else(HotkeyConfig::default_notes_hotkey),
+        )
     }
 
     /// Returns true if AI hotkey registration is enabled.
@@ -2133,6 +2168,42 @@ mod tests {
         };
         assert!(config.is_command_hidden("script/hidden"));
         assert!(!config.is_command_hidden("script/visible"));
+    }
+
+    #[test]
+    fn test_get_notes_hotkey_returns_default_when_unset() {
+        let config = Config::default();
+        assert_eq!(
+            config.get_notes_hotkey(),
+            Some(HotkeyConfig::default_notes_hotkey())
+        );
+    }
+
+    #[test]
+    fn test_get_notes_hotkey_returns_configured_value_when_enabled() {
+        let hotkey = HotkeyConfig {
+            modifiers: vec!["meta".to_string(), "shift".to_string()],
+            key: "KeyN".to_string(),
+        };
+        let config = Config {
+            notes_hotkey: Some(hotkey.clone()),
+            notes_hotkey_enabled: Some(true),
+            ..Config::default()
+        };
+        assert_eq!(config.get_notes_hotkey(), Some(hotkey));
+    }
+
+    #[test]
+    fn test_get_notes_hotkey_returns_none_when_disabled() {
+        let config = Config {
+            notes_hotkey: Some(HotkeyConfig {
+                modifiers: vec!["meta".to_string()],
+                key: "KeyN".to_string(),
+            }),
+            notes_hotkey_enabled: Some(false),
+            ..Config::default()
+        };
+        assert_eq!(config.get_notes_hotkey(), None);
     }
 
     #[test]

@@ -1271,9 +1271,6 @@ impl NotesCommandBuiltinAction {
         }
     }
 
-    fn opens_notes_window(self) -> bool {
-        matches!(self, Self::OpenNotes | Self::NewNote | Self::SearchNotes)
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -5054,10 +5051,14 @@ impl ScriptListApp {
 
         self.pending_focus = None;
 
-        let result = if action.opens_notes_window() {
-            notes::open_notes_window_without_launcher_restore(cx)
-        } else {
-            notes::quick_capture(cx)
+        let result = match action {
+            NotesCommandBuiltinAction::OpenNotes => {
+                notes::open_notes_window_without_launcher_restore(cx)
+            }
+            NotesCommandBuiltinAction::SearchNotes => notes::open_notes_search(cx),
+            NotesCommandBuiltinAction::NewNote | NotesCommandBuiltinAction::QuickCapture => {
+                notes::quick_capture(cx)
+            }
         };
 
         if let Err(e) = result {

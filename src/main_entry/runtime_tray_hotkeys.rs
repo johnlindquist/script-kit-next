@@ -443,14 +443,34 @@
 
                 // Handle special deeplink types
                 if command_id.starts_with("notes/") {
-                    // Notes deeplink - open notes window
-                    // Note: Currently opens notes window; specific note navigation can be added later
+                    // Notes deeplink - open the specific note when a valid id is present,
+                    // otherwise just toggle the notes window.
                     let note_id = command_id.strip_prefix("notes/").unwrap_or("");
                     logging::log("DEEPLINK", &format!("Opening notes (note_id: {})", note_id));
-                    let _ = cx.update(|cx| {
-                        if let Err(e) = notes::open_notes_window(cx) {
+                    let parsed_note_id = notes::NoteId::parse(note_id);
+                    let _ = cx.update(move |cx| {
+                        let result = match parsed_note_id {
+                            Some(id) => notes::open_note_in_notes_window(cx, id),
+                            None => notes::open_notes_window(cx),
+                        };
+                        if let Err(e) = result {
                             logging::log("DEEPLINK", &format!("Failed to open notes: {}", e));
                         }
+                    });
+                    continue;
+                }
+
+                if command_id.starts_with("agent-chat/") {
+                    // Provenance deeplink from a note's `source:` frontmatter.
+                    // Opens Agent Chat; thread-specific restore can layer on
+                    // once history navigation is addressable by thread id.
+                    logging::log("DEEPLINK", &format!("Opening Agent Chat ({})", command_id));
+                    let app_entity_inner = app_entity_for_deeplinks.clone();
+                    let _ = cx.update(move |cx: &mut gpui::App| {
+                        app_entity_inner.update(cx, |view, cx| {
+                            view.mark_opened_directly("deeplink");
+                            view.open_tab_ai_agent_chat_with_entry_intent(None, cx);
+                        });
                     });
                     continue;
                 }

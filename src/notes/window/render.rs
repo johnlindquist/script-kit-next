@@ -124,8 +124,6 @@ impl NotesApp {
 
     fn process_render_side_effects(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.detect_manual_resize(window);
-        self.drain_pending_action(window, cx);
-        self.drain_pending_browse_actions(window, cx);
         self.drain_pending_focus(window, cx);
         self.maybe_update_theme_cache();
         self.maybe_persist_bounds(window);
@@ -152,9 +150,6 @@ impl Render for NotesApp {
         let mouse_cursor_hidden = self.mouse_cursor_hidden;
 
         self.process_render_side_effects(window, cx);
-
-        let show_actions =
-            self.show_actions_panel && self.actions_panel.is_some() && !self.command_bar.is_open();
 
         let theme = crate::theme::get_cached_theme();
         let vibrancy_bg = crate::ui_foundation::get_vibrancy_background(&theme);
@@ -203,9 +198,6 @@ impl Render for NotesApp {
             .when(!in_agent_chat_mode, |d| d.child(self.render_editor(cx)))
             .when(in_agent_chat_mode, |d| {
                 d.child(self.render_agent_chat_surface(cx))
-            })
-            .when(show_actions && !in_agent_chat_mode, |d| {
-                d.child(self.render_actions_panel_overlay(cx))
             })
             .children(gpui_component::Root::render_dialog_layer(window, cx))
             .children(gpui_component::Root::render_notification_layer(window, cx))

@@ -115,6 +115,7 @@ fn create_note_from_capture(
         metadata::MetadataFrontmatterPatch {
             tags: resolved.tags.clone(),
             aliases: aliases_from_kv(invocation),
+            source: None,
         },
     );
     let mut note = Note::with_content(content);
@@ -171,6 +172,7 @@ fn update_note_from_capture(
         metadata::MetadataFrontmatterPatch {
             tags: resolved.tags.clone(),
             aliases: aliases_from_kv(invocation),
+            source: None,
         },
     );
     if let Some(title) = kv_value(invocation, "title") {

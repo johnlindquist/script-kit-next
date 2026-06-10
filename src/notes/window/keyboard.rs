@@ -265,11 +265,9 @@ impl NotesApp {
         let note_switcher_was_stale = self.note_switcher.reconcile_open_state();
         if command_bar_was_stale {
             self.show_actions_panel = false;
-            self.actions_panel = None;
         }
         if note_switcher_was_stale {
             self.show_browse_panel = false;
-            self.browse_panel = None;
         }
         if command_bar_was_stale || note_switcher_was_stale {
             // Detached action windows are visual-only; restore focus to the
@@ -376,49 +374,6 @@ impl NotesApp {
                     }
                 }
             }
-            return;
-        }
-
-        if self.show_actions_panel && self.actions_panel.is_some() {
-            if is_key_escape(key) || (modifiers.platform && key.eq_ignore_ascii_case("k")) {
-                self.close_actions_panel(window, cx);
-                cx.stop_propagation();
-                return;
-            }
-
-            if let Some(ref panel) = self.actions_panel {
-                match key {
-                    key if is_key_up(key) => {
-                        panel.update(cx, |panel, cx| panel.move_up(cx));
-                    }
-                    key if is_key_down(key) => {
-                        panel.update(cx, |panel, cx| panel.move_down(cx));
-                    }
-                    key if is_key_enter(key) => {
-                        panel.update(cx, |panel, _| panel.submit_selected());
-                    }
-                    key if is_key_backspace(key) => {
-                        panel.update(cx, |panel, cx| panel.handle_backspace(cx));
-                    }
-                    _ => {
-                        let handled_navigation =
-                            panel.update(cx, |panel, cx| panel.handle_navigation_key(key, cx));
-                        if handled_navigation {
-                            return;
-                        }
-                        if let Some(ref key_char) = event.keystroke.key_char {
-                            if let Some(ch) = key_char.chars().next() {
-                                if !ch.is_control() {
-                                    panel.update(cx, |panel, cx| {
-                                        panel.handle_char(ch, cx);
-                                    });
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
             return;
         }
 
@@ -611,8 +566,33 @@ impl NotesApp {
             return;
         }
 
+        // Ctrl+Cmd+Up/Down: move list item (line) — advertised by the
+        // "Move List Item Up/Down" actions in the command bar.
+        if modifiers.control && modifiers.platform {
+            if is_key_up(key) {
+                self.move_line_up(window, cx);
+                cx.stop_propagation();
+                return;
+            }
+            if is_key_down(key) {
+                self.move_line_down(window, cx);
+                cx.stop_propagation();
+                return;
+            }
+        }
+
         if modifiers.platform {
             match key {
+                // Cmd+Shift+Enter: follow the [[wiki link]] under the cursor.
+                key if is_key_enter(key)
+                    && modifiers.shift
+                    && !modifiers.control
+                    && !modifiers.alt =>
+                {
+                    if self.follow_wiki_link_at_cursor(window, cx) {
+                        cx.stop_propagation();
+                    }
+                }
                 // Cmd+Enter: open embedded Agent Chat with the staged note cart as
                 // inline @mentions. Must precede plain Enter and other
                 // platform shortcuts.

@@ -219,6 +219,7 @@ fn create_note_from_mcp(
         crate::notes::metadata::MetadataFrontmatterPatch {
             tags: args.tags,
             aliases: args.aliases,
+            source: args.source,
         },
     );
     validate_mcp_note_content_len(&body)?;
@@ -277,6 +278,7 @@ fn update_note_from_mcp(
             crate::notes::metadata::MetadataFrontmatterPatch {
                 tags: args.tags.clone(),
                 aliases: args.aliases.clone(),
+                source: None,
             },
         );
         validate_mcp_note_content_len(&note.content)?;
@@ -289,6 +291,7 @@ fn update_note_from_mcp(
             crate::notes::metadata::MetadataFrontmatterPatch {
                 tags: args.tags.clone(),
                 aliases: args.aliases.clone(),
+                source: None,
             },
         );
         validate_mcp_note_content_len(&note.content)?;
@@ -770,6 +773,56 @@ pub fn quick_capture(cx: &mut App) -> Result<()> {
     Ok(())
 }
 
+/// Open the Notes window with the note switcher (search) already showing.
+///
+/// Backs the root "Search Notes" command: lands the user directly in the
+/// Cmd+P switcher instead of the last-viewed note.
+pub fn open_notes_search(cx: &mut App) -> Result<()> {
+    let existing_handle = {
+        let slot = NOTES_WINDOW.get_or_init(|| std::sync::Mutex::new(None));
+        slot.lock().ok().and_then(|g| *g)
+    };
+    let existing_app = {
+        let slot = NOTES_APP_ENTITY.get_or_init(|| std::sync::Mutex::new(None));
+        slot.lock().ok().and_then(|g| g.clone())
+    };
+
+    // Window already open: just raise it and show the switcher.
+    if let (Some(handle), Some(notes_app)) = (existing_handle, existing_app) {
+        let result = handle.update(cx, |_root, window, cx| {
+            window.activate_window();
+            notes_app.update(cx, |app, cx| {
+                app.open_browse_panel(window, cx);
+            });
+        });
+        if result.is_ok() {
+            return Ok(());
+        }
+        // Stale handle: fall through and recreate the window.
+    }
+
+    open_notes_window_without_launcher_restore(cx)?;
+
+    let handle = {
+        let slot = NOTES_WINDOW.get_or_init(|| std::sync::Mutex::new(None));
+        slot.lock().ok().and_then(|g| *g)
+    };
+    let notes_app = {
+        let slot = NOTES_APP_ENTITY.get_or_init(|| std::sync::Mutex::new(None));
+        slot.lock().ok().and_then(|g| g.clone())
+    };
+
+    if let (Some(handle), Some(notes_app)) = (handle, notes_app) {
+        let _ = handle.update(cx, |_root, window, cx| {
+            notes_app.update(cx, |app, cx| {
+                app.open_browse_panel(window, cx);
+            });
+        });
+    }
+
+    Ok(())
+}
+
 /// Save content as a new note, opening the Notes window if needed.
 ///
 /// Creates a note pre-filled with the given content and selects it in the
@@ -778,7 +831,30 @@ pub fn quick_capture(cx: &mut App) -> Result<()> {
 ///
 /// Used by "Save as Note" from the AI chat.
 pub fn save_note_with_content(cx: &mut App, content: String) -> Result<()> {
+    save_note_with_content_and_source(cx, content, None)
+}
+
+/// Like [`save_note_with_content`], but records provenance frontmatter
+/// (`source: <link>`) so the note points back at the conversation or surface
+/// that produced it.
+pub fn save_note_with_content_and_source(
+    cx: &mut App,
+    content: String,
+    source: Option<String>,
+) -> Result<()> {
     use crate::logging;
+
+    let content = match source {
+        Some(source) => crate::notes::metadata::merge_frontmatter(
+            &content,
+            crate::notes::metadata::MetadataFrontmatterPatch {
+                tags: vec![],
+                aliases: vec![],
+                source: Some(source),
+            },
+        ),
+        None => content,
+    };
 
     let existing_handle = {
         let slot = NOTES_WINDOW.get_or_init(|| std::sync::Mutex::new(None));

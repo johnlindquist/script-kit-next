@@ -129,6 +129,87 @@ impl NotesApp {
         format!("scriptkit://notes/{}", id.as_str())
     }
 
+    /// Follow the `[[wiki link]]` under the cursor (Cmd+Shift+Enter).
+    ///
+    /// Resolves the link target against note titles/aliases. A unique match
+    /// opens that note; no match creates a new note titled after the target
+    /// (Obsidian-style); an ambiguous match shows feedback instead of guessing.
+    ///
+    /// Returns true when the cursor was inside a wiki link.
+    pub(super) fn follow_wiki_link_at_cursor(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let (value, cursor) = {
+            let state = self.editor_state.read(cx);
+            (state.value().to_string(), state.selection().start)
+        };
+
+        let Some(target) = Self::wiki_link_target_at(&value, cursor) else {
+            return false;
+        };
+
+        match storage::resolve_note_ref(&target) {
+            Ok(storage::NoteRefResolution::Unique(note_id)) => {
+                if self.has_unsaved_changes {
+                    self.save_current_note();
+                }
+                self.select_note(note_id, window, cx);
+            }
+            Ok(storage::NoteRefResolution::NotFound) => {
+                if self.has_unsaved_changes {
+                    self.save_current_note();
+                }
+                if let Err(error) =
+                    self.create_note_with_content(format!("{target}\n\n"), window, cx)
+                {
+                    tracing::warn!(error = %error, target, "Failed to create note from wiki link");
+                    self.show_action_feedback("Could not create linked note", true);
+                }
+            }
+            Ok(storage::NoteRefResolution::Ambiguous) => {
+                self.show_action_feedback(format!("Multiple notes match \"{target}\""), true);
+            }
+            Err(error) => {
+                tracing::warn!(error = %error, target, "Failed to resolve wiki link");
+                self.show_action_feedback("Could not resolve link", true);
+            }
+        }
+        cx.notify();
+        true
+    }
+
+    /// Extract the `[[target]]` whose span contains `cursor`, if any.
+    fn wiki_link_target_at(value: &str, cursor: usize) -> Option<String> {
+        let mut scan = 0;
+        while let Some(relative_start) = value[scan..].find("[[") {
+            let start = scan + relative_start;
+            let content_start = start + 2;
+            let Some(relative_end) = value[content_start..].find("]]") else {
+                return None;
+            };
+            let end = content_start + relative_end + 2;
+            if cursor >= start && cursor <= end {
+                let inner = value[content_start..content_start + relative_end].trim();
+                if inner.is_empty() {
+                    return None;
+                }
+                let target = inner
+                    .split_once('|')
+                    .map(|(t, _)| t.trim())
+                    .unwrap_or(inner);
+                return (!target.is_empty()).then(|| target.to_string());
+            }
+            if end <= cursor {
+                scan = end;
+            } else {
+                return None;
+            }
+        }
+        None
+    }
+
     pub(super) fn copy_note_as_markdown(&mut self, cx: &mut Context<Self>) {
         self.export_note(ExportFormat::Markdown, cx);
     }

@@ -87,6 +87,37 @@ impl ScriptListApp {
             });
         }
 
+        // --- Notes-as-instructions: stage standing instruction notes ---
+        // Notes tagged `#instructions` act as user-authored standing guidance
+        // for every new thread. Skipped on retry-draft restores because the
+        // draft already carries its context parts.
+        if !has_retry_draft_state {
+            match crate::notes::count_active_notes_with_tag(crate::notes::NOTES_INSTRUCTIONS_TAG) {
+                Ok(count) if count > 0 => {
+                    let part = crate::ai::message_parts::AiContextPart::ResourceUri {
+                        uri: crate::notes::NOTES_INSTRUCTIONS_RESOURCE_URI.to_string(),
+                        label: crate::notes::NOTES_INSTRUCTIONS_LABEL.to_string(),
+                    };
+                    let _ = thread.update(cx, |thread, cx| {
+                        thread.add_context_part(part, cx);
+                    });
+                    tracing::info!(
+                        target: "script_kit::tab_ai",
+                        event = "agent_chat_instruction_notes_staged_on_thread",
+                        instruction_note_count = count,
+                    );
+                }
+                Ok(_) => {}
+                Err(error) => {
+                    tracing::debug!(
+                        target: "script_kit::tab_ai",
+                        event = "agent_chat_instruction_notes_lookup_failed",
+                        error = %error,
+                    );
+                }
+            }
+        }
+
         // --- Stage context part + insert inline @type:name token ---
         if let Some(part) = focused_part.clone() {
             let inline_token = crate::ai::context_mentions::part_to_inline_token(&part);

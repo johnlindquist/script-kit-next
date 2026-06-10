@@ -1512,7 +1512,7 @@ pub(crate) fn start_hotkey_listener(config: config::Config) {
             MAIN_HOTKEY_REGISTERED.store(true, Ordering::Relaxed);
         }
 
-        // Register notes hotkey (only if configured - no default)
+        // Register notes hotkey (defaults to Cmd+Ctrl+N; disable via notesHotkeyEnabled)
         if let Some(notes_hotkey) = config.get_notes_hotkey() {
             register_builtin_hotkey(&manager_guard, HotkeyAction::Notes, &notes_hotkey);
         }

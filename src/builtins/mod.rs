@@ -1234,8 +1234,23 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
             "notebook-pen",
         ));
 
-        // NewNote and SearchNotes intentionally collapse into OpenNotes until
-        // note creation / search have distinct execution paths.
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin/new-note",
+            "Create Note",
+            "Create a new note and open the Notes window",
+            vec!["new", "create", "note", "notes", "add", "write"],
+            BuiltInFeature::NotesCommand(NotesCommandType::NewNote),
+            "file-plus",
+        ));
+
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin/search-notes",
+            "Search Notes",
+            "Search all notes by title and content",
+            vec!["search", "find", "note", "notes", "browse", "switcher"],
+            BuiltInFeature::NotesCommand(NotesCommandType::SearchNotes),
+            "file-search",
+        ));
 
         entries.push(BuiltInEntry::new_with_icon(
             "builtin/quick-capture",
@@ -2443,15 +2458,14 @@ mod tests {
         let config = BuiltInConfig::default();
         let entries = get_builtin_entries(&config);
 
-        // Open Notes absorbs New Note and Search Notes (same execution path).
         assert!(entries.iter().any(|e| e.id == "builtin/open-notes"));
         assert!(
-            !entries.iter().any(|e| e.id == "builtin/new-note"),
-            "builtin/new-note collapsed into builtin-open-notes"
+            entries.iter().any(|e| e.id == "builtin/new-note"),
+            "builtin/new-note should be a distinct root command"
         );
         assert!(
-            !entries.iter().any(|e| e.id == "builtin/search-notes"),
-            "builtin/search-notes collapsed into builtin-open-notes"
+            entries.iter().any(|e| e.id == "builtin/search-notes"),
+            "builtin/search-notes should be a distinct root command"
         );
         assert!(entries.iter().any(|e| e.id == "builtin/quick-capture"));
 

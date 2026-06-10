@@ -230,6 +230,30 @@ pub fn get_notes_command_bar_actions(info: &NotesInfo) -> Vec<Action> {
             .with_icon(IconName::Code)
             .with_section("Edit"),
         );
+
+        actions.push(
+            Action::new(
+                "move_list_item_up",
+                "Move List Item Up",
+                Some("Moves the current line up".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut("⌃⌘↑")
+            .with_icon(IconName::ArrowUp)
+            .with_section("Edit"),
+        );
+
+        actions.push(
+            Action::new(
+                "move_list_item_down",
+                "Move List Item Down",
+                Some("Moves the current line down".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut("⌃⌘↓")
+            .with_icon(IconName::ArrowDown)
+            .with_section("Edit"),
+        );
     }
 
     if action_plan.has_active_note_actions() {

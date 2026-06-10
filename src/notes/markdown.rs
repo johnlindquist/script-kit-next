@@ -3,8 +3,8 @@
 //! Uses pulldown-cmark to parse markdown and renders to GPUI StyledText with highlights.
 
 use gpui::{
-    div, px, AnyElement, FontStyle, FontWeight, HighlightStyle, Hsla, IntoElement, ParentElement,
-    Styled, StyledText, UnderlineStyle,
+    div, px, AnyElement, FontStyle, FontWeight, HighlightStyle, Hsla, InteractiveElement,
+    IntoElement, ParentElement, StatefulInteractiveElement, Styled, StyledText, UnderlineStyle,
 };
 use gpui_component::theme::{Theme, ThemeMode};
 use pulldown_cmark::{CodeBlockKind, Event, Options, Parser, Tag, TagEnd};
@@ -109,6 +109,11 @@ pub enum MarkdownBlock {
         number: usize,
         indent: usize,
         text: MarkdownText,
+        /// Some(checked) when this is a task list item (`- [ ]` / `- [x]`).
+        checked: Option<bool>,
+        /// Byte range of the task marker in the source markdown, used to
+        /// toggle the checkbox from the preview.
+        marker_range: Option<Range<usize>>,
     },
     CodeBlock {
         language: Option<String>,
@@ -124,6 +129,8 @@ enum BlockKind {
         ordered: bool,
         number: usize,
         indent: usize,
+        checked: Option<bool>,
+        marker_range: Option<Range<usize>>,
     },
     CodeBlock {
         language: Option<String>,
@@ -162,11 +169,15 @@ impl BlockBuilder {
                 ordered,
                 number,
                 indent,
+                checked,
+                marker_range,
             } => Some(MarkdownBlock::ListItem {
                 ordered,
                 number,
                 indent,
                 text: self.text,
+                checked,
+                marker_range,
             }),
             BlockKind::CodeBlock { language } => Some(MarkdownBlock::CodeBlock {
                 language,
@@ -224,7 +235,7 @@ pub fn parse_markdown(markdown: &str) -> Vec<MarkdownBlock> {
     options.remove(Options::ENABLE_DEFINITION_LIST);
 
     let parser = Parser::new_ext(markdown, options);
-    for event in parser {
+    for (event, source_range) in parser.into_offset_iter() {
         match event {
             Event::Start(tag) => match tag {
                 Tag::Paragraph => {
@@ -266,6 +277,8 @@ pub fn parse_markdown(markdown: &str) -> Vec<MarkdownBlock> {
                         ordered,
                         number,
                         indent,
+                        checked: None,
+                        marker_range: None,
                     }));
                 }
                 Tag::CodeBlock(kind) => {
@@ -341,6 +354,19 @@ pub fn parse_markdown(markdown: &str) -> Vec<MarkdownBlock> {
                     builder.text.push_text(&text, inline.with_code());
                 }
             }
+            Event::TaskListMarker(is_checked) => {
+                if let Some(ref mut builder) = current {
+                    if let BlockKind::ListItem {
+                        ref mut checked,
+                        ref mut marker_range,
+                        ..
+                    } = builder.kind
+                    {
+                        *checked = Some(is_checked);
+                        *marker_range = Some(source_range.clone());
+                    }
+                }
+            }
             Event::SoftBreak | Event::HardBreak => {
                 if current.is_none() {
                     current = Some(BlockBuilder::new(BlockKind::Paragraph));
@@ -411,8 +437,31 @@ fn with_alpha(mut color: Hsla, alpha: f32) -> Hsla {
     color
 }
 
+/// Callback invoked when a task checkbox is clicked in the preview.
+/// Receives the byte range of the task marker in the source markdown and
+/// the current checked state.
+pub type TaskToggleHandler =
+    std::rc::Rc<dyn Fn(Range<usize>, bool, &mut gpui::Window, &mut gpui::App)>;
+
 /// Render markdown to GPUI elements using StyledText + HighlightStyle.
 pub fn render_markdown_preview(markdown: &str, theme: &Theme) -> impl IntoElement {
+    render_markdown_preview_impl(markdown, theme, None)
+}
+
+/// Render markdown with clickable task checkboxes.
+pub fn render_markdown_preview_interactive(
+    markdown: &str,
+    theme: &Theme,
+    on_toggle_task: TaskToggleHandler,
+) -> impl IntoElement {
+    render_markdown_preview_impl(markdown, theme, Some(on_toggle_task))
+}
+
+fn render_markdown_preview_impl(
+    markdown: &str,
+    theme: &Theme,
+    on_toggle_task: Option<TaskToggleHandler>,
+) -> impl IntoElement {
     let styles = RenderStyles::from_theme(theme);
     let blocks = parse_markdown(markdown);
 
@@ -424,14 +473,48 @@ pub fn render_markdown_preview(markdown: &str, theme: &Theme) -> impl IntoElemen
         .min_w_0()
         .text_sm();
 
-    for block in blocks {
-        container = container.child(render_block(&block, &styles));
+    for (index, block) in blocks.iter().enumerate() {
+        container = container.child(render_block(block, &styles, index, on_toggle_task.as_ref()));
     }
 
     container
 }
 
-fn render_block(block: &MarkdownBlock, styles: &RenderStyles) -> AnyElement {
+fn render_task_checkbox(
+    index: usize,
+    checked: bool,
+    marker_range: Option<&Range<usize>>,
+    styles: &RenderStyles,
+    on_toggle_task: Option<&TaskToggleHandler>,
+) -> AnyElement {
+    let glyph = if checked { "☑" } else { "☐" };
+    let color = if checked { styles.muted } else { styles.text };
+    let base = div()
+        .id(("notes-task-checkbox", index))
+        .text_color(color)
+        .child(glyph);
+
+    match (on_toggle_task, marker_range) {
+        (Some(handler), Some(range)) => {
+            let handler = handler.clone();
+            let range = range.clone();
+            base.cursor_pointer()
+                .hover(|s| s.text_color(styles.link))
+                .on_click(move |_, window, cx| {
+                    handler(range.clone(), checked, window, cx);
+                })
+                .into_any_element()
+        }
+        _ => base.into_any_element(),
+    }
+}
+
+fn render_block(
+    block: &MarkdownBlock,
+    styles: &RenderStyles,
+    index: usize,
+    on_toggle_task: Option<&TaskToggleHandler>,
+) -> AnyElement {
     match block {
         MarkdownBlock::Paragraph(text) => div()
             .text_color(styles.text)
@@ -456,11 +539,33 @@ fn render_block(block: &MarkdownBlock, styles: &RenderStyles) -> AnyElement {
             number,
             indent,
             text,
+            checked,
+            marker_range,
         } => {
-            let bullet = if *ordered {
-                format!("{}.", number)
+            let marker: AnyElement = match checked {
+                Some(checked) => render_task_checkbox(
+                    index,
+                    *checked,
+                    marker_range.as_ref(),
+                    styles,
+                    on_toggle_task,
+                ),
+                None => {
+                    let bullet = if *ordered {
+                        format!("{}.", number)
+                    } else {
+                        "-".to_string()
+                    };
+                    div()
+                        .text_color(styles.muted)
+                        .child(bullet)
+                        .into_any_element()
+                }
+            };
+            let text_color = if *checked == Some(true) {
+                styles.muted
             } else {
-                "-".to_string()
+                styles.text
             };
             div()
                 .flex()
@@ -468,8 +573,8 @@ fn render_block(block: &MarkdownBlock, styles: &RenderStyles) -> AnyElement {
                 .items_start()
                 .gap(px(BLOCK_GAP))
                 .pl(px(12.0 * (*indent as f32)))
-                .text_color(styles.text)
-                .child(div().text_color(styles.muted).child(bullet))
+                .text_color(text_color)
+                .child(marker)
                 .child(div().flex_1().min_w_0().child(styled_text(text, styles)))
                 .into_any_element()
         }

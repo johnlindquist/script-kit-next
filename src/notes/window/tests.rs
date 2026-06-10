@@ -160,9 +160,6 @@ fn test_notes_keyboard_escape_dismisses_ghost_after_higher_priority_surfaces() {
     let command_bar = live_keyboard
         .find("if self.command_bar.is_open()")
         .expect("command bar should own escape before editor");
-    let actions_panel = live_keyboard
-        .find("if self.show_actions_panel && self.actions_panel.is_some()")
-        .expect("actions panel should own escape before editor");
     let note_switcher = live_keyboard
         .find("if self.note_switcher.is_open()")
         .expect("note switcher should own escape before editor");
@@ -184,8 +181,7 @@ fn test_notes_keyboard_escape_dismisses_ghost_after_higher_priority_surfaces() {
 
     assert!(
         dialog_guard < command_bar
-            && command_bar < actions_panel
-            && actions_panel < note_switcher
+            && command_bar < note_switcher
             && note_switcher < agent_chat_surface
             && agent_chat_surface < editor_escape
             && editor_escape < ghost_dismiss
@@ -366,27 +362,25 @@ fn test_notes_keyboard_handles_named_bracket_keys_when_platform_navigation_short
 #[test]
 fn test_notes_keyboard_stops_propagation_when_escape_closes_actions_panel() {
     const KEYBOARD_SOURCE: &str = include_str!("keyboard.rs");
-    let escape_branch =
-        "if is_key_escape(key) || (modifiers.platform && key.eq_ignore_ascii_case(\"k\")) {";
-    let branch_start = KEYBOARD_SOURCE
-        .find(escape_branch)
-        .expect("Expected actions panel escape branch in keyboard.rs");
+    let command_bar_branch = KEYBOARD_SOURCE
+        .find("if self.command_bar.is_open() {")
+        .expect("Expected command bar branch in keyboard.rs");
     let branch_slice =
-        &KEYBOARD_SOURCE[branch_start..(branch_start + 256).min(KEYBOARD_SOURCE.len())];
+        &KEYBOARD_SOURCE[command_bar_branch..(command_bar_branch + 512).min(KEYBOARD_SOURCE.len())];
 
     let close_idx = branch_slice
         .find("self.close_actions_panel(window, cx);")
-        .expect("Expected close_actions_panel call in actions panel escape branch");
+        .expect("Expected close_actions_panel call in command bar escape branch");
     let stop_idx = branch_slice
         .find("cx.stop_propagation();")
-        .expect("Expected cx.stop_propagation call in actions panel escape branch");
+        .expect("Expected cx.stop_propagation call in command bar escape branch");
     let return_idx = branch_slice
         .find("return;")
-        .expect("Expected return in actions panel escape branch");
+        .expect("Expected return in command bar escape branch");
 
     assert!(
         close_idx < stop_idx && stop_idx < return_idx,
-        "Actions panel escape branch should stop propagation before returning"
+        "Command bar escape branch should stop propagation before returning"
     );
 }
 
@@ -694,19 +688,6 @@ fn test_notes_agent_chat_escape_dismisses_local_popup_before_leaving_surface() {
 }
 
 #[test]
-fn test_notes_actions_panel_uses_shared_disabled_opacity_constant() {
-    const ACTIONS_PANEL_SOURCE: &str = include_str!("../actions_panel.rs");
-    assert!(
-        ACTIONS_PANEL_SOURCE.contains("use super::window::OPACITY_DISABLED;"),
-        "Actions panel should use the shared Notes disabled opacity constant"
-    );
-    assert!(
-        !ACTIONS_PANEL_SOURCE.contains("const OPACITY_DISABLED: f32"),
-        "Actions panel should not define a duplicate disabled opacity constant"
-    );
-}
-
-#[test]
 fn test_notes_keyboard_delete_shortcut_routes_through_confirmation_helper() {
     const KEYBOARD_SOURCE: &str = include_str!("keyboard.rs");
     assert!(
@@ -928,18 +909,23 @@ fn test_notes_agent_chat_actions_close_requests_embedded_chat_refocus() {
 #[test]
 fn test_notes_agent_chat_host_routes_close_paths_through_host_helpers() {
     const AGENT_CHAT_HOST_SOURCE: &str = include_str!("agent_chat_host.rs");
+    // Whitespace-insensitive: rustfmt may wrap these calls across lines.
+    let condensed: String = AGENT_CHAT_HOST_SOURCE
+        .chars()
+        .filter(|c| !c.is_whitespace())
+        .collect();
     assert!(
-        AGENT_CHAT_HOST_SOURCE.contains(
-            "app.close_embedded_agent_chat_via_host(\"agent_chat_close_requested\", Some(window), cx);"
-        ) && AGENT_CHAT_HOST_SOURCE.contains(
-            "self.close_notes_agent_chat_actions_via_host(\"toggle_existing_window\", Some(window), cx);"
-        ) && AGENT_CHAT_HOST_SOURCE
-            .contains("app.close_notes_agent_chat_actions_via_host(\"dialog_on_close\", None, cx);")
-            && AGENT_CHAT_HOST_SOURCE.contains(
-                "app.close_embedded_agent_chat_via_host(\"agent_chat_action_close\", Some(window), cx);"
+        condensed.contains(
+            "app.close_embedded_agent_chat_via_host(\"agent_chat_close_requested\",Some(window),cx"
+        ) && condensed.contains(
+            "self.close_notes_agent_chat_actions_via_host(\"toggle_existing_window\",Some(window),cx"
+        ) && condensed
+            .contains("app.close_notes_agent_chat_actions_via_host(\"dialog_on_close\",None,cx")
+            && condensed.contains(
+                "app.close_embedded_agent_chat_via_host(\"agent_chat_action_close\",Some(window),cx"
             )
-            && AGENT_CHAT_HOST_SOURCE
-                .contains("event = \"notes_agent_chat_action_cancel_consumed_after_on_close\""),
+            && condensed
+                .contains("event=\"notes_agent_chat_action_cancel_consumed_after_on_close\""),
         "Notes embedded Agent Chat close and Agent Chat-actions close should route through shared host helpers"
     );
 }

@@ -3,51 +3,6 @@ use itertools::Itertools;
 use super::*;
 
 impl NotesApp {
-    pub(super) fn build_action_items(&self) -> Vec<NotesActionItem> {
-        let has_selection = self.selected_note_id.is_some();
-        let is_trash = self.view_mode == NotesViewMode::Trash;
-        let can_edit = has_selection && !is_trash;
-
-        let mut items: Vec<NotesActionItem> = NotesAction::all()
-            .iter()
-            .map(|action| {
-                let enabled = match action {
-                    NotesAction::NewNote | NotesAction::BrowseNotes => true,
-                    NotesAction::DuplicateNote
-                    | NotesAction::FindInNote
-                    | NotesAction::CopyNoteAs
-                    | NotesAction::CopyDeeplink
-                    | NotesAction::CreateQuicklink
-                    | NotesAction::CopyBacklinks
-                    | NotesAction::Export
-                    | NotesAction::Format
-                    | NotesAction::DeleteNote
-                    | NotesAction::SendToAi => can_edit,
-                    NotesAction::RestoreNote | NotesAction::PermanentlyDeleteNote => {
-                        has_selection && is_trash
-                    }
-                    NotesAction::MoveListItemUp | NotesAction::MoveListItemDown => false,
-                    NotesAction::EnableAutoSizing => !self.auto_sizing_enabled,
-                    NotesAction::Cancel => true,
-                };
-
-                NotesActionItem {
-                    action: *action,
-                    enabled,
-                }
-            })
-            .collect();
-
-        if !self.auto_sizing_enabled {
-            items.push(NotesActionItem {
-                action: NotesAction::EnableAutoSizing,
-                enabled: true,
-            });
-        }
-
-        items
-    }
-
     pub(crate) fn open_actions_panel(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         // Update command bar actions based on current state (dynamic - depends on selection, etc.)
         let actions = get_notes_command_bar_actions(&NotesInfo {
@@ -71,7 +26,6 @@ impl NotesApp {
         // Update state flags (before focus request so current_focus_surface() reflects the new state)
         self.show_actions_panel = true;
         self.show_browse_panel = false;
-        self.browse_panel = None;
 
         // Route through NotesFocusSurface for structured logging and consistent focus management.
         // The ActionsWindow is a visual-only popup — it does NOT take keyboard focus.
@@ -83,7 +37,6 @@ impl NotesApp {
         self.command_bar.close(cx);
 
         self.show_actions_panel = false;
-        self.actions_panel = None;
 
         // Route through NotesFocusSurface for structured logging and consistent focus management.
         self.request_focus_surface(focus::NotesFocusSurface::Editor, window, cx);
@@ -112,65 +65,6 @@ impl NotesApp {
         self.last_window_height = prev_height;
     }
 
-    pub(super) fn drain_pending_action(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let pending_action = self
-            .pending_action
-            .lock()
-            .ok()
-            .and_then(|mut pending| pending.take());
-
-        if let Some(action) = pending_action {
-            self.handle_action(action, window, cx);
-        }
-    }
-
-    /// Drain pending browse panel actions (select, close, note actions)
-    pub(super) fn drain_pending_browse_actions(
-        &mut self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        // Check for pending note selection
-        let pending_select = self
-            .pending_browse_select
-            .lock()
-            .ok()
-            .and_then(|mut guard| guard.take());
-
-        if let Some(id) = pending_select {
-            self.handle_browse_select(id, window, cx);
-            return; // Selection closes the panel, so we're done
-        }
-
-        // Check for pending close request
-        let pending_close = self
-            .pending_browse_close
-            .lock()
-            .ok()
-            .map(|mut guard| {
-                let val = *guard;
-                *guard = false;
-                val
-            })
-            .unwrap_or(false);
-
-        if pending_close {
-            self.close_browse_panel(window, cx);
-            return;
-        }
-
-        // Check for pending note action (pin/delete)
-        let pending_action = self
-            .pending_browse_action
-            .lock()
-            .ok()
-            .and_then(|mut guard| guard.take());
-
-        if let Some((id, action)) = pending_action {
-            self.handle_browse_action(id, action, cx);
-        }
-    }
-
     /// Handle action from the actions panel (Cmd+K)
     pub(super) fn handle_action(
         &mut self,
@@ -187,7 +81,6 @@ impl NotesApp {
                 // Don't call close_actions_panel here - it refocuses editor
                 // Instead, just clear the state and let open_browse_panel handle focus
                 self.show_actions_panel = false;
-                self.actions_panel = None;
                 self.restore_actions_panel_height(window);
                 self.show_browse_panel = true;
                 self.open_browse_panel(window, cx);
@@ -214,7 +107,16 @@ impl NotesApp {
             }
             NotesAction::RestoreNote => self.restore_note(window, cx),
             NotesAction::PermanentlyDeleteNote => self.permanently_delete_note(window, cx),
-            NotesAction::MoveListItemUp | NotesAction::MoveListItemDown => {}
+            NotesAction::MoveListItemUp => {
+                self.close_actions_panel(window, cx);
+                self.move_line_up(window, cx);
+                return;
+            }
+            NotesAction::MoveListItemDown => {
+                self.close_actions_panel(window, cx);
+                self.move_line_down(window, cx);
+                return;
+            }
             NotesAction::Format => {
                 self.show_format_toolbar = !self.show_format_toolbar;
             }
@@ -265,6 +167,8 @@ impl NotesApp {
             "restore_note" => Some(NotesAction::RestoreNote),
             "permanently_delete_note" => Some(NotesAction::PermanentlyDeleteNote),
             "enable_auto_sizing" => Some(NotesAction::EnableAutoSizing),
+            "move_list_item_up" => Some(NotesAction::MoveListItemUp),
+            "move_list_item_down" => Some(NotesAction::MoveListItemDown),
             "send_to_ai" => Some(NotesAction::SendToAi),
             _ => {
                 tracing::warn!(action_id, "Unknown action ID from CommandBar");
@@ -376,83 +280,10 @@ impl NotesApp {
         // Update state flags (before focus request so current_focus_surface() reflects the new state)
         self.show_browse_panel = true;
         self.show_actions_panel = false;
-        self.browse_panel = None; // Clear legacy browse panel
 
         // Route through NotesFocusSurface for structured logging and consistent focus management.
         // The ActionsWindow is a visual-only popup — it does NOT take keyboard focus.
         self.request_focus_surface(focus::NotesFocusSurface::BrowsePanel, window, cx);
-    }
-
-    /// Handle note selection from browse panel
-    pub(super) fn handle_browse_select(
-        &mut self,
-        id: NoteId,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        if self.replace_active_note_mention_with_note(id, window, cx) {
-            return;
-        }
-        self.show_browse_panel = false;
-        self.browse_panel = None;
-        // select_note already focuses the editor
-        self.select_note(id, window, cx);
-        cx.notify();
-    }
-
-    /// Handle note action from browse panel
-    pub(super) fn handle_browse_action(
-        &mut self,
-        id: NoteId,
-        action: NoteAction,
-        cx: &mut Context<Self>,
-    ) {
-        match action {
-            NoteAction::TogglePin => {
-                if let Some(note) = self.notes.iter_mut().find(|n| n.id == id) {
-                    note.is_pinned = !note.is_pinned;
-                    if let Err(e) = storage::save_note(note) {
-                        tracing::error!(error = %e, "Failed to save note pin state");
-                    }
-                }
-                // Re-sort notes: pinned first, then by updated_at descending
-                self.notes.sort_by(|a, b| match (a.is_pinned, b.is_pinned) {
-                    (true, false) => std::cmp::Ordering::Less,
-                    (false, true) => std::cmp::Ordering::Greater,
-                    _ => b.updated_at.cmp(&a.updated_at),
-                });
-                cx.notify();
-            }
-            NoteAction::Delete => {
-                // Soft-delete from browse panel (doesn't switch editor)
-                if let Some(idx) = self.notes.iter().position(|n| n.id == id) {
-                    let mut note = self.notes.remove(idx);
-                    note.soft_delete();
-                    if let Err(e) = storage::save_note(&note) {
-                        tracing::error!(error = %e, "Failed to delete note");
-                    }
-                    self.deleted_notes.insert(0, note);
-                }
-                // If we deleted the currently-selected note, move selection
-                if self.selected_note_id == Some(id) {
-                    self.selected_note_id = self.notes.first().map(|n| n.id);
-                }
-                self.show_action_feedback("Deleted · ⌘⇧T trash", false);
-                cx.notify();
-            }
-        }
-        // Update browse panel's note list
-        if let Some(ref browse_panel) = self.browse_panel {
-            let note_items: Vec<NoteListItem> = self
-                .notes
-                .iter()
-                .map(|note| NoteListItem::from_note(note, Some(note.id) == self.selected_note_id))
-                .collect();
-            browse_panel.update(cx, |panel, cx| {
-                panel.set_notes(note_items, cx);
-            });
-        }
-        cx.notify();
     }
 
     /// Close the browse panel (note switcher) and refocus the editor
@@ -461,7 +292,6 @@ impl NotesApp {
         self.note_switcher.close(cx);
 
         self.show_browse_panel = false;
-        self.browse_panel = None;
         self.mention_portal_edit = None;
 
         // Route through NotesFocusSurface for structured logging and consistent focus management.

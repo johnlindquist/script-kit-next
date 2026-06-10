@@ -38,6 +38,9 @@ pub(crate) struct ParsedNoteLink {
 pub(crate) struct MetadataFrontmatterPatch {
     pub(crate) tags: Vec<String>,
     pub(crate) aliases: Vec<String>,
+    /// Provenance link (e.g. `scriptkit://agent-chat/{thread_id}`) recorded
+    /// when a note is created by an agent or another surface.
+    pub(crate) source: Option<String>,
 }
 
 pub(crate) fn parse_note_metadata(title: &str, content: &str) -> ParsedNoteMetadata {
@@ -86,7 +89,7 @@ pub(crate) fn parse_note_metadata(title: &str, content: &str) -> ParsedNoteMetad
 }
 
 pub(crate) fn merge_frontmatter(content: &str, patch: MetadataFrontmatterPatch) -> String {
-    if patch.tags.is_empty() && patch.aliases.is_empty() {
+    if patch.tags.is_empty() && patch.aliases.is_empty() && patch.source.is_none() {
         return content.to_string();
     }
 
@@ -96,21 +99,31 @@ pub(crate) fn merge_frontmatter(content: &str, patch: MetadataFrontmatterPatch) 
         parse_frontmatter_values(&frontmatter, "aliases"),
         patch.aliases,
     );
-    if frontmatter.is_empty() && tags.is_empty() && aliases.is_empty() {
+    let source = patch
+        .source
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty());
+    if frontmatter.is_empty() && tags.is_empty() && aliases.is_empty() && source.is_none() {
         return strip_frontmatter(content).to_string();
     }
 
+    let excluded: &[&str] = if source.is_some() {
+        &["tags", "aliases", "source"]
+    } else {
+        &["tags", "aliases"]
+    };
+
     let mut lines = Vec::new();
     lines.push("---".to_string());
-    lines.extend(preserved_frontmatter_lines(
-        &frontmatter,
-        &["tags", "aliases"],
-    ));
+    lines.extend(preserved_frontmatter_lines(&frontmatter, excluded));
     if !tags.is_empty() {
         lines.push(format!("tags: [{}]", format_yaml_list(&tags)));
     }
     if !aliases.is_empty() {
         lines.push(format!("aliases: [{}]", format_yaml_list(&aliases)));
+    }
+    if let Some(source) = source {
+        lines.push(format!("source: {}", source));
     }
     lines.push("---".to_string());
     lines.push(String::new());
@@ -443,6 +456,7 @@ mod tests {
             MetadataFrontmatterPatch {
                 tags: vec!["rust".to_string()],
                 aliases: vec!["Rust Note".to_string()],
+                source: None,
             },
         );
 
@@ -457,6 +471,7 @@ mod tests {
             MetadataFrontmatterPatch {
                 tags: vec!["rust".to_string(), "notes/metadata".to_string()],
                 aliases: vec!["Plan".to_string(), "Project Plan".to_string()],
+                source: None,
             },
         );
 
@@ -465,6 +480,37 @@ mod tests {
         assert!(merged.contains("tags: [\"rust\", \"notes/metadata\"]"));
         assert!(merged.contains("aliases: [\"Plan\", \"Project Plan\"]"));
         assert!(merged.ends_with("# Note\nBody"));
+    }
+
+    #[test]
+    fn merge_frontmatter_records_source_provenance() {
+        let merged = merge_frontmatter(
+            "# Note\nBody",
+            MetadataFrontmatterPatch {
+                tags: vec![],
+                aliases: vec![],
+                source: Some("scriptkit://agent-chat/thread-123".to_string()),
+            },
+        );
+
+        assert!(merged.starts_with("---\nsource: scriptkit://agent-chat/thread-123\n---"));
+        assert!(merged.contains("# Note\nBody"));
+    }
+
+    #[test]
+    fn merge_frontmatter_replaces_existing_source() {
+        let merged = merge_frontmatter(
+            "---\nsource: old-value\nowner: John\n---\n# Note\nBody",
+            MetadataFrontmatterPatch {
+                tags: vec![],
+                aliases: vec![],
+                source: Some("scriptkit://agent-chat/thread-456".to_string()),
+            },
+        );
+
+        assert!(merged.contains("source: scriptkit://agent-chat/thread-456"));
+        assert!(!merged.contains("old-value"));
+        assert!(merged.contains("owner: John"));
     }
 
     #[test]

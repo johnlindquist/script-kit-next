@@ -153,7 +153,6 @@ impl NotesApp {
             _subscriptions: vec![editor_sub, search_sub],
             show_actions_panel: false,
             show_browse_panel: false,
-            actions_panel: None,
             // Initialize CommandBar with notes-specific actions
             command_bar: CommandBar::new(
                 get_notes_command_bar_actions(&NotesInfo {
@@ -170,12 +169,7 @@ impl NotesApp {
                 CommandBarConfig::notes_recent_style(),
                 std::sync::Arc::new(theme::get_cached_theme()),
             ),
-            browse_panel: None,
-            pending_action: Arc::new(Mutex::new(None)),
             actions_panel_prev_height: None,
-            pending_browse_select: Arc::new(Mutex::new(None)),
-            pending_browse_close: Arc::new(Mutex::new(false)),
-            pending_browse_action: Arc::new(Mutex::new(None)),
             has_unsaved_changes: false,
             last_save_time: None,
             last_persisted_bounds: None,

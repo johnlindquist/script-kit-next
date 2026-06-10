@@ -11,9 +11,11 @@ Create and automate notes in Script Kit's floating Notes window.
 
 Notes are stored in SQLite at `~/.scriptkit/db/notes.sqlite`. The Notes window manages them directly. Scripts and agents must use the runtime write ports (`kit/notes_create`, `kit/notes_update`, `kit/notes_delete`) or the Notes automation target; do not raw-write the database.
 
+Every active note is also mirrored as a read-only markdown file at `~/.scriptkit/notes/<slug>-<id8>.md`, so external tools (grep, editors, git) can read note content as plain files. The mirror is write-through from the app; treat the files as read-only — edits to them are not synced back and are overwritten on the next save.
+
 ## Opening the Notes Window
 
-- **Hotkey**: No default — set `notesHotkey` in `config.ts` to enable
+- **Hotkey**: `Cmd+Ctrl+N` by default — override with `notesHotkey` or disable with `notesHotkeyEnabled: false` in `config.ts`
 - **From the launcher**: Search for "Notes" in the main menu
 
 ### Configuring the Hotkey
@@ -29,7 +31,7 @@ notesHotkey: {
 ## Notes Window Features
 
 - Markdown editing with formatting toolbar
-- Multiple notes with sidebar navigation
+- Multiple notes with a Cmd+P note switcher
 - Full-text search across all notes
 - Tags from frontmatter or `#tag` markdown
 - Wiki-style links and backlinks from `[[Note Title]]`
@@ -71,7 +73,15 @@ Use the MCP notes tools when creating or organizing notes from an agent. They ro
 
 Tags and aliases passed to the mutation tools are written into visible YAML frontmatter so users can edit them directly. Markdown `#tags` and `[[Wiki Links]]` are indexed from the note body. Backlinks are derived from the normalized link index; they are not copied into note content.
 
-Read `kit://notes` to inspect organized notes. The resource returns each note's tags, aliases, outbound link count, and backlink count, and supports `?tag=...`, `?alias=...`, `?link=...`, or `?q=...` filters. Read `kit://notes/{id}` for full note content plus the same metadata.
+Read `kit://notes` to inspect organized notes. The resource returns each note's tags, aliases, outbound link count, and backlink count, and supports `?tag=...`, `?alias=...`, `?link=...`, or `?q=...` filters. Add `&full=true` to get complete note bodies instead of 240-char previews (bounded to 20 notes by default). Read `kit://notes/{id}` for full note content plus the same metadata.
+
+### Instruction Notes
+
+Notes tagged `#instructions` (or `tags: [instructions]` in frontmatter) are standing agent guidance: new Agent Chat threads automatically stage `kit://notes?tag=instructions&full=true` as context, so the agent reads them at thread start. Use this for durable user preferences, style rules, or project conventions that should apply to every conversation.
+
+### Provenance
+
+Notes created from Agent Chat ("Save as Note") carry `source: scriptkit://agent-chat/{thread_id}` frontmatter linking back to the originating conversation. `kit/notes_create` accepts an optional `source` string for the same purpose.
 
 ## Automation Targets
 
@@ -136,7 +146,7 @@ These are UI actions, not JavaScript globals. The current public Notes script su
 ## Common Pitfalls
 
 - **No raw DB access**: Do not read/write `notes.sqlite` directly from scripts. Use the MCP notes tools for creation/update/delete and the automation protocol for window/editor control.
-- **Hotkey required**: The Notes window has no default hotkey. Users must set `notesHotkey` in config before it appears in the launcher shortcuts.
+- **Default hotkey**: The Notes window toggles with `Cmd+Ctrl+N` unless overridden via `notesHotkey` or disabled via `notesHotkeyEnabled: false`.
 - **Automation target must be open**: `getElements` and `batch` commands targeting Notes require the Notes window to be open. Use `waitFor` with a timeout to handle the case where it is not yet visible.
 - **No invented JS globals**: The current public Notes script surface is the automation target (`kind: notes`) and MCP notes tools. Do not document or rely on `notesOpen()`, `notesCreate()`, or similar JavaScript globals unless they are added to `scripts/kit-sdk.ts`.
 

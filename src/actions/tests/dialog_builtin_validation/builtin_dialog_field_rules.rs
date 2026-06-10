@@ -648,9 +648,10 @@ mod from_dialog_builtin_action_validation_tests_11 {
             auto_sizing_enabled: false,
         };
         let actions = get_notes_command_bar_actions(&info);
-        // new_note, duplicate_note, delete_note, browse_notes, find_in_note, format, copy_note_as,
-        // copy_deeplink, create_quicklink, export, send_to_ai, enable_auto_sizing = 12
-        assert_eq!(actions.len(), 12);
+        // new_note, duplicate_note, delete_note, browse_notes, find_in_note, format,
+        // move_list_item_up, move_list_item_down, copy_note_as, copy_deeplink,
+        // create_quicklink, copy_backlinks, export, send_to_ai, enable_auto_sizing = 15
+        assert_eq!(actions.len(), 15);
     }
 
     #[test]
@@ -6173,7 +6174,8 @@ mod from_dialog_builtin_action_validation_tests_14 {
                 .iter()
                 .filter(|a| a.section.as_deref() == Some("Edit"))
                 .count();
-            assert_eq!(count, 2);
+            // find_in_note, format, move_list_item_up, move_list_item_down
+            assert_eq!(count, 4);
         }
 
         #[test]
@@ -6188,7 +6190,8 @@ mod from_dialog_builtin_action_validation_tests_14 {
                 .iter()
                 .filter(|a| a.section.as_deref() == Some("Copy"))
                 .count();
-            assert_eq!(count, 3);
+            // copy_note_as, copy_deeplink, create_quicklink, copy_backlinks
+            assert_eq!(count, 4);
         }
 
         #[test]
@@ -8132,8 +8135,9 @@ mod from_dialog_builtin_action_validation_tests_15 {
             };
             let actions = get_notes_command_bar_actions(&info);
             // Should have max actions: new_note, duplicate, delete, browse, find, format,
-            // copy_note_as, copy_deeplink, create_quicklink, export, send_to_ai, enable_auto_sizing
-            assert_eq!(actions.len(), 12, "Full feature set should be 12 actions");
+            // move_list_item_up, move_list_item_down, copy_note_as, copy_deeplink,
+            // create_quicklink, copy_backlinks, export, send_to_ai, enable_auto_sizing
+            assert_eq!(actions.len(), 15, "Full feature set should be 15 actions");
         }
 
         #[test]
@@ -8146,8 +8150,8 @@ mod from_dialog_builtin_action_validation_tests_15 {
             let actions = get_notes_command_bar_actions(&info);
             let ids = action_ids(&actions);
             assert!(!ids.contains(&"enable_auto_sizing".to_string()));
-            // Full set minus enable_auto_sizing = 11
-            assert_eq!(actions.len(), 11);
+            // Full set minus enable_auto_sizing = 14
+            assert_eq!(actions.len(), 14);
         }
 
         #[test]

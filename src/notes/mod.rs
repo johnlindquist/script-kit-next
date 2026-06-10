@@ -5,7 +5,7 @@
 //! ## Features
 //! - Floating notes window with global hotkey access
 //! - Markdown/rich text editing with live preview
-//! - Multiple notes management with sidebar list
+//! - Multiple notes, one visible at a time (Cmd+P note switcher; no sidebar)
 //! - Quick capture from anywhere
 //! - Auto-sizing window that grows with content
 //! - Persistent storage (local SQLite)
@@ -34,8 +34,8 @@
 #![allow(dead_code)]
 
 mod actions_panel;
-mod browse_panel;
 pub(crate) mod code_highlight;
+pub(crate) mod file_mirror;
 pub(crate) mod ghost;
 mod markdown;
 mod markdown_highlighting;
@@ -45,25 +45,41 @@ mod model;
 mod storage;
 pub(crate) mod window;
 
-// Re-export actions panel types for use by window.rs
+// Re-export notes action catalog for CommandBar action builders
 #[allow(unused_imports)]
-pub use actions_panel::{NotesAction, NotesActionCallback, NotesActionItem, NotesActionsPanel};
-
-// Re-export browse panel types for use by window.rs
-#[allow(unused_imports)]
-pub use browse_panel::{BrowsePanel, NoteAction, NoteListItem};
+pub use actions_panel::NotesAction;
 
 #[allow(unused_imports)]
 pub(crate) use model::{Note, NoteCartItem, NoteCartItemPayload, NoteId};
 #[allow(unused_imports)]
 pub(crate) use storage::{
-    delete_note_cart_item, delete_note_cart_items, delete_note_permanently, get_all_notes,
-    get_deleted_notes, get_note, get_note_aliases, get_note_backlink_count, get_note_backlinks,
-    get_note_outbound_link_count, get_note_tags, init_notes_db, list_note_cart_items,
-    list_note_cart_items_deduped, root_notes_query_is_eligible, save_note, save_note_cart_item,
-    search_notes, search_root_notes_meta, search_root_notes_meta_cached,
-    search_root_notes_meta_direct, NoteBacklinkSummary, RootNoteSearchHit, RootNotesSectionOptions,
+    count_active_notes_with_tag, delete_note_cart_item, delete_note_cart_items,
+    delete_note_permanently, get_all_notes, get_deleted_notes, get_note, get_note_aliases,
+    get_note_backlink_count, get_note_backlinks, get_note_outbound_link_count, get_note_tags,
+    init_notes_db, list_note_cart_items, list_note_cart_items_deduped,
+    root_notes_query_is_eligible, save_note, save_note_cart_item, search_notes,
+    search_root_notes_meta, search_root_notes_meta_cached, search_root_notes_meta_direct,
+    NoteBacklinkSummary, RootNoteSearchHit, RootNotesSectionOptions,
 };
+
+/// Tag that promotes a note to a standing agent instruction.
+///
+/// Notes tagged `#instructions` (or `tags: [instructions]` frontmatter) are
+/// automatically staged as context on new Agent Chat threads.
+pub const NOTES_INSTRUCTIONS_TAG: &str = "instructions";
+
+/// MCP resource URI that resolves all instruction notes with full bodies.
+pub const NOTES_INSTRUCTIONS_RESOURCE_URI: &str = "kit://notes?tag=instructions&full=true";
+
+/// Label shown on the instructions context chip in Agent Chat.
+pub const NOTES_INSTRUCTIONS_LABEL: &str = "Note Instructions";
+
+/// Provenance URI recorded in `source:` frontmatter for notes created from an
+/// Agent Chat thread. Keeps the note ↔ conversation relationship in the data
+/// layer so any surface can link back.
+pub fn agent_chat_thread_source(ui_thread_id: &str) -> String {
+    format!("scriptkit://agent-chat/{ui_thread_id}")
+}
 
 // Re-export key types - suppress unused warnings since these are public API
 #[allow(unused_imports)]
@@ -71,7 +87,7 @@ pub use window::{
     accept_notes_ghost_for_automation, apply_mcp_notes_mutation_on_main_thread,
     close_notes_embedded_agent_chat, close_notes_window, get_notes_app_entity_and_handle,
     get_notes_editor_text, handle_notes_ghost_key_for_automation, inject_text_into_notes,
-    is_notes_window, is_notes_window_open, open_note_in_notes_window, open_notes_window,
-    open_notes_window_without_launcher_restore, quick_capture, save_note_with_content, NotesApp,
-    NotesSurfaceMode,
+    is_notes_window, is_notes_window_open, open_note_in_notes_window, open_notes_search,
+    open_notes_window, open_notes_window_without_launcher_restore, quick_capture,
+    save_note_with_content, save_note_with_content_and_source, NotesApp, NotesSurfaceMode,
 };

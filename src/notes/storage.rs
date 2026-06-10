@@ -321,6 +321,12 @@ pub fn init_notes_db() -> Result<()> {
 
     let _ = NOTES_DB.get_or_init(|| Arc::new(Mutex::new(conn)));
 
+    // Backfill the markdown file mirror for notes saved before the mirror
+    // existed. Best-effort: mirror failures never block initialization.
+    if let Ok(notes) = get_all_notes() {
+        super::file_mirror::mirror_all_active_notes(&notes);
+    }
+
     Ok(())
 }
 
@@ -393,6 +399,7 @@ pub fn save_note(note: &Note) -> Result<()> {
 
     debug!(note_id = %note.id, title = %note.title, "Note saved");
     invalidate_root_notes_search_cache();
+    super::file_mirror::mirror_note_save(note);
     Ok(())
 }
 
@@ -557,6 +564,78 @@ fn backfill_note_metadata_with_conn(conn: &Connection) -> Result<()> {
 }
 
 /// Get a note by ID
+/// Count active (non-deleted) notes carrying the given normalized tag.
+///
+/// Used to decide whether instruction notes should be staged on new Agent
+/// Chat threads without paying for a full list read.
+pub(crate) fn count_active_notes_with_tag(tag: &str) -> Result<u64> {
+    let Some(normalized) = metadata::normalize_tag(tag) else {
+        return Ok(0);
+    };
+
+    init_notes_db()?;
+    let db = get_db()?;
+    let conn = db.lock().map_err(db_lock_err)?;
+
+    let count: i64 = conn
+        .query_row(
+            r#"
+            SELECT COUNT(DISTINCT t.note_id)
+            FROM note_tags t
+            JOIN notes n ON n.id = t.note_id
+            WHERE t.normalized_tag = ?1 AND n.deleted_at IS NULL
+            "#,
+            params![normalized],
+            |row| row.get(0),
+        )
+        .context("Failed to count notes with tag")?;
+
+    Ok(count.max(0) as u64)
+}
+
+/// Result of resolving a wiki-link target reference against note aliases.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum NoteRefResolution {
+    Unique(NoteId),
+    Ambiguous,
+    NotFound,
+}
+
+/// Resolve a `[[wiki link]]` target (title or alias text) to a note.
+pub(crate) fn resolve_note_ref(target: &str) -> Result<NoteRefResolution> {
+    let slug = metadata::slugify_note_ref(target);
+    if slug.is_empty() {
+        return Ok(NoteRefResolution::NotFound);
+    }
+
+    let db = get_db()?;
+    let conn = db.lock().map_err(db_lock_err)?;
+
+    let mut stmt = conn
+        .prepare(
+            r#"
+            SELECT DISTINCT a.note_id
+            FROM note_aliases a
+            JOIN notes n ON n.id = a.note_id
+            WHERE a.slug = ?1 AND n.deleted_at IS NULL
+            "#,
+        )
+        .context("Failed to prepare note ref resolution query")?;
+    let matches = stmt
+        .query_map(params![slug], |row| row.get::<_, String>(0))
+        .context("Failed to query note aliases for ref resolution")?
+        .collect::<Result<Vec<_>, _>>()
+        .context("Failed to collect note ref matches")?;
+
+    match matches.len() {
+        0 => Ok(NoteRefResolution::NotFound),
+        1 => Ok(NoteId::parse(&matches[0])
+            .map(NoteRefResolution::Unique)
+            .unwrap_or(NoteRefResolution::NotFound)),
+        _ => Ok(NoteRefResolution::Ambiguous),
+    }
+}
+
 pub fn get_note(id: NoteId) -> Result<Option<Note>> {
     let db = get_db()?;
     let conn = db.lock().map_err(db_lock_err)?;
@@ -1117,6 +1196,7 @@ pub fn delete_note_permanently(id: NoteId) -> Result<()> {
 
     info!(note_id = %id, "Note permanently deleted");
     invalidate_root_notes_search_cache();
+    super::file_mirror::mirror_note_delete(id);
     Ok(())
 }
 
@@ -1849,6 +1929,28 @@ mod tests {
 
         assert!(tag_results.iter().any(|candidate| candidate.id == id));
         assert!(alias_results.iter().any(|candidate| candidate.id == id));
+    }
+
+    #[test]
+    fn test_count_active_notes_with_tag_ignores_soft_deleted_notes() {
+        let _guard = notes_db_test_lock().lock().expect("lock");
+        init_notes_db().expect("notes db should initialize before tag count test");
+        let token = unique_test_token("instr_count");
+        let mut note = Note::with_content(format!("---\ntags: [{token}]\n---\n# Instruction"));
+        let id = note.id;
+
+        save_note(&note).expect("failed to save instruction note");
+        let active_count = count_active_notes_with_tag(&token).expect("tag count should succeed");
+
+        note.soft_delete();
+        save_note(&note).expect("failed to soft-delete instruction note");
+        let deleted_count =
+            count_active_notes_with_tag(&token).expect("tag count after delete should succeed");
+
+        delete_note_permanently(id).expect("cleanup failed for tag count note");
+
+        assert_eq!(active_count, 1);
+        assert_eq!(deleted_count, 0);
     }
 
     #[test]

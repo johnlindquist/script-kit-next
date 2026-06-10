@@ -16,6 +16,8 @@ pub(crate) enum NotesGhostSourceKind {
     CurrentNote,
     OtherNote,
     Clipboard,
+    /// Note title completion inside an unclosed `[[wiki link`.
+    NoteTitle,
 }
 
 impl NotesGhostSourceKind {
@@ -24,6 +26,7 @@ impl NotesGhostSourceKind {
             Self::CurrentNote => "currentNote",
             Self::OtherNote => "otherNote",
             Self::Clipboard => "clipboard",
+            Self::NoteTitle => "noteTitle",
         }
     }
 
@@ -32,6 +35,7 @@ impl NotesGhostSourceKind {
             Self::CurrentNote => 3,
             Self::OtherNote => 2,
             Self::Clipboard => 1,
+            Self::NoteTitle => 4,
         }
     }
 }
@@ -86,6 +90,13 @@ pub(crate) fn compute_notes_ghost_prediction(
     input: NotesGhostInput<'_>,
 ) -> Option<NotesGhostPrediction> {
     let line = current_line_prefix(input.editor_text, input.selection.clone())?;
+
+    // Wiki-link completion takes precedence: inside an unclosed `[[…` the
+    // only sensible completion is a note title.
+    if let Some(prediction) = wiki_link_title_prediction(&line, &input) {
+        return Some(prediction);
+    }
+
     if line.text.trim().chars().count() < MIN_PREFIX_CHARS {
         return None;
     }
@@ -164,6 +175,54 @@ pub(crate) fn compute_notes_ghost_prediction(
     })
 }
 
+/// Complete `[[partial` with a matching note title and closing `]]`.
+///
+/// Deterministic: case-insensitive prefix match against other notes' titles,
+/// preferring the shortest (most specific) title, then lexicographic order.
+fn wiki_link_title_prediction(
+    line: &LinePrefix,
+    input: &NotesGhostInput<'_>,
+) -> Option<NotesGhostPrediction> {
+    let open = line.text.rfind("[[")?;
+    let query = &line.text[open + 2..];
+    // Already closed or contains a newline-ish boundary: not an open link.
+    if query.contains("]]") || query.contains('[') {
+        return None;
+    }
+    if query.trim().is_empty() {
+        return None;
+    }
+
+    let query_lower = query.to_lowercase();
+    let mut matches: Vec<&str> = input
+        .notes
+        .iter()
+        .filter(|note| Some(note.id) != input.selected_note_id)
+        .filter(|note| note.deleted_at.is_none())
+        .map(|note| note.title.as_str())
+        .filter(|title| !title.trim().is_empty())
+        .filter(|title| {
+            let title_lower = title.to_lowercase();
+            title_lower.starts_with(&query_lower) && title_lower != query_lower
+        })
+        .collect();
+    matches.sort_by(|a, b| a.chars().count().cmp(&b.chars().count()).then(a.cmp(b)));
+
+    let title = matches.first()?;
+    let completion: String = title.chars().skip(query.chars().count()).collect();
+    let suffix = format!("{completion}]]");
+
+    Some(NotesGhostPrediction {
+        query_prefix: line.text.clone(),
+        suffix,
+        source_kind: NotesGhostSourceKind::NoteTitle,
+        source_rank: 0,
+        confidence: 0.9,
+        generation: input.generation,
+        accepts_tab: true,
+    })
+}
+
 pub(crate) fn current_line_prefix(text: &str, selection: Range<usize>) -> Option<LinePrefix> {
     if selection.start != selection.end {
         return None;
@@ -237,6 +296,9 @@ fn score_candidate(prefix: &str, candidate: NotesGhostCandidate) -> Option<Score
         NotesGhostSourceKind::CurrentNote => 1000,
         NotesGhostSourceKind::OtherNote => 700,
         NotesGhostSourceKind::Clipboard => 550,
+        // Wiki-link completions short-circuit before scoring, but keep them
+        // top-ranked if a candidate ever flows through here.
+        NotesGhostSourceKind::NoteTitle => 1100,
     };
     score -= (candidate.source_rank.min(50) as i32) * 4;
     score += 80;
@@ -390,6 +452,44 @@ mod tests {
         let notes = vec![note("token=secret-value\n\nTo")];
         let text = notes[0].content.as_str();
         assert!(compute_notes_ghost_prediction(input(text, text.len(), &notes, &[])).is_none());
+    }
+
+    #[test]
+    fn notes_ghost_completes_wiki_link_from_other_note_title() {
+        let current = note("Linking to [[Mee");
+        let other = note("Meeting Notes\n\nAgenda items");
+        let notes = vec![current, other];
+        let text = notes[0].content.as_str();
+        let prediction = compute_notes_ghost_prediction(input(text, text.len(), &notes, &[]))
+            .expect("open wiki link should complete from note title");
+        assert_eq!(prediction.source_kind, NotesGhostSourceKind::NoteTitle);
+        assert_eq!(prediction.suffix, "ting Notes]]");
+        assert!(prediction.accepts_tab);
+    }
+
+    #[test]
+    fn notes_ghost_wiki_link_prefers_shortest_matching_title() {
+        let current = note("See [[Pro");
+        let longer = note("Project Roadmap Long Term\n\nbody");
+        let shorter = note("Project Plan\n\nbody");
+        let notes = vec![current, longer, shorter];
+        let text = notes[0].content.as_str();
+        let prediction = compute_notes_ghost_prediction(input(text, text.len(), &notes, &[]))
+            .expect("open wiki link should complete");
+        assert_eq!(prediction.suffix, "ject Plan]]");
+    }
+
+    #[test]
+    fn notes_ghost_ignores_closed_wiki_links() {
+        let current = note("See [[Done Link]] then Cal");
+        let other = note("Done Link Extended\n\nbody");
+        let notes = vec![current, other];
+        let text = notes[0].content.as_str();
+        let prediction = compute_notes_ghost_prediction(input(text, text.len(), &notes, &[]));
+        // No open `[[`; should not produce a NoteTitle prediction.
+        assert!(prediction
+            .map(|p| p.source_kind != NotesGhostSourceKind::NoteTitle)
+            .unwrap_or(true));
     }
 
     #[test]
