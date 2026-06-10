@@ -96,6 +96,8 @@ pub(crate) struct AgentChatThreadMessage {
     pub body: SharedString,
     /// Optional tool call ID linking this message to an `AgentChatToolCallState`.
     pub tool_call_id: Option<String>,
+    /// Structured card metadata for Tool messages (kind, status, subject, diff).
+    pub tool_meta: Option<super::tool_card::AgentChatToolCardMeta>,
 }
 
 impl AgentChatThreadMessage {
@@ -105,6 +107,7 @@ impl AgentChatThreadMessage {
             role,
             body: body.into(),
             tool_call_id: None,
+            tool_meta: None,
         }
     }
 
@@ -119,6 +122,7 @@ impl AgentChatThreadMessage {
             role,
             body: body.into(),
             tool_call_id: Some(tool_call_id),
+            tool_meta: None,
         }
     }
 }
@@ -134,10 +138,37 @@ pub(crate) struct AgentChatToolCallState {
     pub status: String,
     /// Latest body text (e.g. file contents, command output).
     pub body: Option<String>,
+    /// Raw Pi tool name (e.g. "bash", "edit") when the event carried one.
+    pub tool_name: Option<String>,
+    /// One-line subject extracted from the tool args (path, command, query).
+    pub subject: Option<String>,
+    /// Pre-rendered diff from `result.details.diff` for edit/write tools.
+    pub diff: Option<String>,
+    /// Whether the tool reported an error result.
+    pub is_error: bool,
     /// ID of the corresponding `AgentChatThreadMessage` so the view can correlate.
     pub message_id: u64,
     /// Index into `AgentChatThread::messages` for O(1) message lookup.
     message_index: usize,
+}
+
+impl AgentChatToolCallState {
+    fn card_meta(&self) -> super::tool_card::AgentChatToolCardMeta {
+        use super::tool_card::{AgentChatToolCardMeta, AgentChatToolKind, AgentChatToolStatus};
+        let tool_name = self.tool_name.clone().unwrap_or_else(|| self.title.clone());
+        AgentChatToolCardMeta {
+            kind: AgentChatToolKind::from_tool_name(&tool_name),
+            tool_name,
+            status: if self.is_error {
+                AgentChatToolStatus::Failed
+            } else {
+                AgentChatToolStatus::from_status_str(&self.status)
+            },
+            subject: self.subject.clone(),
+            diff: self.diff.clone(),
+            is_error: self.is_error,
+        }
+    }
 }
 
 /// Snapshot of composer draft state that can survive Agent Chat view relaunch.
@@ -1327,8 +1358,11 @@ impl AgentChatThread {
                 tool_call_id,
                 title,
                 status,
+                tool_name,
+                raw_input,
             } => {
-                changed |= self.upsert_tool_call_start(tool_call_id, title, status);
+                changed |=
+                    self.upsert_tool_call_start(tool_call_id, title, status, tool_name, raw_input);
                 changed |= self.set_status(AgentChatThreadStatus::Streaming);
             }
             AgentChatEvent::ToolCallUpdated {
@@ -1336,8 +1370,19 @@ impl AgentChatThread {
                 title,
                 status,
                 body,
+                raw_input,
+                diff,
+                is_error,
             } => {
-                changed |= self.apply_tool_call_update(tool_call_id, title, status, body);
+                changed |= self.apply_tool_call_update(
+                    tool_call_id,
+                    title,
+                    status,
+                    body,
+                    raw_input,
+                    diff,
+                    is_error,
+                );
                 changed |= self.set_status(AgentChatThreadStatus::Streaming);
             }
             AgentChatEvent::PlanUpdated { entries } => {
@@ -1639,6 +1684,20 @@ impl AgentChatThread {
         true
     }
 
+    /// Re-derive the formatted body and structured card metadata for the
+    /// message backing a tool call slot.
+    fn sync_tool_call_message(&mut self, slot: usize) {
+        let tool_call = &self.active_tool_calls[slot];
+        let new_body =
+            Self::format_tool_call_body(&tool_call.title, &tool_call.status, &tool_call.body);
+        let meta = tool_call.card_meta();
+        let message_index = tool_call.message_index;
+        if let Some(msg) = self.messages.get_mut(message_index) {
+            msg.body = new_body.into();
+            msg.tool_meta = Some(meta);
+        }
+    }
+
     /// Insert or update a tool call from a `ToolCallStarted` event.
     /// Uses `tool_call_lookup` for O(1) access. Returns `true` if state changed.
     fn upsert_tool_call_start(
@@ -1646,7 +1705,12 @@ impl AgentChatThread {
         tool_call_id: String,
         title: String,
         status: String,
+        tool_name: Option<String>,
+        raw_input: Option<serde_json::Value>,
     ) -> bool {
+        let subject = raw_input
+            .as_ref()
+            .and_then(super::tool_card::subject_from_args);
         if let Some(&slot) = self.tool_call_lookup.get(&tool_call_id) {
             let existing = &mut self.active_tool_calls[slot];
             let mut changed = false;
@@ -1658,12 +1722,16 @@ impl AgentChatThread {
                 existing.status = status;
                 changed = true;
             }
+            if tool_name.is_some() && existing.tool_name != tool_name {
+                existing.tool_name = tool_name;
+                changed = true;
+            }
+            if subject.is_some() && existing.subject != subject {
+                existing.subject = subject;
+                changed = true;
+            }
             if changed {
-                let new_body =
-                    Self::format_tool_call_body(&existing.title, &existing.status, &existing.body);
-                if let Some(msg) = self.messages.get_mut(existing.message_index) {
-                    msg.body = new_body.into();
-                }
+                self.sync_tool_call_message(slot);
             }
             return changed;
         }
@@ -1685,22 +1753,34 @@ impl AgentChatThread {
             title,
             status,
             body: None,
+            tool_name,
+            subject,
+            diff: None,
+            is_error: false,
             message_id,
             message_index,
         });
         self.tool_call_lookup.insert(tool_call_id, slot);
+        self.sync_tool_call_message(slot);
         true
     }
 
     /// Apply a `ToolCallUpdated` event, updating tracked state and message in-place.
     /// Uses `tool_call_lookup` for O(1) access. Returns `true` if state changed.
+    #[allow(clippy::too_many_arguments)]
     fn apply_tool_call_update(
         &mut self,
         tool_call_id: String,
         title: Option<String>,
         status: Option<String>,
         body: Option<String>,
+        raw_input: Option<serde_json::Value>,
+        diff: Option<String>,
+        is_error: bool,
     ) -> bool {
+        let subject = raw_input
+            .as_ref()
+            .and_then(super::tool_card::subject_from_args);
         if let Some(&slot) = self.tool_call_lookup.get(&tool_call_id) {
             let tool_call = &mut self.active_tool_calls[slot];
             let mut changed = false;
@@ -1723,16 +1803,21 @@ impl AgentChatThread {
                     changed = true;
                 }
             }
+            if subject.is_some() && tool_call.subject != subject {
+                tool_call.subject = subject;
+                changed = true;
+            }
+            if diff.is_some() && tool_call.diff != diff {
+                tool_call.diff = diff;
+                changed = true;
+            }
+            if is_error && !tool_call.is_error {
+                tool_call.is_error = true;
+                changed = true;
+            }
 
             if changed {
-                let new_body = Self::format_tool_call_body(
-                    &tool_call.title,
-                    &tool_call.status,
-                    &tool_call.body,
-                );
-                if let Some(msg) = self.messages.get_mut(tool_call.message_index) {
-                    msg.body = new_body.into();
-                }
+                self.sync_tool_call_message(slot);
             }
             return changed;
         }
@@ -1757,10 +1842,15 @@ impl AgentChatThread {
             title,
             status,
             body,
+            tool_name: None,
+            subject,
+            diff,
+            is_error,
             message_id,
             message_index,
         });
         self.tool_call_lookup.insert(tool_call_id, slot);
+        self.sync_tool_call_message(slot);
         true
     }
 
@@ -2195,9 +2285,39 @@ impl AgentChatThread {
                 AgentChatKitchenSinkFixtureRole::System => AgentChatThreadMessageRole::System,
                 AgentChatKitchenSinkFixtureRole::Error => AgentChatThreadMessageRole::Error,
             };
-            let id = self.alloc_id();
             let body = message.body.to_string();
             if let Some(tool_call_id) = message.tool_call_id {
+                // Tool rows with structured fixture meta go through the real
+                // tool-call event path so the kitchen sink exercises the
+                // production card pipeline (kind, status, subject, diff).
+                if let Some(meta) =
+                    crate::ai::agent_chat::ui::kitchen_sink_fixture::kitchen_sink_tool_meta(
+                        tool_call_id,
+                    )
+                {
+                    let mut lines = body.lines();
+                    let title = lines.next().unwrap_or("Tool").to_string();
+                    let status = lines.next().unwrap_or("running").to_string();
+                    let output = lines.collect::<Vec<_>>().join("\n").trim().to_string();
+                    self.upsert_tool_call_start(
+                        tool_call_id.to_string(),
+                        title,
+                        status.clone(),
+                        Some(meta.tool_name.to_string()),
+                        serde_json::from_str(meta.args_json).ok(),
+                    );
+                    self.apply_tool_call_update(
+                        tool_call_id.to_string(),
+                        None,
+                        Some(status),
+                        (!output.is_empty()).then_some(output),
+                        None,
+                        meta.diff.map(str::to_string),
+                        meta.is_error,
+                    );
+                    continue;
+                }
+                let id = self.alloc_id();
                 self.messages
                     .push(AgentChatThreadMessage::with_tool_call_id(
                         id,
@@ -2206,6 +2326,7 @@ impl AgentChatThread {
                         tool_call_id.to_string(),
                     ));
             } else {
+                let id = self.alloc_id();
                 self.messages
                     .push(AgentChatThreadMessage::new(id, role, body));
             }
@@ -2723,8 +2844,10 @@ impl AgentChatThread {
                 tool_call_id,
                 title,
                 status,
+                tool_name,
+                raw_input,
             } => {
-                self.upsert_tool_call_start(tool_call_id, title, status);
+                self.upsert_tool_call_start(tool_call_id, title, status, tool_name, raw_input);
                 self.set_status(AgentChatThreadStatus::Streaming);
             }
             super::AgentChatEvent::ToolCallUpdated {
@@ -2732,8 +2855,19 @@ impl AgentChatThread {
                 title,
                 status,
                 body,
+                raw_input,
+                diff,
+                is_error,
             } => {
-                self.apply_tool_call_update(tool_call_id, title, status, body);
+                self.apply_tool_call_update(
+                    tool_call_id,
+                    title,
+                    status,
+                    body,
+                    raw_input,
+                    diff,
+                    is_error,
+                );
                 self.set_status(AgentChatThreadStatus::Streaming);
             }
             super::AgentChatEvent::PlanUpdated { entries } => {
@@ -3194,6 +3328,8 @@ mod tests {
                 tool_call_id: "tc-1".into(),
                 title: "Read file".into(),
                 status: "running".into(),
+                tool_name: None,
+                raw_input: None,
             },
         );
 
@@ -3217,6 +3353,8 @@ mod tests {
                 tool_call_id: "tc-1".into(),
                 title: "Read file".into(),
                 status: "running".into(),
+                tool_name: None,
+                raw_input: None,
             },
         );
 
@@ -3227,6 +3365,9 @@ mod tests {
                 title: None,
                 status: Some("completed".into()),
                 body: Some("file contents here".into()),
+                raw_input: None,
+                diff: None,
+                is_error: false,
             },
         );
 
@@ -3264,6 +3405,9 @@ mod tests {
                 title: None,
                 status: Some("done".into()),
                 body: None,
+                raw_input: None,
+                diff: None,
+                is_error: false,
             },
         );
 
@@ -3361,6 +3505,8 @@ mod tests {
                 tool_call_id: "tc-1".into(),
                 title: "Read file".into(),
                 status: "running".into(),
+                tool_name: None,
+                raw_input: None,
             },
         );
         apply_event_test(
@@ -3369,6 +3515,8 @@ mod tests {
                 tool_call_id: "tc-2".into(),
                 title: "Write file".into(),
                 status: "running".into(),
+                tool_name: None,
+                raw_input: None,
             },
         );
 
@@ -3380,6 +3528,9 @@ mod tests {
                 title: None,
                 status: Some("completed".into()),
                 body: None,
+                raw_input: None,
+                diff: None,
+                is_error: false,
             },
         );
 

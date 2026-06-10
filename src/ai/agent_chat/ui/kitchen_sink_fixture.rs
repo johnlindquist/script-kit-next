@@ -58,7 +58,65 @@ pub(crate) fn kitchen_sink_feature_manifest() -> &'static [&'static str] {
         "conversation:tool-call-id",
         "conversation:collapsible-thought",
         "conversation:collapsible-tool",
+        "conversation:tool-card-diff",
+        "conversation:tool-card-failed",
     ]
+}
+
+/// Structured tool metadata for fixture Tool rows, keyed by `tool_call_id`.
+///
+/// Kept as a parallel table (not fields on every fixture message) so only
+/// Tool rows carry tool data. `load_kitchen_sink_fixture` routes rows with a
+/// meta entry through the real tool-call event path, so the kitchen sink
+/// exercises the production card pipeline (kind, status, subject, diff).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct AgentChatKitchenSinkToolMeta {
+    pub(crate) tool_call_id: &'static str,
+    pub(crate) tool_name: &'static str,
+    pub(crate) args_json: &'static str,
+    pub(crate) diff: Option<&'static str>,
+    pub(crate) is_error: bool,
+}
+
+pub(crate) const AGENT_CHAT_KITCHEN_SINK_TOOL_META: &[AgentChatKitchenSinkToolMeta] = &[
+    AgentChatKitchenSinkToolMeta {
+        tool_call_id: "tool-read-transcript-owner",
+        tool_name: "read",
+        args_json: r#"{"path": "src/ai/agent_chat/ui/components/transcript.rs"}"#,
+        diff: None,
+        is_error: false,
+    },
+    AgentChatKitchenSinkToolMeta {
+        tool_call_id: "tool-search-docs",
+        tool_name: "grep",
+        args_json: r#"{"pattern": "agent chat markdown renderer"}"#,
+        diff: None,
+        is_error: false,
+    },
+    AgentChatKitchenSinkToolMeta {
+        tool_call_id: "tool-edit-diff",
+        tool_name: "edit",
+        args_json: r#"{"path": "src/ai/agent_chat/ui/components/transcript.rs"}"#,
+        diff: Some(
+            "  41 fn render_message(\n- 42     let label = \"Tool\";\n+ 42     let label = meta.tool_name.clone();\n+ 43     let subject = meta.subject.clone();\n  44     // header renders status badge",
+        ),
+        is_error: false,
+    },
+    AgentChatKitchenSinkToolMeta {
+        tool_call_id: "tool-bash-failed",
+        tool_name: "bash",
+        args_json: r#"{"cmd": "cargo test --workspace --quiet"}"#,
+        diff: None,
+        is_error: true,
+    },
+];
+
+pub(crate) fn kitchen_sink_tool_meta(
+    tool_call_id: &str,
+) -> Option<&'static AgentChatKitchenSinkToolMeta> {
+    AGENT_CHAT_KITCHEN_SINK_TOOL_META
+        .iter()
+        .find(|meta| meta.tool_call_id == tool_call_id)
 }
 
 pub(crate) const AGENT_CHAT_KITCHEN_SINK_MESSAGES: &[AgentChatKitchenSinkFixtureMessage] = &[
@@ -295,6 +353,24 @@ The command appears as markdown only; it is not executed by the fixture."#,
         role: AgentChatKitchenSinkFixtureRole::System,
         tool_call_id: None,
         body: r#"System checkpoint: fixture transcript remains static, deterministic, and safe."#,
+    },
+    AgentChatKitchenSinkFixtureMessage {
+        id: 20,
+        role: AgentChatKitchenSinkFixtureRole::Tool,
+        tool_call_id: Some("tool-edit-diff"),
+        body: r#"edit
+complete
+
+Successfully replaced text in src/ai/agent_chat/ui/components/transcript.rs."#,
+    },
+    AgentChatKitchenSinkFixtureMessage {
+        id: 21,
+        role: AgentChatKitchenSinkFixtureRole::Tool,
+        tool_call_id: Some("tool-bash-failed"),
+        body: r#"bash
+failed
+
+error: test failed, to rerun pass `--lib`"#,
     },
     AgentChatKitchenSinkFixtureMessage {
         id: 19,

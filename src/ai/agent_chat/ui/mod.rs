@@ -39,6 +39,7 @@ pub(crate) mod preflight;
 pub(crate) mod setup_state;
 pub(crate) mod surface_state;
 pub(crate) mod thread;
+pub(crate) mod tool_card;
 pub(crate) mod types;
 pub(crate) mod ui_variant;
 pub(crate) mod view;

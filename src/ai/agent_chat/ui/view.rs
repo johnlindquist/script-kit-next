@@ -7937,7 +7937,9 @@ impl AgentChatView {
                 .w_full()
                 .h_full()
                 .overflow_hidden()
-                .child(crate::components::render_agent_chat_empty_guidance(theme))
+                .child(crate::components::render_agent_chat_empty_guidance(
+                    theme, cx,
+                ))
                 .into_any_element();
         }
         if show_sidecar {
@@ -13883,6 +13885,7 @@ mod tests {
             role: AgentChatThreadMessageRole::Tool,
             body: "Write file\nrunning".into(),
             tool_call_id: Some("tc-123".to_string()),
+            tool_meta: None,
         };
 
         assert!(AgentChatView::permission_request_matches_message(

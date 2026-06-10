@@ -281,22 +281,51 @@ fn tool_call_lifecycle_tracks_state_for_view() {
         tool_call_id: "tc-abc".into(),
         title: "Read file".into(),
         status: "running".into(),
+        tool_name: Some("read".into()),
+        raw_input: Some(serde_json::json!({"path": "src/main.rs"})),
     });
 
     assert_eq!(thread.active_tool_calls().len(), 1);
     assert_eq!(thread.messages.len(), 1);
     assert_eq!(thread.messages[0].role, AgentChatThreadMessageRole::Tool);
+    let meta = thread.messages[0]
+        .tool_meta
+        .as_ref()
+        .expect("tool message carries structured card meta");
+    assert_eq!(
+        meta.kind,
+        crate::ai::agent_chat::ui::tool_card::AgentChatToolKind::Read
+    );
+    assert_eq!(
+        meta.status,
+        crate::ai::agent_chat::ui::tool_card::AgentChatToolStatus::Running
+    );
+    assert_eq!(meta.subject.as_deref(), Some("src/main.rs"));
 
     thread.apply_event_test(AgentChatEvent::ToolCallUpdated {
         tool_call_id: "tc-abc".into(),
         title: None,
         status: Some("completed".into()),
         body: Some("file contents...".into()),
+        raw_input: None,
+        diff: Some("-1 old\n+1 new".into()),
+        is_error: false,
     });
 
     assert_eq!(thread.messages.len(), 1, "should update in-place");
     assert!(thread.messages[0].body.contains("completed"));
     assert_eq!(thread.active_tool_calls()[0].status, "completed");
+    let meta = thread.messages[0].tool_meta.as_ref().unwrap();
+    assert_eq!(
+        meta.status,
+        crate::ai::agent_chat::ui::tool_card::AgentChatToolStatus::Complete
+    );
+    assert_eq!(meta.diff.as_deref(), Some("-1 old\n+1 new"));
+    assert_eq!(
+        meta.subject.as_deref(),
+        Some("src/main.rs"),
+        "subject from start event must survive updates without raw_input"
+    );
 }
 
 #[test]
@@ -581,7 +610,8 @@ fn agent_chat_root_escape_interceptor_cancels_streaming_before_returning_to_menu
     assert!(
         AGENT_CHAT_VIEW_SOURCE.contains("pub(crate) fn cancel_streaming_from_escape")
             && AGENT_CHAT_VIEW_SOURCE.contains("thread.cancel_streaming(cx)")
-            && AGENT_CHAT_VIEW_SOURCE.contains("event = \"agent_chat_escape_cancel_streaming_requested\""),
+            && AGENT_CHAT_VIEW_SOURCE
+                .contains("event = \"agent_chat_escape_cancel_streaming_requested\""),
         "AgentChatView should expose a shared Escape cancellation helper for focused and host routes"
     );
 }
@@ -637,8 +667,10 @@ fn agent_chat_plain_up_recalls_latest_user_prompt_when_composer_is_empty() {
     assert!(
         AGENT_CHAT_THREAD_SOURCE.contains("pub(crate) fn recall_last_user_message")
             && AGENT_CHAT_THREAD_SOURCE.contains("!self.input.is_empty()")
-            && AGENT_CHAT_THREAD_SOURCE.contains("AgentChatThreadStatus::Idle | AgentChatThreadStatus::Error")
-            && AGENT_CHAT_THREAD_SOURCE.contains("message.role == AgentChatThreadMessageRole::User")
+            && AGENT_CHAT_THREAD_SOURCE
+                .contains("AgentChatThreadStatus::Idle | AgentChatThreadStatus::Error")
+            && AGENT_CHAT_THREAD_SOURCE
+                .contains("message.role == AgentChatThreadMessageRole::User")
             && AGENT_CHAT_THREAD_SOURCE.contains("self.input.set_cursor(0)"),
         "AgentChatThread should recall the last user message only from an empty idle/error composer"
     );
@@ -801,8 +833,10 @@ fn agent_chat_model_selector_migration_uses_popup_window_instead_of_inline_layer
     );
     assert!(
         AGENT_CHAT_VIEW_SOURCE.contains("fn trigger_toggle_actions_from_parent")
-            && AGENT_CHAT_VIEW_SOURCE.contains("AgentChatToolbarEvent::ToggleModelSelector(parent)")
-            && AGENT_CHAT_VIEW_SOURCE.contains("this.trigger_toggle_actions_from_parent(*parent, cx);")
+            && AGENT_CHAT_VIEW_SOURCE
+                .contains("AgentChatToolbarEvent::ToggleModelSelector(parent)")
+            && AGENT_CHAT_VIEW_SOURCE
+                .contains("this.trigger_toggle_actions_from_parent(*parent, cx);")
             && AGENT_CHAT_ACTIONS_SOURCE.contains("get_agent_chat_model_picker_actions")
             && !AGENT_CHAT_VIEW_SOURCE.contains("model_selector_open"),
         "Agent Chat model selector should route through Cmd+K actions instead of an inline or PromptPopup list"
@@ -817,9 +851,12 @@ fn agent_chat_history_migration_uses_popup_window_instead_of_inline_layer() {
     );
     assert!(
         AGENT_CHAT_HISTORY_POPUP_SOURCE.contains("AgentChatHistoryPopupWindow")
-            && AGENT_CHAT_HISTORY_POPUP_SOURCE.contains("super::popup_window::popup_window_options")
-            && AGENT_CHAT_HISTORY_POPUP_SOURCE.contains("super::popup_window::configure_popup_window")
-            && AGENT_CHAT_HISTORY_POPUP_SOURCE.contains("super::popup_window::set_popup_window_bounds"),
+            && AGENT_CHAT_HISTORY_POPUP_SOURCE
+                .contains("super::popup_window::popup_window_options")
+            && AGENT_CHAT_HISTORY_POPUP_SOURCE
+                .contains("super::popup_window::configure_popup_window")
+            && AGENT_CHAT_HISTORY_POPUP_SOURCE
+                .contains("super::popup_window::set_popup_window_bounds"),
         "Agent Chat history picker should render through a popup window entity using shared popup mechanics"
     );
     assert!(
@@ -835,7 +872,8 @@ fn agent_chat_picker_popup_row_rendering_uses_shared_list_item_chrome() {
     assert!(
         AGENT_CHAT_PICKER_POPUP_SOURCE.contains("crate::components::inline_dropdown")
             && AGENT_CHAT_PICKER_POPUP_SOURCE.contains("crate::list_item::ListItem::new")
-            && AGENT_CHAT_PICKER_POPUP_SOURCE.contains("crate::list_item::ListItemColors::from_theme")
+            && AGENT_CHAT_PICKER_POPUP_SOURCE
+                .contains("crate::list_item::ListItemColors::from_theme")
             && !AGENT_CHAT_PICKER_POPUP_SOURCE.contains("render_soft_compact_picker_row")
             && !AGENT_CHAT_PICKER_POPUP_SOURCE.contains("render_dense_monoline_picker_row"),
         "Agent Chat slash/@ picker popup should keep the shared dropdown shell while rows use main-list ListItem chrome"
@@ -892,7 +930,8 @@ fn agent_chat_footer_actions_hint_uses_shared_clickable_toggle_path() {
             && TAB_AI_MODE_SOURCE.contains("view.set_on_open_history_command")
             && TAB_AI_MODE_SOURCE.contains("app.open_agent_chat_history_main_list(window, cx);")
             && TAB_AI_MODE_SOURCE.contains("view.set_on_paste_response_requested")
-            && TAB_AI_MODE_SOURCE.contains("app.paste_latest_agent_chat_response_to_frontmost(None, cx);"),
+            && TAB_AI_MODE_SOURCE
+                .contains("app.paste_latest_agent_chat_response_to_frontmost(None, cx);"),
         "embedded Agent Chat hosts must wire footer clicks to the existing actions, close, history popup, and paste-response paths"
     );
     assert!(
@@ -921,7 +960,8 @@ fn agent_chat_footer_primary_action_tracks_composer_response_and_streaming_state
     );
     assert!(
         AGENT_CHAT_VIEW_SOURCE.contains("Self::has_pastable_assistant_response(thread)")
-            && AGENT_CHAT_VIEW_SOURCE.contains("self.trigger_paste_response_requested(window, cx);")
+            && AGENT_CHAT_VIEW_SOURCE
+                .contains("self.trigger_paste_response_requested(window, cx);")
             && AGENT_CHAT_VIEW_SOURCE.contains("caused_submit: false"),
         "Enter on an empty composer after an assistant response must route to Paste Response instead of empty-submit"
     );
@@ -1053,7 +1093,8 @@ fn agent_chat_detached_cmd_k_keeps_detached_actions_path() {
 #[test]
 fn agent_chat_show_history_action_opens_main_history_list() {
     assert!(
-        !HANDLE_ACTION_SOURCE.contains("if !self.open_embedded_agent_chat_history_popup(window, cx) {")
+        !HANDLE_ACTION_SOURCE
+            .contains("if !self.open_embedded_agent_chat_history_popup(window, cx) {")
             && HANDLE_ACTION_SOURCE.contains("AppView::AgentChatHistoryView"),
         "agent_chat_show_history should open the main AgentChatHistoryView list instead of the embedded history popup"
     );
@@ -1096,7 +1137,8 @@ fn agent_chat_picker_parent_mouse_down_dismisses_slash_and_mention_popup() {
     assert!(
         AGENT_CHAT_VIEW_SOURCE.contains("pub(crate) fn dismiss_mention_picker")
             && AGENT_CHAT_VIEW_SOURCE.contains("self.mention_session.take()")
-            && AGENT_CHAT_VIEW_SOURCE.contains("self.sync_mention_popup_window_from_cached_parent(cx);"),
+            && AGENT_CHAT_VIEW_SOURCE
+                .contains("self.sync_mention_popup_window_from_cached_parent(cx);"),
         "AgentChatView must expose a shared picker dismiss helper for both slash and @ mention sessions"
     );
     assert!(
@@ -1141,13 +1183,15 @@ fn agent_chat_picker_outside_dismiss_suppresses_unchanged_trigger_reopen() {
 fn agent_chat_picker_row_click_matches_actions_dialog_mouse_arming() {
     assert!(
         AGENT_CHAT_PICKER_POPUP_SOURCE.contains("mouse_armed_row: Option<(usize, String)>")
-            && AGENT_CHAT_PICKER_POPUP_SOURCE.contains("fn should_submit_agent_chat_picker_row_click")
+            && AGENT_CHAT_PICKER_POPUP_SOURCE
+                .contains("fn should_submit_agent_chat_picker_row_click")
             && AGENT_CHAT_PICKER_POPUP_SOURCE.contains("was_mouse_armed || click_count >= 2"),
         "Agent Chat slash/@ picker rows must use actions-dialog-style mouse arming: first click focuses, second or double-click accepts"
     );
     assert!(
         AGENT_CHAT_PICKER_POPUP_SOURCE.contains("fn handle_row_click")
-            && AGENT_CHAT_PICKER_POPUP_SOURCE.contains("this.handle_row_click(idx, event, window, cx);")
+            && AGENT_CHAT_PICKER_POPUP_SOURCE
+                .contains("this.handle_row_click(idx, event, window, cx);")
             && AGENT_CHAT_PICKER_POPUP_SOURCE.contains("self.select_item(index, cx);")
             && AGENT_CHAT_PICKER_POPUP_SOURCE.contains("self.activate_item(index, cx);"),
         "Agent Chat picker row clicks must route through a shared handler that selects before accepting"
@@ -1330,12 +1374,15 @@ fn agent_chat_history_popup_window_observes_focus_loss_and_escape() {
             .contains("this.request_close(window, cx, \"mouse_down_out\");")
             && AGENT_CHAT_HISTORY_POPUP_SOURCE
                 .contains("view.dismiss_history_popup_from_window(reason, cx);")
-            && AGENT_CHAT_HISTORY_POPUP_SOURCE.contains("this.request_close(window, cx, \"escape\");"),
+            && AGENT_CHAT_HISTORY_POPUP_SOURCE
+                .contains("this.request_close(window, cx, \"escape\");"),
         "Agent Chat history popup window should close on outside clicks and sync dismissals back into Agent Chat state"
     );
     assert!(
-        AGENT_CHAT_HISTORY_POPUP_SOURCE.contains("view.dismiss_history_popup_from_window(reason, cx);")
-            && AGENT_CHAT_HISTORY_POPUP_SOURCE.contains("this.request_close(window, cx, \"escape\");"),
+        AGENT_CHAT_HISTORY_POPUP_SOURCE
+            .contains("view.dismiss_history_popup_from_window(reason, cx);")
+            && AGENT_CHAT_HISTORY_POPUP_SOURCE
+                .contains("this.request_close(window, cx, \"escape\");"),
         "Agent Chat history popup window should sync dismissals back into Agent Chat state for both focus loss and Escape"
     );
     assert!(
@@ -1368,7 +1415,8 @@ fn agent_chat_history_popup_window_supports_actions_style_search_and_keyboard_na
         AGENT_CHAT_VIEW_SOURCE.contains("if self.history_menu.is_some() {")
             && AGENT_CHAT_VIEW_SOURCE.contains("match history_popup_key_intent(key, modifiers)")
             && AGENT_CHAT_VIEW_SOURCE.contains("self.set_history_popup_query(next_query, cx);")
-            && AGENT_CHAT_VIEW_SOURCE.contains("self.execute_history_popup_selection(modifiers, cx);"),
+            && AGENT_CHAT_VIEW_SOURCE
+                .contains("self.execute_history_popup_selection(modifiers, cx);"),
         "Agent Chat host key routing should intercept history popup navigation and search the same way the shared actions popup does"
     );
 }
@@ -1388,7 +1436,8 @@ fn agent_chat_history_enter_resumes_selected_chat() {
             && AGENT_CHAT_HISTORY_POPUP_SOURCE.contains("} else {")
             && AGENT_CHAT_HISTORY_POPUP_SOURCE.contains("this.resume_session(&entry, cx);")
             && AGENT_CHAT_HISTORY_POPUP_SOURCE.contains("\"\\u{21B5} Resume\".into(),")
-            && AGENT_CHAT_HISTORY_POPUP_SOURCE.contains("\"\\u{2318}\\u{21B5} Attach Summary\".into(),"),
+            && AGENT_CHAT_HISTORY_POPUP_SOURCE
+                .contains("\"\\u{2318}\\u{21B5} Attach Summary\".into(),"),
         "Agent Chat history popup should advertise and honor Enter-to-resume while keeping modifier-based attach actions"
     );
 }
@@ -1415,7 +1464,8 @@ fn agent_chat_view_exposes_escape_popup_dismiss_helper() {
             && AGENT_CHAT_VIEW_SOURCE.contains("pub(crate) fn has_escape_dismissible_popup")
             && AGENT_CHAT_VIEW_SOURCE.contains("self.history_menu.is_some()")
             && AGENT_CHAT_VIEW_SOURCE.contains("self.mention_session = None;")
-            && AGENT_CHAT_VIEW_SOURCE.contains("self.sync_mention_popup_window_from_cached_parent(cx);")
+            && AGENT_CHAT_VIEW_SOURCE
+                .contains("self.sync_mention_popup_window_from_cached_parent(cx);")
             && AGENT_CHAT_VIEW_SOURCE.contains("if self.attach_menu_open {")
             && AGENT_CHAT_VIEW_SOURCE.contains("|| self.attach_menu_open"),
         "Agent Chat view should expose a helper that dismisses the detached Agent Chat popups on Escape"
@@ -1492,8 +1542,10 @@ fn agent_chat_history_popup_attach_consumes_pending_history_portal_session() {
 #[test]
 fn agent_chat_history_popup_dismiss_restores_pending_history_portal_session() {
     assert!(
-        AGENT_CHAT_VIEW_SOURCE.contains("event = \"agent_chat_history_portal_dismissed_via_popup\"")
-            && AGENT_CHAT_VIEW_SOURCE.contains("event = \"agent_chat_history_portal_dismissed_from_window\"")
+        AGENT_CHAT_VIEW_SOURCE
+            .contains("event = \"agent_chat_history_portal_dismissed_via_popup\"")
+            && AGENT_CHAT_VIEW_SOURCE
+                .contains("event = \"agent_chat_history_portal_dismissed_from_window\"")
             && AGENT_CHAT_VIEW_SOURCE.contains("self.has_pending_history_portal_session()")
             && AGENT_CHAT_VIEW_SOURCE.contains("self.cancel_pending_portal_session(")
             && AGENT_CHAT_VIEW_SOURCE.contains("PortalKind::AgentChatHistory"),
@@ -2930,10 +2982,10 @@ fn at_inline_portal_window_cannot_outlive_owner() {
         "fn clear_composer_picker",
     );
     assert!(
-        composer_body
-            .contains("let next_picker_open = matches!(&state, AgentChatComposerPickerState::Open(_));")
-            && composer_body
-                .contains("crate::ai::agent_chat::ui::picker_popup::close_mention_popup_window(cx);",),
+        composer_body.contains(
+            "let next_picker_open = matches!(&state, AgentChatComposerPickerState::Open(_));"
+        ) && composer_body
+            .contains("crate::ai::agent_chat::ui::picker_popup::close_mention_popup_window(cx);",),
         "apply_composer_picker_transition must unconditionally close the detached @ popup whenever the picker state is not Open"
     );
 
@@ -2957,8 +3009,9 @@ fn at_inline_portal_window_cannot_outlive_owner() {
     //    skipped by individual surface transitions.
     assert!(
         LIFECYCLE_RESET_SOURCE.contains("pub(crate) fn close_floating_popups_for_owner_loss",)
-            && LIFECYCLE_RESET_SOURCE
-                .contains("crate::ai::agent_chat::ui::picker_popup::close_mention_popup_window(cx);")
+            && LIFECYCLE_RESET_SOURCE.contains(
+                "crate::ai::agent_chat::ui::picker_popup::close_mention_popup_window(cx);"
+            )
             && LIFECYCLE_RESET_SOURCE
                 .contains("self.menu_syntax_trigger_popup_state = Default::default();",),
         "lifecycle_reset must expose `close_floating_popups_for_owner_loss` that closes the Agent Chat @ picker and clears the main-owned menu-syntax trigger picker"
@@ -3024,13 +3077,15 @@ fn agent_chat_transcript_keeps_selectable_markdown_with_chat_scaled_typography()
     assert!(
         AGENT_CHAT_TRANSCRIPT_SOURCE.contains("fn selectable_markdown_view(")
             && AGENT_CHAT_TRANSCRIPT_SOURCE.contains(".selectable(true)")
-            && AGENT_CHAT_TRANSCRIPT_SOURCE.contains(".text_size(px(style_def.markdown.body_font_size))"),
+            && AGENT_CHAT_TRANSCRIPT_SOURCE
+                .contains(".text_size(px(style_def.markdown.body_font_size))"),
         "Agent Chat transcript messages must stay selectable without reverting to oversized document typography"
     );
 
     assert!(
         AGENT_CHAT_TRANSCRIPT_SOURCE.contains("fn transcript_text_style(")
-            && AGENT_CHAT_TRANSCRIPT_SOURCE.contains(".paragraph_gap(rems(style_def.markdown.paragraph_gap))")
+            && AGENT_CHAT_TRANSCRIPT_SOURCE
+                .contains(".paragraph_gap(rems(style_def.markdown.paragraph_gap))")
             && AGENT_CHAT_TRANSCRIPT_SOURCE.contains("1 => px(heading_1_font_size)")
             && AGENT_CHAT_TRANSCRIPT_SOURCE.contains("StyleRefinement::default()")
             && AGENT_CHAT_TRANSCRIPT_SOURCE.contains(".code_block(")
@@ -3081,8 +3136,9 @@ fn agent_chat_ui_variants_are_menu_addressable_and_protocol_visible() {
         AGENT_CHAT_VIEW_SOURCE.contains("fn render_composer_bar(")
             && AGENT_CHAT_VIEW_SOURCE
                 .contains("matches!(variant_config.composer, AgentChatComposerPlacement::Default)")
-            && AGENT_CHAT_VIEW_SOURCE
-                .contains("matches!(variant_config.composer, AgentChatComposerPlacement::BottomDock)"),
+            && AGENT_CHAT_VIEW_SOURCE.contains(
+                "matches!(variant_config.composer, AgentChatComposerPlacement::BottomDock)"
+            ),
         "Agent Chat renderer must place the shared composer at the top or bottom based on the active variant"
     );
 

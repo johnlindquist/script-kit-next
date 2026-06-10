@@ -44,6 +44,8 @@ pub(crate) fn map_rpc_event_to_events(event: &Value) -> Vec<AgentChatEvent> {
                 .unwrap_or("Tool")
                 .to_string(),
             status: "pending".to_string(),
+            tool_name: tool_name_from_event(event),
+            raw_input: raw_input_from_event(event),
         }],
         Some("tool_execution_start") => vec![AgentChatEvent::ToolCallStarted {
             tool_call_id: tool_call_id(event).unwrap_or_else(|| "tool-call".to_string()),
@@ -52,6 +54,8 @@ pub(crate) fn map_rpc_event_to_events(event: &Value) -> Vec<AgentChatEvent> {
                 .unwrap_or("Tool")
                 .to_string(),
             status: "running".to_string(),
+            tool_name: tool_name_from_event(event),
+            raw_input: raw_input_from_event(event),
         }],
         Some("tool_execution_update") => vec![AgentChatEvent::ToolCallUpdated {
             tool_call_id: tool_call_id(event).unwrap_or_else(|| "tool-call".to_string()),
@@ -60,10 +64,14 @@ pub(crate) fn map_rpc_event_to_events(event: &Value) -> Vec<AgentChatEvent> {
                 .map(str::to_string),
             status: Some("running".to_string()),
             body: body_from_event(event),
+            raw_input: raw_input_from_event(event),
+            diff: diff_from_event(event),
+            is_error: false,
         }],
         Some("tool_execution_end") => {
             let failed = get_str(event, "status") == Some("failed")
-                || event.get("error").and_then(Value::as_str).is_some();
+                || event.get("error").and_then(Value::as_str).is_some()
+                || event.get("isError").and_then(Value::as_bool) == Some(true);
             vec![AgentChatEvent::ToolCallUpdated {
                 tool_call_id: tool_call_id(event).unwrap_or_else(|| "tool-call".to_string()),
                 title: get_str(event, "toolName")
@@ -72,6 +80,9 @@ pub(crate) fn map_rpc_event_to_events(event: &Value) -> Vec<AgentChatEvent> {
                 status: Some(if failed { "failed" } else { "complete" }.to_string()),
                 body: body_from_event(event)
                     .or_else(|| get_str(event, "error").map(str::to_string)),
+                raw_input: raw_input_from_event(event),
+                diff: diff_from_event(event),
+                is_error: failed,
             }]
         }
         Some("agent_end") => {
@@ -120,6 +131,9 @@ fn map_message_update(event: &Value) -> Vec<AgentChatEvent> {
             title: None,
             status: None,
             body: Some(delta.to_string()),
+            raw_input: None,
+            diff: None,
+            is_error: false,
         }],
         _ => Vec::new(),
     }
@@ -412,6 +426,38 @@ fn tool_call_id(value: &Value) -> Option<String> {
         .map(str::to_string)
 }
 
+/// Raw Pi tool name. `tool_call_end` (model-side) nests it under `toolCall.name`;
+/// execution events carry it as a top-level `toolName`.
+fn tool_name_from_event(event: &Value) -> Option<String> {
+    get_str(event, "toolName")
+        .or_else(|| get_str(event, "name"))
+        .or_else(|| event.get("toolCall").and_then(|tc| get_str(tc, "name")))
+        .map(str::to_string)
+}
+
+/// Raw tool input args. Execution events carry top-level `args`; model-side
+/// `tool_call_end` nests `toolCall.arguments`.
+fn raw_input_from_event(event: &Value) -> Option<Value> {
+    event
+        .get("args")
+        .or_else(|| event.get("toolCall").and_then(|tc| tc.get("arguments")))
+        .filter(|value| !value.is_null())
+        .cloned()
+}
+
+/// Pre-rendered diff emitted by Pi edit/write tools in `result.details.diff`.
+fn diff_from_event(event: &Value) -> Option<String> {
+    for key in ["result", "partialResult"] {
+        if let Some(diff) = event
+            .get(key)
+            .and_then(crate::ai::agent_chat::ui::tool_card::diff_from_tool_result)
+        {
+            return Some(diff);
+        }
+    }
+    None
+}
+
 fn body_from_event(event: &Value) -> Option<String> {
     for key in ["partialResult", "result"] {
         let Some(value) = get_value(event, key) else {
@@ -555,13 +601,51 @@ mod tests {
         let events = map_rpc_event_to_events(&json!({
             "type": "tool_execution_start",
             "toolCallId": "tool-1",
-            "toolName": "bash"
+            "toolName": "bash",
+            "args": {"cmd": "printf hi"}
         }));
 
         assert!(matches!(
             events.as_slice(),
-            [AgentChatEvent::ToolCallStarted { tool_call_id, title, status }]
-                if tool_call_id == "tool-1" && title == "bash" && status == "running"
+            [AgentChatEvent::ToolCallStarted { tool_call_id, title, status, tool_name: Some(tool_name), raw_input: Some(raw_input) }]
+                if tool_call_id == "tool-1"
+                    && title == "bash"
+                    && status == "running"
+                    && tool_name == "bash"
+                    && raw_input["cmd"] == "printf hi"
+        ));
+    }
+
+    #[test]
+    fn pi_rpc_tool_execution_end_extracts_details_diff_and_error_flag() {
+        let events = map_rpc_event_to_events(&json!({
+            "type": "tool_execution_end",
+            "toolCallId": "tool-1",
+            "toolName": "edit",
+            "args": {"path": "src/lib.rs"},
+            "result": {
+                "content": [{"type": "text", "text": "Successfully replaced text in src/lib.rs."}],
+                "details": {"diff": "-1 old\n+1 new", "firstChangedLine": 1}
+            }
+        }));
+
+        assert!(matches!(
+            events.as_slice(),
+            [AgentChatEvent::ToolCallUpdated { diff: Some(diff), is_error: false, raw_input: Some(raw_input), .. }]
+                if diff == "-1 old\n+1 new" && raw_input["path"] == "src/lib.rs"
+        ));
+
+        let failed = map_rpc_event_to_events(&json!({
+            "type": "tool_execution_end",
+            "toolCallId": "tool-1",
+            "toolName": "bash",
+            "isError": true,
+            "result": {"content": [{"type": "text", "text": "boom"}]}
+        }));
+        assert!(matches!(
+            failed.as_slice(),
+            [AgentChatEvent::ToolCallUpdated { is_error: true, status: Some(status), .. }]
+                if status == "failed"
         ));
     }
 

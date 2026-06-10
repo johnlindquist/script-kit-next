@@ -25,6 +25,10 @@ pub(crate) enum AgentChatEvent {
         tool_call_id: String,
         title: String,
         status: String,
+        /// Raw Pi tool name (e.g. "bash", "edit") for kind derivation.
+        tool_name: Option<String>,
+        /// Raw tool input args, used to derive the card subject line.
+        raw_input: Option<serde_json::Value>,
     },
     /// An existing tool call has been updated.
     ToolCallUpdated {
@@ -32,6 +36,13 @@ pub(crate) enum AgentChatEvent {
         title: Option<String>,
         status: Option<String>,
         body: Option<String>,
+        /// Raw tool input args (present on Pi execution updates; backfills
+        /// orphan tool calls whose start event was missed).
+        raw_input: Option<serde_json::Value>,
+        /// Pre-rendered diff from `result.details.diff` for edit/write tools.
+        diff: Option<String>,
+        /// Whether the tool reported an error result.
+        is_error: bool,
     },
     /// The agent's plan has been updated.
     PlanUpdated { entries: Vec<String> },

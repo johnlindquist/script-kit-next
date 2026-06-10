@@ -8,8 +8,12 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use super::super::thread::{AgentChatThread, AgentChatThreadMessage, AgentChatThreadMessageRole};
+use super::super::tool_card::{
+    classify_diff_line, AgentChatToolCardMeta, AgentChatToolStatus, DiffLineKind,
+};
 use super::super::ui_variant::{AgentChatTranscriptPresentation, AgentChatUiVariant};
 use crate::dev_style_tool::agent_chat_catalog::AgentChatStyleDef;
+use crate::list_item::FONT_MONO;
 use crate::theme::{self, PromptColors};
 
 pub enum AgentChatTranscriptEvent {
@@ -70,7 +74,24 @@ impl AgentChatTranscript {
                         && current.role == incoming.role
                         && current.body == incoming.body
                         && current.tool_call_id == incoming.tool_call_id
+                        && current.tool_meta == incoming.tool_meta
                 })
+    }
+
+    /// Markdown text shown in the message body view.
+    ///
+    /// Tool messages embed `title\nstatus\noutput` for history compatibility;
+    /// when structured card meta is present the card header already renders
+    /// title and status, so the body view shows only the output lines.
+    fn display_body(msg: &AgentChatThreadMessage) -> String {
+        if msg.tool_meta.is_some() {
+            let mut lines = msg.body.lines();
+            let _title = lines.next();
+            let _status = lines.next();
+            lines.collect::<Vec<_>>().join("\n")
+        } else {
+            msg.body.to_string()
+        }
     }
 
     pub fn set_messages(&mut self, messages: Vec<AgentChatThreadMessage>, cx: &mut Context<Self>) {
@@ -108,6 +129,29 @@ impl AgentChatTranscript {
             self.collapsed_ids.insert(id);
         }
         cx.notify();
+    }
+
+    /// Whether a collapsible message renders expanded by default, before any
+    /// user toggle. Edit diffs and failed tools surface their body immediately;
+    /// everything else starts collapsed.
+    fn default_expanded(msg: &AgentChatThreadMessage) -> bool {
+        msg.tool_meta
+            .as_ref()
+            .is_some_and(|meta| meta.diff.is_some() || meta.is_error)
+    }
+
+    /// `collapsed_ids` records user toggles, so the effective state is the
+    /// default expansion XOR a recorded toggle.
+    fn is_collapsed_for(msg: &AgentChatThreadMessage, toggled: &HashSet<u64>) -> bool {
+        let is_collapsible = matches!(
+            msg.role,
+            AgentChatThreadMessageRole::Thought | AgentChatThreadMessageRole::Tool
+        );
+        if !is_collapsible {
+            return false;
+        }
+        let expanded = Self::default_expanded(msg) ^ toggled.contains(&msg.id);
+        !expanded
     }
 
     pub fn clear_collapsed_ids(&mut self, cx: &mut Context<Self>) {
@@ -208,6 +252,21 @@ impl AgentChatTranscript {
             .text_color(text_color)
     }
 
+    /// Attach the expand/collapse click handler to a collapsible header.
+    /// Routed through the transcript entity so toggling re-renders the row.
+    fn with_toggle_click(
+        header: gpui::Stateful<gpui::Div>,
+        entity: &gpui::WeakEntity<AgentChatTranscript>,
+        message_id: u64,
+    ) -> gpui::Stateful<gpui::Div> {
+        let entity = entity.clone();
+        header.on_click(move |_event, _window, cx| {
+            if let Some(transcript) = entity.upgrade() {
+                transcript.update(cx, |this, cx| this.toggle_collapsed(message_id, cx));
+            }
+        })
+    }
+
     fn render_message(
         ui_variant: AgentChatUiVariant,
         msg: &AgentChatThreadMessage,
@@ -215,6 +274,7 @@ impl AgentChatTranscript {
         is_collapsed: bool,
         text_view_state: &gpui::Entity<TextViewState>,
         style_def: &AgentChatStyleDef,
+        entity: &gpui::WeakEntity<AgentChatTranscript>,
     ) -> gpui::AnyElement {
         let theme = theme::get_cached_theme();
         let presentation = ui_variant.config().transcript;
@@ -244,6 +304,7 @@ impl AgentChatTranscript {
                 false,
                 text_view_state,
                 style_def,
+                entity,
             ),
             AgentChatThreadMessageRole::Tool => Self::render_collapsible_block(
                 msg,
@@ -253,6 +314,7 @@ impl AgentChatTranscript {
                 true,
                 text_view_state,
                 style_def,
+                entity,
             ),
             AgentChatThreadMessageRole::Error => {
                 Self::render_error_message(msg, colors, text_view_state, style_def)
@@ -355,6 +417,204 @@ impl AgentChatTranscript {
         }
     }
 
+    /// Maximum diff rows rendered inline before truncating with a marker.
+    /// Bounds element count for very large edits; the full diff remains in
+    /// the thread state.
+    const MAX_DIFF_ROWS: usize = 200;
+
+    /// Render the colored, line-numbered diff Pi emits for edit/write tools.
+    /// Lines are classified by their `+`/`-`/space marker prefix.
+    fn render_diff_body(
+        diff: &str,
+        theme: &crate::theme::Theme,
+        style_def: &AgentChatStyleDef,
+    ) -> gpui::AnyElement {
+        let block_style = style_def.collapsible;
+        let code_font_size = style_def.markdown.code_block_font_size;
+        let total_rows = diff.lines().count();
+
+        let mut rows = div()
+            .flex()
+            .flex_col()
+            .w_full()
+            .mt(px(block_style.body_padding_top))
+            .rounded(px(style_def.markdown.code_block_radius))
+            .bg(rgba(
+                (theme.colors.background.search_box << 8)
+                    | style_def.markdown.code_block_bg_alpha.round() as u32,
+            ))
+            .px(px(style_def.markdown.code_block_padding_x))
+            .py(px(style_def.markdown.code_block_padding_y))
+            .font_family(FONT_MONO)
+            .text_size(px(code_font_size));
+
+        for line in diff.lines().take(Self::MAX_DIFF_ROWS) {
+            let row = div().w_full().whitespace_nowrap().child(line.to_string());
+            let row = match classify_diff_line(line) {
+                DiffLineKind::Added => row
+                    .text_color(rgb(theme.colors.ui.success))
+                    .bg(rgba((theme.colors.ui.success << 8) | 0x14)),
+                DiffLineKind::Removed => row
+                    .text_color(rgb(theme.colors.ui.error))
+                    .bg(rgba((theme.colors.ui.error << 8) | 0x14)),
+                DiffLineKind::Context => {
+                    row.text_color(rgb(theme.colors.text.primary)).opacity(0.55)
+                }
+            };
+            rows = rows.child(row);
+        }
+
+        if total_rows > Self::MAX_DIFF_ROWS {
+            rows = rows.child(
+                div()
+                    .text_color(rgb(theme.colors.text.primary))
+                    .opacity(0.45)
+                    .child(format!(
+                        "\u{2026} {} more lines",
+                        total_rows - Self::MAX_DIFF_ROWS
+                    )),
+            );
+        }
+
+        rows.into_any_element()
+    }
+
+    /// Render a tool call as a structured card: status badge, kind glyph,
+    /// tool name, args subject, and (expanded) diff or output body.
+    #[allow(clippy::too_many_arguments)]
+    fn render_tool_card(
+        msg: &AgentChatThreadMessage,
+        meta: &AgentChatToolCardMeta,
+        _colors: &PromptColors,
+        theme: &crate::theme::Theme,
+        is_collapsed: bool,
+        text_view_state: &gpui::Entity<TextViewState>,
+        style_def: &AgentChatStyleDef,
+        entity: &gpui::WeakEntity<AgentChatTranscript>,
+    ) -> gpui::AnyElement {
+        let block_style = style_def.collapsible;
+        let status_color = match meta.status {
+            AgentChatToolStatus::Pending => rgba((theme.colors.text.primary << 8) | 0x80),
+            AgentChatToolStatus::Running => rgb(_colors.accent_color),
+            AgentChatToolStatus::Complete => rgb(theme.colors.ui.success),
+            AgentChatToolStatus::Failed => rgb(theme.colors.ui.error),
+        };
+        let left_border_color = if meta.is_error {
+            rgba((theme.colors.ui.error << 8) | block_style.tool_border_alpha.round() as u32)
+        } else {
+            rgba((theme.colors.accent.selected << 8) | block_style.tool_border_alpha.round() as u32)
+        };
+        let chevron = if is_collapsed {
+            "\u{25B8}" // ▸
+        } else {
+            "\u{25BE}" // ▾
+        };
+
+        let display_body = Self::display_body(msg);
+        let has_body = !display_body.trim().is_empty();
+        let collapsed_line_count = meta
+            .diff
+            .as_deref()
+            .map(|diff| diff.lines().count())
+            .unwrap_or_else(|| display_body.lines().count());
+
+        let header = div()
+            .id(SharedString::from(format!("agent_chat-toggle-{}", msg.id)))
+            .flex()
+            .items_center()
+            .gap_1()
+            .cursor_pointer()
+            .child(
+                div()
+                    .text_sm()
+                    .opacity(block_style.tool_header_opacity)
+                    .text_color(rgb(_colors.accent_color))
+                    .child(chevron.to_string()),
+            )
+            .child(
+                div()
+                    .text_sm()
+                    .text_color(status_color)
+                    .child(format!("{} ", meta.status.glyph())),
+            )
+            .child(
+                div()
+                    .text_sm()
+                    .opacity(block_style.tool_header_opacity)
+                    .text_color(rgb(_colors.accent_color))
+                    .child(format!("{} {}", meta.kind.glyph(), meta.tool_name)),
+            )
+            .when_some(meta.subject.clone(), |d, subject| {
+                d.child(
+                    div()
+                        .text_sm()
+                        .min_w(px(0.0))
+                        .flex_shrink()
+                        .overflow_hidden()
+                        .whitespace_nowrap()
+                        .font_family(FONT_MONO)
+                        .opacity(block_style.status_opacity)
+                        .text_color(rgb(_colors.text_primary))
+                        .child(subject),
+                )
+            })
+            .when(matches!(meta.status, AgentChatToolStatus::Failed), |d| {
+                d.child(
+                    div()
+                        .text_sm()
+                        .text_color(rgb(theme.colors.ui.error))
+                        .child(meta.status.label().to_string()),
+                )
+            })
+            .when(is_collapsed && collapsed_line_count > 0, |d| {
+                d.child(
+                    div()
+                        .text_sm()
+                        .opacity(block_style.status_opacity)
+                        .text_color(rgb(_colors.accent_color))
+                        .child(format!("{collapsed_line_count} lines")),
+                )
+            });
+        let header = Self::with_toggle_click(header, entity, msg.id);
+
+        let mut container = div()
+            .w_full()
+            .pl(px(block_style.padding_x))
+            .pr(px(block_style.padding_x))
+            .py(px(block_style.padding_y))
+            .border_l_2()
+            .border_color(left_border_color)
+            .child(header);
+
+        if !is_collapsed {
+            if let Some(diff) = meta.diff.as_deref() {
+                container = container.child(
+                    div()
+                        .max_h(px(block_style.max_body_height))
+                        .overflow_y_hidden()
+                        .child(Self::render_diff_body(diff, theme, style_def)),
+                );
+            } else if has_body {
+                container = container.child(
+                    div()
+                        .pt(px(block_style.body_padding_top))
+                        .max_h(px(block_style.max_body_height))
+                        .overflow_y_hidden()
+                        .child(Self::selectable_markdown_view(
+                            text_view_state,
+                            theme,
+                            _colors,
+                            rgb(_colors.accent_color),
+                            style_def,
+                        )),
+                );
+            }
+        }
+
+        container.into_any_element()
+    }
+
+    #[allow(clippy::too_many_arguments)]
     fn render_collapsible_block(
         msg: &AgentChatThreadMessage,
         _colors: &PromptColors,
@@ -363,7 +623,23 @@ impl AgentChatTranscript {
         is_tool: bool,
         text_view_state: &gpui::Entity<TextViewState>,
         style_def: &AgentChatStyleDef,
+        entity: &gpui::WeakEntity<AgentChatTranscript>,
     ) -> gpui::AnyElement {
+        if is_tool {
+            if let Some(meta) = msg.tool_meta.as_ref() {
+                return Self::render_tool_card(
+                    msg,
+                    meta,
+                    _colors,
+                    theme,
+                    is_collapsed,
+                    text_view_state,
+                    style_def,
+                    entity,
+                );
+            }
+        }
+
         let (label, status_hint) = if is_tool {
             let mut lines = msg.body.lines();
             let title = lines
@@ -449,6 +725,7 @@ impl AgentChatTranscript {
                     )
                 },
             );
+        let header = Self::with_toggle_click(header, entity, msg.id);
 
         container = container.child(header);
 
@@ -587,23 +864,25 @@ impl Render for AgentChatTranscript {
 
         // Reconcile/sync TextViewState entities for each message
         for msg in &messages_snapshot {
+            let display_text = Self::display_body(msg);
             let text_view_state = self
                 .message_views
                 .entry(msg.id)
-                .or_insert_with(|| cx.new(|cx| TextViewState::markdown(&msg.body, cx)));
+                .or_insert_with(|| cx.new(|cx| TextViewState::markdown(&display_text, cx)));
 
             // Update text buffer if it's changing (e.g. streaming assistant output)
             let last_text = self.message_texts.get(&msg.id).cloned().unwrap_or_default();
-            if last_text != msg.body.as_ref() {
+            if last_text != display_text {
                 text_view_state.update(cx, |state, cx| {
-                    state.set_text(&msg.body, cx);
+                    state.set_text(&display_text, cx);
                 });
-                self.message_texts.insert(msg.id, msg.body.to_string());
+                self.message_texts.insert(msg.id, display_text);
             }
         }
 
         let message_views_snapshot = self.message_views.clone();
         let ui_variant = self.ui_variant;
+        let entity = cx.entity().downgrade();
         let transcript_content = if focused_text_preview {
             let mut preview = div().size_full().flex().flex_col().overflow_hidden();
 
@@ -615,11 +894,7 @@ impl Render for AgentChatTranscript {
                     continue;
                 };
 
-                let is_collapsible = matches!(
-                    msg.role,
-                    AgentChatThreadMessageRole::Thought | AgentChatThreadMessageRole::Tool
-                );
-                let is_collapsed = is_collapsible && !collapsed_ids.contains(&msg.id);
+                let is_collapsed = Self::is_collapsed_for(msg, &collapsed_ids);
                 preview = preview.child(
                     div()
                         .w_full()
@@ -632,6 +907,7 @@ impl Render for AgentChatTranscript {
                             is_collapsed,
                             text_view_state,
                             &style_def,
+                            &entity,
                         )),
                 );
             }
@@ -644,11 +920,7 @@ impl Render for AgentChatTranscript {
                 };
                 let msg = &messages_snapshot[message_ix];
 
-                let is_collapsible = matches!(
-                    msg.role,
-                    AgentChatThreadMessageRole::Thought | AgentChatThreadMessageRole::Tool
-                );
-                let is_collapsed = is_collapsible && !collapsed_ids.contains(&msg.id);
+                let is_collapsed = Self::is_collapsed_for(msg, &collapsed_ids);
 
                 let prev_was_user = message_ix > 0
                     && matches!(
@@ -698,6 +970,7 @@ impl Render for AgentChatTranscript {
                         is_collapsed,
                         text_view_state,
                         &style_def,
+                        &entity,
                     ))
                     .into_any()
             })
