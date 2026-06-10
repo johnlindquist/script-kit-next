@@ -17,7 +17,7 @@ pub fn default_pi_binary() -> Option<PathBuf> {
         }
     }
 
-    dev_pi_binary_for_home(dirs::home_dir().as_deref())
+    dev_sidecar_pi_binary().or_else(|| dev_pi_binary_for_home(dirs::home_dir().as_deref()))
 }
 
 pub fn bundled_pi_binary_candidate_for_exe(exe: &Path) -> Option<PathBuf> {
@@ -31,6 +31,25 @@ pub fn bundled_pi_binary_candidate_for_exe(exe: &Path) -> Option<PathBuf> {
 
 pub fn existing_bundled_pi_binary_for_exe(exe: &Path) -> Option<PathBuf> {
     let candidate = bundled_pi_binary_candidate_for_exe(exe)?;
+    is_executable_file(&candidate).then_some(candidate)
+}
+
+/// Dev runs (`./dev.sh`, `cargo run`) execute the bare target binary, so the
+/// bundled `Contents/MacOS/pi` sidecar never resolves. Debug builds therefore
+/// also check the repo-local sidecar produced by `scripts/prepare-pi-sidecar.sh`.
+#[cfg(debug_assertions)]
+pub fn dev_sidecar_pi_binary() -> Option<PathBuf> {
+    dev_sidecar_pi_binary_in_repo(Path::new(env!("CARGO_MANIFEST_DIR")))
+}
+
+#[cfg(not(debug_assertions))]
+pub fn dev_sidecar_pi_binary() -> Option<PathBuf> {
+    None
+}
+
+#[cfg(debug_assertions)]
+pub fn dev_sidecar_pi_binary_in_repo(repo_root: &Path) -> Option<PathBuf> {
+    let candidate = repo_root.join("target").join("pi-sidecar").join("pi");
     is_executable_file(&candidate).then_some(candidate)
 }
 
@@ -141,6 +160,29 @@ mod tests {
         let exe = Path::new("/tmp/script-kit-gpui");
 
         assert_eq!(bundled_pi_binary_candidate_for_exe(exe), None);
+    }
+
+    #[test]
+    fn dev_sidecar_resolves_only_when_prepared_and_executable() {
+        let temp = tempfile::tempdir().expect("temp dir");
+        let repo_root = temp.path();
+        let sidecar_dir = repo_root.join("target").join("pi-sidecar");
+        std::fs::create_dir_all(&sidecar_dir).expect("sidecar dir");
+        let pi = sidecar_dir.join("pi");
+
+        assert_eq!(dev_sidecar_pi_binary_in_repo(repo_root), None);
+
+        std::fs::write(&pi, b"pi").expect("pi binary");
+        assert_eq!(dev_sidecar_pi_binary_in_repo(repo_root), None);
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mut permissions = std::fs::metadata(&pi).unwrap().permissions();
+            permissions.set_mode(0o755);
+            std::fs::set_permissions(&pi, permissions).unwrap();
+            assert_eq!(dev_sidecar_pi_binary_in_repo(repo_root), Some(pi));
+        }
     }
 
     #[test]

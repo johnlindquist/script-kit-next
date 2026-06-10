@@ -62,6 +62,11 @@ pub(crate) enum AgentChatWarmSessionState {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum AgentChatWarmAcquireOrigin {
     Ready,
+    /// The slot was still `Preparing` but its connection was already spawned;
+    /// the caller joins the in-flight boot instead of cold-spawning a
+    /// duplicate runtime. The pi worker queue serializes the prepare
+    /// commands ahead of the caller's first turn.
+    JoinedPreparing,
     ColdSpawned,
 }
 
@@ -191,6 +196,16 @@ impl AgentChatWarmSessionManager {
         self.cleanup_stale_acquired(DEFAULT_STALE_ACQUIRED_TTL);
         if let Some(lease) = self.acquire_warm_ready(&spec.key) {
             return Ok((lease, AgentChatWarmAcquireOrigin::Ready));
+        }
+        if let Some(lease) = self.acquire_preparing_join(&spec.key) {
+            tracing::info!(
+                target: "script_kit::tab_ai",
+                event = "warm_acquire_joined_preparing",
+                key = %lease.key,
+                generation = lease.generation,
+                ui_thread_id = %lease.ui_thread_id,
+            );
+            return Ok((lease, AgentChatWarmAcquireOrigin::JoinedPreparing));
         }
 
         let (generation, ui_thread_id, previous_state) = {
@@ -326,6 +341,31 @@ impl AgentChatWarmSessionManager {
         Ok(snapshot)
     }
 
+    /// Acquire a slot that is still `Preparing` but whose runtime connection
+    /// has already been spawned. The warm-up commands are queued ahead of the
+    /// caller's first turn on the same worker, so joining is strictly faster
+    /// than discarding the in-flight boot and cold-spawning a second runtime.
+    fn acquire_preparing_join(&self, key: &str) -> Option<AgentChatWarmSessionLease> {
+        let mut inner = self.inner.lock();
+        let slot = inner.slots.get_mut(key)?;
+        if slot.state != AgentChatWarmSessionState::Preparing {
+            return None;
+        }
+
+        let connection = slot.connection.as_ref()?.clone();
+        let ui_thread_id = slot.ui_thread_id.clone()?;
+        slot.state = AgentChatWarmSessionState::Acquired;
+        slot.acquired_at = Some(Instant::now());
+
+        Some(AgentChatWarmSessionLease {
+            key: key.to_string(),
+            generation: slot.generation,
+            ui_thread_id,
+            cwd: slot.spec.cwd.clone(),
+            connection,
+        })
+    }
+
     pub(crate) fn acquire_warm_ready(&self, key: &str) -> Option<AgentChatWarmSessionLease> {
         let mut inner = self.inner.lock();
         let slot = inner.slots.get_mut(key)?;
@@ -350,6 +390,28 @@ impl AgentChatWarmSessionManager {
     pub(crate) fn dismiss_reset_background(
         &self,
         lease: AgentChatWarmSessionLease,
+    ) -> AgentChatWarmSessionSnapshot {
+        self.reset_background_inner(lease, true)
+    }
+
+    /// Release an acquired lease because the conversation is moving to the
+    /// detached chat window, which keeps using the lease's connection.
+    ///
+    /// Identical to [`Self::dismiss_reset_background`] (the slot is
+    /// regenerated so the next launch gets a fresh warm session) except the
+    /// old connection's turn is NOT cancelled — cancelling here would kill an
+    /// in-flight response in the window the user just detached.
+    pub(crate) fn release_for_detach_handoff(
+        &self,
+        lease: AgentChatWarmSessionLease,
+    ) -> AgentChatWarmSessionSnapshot {
+        self.reset_background_inner(lease, false)
+    }
+
+    fn reset_background_inner(
+        &self,
+        lease: AgentChatWarmSessionLease,
+        cancel_old_turn: bool,
     ) -> AgentChatWarmSessionSnapshot {
         let key = lease.key.clone();
         let generation = lease.generation;
@@ -397,7 +459,9 @@ impl AgentChatWarmSessionManager {
 
         let manager = self.clone();
         std::thread::spawn(move || {
-            let _ = old_connection.cancel_turn(old_ui_thread_id);
+            if cancel_old_turn {
+                let _ = old_connection.cancel_turn(old_ui_thread_id);
+            }
             drop(lease);
             let slot = manager.prepare_slot_with_generation(
                 spec,
@@ -506,6 +570,26 @@ impl AgentChatWarmSessionManager {
         self.prepare_slot_with_generation(spec, generation, ui_thread_id)
     }
 
+    /// Expose the freshly spawned connection on a still-`Preparing` slot so
+    /// `acquire_preparing_join` can hand it out while warm-up continues.
+    fn publish_preparing_connection(
+        &self,
+        key: &str,
+        generation: u64,
+        connection: &Arc<dyn AgentChatConnection>,
+    ) {
+        let mut inner = self.inner.lock();
+        let Some(slot) = inner.slots.get_mut(key) else {
+            return;
+        };
+        if slot.generation == generation
+            && slot.state == AgentChatWarmSessionState::Preparing
+            && slot.connection.is_none()
+        {
+            slot.connection = Some(connection.clone());
+        }
+    }
+
     fn insert_prepared_slot_if_current(&self, slot: WarmSlot, generation: u64) {
         let mut inner = self.inner.lock();
         let Some(current) = inner.slots.get(&slot.spec.key) else {
@@ -541,6 +625,7 @@ impl AgentChatWarmSessionManager {
                     generation,
                     key = %spec.key,
                 );
+                self.publish_preparing_connection(&spec.key, generation, &connection);
                 let prepare_events =
                     connection.prepare_session(ui_thread_id.clone(), spec.cwd.clone());
                 let (state, failure_message) = match prepare_events {
@@ -843,6 +928,73 @@ mod tests {
         }
     }
 
+    /// Spawns instantly but blocks inside `prepare_session` until released,
+    /// holding the slot in `Preparing` with a published connection.
+    struct GatedPrepareFactory {
+        spawned: AtomicUsize,
+        started_tx: Mutex<Option<mpsc::Sender<()>>>,
+        release_rx: Mutex<Option<mpsc::Receiver<()>>>,
+    }
+
+    impl GatedPrepareFactory {
+        fn new(started_tx: mpsc::Sender<()>, release_rx: mpsc::Receiver<()>) -> Self {
+            Self {
+                spawned: AtomicUsize::new(0),
+                started_tx: Mutex::new(Some(started_tx)),
+                release_rx: Mutex::new(Some(release_rx)),
+            }
+        }
+
+        fn spawned_count(&self) -> usize {
+            self.spawned.load(Ordering::SeqCst)
+        }
+    }
+
+    impl AgentChatWarmRuntimeFactory for GatedPrepareFactory {
+        fn spawn_connection(&self) -> Result<Arc<dyn AgentChatConnection>> {
+            self.spawned.fetch_add(1, Ordering::SeqCst);
+            Ok(Arc::new(GatedPrepareConnection {
+                started_tx: Mutex::new(self.started_tx.lock().take()),
+                release_rx: Mutex::new(self.release_rx.lock().take()),
+            }))
+        }
+    }
+
+    struct GatedPrepareConnection {
+        started_tx: Mutex<Option<mpsc::Sender<()>>>,
+        release_rx: Mutex<Option<mpsc::Receiver<()>>>,
+    }
+
+    impl AgentChatConnection for GatedPrepareConnection {
+        fn start_turn(&self, _request: AgentChatTurnRequest) -> Result<AgentChatEventRx> {
+            let (_tx, rx) = async_channel::bounded(1);
+            Ok(rx)
+        }
+
+        fn cancel_turn(&self, _ui_thread_id: String) -> Result<()> {
+            Ok(())
+        }
+
+        fn prepare_session(
+            &self,
+            _ui_thread_id: String,
+            _cwd: PathBuf,
+        ) -> Result<AgentChatEventRx> {
+            if let Some(tx) = self.started_tx.lock().take() {
+                let _ = tx.send(());
+            }
+            if let Some(rx) = self.release_rx.lock().take() {
+                let _ = rx.recv();
+            }
+            let (tx, rx) = async_channel::bounded(1);
+            tx.send_blocking(AgentChatEvent::ModelsAvailable {
+                current_model_id: None,
+                models: Vec::new(),
+            })?;
+            Ok(rx)
+        }
+    }
+
     struct SpawnFailFactory;
 
     impl AgentChatWarmRuntimeFactory for SpawnFailFactory {
@@ -1107,6 +1259,43 @@ mod tests {
     }
 
     #[test]
+    fn acquire_ready_or_spawn_cold_joins_preparing_slot_with_spawned_connection() {
+        let manager = manager();
+        let (started_tx, started_rx) = mpsc::channel();
+        let (release_tx, release_rx) = mpsc::channel();
+        let factory = Arc::new(GatedPrepareFactory::new(started_tx, release_rx));
+
+        let gated_factory: Arc<dyn AgentChatWarmRuntimeFactory> = factory.clone();
+        manager
+            .prepare_warm_background(spec_with_factory(gated_factory.clone()))
+            .expect("background prepare");
+        started_rx
+            .recv_timeout(Duration::from_secs(1))
+            .expect("prepare_session entered");
+
+        let (lease, origin) = manager
+            .acquire_ready_or_spawn_cold(spec_with_factory(gated_factory))
+            .expect("join in-flight prepare");
+
+        assert_eq!(origin, AgentChatWarmAcquireOrigin::JoinedPreparing);
+        assert_eq!(lease.generation, 1);
+        assert_eq!(lease.ui_thread_id, "thread-1");
+        assert_eq!(factory.spawned_count(), 1);
+        assert_eq!(
+            manager.snapshot("key-a").unwrap().state,
+            AgentChatWarmSessionState::Acquired
+        );
+
+        release_tx.send(()).expect("release prepare");
+        // The prepare thread finishing must not clobber the joined acquisition.
+        std::thread::sleep(Duration::from_millis(100));
+        let snapshot = manager.snapshot("key-a").unwrap();
+        assert_eq!(snapshot.state, AgentChatWarmSessionState::Acquired);
+        assert_eq!(snapshot.generation, 1);
+        assert_eq!(factory.spawned_count(), 1);
+    }
+
+    #[test]
     fn cold_acquired_dismiss_reset_background_prepares_replacement() {
         let manager = manager();
         let factory = Arc::new(RecordingFactory::default());
@@ -1157,6 +1346,33 @@ mod tests {
             .as_deref()
             .unwrap_or_default()
             .contains("spawn failed"));
+    }
+
+    #[test]
+    fn release_for_detach_handoff_prepares_replacement_without_cancelling_live_turn() {
+        let manager = manager();
+        let factory = Arc::new(RecordingFactory::default());
+
+        manager.prepare_warm(spec(factory.clone())).unwrap();
+        let lease = manager.acquire_warm("key-a").unwrap();
+        let replacement = manager.release_for_detach_handoff(lease);
+
+        assert_eq!(replacement.state, AgentChatWarmSessionState::Preparing);
+        assert_eq!(replacement.generation, 2);
+        assert_eq!(replacement.ui_thread_id.as_deref(), Some("thread-2"));
+        for _ in 0..100 {
+            if manager.snapshot("key-a").unwrap().state == AgentChatWarmSessionState::Ready {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        // The detached window keeps streaming on the old connection: the
+        // hand-off must NOT cancel its in-flight turn.
+        assert!(factory.spawned()[0].cancel_calls().is_empty());
+        assert_eq!(
+            factory.spawned()[1].prepare_calls(),
+            vec![("thread-2".to_string(), PathBuf::from("/tmp/a"))]
+        );
     }
 
     #[test]

@@ -5170,6 +5170,7 @@ impl AgentChatView {
         )?;
         Some(match source {
             crate::spine::catalog_subsearch::ContextSubsearchSource::File => "file",
+            crate::spine::catalog_subsearch::ContextSubsearchSource::Project => "project",
             crate::spine::catalog_subsearch::ContextSubsearchSource::Clipboard => "clipboard",
             crate::spine::catalog_subsearch::ContextSubsearchSource::Notes => "notes",
             crate::spine::catalog_subsearch::ContextSubsearchSource::BrowserHistory => {
@@ -5226,7 +5227,6 @@ impl AgentChatView {
             SpineListAction::OpenModeExit { .. } => "openModeExit",
             SpineListAction::OpenFileSearchPortal { .. } => "openFileSearchPortal",
             SpineListAction::OpenConversation { .. } => "openConversation",
-            SpineListAction::AwaitContextSubsearchInput { .. } => "awaitContextSubsearchInput",
             SpineListAction::SubmitPromptPlan => "submitPromptPlan",
             SpineListAction::Noop => "noop",
         };
@@ -7237,10 +7237,19 @@ impl AgentChatView {
             tracing::info!(target: "script_kit::agent_chat_spine", event = "refresh_skipped_setup_mode");
             return;
         }
-        let (text, cursor) = {
+        let (text, cursor, thread_cwd) = {
             let thread = self.live_thread().read(cx);
-            (thread.input.text().to_string(), thread.input.cursor())
+            (
+                thread.input.text().to_string(),
+                thread.input.cursor(),
+                thread.cwd().clone(),
+            )
         };
+        // Snapshot for the `@project:` subsearch: section builders run
+        // without cx and cannot read the thread entity.
+        self.composer_spine.project_scope_cwd = Some(thread_cwd).filter(|cwd| {
+            !cwd.as_os_str().is_empty() && cwd.as_path() != std::path::Path::new(".")
+        });
         self.composer_spine.refresh(&text, cursor);
         let owns = self.agent_chat_spine_owns_list();
         let kind = self
@@ -7346,6 +7355,27 @@ impl AgentChatView {
                             &files,
                         )]
                     }
+                    crate::spine::catalog_subsearch::ContextSubsearchSource::Project => {
+                        // Scoped to the thread cwd snapshot; `search_files`
+                        // already falls back to a filesystem walk when
+                        // Spotlight can't serve the scope (dot-directories).
+                        let scope = self
+                            .composer_spine
+                            .project_scope_cwd
+                            .as_ref()
+                            .map(|p| p.to_string_lossy().to_string())
+                            .or_else(|| {
+                                dirs::home_dir().map(|home| home.to_string_lossy().to_string())
+                            });
+                        let files =
+                            crate::file_search::search_files(rich_query, scope.as_deref(), 10);
+                        vec![self.agent_chat_rich_project_subsearch_section(
+                            rich_query,
+                            segment_index,
+                            segment_byte_range,
+                            &files,
+                        )]
+                    }
                     crate::spine::catalog_subsearch::ContextSubsearchSource::Clipboard => {
                         let options =
                             crate::clipboard_history::RootClipboardHistorySectionOptions {
@@ -7427,17 +7457,54 @@ impl AgentChatView {
         segment_byte_range: std::ops::Range<usize>,
         files: &[crate::file_search::FileResult],
     ) -> SpineListSection {
+        self.agent_chat_rich_file_backed_subsearch_section(
+            query,
+            segment_index,
+            segment_byte_range,
+            files,
+            "Files",
+            "@file:",
+        )
+    }
+
+    fn agent_chat_rich_project_subsearch_section(
+        &self,
+        query: &str,
+        segment_index: usize,
+        segment_byte_range: std::ops::Range<usize>,
+        files: &[crate::file_search::FileResult],
+    ) -> SpineListSection {
+        self.agent_chat_rich_file_backed_subsearch_section(
+            query,
+            segment_index,
+            segment_byte_range,
+            files,
+            "Project Files",
+            "@project:",
+        )
+    }
+
+    fn agent_chat_rich_file_backed_subsearch_section(
+        &self,
+        query: &str,
+        segment_index: usize,
+        segment_byte_range: std::ops::Range<usize>,
+        files: &[crate::file_search::FileResult],
+        noun: &str,
+        prefix: &str,
+    ) -> SpineListSection {
         let trimmed = query.trim();
         let title = if trimmed.is_empty() {
-            "Files".to_string()
+            noun.to_string()
         } else {
-            format!("Files matching \"{trimmed}\"")
+            format!("{noun} matching \"{trimmed}\"")
         };
+        let empty_subtitle = format!("Type after {prefix} to search");
         let rows = if files.is_empty() {
             vec![Self::agent_chat_spine_hint_row(
                 "No files",
                 if trimmed.is_empty() {
-                    "Type after @file: to search"
+                    &empty_subtitle
                 } else {
                     "No matching files"
                 },
@@ -7871,7 +7938,6 @@ impl AgentChatView {
                 }
                 ok
             }
-            SpineListAction::AwaitContextSubsearchInput { .. } => true,
             // SubmitPromptPlan falls through (false) so the composer's
             // normal Enter-to-send path delivers the message.
             SpineListAction::OpenModeExit { .. }
@@ -7993,10 +8059,19 @@ impl AgentChatView {
         &mut self,
         cx: &mut Context<Self>,
     ) -> bool {
-        let (text, cursor) = {
+        let (text, cursor, thread_cwd) = {
             let thread = self.live_thread().read(cx);
-            (thread.input.text().to_string(), thread.input.cursor())
+            (
+                thread.input.text().to_string(),
+                thread.input.cursor(),
+                thread.cwd().clone(),
+            )
         };
+        // Snapshot for the `@project:` subsearch: section builders run
+        // without cx and cannot read the thread entity.
+        self.composer_spine.project_scope_cwd = Some(thread_cwd).filter(|cwd| {
+            !cwd.as_os_str().is_empty() && cwd.as_path() != std::path::Path::new(".")
+        });
         self.composer_spine.refresh(&text, cursor);
         let plan = crate::spine::prompt_plan::build_spine_prompt_plan_with_aliases(
             &self.composer_spine.input.parse,
@@ -12680,15 +12755,34 @@ impl AgentChatView {
 
         if modifiers.platform && key.eq_ignore_ascii_case("w") {
             let is_detached_host = crate::ai::agent_chat::ui::chat_window::is_chat_window(window);
-            if !is_detached_host {
-                tracing::info!(
-                    target: "script_kit::keyboard",
-                    event = "embedded_agent_chat_cmd_w_host_close_requested",
-                );
-                self.trigger_close_window_requested(window, cx);
-                cx.stop_propagation();
-                return;
-            }
+            tracing::info!(
+                target: "script_kit::keyboard",
+                event = "agent_chat_cmd_w_host_close_requested",
+                host = if is_detached_host { "detached" } else { "embedded" },
+            );
+            // Detached host: on_close_window_requested is unset, so this falls
+            // back to on_close_requested (close_chat_window) and closes the
+            // detached window — same as the embedded host's window close.
+            self.trigger_close_window_requested(window, cx);
+            cx.stop_propagation();
+            return;
+        }
+
+        // ── Cmd+N → start a new thread (both hosts) ──────────────
+        if modifiers.platform && !modifiers.shift && !modifiers.alt && key.eq_ignore_ascii_case("n")
+        {
+            tracing::info!(
+                target: "script_kit::keyboard",
+                event = "agent_chat_cmd_n_new_thread",
+                host = if crate::ai::agent_chat::ui::chat_window::is_chat_window(window) {
+                    "detached"
+                } else {
+                    "embedded"
+                },
+            );
+            self.start_new_thread(cx);
+            cx.stop_propagation();
+            return;
         }
 
         // ── Cmd+. → cancel streaming (standard macOS cancel) ──────

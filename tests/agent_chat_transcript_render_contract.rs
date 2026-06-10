@@ -33,23 +33,34 @@ fn transcript_list_state_starts_with_existing_messages() {
 }
 
 #[test]
-fn streaming_activity_status_stays_out_of_transcript_rows() {
-    assert!(
-        !TRANSCRIPT_SOURCE.contains("agent_chat-assistant-activity-row")
-            && !TRANSCRIPT_SOURCE.contains("Working...")
-            && !TRANSCRIPT_SOURCE.contains("render_assistant_activity_row_static"),
-        "Agent Chat streaming/loading status must not be rendered as an inline transcript row"
-    );
-
+fn streaming_activity_row_is_a_single_idempotent_tail_row() {
+    // Decision (2026-06-10, supersedes the footer-only rule): while a turn is
+    // streaming with no assistant text yet, the transcript renders one
+    // synthetic "Thinking…" tail row so submit gives immediate visible
+    // feedback. The churn-safety invariants that motivated the old rule are
+    // kept: the setter must be idempotent (no reset/notify when unchanged)
+    // and the list row count must only change through row_count().
     let setter_body = source_between(
         TRANSCRIPT_SOURCE,
         "pub fn set_show_activity_row(",
         "\n    pub fn toggle_collapsed(",
     );
     assert!(
-        !setter_body.contains("self.list_state.reset(")
-            && !setter_body.contains("usize::from(self.show_activity_row)"),
-        "the legacy activity-row setter must not add synthetic transcript rows"
+        setter_body.contains("if self.show_activity_row == show") && setter_body.contains("return;"),
+        "set_show_activity_row must early-return when the flag is unchanged to avoid reset/notify churn"
+    );
+    assert!(
+        setter_body.contains("self.list_state.reset(self.row_count())"),
+        "set_show_activity_row must resize the virtual list via row_count() so the tail row is reachable"
+    );
+    assert!(
+        TRANSCRIPT_SOURCE.contains("fn render_activity_row(")
+            && TRANSCRIPT_SOURCE.contains("ix == visible_indices.len()"),
+        "the activity row must render as the single tail row after all message rows"
+    );
+    assert!(
+        !TRANSCRIPT_SOURCE.contains("Working..."),
+        "the transcript activity row must not duplicate the footer's Working... status text"
     );
 }
 

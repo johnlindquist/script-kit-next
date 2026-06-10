@@ -225,7 +225,8 @@ impl ScriptListApp {
                     profile_icon_name: None,
                     selected_agent: None,
                     available_agents: Vec::new(),
-                    launch_requirements: crate::ai::agent_chat::ui::AgentChatLaunchRequirements::default(),
+                    launch_requirements:
+                        crate::ai::agent_chat::ui::AgentChatLaunchRequirements::default(),
                     available_models: Vec::new(),
                     selected_model_id: None,
                 },
@@ -237,8 +238,9 @@ impl ScriptListApp {
         });
 
         let view_entity = cx.new(|cx| {
-            crate::ai::agent_chat::ui::AgentChatView::new(thread, cx)
-                .with_ui_variant(crate::ai::agent_chat::ui::ui_variant::AgentChatUiVariant::FocusedTextMini)
+            crate::ai::agent_chat::ui::AgentChatView::new(thread, cx).with_ui_variant(
+                crate::ai::agent_chat::ui::ui_variant::AgentChatUiVariant::FocusedTextMini,
+            )
         });
         self.wire_embedded_agent_chat_footer_callbacks(&view_entity, cx);
         self.embedded_agent_chat = Some(view_entity.clone());

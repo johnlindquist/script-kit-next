@@ -5,7 +5,7 @@
 //! the heavy FFI decode loop off the GPUI executor. Requests arrive over an
 //! mpsc channel; each carries a reply channel and a cancel flag.
 
-use super::types::{LocalGhostRequest, LocalGhostResponse, ResolvedLocalModel};
+use super::types::{GhostPromptSpec, LocalGhostRequest, LocalGhostResponse, ResolvedLocalModel};
 use anyhow::{Context as _, Result};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc;
@@ -49,6 +49,11 @@ struct Job {
     reply: mpsc::Sender<Result<LocalGhostResponse>>,
 }
 
+/// Unload the model (and its helper subprocess / Metal residency) after this
+/// long without a ghost request. The next request reloads on demand, trading
+/// one slower first hint for ~GBs of reclaimed RAM while idle.
+const IDLE_UNLOAD: std::time::Duration = std::time::Duration::from_secs(5 * 60);
+
 impl LocalLlmActor {
     fn start() -> Self {
         let (tx, rx) = mpsc::channel::<Message>();
@@ -56,7 +61,21 @@ impl LocalLlmActor {
             .name("script-kit-local-ghost-llm".to_string())
             .spawn(move || {
                 let mut engine = LocalLlmEngine::default();
-                while let Ok(message) = rx.recv() {
+                loop {
+                    let message = match rx.recv_timeout(IDLE_UNLOAD) {
+                        Ok(message) => message,
+                        Err(mpsc::RecvTimeoutError::Timeout) => {
+                            if engine.loaded.take().is_some() {
+                                tracing::debug!(
+                                    target: "script_kit::ghost_text",
+                                    idle_secs = IDLE_UNLOAD.as_secs(),
+                                    "ghost local llm unloaded after idle"
+                                );
+                            }
+                            continue;
+                        }
+                        Err(mpsc::RecvTimeoutError::Disconnected) => break,
+                    };
                     match message {
                         Message::Shutdown => break,
                         Message::Generate(job) => {
@@ -146,10 +165,13 @@ impl LocalLlmEngine {
         let model = super::model_locator::resolve_ghost_model(config)
             .context("ghost_local_llm_no_model")?;
         self.load_if_needed(&model, &request.cancel)?;
-        let prompt = crate::scripts::search::ghost::build_local_ghost_prompt(
-            &request.partial_query,
-            &request.context,
-        );
+        let prompt = match &request.prompt {
+            GhostPromptSpec::Launcher {
+                partial_query,
+                context,
+            } => crate::scripts::search::ghost::build_local_ghost_prompt(partial_query, context),
+            GhostPromptSpec::NotesContinuation { prompt } => prompt.clone(),
+        };
         let raw_completion = self
             .loaded
             .as_mut()

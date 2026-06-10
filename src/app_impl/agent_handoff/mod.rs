@@ -224,7 +224,8 @@ impl ScriptListApp {
                 .await;
 
             let _ = cx.update(|cx| {
-                if AGENT_CHAT_OBSERVED_STATE_SYNC_GENERATION.load(std::sync::atomic::Ordering::Relaxed)
+                if AGENT_CHAT_OBSERVED_STATE_SYNC_GENERATION
+                    .load(std::sync::atomic::Ordering::Relaxed)
                     != generation
                 {
                     return;
@@ -324,6 +325,17 @@ impl ScriptListApp {
     ) -> bool {
         if !self.spine_projection_owns_main_list() {
             return false;
+        }
+        // Unarmed empty colon mode (`@clipboard:` showing recents with no
+        // selected row): Enter is consumed but attaches nothing — a reflexive
+        // double-Enter must never insert an unseen recent item. Down or a
+        // click arms the selection first.
+        if self.spine_empty_subsearch_selection_suppressed() {
+            tracing::info!(
+                target: "script_kit::spine",
+                event = "empty_context_subsearch_enter_consumed",
+            );
+            return true;
         }
         // accept_spine_projection_row handles rich subsearch interception
         // (@file:, @clipboard:, etc.) before applying the row's action. If it
@@ -457,6 +469,7 @@ impl ScriptListApp {
         self.pending_filter_sync = true;
         self.spine_parse = Default::default();
         self.spine_projection = None;
+        self.spine_empty_subsearch_armed_for = None;
         self.spine_live_preview_cache = Default::default();
         // Alias hygiene: the plan has already resolved tokens into context
         // parts; stale aliases would leak into the next prompt's tokens.
@@ -576,13 +589,36 @@ impl ScriptListApp {
 
     /// Reattach flow for the "Return to Panel" action on a detached Agent Chat chat.
     ///
-    /// The detached window and the main embedded view share the same
-    /// [`AgentChatThread`] entity, and `close_agent_chat_to_script_list` preserves a
-    /// strong reference via `self.embedded_agent_chat` when detaching. On
-    /// reattach we reuse that cached view so the thread's message history,
-    /// pending parts, and identity survive the round trip. Only when the
-    /// cache is missing do we fall back to a fresh launch.
+    /// The detached window owns the live [`AgentChatThread`] entity — and may
+    /// have switched threads since the detach — so reattach pulls the CURRENT
+    /// thread out of the detached view BEFORE closing the window, then builds
+    /// a fresh embedded view around that same thread entity. Message history,
+    /// pending parts, and thread identity survive the round trip. Only when
+    /// no detached view/thread exists do we fall back to the cached embedded
+    /// view, then to a fresh launch.
     pub(crate) fn reattach_embedded_agent_chat_from_detached(&mut self, cx: &mut Context<Self>) {
+        let detached_thread =
+            crate::ai::agent_chat::ui::chat_window::get_detached_agent_chat_view_entity()
+                .and_then(|view| view.read(cx).thread());
+        crate::ai::agent_chat::ui::chat_window::close_chat_window(cx);
+
+        if let Some(thread) = detached_thread {
+            let view_entity =
+                cx.new(|cx| crate::ai::agent_chat::ui::AgentChatView::new(thread, cx));
+            self.wire_embedded_agent_chat_footer_callbacks(&view_entity, cx);
+            self.embedded_agent_chat = Some(view_entity.clone());
+            self.tab_ai_harness_return_view = Some(AppView::ScriptList);
+            self.tab_ai_harness_return_focus_target = Some(self.tab_ai_return_focus_target());
+            self.enter_embedded_agent_chat_surface(view_entity, cx);
+            cx.notify();
+            tracing::info!(
+                target: "script_kit::tab_ai",
+                event = "agent_chat_reattach_embedded_from_detached_thread",
+                reuse = true,
+            );
+            return;
+        }
+
         if self.try_reuse_embedded_agent_chat_view(
             None,
             crate::ai::agent_chat::ui::ui_variant::AgentChatUiVariant::Standard,
@@ -680,32 +716,9 @@ impl ScriptListApp {
             .filter(|value| !value.is_empty())
             .map(str::to_string);
 
-        // If a detached chat window exists, bring it to front instead
-        // of opening a new panel chat.
-        if crate::ai::agent_chat::ui::chat_window::is_chat_window_open() {
-            if let Some(intent) = normalized_entry_intent.clone() {
-                match crate::ai::agent_chat::ui::chat_window::submit_reused_entry_intent_in_detached_chat(
-                    intent, cx,
-                ) {
-                    Ok(true) => return,
-                    Ok(false) => {}
-                    Err(error) => {
-                        tracing::warn!(
-                            target: "script_kit::tab_ai",
-                            event = "tab_ai_detached_entry_intent_reuse_failed",
-                            error = %error,
-                        );
-                    }
-                }
-            }
-
-            if let Err(e) = crate::ai::agent_chat::ui::chat_window::open_chat_window(cx) {
-                tracing::debug!(%e, "failed to focus detached chat window");
-            } else {
-                tracing::info!("tab_ai_focused_detached_window");
-                return;
-            }
-        }
+        // A detached chat window is an independent workspace: main-window AI
+        // entries open the embedded chat as if it did not exist (no reroute,
+        // no focus steal).
         let has_cached_retry_request = self
             .embedded_agent_chat
             .as_ref()
@@ -760,26 +773,6 @@ impl ScriptListApp {
 
         let focused_part =
             Some(crate::ai::message_parts::AiContextPart::FocusedTarget { target, label });
-
-        if crate::ai::agent_chat::ui::chat_window::is_chat_window_open() {
-            let detached_parts = focused_part.clone().into_iter().collect::<Vec<_>>();
-            match crate::ai::agent_chat::ui::chat_window::submit_reused_entry_intent_with_host_context_in_detached_chat(
-                String::new(),
-                detached_parts,
-                "tab_ai_explicit_target_agent_chat_open",
-                cx,
-            ) {
-                Ok(true) => return,
-                Ok(false) => {}
-                Err(error) => {
-                    tracing::warn!(
-                        target: "script_kit::tab_ai",
-                        event = "tab_ai_detached_explicit_target_reuse_failed",
-                        error = %error,
-                    );
-                }
-            }
-        }
 
         // Minimal snapshot for the launch request — we already know the target.
         let (ui_snapshot, invocation_receipt) = self.snapshot_tab_ai_ui(cx);
@@ -836,7 +829,9 @@ impl ScriptListApp {
                 ui_variant: crate::ai::agent_chat::ui::ui_variant::AgentChatUiVariant::Standard,
                 seed_policy: agent_chat_entry::AgentChatSeedPolicy::ComposerOnly,
                 suppress_focused_part: true,
-                context_staging: agent_chat_entry::AgentChatContextStaging::ActionsPayload { target },
+                context_staging: agent_chat_entry::AgentChatContextStaging::ActionsPayload {
+                    target,
+                },
                 return_origin: Some(source_view.clone()),
             },
             cx,
@@ -869,26 +864,6 @@ impl ScriptListApp {
             label = %part.label(),
         );
 
-        if crate::ai::agent_chat::ui::chat_window::is_chat_window_open() {
-            match crate::ai::agent_chat::ui::chat_window::submit_reused_entry_intent_with_host_context_in_detached_chat(
-                String::new(),
-                vec![part.clone()],
-                source,
-                cx,
-            ) {
-                Ok(true) => return,
-                Ok(false) => {}
-                Err(error) => {
-                    tracing::warn!(
-                        target: "script_kit::tab_ai",
-                        event = "tab_ai_detached_context_part_reuse_failed",
-                        source,
-                        error = %error,
-                    );
-                }
-            }
-        }
-
         let (ui_snapshot, invocation_receipt) = self.snapshot_tab_ai_ui(cx);
         self.tab_ai_harness_capture_generation += 1;
 
@@ -906,7 +881,15 @@ impl ScriptListApp {
 
         let (_tx, rx) = async_channel::bounded::<Result<TabAiDeferredCaptureArtifacts, String>>(1);
 
-        self.open_tab_ai_agent_chat_view_from_request_impl(request, rx, Some(part), false, None, true, cx);
+        self.open_tab_ai_agent_chat_view_from_request_impl(
+            request,
+            rx,
+            Some(part),
+            false,
+            None,
+            true,
+            cx,
+        );
     }
 
     fn quick_terminal_context_part_from_entity(
@@ -1017,7 +1000,10 @@ impl ScriptListApp {
         self.open_agent_chat_with_quick_terminal_output(entity, cx)
     }
 
-    pub(crate) fn route_large_script_list_paste_to_agent_chat(&mut self, cx: &mut Context<Self>) -> bool {
+    pub(crate) fn route_large_script_list_paste_to_agent_chat(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) -> bool {
         if !matches!(self.current_view, AppView::ScriptList) {
             return false;
         }
@@ -1114,7 +1100,8 @@ impl ScriptListApp {
         } else {
             &skill.plugin_title
         };
-        let command_text = crate::ai::agent_chat::ui::build_skill_slash_command_text(&skill.skill_id);
+        let command_text =
+            crate::ai::agent_chat::ui::build_skill_slash_command_text(&skill.skill_id);
         let part = crate::ai::agent_chat::ui::build_skill_context_part(
             &skill.title,
             owner,
@@ -1133,7 +1120,9 @@ impl ScriptListApp {
             "Opening Agent Chat with plugin skill staged as a slash selection"
         );
 
-        if let Some(entity) = crate::ai::agent_chat::ui::chat_window::get_detached_agent_chat_view_entity() {
+        if let Some(entity) =
+            crate::ai::agent_chat::ui::chat_window::get_detached_agent_chat_view_entity()
+        {
             let staged = entity.update(cx, |chat, cx| {
                 chat.stage_selected_plugin_skill_from_main_menu(skill, cx)
             });
@@ -1189,7 +1178,8 @@ impl ScriptListApp {
         );
         self.open_tab_ai_agent_chat_with_entry_intent(None, cx);
 
-        let detached_opened = crate::ai::agent_chat::ui::chat_window::open_detached_slash_picker(cx);
+        let detached_opened =
+            crate::ai::agent_chat::ui::chat_window::open_detached_slash_picker(cx);
         tracing::info!(
             target: "script_kit::tab_ai",
             event = "agent_chat_trigger_picker_open_attempt",
@@ -1206,7 +1196,12 @@ impl ScriptListApp {
                 event = "agent_chat_trigger_picker_open_embedded_deferred",
                 trigger = "/",
             );
-            self.schedule_embedded_agent_chat_picker_open(window.window_handle(), entity.clone(), '/', cx);
+            self.schedule_embedded_agent_chat_picker_open(
+                window.window_handle(),
+                entity.clone(),
+                '/',
+                cx,
+            );
         }
     }
 
@@ -1224,7 +1219,8 @@ impl ScriptListApp {
         );
         self.open_tab_ai_agent_chat_with_entry_intent(None, cx);
 
-        let detached_opened = crate::ai::agent_chat::ui::chat_window::open_detached_mention_picker(cx);
+        let detached_opened =
+            crate::ai::agent_chat::ui::chat_window::open_detached_mention_picker(cx);
         tracing::info!(
             target: "script_kit::tab_ai",
             event = "agent_chat_trigger_picker_open_attempt",
@@ -1263,17 +1259,15 @@ impl ScriptListApp {
                 .await;
 
             let _ = window_handle.update(cx, |_root, window, cx| {
-                entity.update(cx, |view, cx| {
-                    match trigger {
-                        '/' => view.open_slash_picker_in_window(window, cx),
-                        '@' => view.open_mention_picker_in_window(window, cx),
-                        '|' => view.open_profile_trigger_picker_in_window(window, cx),
-                        '.' | ';' | '>' => {
-                            view.set_input(trigger.to_string(), cx);
-                            view.refresh_agent_chat_spine_from_composer(cx);
-                        }
-                        _ => {}
+                entity.update(cx, |view, cx| match trigger {
+                    '/' => view.open_slash_picker_in_window(window, cx),
+                    '@' => view.open_mention_picker_in_window(window, cx),
+                    '|' => view.open_profile_trigger_picker_in_window(window, cx),
+                    '.' | ';' | '>' => {
+                        view.set_input(trigger.to_string(), cx);
+                        view.refresh_agent_chat_spine_from_composer(cx);
                     }
+                    _ => {}
                 });
             });
         })
@@ -1358,7 +1352,8 @@ impl ScriptListApp {
         gpui::Entity<crate::ai::agent_chat::ui::AgentChatView>,
         gpui::Entity<crate::ai::agent_chat::ui::AgentChatThread>,
     )> {
-        if retry_request_active || requirements != crate::ai::agent_chat::ui::AgentChatLaunchRequirements::default()
+        if retry_request_active
+            || requirements != crate::ai::agent_chat::ui::AgentChatLaunchRequirements::default()
         {
             tracing::info!(
                 target: "script_kit::tab_ai",
@@ -1433,17 +1428,6 @@ impl ScriptListApp {
     ) {
         if self.tab_ai_save_offer_state.is_some() {
             return;
-        }
-
-        // If a detached chat window exists, bring it to front instead
-        // of opening a new panel chat.
-        if crate::ai::agent_chat::ui::chat_window::is_chat_window_open() {
-            if let Err(e) = crate::ai::agent_chat::ui::chat_window::open_chat_window(cx) {
-                tracing::debug!(%e, "failed to focus detached chat window");
-            } else {
-                tracing::info!("tab_ai_focused_detached_window");
-                return;
-            }
         }
 
         self.begin_tab_ai_harness_entry(
@@ -2004,7 +1988,10 @@ impl ScriptListApp {
                 event = "tab_ai_global_cmd_enter_plain_prompt_routed_to_agent_chat",
                 input_len = intent.len(),
             );
-            self.open_tab_ai_agent_chat_with_entry_intent_suppressing_focused_part(Some(intent), cx);
+            self.open_tab_ai_agent_chat_with_entry_intent_suppressing_focused_part(
+                Some(intent),
+                cx,
+            );
             return true;
         }
 
@@ -2029,14 +2016,15 @@ impl ScriptListApp {
         // than staging that auto-selected row as an `@cmd:` context chip. Staging
         // is still preserved when the filter is non-empty OR the user
         // deliberately moved the selection off the default first-selectable row.
-        let suppress_default_script_list_selection = matches!(
-            self.current_view,
-            AppView::ScriptList
-        ) && self.filter_text.trim().is_empty()
-            && self
-                .main_menu_result_caches
-                .first_selectable_index()
-                .map_or(self.selected_index == 0, |first| self.selected_index == first);
+        let suppress_default_script_list_selection =
+            matches!(self.current_view, AppView::ScriptList)
+                && self.filter_text.trim().is_empty()
+                && self
+                    .main_menu_result_caches
+                    .first_selectable_index()
+                    .map_or(self.selected_index == 0, |first| {
+                        self.selected_index == first
+                    });
         if suppress_default_script_list_selection {
             tracing::info!(
                 target: "script_kit::tab_ai",
@@ -3214,7 +3202,8 @@ impl ScriptListApp {
         );
         let closing_quick_terminal = matches!(self.current_view, AppView::QuickTerminalView { .. });
         let closing_agent_chat = matches!(self.current_view, AppView::AgentChatView { .. });
-        let closing_pi_agent_chat = closing_agent_chat && self.active_agent_chat_warm_lease.is_some();
+        let closing_pi_agent_chat =
+            closing_agent_chat && self.active_agent_chat_warm_lease.is_some();
 
         if !closing_quick_terminal && !closing_agent_chat {
             return;
@@ -3397,10 +3386,32 @@ impl ScriptListApp {
         self.tab_ai_harness_capture_generation += 1;
         self.tab_ai_harness_apply_back_route = None;
         if let AppView::AgentChatView { entity } = &self.current_view {
-            self.embedded_agent_chat = Some(entity.clone());
+            // Detach hand-off: when the detached window now owns this thread,
+            // leave the embedded cache empty so the next main-window AI entry
+            // starts a fresh chat instead of aliasing the detached
+            // conversation. Reattach pulls the live thread back from the
+            // detached view itself (see reattach_embedded_agent_chat_from_detached).
+            let detached_owns_thread =
+                crate::ai::agent_chat::ui::chat_window::get_detached_agent_chat_view_entity()
+                    .and_then(|view| view.read(cx).thread())
+                    .zip(entity.read(cx).thread())
+                    .is_some_and(|(detached, ours)| detached == ours);
+            if detached_owns_thread {
+                self.embedded_agent_chat = None;
+            } else {
+                self.embedded_agent_chat = Some(entity.clone());
+            }
             entity.update(cx, |view, cx| {
                 view.prepare_for_host_hide(cx);
             });
+            if detached_owns_thread {
+                // The detached window keeps streaming on the warm lease's
+                // connection: regenerate the warm slot WITHOUT cancelling the
+                // in-flight turn (dismiss would kill the detached response).
+                if let Some(lease) = self.active_agent_chat_warm_lease.take() {
+                    self.release_agent_chat_warm_lease_for_detach_handoff(lease);
+                }
+            }
         }
         let pending_warm_lease = self.active_agent_chat_warm_lease.take();
 
@@ -3438,7 +3449,9 @@ impl ScriptListApp {
         // `listAutomationWindows` stops reporting a kind=ai window once the
         // user is back on ScriptList.
         crate::windows::ensure_embedded_ai_window(false);
-        self.transition_agent_chat_surface(crate::ai::agent_chat::ui::surface_state::AgentChatSurfaceEvent::EmbeddedClosed);
+        self.transition_agent_chat_surface(
+            crate::ai::agent_chat::ui::surface_state::AgentChatSurfaceEvent::EmbeddedClosed,
+        );
 
         tracing::info!(
             event = "agent_chat_restored_to_script_list",
@@ -3462,6 +3475,27 @@ impl ScriptListApp {
         tracing::info!(
             target: "script_kit::tab_ai",
             event = "pi_agent_chat_warm_dismiss_reset_background",
+            warm_key = %key,
+            generation,
+            replacement_generation = snapshot.generation,
+            replacement_state = ?snapshot.state,
+        );
+    }
+
+    /// Release a warm lease whose connection now belongs to the detached chat
+    /// window. Regenerates the slot (next launch gets a fresh warm session)
+    /// without cancelling the detached conversation's in-flight turn.
+    fn release_agent_chat_warm_lease_for_detach_handoff(
+        &mut self,
+        lease: crate::ai::agent_chat::warm_session::AgentChatWarmSessionLease,
+    ) {
+        let key = lease.key.clone();
+        let generation = lease.generation;
+        let snapshot =
+            crate::ai::agent_chat::launch::warm_session_manager().release_for_detach_handoff(lease);
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "pi_agent_chat_warm_release_for_detach_handoff",
             warm_key = %key,
             generation,
             replacement_generation = snapshot.generation,
@@ -3646,6 +3680,7 @@ impl ScriptListApp {
 
             AppView::ConfirmPrompt { .. } => FocusTarget::AppRoot,
             AppView::NonListStatesView { .. } => FocusTarget::AppRoot,
+            AppView::PermissionsWizardView { .. } => FocusTarget::AppRoot,
 
             #[cfg(feature = "storybook")]
             AppView::DesignExplorerView { .. } => FocusTarget::AppRoot,
@@ -4935,6 +4970,7 @@ impl ScriptListApp {
             AppView::SearchAiPresetsView { .. } => "SearchAiPresets".to_string(),
             AppView::CreateAiPresetView { .. } => "CreateAiPreset".to_string(),
             AppView::SettingsView { .. } => "Settings".to_string(),
+            AppView::PermissionsWizardView { .. } => "PermissionsWizard".to_string(),
             AppView::FavoritesBrowseView { .. } => "FavoritesBrowse".to_string(),
             AppView::CurrentAppCommandsView { .. } => "CurrentAppCommands".to_string(),
             AppView::AgentChatHistoryView { .. } => "AgentChatHistoryView".to_string(),
@@ -5071,6 +5107,7 @@ impl ScriptListApp {
             | AppView::ActionsDialog
             | AppView::InstalledKitsView { .. }
             | AppView::NonListStatesView { .. }
+            | AppView::PermissionsWizardView { .. }
             | AppView::ConfirmPrompt { .. } => None,
 
             #[cfg(feature = "storybook")]
@@ -6191,24 +6228,30 @@ mod tests {
 
     #[test]
     fn embedded_agent_chat_reuse_requires_entry_intent_no_retry_and_non_setup_cache() {
-        assert!(!ScriptListApp::should_reuse_embedded_agent_chat_view_for_open(
-            None, false, false,
-        ));
-        assert!(ScriptListApp::should_reuse_embedded_agent_chat_view_for_open(
-            Some("explain this"),
-            false,
-            false,
-        ));
-        assert!(!ScriptListApp::should_reuse_embedded_agent_chat_view_for_open(
-            Some("switch agent"),
-            true,
-            false,
-        ));
-        assert!(!ScriptListApp::should_reuse_embedded_agent_chat_view_for_open(
-            Some("explain this"),
-            false,
-            true,
-        ));
+        assert!(
+            !ScriptListApp::should_reuse_embedded_agent_chat_view_for_open(None, false, false,)
+        );
+        assert!(
+            ScriptListApp::should_reuse_embedded_agent_chat_view_for_open(
+                Some("explain this"),
+                false,
+                false,
+            )
+        );
+        assert!(
+            !ScriptListApp::should_reuse_embedded_agent_chat_view_for_open(
+                Some("switch agent"),
+                true,
+                false,
+            )
+        );
+        assert!(
+            !ScriptListApp::should_reuse_embedded_agent_chat_view_for_open(
+                Some("explain this"),
+                false,
+                true,
+            )
+        );
     }
 
     #[test]

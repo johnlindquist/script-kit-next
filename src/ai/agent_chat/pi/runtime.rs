@@ -217,6 +217,10 @@ async fn run_pi_rpc_event_loop(
     });
 
     let mut counter = 0_u64;
+    // Last selection acknowledged by the pi process. set_model is a blocking
+    // round trip serialized ahead of every prompt, so skip it when the model
+    // is unchanged.
+    let mut applied_model: Option<PiRpcModelSelection> = None;
     while let Ok(command) = rx.recv().await {
         counter += 1;
         match command {
@@ -251,16 +255,21 @@ async fn run_pi_rpc_event_loop(
                         }
                     };
 
-                    let id = format!("set-model-{counter}");
-                    match send_set_model_and_wait(&mut stdin, &pending, id, &selection).await {
-                        Ok(()) => {}
-                        Err(error) => {
-                            let _ = event_tx
-                                .send(AgentChatEvent::Failed {
-                                    error: error.to_string(),
-                                })
-                                .await;
-                            continue;
+                    if applied_model.as_ref() != Some(&selection) {
+                        let id = format!("set-model-{counter}");
+                        match send_set_model_and_wait(&mut stdin, &pending, id, &selection).await {
+                            Ok(()) => {
+                                applied_model = Some(selection);
+                            }
+                            Err(error) => {
+                                applied_model = None;
+                                let _ = event_tx
+                                    .send(AgentChatEvent::Failed {
+                                        error: error.to_string(),
+                                    })
+                                    .await;
+                                continue;
+                            }
                         }
                     }
                 }

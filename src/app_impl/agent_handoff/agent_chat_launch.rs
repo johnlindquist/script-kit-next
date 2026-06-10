@@ -2,18 +2,24 @@ use super::*;
 
 struct StandardAgentChatMockFixtureConnection;
 
-impl crate::ai::agent_chat::runtime::AgentChatConnection for StandardAgentChatMockFixtureConnection {
+impl crate::ai::agent_chat::runtime::AgentChatConnection
+    for StandardAgentChatMockFixtureConnection
+{
     fn start_turn(
         &self,
         _request: crate::ai::agent_chat::runtime::AgentChatTurnRequest,
     ) -> anyhow::Result<crate::ai::agent_chat::events::AgentChatEventRx> {
         let (tx, rx) = async_channel::bounded(2);
-        let _ = tx.try_send(crate::ai::agent_chat::events::AgentChatEvent::AgentMessageDelta(
-            "Fixture Agent Chat response.".to_string(),
-        ));
-        let _ = tx.try_send(crate::ai::agent_chat::events::AgentChatEvent::TurnFinished {
-            stop_reason: "fixture".to_string(),
-        });
+        let _ = tx.try_send(
+            crate::ai::agent_chat::events::AgentChatEvent::AgentMessageDelta(
+                "Fixture Agent Chat response.".to_string(),
+            ),
+        );
+        let _ = tx.try_send(
+            crate::ai::agent_chat::events::AgentChatEvent::TurnFinished {
+                stop_reason: "fixture".to_string(),
+            },
+        );
         Ok(rx)
     }
 
@@ -72,8 +78,9 @@ impl ScriptListApp {
         });
 
         let view_entity = cx.new(|cx| {
-            crate::ai::agent_chat::ui::AgentChatView::new(thread, cx)
-                .with_ui_variant(crate::ai::agent_chat::ui::ui_variant::AgentChatUiVariant::Standard)
+            crate::ai::agent_chat::ui::AgentChatView::new(thread, cx).with_ui_variant(
+                crate::ai::agent_chat::ui::ui_variant::AgentChatUiVariant::Standard,
+            )
         });
         self.wire_embedded_agent_chat_footer_callbacks(&view_entity, cx);
         self.embedded_agent_chat = Some(view_entity.clone());
@@ -92,7 +99,8 @@ impl ScriptListApp {
         self.seed_agent_chat_return_origin_for_view(&source_view);
 
         let (_broker, permission_rx) = crate::ai::agent_chat::ui::AgentChatPermissionBroker::new();
-        let fixture = crate::ai::agent_chat::ui::kitchen_sink_fixture::agent_chat_kitchen_sink_fixture();
+        let fixture =
+            crate::ai::agent_chat::ui::kitchen_sink_fixture::agent_chat_kitchen_sink_fixture();
         let thread = cx.new(|cx| {
             crate::ai::agent_chat::ui::AgentChatThread::new(
                 std::sync::Arc::new(StandardAgentChatMockFixtureConnection),
@@ -121,8 +129,9 @@ impl ScriptListApp {
         });
 
         let view_entity = cx.new(|cx| {
-            crate::ai::agent_chat::ui::AgentChatView::new(thread, cx)
-                .with_ui_variant(crate::ai::agent_chat::ui::ui_variant::AgentChatUiVariant::Standard)
+            crate::ai::agent_chat::ui::AgentChatView::new(thread, cx).with_ui_variant(
+                crate::ai::agent_chat::ui::ui_variant::AgentChatUiVariant::Standard,
+            )
         });
         self.wire_embedded_agent_chat_footer_callbacks(&view_entity, cx);
         self.embedded_agent_chat = Some(view_entity.clone());
@@ -227,8 +236,8 @@ impl ScriptListApp {
 
         let profile_ctx = crate::ai::agent_chat::profiles::AgentChatProfileContext::from_setup();
         let ai_preferences = crate::config::load_user_preferences().ai;
-        let focused_text_mini =
-            request.ui_variant == crate::ai::agent_chat::ui::ui_variant::AgentChatUiVariant::FocusedTextMini;
+        let focused_text_mini = request.ui_variant
+            == crate::ai::agent_chat::ui::ui_variant::AgentChatUiVariant::FocusedTextMini;
         let pi_launch_result = if focused_text_mini {
             crate::ai::agent_chat::launch::resolve_focused_text_pi_launch(
                 &ai_preferences,
@@ -340,11 +349,7 @@ impl ScriptListApp {
                     warm_key = %pi_launch.warm_key,
                     error = %error,
                 );
-                self.show_pi_agent_chat_unavailable_setup_view(
-                    source_view,
-                    error.to_string(),
-                    cx,
-                );
+                self.show_pi_agent_chat_unavailable_setup_view(source_view, error.to_string(), cx);
                 return;
             }
         };
@@ -433,7 +438,11 @@ impl ScriptListApp {
             cx,
         );
 
-        self.schedule_agent_chat_post_paint_harness_teardown(had_harness_session, open_started_at, cx);
+        self.schedule_agent_chat_post_paint_harness_teardown(
+            had_harness_session,
+            open_started_at,
+            cx,
+        );
 
         if !needs_deferred {
             return;
@@ -526,8 +535,11 @@ impl ScriptListApp {
             }
 
             return Some(
-                crate::ai::harness::build_tab_ai_agent_chat_initial_input_for_prompt(prompt_type, intent)
-                    .text,
+                crate::ai::harness::build_tab_ai_agent_chat_initial_input_for_prompt(
+                    prompt_type,
+                    intent,
+                )
+                .text,
             );
         }
 

@@ -206,7 +206,10 @@ pub fn open_chat_window(cx: &mut App) -> anyhow::Result<()> {
             }
             true
         });
-        cx.new(|_cx| ChatWindowPlaceholder)
+        let view = cx.new(ChatWindowPlaceholder::new);
+        let focus_handle = view.read(cx).focus_handle.clone();
+        window.focus(&focus_handle, cx);
+        view
     })?;
 
     let any_handle: AnyWindowHandle = handle.into();
@@ -1615,18 +1618,43 @@ fn configure_agent_chat_vibrancy(cx: &mut App) {
 fn configure_agent_chat_vibrancy(_cx: &mut App) {}
 
 /// Minimal placeholder view for the detached chat window.
-struct ChatWindowPlaceholder;
+struct ChatWindowPlaceholder {
+    focus_handle: gpui::FocusHandle,
+}
+
+impl ChatWindowPlaceholder {
+    fn new(cx: &mut gpui::Context<Self>) -> Self {
+        Self {
+            focus_handle: cx.focus_handle(),
+        }
+    }
+}
 
 impl gpui::Render for ChatWindowPlaceholder {
     fn render(
         &mut self,
         _window: &mut gpui::Window,
-        _cx: &mut gpui::Context<Self>,
+        cx: &mut gpui::Context<Self>,
     ) -> impl gpui::IntoElement {
         use gpui::{div, prelude::*, rgb};
         let theme = crate::theme::get_cached_theme();
 
         div()
+            .track_focus(&self.focus_handle)
+            .on_key_down(
+                cx.listener(|_this, event: &gpui::KeyDownEvent, _window, cx| {
+                    let key = event.keystroke.key.as_str();
+                    let close_requested = (event.keystroke.modifiers.platform
+                        && key.eq_ignore_ascii_case("w"))
+                        || crate::ui_foundation::is_key_escape(key);
+                    if close_requested {
+                        cx.stop_propagation();
+                        cx.defer(|cx| {
+                            close_chat_window(cx);
+                        });
+                    }
+                }),
+            )
             .size_full()
             .flex()
             .flex_col()

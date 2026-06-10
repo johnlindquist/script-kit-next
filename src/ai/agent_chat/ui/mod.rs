@@ -116,12 +116,13 @@ pub(crate) fn open_or_focus_chat_with_input(
             .map_err(|error| error.to_string())?;
     let warm_spec = pi_launch.warm_spec();
     let manager = crate::ai::agent_chat::launch::warm_session_manager();
-    manager
-        .prepare_warm(warm_spec)
-        .map_err(|error| format!("Failed to prepare Pi Agent Chat warm session: {error}"))?;
-    let lease = manager
-        .acquire_warm(&pi_launch.warm_key)
-        .ok_or_else(|| "Failed to start Pi Agent Chat warm session".to_string())?;
+    // Acquire without blocking the UI thread: a Ready slot is reused, an
+    // in-flight Preparing slot is joined, and only a true miss cold-spawns —
+    // the runtime boot then happens on the pi worker, not here. The old
+    // prepare_warm call blocked this thread for the full warm-up on a miss.
+    let (lease, _origin) = manager
+        .acquire_ready_or_spawn_cold(warm_spec)
+        .map_err(|error| format!("Failed to start Pi Agent Chat session: {error}"))?;
 
     let (_broker, permission_rx) = AgentChatPermissionBroker::new();
     let thread = cx.new(|cx| {

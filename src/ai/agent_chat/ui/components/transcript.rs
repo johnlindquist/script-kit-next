@@ -1,6 +1,7 @@
 use gpui::{
-    div, list, prelude::*, px, rems, rgb, rgba, App, Context, Entity, FontWeight, ListAlignment,
-    ListOffset, ListSizingBehavior, ListState, Render, Rgba, SharedString, StyleRefinement, Window,
+    div, list, prelude::*, px, rems, rgb, rgba, Animation, AnimationExt as _, App, Context, Entity,
+    FontWeight, ListAlignment, ListOffset, ListSizingBehavior, ListState, Render, Rgba,
+    SharedString, StyleRefinement, Window,
 };
 use gpui_component::scroll::ScrollableElement;
 use gpui_component::text::{TextView, TextViewState, TextViewStyle};
@@ -29,6 +30,10 @@ pub struct AgentChatTranscript {
     message_views: HashMap<u64, gpui::Entity<TextViewState>>,
     message_texts: HashMap<u64, String>,
     ui_variant: AgentChatUiVariant,
+    /// While a turn is streaming with no assistant text yet, render a
+    /// synthetic "Thinking…" row at the tail so the wait is visible in the
+    /// transcript itself, not just the footer status.
+    show_activity_row: bool,
 }
 
 impl AgentChatTranscript {
@@ -44,7 +49,12 @@ impl AgentChatTranscript {
             message_views: HashMap::new(),
             message_texts: HashMap::new(),
             ui_variant: AgentChatUiVariant::Standard,
+            show_activity_row: false,
         }
+    }
+
+    fn row_count(&self) -> usize {
+        self.messages.len() + usize::from(self.show_activity_row)
     }
 
     pub fn with_ui_variant(mut self, ui_variant: AgentChatUiVariant) -> Self {
@@ -99,12 +109,12 @@ impl AgentChatTranscript {
             return;
         }
 
-        let old_count = self.messages.len();
+        let old_rows = self.row_count();
         self.messages = messages;
-        let new_count = self.messages.len();
+        let new_rows = self.row_count();
 
-        if new_count != old_count {
-            self.list_state.reset(new_count);
+        if new_rows != old_rows {
+            self.list_state.reset(new_rows);
         }
 
         // Clean up message inputs for deleted messages
@@ -115,10 +125,12 @@ impl AgentChatTranscript {
         cx.notify();
     }
 
-    pub fn set_show_activity_row(&mut self, _show: bool, cx: &mut Context<Self>) {
-        // Streaming/loading activity is surfaced by the footer status, not as a
-        // synthetic transcript row. Keep this method as a narrow compatibility
-        // shim for the thread observer.
+    pub fn set_show_activity_row(&mut self, show: bool, cx: &mut Context<Self>) {
+        if self.show_activity_row == show {
+            return;
+        }
+        self.show_activity_row = show;
+        self.list_state.reset(self.row_count());
         cx.notify();
     }
 
@@ -323,6 +335,42 @@ impl AgentChatTranscript {
                 Self::render_system_message(msg, colors, &theme, text_view_state, style_def)
             }
         }
+    }
+
+    /// Synthetic tail row shown while a turn is streaming with no assistant
+    /// text yet: a pulsing accent dot plus a dimmed "Thinking…" label, so
+    /// submit always produces immediate visible feedback in the transcript.
+    fn render_activity_row(
+        theme: &crate::theme::Theme,
+        style_def: &AgentChatStyleDef,
+    ) -> gpui::AnyElement {
+        let dot = div()
+            .size(px(7.0))
+            .rounded(px(999.0))
+            .bg(rgb(theme.colors.accent.selected))
+            .with_animation(
+                "agent-chat-transcript-thinking-pulse",
+                Animation::new(std::time::Duration::from_millis(1200)).repeat(),
+                |style, delta| {
+                    let sine = (delta * std::f32::consts::PI * 2.0).sin();
+                    style.opacity(0.65 + (0.35 * ((sine + 1.0) / 2.0)))
+                },
+            );
+
+        div()
+            .w_full()
+            .px(px(style_def.transcript.row_padding_x))
+            .pb(px(style_def.transcript.row_padding_bottom))
+            .mt(px(style_def.transcript.response_start_margin_top))
+            .child(
+                div().flex().items_center().gap(px(8.0)).child(dot).child(
+                    div()
+                        .text_size(px(style_def.markdown.body_font_size))
+                        .text_color(rgba((theme.colors.text.primary << 8) | 0xB0))
+                        .child("Thinking\u{2026}"),
+                ),
+            )
+            .into_any()
     }
 
     fn render_user_message(
@@ -914,7 +962,11 @@ impl Render for AgentChatTranscript {
 
             preview.into_any_element()
         } else {
+            let show_activity_row = self.show_activity_row;
             list(self.list_state.clone(), move |ix, _window, _cx| {
+                if show_activity_row && ix == visible_indices.len() {
+                    return Self::render_activity_row(&theme, &style_def);
+                }
                 let Some(&message_ix) = visible_indices.get(ix) else {
                     return div().into_any();
                 };

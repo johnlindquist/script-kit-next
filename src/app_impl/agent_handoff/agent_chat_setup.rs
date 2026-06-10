@@ -10,7 +10,8 @@ impl ScriptListApp {
         setup: crate::ai::agent_chat::ui::AgentChatInlineSetupState,
         cx: &mut Context<Self>,
     ) {
-        let view_entity = cx.new(|cx| crate::ai::agent_chat::ui::AgentChatView::new_setup(setup, cx));
+        let view_entity =
+            cx.new(|cx| crate::ai::agent_chat::ui::AgentChatView::new_setup(setup, cx));
         self.wire_embedded_agent_chat_footer_callbacks(&view_entity, cx);
         self.tab_ai_harness_return_view = Some(source_view);
         self.tab_ai_harness_return_focus_target = Some(self.tab_ai_return_focus_target());

@@ -3,7 +3,8 @@
 //! Resolution order (first hit wins):
 //!   1. Explicit override: `SCRIPT_KIT_GHOST_LLM_MODEL_PATH` env.
 //!   2. Script Kit-owned models: `get_kit_path()/models/ghost-text/*.gguf`
-//!      (preferring a small "fast" Qwen model when present).
+//!      (preferring the Gemma 4 E2B QAT model, then the small "fast" Qwen
+//!      model when present).
 //!   3. Cotabby / Cotypist models already on disk (read-only reuse).
 //!   4. None -> caller keeps the deterministic starter, no network.
 
@@ -12,7 +13,12 @@ use std::path::{Path, PathBuf};
 
 /// Env override for an explicit model path.
 const ENV_MODEL_PATH: &str = "SCRIPT_KIT_GHOST_LLM_MODEL_PATH";
-/// Preferred fast model filename when present in the Script Kit models dir.
+/// Preferred ghost model: Gemma 4 E2B QAT Q4_0 — markedly better at grounding
+/// completions in retrieved (brain) context than the sub-1B fallbacks, while
+/// only ~2.3B parameters are active per token. See `super::download` for the
+/// first-run fetch.
+pub(crate) const PREFERRED_GHOST_MODEL: &str = "gemma-4-E2B_q4_0-it.gguf";
+/// Fast fallback model filename when present in the Script Kit models dir.
 const PREFERRED_FAST_MODEL: &str = "Qwen3-0.6B-Q4_K_M.gguf";
 
 /// Resolve the best available ghost model, or `None` when nothing is on disk.
@@ -60,12 +66,19 @@ fn candidate_paths() -> Vec<PathBuf> {
         }
     }
 
-    // 2. Script Kit-owned models dir: prefer the small fast model, then any GGUF.
-    let kit_models = crate::setup::get_kit_path()
-        .join("models")
-        .join("ghost-text");
+    // 2. Script Kit-owned models dir: prefer Gemma 4 E2B QAT (any matching
+    //    filename casing/quant), then the small fast model, then any GGUF.
+    let kit_models = ghost_models_dir();
+    let kit_ggufs = gguf_files_in(&kit_models);
+    paths.push(kit_models.join(PREFERRED_GHOST_MODEL));
+    paths.extend(
+        kit_ggufs
+            .iter()
+            .filter(|path| file_name_contains(path, "gemma-4-e2b"))
+            .cloned(),
+    );
     paths.push(kit_models.join(PREFERRED_FAST_MODEL));
-    paths.extend(gguf_files_in(&kit_models));
+    paths.extend(kit_ggufs);
 
     // 3. Cotabby / Cotypist models already downloaded (read-only reuse). The
     //    Cotabby dir casing varies by install ("Cotabby" vs "cotabby"); check
@@ -85,7 +98,22 @@ fn candidate_paths() -> Vec<PathBuf> {
     paths
 }
 
+/// The Script Kit-owned ghost model directory: `get_kit_path()/models/ghost-text`.
+pub(crate) fn ghost_models_dir() -> PathBuf {
+    crate::setup::get_kit_path()
+        .join("models")
+        .join("ghost-text")
+}
+
+fn file_name_contains(path: &Path, needle: &str) -> bool {
+    path.file_name()
+        .map(|name| name.to_string_lossy().to_lowercase())
+        .is_some_and(|name| name.contains(needle))
+}
+
 /// All `*.gguf` files directly inside `dir` (sorted for deterministic order).
+/// Multimodal projector files (`*mmproj*`) are skipped — they are not language
+/// models and must never be loaded as the ghost LLM.
 fn gguf_files_in(dir: &Path) -> Vec<PathBuf> {
     let mut out = Vec::new();
     if let Ok(entries) = std::fs::read_dir(dir) {
@@ -94,6 +122,7 @@ fn gguf_files_in(dir: &Path) -> Vec<PathBuf> {
             if path
                 .extension()
                 .is_some_and(|ext| ext.eq_ignore_ascii_case("gguf"))
+                && !file_name_contains(&path, "mmproj")
             {
                 out.push(path);
             }

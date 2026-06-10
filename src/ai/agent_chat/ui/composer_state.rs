@@ -15,6 +15,10 @@ pub(crate) struct AgentChatComposerSpineState {
     pub(crate) input: crate::spine::input_projection::SpineInputProjection,
     pub(crate) selected_index: usize,
     pub(crate) visible_start: usize,
+    /// Snapshot of the thread cwd taken on composer refresh (the spine
+    /// section builders run without `cx`, so they cannot read the thread
+    /// entity). Scopes the `@project:` subsearch.
+    pub(crate) project_scope_cwd: Option<std::path::PathBuf>,
 }
 
 #[allow(dead_code)]

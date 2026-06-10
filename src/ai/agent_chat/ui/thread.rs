@@ -346,6 +346,9 @@ pub(crate) struct AgentChatThread {
 
     /// When the current streaming turn started (for elapsed time display).
     stream_started_at: Option<std::time::Instant>,
+    /// True between submit and the first assistant/thought delta of the turn;
+    /// gates the one-shot time-to-first-token log.
+    ttft_pending: bool,
 
     /// Handle to the active stream pump task.
     stream_task: Option<Task<()>>,
@@ -427,6 +430,7 @@ impl AgentChatThread {
             usage_tokens: None,
             usage_cost_usd: None,
             stream_started_at: None,
+            ttft_pending: false,
             stream_task: None,
             permission_task: None,
             transcript_generation: 0,
@@ -721,6 +725,7 @@ impl AgentChatThread {
         );
         self.input.clear();
         self.stream_started_at = Some(std::time::Instant::now());
+        self.ttft_pending = true;
         self.status = AgentChatThreadStatus::Streaming;
 
         let rx = self
@@ -786,6 +791,7 @@ impl AgentChatThread {
         );
         self.input.clear();
         self.stream_started_at = Some(std::time::Instant::now());
+        self.ttft_pending = true;
         self.status = AgentChatThreadStatus::Streaming;
 
         let rx = self
@@ -1472,6 +1478,7 @@ impl AgentChatThread {
                 changed |= self.set_status(AgentChatThreadStatus::Streaming);
             }
             AgentChatEvent::AgentMessageDelta(chunk) => {
+                self.log_time_to_first_token("assistant_message");
                 let accumulated = self
                     .accumulated_text_after_append(AgentChatThreadMessageRole::Assistant, &chunk);
                 let delta = chunk.clone();
@@ -1486,6 +1493,7 @@ impl AgentChatThread {
                 changed |= self.set_status(AgentChatThreadStatus::Streaming);
             }
             AgentChatEvent::AgentThoughtDelta(chunk) => {
+                self.log_time_to_first_token("agent_thought");
                 changed |= self.append_chunk(AgentChatThreadMessageRole::Thought, chunk);
                 changed |= self.set_status(AgentChatThreadStatus::Streaming);
             }
@@ -1772,6 +1780,25 @@ impl AgentChatThread {
         }
 
         true
+    }
+
+    /// One-shot time-to-first-token log for the current turn. Makes warm/cold
+    /// launch latency measurable from logs (`agent_chat_time_to_first_token`).
+    fn log_time_to_first_token(&mut self, first_event: &'static str) {
+        if !self.ttft_pending {
+            return;
+        }
+        self.ttft_pending = false;
+        let Some(started_at) = self.stream_started_at else {
+            return;
+        };
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "agent_chat_time_to_first_token",
+            ui_thread_id = %self.ui_thread_id,
+            first_event,
+            elapsed_ms = started_at.elapsed().as_millis() as u64,
+        );
     }
 
     /// Set the thread status, returning `true` if it actually changed.
@@ -3091,6 +3118,7 @@ impl AgentChatThread {
             usage_tokens: None,
             usage_cost_usd: None,
             stream_started_at: None,
+            ttft_pending: false,
             stream_task: None,
             permission_task: None,
             transcript_generation: 0,
@@ -3432,6 +3460,7 @@ mod tests {
             usage_tokens: None,
             usage_cost_usd: None,
             stream_started_at: None,
+            ttft_pending: false,
             stream_task: None,
             permission_task: None,
             transcript_generation: 0,

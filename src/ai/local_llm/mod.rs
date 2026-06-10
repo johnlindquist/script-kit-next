@@ -11,6 +11,7 @@
 //! backend is unavailable or no model is on disk, generation returns `Err` and
 //! the caller silently keeps the deterministic starter.
 
+mod download;
 pub(crate) mod model_locator;
 mod runtime;
 mod types;
@@ -20,7 +21,8 @@ mod stub_backend;
 #[cfg(all(target_os = "macos", feature = "local-llm"))]
 mod subprocess_backend;
 
-pub(crate) use types::{LocalGhostRequest, LocalGhostResponse};
+pub(crate) use download::ensure_ghost_model_in_background;
+pub(crate) use types::{GhostPromptSpec, LocalGhostRequest, LocalGhostResponse};
 
 /// Cache identity of the model that would serve ghost text (or a sentinel when
 /// none is available). Folded into `GhostLlmCacheKey.model_id`.
@@ -71,9 +73,10 @@ mod smoke {
         let response = super::generate_ghost_completion(
             &crate::config::Config::default(),
             super::LocalGhostRequest {
-                partial_query: query.clone(),
-                context: crate::scripts::search::ghost::GhostContext::default(),
-                cwd: None,
+                prompt: super::GhostPromptSpec::Launcher {
+                    partial_query: query.clone(),
+                    context: crate::scripts::search::ghost::GhostContext::default(),
+                },
                 cancel: Arc::new(AtomicBool::new(false)),
             },
         )

@@ -91,10 +91,7 @@ impl ScriptListApp {
                                     error = %e,
                                     "Failed to open clear conversation dialog"
                                 );
-                                this.show_error_toast(
-                                    "Failed to open confirmation dialog",
-                                    cx,
-                                );
+                                this.show_error_toast("Failed to open confirmation dialog", cx);
                             });
                             return;
                         }

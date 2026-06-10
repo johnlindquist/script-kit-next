@@ -8,7 +8,9 @@
 //! are forbidden; an audit test pins that contract.
 
 use super::*;
-use crate::ai::agent_chat::ui::surface_state::{reduce_agent_chat_surface, AgentChatSurfaceEvent, AgentChatSurfaceState};
+use crate::ai::agent_chat::ui::surface_state::{
+    reduce_agent_chat_surface, AgentChatSurfaceEvent, AgentChatSurfaceState,
+};
 
 #[derive(Clone, Debug, serde::Serialize)]
 pub(crate) struct AgentChatSurfaceLifecycleReceipt {

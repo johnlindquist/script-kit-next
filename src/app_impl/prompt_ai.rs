@@ -145,7 +145,9 @@ fn generate_script_via_ai_backend(
 
     let request_messages = vec![
         crate::ai::ProviderMessage::system(AI_SCRIPT_GENERATION_SYSTEM_PROMPT),
-        crate::ai::ProviderMessage::user(build_ai_script_generation_user_prompt(prompt_description)),
+        crate::ai::ProviderMessage::user(build_ai_script_generation_user_prompt(
+            prompt_description,
+        )),
     ];
 
     let ai_response = provider
@@ -168,13 +170,14 @@ fn generate_script_via_ai_backend(
     })?;
 
     let script_name = derive_script_name_from_description(prompt_description);
-    let script_path = crate::script_creation::create_new_script(&script_name).with_context(|| {
-        format!(
-            "state={} attempted=create_new_script name={} failure=create_script_failed",
-            AiScriptGenerationStage::CreateScriptFile.as_str(),
-            script_name
-        )
-    })?;
+    let script_path =
+        crate::script_creation::create_new_script(&script_name).with_context(|| {
+            format!(
+                "state={} attempted=create_new_script name={} failure=create_script_failed",
+                AiScriptGenerationStage::CreateScriptFile.as_str(),
+                script_name
+            )
+        })?;
 
     std::fs::write(&script_path, generated_script).with_context(|| {
         format!(
@@ -265,9 +268,7 @@ impl ScriptListApp {
     pub(crate) fn is_in_prompt(&self) -> bool {
         !matches!(
             self.current_view,
-            AppView::ScriptList
-                | AppView::ActionsDialog
-                | AppView::CreationFeedback { .. }
+            AppView::ScriptList | AppView::ActionsDialog | AppView::CreationFeedback { .. }
         )
     }
 
@@ -590,10 +591,7 @@ impl ScriptListApp {
         initial_query: Option<String>,
         cx: &mut Context<Self>,
     ) {
-        let query = initial_query
-            .unwrap_or_default()
-            .trim()
-            .to_string();
+        let query = initial_query.unwrap_or_default().trim().to_string();
 
         if query.is_empty() {
             self.open_tab_ai_agent_chat_with_entry_intent(None, cx);
@@ -641,8 +639,11 @@ impl ScriptListApp {
 
         if !registry.has_any_provider() {
             self.toast_manager.push(
-                components::toast::Toast::error("No AI providers configured for script generation", &self.theme)
-                    .duration_ms(Some(TOAST_ERROR_MS)),
+                components::toast::Toast::error(
+                    "No AI providers configured for script generation",
+                    &self.theme,
+                )
+                .duration_ms(Some(TOAST_ERROR_MS)),
             );
             cx.notify();
             return;
@@ -685,7 +686,11 @@ impl ScriptListApp {
                 prompt_description.len()
             ),
         );
-        self.show_hud("Generating script with AI...".to_string(), Some(HUD_SHORT_MS), cx);
+        self.show_hud(
+            "Generating script with AI...".to_string(),
+            Some(HUD_SHORT_MS),
+            cx,
+        );
 
         std::thread::spawn(move || {
             logging::log(
@@ -718,43 +723,41 @@ impl ScriptListApp {
             };
 
             let _ = cx.update(|cx| {
-                this.update(cx, |app, cx| {
-                    match result {
-                        Ok(script_path) => {
-                            let script_name = script_path
-                                .file_name()
-                                .and_then(|name| name.to_str())
-                                .unwrap_or("generated script");
-                            logging::log(
-                                "AI_SCRIPT_GEN",
-                                &format!(
-                                    "state=completed attempted=generate_script path={}",
-                                    script_path.display()
-                                ),
-                            );
-                            app.toast_manager.push(
-                                components::toast::Toast::success(
-                                    format!("Generated and opened {}", script_name),
-                                    &app.theme,
-                                )
-                                .duration_ms(Some(TOAST_INFO_MS)),
-                            );
-                            app.close_and_reset_window(cx);
-                        }
-                        Err(error) => {
-                            logging::log(
-                                "AI_SCRIPT_GEN",
-                                &format!("state=failed attempted=generate_script error={}", error),
-                            );
-                            app.toast_manager.push(
-                                components::toast::Toast::error(
-                                    format!("Failed to generate script: {}", error),
-                                    &app.theme,
-                                )
-                                .duration_ms(Some(TOAST_ERROR_DETAILED_MS)),
-                            );
-                            cx.notify();
-                        }
+                this.update(cx, |app, cx| match result {
+                    Ok(script_path) => {
+                        let script_name = script_path
+                            .file_name()
+                            .and_then(|name| name.to_str())
+                            .unwrap_or("generated script");
+                        logging::log(
+                            "AI_SCRIPT_GEN",
+                            &format!(
+                                "state=completed attempted=generate_script path={}",
+                                script_path.display()
+                            ),
+                        );
+                        app.toast_manager.push(
+                            components::toast::Toast::success(
+                                format!("Generated and opened {}", script_name),
+                                &app.theme,
+                            )
+                            .duration_ms(Some(TOAST_INFO_MS)),
+                        );
+                        app.close_and_reset_window(cx);
+                    }
+                    Err(error) => {
+                        logging::log(
+                            "AI_SCRIPT_GEN",
+                            &format!("state=failed attempted=generate_script error={}", error),
+                        );
+                        app.toast_manager.push(
+                            components::toast::Toast::error(
+                                format!("Failed to generate script: {}", error),
+                                &app.theme,
+                            )
+                            .duration_ms(Some(TOAST_ERROR_DETAILED_MS)),
+                        );
+                        cx.notify();
                     }
                 })
             });
@@ -850,7 +853,9 @@ import "@scriptkit/sdk";
     #[test]
     fn test_ai_script_generation_system_prompt_defaults_to_main_menu_dimensions() {
         assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("main-menu-sized prompt flow"));
-        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("expanded split-view previews as rare exceptions"));
-        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("Avoid `setPreview()`, `setPanel()`, and choice `preview` fields"));
+        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT
+            .contains("expanded split-view previews as rare exceptions"));
+        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT
+            .contains("Avoid `setPreview()`, `setPanel()`, and choice `preview` fields"));
     }
 }

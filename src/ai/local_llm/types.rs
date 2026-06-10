@@ -4,15 +4,28 @@ use std::path::PathBuf;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
+/// What the local model should complete. Each surface builds its prompt at
+/// its own layer; the runtime actor only resolves the final prompt string.
+#[derive(Clone, Debug)]
+pub(crate) enum GhostPromptSpec {
+    /// Launcher input continuation: prompt composed by
+    /// `crate::scripts::search::ghost::build_local_ghost_prompt` from the
+    /// caret prefix plus the cwd-derived context digest.
+    Launcher {
+        partial_query: String,
+        context: crate::scripts::search::ghost::GhostContext,
+    },
+    /// Notes editor continuation: a prebuilt prompt from
+    /// `crate::notes::ghost_llm::build_notes_ghost_prompt` (note excerpt +
+    /// brain recall block + current line prefix).
+    NotesContinuation { prompt: String },
+}
+
 /// A single ghost-completion request handed to the local runtime actor.
 #[derive(Clone, Debug)]
 pub(crate) struct LocalGhostRequest {
-    /// The user's partial launcher input (the caret prefix).
-    pub partial_query: String,
-    /// cwd-derived bias (project name, task phrases, topic keywords, excerpt).
-    pub context: crate::scripts::search::ghost::GhostContext,
-    /// Resolved working directory, used only for cache identity upstream.
-    pub cwd: Option<PathBuf>,
+    /// The surface-specific prompt to continue.
+    pub prompt: GhostPromptSpec,
     /// Cooperative cancel flag. Checked before load, after debounce, and on
     /// every decode step so a new keystroke aborts in-flight generation.
     pub cancel: Arc<AtomicBool>,
@@ -37,8 +50,10 @@ pub(crate) struct ResolvedLocalModel {
 }
 
 /// Sampling + context parameters for ghost generation. Mirrors Cotabby's
-/// defaults (ctx 2048, batch 512, topK 40, topP 0.95) tuned for a one-line,
-/// sub-second launcher autocomplete (low temperature, tiny token budget).
+/// defaults (batch 512, topK 40, topP 0.95) tuned for a one-line, sub-second
+/// autocomplete (low temperature, tiny token budget). `ctx_tokens` is sized
+/// for the largest ghost prompt: the notes continuation prompt, which can
+/// carry a brain recall block (up to ~4000 chars) plus a note excerpt.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct GhostSamplingParams {
     pub max_prediction_tokens: usize,
@@ -61,7 +76,7 @@ impl Default for GhostSamplingParams {
             top_p: 0.95,
             min_p: 0.05,
             repeat_penalty: 1.08,
-            ctx_tokens: 2048,
+            ctx_tokens: 4096,
             batch_size: 512,
             // llama-cpp-2 uses a u32 gpu-layer count; "all practical layers".
             gpu_layers: 99,
