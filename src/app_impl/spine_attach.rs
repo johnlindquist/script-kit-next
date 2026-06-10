@@ -30,11 +30,17 @@ pub(crate) struct SpineAttachOutcome {
     pub alias: Option<(String, AiContextPart)>,
 }
 
-/// Compact display token for a resolved subsearch result: `@prefix:value`
-/// with whitespace/reserved characters escaped.
+/// Compact display token for a resolved subsearch result: `@prefix:value`.
+/// Whitespace runs become `-` so the token stays one contiguous, readable
+/// word (`@notes:grocery-list`, not `@notes:grocery%20list`); remaining
+/// reserved characters are escaped.
 pub(crate) fn compact_subsearch_token(prefix: &str, value: &str) -> String {
     let compact = crate::spine::text_preview::single_line_truncate(value, 40);
-    format!("@{}:{}", prefix, escape_ref_component(&compact))
+    let friendly = compact
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join("-");
+    format!("@{}:{}", prefix, escape_ref_component(&friendly))
 }
 
 fn resolve_action(
@@ -330,9 +336,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn compact_token_escapes_and_truncates() {
+    fn compact_token_is_friendly_and_truncates() {
         let token = compact_subsearch_token("notes", "grocery list for the week");
-        assert_eq!(token, "@notes:grocery%20list%20for%20the%20week");
+        assert_eq!(token, "@notes:grocery-list-for-the-week");
         let long = "x".repeat(120);
         let token = compact_subsearch_token("notes", &long);
         assert!(token.chars().count() <= "@notes:".len() + 40 + 1);

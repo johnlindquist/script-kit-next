@@ -625,12 +625,29 @@ impl ScriptListApp {
         };
         let result = flat.get(result_idx)?;
 
-        super::spine_attach::attach_outcome_for_result(
+        let mut outcome = super::spine_attach::attach_outcome_for_result(
             source,
             result,
             segment_index,
             segment_byte_range,
-        )
+        )?;
+        // File tokens are deduplicated against the live alias registry so a
+        // second README.md gets `@file:README.md-2` instead of silently
+        // overwriting the first alias.
+        if let SpineListAction::ResolveSegment {
+            replacement,
+            resolution_id,
+            resolution_source,
+            ..
+        } = &mut outcome.action
+        {
+            if resolution_source.as_ref() == "file" {
+                if let Some(path) = resolution_id.as_ref().strip_prefix("file/") {
+                    *replacement = self.unique_spine_file_mention_token(path).into();
+                }
+            }
+        }
+        Some(outcome)
     }
 
     /// Canonical compact spine token for a selected file: `@file:` plus the
@@ -642,10 +659,40 @@ impl ScriptListApp {
             .file_name()
             .and_then(|name| name.to_str())
             .unwrap_or(path);
+        // Friendly token: whitespace runs become `-` so the token reads as
+        // one word instead of `%20` soup; reserved chars stay escaped.
+        let friendly = basename.split_whitespace().collect::<Vec<_>>().join("-");
         format!(
             "@file:{}",
-            crate::spine::catalog_subsearch::escape_ref_component(basename),
+            crate::spine::catalog_subsearch::escape_ref_component(&friendly),
         )
+    }
+
+    /// `spine_file_mention_token`, deduplicated against the live alias
+    /// registry: two different files sharing a basename get distinct tokens
+    /// (`@file:README.md`, `@file:README.md-2`) so the second attach does
+    /// not silently overwrite the first alias.
+    pub(crate) fn unique_spine_file_mention_token(&self, path: &str) -> String {
+        let base = Self::spine_file_mention_token(path);
+        let collides = |token: &str| {
+            matches!(
+                self.spine_mention_aliases.get(token),
+                Some(crate::ai::message_parts::AiContextPart::FilePath {
+                    path: existing,
+                    ..
+                }) if existing != path
+            )
+        };
+        if !collides(&base) {
+            return base;
+        }
+        for n in 2..100 {
+            let candidate = format!("{base}-{n}");
+            if !collides(&candidate) {
+                return candidate;
+            }
+        }
+        base
     }
 
     /// Register the alias that maps a compact spine `@file:` token back to its

@@ -39,12 +39,12 @@ pub(super) fn build_profile_rows(
             } else {
                 entry.name.clone()
             };
+            // "Sets default" is load-bearing: picking a |profile persists it
+            // as the global default, it is not scoped to one conversation.
             let subtitle = if selected {
-                format!("Current Agent Chat profile · {source} · Pi")
+                format!("Current default profile · {source}")
             } else {
-                format!(
-                    "Switch to this profile in a new chat · {source} · Pi · Starts a new chat when a conversation is already active"
-                )
+                format!("Sets default profile · {source}")
             };
             SpineListRow {
                 id: ss(format!("spine:|:{}", entry.id)),

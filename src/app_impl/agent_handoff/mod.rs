@@ -431,7 +431,7 @@ impl ScriptListApp {
         if prompt.is_empty() && parts.is_empty() {
             if let Some(profile_name) = selected_profile_name {
                 self.show_hud(
-                    format!("Agent Chat profile: {profile_name}"),
+                    format!("Default Agent Chat profile: {profile_name}"),
                     Some(HUD_SHORT_MS),
                     cx,
                 );
@@ -458,6 +458,9 @@ impl ScriptListApp {
         self.spine_parse = Default::default();
         self.spine_projection = None;
         self.spine_live_preview_cache = Default::default();
+        // Alias hygiene: the plan has already resolved tokens into context
+        // parts; stale aliases would leak into the next prompt's tokens.
+        self.spine_mention_aliases.clear();
         self.invalidate_grouped_cache();
 
         let spine_cwd = self.spine_cwd.clone();

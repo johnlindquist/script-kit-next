@@ -214,8 +214,15 @@ pub(crate) fn build_spine_prompt_plan_with_aliases(
             }
             SpineSegmentKind::Style { style_id } => {
                 plan.prompt_builder_segment_count += 1;
-                if !style_id.is_empty() {
+                if style_id.is_empty() {
+                    // nothing to do
+                } else if crate::spine::catalog_style::is_known_style(style_id) {
                     apply_style_sugar(&mut plan, index, style_id.clone());
+                } else {
+                    // Unknown `.foo` downgrades to free text (`.env`,
+                    // `.gitignore`, trailing periods) instead of fabricating
+                    // a rewrite instruction the user never picked.
+                    free_text_chunks.push(text.clone());
                 }
             }
             SpineSegmentKind::Capture { .. } => {
@@ -241,6 +248,8 @@ pub(crate) fn build_spine_prompt_plan_with_aliases(
     plan
 }
 
+/// Only called for known styles; unknown `.foo` downgrades to free text in
+/// the Style segment arm above.
 fn apply_style_sugar(plan: &mut SpinePromptPlan, segment_index: usize, id: String) {
     let _ = segment_index;
     let instruction = crate::spine::catalog_style::style_instruction(&id)
@@ -381,12 +390,16 @@ mod tests {
     }
 
     #[test]
-    fn unknown_style_id_still_produces_generic_instruction() {
-        let plan = build_spine_prompt_plan(&parse_spine(".pirate"));
-        assert!(plan.should_submit_to_chat());
+    fn unknown_style_id_downgrades_to_free_text() {
+        let plan = build_spine_prompt_plan(&parse_spine("rename .env to .env.local"));
         assert!(
-            plan.normalized_prompt.contains("pirate"),
-            "generic style instruction must mention the id: {}",
+            plan.selected_style.is_none(),
+            "unknown .foo must not become a style: {:?}",
+            plan.selected_style,
+        );
+        assert!(
+            plan.normalized_prompt.contains(".env"),
+            "downgraded style text must survive as prose: {}",
             plan.normalized_prompt,
         );
     }

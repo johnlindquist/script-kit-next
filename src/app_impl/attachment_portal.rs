@@ -227,7 +227,7 @@ impl ScriptListApp {
             return;
         };
 
-        let token = Self::spine_file_mention_token(path);
+        let token = self.unique_spine_file_mention_token(path);
         self.register_spine_file_mention_alias(token.clone(), path.clone());
 
         let current = self.filter_text.clone();
