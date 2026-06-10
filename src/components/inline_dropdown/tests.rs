@@ -2,10 +2,7 @@ use super::component::{
     inline_dropdown_clamp_selected_index, inline_dropdown_select_next, inline_dropdown_select_prev,
     inline_dropdown_visible_range, inline_dropdown_visible_range_from_start,
 };
-use super::row::{
-    compact_synopsis_height_for_description, CONTEXT_PICKER_ROW_HEIGHT,
-    CONTEXT_PICKER_SYNOPSIS_HEIGHT, SOFT_COMPACT_PICKER_ROW_HEIGHT,
-};
+use super::row::{CONTEXT_PICKER_ROW_HEIGHT, SOFT_COMPACT_PICKER_ROW_HEIGHT};
 
 #[test]
 fn inline_dropdown_navigation_wraps() {
@@ -78,14 +75,15 @@ fn compact_synopsis_uses_footer_surface_tokens_and_grows_for_description() {
             && synopsis_source.contains("HINT_STRIP_PADDING_X"),
         "focused item synopsis must share the main/dictation footer surface and spacing tokens"
     );
-    assert_eq!(
-        compact_synopsis_height_for_description("short"),
-        CONTEXT_PICKER_SYNOPSIS_HEIGHT
+    assert!(
+        synopsis_source.contains(".min_h(px(CONTEXT_PICKER_SYNOPSIS_HEIGHT))")
+            && !synopsis_source.contains(".h(px(description_height))"),
+        "synopsis strip must size intrinsically from measured text (min-height floor only), \
+         not from a chars-per-line height estimate"
     );
     assert!(
-        compact_synopsis_height_for_description(
-            "This description should wrap to more than one line in the sidebar picker footer."
-        ) > CONTEXT_PICKER_SYNOPSIS_HEIGHT
+        synopsis_source.contains("line_clamp(CONTEXT_PICKER_SYNOPSIS_MAX_LINES)"),
+        "synopsis description must stay capped by line_clamp so intrinsic growth is bounded"
     );
 }
 

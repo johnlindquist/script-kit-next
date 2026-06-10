@@ -28,24 +28,7 @@ pub(crate) const CONTEXT_PICKER_ROW_HEIGHT: f32 = LIST_ITEM_HEIGHT;
 pub(crate) const SOFT_COMPACT_PICKER_ROW_HEIGHT: f32 = 36.0;
 pub(crate) const CONTEXT_PICKER_SYNOPSIS_HEIGHT: f32 = 64.0;
 const CONTEXT_PICKER_SYNOPSIS_MAX_LINES: usize = 4;
-const CONTEXT_PICKER_SYNOPSIS_LINE_CHARS: usize = 52;
 const CONTEXT_PICKER_SYNOPSIS_LINE_HEIGHT: f32 = 16.0;
-
-pub(crate) fn compact_synopsis_height_for_description(description: &str) -> f32 {
-    let explicit_lines = description.lines().count().max(1);
-    let wrapped_lines = description
-        .lines()
-        .map(|line| {
-            let char_count = line.chars().count().max(1);
-            char_count.div_ceil(CONTEXT_PICKER_SYNOPSIS_LINE_CHARS)
-        })
-        .sum::<usize>()
-        .max(explicit_lines)
-        .clamp(1, CONTEXT_PICKER_SYNOPSIS_MAX_LINES);
-
-    CONTEXT_PICKER_SYNOPSIS_HEIGHT
-        + (wrapped_lines.saturating_sub(1) as f32 * CONTEXT_PICKER_SYNOPSIS_LINE_HEIGHT)
-}
 
 /// Render a single dense-monoline picker row.
 ///
@@ -548,14 +531,14 @@ pub(crate) fn render_compact_synopsis_strip(
         footer_colors,
     ));
     let border = gpui::rgba((footer_colors.border << 8) | 0x50);
-    let description_height = compact_synopsis_height_for_description(description.as_ref());
     let hint_opacity_byte =
         (crate::window_resize::main_layout::HINT_TEXT_OPACITY * 255.0).round() as u32;
     let hint_color = gpui::rgba((theme.colors.text.primary << 8) | hint_opacity_byte);
     let meta_text = meta.clone();
 
+    // Intrinsic height: the description text measures its own wrapped lines
+    // (capped by `line_clamp`), so no chars-per-line height estimate is needed.
     div()
-        .h(px(description_height))
         .min_h(px(CONTEXT_PICKER_SYNOPSIS_HEIGHT))
         .flex_shrink_0()
         .overflow_hidden()
