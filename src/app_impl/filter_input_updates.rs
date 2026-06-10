@@ -634,7 +634,7 @@ impl ScriptListApp {
         // File tokens are deduplicated against the live alias registry so a
         // second README.md gets `@file:README.md-2` instead of silently
         // overwriting the first alias.
-        if let SpineListAction::ResolveSegment {
+        if let crate::spine::SpineListAction::ResolveSegment {
             replacement,
             resolution_id,
             resolution_source,
