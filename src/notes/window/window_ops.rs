@@ -1,7 +1,7 @@
 use super::*;
 use crate::mcp_notes_tools::{
-    NOTE_BODY_MAX_BYTES, NotesCreateArgs, NotesDeleteArgs, NotesMutationError,
-    NotesMutationErrorCode, NotesMutationRequest, NotesMutationResult, NotesUpdateArgs,
+    NotesCreateArgs, NotesDeleteArgs, NotesMutationError, NotesMutationErrorCode,
+    NotesMutationRequest, NotesMutationResult, NotesUpdateArgs, NOTE_BODY_MAX_BYTES,
 };
 use crate::theme::get_cached_theme;
 
