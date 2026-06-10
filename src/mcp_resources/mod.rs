@@ -160,6 +160,15 @@ pub fn get_resource_definitions() -> Vec<McpResource> {
             mime_type: "application/json".to_string(),
         },
         McpResource {
+            uri: crate::brain::resources::BRAIN_RESOURCE_URI.to_string(),
+            name: "Brain".to_string(),
+            description: Some(
+                "Script Kit's local memory. kit://brain for status, kit://brain/recall?q=... for hybrid retrieval over notes and past conversations, kit://brain/signals for recent attention signals."
+                    .to_string(),
+            ),
+            mime_type: "application/json".to_string(),
+        },
+        McpResource {
             uri: AUDIT_RESOURCE_URI.to_string(),
             name: "MCP Audit Log".to_string(),
             description: Some(
@@ -416,6 +425,14 @@ pub fn read_resource(
         }
         "kit://git-status" => read_git_status_resource(),
         _ if is_notes_resource_uri(uri) => read_notes_resource(uri),
+        _ if crate::brain::resources::is_brain_resource_uri(uri) => {
+            let (mime_type, text) = crate::brain::resources::read_brain_resource(uri)?;
+            Ok(ResourceContent {
+                uri: uri.to_string(),
+                mime_type,
+                text,
+            })
+        }
         _ if is_audit_resource_uri(uri) => read_audit_resource(uri),
         crate::computer_use::COMPUTER_USE_READINESS_RESOURCE_URI => {
             read_computer_use_readiness_resource()

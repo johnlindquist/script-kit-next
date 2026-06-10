@@ -202,6 +202,10 @@ impl InputHistory {
         if let (Some(query_key), Some(result_key)) =
             (Self::normalize_query(text), selected_result_key)
         {
+            // Ambient learning: a query the user typed AND a result they chose
+            // is the strongest "this matters to me" signal the launcher emits.
+            // Recorded fire-and-forget into the brain's attention log.
+            crate::brain::record_search_selection_signals(&query_key, &result_key);
             self.selected_results.insert(query_key, result_key);
         }
         self.prune_selected_results();

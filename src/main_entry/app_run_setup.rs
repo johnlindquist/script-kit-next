@@ -174,6 +174,9 @@
     match crate::brain::init_brain_db() {
         Ok(()) => {
             crate::brain::start_brain_indexer();
+            if let Err(e) = crate::brain::seed::seed_constitution_if_needed() {
+                logging::log("BRAIN", &format!("Constitution seeding skipped: {}", e));
+            }
             logging::log("BRAIN", "Brain store initialized; indexer started");
         }
         Err(e) => {

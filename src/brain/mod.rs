@@ -21,7 +21,9 @@
 
 pub mod embedder;
 pub mod indexer;
+pub mod resources;
 pub mod search;
+pub mod seed;
 pub mod store;
 
 #[cfg(test)]
@@ -60,4 +62,23 @@ pub fn record_ask_signals(query: &str) {
     for topic in indexer::extract_topics(query) {
         let _ = record_signal(&topic, 2, "ask");
     }
+}
+
+/// Record a launcher search → selection pair (ambient learning). Spawned to a
+/// short-lived thread so the input path never touches sqlite synchronously.
+pub fn record_search_selection_signals(query: &str, selected_result_key: &str) {
+    let query = query.to_string();
+    let selected = selected_result_key.to_string();
+    let _ = std::thread::Builder::new()
+        .name("script-kit-brain-signal".to_string())
+        .spawn(move || {
+            for topic in indexer::extract_topics(&query) {
+                let _ = record_signal(&topic, 1, "search");
+            }
+            // The chosen result's human-readable tail (after any kind prefix)
+            // is itself a topic: choosing "script:kill-port" teaches the brain
+            // that "kill-port" matters.
+            let tail = selected.rsplit(':').next().unwrap_or(&selected);
+            let _ = record_signal(&tail.replace(['-', '_'], " "), 2, "selection");
+        });
 }
