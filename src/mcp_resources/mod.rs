@@ -3609,13 +3609,14 @@ mod tests {
 
         assert_eq!(
             resources.len(),
-            27,
+            29,
             "Resource registry count should be updated when new MCP resources land"
         );
 
         let uris: Vec<&str> = resources.iter().map(|r| r.uri.as_str()).collect();
         assert!(uris.contains(&"kit://state"), "Should include kit://state");
         assert!(uris.contains(&"kit://notes"), "Should include kit://notes");
+        assert!(uris.contains(&"kit://brain"), "Should include kit://brain");
         assert!(uris.contains(&"kit://audit"), "Should include kit://audit");
         assert!(uris.contains(&"scripts://"), "Should include scripts://");
         assert!(
