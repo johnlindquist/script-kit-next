@@ -14,6 +14,40 @@
 //! - `helpers` - Lightweight color extraction for render closures
 //! - `gpui_integration` - gpui-component theme mapping
 //! - `service` - Global theme watcher service
+//!
+//! # Style Resolution Order
+//!
+//! Colors and chrome values flow through one pipeline from disk to pixels:
+//!
+//! 1. **theme.json on disk** - `~/.scriptkit/theme.json` (with user-preference
+//!    and appearance fallbacks) is parsed by `types::load_theme()`. This is the
+//!    only step that touches the filesystem.
+//! 2. **Dev tool color overrides** - `reload_theme_cache()` layers
+//!    `dev_style_tool::runtime_overrides::apply_to_theme` on top of the loaded
+//!    theme, applying any live `theme.colors.*` overrides from the styling
+//!    sidecar's Theme inspector tab (devtools `setThemeControl`). A no-op when
+//!    the override channel is empty.
+//! 3. **THEME_CACHE** - the layered `Theme` is stored in the global cache in
+//!    `types.rs`. `service.rs` owns `THEME_REVISION`, bumped whenever the cache
+//!    reloads: by the theme.json file watcher, by appearance flips, or by
+//!    `service::reapply_runtime_theme_overrides` after a dev-tool color edit.
+//!    `set_cached_theme_for_preview` (used by the theme chooser built-in) is a
+//!    side door that swaps the cached theme for live preview without touching
+//!    disk or the override channel.
+//! 4. **get_cached_theme() consumers** - render and service code read the
+//!    cached theme; revision checks let windows notice cross-window changes.
+//! 5. **Per-surface token defs** - surface-level token structs resolve from the
+//!    cached theme and then apply their own dev-tool override channels:
+//!    `MainMenuThemeVariant::def()` runs `apply_to_main_menu_def`, the actions
+//!    popup def runs `apply_to_actions_popup_def`, and Agent Chat / confirm
+//!    modal read `effective_agent_chat_style()` / `effective_confirm_modal_style()`.
+//! 6. **Render-time color structs** - per-frame `Copy` snapshots are extracted
+//!    for render closures: `AppChromeColors::from_theme`, `ListItemColors`,
+//!    and `PromptColors`.
+//!
+//! Note: `DesignVariant` (`designs/core/registry.rs` + `designs/traits/**`) is
+//! a separate catalog path for non-default designs; the pipeline above covers
+//! the default theme-driven path.
 
 mod audit;
 mod chrome;

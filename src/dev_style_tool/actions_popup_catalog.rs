@@ -39,6 +39,20 @@ impl ActionsPopupKnobGroup {
             Self::Shortcut => "Actions shortcuts",
         }
     }
+
+    /// One-line anatomy hint tying the group to the element it styles in the
+    /// actions popup, so tool users can tell which controls map where.
+    pub const fn description(self) -> &'static str {
+        match self {
+            Self::Shell => "Popup window: size, margins, corner radius",
+            Self::Search => "Filter input at the bottom of the popup",
+            Self::List => "Action list container: row height, padding",
+            Self::Row => "Individual action rows: selection, hover",
+            Self::Section => "Section headers between action groups",
+            Self::ContextHeader => "Breadcrumb header above the list",
+            Self::Shortcut => "Keycap chips on the trailing edge of rows",
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy)]

@@ -6,6 +6,7 @@ pub mod copy_catalog;
 pub mod export;
 pub mod kitchen_sink_targets;
 pub mod runtime_overrides;
+pub mod theme_catalog;
 
 pub(crate) mod window {
     pub(crate) fn is_dev_style_tool_open() -> bool {
@@ -25,3 +26,5 @@ pub use confirm_modal_catalog::*;
 pub use copy_catalog::*;
 #[allow(unused_imports)]
 pub(crate) use kitchen_sink_targets::*;
+#[allow(unused_imports)]
+pub use theme_catalog::*;

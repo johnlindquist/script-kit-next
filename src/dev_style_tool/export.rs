@@ -2,6 +2,7 @@ use std::path::{Path, PathBuf};
 
 use serde_json::json;
 
+use super::theme_catalog::{format_theme_color_hex, THEME_COLOR_KNOBS};
 use super::{
     runtime_overrides, StyleValue, ACTIONS_POPUP_KNOBS, AGENT_CHAT_KNOBS, CONFIRM_MODAL_KNOBS,
     COPY_CONTROLS, STYLE_KNOBS,
@@ -195,15 +196,45 @@ pub fn current_settings_json() -> serde_json::Value {
             })
         })
         .collect();
+    let theme_for_colors = crate::theme::get_cached_theme();
+    let theme_color_overrides: Vec<_> = THEME_COLOR_KNOBS
+        .iter()
+        .filter_map(|knob| {
+            runtime_overrides::current_theme_color_value(knob.id).map(|value| {
+                json!({
+                    "id": knob.id.as_str(),
+                    "label": knob.label,
+                    "group": knob.group.label(),
+                    "value": format_theme_color_hex(value),
+                })
+            })
+        })
+        .collect();
+    let theme_color_effective: Vec<_> = THEME_COLOR_KNOBS
+        .iter()
+        .map(|knob| {
+            // The cached theme already has overrides layered in, so this is the
+            // effective value every window currently renders with.
+            let value = (knob.get)(&theme_for_colors);
+            json!({
+                "id": knob.id.as_str(),
+                "label": knob.label,
+                "group": knob.group.label(),
+                "value": format_theme_color_hex(value),
+                "overridden": runtime_overrides::current_theme_color_value(knob.id).is_some(),
+            })
+        })
+        .collect();
     let override_count = main_window_style_overrides
         .len()
         .saturating_add(main_window_copy_overrides.len())
         .saturating_add(actions_popup_style_overrides.len())
         .saturating_add(agent_chat_style_overrides.len())
-        .saturating_add(confirm_modal_style_overrides.len());
+        .saturating_add(confirm_modal_style_overrides.len())
+        .saturating_add(theme_color_overrides.len());
 
     json!({
-        "schema": "script-kit-dev-style/v2",
+        "schema": "script-kit-dev-style/v3",
         "generatedAt": chrono::Local::now().to_rfc3339(),
         "runtimeGeneration": runtime_overrides::generation(),
         "overrideCount": override_count,
@@ -213,6 +244,7 @@ pub fn current_settings_json() -> serde_json::Value {
             "actionsPopupStyle": ACTIONS_POPUP_KNOBS.len(),
             "agentChatStyle": AGENT_CHAT_KNOBS.len(),
             "confirmModalStyle": CONFIRM_MODAL_KNOBS.len(),
+            "themeColors": THEME_COLOR_KNOBS.len(),
         },
         "surfaces": {
             "mainWindow": {
@@ -243,8 +275,14 @@ pub fn current_settings_json() -> serde_json::Value {
                     "effective": confirm_modal_style_effective,
                 },
             },
+            "theme": {
+                "colors": {
+                    "overrides": theme_color_overrides,
+                    "effective": theme_color_effective,
+                },
+            },
         },
-        "agentPrompt": "Apply or reason about these Script Kit GPUI dev style overrides by matching style ids to src/dev_style_tool/catalog.rs, src/dev_style_tool/actions_popup_catalog.rs, src/dev_style_tool/agent_chat_catalog.rs, and src/dev_style_tool/confirm_modal_catalog.rs, and copy ids to src/dev_style_tool/copy_catalog.rs.",
+        "agentPrompt": "Apply or reason about these Script Kit GPUI dev style overrides by matching style ids to src/dev_style_tool/catalog.rs, src/dev_style_tool/actions_popup_catalog.rs, src/dev_style_tool/agent_chat_catalog.rs, and src/dev_style_tool/confirm_modal_catalog.rs, copy ids to src/dev_style_tool/copy_catalog.rs, and theme color ids to src/dev_style_tool/theme_catalog.rs.",
     })
 }
 

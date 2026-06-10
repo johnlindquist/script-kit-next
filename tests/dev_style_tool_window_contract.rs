@@ -103,10 +103,28 @@ fn dev_style_tool_initializes_slider_max_before_min() {
     let render_source =
         fs::read_to_string("src/dev_style_tool/render.rs").expect("read dev style render source");
 
+    let sites: Vec<usize> = render_source
+        .match_indices("SliderState::new()")
+        .map(|(idx, _)| idx)
+        .collect();
     assert!(
-        render_source.matches("SliderState::new()\n                        .max(knob.max)\n                        .min(knob.min)").count() >= 2,
-        "dev style sliders must set max before min because some controls have min values above the slider default max"
+        sites.len() >= 2,
+        "dev style render must construct sliders via SliderState::new() (found {})",
+        sites.len()
     );
+    for site in sites {
+        let window = &render_source[site..(site + 400).min(render_source.len())];
+        let max_pos = window
+            .find(".max(")
+            .expect("each SliderState::new() must chain .max(...)");
+        let min_pos = window
+            .find(".min(")
+            .expect("each SliderState::new() must chain .min(...)");
+        assert!(
+            max_pos < min_pos,
+            "dev style sliders must set max before min because some controls have min values above the slider default max"
+        );
+    }
 }
 
 #[test]

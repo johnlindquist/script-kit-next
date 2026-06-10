@@ -17,6 +17,10 @@ use super::confirm_modal_catalog::{
     ConfirmModalKnobId, ConfirmModalStyleDef, CONFIRM_MODAL_KNOBS,
 };
 use super::copy_catalog::{copy_control_by_id, copy_control_id_from_str, CopyControlId};
+use super::theme_catalog::{
+    format_theme_color_hex, theme_color_knob_by_id, theme_color_knob_id_from_str, ThemeColorKnobId,
+    THEME_COLOR_KNOBS,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct AppliedStyleChange {
@@ -34,14 +38,43 @@ pub struct AppliedCopyChange {
     pub applied: String,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AppliedThemeColorChange {
+    pub generation: u64,
+    pub previous: Option<u32>,
+    pub requested: u32,
+    pub applied: u32,
+}
+
+/// One override map per channel. Every channel shares the same lifecycle
+/// (set/reset/current plus the interleaved undo/redo history), so the maps
+/// live together and snapshot history entries clone the whole struct.
 #[derive(Debug, Clone, Default)]
-struct RuntimeStyleOverrides {
-    generation: u64,
+struct OverrideMaps {
     values: BTreeMap<StyleKnobId, StyleValue>,
     copy_values: BTreeMap<CopyControlId, String>,
     actions_values: BTreeMap<ActionsPopupKnobId, StyleValue>,
     agent_chat_values: BTreeMap<AgentChatKnobId, StyleValue>,
     confirm_modal_values: BTreeMap<ConfirmModalKnobId, StyleValue>,
+    theme_color_values: BTreeMap<ThemeColorKnobId, u32>,
+}
+
+impl OverrideMaps {
+    fn total_len(&self) -> usize {
+        self.values
+            .len()
+            .saturating_add(self.copy_values.len())
+            .saturating_add(self.actions_values.len())
+            .saturating_add(self.agent_chat_values.len())
+            .saturating_add(self.confirm_modal_values.len())
+            .saturating_add(self.theme_color_values.len())
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+struct RuntimeStyleOverrides {
+    generation: u64,
+    maps: OverrideMaps,
     undo_stack: Vec<HistoryEntry>,
     redo_stack: Vec<HistoryEntry>,
 }
@@ -75,17 +108,14 @@ enum HistoryEntry {
         before: Option<StyleValue>,
         after: Option<StyleValue>,
     },
+    ThemeColorSingle {
+        id: ThemeColorKnobId,
+        before: Option<u32>,
+        after: Option<u32>,
+    },
     Snapshot {
-        before: BTreeMap<StyleKnobId, StyleValue>,
-        copy_before: BTreeMap<CopyControlId, String>,
-        actions_before: BTreeMap<ActionsPopupKnobId, StyleValue>,
-        agent_chat_before: BTreeMap<AgentChatKnobId, StyleValue>,
-        confirm_modal_before: BTreeMap<ConfirmModalKnobId, StyleValue>,
-        after: BTreeMap<StyleKnobId, StyleValue>,
-        copy_after: BTreeMap<CopyControlId, String>,
-        actions_after: BTreeMap<ActionsPopupKnobId, StyleValue>,
-        agent_chat_after: BTreeMap<AgentChatKnobId, StyleValue>,
-        confirm_modal_after: BTreeMap<ConfirmModalKnobId, StyleValue>,
+        before: Box<OverrideMaps>,
+        after: Box<OverrideMaps>,
     },
 }
 
@@ -101,127 +131,185 @@ fn store() -> &'static RwLock<RuntimeStyleOverrides> {
     STORE.get_or_init(|| RwLock::new(RuntimeStyleOverrides::default()))
 }
 
-pub fn generation() -> u64 {
+fn read_store() -> std::sync::RwLockReadGuard<'static, RuntimeStyleOverrides> {
     store()
         .read()
         .unwrap_or_else(|poisoned| poisoned.into_inner())
-        .generation
+}
+
+fn write_store() -> std::sync::RwLockWriteGuard<'static, RuntimeStyleOverrides> {
+    store()
+        .write()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+pub fn generation() -> u64 {
+    read_store().generation
 }
 
 pub fn history_state() -> StyleHistoryState {
-    let guard = store()
-        .read()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let guard = read_store();
     StyleHistoryState {
         can_undo: !guard.undo_stack.is_empty(),
         can_redo: !guard.redo_stack.is_empty(),
-        override_count: guard
-            .values
-            .len()
-            .saturating_add(guard.copy_values.len())
-            .saturating_add(guard.actions_values.len())
-            .saturating_add(guard.agent_chat_values.len())
-            .saturating_add(guard.confirm_modal_values.len()),
+        override_count: guard.maps.total_len(),
         generation: guard.generation,
     }
 }
 
-pub fn set_value(id: StyleKnobId, requested: StyleValue) -> Option<AppliedStyleChange> {
-    let knob = knob_by_id(id)?;
-    let applied = knob.clamp_value(requested);
-    let mut guard = store()
-        .write()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
-    let previous = guard.values.insert(id, applied);
-    guard.undo_stack.push(HistoryEntry::Single {
-        id,
-        before: previous,
-        after: Some(applied),
-    });
-    guard.redo_stack.clear();
-    guard.generation = guard.generation.saturating_add(1);
-    Some(AppliedStyleChange {
-        generation: guard.generation,
-        previous,
-        requested,
-        applied,
-    })
+/// Generate the set/reset/current trio for one override channel.
+///
+/// Every channel follows the same lifecycle: clamp the requested value, store
+/// it in the channel map, push a single-entry undo record, clear the redo
+/// stack, and bump the shared generation counter. Only the value type, the
+/// clamp rule, and the base-value source differ per channel.
+macro_rules! override_channel {
+    (
+        change: $change_ty:ident,
+        value: $value_ty:ty,
+        id: $id_ty:ty,
+        field: $field:ident,
+        variant: $variant:ident,
+        lookup: $lookup:path,
+        clamp: |$set_knob:pat_param, $requested:ident| $clamp:expr,
+        base: |$reset_knob:pat_param| $base:expr,
+        set: $set_fn:ident,
+        reset: $reset_fn:ident,
+        current: $current_fn:ident $(,)?
+    ) => {
+        #[allow(clippy::clone_on_copy)]
+        pub fn $set_fn(id: $id_ty, $requested: $value_ty) -> Option<$change_ty> {
+            let $set_knob = $lookup(id)?;
+            let applied: $value_ty = $clamp;
+            let mut guard = write_store();
+            let previous = guard.maps.$field.insert(id, applied.clone());
+            guard.undo_stack.push(HistoryEntry::$variant {
+                id,
+                before: previous.clone(),
+                after: Some(applied.clone()),
+            });
+            guard.redo_stack.clear();
+            guard.generation = guard.generation.saturating_add(1);
+            Some($change_ty {
+                generation: guard.generation,
+                previous,
+                requested: $requested,
+                applied,
+            })
+        }
+
+        #[allow(clippy::clone_on_copy)]
+        pub fn $reset_fn(id: $id_ty) -> Option<$change_ty> {
+            let $reset_knob = $lookup(id)?;
+            let base_value: $value_ty = $base;
+            let mut guard = write_store();
+            let previous = guard.maps.$field.remove(&id);
+            guard.undo_stack.push(HistoryEntry::$variant {
+                id,
+                before: previous.clone(),
+                after: None,
+            });
+            guard.redo_stack.clear();
+            guard.generation = guard.generation.saturating_add(1);
+            Some($change_ty {
+                generation: guard.generation,
+                previous,
+                requested: base_value.clone(),
+                applied: base_value,
+            })
+        }
+
+        pub fn $current_fn(id: $id_ty) -> Option<$value_ty> {
+            read_store().maps.$field.get(&id).cloned()
+        }
+    };
 }
 
-pub fn reset_value(id: StyleKnobId) -> Option<AppliedStyleChange> {
-    let knob = knob_by_id(id)?;
-    let mut guard = store()
-        .write()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
-    let previous = guard.values.remove(&id);
-    guard.undo_stack.push(HistoryEntry::Single {
-        id,
-        before: previous,
-        after: None,
-    });
-    guard.redo_stack.clear();
-    guard.generation = guard.generation.saturating_add(1);
-    let base_value = (knob.get)(&crate::designs::current_main_menu_theme().base_def());
-    Some(AppliedStyleChange {
-        generation: guard.generation,
-        previous,
-        requested: base_value,
-        applied: base_value,
-    })
-}
+override_channel!(
+    change: AppliedStyleChange,
+    value: StyleValue,
+    id: StyleKnobId,
+    field: values,
+    variant: Single,
+    lookup: knob_by_id,
+    clamp: |knob, requested| knob.clamp_value(requested),
+    base: |knob| (knob.get)(&crate::designs::current_main_menu_theme().base_def()),
+    set: set_value,
+    reset: reset_value,
+    current: current_value,
+);
 
-pub fn set_copy_value(id: CopyControlId, requested: String) -> Option<AppliedCopyChange> {
-    let _control = copy_control_by_id(id)?;
-    let applied = requested;
-    let mut guard = store()
-        .write()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
-    let previous = guard.copy_values.insert(id, applied.clone());
-    guard.undo_stack.push(HistoryEntry::CopySingle {
-        id,
-        before: previous.clone(),
-        after: Some(applied.clone()),
-    });
-    guard.redo_stack.clear();
-    guard.generation = guard.generation.saturating_add(1);
-    Some(AppliedCopyChange {
-        generation: guard.generation,
-        previous,
-        requested: applied.clone(),
-        applied,
-    })
-}
+override_channel!(
+    change: AppliedCopyChange,
+    value: String,
+    id: CopyControlId,
+    field: copy_values,
+    variant: CopySingle,
+    lookup: copy_control_by_id,
+    clamp: |_control, requested| requested.clone(),
+    base: |control| (control.base)(),
+    set: set_copy_value,
+    reset: reset_copy_value,
+    current: current_copy_value,
+);
 
-pub fn reset_copy_value(id: CopyControlId) -> Option<AppliedCopyChange> {
-    let control = copy_control_by_id(id)?;
-    let mut guard = store()
-        .write()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
-    let previous = guard.copy_values.remove(&id);
-    guard.undo_stack.push(HistoryEntry::CopySingle {
-        id,
-        before: previous.clone(),
-        after: None,
-    });
-    guard.redo_stack.clear();
-    guard.generation = guard.generation.saturating_add(1);
-    let base_value = (control.base)();
-    Some(AppliedCopyChange {
-        generation: guard.generation,
-        previous,
-        requested: base_value.clone(),
-        applied: base_value,
-    })
-}
+override_channel!(
+    change: AppliedStyleChange,
+    value: StyleValue,
+    id: ActionsPopupKnobId,
+    field: actions_values,
+    variant: ActionsSingle,
+    lookup: actions_popup_knob_by_id,
+    clamp: |knob, requested| knob.clamp_value(requested),
+    base: |knob| (knob.get)(&crate::designs::base_actions_popup_theme()),
+    set: set_actions_popup_value,
+    reset: reset_actions_popup_value,
+    current: current_actions_popup_value,
+);
 
-pub fn current_copy_value(id: CopyControlId) -> Option<String> {
-    store()
-        .read()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
-        .copy_values
-        .get(&id)
-        .cloned()
-}
+override_channel!(
+    change: AppliedStyleChange,
+    value: StyleValue,
+    id: AgentChatKnobId,
+    field: agent_chat_values,
+    variant: AgentChatSingle,
+    lookup: agent_chat_knob_by_id,
+    clamp: |knob, requested| knob.clamp_value(requested),
+    base: |knob| (knob.get)(&base_agent_chat_style()),
+    set: set_agent_chat_value,
+    reset: reset_agent_chat_value,
+    current: current_agent_chat_value,
+);
+
+override_channel!(
+    change: AppliedStyleChange,
+    value: StyleValue,
+    id: ConfirmModalKnobId,
+    field: confirm_modal_values,
+    variant: ConfirmModalSingle,
+    lookup: confirm_modal_knob_by_id,
+    clamp: |knob, requested| knob.clamp_value(requested),
+    base: |knob| (knob.get)(&base_confirm_modal_style()),
+    set: set_confirm_modal_value,
+    reset: reset_confirm_modal_value,
+    current: current_confirm_modal_value,
+);
+
+// Theme color resets read the base value fresh from disk so the reported
+// value never includes the override that was just removed.
+override_channel!(
+    change: AppliedThemeColorChange,
+    value: u32,
+    id: ThemeColorKnobId,
+    field: theme_color_values,
+    variant: ThemeColorSingle,
+    lookup: theme_color_knob_by_id,
+    clamp: |_knob, requested| requested & 0xFF_FF_FF,
+    base: |knob| (knob.get)(&crate::theme::load_theme()),
+    set: set_theme_color_value,
+    reset: reset_theme_color_value,
+    current: current_theme_color_value,
+);
 
 pub fn effective_copy_value(id: CopyControlId) -> String {
     current_copy_value(id).unwrap_or_else(|| {
@@ -235,199 +323,41 @@ pub fn effective_main_input_placeholder() -> String {
     effective_copy_value(super::copy_catalog::MAIN_INPUT_PLACEHOLDER_COPY_ID)
 }
 
-pub fn set_actions_popup_value(
-    id: ActionsPopupKnobId,
-    requested: StyleValue,
-) -> Option<AppliedStyleChange> {
-    let knob = actions_popup_knob_by_id(id)?;
-    let applied = knob.clamp_value(requested);
-    let mut guard = store()
-        .write()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
-    let previous = guard.actions_values.insert(id, applied);
-    guard.undo_stack.push(HistoryEntry::ActionsSingle {
-        id,
-        before: previous,
-        after: Some(applied),
+pub fn has_theme_color_overrides() -> bool {
+    !read_store().maps.theme_color_values.is_empty()
+}
+
+/// Drop every theme color override without touching other channels.
+///
+/// Used after "Save theme to disk": the overrides have just been baked into
+/// theme.json, so the channel must be emptied for the inspector to show the
+/// saved values as base instead of double-reporting them as overridden.
+/// Recorded as a snapshot history entry so undo/redo stays coherent.
+pub fn clear_theme_color_values() -> u64 {
+    let mut guard = write_store();
+    if guard.maps.theme_color_values.is_empty() {
+        return guard.generation;
+    }
+    let before = guard.maps.clone();
+    let mut after = guard.maps.clone();
+    after.theme_color_values.clear();
+    guard.maps.theme_color_values.clear();
+    guard.undo_stack.push(HistoryEntry::Snapshot {
+        before: Box::new(before),
+        after: Box::new(after),
     });
     guard.redo_stack.clear();
     guard.generation = guard.generation.saturating_add(1);
-    Some(AppliedStyleChange {
-        generation: guard.generation,
-        previous,
-        requested,
-        applied,
-    })
-}
-
-pub fn reset_actions_popup_value(id: ActionsPopupKnobId) -> Option<AppliedStyleChange> {
-    let knob = actions_popup_knob_by_id(id)?;
-    let mut guard = store()
-        .write()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
-    let previous = guard.actions_values.remove(&id);
-    guard.undo_stack.push(HistoryEntry::ActionsSingle {
-        id,
-        before: previous,
-        after: None,
-    });
-    guard.redo_stack.clear();
-    guard.generation = guard.generation.saturating_add(1);
-    let base_value = (knob.get)(&crate::designs::base_actions_popup_theme());
-    Some(AppliedStyleChange {
-        generation: guard.generation,
-        previous,
-        requested: base_value,
-        applied: base_value,
-    })
-}
-
-pub fn current_actions_popup_value(id: ActionsPopupKnobId) -> Option<StyleValue> {
-    store()
-        .read()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
-        .actions_values
-        .get(&id)
-        .copied()
-}
-
-pub fn set_agent_chat_value(
-    id: AgentChatKnobId,
-    requested: StyleValue,
-) -> Option<AppliedStyleChange> {
-    let knob = agent_chat_knob_by_id(id)?;
-    let applied = knob.clamp_value(requested);
-    let mut guard = store()
-        .write()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
-    let previous = guard.agent_chat_values.insert(id, applied);
-    guard.undo_stack.push(HistoryEntry::AgentChatSingle {
-        id,
-        before: previous,
-        after: Some(applied),
-    });
-    guard.redo_stack.clear();
-    guard.generation = guard.generation.saturating_add(1);
-    Some(AppliedStyleChange {
-        generation: guard.generation,
-        previous,
-        requested,
-        applied,
-    })
-}
-
-pub fn reset_agent_chat_value(id: AgentChatKnobId) -> Option<AppliedStyleChange> {
-    let knob = agent_chat_knob_by_id(id)?;
-    let mut guard = store()
-        .write()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
-    let previous = guard.agent_chat_values.remove(&id);
-    guard.undo_stack.push(HistoryEntry::AgentChatSingle {
-        id,
-        before: previous,
-        after: None,
-    });
-    guard.redo_stack.clear();
-    guard.generation = guard.generation.saturating_add(1);
-    let base_value = (knob.get)(&base_agent_chat_style());
-    Some(AppliedStyleChange {
-        generation: guard.generation,
-        previous,
-        requested: base_value,
-        applied: base_value,
-    })
-}
-
-pub fn current_agent_chat_value(id: AgentChatKnobId) -> Option<StyleValue> {
-    store()
-        .read()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
-        .agent_chat_values
-        .get(&id)
-        .copied()
-}
-
-pub fn set_confirm_modal_value(
-    id: ConfirmModalKnobId,
-    requested: StyleValue,
-) -> Option<AppliedStyleChange> {
-    let knob = confirm_modal_knob_by_id(id)?;
-    let applied = knob.clamp_value(requested);
-    let mut guard = store()
-        .write()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
-    let previous = guard.confirm_modal_values.insert(id, applied);
-    guard.undo_stack.push(HistoryEntry::ConfirmModalSingle {
-        id,
-        before: previous,
-        after: Some(applied),
-    });
-    guard.redo_stack.clear();
-    guard.generation = guard.generation.saturating_add(1);
-    Some(AppliedStyleChange {
-        generation: guard.generation,
-        previous,
-        requested,
-        applied,
-    })
-}
-
-pub fn reset_confirm_modal_value(id: ConfirmModalKnobId) -> Option<AppliedStyleChange> {
-    let knob = confirm_modal_knob_by_id(id)?;
-    let base_value = (knob.get)(&base_confirm_modal_style());
-    let mut guard = store()
-        .write()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
-    let previous = guard.confirm_modal_values.remove(&id);
-    guard.undo_stack.push(HistoryEntry::ConfirmModalSingle {
-        id,
-        before: previous,
-        after: None,
-    });
-    guard.redo_stack.clear();
-    guard.generation = guard.generation.saturating_add(1);
-    Some(AppliedStyleChange {
-        generation: guard.generation,
-        previous,
-        requested: base_value,
-        applied: base_value,
-    })
-}
-
-pub fn current_confirm_modal_value(id: ConfirmModalKnobId) -> Option<StyleValue> {
-    store()
-        .read()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
-        .confirm_modal_values
-        .get(&id)
-        .copied()
+    guard.generation
 }
 
 pub fn reset_all() -> u64 {
-    let mut guard = store()
-        .write()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
-    let before = guard.values.clone();
-    let copy_before = guard.copy_values.clone();
-    let actions_before = guard.actions_values.clone();
-    let agent_chat_before = guard.agent_chat_values.clone();
-    let confirm_modal_before = guard.confirm_modal_values.clone();
-    guard.values.clear();
-    guard.copy_values.clear();
-    guard.actions_values.clear();
-    guard.agent_chat_values.clear();
-    guard.confirm_modal_values.clear();
+    let mut guard = write_store();
+    let before = guard.maps.clone();
+    guard.maps = OverrideMaps::default();
     guard.undo_stack.push(HistoryEntry::Snapshot {
-        before,
-        copy_before,
-        actions_before,
-        agent_chat_before,
-        confirm_modal_before,
-        after: BTreeMap::new(),
-        copy_after: BTreeMap::new(),
-        actions_after: BTreeMap::new(),
-        agent_chat_after: BTreeMap::new(),
-        confirm_modal_after: BTreeMap::new(),
+        before: Box::new(before),
+        after: Box::new(OverrideMaps::default()),
     });
     guard.redo_stack.clear();
     guard.generation = guard.generation.saturating_add(1);
@@ -435,9 +365,7 @@ pub fn reset_all() -> u64 {
 }
 
 pub fn undo_last() -> Option<String> {
-    let mut guard = store()
-        .write()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let mut guard = write_store();
     let entry = guard.undo_stack.pop()?;
     apply_history_entry(&mut guard, &entry, HistoryDirection::Undo);
     guard.redo_stack.push(entry.clone());
@@ -446,9 +374,7 @@ pub fn undo_last() -> Option<String> {
 }
 
 pub fn redo_last() -> Option<String> {
-    let mut guard = store()
-        .write()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let mut guard = write_store();
     let entry = guard.redo_stack.pop()?;
     apply_history_entry(&mut guard, &entry, HistoryDirection::Redo);
     guard.undo_stack.push(entry.clone());
@@ -456,45 +382,24 @@ pub fn redo_last() -> Option<String> {
     Some(format_history_result("redo", &entry, guard.generation))
 }
 
-pub fn current_value(id: StyleKnobId) -> Option<StyleValue> {
-    store()
-        .read()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
-        .values
-        .get(&id)
-        .copied()
-}
-
 pub fn copy_override_count() -> usize {
-    store()
-        .read()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
-        .copy_values
-        .len()
+    read_store().maps.copy_values.len()
 }
 
 pub fn actions_popup_override_count() -> usize {
-    store()
-        .read()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
-        .actions_values
-        .len()
+    read_store().maps.actions_values.len()
 }
 
 pub fn agent_chat_override_count() -> usize {
-    store()
-        .read()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
-        .agent_chat_values
-        .len()
+    read_store().maps.agent_chat_values.len()
 }
 
 pub fn confirm_modal_override_count() -> usize {
-    store()
-        .read()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
-        .confirm_modal_values
-        .len()
+    read_store().maps.confirm_modal_values.len()
+}
+
+pub fn theme_color_override_count() -> usize {
+    read_store().maps.theme_color_values.len()
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -503,132 +408,72 @@ enum HistoryDirection {
     Redo,
 }
 
+impl HistoryDirection {
+    /// Pick the map state this direction restores: `before` for undo,
+    /// `after` for redo.
+    fn pick<'a, T>(self, before: &'a T, after: &'a T) -> &'a T {
+        match self {
+            HistoryDirection::Undo => before,
+            HistoryDirection::Redo => after,
+        }
+    }
+}
+
 fn apply_history_entry(
     overrides: &mut RuntimeStyleOverrides,
     entry: &HistoryEntry,
     direction: HistoryDirection,
 ) {
-    match (entry, direction) {
-        (HistoryEntry::Single { id, before, .. }, HistoryDirection::Undo) => {
-            apply_optional_value(&mut overrides.values, *id, *before);
+    match entry {
+        HistoryEntry::Single { id, before, after } => {
+            apply_optional(
+                &mut overrides.maps.values,
+                *id,
+                *direction.pick(before, after),
+            );
         }
-        (HistoryEntry::Single { id, after, .. }, HistoryDirection::Redo) => {
-            apply_optional_value(&mut overrides.values, *id, *after);
+        HistoryEntry::CopySingle { id, before, after } => {
+            apply_optional(
+                &mut overrides.maps.copy_values,
+                *id,
+                direction.pick(before, after).clone(),
+            );
         }
-        (HistoryEntry::CopySingle { id, before, .. }, HistoryDirection::Undo) => {
-            apply_optional_copy_value(&mut overrides.copy_values, *id, before.clone());
+        HistoryEntry::ActionsSingle { id, before, after } => {
+            apply_optional(
+                &mut overrides.maps.actions_values,
+                *id,
+                *direction.pick(before, after),
+            );
         }
-        (HistoryEntry::CopySingle { id, after, .. }, HistoryDirection::Redo) => {
-            apply_optional_copy_value(&mut overrides.copy_values, *id, after.clone());
+        HistoryEntry::AgentChatSingle { id, before, after } => {
+            apply_optional(
+                &mut overrides.maps.agent_chat_values,
+                *id,
+                *direction.pick(before, after),
+            );
         }
-        (HistoryEntry::ActionsSingle { id, before, .. }, HistoryDirection::Undo) => {
-            apply_optional_actions_value(&mut overrides.actions_values, *id, *before);
+        HistoryEntry::ConfirmModalSingle { id, before, after } => {
+            apply_optional(
+                &mut overrides.maps.confirm_modal_values,
+                *id,
+                *direction.pick(before, after),
+            );
         }
-        (HistoryEntry::ActionsSingle { id, after, .. }, HistoryDirection::Redo) => {
-            apply_optional_actions_value(&mut overrides.actions_values, *id, *after);
+        HistoryEntry::ThemeColorSingle { id, before, after } => {
+            apply_optional(
+                &mut overrides.maps.theme_color_values,
+                *id,
+                *direction.pick(before, after),
+            );
         }
-        (HistoryEntry::AgentChatSingle { id, before, .. }, HistoryDirection::Undo) => {
-            apply_optional_agent_chat_value(&mut overrides.agent_chat_values, *id, *before);
-        }
-        (HistoryEntry::AgentChatSingle { id, after, .. }, HistoryDirection::Redo) => {
-            apply_optional_agent_chat_value(&mut overrides.agent_chat_values, *id, *after);
-        }
-        (HistoryEntry::ConfirmModalSingle { id, before, .. }, HistoryDirection::Undo) => {
-            apply_optional_confirm_modal_value(&mut overrides.confirm_modal_values, *id, *before);
-        }
-        (HistoryEntry::ConfirmModalSingle { id, after, .. }, HistoryDirection::Redo) => {
-            apply_optional_confirm_modal_value(&mut overrides.confirm_modal_values, *id, *after);
-        }
-        (
-            HistoryEntry::Snapshot {
-                before,
-                copy_before,
-                actions_before,
-                agent_chat_before,
-                confirm_modal_before,
-                ..
-            },
-            HistoryDirection::Undo,
-        ) => {
-            overrides.values = before.clone();
-            overrides.copy_values = copy_before.clone();
-            overrides.actions_values = actions_before.clone();
-            overrides.agent_chat_values = agent_chat_before.clone();
-            overrides.confirm_modal_values = confirm_modal_before.clone();
-        }
-        (
-            HistoryEntry::Snapshot {
-                after,
-                copy_after,
-                actions_after,
-                agent_chat_after,
-                confirm_modal_after,
-                ..
-            },
-            HistoryDirection::Redo,
-        ) => {
-            overrides.values = after.clone();
-            overrides.copy_values = copy_after.clone();
-            overrides.actions_values = actions_after.clone();
-            overrides.agent_chat_values = agent_chat_after.clone();
-            overrides.confirm_modal_values = confirm_modal_after.clone();
+        HistoryEntry::Snapshot { before, after } => {
+            overrides.maps = direction.pick(before, after).as_ref().clone();
         }
     }
 }
 
-fn apply_optional_value(
-    values: &mut BTreeMap<StyleKnobId, StyleValue>,
-    id: StyleKnobId,
-    value: Option<StyleValue>,
-) {
-    if let Some(value) = value {
-        values.insert(id, value);
-    } else {
-        values.remove(&id);
-    }
-}
-
-fn apply_optional_copy_value(
-    values: &mut BTreeMap<CopyControlId, String>,
-    id: CopyControlId,
-    value: Option<String>,
-) {
-    if let Some(value) = value {
-        values.insert(id, value);
-    } else {
-        values.remove(&id);
-    }
-}
-
-fn apply_optional_actions_value(
-    values: &mut BTreeMap<ActionsPopupKnobId, StyleValue>,
-    id: ActionsPopupKnobId,
-    value: Option<StyleValue>,
-) {
-    if let Some(value) = value {
-        values.insert(id, value);
-    } else {
-        values.remove(&id);
-    }
-}
-
-fn apply_optional_agent_chat_value(
-    values: &mut BTreeMap<AgentChatKnobId, StyleValue>,
-    id: AgentChatKnobId,
-    value: Option<StyleValue>,
-) {
-    if let Some(value) = value {
-        values.insert(id, value);
-    } else {
-        values.remove(&id);
-    }
-}
-
-fn apply_optional_confirm_modal_value(
-    values: &mut BTreeMap<ConfirmModalKnobId, StyleValue>,
-    id: ConfirmModalKnobId,
-    value: Option<StyleValue>,
-) {
+fn apply_optional<K: Ord, V>(values: &mut BTreeMap<K, V>, id: K, value: Option<V>) {
     if let Some(value) = value {
         values.insert(id, value);
     } else {
@@ -637,49 +482,22 @@ fn apply_optional_confirm_modal_value(
 }
 
 fn format_history_result(action: &str, entry: &HistoryEntry, generation: u64) -> String {
-    match entry {
-        HistoryEntry::Single { id, .. } => {
-            format!("{action}:{} generation={generation}", id.as_str())
+    let id = match entry {
+        HistoryEntry::Single { id, .. } => id.as_str(),
+        HistoryEntry::CopySingle { id, .. } => id.as_str(),
+        HistoryEntry::ActionsSingle { id, .. } => id.as_str(),
+        HistoryEntry::AgentChatSingle { id, .. } => id.as_str(),
+        HistoryEntry::ConfirmModalSingle { id, .. } => id.as_str(),
+        HistoryEntry::ThemeColorSingle { id, .. } => id.as_str(),
+        HistoryEntry::Snapshot { before, after } => {
+            return format!(
+                "{action}:all before={} after={} generation={generation}",
+                before.total_len(),
+                after.total_len()
+            );
         }
-        HistoryEntry::CopySingle { id, .. } => {
-            format!("{action}:{} generation={generation}", id.as_str())
-        }
-        HistoryEntry::ActionsSingle { id, .. } => {
-            format!("{action}:{} generation={generation}", id.as_str())
-        }
-        HistoryEntry::AgentChatSingle { id, .. } => {
-            format!("{action}:{} generation={generation}", id.as_str())
-        }
-        HistoryEntry::ConfirmModalSingle { id, .. } => {
-            format!("{action}:{} generation={generation}", id.as_str())
-        }
-        HistoryEntry::Snapshot {
-            before,
-            copy_before,
-            actions_before,
-            agent_chat_before,
-            confirm_modal_before,
-            after,
-            copy_after,
-            actions_after,
-            agent_chat_after,
-            confirm_modal_after,
-        } => {
-            let before = before
-                .len()
-                .saturating_add(copy_before.len())
-                .saturating_add(actions_before.len())
-                .saturating_add(agent_chat_before.len())
-                .saturating_add(confirm_modal_before.len());
-            let after = after
-                .len()
-                .saturating_add(copy_after.len())
-                .saturating_add(actions_after.len())
-                .saturating_add(agent_chat_after.len())
-                .saturating_add(confirm_modal_after.len());
-            format!("{action}:all before={before} after={after} generation={generation}")
-        }
-    }
+    };
+    format!("{action}:{id} generation={generation}")
 }
 
 pub fn set_number_from_devtools(control: &str, value: &str) -> anyhow::Result<String> {
@@ -705,9 +523,18 @@ pub fn set_copy_from_devtools(control: &str, value: &str) -> anyhow::Result<Stri
     Ok(format!("{}={}", id.as_str(), change.applied))
 }
 
-pub fn set_actions_number_from_devtools(control: &str, value: &str) -> anyhow::Result<String> {
-    let id = actions_popup_knob_id_from_str(control)
-        .ok_or_else(|| anyhow::anyhow!("unknown dev style actions control '{control}'"))?;
+/// Shared body for the per-channel numeric devtools setters. Accepts values
+/// with a trailing `px` or `%` suffix, mirroring how the sliders report them.
+fn set_channel_number_from_devtools<Id: Copy>(
+    label: &str,
+    control: &str,
+    value: &str,
+    id_from_str: fn(&str) -> Option<Id>,
+    set: fn(Id, StyleValue) -> Option<AppliedStyleChange>,
+    id_as_str: fn(Id) -> &'static str,
+) -> anyhow::Result<String> {
+    let id = id_from_str(control)
+        .ok_or_else(|| anyhow::anyhow!("unknown dev style {label} control '{control}'"))?;
     let parsed = value
         .trim()
         .trim_end_matches("px")
@@ -715,53 +542,84 @@ pub fn set_actions_number_from_devtools(control: &str, value: &str) -> anyhow::R
         .trim()
         .parse::<f32>()
         .map_err(|_| anyhow::anyhow!("invalid numeric value '{value}'"))?;
-    let change = set_actions_popup_value(id, StyleValue::Number(parsed))
-        .ok_or_else(|| anyhow::anyhow!("unknown dev style actions control '{control}'"))?;
+    let change = set(id, StyleValue::Number(parsed))
+        .ok_or_else(|| anyhow::anyhow!("unknown dev style {label} control '{control}'"))?;
     let StyleValue::Number(applied) = change.applied;
-    Ok(format!("{}={applied}", id.as_str()))
+    Ok(format!("{}={applied}", id_as_str(id)))
+}
+
+pub fn set_actions_number_from_devtools(control: &str, value: &str) -> anyhow::Result<String> {
+    set_channel_number_from_devtools(
+        "actions",
+        control,
+        value,
+        actions_popup_knob_id_from_str,
+        set_actions_popup_value,
+        ActionsPopupKnobId::as_str,
+    )
 }
 
 pub fn set_agent_chat_number_from_devtools(control: &str, value: &str) -> anyhow::Result<String> {
-    let id = agent_chat_knob_id_from_str(control)
-        .ok_or_else(|| anyhow::anyhow!("unknown dev style agent chat control '{control}'"))?;
-    let parsed = value
-        .trim()
-        .trim_end_matches("px")
-        .trim_end_matches('%')
-        .trim()
-        .parse::<f32>()
-        .map_err(|_| anyhow::anyhow!("invalid numeric value '{value}'"))?;
-    let change = set_agent_chat_value(id, StyleValue::Number(parsed))
-        .ok_or_else(|| anyhow::anyhow!("unknown dev style agent chat control '{control}'"))?;
-    let StyleValue::Number(applied) = change.applied;
-    Ok(format!("{}={applied}", id.as_str()))
+    set_channel_number_from_devtools(
+        "agent chat",
+        control,
+        value,
+        agent_chat_knob_id_from_str,
+        set_agent_chat_value,
+        AgentChatKnobId::as_str,
+    )
 }
 
 pub fn set_confirm_modal_number_from_devtools(
     control: &str,
     value: &str,
 ) -> anyhow::Result<String> {
-    let id = confirm_modal_knob_id_from_str(control)
-        .ok_or_else(|| anyhow::anyhow!("unknown dev style confirm modal control '{control}'"))?;
-    let parsed = value
-        .trim()
-        .trim_end_matches("px")
-        .trim_end_matches('%')
-        .trim()
-        .parse::<f32>()
-        .map_err(|_| anyhow::anyhow!("invalid numeric value '{value}'"))?;
-    let change = set_confirm_modal_value(id, StyleValue::Number(parsed))
-        .ok_or_else(|| anyhow::anyhow!("unknown dev style confirm modal control '{control}'"))?;
-    let StyleValue::Number(applied) = change.applied;
-    Ok(format!("{}={applied}", id.as_str()))
+    set_channel_number_from_devtools(
+        "confirm modal",
+        control,
+        value,
+        confirm_modal_knob_id_from_str,
+        set_confirm_modal_value,
+        ConfirmModalKnobId::as_str,
+    )
+}
+
+pub fn set_theme_color_from_devtools(control: &str, value: &str) -> anyhow::Result<String> {
+    let id = theme_color_knob_id_from_str(control)
+        .ok_or_else(|| anyhow::anyhow!("unknown dev style theme color control '{control}'"))?;
+    let parsed = crate::theme::hex_color::hex_color_serde::parse_color_string(value)
+        .map_err(|error| anyhow::anyhow!("invalid color value '{value}': {error}"))?;
+    let change = set_theme_color_value(id, parsed)
+        .ok_or_else(|| anyhow::anyhow!("unknown dev style theme color control '{control}'"))?;
+    Ok(format!(
+        "{}={}",
+        id.as_str(),
+        format_theme_color_hex(change.applied)
+    ))
+}
+
+/// Apply every live theme color override on top of a freshly loaded theme.
+///
+/// Called from `theme::reload_theme_cache()` so the override layer survives any
+/// cache reload (file watcher, appearance flip, devtools) while remaining a
+/// no-op when the channel is empty.
+pub fn apply_to_theme(mut theme: crate::theme::Theme) -> crate::theme::Theme {
+    let guard = read_store();
+    if guard.maps.theme_color_values.is_empty() {
+        return theme;
+    }
+    for knob in THEME_COLOR_KNOBS {
+        if let Some(value) = guard.maps.theme_color_values.get(&knob.id).copied() {
+            (knob.apply)(&mut theme, value);
+        }
+    }
+    theme
 }
 
 pub fn apply_to_main_menu_def(mut def: MainMenuThemeDef) -> MainMenuThemeDef {
-    let guard = store()
-        .read()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let guard = read_store();
     for knob in STYLE_KNOBS {
-        if let Some(value) = guard.values.get(&knob.id).copied() {
+        if let Some(value) = guard.maps.values.get(&knob.id).copied() {
             (knob.apply)(&mut def, value);
         }
     }
@@ -769,11 +627,9 @@ pub fn apply_to_main_menu_def(mut def: MainMenuThemeDef) -> MainMenuThemeDef {
 }
 
 pub fn apply_to_actions_popup_def(mut def: ActionsPopupThemeDef) -> ActionsPopupThemeDef {
-    let guard = store()
-        .read()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let guard = read_store();
     for knob in ACTIONS_POPUP_KNOBS {
-        if let Some(value) = guard.actions_values.get(&knob.id).copied() {
+        if let Some(value) = guard.maps.actions_values.get(&knob.id).copied() {
             (knob.apply)(&mut def, value);
         }
     }
@@ -782,11 +638,9 @@ pub fn apply_to_actions_popup_def(mut def: ActionsPopupThemeDef) -> ActionsPopup
 
 pub fn effective_agent_chat_style() -> AgentChatStyleDef {
     let mut def = base_agent_chat_style();
-    let guard = store()
-        .read()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let guard = read_store();
     for knob in AGENT_CHAT_KNOBS {
-        if let Some(value) = guard.agent_chat_values.get(&knob.id).copied() {
+        if let Some(value) = guard.maps.agent_chat_values.get(&knob.id).copied() {
             (knob.apply)(&mut def, value);
         }
     }
@@ -795,11 +649,9 @@ pub fn effective_agent_chat_style() -> AgentChatStyleDef {
 
 pub fn effective_confirm_modal_style() -> ConfirmModalStyleDef {
     let mut def = base_confirm_modal_style();
-    let guard = store()
-        .read()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let guard = read_store();
     for knob in CONFIRM_MODAL_KNOBS {
-        if let Some(value) = guard.confirm_modal_values.get(&knob.id).copied() {
+        if let Some(value) = guard.maps.confirm_modal_values.get(&knob.id).copied() {
             (knob.apply)(&mut def, value);
         }
     }

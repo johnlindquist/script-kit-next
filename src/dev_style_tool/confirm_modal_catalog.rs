@@ -122,6 +122,17 @@ impl ConfirmModalKnobGroup {
             Self::Actions => "Confirm modal actions",
         }
     }
+
+    /// One-line anatomy hint tying the group to the element it styles in the
+    /// confirm modal, so tool users can tell which controls map where.
+    pub const fn description(self) -> &'static str {
+        match self {
+            Self::Shell => "Modal surface: width, padding, corner radius",
+            Self::Header => "Title and message block at the top",
+            Self::Anatomy => "Spacing between header, body, and actions",
+            Self::Actions => "Confirm/cancel button row at the bottom",
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy)]

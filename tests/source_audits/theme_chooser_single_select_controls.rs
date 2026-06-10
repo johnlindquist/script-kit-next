@@ -1,5 +1,38 @@
 use super::read_source;
 
+/// Returns the parenthesized argument list of the
+/// `render_theme_chooser_management_button(` call whose first argument is the
+/// given button id, panicking when no such call exists in `section`.
+fn management_button_call_args<'a>(section: &'a str, id: &str) -> &'a str {
+    let callee = "render_theme_chooser_management_button(";
+    let first_arg = format!("\"{id}\"");
+    let mut search = section;
+    loop {
+        let Some(index) = search.find(callee) else {
+            panic!("missing render_theme_chooser_management_button call for `{id}`");
+        };
+        let args_start = index + callee.len();
+        let after = &search[args_start..];
+        if after.trim_start().starts_with(&first_arg) {
+            let mut depth = 1usize;
+            for (offset, ch) in after.char_indices() {
+                match ch {
+                    '(' => depth += 1,
+                    ')' => {
+                        depth -= 1;
+                        if depth == 0 {
+                            return &after[..offset];
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            panic!("unterminated management button call for `{id}`");
+        }
+        search = after;
+    }
+}
+
 fn source_between<'a>(source: &'a str, start: &str, end: &str) -> &'a str {
     source
         .split(start)
@@ -36,11 +69,17 @@ fn theme_chooser_customize_opacity_controls_cover_full_percent_range() {
     assert!(source.contains(
         "const FOCUSED_BACKGROUND_OPACITY_PRESETS: &'static [(f32, &'static str)] = &[\n        (0.00, \"0%\"),"
     ));
-    assert_eq!(
-        source.matches("(1.00, \"100%\"),").count(),
-        3,
-        "each theme designer opacity control should expose a 100% endpoint"
-    );
+    for preset_const in [
+        "const OPACITY_PRESETS:",
+        "const TEXT_OPACITY_PRESETS:",
+        "const FOCUSED_BACKGROUND_OPACITY_PRESETS:",
+    ] {
+        let preset_table = source_between(&source, preset_const, "];");
+        assert!(
+            preset_table.contains("(1.00, \"100%\"),"),
+            "{preset_const} should expose a 100% endpoint"
+        );
+    }
 }
 
 #[test]
@@ -241,24 +280,15 @@ fn theme_chooser_management_buttons_use_theme_aware_hover_states() {
         .nth(1)
         .and_then(|section| section.split("let colors_section =").next())
         .expect("missing Theme Designer management section");
-    assert_eq!(
-        render_section
-            .matches("render_theme_chooser_management_button(")
-            .count(),
-        4,
-        "Save Copy, Update, Delete, and Restore should all use the shared local helper"
-    );
-
     for id in [
         "theme-chooser-save-copy-button",
         "theme-chooser-update-user-theme-button",
         "theme-chooser-delete-user-theme-button",
         "theme-chooser-restore-user-theme-button",
     ] {
-        assert!(
-            render_section.contains(id),
-            "management button id `{id}` must be preserved"
-        );
+        // Panics when the id is not rendered through the shared local helper:
+        // Save Copy, Update, Delete, and Restore must all use it.
+        management_button_call_args(render_section, id);
     }
 
     assert!(
@@ -325,18 +355,25 @@ fn theme_chooser_customize_cards_use_whisper_tokens_not_panel_tokens() {
         !customize_section.contains("badge_border_rgba"),
         "customize card borders must not use badge_border_rgba"
     );
+    let save_copy_args =
+        management_button_call_args(management_section, "theme-chooser-save-copy-button");
     assert!(
-        management_section.contains("chrome.accent_badge_bg_rgba")
-            && management_section
-                .matches("chrome.whisper_surface_rgba")
-                .count()
-                == 3
-            && management_section
-                .matches("chrome.whisper_border_rgba")
-                .count()
-                == 3,
-        "Save Copy should keep accent chrome while Update/Delete/Restore use whisper chrome"
+        save_copy_args.contains("chrome.accent_badge_bg_rgba")
+            && !save_copy_args.contains("chrome.whisper_surface_rgba"),
+        "Save Copy should keep accent chrome rather than whisper chrome"
     );
+    for id in [
+        "theme-chooser-update-user-theme-button",
+        "theme-chooser-delete-user-theme-button",
+        "theme-chooser-restore-user-theme-button",
+    ] {
+        let args = management_button_call_args(management_section, id);
+        assert!(
+            args.contains("chrome.whisper_surface_rgba")
+                && args.contains("chrome.whisper_border_rgba"),
+            "{id} should use whisper surface + border chrome"
+        );
+    }
     assert!(
         !management_section.contains("chrome.panel_surface_rgba"),
         "Theme Designer management buttons must not use panel_surface_rgba"

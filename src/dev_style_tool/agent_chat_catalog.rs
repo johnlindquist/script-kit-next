@@ -196,6 +196,19 @@ impl AgentChatKnobGroup {
             Self::ErrorAndSystem => "Error and system messages",
         }
     }
+
+    /// One-line anatomy hint tying the group to the element it styles in
+    /// Agent Chat, so tool users can tell which controls map where.
+    pub const fn description(self) -> &'static str {
+        match self {
+            Self::Transcript => "Chat scroll area: outer padding, message gaps",
+            Self::Markdown => "Rendered markdown inside assistant replies",
+            Self::UserMessage => "Your message bubbles",
+            Self::AssistantMessage => "Assistant reply blocks",
+            Self::CollapsibleBlocks => "Collapsible tool-call and thinking sections",
+            Self::ErrorAndSystem => "Error banners and system notices",
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy)]

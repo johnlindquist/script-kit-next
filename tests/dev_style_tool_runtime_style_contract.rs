@@ -1,5 +1,8 @@
 use gpui::FontWeight;
 use script_kit_gpui::designs::MainMenuThemeVariant;
+use script_kit_gpui::dev_style_tool::theme_catalog::{
+    format_theme_color_hex, THEME_COLOR_KNOBS, THEME_TEXT_PRIMARY_KNOB_ID, THEME_UI_BORDER_KNOB_ID,
+};
 use script_kit_gpui::dev_style_tool::{
     base_agent_chat_style, base_confirm_modal_style, export, runtime_overrides, StyleValue,
     ACTIONS_POPUP_KNOBS, CONFIRM_MODAL_ACTIONS_EDGE_PADDING_X_KNOB_ID,
@@ -937,7 +940,7 @@ fn export_current_settings_includes_agent_readable_overrides_and_effective_value
         .expect("list item height knob should exist");
 
     let json = export::current_settings_json();
-    assert_eq!(json["schema"], "script-kit-dev-style/v2");
+    assert_eq!(json["schema"], "script-kit-dev-style/v3");
     assert_eq!(json["overrideCount"], 1);
     assert_eq!(json["controls"]["mainWindowStyle"], STYLE_KNOBS.len());
     assert_eq!(json["controls"]["mainWindowCopy"], COPY_CONTROLS.len());
@@ -1125,9 +1128,125 @@ fn export_current_settings_includes_agent_readable_overrides_and_effective_value
         .iter()
         .any(|entry| entry["id"] == "list.scrollbarWidth"));
 
+    assert_eq!(json["controls"]["themeColors"], THEME_COLOR_KNOBS.len());
+    assert!(json["agentPrompt"]
+        .as_str()
+        .expect("agent prompt should be a string")
+        .contains("src/dev_style_tool/theme_catalog.rs"));
+    let theme_colors = &json["surfaces"]["theme"]["colors"];
+    assert!(theme_colors["effective"]
+        .as_array()
+        .expect("theme colors effective should be an array")
+        .iter()
+        .any(|entry| entry["id"] == "theme.colors.text.primary"));
+    assert!(theme_colors["effective"]
+        .as_array()
+        .expect("theme colors effective should be an array")
+        .iter()
+        .any(|entry| entry["id"] == "theme.colors.accent.selected"));
+
     let markdown = export::current_settings_markdown();
     assert!(markdown.contains("```json"));
     assert!(markdown.contains("\"list.itemHeight\""));
+
+    runtime_overrides::reset_all();
+}
+
+#[test]
+fn theme_color_override_round_trips_with_undo_redo_and_generation() {
+    let _guard = runtime_test_guard();
+    runtime_overrides::reset_all();
+    let before_generation = runtime_overrides::generation();
+
+    let change = runtime_overrides::set_theme_color_value(THEME_TEXT_PRIMARY_KNOB_ID, 0x112233)
+        .expect("theme text primary knob should exist");
+    assert_eq!(change.applied, 0x112233);
+    assert!(change.generation > before_generation);
+    assert_eq!(
+        runtime_overrides::current_theme_color_value(THEME_TEXT_PRIMARY_KNOB_ID),
+        Some(0x112233)
+    );
+    assert!(runtime_overrides::has_theme_color_overrides());
+    assert_eq!(runtime_overrides::theme_color_override_count(), 1);
+    assert_eq!(runtime_overrides::history_state().override_count, 1);
+
+    let undo = runtime_overrides::undo_last().expect("theme color set should be undoable");
+    assert!(undo.contains("theme.colors.text.primary"));
+    assert_eq!(
+        runtime_overrides::current_theme_color_value(THEME_TEXT_PRIMARY_KNOB_ID),
+        None
+    );
+
+    let redo = runtime_overrides::redo_last().expect("theme color set should be redoable");
+    assert!(redo.contains("theme.colors.text.primary"));
+    assert_eq!(
+        runtime_overrides::current_theme_color_value(THEME_TEXT_PRIMARY_KNOB_ID),
+        Some(0x112233)
+    );
+
+    let reset = runtime_overrides::reset_theme_color_value(THEME_TEXT_PRIMARY_KNOB_ID)
+        .expect("theme text primary knob should reset");
+    assert_eq!(reset.previous, Some(0x112233));
+    assert_eq!(
+        runtime_overrides::current_theme_color_value(THEME_TEXT_PRIMARY_KNOB_ID),
+        None
+    );
+
+    runtime_overrides::reset_all();
+}
+
+#[test]
+fn apply_to_theme_layers_theme_color_overrides_onto_a_theme() {
+    let _guard = runtime_test_guard();
+    runtime_overrides::reset_all();
+
+    let base = script_kit_gpui::theme::Theme::default();
+    let untouched = runtime_overrides::apply_to_theme(base.clone());
+    assert_eq!(untouched.colors.ui.border, base.colors.ui.border);
+
+    runtime_overrides::set_theme_color_value(THEME_UI_BORDER_KNOB_ID, 0xAB_CD_EF)
+        .expect("theme ui border knob should exist");
+    let themed = runtime_overrides::apply_to_theme(base.clone());
+    assert_eq!(themed.colors.ui.border, 0xAB_CD_EF);
+    assert_eq!(format_theme_color_hex(themed.colors.ui.border), "#ABCDEF");
+
+    runtime_overrides::reset_all();
+    let cleared = runtime_overrides::apply_to_theme(base.clone());
+    assert_eq!(cleared.colors.ui.border, base.colors.ui.border);
+}
+
+#[test]
+fn devtools_theme_color_setter_accepts_hex_and_rejects_garbage() {
+    let _guard = runtime_test_guard();
+    runtime_overrides::reset_all();
+
+    let applied =
+        runtime_overrides::set_theme_color_from_devtools("theme.colors.text.primary", "#FBBF24")
+            .expect("theme text primary should be settable through devtools");
+    assert_eq!(applied, "theme.colors.text.primary=#FBBF24");
+    assert_eq!(
+        runtime_overrides::current_theme_color_value(THEME_TEXT_PRIMARY_KNOB_ID),
+        Some(0xFBBF24)
+    );
+
+    let applied = runtime_overrides::set_theme_color_from_devtools(
+        "input:dev-style-tool-theme:theme.colors.ui.border",
+        "rgb(1, 2, 3)",
+    )
+    .expect("theme ui border should be settable by semantic control id");
+    assert_eq!(applied, "theme.colors.ui.border=#010203");
+
+    assert!(runtime_overrides::set_theme_color_from_devtools(
+        "theme.colors.text.primary",
+        "not-a-hex"
+    )
+    .is_err());
+    assert!(
+        runtime_overrides::set_theme_color_from_devtools("theme.colors.nope", "#112233").is_err()
+    );
+
+    runtime_overrides::clear_theme_color_values();
+    assert!(!runtime_overrides::has_theme_color_overrides());
 
     runtime_overrides::reset_all();
 }

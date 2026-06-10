@@ -33,6 +33,10 @@ use crate::dev_style_tool::{
     export,
     kitchen_sink_targets::{DevStyleKitchenSinkTarget, OPEN_AGENT_CHAT_KITCHEN_SINK_BUTTON},
     runtime_overrides,
+    theme_catalog::{
+        format_theme_color_hex, theme_color_knob_by_id, ThemeColorKnob, ThemeColorKnobGroup,
+        ThemeColorKnobId, THEME_COLOR_KNOBS,
+    },
 };
 use crate::{theme, ScriptListApp};
 
@@ -65,6 +69,11 @@ struct ConfirmModalControlState {
     slider: Entity<SliderState>,
 }
 
+struct ThemeColorControlState {
+    knob_id: ThemeColorKnobId,
+    input: Entity<InputState>,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum DevStyleToolTab {
     MainWindowStyling,
@@ -72,6 +81,7 @@ enum DevStyleToolTab {
     ActionsPopupStyling,
     AgentChatStyling,
     ConfirmModalStyling,
+    ThemeInspector,
 }
 
 impl DevStyleToolTab {
@@ -81,6 +91,7 @@ impl DevStyleToolTab {
         Self::ActionsPopupStyling,
         Self::AgentChatStyling,
         Self::ConfirmModalStyling,
+        Self::ThemeInspector,
     ];
 
     const fn label(self) -> &'static str {
@@ -90,6 +101,7 @@ impl DevStyleToolTab {
             Self::ActionsPopupStyling => "Actions Popup Styling",
             Self::AgentChatStyling => "Agent Chat Styling",
             Self::ConfirmModalStyling => "Confirm Modal Styling",
+            Self::ThemeInspector => "Theme",
         }
     }
 
@@ -100,8 +112,30 @@ impl DevStyleToolTab {
             Self::ActionsPopupStyling => "tab:dev-style-tool:actions-popup-styling",
             Self::AgentChatStyling => "tab:dev-style-tool:agent-chat-styling",
             Self::ConfirmModalStyling => "tab:dev-style-tool:confirm-modal-styling",
+            Self::ThemeInspector => "tab:dev-style-tool:theme-inspector",
         }
     }
+}
+
+/// Fixed width of the "{effective} | base {n}" value readout column. Keeping the
+/// column width constant means live value changes can never re-flow the card
+/// layout while a slider drag is in flight.
+const VALUE_READOUT_COL_W: f32 = 140.0;
+
+/// Update a control's paired text input without touching the slider entity or the
+/// tool view. Used by the live drag path: the `InputState` entity notifies itself,
+/// so the value readout stays live while the surrounding layout stays frozen.
+fn sync_live_input_text(
+    input: &Entity<InputState>,
+    label: String,
+    window: &mut Window,
+    cx: &mut gpui::Context<DevStyleToolApp>,
+) {
+    input.update(cx, |input, cx| {
+        if input.value().as_ref() != label {
+            input.set_value(label, window, cx);
+        }
+    });
 }
 
 pub(crate) struct DevStyleToolApp {
@@ -112,6 +146,7 @@ pub(crate) struct DevStyleToolApp {
     actions_popup_controls: Vec<ActionsPopupControlState>,
     agent_chat_controls: Vec<AgentChatControlState>,
     confirm_modal_controls: Vec<ConfirmModalControlState>,
+    theme_color_controls: Vec<ThemeColorControlState>,
     save_status: Option<String>,
     save_path: Option<PathBuf>,
     saved_markdown: Entity<InputState>,
@@ -120,6 +155,10 @@ pub(crate) struct DevStyleToolApp {
     active_actions_group: ActionsPopupKnobGroup,
     active_agent_chat_group: AgentChatKnobGroup,
     active_confirm_modal_group: ConfirmModalKnobGroup,
+    knob_filter: Entity<InputState>,
+    knob_filter_query: String,
+    show_previews: bool,
+    last_live_refresh: Option<std::time::Instant>,
     subscriptions: Vec<Subscription>,
 }
 
@@ -153,7 +192,10 @@ impl DevStyleToolApp {
                     &slider,
                     window,
                     move |this, _, event: &SliderEvent, window, cx| match event {
-                        SliderEvent::Change(value) | SliderEvent::Release(value) => {
+                        SliderEvent::Change(value) => {
+                            this.apply_knob_value_live(knob_id, value.end(), window, cx);
+                        }
+                        SliderEvent::Release(value) => {
                             this.apply_knob_value(knob_id, value.end(), window, cx);
                         }
                     },
@@ -221,7 +263,15 @@ impl DevStyleToolApp {
                     &slider,
                     window,
                     move |this, _, event: &SliderEvent, window, cx| match event {
-                        SliderEvent::Change(value) | SliderEvent::Release(value) => {
+                        SliderEvent::Change(value) => {
+                            this.apply_actions_popup_knob_value_live(
+                                knob_id,
+                                value.end(),
+                                window,
+                                cx,
+                            );
+                        }
+                        SliderEvent::Release(value) => {
                             this.apply_actions_popup_knob_value(knob_id, value.end(), window, cx);
                         }
                     },
@@ -267,7 +317,10 @@ impl DevStyleToolApp {
                     &slider,
                     window,
                     move |this, _, event: &SliderEvent, window, cx| match event {
-                        SliderEvent::Change(value) | SliderEvent::Release(value) => {
+                        SliderEvent::Change(value) => {
+                            this.apply_agent_chat_knob_value_live(knob_id, value.end(), window, cx);
+                        }
+                        SliderEvent::Release(value) => {
                             this.apply_agent_chat_knob_value(knob_id, value.end(), window, cx);
                         }
                     },
@@ -313,7 +366,15 @@ impl DevStyleToolApp {
                     &slider,
                     window,
                     move |this, _, event: &SliderEvent, window, cx| match event {
-                        SliderEvent::Change(value) | SliderEvent::Release(value) => {
+                        SliderEvent::Change(value) => {
+                            this.apply_confirm_modal_knob_value_live(
+                                knob_id,
+                                value.end(),
+                                window,
+                                cx,
+                            );
+                        }
+                        SliderEvent::Release(value) => {
                             this.apply_confirm_modal_knob_value(knob_id, value.end(), window, cx);
                         }
                     },
@@ -337,12 +398,54 @@ impl DevStyleToolApp {
                 }
             })
             .collect();
+        let theme_color_controls = THEME_COLOR_KNOBS
+            .iter()
+            .map(|knob| {
+                let initial = effective_theme_color_value(knob);
+                let input = cx.new(|cx| {
+                    InputState::new(window, cx)
+                        .tab_navigation(true)
+                        .default_value(format_theme_color_hex(initial))
+                });
+
+                let knob_id = knob.id;
+                subscriptions.push(cx.subscribe_in(
+                    &input,
+                    window,
+                    move |this, input, event: &InputEvent, window, cx| match event {
+                        InputEvent::PressEnter { .. } | InputEvent::Blur => {
+                            let value = input.read(cx).value().to_string();
+                            this.commit_theme_color_text(knob_id, &value, window, cx);
+                        }
+                        _ => {}
+                    },
+                ));
+
+                ThemeColorControlState { knob_id, input }
+            })
+            .collect();
         let saved_markdown = cx.new(|cx| {
             InputState::new(window, cx)
                 .multi_line(true)
                 .tab_navigation(true)
                 .default_value("")
         });
+
+        let knob_filter = cx.new(|cx| {
+            InputState::new(window, cx)
+                .tab_navigation(true)
+                .placeholder("Filter controls by name or id (searches every group)")
+        });
+        subscriptions.push(cx.subscribe_in(
+            &knob_filter,
+            window,
+            |this, input, event: &InputEvent, _window, cx| {
+                if matches!(event, InputEvent::Change) {
+                    this.knob_filter_query = input.read(cx).value().trim().to_lowercase();
+                    cx.notify();
+                }
+            },
+        ));
 
         Self {
             main_window,
@@ -352,6 +455,7 @@ impl DevStyleToolApp {
             actions_popup_controls,
             agent_chat_controls,
             confirm_modal_controls,
+            theme_color_controls,
             save_status: None,
             save_path: None,
             saved_markdown,
@@ -360,8 +464,32 @@ impl DevStyleToolApp {
             active_actions_group: ActionsPopupKnobGroup::Shell,
             active_agent_chat_group: AgentChatKnobGroup::Transcript,
             active_confirm_modal_group: ConfirmModalKnobGroup::Shell,
+            knob_filter,
+            knob_filter_query: String::new(),
+            show_previews: true,
+            last_live_refresh: None,
             subscriptions,
         }
+    }
+
+    fn filter_active(&self) -> bool {
+        !self.knob_filter_query.is_empty()
+    }
+
+    fn knob_matches_filter(&self, label: &str, id: &str) -> bool {
+        if self.knob_filter_query.is_empty() {
+            return true;
+        }
+        let query = self.knob_filter_query.as_str();
+        label.to_lowercase().contains(query) || id.to_lowercase().contains(query)
+    }
+
+    fn clear_knob_filter(&mut self, window: &mut Window, cx: &mut gpui::Context<Self>) {
+        self.knob_filter_query.clear();
+        self.knob_filter.update(cx, |input, cx| {
+            input.set_value("", window, cx);
+        });
+        cx.notify();
     }
 
     fn apply_knob_value(
@@ -375,6 +503,123 @@ impl DevStyleToolApp {
             let StyleValue::Number(applied) = change.applied;
             self.sync_control_to_value(knob_id, applied, window, cx);
             self.refresh_main_window(cx);
+        }
+    }
+
+    /// Live (mid-drag) variant of [`Self::apply_knob_value`]: updates the override store
+    /// and the paired text input only, without notifying the whole tool view, so an
+    /// in-flight slider drag never re-lays-out the control tree under the cursor.
+    fn apply_knob_value_live(
+        &mut self,
+        knob_id: StyleKnobId,
+        value: f32,
+        window: &mut Window,
+        cx: &mut gpui::Context<Self>,
+    ) {
+        if let Some(change) = runtime_overrides::set_value(knob_id, StyleValue::Number(value)) {
+            let StyleValue::Number(applied) = change.applied;
+            if let (Some(knob), Some(control)) = (
+                knob_by_id(knob_id),
+                self.controls
+                    .iter()
+                    .find(|control| control.knob_id == knob_id),
+            ) {
+                sync_live_input_text(
+                    &control.input,
+                    format_style_value(applied, knob.unit),
+                    window,
+                    cx,
+                );
+            }
+            self.refresh_main_window_throttled(cx);
+        }
+    }
+
+    fn apply_actions_popup_knob_value_live(
+        &mut self,
+        knob_id: ActionsPopupKnobId,
+        value: f32,
+        window: &mut Window,
+        cx: &mut gpui::Context<Self>,
+    ) {
+        if let Some(change) =
+            runtime_overrides::set_actions_popup_value(knob_id, StyleValue::Number(value))
+        {
+            let StyleValue::Number(applied) = change.applied;
+            if let (Some(knob), Some(control)) = (
+                actions_popup_knob_by_id(knob_id),
+                self.actions_popup_controls
+                    .iter()
+                    .find(|control| control.knob_id == knob_id),
+            ) {
+                sync_live_input_text(
+                    &control.input,
+                    format_style_value(applied, knob.unit),
+                    window,
+                    cx,
+                );
+            }
+            // Window resize is deferred to Release; only repaint the dialog live.
+            if let Some(dialog) = crate::actions::get_actions_dialog_entity(cx) {
+                dialog.update(cx, |_dialog, cx| cx.notify());
+                crate::actions::notify_actions_window(cx);
+            }
+        }
+    }
+
+    fn apply_agent_chat_knob_value_live(
+        &mut self,
+        knob_id: AgentChatKnobId,
+        value: f32,
+        window: &mut Window,
+        cx: &mut gpui::Context<Self>,
+    ) {
+        if let Some(change) =
+            runtime_overrides::set_agent_chat_value(knob_id, StyleValue::Number(value))
+        {
+            let StyleValue::Number(applied) = change.applied;
+            if let (Some(knob), Some(control)) = (
+                agent_chat_knob_by_id(knob_id),
+                self.agent_chat_controls
+                    .iter()
+                    .find(|control| control.knob_id == knob_id),
+            ) {
+                sync_live_input_text(
+                    &control.input,
+                    format_style_value(applied, knob.unit),
+                    window,
+                    cx,
+                );
+            }
+            self.refresh_agent_chat(cx);
+        }
+    }
+
+    fn apply_confirm_modal_knob_value_live(
+        &mut self,
+        knob_id: ConfirmModalKnobId,
+        value: f32,
+        window: &mut Window,
+        cx: &mut gpui::Context<Self>,
+    ) {
+        if let Some(change) =
+            runtime_overrides::set_confirm_modal_value(knob_id, StyleValue::Number(value))
+        {
+            let StyleValue::Number(applied) = change.applied;
+            if let (Some(knob), Some(control)) = (
+                confirm_modal_knob_by_id(knob_id),
+                self.confirm_modal_controls
+                    .iter()
+                    .find(|control| control.knob_id == knob_id),
+            ) {
+                sync_live_input_text(
+                    &control.input,
+                    format_style_value(applied, knob.unit),
+                    window,
+                    cx,
+                );
+            }
+            self.refresh_confirm_modal(cx);
         }
     }
 
@@ -591,8 +836,79 @@ impl DevStyleToolApp {
         self.refresh_confirm_modal(cx);
     }
 
+    fn apply_theme_color_value(
+        &mut self,
+        knob_id: ThemeColorKnobId,
+        value: u32,
+        window: &mut Window,
+        cx: &mut gpui::Context<Self>,
+    ) {
+        if runtime_overrides::set_theme_color_value(knob_id, value).is_some() {
+            // Theme colors live in the cached Theme: rebuild the cache (which
+            // layers the override) and notify every window, exactly like the
+            // theme.json hot-reload path.
+            crate::theme::service::reapply_runtime_theme_overrides(cx);
+            self.sync_theme_color_control_to_value(knob_id, window, cx);
+            self.refresh_main_window(cx);
+        }
+    }
+
+    fn commit_theme_color_text(
+        &mut self,
+        knob_id: ThemeColorKnobId,
+        value: &str,
+        window: &mut Window,
+        cx: &mut gpui::Context<Self>,
+    ) {
+        let Some(_knob) = theme_color_knob_by_id(knob_id) else {
+            return;
+        };
+        let Ok(color) = crate::theme::hex_color::hex_color_serde::parse_color_string(value) else {
+            self.sync_theme_color_control_to_value(knob_id, window, cx);
+            return;
+        };
+        self.apply_theme_color_value(knob_id, color, window, cx);
+    }
+
+    fn reset_theme_color_knob(
+        &mut self,
+        knob_id: ThemeColorKnobId,
+        window: &mut Window,
+        cx: &mut gpui::Context<Self>,
+    ) {
+        if runtime_overrides::reset_theme_color_value(knob_id).is_some() {
+            crate::theme::service::reapply_runtime_theme_overrides(cx);
+            self.sync_theme_color_control_to_value(knob_id, window, cx);
+            self.refresh_main_window(cx);
+        }
+    }
+
+    /// Persist the live theme (cached theme already has every theme color
+    /// override applied) to ~/.scriptkit/theme.json, then clear the override
+    /// channel so the inspector reports the saved values as base.
+    fn save_theme_to_disk(&mut self, window: &mut Window, cx: &mut gpui::Context<Self>) {
+        let theme = theme::get_cached_theme();
+        self.save_status = Some(
+            match crate::theme::service::persist_theme_and_sync_all_windows(
+                cx,
+                &theme,
+                "dev_style_tool",
+            ) {
+                Ok(_applied) => {
+                    runtime_overrides::clear_theme_color_values();
+                    "Saved theme colors to ~/.scriptkit/theme.json".to_string()
+                }
+                Err(error) => format!("Theme save failed: {error}"),
+            },
+        );
+        self.sync_all_controls(window, cx);
+        self.refresh_main_window(cx);
+        cx.notify();
+    }
+
     fn undo_style_change(&mut self, window: &mut Window, cx: &mut gpui::Context<Self>) {
         if runtime_overrides::undo_last().is_some() {
+            crate::theme::service::reapply_runtime_theme_overrides(cx);
             self.sync_all_controls(window, cx);
             self.refresh_main_window(cx);
             self.refresh_actions_popup(cx);
@@ -603,6 +919,7 @@ impl DevStyleToolApp {
 
     fn redo_style_change(&mut self, window: &mut Window, cx: &mut gpui::Context<Self>) {
         if runtime_overrides::redo_last().is_some() {
+            crate::theme::service::reapply_runtime_theme_overrides(cx);
             self.sync_all_controls(window, cx);
             self.refresh_main_window(cx);
             self.refresh_actions_popup(cx);
@@ -613,6 +930,7 @@ impl DevStyleToolApp {
 
     fn reset_all_controls(&mut self, window: &mut Window, cx: &mut gpui::Context<Self>) {
         runtime_overrides::reset_all();
+        crate::theme::service::reapply_runtime_theme_overrides(cx);
         self.sync_all_controls(window, cx);
         self.refresh_main_window(cx);
         self.refresh_actions_popup(cx);
@@ -676,6 +994,14 @@ impl DevStyleToolApp {
                 cx,
             );
         }
+        let theme_color_knob_ids: Vec<ThemeColorKnobId> = self
+            .theme_color_controls
+            .iter()
+            .map(|control| control.knob_id)
+            .collect();
+        for knob_id in theme_color_knob_ids {
+            self.sync_theme_color_control_to_value(knob_id, window, cx);
+        }
     }
 
     fn sync_control_to_value(
@@ -696,7 +1022,7 @@ impl DevStyleToolApp {
             return;
         };
         control.slider.update(cx, |slider, cx| {
-            if (slider.value().end() - value).abs() > f32::EPSILON {
+            if !slider.is_dragging() && (slider.value().end() - value).abs() > f32::EPSILON {
                 slider.set_value(SliderValue::Single(value), window, cx);
             }
         });
@@ -749,7 +1075,7 @@ impl DevStyleToolApp {
             return;
         };
         control.slider.update(cx, |slider, cx| {
-            if (slider.value().end() - value).abs() > f32::EPSILON {
+            if !slider.is_dragging() && (slider.value().end() - value).abs() > f32::EPSILON {
                 slider.set_value(SliderValue::Single(value), window, cx);
             }
         });
@@ -780,7 +1106,7 @@ impl DevStyleToolApp {
             return;
         };
         control.slider.update(cx, |slider, cx| {
-            if (slider.value().end() - value).abs() > f32::EPSILON {
+            if !slider.is_dragging() && (slider.value().end() - value).abs() > f32::EPSILON {
                 slider.set_value(SliderValue::Single(value), window, cx);
             }
         });
@@ -811,7 +1137,7 @@ impl DevStyleToolApp {
             return;
         };
         control.slider.update(cx, |slider, cx| {
-            if (slider.value().end() - value).abs() > f32::EPSILON {
+            if !slider.is_dragging() && (slider.value().end() - value).abs() > f32::EPSILON {
                 slider.set_value(SliderValue::Single(value), window, cx);
             }
         });
@@ -822,6 +1148,48 @@ impl DevStyleToolApp {
             }
         });
         cx.notify();
+    }
+
+    fn sync_theme_color_control_to_value(
+        &mut self,
+        knob_id: ThemeColorKnobId,
+        window: &mut Window,
+        cx: &mut gpui::Context<Self>,
+    ) {
+        let Some(knob) = theme_color_knob_by_id(knob_id) else {
+            return;
+        };
+        let Some(control) = self
+            .theme_color_controls
+            .iter()
+            .find(|control| control.knob_id == knob_id)
+        else {
+            return;
+        };
+        let label = format_theme_color_hex(effective_theme_color_value(knob));
+        control.input.update(cx, |input, cx| {
+            if input.value().as_ref() != label {
+                input.set_value(label, window, cx);
+            }
+        });
+        cx.notify();
+    }
+
+    /// Throttled refresh used by the live (mid-drag) slider path. `refresh_main_window`
+    /// runs a full theme update on every call; at drag-event rates that floods the main
+    /// window, so live ticks are capped at ~30Hz. The Release path always calls the
+    /// unthrottled version, so the final value is never skipped.
+    fn refresh_main_window_throttled(&mut self, cx: &mut gpui::Context<Self>) {
+        const LIVE_REFRESH_INTERVAL: std::time::Duration = std::time::Duration::from_millis(33);
+        let now = std::time::Instant::now();
+        if self
+            .last_live_refresh
+            .is_some_and(|last| now.duration_since(last) < LIVE_REFRESH_INTERVAL)
+        {
+            return;
+        }
+        self.last_live_refresh = Some(now);
+        self.refresh_main_window(cx);
     }
 
     fn refresh_main_window(&self, cx: &mut gpui::Context<Self>) {
@@ -957,6 +1325,7 @@ impl DevStyleToolApp {
             DevStyleToolTab::AgentChatStyling => &[DevStyleKitchenSinkTarget::AgentChat],
             DevStyleToolTab::ConfirmModalStyling => &[DevStyleKitchenSinkTarget::ConfirmModal],
             DevStyleToolTab::TextCopy => &[],
+            DevStyleToolTab::ThemeInspector => &[],
         };
 
         let mut panel = div()
@@ -1286,6 +1655,11 @@ impl DevStyleToolApp {
                 self.active_tab.label(),
                 self.active_confirm_modal_group.label()
             ),
+            DevStyleToolTab::ThemeInspector => format!(
+                "{} / {} colors",
+                self.active_tab.label(),
+                THEME_COLOR_KNOBS.len()
+            ),
         }
     }
 
@@ -1315,6 +1689,42 @@ impl DevStyleToolApp {
                     .text_color(rgb(chrome.text_primary_hex))
                     .child(self.active_scope_label()),
             )
+    }
+
+    fn render_knob_filter(
+        &self,
+        chrome: theme::AppChromeColors,
+        cx: &mut gpui::Context<Self>,
+    ) -> impl IntoElement {
+        div()
+            .id("panel:dev-style-tool-knob-filter")
+            .flex()
+            .items_center()
+            .gap(px(8.0))
+            .child(
+                div()
+                    .id("input:dev-style-tool-knob-filter")
+                    .flex_1()
+                    .child(Input::new(&self.knob_filter).small()),
+            )
+            .when(self.filter_active(), |row| {
+                row.child(
+                    div()
+                        .id("button:dev-style-tool-knob-filter-clear")
+                        .px(px(6.0))
+                        .py(px(3.0))
+                        .rounded(px(crate::ui::chrome::LIQUID_GLASS_COMPACT_RADIUS_PX))
+                        .border(px(1.0))
+                        .border_color(rgba(chrome.border_rgba))
+                        .text_xs()
+                        .cursor_pointer()
+                        .hover(|style| style.bg(rgba(chrome.hover_rgba)))
+                        .on_click(cx.listener(|this, _event, window, cx| {
+                            this.clear_knob_filter(window, cx);
+                        }))
+                        .child("Clear"),
+                )
+            })
     }
 
     fn render_saved_markdown(
@@ -1373,20 +1783,45 @@ impl DevStyleToolApp {
         cx: &mut gpui::Context<Self>,
     ) -> Div {
         let mut column = div().flex().flex_col().gap(px(10.0)).flex_1();
+        let mut matched = 0usize;
         for group in groups {
             let controls: Vec<&StyleControlState> = self
                 .controls
                 .iter()
                 .filter(|control| {
-                    knob_by_id(control.knob_id).is_some_and(|knob| knob.group == *group)
+                    knob_by_id(control.knob_id).is_some_and(|knob| {
+                        knob.group == *group
+                            && self.knob_matches_filter(knob.label, knob.id.as_str())
+                    })
                 })
                 .collect();
             if controls.is_empty() {
                 continue;
             }
+            matched += controls.len();
             column = column.child(self.render_group(*group, controls, chrome, cx));
         }
+        if matched == 0 && self.filter_active() {
+            column = column.child(self.render_filter_empty_state(chrome));
+        }
         column
+    }
+
+    fn render_filter_empty_state(&self, chrome: theme::AppChromeColors) -> impl IntoElement {
+        div()
+            .id("status:dev-style-tool-filter-empty")
+            .px(px(10.0))
+            .py(px(8.0))
+            .rounded(px(crate::ui::chrome::LIQUID_GLASS_COMPACT_RADIUS_PX))
+            .border(px(1.0))
+            .border_color(rgba(chrome.border_rgba))
+            .bg(rgba(chrome.input_surface_rgba))
+            .text_xs()
+            .text_color(rgb(chrome.text_secondary_hex))
+            .child(format!(
+                "No controls match \"{}\" on this surface",
+                self.knob_filter_query
+            ))
     }
 
     fn render_group(
@@ -1414,6 +1849,12 @@ impl DevStyleToolApp {
                     .font_weight(gpui::FontWeight::SEMIBOLD)
                     .text_color(rgb(chrome.text_secondary_hex))
                     .child(group.label()),
+            )
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(rgb(chrome.text_dimmed_hex))
+                    .child(group.description()),
             )
             .children(self.group_controls_by_section(controls).into_iter().map(
                 |(section, controls)| {
@@ -1482,6 +1923,7 @@ impl DevStyleToolApp {
         let base = knob_base_value(knob);
         let effective = current_knob_value(knob.id);
         let knob_id = knob.id;
+        let overridden = runtime_overrides::current_value(knob_id).is_some();
 
         div()
             .id(ElementId::Name(
@@ -1493,7 +1935,11 @@ impl DevStyleToolApp {
             .p(px(7.0))
             .rounded(px(crate::ui::chrome::LIQUID_GLASS_COMPACT_RADIUS_PX))
             .border(px(1.0))
-            .border_color(rgba(chrome.border_rgba))
+            .border_color(if overridden {
+                rgba(chrome.accent_badge_border_rgba)
+            } else {
+                rgba(chrome.border_rgba)
+            })
             .bg(rgba(chrome.window_surface_rgba))
             .child(
                 div()
@@ -1501,10 +1947,22 @@ impl DevStyleToolApp {
                     .items_center()
                     .justify_between()
                     .gap(px(8.0))
-                    .child(div().text_xs().child(knob.label))
                     .child(
                         div()
                             .text_xs()
+                            .flex_1()
+                            .min_w_0()
+                            .truncate()
+                            .child(knob.label),
+                    )
+                    .child(
+                        div()
+                            .w(px(VALUE_READOUT_COL_W))
+                            .flex_none()
+                            .text_xs()
+                            .text_right()
+                            .whitespace_nowrap()
+                            .overflow_hidden()
                             .text_color(rgb(chrome.text_secondary_hex))
                             .child(format!(
                                 "{} | base {}",
@@ -1571,10 +2029,15 @@ impl DevStyleToolApp {
         cx: &mut gpui::Context<Self>,
     ) -> Div {
         let mut column = div().flex().flex_col().gap(px(10.0)).flex_1();
+        let mut matched = 0usize;
         for control in &self.copy_controls {
             let Some(copy_control) = copy_control_by_id(control.control_id) else {
                 continue;
             };
+            if !self.knob_matches_filter(copy_control.label, copy_control.id.as_str()) {
+                continue;
+            }
+            matched += 1;
             let effective = runtime_overrides::effective_copy_value(copy_control.id);
             let base = (copy_control.base)();
             let control_id = copy_control.id;
@@ -1665,6 +2128,9 @@ impl DevStyleToolApp {
                     ),
             );
         }
+        if matched == 0 && self.filter_active() {
+            column = column.child(self.render_filter_empty_state(chrome));
+        }
         column
     }
 
@@ -1674,21 +2140,31 @@ impl DevStyleToolApp {
         cx: &mut gpui::Context<Self>,
     ) -> Div {
         let mut column = div().flex().flex_col().gap(px(10.0)).flex_1();
-        let controls: Vec<&ActionsPopupControlState> = self
-            .actions_popup_controls
-            .iter()
-            .filter(|control| {
-                actions_popup_knob_by_id(control.knob_id)
-                    .is_some_and(|knob| knob.group == self.active_actions_group)
-            })
-            .collect();
-        if !controls.is_empty() {
-            column = column.child(self.render_actions_popup_group(
-                self.active_actions_group,
-                controls,
-                chrome,
-                cx,
-            ));
+        let groups: &[ActionsPopupKnobGroup] = if self.filter_active() {
+            ACTIONS_POPUP_KNOB_GROUPS
+        } else {
+            std::slice::from_ref(&self.active_actions_group)
+        };
+        let mut matched = 0usize;
+        for group in groups {
+            let controls: Vec<&ActionsPopupControlState> = self
+                .actions_popup_controls
+                .iter()
+                .filter(|control| {
+                    actions_popup_knob_by_id(control.knob_id).is_some_and(|knob| {
+                        knob.group == *group
+                            && self.knob_matches_filter(knob.label, knob.id.as_str())
+                    })
+                })
+                .collect();
+            if controls.is_empty() {
+                continue;
+            }
+            matched += controls.len();
+            column = column.child(self.render_actions_popup_group(*group, controls, chrome, cx));
+        }
+        if matched == 0 && self.filter_active() {
+            column = column.child(self.render_filter_empty_state(chrome));
         }
         column
     }
@@ -1719,6 +2195,12 @@ impl DevStyleToolApp {
                     .text_color(rgb(chrome.text_secondary_hex))
                     .child(group.label()),
             )
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(rgb(chrome.text_dimmed_hex))
+                    .child(group.description()),
+            )
             .children(
                 controls
                     .into_iter()
@@ -1737,6 +2219,7 @@ impl DevStyleToolApp {
         let base = actions_popup_knob_base_value(knob);
         let effective = current_actions_popup_knob_value(knob.id);
         let knob_id = knob.id;
+        let overridden = runtime_overrides::current_actions_popup_value(knob_id).is_some();
 
         div()
             .id(ElementId::Name(
@@ -1748,7 +2231,11 @@ impl DevStyleToolApp {
             .p(px(7.0))
             .rounded(px(crate::ui::chrome::LIQUID_GLASS_COMPACT_RADIUS_PX))
             .border(px(1.0))
-            .border_color(rgba(chrome.border_rgba))
+            .border_color(if overridden {
+                rgba(chrome.accent_badge_border_rgba)
+            } else {
+                rgba(chrome.border_rgba)
+            })
             .bg(rgba(chrome.window_surface_rgba))
             .child(
                 div()
@@ -1756,10 +2243,22 @@ impl DevStyleToolApp {
                     .items_center()
                     .justify_between()
                     .gap(px(8.0))
-                    .child(div().text_xs().child(knob.label))
                     .child(
                         div()
                             .text_xs()
+                            .flex_1()
+                            .min_w_0()
+                            .truncate()
+                            .child(knob.label),
+                    )
+                    .child(
+                        div()
+                            .w(px(VALUE_READOUT_COL_W))
+                            .flex_none()
+                            .text_xs()
+                            .text_right()
+                            .whitespace_nowrap()
+                            .overflow_hidden()
                             .text_color(rgb(chrome.text_secondary_hex))
                             .child(format!(
                                 "{} | base {}",
@@ -1828,21 +2327,31 @@ impl DevStyleToolApp {
         cx: &mut gpui::Context<Self>,
     ) -> Div {
         let mut column = div().flex().flex_col().gap(px(10.0)).flex_1();
-        let controls: Vec<&AgentChatControlState> = self
-            .agent_chat_controls
-            .iter()
-            .filter(|control| {
-                agent_chat_knob_by_id(control.knob_id)
-                    .is_some_and(|knob| knob.group == self.active_agent_chat_group)
-            })
-            .collect();
-        if !controls.is_empty() {
-            column = column.child(self.render_agent_chat_group(
-                self.active_agent_chat_group,
-                controls,
-                chrome,
-                cx,
-            ));
+        let groups: &[AgentChatKnobGroup] = if self.filter_active() {
+            AGENT_CHAT_KNOB_GROUPS
+        } else {
+            std::slice::from_ref(&self.active_agent_chat_group)
+        };
+        let mut matched = 0usize;
+        for group in groups {
+            let controls: Vec<&AgentChatControlState> = self
+                .agent_chat_controls
+                .iter()
+                .filter(|control| {
+                    agent_chat_knob_by_id(control.knob_id).is_some_and(|knob| {
+                        knob.group == *group
+                            && self.knob_matches_filter(knob.label, knob.id.as_str())
+                    })
+                })
+                .collect();
+            if controls.is_empty() {
+                continue;
+            }
+            matched += controls.len();
+            column = column.child(self.render_agent_chat_group(*group, controls, chrome, cx));
+        }
+        if matched == 0 && self.filter_active() {
+            column = column.child(self.render_filter_empty_state(chrome));
         }
         column
     }
@@ -1873,6 +2382,12 @@ impl DevStyleToolApp {
                     .text_color(rgb(chrome.text_secondary_hex))
                     .child(group.label()),
             )
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(rgb(chrome.text_dimmed_hex))
+                    .child(group.description()),
+            )
             .children(
                 controls
                     .into_iter()
@@ -1891,6 +2406,7 @@ impl DevStyleToolApp {
         let base = agent_chat_knob_base_value(knob);
         let effective = current_agent_chat_knob_value(knob.id);
         let knob_id = knob.id;
+        let overridden = runtime_overrides::current_agent_chat_value(knob_id).is_some();
 
         div()
             .id(ElementId::Name(
@@ -1902,7 +2418,11 @@ impl DevStyleToolApp {
             .p(px(7.0))
             .rounded(px(crate::ui::chrome::LIQUID_GLASS_COMPACT_RADIUS_PX))
             .border(px(1.0))
-            .border_color(rgba(chrome.border_rgba))
+            .border_color(if overridden {
+                rgba(chrome.accent_badge_border_rgba)
+            } else {
+                rgba(chrome.border_rgba)
+            })
             .bg(rgba(chrome.window_surface_rgba))
             .child(
                 div()
@@ -1910,10 +2430,22 @@ impl DevStyleToolApp {
                     .items_center()
                     .justify_between()
                     .gap(px(8.0))
-                    .child(div().text_xs().child(knob.label))
                     .child(
                         div()
                             .text_xs()
+                            .flex_1()
+                            .min_w_0()
+                            .truncate()
+                            .child(knob.label),
+                    )
+                    .child(
+                        div()
+                            .w(px(VALUE_READOUT_COL_W))
+                            .flex_none()
+                            .text_xs()
+                            .text_right()
+                            .whitespace_nowrap()
+                            .overflow_hidden()
                             .text_color(rgb(chrome.text_secondary_hex))
                             .child(format!(
                                 "{} | base {}",
@@ -1986,21 +2518,31 @@ impl DevStyleToolApp {
         cx: &mut gpui::Context<Self>,
     ) -> Div {
         let mut column = div().flex().flex_col().gap(px(10.0)).flex_1();
-        let controls: Vec<&ConfirmModalControlState> = self
-            .confirm_modal_controls
-            .iter()
-            .filter(|control| {
-                confirm_modal_knob_by_id(control.knob_id)
-                    .is_some_and(|knob| knob.group == self.active_confirm_modal_group)
-            })
-            .collect();
-        if !controls.is_empty() {
-            column = column.child(self.render_confirm_modal_group(
-                self.active_confirm_modal_group,
-                controls,
-                chrome,
-                cx,
-            ));
+        let groups: &[ConfirmModalKnobGroup] = if self.filter_active() {
+            CONFIRM_MODAL_KNOB_GROUPS
+        } else {
+            std::slice::from_ref(&self.active_confirm_modal_group)
+        };
+        let mut matched = 0usize;
+        for group in groups {
+            let controls: Vec<&ConfirmModalControlState> = self
+                .confirm_modal_controls
+                .iter()
+                .filter(|control| {
+                    confirm_modal_knob_by_id(control.knob_id).is_some_and(|knob| {
+                        knob.group == *group
+                            && self.knob_matches_filter(knob.label, knob.id.as_str())
+                    })
+                })
+                .collect();
+            if controls.is_empty() {
+                continue;
+            }
+            matched += controls.len();
+            column = column.child(self.render_confirm_modal_group(*group, controls, chrome, cx));
+        }
+        if matched == 0 && self.filter_active() {
+            column = column.child(self.render_filter_empty_state(chrome));
         }
         column
     }
@@ -2035,6 +2577,12 @@ impl DevStyleToolApp {
                     .text_color(rgb(chrome.text_secondary_hex))
                     .child(group.label()),
             )
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(rgb(chrome.text_dimmed_hex))
+                    .child(group.description()),
+            )
             .children(
                 controls
                     .into_iter()
@@ -2053,6 +2601,7 @@ impl DevStyleToolApp {
         let base = confirm_modal_knob_base_value(knob);
         let effective = current_confirm_modal_knob_value(knob.id);
         let knob_id = knob.id;
+        let overridden = runtime_overrides::current_confirm_modal_value(knob_id).is_some();
 
         div()
             .id(ElementId::Name(
@@ -2064,7 +2613,11 @@ impl DevStyleToolApp {
             .p(px(7.0))
             .rounded(px(crate::ui::chrome::LIQUID_GLASS_COMPACT_RADIUS_PX))
             .border(px(1.0))
-            .border_color(rgba(chrome.border_rgba))
+            .border_color(if overridden {
+                rgba(chrome.accent_badge_border_rgba)
+            } else {
+                rgba(chrome.border_rgba)
+            })
             .bg(rgba(chrome.window_surface_rgba))
             .child(
                 div()
@@ -2072,10 +2625,22 @@ impl DevStyleToolApp {
                     .items_center()
                     .justify_between()
                     .gap(px(8.0))
-                    .child(div().text_xs().child(knob.label))
                     .child(
                         div()
                             .text_xs()
+                            .flex_1()
+                            .min_w_0()
+                            .truncate()
+                            .child(knob.label),
+                    )
+                    .child(
+                        div()
+                            .w(px(VALUE_READOUT_COL_W))
+                            .flex_none()
+                            .text_xs()
+                            .text_right()
+                            .whitespace_nowrap()
+                            .overflow_hidden()
                             .text_color(rgb(chrome.text_secondary_hex))
                             .child(format!(
                                 "{} | base {}",
@@ -2142,6 +2707,352 @@ impl DevStyleToolApp {
             )
     }
 
+    /// Render the Storybook-style preview column for the active tab.
+    ///
+    /// Shows the active tab's stories followed by the shared Common stories.
+    /// Tabs without portable stories (Actions Popup, Agent Chat) get a hint
+    /// card pointing at the kitchen-sink buttons instead.
+    fn render_story_previews(
+        &self,
+        chrome: theme::AppChromeColors,
+        window: &mut Window,
+        cx: &mut gpui::Context<Self>,
+    ) -> impl IntoElement {
+        use crate::dev_style_tool::stories::{stories_for_group, ComponentStory, StoryGroup};
+
+        let group = match self.active_tab {
+            DevStyleToolTab::MainWindowStyling => StoryGroup::MainWindow,
+            DevStyleToolTab::TextCopy => StoryGroup::TextCopy,
+            DevStyleToolTab::ActionsPopupStyling => StoryGroup::ActionsPopup,
+            DevStyleToolTab::AgentChatStyling => StoryGroup::AgentChat,
+            DevStyleToolTab::ConfirmModalStyling => StoryGroup::ConfirmModal,
+            // The Theme Inspector recolors every surface, so show the shared
+            // component stories which redraw live as colors change.
+            DevStyleToolTab::ThemeInspector => StoryGroup::Common,
+        };
+
+        let story_card =
+            |story: &'static ComponentStory, window: &mut Window, cx: &mut gpui::Context<Self>| {
+                div()
+                    .id(ElementId::Name(story.id.into()))
+                    .flex()
+                    .flex_col()
+                    .gap(px(6.0))
+                    .p(px(8.0))
+                    .rounded(px(crate::ui::chrome::LIQUID_GLASS_COMPACT_RADIUS_PX))
+                    .border(px(1.0))
+                    .border_color(rgba(chrome.border_rgba))
+                    .bg(rgba(chrome.window_surface_rgba))
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(rgb(chrome.text_secondary_hex))
+                            .child(story.title),
+                    )
+                    .child((story.render)(window, cx))
+            };
+
+        let own_stories: Vec<&'static ComponentStory> = stories_for_group(group).collect();
+        let mut column = div().flex().flex_col().gap(px(10.0));
+
+        if own_stories.is_empty() {
+            column = column.child(
+                div()
+                    .id("story:dev-style-tool:surface-hint")
+                    .flex()
+                    .flex_col()
+                    .gap(px(6.0))
+                    .p(px(8.0))
+                    .rounded(px(crate::ui::chrome::LIQUID_GLASS_COMPACT_RADIUS_PX))
+                    .border(px(1.0))
+                    .border_color(rgba(chrome.border_rgba))
+                    .bg(rgba(chrome.window_surface_rgba))
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(rgb(chrome.text_secondary_hex))
+                            .child(
+                                "This surface previews in the main window — use the \
+                                 kitchen-sink buttons.",
+                            ),
+                    ),
+            );
+        }
+
+        // Avoid duplicating the shared stories when the tab's own group is
+        // already `Common` (Theme Inspector).
+        let common_stories = if group == StoryGroup::Common {
+            Vec::new()
+        } else {
+            stories_for_group(StoryGroup::Common).collect()
+        };
+        for story in own_stories.into_iter().chain(common_stories) {
+            column = column.child(story_card(story, window, cx));
+        }
+
+        column
+    }
+
+    /// Theme Inspector tab body: live theme summary, save-to-disk button, and
+    /// one hex color row per cataloged theme color knob, grouped by section.
+    fn render_theme_inspector_controls(
+        &self,
+        theme: &theme::Theme,
+        chrome: theme::AppChromeColors,
+        cx: &mut gpui::Context<Self>,
+    ) -> Div {
+        let mut column = div()
+            .flex()
+            .flex_col()
+            .gap(px(10.0))
+            .flex_1()
+            .child(self.render_theme_summary(theme, chrome))
+            .child(
+                div()
+                    .id("panel:dev-style-tool-theme-save")
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .gap(px(8.0))
+                    .child(
+                        div()
+                            .text_xs()
+                            .flex_1()
+                            .min_w_0()
+                            .text_color(rgb(chrome.text_secondary_hex))
+                            .child(format!(
+                                "{} live color overrides | writes ~/.scriptkit/theme.json",
+                                runtime_overrides::theme_color_override_count()
+                            )),
+                    )
+                    .child(
+                        self.render_toolbar_button(
+                            "button:dev-style-tool-save-theme",
+                            "Save theme to disk",
+                            true,
+                            chrome,
+                        )
+                        .on_click(cx.listener(
+                            |this, _event, window, cx| {
+                                this.save_theme_to_disk(window, cx);
+                            },
+                        )),
+                    ),
+            );
+
+        let mut matched = 0usize;
+        for group in THEME_COLOR_KNOB_GROUPS {
+            let controls: Vec<&ThemeColorControlState> = self
+                .theme_color_controls
+                .iter()
+                .filter(|control| {
+                    theme_color_knob_by_id(control.knob_id).is_some_and(|knob| {
+                        knob.group == *group
+                            && self.knob_matches_filter(knob.label, knob.id.as_str())
+                    })
+                })
+                .collect();
+            if controls.is_empty() {
+                continue;
+            }
+            matched += controls.len();
+            column = column.child(self.render_theme_color_group(*group, controls, chrome, cx));
+        }
+        if matched == 0 && self.filter_active() {
+            column = column.child(self.render_filter_empty_state(chrome));
+        }
+        column
+    }
+
+    /// Read-only card summarizing the live theme: appearance mode, current
+    /// main menu theme variant, and opacity/vibrancy values.
+    fn render_theme_summary(
+        &self,
+        theme: &theme::Theme,
+        chrome: theme::AppChromeColors,
+    ) -> impl IntoElement {
+        let opacity = theme.get_opacity();
+        let vibrancy = theme.get_vibrancy();
+        let summary_row = |label: &'static str, value: String| {
+            div()
+                .flex()
+                .items_center()
+                .justify_between()
+                .gap(px(8.0))
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(rgb(chrome.text_secondary_hex))
+                        .child(label),
+                )
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(rgb(chrome.text_primary_hex))
+                        .child(value),
+                )
+        };
+        div()
+            .id("panel:dev-style-tool-theme-summary")
+            .flex()
+            .flex_col()
+            .gap(px(5.0))
+            .p(px(8.0))
+            .rounded(px(crate::ui::chrome::LIQUID_GLASS_COMPACT_RADIUS_PX))
+            .border(px(1.0))
+            .border_color(rgba(chrome.border_rgba))
+            .bg(rgba(chrome.input_surface_rgba))
+            .child(
+                div()
+                    .text_xs()
+                    .font_weight(gpui::FontWeight::SEMIBOLD)
+                    .text_color(rgb(chrome.text_secondary_hex))
+                    .child("Live theme"),
+            )
+            .child(summary_row("Appearance", format!("{:?}", theme.appearance)))
+            .child(summary_row(
+                "Main menu variant",
+                crate::designs::current_main_menu_theme().name().to_string(),
+            ))
+            .child(summary_row(
+                "Opacity (main / search / panel)",
+                format!(
+                    "{:.2} / {:.2} / {:.2}",
+                    opacity.main, opacity.search_box, opacity.panel
+                ),
+            ))
+            .child(summary_row(
+                "Vibrancy",
+                format!(
+                    "{} ({})",
+                    if vibrancy.enabled {
+                        "enabled"
+                    } else {
+                        "disabled"
+                    },
+                    vibrancy.material
+                ),
+            ))
+    }
+
+    fn render_theme_color_group(
+        &self,
+        group: ThemeColorKnobGroup,
+        controls: Vec<&ThemeColorControlState>,
+        chrome: theme::AppChromeColors,
+        cx: &mut gpui::Context<Self>,
+    ) -> impl IntoElement {
+        div()
+            .id(ElementId::Name(
+                format!("theme-color-section:{}", theme_color_group_slug(group)).into(),
+            ))
+            .flex()
+            .flex_col()
+            .gap(px(6.0))
+            .p(px(8.0))
+            .rounded(px(crate::ui::chrome::LIQUID_GLASS_COMPACT_RADIUS_PX))
+            .border(px(1.0))
+            .border_color(rgba(chrome.border_rgba))
+            .bg(rgba(chrome.input_surface_rgba))
+            .child(
+                div()
+                    .text_xs()
+                    .font_weight(gpui::FontWeight::SEMIBOLD)
+                    .text_color(rgb(chrome.text_secondary_hex))
+                    .child(group.label()),
+            )
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(rgb(chrome.text_dimmed_hex))
+                    .child(group.description()),
+            )
+            .children(
+                controls
+                    .into_iter()
+                    .map(|control| self.render_theme_color_control(control, chrome, cx)),
+            )
+    }
+
+    fn render_theme_color_control(
+        &self,
+        control: &ThemeColorControlState,
+        chrome: theme::AppChromeColors,
+        cx: &mut gpui::Context<Self>,
+    ) -> impl IntoElement {
+        let knob = theme_color_knob_by_id(control.knob_id)
+            .expect("theme color control must reference catalog knob");
+        let knob_id = knob.id;
+        let effective = effective_theme_color_value(knob);
+        let overridden = runtime_overrides::current_theme_color_value(knob_id).is_some();
+
+        div()
+            .id(ElementId::Name(
+                format!("control:dev-style-tool-theme:{}", knob.id.as_str()).into(),
+            ))
+            .flex()
+            .items_center()
+            .gap(px(8.0))
+            .p(px(7.0))
+            .rounded(px(crate::ui::chrome::LIQUID_GLASS_COMPACT_RADIUS_PX))
+            .border(px(1.0))
+            .border_color(if overridden {
+                rgba(chrome.accent_badge_border_rgba)
+            } else {
+                rgba(chrome.border_rgba)
+            })
+            .bg(rgba(chrome.window_surface_rgba))
+            .child(
+                // Color swatch reflecting the effective (override-applied) value.
+                div()
+                    .id(ElementId::Name(
+                        format!("swatch:dev-style-tool-theme:{}", knob.id.as_str()).into(),
+                    ))
+                    .w(px(22.0))
+                    .h(px(22.0))
+                    .flex_none()
+                    .rounded(px(5.0))
+                    .border(px(1.0))
+                    .border_color(rgba(chrome.border_rgba))
+                    .bg(rgb(effective)),
+            )
+            .child(
+                div()
+                    .text_xs()
+                    .flex_1()
+                    .min_w_0()
+                    .truncate()
+                    .child(knob.label),
+            )
+            .child(
+                div()
+                    .id(ElementId::Name(
+                        format!("input:dev-style-tool-theme:{}", knob.id.as_str()).into(),
+                    ))
+                    .w(px(88.0))
+                    .flex_none()
+                    .child(Input::new(&control.input).small()),
+            )
+            .child(
+                div()
+                    .id(ElementId::Name(
+                        format!("button:dev-style-tool-theme-reset:{}", knob.id.as_str()).into(),
+                    ))
+                    .px(px(6.0))
+                    .py(px(3.0))
+                    .rounded(px(crate::ui::chrome::LIQUID_GLASS_COMPACT_RADIUS_PX))
+                    .border(px(1.0))
+                    .border_color(rgba(chrome.border_rgba))
+                    .text_xs()
+                    .cursor_pointer()
+                    .hover(|style| style.bg(rgba(chrome.hover_rgba)))
+                    .on_click(cx.listener(move |this, _event, window, cx| {
+                        this.reset_theme_color_knob(knob_id, window, cx);
+                    }))
+                    .child("Reset"),
+            )
+    }
+
     fn render_toolbar_button(
         &self,
         semantic_id: &'static str,
@@ -2165,7 +3076,7 @@ impl DevStyleToolApp {
 }
 
 impl Render for DevStyleToolApp {
-    fn render(&mut self, _window: &mut Window, cx: &mut gpui::Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut gpui::Context<Self>) -> impl IntoElement {
         let theme = theme::get_cached_theme();
         let chrome = theme::AppChromeColors::from_theme(&theme);
         let generation = runtime_overrides::generation();
@@ -2205,6 +3116,8 @@ impl Render for DevStyleToolApp {
                             .child(
                                 div()
                                     .text_xs()
+                                    .min_w(px(230.0))
+                                    .whitespace_nowrap()
                                     .text_color(rgb(chrome.text_secondary_hex))
                                     .child(format!(
                                         "{} controls | runtime generation {generation}",
@@ -2214,6 +3127,7 @@ impl Render for DevStyleToolApp {
                                             .saturating_add(ACTIONS_POPUP_KNOBS.len())
                                             .saturating_add(AGENT_CHAT_KNOBS.len())
                                             .saturating_add(CONFIRM_MODAL_KNOBS.len())
+                                            .saturating_add(THEME_COLOR_KNOBS.len())
                                     )),
                             )
                             .child(
@@ -2226,6 +3140,20 @@ impl Render for DevStyleToolApp {
                                 .on_click(cx.listener(
                                     |this, _event, _window, cx| {
                                         this.open_agent_chat_kitchen_sink(cx);
+                                    },
+                                )),
+                            )
+                            .child(
+                                self.render_toolbar_button(
+                                    "button:dev-style-tool-toggle-previews",
+                                    "Previews",
+                                    self.show_previews,
+                                    chrome,
+                                )
+                                .on_click(cx.listener(
+                                    |this, _event, _window, cx| {
+                                        this.show_previews = !this.show_previews;
+                                        cx.notify();
                                     },
                                 )),
                             )
@@ -2314,31 +3242,68 @@ impl Render for DevStyleToolApp {
                 |view| view.child(self.render_confirm_modal_group_tabs(chrome, cx)),
             )
             .child(self.render_active_scope_summary(chrome))
+            .child(self.render_knob_filter(chrome, cx))
             .child(
+                // Horizontal split: optional live component previews on the
+                // left, the existing scrollable knob controls on the right.
+                // Both columns share the space with flex (no fixed widths).
                 div()
-                    .id("body:dev-style-tool-scroll")
                     .flex()
-                    .flex_col()
+                    .flex_row()
                     .flex_1()
                     .min_h_0()
                     .gap(px(10.0))
-                    .pr(px(4.0))
-                    .overflow_y_scroll()
-                    .child(match self.active_tab {
-                        DevStyleToolTab::MainWindowStyling => {
-                            self.render_groups(&[self.active_group], chrome, cx)
-                        }
-                        DevStyleToolTab::TextCopy => self.render_copy_controls(chrome, cx),
-                        DevStyleToolTab::ActionsPopupStyling => {
-                            self.render_actions_popup_controls(chrome, cx)
-                        }
-                        DevStyleToolTab::AgentChatStyling => {
-                            self.render_agent_chat_controls(chrome, cx)
-                        }
-                        DevStyleToolTab::ConfirmModalStyling => {
-                            self.render_confirm_modal_controls(chrome, cx)
-                        }
-                    }),
+                    .when(self.show_previews, |row| {
+                        row.child(
+                            div()
+                                .id("panel:dev-style-tool-previews")
+                                .flex()
+                                .flex_col()
+                                .flex_1()
+                                .min_w_0()
+                                .min_h_0()
+                                .gap(px(10.0))
+                                .pr(px(4.0))
+                                .overflow_y_scroll()
+                                .child(self.render_story_previews(chrome, window, cx)),
+                        )
+                    })
+                    .child(
+                        div()
+                            .id("body:dev-style-tool-scroll")
+                            .flex()
+                            .flex_col()
+                            .flex_1()
+                            .min_w_0()
+                            .min_h_0()
+                            .gap(px(10.0))
+                            .pr(px(4.0))
+                            .overflow_y_scroll()
+                            .child(match self.active_tab {
+                                DevStyleToolTab::MainWindowStyling => {
+                                    // While filtering, search every group so a knob can be
+                                    // found without knowing which group owns it.
+                                    if self.filter_active() {
+                                        self.render_groups(STYLE_KNOB_GROUPS, chrome, cx)
+                                    } else {
+                                        self.render_groups(&[self.active_group], chrome, cx)
+                                    }
+                                }
+                                DevStyleToolTab::TextCopy => self.render_copy_controls(chrome, cx),
+                                DevStyleToolTab::ActionsPopupStyling => {
+                                    self.render_actions_popup_controls(chrome, cx)
+                                }
+                                DevStyleToolTab::AgentChatStyling => {
+                                    self.render_agent_chat_controls(chrome, cx)
+                                }
+                                DevStyleToolTab::ConfirmModalStyling => {
+                                    self.render_confirm_modal_controls(chrome, cx)
+                                }
+                                DevStyleToolTab::ThemeInspector => {
+                                    self.render_theme_inspector_controls(&theme, chrome, cx)
+                                }
+                            }),
+                    ),
             )
     }
 }
@@ -2513,4 +3478,27 @@ fn confirm_modal_group_slug(group: ConfirmModalKnobGroup) -> &'static str {
         ConfirmModalKnobGroup::Anatomy => "anatomy",
         ConfirmModalKnobGroup::Actions => "actions",
     }
+}
+
+const THEME_COLOR_KNOB_GROUPS: &[ThemeColorKnobGroup] = &[
+    ThemeColorKnobGroup::Background,
+    ThemeColorKnobGroup::Text,
+    ThemeColorKnobGroup::Accent,
+    ThemeColorKnobGroup::Ui,
+];
+
+fn theme_color_group_slug(group: ThemeColorKnobGroup) -> &'static str {
+    match group {
+        ThemeColorKnobGroup::Background => "background",
+        ThemeColorKnobGroup::Text => "text",
+        ThemeColorKnobGroup::Accent => "accent",
+        ThemeColorKnobGroup::Ui => "ui",
+    }
+}
+
+/// Effective theme color for a knob: the cached theme already has every live
+/// override layered in by `theme::reload_theme_cache`, so reading it covers
+/// both the overridden and base cases.
+fn effective_theme_color_value(knob: &ThemeColorKnob) -> u32 {
+    (knob.get)(&theme::get_cached_theme())
 }

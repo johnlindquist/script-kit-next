@@ -181,6 +181,9 @@ pub struct SliderState {
     percentage: Range<f32>,
     /// The bounds of the slider after rendered.
     bounds: Bounds<Pixels>,
+    /// Bounds snapshot taken when a drag starts; drags use this so mid-drag
+    /// re-layout cannot shift the value math under the cursor.
+    drag_bounds: Bounds<Pixels>,
     scale: SliderScale,
     dragging: bool,
 }
@@ -195,6 +198,7 @@ impl SliderState {
             value: SliderValue::default(),
             percentage: (0.0..0.0),
             bounds: Bounds::default(),
+            drag_bounds: Bounds::default(),
             scale: SliderScale::default(),
             dragging: false,
         }
@@ -340,8 +344,11 @@ impl SliderState {
         _: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        if !self.dragging {
+            self.drag_bounds = self.bounds;
+        }
         self.dragging = true;
-        let bounds = self.bounds;
+        let bounds = self.drag_bounds;
         let step = self.step;
 
         let inner_pos = if axis.is_horizontal() {

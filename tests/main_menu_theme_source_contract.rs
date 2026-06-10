@@ -95,11 +95,15 @@ fn selector_copy_is_header_oriented_not_theme_oriented() {
         assert!(def.shell.header_padding_y <= 4.0);
         assert!(def.shell.header_gap <= 4.0);
         assert_eq!(def.shell.divider_height, 0.0);
+        // Commit ee4a244f3 ("Prepare UI polish and release CI gates") gave the
+        // first section header 4px of extra breathing room beyond the derived
+        // header-padding + line-height + section-padding sum.
         assert_eq!(
             def.list.first_section_header_height,
             def.shell.header_padding_y
                 + def.typography.section_line_height
                 + def.list.section_padding_bottom
+                + 4.0
         );
     }
 }
@@ -129,7 +133,9 @@ fn base_header_borrows_low_contrast_vertical_spacing_without_shell_geometry_drif
     );
     assert!(base.header_info_bar.show_keys);
     assert_eq!(base.header_info_bar.gap_px, 7.0);
-    assert_eq!(base.header_info_bar.pill_padding_x, 0.0);
+    // Commit ee4a244f3 ("Prepare UI polish and release CI gates") gave the
+    // base info-bar pills 6px of horizontal padding.
+    assert_eq!(base.header_info_bar.pill_padding_x, 6.0);
     assert_eq!(base.header_info_bar.pill_padding_y, 0.0);
     assert_eq!(base.header_info_bar.pill_border_alpha, 0x00);
     assert_eq!(base.header_info_bar.pill_bg_alpha, 0x00);
@@ -177,10 +183,17 @@ fn main_menu_variant_slots_are_header_info_bar_slots() {
         );
     }
 
-    assert_eq!(
-        variant_enum.matches("InfoBar").count(),
-        MainMenuThemeVariant::COUNT
-    );
+    for variant in MainMenuThemeVariant::all() {
+        let name = format!("{variant:?}");
+        assert!(
+            name.starts_with("InfoBar"),
+            "every MainMenuThemeVariant slot must be a header info-bar slot; {name} is not"
+        );
+        assert!(
+            variant_enum.contains(&name),
+            "MainMenuThemeVariant enum body must declare the {name} slot"
+        );
+    }
 }
 
 #[test]

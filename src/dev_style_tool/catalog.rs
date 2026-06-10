@@ -46,6 +46,22 @@ impl StyleKnobGroup {
             StyleKnobGroup::HeaderInfoBar => "Header info bar",
         }
     }
+
+    /// One-line anatomy hint tying the group to the element it styles in the
+    /// main window, so tool users can tell which controls map where.
+    pub const fn description(self) -> &'static str {
+        match self {
+            StyleKnobGroup::Shell => "Window frame: outer padding, dividers, header spacing",
+            StyleKnobGroup::Search => "Input row at the top of the main window",
+            StyleKnobGroup::List => "Results list container, section headers, status rows",
+            StyleKnobGroup::Row => "Individual result rows: padding, selection, hover",
+            StyleKnobGroup::Icon => "Leading icons inside result rows",
+            StyleKnobGroup::Metadata => "Badges and source labels on the trailing edge of rows",
+            StyleKnobGroup::Typography => "Font sizes and weights across the main window",
+            StyleKnobGroup::Footer => "Bottom bar: buttons, keycaps, hints",
+            StyleKnobGroup::HeaderInfoBar => "Info bar between the input and the list",
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

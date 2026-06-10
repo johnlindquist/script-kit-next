@@ -71,14 +71,16 @@ pub(crate) fn open_dev_style_tool_window(
     }
 
     let bounds = Bounds {
-        origin: point(px(820.0), px(160.0)),
-        size: size(px(760.0), px(760.0)),
+        origin: point(px(620.0), px(120.0)),
+        size: size(px(1180.0), px(820.0)),
     };
     let window = cx.open_window(
         WindowOptions {
             window_bounds: Some(WindowBounds::Windowed(bounds)),
             titlebar: None,
             is_movable: true,
+            is_resizable: true,
+            window_min_size: Some(size(px(760.0), px(600.0))),
             show: true,
             focus: false,
             kind: WindowKind::Normal,

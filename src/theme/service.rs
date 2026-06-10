@@ -102,6 +102,17 @@ pub(crate) fn reload_theme_cache_sync_and_bump_revision(cx: &mut App) -> super::
     theme
 }
 
+/// Re-run the theme cache reload pipeline so live dev style tool theme color
+/// overrides (layered inside `reload_theme_cache`) reach every window.
+///
+/// Mirrors the file-watcher hot-reload path exactly: atomic cache reload +
+/// gpui-component sync + revision bump, then notify all registered windows.
+#[allow(dead_code)] // Called from dev style tool render path (binary target).
+pub(crate) fn reapply_runtime_theme_overrides(cx: &mut App) {
+    let _theme = reload_theme_cache_sync_and_bump_revision(cx);
+    windows::notify_all_windows(cx);
+}
+
 fn log_theme_validation_diagnostics(theme_json: &serde_json::Value) -> (usize, usize) {
     let mut diagnostics = super::validation::ThemeDiagnostics::new();
     diagnostics.merge(super::validation::validate_theme_json(theme_json));
