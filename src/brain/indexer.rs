@@ -116,6 +116,7 @@ pub fn run_cycle(embedder: &mut Option<BrainEmbedder>) -> Result<()> {
         tracing::debug!(target: "script_kit::brain", error = %err, "clipboard sync skipped");
         0
     });
+    sync_browser_attention();
     // Embedding trouble (missing helper binary, model load failure) must
     // never take down the rest of the metabolism — lexical search, journal,
     // and the curator all work without vectors.
@@ -168,6 +169,49 @@ fn sync_pinned_clipboard() -> Result<usize> {
     // Unpinning is the user revoking the "this matters" signal — forget it.
     let _ = store::retain_docs(DocSource::Clipboard, &pinned_ids)?;
     Ok(promoted)
+}
+
+/// Browser attention: hosts the user visited repeatedly in the last day
+/// become attention SIGNALS — ranking hints only, never documents. Page
+/// titles and URLs are not stored in the brain; the raw history stays in
+/// the browser. This is the sensory-buffer pattern: observe, distill,
+/// discard.
+fn sync_browser_attention() {
+    const SIGNAL_WINDOW_MS: i64 = 24 * 60 * 60 * 1000;
+    const MIN_VISITS: i64 = 3;
+    let last_marker = store::meta_get("browser_attention_last")
+        .ok()
+        .flatten()
+        .and_then(|value| value.parse::<i64>().ok())
+        .unwrap_or(0);
+    let now = chrono::Utc::now().timestamp();
+    // At most once per cycle interval x4 — browser reads hit other apps'
+    // sqlite files; be a polite neighbor.
+    if now - last_marker < 8 * 60 {
+        return;
+    }
+    let _ = store::meta_set("browser_attention_last", &now.to_string());
+    let Ok(entries) = crate::browser_history::list_recent_history(250) else {
+        return;
+    };
+    let cutoff_ms = chrono::Utc::now().timestamp_millis() - SIGNAL_WINDOW_MS;
+    let mut by_host: std::collections::HashMap<String, i64> = std::collections::HashMap::new();
+    for entry in entries {
+        if entry.last_visited_at_ms >= cutoff_ms {
+            *by_host.entry(entry.host.to_string()).or_default() += 1;
+        }
+    }
+    for (host, visits) in by_host {
+        if visits >= MIN_VISITS && !host.is_empty() {
+            let topic = host
+                .trim_start_matches("www.")
+                .split('.')
+                .next()
+                .unwrap_or(&host)
+                .to_string();
+            let _ = store::record_signal(&topic, 1, "browser");
+        }
+    }
 }
 
 /// Mirror active notes into brain_docs. Hash-guarded upserts make this
