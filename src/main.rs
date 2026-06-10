@@ -63,6 +63,8 @@ mod dev_style_tool {
     pub mod kitchen_sink_targets;
     pub(crate) mod render;
     pub mod runtime_overrides;
+    pub(crate) mod stories;
+    pub mod theme_catalog;
     pub mod window;
 
     #[allow(unused_imports)]
@@ -77,6 +79,8 @@ mod dev_style_tool {
     pub use copy_catalog::*;
     #[allow(unused_imports)]
     pub(crate) use kitchen_sink_targets::*;
+    #[allow(unused_imports)]
+    pub use theme_catalog::*;
 }
 mod dictation;
 mod editor;
