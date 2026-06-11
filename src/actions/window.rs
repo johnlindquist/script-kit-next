@@ -517,14 +517,26 @@ impl ActionsWindow {
             ),
         );
 
-        // Activate the main window BEFORE scheduling focus restoration.
+        // Activate the parent window BEFORE scheduling focus restoration.
         // macOS window activation is async; starting it early gives the OS
-        // more time to make the main window key before the deferred
+        // more time to make the parent window key before the deferred
         // on_close callback runs and sets pending focus.
-        let should_activate_main_window =
-            activate_main_window && self.parent_kind == AutomationWindowKind::Main;
-        if should_activate_main_window {
-            platform::activate_main_window();
+        if activate_main_window {
+            if self.parent_kind == AutomationWindowKind::Main {
+                platform::activate_main_window();
+            } else if let Some(parent_handle) =
+                crate::windows::get_runtime_window_handle(&self.parent_automation_id)
+            {
+                // Secondary hosts (Notes, detached Agent Chat) keep their
+                // popups when AppKit promotes the popup to key window. On
+                // Escape/Cmd+K the key status must hand back to the host
+                // window, or keyboard focus lands nowhere after the close.
+                cx.defer(move |cx| {
+                    let _ = parent_handle.update(cx, |_root, window, _cx| {
+                        window.activate_window();
+                    });
+                });
+            }
         }
 
         if let Some(on_close) = self.dialog.read(cx).on_close.clone() {
@@ -564,6 +576,233 @@ impl ActionsWindow {
 
             this.request_close(window, cx, "focus_lost", false);
         }));
+    }
+
+    /// Handle one keystroke for the actions popup. Shared by the popup
+    /// window's own key listener and by parent-window routers
+    /// (`route_key_to_detached_actions_window`) for hosts whose parent window
+    /// stays the key window while the detached popup is open.
+    ///
+    /// Returns `true` when the popup consumed the key.
+    fn handle_key_event(
+        &mut self,
+        key: &str,
+        key_char: Option<&str>,
+        modifiers: &gpui::Modifiers,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        match actions_window_key_intent(key, key_char, modifiers) {
+            Some(ActionsWindowKeyIntent::MoveUp) => {
+                crate::logging::log("ACTIONS", "ActionsWindow: handling UP arrow");
+
+                self.dialog.update(cx, |d, cx| d.move_up(cx));
+                cx.notify();
+                true
+            }
+            Some(ActionsWindowKeyIntent::MoveDown) => {
+                crate::logging::log("ACTIONS", "ActionsWindow: handling DOWN arrow");
+                self.dialog.update(cx, |d, cx| d.move_down(cx));
+                cx.notify();
+                true
+            }
+            Some(ActionsWindowKeyIntent::MoveHome) => {
+                self.dialog.update(cx, |d, cx| {
+                    if let Some(first) = first_selectable_index(&d.grouped_items) {
+                        d.selected_index = first;
+                        d.reveal_selection_after_navigation(cx);
+                    }
+                });
+                true
+            }
+            Some(ActionsWindowKeyIntent::MoveEnd) => {
+                self.dialog.update(cx, |d, cx| {
+                    if let Some(last) = last_selectable_index(&d.grouped_items) {
+                        d.selected_index = last;
+                        d.reveal_selection_after_navigation(cx);
+                    }
+                });
+                true
+            }
+            Some(ActionsWindowKeyIntent::MovePageUp) => {
+                self.dialog.update(cx, |d, cx| {
+                    if d.grouped_items.is_empty() {
+                        return;
+                    }
+
+                    let target = d.selected_index.saturating_sub(ACTIONS_WINDOW_PAGE_JUMP);
+                    if let Some(next_index) =
+                        selectable_index_at_or_before(&d.grouped_items, target)
+                            .or_else(|| first_selectable_index(&d.grouped_items))
+                    {
+                        d.selected_index = next_index;
+                        d.reveal_selection_after_navigation(cx);
+                    }
+                });
+                true
+            }
+            Some(ActionsWindowKeyIntent::MovePageDown) => {
+                self.dialog.update(cx, |d, cx| {
+                    if d.grouped_items.is_empty() {
+                        return;
+                    }
+
+                    let last_index = d.grouped_items.len() - 1;
+                    let target = (d.selected_index + ACTIONS_WINDOW_PAGE_JUMP).min(last_index);
+                    if let Some(next_index) = selectable_index_at_or_after(&d.grouped_items, target)
+                        .or_else(|| last_selectable_index(&d.grouped_items))
+                    {
+                        d.selected_index = next_index;
+                        d.reveal_selection_after_navigation(cx);
+                    }
+                });
+                true
+            }
+            Some(ActionsWindowKeyIntent::SendToAgentChat) => {
+                if let Some(action) = self.dialog.read(cx).get_selected_action().cloned() {
+                    let target =
+                        crate::ai::build_action_target_for_ai(&action, "DetachedActionsWindow");
+                    tracing::info!(
+                        target: "script_kit::tab_ai",
+                        event = "tab_ai_actions_window_cmd_enter",
+                        action_id = %action.id,
+                        semantic_id = %target.semantic_id,
+                    );
+                    // Use the shared secondary-window handoff helper to enqueue
+                    // the target. Pass show_main_window=false because request_close
+                    // already handles activate_main_window with the correct timing
+                    // (before defer_close, not after).
+                    crate::ai::request_explicit_agent_chat_handoff_from_secondary_window(
+                        target,
+                        "DetachedActionsWindow",
+                        false,
+                    );
+                    self.request_close(window, cx, "send_to_agent_chat", true);
+                }
+                true
+            }
+            Some(ActionsWindowKeyIntent::ExecuteSelected) => {
+                let activation = self.dialog.update(cx, |d, cx| d.activate_selected(cx));
+                self.handle_dialog_activation(activation, window, cx, "execute_selected");
+                true
+            }
+            Some(ActionsWindowKeyIntent::Close) => {
+                let outcome = self.dialog.update(cx, |d, cx| d.handle_escape(cx));
+                match outcome {
+                    super::dialog::ActionsDialogEscapeOutcome::PoppedRoute => {
+                        let (route_id, search_placeholder, route_depth, escape_hint) = {
+                            let dialog = self.dialog.read(cx);
+                            (
+                                dialog.current_route_id().map(str::to_string),
+                                dialog.current_search_placeholder().map(str::to_string),
+                                dialog.route_depth(),
+                                dialog.route_hint_label(),
+                            )
+                        };
+                        tracing::info!(
+                            target: "script_kit::actions",
+                            host = "detached_actions_window",
+                            route_id = ?route_id,
+                            route_depth,
+                            escape_hint,
+                            search_placeholder = ?search_placeholder,
+                            "actions_dialog_route_visible"
+                        );
+                        let dialog = self.dialog.clone();
+                        cx.spawn(async move |_this, cx| {
+                            cx.update(|cx| {
+                                resize_actions_window(cx, &dialog);
+                            })
+                        })
+                        .detach();
+                    }
+                    super::dialog::ActionsDialogEscapeOutcome::CloseDialog => {
+                        self.request_close(window, cx, "escape", true);
+                    }
+                }
+                true
+            }
+            Some(ActionsWindowKeyIntent::Backspace) => {
+                crate::logging::log("ACTIONS", "ActionsWindow: backspace pressed");
+                self.dialog.update(cx, |d, cx| d.handle_backspace(cx));
+                // Schedule resize after filter changes
+                let dialog = self.dialog.clone();
+                window.defer(cx, move |window, cx| {
+                    crate::logging::log("ACTIONS", "ActionsWindow: defer - resizing directly");
+                    resize_actions_window_direct(window, cx, &dialog);
+                });
+                cx.notify();
+                true
+            }
+            Some(ActionsWindowKeyIntent::BackspaceWord) => {
+                crate::logging::log("ACTIONS", "ActionsWindow: word backspace pressed");
+                self.dialog.update(cx, |d, cx| d.handle_backspace_word(cx));
+                let dialog = self.dialog.clone();
+                window.defer(cx, move |window, cx| {
+                    resize_actions_window_direct(window, cx, &dialog);
+                });
+                cx.notify();
+                true
+            }
+            Some(ActionsWindowKeyIntent::TypeChar(ch)) => {
+                crate::logging::log("ACTIONS", &format!("ActionsWindow: char '{}' pressed", ch));
+                self.dialog.update(cx, |d, cx| d.handle_char(ch, cx));
+                // Schedule resize after filter changes
+                let dialog = self.dialog.clone();
+                window.defer(cx, move |window, cx| {
+                    crate::logging::log("ACTIONS", "ActionsWindow: defer - resizing directly");
+                    resize_actions_window_direct(window, cx, &dialog);
+                });
+                cx.notify();
+                true
+            }
+            None => {
+                let matched_action_id = {
+                    let dialog = self.dialog.read(cx);
+                    crate::actions::matching_filtered_action_id_for_keystroke(
+                        &dialog.actions,
+                        &dialog.filtered_actions,
+                        key,
+                        modifiers,
+                    )
+                };
+                if let Some(action_id) = matched_action_id {
+                    tracing::info!(
+                        target: "script_kit::actions",
+                        event = "actions_window_shortcut_matched",
+                        action_id = %action_id,
+                        key = %key,
+                        platform = modifiers.platform,
+                        shift = modifiers.shift,
+                        control = modifiers.control,
+                        alt = modifiers.alt,
+                    );
+                    let activation = self
+                        .dialog
+                        .update(cx, |d, cx| d.activate_action_id(action_id, cx));
+                    self.handle_dialog_activation(activation, window, cx, "shortcut_execute");
+                    true
+                } else if modifiers.platform
+                    && !modifiers.shift
+                    && !modifiers.control
+                    && !modifiers.alt
+                    && key.eq_ignore_ascii_case("v")
+                {
+                    // Cmd+V pastes into the popup search, like the main
+                    // search input. Runs after shortcut matching so a host
+                    // action that binds ⌘V keeps its row shortcut.
+                    self.dialog.update(cx, |d, cx| d.handle_paste(cx));
+                    let dialog = self.dialog.clone();
+                    window.defer(cx, move |window, cx| {
+                        resize_actions_window_direct(window, cx, &dialog);
+                    });
+                    cx.notify();
+                    true
+                } else {
+                    false
+                }
+            }
+        }
     }
 
     fn handle_dialog_activation(
@@ -697,226 +936,8 @@ impl Render for ActionsWindow {
                 ),
             );
 
-            let handled = match actions_window_key_intent(
-                key,
-                event.keystroke.key_char.as_deref(),
-                modifiers,
-            ) {
-                Some(ActionsWindowKeyIntent::MoveUp) => {
-                    crate::logging::log("ACTIONS", "ActionsWindow: handling UP arrow");
-
-                    this.dialog.update(cx, |d, cx| d.move_up(cx));
-                    cx.notify();
-                    true
-                }
-                Some(ActionsWindowKeyIntent::MoveDown) => {
-                    crate::logging::log("ACTIONS", "ActionsWindow: handling DOWN arrow");
-                    this.dialog.update(cx, |d, cx| d.move_down(cx));
-                    cx.notify();
-                    true
-                }
-                Some(ActionsWindowKeyIntent::MoveHome) => {
-                    this.dialog.update(cx, |d, cx| {
-                        if let Some(first) = first_selectable_index(&d.grouped_items) {
-                            d.selected_index = first;
-                            d.reveal_selection_after_navigation(cx);
-                        }
-                    });
-                    true
-                }
-                Some(ActionsWindowKeyIntent::MoveEnd) => {
-                    this.dialog.update(cx, |d, cx| {
-                        if let Some(last) = last_selectable_index(&d.grouped_items) {
-                            d.selected_index = last;
-                            d.reveal_selection_after_navigation(cx);
-                        }
-                    });
-                    true
-                }
-                Some(ActionsWindowKeyIntent::MovePageUp) => {
-                    this.dialog.update(cx, |d, cx| {
-                        if d.grouped_items.is_empty() {
-                            return;
-                        }
-
-                        let target = d.selected_index.saturating_sub(ACTIONS_WINDOW_PAGE_JUMP);
-                        if let Some(next_index) =
-                            selectable_index_at_or_before(&d.grouped_items, target)
-                                .or_else(|| first_selectable_index(&d.grouped_items))
-                        {
-                            d.selected_index = next_index;
-                            d.reveal_selection_after_navigation(cx);
-                        }
-                    });
-                    true
-                }
-                Some(ActionsWindowKeyIntent::MovePageDown) => {
-                    this.dialog.update(cx, |d, cx| {
-                        if d.grouped_items.is_empty() {
-                            return;
-                        }
-
-                        let last_index = d.grouped_items.len() - 1;
-                        let target = (d.selected_index + ACTIONS_WINDOW_PAGE_JUMP).min(last_index);
-                        if let Some(next_index) =
-                            selectable_index_at_or_after(&d.grouped_items, target)
-                                .or_else(|| last_selectable_index(&d.grouped_items))
-                        {
-                            d.selected_index = next_index;
-                            d.reveal_selection_after_navigation(cx);
-                        }
-                    });
-                    true
-                }
-                Some(ActionsWindowKeyIntent::SendToAgentChat) => {
-                    if let Some(action) = this.dialog.read(cx).get_selected_action().cloned() {
-                        let target =
-                            crate::ai::build_action_target_for_ai(&action, "DetachedActionsWindow");
-                        tracing::info!(
-                            target: "script_kit::tab_ai",
-                            event = "tab_ai_actions_window_cmd_enter",
-                            action_id = %action.id,
-                            semantic_id = %target.semantic_id,
-                        );
-                        // Use the shared secondary-window handoff helper to enqueue
-                        // the target. Pass show_main_window=false because request_close
-                        // already handles activate_main_window with the correct timing
-                        // (before defer_close, not after).
-                        crate::ai::request_explicit_agent_chat_handoff_from_secondary_window(
-                            target,
-                            "DetachedActionsWindow",
-                            false,
-                        );
-                        this.request_close(window, cx, "send_to_agent_chat", true);
-                    }
-                    true
-                }
-                Some(ActionsWindowKeyIntent::ExecuteSelected) => {
-                    let activation = this.dialog.update(cx, |d, cx| d.activate_selected(cx));
-                    this.handle_dialog_activation(activation, window, cx, "execute_selected");
-                    true
-                }
-                Some(ActionsWindowKeyIntent::Close) => {
-                    let outcome = this.dialog.update(cx, |d, cx| d.handle_escape(cx));
-                    match outcome {
-                        super::dialog::ActionsDialogEscapeOutcome::PoppedRoute => {
-                            let (route_id, search_placeholder, route_depth, escape_hint) = {
-                                let dialog = this.dialog.read(cx);
-                                (
-                                    dialog.current_route_id().map(str::to_string),
-                                    dialog.current_search_placeholder().map(str::to_string),
-                                    dialog.route_depth(),
-                                    dialog.route_hint_label(),
-                                )
-                            };
-                            tracing::info!(
-                                target: "script_kit::actions",
-                                host = "detached_actions_window",
-                                route_id = ?route_id,
-                                route_depth,
-                                escape_hint,
-                                search_placeholder = ?search_placeholder,
-                                "actions_dialog_route_visible"
-                            );
-                            let dialog = this.dialog.clone();
-                            cx.spawn(async move |_this, cx| {
-                                cx.update(|cx| {
-                                    resize_actions_window(cx, &dialog);
-                                })
-                            })
-                            .detach();
-                        }
-                        super::dialog::ActionsDialogEscapeOutcome::CloseDialog => {
-                            this.request_close(window, cx, "escape", true);
-                        }
-                    }
-                    true
-                }
-                Some(ActionsWindowKeyIntent::Backspace) => {
-                    crate::logging::log("ACTIONS", "ActionsWindow: backspace pressed");
-                    this.dialog.update(cx, |d, cx| d.handle_backspace(cx));
-                    // Schedule resize after filter changes
-                    let dialog = this.dialog.clone();
-                    window.defer(cx, move |window, cx| {
-                        crate::logging::log("ACTIONS", "ActionsWindow: defer - resizing directly");
-                        resize_actions_window_direct(window, cx, &dialog);
-                    });
-                    cx.notify();
-                    true
-                }
-                Some(ActionsWindowKeyIntent::BackspaceWord) => {
-                    crate::logging::log("ACTIONS", "ActionsWindow: word backspace pressed");
-                    this.dialog.update(cx, |d, cx| d.handle_backspace_word(cx));
-                    let dialog = this.dialog.clone();
-                    window.defer(cx, move |window, cx| {
-                        resize_actions_window_direct(window, cx, &dialog);
-                    });
-                    cx.notify();
-                    true
-                }
-                Some(ActionsWindowKeyIntent::TypeChar(ch)) => {
-                    crate::logging::log(
-                        "ACTIONS",
-                        &format!("ActionsWindow: char '{}' pressed", ch),
-                    );
-                    this.dialog.update(cx, |d, cx| d.handle_char(ch, cx));
-                    // Schedule resize after filter changes
-                    let dialog = this.dialog.clone();
-                    window.defer(cx, move |window, cx| {
-                        crate::logging::log("ACTIONS", "ActionsWindow: defer - resizing directly");
-                        resize_actions_window_direct(window, cx, &dialog);
-                    });
-                    cx.notify();
-                    true
-                }
-                None => {
-                    let matched_action_id = {
-                        let dialog = this.dialog.read(cx);
-                        crate::actions::matching_filtered_action_id_for_keystroke(
-                            &dialog.actions,
-                            &dialog.filtered_actions,
-                            key,
-                            modifiers,
-                        )
-                    };
-                    if let Some(action_id) = matched_action_id {
-                        tracing::info!(
-                            target: "script_kit::actions",
-                            event = "actions_window_shortcut_matched",
-                            action_id = %action_id,
-                            key = %key,
-                            platform = modifiers.platform,
-                            shift = modifiers.shift,
-                            control = modifiers.control,
-                            alt = modifiers.alt,
-                        );
-                        let activation = this
-                            .dialog
-                            .update(cx, |d, cx| d.activate_action_id(action_id, cx));
-                        this.handle_dialog_activation(activation, window, cx, "shortcut_execute");
-                        true
-                    } else if modifiers.platform
-                        && !modifiers.shift
-                        && !modifiers.control
-                        && !modifiers.alt
-                        && key.eq_ignore_ascii_case("v")
-                    {
-                        // Cmd+V pastes into the popup search, like the main
-                        // search input. Runs after shortcut matching so a host
-                        // action that binds ⌘V keeps its row shortcut.
-                        this.dialog.update(cx, |d, cx| d.handle_paste(cx));
-                        let dialog = this.dialog.clone();
-                        window.defer(cx, move |window, cx| {
-                            resize_actions_window_direct(window, cx, &dialog);
-                        });
-                        cx.notify();
-                        true
-                    } else {
-                        false
-                    }
-                }
-            };
-            if handled {
+            if this.handle_key_event(key, event.keystroke.key_char.as_deref(), modifiers, window, cx)
+            {
                 cx.stop_propagation();
             }
         });
@@ -1163,6 +1184,10 @@ mod tests {
 
     #[test]
     fn test_actions_window_dynamic_height_matches_single_row_when_empty() {
+        // Reads the live theme: serialize against sibling tests that install
+        // devtools runtime overrides under the same guard.
+        let _guard = runtime_test_guard();
+        crate::dev_style_tool::runtime_overrides::reset_all();
         let row_height = crate::designs::current_actions_popup_theme()
             .list
             .row_height;
@@ -1193,6 +1218,10 @@ mod tests {
 
     #[test]
     fn test_actions_window_dynamic_height_includes_footer_height() {
+        // Reads the live theme: serialize against sibling tests that install
+        // devtools runtime overrides under the same guard.
+        let _guard = runtime_test_guard();
+        crate::dev_style_tool::runtime_overrides::reset_all();
         let row_height = crate::designs::current_actions_popup_theme()
             .list
             .row_height;
@@ -2164,6 +2193,38 @@ pub fn is_actions_window_open() -> bool {
         }
     }
     false
+}
+
+/// Route a key from a parent window's keyboard router into the detached
+/// actions popup.
+///
+/// Hosts whose parent window can stay the key window while the popup is open
+/// (the Notes-hosted Agent Chat Cmd+K actions / Cmd+P history popups, the
+/// detached Agent Chat window) call this so navigation, typing, and Enter
+/// drive the visible popup instead of leaking into the host surface (e.g.
+/// the chat composer, where Enter silently no-ops). Returns `true` when the
+/// popup consumed the key.
+pub fn route_key_to_detached_actions_window(
+    key: &str,
+    key_char: Option<&str>,
+    modifiers: &gpui::Modifiers,
+    cx: &mut gpui::App,
+) -> bool {
+    let Some(handle) = get_actions_window_handle() else {
+        return false;
+    };
+    handle
+        .update(cx, |this, window, cx| {
+            let handled = this.handle_key_event(key, key_char, modifiers, window, cx);
+            if handled {
+                crate::logging::log(
+                    "KEY_ROUTE",
+                    &format!("ACTIONS_POPUP_PARENT_ROUTED key='{key}'"),
+                );
+            }
+            handled
+        })
+        .unwrap_or(false)
 }
 
 /// Get the actions window handle if it exists

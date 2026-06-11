@@ -12576,6 +12576,25 @@ impl AgentChatView {
         // Reset cursor blink on any key press.
         self.cursor_visible = true;
 
+        // ── Detached actions popup routing ───────────────────────
+        // The detached actions window (Cmd+K actions / Cmd+P history route)
+        // can stay open while THIS window remains key — the popup keeps the
+        // parent-focused contract, e.g. after clicking back into the host or
+        // when popup activation fails. Route keys into the popup so arrows,
+        // typing, and Enter drive the visible popup instead of leaking into
+        // the composer, where Enter silently no-ops.
+        if crate::actions::is_actions_window_open()
+            && crate::actions::route_key_to_detached_actions_window(
+                key,
+                event.keystroke.key_char.as_deref(),
+                modifiers,
+                cx,
+            )
+        {
+            cx.stop_propagation();
+            return;
+        }
+
         // ── Inline approval intercept ────────────────────────────
         let pending_permission = self.live_thread().read(cx).pending_permission.clone();
         if let Some(ref request) = pending_permission {

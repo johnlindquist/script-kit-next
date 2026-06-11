@@ -653,3 +653,42 @@ fn agent_chat_root_route_initial_selection_is_change_profile() {
         Some(AGENT_CHAT_CHANGE_PROFILE_ACTION_ID),
     );
 }
+
+#[test]
+fn note_switcher_titles_match_progressive_prefix_queries() {
+    use crate::actions::builders::{NoteSwitcherNoteInfo, get_note_switcher_actions};
+
+    let actions = get_note_switcher_actions(&[
+        NoteSwitcherNoteInfo {
+            id: "a".into(),
+            title: "alpha first note".into(),
+            char_count: 16,
+            is_current: false,
+            is_pinned: false,
+            preview: "alpha first note".into(),
+            relative_time: "2m ago".into(),
+        },
+        NoteSwitcherNoteInfo {
+            id: "b".into(),
+            title: "beta second note".into(),
+            char_count: 16,
+            is_current: true,
+            is_pinned: false,
+            preview: "beta second note".into(),
+            relative_time: "1m ago".into(),
+        },
+    ]);
+    assert_eq!(actions.len(), 2);
+
+    for query in ["a", "al", "alp", "alph", "alpha"] {
+        let matched: Vec<&str> = actions
+            .iter()
+            .filter(|a| crate::actions::ActionsDialog::score_action(a, query) > 0)
+            .map(|a| a.id.as_str())
+            .collect();
+        assert!(
+            matched.contains(&"note_a"),
+            "query '{query}' should match the alpha note, matched: {matched:?}"
+        );
+    }
+}

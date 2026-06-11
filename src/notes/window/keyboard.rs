@@ -574,6 +574,23 @@ impl NotesApp {
                     return;
                 }
             }
+            // Detached actions popup routing: when the popup is open but THIS
+            // window stayed key (click-back into the host, or popup activation
+            // failed), arrows/typing/Enter must drive the visible popup instead
+            // of leaking into the composer where Enter silently no-ops. The
+            // same guard exists in AgentChatView::handle_key_down for the
+            // composer-focused dispatch path; this covers root-focused keys.
+            if crate::actions::is_actions_window_open()
+                && crate::actions::route_key_to_detached_actions_window(
+                    key,
+                    event.keystroke.key_char.as_deref(),
+                    modifiers,
+                    cx,
+                )
+            {
+                cx.stop_propagation();
+                return;
+            }
             // All other keys propagate to the Agent Chat chat view.
             cx.propagate();
             return;
