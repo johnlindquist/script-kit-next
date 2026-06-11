@@ -574,20 +574,20 @@ impl AgentChatTranscript {
             .cursor_pointer()
             .child(
                 div()
-                    .text_sm()
+                    .text_size(px(style_def.markdown.body_font_size))
                     .opacity(block_style.tool_header_opacity)
                     .text_color(rgb(_colors.accent_color))
                     .child(chevron.to_string()),
             )
             .child(
                 div()
-                    .text_sm()
+                    .text_size(px(style_def.markdown.body_font_size))
                     .text_color(status_color)
                     .child(format!("{} ", meta.status.glyph())),
             )
             .child(
                 div()
-                    .text_sm()
+                    .text_size(px(style_def.markdown.body_font_size))
                     .opacity(block_style.tool_header_opacity)
                     .text_color(rgb(_colors.accent_color))
                     .child(format!("{} {}", meta.kind.glyph(), meta.tool_name)),
@@ -595,7 +595,9 @@ impl AgentChatTranscript {
             .when_some(meta.subject.clone(), |d, subject| {
                 d.child(
                     div()
-                        .text_sm()
+                        // Mono renders optically larger than the UI font at equal px,
+                        // so the subject tracks the code-block size, one step under body.
+                        .text_size(px(style_def.markdown.code_block_font_size))
                         .min_w(px(0.0))
                         .flex_shrink()
                         .overflow_hidden()
@@ -609,7 +611,7 @@ impl AgentChatTranscript {
             .when(matches!(meta.status, AgentChatToolStatus::Failed), |d| {
                 d.child(
                     div()
-                        .text_sm()
+                        .text_size(px(style_def.markdown.body_font_size))
                         .text_color(rgb(theme.colors.ui.error))
                         .child(meta.status.label().to_string()),
                 )
@@ -617,7 +619,7 @@ impl AgentChatTranscript {
             .when(is_collapsed && collapsed_line_count > 0, |d| {
                 d.child(
                     div()
-                        .text_sm()
+                        .text_size(px(style_def.markdown.body_font_size))
                         .opacity(block_style.status_opacity)
                         .text_color(rgb(_colors.accent_color))
                         .child(format!("{collapsed_line_count} lines")),
@@ -740,14 +742,14 @@ impl AgentChatTranscript {
             .cursor_pointer()
             .child(
                 div()
-                    .text_sm()
+                    .text_size(px(style_def.markdown.body_font_size))
                     .opacity(header_opacity)
                     .when(is_tool, |d| d.text_color(rgb(_colors.accent_color)))
                     .child(chevron.to_string()),
             )
             .child(
                 div()
-                    .text_sm()
+                    .text_size(px(style_def.markdown.body_font_size))
                     .opacity(header_opacity)
                     .when(is_tool, |d| d.text_color(rgb(_colors.accent_color)))
                     .child(label),
@@ -755,7 +757,7 @@ impl AgentChatTranscript {
             .when_some(status_hint.clone(), |d, status| {
                 d.child(
                     div()
-                        .text_sm()
+                        .text_size(px(style_def.markdown.body_font_size))
                         .opacity(block_style.status_opacity)
                         .when(is_tool, |d| d.text_color(rgb(_colors.accent_color)))
                         .child(status),
@@ -766,7 +768,7 @@ impl AgentChatTranscript {
                 |d| {
                     d.child(
                         div()
-                            .text_sm()
+                            .text_size(px(style_def.markdown.body_font_size))
                             .opacity(block_style.status_opacity)
                             .when(is_tool, |d| d.text_color(rgb(_colors.accent_color)))
                             .child(format!("{line_count} lines")),
@@ -825,13 +827,13 @@ impl AgentChatTranscript {
                     .pb(px(4.0))
                     .child(
                         div()
-                            .text_sm()
+                            .text_size(px(style_def.markdown.body_font_size))
                             .opacity(error_style.label_opacity)
                             .child("\u{26A0}"),
                     )
                     .child(
                         div()
-                            .text_sm()
+                            .text_size(px(style_def.markdown.body_font_size))
                             .font_weight(FontWeight::SEMIBOLD)
                             .opacity(error_style.label_opacity)
                             .child("Error"),
@@ -847,7 +849,7 @@ impl AgentChatTranscript {
             .child(
                 div()
                     .pt(px(4.0))
-                    .text_sm()
+                    .text_size(px(style_def.markdown.body_font_size))
                     .opacity(error_style.hint_opacity)
                     .child(
                         "Try sending your message again or use \u{2318}N for a new conversation",
