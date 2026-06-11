@@ -15,4 +15,6 @@ Script Kit GPUI is a native command palette, scripting runtime, Agent Chat host,
 
 - [Codex MCP Setup](./codex-mcp-setup.md) — register the live app's MCP server with Codex.
 - [AI Cookbook](./ai/cookbook/README.md) — implementation patterns for contributors working on GPUI surfaces.
+- [ADRs](./adr/) — accepted decisions, including the [one-key gesture grammar](./adr/0002-one-key-gesture-grammar.md), [markdown memory substrate](./adr/0003-markdown-files-as-memory-substrate.md), and [clipboard sediment](./adr/0004-clipboard-sediment.md).
+- [Specs](./specs/) — pre-implementation designs: [gesture grammar](./specs/gesture-grammar.md) and [QMD migration](./specs/qmd-migration.md).
 - [Architecture knowledge graph](../removed-docs) — project design notes maintained with `removed-docs`.

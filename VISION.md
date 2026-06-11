@@ -20,9 +20,27 @@ generated contracts, tests, or source code.
 
 ## One-Sentence Vision
 
-Script Kit GPUI is a native, keyboard-first programmable command center for
-people who want their desktop workflows to be fast, local, inspectable, and
-owned by them.
+Script Kit GPUI is a native, keyboard-first programmable command center with a
+local memory — everything the user captures, copies, says, and discusses
+compounds into markdown they own — for people who want their desktop workflows
+to be fast, local, inspectable, and owned by them.
+
+## The Thread
+
+Launchers are stateless: they answer "what do you want to do right now?" and
+forget the user the moment they close. Script Kit GPUI is stateful: every
+interaction leaves a deposit, and the deposits compound. The defining product
+moment is not the launch — it is the return path, when the tool gives back
+something the user had forgotten they gave it, at the moment they need it.
+
+Stated as a thesis:
+
+> One key. Everything you touch can become memory. Time is the structure,
+> meaning is the index, and one gesture is the price.
+
+The launcher, the Day Page, and Agent Chat are not three tools. They are three
+pressures on the same key. See the Memory Layer section below and
+`docs/adr/0002-one-key-gesture-grammar.md`.
 
 ## Launch Promise
 
@@ -134,6 +152,79 @@ It is a semantic automation surface with receipts. Script Kit should prefer
 target identity, semantic IDs, layout info, deterministic `waitFor`/`batch`
 transactions, transcripts, logs, and action receipts over sleeps, coordinates, or
 screenshot-only proof.
+
+It is a local memory layer — Script Kit Brain. Notes, captures, clipboard
+sediment, dictation, and Agent Chat turns accumulate as markdown files the user
+owns, indexed (never owned) by a local hybrid search brain that resurfaces them
+in search, in chat context, and in curator observations.
+
+## The Memory Layer (Script Kit Brain)
+
+This section is direction, not shipped behavior. Where it conflicts with
+current source, the gap is intentional and tracked in
+`docs/adr/0002-one-key-gesture-grammar.md`,
+`docs/adr/0003-markdown-files-as-memory-substrate.md`,
+`docs/adr/0004-clipboard-sediment.md`, and `docs/specs/**`.
+
+Naming: the platform stays Script Kit. The memory layer is Script Kit Brain.
+
+### One Key, Three Pressures
+
+The entire interaction model for the memory layer is the existing main hotkey
+plus two established conventions (Cmd+Enter for Agent Chat, Esc to dismiss). No
+new chords.
+
+- Tap (closed): the launcher, visible on key-down, instant, unchanged.
+- Tap (open): toggle launcher <-> Day Page. In-flight query text carries over
+  as the start of a capture. Esc is the only dismiss.
+- Hold (~250ms): the window deepens into the Day Page and dictation goes hot
+  (push-to-talk; release commits the transcript to today's page).
+- Double-tap: Agent Chat, from closed or from either surface.
+
+The disambiguation rule is "always open, then deepen": the launcher appears on
+key-down in every case, and hold/double-tap escalate the already-open window.
+No gesture ever waits on another. Surfaces morph inside one window; windows are
+never swapped.
+
+### The Day Page
+
+The Day Page is one markdown file per day on disk. Humans think in time blocks
+("what happened yesterday"), so time is the structure: hold-to-dictate appends
+to today, grabs and promoted clipboard entries append with provenance, and
+Agent Chat threads leave one-line traces. The day page must stay human-readable
+in any editor: long captures live as separate markdown fragment files with
+provenance frontmatter, referenced from the day page with a short excerpt.
+
+The brain indexes the files; it never owns them. Markdown on disk is canonical;
+SQLite (FTS, embeddings, signals) is a derived, rebuildable index. Delete the
+app, keep your life.
+
+The floating Notes window survives for notes about something other than today.
+The Day Page and a note must feel identical — same editor entity, hosted by
+different shells.
+
+### Clipboard Sediment
+
+Copies become memory through earned importance, not filing decisions:
+
+- URLs are kept automatically.
+- Other content is kept when behavior proves value (re-paste), or when the user
+  promotes it via the post-copy quick menu (tap Cmd shortly after Cmd+C) by
+  adding the "why".
+- Concealed pasteboard types, password-manager sources, and user-defined
+  secret patterns are hard-rejected. This is a launch-facing privacy claim and
+  needs receipts before strong language.
+- Kept copies land in a low tier and promote through signals (re-paste,
+  annotation, recall) so resurfacing stays high-signal.
+
+### Memory Anti-Goals
+
+- No cloud, no accounts. The brain is local files plus a local index.
+- The launcher input does not silently keep plain queries. Capture requires
+  expressed intent: a semicolon tag, the hold gesture, the toggle, a grab, or a
+  clipboard rule.
+- The brain must never become a second filing system the user has to manage.
+  Importance is earned by behavior, not declared by the user.
 
 ## What It Is Not
 

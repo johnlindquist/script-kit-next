@@ -16,7 +16,7 @@ Script Kit is a sharp tool, not a playground. It respects the user's time and at
 
 ### Design Principles
 
-1. **Three keys, nothing more** — The footer shows at most three affordances: Run (Enter), Actions (⌘K), AI (Tab). If it doesn't fit in three slots, it belongs in the Actions dialog, not the chrome. This applies universally across all windows and surfaces.
+1. **Three keys, nothing more** — The footer shows at most three affordances: Run (Enter), Actions (⌘K), Agent (⌘↵). If it doesn't fit in three slots, it belongs in the Actions dialog, not the chrome. This applies universally across all windows and surfaces.
 
 2. **Discovery lives in Actions** — Features, commands, and contextual operations are discoverable through the Actions dialog (⌘K), not through persistent chrome, hover states, or tooltips. The main surface stays clean; ⌘K is the single entry point for "what can I do here?"
 
@@ -91,7 +91,7 @@ Hover, focus, and active/toggle states use a 3-tier luminance ladder. Each tier 
 
 **Section headers:** Uppercase label at strong tier (80%). Count and icon at muted tier (65%). No separator lines — spacing alone defines groups.
 
-**Footer:** Exactly `↵ Run · ⌘K Actions · Tab AI`. Hint opacity. Right-aligned. Nothing else.
+**Footer:** Exactly `↵ Run · ⌘K Actions · ⌘↵ Agent`. Hint opacity. Right-aligned. Nothing else.
 
 ### Surface Layouts
 
@@ -164,6 +164,6 @@ The actions dialog is the single discovery surface. It must feel like a natural 
 |-----|--------|-------|
 | **Enter** | Run / Submit / Confirm | Universal |
 | **⌘K** | Open Actions dialog | Universal — the single discovery surface for all contextual operations |
-| **Tab** | AI chat | Universal |
+| **⌘↵** | Agent Chat | Universal |
 | **⌘I** | Info / Peek | Universal — toggles detail view, Esc to return |
 | **Esc** | Back / Dismiss | Universal — returns from peek, closes dialogs, dismisses window |
