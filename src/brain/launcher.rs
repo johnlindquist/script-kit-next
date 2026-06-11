@@ -93,7 +93,11 @@ pub struct RootBrainSearchHit {
 
 pub fn root_brain_query_is_eligible(query: &str, options: RootBrainSectionOptions) -> bool {
     let query = query.trim();
-    options.enabled && !query.contains('\n') && query.chars().count() >= options.min_query_chars
+    // min_query_chars is measured in BYTES: it exists to skip noisy 1-2
+    // keystroke ASCII prefixes, but a single emoji (4 bytes) or CJK char
+    // (3 bytes) already carries full recall intent — counting chars made
+    // "🚀" and one-character CJK words unsearchable (audit F12).
+    options.enabled && !query.contains('\n') && query.len() >= options.min_query_chars
 }
 
 /// Search the brain for passive root-launcher rows. Returns an empty list when
@@ -185,7 +189,10 @@ pub fn semantic_root_brain_hits_for_query(
 pub(crate) fn map_root_brain_hits(hits: Vec<super::search::BrainHit>) -> Vec<RootBrainSearchHit> {
     hits.into_iter()
         .map(|hit| {
-            let excerpt = excerpt_for_content(&hit.doc.content);
+            let excerpt = match hit.doc.source {
+                DocSource::Activity => excerpt_for_activity_content(&hit.doc.content),
+                _ => excerpt_for_content(&hit.doc.content),
+            };
             let title = if hit.doc.title.trim().is_empty() {
                 hit.doc.source.label().to_string()
             } else {
@@ -202,19 +209,90 @@ pub(crate) fn map_root_brain_hits(hits: Vec<super::search::BrainHit>) -> Vec<Roo
         .collect()
 }
 
+/// Render a brain memory as DivPrompt HTML for the launcher's read-only
+/// preview (Enter on a non-note memory row — audit F5: no path let the user
+/// actually READ a memory). Plain text is escaped and split into paragraphs;
+/// the metadata line carries the source and last-updated time.
+pub fn root_brain_memory_preview_html(
+    title: &str,
+    source_label: &str,
+    updated_at: Option<i64>,
+    content: &str,
+) -> String {
+    fn escape_html(text: &str) -> String {
+        text.replace('&', "&amp;")
+            .replace('<', "&lt;")
+            .replace('>', "&gt;")
+    }
+    let mut meta = format!("From your brain · {source_label}");
+    if let Some(ts) = updated_at {
+        if let Some(dt) = chrono::DateTime::from_timestamp(ts, 0) {
+            let local = dt.with_timezone(&chrono::Local);
+            meta.push_str(&format!(" · {}", local.format("%b %d, %Y %H:%M")));
+        }
+    }
+    let mut html = format!(
+        "<h1>{}</h1><p><em>{}</em></p>",
+        escape_html(title),
+        escape_html(&meta)
+    );
+    for line in content.lines() {
+        let line = line.trim_end();
+        if line.is_empty() {
+            continue;
+        }
+        html.push_str(&format!("<p>{}</p>", escape_html(line)));
+    }
+    html.push_str("<p><em>Esc to go back</em></p>");
+    html
+}
+
 /// First non-empty content line, truncated to a row-friendly excerpt.
 fn excerpt_for_content(content: &str) -> String {
-    let line = content
+    truncate_excerpt(first_non_empty_line(content))
+}
+
+/// Activity-journal variant: journal lines are stamped "HH:MM — detail". The
+/// stamp is useful inside the journal but reads like plumbing in a launcher
+/// row (audit F11) — show only the detail.
+fn excerpt_for_activity_content(content: &str) -> String {
+    truncate_excerpt(strip_activity_stamp(first_non_empty_line(content)))
+}
+
+fn first_non_empty_line(content: &str) -> &str {
+    content
         .lines()
         .map(str::trim)
         .find(|line| !line.is_empty())
-        .unwrap_or("");
+        .unwrap_or("")
+}
+
+fn truncate_excerpt(line: &str) -> String {
     if line.chars().count() <= ROOT_BRAIN_EXCERPT_MAX_CHARS {
         return line.to_string();
     }
     let mut excerpt: String = line.chars().take(ROOT_BRAIN_EXCERPT_MAX_CHARS).collect();
     excerpt.push('…');
     excerpt
+}
+
+/// Strip a leading "HH:MM — " journal stamp; anything else passes through.
+fn strip_activity_stamp(line: &str) -> &str {
+    match line.split_once(" — ") {
+        Some((stamp, rest))
+            if stamp.len() == 5
+                && stamp.chars().enumerate().all(|(i, c)| {
+                    if i == 2 {
+                        c == ':'
+                    } else {
+                        c.is_ascii_digit()
+                    }
+                }) =>
+        {
+            rest
+        }
+        _ => line,
+    }
 }
 
 #[cfg(test)]
@@ -231,6 +309,9 @@ mod tests {
         assert!(root_brain_query_is_eligible("fix", options));
         assert!(!root_brain_query_is_eligible("fi", options));
         assert!(!root_brain_query_is_eligible("fix\nbug", options));
+        // Multibyte single "characters" carry full recall intent (F12).
+        assert!(root_brain_query_is_eligible("🚀", options));
+        assert!(root_brain_query_is_eligible("猫", options));
         assert!(!root_brain_query_is_eligible(
             "fix",
             RootBrainSectionOptions {
@@ -250,6 +331,38 @@ mod tests {
         let excerpt = excerpt_for_content(&long);
         assert_eq!(excerpt.chars().count(), ROOT_BRAIN_EXCERPT_MAX_CHARS + 1);
         assert!(excerpt.ends_with('…'));
+    }
+
+    /// The memory preview must escape HTML in user content (a clipboard
+    /// memory can hold arbitrary markup) and keep every content line.
+    #[test]
+    fn memory_preview_html_escapes_and_keeps_lines() {
+        let html = root_brain_memory_preview_html(
+            "Deploy <notes>",
+            "Clipboard",
+            None,
+            "first & second\n\n<script>alert(1)</script>",
+        );
+        assert!(html.contains("<h1>Deploy &lt;notes&gt;</h1>"));
+        assert!(html.contains("<p>first &amp; second</p>"));
+        assert!(html.contains("<p>&lt;script&gt;alert(1)&lt;/script&gt;</p>"));
+        assert!(!html.contains("<script>"));
+        assert!(html.contains("From your brain · Clipboard"));
+    }
+
+    /// F11: launcher rows for activity-journal hits must not lead with the
+    /// "HH:MM — " stamp; non-stamp dashes stay untouched.
+    #[test]
+    fn activity_excerpt_strips_journal_stamp() {
+        assert_eq!(
+            excerpt_for_activity_content("23:26 — captured todo \"TPS report\"\n09:00 — older"),
+            "captured todo \"TPS report\""
+        );
+        assert_eq!(
+            excerpt_for_activity_content("plan — review the TPS report"),
+            "plan — review the TPS report"
+        );
+        assert_eq!(excerpt_for_activity_content("2x:26 — odd"), "2x:26 — odd");
     }
 
     fn semantic_hit(title: &str) -> RootBrainSearchHit {

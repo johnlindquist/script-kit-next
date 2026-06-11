@@ -12,6 +12,12 @@ enum FileSearchPresentation {
 pub(crate) const ABOUT_SURFACE_EXEMPTION: &str =
     "about is a static content surface with no list selection owner";
 
+/// Prompt id of the internal (sessionless) brain-memory preview DivPrompt.
+/// Enter/Escape on a DivPrompt with this id return to the script list instead
+/// of routing through the protocol prompt machinery — checked by the root
+/// capture_key_down handler and the simulateKey dispatcher.
+pub(crate) const BRAIN_MEMORY_PREVIEW_PROMPT_ID: &str = "brain-memory-preview";
+
 #[derive(Debug, Clone)]
 enum AppView {
     /// Showing the script list

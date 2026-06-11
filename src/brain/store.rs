@@ -550,6 +550,43 @@ pub fn fts_search(query: &str, limit: usize) -> Result<Vec<i64>> {
 /// "k8s", and "ai" are exactly the kinds of topics users recall, and the old
 /// `len() > 3` filter silently produced an empty query for them. BM25 already
 /// down-ranks high-frequency filler, so dropping it here is unnecessary.
+/// Substring fallback for queries the FTS tokenizer cannot index: unicode61
+/// drops emoji and symbol-only tokens, so `🚀` MATCHes nothing even when the
+/// text sits verbatim in a doc title. Scans title+content with LIKE (newest
+/// first) so those queries still recall. Callers should only reach for this
+/// when [`fts_search`] returns empty — it is a table scan, not an index hit.
+pub fn substring_search(query: &str, limit: usize) -> Result<Vec<i64>> {
+    let terms: Vec<String> = query
+        .split_whitespace()
+        .map(|term| {
+            term.replace('\\', "\\\\")
+                .replace('%', "\\%")
+                .replace('_', "\\_")
+        })
+        .collect();
+    if terms.is_empty() {
+        return Ok(Vec::new());
+    }
+    let db = get_db()?;
+    let conn = db.lock().map_err(|_| anyhow!("brain db lock poisoned"))?;
+    let clause = (1..=terms.len())
+        .map(|n| format!("title LIKE ?{n} ESCAPE '\\' OR content LIKE ?{n} ESCAPE '\\'"))
+        .collect::<Vec<_>>()
+        .join(" OR ");
+    let sql = format!(
+        "SELECT id FROM brain_docs WHERE {clause}
+         ORDER BY updated_at DESC LIMIT {limit}"
+    );
+    let mut stmt = conn.prepare(&sql)?;
+    let patterns = terms.iter().map(|term| format!("%{term}%"));
+    let rows = stmt
+        .query_map(rusqlite::params_from_iter(patterns), |row| {
+            row.get::<_, i64>(0)
+        })?
+        .collect::<std::result::Result<Vec<_>, _>>()?;
+    Ok(rows)
+}
+
 fn sanitize_fts_query(query: &str) -> String {
     query
         .split_whitespace()

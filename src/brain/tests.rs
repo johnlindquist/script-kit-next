@@ -154,6 +154,78 @@ fn fts_matches_short_keywords() {
 }
 
 #[test]
+fn emoji_only_query_matches_via_substring_fallback() {
+    init_test_db();
+    let id = store::upsert_doc(
+        DocSource::Note,
+        "n-emoji",
+        "🚀 launch checklist",
+        "ship the release, post the announcement",
+        100,
+    )
+    .unwrap();
+    // The tokenizer drops the emoji, so the FTS leg alone finds nothing…
+    assert!(store::fts_search("🚀", 10).unwrap().is_empty());
+    // …but full search recalls it via the substring fallback.
+    let hits = search::brain_search("🚀", None, None, 10).unwrap();
+    assert!(
+        hits.iter().any(|h| h.doc.id == id),
+        "emoji-only query should recall the doc via substring fallback"
+    );
+    // LIKE wildcards in the query must stay literal, not match everything.
+    let id2 = store::upsert_doc(
+        DocSource::Note,
+        "n-percent",
+        "100% coverage plan",
+        "we promised 100% on the parser",
+        100,
+    )
+    .unwrap();
+    let hits = store::substring_search("100%", 10).unwrap();
+    assert!(hits.contains(&id2), "escaped % should match literally");
+    let hits = store::substring_search("100%zzz", 10).unwrap();
+    assert!(
+        hits.is_empty(),
+        "wildcard characters must not act as wildcards"
+    );
+}
+
+fn inbox_item(id: i64) -> inbox::InboxItem {
+    inbox::InboxItem {
+        id,
+        kind: InboxKind::Commitment,
+        title: format!("item {id}"),
+        detail: String::new(),
+        source: "note".to_string(),
+        source_id: format!("n-{id}"),
+        created_at: id,
+        resolved_at: None,
+    }
+}
+
+/// F8 regression: a curator insert landing mid-session must not displace the
+/// row under the user's cursor — kept items hold position, resolved items
+/// drop out, and new items append below the visible ones.
+#[test]
+fn inbox_stable_merge_keeps_visible_order_and_appends_new_items() {
+    let current = vec![inbox_item(1), inbox_item(2), inbox_item(3)];
+    // Fresh read: 3 resolved elsewhere, 9 is a brand-new curator insert that
+    // a newest-first reload would pin at the very top.
+    let fresh = vec![inbox_item(9), inbox_item(2), inbox_item(1)];
+    let merged = inbox::stable_merge_open_inbox(&current, fresh);
+    let ids: Vec<i64> = merged.iter().map(|i| i.id).collect();
+    assert_eq!(ids, vec![1, 2, 9]);
+}
+
+#[test]
+fn inbox_stable_merge_from_empty_takes_fresh_order() {
+    let fresh = vec![inbox_item(9), inbox_item(2)];
+    let merged = inbox::stable_merge_open_inbox(&[], fresh);
+    let ids: Vec<i64> = merged.iter().map(|i| i.id).collect();
+    assert_eq!(ids, vec![9, 2]);
+}
+
+#[test]
 fn fts_finds_doc_by_content_and_respects_deletion() {
     init_test_db();
     let id = store::upsert_doc(

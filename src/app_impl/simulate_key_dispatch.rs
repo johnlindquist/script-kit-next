@@ -1058,6 +1058,33 @@ impl ScriptListApp {
                         }
                     });
                 }
+                AppView::DivPrompt { id, entity } => {
+                    // Div prompts have one keyboard affordance: Enter/Escape
+                    // submit-and-close (mirrors is_div_submit_key in the real
+                    // key path). Without this arm every div prompt — protocol
+                    // divs and the internal brain-memory preview — was
+                    // undriveable by simulateKey.
+                    logging::log(
+                        "STDIN",
+                        &format!("SimulateKey: Dispatching '{}' to DivPrompt", key_lower),
+                    );
+                    let is_brain_preview = id == BRAIN_MEMORY_PREVIEW_PROMPT_ID;
+                    let entity_clone = entity.clone();
+                    if matches!(key_lower.as_str(), "enter" | "return" | "escape" | "esc") {
+                        if is_brain_preview {
+                            // Internal sessionless preview: close straight
+                            // back to the launcher (mirrors the root
+                            // capture_key_down path for real keyboards).
+                            logging::log("BRAIN", "Brain memory preview closed via simulateKey");
+                            view.reset_to_script_list(ctx);
+                        } else {
+                            entity_clone.update(ctx, |div_prompt, div_cx| {
+                                div_prompt.submit();
+                                div_cx.notify();
+                            });
+                        }
+                    }
+                }
                 AppView::ArgPrompt { id, .. } | AppView::MiniPrompt { id, .. } => {
                     // Arg prompt key handling via SimulateKey
                     logging::log(

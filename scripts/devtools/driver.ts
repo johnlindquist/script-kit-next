@@ -21,7 +21,8 @@
  *   bun scripts/devtools/driver.ts smoke
  */
 
-import { mkdirSync, existsSync, rmSync } from "node:fs";
+import { mkdirSync, existsSync, rmSync, symlinkSync } from "node:fs";
+import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import type { Subprocess } from "bun";
 
@@ -57,6 +58,13 @@ export interface DriverOptions {
    * driven app never touches real user data and starts from a known state.
    */
   sandboxHome?: boolean;
+  /**
+   * With sandboxHome, symlink the real ~/.scriptkit/models into the sandbox
+   * so the app reuses the multi-GB dictation/brain model downloads instead
+   * of re-downloading into every session dir. Pass false only when a probe
+   * specifically tests model-download behavior. Default true.
+   */
+  sharedModels?: boolean;
   /** Extra env vars for the app process (test providers, feature flags). */
   env?: Record<string, string>;
   /** Max ms to wait for the readiness log marker. Default 10000. */
@@ -155,9 +163,19 @@ export class Driver {
     }
     if (options.sandboxHome) {
       const home = join(sessionDir, "home");
-      mkdirSync(join(home, ".scriptkit"), { recursive: true });
+      const kitDir = join(home, ".scriptkit");
+      mkdirSync(kitDir, { recursive: true });
       env.HOME = home;
-      env.SK_PATH = join(home, ".scriptkit");
+      env.SK_PATH = kitDir;
+      if (options.sharedModels !== false) {
+        // Every model path resolves under $SK_PATH/models (dictation
+        // Whisper/Parakeet, brain GGUF). Symlink the real cache so sandboxed
+        // launches never re-download 1-2GB per session; downloads triggered
+        // inside a sandbox land in the shared cache for future runs.
+        const realModels = join(homedir(), ".scriptkit", "models");
+        mkdirSync(realModels, { recursive: true });
+        symlinkSync(realModels, join(kitDir, "models"));
+      }
     }
 
     const proc = Bun.spawn([binary], {

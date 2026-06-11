@@ -106,8 +106,10 @@ impl DivPrompt {
         }
     }
 
-    /// Submit - always with None value (just acknowledgment)
-    pub(super) fn submit(&mut self) {
+    /// Submit - always with None value (just acknowledgment). Public so the
+    /// simulateKey dispatcher can drive Enter/Escape on div prompts the same
+    /// way real key dispatch does.
+    pub fn submit(&mut self) {
         (self.on_submit)(self.id.clone(), None);
     }
 

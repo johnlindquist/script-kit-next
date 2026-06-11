@@ -104,7 +104,13 @@ pub fn brain_search(
     limit: usize,
 ) -> Result<Vec<BrainHit>> {
     let candidate_limit = limit.max(8) * 4;
-    let fts_ids = store::fts_search(query, candidate_limit)?;
+    let mut fts_ids = store::fts_search(query, candidate_limit)?;
+    if fts_ids.is_empty() && !query.trim().is_empty() {
+        // unicode61 drops emoji/symbol tokens, so FTS can come back empty for
+        // text that exists verbatim in docs. Fall back to a substring scan as
+        // the lexical leg before giving up.
+        fts_ids = store::substring_search(query, candidate_limit).unwrap_or_default();
+    }
     let vec_ids = match (query_vec, model_id) {
         (Some(qv), Some(mid)) if !qv.is_empty() => {
             let embeddings = store::load_embeddings(mid)?;

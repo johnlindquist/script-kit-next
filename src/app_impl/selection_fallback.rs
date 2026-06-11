@@ -657,8 +657,9 @@ impl ScriptListApp {
 
     /// Enter on a "From Your Brain" passive row. Routes by document source:
     /// notes open in the Notes editor, chat turns resume their Agent Chat
-    /// conversation, and everything else hands the current query to Agent
-    /// Chat as a plain prompt (the Brain profile is the default there).
+    /// conversation, and everything else opens a read-only preview of the
+    /// memory itself (audit F5: plain Enter must never auto-submit an AI
+    /// turn, and the user must be able to actually read the memory).
     pub(crate) fn execute_root_brain_hit_open(
         &mut self,
         hit: &crate::brain::RootBrainSearchHit,
@@ -682,35 +683,79 @@ impl ScriptListApp {
                     .split('#')
                     .next()
                     .unwrap_or(hit.source_id.as_str());
-                self.resume_agent_chat_conversation_from_history(thread_id, &hit.excerpt, cx);
+                if crate::ai::agent_chat::ui::history::conversation_exists(thread_id) {
+                    self.resume_agent_chat_conversation_from_history(thread_id, &hit.excerpt, cx);
+                } else {
+                    // Conversation file gone: the old fallback parked the raw
+                    // "user: …" excerpt as a composer draft, making re-sending
+                    // your own old message the default action. Show the
+                    // stored memory instead, like every other non-note source.
+                    self.open_brain_memory_preview(hit, cx);
+                }
             }
             crate::brain::DocSource::Clipboard
             | crate::brain::DocSource::Activity
             | crate::brain::DocSource::Capture => {
-                // Attach the memory itself as a context chip and let the user
-                // say what they want — plain Enter on a memory must never
-                // auto-submit an AI turn (audit finding F5: the bare filter
-                // text used to be fired as a prompt immediately).
-                let content = crate::brain::get_doc(hit.source, &hit.source_id)
-                    .ok()
-                    .flatten()
-                    .map(|doc| doc.content)
-                    .filter(|content| !content.trim().is_empty())
-                    .unwrap_or_else(|| hit.excerpt.clone());
-                let label = if hit.title.trim().is_empty() {
-                    hit.source_label.to_string()
-                } else {
-                    hit.title.clone()
-                };
-                let part = crate::ai::message_parts::AiContextPart::TextBlock {
-                    label,
-                    source: "brain".to_string(),
-                    text: content,
-                    mime_type: None,
-                };
-                self.open_tab_ai_agent_chat_with_context_part(part, "brain_memory", cx);
+                self.open_brain_memory_preview(hit, cx);
             }
         }
+    }
+
+    /// Open a read-only preview of a brain memory in the main window. Reuses
+    /// the DivPrompt surface (theme-aware HTML rendering, scrolling, the
+    /// standard prompt shell) without a protocol session: Enter/Escape close
+    /// it back to the launcher via the root capture_key_down handler and the
+    /// simulateKey dispatcher, both keyed on
+    /// [`BRAIN_MEMORY_PREVIEW_PROMPT_ID`].
+    fn open_brain_memory_preview(
+        &mut self,
+        hit: &crate::brain::RootBrainSearchHit,
+        cx: &mut Context<Self>,
+    ) {
+        let doc = crate::brain::get_doc(hit.source, &hit.source_id)
+            .ok()
+            .flatten();
+        let (content, updated_at) = match &doc {
+            Some(doc) if !doc.content.trim().is_empty() => {
+                (doc.content.clone(), Some(doc.updated_at))
+            }
+            _ => (hit.excerpt.clone(), None),
+        };
+        let title = if hit.title.trim().is_empty() {
+            hit.source_label.to_string()
+        } else {
+            hit.title.clone()
+        };
+        let html = crate::brain::root_brain_memory_preview_html(
+            &title,
+            hit.source_label,
+            updated_at,
+            &content,
+        );
+        tracing::info!(
+            target: "script_kit::brain",
+            source = %hit.source_label,
+            source_id = %hit.source_id,
+            "opening brain memory preview"
+        );
+        // Sessionless prompt: closing is owned by the key paths above, so the
+        // prompt's own submit callback has nothing to do.
+        let on_submit: crate::prompts::SubmitCallback = std::sync::Arc::new(|_id, _value| {});
+        let id = BRAIN_MEMORY_PREVIEW_PROMPT_ID.to_string();
+        let div_prompt = crate::prompts::DivPrompt::new(
+            id.clone(),
+            html,
+            None,
+            cx.focus_handle(),
+            on_submit,
+            std::sync::Arc::clone(&self.theme),
+        );
+        let entity = cx.new(|_| div_prompt);
+        self.current_view = AppView::DivPrompt { id, entity };
+        self.focused_input = FocusedInput::None;
+        self.pending_focus = Some(FocusTarget::AppRoot);
+        resize_to_view_sync(ViewType::DivPrompt, 0);
+        cx.notify();
     }
 
     /// Enter on a pinned "Brain Inbox" row. The item's source is opened via

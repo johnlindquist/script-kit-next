@@ -838,6 +838,21 @@ impl Render for ScriptListApp {
                     return;
                 }
 
+                // The internal brain-memory preview is a sessionless DivPrompt:
+                // Enter/Escape close it back to the launcher list here instead
+                // of routing through the protocol prompt machinery.
+                if let AppView::DivPrompt { id, .. } = &this.current_view {
+                    if id == BRAIN_MEMORY_PREVIEW_PROMPT_ID
+                        && (crate::ui_foundation::is_key_escape(key)
+                            || key.eq_ignore_ascii_case("enter"))
+                    {
+                        logging::log("BRAIN", "Brain memory preview closed via key");
+                        this.reset_to_script_list(cx);
+                        cx.stop_propagation();
+                        return;
+                    }
+                }
+
                 if matches!(this.current_view, AppView::FileSearchView { .. })
                     && !actions::is_actions_window_open()
                 {

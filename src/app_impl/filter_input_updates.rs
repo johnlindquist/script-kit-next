@@ -95,7 +95,7 @@ impl ScriptListApp {
             self.computed_filter_text = value.clone();
             self.maybe_start_root_file_search(&value, cx);
             self.maybe_start_root_brain_semantic_search(&value, cx);
-            self.refresh_root_brain_inbox_if_stale(cx);
+            self.refresh_root_brain_inbox_if_stale(false, cx);
             self.maybe_start_root_windows_refresh_for_query(&value, cx);
             self.maybe_start_root_browser_tabs_refresh_for_query(&value, cx);
             self.maybe_start_root_browser_history_refresh_for_query(&value, cx);
@@ -352,7 +352,7 @@ impl ScriptListApp {
         self.filter_coalescer.reset();
         self.maybe_start_root_file_search(&text, cx);
         self.maybe_start_root_brain_semantic_search(&text, cx);
-        self.refresh_root_brain_inbox_if_stale(cx);
+        self.refresh_root_brain_inbox_if_stale(false, cx);
         self.maybe_start_root_windows_refresh_for_query(&text, cx);
         self.maybe_start_root_browser_tabs_refresh_for_query(&text, cx);
         self.maybe_start_root_browser_history_refresh_for_query(&text, cx);

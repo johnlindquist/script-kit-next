@@ -5,6 +5,25 @@
 > `green-receipt.json`). F9 reclassified: the single chip on fresh-chat
 > handoffs is the staged brain-recall ambient context — legitimately different
 > from the resume path, documented not changed. F11/F12 remain open (P3).
+>
+> **Status 2026-06-11 (second pass):** F11, F12, and the remaining F5/F8
+> tails fixed and proven green at runtime (`/tmp/brain-fixes2-probe.ts`,
+> all checks pass against a seeded sandbox DB):
+> - F12: `substring_search` LIKE fallback when the FTS leg is empty, plus
+>   byte-based `min_query_chars` so "🚀"/single CJK chars are eligible.
+> - F11: `record_capture_signals` re-wakes the indexer at +2s/+8s (the
+>   detached capture handler races the first wake), and activity-journal
+>   launcher excerpts drop the "HH:MM — " stamp.
+> - F5 remainder: Enter on a non-note memory now opens a read-only
+>   brain-memory preview (sessionless DivPrompt, Esc/Enter return to the
+>   list); a missing chat_turn conversation routes to the same preview
+>   instead of parking the raw "user: …" excerpt as a composer draft.
+> - F8 remainder: mid-session inbox refreshes use `stable_merge_open_inbox`
+>   (kept rows hold position, new curator items append below); the full
+>   newest-first reorder only happens on window show.
+> - DevTools: simulateKey gained a DivPrompt dispatcher arm (div prompts
+>   were previously undriveable), and driver sandbox HOMEs symlink the real
+>   `~/.scriptkit/models` (1–2 GB per session no longer re-downloaded).
 > Fix summary: char-boundary-safe head slicing (F1), brain section above the
 > file-CTA + selected by default (F2), short FTS terms kept (F3), capture body
 > preserved through target accept (F4), memory Enter parks a context chip

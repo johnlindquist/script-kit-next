@@ -68,6 +68,29 @@ pub struct InboxItem {
     pub resolved_at: Option<i64>,
 }
 
+/// Merge a fresh open-inbox read into the snapshot currently on screen
+/// WITHOUT moving rows the user can already see: items still open keep their
+/// current positions (refreshed to the new copies), items no longer open drop
+/// out, and genuinely new items append BELOW the existing ones. Used for
+/// mid-session launcher refreshes so a curator insert can never displace the
+/// top row between glance and Enter (audit finding F8: muscle-memory Enter
+/// resolved an item the user never read). A full newest-first reorder is
+/// reserved for the window-show refresh.
+pub fn stable_merge_open_inbox(current: &[InboxItem], fresh: Vec<InboxItem>) -> Vec<InboxItem> {
+    let mut fresh_by_id: std::collections::HashMap<i64, InboxItem> =
+        fresh.iter().map(|item| (item.id, item.clone())).collect();
+    let mut merged: Vec<InboxItem> = current
+        .iter()
+        .filter_map(|item| fresh_by_id.remove(&item.id))
+        .collect();
+    merged.extend(
+        fresh
+            .into_iter()
+            .filter(|item| fresh_by_id.contains_key(&item.id)),
+    );
+    merged
+}
+
 fn truncate_context(value: &str, max_chars: usize) -> String {
     if value.chars().count() <= max_chars {
         return value.trim().to_string();

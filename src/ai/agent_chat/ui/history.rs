@@ -534,6 +534,16 @@ fn parse_history_entries(content: &str) -> Vec<AgentChatHistoryEntry> {
     entries
 }
 
+/// Whether a saved conversation exists for `session_id` (cheap stat, no
+/// parse). Lets callers pick a different route up front when resume would
+/// fall back — e.g. a brain chat_turn memory whose conversation file is gone
+/// stages the memory as a context chip instead of opening an empty chat.
+pub(crate) fn conversation_exists(session_id: &str) -> bool {
+    conversations_dir()
+        .join(format!("{session_id}.json"))
+        .is_file()
+}
+
 /// Load a full conversation by session ID.
 pub(crate) fn load_conversation(session_id: &str) -> Option<SavedConversation> {
     let path = conversations_dir().join(format!("{session_id}.json"));

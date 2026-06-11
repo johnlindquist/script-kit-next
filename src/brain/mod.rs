@@ -38,13 +38,14 @@ use anyhow::Result;
 
 pub use inbox::{
     count_open_inbox, insert_inbox_item, open_inbox_items, resolve_inbox_item,
-    response_prompt_for_inbox_item, InboxItem, InboxKind,
+    response_prompt_for_inbox_item, stable_merge_open_inbox, InboxItem, InboxKind,
 };
 pub use indexer::{ingest_chat_turn, start_brain_indexer, wake_indexer};
 pub use launcher::{
-    recent_root_brain_hits, root_brain_inbox_subtitle, root_brain_query_is_eligible,
-    search_root_brain_direct, search_root_brain_semantic, semantic_root_brain_hits_for_query,
-    RootBrainInboxSectionOptions, RootBrainSearchHit, RootBrainSectionOptions,
+    recent_root_brain_hits, root_brain_inbox_subtitle, root_brain_memory_preview_html,
+    root_brain_query_is_eligible, search_root_brain_direct, search_root_brain_semantic,
+    semantic_root_brain_hits_for_query, RootBrainInboxSectionOptions, RootBrainSearchHit,
+    RootBrainSectionOptions,
 };
 pub use search::{brain_search, render_context_block, BrainHit};
 pub use store::{get_doc, init_brain_db, record_signal, DocSource};
@@ -182,6 +183,16 @@ pub fn record_capture_signals(target: &str, body: &str, tags: &[String]) {
             let excerpt: String = body.chars().take(120).collect();
             let _ = store::append_activity(&format!("captured {target} \"{excerpt}\""));
             indexer::wake_indexer();
+            // Plain `;todo`-style captures are written by a DETACHED handler
+            // process spawned just before this signal fires, so the first
+            // wake usually races the file write and the cycle misses the new
+            // capture — leaving the doc to the next 120s timer (audit F11).
+            // Re-wake after the handler has had time to land the file; cycles
+            // are cheap and idempotent.
+            for delay_secs in [2, 8] {
+                std::thread::sleep(std::time::Duration::from_secs(delay_secs));
+                indexer::wake_indexer();
+            }
         });
 }
 
