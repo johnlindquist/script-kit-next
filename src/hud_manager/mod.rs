@@ -621,10 +621,9 @@ pub fn show_hud(text: String, duration_ms: Option<u64>, cx: &mut App) {
 
     match window_result {
         Ok(window_handle) => {
-            // Configure the window as a floating overlay using size-based matching.
-            // HUDs accept mouse events (click_through=false) so a click can
-            // dismiss them.
-            configure_hud_window_by_size(hud_width, hud_height, false);
+            // Configure the window as a floating overlay. HUDs accept mouse
+            // events (click_through=false) so a click can dismiss them.
+            configure_hud_window(window_handle, false, cx);
 
             register_hud_automation_window(hud_id, &text_for_log, bounds);
 
@@ -760,9 +759,9 @@ pub fn show_hud_with_action(
 
     match window_result {
         Ok(window_handle) => {
-            // Configure the window as a floating overlay using size-based matching
-            // Action HUDs need to receive mouse events for button clicks (click_through = false)
-            configure_hud_window_by_size(hud_width, HUD_ACTION_HEIGHT, false);
+            // Configure the window as a floating overlay. Action HUDs need to
+            // receive mouse events for button clicks (click_through = false).
+            configure_hud_window(window_handle, false, cx);
 
             register_hud_automation_window(hud_id, &text_for_log, bounds);
 
@@ -864,110 +863,113 @@ fn calculate_hud_position(hud_width: f32) -> (f32, f32) {
         (500.0, 800.0)
     }
 }
-/// Configure a HUD window by finding it based on its expected size
+/// Configure a HUD window as a floating overlay.
 ///
-/// Since HUD windows have unique sizes (200x36 for regular, 300x40 for action),
-/// we can reliably find the most recently created window with matching dimensions.
-/// This is more reliable than bounds matching since coordinate systems vary.
+/// Resolves the NSWindow deterministically from the HUD's own GPUI window
+/// handle (via `raw_window_handle`, same pattern as the actions popup). Do NOT
+/// match NSWindows by size here: identical pills share dimensions, so a size
+/// scan over `[NSApp windows]` configured the oldest pill instead of the new
+/// one — and calling `orderFrontRegardless` on a window GPUI was concurrently
+/// closing could leave a permanent ghost HUD on screen.
 ///
 /// # Arguments
-/// * `expected_width` - The expected width of the HUD window
-/// * `expected_height` - The expected height of the HUD window
+/// * `window_handle` - The freshly opened HUD window to configure
 /// * `click_through` - If true, window ignores mouse events (for plain HUDs).
-///   If false, window receives mouse events (for action HUDs with buttons).
+///   If false, window receives mouse events (for click-to-dismiss/buttons).
+fn configure_hud_window(window_handle: WindowHandle<HudView>, click_through: bool, cx: &mut App) {
+    let update_result = window_handle.update(cx, move |_view, window, cx| {
+        // Defer so GPUI finishes internal setup after open_window before we
+        // touch the native window (same reasoning as the actions popup).
+        window.defer(cx, move |window, _cx| {
+            configure_hud_platform_window(window, click_through);
+        });
+    });
+    if update_result.is_err() {
+        logging::log("HUD", "Could not schedule HUD window configuration");
+    }
+}
+
 #[cfg(target_os = "macos")]
-fn configure_hud_window_by_size(expected_width: f32, expected_height: f32, click_through: bool) {
-    use cocoa::appkit::NSApp;
+fn configure_hud_platform_window(window: &mut Window, click_through: bool) {
     use cocoa::base::id;
-    use cocoa::foundation::NSRect;
 
-    // SAFETY: NSApp() is valid after app launch, we only inspect AppKit's
-    // current windows array on the main thread, and all selectors used below
-    // are standard NSWindow accessors/setters on the matched HUD window.
+    let Ok(handle) = raw_window_handle::HasWindowHandle::window_handle(window) else {
+        logging::log("HUD", "Could not resolve raw window handle for HUD window");
+        return;
+    };
+    let raw_window_handle::RawWindowHandle::AppKit(appkit) = handle.as_raw() else {
+        logging::log("HUD", "HUD window handle is not an AppKit window");
+        return;
+    };
+    let ns_view = appkit.ns_view.as_ptr() as id;
+
+    // SAFETY: `ns_view` comes from the live GPUI HUD window on the AppKit main
+    // thread; `-[NSView window]` returns its owning NSWindow or nil, and all
+    // selectors below are standard NSWindow accessors/setters.
     unsafe {
-        let app: id = NSApp();
-        let windows: id = msg_send![app, windows];
-        let count: usize = msg_send![windows, count];
-
-        // Find a window with matching dimensions (search from most recent)
-        for i in 0..count {
-            let window: id = msg_send![windows, objectAtIndex: i];
-            let frame: NSRect = msg_send![window, frame];
-
-            // Check if this looks like our HUD window by size
-            let width_matches = (frame.size.width - expected_width as f64).abs() < 5.0;
-            let height_matches = (frame.size.height - expected_height as f64).abs() < 5.0;
-
-            if width_matches && height_matches {
-                // Found it! Configure as HUD overlay
-                let theme = crate::theme::get_cached_theme();
-                crate::platform::configure_hud_window_vibrancy(
-                    window,
-                    theme.should_use_dark_vibrancy(),
-                );
-
-                // Set window level very high (NSPopUpMenuWindowLevel = 101)
-                let hud_level: i64 = 101;
-                let _: () = msg_send![window, setLevel: hud_level];
-
-                // Collection behaviors for HUD:
-                // - CanJoinAllSpaces (1): appear on all spaces
-                // - Stationary (16): don't move with spaces
-                // - IgnoresCycle (64): cmd-tab ignores this window
-                let collection_behavior: u64 = 1 | 16 | 64;
-                let _: () = msg_send![window, setCollectionBehavior: collection_behavior];
-
-                // Set mouse event handling based on whether HUD has clickable actions
-                let ignores_mouse: cocoa::base::BOOL = if click_through {
-                    cocoa::base::YES
-                } else {
-                    cocoa::base::NO
-                };
-                let _: () = msg_send![window, setIgnoresMouseEvents: ignores_mouse];
-
-                // Ensure window content is shareable for captureScreenshot()
-                let sharing_type: i64 = 1; // NSWindowSharingReadOnly
-                let _: () = msg_send![window, setSharingType: sharing_type];
-
-                // Don't show in window menu
-                let _: () = msg_send![window, setExcludedFromWindowsMenu: true];
-
-                // Keep HUD overlays eligible to appear even when the app is
-                // otherwise hidden and interactive scripts are running headless.
-                let _: () = msg_send![window, setCanHide: false];
-
-                // Keep the HUD visible even after the main launcher orders out.
-                // orderFrontRegardless lifts the overlay without requiring the
-                // app to remain active or the main panel to stay open.
-                let _: () = msg_send![window, orderFrontRegardless];
-
-                let click_status = if click_through {
-                    "click-through"
-                } else {
-                    "clickable"
-                };
-                logging::log(
-                    "HUD",
-                    &format!(
-                        "Configured HUD NSWindow ({}x{}): level={}, {}, canHide=false, orderFrontRegardless",
-                        expected_width, expected_height, hud_level, click_status
-                    ),
-                );
-                return;
-            }
+        let window: id = msg_send![ns_view, window];
+        if window.is_null() {
+            logging::log(
+                "HUD",
+                "HUD NSView has no NSWindow yet, skipping configuration",
+            );
+            return;
         }
 
+        let theme = crate::theme::get_cached_theme();
+        crate::platform::configure_hud_window_vibrancy(window, theme.should_use_dark_vibrancy());
+
+        // Set window level very high (NSPopUpMenuWindowLevel = 101)
+        let hud_level: i64 = 101;
+        let _: () = msg_send![window, setLevel: hud_level];
+
+        // Collection behaviors for HUD:
+        // - CanJoinAllSpaces (1): appear on all spaces
+        // - Stationary (16): don't move with spaces
+        // - IgnoresCycle (64): cmd-tab ignores this window
+        let collection_behavior: u64 = 1 | 16 | 64;
+        let _: () = msg_send![window, setCollectionBehavior: collection_behavior];
+
+        // Set mouse event handling based on whether HUD has clickable actions
+        let ignores_mouse: cocoa::base::BOOL = if click_through {
+            cocoa::base::YES
+        } else {
+            cocoa::base::NO
+        };
+        let _: () = msg_send![window, setIgnoresMouseEvents: ignores_mouse];
+
+        // Ensure window content is shareable for captureScreenshot()
+        let sharing_type: i64 = 1; // NSWindowSharingReadOnly
+        let _: () = msg_send![window, setSharingType: sharing_type];
+
+        // Don't show in window menu
+        let _: () = msg_send![window, setExcludedFromWindowsMenu: true];
+
+        // Keep HUD overlays eligible to appear even when the app is
+        // otherwise hidden and interactive scripts are running headless.
+        let _: () = msg_send![window, setCanHide: false];
+
+        // Keep the HUD visible even after the main launcher orders out.
+        // orderFrontRegardless lifts the overlay without requiring the
+        // app to remain active or the main panel to stay open.
+        let _: () = msg_send![window, orderFrontRegardless];
+
+        let click_status = if click_through {
+            "click-through"
+        } else {
+            "clickable"
+        };
         logging::log(
             "HUD",
             &format!(
-                "Could not find HUD window with size {}x{}",
-                expected_width, expected_height
+                "Configured HUD NSWindow: level={}, {}, canHide=false, orderFrontRegardless",
+                hud_level, click_status
             ),
         );
     }
 }
 #[cfg(not(target_os = "macos"))]
-fn configure_hud_window_by_size(_expected_width: f32, _expected_height: f32, _click_through: bool) {
+fn configure_hud_platform_window(_window: &mut Window, _click_through: bool) {
     logging::log(
         "HUD",
         "Non-macOS platform, skipping HUD window configuration",

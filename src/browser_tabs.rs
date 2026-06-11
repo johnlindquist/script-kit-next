@@ -297,14 +297,38 @@ pub fn activate_tab(tab: &BrowserTabInfo) -> Result<()> {
     })?;
 
     let script = build_activate_tab_script(browser, tab.window_index, tab.tab_index);
-    crate::platform::run_osascript(&script, "browser_tabs_activate")
-        .map(|_| ())
-        .with_context(|| {
-            format!(
-                "activate_browser_tab_failed: browser={} window_index={} tab_index={}",
-                browser.app_name, tab.window_index, tab.tab_index
-            )
-        })
+    let index_error = match crate::platform::run_osascript(&script, "browser_tabs_activate") {
+        Ok(_) => return Ok(()),
+        Err(error) => error,
+    };
+
+    // Activation requests come from cached snapshots, so the window/tab
+    // indexes are often stale by the time the user hits Enter (a closed or
+    // reordered window yields "Window N is no longer available"). Re-locate
+    // the tab by URL across all windows before reporting failure.
+    activate_tab_by_url(browser, &tab.url).with_context(|| {
+        format!(
+            "activate_browser_tab_failed: browser={} window_index={} tab_index={} index_error={index_error:#}",
+            browser.app_name, tab.window_index, tab.tab_index
+        )
+    })
+}
+
+fn activate_tab_by_url(browser: &SupportedBrowser, url: &str) -> Result<()> {
+    let url = url.trim();
+    if url.is_empty() {
+        bail!("tab has no URL to re-locate");
+    }
+    let script = build_activate_tab_by_url_jxa(browser, url);
+    let output = crate::platform::run_jxa_with_timeout(
+        &script,
+        "browser_tabs_activate_by_url",
+        BROWSER_TIMEOUT,
+    )?;
+    if output.trim() == "ok" {
+        return Ok(());
+    }
+    bail!("no open tab with URL {url} in {}", browser.app_name)
 }
 
 pub fn fuzzy_search_browser_tabs(tabs: &[BrowserTabInfo], query: &str) -> Vec<BrowserTabMatch> {
@@ -1104,6 +1128,47 @@ tell application "{app_name}"
     )
 }
 
+/// Fallback activation that scans every window for an exact URL match.
+///
+/// Unlike `build_activate_tab_script`, this does not trust cached indexes, so
+/// it survives windows being closed or reordered between the snapshot and the
+/// user's Enter press. JXA is used for the same reason as `build_list_tabs_jxa`:
+/// it reliably enumerates windows on other Spaces.
+fn build_activate_tab_by_url_jxa(browser: &SupportedBrowser, url: &str) -> String {
+    let app_name_json =
+        serde_json::to_string(browser.app_name).expect("app name serializes as a JSON string");
+    let target_json = serde_json::to_string(url).expect("URL serializes as a JSON string");
+    let select_tab = match browser.family {
+        BrowserFamily::Safari => "win.currentTab = win.tabs[t];",
+        BrowserFamily::Chromium => "win.activeTabIndex = t + 1;",
+    };
+
+    format!(
+        r#"
+var app = Application({app_name_json});
+var found = false;
+if (app.running()) {{
+    var target = {target_json};
+    var wins = app.windows();
+    for (var w = 0; w < wins.length && !found; w++) {{
+        var win = wins[w];
+        var urls = win.tabs.url();
+        for (var t = 0; t < urls.length; t++) {{
+            if ((urls[t] || "") === target) {{
+                {select_tab}
+                win.index = 1;
+                app.activate();
+                found = true;
+                break;
+            }}
+        }}
+    }}
+}}
+found ? "ok" : "not-found";
+"#
+    )
+}
+
 // Favicon logic moved to src/favicons.rs
 
 #[cfg(test)]
@@ -1298,6 +1363,30 @@ mod tests {
         assert!(safari_script.contains("set current tab of window 2 to tab 4 of window 2"));
         assert!(chrome_script.contains("set active tab index of window 2 to 4"));
         assert!(chrome_script.contains("set index of window 2 to 1"));
+    }
+
+    #[test]
+    fn build_activate_tab_by_url_jxa_switches_browser_specific_tab_property() {
+        let safari_script =
+            build_activate_tab_by_url_jxa(&SUPPORTED_BROWSERS[0], "https://chatgpt.com/");
+        let chrome_script =
+            build_activate_tab_by_url_jxa(&SUPPORTED_BROWSERS[1], "https://chatgpt.com/");
+
+        assert!(safari_script.contains("win.currentTab = win.tabs[t];"));
+        assert!(!safari_script.contains("activeTabIndex"));
+        assert!(chrome_script.contains("win.activeTabIndex = t + 1;"));
+        assert!(chrome_script.contains(r#"Application("Google Chrome")"#));
+        assert!(chrome_script.contains(r#"var target = "https://chatgpt.com/";"#));
+    }
+
+    #[test]
+    fn build_activate_tab_by_url_jxa_escapes_url_as_json_string() {
+        let script = build_activate_tab_by_url_jxa(
+            &SUPPORTED_BROWSERS[1],
+            "https://example.com/?q=\"quoted\"",
+        );
+
+        assert!(script.contains(r#"var target = "https://example.com/?q=\"quoted\"";"#));
     }
 
     #[test]

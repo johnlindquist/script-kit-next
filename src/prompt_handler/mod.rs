@@ -1495,6 +1495,9 @@ fn prompt_message_from_protocol_message(
             target,
             event,
         }),
+        // Allow stdin/devtools to show HUD pills directly, matching the script
+        // path; probes use this to exercise HUD stacking/dismissal behavior.
+        Message::Hud { text, duration_ms } => Some(PromptMessage::ShowHud { text, duration_ms }),
         _ => None,
     }
 }
