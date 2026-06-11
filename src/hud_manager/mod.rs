@@ -14,7 +14,7 @@ use crate::logging;
 use crate::theme::get_cached_theme;
 use gpui::{
     div, point, prelude::*, px, rgb, rgba, size, App, Context, ElementId, Render, SharedString,
-    Window, WindowBackgroundAppearance, WindowBounds, WindowHandle, WindowOptions,
+    Window, WindowBackgroundAppearance, WindowBounds, WindowHandle, WindowKind, WindowOptions,
 };
 use gpui_component::tooltip::Tooltip;
 use parking_lot::Mutex;
@@ -217,24 +217,29 @@ struct HudView {
     action: Option<HudAction>,
     /// Theme colors for rendering
     colors: HudColors,
+    /// Manager-side ID, so a click on the pill can dismiss this HUD through
+    /// the same tracked path as the auto-dismiss timer.
+    hud_id: u64,
 }
 impl HudView {
-    fn new(text: String) -> Self {
+    fn new(text: String, hud_id: u64) -> Self {
         Self {
             text,
             action_label: None,
             action: None,
             colors: HudColors::from_theme(),
+            hud_id,
         }
     }
 
     #[allow(dead_code)]
-    fn with_action(text: String, action_label: String, action: HudAction) -> Self {
+    fn with_action(text: String, action_label: String, action: HudAction, hud_id: u64) -> Self {
         Self {
             text,
             action_label: Some(action_label),
             action: Some(action),
             colors: HudColors::from_theme(),
+            hud_id,
         }
     }
 
@@ -246,6 +251,7 @@ impl HudView {
             action_label: None,
             action: None,
             colors,
+            hud_id: 0,
         }
     }
 
@@ -334,7 +340,7 @@ fn register_hud_automation_window(hud_id: u64, text: &str, bounds: gpui::Bounds<
     });
 }
 impl Render for HudView {
-    fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let has_action = self.has_action();
 
         // Extract colors for use in closures (Copy trait)
@@ -358,6 +364,17 @@ impl Render for HudView {
             .gap(px(12.))
             .relative()
             .overflow_hidden()
+            .cursor_pointer()
+            // Click anywhere on the pill dismisses the HUD through the same
+            // tracked path as the auto-dismiss timer. Deferred out of this
+            // window's own event dispatch (removing a window from inside its
+            // dispatch leaves a zombie key window).
+            .on_click(cx.listener(|this, _event, window, cx| {
+                let hud_id = this.hud_id;
+                window.defer(cx, move |_window, cx| {
+                    dismiss_hud_by_id(hud_id, cx);
+                });
+            }))
             // Use the same theme background and opacity as the main window.
             .bg(rgba(colors.background_rgba))
             .children(theme_background_gradients)
@@ -581,7 +598,13 @@ pub fn show_hud(text: String, duration_ms: Option<u64>, cx: &mut App) {
 
     let text_for_log = text.clone();
 
-    // Create the HUD window with specific options for overlay behavior
+    // Generate the ID before the window exists so the view can dismiss
+    // itself on click through the tracked path.
+    let hud_id = next_hud_id();
+
+    // Create the HUD window with specific options for overlay behavior.
+    // PopUp = non-activating panel, so the dismiss click below never steals
+    // focus from the frontmost app.
     let window_result = cx.open_window(
         WindowOptions {
             window_bounds: Some(WindowBounds::Windowed(bounds)),
@@ -590,19 +613,19 @@ pub fn show_hud(text: String, duration_ms: Option<u64>, cx: &mut App) {
             window_background: WindowBackgroundAppearance::Transparent,
             focus: false, // Don't steal focus
             show: true,   // Show immediately
+            kind: WindowKind::PopUp,
             ..Default::default()
         },
-        |_, cx| cx.new(|_| HudView::new(text)),
+        |_, cx| cx.new(|_| HudView::new(text, hud_id)),
     );
 
     match window_result {
         Ok(window_handle) => {
-            // Configure the window as a floating overlay using size-based matching
-            // Regular HUDs without actions are click-through (true)
-            configure_hud_window_by_size(hud_width, hud_height, true);
+            // Configure the window as a floating overlay using size-based matching.
+            // HUDs accept mouse events (click_through=false) so a click can
+            // dismiss them.
+            configure_hud_window_by_size(hud_width, hud_height, false);
 
-            // Generate unique ID for this HUD
-            let hud_id = next_hud_id();
             register_hud_automation_window(hud_id, &text_for_log, bounds);
 
             // Track the active HUD and register slot
@@ -716,6 +739,10 @@ pub fn show_hud_with_action(
 
     let text_for_log = text.clone();
 
+    // Generate the ID before the window exists so the view can dismiss
+    // itself on click through the tracked path.
+    let hud_id = next_hud_id();
+
     // Create the HUD window with action button
     let window_result = cx.open_window(
         WindowOptions {
@@ -725,9 +752,10 @@ pub fn show_hud_with_action(
             window_background: WindowBackgroundAppearance::Transparent,
             focus: false, // Don't steal focus
             show: true,   // Show immediately
+            kind: WindowKind::PopUp,
             ..Default::default()
         },
-        |_, cx| cx.new(|_| HudView::with_action(text, action_label, action)),
+        |_, cx| cx.new(|_| HudView::with_action(text, action_label, action, hud_id)),
     );
 
     match window_result {
@@ -736,8 +764,6 @@ pub fn show_hud_with_action(
             // Action HUDs need to receive mouse events for button clicks (click_through = false)
             configure_hud_window_by_size(hud_width, HUD_ACTION_HEIGHT, false);
 
-            // Generate unique ID for this HUD
-            let hud_id = next_hud_id();
             register_hud_automation_window(hud_id, &text_for_log, bounds);
 
             // Track the active HUD and register slot
@@ -996,31 +1022,46 @@ fn dismiss_hud_by_id(hud_id: u64, cx: &mut App) {
 /// Clean up expired HUD windows and show pending ones
 fn cleanup_expired_huds(cx: &mut App) {
     let manager = get_hud_manager();
-    let mut state = manager.lock();
 
-    // Remove expired HUDs from tracking and release their slots
-    let before_count = state.active_huds.len();
-    let expired_ids: Vec<u64> = state
-        .active_huds
-        .iter()
-        .filter(|hud| hud.is_expired())
-        .map(|hud| hud.id)
-        .collect();
+    // Remove expired HUDs from tracking, KEEPING their window handles so the
+    // windows can actually be closed below. Dropping them from tracking
+    // without closing (the old behavior) orphaned the OS window forever: the
+    // HUD's own dismiss timer later found nothing in `active_huds` and
+    // skipped the close, leaving a permanent on-screen HUD. This raced
+    // whenever two HUDs were shown in quick succession (e.g. the permissions
+    // flow) — the first dismissal swept the second out of tracking here just
+    // before the second's timer fired.
+    let expired: Vec<ActiveHud> = {
+        let mut state = manager.lock();
+        let (expired, remaining): (Vec<ActiveHud>, Vec<ActiveHud>) = state
+            .active_huds
+            .drain(..)
+            .partition(|hud| hud.is_expired());
+        state.active_huds = remaining;
+        for hud in &expired {
+            state.release_slot_by_id(hud.id);
+        }
+        expired
+    };
 
-    // Release slots for expired HUDs
-    for id in &expired_ids {
-        state.release_slot_by_id(*id);
-        crate::windows::remove_automation_window(&hud_automation_id(*id));
+    // Close expired windows outside the lock.
+    for hud in &expired {
+        crate::windows::remove_automation_window(&hud_automation_id(hud.id));
+        hud.window
+            .update(cx, |_view, window, _cx| {
+                window.remove_window();
+            })
+            .ok();
     }
-
-    state.active_huds.retain(|hud| !hud.is_expired());
-    let removed = before_count - state.active_huds.len();
-
-    if removed > 0 {
-        logging::log("HUD", &format!("Cleaned up {} expired HUD(s)", removed));
+    if !expired.is_empty() {
+        logging::log(
+            "HUD",
+            &format!("Cleaned up {} expired HUD(s)", expired.len()),
+        );
     }
 
     // Show pending HUDs if we have free slots
+    let mut state = manager.lock();
     while state.first_free_slot().is_some() {
         if let Some(pending) = state.pending_queue.pop_front() {
             // Drop lock before showing HUD (show_notification will acquire it)
@@ -1204,7 +1245,7 @@ mod tests {
     #[test]
     fn test_hud_view_has_action() {
         // Test that HudView correctly reports whether it has an action
-        let view_without_action = HudView::new("Test message".to_string());
+        let view_without_action = HudView::new("Test message".to_string(), 1);
         assert!(
             !view_without_action.has_action(),
             "HudView without action should report has_action() = false"
@@ -1214,6 +1255,7 @@ mod tests {
             "Test message".to_string(),
             "Open".to_string(),
             HudAction::OpenUrl("https://example.com".to_string()),
+            2,
         );
         assert!(
             view_with_action.has_action(),
