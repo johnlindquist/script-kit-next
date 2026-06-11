@@ -2065,7 +2065,13 @@ impl RenderOnce for ListItem {
             .items_center()
             .gap(px(metrics.icon_text_gap));
 
-        inner_content = inner_content.child(icon_element);
+        // Only mount the icon slot when an icon exists: a zero-size placeholder
+        // still consumes the row's flex gap, indenting iconless rows (e.g. the
+        // actions popup) on the left while the right edge stays at the inner
+        // padding — visually asymmetric padding.
+        if self.icon.is_some() {
+            inner_content = inner_content.child(icon_element);
+        }
 
         // Leading accessory slot (e.g., color swatch strip) — between icon and text
         let has_leading_accessory = self.leading_accessory.is_some();
