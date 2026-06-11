@@ -297,8 +297,10 @@ fn agent_no_shortcut_no_alias_not_suggested() {
     agent.is_script = false;
     let actions = get_script_context_actions(&agent);
     let ids = action_ids(&actions);
-    assert!(ids.contains(&"add_shortcut"));
-    assert!(ids.contains(&"add_alias"));
+    // Agents get no shortcut/alias preference actions
+    // (ScriptContextPreferenceActionPlan::AgentNoPreferenceActions).
+    assert!(!ids.contains(&"add_shortcut"));
+    assert!(!ids.contains(&"add_alias"));
     assert!(!ids.contains(&"reset_ranking"));
     // Agent-specific
     let edit = find_action(&actions, "edit_script").unwrap();

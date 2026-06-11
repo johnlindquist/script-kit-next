@@ -63,8 +63,8 @@ fn parse_context_mentions_handles_all_resource_directives() {
 
     assert_eq!(parsed.cleaned_content, "");
     assert_eq!(parsed.parts.len(), 6);
-    assert_eq!(parsed.parts[0].label(), "Current Context");
-    assert_eq!(parsed.parts[1].label(), "Current Context (Full)");
+    assert_eq!(parsed.parts[0].label(), "What I\u{2019}m Looking At");
+    assert_eq!(parsed.parts[1].label(), "Everything Available");
     assert_eq!(parsed.parts[2].label(), "Selection");
     assert_eq!(parsed.parts[3].label(), "Browser URL");
     assert_eq!(parsed.parts[4].label(), "Focused Window");
@@ -115,8 +115,8 @@ fn parse_context_mentions_accepts_legacy_context_aliases() {
 
     assert_eq!(parsed.cleaned_content, "");
     assert_eq!(parsed.parts.len(), 2);
-    assert_eq!(parsed.parts[0].label(), "Current Context");
-    assert_eq!(parsed.parts[1].label(), "Current Context (Full)");
+    assert_eq!(parsed.parts[0].label(), "What I\u{2019}m Looking At");
+    assert_eq!(parsed.parts[1].label(), "Everything Available");
 }
 
 // ── @file: colon-prefix parsing ────────────────────────────────

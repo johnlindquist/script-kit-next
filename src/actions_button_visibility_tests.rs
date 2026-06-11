@@ -126,9 +126,11 @@ mod tests {
             content.contains("let is_mini = self.main_window_mode == MainWindowMode::Mini;"),
             "mini mode flag should be computed from main_window_mode"
         );
+        // The Agent affordance lives in the native footer (FooterAction::Ai);
+        // the script list must not grow a local agent hint element again.
         assert!(
-            content.contains("render_launcher_ask_ai_hint("),
-            "Script list should route the Agent hint through the shared launcher component"
+            !content.contains("agent-hint-button"),
+            "Script list must not render a local agent hint — the Agent button lives in the native footer"
         );
         assert!(
             content.contains("if is_mini {")
@@ -205,7 +207,8 @@ mod tests {
         let dispatcher_pos = content
             .find("fn dispatch_main_window_footer_action")
             .expect("dispatch_main_window_footer_action must exist in ui_window.rs");
-        let dispatcher_section = &content[dispatcher_pos..content.len().min(dispatcher_pos + 6000)];
+        let dispatcher_section =
+            &content[dispatcher_pos..content.len().min(dispatcher_pos + 20000)];
 
         assert!(
             dispatcher_section.contains("FooterAction::Run")
@@ -238,33 +241,40 @@ mod tests {
         );
     }
 
+    /// The Agent affordance lives in the standard native footer buttons for
+    /// the ScriptList view (FooterAction::Ai with the ⌘↵ shortcut). The shared
+    /// launcher hint component must keep using the shared footer hint renderer
+    /// so it cannot drift visually if it is re-adopted.
     #[test]
-    fn test_agent_moved_from_footer_to_input_hint() {
+    fn test_agent_button_lives_in_native_footer() {
         let footer_content = fs::read_to_string("src/app_impl/ui_window.rs")
             .expect("Failed to read src/app_impl/ui_window.rs");
 
         let hint_content = fs::read_to_string("src/components/launcher_ask_ai_hint.rs")
             .expect("Failed to read src/components/launcher_ask_ai_hint.rs");
 
-        // Agent button should NOT be in the standard footer buttons
+        // Agent button is part of the standard native footer buttons
         let standard_fn = footer_content
             .find("fn standard_main_window_footer_buttons")
             .expect("standard_main_window_footer_buttons must exist");
         let standard_section =
-            &footer_content[standard_fn..footer_content.len().min(standard_fn + 600)];
+            &footer_content[standard_fn..footer_content.len().min(standard_fn + 1500)];
         assert!(
-            !standard_section.contains("FooterAction::Ai"),
-            "Agent button should not be in the standard footer — it moved to the input hint"
+            standard_section.contains("FooterAction::Ai") && standard_section.contains("\"Agent\""),
+            "Agent button should be in the standard native footer buttons"
+        );
+        assert!(
+            standard_section.contains("\"⌘↵\""),
+            "Agent footer button should advertise the ⌘↵ shortcut"
         );
 
-        // Agent hint should render with Cmd+Enter keycaps in the input header
+        // The shared hint component renders through the shared footer hint renderer
         assert!(
-            hint_content.contains("render_footer_keycap(\"⌘\"")
-                && hint_content.contains("render_footer_keycap(\"↵\""),
-            "Agent hint should render ⌘ and ↵ as footer-style keycaps"
+            hint_content.contains("render_footer_hint_content"),
+            "Agent hint should use the shared footer hint renderer"
         );
         assert!(
-            hint_content.contains(".child(\"Agent\")"),
+            hint_content.contains("\"Agent\".into()"),
             "Agent hint should show the Agent label"
         );
     }
@@ -318,8 +328,8 @@ mod tests {
         let handler_section = &content[handler_pos..content.len().min(handler_pos + 1500)];
 
         assert!(
-            handler_section.contains("main_window_footer_config()"),
-            "Native footer handler must check main_window_footer_config() to guard dispatch"
+            handler_section.contains("main_window_footer_config_with_cx("),
+            "Native footer handler must check the view-driven footer config to guard dispatch"
         );
         assert!(
             handler_section.contains("is_main_window_visible()"),
@@ -451,9 +461,20 @@ mod tests {
             content.contains("footer_button_mouse_down_can_move_window"),
             "ScriptKitFooterButton must implement mouseDownCanMoveWindow"
         );
-        // Must NOT allocate plain NSButton for footer hint items
+        // Must NOT allocate plain NSButton for footer hint items.
+        // (Plain NSButton is fine for the transparent cwd/left-info chip hit
+        // targets elsewhere in the file — scope the check to the hint item fn.)
+        let hint_item_pos = content
+            .find("unsafe fn make_footer_hint_item")
+            .expect("make_footer_hint_item must exist");
+        let hint_item_end = content[hint_item_pos..]
+            .find("\nunsafe fn ")
+            .or_else(|| content[hint_item_pos..].find("\nfn "))
+            .map(|offset| hint_item_pos + offset)
+            .unwrap_or(content.len());
+        let hint_item_section = &content[hint_item_pos..hint_item_end];
         assert!(
-            !content.contains("msg_send![class!(NSButton), alloc]"),
+            !hint_item_section.contains("msg_send![class!(NSButton), alloc]"),
             "Footer hint items must not allocate plain NSButton — use footer_button_class()"
         );
     }

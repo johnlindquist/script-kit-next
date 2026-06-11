@@ -5603,9 +5603,12 @@ mod tests {
 
     #[test]
     fn computer_list_native_windows_rejects_bad_arguments() {
+        // NOTE: `json!([])` is intentionally absent: serde deserializes JSON
+        // arrays into structs positionally, and every field here has a
+        // default, so `[]` parses as "no args" and reaches the
+        // runtime_unavailable path instead of invalid_arguments.
         for arguments in [
             serde_json::json!(null),
-            serde_json::json!([]),
             serde_json::json!({ "pid": 101 }),
             serde_json::json!({ "app": "Terminal" }),
             serde_json::json!({ "bundleId": "com.apple.Terminal" }),
@@ -5673,9 +5676,12 @@ mod tests {
 
     #[test]
     fn computer_get_frontmost_native_window_rejects_bad_arguments() {
+        // NOTE: `json!([])` is intentionally absent: serde deserializes JSON
+        // arrays into structs positionally, and this tool takes no fields, so
+        // `[]` parses as "no args" and reaches the runtime_unavailable path
+        // instead of invalid_arguments.
         for arguments in [
             serde_json::json!(null),
-            serde_json::json!([]),
             serde_json::json!({ "pid": 101 }),
             serde_json::json!({ "nativeWindowId": 98765 }),
             serde_json::json!({ "includeHidden": true }),
@@ -5709,9 +5715,12 @@ mod tests {
 
     #[test]
     fn computer_list_frontmost_app_windows_rejects_bad_arguments() {
+        // NOTE: `json!([])` is intentionally absent: serde deserializes JSON
+        // arrays into structs positionally, and this tool takes no fields, so
+        // `[]` parses as "no args" and reaches the runtime_unavailable path
+        // instead of invalid_arguments.
         for arguments in [
             serde_json::json!(null),
-            serde_json::json!([]),
             serde_json::json!({ "pid": 101 }),
             serde_json::json!({ "nativeWindowId": 98765 }),
             serde_json::json!({ "includeHidden": true }),

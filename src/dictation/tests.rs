@@ -729,8 +729,11 @@ fn dictation_overlay_uses_popup_blur_and_vibrancy() {
         source.contains("WindowBackgroundAppearance::Blurred"),
         "overlay must support blurred background"
     );
+    // 81e23d77c gave the overlay its own platform wrapper
+    // (configure_dictation_overlay_window) which routes through the same
+    // configure_window_vibrancy_common path as other secondary windows.
     assert!(
-        source.contains("configure_secondary_window_vibrancy"),
+        source.contains("crate::platform::configure_dictation_overlay_window"),
         "overlay must configure vibrancy via platform helper"
     );
 }
@@ -1688,7 +1691,12 @@ fn overlay_dot_and_window_constants_match_target_contract() {
 
     assert_eq!(super::window::OVERLAY_WIDTH_PX, 520.0);
     assert_eq!(super::window::OVERLAY_HEIGHT_PX, 72.0);
-    assert_eq!(super::window::OVERLAY_RADIUS_PX, 12.0);
+    // 562fb2964 (Liquid Glass): the radius derives from the shared panel
+    // token so the overlay stays in lockstep with other glass panels.
+    assert_eq!(
+        super::window::OVERLAY_RADIUS_PX,
+        crate::ui::chrome::LIQUID_GLASS_PANEL_RADIUS_PX
+    );
     assert_eq!(super::window::STATUS_TEXT_SIZE_PX, 11.5);
     assert_eq!(super::window::WAVEFORM_BAR_COUNT, 9);
     assert_eq!(super::window::WAVEFORM_BAR_WIDTH_PX, 3.0);
@@ -1790,21 +1798,25 @@ fn dictation_overlay_derives_colors_from_theme_and_compact_capsule_chrome() {
     let source =
         std::fs::read_to_string("src/dictation/window.rs").expect("read dictation window.rs");
 
+    // 81e23d77c moved the rail chrome contract into the shared footer_chrome
+    // layer: footer_rail_chrome derives from AppChromeColors::from_theme, and
+    // render_footer_hint_content owns split_footer_shortcut keycap rendering,
+    // so the overlay and the native main-menu footer share one source of truth.
     assert!(
-        source.contains("AppChromeColors::from_theme"),
-        "overlay surface must use app chrome color tokens"
+        source.contains("footer_chrome::footer_rail_chrome"),
+        "overlay surface must use the shared footer chrome (AppChromeColors) tokens"
     );
     assert!(
-        source.contains("PromptFooterColors::from_theme"),
-        "overlay action rail buttons must use standard prompt footer color tokens"
+        source.contains("footer_chrome::render_footer_hint_content"),
+        "overlay action rail buttons must use the shared footer hint renderer"
     );
     assert!(
         source.contains("render_glass_signal_band"),
         "overlay must render the launcher-style selected signal band"
     );
     assert!(
-        source.contains("split_footer_shortcut"),
-        "overlay action rail shortcuts must use the main-menu footer shortcut splitter"
+        source.contains("FooterHintKeyMode::Shortcut"),
+        "overlay action rail shortcuts must use the main-menu footer shortcut keycap mode"
     );
     // Theme tokens still used for content colors.
     assert!(
@@ -2995,24 +3007,24 @@ fn overlay_confirming_phase_renders_stop_continue() {
 fn overlay_uses_glass_bar_styling() {
     let window_src = std::fs::read_to_string("src/dictation/window.rs").expect("read window.rs");
 
+    // 81e23d77c moved the glass bar / action rail chrome contract into the
+    // shared footer_chrome layer (footer_rail_chrome derives from
+    // AppChromeColors::from_theme), so both the native main-menu footer and
+    // this overlay consume one rail surface, hover/active, and keycap source.
     assert!(
-        window_src.contains("AppChromeColors::from_theme"),
-        "overlay must derive glass surface from app chrome"
+        window_src.contains("footer_chrome::footer_rail_chrome"),
+        "overlay must derive glass surface from the shared footer rail chrome"
     );
     assert!(
-        window_src.contains("PromptFooterColors::from_theme"),
-        "overlay must use prompt footer colors"
-    );
-    assert!(
-        window_src.contains("PromptFooterColors::from_theme"),
-        "glass bar surface must match main menu window surface chrome"
+        window_src.contains("footer_chrome::render_footer_hint_content"),
+        "overlay must use the shared footer hint renderer for action buttons"
     );
     let rail_start = window_src
         .find("fn render_clickable_action_rail")
         .expect("clickable action rail renderer must exist");
     let rail_src = &window_src[rail_start..rail_start + 900.min(window_src.len() - rail_start)];
     assert!(
-        !rail_src.contains(".bg(rgba(chrome.window_surface_rgba))"),
+        !rail_src.contains(".bg(rgba(rail_chrome.surface_rgba))"),
         "action rail must inherit the overlay surface instead of stacking a darker background"
     );
     assert!(
@@ -3028,8 +3040,8 @@ fn overlay_uses_glass_bar_styling() {
         "dictation overlay chrome must use the system UI font, not monospace"
     );
     assert!(
-        window_src.contains("PromptFooterColors::from_theme")
-            && window_src.contains("split_footer_shortcut"),
+        window_src.contains("footer_chrome::footer_rail_chrome")
+            && window_src.contains("FooterHintKeyMode::Shortcut"),
         "dictation action buttons must match main menu footer hover, active, font, and shortcut rendering"
     );
 }
@@ -3050,10 +3062,12 @@ fn overlay_dimensions_match_glass_bar_contract() {
         72.0,
         "overlay height must match the glass bar direction"
     );
+    // 562fb2964 moved the radius from a local 12.0 to the shared Liquid
+    // Glass panel token (16.0) so the overlay matches other glass panels.
     assert_eq!(
         super::window::OVERLAY_RADIUS_PX,
-        12.0,
-        "overlay radius must match the adopted glass bar shape"
+        16.0,
+        "overlay radius must match the adopted Liquid Glass panel shape"
     );
 }
 
@@ -4032,9 +4046,20 @@ fn dictation_overlay_singleton_nonactivating_contract() {
         "overlay open path must probe handle liveness before reuse"
     );
 
-    // Singleton reuse: return existing live handle
+    // Singleton reuse: the live-handle branch must return the existing
+    // handle before any window creation. A tracing call sits between the
+    // check and the return, so anchor on ordering rather than exact text.
+    let alive_branch_pos = section
+        .find("if alive {")
+        .expect("overlay open path must branch on handle liveness");
+    let reuse_return_pos = section
+        .find("return Ok(handle);")
+        .expect("overlay must early-return the existing live handle");
+    let open_window_anchor_pos = section
+        .find(".open_window(window_options")
+        .expect("overlay must create the native window through GPUI open_window");
     assert!(
-        body.contains(&compact_delta_contract("if alive { return Ok(handle); }")),
+        alive_branch_pos < reuse_return_pos && reuse_return_pos < open_window_anchor_pos,
         "overlay must reuse the live singleton window instead of spawning duplicates"
     );
 
@@ -4329,9 +4354,12 @@ fn confirming_render_shows_stop_and_continue_buttons() {
 #[test]
 fn confirming_render_uses_error_and_success_colors() {
     let src = std::fs::read_to_string("src/dictation/window.rs").expect("read window.rs");
+    // 81e23d77c: button hover/active colors now come from the shared
+    // footer_rail_chrome (which derives from AppChromeColors::from_theme)
+    // instead of a local PromptFooterColors copy.
     assert!(
-        src.contains("PromptFooterColors"),
-        "buttons must use standard prompt footer colors"
+        src.contains("footer_chrome::footer_rail_chrome"),
+        "buttons must use standard shared footer chrome colors"
     );
 }
 

@@ -518,6 +518,19 @@ mod tests {
         format!("t{n}")
     }
 
+    // The registry is one process-global singleton. Unique id prefixes do
+    // NOT isolate `Focused`/`Main`/kind-index resolution — resolve sees every
+    // concurrent test's windows (e.g. another test's focused agent_chat wins a
+    // Focused resolve). Serialize the whole module on one mutex; the tests
+    // are sub-millisecond so this costs nothing.
+    static REGISTRY_TEST_MUTEX: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    fn registry_guard() -> std::sync::MutexGuard<'static, ()> {
+        REGISTRY_TEST_MUTEX
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
     fn make_info(prefix: &str, id: &str, kind: AutomationWindowKind) -> AutomationWindowInfo {
         AutomationWindowInfo {
             id: format!("{prefix}:{id}"),
@@ -537,6 +550,7 @@ mod tests {
 
     #[test]
     fn automation_window_registry_resolves_main_and_focused() {
+        let _registry_guard = registry_guard();
         let p = test_prefix();
 
         let mut main = make_info(&p, "main", AutomationWindowKind::Main);
@@ -571,6 +585,7 @@ mod tests {
 
     #[test]
     fn automation_window_registry_resolves_kind_index() {
+        let _registry_guard = registry_guard();
         let p = test_prefix();
 
         let mut agent_chat0 = make_info(&p, "agent_chat0", AutomationWindowKind::AgentChatDetached);
@@ -623,6 +638,7 @@ mod tests {
 
     #[test]
     fn automation_window_registry_unregisters_closed_window() {
+        let _registry_guard = registry_guard();
         let p = test_prefix();
 
         let info = make_info(&p, "notes", AutomationWindowKind::Notes);
@@ -653,6 +669,7 @@ mod tests {
 
     #[test]
     fn focus_change_updates_all_entries() {
+        let _registry_guard = registry_guard();
         let p = test_prefix();
 
         let mut main = make_info(&p, "main", AutomationWindowKind::Main);
@@ -693,6 +710,7 @@ mod tests {
 
     #[test]
     fn visibility_update() {
+        let _registry_guard = registry_guard();
         let p = test_prefix();
 
         let info = make_info(&p, "ai", AutomationWindowKind::Ai);
@@ -722,6 +740,7 @@ mod tests {
 
     #[test]
     fn title_contains_resolution() {
+        let _registry_guard = registry_guard();
         let p = test_prefix();
 
         let mut info = make_info(&p, "agent_chat", AutomationWindowKind::AgentChatDetached);
@@ -748,6 +767,7 @@ mod tests {
 
     #[test]
     fn info_with_bounds_round_trips_through_registry() {
+        let _registry_guard = registry_guard();
         let p = test_prefix();
 
         let info = AutomationWindowInfo {
@@ -782,6 +802,7 @@ mod tests {
 
     #[test]
     fn list_returns_all_registered_windows() {
+        let _registry_guard = registry_guard();
         let p = test_prefix();
 
         upsert_automation_window(make_info(&p, "main", AutomationWindowKind::Main));
@@ -801,6 +822,7 @@ mod tests {
 
     #[test]
     fn upsert_overwrites_existing_entry() {
+        let _registry_guard = registry_guard();
         let p = test_prefix();
 
         let mut v1 = make_info(&p, "main", AutomationWindowKind::Main);
@@ -826,6 +848,7 @@ mod tests {
     /// semantic surface and ID, not the main window.
     #[test]
     fn targeted_get_elements_routes_notes_window() {
+        let _registry_guard = registry_guard();
         let p = test_prefix();
 
         let mut main = make_info(&p, "main", AutomationWindowKind::Main);
@@ -866,6 +889,7 @@ mod tests {
     /// window with its own ID and kind, suitable for screenshot routing.
     #[test]
     fn targeted_capture_screenshot_routes_detached_agent_chat() {
+        let _registry_guard = registry_guard();
         let p = test_prefix();
 
         let mut main = make_info(&p, "main", AutomationWindowKind::Main);
@@ -915,6 +939,7 @@ mod tests {
     /// standalone queries — a Notes or Agent Chat target resolves consistently.
     #[test]
     fn targeted_wait_for_uses_resolved_window_state() {
+        let _registry_guard = registry_guard();
         let p = test_prefix();
 
         let mut main = make_info(&p, "main", AutomationWindowKind::Main);
@@ -964,6 +989,7 @@ mod tests {
     /// resolve deterministically by lexicographic ID.
     #[test]
     fn kind_index_is_deterministic_regardless_of_insertion_order() {
+        let _registry_guard = registry_guard();
         let p = test_prefix();
 
         // Insert b before a — HashMap would be non-deterministic, but
@@ -1027,6 +1053,7 @@ mod tests {
     /// sorted by kind_rank then id.
     #[test]
     fn list_snapshot_is_sorted_by_kind_rank_then_id() {
+        let _registry_guard = registry_guard();
         let p = test_prefix();
 
         // Insert in reverse kind-rank order
@@ -1059,6 +1086,7 @@ mod tests {
 
     #[test]
     fn register_attached_popup_records_parent_identity() {
+        let _registry_guard = registry_guard();
         let p = test_prefix();
 
         let mut main = make_info(&p, "main", AutomationWindowKind::Main);
@@ -1093,6 +1121,7 @@ mod tests {
 
     #[test]
     fn register_attached_popup_fails_closed_on_unknown_parent() {
+        let _registry_guard = registry_guard();
         let p = test_prefix();
 
         let popup_id = format!("{p}:orphan-popup");
@@ -1119,6 +1148,7 @@ mod tests {
 
     #[test]
     fn register_attached_popup_without_parent_fails_closed() {
+        let _registry_guard = registry_guard();
         let p = test_prefix();
 
         let popup_id = format!("{p}:no-parent-popup");
@@ -1147,6 +1177,7 @@ mod tests {
 
     #[test]
     fn register_attached_popup_resolves_non_main_parent() {
+        let _registry_guard = registry_guard();
         let p = test_prefix();
 
         let mut agent_chat = make_info(&p, "agent_chat-1", AutomationWindowKind::AgentChatDetached);
@@ -1183,6 +1214,7 @@ mod tests {
 
     #[test]
     fn parent_identity_serializes_in_list_snapshot() {
+        let _registry_guard = registry_guard();
         let p = test_prefix();
 
         let mut main = make_info(&p, "main", AutomationWindowKind::Main);
@@ -1216,17 +1248,12 @@ mod tests {
 
     // -- Embedded AI surface -----------------------------------------------
 
-    // `ensure_embedded_ai_window` writes a fixed id `"ai"` so two test
-    // invocations would race on the global registry. Serialize with a
-    // dedicated mutex and always clean up to leave the registry untouched
-    // for other suites.
-    static EMBEDDED_AI_TEST_MUTEX: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    // `ensure_embedded_ai_window` writes a fixed id `"ai"`; the module-wide
+    // registry_guard() serializes it like every other registry test.
 
     #[test]
     fn ensure_embedded_ai_window_upserts_and_removes_ai_entry() {
-        let _guard = EMBEDDED_AI_TEST_MUTEX
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let _registry_guard = registry_guard();
 
         // Baseline: no `ai` entry.
         let before: Vec<AutomationWindowInfo> = list_automation_windows()
@@ -1271,9 +1298,7 @@ mod tests {
 
     #[test]
     fn ensure_embedded_ai_window_idempotent_activations_keep_one_entry() {
-        let _guard = EMBEDDED_AI_TEST_MUTEX
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let _registry_guard = registry_guard();
 
         ensure_embedded_ai_window(true);
         ensure_embedded_ai_window(true);

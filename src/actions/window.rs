@@ -2795,9 +2795,26 @@ mod actions_popup_origin_tests {
             ),
             "open_actions_window must register the actions-dialog runtime handle for simulateGpuiEvent"
         );
+        // The runtime-handle removal moved into the shared
+        // unregister_actions_dialog_automation_surfaces() helper; follow the
+        // indirection so the invariant (closing removes the handle) still holds.
         assert!(
-            close_body.contains("crate::windows::remove_runtime_window_handle(\"actions-dialog\")"),
-            "close_actions_window must remove the actions-dialog runtime handle"
+            close_body.contains("unregister_actions_dialog_automation_surfaces()"),
+            "close_actions_window must unregister the actions-dialog automation surfaces"
+        );
+        let helper_start = source
+            .find("fn unregister_actions_dialog_automation_surfaces()")
+            .expect("unregister_actions_dialog_automation_surfaces not found");
+        let helper_body = &source[helper_start..];
+        let helper_end = helper_body
+            .find("\n}")
+            .map(|i| i + 2)
+            .unwrap_or(helper_body.len());
+        let helper_body = &helper_body[..helper_end];
+        assert!(
+            helper_body
+                .contains("crate::windows::remove_runtime_window_handle(\"actions-dialog\")"),
+            "unregister_actions_dialog_automation_surfaces must remove the actions-dialog runtime handle"
         );
     }
 }

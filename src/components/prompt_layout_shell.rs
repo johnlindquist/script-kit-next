@@ -1693,10 +1693,18 @@ mod prompt_layout_shell_tests {
 
     #[test]
     fn builtin_special_surfaces_emit_expected_chrome_audit() {
+        // Kit Store migrated off its PromptFooter chrome exception onto native
+        // footer slots + shared main-view chrome (32a6b6586 "Move Kit Store
+        // footers to native slot"); both views now declare minimal audits.
         let kit_store = include_str!("../render_builtins/kit_store.rs");
         assert!(
-            kit_store.contains("PromptChromeAudit::exception("),
-            "kit_store.rs should classify as exception"
+            kit_store.contains("PromptChromeAudit::minimal(\"kit_store_browse\"")
+                && kit_store.contains("PromptChromeAudit::minimal(\"kit_store_installed\""),
+            "kit_store.rs should classify browse/installed as minimal"
+        );
+        assert!(
+            !kit_store.contains("PromptChromeAudit::exception("),
+            "kit_store.rs should no longer carry a chrome exception"
         );
 
         let process_manager = include_str!("../render_builtins/process_manager.rs");
@@ -1714,24 +1722,33 @@ mod prompt_layout_shell_tests {
 
     // ── Minimal-chrome source-audit tests for migrated builtins ──────
 
-    fn assert_minimal_surface_source(source: &str, surface: &str, require_header_padding: bool) {
+    /// Assert the migrated minimal builtin contract.
+    ///
+    /// Since 9ff5f45e9 ("Share built-in search chrome broadly") minimal
+    /// builtins route through the shared main-view chrome
+    /// (`render_main_view_chrome` + `render_builtin_main_input_header`),
+    /// which owns header padding and the divider — so local
+    /// `HEADER_PADDING_*` tokens and `SectionDivider` must NOT reappear.
+    /// The shared hint strip footer remains, and `PromptFooter` stays gone.
+    fn assert_minimal_surface_source(source: &str, surface: &str) {
         let render_fn_end = source.find("#[cfg(test)]").unwrap_or(source.len());
         let render_code = &source[..render_fn_end];
 
-        if require_header_padding {
-            assert!(
-                render_code.contains("HEADER_PADDING_X"),
-                "{surface} should use chrome HEADER_PADDING_X"
-            );
-            assert!(
-                render_code.contains("HEADER_PADDING_Y"),
-                "{surface} should use chrome HEADER_PADDING_Y"
-            );
-        }
-
         assert!(
-            render_code.contains("SectionDivider::new()"),
-            "{surface} should use SectionDivider for its subtle divider"
+            render_code.contains("render_main_view_chrome("),
+            "{surface} should route through the shared main-view chrome"
+        );
+        assert!(
+            render_code.contains("render_builtin_main_input_header("),
+            "{surface} should use the shared built-in main input header"
+        );
+        assert!(
+            !render_code.contains("HEADER_PADDING_X") && !render_code.contains("HEADER_PADDING_Y"),
+            "{surface} should not hardcode local header padding (the shared input header owns it)"
+        );
+        assert!(
+            !render_code.contains("SectionDivider::new()"),
+            "{surface} should use the shared main-view divider contract, not a local SectionDivider"
         );
         assert!(
             render_code.contains("render_simple_hint_strip("),
@@ -1760,15 +1777,16 @@ mod prompt_layout_shell_tests {
 
     /// Combined source-level and runtime-audit assertion for a minimal surface.
     ///
-    /// Checks both that the layout file uses `SectionDivider`, `render_simple_hint_strip`,
-    /// and shared header padding tokens, AND that the entry-point file declares
+    /// Checks both that the layout file routes through the shared main-view
+    /// chrome (`render_main_view_chrome` + `render_builtin_main_input_header`)
+    /// with the shared hint strip, AND that the entry-point file declares
     /// `PromptChromeAudit::minimal("<surface>", ...)`.
     macro_rules! assert_minimal_surface_file {
-        ($layout_path:literal, $entry_path:literal, $surface:literal, $require_header_padding:expr) => {{
+        ($layout_path:literal, $entry_path:literal, $surface:literal) => {{
             let layout_source = include_str!($layout_path);
             let entry_source = include_str!($entry_path);
             assert_surface_declares_runtime_audit(entry_source, $surface, "minimal");
-            assert_minimal_surface_source(layout_source, $surface, $require_header_padding);
+            assert_minimal_surface_source(layout_source, $surface);
         }};
     }
 
@@ -1783,7 +1801,7 @@ mod prompt_layout_shell_tests {
             !source.contains("PromptChromeAudit::exception("),
             "process_manager.rs should no longer emit an exception audit"
         );
-        assert_minimal_surface_source(source, "process_manager.rs", false);
+        assert_minimal_surface_source(source, "process_manager.rs");
     }
 
     #[test]
@@ -1799,12 +1817,14 @@ mod prompt_layout_shell_tests {
             source.contains("universal_prompt_hints_with_primary_label(\"Paste\")"),
             "clipboard.rs should use canonical universal prompt hints with Paste as primary"
         );
-        // Must route through the shared expanded-view scaffold
+        // Must route through the shared main-view chrome with the native
+        // footer slot (clipboard migrated off the expanded-view scaffold onto
+        // MainViewChrome; see tests/minimal_chrome_audit.rs and clipboard.rs's
+        // own clipboard_history_uses_shared_main_view_chrome audit).
         assert!(
-            source.contains("render_expanded_view_scaffold_with_hints(")
-                || source.contains("render_expanded_view_scaffold_with_footer(")
-                || source.contains("render_expanded_view_scaffold("),
-            "clipboard.rs should route through the shared expanded-view scaffold"
+            source.contains("render_main_view_chrome(")
+                && source.contains("main_window_footer_slot("),
+            "clipboard.rs should route through the shared main-view chrome with the native footer slot"
         );
         // No PromptFooter after migration
         assert!(
@@ -1855,18 +1875,18 @@ mod prompt_layout_shell_tests {
 
     /// Table-driven regression test covering all migrated minimal builtin surfaces.
     ///
-    /// Each entry asserts both source-level markers (SectionDivider, hint strip,
-    /// header padding tokens, no PromptFooter) and the presence of a runtime
-    /// `PromptChromeAudit::minimal("<surface>", ...)` declaration in the entry file.
-    /// When a surface drifts, the failure message names it explicitly.
+    /// Each entry asserts both source-level markers (shared main-view chrome,
+    /// shared input header, hint strip, no local divider/padding/PromptFooter)
+    /// and the presence of a runtime `PromptChromeAudit::minimal("<surface>", ...)`
+    /// declaration in the entry file. When a surface drifts, the failure
+    /// message names it explicitly.
     #[test]
     fn migrated_builtin_surfaces_match_minimal_contract() {
         // process_manager: layout and entry are in the same file
         assert_minimal_surface_file!(
             "../render_builtins/process_manager.rs",
             "../render_builtins/process_manager.rs",
-            "process_manager",
-            true
+            "process_manager"
         );
 
         // clipboard_history is now expanded (not minimal) — tested separately below.
@@ -2018,10 +2038,13 @@ mod prompt_layout_shell_tests {
         let render_fn_end = source.find("#[cfg(test)]").unwrap_or(source.len());
         let render_code = &source[..render_fn_end];
 
+        // app_launcher migrated from the minimal list prompt shell onto the
+        // shared main-view chrome (9ff5f45e9 "Share built-in search chrome
+        // broadly"); the keyboard hooks below must stay on the shell root.
         assert!(
-            render_code.contains("render_minimal_list_prompt_shell(")
-                || render_code.contains("render_minimal_list_prompt_shell_with_footer("),
-            "app_launcher should return the shared minimal list prompt shell wrapper"
+            render_code.contains("render_main_view_chrome(")
+                && render_code.contains("render_builtin_main_input_header("),
+            "app_launcher should return the shared main-view chrome wrapper"
         );
         assert!(
             render_code.contains(".key_context(\"app_launcher\")"),

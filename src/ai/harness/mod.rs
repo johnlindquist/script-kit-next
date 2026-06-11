@@ -2301,10 +2301,14 @@ mod tests {
         )));
     }
 
+    /// START_HERE.md was simplified ("Simplify seeded examples workspace"):
+    /// the scriptlet bundle section is gone and the launchpad now ships one
+    /// runnable script example.
     #[test]
-    fn authoring_guidance_block_mentions_scriptlet_bundle() {
+    fn authoring_guidance_block_routes_through_example_starter() {
         let block = build_tab_ai_artifact_authoring_guidance_block();
-        assert!(block.contains("### Scriptlet bundle"));
+        assert!(block.contains("# Script Kit Example Starter"));
+        assert!(block.contains("scripts/todo-app.ts"));
     }
 
     #[test]
@@ -2312,20 +2316,20 @@ mod tests {
         let block = build_tab_ai_artifact_authoring_guidance_block();
         assert!(block.contains("--- Script Kit artifact authoring guidance ---"));
         assert!(block.contains("--- end artifact authoring guidance ---"));
-        assert!(block.contains("### Scriptlet bundle"));
-        assert!(block.contains("scriptlets/starter.md"));
         assert!(block.contains("scripts/todo-app.ts"));
-        assert!(block.contains("`tool:<name>`"));
-        assert!(block.contains("_sk_*"));
+        assert!(block.contains("~/.scriptkit/plugins/main/scripts/"));
+        assert!(block.contains("skills/new-script/SKILL.md"));
     }
 
+    /// The command/helper/tool decision section was removed with the
+    /// simplified launchpad; the surviving load-bearing instruction is the
+    /// prompt API sequencing rule (no concurrent prompt calls).
     #[test]
-    fn start_here_includes_command_helper_tool_decision_section() {
+    fn start_here_includes_prompt_api_sequencing_rules() {
         let block = build_tab_ai_artifact_authoring_guidance_block();
-        assert!(block.contains("When the request says"));
-        assert!(block.contains("command"));
-        assert!(block.contains("helper"));
-        assert!(block.contains("tool"));
+        assert!(block.contains("Prompt API Sequencing"));
+        assert!(block.contains("Promise.all"));
+        assert!(block.contains("Do not start multiple prompts concurrently."));
     }
 
     #[test]
@@ -2335,13 +2339,15 @@ mod tests {
         assert!(!block.contains(".i.gemini.md"));
     }
 
+    /// Fast Picks were removed with the simplified launchpad; the concrete
+    /// paths that must survive are the authoring target, the copy-from
+    /// example, and the non-interactive verification command.
     #[test]
-    fn start_here_includes_fast_pick_examples_with_concrete_paths() {
+    fn start_here_includes_concrete_authoring_paths() {
         let block = build_tab_ai_artifact_authoring_guidance_block();
-        assert!(block.contains("Fast Picks"));
-        assert!(block.contains("~/.scriptkit/plugins/main/scripts/clipboard-cleanup.ts"));
-        assert!(block.contains("~/.scriptkit/plugins/main/scriptlets/snippets.md"));
-        assert!(block.contains("~/.scriptkit/plugins/main/agents/review-pr.claude.md"));
+        assert!(block.contains("~/.scriptkit/plugins/main/scripts/<name>.ts"));
+        assert!(block.contains("~/.scriptkit/plugins/examples/scripts/todo-app.ts"));
+        assert!(block.contains("SK_VERIFY=1"));
     }
 
     // =========================================================================
@@ -2554,9 +2560,11 @@ mod cleanup_contract_audits {
             source.contains(&compact("AiCommandType::GenerateScript =>")),
             "GenerateScript arm should exist in builtin execution"
         );
+        // The generate path was refactored into `AiGenerateBuiltinAction`,
+        // which derives an entry intent and submits it through the harness.
         assert!(
             source.contains(&compact(
-                "self.open_tab_ai_chat_with_entry_intent(Some(request), cx);"
+                "self.open_tab_ai_chat_with_entry_intent(intent, cx);"
             )),
             "GenerateScript should submit through the harness"
         );

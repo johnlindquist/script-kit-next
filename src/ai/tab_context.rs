@@ -4710,10 +4710,22 @@ mod tab_ai_apply_back_route_tests {
 
     #[test]
     fn quick_terminal_cmd_enter_routes_to_apply_back() {
+        // Cmd+Enter now goes through the shared dispatcher, which routes to
+        // the de-raced apply-back helper (after the portal-attach check).
         let source = std::fs::read_to_string("src/render_prompts/term.rs").expect("read term.rs");
         assert!(
-            source.contains("this.apply_tab_ai_result_from_terminal(entity.clone(), cx);"),
-            "QuickTerminalView must route Cmd+Enter through the de-raced apply-back helper"
+            source.contains("this.dispatch_quick_terminal_cmd_enter(entity.clone(), cx);"),
+            "QuickTerminalView must route Cmd+Enter through the shared dispatcher"
+        );
+        let dispatcher = std::fs::read_to_string("src/app_impl/agent_handoff/mod.rs")
+            .expect("read agent_handoff/mod.rs");
+        let start = dispatcher
+            .find("fn dispatch_quick_terminal_cmd_enter")
+            .expect("dispatch_quick_terminal_cmd_enter should exist");
+        let body = &dispatcher[start..(start + 2000).min(dispatcher.len())];
+        assert!(
+            body.contains("self.apply_tab_ai_result_from_terminal(entity, cx);"),
+            "dispatcher must route Cmd+Enter through the de-raced apply-back helper"
         );
     }
 

@@ -135,8 +135,35 @@ fn brain_db_path() -> PathBuf {
     if let Ok(path) = std::env::var("SCRIPT_KIT_TEST_BRAIN_DB_PATH") {
         return PathBuf::from(path);
     }
-    let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
-    home.join(".scriptkit").join("db").join("brain.sqlite")
+    // Unit tests must never bind the process-global connection to the real
+    // ~/.scriptkit brain db. `BRAIN_DB` is a `OnceLock`, so whichever test
+    // thread touches the brain first wins the path for the whole process —
+    // and brain-adjacent paths (input-history selection signals, launcher
+    // grouping, MCP resources) fire before `brain::tests::init_test_db` can
+    // point the connection at a temp file. Resolving every cfg(test) caller
+    // to one fresh-per-process temp path keeps all suite writers on the same
+    // isolated database and keeps test junk out of the developer's live db.
+    #[cfg(test)]
+    {
+        static TEST_BRAIN_DB_PATH: OnceLock<PathBuf> = OnceLock::new();
+        return TEST_BRAIN_DB_PATH
+            .get_or_init(|| {
+                let nanos = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map(|d| d.as_nanos())
+                    .unwrap_or_default();
+                std::env::temp_dir().join(format!(
+                    "script-kit-brain-test-{}-{nanos}.sqlite",
+                    std::process::id()
+                ))
+            })
+            .clone();
+    }
+    #[cfg(not(test))]
+    {
+        let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
+        home.join(".scriptkit").join("db").join("brain.sqlite")
+    }
 }
 
 fn ensure_brain_schema(conn: &Connection) -> Result<()> {

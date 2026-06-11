@@ -1095,8 +1095,11 @@ mod tests {
 
     #[test]
     fn popup_layout_above_shrinks_to_short_item_list() {
+        // Anchor far enough down that the available-height cap never bites:
+        // this test pins the shrink-to-content behavior (3 items => 3 rows,
+        // not INLINE_POPUP_MAX_VISIBLE_ROWS) independent of themed row height.
         let parent = gpui::Bounds {
-            origin: gpui::point(gpui::px(500.0), gpui::px(120.0)),
+            origin: gpui::point(gpui::px(500.0), gpui::px(500.0)),
             size: gpui::size(gpui::px(700.0), gpui::px(600.0)),
         };
         let snapshot = AgentChatMentionPopupSnapshot {

@@ -801,11 +801,15 @@ mod tests {
 
     #[test]
     fn free_text_for_search_strips_source_filter_anywhere() {
-        let mode = MenuSyntaxMode::from_input("meeting :n");
-        assert_eq!(free_text_for_search(&mode, "meeting :n"), "meeting");
+        // Source filters use postfix-colon heads (`n:`, `f:`) since the root
+        // source-filter stabilization; the old `:n` / `:f` prefix tokens are
+        // plain text now (see query.rs
+        // `legacy_colon_prefix_source_filter_is_not_committed_syntax`).
+        let mode = MenuSyntaxMode::from_input("meeting n:");
+        assert_eq!(free_text_for_search(&mode, "meeting n:"), "meeting");
 
-        let mode = MenuSyntaxMode::from_input(":f project");
-        assert_eq!(free_text_for_search(&mode, ":f project"), "project");
+        let mode = MenuSyntaxMode::from_input("f: project");
+        assert_eq!(free_text_for_search(&mode, "f: project"), "project");
     }
 
     #[test]
@@ -852,11 +856,15 @@ mod tests {
     }
 
     #[test]
-    fn prefix_span_highlights_plus_capture() {
+    fn prefix_span_highlights_semicolon_capture() {
+        // Grammar pivot (2026-04-26): `;` is the capture sigil. A partial
+        // known-target head (`;t` → todo) still gets the accent; the legacy
+        // `+` sigil no longer receives prefix chrome at all.
         assert_eq!(prefix_span_for_input(";todo Renew passport"), Some(0..5));
         assert_eq!(prefix_span_for_input(";note"), Some(0..5));
-        assert_eq!(prefix_span_for_input("+t"), Some(0..2));
+        assert_eq!(prefix_span_for_input(";t"), Some(0..2));
         assert_eq!(prefix_span_for_input(";"), Some(0..1));
+        assert_eq!(prefix_span_for_input("+t"), None);
     }
 
     #[test]
@@ -888,14 +896,21 @@ mod tests {
 
     #[test]
     fn prefix_span_highlights_registered_capture_target() {
+        // `;` (canonical sigil) and the `target:` keyword form get accent
+        // chrome for registered dynamic targets; the legacy `+` spelling
+        // lost its accent in the grammar pivot.
         let targets = vec!["github".to_string()];
         assert_eq!(
-            prefix_span_for_input_with_targets("+github issue", &targets),
+            prefix_span_for_input_with_targets(";github issue", &targets),
             Some(0..7)
         );
         assert_eq!(
             prefix_span_for_input_with_targets("github: issue", &targets),
             Some(0..7)
+        );
+        assert_eq!(
+            prefix_span_for_input_with_targets("+github issue", &targets),
+            None
         );
     }
 

@@ -822,11 +822,12 @@ fn agent_with_shortcut_alias_frecency() {
     let actions = get_script_context_actions(&agent);
     let ids: Vec<&str> = actions.iter().map(|a| a.id.as_str()).collect();
 
-    // Should have management actions for existing shortcut+alias
-    assert!(ids.contains(&"update_shortcut"));
-    assert!(ids.contains(&"remove_shortcut"));
-    assert!(ids.contains(&"update_alias"));
-    assert!(ids.contains(&"remove_alias"));
+    // Agents get no shortcut/alias preference actions
+    // (ScriptContextPreferenceActionPlan::AgentNoPreferenceActions).
+    assert!(!ids.contains(&"update_shortcut"));
+    assert!(!ids.contains(&"remove_shortcut"));
+    assert!(!ids.contains(&"update_alias"));
+    assert!(!ids.contains(&"remove_alias"));
     assert!(ids.contains(&"reset_ranking"));
 
     // Agent-specific actions

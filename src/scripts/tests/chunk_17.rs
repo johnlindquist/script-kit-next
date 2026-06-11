@@ -109,12 +109,14 @@ fn test_frecency_cache_invalidation_required() {
         None,
     );
 
-    // Extract recent items from correct results
+    // Extract recent items from correct results.
+    // The section header label is "Suggested" (icon carried separately);
+    // the old "SUGGESTED · N" spelling was retired with the chrome refresh.
     let mut correct_recent_items: Vec<&str> = vec![];
     let mut in_recent = false;
     for item in correct_grouped.iter() {
         match item {
-            GroupedListItem::SectionHeader(s, _) if s.starts_with("SUGGESTED") => in_recent = true,
+            GroupedListItem::SectionHeader(s, _) if s.starts_with("Suggested") => in_recent = true,
             GroupedListItem::SectionHeader(..) => in_recent = false,
             GroupedListItem::Item(idx) if in_recent => {
                 if let Some(r) = correct_results.get(*idx) {
@@ -130,7 +132,7 @@ fn test_frecency_cache_invalidation_required() {
     let mut in_recent_buggy = false;
     for item in buggy_grouped.iter() {
         match item {
-            GroupedListItem::SectionHeader(s, _) if s.starts_with("SUGGESTED") => {
+            GroupedListItem::SectionHeader(s, _) if s.starts_with("Suggested") => {
                 in_recent_buggy = true
             }
             GroupedListItem::SectionHeader(..) => in_recent_buggy = false,
@@ -286,7 +288,7 @@ fn test_frecency_change_invalidates_cache() {
 
     // Verify initial state: no SUGGESTED section (no frecency data)
     let initial_has_recent = initial_grouped.iter().any(
-        |item| matches!(item, GroupedListItem::SectionHeader(s, _) if s.starts_with("SUGGESTED")),
+        |item| matches!(item, GroupedListItem::SectionHeader(s, _) if s.starts_with("Suggested")),
     );
     assert!(
         !initial_has_recent,
@@ -317,7 +319,7 @@ fn test_frecency_change_invalidates_cache() {
     let mut in_recent = false;
     for item in second_grouped.iter() {
         match item {
-            GroupedListItem::SectionHeader(s, _) if s.starts_with("SUGGESTED") => in_recent = true,
+            GroupedListItem::SectionHeader(s, _) if s.starts_with("Suggested") => in_recent = true,
             GroupedListItem::SectionHeader(..) => in_recent = false,
             GroupedListItem::Item(idx) if in_recent => {
                 if let Some(r) = second_results.get(*idx) {

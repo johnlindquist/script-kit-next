@@ -363,40 +363,52 @@ pub struct AgentChatSetupSnapshot {
 /// Agent Chat-specific wait condition variants.
 ///
 /// These extend the existing `WaitDetailedCondition` enum for Agent Chat views.
+///
+/// WIRE CONTRACT: explicit `agent_chat*` tags — see the matching note on
+/// `WaitDetailedCondition` in batch_wait.rs. These tags must stay in sync
+/// with the TypeScript driver consumers (camelCase kept as an alias).
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase", tag = "type")]
 pub enum AgentChatWaitCondition {
     /// Wait until the Agent Chat view is ready (context bootstrapped, status idle).
+    #[serde(rename = "agent_chatReady", alias = "agentChatReady")]
     AgentChatReady,
 
     /// Wait until the mention/slash picker is open.
+    #[serde(rename = "agent_chatPickerOpen", alias = "agentChatPickerOpen")]
     AgentChatPickerOpen,
 
     /// Wait until the mention/slash picker is closed.
+    #[serde(rename = "agent_chatPickerClosed", alias = "agentChatPickerClosed")]
     AgentChatPickerClosed,
 
     /// Wait until a picker item has been accepted.
+    #[serde(rename = "agent_chatItemAccepted", alias = "agentChatItemAccepted")]
     AgentChatItemAccepted,
 
     /// Wait until the cursor reaches a specific character index.
+    #[serde(rename = "agent_chatCursorAt", alias = "agentChatCursorAt")]
     AgentChatCursorAt {
         /// Target character index.
         index: usize,
     },
 
     /// Wait until the Agent Chat thread reaches a specific status.
+    #[serde(rename = "agent_chatStatus", alias = "agentChatStatus")]
     AgentChatStatus {
         /// Target status: "idle", "streaming", "waitingForPermission", "error".
         status: String,
     },
 
     /// Wait until the Agent Chat input text matches an exact value.
+    #[serde(rename = "agent_chatInputMatch", alias = "agentChatInputMatch")]
     AgentChatInputMatch {
         /// Expected input text.
         text: String,
     },
 
     /// Wait until the Agent Chat input text contains a substring.
+    #[serde(rename = "agent_chatInputContains", alias = "agentChatInputContains")]
     AgentChatInputContains {
         /// Substring that must appear in the input.
         substring: String,

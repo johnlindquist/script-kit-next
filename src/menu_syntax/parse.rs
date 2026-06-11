@@ -334,13 +334,20 @@ mod tests {
     fn plain_text_returns_none() {
         assert_eq!(parse("git deploy"), MenuSyntaxParse::None);
         assert_eq!(parse("some search"), MenuSyntaxParse::None);
-        assert_eq!(parse("#work"), MenuSyntaxParse::None);
+        // NOTE: `#work` is intentionally NOT plain text anymore — since
+        // "Stabilize root source filters" (57c7696df) bare qualifier tokens
+        // (`#tag`, `type:script`, …) claim an AdvancedQuery anywhere in the
+        // input. See `prefix_ownership_conformance_matrix`.
         assert_eq!(parse("hello world!"), MenuSyntaxParse::None);
     }
 
     #[test]
     fn existing_triggers_return_none() {
-        for trigger in ["~", "~/Desktop", "/", "@", ">", "?"] {
+        // `>` is no longer in this list: after the 2026-04-26 grammar pivot
+        // dropped `!`, `>` became the menu-syntax argv/command sigil (bare
+        // `>` parses as Incomplete(BareArgvPrefix); see the bang_prefix_*
+        // tests below and mode::is_menu_syntax_for_true_on_incomplete_*).
+        for trigger in ["~", "~/Desktop", "/", "@", "?"] {
             let result = parse(trigger);
             assert_eq!(
                 result,
@@ -555,7 +562,10 @@ mod tests {
             ("todo: body", &[], "advanced-query"),
             ("unknown: body", &[], "none"),
             ("localhost:3000", &[], "none"),
-            ("#tag", &[], "none"),
+            // Bare `#tag` is claimed as an advanced query (tag predicate)
+            // since 57c7696df made qualifier tokens claim the filter query
+            // anywhere in the input.
+            ("#tag", &[], "advanced-query"),
             (";github body", &registered, "capture:github:prefix"),
             ("+github body", &registered, "capture:github:prefix"),
             ("github: body", &registered, "capture:github:keyword"),

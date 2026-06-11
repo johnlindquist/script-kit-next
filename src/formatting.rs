@@ -369,7 +369,10 @@ mod tests {
 
     #[test]
     fn test_absolute_unix_seconds_uses_readable_local_format() {
-        let formatted = format_absolute_unix_seconds(0);
+        // Rendering is in LOCAL time, so epoch 0 lands in 1969 west of UTC.
+        // Use a mid-1970 timestamp (200 days, in seconds) so "1970" holds in
+        // every timezone.
+        let formatted = format_absolute_unix_seconds(200 * 86_400);
 
         assert_ne!(formatted, "unknown time");
         assert!(formatted.contains("1970"));

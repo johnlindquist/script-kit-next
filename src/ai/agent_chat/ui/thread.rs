@@ -1268,16 +1268,26 @@ impl AgentChatThread {
         // Lexical + attention-signal retrieval over the brain store (notes,
         // past chat turns). Milliseconds on sqlite; hard-capped output so it
         // can never crowd a prompt. Empty recall stages nothing.
-        let brain_block = crate::brain::recall_context_block(input).ok().flatten();
-        if let Some(recall) = brain_block {
-            tracing::info!(
-                target: "script_kit::brain",
-                event = "agent_chat_brain_recall_staged",
-                chars = recall.len(),
-            );
-            blocks.push(ContentBlock::Text(TextContent::new(recall)));
+        //
+        // Skipped in unit-test builds: the brain caches one process-wide
+        // sqlite connection at first access, so test runs would otherwise
+        // read recall from (and write ask-signals into) the developer's real
+        // `~/.scriptkit/db/brain.sqlite`, making every turn-block count
+        // assertion nondeterministic. Brain recall behavior is covered by
+        // `crate::brain::tests` against `SCRIPT_KIT_TEST_BRAIN_DB_PATH`.
+        #[cfg(not(test))]
+        {
+            let brain_block = crate::brain::recall_context_block(input).ok().flatten();
+            if let Some(recall) = brain_block {
+                tracing::info!(
+                    target: "script_kit::brain",
+                    event = "agent_chat_brain_recall_staged",
+                    chars = recall.len(),
+                );
+                blocks.push(ContentBlock::Text(TextContent::new(recall)));
+            }
+            crate::brain::record_ask_signals(input);
         }
-        crate::brain::record_ask_signals(input);
 
         if let Some(turn) = self.take_pending_context_for_turn() {
             let receipt = turn.receipt;

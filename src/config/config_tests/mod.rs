@@ -3,6 +3,15 @@
 use super::*;
 use std::collections::HashMap;
 
+/// Serializes the tests that mutate the process-global `EDITOR` env var
+/// (`test_get_editor_from_env`, `test_get_editor_default`,
+/// `test_config_editor_priority`). `std::env::set_var` is process-wide, so
+/// without this lock those tests race each other and fail
+/// order-dependently — typically only in filtered runs (e.g.
+/// `cargo test config::tests`) where they get scheduled concurrently.
+/// Acquire with `unwrap_or_else(|e| e.into_inner())` to recover from poison.
+static EDITOR_ENV_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 #[test]
 fn test_default_config() {
     let config = Config::default();
@@ -613,6 +622,10 @@ fn test_get_editor_from_config() {
 
 #[test]
 fn test_get_editor_from_env() {
+    let _env_guard = EDITOR_ENV_TEST_LOCK
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
+
     // Save current EDITOR value
     let original_editor = std::env::var("EDITOR").ok();
 
@@ -674,6 +687,10 @@ fn test_get_editor_from_env() {
 
 #[test]
 fn test_get_editor_default() {
+    let _env_guard = EDITOR_ENV_TEST_LOCK
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
+
     // Save current EDITOR value
     let original_editor = std::env::var("EDITOR").ok();
 
@@ -734,6 +751,10 @@ fn test_get_editor_default() {
 
 #[test]
 fn test_config_editor_priority() {
+    let _env_guard = EDITOR_ENV_TEST_LOCK
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
+
     // Save current EDITOR value
     let original_editor = std::env::var("EDITOR").ok();
 
@@ -1360,7 +1381,10 @@ fn unified_search_defaults_enable_files_but_disable_promotion() {
     assert!(unified.agent_chat_history.enabled);
     assert_eq!(unified.agent_chat_history.max_results, 3);
     assert_eq!(unified.agent_chat_history.min_query_chars, 3);
-    assert!(!unified.clipboard_history.enabled);
+    // Clipboard history flipped to enabled-by-default in 4bff1ecac
+    // ("Benchmark root unified search responsiveness") along with the other
+    // passive sources; root visibility is still gated by builtIns.clipboardHistory.
+    assert!(unified.clipboard_history.enabled);
     assert_eq!(unified.clipboard_history.max_results, 3);
     assert_eq!(unified.clipboard_history.min_query_chars, 3);
     assert_eq!(unified.clipboard_history.scan_limit, 200);
@@ -1398,7 +1422,7 @@ fn unified_search_files_disabled_loads() {
 fn unified_search_agent_chat_history_disabled_loads() {
     let json = r#"{
         "hotkey": { "modifiers": ["meta"], "key": "Semicolon" },
-        "unifiedSearch": { "agent_chatHistory": { "enabled": false } }
+        "unifiedSearch": { "agentChatHistory": { "enabled": false } }
     }"#;
 
     let config: Config = serde_json::from_str(json).unwrap();
@@ -1414,7 +1438,7 @@ fn unified_search_agent_chat_history_options_are_sanitized() {
     let json = r#"{
         "hotkey": { "modifiers": ["meta"], "key": "Semicolon" },
         "unifiedSearch": {
-            "agent_chatHistory": {
+            "agentChatHistory": {
                 "maxResults": 99,
                 "minQueryChars": 1
             }

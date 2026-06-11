@@ -150,22 +150,25 @@ fn test_compute_match_indices_empty_query() {
 
 #[test]
 fn test_scriptlet_code_search_gated_by_length() {
-    // Code search only happens when query >= 4 chars and score == 0
-    // Use a name that doesn't contain any of the search characters
+    // The search relevance contract restricts scriptlet matching to visible
+    // or exact low-tier fields (name, file path, description, keyword, alias,
+    // shortcut, group, tool). Scriptlet source/code is intentionally NOT
+    // searched anymore, so a query that only occurs in the code body must
+    // never match — regardless of query length.
     let scriptlets = wrap_scriptlets(vec![test_scriptlet(
         "Utility",
         "ts",
         "contains_xyz_function()",
     )]);
 
-    // Short query - should NOT search code (even if it would match)
     let results = fuzzy_search_scriptlets(&scriptlets, "xyz");
-    assert!(results.is_empty()); // No match because "xyz" only in code, and query < 4 chars
+    assert!(results.is_empty());
 
-    // Long query >= 4 chars should search code when name doesn't match
     let results = fuzzy_search_scriptlets(&scriptlets, "xyz_f");
-    assert_eq!(results.len(), 1);
-    assert_eq!(results[0].score, 5); // Only code match score
+    assert!(
+        results.is_empty(),
+        "scriptlet code/body is intentionally not searched"
+    );
 }
 
 #[test]

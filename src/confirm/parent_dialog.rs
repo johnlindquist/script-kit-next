@@ -541,18 +541,14 @@ mod tests {
         );
     }
 
-    #[test]
-    fn prompt_handler_confirm_uses_shared_async_confirm_helper() {
-        let source = fs::read_to_string("src/prompt_handler/mod.rs")
-            .expect("Failed to read src/prompt_handler/mod.rs");
-        let normalized = normalize_ws(&source);
-
-        assert!(
-            normalized.contains("crate::confirm::confirm_with_parent_dialog(")
-                && !normalized.contains("crate::confirm::open_parent_confirm_dialog("),
-            "prompt_handler confirm should delegate to the shared async confirm helper"
-        );
-    }
+    // NOTE: prompt_handler's SDK confirm() route no longer uses
+    // confirm_with_parent_dialog — 192d7d647 ("Route SDK confirm through
+    // shared prompt") intentionally migrated it onto the shared in-window
+    // ConfirmPrompt surface via Self::open_confirm_prompt. That contract is
+    // locked by tests/source_audits/confirm_modal_shared_shell.rs::
+    // sdk_confirm_host_route_uses_shared_confirm_prompt_surface, so the old
+    // prompt_handler_confirm_uses_shared_async_confirm_helper audit here was
+    // removed instead of being rewritten into a duplicate.
 
     #[test]
     fn quit_action_and_builtin_quit_share_shutdown_cleanup() {

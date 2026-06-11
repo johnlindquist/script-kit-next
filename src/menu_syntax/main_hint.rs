@@ -518,7 +518,12 @@ fn capture_picker_companion_hint(
 
     let target = selected
         .and_then(|row| row.token.as_deref())
-        .and_then(|token| token.strip_prefix(';'))
+        .and_then(|token| {
+            // A4 capture rows spell the token postfix ("todo;"); accept the
+            // older prefix form (";todo") too so the companion hint can
+            // always name the selected target.
+            token.strip_suffix(';').or_else(|| token.strip_prefix(';'))
+        })
         .or(snapshot.target.as_deref());
 
     let mut rows = Vec::new();
@@ -858,10 +863,23 @@ fn display_capture_operation<'a>(
         return resolution.operation.as_str();
     };
     match resolution.canonical_target {
-        CanonicalCaptureTarget::Link | CanonicalCaptureTarget::Snippet => {
-            first_app_owned_operation_word(&invocation.body)
-                .unwrap_or_else(|| resolution.operation.as_str())
+        // Snippet: normalize_snippet_capture_invocation rewrites `body` to the
+        // post-`--` code, dropping the typed operation word — derive the
+        // operation from the same parser the executor uses so the hint and
+        // execution always agree.
+        CanonicalCaptureTarget::Snippet => {
+            match super::snippet_scriptlet::parse_snippet_scriptlet_capture(invocation) {
+                Ok(draft) => match draft.operation {
+                    super::snippet_scriptlet::SnippetScriptletOperation::Create => "create",
+                    super::snippet_scriptlet::SnippetScriptletOperation::Update => "update",
+                    super::snippet_scriptlet::SnippetScriptletOperation::Delete => "delete",
+                },
+                Err(_) => first_app_owned_operation_word(&invocation.body)
+                    .unwrap_or_else(|| resolution.operation.as_str()),
+            }
         }
+        CanonicalCaptureTarget::Link => first_app_owned_operation_word(&invocation.body)
+            .unwrap_or_else(|| resolution.operation.as_str()),
         CanonicalCaptureTarget::Note => first_app_owned_operation_word(&invocation.body)
             .unwrap_or_else(|| {
                 if note_has_selected_note_ref(invocation) {
@@ -2941,7 +2959,9 @@ mod tests {
     #[test]
     fn known_slug_picker_companion_keeps_examples() {
         // Sanity check: the no-match branch must not steal the existing
-        // ;todo/;cal/;note/;social/;link companion behavior.
+        // ;todo/;cal/;note/;social/;link behavior. A committed known target
+        // (`;todo`) is owned by the capture composer (A4 pivot), so the
+        // hint is the composer card — examples must survive regardless.
         let mode = MenuSyntaxMode::from_input(";todo");
         let snapshot = build_trigger_picker_snapshot(";todo", &TriggerPickerContext::default())
             .expect("todo snapshot");
@@ -2957,7 +2977,7 @@ mod tests {
         })
         .expect("hint");
 
-        assert_eq!(hint.title, "Todo inbox");
+        assert_eq!(hint.title, "Capture Todo inbox");
         assert!(!hint.examples.is_empty());
         assert!(hint.examples.iter().all(|e| e.starts_with(";todo")));
     }
@@ -3005,7 +3025,9 @@ mod tests {
         .expect("hint");
 
         assert_eq!(hint.kind, MenuSyntaxMainHintKind::CaptureComposer);
-        assert_eq!(hint.title, "Capture todo");
+        // Composer titles use the resolved target display title
+        // ("Todo inbox"), matching `reminder_hint_labels_todo_operation`.
+        assert_eq!(hint.title, "Capture Todo inbox");
         assert!(hint
             .rows
             .iter()
@@ -3125,7 +3147,8 @@ mod tests {
 
     #[test]
     fn unknown_command_warns_without_shell_semantics() {
-        let raw = "!important";
+        // `>` is the command sigil since the grammar pivot dropped `!`.
+        let raw = ">important";
         let mode = MenuSyntaxMode::from_input(raw);
         let hint = build_menu_syntax_main_hint(MenuSyntaxMainHintContext {
             raw_filter_text: raw,
@@ -3150,7 +3173,7 @@ mod tests {
 
     #[test]
     fn duplicate_command_warns() {
-        let raw = "!ps-dupe";
+        let raw = ">ps-dupe";
         let mode = MenuSyntaxMode::from_input(raw);
         let scripts = vec![script("Duplicate Script", Some("ps-dupe"))];
         let scriptlets = vec![scriptlet("Duplicate Scriptlet", Some("ps-dupe"))];
@@ -3249,7 +3272,9 @@ mod tests {
         .expect("hint");
 
         assert_eq!(hint.kind, MenuSyntaxMainHintKind::AdvancedQueryEmpty);
-        assert_eq!(hint.title, "No launcher items tagged #work");
+        // Head-aware empty copy: a `type:` predicate wins the title, so the
+        // zero-result state names the kind and the search words.
+        assert_eq!(hint.title, "No scripts match `nohit`.");
         assert!(hint.rows.iter().any(|row| {
             row.label == "Filters"
                 && row.value.contains("#work")
@@ -3260,17 +3285,20 @@ mod tests {
             .iter()
             .any(|row| row.label == "Search words" && row.value == "nohit"));
         assert!(hint
-            .secondary_hint
+            .primary_hint
             .as_deref()
             .unwrap()
-            .contains("Plain `#work` is normal launcher search"));
+            .contains("Remove `type:script`"));
     }
 
     #[test]
-    fn plain_top_level_tag_gets_no_hint() {
+    fn plain_top_level_tag_gets_tag_empty_hint() {
+        // Since 57c7696df bare `#work` claims an AdvancedQuery (tag
+        // predicate) at the top level, so a zero-result state renders the
+        // tag-specific empty hint instead of staying silent.
         let raw = "#work";
         let mode = MenuSyntaxMode::from_input(raw);
-        assert!(build_menu_syntax_main_hint(MenuSyntaxMainHintContext {
+        let hint = build_menu_syntax_main_hint(MenuSyntaxMainHintContext {
             raw_filter_text: raw,
             mode: &mode,
             popup_snapshot: None,
@@ -3280,7 +3308,9 @@ mod tests {
             advanced_query_results_empty: true,
             menu_syntax_ai_proposal: None,
         })
-        .is_none());
+        .expect("tag empty hint");
+        assert_eq!(hint.kind, MenuSyntaxMainHintKind::AdvancedQueryEmpty);
+        assert_eq!(hint.title, "No launcher items tagged #work");
     }
 
     #[test]
@@ -3380,7 +3410,7 @@ mod tests {
         // when no script registers a matching command.v1 handler. This pins
         // the `script_command_schema_for` dependency — a regression that
         // returned a stub spec by default would surface ghost rows.
-        let raw = "!unknown";
+        let raw = ">unknown";
         let mode = MenuSyntaxMode::from_input(raw);
         let hint = build_menu_syntax_main_hint(MenuSyntaxMainHintContext {
             raw_filter_text: raw,
@@ -3395,7 +3425,7 @@ mod tests {
         .expect("hint");
 
         assert_eq!(hint.kind, MenuSyntaxMainHintKind::CommandComposer);
-        // The default `Command !unknown` row remains, but no `env` /
+        // The default `Command >unknown` row remains, but no `env` /
         // `--dry-run` schema rows should exist.
         let labels: Vec<&str> = hint.rows.iter().map(|r| r.label.as_str()).collect();
         assert!(
@@ -3883,7 +3913,10 @@ mod tests {
 
     #[test]
     fn type_skill_applied_hint_has_non_empty_body_when_results_exist() {
-        let hint = applied_hint_for(":type:skill review");
+        // The colon filter picker closes once free search words follow the
+        // qualifier (b3f83a991), so the applied companion hint only exists
+        // for the popup-open state — the qualifier itself.
+        let hint = applied_hint_for(":type:skill");
 
         assert_eq!(hint.kind, MenuSyntaxMainHintKind::AdvancedQueryGuide);
         assert_eq!(hint.title, "Filtering to skills");
@@ -3894,10 +3927,7 @@ mod tests {
         assert!(hint.rows.iter().any(|row| {
             row.label == "Filters" && row.value.to_ascii_lowercase().contains("skill")
         }));
-        assert!(hint
-            .rows
-            .iter()
-            .any(|row| row.label == "Search words" && row.value == "review"));
+        assert!(hint.rows.iter().any(|row| row.label == "Recovery"));
     }
 
     #[test]
@@ -3910,13 +3940,25 @@ mod tests {
         );
         assert_eq!(hint.active_head.as_deref(), Some(":type:"));
         assert_eq!(hint.active_head_value_partial.as_deref(), Some("skill"));
-        assert!(hint.rows.iter().any(|row| row.label == "Filter"));
-        assert!(hint.rows.iter().any(|row| row.label == "Recovery"));
+        // Head-aware zero-result body: a Filters summary plus the search
+        // words, with the recovery copy carried by primary_hint.
+        assert!(hint.rows.iter().any(|row| row.label == "Filters"));
+        assert!(hint
+            .rows
+            .iter()
+            .any(|row| row.label == "Search words" && row.value == "review"));
+        assert!(hint
+            .primary_hint
+            .as_deref()
+            .unwrap()
+            .contains("Remove `type:skill`"));
     }
 
     #[test]
     fn kind_alias_type_filter_hint_has_non_empty_body() {
-        let hint = applied_hint_for(":kind:skill review");
+        // Popup-open state only — free words after the qualifier close the
+        // picker (b3f83a991), and the applied hint rides on the popup.
+        let hint = applied_hint_for(":kind:skill");
 
         assert_eq!(hint.kind, MenuSyntaxMainHintKind::AdvancedQueryGuide);
         assert_eq!(hint.title, "Filtering to skills");

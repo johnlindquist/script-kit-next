@@ -35,6 +35,15 @@ pub enum WaitNamedCondition {
 }
 
 /// Detailed conditions requiring additional parameters.
+///
+/// WIRE CONTRACT: the `AgentChat*` variants use explicit
+/// `agent_chat*`-prefixed tags (e.g. `agent_chatReady`) because every
+/// TypeScript consumer (scripts/devtools, scripts/agentic) and the
+/// `agent_chatStateResult` message family use that prefix. Commit
+/// 3019cb425 renamed the Rust variants `Acp*` -> `AgentChat*`, which
+/// silently changed the camelCase tags to `agentChatReady` and broke
+/// every live driver waitFor on these conditions; the explicit renames
+/// restore the consumer-expected shape (camelCase kept as an alias).
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase", tag = "type")]
 pub enum WaitDetailedCondition {
@@ -54,45 +63,63 @@ pub enum WaitDetailedCondition {
         state: StateMatchSpec,
     },
     /// Agent Chat-specific: wait until the Agent Chat view is ready (context bootstrapped, idle).
+    #[serde(rename = "agent_chatReady", alias = "agentChatReady")]
     AgentChatReady,
     /// Agent Chat-specific: wait until the mention/slash picker is open.
+    #[serde(rename = "agent_chatPickerOpen", alias = "agentChatPickerOpen")]
     AgentChatPickerOpen,
     /// Agent Chat-specific: wait until the mention/slash picker is closed.
+    #[serde(rename = "agent_chatPickerClosed", alias = "agentChatPickerClosed")]
     AgentChatPickerClosed,
     /// Agent Chat-specific: wait until a picker item has been accepted.
+    #[serde(rename = "agent_chatItemAccepted", alias = "agentChatItemAccepted")]
     AgentChatItemAccepted,
     /// Agent Chat-specific: wait until the cursor reaches a specific character index.
+    #[serde(rename = "agent_chatCursorAt", alias = "agentChatCursorAt")]
     AgentChatCursorAt {
         index: usize,
     },
     /// Agent Chat-specific: wait until the Agent Chat thread reaches a specific status.
+    #[serde(rename = "agent_chatStatus", alias = "agentChatStatus")]
     AgentChatStatus {
         status: String,
     },
     /// Agent Chat-specific: wait until the Agent Chat input text matches exactly.
+    #[serde(rename = "agent_chatInputMatch", alias = "agentChatInputMatch")]
     AgentChatInputMatch {
         text: String,
     },
     /// Agent Chat-specific: wait until the Agent Chat input text contains a substring.
+    #[serde(rename = "agent_chatInputContains", alias = "agentChatInputContains")]
     AgentChatInputContains {
         substring: String,
     },
     /// Agent Chat proof: wait until a picker item was accepted via a specific key.
+    #[serde(rename = "agent_chatAcceptedViaKey", alias = "agentChatAcceptedViaKey")]
     AgentChatAcceptedViaKey {
         /// The key that must have caused acceptance: `"enter"` or `"tab"`.
         key: String,
     },
     /// Agent Chat proof: wait until a picker item with a specific label was accepted.
+    #[serde(rename = "agent_chatAcceptedLabel", alias = "agentChatAcceptedLabel")]
     AgentChatAcceptedLabel {
         /// The label of the accepted item.
         label: String,
     },
     /// Agent Chat proof: wait until the cursor reaches a specific index after acceptance.
+    #[serde(
+        rename = "agent_chatAcceptedCursorAt",
+        alias = "agentChatAcceptedCursorAt"
+    )]
     AgentChatAcceptedCursorAt {
         /// Target cursor index after the accepted text was inserted.
         index: usize,
     },
     /// Agent Chat proof: wait until the input layout matches specific visibility metrics.
+    #[serde(
+        rename = "agent_chatInputLayoutMatch",
+        alias = "agentChatInputLayoutMatch"
+    )]
     AgentChatInputLayoutMatch {
         /// Visible window start (character index).
         #[serde(rename = "visibleStart")]
@@ -105,19 +132,36 @@ pub enum WaitDetailedCondition {
         cursor_in_window: usize,
     },
     /// Agent Chat setup: wait until the setup card is visible (status == "setup" with setup payload).
+    #[serde(rename = "agent_chatSetupVisible", alias = "agentChatSetupVisible")]
     AgentChatSetupVisible,
     /// Agent Chat setup: wait until the setup reason code matches.
+    #[serde(
+        rename = "agent_chatSetupReasonCode",
+        alias = "agentChatSetupReasonCode"
+    )]
     AgentChatSetupReasonCode {
         #[serde(rename = "reasonCode")]
         reason_code: String,
     },
     /// Agent Chat setup: wait until the setup primary action matches.
+    #[serde(
+        rename = "agent_chatSetupPrimaryAction",
+        alias = "agentChatSetupPrimaryAction"
+    )]
     AgentChatSetupPrimaryAction {
         action: crate::protocol::types::agent_chat_state::AgentChatSetupActionKind,
     },
     /// Agent Chat setup: wait until the setup agent picker overlay is open.
+    #[serde(
+        rename = "agent_chatSetupAgentPickerOpen",
+        alias = "agentChatSetupAgentPickerOpen"
+    )]
     AgentChatSetupAgentPickerOpen,
     /// Agent Chat setup: wait until the setup selected agent matches.
+    #[serde(
+        rename = "agent_chatSetupSelectedAgent",
+        alias = "agentChatSetupSelectedAgent"
+    )]
     AgentChatSetupSelectedAgent {
         #[serde(rename = "agentId")]
         agent_id: String,

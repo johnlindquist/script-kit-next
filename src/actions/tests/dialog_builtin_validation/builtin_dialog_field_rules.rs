@@ -1986,7 +1986,6 @@ mod from_dialog_builtin_action_validation_tests_12 {
                 "clip:clipboard_share",
                 "clip:clipboard_attach_to_ai",
                 "clip:clipboard_pin",
-                "clip:clipboard_save_snippet",
                 "clip:clipboard_save_file",
                 "clip:clipboard_delete",
                 "clip:clipboard_delete_multiple",
@@ -1996,6 +1995,15 @@ mod from_dialog_builtin_action_validation_tests_12 {
                 assert!(text_ids.contains(id), "text missing {}", id);
                 assert!(image_ids.contains(id), "image missing {}", id);
             }
+            // save_snippet is TEXT-only: images get clip:clipboard_ocr instead.
+            assert!(
+                text_ids.contains("clip:clipboard_save_snippet"),
+                "text missing clip:clipboard_save_snippet"
+            );
+            assert!(
+                !image_ids.contains("clip:clipboard_save_snippet"),
+                "save_snippet must be text-only"
+            );
         }
 
         // =========================================================================
@@ -3385,8 +3393,8 @@ mod from_dialog_builtin_action_validation_tests_12 {
                 .iter()
                 .find(|a| a.id == "clip:clipboard_paste")
                 .unwrap();
-            // Empty string still produces "Paste to " (the code uses the string as-is)
-            assert_eq!(paste.title, "Paste to ");
+            // Empty app name falls back to the generic "Paste to Active App" title
+            assert_eq!(paste.title, "Paste to Active App");
         }
 
         // =========================================================================
@@ -3777,7 +3785,7 @@ mod from_dialog_builtin_action_validation_tests_13 {
     //! - format_shortcut_hint edge cases (non-modifier intermediate parts, aliased modifiers)
     //! - ScriptInfo mutually-exclusive flags (agent vs script vs scriptlet vs builtin)
     //! - Scriptlet context custom action value/has_action propagation
-    //! - Clipboard save_snippet/save_file universality (text and image)
+    //! - Clipboard save_snippet (text-only) and save_file (text and image)
     //! - Path context copy_filename has no shortcut
     //! - Note switcher description ellipsis boundary (exactly 60 chars)
     //! - Chat context multi-model ordering and checkmark logic
@@ -4061,7 +4069,7 @@ mod from_dialog_builtin_action_validation_tests_13 {
         }
 
         // =========================================================================
-        // 4. Clipboard save_snippet/save_file present for both text and image
+        // 4. Clipboard save_snippet (text-only) and save_file (text and image)
         // =========================================================================
 
         fn make_text_entry() -> ClipboardEntryInfo {
@@ -4101,11 +4109,13 @@ mod from_dialog_builtin_action_validation_tests_13 {
         }
 
         #[test]
-        fn cat04_image_has_save_snippet() {
+        fn cat04_image_has_no_save_snippet() {
+            // save_snippet exists only for TEXT entries; image entries get ocr instead.
             let actions = get_clipboard_history_context_actions(&make_image_entry());
-            assert!(actions
+            assert!(!actions
                 .iter()
                 .any(|a| a.id == "clip:clipboard_save_snippet"));
+            assert!(actions.iter().any(|a| a.id == "clip:clipboard_ocr"));
         }
 
         #[test]
@@ -5778,7 +5788,7 @@ mod from_dialog_builtin_action_validation_tests_14 {
     //! - Action with_shortcut_opt Some vs None chaining
     //! - CommandBarConfig notes_style field completeness
     //! - Clipboard destructive ordering invariant across pin states
-    //! - Global actions always empty
+    //! - Global actions seeded with core ops (reload_scripts, settings, view_logs)
 
     #[cfg(test)]
     mod tests {
@@ -7212,13 +7222,23 @@ mod from_dialog_builtin_action_validation_tests_14 {
         }
 
         // =========================================================================
-        // 20. Global actions always empty
+        // 20. Global actions are seeded with core ops
         // =========================================================================
 
         #[test]
-        fn cat20_global_actions_empty() {
+        fn cat20_global_actions_seeded() {
+            // get_global_actions() is seeded (reload_scripts, settings, view_logs)
+            // plus config-dependent prompt-export/handoff actions, so we assert the
+            // core ids rather than emptiness or an exact total count.
             let actions = get_global_actions();
-            assert!(actions.is_empty());
+            let ids = action_ids(&actions);
+            for core in ["reload_scripts", "settings", "view_logs"] {
+                assert!(
+                    ids.contains(&core.to_string()),
+                    "global actions missing {}",
+                    core
+                );
+            }
         }
 
         // =========================================================================
@@ -8807,8 +8827,9 @@ mod from_dialog_builtin_action_validation_tests_15 {
             let actions = get_clipboard_history_context_actions(&entry);
             // paste, copy, paste_keep_open, share, attach, quick_look,
             // open_with, annotate_cleanshot, upload_cleanshot,
-            // pin, ocr, save_snippet, save_file, delete, delete_multiple, delete_all = 16
-            assert_eq!(actions.len(), 16, "Image on macOS: {}", actions.len());
+            // pin, ocr, save_file, delete, delete_multiple, delete_all = 15
+            // (save_snippet is text-only; images get ocr instead)
+            assert_eq!(actions.len(), 15, "Image on macOS: {}", actions.len());
         }
 
         #[cfg(target_os = "macos")]
@@ -9334,8 +9355,8 @@ mod from_dialog_builtin_action_validation_tests_15 {
                 frontmost_app_name: Some(String::new()),
             };
             let actions = get_clipboard_history_context_actions(&entry);
-            // Some("") → "Paste to " (empty name)
-            assert_eq!(actions[0].title, "Paste to ");
+            // Some("") falls back to the generic "Paste to Active App" title
+            assert_eq!(actions[0].title, "Paste to Active App");
         }
 
         // =========================================================================
@@ -9682,16 +9703,18 @@ mod from_dialog_builtin_action_validation_tests_15 {
         fn cat27_no_shortcut_no_alias_count() {
             let s = ScriptInfo::new("test", "/p");
             let actions = get_script_context_actions(&s);
-            // + toggle_info + toggle_favorite was added for script/scriptlet/agent items with path
-            // + delete_script was added for is_script=true items
-            assert_eq!(actions.len(), 12);
+            // run_script, toggle_info, add_shortcut, add_alias, toggle_favorite, edit_script,
+            // view_logs, reveal_in_finder, file:open_in_quick_terminal, copy_path, copy_content,
+            // copy_deeplink, delete_script = 13
+            assert_eq!(actions.len(), 13);
         }
 
         #[test]
         fn cat27_with_shortcut_count() {
             let s = ScriptInfo::with_shortcut("test", "/p", Some("cmd+t".into()));
             let actions = get_script_context_actions(&s);
-            assert_eq!(actions.len(), 13);
+            // base 13 with add_shortcut replaced by update_shortcut + remove_shortcut = 14
+            assert_eq!(actions.len(), 14);
         }
 
         #[test]
@@ -9703,15 +9726,16 @@ mod from_dialog_builtin_action_validation_tests_15 {
                 Some("ts".into()),
             );
             let actions = get_script_context_actions(&s);
-            assert_eq!(actions.len(), 14);
+            // base 13 + shortcut pair swap (+1) + alias pair swap (+1) = 15
+            assert_eq!(actions.len(), 15);
         }
 
         #[test]
         fn cat27_frecency_adds_one() {
             let s = ScriptInfo::new("test", "/p").with_frecency(true, Some("/f".into()));
             let actions = get_script_context_actions(&s);
-            // 12 + 1 (reset_ranking) = 13
-            assert_eq!(actions.len(), 13);
+            // 13 + 1 (reset_ranking) = 14
+            assert_eq!(actions.len(), 14);
         }
 
         // =========================================================================
@@ -9992,7 +10016,7 @@ mod from_dialog_builtin_action_validation_tests_16 {
     //! - Scriptlet context with custom actions ordering relative to built-ins
     //! - Clipboard share/attach_to_ai universality across content types
     //! - Agent context copy_content description substring
-    //! - Path context open_in_quick_terminal/open_in_editor shortcuts
+    //! - Path context open_in_quick_terminal (no shortcut) / open_in_editor shortcut
     //! - File context shortcut consistency between file and directory
     //! - Notes command bar section count per flag combo
     //! - Chat context continue_in_chat shortcut value
@@ -10328,11 +10352,11 @@ mod from_dialog_builtin_action_validation_tests_16 {
         }
 
         // =========================================================================
-        // cat04: Path context shortcut values for open_in_quick_terminal and open_in_editor
+        // cat04: Path context shortcuts: open_in_quick_terminal has none, open_in_editor has ⌘E
         // =========================================================================
 
         #[test]
-        fn cat04_path_open_in_quick_terminal_shortcut() {
+        fn cat04_path_open_in_quick_terminal_has_no_shortcut() {
             let info = PathInfo {
                 name: "project".into(),
                 path: "/home/project".into(),
@@ -10343,7 +10367,8 @@ mod from_dialog_builtin_action_validation_tests_16 {
                 .iter()
                 .find(|a| a.id == "file:open_in_quick_terminal")
                 .unwrap();
-            assert_eq!(terminal.shortcut.as_deref(), Some("⌘T"));
+            // file:open_in_quick_terminal ships without a shortcut.
+            assert_eq!(terminal.shortcut.as_deref(), None);
         }
 
         #[test]
@@ -11996,8 +12021,9 @@ mod from_dialog_builtin_action_validation_tests_17 {
             let script = ScriptInfo::new("test", "/path/test.ts");
             let actions = get_script_context_actions(&script);
             // run, toggle_info, add_shortcut, add_alias, edit_script, view_logs, toggle_favorite,
-            // reveal_in_finder, copy_path, copy_content, copy_deeplink, delete_script = 12
-            assert_eq!(actions.len(), 12);
+            // reveal_in_finder, file:open_in_quick_terminal, copy_path, copy_content,
+            // copy_deeplink, delete_script = 13
+            assert_eq!(actions.len(), 13);
         }
 
         #[test]
@@ -12005,8 +12031,9 @@ mod from_dialog_builtin_action_validation_tests_17 {
             let script = ScriptInfo::with_shortcut("test", "/path/test.ts", Some("cmd+t".into()));
             let actions = get_script_context_actions(&script);
             // run, toggle_info, update_shortcut, remove_shortcut, add_alias, edit_script, view_logs,
-            // toggle_favorite, reveal_in_finder, copy_path, copy_content, copy_deeplink, delete_script = 13
-            assert_eq!(actions.len(), 13);
+            // toggle_favorite, reveal_in_finder, file:open_in_quick_terminal, copy_path,
+            // copy_content, copy_deeplink, delete_script = 14
+            assert_eq!(actions.len(), 14);
         }
 
         #[test]
@@ -12018,9 +12045,11 @@ mod from_dialog_builtin_action_validation_tests_17 {
                 Some("ts".into()),
             );
             let actions = get_script_context_actions(&script);
-            // run, toggle_info, update_shortcut, remove_shortcut, update_alias, remove_alias, edit_script,
-            // view_logs, toggle_favorite, reveal_in_finder, copy_path, copy_content, copy_deeplink, delete_script = 14
-            assert_eq!(actions.len(), 14);
+            // run, toggle_info, update_shortcut, remove_shortcut, update_alias, remove_alias,
+            // edit_script, view_logs, toggle_favorite, reveal_in_finder,
+            // file:open_in_quick_terminal, copy_path, copy_content, copy_deeplink,
+            // delete_script = 15
+            assert_eq!(actions.len(), 15);
         }
 
         #[test]
@@ -12035,9 +12064,10 @@ mod from_dialog_builtin_action_validation_tests_17 {
         fn cat01_scriptlet_no_shortcut_count() {
             let scriptlet = ScriptInfo::scriptlet("Open URL", "/path/url.md", None, None);
             let actions = get_script_context_actions(&scriptlet);
-            // run, toggle_info, add_shortcut, add_alias, edit_scriptlet, toggle_favorite, reveal_scriptlet_in_finder,
-            // copy_scriptlet_path, copy_content, copy_deeplink = 10
-            assert_eq!(actions.len(), 10);
+            // run, toggle_info, add_shortcut, add_alias, edit_scriptlet, toggle_favorite,
+            // reveal_scriptlet_in_finder, file:open_in_quick_terminal, copy_scriptlet_path,
+            // copy_content, copy_deeplink = 11
+            assert_eq!(actions.len(), 11);
         }
 
         #[test]
@@ -12045,8 +12075,8 @@ mod from_dialog_builtin_action_validation_tests_17 {
             let script = ScriptInfo::new("test", "/path/test.ts")
                 .with_frecency(true, Some("/path/test.ts".into()));
             let actions = get_script_context_actions(&script);
-            // base 12 + reset_ranking = 13
-            assert_eq!(actions.len(), 13);
+            // base 13 + reset_ranking = 14
+            assert_eq!(actions.len(), 14);
         }
 
         // ================================================================
@@ -12825,8 +12855,9 @@ mod from_dialog_builtin_action_validation_tests_17 {
             let actions = get_clipboard_history_context_actions(&entry);
             // paste, copy, paste_keep_open, share, attach_to_ai, quick_look,
             // open_with, annotate_cleanshot, upload_cleanshot, pin, ocr,
-            // save_snippet, save_file, delete, delete_multiple, delete_all = 16
-            assert_eq!(actions.len(), 16);
+            // save_file, delete, delete_multiple, delete_all = 15
+            // (save_snippet is text-only; images get ocr instead)
+            assert_eq!(actions.len(), 15);
         }
 
         // ================================================================
@@ -14498,7 +14529,7 @@ mod from_dialog_builtin_action_validation_tests_18 {
         }
 
         #[test]
-        fn cat11_open_in_quick_terminal_shortcut() {
+        fn cat11_open_in_quick_terminal_has_no_shortcut() {
             let path = PathInfo {
                 path: "/Users/test/Documents".to_string(),
                 name: "Documents".to_string(),
@@ -14509,7 +14540,8 @@ mod from_dialog_builtin_action_validation_tests_18 {
                 .iter()
                 .find(|a| a.id == "file:open_in_quick_terminal")
                 .unwrap();
-            assert_eq!(action.shortcut.as_ref().unwrap(), "⌘T");
+            // file:open_in_quick_terminal ships without a shortcut.
+            assert_eq!(action.shortcut, None);
         }
 
         // =========================================================================
@@ -15336,12 +15368,13 @@ mod from_dialog_builtin_action_validation_tests_18 {
             };
             let actions = get_notes_command_bar_actions(&info);
             // Notes: new_note, duplicate_note, delete_note, browse_notes
-            // Edit: find_in_note, format
-            // Copy: copy_note_as, copy_deeplink, create_quicklink
+            // Edit: find_in_note, format, move_list_item_up, move_list_item_down
+            // Copy: copy_note_as, copy_deeplink, create_quicklink, copy_backlinks
             // Export: export
             // AI: send_to_ai
             // Settings: enable_auto_sizing
-            assert_eq!(actions.len(), 12);
+            // = 15 (move_list_item_up/down + copy_backlinks were added for active notes)
+            assert_eq!(actions.len(), 15);
         }
 
         #[test]
@@ -15352,7 +15385,8 @@ mod from_dialog_builtin_action_validation_tests_18 {
                 auto_sizing_enabled: true,
             };
             let actions = get_notes_command_bar_actions(&info);
-            assert_eq!(actions.len(), 11);
+            // Full-feature set (15) minus enable_auto_sizing = 14
+            assert_eq!(actions.len(), 14);
             assert!(!actions.iter().any(|a| a.id == "enable_auto_sizing"));
         }
 
@@ -15757,8 +15791,8 @@ mod from_dialog_builtin_action_validation_tests_19 {
                 .iter()
                 .find(|a| a.id == "clip:clipboard_paste")
                 .unwrap();
-            // Empty string still formats as "Paste to "
-            assert_eq!(paste.title, "Paste to ");
+            // Empty string falls back to the generic "Paste to Active App" title
+            assert_eq!(paste.title, "Paste to Active App");
         }
 
         // =========================================================================

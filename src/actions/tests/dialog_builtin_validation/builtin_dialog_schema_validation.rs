@@ -1060,7 +1060,8 @@ mod from_dialog_builtin_action_validation_tests {
             ScriptInfo::with_action_verb("Window Switcher", "builtin:windows", false, "Switch to");
         let actions = get_script_context_actions(&script);
         let run = find_action(&actions, "run_script").unwrap();
-        assert_eq!(run.title, "Switch To");
+        // Builtins preserve the catalog verb exactly (no title-casing).
+        assert_eq!(run.title, "Switch to");
     }
 
     #[test]
@@ -2739,14 +2740,19 @@ mod from_dialog_builtin_action_validation_tests_2 {
     }
 
     // =========================================================================
-    // 20. Global actions always empty
+    // 20. Global actions are seeded with GlobalOps entries
     // =========================================================================
 
     #[test]
-    fn global_actions_always_returns_empty() {
+    fn global_actions_always_seeded_with_global_ops() {
         use super::builders::get_global_actions;
         let actions = get_global_actions();
-        assert!(actions.is_empty(), "Global actions should always be empty");
+        let ids: Vec<&str> = actions.iter().map(|a| a.id.as_str()).collect();
+        // get_global_actions() is seeded (never empty): reload_scripts, settings,
+        // view_logs, plus config-dependent prompt-export/handoff actions.
+        assert!(ids.contains(&"reload_scripts"));
+        assert!(ids.contains(&"settings"));
+        assert!(ids.contains(&"view_logs"));
     }
 
     // =========================================================================
@@ -4283,7 +4289,7 @@ mod from_dialog_builtin_action_validation_tests_3 {
     // --- merged from part_03.rs ---
 
     #[test]
-    fn agent_with_shortcut_shows_update_not_add() {
+    fn agent_with_shortcut_has_no_shortcut_preference_actions() {
         let mut agent = ScriptInfo::new("my-agent", "/path/agent.md");
         agent.is_agent = true;
         agent.is_script = false;
@@ -4291,7 +4297,9 @@ mod from_dialog_builtin_action_validation_tests_3 {
 
         let actions = get_script_context_actions(&agent);
         let ids: HashSet<&str> = action_ids(&actions).into_iter().collect();
-        assert!(ids.contains("update_shortcut"));
+        // Agents never get shortcut preference actions, even with a shortcut set.
+        assert!(!ids.contains("update_shortcut"));
+        assert!(!ids.contains("remove_shortcut"));
         assert!(!ids.contains("add_shortcut"));
         assert!(ids.contains("edit_script")); // agent gets edit_script with title "Edit Agent"
     }
@@ -5756,40 +5764,43 @@ mod from_dialog_builtin_action_validation_tests_4 {
     // =========================================================================
 
     #[test]
-    fn agent_with_shortcut_has_update_and_remove_shortcut() {
+    fn agent_with_shortcut_has_no_shortcut_actions() {
         let mut agent = ScriptInfo::new("My Agent", "/path/to/agent.md");
         agent.is_script = false;
         agent.is_agent = true;
         agent.shortcut = Some("cmd+a".to_string());
         let actions = get_script_context_actions(&agent);
         let ids = action_ids(&actions);
-        assert!(ids.contains(&"update_shortcut"));
-        assert!(ids.contains(&"remove_shortcut"));
+        // Agents never get shortcut preference actions, even with a shortcut set.
+        assert!(!ids.contains(&"update_shortcut"));
+        assert!(!ids.contains(&"remove_shortcut"));
         assert!(!ids.contains(&"add_shortcut"));
     }
 
     #[test]
-    fn agent_without_shortcut_has_add_shortcut() {
+    fn agent_without_shortcut_has_no_shortcut_actions() {
         let mut agent = ScriptInfo::new("My Agent", "/path/to/agent.md");
         agent.is_script = false;
         agent.is_agent = true;
         let actions = get_script_context_actions(&agent);
         let ids = action_ids(&actions);
-        assert!(ids.contains(&"add_shortcut"));
+        // Agents never get shortcut preference actions.
+        assert!(!ids.contains(&"add_shortcut"));
         assert!(!ids.contains(&"update_shortcut"));
         assert!(!ids.contains(&"remove_shortcut"));
     }
 
     #[test]
-    fn agent_with_alias_has_update_and_remove_alias() {
+    fn agent_with_alias_has_no_alias_actions() {
         let mut agent = ScriptInfo::new("My Agent", "/path/to/agent.md");
         agent.is_script = false;
         agent.is_agent = true;
         agent.alias = Some("ag".to_string());
         let actions = get_script_context_actions(&agent);
         let ids = action_ids(&actions);
-        assert!(ids.contains(&"update_alias"));
-        assert!(ids.contains(&"remove_alias"));
+        // Agents never get alias preference actions, even with an alias set.
+        assert!(!ids.contains(&"update_alias"));
+        assert!(!ids.contains(&"remove_alias"));
         assert!(!ids.contains(&"add_alias"));
     }
 
@@ -7030,8 +7041,8 @@ mod from_dialog_builtin_action_validation_tests_4 {
         };
         let actions = get_clipboard_history_context_actions(&entry);
         let paste = find_action(&actions, "clip:clipboard_paste").unwrap();
-        // Even empty string gets formatted with "Paste to "
-        assert_eq!(paste.title, "Paste to ");
+        // Empty/whitespace app names fall back to the generic title.
+        assert_eq!(paste.title, "Paste to Active App");
     }
 
     // --- merged from part_04.rs ---
@@ -8429,14 +8440,15 @@ mod from_dialog_builtin_action_validation_tests_5 {
                 frontmost_app_name: None,
             };
             let actions = get_clipboard_history_context_actions(&entry);
+            // Images do NOT get save_snippet (text-only); they get ocr instead.
             // On macOS: paste, copy, paste_keep_open, share, attach_ai, quick_look,
             //           open_with, annotate_cleanshot, upload_cleanshot, unpin,
-            //           ocr, save_snippet, save_file, delete, delete_multiple, delete_all = 16
+            //           ocr, save_file, delete, delete_multiple, delete_all = 15
             #[cfg(target_os = "macos")]
-            assert_eq!(actions.len(), 16);
-            // Non-macOS: no quick_look, open_with, annotate_cleanshot, upload_cleanshot = 12
+            assert_eq!(actions.len(), 15);
+            // Non-macOS: no quick_look, open_with, annotate_cleanshot, upload_cleanshot = 11
             #[cfg(not(target_os = "macos"))]
-            assert_eq!(actions.len(), 12);
+            assert_eq!(actions.len(), 11);
         }
 
         // =========================================================================
@@ -8878,11 +8890,18 @@ mod from_dialog_builtin_action_validation_tests_5 {
             let actions_standard = get_script_context_actions(&script);
             let actions_custom = get_scriptlet_context_actions_with_custom(&script, None);
 
-            // Standard script context now includes toggle_favorite for scriptlets, while
-            // the scriptlet-custom builder omits it when no custom actions are provided.
+            // Standard script context now includes toggle_info, toggle_favorite, and
+            // file:open_in_quick_terminal for scriptlets, while the scriptlet-custom
+            // builder (get_scriptlet_context_actions_with_custom) omits all three.
+            // Filter those known extras so the comparison stays meaningful for the
+            // shared scriptlet action set.
             let mut ids_standard = action_ids(&actions_standard);
             let ids_custom = action_ids(&actions_custom);
-            ids_standard.retain(|id| *id != "toggle_favorite" && *id != "toggle_info");
+            ids_standard.retain(|id| {
+                *id != "toggle_favorite"
+                    && *id != "toggle_info"
+                    && *id != "file:open_in_quick_terminal"
+            });
             assert_eq!(ids_standard, ids_custom);
         }
 
@@ -8894,7 +8913,11 @@ mod from_dialog_builtin_action_validation_tests_5 {
             let actions_custom = get_scriptlet_context_actions_with_custom(&script, None);
             let mut ids_standard = action_ids(&actions_standard);
             let ids_custom = action_ids(&actions_custom);
-            ids_standard.retain(|id| *id != "toggle_favorite" && *id != "toggle_info");
+            ids_standard.retain(|id| {
+                *id != "toggle_favorite"
+                    && *id != "toggle_info"
+                    && *id != "file:open_in_quick_terminal"
+            });
             assert_eq!(ids_standard, ids_custom);
         }
 
@@ -8906,7 +8929,11 @@ mod from_dialog_builtin_action_validation_tests_5 {
             let actions_custom = get_scriptlet_context_actions_with_custom(&script, None);
             let mut ids_standard = action_ids(&actions_standard);
             let ids_custom = action_ids(&actions_custom);
-            ids_standard.retain(|id| *id != "toggle_favorite" && *id != "toggle_info");
+            ids_standard.retain(|id| {
+                *id != "toggle_favorite"
+                    && *id != "toggle_info"
+                    && *id != "file:open_in_quick_terminal"
+            });
             assert_eq!(ids_standard, ids_custom);
         }
 
@@ -8918,7 +8945,11 @@ mod from_dialog_builtin_action_validation_tests_5 {
             let actions_custom = get_scriptlet_context_actions_with_custom(&script, None);
             let mut ids_standard = action_ids(&actions_standard);
             let ids_custom = action_ids(&actions_custom);
-            ids_standard.retain(|id| *id != "toggle_favorite" && *id != "toggle_info");
+            ids_standard.retain(|id| {
+                *id != "toggle_favorite"
+                    && *id != "toggle_info"
+                    && *id != "file:open_in_quick_terminal"
+            });
             assert_eq!(ids_standard, ids_custom);
         }
 
@@ -9676,7 +9707,8 @@ mod from_dialog_builtin_action_validation_tests_5 {
             };
             let actions = get_file_context_actions(&file_info);
             // reveal_in_finder no longer has a shortcut (⌘↵ reserved for AI).
-            let shortcut_exempt = ["file:reveal_in_finder"];
+            // open_in_quick_terminal ships without a shortcut.
+            let shortcut_exempt = ["file:reveal_in_finder", "file:open_in_quick_terminal"];
             for action in &actions {
                 if shortcut_exempt.contains(&action.id.as_str()) {
                     continue;
@@ -10190,12 +10222,18 @@ mod from_dialog_builtin_action_validation_tests_5 {
         }
 
         // =========================================================================
-        // 24. Global actions always empty
+        // 24. Global actions are seeded with GlobalOps entries
         // =========================================================================
 
         #[test]
-        fn global_actions_empty() {
-            assert!(get_global_actions().is_empty());
+        fn global_actions_seeded() {
+            // get_global_actions() is seeded (never empty): reload_scripts, settings,
+            // view_logs, plus config-dependent prompt-export/handoff actions.
+            let actions = get_global_actions();
+            let ids: Vec<&str> = actions.iter().map(|a| a.id.as_str()).collect();
+            assert!(ids.contains(&"reload_scripts"));
+            assert!(ids.contains(&"settings"));
+            assert!(ids.contains(&"view_logs"));
         }
 
         // =========================================================================
@@ -10426,7 +10464,8 @@ mod from_dialog_builtin_action_validation_tests_6 {
             let info = ScriptInfo::with_action_verb("Test", "/path/test.ts", true, "Execute");
             let actions = get_script_context_actions(&info);
             let desc = actions[0].description.as_ref().unwrap();
-            assert_eq!(desc, "Execute this item");
+            // is_script fixture → "{verb} this script"
+            assert_eq!(desc, "Execute this script");
         }
 
         #[test]
@@ -12274,11 +12313,14 @@ mod from_dialog_builtin_action_validation_tests_6 {
             let edit = actions.iter().find(|a| a.id == "edit_script").unwrap();
             assert_eq!(edit.title, "Edit Agent");
 
-            // Has update/remove for shortcut and alias
-            assert!(ids.contains(&"update_shortcut"));
-            assert!(ids.contains(&"remove_shortcut"));
-            assert!(ids.contains(&"update_alias"));
-            assert!(ids.contains(&"remove_alias"));
+            // Agents never get shortcut/alias preference actions, even with
+            // shortcut + alias set on the ScriptInfo.
+            assert!(!ids.contains(&"update_shortcut"));
+            assert!(!ids.contains(&"remove_shortcut"));
+            assert!(!ids.contains(&"add_shortcut"));
+            assert!(!ids.contains(&"update_alias"));
+            assert!(!ids.contains(&"remove_alias"));
+            assert!(!ids.contains(&"add_alias"));
 
             // Has frecency reset
             assert!(ids.contains(&"reset_ranking"));
@@ -12290,12 +12332,18 @@ mod from_dialog_builtin_action_validation_tests_6 {
         }
 
         // =========================================================================
-        // 24. Global actions always empty
+        // 24. Global actions are seeded with GlobalOps entries
         // =========================================================================
 
         #[test]
-        fn global_actions_is_empty() {
-            assert!(get_global_actions().is_empty());
+        fn global_actions_is_seeded() {
+            // get_global_actions() is seeded (never empty): reload_scripts, settings,
+            // view_logs, plus config-dependent prompt-export/handoff actions.
+            let actions = get_global_actions();
+            let ids: Vec<&str> = actions.iter().map(|a| a.id.as_str()).collect();
+            assert!(ids.contains(&"reload_scripts"));
+            assert!(ids.contains(&"settings"));
+            assert!(ids.contains(&"view_logs"));
         }
 
         // =========================================================================
@@ -16592,8 +16640,8 @@ mod from_dialog_builtin_action_validation_tests_8 {
             let via_scriptlet = get_scriptlet_context_actions_with_custom(&script, None);
             assert_eq!(
                 via_script.len(),
-                via_scriptlet.len() + 2,
-                "Script context ({}) includes two extra actions (toggle_info + toggle_favorite) compared to scriptlet context ({})",
+                via_scriptlet.len() + 3,
+                "Script context ({}) includes three extra actions (toggle_info + toggle_favorite + file:open_in_quick_terminal) compared to scriptlet context ({})",
                 via_script.len(),
                 via_scriptlet.len()
             );
@@ -18358,7 +18406,7 @@ mod from_dialog_builtin_action_validation_tests_9 {
         }
 
         // ============================================================
-        // 10. Clipboard save_snippet/save_file always present
+        // 10. Clipboard save_snippet (text-only) / save_file presence
         // ============================================================
 
         #[test]
@@ -18370,10 +18418,12 @@ mod from_dialog_builtin_action_validation_tests_9 {
         }
 
         #[test]
-        fn clipboard_image_has_save_snippet_and_file() {
+        fn clipboard_image_has_save_file_but_no_save_snippet() {
             let entry = make_clipboard_entry(ContentType::Image, false, None);
             let actions = get_clipboard_history_context_actions(&entry);
-            assert!(find_action(&actions, "clip:clipboard_save_snippet").is_some());
+            // save_snippet exists only for TEXT entries; images get ocr instead.
+            assert!(find_action(&actions, "clip:clipboard_save_snippet").is_none());
+            assert!(find_action(&actions, "clip:clipboard_ocr").is_some());
             assert!(find_action(&actions, "clip:clipboard_save_file").is_some());
         }
 
@@ -18472,9 +18522,14 @@ mod from_dialog_builtin_action_validation_tests_9 {
             };
             let actions = get_path_context_actions(&path);
             let terminal = find_action(&actions, "file:open_in_quick_terminal").unwrap();
+            // Description is "Opens Quick Terminal at this location" (capital Q/T).
             assert!(
-                terminal.description.as_ref().unwrap().contains("terminal"),
-                "open_in_quick_terminal description should mention terminal"
+                terminal
+                    .description
+                    .as_ref()
+                    .unwrap()
+                    .contains("Quick Terminal"),
+                "open_in_quick_terminal description should mention Quick Terminal"
             );
         }
 
@@ -19714,7 +19769,8 @@ mod from_dialog_builtin_action_validation_tests_10 {
             let entry = make_clipboard_entry(ContentType::Text, false, Some(""));
             let actions = get_clipboard_history_context_actions(&entry);
             let paste = find_action(&actions, "clip:clipboard_paste").unwrap();
-            assert_eq!(paste.title, "Paste to ");
+            // Empty/whitespace app names fall back to the generic title.
+            assert_eq!(paste.title, "Paste to Active App");
         }
 
         #[test]
@@ -19751,8 +19807,8 @@ mod from_dialog_builtin_action_validation_tests_10 {
         fn script_no_shortcut_no_alias_action_count() {
             let script = ScriptInfo::new("test", "/path/test.ts");
             let actions = get_script_context_actions(&script);
-            // run, toggle_info, add_shortcut, add_alias, toggle_favorite, edit, view_logs, reveal, copy_path, copy_content, copy_deeplink, delete_script = 12
-            assert_eq!(actions.len(), 12);
+            // run, toggle_info, add_shortcut, add_alias, toggle_favorite, edit, view_logs, reveal, file:open_in_quick_terminal, copy_path, copy_content, copy_deeplink, delete_script = 13
+            assert_eq!(actions.len(), 13);
         }
 
         #[test]
@@ -19760,8 +19816,8 @@ mod from_dialog_builtin_action_validation_tests_10 {
             let script =
                 ScriptInfo::with_shortcut("test", "/path/test.ts", Some("cmd+t".to_string()));
             let actions = get_script_context_actions(&script);
-            // run, toggle_info, update_shortcut, remove_shortcut, add_alias, toggle_favorite, edit, view_logs, reveal, copy_path, copy_content, copy_deeplink, delete_script = 13
-            assert_eq!(actions.len(), 13);
+            // run, toggle_info, update_shortcut, remove_shortcut, add_alias, toggle_favorite, edit, view_logs, reveal, file:open_in_quick_terminal, copy_path, copy_content, copy_deeplink, delete_script = 14
+            assert_eq!(actions.len(), 14);
         }
 
         #[test]
@@ -19773,8 +19829,8 @@ mod from_dialog_builtin_action_validation_tests_10 {
                 Some("ts".to_string()),
             );
             let actions = get_script_context_actions(&script);
-            // run, toggle_info, update_shortcut, remove_shortcut, update_alias, remove_alias, toggle_favorite, edit, view_logs, reveal, copy_path, copy_content, copy_deeplink, delete_script = 14
-            assert_eq!(actions.len(), 14);
+            // run, toggle_info, update_shortcut, remove_shortcut, update_alias, remove_alias, toggle_favorite, edit, view_logs, reveal, file:open_in_quick_terminal, copy_path, copy_content, copy_deeplink, delete_script = 15
+            assert_eq!(actions.len(), 15);
         }
 
         #[test]
@@ -19789,8 +19845,8 @@ mod from_dialog_builtin_action_validation_tests_10 {
         fn scriptlet_no_shortcut_no_alias_action_count() {
             let scriptlet = ScriptInfo::scriptlet("Test", "/path/test.md", None, None);
             let actions = get_script_context_actions(&scriptlet);
-            // run, toggle_info, add_shortcut, add_alias, toggle_favorite, edit_scriptlet, reveal_scriptlet, copy_scriptlet_path, copy_content, copy_deeplink = 10
-            assert_eq!(actions.len(), 10);
+            // run, toggle_info, add_shortcut, add_alias, toggle_favorite, edit_scriptlet, reveal_scriptlet, file:open_in_quick_terminal, copy_scriptlet_path, copy_content, copy_deeplink = 11
+            assert_eq!(actions.len(), 11);
         }
 
         #[test]
@@ -19799,8 +19855,9 @@ mod from_dialog_builtin_action_validation_tests_10 {
             agent.is_script = false;
             agent.is_agent = true;
             let actions = get_script_context_actions(&agent);
-            // run, toggle_info, add_shortcut, add_alias, toggle_favorite, edit(agent), reveal, copy_path, copy_content, copy_deeplink = 10
-            assert_eq!(actions.len(), 10);
+            // Agents never get add_shortcut/add_alias preference actions.
+            // run, toggle_info, toggle_favorite, edit(agent), reveal, file:open_in_quick_terminal, copy_path, copy_content, copy_deeplink = 9
+            assert_eq!(actions.len(), 9);
         }
 
         #[test]
@@ -20137,7 +20194,8 @@ mod from_dialog_builtin_action_validation_tests_10 {
             };
             let actions = get_path_context_actions(&info);
             let a = find_action(&actions, "file:open_in_quick_terminal").unwrap();
-            assert_eq!(a.shortcut.as_deref(), Some("⌘T"));
+            // open_in_quick_terminal ships without a shortcut.
+            assert_eq!(a.shortcut.as_deref(), None);
         }
 
         #[test]

@@ -629,12 +629,12 @@ fn test_agent_with_shortcut_and_alias() {
 
     let actions = get_script_context_actions(&script);
 
-    // Should have update/remove pairs
-    assert!(actions.iter().any(|a| a.id == "update_shortcut"));
-    assert!(actions.iter().any(|a| a.id == "remove_shortcut"));
-    assert!(actions.iter().any(|a| a.id == "update_alias"));
-    assert!(actions.iter().any(|a| a.id == "remove_alias"));
-    // Should NOT have add
+    // Agents get no shortcut/alias preference actions at all
+    // (ScriptContextPreferenceActionPlan::AgentNoPreferenceActions).
+    assert!(!actions.iter().any(|a| a.id == "update_shortcut"));
+    assert!(!actions.iter().any(|a| a.id == "remove_shortcut"));
+    assert!(!actions.iter().any(|a| a.id == "update_alias"));
+    assert!(!actions.iter().any(|a| a.id == "remove_alias"));
     assert!(!actions.iter().any(|a| a.id == "add_shortcut"));
     assert!(!actions.iter().any(|a| a.id == "add_alias"));
 }

@@ -50,8 +50,16 @@ fn expected_dispatch(suffix: &str) -> Option<AiContextPart> {
 
 /// Expected (id, title, section) triples for every context action.
 const CONTEXT_ACTION_METADATA: &[(&str, &str, &str)] = &[
-    ("chat:add_current_context", "Attach Current Snapshot", "Context"),
-    ("chat:add_context_full", "Attach Full Snapshot", "Context"),
+    (
+        "chat:add_current_context",
+        "Attach What I\u{2019}m Looking At",
+        "Context",
+    ),
+    (
+        "chat:add_context_full",
+        "Attach Everything Available",
+        "Context",
+    ),
     ("chat:add_selection_context", "Attach Selected Text", "Context"),
     ("chat:add_browser_context", "Attach Browser URL", "Context"),
     ("chat:add_window_context", "Attach Focused Window", "Context"),
@@ -215,12 +223,12 @@ fn context_action_contract_full_uri_snapshot() {
         (
             "add_current_context",
             "kit://context?profile=minimal",
-            "Current Context",
+            "What I\u{2019}m Looking At",
         ),
         (
             "add_context_full",
             "kit://context",
-            "Current Context (Full)",
+            "Everything Available",
         ),
         (
             "add_selection_context",

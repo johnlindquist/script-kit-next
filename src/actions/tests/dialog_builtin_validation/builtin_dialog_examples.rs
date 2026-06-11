@@ -946,8 +946,8 @@ mod from_dialog_builtin_action_validation_tests_21 {
             .iter()
             .find(|a| a.id == "clip:clipboard_paste")
             .unwrap();
-        // Empty string still triggers Some branch: "Paste to "
-        assert_eq!(a.title, "Paste to ");
+        // Empty string is treated like None: falls back to "Paste to Active App"
+        assert_eq!(a.title, "Paste to Active App");
     }
 
     #[test]
@@ -2873,7 +2873,8 @@ mod from_dialog_builtin_action_validation_tests_22 {
             .iter()
             .find(|a| a.id == "file:open_in_quick_terminal")
             .unwrap();
-        assert_eq!(ot.shortcut.as_deref(), Some("⌘T"));
+        // Quick Terminal intentionally ships without a shortcut.
+        assert_eq!(ot.shortcut.as_deref(), None);
     }
 
     // ============================================================
@@ -3266,7 +3267,8 @@ mod from_dialog_builtin_action_validation_tests_23 {
         let script = ScriptInfo::with_action_verb("Timer", "/path/timer.ts", true, "Start");
         let actions = get_script_context_actions(&script);
         let run = actions.iter().find(|a| a.id == "run_script").unwrap();
-        assert_eq!(run.description.as_ref().unwrap(), "Start this item");
+        // is_script=true → "{verb} this script"
+        assert_eq!(run.description.as_ref().unwrap(), "Start this script");
     }
 
     // ============================================================
@@ -3278,8 +3280,8 @@ mod from_dialog_builtin_action_validation_tests_23 {
         // is_script=true, no shortcut, no alias, not suggested
         let script = ScriptInfo::new("test", "/test.ts");
         let actions = get_script_context_actions(&script);
-        // run_script + toggle_info + add_shortcut + add_alias + toggle_favorite + edit_script + view_logs + reveal_in_finder + copy_path + copy_content + copy_deeplink + delete_script = 12
-        assert_eq!(actions.len(), 12);
+        // run_script + toggle_info + add_shortcut + add_alias + toggle_favorite + edit_script + view_logs + reveal_in_finder + file:open_in_quick_terminal + copy_path + copy_content + copy_deeplink + delete_script = 13
+        assert_eq!(actions.len(), 13);
     }
 
     #[test]
@@ -3294,16 +3296,16 @@ mod from_dialog_builtin_action_validation_tests_23 {
     fn batch23_scriptlet_action_count() {
         let scriptlet = ScriptInfo::scriptlet("Test", "/test.md", None, None);
         let actions = get_script_context_actions(&scriptlet);
-        // run_script + toggle_info + add_shortcut + add_alias + toggle_favorite + edit_scriptlet + reveal_scriptlet + copy_scriptlet_path + copy_content + copy_deeplink = 10
-        assert_eq!(actions.len(), 10);
+        // run_script + toggle_info + add_shortcut + add_alias + toggle_favorite + edit_scriptlet + reveal_scriptlet_in_finder + file:open_in_quick_terminal + copy_scriptlet_path + copy_content + copy_deeplink = 11
+        assert_eq!(actions.len(), 11);
     }
 
     #[test]
     fn batch23_script_with_shortcut_adds_two() {
         let script = ScriptInfo::with_shortcut("test", "/test.ts", Some("cmd+t".to_string()));
         let actions = get_script_context_actions(&script);
-        // Same as full script but shortcut adds one extra (update+remove instead of add = +1)
-        assert_eq!(actions.len(), 13);
+        // Same as full script (13) but shortcut adds one extra (update+remove instead of add = +1)
+        assert_eq!(actions.len(), 14);
     }
 
     #[test]
@@ -3315,8 +3317,8 @@ mod from_dialog_builtin_action_validation_tests_23 {
             Some("ts".to_string()),
         );
         let actions = get_script_context_actions(&script);
-        // script(12) + 1 extra shortcut + 1 extra alias = 14
-        assert_eq!(actions.len(), 14);
+        // script(13) + 1 extra shortcut + 1 extra alias = 15
+        assert_eq!(actions.len(), 15);
     }
 
     // ============================================================
@@ -3441,7 +3443,7 @@ mod from_dialog_builtin_action_validation_tests_23 {
             .as_ref()
             .unwrap()
             .to_lowercase()
-            .contains("agent_chat chat"));
+            .contains("agent chat"));
     }
 
     #[test]
@@ -3472,8 +3474,8 @@ mod from_dialog_builtin_action_validation_tests_23 {
         assert_eq!(ids[0], "file:open_directory");
         assert_eq!(ids[1], "file:copy_path");
         assert_eq!(ids[2], "file:open_in_finder");
-        assert_eq!(ids[3], "file:open_in_editor");
-        assert_eq!(ids[4], "file:open_in_quick_terminal");
+        assert_eq!(ids[3], "file:open_in_quick_terminal");
+        assert_eq!(ids[4], "file:open_in_editor");
         assert_eq!(ids[5], "file:copy_filename");
         assert_eq!(ids[6], "file:move_to_trash");
     }
@@ -3486,8 +3488,8 @@ mod from_dialog_builtin_action_validation_tests_23 {
         assert_eq!(ids[0], "file:select_file");
         assert_eq!(ids[1], "file:copy_path");
         assert_eq!(ids[2], "file:open_in_finder");
-        assert_eq!(ids[3], "file:open_in_editor");
-        assert_eq!(ids[4], "file:open_in_quick_terminal");
+        assert_eq!(ids[3], "file:open_in_quick_terminal");
+        assert_eq!(ids[4], "file:open_in_editor");
         assert_eq!(ids[5], "file:copy_filename");
         assert_eq!(ids[6], "file:move_to_trash");
     }
@@ -5824,8 +5826,8 @@ mod from_dialog_builtin_action_validation_tests_24 {
                 "file:open_directory",
                 "file:copy_path",
                 "file:open_in_finder",
-                "file:open_in_editor",
                 "file:open_in_quick_terminal",
+                "file:open_in_editor",
                 "file:copy_filename",
                 "file:move_to_trash",
             ]
@@ -5843,8 +5845,8 @@ mod from_dialog_builtin_action_validation_tests_24 {
                 "file:select_file",
                 "file:copy_path",
                 "file:open_in_finder",
-                "file:open_in_editor",
                 "file:open_in_quick_terminal",
+                "file:open_in_editor",
                 "file:copy_filename",
                 "file:move_to_trash",
             ]
@@ -5890,7 +5892,8 @@ mod from_dialog_builtin_action_validation_tests_24 {
             .iter()
             .find(|a| a.id == "file:open_in_quick_terminal")
             .unwrap();
-        assert_eq!(t.shortcut.as_ref().unwrap(), "⌘T");
+        // Quick Terminal intentionally ships without a shortcut.
+        assert!(t.shortcut.is_none());
     }
 
     #[test]
@@ -6591,7 +6594,7 @@ mod from_dialog_builtin_action_validation_tests_26 {
             .as_ref()
             .unwrap()
             .to_lowercase()
-            .contains("agent_chat chat"));
+            .contains("agent chat"));
     }
 
     #[test]
@@ -7909,17 +7912,23 @@ mod from_dialog_builtin_action_validation_tests_26 {
     }
 
     #[test]
-    fn cat26_30_script_exactly_9_actions() {
+    fn cat26_30_script_exactly_13_actions() {
         let s = ScriptInfo::new("s", "/s.ts");
         let actions = get_script_context_actions(&s);
-        assert_eq!(actions.len(), 12);
+        // run_script, toggle_info, add_shortcut, add_alias, toggle_favorite, edit_script,
+        // view_logs, reveal_in_finder, file:open_in_quick_terminal, copy_path, copy_content,
+        // copy_deeplink, delete_script
+        assert_eq!(actions.len(), 13);
     }
 
     #[test]
-    fn cat26_30_scriptlet_exactly_8_actions() {
+    fn cat26_30_scriptlet_exactly_11_actions() {
         let s = ScriptInfo::scriptlet("S", "/s.md", None, None);
         let actions = get_script_context_actions(&s);
-        assert_eq!(actions.len(), 10);
+        // run_script, toggle_info, add_shortcut, add_alias, toggle_favorite, edit_scriptlet,
+        // reveal_scriptlet_in_finder, file:open_in_quick_terminal, copy_scriptlet_path,
+        // copy_content, copy_deeplink
+        assert_eq!(actions.len(), 11);
     }
 
     #[test]
@@ -8085,8 +8094,10 @@ mod from_dialog_builtin_action_validation_tests_27 {
         script.is_agent = true;
         script.is_script = false;
         let actions = get_script_context_actions(&script);
-        // run_script, toggle_info, add_shortcut, add_alias, edit_script(agent), reveal, copy_path, copy_content, copy_deeplink
-        assert_eq!(actions.len(), 9);
+        // Agents never get shortcut/alias preference actions; empty path drops toggle_favorite.
+        // run_script, toggle_info, edit_script(agent), reveal_in_finder,
+        // file:open_in_quick_terminal, copy_path, copy_content, copy_deeplink
+        assert_eq!(actions.len(), 8);
     }
 
     #[test]
@@ -11122,12 +11133,13 @@ mod from_dialog_builtin_action_validation_tests_29 {
             frontmost_app_name: None,
         };
         let actions = get_clipboard_history_context_actions(&entry);
-        // Image adds: ocr (+1 vs text)
-        // macOS adds: quick_look, open_with, annotate_cleanshot, upload_cleanshot
+        // Image vs text: +ocr, -save_snippet (snippet is text-only)
+        // macOS additionally adds: open_with, annotate_cleanshot, upload_cleanshot (quick_look is
+        // on both text and image), so macOS image = text(12) - 1 + 4 = 15
         #[cfg(target_os = "macos")]
-        assert_eq!(actions.len(), 16);
+        assert_eq!(actions.len(), 15);
         #[cfg(not(target_os = "macos"))]
-        assert_eq!(actions.len(), 12);
+        assert_eq!(actions.len(), 11);
     }
 
     // =============================================================================
@@ -11190,7 +11202,7 @@ mod from_dialog_builtin_action_validation_tests_29 {
             .as_ref()
             .unwrap()
             .to_lowercase()
-            .contains("agent_chat chat"));
+            .contains("agent chat"));
     }
 
     // =============================================================================
@@ -12682,7 +12694,7 @@ mod from_dialog_builtin_action_validation_tests_30 {
     }
 
     // ---------------------------------------------------------------------------
-    // 6. Path context: open_in_quick_terminal shortcut is ⌘T
+    // 6. Path context: open_in_quick_terminal ships without a shortcut
     // ---------------------------------------------------------------------------
     #[test]
     fn batch30_path_open_in_quick_terminal_shortcut() {
@@ -12696,7 +12708,7 @@ mod from_dialog_builtin_action_validation_tests_30 {
             .iter()
             .find(|a| a.id == "file:open_in_quick_terminal")
             .unwrap();
-        assert_eq!(t.shortcut.as_deref(), Some("⌘T"));
+        assert_eq!(t.shortcut.as_deref(), None);
     }
 
     #[test]

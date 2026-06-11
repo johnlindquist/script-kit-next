@@ -241,8 +241,18 @@ fn test_fuzzy_search_by_path() {
         },
     ]);
 
-    // Search for ".scriptkit" which is in the new path structure
-    let results = fuzzy_search_scripts(&scripts, ".scriptkit");
+    // The search relevance contract restricts script matching to visible or
+    // exact low-tier fields (name, filename, alias, description, body, …).
+    // Full path/directory components are intentionally NOT searched anymore,
+    // so a directory-only query must not match any script.
+    let results = fuzzy_search_scripts(&scripts, ".scriptplugins");
+    assert!(
+        results.is_empty(),
+        "directory components of the path must not be searchable"
+    );
+
+    // The filename portion of the path is still searchable.
+    let results = fuzzy_search_scripts(&scripts, "open.ts");
     assert_eq!(results.len(), 1);
     assert_eq!(results[0].script.name, "foo");
 }

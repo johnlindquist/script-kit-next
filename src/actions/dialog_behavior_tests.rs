@@ -37,7 +37,8 @@ fn script_primary_action_title_uses_action_verb() {
     let actions = get_script_context_actions(&script);
     let primary = &actions[0];
     assert_eq!(primary.id, "run_script");
-    assert_eq!(primary.title, "Switch To");
+    // Built-in catalog entries preserve their action verb text exactly.
+    assert_eq!(primary.title, "Switch to");
 }
 
 #[test]
@@ -47,8 +48,8 @@ fn script_primary_action_description_uses_action_verb() {
     let primary = &actions[0];
     assert_eq!(
         primary.description,
-        Some("Launch this item".to_string()),
-        "Description should use the action verb"
+        Some("Launch".to_string()),
+        "Built-in descriptions preserve the catalog action verb exactly"
     );
 }
 

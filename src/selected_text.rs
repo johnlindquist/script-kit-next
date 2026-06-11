@@ -745,8 +745,13 @@ mod unit_tests {
         let post_paste_delay_idx = source
             .find("thread::sleep(Duration::from_millis(150));")
             .expect("expected 150ms post-paste delay");
-        let restore_idx = source
-            .find("let restore_result = snapshot.restore();")
+        // Restore is gated on the pasteboard change count so an external
+        // clipboard update during the paste window is never clobbered.
+        let restore_guard_idx = source
+            .find("let restore_result = match general_pasteboard_change_count()")
+            .expect("expected restore to be gated on the clipboard change count");
+        let restore_call_idx = source
+            .find("snapshot.restore()")
             .expect("expected full pasteboard snapshot restore");
         let pre_restore_delay_idx = source
             .find("thread::sleep(Duration::from_millis(100));")
@@ -768,16 +773,20 @@ mod unit_tests {
             "paste should run before post-paste delay"
         );
         assert!(
-            post_paste_delay_idx < restore_idx,
-            "restore should occur after post-paste delay"
+            post_paste_delay_idx < pre_restore_delay_idx,
+            "pre-restore delay should follow the post-paste delay"
         );
         assert!(
-            restore_idx < paste_return_idx,
+            pre_restore_delay_idx < restore_guard_idx,
+            "restore should occur after the pre-restore delay"
+        );
+        assert!(
+            restore_guard_idx < restore_call_idx,
+            "snapshot restore must stay inside the change-count guard"
+        );
+        assert!(
+            restore_guard_idx < paste_return_idx,
             "paste result should be returned after restore attempt"
-        );
-        assert!(
-            pre_restore_delay_idx > restore_idx,
-            "pre-restore delay should remain inside restore block"
         );
     }
 
@@ -820,6 +829,19 @@ mod unit_tests {
             .and_then(|rest| rest.split("struct PasteboardSnapshot").next())
             .expect("expected selected-text fallback body");
 
+        // A forbidden token only counts when it starts its own identifier:
+        // content-light boolean fields like `has_text = ...` must not trip the
+        // bare `text =` check, while a raw `text = ...` log field still does.
+        fn contains_standalone(body: &str, needle: &str) -> bool {
+            body.match_indices(needle).any(|(idx, _)| {
+                if idx == 0 {
+                    return true;
+                }
+                let prev = body.as_bytes()[idx - 1];
+                !prev.is_ascii_alphanumeric() && prev != b'_'
+            })
+        }
+
         for forbidden in [
             "text =",
             "%text",
@@ -828,7 +850,7 @@ mod unit_tests {
             "representation.data",
         ] {
             assert!(
-                !fallback_body.contains(forbidden),
+                !contains_standalone(fallback_body, forbidden),
                 "selected-text fallback logs must not expose raw clipboard or replacement content: {forbidden}"
             );
         }

@@ -547,11 +547,14 @@ mod main_menu_input_guard_tests {
         let script_issues_pos = physical_enter_section
             .find("AppView::ScriptIssuesView")
             .expect("physical Enter must preserve ScriptIssuesView handling first");
+        // Since 8a4ef223f the popup windows are reached through the
+        // owns-main-keyboard helpers rather than direct popup-window access;
+        // Enter must still Accept the object selector before the trigger popup.
         let object_popup_pos = physical_enter_section
-            .find("menu_syntax_object_selector_popup_window")
+            .find("menu_syntax_object_selector_owns_main_keyboard")
             .expect("physical Enter must preserve menu-syntax object popup Accept");
         let trigger_popup_pos = physical_enter_section
-            .find("menu_syntax_trigger_popup_window")
+            .find("menu_syntax_trigger_picker_owns_main_keyboard")
             .expect("physical Enter must preserve menu-syntax trigger popup Accept");
         let script_list_pos = physical_enter_section
             .find("global_plain_enter_script_list")

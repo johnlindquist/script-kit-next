@@ -1333,7 +1333,7 @@ fn context_action_behavior_add_current_context_inserts_minimal_uri() {
     match &state.pending_context_parts[0] {
         crate::ai::message_parts::AiContextPart::ResourceUri { uri, label } => {
             assert_eq!(uri, "kit://context?profile=minimal");
-            assert_eq!(label, "Current Context");
+            assert_eq!(label, "What I\u{2019}m Looking At");
         }
         other => panic!("expected ResourceUri, got {other:?}"),
     }
@@ -1360,7 +1360,7 @@ fn context_action_behavior_add_context_full_inserts_full_uri() {
     match &state.pending_context_parts[0] {
         crate::ai::message_parts::AiContextPart::ResourceUri { uri, label } => {
             assert_eq!(uri, "kit://context");
-            assert_eq!(label, "Current Context (Full)");
+            assert_eq!(label, "Everything Available");
         }
         other => panic!("expected ResourceUri, got {other:?}"),
     }

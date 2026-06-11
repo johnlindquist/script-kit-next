@@ -1850,7 +1850,7 @@ mod tests {
         let file: AgentChatAgentRuntimeStateFile =
             serde_json::from_str(json).expect("runtime state should parse");
         assert_eq!(file.schema_version, 1);
-        assert!(file.agents.is_empty());
+        assert_eq!(file.agents.len(), 1);
         let codex = file
             .agents
             .get("codex-agent_chat")

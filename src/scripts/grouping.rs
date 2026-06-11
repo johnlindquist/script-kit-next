@@ -2293,7 +2293,13 @@ mod advanced_query_tests {
 
     #[test]
     fn empty_predicates_never_reject_issue() {
-        let query = advanced_query_from(": git");
+        // Grammar pivot (2026-06): a bare `: git` no longer parses as an
+        // AdvancedQuery — the leading-colon form stays Incomplete
+        // (BareQueryPrefix) until a concrete filter is chosen. A source-filter
+        // query like `f: git` is the current spelling that still yields an
+        // AdvancedQuery with empty predicates, which is what this invariant
+        // is about: no predicates means the ScriptIssue row is never rejected.
+        let query = advanced_query_from("f: git");
         assert!(query.predicates.is_empty());
         assert!(!advanced_query_rejects_issue(Some(&query)));
     }
@@ -2641,6 +2647,40 @@ mod advanced_query_tests {
             .collect()
     }
 
+    /// First grouped index of a terminal fallback row (the "Use … with"
+    /// section at the bottom of the list).
+    ///
+    /// The Files section appends its own "Search Files for …" handoff CTA,
+    /// which is also a `SearchResult::Fallback` but belongs to the Files
+    /// section by design (it must not split file rows; see
+    /// `root_agent_chat_history_rows_do_not_split_files_section_or_file_handoff`
+    /// and the F2 audit note on `root_brain_passive_insertion_index`).
+    /// Ordering invariants about fallbacks must therefore compare against the
+    /// first fallback that is NOT the Files handoff.
+    fn first_terminal_fallback_index(
+        grouped: &[GroupedListItem],
+        flat: &[SearchResult],
+    ) -> Option<usize> {
+        grouped.iter().enumerate().find_map(|(index, item)| {
+            let GroupedListItem::Item(flat_index) = item else {
+                return None;
+            };
+            match flat.get(*flat_index)? {
+                SearchResult::Fallback(fallback)
+                    if !fallback
+                        .stable_selection_key_override
+                        .as_deref()
+                        .is_some_and(|key| {
+                            key.starts_with("fallback/root-file-search-handoff")
+                        }) =>
+                {
+                    Some(index)
+                }
+                _ => None,
+            }
+        })
+    }
+
     fn passive_source_counts(
         flat: &[SearchResult],
     ) -> std::collections::HashMap<&'static str, usize> {
@@ -2826,10 +2866,12 @@ mod advanced_query_tests {
             .iter()
             .find_map(|(index, role)| (*role == "rootPassive").then_some(*index))
             .expect("collision fixture should include a passive row");
-        let first_fallback = roles
-            .iter()
-            .find_map(|(index, role)| (*role == "fallback").then_some(*index))
-            .expect("collision fixture should include a File Search fallback row");
+        // The Files section carries its own "Search Files for …" handoff CTA
+        // (a Fallback row that is part of the Files section by design), so the
+        // passive-vs-fallback invariant is scoped to the terminal "Use … with"
+        // fallback section.
+        let first_fallback = first_terminal_fallback_index(&grouped, &flat)
+            .expect("collision fixture should include a terminal fallback row");
 
         assert!(first_primary < first_root_file);
         assert!(first_primary < first_passive);
@@ -2991,10 +3033,10 @@ mod advanced_query_tests {
             .iter()
             .find_map(|(index, role)| (*role == "rootPassive").then_some(*index))
             .expect("collision fixture should include a passive row");
-        let first_fallback = roles
-            .iter()
-            .find_map(|(index, role)| (*role == "fallback").then_some(*index))
-            .expect("collision fixture should include a File Search fallback row");
+        // Scoped to the terminal "Use … with" fallback section; the Files
+        // handoff CTA is a Fallback row owned by the Files section.
+        let first_fallback = first_terminal_fallback_index(&grouped, &flat)
+            .expect("collision fixture should include a terminal fallback row");
 
         assert!(first_primary < first_root_file);
         assert!(first_root_file < first_passive);
@@ -3439,10 +3481,9 @@ mod advanced_query_tests {
             .iter()
             .find_map(|(index, role)| (*role == "rootPassive").then_some(*index))
             .unwrap();
-        let first_fallback = roles
-            .iter()
-            .find_map(|(index, role)| (*role == "fallback").then_some(*index))
-            .unwrap();
+        // Scoped to the terminal "Use … with" fallback section; the Files
+        // handoff CTA is a Fallback row owned by the Files section.
+        let first_fallback = first_terminal_fallback_index(&grouped, &flat).unwrap();
         assert!(first_primary < first_root_file);
         assert!(first_root_file < first_passive);
         assert!(first_passive < first_fallback);
@@ -3560,14 +3601,14 @@ mod advanced_query_tests {
                 | GroupedListItem::Status(_) => None,
             })
             .collect::<Vec<_>>();
+        // The passive budget is consumed greedily in passive-source order:
+        // Browser Tabs takes 3 rows, Notes takes the remaining 2, and the
+        // Clipboard History section is skipped once the total budget (5) is
+        // exhausted. The invariant under test is the total cap, asserted via
+        // passive_result_count above.
         assert_eq!(
             section_labels,
-            vec![
-                "Browser Tabs",
-                "Notes",
-                "Clipboard History",
-                "Use \"design\" with..."
-            ]
+            vec!["Browser Tabs", "Notes", "Use \"design\" with..."]
         );
     }
 

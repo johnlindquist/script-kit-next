@@ -1641,9 +1641,11 @@ mod tests {
         let fragment_key = root_directory_browse_source_key(&with_fragment);
 
         assert_eq!(base_key, fragment_key);
+        // parse_directory_path keeps the directory slash-terminated so all
+        // providers compare the same normalized key.
         assert_eq!(
             base_key,
-            Some((nested.to_string_lossy().into_owned(), false))
+            Some((format!("{}/", nested.to_string_lossy()), false))
         );
 
         std::fs::remove_dir_all(root).ok();
@@ -1662,7 +1664,7 @@ mod tests {
 
         assert_eq!(
             root_directory_browse_source_key(&query),
-            Some((nested.to_string_lossy().into_owned(), true))
+            Some((format!("{}/", nested.to_string_lossy()), true))
         );
 
         std::fs::remove_dir_all(root).ok();

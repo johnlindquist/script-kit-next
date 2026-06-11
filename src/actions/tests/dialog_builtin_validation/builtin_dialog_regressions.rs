@@ -154,8 +154,8 @@ mod from_dialog_builtin_action_validation_tests_32 {
             .iter()
             .find(|a| a.id == "clip:clipboard_paste")
             .unwrap();
-        // Empty string still goes through format!("Paste to {}", name) path
-        assert_eq!(paste.title, "Paste to ");
+        // Empty app name falls back to the generic title (no trailing-space variant)
+        assert_eq!(paste.title, "Paste to Active App");
     }
 
     #[test]
@@ -1248,7 +1248,7 @@ mod from_dialog_builtin_action_validation_tests_32 {
     }
 
     #[test]
-    fn batch32_clipboard_image_has_save_snippet() {
+    fn batch32_clipboard_image_lacks_save_snippet() {
         let entry = ClipboardEntryInfo {
             id: "1".into(),
             content_type: ContentType::Image,
@@ -1258,9 +1258,11 @@ mod from_dialog_builtin_action_validation_tests_32 {
             frontmost_app_name: None,
         };
         let actions = get_clipboard_history_context_actions(&entry);
-        assert!(actions
+        // save_snippet exists only for text entries; images get clipboard_ocr instead
+        assert!(!actions
             .iter()
             .any(|a| a.id == "clip:clipboard_save_snippet"));
+        assert!(actions.iter().any(|a| a.id == "clip:clipboard_ocr"));
     }
 
     #[test]
@@ -2082,8 +2084,8 @@ mod from_dialog_builtin_action_validation_tests_33 {
     fn script_context_action_count_no_shortcut_no_alias() {
         let script = ScriptInfo::new("test", "/path/test.ts");
         let actions = get_script_context_actions(&script);
-        // run + toggle_info + add_shortcut + add_alias + toggle_favorite + edit + view_logs + reveal + copy_path + copy_content + copy_deeplink + delete_script = 12
-        assert_eq!(actions.len(), 12);
+        // run + toggle_info + add_shortcut + add_alias + toggle_favorite + edit + view_logs + reveal + open_in_quick_terminal + copy_path + copy_content + copy_deeplink + delete_script = 13
+        assert_eq!(actions.len(), 13);
     }
 
     // =====================================================================
@@ -3710,21 +3712,27 @@ mod from_dialog_builtin_action_validation_tests_34 {
     }
 
     // =====================================================================
-    // 19. Global actions: always empty
+    // 19. Global actions: seeded with global ops
     // =====================================================================
 
     #[test]
-    fn global_actions_empty() {
+    fn global_actions_seeded() {
         use crate::actions::builders::get_global_actions;
         let actions = get_global_actions();
-        assert!(actions.is_empty());
+        // Seeded, never empty: reload_scripts, settings, view_logs plus
+        // config-dependent prompt-export / handoff actions.
+        let ids: Vec<&str> = actions.iter().map(|a| a.id.as_str()).collect();
+        assert!(ids.contains(&"reload_scripts"));
+        assert!(ids.contains(&"settings"));
+        assert!(ids.contains(&"view_logs"));
     }
 
     #[test]
     fn global_actions_returns_vec() {
         use crate::actions::builders::get_global_actions;
         let actions = get_global_actions();
-        assert_eq!(actions.len(), 0);
+        // Exact total is config-dependent; only assert it is non-empty.
+        assert!(!actions.is_empty());
     }
 
     // --- merged from part_03.rs ---
@@ -4466,7 +4474,7 @@ mod from_dialog_builtin_action_validation_tests_35 {
             .as_ref()
             .unwrap()
             .to_lowercase()
-            .contains("agent_chat chat"));
+            .contains("agent chat"));
     }
 
     #[test]
@@ -4520,13 +4528,13 @@ mod from_dialog_builtin_action_validation_tests_35 {
         let actions = get_clipboard_history_context_actions(&entry);
         // Image on macOS: paste, copy, paste_keep_open, share, attach_to_ai, quick_look,
         // open_with, annotate_cleanshot, upload_cleanshot, pin, ocr,
-        // save_snippet, save_file, delete, delete_multiple, delete_all = 16
-        assert_eq!(actions.len(), 16);
+        // save_file, delete, delete_multiple, delete_all = 15 (no save_snippet for images)
+        assert_eq!(actions.len(), 15);
     }
 
     #[cfg(target_os = "macos")]
     #[test]
-    fn clipboard_image_has_4_more_actions_than_text_on_macos() {
+    fn clipboard_image_has_3_more_actions_than_text_on_macos() {
         let text_entry = ClipboardEntryInfo {
             id: "cnt-3".into(),
             content_type: ContentType::Text,
@@ -4545,8 +4553,9 @@ mod from_dialog_builtin_action_validation_tests_35 {
         };
         let text_count = get_clipboard_history_context_actions(&text_entry).len();
         let img_count = get_clipboard_history_context_actions(&img_entry).len();
-        // Image has 4 more: open_with, annotate_cleanshot, upload_cleanshot, ocr
-        assert_eq!(img_count - text_count, 4);
+        // Image adds open_with, annotate_cleanshot, upload_cleanshot, ocr but
+        // drops save_snippet (text-only), so the net difference is 3.
+        assert_eq!(img_count - text_count, 3);
     }
 
     #[test]
@@ -5339,7 +5348,7 @@ mod from_dialog_builtin_action_validation_tests_35 {
 
     #[test]
     fn constant_action_row_inset() {
-        assert_eq!(ACTION_ROW_INSET, 4.0);
+        assert_eq!(ACTION_ROW_INSET, 8.0);
     }
 
     // Removed: constant_selection_radius, constant_keycap_min_width, constant_keycap_height
@@ -6416,7 +6425,7 @@ mod from_dialog_builtin_action_validation_tests_36 {
     }
 
     // =====================================================================
-    // 10. Path context: open_in_quick_terminal shortcut ⌘T
+    // 10. Path context: open_in_quick_terminal has no shortcut
     // =====================================================================
 
     #[test]
@@ -6431,7 +6440,7 @@ mod from_dialog_builtin_action_validation_tests_36 {
             .iter()
             .find(|a| a.id == "file:open_in_quick_terminal")
             .unwrap();
-        assert_eq!(ot.shortcut.as_deref(), Some("⌘T"));
+        assert_eq!(ot.shortcut.as_deref(), None);
     }
 
     #[test]
@@ -6446,7 +6455,8 @@ mod from_dialog_builtin_action_validation_tests_36 {
             .iter()
             .find(|a| a.id == "file:open_in_quick_terminal")
             .unwrap();
-        assert!(ot.description.as_deref().unwrap().contains("terminal"));
+        // Description is "Opens Quick Terminal at this location"
+        assert!(ot.description.as_deref().unwrap().contains("Quick Terminal"));
     }
 
     #[test]
@@ -6565,16 +6575,16 @@ mod from_dialog_builtin_action_validation_tests_36 {
     fn script_context_base_count_no_extras() {
         let script = ScriptInfo::new("test", "/path/test.ts");
         let actions = get_script_context_actions(&script);
-        // run + toggle_info + add_shortcut + add_alias + toggle_favorite + edit + view_logs + reveal + copy_path + copy_content + copy_deeplink + delete_script = 12
-        assert_eq!(actions.len(), 12);
+        // run + toggle_info + add_shortcut + add_alias + toggle_favorite + edit + view_logs + reveal + open_in_quick_terminal + copy_path + copy_content + copy_deeplink + delete_script = 13
+        assert_eq!(actions.len(), 13);
     }
 
     #[test]
     fn script_context_with_shortcut_adds_one() {
         let script = ScriptInfo::with_shortcut("test", "/path/test.ts", Some("cmd+t".into()));
         let actions = get_script_context_actions(&script);
-        // run + toggle_info + update_shortcut + remove_shortcut + add_alias + toggle_favorite + edit + view_logs + reveal + copy_path + copy_content + copy_deeplink + delete_script = 13
-        assert_eq!(actions.len(), 13);
+        // run + toggle_info + update_shortcut + remove_shortcut + add_alias + toggle_favorite + edit + view_logs + reveal + open_in_quick_terminal + copy_path + copy_content + copy_deeplink + delete_script = 14
+        assert_eq!(actions.len(), 14);
     }
 
     #[test]
@@ -6586,8 +6596,8 @@ mod from_dialog_builtin_action_validation_tests_36 {
             Some("ts".into()),
         );
         let actions = get_script_context_actions(&script);
-        // run + toggle_info + update_shortcut + remove_shortcut + update_alias + remove_alias + toggle_favorite + edit + view_logs + reveal + copy_path + copy_content + copy_deeplink + delete_script = 14
-        assert_eq!(actions.len(), 14);
+        // run + toggle_info + update_shortcut + remove_shortcut + update_alias + remove_alias + toggle_favorite + edit + view_logs + reveal + open_in_quick_terminal + copy_path + copy_content + copy_deeplink + delete_script = 15
+        assert_eq!(actions.len(), 15);
     }
 
     #[test]
@@ -6595,8 +6605,8 @@ mod from_dialog_builtin_action_validation_tests_36 {
         let script = ScriptInfo::new("test", "/path/test.ts")
             .with_frecency(true, Some("/path/test.ts".into()));
         let actions = get_script_context_actions(&script);
-        // 12 + reset_ranking = 13
-        assert_eq!(actions.len(), 13);
+        // 13 base + reset_ranking = 14
+        assert_eq!(actions.len(), 14);
         assert!(actions.iter().any(|a| a.id == "reset_ranking"));
     }
 
@@ -9268,7 +9278,7 @@ mod from_dialog_builtin_action_validation_tests_39 {
         }
 
         #[test]
-        fn clipboard_image_ocr_comes_before_save_snippet() {
+        fn clipboard_image_has_ocr_and_no_save_snippet() {
             let entry = ClipboardEntryInfo {
                 id: "1".into(),
                 content_type: ContentType::Image,
@@ -9278,15 +9288,11 @@ mod from_dialog_builtin_action_validation_tests_39 {
                 frontmost_app_name: None,
             };
             let actions = get_clipboard_history_context_actions(&entry);
-            let ocr_pos = actions
+            // save_snippet is text-only; images carry clipboard_ocr instead.
+            assert!(actions.iter().any(|a| a.id == "clip:clipboard_ocr"));
+            assert!(!actions
                 .iter()
-                .position(|a| a.id == "clip:clipboard_ocr")
-                .unwrap();
-            let snippet_pos = actions
-                .iter()
-                .position(|a| a.id == "clip:clipboard_save_snippet")
-                .unwrap();
-            assert!(ocr_pos < snippet_pos);
+                .any(|a| a.id == "clip:clipboard_save_snippet"));
         }
 
         #[test]
@@ -10769,13 +10775,13 @@ mod from_dialog_builtin_action_validation_tests_40 {
             let actions = get_clipboard_history_context_actions(&entry);
             // On macOS image: paste, copy, paste_keep_open, share, attach_to_ai, quick_look,
             //   open_with, annotate_cleanshot, upload_cleanshot, pin, ocr,
-            //   save_snippet, save_file, delete, delete_multiple, delete_all = 16
+            //   save_file, delete, delete_multiple, delete_all = 15 (no save_snippet for images)
             #[cfg(target_os = "macos")]
-            assert_eq!(actions.len(), 16);
+            assert_eq!(actions.len(), 15);
         }
 
         #[test]
-        fn clipboard_image_has_4_more_than_text() {
+        fn clipboard_image_has_3_more_than_text() {
             let text_entry = ClipboardEntryInfo {
                 id: "1".into(),
                 content_type: ContentType::Text,
@@ -10794,8 +10800,10 @@ mod from_dialog_builtin_action_validation_tests_40 {
             };
             let text_count = get_clipboard_history_context_actions(&text_entry).len();
             let image_count = get_clipboard_history_context_actions(&image_entry).len();
+            // Image adds open_with, annotate_cleanshot, upload_cleanshot, ocr but
+            // drops save_snippet (text-only), so the net difference is 3.
             #[cfg(target_os = "macos")]
-            assert_eq!(image_count - text_count, 4);
+            assert_eq!(image_count - text_count, 3);
         }
 
         #[test]
@@ -12578,7 +12586,7 @@ mod from_dialog_builtin_action_validation_tests_41 {
                 .as_ref()
                 .unwrap()
                 .to_lowercase()
-                .contains("agent_chat chat"));
+                .contains("agent chat"));
         }
 
         #[test]
@@ -12798,7 +12806,7 @@ mod from_dialog_builtin_action_validation_tests_41 {
         }
 
         // =========================================================================
-        // 15. Path context: open_in_quick_terminal shortcut and desc
+        // 15. Path context: open_in_quick_terminal has no shortcut, desc mentions it
         // =========================================================================
 
         #[test]
@@ -12813,7 +12821,7 @@ mod from_dialog_builtin_action_validation_tests_41 {
                 .iter()
                 .find(|a| a.id == "file:open_in_quick_terminal")
                 .unwrap();
-            assert_eq!(term.shortcut.as_deref(), Some("⌘T"));
+            assert_eq!(term.shortcut.as_deref(), None);
         }
 
         #[test]
@@ -13067,10 +13075,12 @@ mod from_dialog_builtin_action_validation_tests_41 {
 
         #[test]
         fn script_context_real_script_count() {
-            // Real script currently includes toggle_info, toggle_favorite, and delete_script in addition to the historical 9 actions.
+            // Real script: run_script, toggle_info, add_shortcut, add_alias, toggle_favorite,
+            // edit_script, view_logs, reveal_in_finder, file:open_in_quick_terminal,
+            // copy_path, copy_content, copy_deeplink, delete_script = 13
             let info = ScriptInfo::new("test", "/test.ts");
             let actions = get_script_context_actions(&info);
-            assert_eq!(actions.len(), 12);
+            assert_eq!(actions.len(), 13);
         }
 
         #[test]
@@ -13083,20 +13093,24 @@ mod from_dialog_builtin_action_validation_tests_41 {
 
         #[test]
         fn script_context_agent_count() {
-            // Agent currently includes toggle_info and toggle_favorite in addition to the historical 8 actions.
+            // Agent with non-empty path (no shortcut/alias actions ever): run_script,
+            // toggle_info, toggle_favorite, edit_script, reveal_in_finder,
+            // file:open_in_quick_terminal, copy_path, copy_content, copy_deeplink = 9
             let mut info = ScriptInfo::new("my-agent", "/a.md");
             info.is_agent = true;
             info.is_script = false;
             let actions = get_script_context_actions(&info);
-            assert_eq!(actions.len(), 10);
+            assert_eq!(actions.len(), 9);
         }
 
         #[test]
         fn script_context_scriptlet_count() {
-            // Scriptlet currently includes toggle_info and toggle_favorite in addition to the historical 8 actions.
+            // Scriptlet via script context: run_script, toggle_info, add_shortcut, add_alias,
+            // toggle_favorite, edit_scriptlet, reveal_scriptlet_in_finder,
+            // file:open_in_quick_terminal, copy_scriptlet_path, copy_content, copy_deeplink = 11
             let info = ScriptInfo::scriptlet("Test Scriptlet", "/t.md", None, None);
             let actions = get_script_context_actions(&info);
-            assert_eq!(actions.len(), 10);
+            assert_eq!(actions.len(), 11);
         }
 
         // =========================================================================
@@ -14564,7 +14578,7 @@ mod from_dialog_builtin_action_validation_tests_44 {
             .iter()
             .find(|a| a.id == "chat:export_markdown")
             .unwrap();
-        assert_eq!(em.title, "Export as Markdown");
+        assert_eq!(em.title, "Copy Chat as Markdown");
     }
 
     // =========== 18. Notes: find_in_note details ===========
@@ -15878,12 +15892,15 @@ mod from_dialog_builtin_action_validation_tests_45 {
     // =========== 14. Script: agent action count ===========
 
     #[test]
-    fn agent_has_8_actions() {
+    fn agent_has_9_actions() {
         let mut s = ScriptInfo::new("my-agent", "/agents/my-agent.md");
         s.is_agent = true;
         s.is_script = false;
         let actions = get_script_context_actions(&s);
-        assert_eq!(actions.len(), 10);
+        // Agent (non-empty path, never shortcut/alias actions): run_script, toggle_info,
+        // toggle_favorite, edit_script, reveal_in_finder, file:open_in_quick_terminal,
+        // copy_path, copy_content, copy_deeplink = 9
+        assert_eq!(actions.len(), 9);
     }
 
     #[test]
@@ -15913,18 +15930,23 @@ mod from_dialog_builtin_action_validation_tests_45 {
         assert!(actions.iter().any(|a| a.id == "copy_deeplink"));
     }
 
-    // =========== 15. Script: get_global_actions empty ===========
+    // =========== 15. Script: get_global_actions seeded ===========
 
     #[test]
-    fn global_actions_returns_empty() {
+    fn global_actions_returns_seeded() {
         let actions = get_global_actions();
-        assert!(actions.is_empty());
+        // Seeded, never empty: reload_scripts, settings, view_logs plus
+        // config-dependent prompt-export / handoff actions.
+        assert!(!actions.is_empty());
     }
 
     #[test]
-    fn global_actions_len_zero() {
+    fn global_actions_contains_core_ids() {
         let actions = get_global_actions();
-        assert_eq!(actions.len(), 0);
+        let ids: Vec<&str> = actions.iter().map(|a| a.id.as_str()).collect();
+        assert!(ids.contains(&"reload_scripts"));
+        assert!(ids.contains(&"settings"));
+        assert!(ids.contains(&"view_logs"));
     }
 
     #[test]
@@ -15936,9 +15958,9 @@ mod from_dialog_builtin_action_validation_tests_45 {
     }
 
     #[test]
-    fn global_actions_no_global_ops() {
+    fn global_actions_has_global_ops() {
         let actions = get_global_actions();
-        assert!(!actions
+        assert!(actions
             .iter()
             .any(|a| a.category == ActionCategory::GlobalOps));
     }

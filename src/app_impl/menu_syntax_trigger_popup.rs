@@ -922,7 +922,9 @@ mod tests {
 
     #[test]
     fn colon_query_highlights_qualifier_token() {
-        let snap = build_trigger_picker_snapshot(":", &ctx()).expect("colon snapshot");
+        // Bare `:` now lists only open-value qualifier heads (b3f83a991);
+        // concrete `type:script` rows appear once the head is being typed.
+        let snap = build_trigger_picker_snapshot(":type", &ctx()).expect("colon type snapshot");
         let row = snap
             .rows
             .iter()
@@ -951,14 +953,17 @@ mod tests {
 
     #[test]
     fn footer_rows_do_not_highlight_partial_queries() {
-        let snap = build_trigger_picker_snapshot("+", &ctx()).expect("plus snapshot");
+        // The bare-sigil picker no longer appends a footer row; the
+        // create-handler footer only appears once a slug filter is typed
+        // (`;t`), so exercise the footer from that state.
+        let snap = build_trigger_picker_snapshot(";t", &ctx()).expect("semicolon slug snapshot");
         let row = snap
             .rows
             .iter()
             .find(|row| row.kind == TriggerPickerRowKind::FooterAction)
             .expect("footer action row");
 
-        let highlights = trigger_popup_row_highlight_indices(row, "+t");
+        let highlights = trigger_popup_row_highlight_indices(row, ";t");
 
         assert!(highlights.title.is_empty());
         assert!(highlights.meta.is_empty());

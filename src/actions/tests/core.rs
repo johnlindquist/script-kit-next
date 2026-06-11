@@ -28,7 +28,7 @@ mod core_part_01 {
     #[test]
     fn test_actions_exceed_visible_space() {
         // Verify script context actions count
-        // Global actions are now empty (Settings/Quit in main menu only)
+        // Global actions are seeded (reload_scripts/settings/view_logs + prompt handoff)
         let script = ScriptInfo::new("test-script", "/path/to/test.ts");
         let script_actions = get_script_context_actions(&script);
         let global_actions = get_global_actions();
@@ -42,7 +42,11 @@ mod core_part_01 {
             total_actions >= 7,
             "Should have at least 7 script context actions"
         );
-        assert!(global_actions.is_empty(), "Global actions should be empty");
+        let global_ids: Vec<&str> = global_actions.iter().map(|a| a.id.as_str()).collect();
+        assert!(
+            global_ids.contains(&"reload_scripts"),
+            "global actions should be seeded with reload_scripts: {global_ids:?}"
+        );
 
         // Log for visibility
         println!(
@@ -796,7 +800,8 @@ use crate::actions::{
             .find(|a| a.id == "run_script")
             .expect("run_script action should exist");
 
-        assert_eq!(run_action.title, "Switch To");
-        assert_eq!(run_action.description.as_deref(), Some("Switch to this item"));
+        // Built-in catalog entries preserve their action verb text exactly.
+        assert_eq!(run_action.title, "Switch to");
+        assert_eq!(run_action.description.as_deref(), Some("Switch to"));
     }
 }

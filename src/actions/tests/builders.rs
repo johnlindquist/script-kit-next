@@ -910,16 +910,19 @@ fn action_has_action_defaults_to_false() {
 }
 
 // ============================================================
-// 10. Global actions (currently empty, verify contract)
+// 10. Global actions (seeded with launcher ops, verify contract)
 // ============================================================
 
 #[test]
-fn global_actions_are_empty() {
+fn global_actions_are_seeded() {
     let actions = get_global_actions();
+    let ids: Vec<&str> = actions.iter().map(|a| a.id.as_str()).collect();
     assert!(
-        actions.is_empty(),
-        "Global actions should be empty (Settings/Quit are in main menu)"
+        ids.contains(&"reload_scripts"),
+        "missing reload_scripts: {ids:?}"
     );
+    assert!(ids.contains(&"settings"), "missing settings: {ids:?}");
+    assert!(ids.contains(&"view_logs"), "missing view_logs: {ids:?}");
 }
 
 // ============================================================

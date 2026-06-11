@@ -1831,8 +1831,15 @@ mod tests {
             None
         );
         assert_eq!(
-            normalize_generate_script_request(Some("  generate script with ai  ")),
+            normalize_generate_script_request(Some("  generate script with agent chat  ")),
             None
+        );
+        // The pre-rename label ("Generate Script with AI", renamed in
+        // edf723a8a) is no longer special-cased and passes through as a
+        // real generation request.
+        assert_eq!(
+            normalize_generate_script_request(Some("generate script with ai")),
+            Some("generate script with ai")
         );
         assert_eq!(
             normalize_generate_script_request(Some("build a clipboard cleanup script")),

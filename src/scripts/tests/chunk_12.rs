@@ -616,21 +616,24 @@ fn test_get_grouped_results_default_suggestions_for_new_users() {
         .collect();
 
     // Default suggestions should appear in order from DEFAULT_SUGGESTED_ITEMS
-    // Some Other Command is NOT in defaults, goes to COMMANDS
+    // (reordered by observed user frequency; "Do in Current App" leads and is
+    // rendered with its dynamic per-app name, here "Safari Commands").
+    // "SDK Reference" is no longer a default suggestion, so it lands in
+    // COMMANDS alongside "Some Other Command".
     assert_eq!(
         grouped_names,
         vec![
             "[Suggested]",
-            "Agent Chat",
             "Safari Commands",
-            "New Script",
-            "Clipboard History",
-            "Open Notes",
+            "Agent Chat",
             "Search Files",
+            "Clipboard History",
             "Search Browser Tabs",
             "Quick Terminal",
-            "SDK Reference",
+            "Open Notes",
+            "New Script",
             "[Commands]",
+            "SDK Reference",
             "Some Other Command",
         ],
         "Default suggested items should appear in SUGGESTED for new users, others in COMMANDS. Got: {:?}",

@@ -486,19 +486,26 @@ mod tests {
     }
 
     #[test]
-    fn accept_source_head_from_exact_colon_inserts_root_filter_and_closes() {
+    fn accept_default_from_exact_colon_inserts_first_qualifier_head_and_keeps_open() {
+        // b3f83a991 removed root source heads (`files:`, `notes:`, …) from
+        // the bare `:` picker; it now lists open-value qualifier heads with
+        // `has:` first. Accept with no explicit selection falls back to that
+        // first row and keeps the picker open for the value.
         let snap = build_trigger_picker_snapshot(":", &ctx()).expect("colon snapshot");
-        let files_idx = snap
+        let has_idx = snap
             .rows
             .iter()
-            .position(|r| r.token.as_deref() == Some("files:"))
-            .expect("files source head row");
+            .position(|r| r.token.as_deref() == Some("has:"))
+            .expect("has qualifier head row");
         let outcome = apply_intent(InlinePickerKeyIntent::Accept, &snap, None, ":");
         match outcome {
             TriggerPickerIntentOutcome::ReplaceInput { text, keep_open } => {
-                assert_eq!(files_idx, 0, "files: should be the first source head");
-                assert_eq!(text, "files:");
-                assert!(!keep_open, "Accept on source head should close the picker");
+                assert_eq!(has_idx, 0, "has: should be the first qualifier head");
+                assert_eq!(text, "has:");
+                assert!(
+                    keep_open,
+                    "Accept on an open-value qualifier head should keep the picker open"
+                );
             }
             other => panic!("expected ReplaceInput, got {other:?}"),
         }

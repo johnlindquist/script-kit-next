@@ -51,7 +51,12 @@ mod tests {
         assert_eq!(relative_time(1_000, 995), "just now");
         assert_eq!(relative_time(4_000, 3_880), "2 minutes ago");
         assert_eq!(relative_time(10_000, 2_800), "2 hours ago");
-        assert_eq!(relative_time(200_000, 100_000), "1 day ago");
+        // format_relative_seconds uses chrono-humanize Accuracy::Precise with
+        // minute flooring (see formatting.rs), so day-scale gaps stay precise.
+        assert_eq!(
+            relative_time(200_000, 100_000),
+            "1 day, 3 hours and 46 minutes ago"
+        );
     }
 
     #[test]
@@ -67,7 +72,10 @@ mod tests {
 
     #[test]
     fn absolute_time_formats_valid_timestamp() {
-        let result = absolute_time(0);
+        // absolute_time renders in LOCAL time, so epoch 0 lands in 1969 west of
+        // UTC. Use a mid-1970 timestamp (200 days, in milliseconds) so the year
+        // assertion holds in every timezone.
+        let result = absolute_time(200 * 86_400_000);
         // Should produce a date string, not "unknown time"
         assert_ne!(result, "unknown time");
         assert!(

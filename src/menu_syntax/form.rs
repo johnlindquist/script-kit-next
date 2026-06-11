@@ -1283,7 +1283,9 @@ mod tests {
             .iter()
             .find(|field| field.id == "body")
             .expect("body field");
-        assert_eq!(body.label, "Snippet");
+        // Required fields carry a ` *` marker since 467f77b96 ("Fix capture
+        // form required labels and scroll reveal").
+        assert_eq!(body.label, "Snippet *");
         assert_eq!(body.placeholder, "Text to paste/expand");
         assert!(body.multiline);
         assert!(snapshot

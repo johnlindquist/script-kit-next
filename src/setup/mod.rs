@@ -2638,13 +2638,21 @@ mod tab_ai_agent_doc_contract_tests {
             "{label} must describe the landed PTY-backed path"
         );
 
+        // The universal AI entry migrated from plain Tab to Cmd+Enter
+        // (commit b6c5752bb "Deprecate Tab ACP agent chat surface").
         assert!(
             source.contains(
-                "Plain `Tab` in `AppView::ScriptList` routes through the Agent Chat entry path"
+                "Command+Enter in `AppView::ScriptList` routes through the Agent Chat entry path"
             ),
-            "{label} must describe plain Tab as the Agent Chat entry path"
+            "{label} must describe Cmd+Enter as the Agent Chat entry path"
         );
 
+        assert!(
+            !source.contains(
+                "Plain `Tab` in `AppView::ScriptList` routes through the Agent Chat entry path"
+            ),
+            "{label} must not describe plain Tab as the Agent Chat entry path"
+        );
         assert!(
             !source.contains("Plain `Tab` opens the harness terminal"),
             "{label} must not describe plain Tab as opening the harness terminal"

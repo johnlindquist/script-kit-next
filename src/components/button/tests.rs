@@ -139,5 +139,8 @@ fn test_button_layout_tokens_stay_consistent_when_render_spacing_is_updated() {
     assert_eq!(BUTTON_ICON_PADDING_Y, 6.0);
     assert_eq!(BUTTON_CONTENT_GAP_PX, 2.0);
     assert_eq!(BUTTON_SHORTCUT_MARGIN_LEFT_PX, 4.0);
-    assert_eq!(BUTTON_RADIUS_PX, 6.0);
+    // BUTTON_RADIUS_PX is intentionally the shared Liquid Glass compact radius
+    // (6fe004fcc re-pointed it at LIQUID_GLASS_COMPACT_RADIUS_PX = 10.0;
+    // tests/liquid_glass_chrome_token_dedrift_contract.rs guards the token reference).
+    assert_eq!(BUTTON_RADIUS_PX, 10.0);
 }

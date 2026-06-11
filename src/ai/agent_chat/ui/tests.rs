@@ -705,8 +705,14 @@ fn simulated_agent_chat_escape_closes_actions_before_unwinding_chat() {
     let agent_chat_block_start = SIMULATE_KEY_DISPATCH_SOURCE
         .find("AppView::AgentChatView { ref entity, .. } => {")
         .expect("Agent Chat simulateKey branch not found in shared simulate_key_dispatch.rs");
-    let agent_chat_block_end =
-        (agent_chat_block_start + 4200).min(SIMULATE_KEY_DISPATCH_SOURCE.len());
+    // Scope to the whole AgentChatView match arm (up to the next `AppView::`
+    // arm) instead of a fixed char window, so unrelated growth inside the
+    // branch (e.g. spine projection handling) cannot truncate the slice.
+    let arm_search_start = agent_chat_block_start + "AppView::AgentChatView".len();
+    let agent_chat_block_end = SIMULATE_KEY_DISPATCH_SOURCE[arm_search_start..]
+        .find("AppView::")
+        .map(|offset| arm_search_start + offset)
+        .unwrap_or(SIMULATE_KEY_DISPATCH_SOURCE.len());
     let agent_chat_block =
         &SIMULATE_KEY_DISPATCH_SOURCE[agent_chat_block_start..agent_chat_block_end];
 
@@ -1236,8 +1242,13 @@ fn agent_chat_picker_mouse_submit_dismisses_popup_window() {
         activate < clear_slot && clear_slot < remove_window,
         "double-click or second-click submit must dismiss the slash/@ picker popup after activation"
     );
+    // Whitespace-normalized so rustfmt line wrapping cannot break the check.
+    let normalized: String = click_handler
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
     assert!(
-        click_handler.contains("is_actionable && should_submit_agent_chat_picker_row_click"),
+        normalized.contains("is_actionable && should_submit_agent_chat_picker_row_click"),
         "inert picker rows must not be dismissed as submitted actions"
     );
 }
@@ -1953,9 +1964,15 @@ fn agent_handoff_derives_launch_requirements() {
         TAB_AI_MODE_SOURCE.contains("AgentChatLaunchRequirements"),
         "agent_handoff must derive AgentChatLaunchRequirements"
     );
+    // The legacy `agent_chat_open_retry_request_consumed` event was removed in
+    // the Pi-backend launch refactor. The surviving requirements-aware retry
+    // decision is the hot-prewarm skip: a queued retry or non-default
+    // requirements must bypass the prewarmed Agent Chat view.
     assert!(
-        TAB_AI_MODE_SOURCE.contains("agent_chat_open_retry_request_consumed"),
-        "agent_handoff must log retry request consumption with requirements"
+        TAB_AI_MODE_SOURCE.contains("agent_chat_hot_prewarm_skip")
+            && TAB_AI_MODE_SOURCE.contains("retry_request_active")
+            && TAB_AI_MODE_SOURCE.contains("needs_embedded_context"),
+        "agent_handoff must log the requirements-aware prewarm skip decision"
     );
 }
 

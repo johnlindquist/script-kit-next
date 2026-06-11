@@ -1370,6 +1370,21 @@ mod tests {
             },
             ExternalCommand::OpenNotes,
             ExternalCommand::OpenAbout,
+            ExternalCommand::OpenCreationFeedback {
+                path: None,
+                receipt_path: None,
+                receipt_status: None,
+                verification_status: None,
+                request_id: None,
+            },
+            ExternalCommand::OpenConfirmPrompt {
+                title: None,
+                body: None,
+                confirm_text: None,
+                cancel_text: None,
+                request_id: None,
+            },
+            ExternalCommand::OpenAgentChatDetachedFixture { request_id: None },
             ExternalCommand::OpenAi,
             ExternalCommand::OpenMiniAi,
             ExternalCommand::OpenAiWithMockData,
@@ -1424,6 +1439,17 @@ mod tests {
                 submit: false,
                 request_id: None,
             },
+            ExternalCommand::SetAgentChatScopeInput {
+                text: String::new(),
+                request_id: None,
+            },
+            ExternalCommand::SelectAgentChatVariation {
+                index: 0,
+                edit: false,
+                request_id: None,
+            },
+            ExternalCommand::GetAgentChatVariations { request_id: None },
+            ExternalCommand::AgentChatEscape { request_id: None },
             ExternalCommand::SetAgentChatTestFixture {
                 phase: "awaitingFirstAssistantText".to_string(),
                 user_text: None,
@@ -1463,6 +1489,7 @@ mod tests {
                 target: None,
                 request_id: None,
             },
+            ExternalCommand::OpenDictationOverlayFixture { request_id: None },
             ExternalCommand::GetConfigFingerprint { request_id: None },
         ];
 

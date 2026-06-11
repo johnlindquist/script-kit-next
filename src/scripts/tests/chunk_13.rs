@@ -138,15 +138,19 @@ fn test_fuzzy_search_scripts_match_indices_for_name() {
         ..Default::default()
     }]);
 
-    let results = fuzzy_search_scripts(&scripts, "opf");
+    // The tiered match contract no longer admits sparse fuzzy matches like
+    // "opf" (fuzzy requires >= 4 chars and a compact/abbreviation shape);
+    // contiguous substrings are the stable name tier, so use one to exercise
+    // the lazy index computation.
+    let results = fuzzy_search_scripts(&scripts, "enfi");
     assert_eq!(results.len(), 1);
     // Match indices are now computed lazily - verify using compute_match_indices_for_result
     let indices =
-        compute_match_indices_for_result(&SearchResult::Script(results[0].clone()), "opf");
-    // "opf" matches indices 0, 1, 4 in "openfile"
+        compute_match_indices_for_result(&SearchResult::Script(results[0].clone()), "enfi");
+    // "enfi" matches indices 2..=5 in "openfile"
     assert_eq!(
         indices.name_indices,
-        vec![0, 1, 4],
+        vec![2, 3, 4, 5],
         "Should return correct match indices for name"
     );
 }
@@ -164,15 +168,18 @@ fn test_fuzzy_search_scripts_match_indices_for_filename() {
         ..Default::default()
     }]);
 
-    let results = fuzzy_search_scripts(&scripts, "mts");
+    // Filename matching is restricted to exact contiguous substrings by the
+    // tiered match contract (sparse fuzzy like "mts" no longer matches), so
+    // use a substring of the filename that does not occur in the name.
+    let results = fuzzy_search_scripts(&scripts, "test");
     assert_eq!(results.len(), 1);
     // Match indices are now computed lazily - verify using compute_match_indices_for_result
     let indices =
-        compute_match_indices_for_result(&SearchResult::Script(results[0].clone()), "mts");
-    // "mts" matches indices in "my-test.ts": m=0, t=3, s=5
+        compute_match_indices_for_result(&SearchResult::Script(results[0].clone()), "test");
+    // "test" matches indices 3..=6 in "my-test.ts"
     assert_eq!(
         indices.filename_indices,
-        vec![0, 3, 5],
+        vec![3, 4, 5, 6],
         "Should return correct match indices for filename when name doesn't match"
     );
 }
