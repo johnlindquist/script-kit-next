@@ -3615,6 +3615,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "gpui-component-assets"
+version = "0.5.0"
+dependencies = [
+ "anyhow",
+ "gpui",
+ "rust-embed",
+]
+
+[[package]]
 name = "gpui-component-macros"
 version = "0.5.0"
 dependencies = [
@@ -7663,6 +7672,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "rust-embed-utils",
+ "shellexpand 3.1.2",
  "syn 2.0.117",
  "walkdir",
 ]
@@ -8106,6 +8116,7 @@ dependencies = [
  "global-hotkey",
  "gpui",
  "gpui-component",
+ "gpui-component-assets",
  "gpui_macos",
  "gpui_macros",
  "gpui_platform",
@@ -8132,13 +8143,14 @@ dependencies = [
  "regex",
  "resvg",
  "rusqlite",
+ "rust-embed",
  "rustfft",
  "semver",
  "serde",
  "serde_json",
  "serde_yaml",
  "sha2",
- "shellexpand",
+ "shellexpand 2.1.2",
  "smallvec",
  "smappservice-rs",
  "strum 0.26.3",
@@ -8441,6 +8453,15 @@ name = "shellexpand"
 version = "2.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7ccc8076840c4da029af4f87e4e8daeb0fca6b87bbb02e10cb60b791450e11e4"
+dependencies = [
+ "dirs 4.0.0",
+]
+
+[[package]]
+name = "shellexpand"
+version = "3.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "32824fab5e16e6c4d86dc1ba84489390419a39f97699852b66480bb87d297ed8"
 dependencies = [
  "dirs 4.0.0",
 ]

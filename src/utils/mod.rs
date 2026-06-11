@@ -7,7 +7,7 @@
 //! - `tailwind`: Tailwind CSS class mapping
 
 mod applescript;
-mod assets;
+pub mod assets;
 mod html;
 mod paths;
 mod tailwind;
@@ -19,8 +19,6 @@ pub(crate) fn truncate_str_chars(s: &str, max_chars: usize) -> &str {
 // Re-export all public items for backwards compatibility
 // Allow unused imports - these are public API exports for external use
 pub use applescript::escape_applescript_string;
-#[allow(unused_imports)]
-pub use assets::{get_asset_path, get_logo_path};
 #[allow(unused_imports)]
 pub use html::{elements_to_text, parse_html, strip_html_tags, HtmlElement};
 pub use paths::render_path_with_highlights;
@@ -41,10 +39,7 @@ mod tests {
         assert!(text.contains("test"));
 
         // Assets
-        let path = get_asset_path("test.svg");
-        assert!(path.contains("test.svg"));
-        let logo = get_logo_path();
-        assert!(logo.contains("logo.svg"));
+        assert!(assets::embedded_asset_exists("logo.svg"));
 
         // Paths
         let highlights = render_path_with_highlights("path/to/file.txt", "file.txt", &[]);

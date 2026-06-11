@@ -187,9 +187,7 @@ impl AiApp {
                                             }))
                                             .child(
                                                 svg()
-                                                    .external_path(
-                                                        LocalIconName::Pencil.external_path(),
-                                                    )
+                                                    .path(LocalIconName::Pencil.asset_path())
                                                     .size(ICON_XS)
                                                     .text_color(
                                                         cx.theme()
@@ -221,9 +219,7 @@ impl AiApp {
                                         .when(is_copied, |d| {
                                             d.child(
                                                 svg()
-                                                    .external_path(
-                                                        LocalIconName::Check.external_path(),
-                                                    )
+                                                    .path(LocalIconName::Check.asset_path())
                                                     .size(ICON_XS)
                                                     .text_color(cx.theme().success),
                                             )
@@ -231,9 +227,7 @@ impl AiApp {
                                         .when(!is_copied, |d| {
                                             d.child(
                                                 svg()
-                                                    .external_path(
-                                                        LocalIconName::Copy.external_path(),
-                                                    )
+                                                    .path(LocalIconName::Copy.asset_path())
                                                     .size(ICON_XS)
                                                     .text_color(
                                                         cx.theme()
@@ -354,9 +348,7 @@ impl AiApp {
                                             }))
                                             .child(
                                                 svg()
-                                                    .external_path(
-                                                        LocalIconName::Pencil.external_path(),
-                                                    )
+                                                    .path(LocalIconName::Pencil.asset_path())
                                                     .size(ICON_XS)
                                                     .text_color(
                                                         cx.theme()
@@ -385,13 +377,13 @@ impl AiApp {
                                         }))
                                         .child(
                                             svg()
-                                                .external_path(
+                                                .path(
                                                     if is_copied {
                                                         LocalIconName::Check
                                                     } else {
                                                         LocalIconName::Copy
                                                     }
-                                                    .external_path(),
+                                                    .asset_path(),
                                                 )
                                                 .size(ICON_XS)
                                                 .text_color(if is_copied {
@@ -475,13 +467,13 @@ impl AiApp {
                                         }))
                                         .child(
                                             svg()
-                                                .external_path(
+                                                .path(
                                                     if is_collapsed {
                                                         LocalIconName::ChevronDown
                                                     } else {
                                                         LocalIconName::ArrowUp
                                                     }
-                                                    .external_path(),
+                                                    .asset_path(),
                                                 )
                                                 .size(ICON_XS)
                                                 .text_color(

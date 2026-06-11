@@ -187,7 +187,7 @@ fn render_logo_block(palette: NonListPalette, metrics: NonListMetrics) -> Div {
         .justify_center()
         .child(
             svg()
-                .external_path(crate::utils::get_logo_path())
+                .path("logo.svg")
                 .size(px(36.0))
                 .text_color(palette.accent),
         )

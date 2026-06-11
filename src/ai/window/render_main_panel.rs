@@ -249,9 +249,7 @@ impl AiApp {
                                         },
                                     )
                                     .child(
-                                        svg()
-                                            .external_path(LocalIconName::Close.external_path())
-                                            .size(ICON_SM),
+                                        svg().path(LocalIconName::Close.asset_path()).size(ICON_SM),
                                     )
                                     .into_any_element()
                             } else if !input_is_empty {
@@ -286,7 +284,7 @@ impl AiApp {
                                     })
                                     .child(
                                         svg()
-                                            .external_path(LocalIconName::ArrowUp.external_path())
+                                            .path(LocalIconName::ArrowUp.asset_path())
                                             .size(ICON_SM),
                                     )
                                     .into_any_element()
@@ -305,7 +303,7 @@ impl AiApp {
                                     )
                                     .child(
                                         svg()
-                                            .external_path(LocalIconName::ArrowUp.external_path())
+                                            .path(LocalIconName::ArrowUp.asset_path())
                                             .size(ICON_SM),
                                     )
                                     .into_any_element()
@@ -592,7 +590,7 @@ impl AiApp {
                     }))
                     .child(
                         svg()
-                            .external_path(chevron_icon.external_path())
+                            .path(chevron_icon.asset_path())
                             .size(ICON_XS)
                             .text_color(text_color),
                     )
@@ -1290,7 +1288,7 @@ impl AiApp {
                     .border_color(chip_border)
                     .child(
                         svg()
-                            .external_path(icon_name.external_path())
+                            .path(icon_name.asset_path())
                             .size(ICON_XS)
                             .text_color(accent),
                     )
@@ -1321,7 +1319,7 @@ impl AiApp {
                             }))
                             .child(
                                 svg()
-                                    .external_path(chevron_icon.external_path())
+                                    .path(chevron_icon.asset_path())
                                     .size(ICON_XS)
                                     .text_color(muted_fg),
                             ),
@@ -1339,7 +1337,7 @@ impl AiApp {
                         }))
                         .child(
                             svg()
-                                .external_path(LocalIconName::Close.external_path())
+                                .path(LocalIconName::Close.asset_path())
                                 .size(ICON_XS)
                                 .text_color(muted_fg),
                         ),
@@ -1449,7 +1447,7 @@ impl AiApp {
                     .gap(S1)
                     .child(
                         svg()
-                            .external_path(LocalIconName::Warning.external_path())
+                            .path(LocalIconName::Warning.asset_path())
                             .size(ICON_XS)
                             .text_color(theme.warning),
                     )

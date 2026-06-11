@@ -272,8 +272,8 @@ fn render_leading(
         Some(LeadingContent::Icon { name, color }) => {
             let icon_color_final = color.map(rgb).unwrap_or(icon_color);
             let svg_path = icon_name_from_str(name)
-                .map(|i| i.external_path())
-                .unwrap_or_else(|| IconName::Code.external_path());
+                .map(|i| i.asset_path())
+                .unwrap_or_else(|| IconName::Code.asset_path());
             Some(
                 div()
                     .w(px(layout.leading_size))
@@ -284,7 +284,7 @@ fn render_leading(
                     .flex_shrink_0()
                     .child(
                         svg()
-                            .external_path(svg_path)
+                            .path(svg_path)
                             .size(px(layout.leading_size - 4.0))
                             .text_color(icon_color_final),
                     ),

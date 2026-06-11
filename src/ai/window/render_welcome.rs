@@ -130,7 +130,7 @@ impl AiApp {
                                         .flex_shrink_0()
                                         .child(
                                             svg()
-                                                .external_path(icon.external_path())
+                                                .path(icon.asset_path())
                                                 .size(MINI_WELCOME_ICON_SIZE)
                                                 .text_color(palette.accent),
                                         ),
@@ -245,7 +245,7 @@ impl AiApp {
                                             .flex_shrink_0()
                                             .child(
                                                 svg()
-                                                    .external_path(icon.external_path())
+                                                    .path(icon.asset_path())
                                                     .size(px(metrics.icon_size * 0.45))
                                                     .text_color(palette.accent),
                                             ),

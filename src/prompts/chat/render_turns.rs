@@ -158,7 +158,7 @@ impl ChatPrompt {
             .hover(|s| s.opacity(1.0).bg(copy_hover_bg))
             .child(
                 svg()
-                    .external_path(IconName::Copy.external_path())
+                    .path(IconName::Copy.asset_path())
                     .size(px(16.))
                     .text_color(rgb(theme_colors.text.secondary)),
             )

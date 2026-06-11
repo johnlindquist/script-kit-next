@@ -260,67 +260,46 @@ impl IconName {
         format!("icons/{}.svg", file_name).into()
     }
 
-    /// Get the full external path for GPUI svg().external_path()
-    /// Returns a &'static str for GPUI compatibility
-    pub fn external_path(&self) -> &'static str {
+    /// Embedded asset path for GPUI `svg().path(...)`, resolved by the app's
+    /// AssetSource (`crate::utils::assets::AppAssets`).
+    ///
+    /// P0 REGRESSION GUARD (2026-06-11): the old `external_path()` baked
+    /// `env!("CARGO_MANIFEST_DIR")` absolute paths into the binary, so every
+    /// icon rendered from a RELEASED .app pointed at the CI runner's
+    /// filesystem and silently drew nothing. Icons must load from embedded
+    /// assets, never from compile-time filesystem paths.
+    pub fn asset_path(&self) -> &'static str {
         match self {
-            Self::File => concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/file.svg"),
-            Self::FileCode => concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/file_code.svg"),
-            Self::Folder => concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/folder.svg"),
-            Self::FolderOpen => {
-                concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/folder_open.svg")
-            }
-            Self::Plus => concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/plus.svg"),
-            Self::Trash => concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/trash.svg"),
-            Self::Copy => concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/copy.svg"),
-            Self::Settings => concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/settings.svg"),
-            Self::MagnifyingGlass => concat!(
-                env!("CARGO_MANIFEST_DIR"),
-                "/assets/icons/magnifying_glass.svg"
-            ),
-            Self::Terminal => concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/terminal.svg"),
-            Self::Code => concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/code.svg"),
-            Self::Pencil => concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/edit_3.svg"),
-            Self::Check => concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/check.svg"),
-            Self::Star => concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/star.svg"),
-            Self::StarFilled => {
-                concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/star_filled.svg")
-            }
-            Self::BoltFilled => {
-                concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/bolt_filled.svg")
-            }
-            Self::BoltOutlined => concat!(
-                env!("CARGO_MANIFEST_DIR"),
-                "/assets/icons/bolt_outlined.svg"
-            ),
-            Self::EyeOff => concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/eye_off.svg"),
-            Self::Warning => concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/warning.svg"),
-            Self::ArrowRight => {
-                concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/arrow_right.svg")
-            }
-            Self::ArrowDown => concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/arrow_down.svg"),
-            Self::ArrowUp => concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/arrow_up.svg"),
-            Self::ChevronRight => concat!(
-                env!("CARGO_MANIFEST_DIR"),
-                "/assets/icons/chevron_right.svg"
-            ),
-            Self::ChevronDown => {
-                concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/chevron_down.svg")
-            }
-            Self::Close => concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/close.svg"),
-            Self::PlayFilled => {
-                concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/play_filled.svg")
-            }
-            Self::PlayOutlined => concat!(
-                env!("CARGO_MANIFEST_DIR"),
-                "/assets/icons/play_outlined.svg"
-            ),
-            Self::Sidebar => concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/sidebar.svg"),
-            Self::Refresh => concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/refresh.svg"),
-            Self::MessageCircle => concat!(
-                env!("CARGO_MANIFEST_DIR"),
-                "/assets/icons/message_circle.svg"
-            ),
+            Self::File => "icons/file.svg",
+            Self::FileCode => "icons/file_code.svg",
+            Self::Folder => "icons/folder.svg",
+            Self::FolderOpen => "icons/folder_open.svg",
+            Self::Plus => "icons/plus.svg",
+            Self::Trash => "icons/trash.svg",
+            Self::Copy => "icons/copy.svg",
+            Self::Settings => "icons/settings.svg",
+            Self::MagnifyingGlass => "icons/magnifying_glass.svg",
+            Self::Terminal => "icons/terminal.svg",
+            Self::Code => "icons/code.svg",
+            Self::Pencil => "icons/edit_3.svg",
+            Self::Check => "icons/check.svg",
+            Self::Star => "icons/star.svg",
+            Self::StarFilled => "icons/star_filled.svg",
+            Self::BoltFilled => "icons/bolt_filled.svg",
+            Self::BoltOutlined => "icons/bolt_outlined.svg",
+            Self::EyeOff => "icons/eye_off.svg",
+            Self::Warning => "icons/warning.svg",
+            Self::ArrowRight => "icons/arrow_right.svg",
+            Self::ArrowDown => "icons/arrow_down.svg",
+            Self::ArrowUp => "icons/arrow_up.svg",
+            Self::ChevronRight => "icons/chevron_right.svg",
+            Self::ChevronDown => "icons/chevron_down.svg",
+            Self::Close => "icons/close.svg",
+            Self::PlayFilled => "icons/play_filled.svg",
+            Self::PlayOutlined => "icons/play_outlined.svg",
+            Self::Sidebar => "icons/sidebar.svg",
+            Self::Refresh => "icons/refresh.svg",
+            Self::MessageCircle => "icons/message_circle.svg",
         }
     }
 

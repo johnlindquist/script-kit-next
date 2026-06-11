@@ -588,9 +588,7 @@ impl Render for AiApp {
                                     }))
                                     .child(
                                         svg()
-                                            .external_path(
-                                                LocalIconName::MessageCircle.external_path(),
-                                            )
+                                            .path(LocalIconName::MessageCircle.asset_path())
                                             .size(ICON_SM),
                                     ),
                             )
@@ -620,9 +618,7 @@ impl Render for AiApp {
                                         );
                                     }))
                                     .child(
-                                        svg()
-                                            .external_path(LocalIconName::Plus.external_path())
-                                            .size(ICON_SM),
+                                        svg().path(LocalIconName::Plus.asset_path()).size(ICON_SM),
                                     ),
                             )
                             // Actions — bolt icon button
@@ -652,9 +648,7 @@ impl Render for AiApp {
                                     }))
                                     .child(
                                         svg()
-                                            .external_path(
-                                                LocalIconName::BoltFilled.external_path(),
-                                            )
+                                            .path(LocalIconName::BoltFilled.asset_path())
                                             .size(ICON_SM),
                                     ),
                             )
@@ -687,9 +681,7 @@ impl Render for AiApp {
                                     }))
                                     .child(
                                         svg()
-                                            .external_path(
-                                                LocalIconName::ChevronRight.external_path(),
-                                            )
+                                            .path(LocalIconName::ChevronRight.asset_path())
                                             .size(ICON_SM),
                                     ),
                             ),

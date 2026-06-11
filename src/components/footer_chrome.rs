@@ -55,15 +55,12 @@ pub(crate) const FOOTER_CHIP_BORDER_ALPHA: f32 = 0.18;
 pub(crate) const FOOTER_CHIP_BORDER_HOVER_ALPHA: f32 = 0.34;
 pub(crate) const FOOTER_CHIP_BORDER_SELECTED_ALPHA: f32 = 0.40;
 pub(crate) const FOOTER_MIC_ICON_TOKEN: &str = "mic";
-pub(crate) const FOOTER_MIC_ICON_PATH: &str = concat!(
-    env!("CARGO_MANIFEST_DIR"),
-    "/vendor/gpui-component/crates/assets/assets/icons/mic.svg"
-);
+// Embedded Lucide asset paths, resolved by AppAssets via svg().path().
+// Compile-time CARGO_MANIFEST_DIR/vendor filesystem paths broke in released
+// bundles — they point at the CI runner (P0 2026-06-11).
+pub(crate) const FOOTER_MIC_ICON_PATH: &str = "icons/mic.svg";
 pub(crate) const FOOTER_PROFILE_ICON_TOKEN: &str = "bot";
-pub(crate) const FOOTER_PROFILE_ICON_PATH: &str = concat!(
-    env!("CARGO_MANIFEST_DIR"),
-    "/vendor/gpui-component/crates/assets/assets/icons/bot.svg"
-);
+pub(crate) const FOOTER_PROFILE_ICON_PATH: &str = "icons/bot.svg";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[allow(dead_code)]
@@ -868,12 +865,10 @@ pub(crate) fn footer_icon_path(token: &str) -> Option<String> {
             {
                 return None;
             }
-            let path = format!(
-                "{}/vendor/gpui-component/crates/assets/assets/icons/{}.svg",
-                env!("CARGO_MANIFEST_DIR"),
-                trimmed
-            );
-            std::path::Path::new(&path).exists().then_some(path)
+            // Validate against the EMBEDDED Lucide set (AppAssets), not the
+            // repo checkout — vendor/ does not exist next to a released .app.
+            let path = format!("icons/{trimmed}.svg");
+            crate::utils::assets::embedded_asset_exists(&path).then_some(path)
         }
     }
 }
@@ -1134,7 +1129,7 @@ fn render_footer_keycap_with_metrics(
     let keycap_font_size = keycap_font_size_px.unwrap_or(metrics.keycap_font_size);
     let token_child: AnyElement = if let Some(path) = footer_icon_path(&token) {
         svg()
-            .external_path(path)
+            .path(path)
             .size(px((keycap_font_size + 1.0).max(10.0)))
             .flex_shrink_0()
             .text_color(footer_text)

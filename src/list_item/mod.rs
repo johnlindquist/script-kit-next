@@ -54,33 +54,33 @@ fn looks_like_symbol_icon_hint(icon_hint: &str) -> bool {
     !has_ascii_alnum && char_count <= 4
 }
 
-/// Resolve an icon hint to an on-disk SVG path for list-item rendering.
+/// Resolve an icon hint to an SVG source for list-item rendering.
+///
+/// Returns either an embedded asset path ("icons/foo.svg", served by
+/// `AppAssets`) or an absolute on-disk path for script-provided icon files.
+/// Render with `crate::utils::assets::svg_icon_source`, which picks the
+/// loader by path kind. Never bake CARGO_MANIFEST_DIR filesystem paths here:
+/// they point at the CI runner in released bundles (P0 2026-06-11).
 fn resolve_svg_icon_path(name: &str) -> String {
     let trimmed = name.trim();
     if trimmed.ends_with(".svg") {
         let explicit_path = std::path::Path::new(trimmed);
-        let candidate = if explicit_path.is_absolute() {
-            explicit_path.to_path_buf()
-        } else {
-            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(explicit_path)
-        };
-        if candidate.exists() {
-            return candidate.to_string_lossy().to_string();
+        if explicit_path.is_absolute() && explicit_path.exists() {
+            return trimmed.to_string();
+        }
+        if crate::utils::assets::embedded_asset_exists(trimmed) {
+            return trimmed.to_string();
         }
     }
 
     if let Some(icon_name) = icon_name_from_str(trimmed) {
-        icon_name.external_path().to_string()
+        icon_name.asset_path().to_string()
     } else {
-        let lucide_path = format!(
-            "{}/vendor/gpui-component/crates/assets/assets/icons/{}.svg",
-            env!("CARGO_MANIFEST_DIR"),
-            trimmed
-        );
-        if std::path::Path::new(&lucide_path).exists() {
+        let lucide_path = format!("icons/{trimmed}.svg");
+        if crate::utils::assets::embedded_asset_exists(&lucide_path) {
             lucide_path
         } else {
-            IconName::Code.external_path().to_string()
+            IconName::Code.asset_path().to_string()
         }
     }
 }
@@ -869,7 +869,7 @@ impl EmptyState {
         if let Some(icon) = self.icon {
             element = element.child(
                 svg()
-                    .external_path(icon.external_path())
+                    .path(icon.asset_path())
                     .size(px(EMPTY_STATE_ICON_SIZE))
                     .text_color(rgba((self.text_color << 8) | ALPHA_EMPTY_ICON)),
             );
@@ -1743,8 +1743,7 @@ impl RenderOnce for ListItem {
                     .justify_center()
                     .flex_shrink_0()
                     .child(
-                        svg()
-                            .external_path(svg_path)
+                        crate::utils::assets::svg_icon_source(svg(), &svg_path)
                             .size(svg_size)
                             .text_color(icon_text_color),
                     )
@@ -2151,8 +2150,7 @@ impl RenderOnce for ListItem {
                         })
                         .flex_shrink_0()
                         .child(
-                            svg()
-                                .external_path(svg_path)
+                            crate::utils::assets::svg_icon_source(svg(), &svg_path)
                                 .size(px(self.main_menu_theme.def().metadata.type_accessory_size))
                                 .text_color(accent_color),
                         ),
@@ -2378,7 +2376,7 @@ pub fn render_section_header(
         if let Some(icon_name) = icon_name_from_str(name) {
             content = content.child(
                 svg()
-                    .external_path(icon_name.external_path())
+                    .path(icon_name.asset_path())
                     .size(px(metrics.section_icon_size))
                     .text_color(rgba((colors.text_primary << 8) | colors.alpha_muted)),
             );

@@ -356,7 +356,7 @@ impl ScriptListApp {
                                     }
                                     GalleryItem::Icon(icon, _style) => {
                                         // Render icon item with SVG
-                                        let icon_path = icon.external_path();
+                                        let icon_path = icon.asset_path();
                                         let name_owned = icon.name().to_string();
                                         let desc_owned = icon.description().to_string();
 
@@ -398,7 +398,7 @@ impl ScriptListApp {
                                                     .justify_center()
                                                     .child(
                                                         svg()
-                                                            .external_path(icon_path)
+                                                            .path(icon_path)
                                                             .size(px(16.0))
                                                             .text_color(rgb(
                                                                 design_colors_clone.text_primary

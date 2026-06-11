@@ -548,15 +548,9 @@ impl GpuiFooterOverlay {
             .as_deref()
             .and_then(crate::components::footer_chrome::footer_icon_path)
         {
-            row = row.child(
-                svg()
-                    .external_path(path)
-                    .size(px(13.0))
-                    .flex_shrink_0()
-                    .text_color(crate::components::footer_chrome::footer_hint_text_color(
-                        theme,
-                    )),
-            );
+            row = row.child(svg().path(path).size(px(13.0)).flex_shrink_0().text_color(
+                crate::components::footer_chrome::footer_hint_text_color(theme),
+            ));
         }
 
         if !info.model_name.trim().is_empty() {

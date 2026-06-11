@@ -1,59 +1,108 @@
 //! Asset path resolution for Script Kit GPUI
 
-/// Get the path to a bundled asset that works both in development and in release builds.
+use std::borrow::Cow;
+
+/// Script Kit's own SVG icons (`assets/icons/*.svg`), embedded at compile
+/// time so `EmbeddedIcon` paths like "icons/copy.svg" resolve in dev builds,
+/// driver sandboxes, and the released .app alike.
+#[derive(rust_embed::RustEmbed)]
+#[folder = "assets"]
+#[include = "icons/**/*.svg"]
+#[include = "logo.svg"]
+struct ScriptKitEmbeddedAssets;
+
+/// The application AssetSource: Script Kit's embedded icons first (exact
+/// snake_case art wins on a name collision like "icons/check.svg"), then
+/// gpui-component's embedded Lucide set (kebab-case, e.g.
+/// "icons/monitor.svg" used by `IconName::path()`).
 ///
-/// In development (cargo run), assets are at `CARGO_MANIFEST_DIR/assets/`.
-/// In release builds (.app bundle), assets are at `APP_BUNDLE/Contents/Resources/assets/`.
-///
-/// # Arguments
-/// * `relative_path` - Path relative to the assets directory (e.g., "logo.svg" or "icons/check.svg")
-///
-/// # Returns
-/// The full path to the asset as a String, suitable for use with GPUI's `svg().external_path()`.
-pub fn get_asset_path(relative_path: &str) -> String {
-    // First, try to find the asset in the app bundle (for release builds)
-    #[cfg(target_os = "macos")]
-    {
-        if let Some(bundle_path) = get_macos_bundle_resources_path() {
-            let asset_path = format!("{}/assets/{}", bundle_path, relative_path);
-            if std::path::Path::new(&asset_path).exists() {
-                return asset_path;
-            }
+/// REGRESSION GUARD: `gpui_platform::application()` defaults to the unit
+/// asset source, which returns `Ok(None)` for every path — with it, every
+/// icon rendered through `svg().path(...)` (all Lucide + EmbeddedIcon call
+/// sites) silently paints NOTHING. This source must stay registered via
+/// `.with_assets(AppAssets)` on the Application in app_run_setup.rs.
+pub struct AppAssets;
+
+impl gpui::AssetSource for AppAssets {
+    fn load(&self, path: &str) -> anyhow::Result<Option<Cow<'static, [u8]>>> {
+        if path.is_empty() {
+            return Ok(None);
         }
+        if let Some(file) = ScriptKitEmbeddedAssets::get(path) {
+            return Ok(Some(file.data));
+        }
+        gpui::AssetSource::load(&gpui_component_assets::Assets, path)
     }
 
-    // Fall back to CARGO_MANIFEST_DIR for development builds
-    // This is set at compile time, so it works when running via `cargo run`
-    let dev_path = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/");
-    format!("{}{}", dev_path, relative_path)
-}
-
-/// Get the macOS app bundle's Resources directory path.
-/// Returns None if not running from an app bundle.
-#[cfg(target_os = "macos")]
-fn get_macos_bundle_resources_path() -> Option<String> {
-    // Get the path to the current executable
-    let exe_path = std::env::current_exe().ok()?;
-
-    // Check if we're in an app bundle structure:
-    // /path/to/App.app/Contents/MacOS/executable
-    let exe_dir = exe_path.parent()?; // Contents/MacOS
-    let contents_dir = exe_dir.parent()?; // Contents
-
-    // Verify this looks like a bundle
-    if contents_dir.file_name()?.to_str()? != "Contents" {
-        return None;
+    fn list(&self, path: &str) -> anyhow::Result<Vec<gpui::SharedString>> {
+        let mut entries: Vec<gpui::SharedString> = ScriptKitEmbeddedAssets::iter()
+            .filter(|p| p.starts_with(path))
+            .map(|p| p.to_string().into())
+            .collect();
+        entries.extend(gpui::AssetSource::list(
+            &gpui_component_assets::Assets,
+            path,
+        )?);
+        entries.sort();
+        entries.dedup();
+        Ok(entries)
     }
+}
 
-    let resources_dir = contents_dir.join("Resources");
-    if resources_dir.exists() {
-        return resources_dir.to_str().map(|s| s.to_string());
+/// Whether `path` resolves through the embedded [`AppAssets`] source.
+/// Used to validate icon tokens without touching the filesystem.
+pub fn embedded_asset_exists(path: &str) -> bool {
+    matches!(gpui::AssetSource::load(&AppAssets, path), Ok(Some(_)))
+}
+
+/// Attach an icon source to an `svg()` builder, picking the right loader:
+/// relative paths ("icons/foo.svg", "logo.svg") load from the embedded
+/// [`AppAssets`] source, absolute paths from disk (script-provided icons).
+pub fn svg_icon_source(svg: gpui::Svg, path: &str) -> gpui::Svg {
+    if std::path::Path::new(path).is_absolute() {
+        svg.external_path(path.to_string())
+    } else {
+        svg.path(path.to_string())
     }
-
-    None
 }
 
-/// Convenience function to get the logo.svg path
-pub fn get_logo_path() -> String {
-    get_asset_path("logo.svg")
+#[cfg(test)]
+mod asset_source_tests {
+    use super::AppAssets;
+    use gpui::AssetSource;
+
+    /// The two icon families the launcher renders through svg().path():
+    /// EmbeddedIcon snake_case paths and Lucide kebab-case paths. If either
+    /// stops resolving, list rows silently lose their icons (P0 2026-06-11).
+    #[test]
+    fn app_assets_resolve_embedded_and_lucide_icons() {
+        for path in [
+            "icons/copy.svg",            // Script Kit EmbeddedIcon
+            "icons/file_code.svg",       // Script Kit EmbeddedIcon
+            "icons/monitor.svg",         // Lucide (builtin "Show Desktop")
+            "icons/sun-moon.svg",        // Lucide (builtin "Toggle Dark Mode")
+            "icons/square-terminal.svg", // Lucide
+        ] {
+            let loaded = AppAssets.load(path).expect("asset load must not error");
+            assert!(
+                loaded.map(|bytes| !bytes.is_empty()).unwrap_or(false),
+                "asset {path:?} must resolve to non-empty bytes"
+            );
+        }
+        assert!(
+            AppAssets.load("icons/definitely-not-an-icon.svg").is_err()
+                || AppAssets
+                    .load("icons/definitely-not-an-icon.svg")
+                    .ok()
+                    .flatten()
+                    .is_none(),
+            "unknown assets must not resolve"
+        );
+    }
 }
+
+// NOTE: the old get_asset_path()/get_logo_path() helpers were removed
+// (P0 2026-06-11): they resolved icons through compile-time
+// CARGO_MANIFEST_DIR filesystem paths, which point at the CI runner in
+// released bundles, silently blanking every icon. All app icons now load
+// through the embedded [`AppAssets`] source via relative paths.

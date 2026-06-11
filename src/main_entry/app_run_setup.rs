@@ -381,7 +381,11 @@
 
     // Register URL scheme handler for scriptkit:// deeplinks
     // This must be done before .run() as it's called on Application
-    let app = gpui_platform::application();
+    // Register the embedded asset source BEFORE run(): without it the
+    // Application falls back to the unit source (always Ok(None)) and every
+    // svg().path(...) icon — Lucide builtin rows, EmbeddedIcon — paints
+    // nothing (P0 2026-06-11). See src/utils/assets.rs.
+    let app = gpui_platform::application().with_assets(crate::utils::assets::AppAssets);
     app.on_open_urls(|urls| {
         logging::log("DEEPLINK", &format!("Received {} URL(s)", urls.len()));
         for url in urls {

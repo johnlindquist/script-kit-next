@@ -38,7 +38,7 @@ impl ChatPrompt {
                     .bg(muted_bg)
                     .child(
                         svg()
-                            .external_path(IconName::Settings.external_path())
+                            .path(IconName::Settings.asset_path())
                             .size(px(36.))
                             .text_color(rgb(colors.text_secondary)),
                     ),
@@ -108,7 +108,7 @@ impl ChatPrompt {
                             }))
                             .child(
                                 svg()
-                                    .external_path(IconName::Settings.external_path())
+                                    .path(IconName::Settings.asset_path())
                                     .size(px(16.))
                                     .text_color(accent_text),
                             )
@@ -166,7 +166,7 @@ impl ChatPrompt {
                             }))
                             .child(
                                 svg()
-                                    .external_path(IconName::Terminal.external_path())
+                                    .path(IconName::Terminal.asset_path())
                                     .size(px(16.))
                                     .text_color(rgb(colors.text_secondary)),
                             )

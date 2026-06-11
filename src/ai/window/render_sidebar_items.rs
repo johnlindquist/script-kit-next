@@ -264,7 +264,7 @@ impl AiApp {
                                 )
                                 .child(
                                     svg()
-                                        .external_path(LocalIconName::Trash.external_path())
+                                        .path(LocalIconName::Trash.asset_path())
                                         .size(S3)
                                         .text_color(muted_fg.opacity(OPACITY_SELECTED)),
                                 )
@@ -286,7 +286,7 @@ impl AiApp {
                         );
                         d.child(
                             svg()
-                                .external_path(LocalIconName::MagnifyingGlass.external_path())
+                                .path(LocalIconName::MagnifyingGlass.asset_path())
                                 .size(SIDEBAR_SEARCH_ICON_SIZE)
                                 .text_color(
                                     cx.theme().accent_foreground.opacity(OPACITY_ACCENT_MEDIUM),

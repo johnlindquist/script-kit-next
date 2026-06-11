@@ -549,7 +549,7 @@ impl AiApp {
                 .when(!has_thumbnail, |el| {
                     el.child(
                         svg()
-                            .external_path(LocalIconName::File.external_path())
+                            .path(LocalIconName::File.asset_path())
                             .size(px(14.))
                             .text_color(cx.theme().accent),
                     )
@@ -579,7 +579,7 @@ impl AiApp {
                         )
                         .child(
                             svg()
-                                .external_path(LocalIconName::Close.external_path())
+                                .path(LocalIconName::Close.asset_path())
                                 .size(px(14.))
                                 .text_color(cx.theme().muted_foreground),
                         ),

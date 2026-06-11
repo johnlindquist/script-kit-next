@@ -1048,7 +1048,7 @@ impl ActionsDialog {
                             shortcut: action.shortcut.clone().map(SharedString::from),
                             icon_svg_path: action
                                 .icon
-                                .map(|icon| SharedString::from(icon.external_path().to_string())),
+                                .map(|icon| SharedString::from(icon.asset_path().to_string())),
                             is_destructive: is_destructive_action(action),
                         },
                     ))
@@ -4259,7 +4259,7 @@ impl Render for ActionsDialog {
                                             if let Some(icon) = action.icon {
                                                 list_item = list_item.icon_kind(
                                                     crate::list_item::IconKind::Svg(
-                                                        icon.external_path().to_string(),
+                                                        icon.asset_path().to_string(),
                                                     ),
                                                 );
                                             }

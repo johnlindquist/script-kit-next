@@ -8535,7 +8535,7 @@ impl AgentChatView {
                 .unwrap_or(crate::components::footer_chrome::FOOTER_PROFILE_ICON_TOKEN),
         );
         let icon = gpui::svg()
-            .external_path(icon_path)
+            .path(icon_path)
             .size(px(13.0))
             .text_color(if active_pending {
                 rgb(theme.colors.accent.selected)

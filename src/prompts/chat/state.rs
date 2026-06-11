@@ -640,7 +640,7 @@ impl ChatPrompt {
                     )
                     .child(
                         svg()
-                            .external_path(IconName::Close.external_path())
+                            .path(IconName::Close.asset_path())
                             .size(px(10.))
                             .text_color(rgb(colors.text.muted)),
                     ),

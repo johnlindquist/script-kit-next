@@ -75,7 +75,7 @@ impl AiApp {
                         .description_opt(description)
                         .source_hint_opt(source_hint)
                         .icon_kind_opt(Some(crate::list_item::IconKind::Svg(
-                            preset.icon.external_path().to_string(),
+                            preset.icon.asset_path().to_string(),
                         )))
                         .type_accessory_opt(Some(
                             crate::list_item::TypeAccessory {

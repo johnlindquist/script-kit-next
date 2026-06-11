@@ -38,7 +38,6 @@ use crate::designs::DesignColors;
 use crate::theme::Theme;
 use crate::ui::chrome::alpha_from_opacity;
 use crate::ui_foundation::{hstack, HexColorExt};
-use crate::utils;
 use crate::window_resize::layout::FOOTER_HEIGHT;
 
 /// Helper text width cap to preserve room for footer actions.
@@ -417,7 +416,7 @@ impl PromptFooter {
     /// Render the Script Kit logo (accent-colored icon, no background)
     fn render_logo(&self) -> impl IntoElement {
         svg()
-            .external_path(utils::get_logo_path())
+            .path("logo.svg")
             .size(px(PROMPT_FOOTER_LOGO_SIZE_PX))
             .ml(px(PROMPT_FOOTER_LOGO_NUDGE_X_PX))
             .text_color(rgb(self.colors.accent)) // Accent color (yellow/gold)

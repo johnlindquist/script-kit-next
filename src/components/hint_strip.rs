@@ -35,13 +35,14 @@ const RETURN_ICON_NUDGE_Y_PX: f32 = 6.0;
 /// Gap between a key icon and its label text within a single hint.
 const KEY_ICON_LABEL_GAP: f32 = 3.0;
 
-/// External (filesystem) paths for keyboard glyph SVGs.
-/// GPUI requires `svg().external_path()` for file-based SVGs; `.path()` is for embedded assets.
-const RETURN_ICON_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/return.svg");
-const TAB_ICON_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/tab.svg");
-const COMMAND_ICON_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/command.svg");
-const SHIFT_ICON_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/shift.svg");
-const ESCAPE_ICON_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/escape.svg");
+/// Embedded asset paths for keyboard glyph SVGs, resolved by AppAssets via
+/// `svg().path()`. Compile-time CARGO_MANIFEST_DIR filesystem paths broke in
+/// released bundles — they point at the CI runner (P0 2026-06-11).
+const RETURN_ICON_PATH: &str = "icons/return.svg";
+const TAB_ICON_PATH: &str = "icons/tab.svg";
+const COMMAND_ICON_PATH: &str = "icons/command.svg";
+const SHIFT_ICON_PATH: &str = "icons/shift.svg";
+const ESCAPE_ICON_PATH: &str = "icons/escape.svg";
 
 const KEYCAP_PADDING_X: f32 = 6.0;
 const KEYCAP_PADDING_Y: f32 = 1.0;
@@ -426,7 +427,7 @@ pub(crate) fn render_inline_shortcut_keys<'a>(
         has_keys = true;
         row = row.child(match inline_shortcut_token(key) {
             InlineShortcutToken::Icon(icon_path) => svg()
-                .external_path(icon_path)
+                .path(icon_path)
                 .size(px(INLINE_SHORTCUT_ICON_SIZE))
                 .flex_shrink_0()
                 .mt(px(icon_nudge_y(icon_path)))
@@ -639,7 +640,7 @@ fn render_hint_element_hsla(element: HintElement, color: gpui::Hsla) -> AnyEleme
             for part in parts {
                 keys_row = keys_row.child(match part {
                     KeyHintPart::Icon(icon_path) => svg()
-                        .external_path(icon_path)
+                        .path(icon_path)
                         .size(px(KEY_ICON_SIZE))
                         .flex_shrink_0()
                         .mt(px(icon_nudge_y(icon_path)))

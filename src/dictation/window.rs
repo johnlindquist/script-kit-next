@@ -1622,7 +1622,7 @@ fn render_mic_action_chip_content(theme: &crate::theme::Theme) -> AnyElement {
         .group_hover("footer-action-button", move |s| s.text_color(full_text))
         .child(
             svg()
-                .external_path(crate::components::footer_chrome::FOOTER_MIC_ICON_PATH)
+                .path(crate::components::footer_chrome::FOOTER_MIC_ICON_PATH)
                 .size(px(13.0))
                 .flex_shrink_0()
                 .text_color(footer_text)

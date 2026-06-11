@@ -190,7 +190,7 @@ impl AiApp {
                                 }))
                                 .child(
                                     svg()
-                                        .external_path(LocalIconName::ChevronDown.external_path())
+                                        .path(LocalIconName::ChevronDown.asset_path())
                                         .size(ICON_SM)
                                         .text_color(cx.theme().accent_foreground),
                                 )

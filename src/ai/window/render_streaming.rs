@@ -293,7 +293,7 @@ impl AiApp {
                     .gap(S2)
                     .child(
                         svg()
-                            .external_path(LocalIconName::Warning.external_path())
+                            .path(LocalIconName::Warning.asset_path())
                             .size(ICON_MD)
                             .text_color(danger),
                     )
@@ -317,7 +317,7 @@ impl AiApp {
                             }))
                             .child(
                                 svg()
-                                    .external_path(LocalIconName::Refresh.external_path())
+                                    .path(LocalIconName::Refresh.asset_path())
                                     .size(ICON_XS)
                                     .text_color(danger),
                             )
@@ -349,7 +349,7 @@ impl AiApp {
             .rounded_t_md()
             .child(
                 svg()
-                    .external_path(LocalIconName::Pencil.external_path())
+                    .path(LocalIconName::Pencil.asset_path())
                     .size(ICON_XS)
                     .text_color(accent),
             )

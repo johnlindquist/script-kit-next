@@ -48,7 +48,7 @@ impl AiApp {
                     .bg(cx.theme().muted.opacity(OPACITY_SUBTLE))
                     .child(
                         svg()
-                            .external_path(LocalIconName::Settings.external_path())
+                            .path(LocalIconName::Settings.asset_path())
                             .size(S8)
                             .text_color(cx.theme().muted_foreground.opacity(OPACITY_SELECTED)),
                     ),
@@ -94,7 +94,7 @@ impl AiApp {
                     }))
                     .child(
                         svg()
-                            .external_path(LocalIconName::Terminal.external_path())
+                            .path(LocalIconName::Terminal.asset_path())
                             .size(ICON_MD)
                             .text_color(button_text),
                     )

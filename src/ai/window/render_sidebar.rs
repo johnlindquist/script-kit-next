@@ -55,7 +55,7 @@ impl AiApp {
                     )
                     .child(
                         svg()
-                            .external_path(LocalIconName::Sidebar.external_path())
+                            .path(LocalIconName::Sidebar.asset_path())
                             .size(ICON_MD)
                             .text_color(icon_color),
                     ),
@@ -153,7 +153,7 @@ impl AiApp {
                         .gap(S2)
                         .child(
                             svg()
-                                .external_path(LocalIconName::MagnifyingGlass.external_path())
+                                .path(LocalIconName::MagnifyingGlass.asset_path())
                                 .size(S6)
                                 .text_color(cx.theme().muted_foreground.opacity(OPACITY_HOVER)),
                         )
@@ -188,7 +188,7 @@ impl AiApp {
                         .gap_3()
                         .child(
                             svg()
-                                .external_path(LocalIconName::MessageCircle.external_path())
+                                .path(LocalIconName::MessageCircle.asset_path())
                                 .size(MINI_BTN_SIZE)
                                 .text_color(cx.theme().muted_foreground.opacity(OPACITY_DANGER_BG)),
                         )
@@ -312,9 +312,7 @@ impl AiApp {
                                         this.new_conversation(window, cx);
                                     }))
                                     .child(
-                                        svg()
-                                            .external_path(LocalIconName::Plus.external_path())
-                                            .size(ICON_SM),
+                                        svg().path(LocalIconName::Plus.asset_path()).size(ICON_SM),
                                     ),
                             )
                             // Close button
@@ -347,9 +345,7 @@ impl AiApp {
                                         );
                                     }))
                                     .child(
-                                        svg()
-                                            .external_path(LocalIconName::Close.external_path())
-                                            .size(ICON_SM),
+                                        svg().path(LocalIconName::Close.asset_path()).size(ICON_SM),
                                     ),
                             ),
                     ),

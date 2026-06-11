@@ -284,7 +284,7 @@ fn action_btn_base(id: &'static str, muted_fg: gpui::Hsla, muted_bg: gpui::Hsla)
 /// Small SVG icon for action buttons.
 fn action_icon(icon: LocalIconName, color: gpui::Hsla) -> Svg {
     svg()
-        .external_path(icon.external_path())
+        .path(icon.asset_path())
         .size(ICON_XS)
         .text_color(color)
 }
