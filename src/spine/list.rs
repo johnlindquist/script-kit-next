@@ -322,11 +322,12 @@ pub(crate) fn build_spine_list_sections_full_with_resolved_tokens(
         SpineSegmentKind::Style { .. } => {
             vec![build_style_section(parse, projection, live_preview)]
         }
-        SpineSegmentKind::Capture { .. } => {
+        SpineSegmentKind::Capture { args, .. } => {
             let range = active_segment_range(parse, projection);
             let query = projection.active_query.as_str();
             let rows = super::catalog_capture::build_capture_rows(
                 query,
+                args,
                 projection.active_segment_index,
                 range,
             );

@@ -955,11 +955,22 @@ fn append_root_passive_section(
     rows: Vec<SearchResult>,
     status: Option<SourceChipStatusRow>,
 ) {
+    let insertion_index = root_file_passive_insertion_index(grouped, flat_results);
+    append_root_passive_section_at(grouped, flat_results, label, rows, status, insertion_index);
+}
+
+fn append_root_passive_section_at(
+    grouped: &mut Vec<GroupedListItem>,
+    flat_results: &mut Vec<SearchResult>,
+    label: &'static str,
+    rows: Vec<SearchResult>,
+    status: Option<SourceChipStatusRow>,
+    insertion_index: usize,
+) {
     if rows.is_empty() && status.is_none() {
         return;
     }
 
-    let insertion_index = root_file_passive_insertion_index(grouped, flat_results);
     let mut grouped_rows = Vec::with_capacity(rows.len() + 2);
     grouped_rows.push(GroupedListItem::SectionHeader(label.to_string(), None));
     for row in rows {
@@ -971,6 +982,54 @@ fn append_root_passive_section(
         grouped_rows.push(GroupedListItem::Status(status));
     }
     grouped.splice(insertion_index..insertion_index, grouped_rows);
+}
+
+/// Insertion index for the "From Your Brain" section. Brain memories are
+/// real matches, so when the files section holds nothing but the
+/// "Search Files for …" handoff CTA (no actual file results yet), the brain
+/// section is inserted ABOVE it — an exact memory must outrank a generic
+/// redirect row (audit finding F2). With real file results present, brain
+/// keeps its usual passive position.
+fn root_brain_passive_insertion_index(
+    grouped: &[GroupedListItem],
+    flat_results: &[SearchResult],
+) -> usize {
+    let default_index = root_file_passive_insertion_index(grouped, flat_results);
+
+    let is_file_handoff = |idx: &usize| {
+        matches!(
+            flat_results.get(*idx),
+            Some(SearchResult::Fallback(fm))
+                if fm
+                    .stable_selection_key_override
+                    .as_deref()
+                    .is_some_and(|key| key.starts_with("fallback/root-file-search-handoff"))
+        )
+    };
+
+    let mut section_start: Option<usize> = None;
+    let mut item_indices: Vec<usize> = Vec::new();
+    for (pos, entry) in grouped.iter().enumerate() {
+        match entry {
+            GroupedListItem::SectionHeader(_, _) => {
+                if let Some(start) = section_start {
+                    if !item_indices.is_empty() && item_indices.iter().all(is_file_handoff) {
+                        return start.min(default_index);
+                    }
+                }
+                section_start = Some(pos);
+                item_indices.clear();
+            }
+            GroupedListItem::Item(idx) => item_indices.push(*idx),
+            GroupedListItem::Status(_) => {}
+        }
+    }
+    if let Some(start) = section_start {
+        if !item_indices.is_empty() && item_indices.iter().all(is_file_handoff) {
+            return start.min(default_index);
+        }
+    }
+    default_index
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1085,7 +1144,15 @@ fn append_root_brain_section(
             false,
         )
     });
-    append_root_passive_section(grouped, flat_results, "From Your Brain", rows, status);
+    let insertion_index = root_brain_passive_insertion_index(grouped, flat_results);
+    append_root_passive_section_at(
+        grouped,
+        flat_results,
+        "From Your Brain",
+        rows,
+        status,
+        insertion_index,
+    );
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -2162,6 +2229,49 @@ mod advanced_query_tests {
             MenuSyntaxParse::AdvancedQuery(q) => q,
             other => panic!("expected AdvancedQuery for {raw:?}, got {other:?}"),
         }
+    }
+
+    /// Audit finding F2: a brain memory must outrank the generic
+    /// "Search Files for …" handoff CTA, so when the files section holds
+    /// nothing but that CTA the brain section inserts above it. With any
+    /// non-CTA result present, brain keeps the default passive position.
+    #[test]
+    fn brain_insertion_index_promotes_above_cta_only_files_section() {
+        let search_files = crate::fallbacks::builtins::get_builtin_fallbacks()
+            .into_iter()
+            .find(|f| f.id == crate::fallbacks::builtins::SEARCH_FILES_FALLBACK_ID)
+            .expect("search files fallback");
+        let handoff = SearchResult::Fallback(
+            FallbackMatch::new(
+                crate::fallbacks::FallbackItem::Builtin(search_files.clone()),
+                0,
+            )
+            .with_stable_selection_key("fallback/root-file-search-handoff/global"),
+        );
+        let plain_fallback = SearchResult::Fallback(FallbackMatch::new(
+            crate::fallbacks::FallbackItem::Builtin(search_files),
+            0,
+        ));
+
+        // CTA-only files section: brain inserts above its header (index 0).
+        let flat = vec![handoff.clone()];
+        let grouped = vec![
+            GroupedListItem::SectionHeader("Files".to_string(), None),
+            GroupedListItem::Item(0),
+        ];
+        assert_eq!(root_brain_passive_insertion_index(&grouped, &flat), 0);
+
+        // Section with a non-CTA row keeps the default (append) position.
+        let flat = vec![handoff, plain_fallback];
+        let grouped = vec![
+            GroupedListItem::SectionHeader("Files".to_string(), None),
+            GroupedListItem::Item(0),
+            GroupedListItem::Item(1),
+        ];
+        assert_eq!(
+            root_brain_passive_insertion_index(&grouped, &flat),
+            grouped.len()
+        );
     }
 
     #[test]

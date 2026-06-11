@@ -2452,10 +2452,10 @@ fn source_head_spec_for_token(
 /// remainder after the trailing colon. Used by [[active_head_context_for_filter]].
 fn qualifier_value_partial(token: &str, head: &str) -> Option<String> {
     let head_with_colon = format!("{head}:");
-    if token.len() < head_with_colon.len() {
-        return None;
-    }
-    let prefix = &token[..head_with_colon.len()];
+    // `get` (not direct slicing) so a multibyte token whose char boundary
+    // straddles the head length can never panic — e.g. "ミーティング" sliced at
+    // the byte length of "todo:" aborted the whole app before this guard.
+    let prefix = token.get(..head_with_colon.len())?;
     if !prefix.eq_ignore_ascii_case(&head_with_colon) {
         return None;
     }
@@ -4133,5 +4133,31 @@ mod tests {
         let ctx = active_head_context_for_filter("!ps").expect("!");
         assert_eq!(ctx.head, "!");
         assert_eq!(ctx.value_partial, "ps");
+    }
+
+    /// Regression: multibyte first tokens used to abort the whole app with
+    /// "byte index N is not a char boundary" when [[qualifier_value_partial]]
+    /// sliced the token at a qualifier head's byte length (e.g. "ミーティング"
+    /// at the length of `todo:`). Every entry here must simply not panic.
+    #[test]
+    fn active_head_detector_survives_multibyte_filters() {
+        for raw in [
+            "ミーティング",
+            "ミーティング 予算",
+            "予算",
+            "🚀",
+            "🚀 launch checklist",
+            "résumé café",
+            "héllo: wörld",
+            "ñañ:value",
+            "日本語のクエリをここに入力",
+            "한국어 검색어",
+            "e\u{301}le\u{301}phant", // combining accents
+            ";ミーティング",
+            "type:ミーティング",
+        ] {
+            let _ = active_head_context_for_filter(raw);
+            let _ = active_head_is_source_filter(raw);
+        }
     }
 }

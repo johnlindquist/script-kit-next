@@ -330,12 +330,40 @@ fn apply_token_insertion(raw_filter_text: &str, token: &str) -> String {
     if trimmed.starts_with(':') && (token.starts_with(':') || !token_is_root_source_head(token)) {
         return apply_advanced_query_token_insertion(raw_filter_text, token);
     }
+    if let Some(text) = apply_capture_target_token_insertion(trimmed, token) {
+        return text;
+    }
     if (trimmed.starts_with(';') && token.starts_with(';'))
         || (trimmed.starts_with('>') && token.starts_with('>'))
     {
         return token.to_string();
     }
     token.to_string()
+}
+
+/// Accepting a capture target (token `"<slug>; "`) must preserve any body the
+/// user already typed: `";todo Submit report #work"` becomes
+/// `"todo; Submit report #work"`, not a bare `"todo; "` that silently throws
+/// the body away. The first whitespace-delimited word of the raw input is the
+/// (possibly partial) head being replaced; everything after it is the body.
+fn apply_capture_target_token_insertion(trimmed: &str, token: &str) -> Option<String> {
+    let slug = token.strip_suffix("; ")?;
+    if slug.is_empty() || slug.contains(char::is_whitespace) {
+        return None;
+    }
+    let rest = trimmed
+        .strip_prefix(';')
+        .or_else(|| trimmed.strip_prefix('+'))?
+        .trim_start();
+    let body = rest
+        .split_once(char::is_whitespace)
+        .map(|(_, body)| body.trim_start())
+        .unwrap_or("");
+    if body.is_empty() {
+        Some(token.to_string())
+    } else {
+        Some(format!("{token}{body}"))
+    }
 }
 
 fn token_is_root_source_head(token: &str) -> bool {
@@ -375,6 +403,39 @@ mod tests {
 
     fn ctx() -> TriggerPickerContext {
         TriggerPickerContext::default()
+    }
+
+    /// Regression: accepting a capture target used to replace the whole input
+    /// with the bare postfix head, silently discarding the body the user had
+    /// already typed (";todo Submit report #work" → "todo; ").
+    #[test]
+    fn capture_target_insertion_preserves_typed_body() {
+        assert_eq!(
+            apply_token_insertion(";todo Submit quarterly TPS report #work", "todo; "),
+            "todo; Submit quarterly TPS report #work"
+        );
+        // Partial slug: the first word is the head being replaced, not body.
+        assert_eq!(
+            apply_token_insertion(";to Submit report", "todo; "),
+            "todo; Submit report"
+        );
+        // Space between sigil and slug.
+        assert_eq!(
+            apply_token_insertion("; todo Submit report", "todo; "),
+            "todo; Submit report"
+        );
+        // Legacy `+` sigil.
+        assert_eq!(
+            apply_token_insertion("+todo buy milk", "todo; "),
+            "todo; buy milk"
+        );
+        // No body typed yet: just commit the head.
+        assert_eq!(apply_token_insertion(";todo", "todo; "), "todo; ");
+        // Multibyte body survives.
+        assert_eq!(
+            apply_token_insertion(";todo ミーティング 🚀", "todo; "),
+            "todo; ミーティング 🚀"
+        );
     }
 
     #[test]

@@ -623,10 +623,16 @@ impl ScriptListApp {
             &brain_options,
         );
         let brain_hits = timed_root_passive_source("brain", search_text, explicit_brain, || {
-            if !advanced_query_active
-                && allow_brain
-                && crate::brain::root_brain_query_is_eligible(search_text, brain_options)
-            {
+            if advanced_query_active || !allow_brain {
+                Vec::new()
+            } else if explicit_brain && search_text.trim().is_empty() {
+                // Armed `brain:` with no query yet: show the most recent
+                // memories instead of a blank panel (audit finding F6). This
+                // must come before the eligibility branch — the explicit
+                // filter forces min_query_chars to 0, which makes the empty
+                // query "eligible" for a search that can only return nothing.
+                crate::brain::recent_root_brain_hits(brain_options.max_results)
+            } else if crate::brain::root_brain_query_is_eligible(search_text, brain_options) {
                 brain_semantic_hits.unwrap_or_else(|| {
                     crate::brain::search_root_brain_direct(search_text, &brain_options)
                 })

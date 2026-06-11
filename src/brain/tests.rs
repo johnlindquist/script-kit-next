@@ -5,7 +5,7 @@
 use super::curator;
 use super::inbox::{self, InboxKind};
 use super::indexer::extract_topics;
-use super::search::{aggregate_signals, cosine_top_ids, fuse_ranks};
+use super::search::{self, aggregate_signals, cosine_top_ids, fuse_ranks};
 use super::store::{self, BrainDoc, BrainSignal, DocSource};
 use super::telegram;
 
@@ -63,6 +63,94 @@ fn fts_matches_natural_language_questions() {
     // still surface it.
     let hits = store::fts_search("what branch does project bluefin deploy from", 10).unwrap();
     assert!(hits.contains(&id), "natural-language question should match");
+}
+
+/// Regression: a fresh database used to make the curator "due" immediately,
+/// firing a live LLM call (and surfacing surprise inbox items) seconds after
+/// first launch. The first `run_if_due` on a fresh DB must only stamp the
+/// marker and defer real distillation a full interval.
+#[test]
+fn curator_first_run_on_fresh_db_only_stamps_marker() {
+    init_test_db();
+    assert!(
+        store::meta_get("curator_last_run").unwrap().is_none(),
+        "fresh db must start without a curator marker"
+    );
+    curator::run_if_due();
+    let stamped = store::meta_get("curator_last_run")
+        .unwrap()
+        .expect("first run_if_due must stamp the marker");
+    let stamped: i64 = stamped.parse().unwrap();
+    let now = chrono::Utc::now().timestamp();
+    assert!((now - stamped).abs() < 60, "marker must be stamped to now");
+}
+
+/// Regression: identical content stored under several sources (clipboard +
+/// note + chat turn) used to fill every launcher slot with duplicates.
+/// `brain_search` must collapse them to one hit and let distinct memories in.
+#[test]
+fn brain_search_dedupes_identical_content_across_sources() {
+    init_test_db();
+    let dup = "We agreed to upgrade the dedupletron cluster to 1.31 next sprint.";
+    store::upsert_doc(
+        DocSource::Note,
+        "dup-note",
+        "dedupletron upgrade plan",
+        dup,
+        100,
+    )
+    .unwrap();
+    store::upsert_doc(
+        DocSource::Clipboard,
+        "dup-clip",
+        "dedupletron upgrade plan",
+        dup,
+        100,
+    )
+    .unwrap();
+    store::upsert_doc(
+        DocSource::ChatTurn,
+        "dup-chat#0",
+        "dedupletron upgrade plan",
+        dup,
+        100,
+    )
+    .unwrap();
+    store::upsert_doc(
+        DocSource::Note,
+        "dup-other",
+        "dedupletron rollback notes",
+        "Rollback plan if the dedupletron upgrade fails: drain and restore.",
+        100,
+    )
+    .unwrap();
+    let hits = search::brain_search("dedupletron upgrade", None, None, 4).unwrap();
+    let dup_hits = hits.iter().filter(|hit| hit.doc.content == dup).count();
+    assert_eq!(dup_hits, 1, "identical content must collapse to one hit");
+    assert!(
+        hits.iter().any(|hit| hit.doc.source_id == "dup-other"),
+        "distinct memory should fill the freed slot"
+    );
+}
+
+/// Regression: terms of 2-3 bytes ("git", "k8s", "ai") used to be dropped by
+/// the FTS sanitizer, producing an empty query and an invisible brain section
+/// for exactly the short tool names users recall most.
+#[test]
+fn fts_matches_short_keywords() {
+    init_test_db();
+    let id = store::upsert_doc(
+        DocSource::Note,
+        "n-short",
+        "git rebase workflow",
+        "use git rebase -i and force push with lease; ai pairing notes for k8s",
+        100,
+    )
+    .unwrap();
+    for query in ["git", "k8s", "ai", "git rebase"] {
+        let hits = store::fts_search(query, 10).unwrap();
+        assert!(hits.contains(&id), "short keyword {query:?} should match");
+    }
 }
 
 #[test]

@@ -687,32 +687,50 @@ impl ScriptListApp {
             crate::brain::DocSource::Clipboard
             | crate::brain::DocSource::Activity
             | crate::brain::DocSource::Capture => {
-                let prompt = self.filter_text.trim().to_string();
-                let entry_intent = (!prompt.is_empty()).then_some(prompt);
-                self.open_tab_ai_agent_chat_with_entry_intent_suppressing_focused_part(
-                    entry_intent,
-                    cx,
-                );
+                // Attach the memory itself as a context chip and let the user
+                // say what they want — plain Enter on a memory must never
+                // auto-submit an AI turn (audit finding F5: the bare filter
+                // text used to be fired as a prompt immediately).
+                let content = crate::brain::get_doc(hit.source, &hit.source_id)
+                    .ok()
+                    .flatten()
+                    .map(|doc| doc.content)
+                    .filter(|content| !content.trim().is_empty())
+                    .unwrap_or_else(|| hit.excerpt.clone());
+                let label = if hit.title.trim().is_empty() {
+                    hit.source_label.to_string()
+                } else {
+                    hit.title.clone()
+                };
+                let part = crate::ai::message_parts::AiContextPart::TextBlock {
+                    label,
+                    source: "brain".to_string(),
+                    text: content,
+                    mime_type: None,
+                };
+                self.open_tab_ai_agent_chat_with_context_part(part, "brain_memory", cx);
             }
         }
     }
 
-    /// Enter on a pinned "Brain Inbox" row. Notification semantics: touching
-    /// the item resolves it first (the section shrinks immediately), then the
-    /// item's source is opened via the same routing as
-    /// [`Self::execute_root_brain_hit_open`] — notes open in the Notes
-    /// editor, chat turns resume their conversation with the follow-up
-    /// prompt auto-submitted as the next turn, and everything else hands a
-    /// prompt-ready summary of the item to Agent Chat.
+    /// Enter on a pinned "Brain Inbox" row. The item's source is opened via
+    /// the same routing as [`Self::execute_root_brain_hit_open`] — notes open
+    /// in the Notes editor, chat turns resume their conversation with the
+    /// follow-up prompt auto-submitted as the next turn, and everything else
+    /// hands a prompt-ready summary of the item to Agent Chat. The item is
+    /// resolved only AFTER its route succeeds: resolution is destructive (no
+    /// undo), so a failed open must leave the observation in the inbox.
     pub(crate) fn execute_root_brain_inbox_open(
         &mut self,
         item: crate::brain::InboxItem,
         cx: &mut Context<Self>,
     ) {
-        self.resolve_root_brain_inbox_item(item.id, cx);
         match item.source.as_str() {
             "note" => match crate::notes::NoteId::parse(&item.source_id) {
-                Some(note_id) => self.execute_root_note_open(note_id, cx),
+                Some(note_id) => {
+                    self.execute_root_note_open(note_id, cx);
+                    self.resolve_root_brain_inbox_item(item.id, cx);
+                }
                 None => {
                     logging::log(
                         "ERROR",
@@ -731,6 +749,7 @@ impl ScriptListApp {
                     .next()
                     .unwrap_or(item.source_id.as_str());
                 self.resume_agent_chat_conversation_with_followup(thread_id, &prompt, cx);
+                self.resolve_root_brain_inbox_item(item.id, cx);
             }
             _ => {
                 let prompt = crate::brain::response_prompt_for_inbox_item(&item);
@@ -739,6 +758,7 @@ impl ScriptListApp {
                     entry_intent,
                     cx,
                 );
+                self.resolve_root_brain_inbox_item(item.id, cx);
             }
         }
     }

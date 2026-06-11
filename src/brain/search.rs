@@ -121,11 +121,17 @@ pub fn brain_search(
     let docs = store::get_docs_by_ids(&candidate_ids)?;
     let signals = store::recent_signals(SIGNAL_WINDOW).unwrap_or_default();
     let signal_topics = aggregate_signals(&signals);
-    let ranked = fuse_ranks(&fts_ids, &vec_ids, &signal_topics, &docs, limit);
+    // Rank the full candidate pool, then dedupe by content before taking the
+    // top `limit`: the same text captured via clipboard, a note, and a chat
+    // turn must not crowd distinct memories out of the launcher section.
+    let ranked = fuse_ranks(&fts_ids, &vec_ids, &signal_topics, &docs, candidate_limit);
     let by_id: HashMap<i64, BrainDoc> = docs.into_iter().map(|d| (d.id, d)).collect();
+    let mut seen_content = std::collections::HashSet::new();
     Ok(ranked
         .into_iter()
         .filter_map(|(id, score)| by_id.get(&id).cloned().map(|doc| BrainHit { doc, score }))
+        .filter(|hit| seen_content.insert(store::content_hash(&hit.doc.title, &hit.doc.content)))
+        .take(limit)
         .collect())
 }
 

@@ -138,6 +138,27 @@ pub fn search_root_brain_semantic(
     ))
 }
 
+/// Most recent brain docs as launcher rows. Backs the armed-but-empty
+/// `brain:` source filter so it shows "what your brain holds" instead of a
+/// blank panel. Never errors into the launcher (empty on store failure).
+pub fn recent_root_brain_hits(max_results: usize) -> Vec<RootBrainSearchHit> {
+    if max_results == 0 {
+        return Vec::new();
+    }
+    // Over-fetch then dedupe by content, mirroring `brain_search`: the same
+    // text mirrored from several sources must not fill the recents view.
+    let mut seen = std::collections::HashSet::new();
+    map_root_brain_hits(
+        super::store::recent_docs(max_results.saturating_mul(3).max(8))
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|doc| seen.insert(super::store::content_hash(&doc.title, &doc.content)))
+            .take(max_results)
+            .map(|doc| super::search::BrainHit { doc, score: 0.0 })
+            .collect(),
+    )
+}
+
 /// Prefer async semantic hits over the sync lexical pass when they were
 /// computed for exactly the query the launcher is currently showing.
 /// `semantic` is `(stored_query, hits)` from app state; `None` (or a stale

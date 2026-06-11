@@ -39,8 +39,14 @@ pub fn run_if_due() {
     let last = store::meta_get(LAST_RUN_MARKER)
         .ok()
         .flatten()
-        .and_then(|value| value.parse::<i64>().ok())
-        .unwrap_or(0);
+        .and_then(|value| value.parse::<i64>().ok());
+    let Some(last) = last else {
+        // Fresh database: stamp the marker and wait a full interval. A new
+        // install must not fire an LLM call (and surprise inbox items)
+        // seconds after first launch — distillation starts after a day of use.
+        let _ = store::meta_set(LAST_RUN_MARKER, &now.to_string());
+        return;
+    };
     if now - last < RUN_INTERVAL_SECS {
         return;
     }

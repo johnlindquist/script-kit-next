@@ -847,7 +847,7 @@ impl ScriptListApp {
         }
     }
 
-    fn open_tab_ai_agent_chat_with_context_part(
+    pub(crate) fn open_tab_ai_agent_chat_with_context_part(
         &mut self,
         part: crate::ai::message_parts::AiContextPart,
         source: &'static str,

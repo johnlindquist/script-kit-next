@@ -305,7 +305,7 @@ pub(crate) fn with_conn<T>(f: impl FnOnce(&Connection) -> Result<T>) -> Result<T
     f(&conn)
 }
 
-fn content_hash(title: &str, content: &str) -> String {
+pub(crate) fn content_hash(title: &str, content: &str) -> String {
     // FNV-1a 64: fast, stable, no new dependency; collisions only cost a
     // redundant re-embed.
     let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
@@ -545,11 +545,16 @@ pub fn fts_search(query: &str, limit: usize) -> Result<Vec<i64>> {
 /// deploy from"), and FTS5's implicit AND would require every filler word to
 /// appear in a document. OR + BM25 ranking keeps precision: documents
 /// matching more terms rank higher.
+///
+/// Short terms are kept (only 1-byte noise is dropped): "git", "vim", "npm",
+/// "k8s", and "ai" are exactly the kinds of topics users recall, and the old
+/// `len() > 3` filter silently produced an empty query for them. BM25 already
+/// down-ranks high-frequency filler, so dropping it here is unnecessary.
 fn sanitize_fts_query(query: &str) -> String {
     query
         .split_whitespace()
         .map(|term| term.replace('"', ""))
-        .filter(|term| term.len() > 3)
+        .filter(|term| term.len() > 1)
         .map(|term| format!("\"{term}\""))
         .collect::<Vec<_>>()
         .join(" OR ")
@@ -569,6 +574,43 @@ pub fn get_docs_by_ids(ids: &[i64]) -> Result<Vec<BrainDoc>> {
     let mut stmt = conn.prepare(&sql)?;
     let rows = stmt
         .query_map(rusqlite::params_from_iter(ids.iter()), |row| {
+            Ok((
+                row.get::<_, i64>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, String>(3)?,
+                row.get::<_, String>(4)?,
+                row.get::<_, i64>(5)?,
+            ))
+        })?
+        .collect::<std::result::Result<Vec<_>, _>>()?;
+    Ok(rows
+        .into_iter()
+        .filter_map(|(id, source, source_id, title, content, updated_at)| {
+            DocSource::parse(&source).map(|source| BrainDoc {
+                id,
+                source,
+                source_id,
+                title,
+                content,
+                updated_at,
+            })
+        })
+        .collect())
+}
+
+/// Most recently updated docs across all sources, newest first. Backs the
+/// armed-but-empty `brain:` launcher filter ("show me what my brain holds")
+/// so the explicit source filter never renders a blank dead end.
+pub fn recent_docs(limit: usize) -> Result<Vec<BrainDoc>> {
+    let db = get_db()?;
+    let conn = db.lock().map_err(|_| anyhow!("brain db lock poisoned"))?;
+    let mut stmt = conn.prepare(
+        "SELECT id, source, source_id, title, content, updated_at
+         FROM brain_docs ORDER BY updated_at DESC LIMIT ?1",
+    )?;
+    let rows = stmt
+        .query_map(params![limit as i64], |row| {
             Ok((
                 row.get::<_, i64>(0)?,
                 row.get::<_, String>(1)?,

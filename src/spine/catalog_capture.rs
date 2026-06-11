@@ -44,9 +44,11 @@ const CAPTURE_SPECS: &[CaptureSpec] = &[
 
 pub(super) fn build_capture_rows(
     query: &str,
+    body: &str,
     segment_index: usize,
     segment_byte_range: Range<usize>,
 ) -> Vec<SpineListRow> {
+    let body = body.trim();
     CAPTURE_SPECS
         .iter()
         .enumerate()
@@ -70,12 +72,19 @@ pub(super) fn build_capture_rows(
             action_label: None,
             // A4 decision (2026-06-09): accepting a capture target converts
             // the typed `;to` prefix into the canonical postfix spelling
-            // (`todo; `), which hands the input to the capture form.
+            // (`todo; `), which hands the input to the capture form. Any body
+            // the user already typed (";todo Submit report") rides along —
+            // accepting the target must never throw typed text away (audit
+            // finding F4).
             action: SpineListAction::InsertSegmentText {
                 segment_index,
                 segment_byte_range: segment_byte_range.clone(),
-                text: ss(format!("{};", spec.id)),
-                trailing_space: true,
+                text: if body.is_empty() {
+                    ss(format!("{};", spec.id))
+                } else {
+                    ss(format!("{}; {body}", spec.id))
+                },
+                trailing_space: body.is_empty(),
             },
         })
         .collect()
@@ -87,7 +96,7 @@ mod tests {
 
     #[test]
     fn bare_semicolon_lists_all_capture_targets() {
-        let rows = build_capture_rows("", 0, 0..1);
+        let rows = build_capture_rows("", "", 0, 0..1);
         assert_eq!(rows.len(), CAPTURE_SPECS.len());
     }
 
@@ -95,7 +104,7 @@ mod tests {
     /// the postfix spelling `todo; `, which hands off to the capture form.
     #[test]
     fn accepting_target_inserts_postfix_spelling() {
-        let rows = build_capture_rows("to", 0, 0..3);
+        let rows = build_capture_rows("to", "", 0, 0..3);
         let todo = rows
             .iter()
             .find(|row| row.id.as_ref() == "spine:;:todo")
@@ -108,6 +117,30 @@ mod tests {
             } => {
                 assert_eq!(text.as_ref(), "todo;");
                 assert!(*trailing_space);
+            }
+            other => panic!("expected InsertSegmentText, got {other:?}"),
+        }
+    }
+
+    /// Audit finding F4: accepting a capture target with a body already typed
+    /// (";todo Submit report #work") must carry the body into the postfix
+    /// spelling instead of silently discarding it.
+    #[test]
+    fn accepting_target_preserves_typed_body() {
+        let raw = ";todo Submit quarterly TPS report #work";
+        let rows = build_capture_rows("todo", "Submit quarterly TPS report #work", 0, 0..raw.len());
+        let todo = rows
+            .iter()
+            .find(|row| row.id.as_ref() == "spine:;:todo")
+            .expect("todo row");
+        match &todo.action {
+            SpineListAction::InsertSegmentText {
+                text,
+                trailing_space,
+                ..
+            } => {
+                assert_eq!(text.as_ref(), "todo; Submit quarterly TPS report #work");
+                assert!(!*trailing_space);
             }
             other => panic!("expected InsertSegmentText, got {other:?}"),
         }
