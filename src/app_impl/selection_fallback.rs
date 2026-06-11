@@ -701,8 +701,9 @@ impl ScriptListApp {
     /// the item resolves it first (the section shrinks immediately), then the
     /// item's source is opened via the same routing as
     /// [`Self::execute_root_brain_hit_open`] — notes open in the Notes
-    /// editor, chat turns resume their conversation, and everything else
-    /// hands a prompt-ready summary of the item to Agent Chat.
+    /// editor, chat turns resume their conversation with the follow-up
+    /// prompt auto-submitted as the next turn, and everything else hands a
+    /// prompt-ready summary of the item to Agent Chat.
     pub(crate) fn execute_root_brain_inbox_open(
         &mut self,
         item: crate::brain::InboxItem,
@@ -721,14 +722,15 @@ impl ScriptListApp {
                 }
             },
             "chat_turn" => {
-                // source_id is "{thread_id}#{turn_index}"; resume by thread id.
+                // source_id is "{thread_id}#{turn_index}"; resume by thread id
+                // and auto-submit the follow-up prompt into the conversation.
                 let prompt = crate::brain::response_prompt_for_inbox_item(&item);
                 let thread_id = item
                     .source_id
                     .split('#')
                     .next()
                     .unwrap_or(item.source_id.as_str());
-                self.resume_agent_chat_conversation_from_history(thread_id, &prompt, cx);
+                self.resume_agent_chat_conversation_with_followup(thread_id, &prompt, cx);
             }
             _ => {
                 let prompt = crate::brain::response_prompt_for_inbox_item(&item);

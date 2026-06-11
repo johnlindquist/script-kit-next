@@ -532,6 +532,41 @@ impl ScriptListApp {
         }
     }
 
+    /// Enter on a chat_turn-sourced Brain Inbox row: resume the saved
+    /// conversation AND auto-submit the inbox follow-up prompt as the next
+    /// turn (an empty prompt only loads the conversation).
+    ///
+    /// Differs from [`Self::resume_agent_chat_conversation_from_history`]
+    /// (history-browser semantics, where `first_message` is only a fallback
+    /// composer draft) in that the embedded chat is entered through the
+    /// suppressing entry, so the focused launcher row is not staged as an
+    /// `@cmd:` mention in the composer.
+    pub(crate) fn resume_agent_chat_conversation_with_followup(
+        &mut self,
+        session_id: &str,
+        followup_prompt: &str,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(chat_entity) =
+            crate::ai::agent_chat::ui::chat_window::get_detached_agent_chat_view_entity()
+        {
+            chat_entity.update(cx, |chat_view, cx| {
+                chat_view.resume_from_history_with_followup(session_id, followup_prompt, cx);
+            });
+            self.reset_to_script_list(cx);
+            return;
+        }
+
+        self.open_tab_ai_agent_chat_with_entry_intent_suppressing_focused_part(None, cx);
+
+        if let AppView::AgentChatView { entity } = &self.current_view {
+            let entity = entity.clone();
+            entity.update(cx, |chat_view, cx| {
+                chat_view.resume_from_history_with_followup(session_id, followup_prompt, cx);
+            });
+        }
+    }
+
     /// Attach a history conversation summary as a context chip to the Agent Chat chat
     /// (Cmd+Enter in the browser). Opens Agent Chat if not already open.
     fn attach_agent_chat_history_to_chat_from_browser(

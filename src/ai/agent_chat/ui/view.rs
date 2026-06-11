@@ -11887,6 +11887,45 @@ impl AgentChatView {
         }
     }
 
+    /// Resume a saved conversation and deliver a Brain Inbox follow-up prompt.
+    ///
+    /// Auto-submits the follow-up when the saved conversation loaded, or when
+    /// the live thread is still empty (matching the non-chat inbox handoff).
+    /// Parks it as a composer draft when resume failed and the thread already
+    /// holds a different conversation, so an unrelated chat never receives a
+    /// surprise turn. An empty follow-up only loads the conversation.
+    pub(crate) fn resume_from_history_with_followup(
+        &mut self,
+        session_id: &str,
+        followup_prompt: &str,
+        cx: &mut Context<Self>,
+    ) {
+        if self.is_setup_mode() {
+            tracing::info!(
+                target: "script_kit::tab_ai",
+                event = "agent_chat_history_followup_ignored_setup_mode",
+                session_id = %session_id,
+            );
+            return;
+        }
+        let resumed = self.resume_from_history(session_id, cx);
+        let followup = followup_prompt.trim();
+        if followup.is_empty() {
+            return;
+        }
+        let thread_is_empty = self.live_thread().read(cx).messages.is_empty();
+        if resumed || thread_is_empty {
+            self.submit_reused_entry_intent(followup.to_string(), cx);
+        } else {
+            self.set_input(followup.to_string(), cx);
+            tracing::info!(
+                target: "script_kit::tab_ai",
+                event = "agent_chat_history_followup_parked_resume_missed",
+                session_id = %session_id,
+            );
+        }
+    }
+
     /// Derive current launch requirements from whichever session mode is active.
     fn current_retry_launch_requirements(
         &self,
