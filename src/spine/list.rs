@@ -483,12 +483,8 @@ fn build_style_section(
     let range = active_segment_range(parse, projection);
     let query = projection.active_query.as_str();
 
-    let mut rows = super::catalog_style::build_style_rows(
-        query,
-        projection.active_segment_index,
-        range,
-        super::prompt_plan::spine_parse_is_style_only(parse),
-    );
+    let mut rows =
+        super::catalog_style::build_style_rows(query, projection.active_segment_index, range);
 
     if let Some(lp) = live_preview {
         let preview = lp.style_selection_preview();
@@ -1181,10 +1177,13 @@ mod tests {
         assert!(!projection_is_prompt_builder_tail(&parse, &proj));
     }
 
+    /// A partial fragment (`@fi`) still offers the completion row; an exact
+    /// trigger (`@file`) routes straight into the file search section — the
+    /// list IS the search mode, with no "press Enter to refine" picker step.
     #[test]
-    fn context_root_includes_file_subsearch_prefix() {
-        let parse = parse_spine("@file");
-        let proj = project_cursor(&parse, 5);
+    fn partial_context_root_includes_file_subsearch_prefix() {
+        let parse = parse_spine("@fi");
+        let proj = project_cursor(&parse, 3);
         let sections = build_spine_list_sections(&parse, &proj);
         let rows: Vec<_> = sections.iter().flat_map(|s| &s.rows).collect();
 
@@ -1205,6 +1204,22 @@ mod tests {
                 assert!(!*trailing_space);
             }
             other => panic!("expected InsertSegmentText action, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn exact_context_root_fragment_routes_to_subsearch_section() {
+        for input in ["@file", "@files", "@clipboard", "@history"] {
+            let parse = parse_spine(input);
+            let proj = project_cursor(&parse, input.len());
+            let sections = build_spine_list_sections(&parse, &proj);
+            assert!(
+                sections
+                    .iter()
+                    .any(|s| s.id.as_ref().starts_with("spine-section-subsearch:")),
+                "{input} must route to the subsearch section, got {:?}",
+                sections.iter().map(|s| s.id.as_ref()).collect::<Vec<_>>(),
+            );
         }
     }
 }

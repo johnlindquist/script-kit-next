@@ -1485,22 +1485,24 @@ impl ScriptListApp {
                     ));
                     for row in section.rows {
                         if !row.is_selectable {
-                            // Empty placeholders ("No matching directories",
-                            // etc.) need to be visibly rendered so the user
-                            // doesn't land on a blank list. Push as an Item
-                            // (it won't be in selectable bounds because the
-                            // SpineListRow's is_selectable is false). Other
-                            // non-selectable rows render as section headers.
-                            if matches!(row.kind, crate::spine::list::SpineListRowKind::Empty) {
-                                let flat_index = flat_results.len();
-                                flat_results.push(scripts::SearchResult::SpineProjection(row));
-                                grouped_items.push(GroupedListItem::Item(flat_index));
-                            } else {
-                                grouped_items.push(GroupedListItem::SectionHeader(
-                                    row.title.to_string(),
-                                    row.icon.as_ref().map(|icon| icon.as_ref().to_string()),
-                                ));
+                            // No informational list items in the main menu:
+                            // non-selectable rows (empty placeholders, hints)
+                            // render as section headers — visible guidance
+                            // that can never look like an actionable result.
+                            // Fold the subtitle hint ("Try @selection…") into
+                            // the header label, matching the "· ↓ to choose"
+                            // header-affordance pattern.
+                            let mut label = row.title.to_string();
+                            if let Some(subtitle) = row.subtitle.as_ref() {
+                                if !subtitle.is_empty() {
+                                    label.push_str(" \u{b7} ");
+                                    label.push_str(subtitle.as_ref());
+                                }
                             }
+                            grouped_items.push(GroupedListItem::SectionHeader(
+                                label,
+                                row.icon.as_ref().map(|icon| icon.as_ref().to_string()),
+                            ));
                             continue;
                         }
                         let flat_index = flat_results.len();
@@ -2958,6 +2960,44 @@ mod tests {
                 active_rich_spine_subsearch(&projection),
                 Some((expected_source, String::new())),
                 "{input} must route to rich rows so unarmed recents render with the choose hint"
+            );
+        }
+    }
+
+    /// Colon-less root fragments must auto-enter the same guarded rich rows —
+    /// typing `@files` IS file search; no "press Enter to refine" picker step
+    /// and no informational list items (user rule).
+    #[test]
+    fn root_context_fragment_routes_to_guarded_rich_rows() {
+        for (input, expected_source, expected_query) in [
+            (
+                "@files",
+                crate::spine::catalog_subsearch::ContextSubsearchSource::File,
+                "",
+            ),
+            (
+                "@filesreadme",
+                crate::spine::catalog_subsearch::ContextSubsearchSource::File,
+                "readme",
+            ),
+            (
+                "@clipboard",
+                crate::spine::catalog_subsearch::ContextSubsearchSource::Clipboard,
+                "",
+            ),
+            (
+                "@history",
+                crate::spine::catalog_subsearch::ContextSubsearchSource::History,
+                "",
+            ),
+        ] {
+            let parse = crate::spine::parse_spine(input);
+            let projection = crate::spine::project_cursor(&parse, input.len());
+
+            assert_eq!(
+                active_rich_spine_subsearch(&projection),
+                Some((expected_source, expected_query.to_string())),
+                "{input} must auto-route to rich search rows"
             );
         }
     }

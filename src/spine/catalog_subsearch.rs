@@ -25,24 +25,6 @@ pub(crate) enum ContextSubsearchSource {
 }
 
 impl ContextSubsearchSource {
-    pub(crate) fn from_prefix(prefix: &str) -> Option<Self> {
-        match prefix {
-            "file" => Some(Self::File),
-            "project" => Some(Self::Project),
-            "browser-history" => Some(Self::BrowserHistory),
-            "clipboard" => Some(Self::Clipboard),
-            "dictation" => Some(Self::Dictation),
-            "scripts" => Some(Self::Scripts),
-            "scriptlets" => Some(Self::Scriptlets),
-            "skills" => Some(Self::Skills),
-            "notes" => Some(Self::Notes),
-            "history" => Some(Self::History),
-            "calendar" => Some(Self::Calendar),
-            "notifications" => Some(Self::Notifications),
-            _ => None,
-        }
-    }
-
     pub(crate) fn prefix(self) -> &'static str {
         match self {
             Self::File => "file",
@@ -114,13 +96,70 @@ impl ContextSubsearchSource {
     }
 }
 
+/// Spelling variants accepted for each subsearch source, longest first so
+/// prefix matching picks the most specific trigger (`files` before `file`).
+/// Every entry is also a valid colon-mode spelling (`@files:` ≡ `@file:`).
+const SUBSEARCH_TRIGGERS: &[(&str, ContextSubsearchSource)] = &[
+    ("browser-history", ContextSubsearchSource::BrowserHistory),
+    ("notifications", ContextSubsearchSource::Notifications),
+    ("scriptlets", ContextSubsearchSource::Scriptlets),
+    ("clipboard", ContextSubsearchSource::Clipboard),
+    ("dictation", ContextSubsearchSource::Dictation),
+    ("projects", ContextSubsearchSource::Project),
+    ("calendar", ContextSubsearchSource::Calendar),
+    ("project", ContextSubsearchSource::Project),
+    ("scripts", ContextSubsearchSource::Scripts),
+    ("history", ContextSubsearchSource::History),
+    ("skills", ContextSubsearchSource::Skills),
+    ("files", ContextSubsearchSource::File),
+    ("notes", ContextSubsearchSource::Notes),
+    ("file", ContextSubsearchSource::File),
+];
+
+impl ContextSubsearchSource {
+    /// Exact trigger match, including aliases (`files` → File). Used for
+    /// colon-mode prefixes and exact root fragments.
+    pub(crate) fn from_trigger(token: &str) -> Option<Self> {
+        SUBSEARCH_TRIGGERS
+            .iter()
+            .find(|(trigger, _)| token.eq_ignore_ascii_case(trigger))
+            .map(|(_, source)| *source)
+    }
+}
+
 pub(crate) fn parse_context_subsearch<'a>(
-    context_type: &str,
+    context_type: &'a str,
     sub_query: Option<&'a str>,
 ) -> Option<(ContextSubsearchSource, &'a str)> {
-    let sq = sub_query?;
-    let source = ContextSubsearchSource::from_prefix(context_type)?;
-    Some((source, sq))
+    if let Some(sq) = sub_query {
+        let source = ContextSubsearchSource::from_trigger(context_type)?;
+        return Some((source, sq));
+    }
+    parse_root_subsearch_fragment(context_type)
+}
+
+/// Colon-less `@` fragments switch into search mode the moment the trigger is
+/// recognized — typing `@files` must already BE file search (recents,
+/// unarmed), with no "press Enter to refine" picker step. Continuations keep
+/// searching seamlessly: `@filesreadme` searches files for "readme" exactly
+/// like `@file:readme`. Partial fragments (`@fi`) return None so the context
+/// catalog can keep offering completion rows.
+fn parse_root_subsearch_fragment(
+    context_type: &str,
+) -> Option<(ContextSubsearchSource, &str)> {
+    if context_type.is_empty() {
+        return None;
+    }
+    if let Some(source) = ContextSubsearchSource::from_trigger(context_type) {
+        return Some((source, ""));
+    }
+    SUBSEARCH_TRIGGERS
+        .iter()
+        .find(|(trigger, _)| {
+            context_type.len() > trigger.len()
+                && context_type[..trigger.len()].eq_ignore_ascii_case(trigger)
+        })
+        .map(|(trigger, source)| (*source, &context_type[trigger.len()..]))
 }
 
 pub(crate) fn build_context_subsearch_section(
@@ -225,6 +264,81 @@ mod tests {
     #[test]
     fn unknown_prefix_returns_none() {
         assert!(parse_context_subsearch("unknown", Some("foo")).is_none());
+    }
+
+    #[test]
+    fn colon_mode_accepts_plural_alias() {
+        let (source, query) = parse_context_subsearch("files", Some("readme")).unwrap();
+        assert_eq!(source, ContextSubsearchSource::File);
+        assert_eq!(query, "readme");
+    }
+
+    /// Root fragments (no colon typed yet) must already BE the search mode —
+    /// the list switches automatically the moment the trigger is recognized,
+    /// with no "press Enter to refine" picker step (user rule: no
+    /// informational/initiation list items in the main menu).
+    #[test]
+    fn exact_root_fragment_enters_search_mode_with_empty_query() {
+        for (fragment, expected) in [
+            ("file", ContextSubsearchSource::File),
+            ("files", ContextSubsearchSource::File),
+            ("project", ContextSubsearchSource::Project),
+            ("projects", ContextSubsearchSource::Project),
+            ("clipboard", ContextSubsearchSource::Clipboard),
+            ("history", ContextSubsearchSource::History),
+            ("browser-history", ContextSubsearchSource::BrowserHistory),
+            ("notes", ContextSubsearchSource::Notes),
+            ("scripts", ContextSubsearchSource::Scripts),
+            ("scriptlets", ContextSubsearchSource::Scriptlets),
+            ("skills", ContextSubsearchSource::Skills),
+            ("dictation", ContextSubsearchSource::Dictation),
+            ("calendar", ContextSubsearchSource::Calendar),
+            ("notifications", ContextSubsearchSource::Notifications),
+        ] {
+            let (source, query) = parse_context_subsearch(fragment, None)
+                .unwrap_or_else(|| panic!("@{fragment} must enter search mode"));
+            assert_eq!(source, expected, "@{fragment}");
+            assert_eq!(query, "", "@{fragment} starts with an empty query");
+        }
+    }
+
+    /// Continuations keep searching seamlessly — the user just keeps typing.
+    #[test]
+    fn root_fragment_continuation_becomes_the_query() {
+        for (fragment, expected_source, expected_query) in [
+            ("filesreadme", ContextSubsearchSource::File, "readme"),
+            ("filereadme", ContextSubsearchSource::File, "readme"),
+            ("clipboardsnip", ContextSubsearchSource::Clipboard, "snip"),
+            ("historyagent", ContextSubsearchSource::History, "agent"),
+        ] {
+            let (source, query) = parse_context_subsearch(fragment, None)
+                .unwrap_or_else(|| panic!("@{fragment} must stay in search mode"));
+            assert_eq!(source, expected_source, "@{fragment}");
+            assert_eq!(query, expected_query, "@{fragment}");
+        }
+    }
+
+    /// Partial fragments are NOT yet a recognized trigger: the context
+    /// catalog keeps offering completion rows (`@fi` → Files, Project Files).
+    #[test]
+    fn partial_and_unknown_root_fragments_keep_the_catalog() {
+        for fragment in ["", "f", "fi", "fil", "clip", "hist", "selection", "zzz"] {
+            assert!(
+                parse_context_subsearch(fragment, None).is_none(),
+                "@{fragment} must not auto-enter a search mode"
+            );
+        }
+    }
+
+    /// Triggers that share a prefix resolve to the most specific source.
+    #[test]
+    fn longest_trigger_wins_for_continuations() {
+        let (source, query) = parse_context_subsearch("scriptletsfoo", None).unwrap();
+        assert_eq!(source, ContextSubsearchSource::Scriptlets);
+        assert_eq!(query, "foo");
+        let (source, query) = parse_context_subsearch("scriptsfoo", None).unwrap();
+        assert_eq!(source, ContextSubsearchSource::Scripts);
+        assert_eq!(query, "foo");
     }
 
     #[test]
