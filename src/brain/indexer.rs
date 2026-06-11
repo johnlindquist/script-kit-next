@@ -448,13 +448,10 @@ fn embed_pending(embedder: &mut Option<BrainEmbedder>) -> Result<usize> {
     let Some(model) = resolve_embed_model() else {
         return Ok(0);
     };
-    if embedder
-        .as_ref()
-        .is_none_or(|e| e.model_id() != model.model_id)
-    {
-        *embedder = Some(BrainEmbedder::spawn(model)?);
-    }
-    let embedder = embedder.as_ref().expect("embedder just initialized");
+    let embedder = match embedder {
+        Some(e) if e.model_id() == model.model_id => e,
+        slot => slot.insert(BrainEmbedder::spawn(model)?),
+    };
     let mut total = 0usize;
     while total < MAX_EMBED_PER_CYCLE {
         let pending = store::docs_needing_embedding(embedder.model_id(), EMBED_BATCH)?;

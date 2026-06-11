@@ -186,9 +186,7 @@ impl NotesApp {
         while let Some(relative_start) = value[scan..].find("[[") {
             let start = scan + relative_start;
             let content_start = start + 2;
-            let Some(relative_end) = value[content_start..].find("]]") else {
-                return None;
-            };
+            let relative_end = value[content_start..].find("]]")?;
             let end = content_start + relative_end + 2;
             if cursor >= start && cursor <= end {
                 let inner = value[content_start..content_start + relative_end].trim();

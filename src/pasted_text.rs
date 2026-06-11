@@ -3,11 +3,15 @@ use std::ops::Range;
 const PASTED_TEXT_LINE_THRESHOLD: usize = 8;
 const PASTED_TEXT_CHAR_THRESHOLD: usize = 600;
 
+// `pub` (not `pub(crate)`) on the paste types/entry point below: this file is
+// compiled into both the lib and the bin, but the single-line-surface caller
+// lives in bin-only `app_impl/`, so the lib copy must stay externally
+// reachable or `clippy --lib -D warnings` flags it dead.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct PastedTextToken {
-    pub(crate) token: String,
-    pub(crate) label: String,
-    pub(crate) text: String,
+pub struct PastedTextToken {
+    pub token: String,
+    pub label: String,
+    pub text: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -18,9 +22,9 @@ pub(crate) struct PastedTextTokenRange {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct PreparedPastedText {
-    pub(crate) insertion_text: String,
-    pub(crate) token: Option<PastedTextToken>,
+pub struct PreparedPastedText {
+    pub insertion_text: String,
+    pub token: Option<PastedTextToken>,
 }
 
 pub(crate) fn prepare_pasted_text(
@@ -44,7 +48,7 @@ pub(crate) fn prepare_pasted_text(
 /// paste collapses to a token (and routes to Agent Chat), not just pastes over
 /// the large-paste thresholds. Multi-line composers (Agent Chat) keep using
 /// [`prepare_pasted_text`] with the size thresholds.
-pub(crate) fn prepare_pasted_text_for_single_line_surface(
+pub fn prepare_pasted_text_for_single_line_surface(
     text: &str,
     existing_tokens: &[PastedTextToken],
 ) -> PreparedPastedText {

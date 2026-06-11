@@ -907,7 +907,6 @@ pub fn get_agent_chat_actions() -> Vec<Action> {
     let mut actions = get_prompt_export_actions(&config)
         .into_iter()
         .chain(get_prompt_target_actions(&config))
-        .into_iter()
         .map(|mut action| {
             action.category = ActionCategory::ScriptContext;
             action

@@ -36,9 +36,6 @@ pub const ACTION_PADDING_X: f32 = 12.0;
 /// Top padding for section/header rows in the actions dialog
 pub const ACTION_PADDING_TOP: f32 = 8.0;
 
-/// Height for section headers within the action list (used when SectionStyle::Headers is enabled)
-pub const SECTION_HEADER_HEIGHT: f32 = 22.0;
-
 /// Horizontal inset for action rows (creates rounded pill appearance)
 pub const ACTION_ROW_INSET: f32 = 8.0;
 

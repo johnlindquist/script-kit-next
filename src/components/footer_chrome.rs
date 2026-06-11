@@ -8,7 +8,6 @@ use crate::theme::opacity::OPACITY_TEXT_MUTED;
 use crate::theme::Theme;
 use crate::ui_foundation::HexColorExt;
 
-pub(crate) const FOOTER_HINT_FONT_SIZE_PX: f32 = 12.0;
 #[allow(dead_code)]
 pub(crate) const FOOTER_HINT_FONT_WEIGHT_APPKIT: f64 = 0.14;
 // Footer action/keycap text weight. Lowered 560 -> 500 (Medium) so the footer

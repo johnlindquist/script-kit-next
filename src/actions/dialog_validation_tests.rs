@@ -24,7 +24,7 @@ use super::builders::{
 };
 use super::constants::{
     ACTION_ITEM_HEIGHT, ACTION_ROW_INSET, HEADER_HEIGHT, POPUP_MAX_HEIGHT, POPUP_WIDTH,
-    SEARCH_INPUT_HEIGHT, SECTION_HEADER_HEIGHT,
+    SEARCH_INPUT_HEIGHT,
 };
 use super::dialog::{build_grouped_items_static, coerce_action_selection, GroupedActionItem};
 use super::types::{
@@ -519,7 +519,6 @@ fn test_constants_positive_and_reasonable() {
     assert!(val(ACTION_ITEM_HEIGHT) > 0.0 && val(ACTION_ITEM_HEIGHT) < 100.0);
     assert!(val(SEARCH_INPUT_HEIGHT) > 0.0 && val(SEARCH_INPUT_HEIGHT) < 100.0);
     assert!(val(HEADER_HEIGHT) > 0.0 && val(HEADER_HEIGHT) < 100.0);
-    assert!(val(SECTION_HEADER_HEIGHT) > 0.0 && val(SECTION_HEADER_HEIGHT) < 100.0);
     assert!(val(ACTION_ROW_INSET) >= 0.0 && val(ACTION_ROW_INSET) < 50.0);
 }
 
@@ -531,17 +530,6 @@ fn test_popup_can_fit_at_least_5_items() {
         max_items >= 5,
         "Popup should fit at least 5 items, fits {}",
         max_items
-    );
-}
-
-#[test]
-fn test_section_header_shorter_than_action_item() {
-    fn val(x: f32) -> f32 {
-        x
-    }
-    assert!(
-        val(SECTION_HEADER_HEIGHT) < val(ACTION_ITEM_HEIGHT),
-        "Section headers should be shorter than action items"
     );
 }
 

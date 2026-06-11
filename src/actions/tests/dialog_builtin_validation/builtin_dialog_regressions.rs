@@ -4395,7 +4395,6 @@ mod from_dialog_builtin_action_validation_tests_35 {
     use crate::actions::command_bar::CommandBarConfig;
     use crate::actions::constants::{
         ACCENT_BAR_WIDTH, ACTION_ROW_INSET, HEADER_HEIGHT, SEARCH_INPUT_HEIGHT,
-        SECTION_HEADER_HEIGHT,
     };
     use crate::actions::dialog::{
         build_grouped_items_static, coerce_action_selection, ActionsDialog,
@@ -5332,11 +5331,6 @@ mod from_dialog_builtin_action_validation_tests_35 {
     // =====================================================================
     // 17. Constants: secondary dimension values
     // =====================================================================
-
-    #[test]
-    fn constant_section_header_height() {
-        assert_eq!(SECTION_HEADER_HEIGHT, 22.0);
-    }
 
     #[test]
     fn constant_header_height() {

@@ -4889,12 +4889,9 @@ impl AgentChatView {
             self.thread_last_seen
                 .insert(t.ui_thread_id().to_string(), t.messages.len());
         }
-        if !self.thread_observers.contains_key(&thread.entity_id()) {
-            self.thread_observers.insert(
-                thread.entity_id(),
-                Self::observe_session_thread(&thread, cx),
-            );
-        }
+        self.thread_observers
+            .entry(thread.entity_id())
+            .or_insert_with(|| Self::observe_session_thread(&thread, cx));
         self.session = AgentChatSession::Live(thread.clone());
         if let Some(transcript) = &self.transcript {
             transcript.update(cx, |t, cx| t.clear_collapsed_ids(cx));

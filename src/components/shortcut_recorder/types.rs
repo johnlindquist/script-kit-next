@@ -1,7 +1,7 @@
 use crate::theme::Theme;
 
 // Re-export shared overlay constants consumed by render.rs.
-pub(super) use crate::components::overlay_modal::{overlay_color_with_alpha, BUTTON_GAP};
+pub(super) use crate::components::overlay_modal::overlay_color_with_alpha;
 
 /// Shortcut-recorder-specific layout constants
 pub(super) const RECORDER_MODAL_WIDTH: f32 = 320.0;

@@ -82,7 +82,7 @@ impl SpinePromptPlan {
 /// "rewrite selected text" flow. When the style segment is the ENTIRE input
 /// (no other prose or sigil segments), accepting a style row auto-submits
 /// the prompt plan — which style sugar expands to `@selection` + `/rewrite`
-/// + the style profile. Mixed inputs (`fix this .formal`) keep the normal
+/// plus the style profile. Mixed inputs (`fix this .formal`) keep the normal
 /// insert-and-keep-typing behavior.
 pub(crate) fn spine_parse_is_style_only(parse: &SpineParse) -> bool {
     let mut saw_style = false;
