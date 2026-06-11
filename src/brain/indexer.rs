@@ -514,19 +514,141 @@ pub fn ingest_chat_turn(
     Ok(())
 }
 
+/// Words too generic to ever stand as an attention topic on their own —
+/// conversational filler ("again", "else", "really") accumulates ask weight
+/// fast and then surfaces verbatim as Brain Inbox drift titles. Shared with
+/// the curator's drift gate via [`is_substantive_topic`] so both layers
+/// agree on what counts as substance. Words of 3 chars or fewer are already
+/// dropped by the length filter and don't need listing.
+const GENERIC_WORDS: &[&str] = &[
+    "about",
+    "after",
+    "again",
+    "also",
+    "another",
+    "anything",
+    "around",
+    "back",
+    "because",
+    "been",
+    "before",
+    "being",
+    "could",
+    "does",
+    "doing",
+    "done",
+    "down",
+    "each",
+    "else",
+    "even",
+    "ever",
+    "every",
+    "everything",
+    "first",
+    "from",
+    "getting",
+    "give",
+    "goes",
+    "going",
+    "gonna",
+    "good",
+    "have",
+    "help",
+    "here",
+    "into",
+    "just",
+    "know",
+    "later",
+    "lets",
+    "like",
+    "made",
+    "make",
+    "many",
+    "maybe",
+    "more",
+    "most",
+    "much",
+    "need",
+    "never",
+    "nothing",
+    "okay",
+    "only",
+    "other",
+    "over",
+    "please",
+    "really",
+    "right",
+    "same",
+    "second",
+    "should",
+    "show",
+    "some",
+    "somehow",
+    "something",
+    "soon",
+    "still",
+    "stuff",
+    "sure",
+    "take",
+    "tell",
+    "than",
+    "thanks",
+    "that",
+    "their",
+    "them",
+    "then",
+    "there",
+    "these",
+    "they",
+    "thing",
+    "things",
+    "think",
+    "this",
+    "those",
+    "time",
+    "today",
+    "tomorrow",
+    "trying",
+    "very",
+    "want",
+    "well",
+    "were",
+    "what",
+    "when",
+    "where",
+    "which",
+    "while",
+    "will",
+    "with",
+    "without",
+    "would",
+    "yeah",
+    "yesterday",
+    "your",
+];
+
+/// Whether a candidate word carries enough meaning to be (part of) a topic.
+fn is_substantive_word(word: &str) -> bool {
+    word.len() > 3 && !GENERIC_WORDS.contains(&word)
+}
+
+/// Whether a topic/title string contains at least one substantive word.
+/// The curator uses this to refuse drift inbox titles like "again" or
+/// "else" while still accepting "second brain" or "build script".
+pub(crate) fn is_substantive_topic(topic: &str) -> bool {
+    topic
+        .to_lowercase()
+        .split(|c: char| !c.is_alphanumeric() && c != '-' && c != '_')
+        .any(is_substantive_word)
+}
+
 /// Cheap, deterministic topic extraction: significant lowercase words and
 /// adjacent pairs. No model in the hot path, by design.
 pub(crate) fn extract_topics(text: &str) -> Vec<String> {
-    const STOP: &[&str] = &[
-        "the", "and", "for", "that", "this", "with", "from", "what", "when", "where", "how", "why",
-        "can", "could", "should", "would", "about", "into", "over", "just", "like", "want", "need",
-        "have", "has", "had", "you", "your", "are", "was", "were", "will", "does", "doing", "done",
-        "make", "made", "let", "lets", "please", "help", "use",
-    ];
     let words: Vec<String> = text
         .to_lowercase()
         .split(|c: char| !c.is_alphanumeric() && c != '-' && c != '_')
-        .filter(|w| w.len() > 3 && !STOP.contains(w))
+        .filter(|w| is_substantive_word(w))
         .map(|w| w.to_string())
         .collect();
     let mut topics: Vec<String> = Vec::new();

@@ -197,6 +197,37 @@ fn topic_extraction_skips_stopwords_and_keeps_pairs() {
 }
 
 #[test]
+fn topic_extraction_drops_conversational_filler() {
+    // The exact failure mode that filled the inbox with "else"/"again":
+    // a throwaway ask made of filler words must yield zero topics.
+    let topics = extract_topics("can you do that again for something else a second time");
+    assert!(
+        topics.is_empty(),
+        "filler-only ask must not record topics, got {topics:?}"
+    );
+    // Filler next to a real subject keeps the subject, drops the filler.
+    let topics = extract_topics("try the thumbnail pipeline again");
+    assert!(topics.iter().any(|t| t == "thumbnail pipeline"));
+    assert!(!topics.iter().any(|t| t.contains("again")));
+}
+
+#[test]
+fn substantive_topic_gate_accepts_subjects_and_rejects_filler() {
+    use super::indexer::is_substantive_topic;
+    for junk in ["again", "else", "second", "Something Else", "  ", "the"] {
+        assert!(!is_substantive_topic(junk), "{junk:?} should be rejected");
+    }
+    for real in [
+        "second brain",
+        "build script",
+        "YouTube pipeline",
+        "egghead",
+    ] {
+        assert!(is_substantive_topic(real), "{real:?} should be accepted");
+    }
+}
+
+#[test]
 fn chat_turn_ingestion_is_idempotent_and_searchable() {
     init_test_db();
     super::ingest_chat_turn(
@@ -591,6 +622,21 @@ fn parse_inbox_extraction_rejects_garbage_and_caps_items() {
     let parsed = curator::parse_inbox_extraction(&raw).unwrap();
     assert!(parsed.commitments.is_empty(), "blank titles skipped");
     assert_eq!(parsed.questions.len(), 8, "per-category cap enforced");
+}
+
+#[test]
+fn parse_inbox_extraction_gates_generic_drift_titles() {
+    let raw = r#"{"commitments":[],"questions":[{"title":"What's going on today?","detail":"","sourceId":"t#0"}],"drift":[{"title":"else","detail":"attention 8, no activity"},{"title":"again","detail":""},{"title":"second brain","detail":"real subject survives"}]}"#;
+    let parsed = curator::parse_inbox_extraction(raw).unwrap();
+    let drift_titles: Vec<&str> = parsed.drift.iter().map(|i| i.title.as_str()).collect();
+    assert_eq!(
+        drift_titles,
+        vec!["second brain"],
+        "generic drift titles are filtered, substantive ones kept"
+    );
+    // The gate applies to drift only — a question phrased entirely in
+    // generic words is still a genuine user question.
+    assert_eq!(parsed.questions.len(), 1);
 }
 
 #[test]

@@ -153,7 +153,10 @@ pub struct InboxExtraction {
 /// Parse the model's extraction response. Tolerates markdown code fences and
 /// leading/trailing prose by slicing from the first `{` to the last `}`.
 /// Empty titles are dropped and each category is capped at
-/// [`INBOX_MAX_PER_CATEGORY`]. Pure — unit-testable without a model.
+/// [`INBOX_MAX_PER_CATEGORY`]. Drift items additionally pass a quality gate:
+/// a drift title with no substantive word ("again", "else") is filler that
+/// leaked through topic extraction, not a real subject, and is discarded
+/// rather than shown as an inbox title. Pure — unit-testable without a model.
 pub fn parse_inbox_extraction(raw: &str) -> Result<InboxExtraction> {
     let start = raw
         .find('{')
@@ -174,6 +177,9 @@ pub fn parse_inbox_extraction(raw: &str) -> Result<InboxExtraction> {
         list.retain(|item| !item.title.trim().is_empty());
         list.truncate(INBOX_MAX_PER_CATEGORY);
     }
+    parsed
+        .drift
+        .retain(|item| super::indexer::is_substantive_topic(&item.title));
     Ok(parsed)
 }
 
@@ -218,7 +224,9 @@ pub fn run_inbox_extraction() -> Result<usize> {
          Commitments are things the user explicitly said they would do in \
          the chats. Questions are questions the user raised that received no \
          answer. Drift is topics with attention but no recent activity (the \
-         focus review's Drifting section is evidence). Titles under ten \
+         focus review's Drifting section is evidence) — only include drift \
+         topics that name a concrete project, tool, or subject; never \
+         generic words like 'again', 'else', or 'second'. Titles under ten \
          words; details one or two sentences of context. At most \
          {INBOX_MAX_PER_CATEGORY} per category; use empty arrays when there \
          is nothing. Facts only — no advice, no invented items.\n\n\
