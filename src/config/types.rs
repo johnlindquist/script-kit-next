@@ -63,6 +63,10 @@ pub struct UnifiedSearchConfig {
     pub brain: UnifiedSearchBrainConfig,
     pub brain_inbox: UnifiedSearchBrainInboxConfig,
     pub notes: UnifiedSearchNotesConfig,
+    // alias: scripts/config-schema.ts documented this key as
+    // `agent_chatHistory` (acp->agent_chat sed artifact) for a while, so
+    // user configs may carry either spelling.
+    #[serde(alias = "agent_chatHistory")]
     pub agent_chat_history: UnifiedSearchAgentChatHistoryConfig,
     pub ai_vault: UnifiedSearchAiVaultConfig,
     pub clipboard_history: UnifiedSearchClipboardHistoryConfig,

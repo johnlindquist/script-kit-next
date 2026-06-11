@@ -1446,7 +1446,7 @@ export interface Config extends BaseConfig {
    *   enabled: true,
    *   files: { enabled: true, globalSearch: true, recentFiles: true, directoryBrowse: true, promotion: "never" },
    *   notes: { enabled: true, maxResults: 3, minQueryChars: 3, searchContent: true },
-   *   agent_chatHistory: { enabled: true, maxResults: 3, minQueryChars: 3 },
+   *   agentChatHistory: { enabled: true, maxResults: 3, minQueryChars: 3 },
  *   aiVault: { enabled: true, maxResults: 3, minQueryChars: 3, providers: ["claude", "codex", "hermesAgent", "rovoDev"], cacheTtlMs: 30000, searchContent: false, resumeTerminal: "cmux", excludePatterns: [] },
    *   clipboardHistory: { enabled: true, maxResults: 3, minQueryChars: 3, scanLimit: 200 },
  *   dictationHistory: { enabled: true, maxResults: 3, minQueryChars: 4, scanLimit: 200 },
@@ -1733,7 +1733,7 @@ export interface UnifiedSearchConfig {
   /** Controls for passive root Notes rows backed by the local Notes index. */
   notes?: UnifiedSearchNotesConfig;
   /** Controls for passive root AI conversation rows backed by saved Agent Chat history. */
-  agent_chatHistory?: UnifiedSearchAgentChatHistoryConfig;
+  agentChatHistory?: UnifiedSearchAgentChatHistoryConfig;
   /** Controls for passive root AI Vault rows backed by cmux session metadata. */
   aiVault?: UnifiedSearchAiVaultConfig;
   /** Controls for passive root clipboard history rows. */
@@ -1751,7 +1751,7 @@ export type UnifiedSearchPassiveSource =
   | "notes"
   | "clipboardHistory"
   | "dictationHistory"
-  | "agent_chatHistory"
+  | "agentChatHistory"
   | "aiVault"
   | "browserHistory";
 
