@@ -3890,7 +3890,11 @@ mod actions_dialog_opacity_consistency_tests {
     #[test]
     fn test_actions_dialog_main_window_background_alpha_matches_dark_window_default() {
         let theme = Theme::dark_default();
-        assert_eq!(actions_dialog_main_window_background_alpha(&theme), 127);
+        let expected = (crate::theme::opacity::OPACITY_VIBRANCY_BACKGROUND * 255.0) as u8;
+        assert_eq!(
+            actions_dialog_main_window_background_alpha(&theme),
+            expected
+        );
     }
 
     #[test]

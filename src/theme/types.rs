@@ -266,7 +266,10 @@ impl BackgroundOpacity {
             input_active: 0.50,            // Match main
             border_inactive: 0.125,        // Borders when inactive
             border_active: 0.25,           // Borders when active
-            vibrancy_background: Some(0.50), // Main window vibrancy background
+            // Window-root tint over native blur. Thin theme veil only — the
+            // vibrancy material (menu) carries legibility over bright
+            // backdrops; a heavy tint here greys out backdrop color.
+            vibrancy_background: Some(crate::theme::opacity::OPACITY_VIBRANCY_BACKGROUND),
             // Text grading (all applied to text_primary)
             text_name: default_text_name(),
             text_strong: default_text_strong(),
@@ -299,7 +302,9 @@ impl BackgroundOpacity {
             input_active: 0.50,                   // Match main
             border_inactive: 0.30,                // Borders when inactive
             border_active: 0.45,                  // Borders when active
-            vibrancy_background: Some(0.50),      // Match main
+            // Match dark mode: thin theme veil; the material carries
+            // legibility (see dark_default).
+            vibrancy_background: Some(crate::theme::opacity::OPACITY_VIBRANCY_BACKGROUND),
             // Text grading (same defaults for light mode)
             text_name: default_text_name(),
             text_strong: default_text_strong(),
@@ -357,16 +362,22 @@ impl BackgroundOpacity {
 #[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case", ascii_case_insensitive)]
 pub enum VibrancyMaterial {
-    /// Dark, high contrast material (like HUD windows)
-    #[default]
+    /// Dark, high contrast material (like HUD windows). The most translucent
+    /// material: its luminance tracks the backdrop (measured 63% body
+    /// luminance over a white app at zero tint), so it needs a heavy tint to
+    /// stay legible — which crushes backdrop color.
     Hud,
     /// Light blur, used in popovers
     Popover,
-    /// Similar to system menus
+    /// Similar to system menus (default). The system's "stays dark over
+    /// bright content" material: measured 39% body luminance over a white app
+    /// at zero tint while retaining backdrop color, so a thin theme tint is
+    /// enough for legibility.
+    #[default]
     Menu,
     /// Sidebar-style blur
     Sidebar,
-    /// Content background blur
+    /// Content background blur (near-opaque plate; backdrop barely shows)
     Content,
 }
 
@@ -377,13 +388,30 @@ pub struct VibrancySettings {
     /// Whether vibrancy is enabled (default: true)
     pub enabled: bool,
     /// Vibrancy material type
-    /// - `hud`: Dark, high contrast (like HUD windows) (default)
+    /// - `hud`: Dark, high contrast (like HUD windows)
     /// - `popover`: Light blur, used in popovers
-    /// - `menu`: Similar to system menus
+    /// - `menu`: Similar to system menus (default)
     /// - `sidebar`: Sidebar-style blur
     /// - `content`: Content background blur
     #[serde(default)]
     pub material: VibrancyMaterial,
+    /// Saturation multiplier applied to the blurred backdrop before the
+    /// material and window tints composite over it (the `colorSaturate`
+    /// filter on the backdrop layer). Materials ship their own default
+    /// (menu: 2.4); raising it makes backdrop color glow through the dark
+    /// panel without changing its darkness — the Raycast look. Clamped to
+    /// 0.0..=4.0 at the apply site.
+    #[serde(default = "default_backdrop_saturation")]
+    pub backdrop_saturation: f32,
+}
+
+/// Default backdrop saturation boost. Measured on the menu material over a
+/// rainbow backdrop: the material's built-in 2.4 retains ~30% body
+/// saturation; 2.6 retains ~36% at identical luminance.
+pub const DEFAULT_BACKDROP_SATURATION: f32 = 2.6;
+
+fn default_backdrop_saturation() -> f32 {
+    DEFAULT_BACKDROP_SATURATION
 }
 
 impl Default for VibrancySettings {
@@ -391,6 +419,7 @@ impl Default for VibrancySettings {
         VibrancySettings {
             enabled: true,
             material: VibrancyMaterial::default(),
+            backdrop_saturation: DEFAULT_BACKDROP_SATURATION,
         }
     }
 }

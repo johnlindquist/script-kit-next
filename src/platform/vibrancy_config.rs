@@ -225,6 +225,19 @@ unsafe fn configure_visual_effect_views_recursive(
         // Light mode without emphasis matches POC's cleaner look
         let _: () = msg_send![view, setEmphasized: is_dark];
 
+        // Debug-only: hide the effect view to measure what the layers beneath
+        // it (e.g. the Tahoe glass backdrop) actually contribute on screen.
+        if std::env::var("SCRIPT_KIT_DEBUG_HIDE_VEV").is_ok() {
+            let _: () = msg_send![view, setHidden: true];
+            logging::log("VIBRANCY", "DEBUG: NSVisualEffectView hidden via SCRIPT_KIT_DEBUG_HIDE_VEV");
+        }
+
+        // NOTE: the backdrop saturation boost is NOT applied here — at
+        // configure time the CABackdropLayer does not exist yet (measured:
+        // the search always comes up empty). It is applied in the BlurredView
+        // updateLayer swizzle (vibrancy_swizzle_materials.rs), where the
+        // material has just (re)installed its filter chain.
+
         // Log state AFTER configuration
         let new_material: isize = msg_send![view, material];
         let new_state: isize = msg_send![view, state];
@@ -275,4 +288,177 @@ unsafe fn configure_visual_effect_views_recursive(
             configure_visual_effect_views_recursive(child, count, is_dark, material);
         }
     }
+}
+
+/// Saturation multiplier for the blurred backdrop.
+///
+/// `SCRIPT_KIT_VIBRANCY_SATURATION` (e.g. "1.8") overrides for live tuning;
+/// otherwise the theme's `vibrancy.backdrop_saturation` applies. Values are
+/// clamped to a sane 0.0..=4.0 range.
+#[cfg(target_os = "macos")]
+fn backdrop_saturation_amount() -> f64 {
+    let env_override = std::env::var("SCRIPT_KIT_VIBRANCY_SATURATION")
+        .ok()
+        .and_then(|raw| raw.trim().parse::<f64>().ok())
+        .filter(|amount| amount.is_finite());
+    let amount = env_override.unwrap_or_else(|| {
+        f64::from(crate::theme::get_cached_theme().get_vibrancy().backdrop_saturation)
+    });
+    amount.clamp(0.0, 4.0)
+}
+
+/// Find the `CABackdropLayer` inside a layer tree (the layer that holds the
+/// captured behind-window content an NSVisualEffectView blurs).
+///
+/// # Safety
+/// `layer` must be a valid CALayer pointer or nil. Main thread only.
+#[cfg(target_os = "macos")]
+unsafe fn find_backdrop_layer(layer: id, backdrop_class: id, depth: usize) -> id {
+    if layer.is_null() || depth > 6 {
+        return nil;
+    }
+    let is_backdrop: bool = msg_send![layer, isKindOfClass: backdrop_class];
+    if is_backdrop {
+        return layer;
+    }
+    let sublayers: id = msg_send![layer, sublayers];
+    if !sublayers.is_null() {
+        let count: usize = msg_send![sublayers, count];
+        for i in 0..count {
+            let child: id = msg_send![sublayers, objectAtIndex: i];
+            let found = find_backdrop_layer(child, backdrop_class, depth + 1);
+            if !found.is_null() {
+                return found;
+            }
+        }
+    }
+    nil
+}
+
+/// Boost backdrop saturation on the CABackdropLayer inside an
+/// NSVisualEffectView before the material and window tints composite over it.
+///
+/// The material installs its own filter chain on the backdrop layer
+/// (sdrNormalize, gaussianBlur, colorSaturate); when a colorSaturate filter is
+/// already present its `inputAmount` is overridden, otherwise a new CAFilter
+/// is appended. Either way the filters array is reassigned, because Core
+/// Animation ignores in-place filter mutation after attachment. Uses private
+/// CoreAnimation API (CAFilter / CABackdropLayer).
+///
+/// # Safety
+/// `view` must be a valid NSView pointer. Main thread only.
+#[cfg(target_os = "macos")]
+unsafe fn apply_backdrop_saturation_filter(view: id, amount: f64) -> bool {
+    #[link(name = "Foundation", kind = "framework")]
+    extern "C" {
+        fn NSClassFromString(a_class_name: id) -> id;
+    }
+
+    let view_class: id = msg_send![view, class];
+    let view_class_name: id = msg_send![view_class, className];
+    let view_class_str: *const std::os::raw::c_char = msg_send![view_class_name, UTF8String];
+    let view_name = if view_class_str.is_null() {
+        "<unknown>".to_string()
+    } else {
+        std::ffi::CStr::from_ptr(view_class_str)
+            .to_string_lossy()
+            .to_string()
+    };
+
+    let fail = |step: &str| {
+        logging::log(
+            "VIBRANCY",
+            &format!("Backdrop saturation: failed at step '{step}' (view={view_name})"),
+        );
+        false
+    };
+
+    let layer: id = msg_send![view, layer];
+    if layer.is_null() {
+        return fail("view.layer is nil");
+    }
+
+    let backdrop_class_name: id = msg_send![
+        class!(NSString),
+        stringWithUTF8String: c"CABackdropLayer".as_ptr()
+    ];
+    let backdrop_class = NSClassFromString(backdrop_class_name);
+    if backdrop_class.is_null() {
+        return fail("CABackdropLayer class unavailable");
+    }
+    let backdrop = find_backdrop_layer(layer, backdrop_class, 0);
+    if backdrop.is_null() {
+        return fail("no CABackdropLayer in layer tree");
+    }
+
+    let input_amount_key: id =
+        msg_send![class!(NSString), stringWithUTF8String: c"inputAmount".as_ptr()];
+    let amount_number: id = msg_send![class!(NSNumber), numberWithDouble: amount];
+    let saturate_name: id =
+        msg_send![class!(NSString), stringWithUTF8String: c"colorSaturate".as_ptr()];
+
+    // Prefer overriding the material's existing colorSaturate filter.
+    let existing_filters: id = msg_send![backdrop, filters];
+    let existing_count: usize = if existing_filters.is_null() {
+        0
+    } else {
+        msg_send![existing_filters, count]
+    };
+    let mutable: id = if existing_filters.is_null() {
+        msg_send![class!(NSMutableArray), array]
+    } else {
+        msg_send![existing_filters, mutableCopy]
+    };
+    let mut overrode_existing = false;
+    for i in 0..existing_count {
+        let filter: id = msg_send![mutable, objectAtIndex: i];
+        let name: id = msg_send![filter, name];
+        if !name.is_null() {
+            let matches: bool = msg_send![name, isEqualToString: saturate_name];
+            if matches {
+                let prior: id = msg_send![filter, valueForKey: input_amount_key];
+                let prior_amount: f64 = if prior.is_null() {
+                    f64::NAN
+                } else {
+                    msg_send![prior, doubleValue]
+                };
+                let _: () = msg_send![filter, setValue: amount_number forKey: input_amount_key];
+                if !overrode_existing {
+                    logging::log(
+                        "VIBRANCY",
+                        &format!(
+                            "Backdrop saturation: material default inputAmount={prior_amount}, overriding to {amount}"
+                        ),
+                    );
+                }
+                overrode_existing = true;
+            }
+        }
+    }
+
+    if !overrode_existing {
+        let filter_class_name: id =
+            msg_send![class!(NSString), stringWithUTF8String: c"CAFilter".as_ptr()];
+        let filter_class = NSClassFromString(filter_class_name);
+        if filter_class.is_null() {
+            return fail("CAFilter class unavailable");
+        }
+        let filter: id = msg_send![filter_class, filterWithType: saturate_name];
+        if filter.is_null() {
+            return fail("CAFilter filterWithType returned nil");
+        }
+        let _: () = msg_send![filter, setValue: amount_number forKey: input_amount_key];
+        let _: () = msg_send![mutable, addObject: filter];
+    }
+
+    // Reassign to commit the change.
+    let _: () = msg_send![backdrop, setFilters: mutable];
+    logging::log(
+        "VIBRANCY",
+        &format!(
+            "Backdrop saturation: {} colorSaturate inputAmount={amount}",
+            if overrode_existing { "overrode existing" } else { "appended new" }
+        ),
+    );
+    true
 }

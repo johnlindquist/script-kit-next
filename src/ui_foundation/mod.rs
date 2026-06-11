@@ -89,11 +89,11 @@ pub fn hex_to_hsla_with_alpha(hex: u32, alpha: f32) -> Hsla {
     }
 }
 /// Opacity for vibrancy window backgrounds in dark mode.
-/// 50% opacity keeps theme backgrounds consistently translucent by default.
-pub const VIBRANCY_DARK_OPACITY: f32 = 0.50;
+/// Sourced from the canonical token so legibility stays backdrop-independent.
+pub const VIBRANCY_DARK_OPACITY: f32 = crate::theme::opacity::OPACITY_VIBRANCY_BACKGROUND;
 /// Opacity for vibrancy window backgrounds in light mode.
-/// 50% opacity keeps theme backgrounds consistently translucent by default.
-pub const VIBRANCY_LIGHT_OPACITY: f32 = 0.50;
+/// Sourced from the canonical token so legibility stays backdrop-independent.
+pub const VIBRANCY_LIGHT_OPACITY: f32 = crate::theme::opacity::OPACITY_VIBRANCY_BACKGROUND;
 /// 38% opacity - arg input selection highlight fill.
 pub(crate) const ALPHA_SELECTION: u8 = 0x60;
 /// 38% opacity - prompt dividers and subtle section borders.
@@ -125,7 +125,7 @@ pub(crate) const ALPHA_TINT_SUBTLE: u8 = 0x20;
 ///
 /// Uses cached theme to avoid file I/O on every render.
 /// If `theme.opacity.vibrancy_background` is set, that value is used.
-/// Otherwise, mode-specific defaults are used (50% dark / 50% light).
+/// Otherwise, the canonical `OPACITY_VIBRANCY_BACKGROUND` token is used.
 #[inline]
 fn resolve_window_vibrancy_opacity(theme: &Theme) -> f32 {
     let opacity = theme.get_opacity();
@@ -149,15 +149,11 @@ pub fn get_window_vibrancy_background() -> Rgba {
 /// Background tint used by floating/native windows that must visually match
 /// the main window's themed surface.
 ///
-/// This intentionally uses the same opacity fallback as the HUD/main-window
-/// matched path: `vibrancy_background` when set, otherwise `main`.
+/// Resolves through the same path as `get_window_vibrancy_background` so every
+/// window (main, notes, dictation, HUD, actions popup) shares one tint.
 #[inline]
 pub fn main_window_matched_background_rgba(theme: &Theme) -> u32 {
-    let opacity = theme.get_opacity();
-    let background_alpha = opacity
-        .vibrancy_background
-        .unwrap_or(opacity.main)
-        .clamp(0.0, 1.0);
+    let background_alpha = resolve_window_vibrancy_opacity(theme);
 
     hex_to_rgba_with_opacity(theme.colors.background.main, background_alpha)
 }

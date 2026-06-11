@@ -7,6 +7,17 @@
 /// Fully transparent — used for hover-reveal patterns where an element
 /// starts invisible and fades in on group hover.
 pub const OPACITY_HIDDEN: f32 = 0.0;
+/// Window-root tint over the native vibrancy blur, shared by ALL windows
+/// (main, notes, dictation, HUD, actions popup, AI/Agent Chat).
+///
+/// Deliberately THIN: legibility over bright backdrops is carried by the
+/// vibrancy material (menu material measured 39% body luminance over a white
+/// app at zero tint; 30% at this 0.30 tint), not by this tint. A plain-alpha
+/// tint scales backdrop chroma by (1-alpha), so a heavy value here greys the
+/// panel out over colorful backdrops — 0.85 crushed body saturation to ~15%
+/// vs Raycast's ~54%. This veil only biases the material toward the theme
+/// color. Pairs with `VibrancySettings::backdrop_saturation`.
+pub const OPACITY_VIBRANCY_BACKGROUND: f32 = 0.30;
 /// Softer ghost-tier background opacity for barely-there fills (0.03–0.06 range).
 #[allow(dead_code)]
 pub const OPACITY_GHOST_SOFT: f32 = 0.03;

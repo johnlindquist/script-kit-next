@@ -232,7 +232,7 @@ const KNOWN_OPACITY_KEYS: &[&str] = &[
     "text_placeholder",
     "text_icon",
 ];
-const KNOWN_VIBRANCY_KEYS: &[&str] = &["enabled", "material"];
+const KNOWN_VIBRANCY_KEYS: &[&str] = &["enabled", "material", "backdrop_saturation"];
 const KNOWN_DROP_SHADOW_KEYS: &[&str] = &[
     "enabled",
     "blur_radius",

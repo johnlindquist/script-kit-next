@@ -73,7 +73,7 @@ impl HudColors {
     fn dark_default() -> Self {
         Self {
             background: 0x1e1e1e,
-            background_rgba: 0x1e1e1e80,
+            background_rgba: 0x1e1e1e4c,
             text_primary: 0xffffff,
             accent: 0x3b82f6,        // blue-500
             accent_hover: 0x60a5fa,  // blue-400
@@ -86,7 +86,7 @@ impl HudColors {
     fn light_default() -> Self {
         Self {
             background: 0xfafafa,
-            background_rgba: 0xfafafa80,
+            background_rgba: 0xfafafa4c,
             text_primary: 0x000000,
             accent: 0x2563eb,        // blue-600 (darker for light mode)
             accent_hover: 0x3b82f6,  // blue-500

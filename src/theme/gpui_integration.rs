@@ -155,23 +155,17 @@ pub fn map_scriptkit_to_gpui_theme(sk_theme: &Theme, is_dark: bool) -> ThemeColo
     // ║ - Higher opacity = more solid color                                        ║
     // ╚════════════════════════════════════════════════════════════════════════════╝
     let main_bg = if vibrancy_enabled {
-        // Get opacity from theme, with fallbacks for different modes
-        // This controls how much blur shows through the window background
-        // Fallback value (0.50) matches the shared theme opacity default:
-        // - 50% opacity keeps every stock theme surface consistently translucent.
+        // This controls how much blur shows through the window background.
+        // The fallback is the canonical OPACITY_VIBRANCY_BACKGROUND token: a
+        // thin theme veil — the vibrancy material carries legibility over
+        // bright backdrops, and a heavy plain-alpha tint here would grey out
+        // backdrop color (see the token's doc comment for the measurements).
         //
         // IMPORTANT: Light and dark modes intentionally use the same floor here.
-        // Supporting text readability is handled by the shared text opacity ladder;
-        // keep muted/hint/placeholder tiers quiet so Liquid Glass chrome does not
-        // read as a stack of full-strength labels over the translucent root bg.
-        let bg_alpha = if is_dark {
-            // Dark mode: use user's value or default
-            opacity.vibrancy_background.unwrap_or(0.50)
-        } else {
-            // Light mode: use user's value or default without forcing a higher floor
-            opacity.vibrancy_background.unwrap_or(0.50)
-        }
-        .clamp(0.0, 1.0);
+        let bg_alpha = opacity
+            .vibrancy_background
+            .unwrap_or(crate::theme::opacity::OPACITY_VIBRANCY_BACKGROUND)
+            .clamp(0.0, 1.0);
 
         debug!(
             is_dark,

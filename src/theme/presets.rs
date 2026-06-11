@@ -4598,10 +4598,6 @@ mod tests {
                 ("panel", opacity.panel),
                 ("input_inactive", opacity.input_inactive),
                 ("input_active", opacity.input_active),
-                (
-                    "vibrancy_background",
-                    opacity.vibrancy_background.unwrap_or(0.50),
-                ),
             ];
 
             for (field, value) in surface_opacities {
@@ -4613,6 +4609,19 @@ mod tests {
                     value
                 );
             }
+
+            // The window-root tint is intentionally higher than the surface
+            // preset so legibility stays backdrop-independent.
+            let vibrancy_background = opacity
+                .vibrancy_background
+                .unwrap_or(crate::theme::opacity::OPACITY_VIBRANCY_BACKGROUND);
+            assert!(
+                (vibrancy_background - crate::theme::opacity::OPACITY_VIBRANCY_BACKGROUND).abs()
+                    < f32::EPSILON,
+                "Preset '{}' should default opacity.vibrancy_background to the canonical token, got {}",
+                preset.name,
+                vibrancy_background
+            );
         }
     }
 

@@ -340,6 +340,19 @@ unsafe fn configure_tahoe_window_backdrop(window: id, log_target: &str, window_n
         return;
     }
 
+    // Debug-only: skip the glass backdrop to measure whether it contributes
+    // anything visible underneath the NSVisualEffectViews.
+    if std::env::var("SCRIPT_KIT_DEBUG_NO_GLASS").is_ok() {
+        logging::log(
+            log_target,
+            &format!(
+                "{}: DEBUG: Tahoe glass backdrop skipped via SCRIPT_KIT_DEBUG_NO_GLASS",
+                window_name
+            ),
+        );
+        return;
+    }
+
     let Some(glass_class) = tahoe_liquid_glass_class() else {
         logging::log(
             log_target,

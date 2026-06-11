@@ -253,6 +253,20 @@ extern "C" fn patched_update_layer(this: &objc::runtime::Object, _sel: objc::run
         // DON'T hide the CAChameleonLayer - this is the key difference from GPUI's version
         // The tint layer provides the native macOS vibrancy effect
 
+        // Re-apply the backdrop saturation boost (theme
+        // `vibrancy.backdrop_saturation`, env-overridable) after every
+        // updateLayer: the material re-installs its filter chain here, and
+        // this is the only point where the CABackdropLayer is guaranteed to
+        // exist (configure-time application finds no backdrop layer yet).
+        let amount = backdrop_saturation_amount();
+        let applied = apply_backdrop_saturation_filter(this_id, amount);
+        if call_count < 3 {
+            logging::log(
+                "VIBRANCY",
+                &format!("updateLayer saturation boost: applied={applied} amount={amount}"),
+            );
+        }
+
         // On first call, log the sublayers recursively to find CAChameleonLayer
         if call_count == 0 {
             let layer: id = msg_send![this_id, layer];
