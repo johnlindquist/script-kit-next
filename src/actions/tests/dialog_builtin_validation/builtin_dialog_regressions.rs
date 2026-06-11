@@ -2331,8 +2331,8 @@ mod from_dialog_builtin_action_validation_tests_33 {
             auto_sizing_enabled: false,
         };
         let actions = get_notes_command_bar_actions(&info);
-        // new_note + browse_notes + enable_auto_sizing = 3
-        assert_eq!(actions.len(), 3);
+        // new_note + browse_notes + enable_auto_sizing + reset_window_position = 4
+        assert_eq!(actions.len(), 4);
     }
 
     // --- merged from part_03.rs ---
@@ -2345,8 +2345,9 @@ mod from_dialog_builtin_action_validation_tests_33 {
             auto_sizing_enabled: false,
         };
         let actions = get_notes_command_bar_actions(&info);
-        // new_note + restore_note + permanently_delete_note + browse_notes + enable_auto_sizing = 5
-        assert_eq!(actions.len(), 5);
+        // new_note + restore_note + permanently_delete_note + browse_notes + enable_auto_sizing
+        // + reset_window_position = 6
+        assert_eq!(actions.len(), 6);
     }
 
     #[test]
@@ -2357,7 +2358,8 @@ mod from_dialog_builtin_action_validation_tests_33 {
             auto_sizing_enabled: false,
         };
         let actions = get_notes_command_bar_actions(&info);
-        assert_eq!(actions.len(), 15);
+        // Full mode including reset_window_position = 16
+        assert_eq!(actions.len(), 16);
     }
 
     #[test]
@@ -2368,7 +2370,8 @@ mod from_dialog_builtin_action_validation_tests_33 {
             auto_sizing_enabled: true,
         };
         let actions = get_notes_command_bar_actions(&info);
-        assert_eq!(actions.len(), 14);
+        // Full mode minus enable_auto_sizing (reset_window_position stays) = 15
+        assert_eq!(actions.len(), 15);
     }
 
     // =====================================================================
@@ -5133,7 +5136,8 @@ mod from_dialog_builtin_action_validation_tests_35 {
             auto_sizing_enabled: false,
         };
         let actions = get_notes_command_bar_actions(&info);
-        assert_eq!(actions.len(), 5);
+        // Trash view with selection including reset_window_position = 6
+        assert_eq!(actions.len(), 6);
     }
 
     #[test]
@@ -6838,8 +6842,8 @@ mod from_dialog_builtin_action_validation_tests_36 {
         let actions = get_notes_command_bar_actions(&info);
         // new_note + duplicate + delete + browse_notes + find_in_note + format + move_list_item_up
         // + move_list_item_down + copy_note_as + copy_deeplink + create_quicklink + copy_backlinks
-        // + export + send_to_ai + enable_auto_sizing = 15
-        assert_eq!(actions.len(), 15);
+        // + export + send_to_ai + enable_auto_sizing + reset_window_position = 16
+        assert_eq!(actions.len(), 16);
     }
 
     // --- merged from part_03.rs ---
@@ -6874,8 +6878,8 @@ mod from_dialog_builtin_action_validation_tests_36 {
             auto_sizing_enabled: false,
         };
         let actions = get_notes_command_bar_actions(&info);
-        // new_note + browse_notes + enable_auto_sizing = 3
-        assert_eq!(actions.len(), 3);
+        // new_note + browse_notes + enable_auto_sizing + reset_window_position = 4
+        assert_eq!(actions.len(), 4);
     }
 
     // =====================================================================
@@ -14741,8 +14745,9 @@ mod from_dialog_builtin_action_validation_tests_44 {
         let actions = get_notes_command_bar_actions(&info);
         // new_note + duplicate + delete + browse + find + format + move_list_item_up
         // + move_list_item_down + copy_note_as + copy_deeplink + create_quicklink
-        // + copy_backlinks + export + send_to_ai + enable_auto_sizing = 15
-        assert_eq!(actions.len(), 15);
+        // + copy_backlinks + export + send_to_ai + enable_auto_sizing
+        // + reset_window_position = 16
+        assert_eq!(actions.len(), 16);
     }
 
     #[test]
@@ -14753,8 +14758,8 @@ mod from_dialog_builtin_action_validation_tests_44 {
             auto_sizing_enabled: false,
         };
         let actions = get_notes_command_bar_actions(&info);
-        // new_note + browse + enable_auto_sizing = 3
-        assert_eq!(actions.len(), 3);
+        // new_note + browse + enable_auto_sizing + reset_window_position = 4
+        assert_eq!(actions.len(), 4);
     }
 
     #[test]
@@ -14765,8 +14770,9 @@ mod from_dialog_builtin_action_validation_tests_44 {
             auto_sizing_enabled: false,
         };
         let actions = get_notes_command_bar_actions(&info);
-        // new_note + restore_note + permanently_delete_note + browse + enable_auto_sizing = 5
-        assert_eq!(actions.len(), 5);
+        // new_note + restore_note + permanently_delete_note + browse + enable_auto_sizing
+        // + reset_window_position = 6
+        assert_eq!(actions.len(), 6);
     }
 
     #[test]
@@ -14777,8 +14783,8 @@ mod from_dialog_builtin_action_validation_tests_44 {
             auto_sizing_enabled: true,
         };
         let actions = get_notes_command_bar_actions(&info);
-        // 15 minus enable_auto_sizing = 14
-        assert_eq!(actions.len(), 14);
+        // 16 minus enable_auto_sizing = 15
+        assert_eq!(actions.len(), 15);
     }
 
     // =========== 22. Chat context: no models produces only continue_in_chat ===========
@@ -16249,7 +16255,8 @@ mod from_dialog_builtin_action_validation_tests_45 {
             auto_sizing_enabled: false,
         };
         let actions = get_notes_command_bar_actions(&info);
-        assert_eq!(actions.len(), 3);
+        // new_note + browse_notes + enable_auto_sizing + reset_window_position = 4
+        assert_eq!(actions.len(), 4);
     }
 
     #[test]
@@ -16260,7 +16267,8 @@ mod from_dialog_builtin_action_validation_tests_45 {
             auto_sizing_enabled: true,
         };
         let actions = get_notes_command_bar_actions(&info);
-        assert_eq!(actions.len(), 2);
+        // new_note + browse_notes + reset_window_position = 3
+        assert_eq!(actions.len(), 3);
     }
 
     #[test]
@@ -16271,7 +16279,9 @@ mod from_dialog_builtin_action_validation_tests_45 {
             auto_sizing_enabled: true,
         };
         let actions = get_notes_command_bar_actions(&info);
-        assert_eq!(actions.len(), 4);
+        // new_note + restore_note + permanently_delete_note + browse_notes
+        // + reset_window_position = 5
+        assert_eq!(actions.len(), 5);
     }
 
     #[test]
@@ -16282,7 +16292,8 @@ mod from_dialog_builtin_action_validation_tests_45 {
             auto_sizing_enabled: true,
         };
         let actions = get_notes_command_bar_actions(&info);
-        assert_eq!(actions.len(), 2);
+        // new_note + browse_notes + reset_window_position = 3
+        assert_eq!(actions.len(), 3);
     }
 
     // =========== 23. Notes: trash+selection suppresses selection-dependent ===========

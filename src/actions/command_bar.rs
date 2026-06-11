@@ -716,6 +716,23 @@ impl CommandBar {
         self.reset_open_state_if_window_gone()
     }
 
+    /// Mark the command bar closed without re-entering the detached window's
+    /// close path. Hosts call this from the dialog's `on_close` callback —
+    /// the popup window is already tearing itself down (Escape/Cmd+K while
+    /// the popup was the key window, focus loss), so only the in-memory
+    /// state needs to drop. Returns true when the bar was open.
+    pub fn mark_closed_externally(&mut self) -> bool {
+        if !self.is_open {
+            return false;
+        }
+        self.reset_open_state();
+        logging::log(
+            "COMMAND_BAR",
+            "Command bar marked closed (detached popup closed itself)",
+        );
+        true
+    }
+
     /// Create a new CommandBar with actions and configuration
     pub fn new(actions: Vec<Action>, config: CommandBarConfig, theme: Arc<theme::Theme>) -> Self {
         Self {

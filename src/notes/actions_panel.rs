@@ -42,6 +42,8 @@ pub enum NotesAction {
     PermanentlyDeleteNote,
     /// Enable auto-sizing (window grows/shrinks with content)
     EnableAutoSizing,
+    /// Reset the window to its default position on the active display
+    ResetWindowPosition,
     /// Send the current note content to Agent Chat
     SendToAi,
     /// Panel was cancelled (Escape pressed)
@@ -87,6 +89,7 @@ impl NotesAction {
             NotesAction::RestoreNote => "Restore Note",
             NotesAction::PermanentlyDeleteNote => "Delete Permanently",
             NotesAction::EnableAutoSizing => "Enable Auto-Sizing",
+            NotesAction::ResetWindowPosition => "Reset Window Position",
             NotesAction::SendToAi => "Send to Agent Chat",
             NotesAction::Cancel => "Cancel",
         }
@@ -114,6 +117,7 @@ impl NotesAction {
             NotesAction::RestoreNote => Some("cmd+z"),
             NotesAction::PermanentlyDeleteNote => None,
             NotesAction::EnableAutoSizing => Some("cmd+a"),
+            NotesAction::ResetWindowPosition => None,
             NotesAction::SendToAi => Some("shift+cmd+a"),
             NotesAction::Cancel => Some("escape"),
         }
@@ -150,6 +154,7 @@ impl NotesAction {
             NotesAction::RestoreNote => IconName::Refresh,
             NotesAction::PermanentlyDeleteNote => IconName::Trash,
             NotesAction::EnableAutoSizing => IconName::ArrowRight,
+            NotesAction::ResetWindowPosition => IconName::Refresh,
             NotesAction::SendToAi => IconName::BoltFilled,
             NotesAction::Cancel => IconName::Close,
         }
@@ -174,6 +179,7 @@ impl NotesAction {
             NotesAction::RestoreNote => "restore_note",
             NotesAction::PermanentlyDeleteNote => "permanently_delete_note",
             NotesAction::EnableAutoSizing => "enable_auto_sizing",
+            NotesAction::ResetWindowPosition => "reset_window_position",
             NotesAction::SendToAi => "send_to_ai",
             NotesAction::Cancel => "cancel",
         }

@@ -1902,7 +1902,9 @@ fn resolve_actions_popup_parent_automation_id(
 }
 
 /// Open the actions window as a separate floating window with vibrancy.
-/// It can take keyboard focus and also supports parent-routed keys.
+/// It opens without taking key-window status so the parent keeps its active
+/// drop shadow; keys arrive via parent routing, or locally after a click
+/// promotes the popup (`setBecomesKeyOnlyIfNeeded:`).
 ///
 /// # Arguments
 /// * `cx` - The application context
@@ -1997,9 +1999,14 @@ pub fn open_actions_window(
         window_bounds: Some(WindowBounds::Windowed(bounds)),
         titlebar: None, // No titlebar = no drag affordance
         window_background,
-        // Let the popup own keyboard focus when AppKit promotes it to the key
-        // window; parent surfaces can still route keys while they remain focused.
-        focus: true,
+        // MUST stay `false`: a focused popup makes GPUI call makeKeyAndOrderFront,
+        // which steals key status from the parent panel and visibly drops its
+        // active shadow (the popup must read as an attached child, like NSMenu).
+        // Keys reach the popup via parent routing (`route_key_to_actions_dialog`,
+        // `route_key_to_detached_actions_window`) while the parent stays key, and
+        // via the popup's own handlers when AppKit click-promotes it
+        // (`setBecomesKeyOnlyIfNeeded:` in `configure_actions_popup_window`).
+        focus: false,
         show: true,
         kind: WindowKind::PopUp, // Floating popup window
         display_id,              // CRITICAL: Position on same display as main window

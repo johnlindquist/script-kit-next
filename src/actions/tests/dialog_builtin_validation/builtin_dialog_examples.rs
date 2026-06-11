@@ -2385,8 +2385,8 @@ mod from_dialog_builtin_action_validation_tests_22 {
             auto_sizing_enabled: false,
         };
         let actions = get_notes_command_bar_actions(&info);
-        // Trash mode with selection includes restore + permanently delete.
-        assert_eq!(actions.len(), 5);
+        // Trash mode with selection includes restore + permanently delete (+ reset_window_position).
+        assert_eq!(actions.len(), 6);
     }
 
     #[test]
@@ -2397,8 +2397,8 @@ mod from_dialog_builtin_action_validation_tests_22 {
             auto_sizing_enabled: false,
         };
         let actions = get_notes_command_bar_actions(&info);
-        // Full: new+dup+delete+browse+find+format+move_up+move_down+copy_note_as+copy_deeplink+create_quicklink+copy_backlinks+export+send_to_ai+auto_sizing = 15
-        assert_eq!(actions.len(), 15);
+        // Full: new+dup+delete+browse+find+format+move_up+move_down+copy_note_as+copy_deeplink+create_quicklink+copy_backlinks+export+send_to_ai+auto_sizing+reset_window_position = 16
+        assert_eq!(actions.len(), 16);
     }
 
     #[test]
@@ -2409,8 +2409,8 @@ mod from_dialog_builtin_action_validation_tests_22 {
             auto_sizing_enabled: true,
         };
         let actions = get_notes_command_bar_actions(&info);
-        // Same as full minus enable_auto_sizing = 14
-        assert_eq!(actions.len(), 14);
+        // Same as full minus enable_auto_sizing (reset_window_position stays) = 15
+        assert_eq!(actions.len(), 15);
     }
 
     #[test]
@@ -2421,8 +2421,8 @@ mod from_dialog_builtin_action_validation_tests_22 {
             auto_sizing_enabled: false,
         };
         let actions = get_notes_command_bar_actions(&info);
-        // new_note + browse_notes + enable_auto_sizing = 3
-        assert_eq!(actions.len(), 3);
+        // new_note + browse_notes + enable_auto_sizing + reset_window_position = 4
+        assert_eq!(actions.len(), 4);
     }
 
     // ============================================================
@@ -5317,8 +5317,8 @@ mod from_dialog_builtin_action_validation_tests_24 {
             auto_sizing_enabled: false,
         };
         let actions = get_notes_command_bar_actions(&info);
-        // Trash with selection: new_note, restore_note, permanently_delete_note, browse_notes, enable_auto_sizing (5)
-        assert_eq!(actions.len(), 5);
+        // Trash with selection: new_note, restore_note, permanently_delete_note, browse_notes, enable_auto_sizing, reset_window_position (6)
+        assert_eq!(actions.len(), 6);
     }
 
     #[test]
@@ -5381,8 +5381,9 @@ mod from_dialog_builtin_action_validation_tests_24 {
         let actions = get_notes_command_bar_actions(&info);
         // new_note, duplicate_note, delete_note, browse_notes, find_in_note, format,
         // move_list_item_up, move_list_item_down, copy_note_as, copy_deeplink,
-        // create_quicklink, copy_backlinks, export, send_to_ai, enable_auto_sizing = 15
-        assert_eq!(actions.len(), 15);
+        // create_quicklink, copy_backlinks, export, send_to_ai, enable_auto_sizing,
+        // reset_window_position = 16
+        assert_eq!(actions.len(), 16);
     }
 
     #[test]
@@ -5393,8 +5394,8 @@ mod from_dialog_builtin_action_validation_tests_24 {
             auto_sizing_enabled: true,
         };
         let actions = get_notes_command_bar_actions(&info);
-        // Same minus enable_auto_sizing = 14
-        assert_eq!(actions.len(), 14);
+        // Same minus enable_auto_sizing (reset_window_position stays) = 15
+        assert_eq!(actions.len(), 15);
     }
 
     #[test]
@@ -5405,8 +5406,8 @@ mod from_dialog_builtin_action_validation_tests_24 {
             auto_sizing_enabled: false,
         };
         let actions = get_notes_command_bar_actions(&info);
-        // new_note, browse_notes, enable_auto_sizing = 3
-        assert_eq!(actions.len(), 3);
+        // new_note, browse_notes, enable_auto_sizing, reset_window_position = 4
+        assert_eq!(actions.len(), 4);
     }
 
     // ============================================================
@@ -10400,8 +10401,9 @@ mod from_dialog_builtin_action_validation_tests_28 {
         };
         let actions = get_notes_command_bar_actions(&info);
         // new_note, duplicate, delete, browse, find, format, move_up, move_down, copy_note_as,
-        // copy_deeplink, create_quicklink, copy_backlinks, export, send_to_ai, auto_sizing
-        assert_eq!(actions.len(), 15);
+        // copy_deeplink, create_quicklink, copy_backlinks, export, send_to_ai, auto_sizing,
+        // reset_window_position
+        assert_eq!(actions.len(), 16);
     }
 
     #[test]
@@ -10412,8 +10414,8 @@ mod from_dialog_builtin_action_validation_tests_28 {
             auto_sizing_enabled: true,
         };
         let actions = get_notes_command_bar_actions(&info);
-        // Same minus auto_sizing = 14
-        assert_eq!(actions.len(), 14);
+        // Same minus auto_sizing (reset_window_position stays) = 15
+        assert_eq!(actions.len(), 15);
     }
 
     #[test]
@@ -10424,8 +10426,8 @@ mod from_dialog_builtin_action_validation_tests_28 {
             auto_sizing_enabled: false,
         };
         let actions = get_notes_command_bar_actions(&info);
-        // new_note, browse, auto_sizing = 3
-        assert_eq!(actions.len(), 3);
+        // new_note, browse, auto_sizing, reset_window_position = 4
+        assert_eq!(actions.len(), 4);
     }
 
     #[test]
@@ -10436,8 +10438,9 @@ mod from_dialog_builtin_action_validation_tests_28 {
             auto_sizing_enabled: false,
         };
         let actions = get_notes_command_bar_actions(&info);
-        // new_note, restore_note, permanently_delete_note, browse, auto_sizing = 5
-        assert_eq!(actions.len(), 5);
+        // new_note, restore_note, permanently_delete_note, browse, auto_sizing,
+        // reset_window_position = 6
+        assert_eq!(actions.len(), 6);
     }
 
     // =============================================================================
@@ -12990,8 +12993,9 @@ mod from_dialog_builtin_action_validation_tests_30 {
         let actions = get_notes_command_bar_actions(&info);
         // new_note, duplicate_note, delete_note, browse_notes, find_in_note, format,
         // move_list_item_up, move_list_item_down, copy_note_as, copy_deeplink,
-        // create_quicklink, copy_backlinks, export, send_to_ai, enable_auto_sizing = 15
-        assert_eq!(actions.len(), 15);
+        // create_quicklink, copy_backlinks, export, send_to_ai, enable_auto_sizing,
+        // reset_window_position = 16
+        assert_eq!(actions.len(), 16);
     }
 
     #[test]
@@ -13002,8 +13006,8 @@ mod from_dialog_builtin_action_validation_tests_30 {
             auto_sizing_enabled: true,
         };
         let actions = get_notes_command_bar_actions(&info);
-        // same minus enable_auto_sizing = 14
-        assert_eq!(actions.len(), 14);
+        // same minus enable_auto_sizing (reset_window_position stays) = 15
+        assert_eq!(actions.len(), 15);
     }
 
     #[test]
@@ -13014,8 +13018,8 @@ mod from_dialog_builtin_action_validation_tests_30 {
             auto_sizing_enabled: false,
         };
         let actions = get_notes_command_bar_actions(&info);
-        // new_note, browse_notes, enable_auto_sizing = 3
-        assert_eq!(actions.len(), 3);
+        // new_note, browse_notes, enable_auto_sizing, reset_window_position = 4
+        assert_eq!(actions.len(), 4);
     }
 
     #[test]
@@ -13026,8 +13030,9 @@ mod from_dialog_builtin_action_validation_tests_30 {
             auto_sizing_enabled: false,
         };
         let actions = get_notes_command_bar_actions(&info);
-        // new_note, restore_note, permanently_delete_note, browse_notes, enable_auto_sizing = 5
-        assert_eq!(actions.len(), 5);
+        // new_note, restore_note, permanently_delete_note, browse_notes, enable_auto_sizing,
+        // reset_window_position = 6
+        assert_eq!(actions.len(), 6);
     }
 
     // ---------------------------------------------------------------------------

@@ -783,6 +783,72 @@ impl NotesApp {
         cx.notify();
     }
 
+    /// Reset the Notes window to its default size and position — the
+    /// top-right corner of the display the mouse cursor is on. The Notes
+    /// counterpart of the main window's "Reset Window Positions" settings
+    /// command, so a window dragged off-screen is always recoverable from
+    /// the actions menu.
+    pub fn reset_window_position_to_default(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let bounds = super::window_ops::default_notes_window_bounds();
+        let x: f64 = bounds.origin.x.into();
+        let y: f64 = bounds.origin.y.into();
+        let width: f64 = bounds.size.width.into();
+        let height: f64 = bounds.size.height.into();
+
+        // GPUI's Window::resize is size-only; reposition through the platform
+        // layer (setFrame:) like the AI window-mode restore does.
+        let mut moved = false;
+        if let Ok(handle) = raw_window_handle::HasWindowHandle::window_handle(window) {
+            if let raw_window_handle::RawWindowHandle::AppKit(appkit) = handle.as_raw() {
+                crate::platform::move_window_by_view(appkit.ns_view, x, y, width, height);
+                moved = true;
+            }
+        }
+        if !moved {
+            window.resize(bounds.size);
+        }
+
+        // The height change is ours — don't let detect_manual_resize read it
+        // as a user resize and silently disable auto-sizing.
+        self.last_window_height = f32::from(bounds.size.height);
+
+        crate::window_state::save_window_bounds(
+            crate::window_state::WindowRole::Notes,
+            crate::window_state::PersistedWindowBounds {
+                mode: crate::window_state::PersistedWindowMode::Windowed,
+                x,
+                y,
+                width,
+                height,
+            },
+        );
+        crate::windows::set_automation_bounds(
+            "notes",
+            Some(crate::protocol::AutomationWindowBounds {
+                x,
+                y,
+                width,
+                height,
+            }),
+        );
+
+        tracing::info!(
+            target: "notes",
+            event = "notes_window_position_reset",
+            x,
+            y,
+            width,
+            height,
+            moved,
+        );
+        self.show_action_feedback("Window position reset", false);
+        cx.notify();
+    }
+
     /// Check if user manually resized the window and disable auto-sizing if so
     pub(super) fn detect_manual_resize(&mut self, window: &Window) {
         if !self.auto_sizing_enabled {

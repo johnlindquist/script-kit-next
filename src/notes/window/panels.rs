@@ -62,7 +62,36 @@ impl NotesApp {
         let resize_dialog = dialog.clone();
         let notes_app = cx.entity().downgrade();
         let notes_window = window.window_handle();
+        let on_close_notes_app = notes_app.clone();
         dialog.update(cx, |dialog, _cx| {
+            // Escape / Cmd+K / focus loss while the DETACHED popup is the key
+            // window run ActionsWindow::request_close, bypassing
+            // close_actions_panel / close_browse_panel entirely. Without this
+            // hook the editor never regains focus and the host's `is_open`
+            // flag only reconciles on the next keystroke.
+            dialog.set_on_close(std::sync::Arc::new(move |cx| {
+                let notes_app = on_close_notes_app.clone();
+                // Defer out of the popup window's close path before touching
+                // the Notes window, mirroring the activation routing below.
+                cx.defer(move |cx| {
+                    let restored = notes_window.update(cx, |_root, window, cx| {
+                        let Some(notes_app) = notes_app.upgrade() else {
+                            return;
+                        };
+                        notes_app.update(cx, |app, cx| {
+                            app.handle_detached_popup_closed_externally(role, window, cx);
+                        });
+                    });
+                    if let Err(error) = restored {
+                        tracing::warn!(
+                            target: "script_kit::actions",
+                            ?role,
+                            error = %error,
+                            "notes_command_bar_on_close_restore_failed"
+                        );
+                    }
+                });
+            }));
             dialog.set_on_activation(std::sync::Arc::new(move |activation, _window, cx| {
                 match activation {
                     crate::actions::ActionsDialogActivation::Executed { action_id, .. } => {
@@ -110,6 +139,34 @@ impl NotesApp {
 
         // Route through NotesFocusSurface for structured logging and consistent focus management.
         self.request_focus_surface(focus::NotesFocusSurface::Editor, window, cx);
+    }
+
+    /// Restore host state and focus after a detached popup closed itself
+    /// (Escape/Cmd+K while the popup was the key window, or focus loss).
+    ///
+    /// Mirrors `close_actions_panel` / `close_browse_panel` without
+    /// re-entering the popup's window-close path, which is already running
+    /// when the dialog's `on_close` callback fires.
+    fn handle_detached_popup_closed_externally(
+        &mut self,
+        role: NotesCommandBarRole,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let was_open = match role {
+            NotesCommandBarRole::Actions => self.command_bar.mark_closed_externally(),
+            NotesCommandBarRole::NoteSwitcher => {
+                self.mention_portal_edit = None;
+                self.note_switcher.mark_closed_externally()
+            }
+        };
+        tracing::info!(
+            target: "script_kit::actions",
+            ?role,
+            was_open,
+            "notes_detached_popup_closed_externally"
+        );
+        self.restore_primary_focus_after_dialog(window, cx);
     }
 
     /// Handle action from the actions panel (Cmd+K)
@@ -173,6 +230,9 @@ impl NotesApp {
             NotesAction::EnableAutoSizing => {
                 self.enable_auto_sizing(window, cx);
             }
+            NotesAction::ResetWindowPosition => {
+                self.reset_window_position_to_default(window, cx);
+            }
             NotesAction::SendToAi => {
                 let opened = self
                     .open_selected_note_cart_in_embedded_agent_chat("NotesAction::SendToAi", cx);
@@ -217,6 +277,7 @@ impl NotesApp {
             "restore_note" => Some(NotesAction::RestoreNote),
             "permanently_delete_note" => Some(NotesAction::PermanentlyDeleteNote),
             "enable_auto_sizing" => Some(NotesAction::EnableAutoSizing),
+            "reset_window_position" => Some(NotesAction::ResetWindowPosition),
             "move_list_item_up" => Some(NotesAction::MoveListItemUp),
             "move_list_item_down" => Some(NotesAction::MoveListItemDown),
             "send_to_ai" => Some(NotesAction::SendToAi),

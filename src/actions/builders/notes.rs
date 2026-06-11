@@ -352,6 +352,19 @@ pub fn get_notes_command_bar_actions(info: &NotesInfo) -> Vec<Action> {
         );
     }
 
+    // Always available: this is the recovery path for a window dragged
+    // off-screen, so it must not depend on selection or view mode.
+    actions.push(
+        Action::new(
+            "reset_window_position",
+            "Reset Window Position",
+            Some("Moves the window to its default position on the active display".to_string()),
+            ActionCategory::ScriptContext,
+        )
+        .with_icon(IconName::Refresh)
+        .with_section("Window"),
+    );
+
     actions
 }
 

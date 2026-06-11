@@ -340,7 +340,7 @@ mod from_dialog_builtin_action_validation_tests {
 
     #[test]
     fn notes_command_bar_section_labels_are_known() {
-        let known = ["Notes", "Edit", "Copy", "Export", "AI", "Settings"];
+        let known = ["Notes", "Edit", "Copy", "Export", "AI", "Settings", "Window"];
         let info = NotesInfo {
             has_selection: true,
             is_trash_view: false,
@@ -3837,7 +3837,7 @@ mod from_dialog_builtin_action_validation_tests_3 {
         let sections = sections_in_order(&actions);
         assert_eq!(
             sections,
-            vec!["Notes", "Edit", "Copy", "Export", "AI", "Settings"],
+            vec!["Notes", "Edit", "Copy", "Export", "AI", "Settings", "Window"],
             "Notes command bar sections should be in correct order"
         );
     }
@@ -3856,8 +3856,8 @@ mod from_dialog_builtin_action_validation_tests_3 {
         let sections = sections_in_order(&actions);
         assert_eq!(
             sections,
-            vec!["Notes", "Settings"],
-            "Notes without selection should only have Notes and Settings"
+            vec!["Notes", "Settings", "Window"],
+            "Notes without selection should only have Notes, Settings, and Window"
         );
     }
 
@@ -3873,7 +3873,7 @@ mod from_dialog_builtin_action_validation_tests_3 {
         let sections = sections_in_order(&actions);
         assert_eq!(
             sections,
-            vec!["Notes", "Trash", "Notes", "Settings"],
+            vec!["Notes", "Trash", "Notes", "Settings", "Window"],
             "Notes in trash view should match the current section sequence"
         );
     }
@@ -3890,8 +3890,8 @@ mod from_dialog_builtin_action_validation_tests_3 {
         let sections = sections_in_order(&actions);
         assert_eq!(
             sections,
-            vec!["Notes"],
-            "With auto-sizing on and no selection, only Notes section"
+            vec!["Notes", "Window"],
+            "With auto-sizing on and no selection, only Notes and Window sections"
         );
     }
 
@@ -9804,8 +9804,9 @@ mod from_dialog_builtin_action_validation_tests_5 {
             let actions = get_notes_command_bar_actions(&info);
             // new_note, duplicate, delete, browse, find, format, move_list_item_up,
             // move_list_item_down, copy_note_as, copy_deeplink, create_quicklink,
-            // copy_backlinks, export, send_to_ai, enable_auto_sizing = 15
-            assert_eq!(actions.len(), 15);
+            // copy_backlinks, export, send_to_ai, enable_auto_sizing,
+            // reset_window_position = 16
+            assert_eq!(actions.len(), 16);
         }
 
         #[test]
@@ -9816,8 +9817,8 @@ mod from_dialog_builtin_action_validation_tests_5 {
                 auto_sizing_enabled: true,
             };
             let actions = get_notes_command_bar_actions(&info);
-            // new_note + browse_notes = 2
-            assert_eq!(actions.len(), 2);
+            // new_note + browse_notes + reset_window_position = 3
+            assert_eq!(actions.len(), 3);
         }
 
         // =========================================================================
@@ -10871,10 +10872,11 @@ mod from_dialog_builtin_action_validation_tests_6 {
                 auto_sizing_enabled: true,
             };
             let actions = get_notes_command_bar_actions(&info);
-            // Only new_note and browse_notes (auto_sizing_enabled=true hides that)
-            assert_eq!(actions.len(), 2);
+            // Only new_note, browse_notes, reset_window_position (auto_sizing_enabled=true hides that)
+            assert_eq!(actions.len(), 3);
             assert_eq!(actions[0].id, "new_note");
             assert_eq!(actions[1].id, "browse_notes");
+            assert_eq!(actions[2].id, "reset_window_position");
         }
 
         #[test]
@@ -14291,10 +14293,10 @@ mod from_dialog_builtin_action_validation_tests_7 {
                 auto_sizing_enabled: false,
             };
             let actions = get_notes_command_bar_actions(&info);
-            // new_note + browse_notes + enable_auto_sizing = 3
+            // new_note + browse_notes + enable_auto_sizing + reset_window_position = 4
             assert_eq!(
                 actions.len(),
-                3,
+                4,
                 "Minimal notes actions: {:?}",
                 action_ids(&actions)
             );
@@ -14309,10 +14311,10 @@ mod from_dialog_builtin_action_validation_tests_7 {
                 auto_sizing_enabled: true,
             };
             let actions = get_notes_command_bar_actions(&info);
-            // new_note + browse_notes = 2
+            // new_note + browse_notes + reset_window_position = 3
             assert_eq!(
                 actions.len(),
-                2,
+                3,
                 "Minimal with auto: {:?}",
                 action_ids(&actions)
             );
@@ -14328,10 +14330,11 @@ mod from_dialog_builtin_action_validation_tests_7 {
             let actions = get_notes_command_bar_actions(&info);
             // new_note + duplicate + delete + browse_notes + find + format + move_list_item_up
             // + move_list_item_down + copy_note_as + copy_deeplink + create_quicklink
-            // + copy_backlinks + export + send_to_ai + enable_auto_sizing = 15
+            // + copy_backlinks + export + send_to_ai + enable_auto_sizing
+            // + reset_window_position = 16
             assert_eq!(
                 actions.len(),
-                15,
+                16,
                 "Full feature: {:?}",
                 action_ids(&actions)
             );
@@ -16050,11 +16053,12 @@ mod from_dialog_builtin_action_validation_tests_8 {
                 .collect::<HashSet<_>>()
                 .into_iter()
                 .collect();
-            // Should only have Notes section (no selection means no Edit/Copy/Export/Settings)
+            // Only Notes + the always-present Window section (reset_window_position);
+            // no selection means no Edit/Copy/Export/Settings
             assert_eq!(
                 sections.len(),
-                1,
-                "Minimal config should have 1 section, got {:?}",
+                2,
+                "Minimal config should have 2 sections, got {:?}",
                 sections
             );
         }
@@ -16863,11 +16867,11 @@ mod from_dialog_builtin_action_validation_tests_8 {
                 auto_sizing_enabled: true,
             };
             let actions = get_notes_command_bar_actions(&info);
-            // Minimal: new_note + browse_notes
+            // Minimal: new_note + browse_notes + reset_window_position
             assert_eq!(
                 actions.len(),
-                2,
-                "Minimal should have exactly 2 actions, got {}",
+                3,
+                "Minimal should have exactly 3 actions, got {}",
                 actions.len()
             );
         }
@@ -18311,14 +18315,19 @@ mod from_dialog_builtin_action_validation_tests_9 {
                 auto_sizing_enabled: true,
             };
             let actions = get_notes_command_bar_actions(&info);
-            // Only Notes section should be present (new_note, browse_notes)
+            // Notes section (new_note, browse_notes) plus the always-present
+            // Window section (reset_window_position)
             assert_eq!(
                 actions.len(),
-                2,
-                "No selection + auto_sizing should give 2 actions"
+                3,
+                "No selection + auto_sizing should give 3 actions"
             );
             for action in &actions {
-                assert_eq!(action.section.as_deref(), Some("Notes"));
+                if action.id == "reset_window_position" {
+                    assert_eq!(action.section.as_deref(), Some("Window"));
+                } else {
+                    assert_eq!(action.section.as_deref(), Some("Notes"));
+                }
             }
         }
 

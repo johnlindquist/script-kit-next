@@ -272,3 +272,49 @@ fn actions_popup_state_exposes_shortcut_parity() {
         "keyboard DevTools receipts must surface actions dialog shortcut parity directly"
     );
 }
+
+/// Extract the brace-balanced body of the function starting at `signature`.
+fn actions_popup_fn_body(source: &str, signature: &str) -> String {
+    let start = source
+        .find(signature)
+        .unwrap_or_else(|| panic!("{signature} not found"));
+    let rest = &source[start..];
+    let open = rest.find('{').expect("function body open brace");
+    let mut depth = 0usize;
+    for (index, ch) in rest[open..].char_indices() {
+        match ch {
+            '{' => depth += 1,
+            '}' => {
+                depth -= 1;
+                if depth == 0 {
+                    return rest[open..open + index + 1].to_string();
+                }
+            }
+            _ => {}
+        }
+    }
+    panic!("unterminated function body for {signature}");
+}
+
+/// WHY: the actions popup must read as an attached child of its parent window.
+/// `focus: true` makes GPUI call `makeKeyAndOrderFront` on the popup NSPanel,
+/// which steals key-window status from the parent and visibly drops the
+/// parent's active shadow (regressed once in `a1cbd2cf9`). Keys reach the
+/// popup via parent routing while the parent stays key, and locally after a
+/// click promotes it (`setBecomesKeyOnlyIfNeeded:`). If this assertion fires
+/// on an intentional focus-model rework, re-verify the parent shadow stays
+/// active while the popup is open before changing it.
+#[test]
+fn open_actions_window_does_not_take_key_window_focus() {
+    let content = read("src/actions/window.rs");
+    let body = actions_popup_fn_body(content.as_str(), "pub fn open_actions_window(");
+    assert!(
+        !body.contains("focus: true"),
+        "open_actions_window must not open the popup with focus: true — \
+         that steals key status from the parent window and drops its shadow"
+    );
+    assert!(
+        body.contains("focus: false"),
+        "open_actions_window must explicitly open the popup with focus: false"
+    );
+}

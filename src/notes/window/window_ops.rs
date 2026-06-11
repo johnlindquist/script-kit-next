@@ -35,6 +35,22 @@ fn ensure_theme_initialized(cx: &mut App) {
 }
 
 /// Calculate window bounds positioned in the top-right corner of the display containing the mouse.
+/// Default Notes window geometry, shared by first-open placement and the
+/// "Reset Window Position" action.
+const NOTES_DEFAULT_WIDTH: f32 = 350.0;
+const NOTES_DEFAULT_HEIGHT: f32 = 280.0;
+const NOTES_DEFAULT_EDGE_PADDING: f32 = 20.0;
+
+/// Default Notes window bounds: top-right corner of the display the mouse
+/// cursor is on (falling back to the primary display).
+pub(crate) fn default_notes_window_bounds() -> gpui::Bounds<gpui::Pixels> {
+    calculate_top_right_bounds(
+        NOTES_DEFAULT_WIDTH,
+        NOTES_DEFAULT_HEIGHT,
+        NOTES_DEFAULT_EDGE_PADDING,
+    )
+}
+
 fn calculate_top_right_bounds(width: f32, height: f32, padding: f32) -> gpui::Bounds<gpui::Pixels> {
     use crate::platform::{
         clamp_to_visible, display_for_point, get_global_mouse_position, get_macos_visible_displays,
@@ -578,11 +594,7 @@ fn open_notes_window_with_close_behavior(
     info!("Opening new notes window");
 
     // Calculate position: try saved position first, then top-right default
-    let window_width = 350.0_f32;
-    let window_height = 280.0_f32;
-    let padding = 20.0_f32; // Padding from screen edges
-
-    let default_bounds = calculate_top_right_bounds(window_width, window_height, padding);
+    let default_bounds = default_notes_window_bounds();
     let displays = crate::platform::get_macos_displays();
     let bounds = if std::env::var_os("SCRIPT_KIT_TEST_NOTES_DB_PATH").is_some() {
         default_bounds

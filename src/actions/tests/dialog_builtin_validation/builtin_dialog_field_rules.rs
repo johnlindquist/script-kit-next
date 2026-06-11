@@ -650,8 +650,9 @@ mod from_dialog_builtin_action_validation_tests_11 {
         let actions = get_notes_command_bar_actions(&info);
         // new_note, duplicate_note, delete_note, browse_notes, find_in_note, format,
         // move_list_item_up, move_list_item_down, copy_note_as, copy_deeplink,
-        // create_quicklink, copy_backlinks, export, send_to_ai, enable_auto_sizing = 15
-        assert_eq!(actions.len(), 15);
+        // create_quicklink, copy_backlinks, export, send_to_ai, enable_auto_sizing,
+        // reset_window_position = 16
+        assert_eq!(actions.len(), 16);
     }
 
     #[test]
@@ -676,8 +677,10 @@ mod from_dialog_builtin_action_validation_tests_11 {
             auto_sizing_enabled: true,
         };
         let actions = get_notes_command_bar_actions(&info);
-        // Only new_note and browse_notes (no auto_sizing since enabled)
-        assert_eq!(actions.len(), 2);
+        // Only new_note, browse_notes, and reset_window_position (no
+        // auto_sizing since enabled). reset_window_position is always present
+        // — it is the recovery path for a window dragged off-screen.
+        assert_eq!(actions.len(), 3);
     }
 
     #[test]
@@ -3148,7 +3151,8 @@ mod from_dialog_builtin_action_validation_tests_12 {
                 .iter()
                 .filter_map(|a| a.section.as_deref())
                 .collect();
-            assert_eq!(sections.len(), 6, "Expected 6 sections: {:?}", sections);
+            // Notes, Edit, Copy, Export, AI, Settings, Window (reset_window_position)
+            assert_eq!(sections.len(), 7, "Expected 7 sections: {:?}", sections);
         }
 
         #[test]
@@ -3180,8 +3184,8 @@ mod from_dialog_builtin_action_validation_tests_12 {
                 auto_sizing_enabled: false,
             };
             let actions = get_notes_command_bar_actions(&info);
-            // Minimal: new_note, browse_notes, possibly enable_auto_sizing
-            assert!(actions.len() <= 3);
+            // Minimal: new_note, browse_notes, possibly enable_auto_sizing, reset_window_position
+            assert!(actions.len() <= 4);
         }
 
         #[test]
@@ -6227,11 +6231,13 @@ mod from_dialog_builtin_action_validation_tests_14 {
                 auto_sizing_enabled: true,
             };
             let actions = get_notes_command_bar_actions(&info);
-            // Trash mode keeps Notes actions and adds Trash restore/delete actions.
+            // Trash mode keeps Notes actions and adds Trash restore/delete actions,
+            // plus the always-present Window section (reset_window_position).
             let sections: HashSet<_> = actions.iter().filter_map(|a| a.section.clone()).collect();
-            assert_eq!(sections.len(), 2);
+            assert_eq!(sections.len(), 3);
             assert!(sections.contains("Notes"));
             assert!(sections.contains("Trash"));
+            assert!(sections.contains("Window"));
         }
 
         #[test]
@@ -6242,8 +6248,8 @@ mod from_dialog_builtin_action_validation_tests_14 {
                 auto_sizing_enabled: false,
             };
             let actions = get_notes_command_bar_actions(&info);
-            // new_note, browse_notes, enable_auto_sizing
-            assert_eq!(actions.len(), 3);
+            // new_note, browse_notes, enable_auto_sizing, reset_window_position
+            assert_eq!(actions.len(), 4);
         }
 
         // =========================================================================
@@ -8156,8 +8162,9 @@ mod from_dialog_builtin_action_validation_tests_15 {
             let actions = get_notes_command_bar_actions(&info);
             // Should have max actions: new_note, duplicate, delete, browse, find, format,
             // move_list_item_up, move_list_item_down, copy_note_as, copy_deeplink,
-            // create_quicklink, copy_backlinks, export, send_to_ai, enable_auto_sizing
-            assert_eq!(actions.len(), 15, "Full feature set should be 15 actions");
+            // create_quicklink, copy_backlinks, export, send_to_ai, enable_auto_sizing,
+            // reset_window_position
+            assert_eq!(actions.len(), 16, "Full feature set should be 16 actions");
         }
 
         #[test]
@@ -8170,8 +8177,8 @@ mod from_dialog_builtin_action_validation_tests_15 {
             let actions = get_notes_command_bar_actions(&info);
             let ids = action_ids(&actions);
             assert!(!ids.contains(&"enable_auto_sizing".to_string()));
-            // Full set minus enable_auto_sizing = 14
-            assert_eq!(actions.len(), 14);
+            // Full set minus enable_auto_sizing (reset_window_position stays) = 15
+            assert_eq!(actions.len(), 15);
         }
 
         #[test]
@@ -8182,8 +8189,8 @@ mod from_dialog_builtin_action_validation_tests_15 {
                 auto_sizing_enabled: true,
             };
             let actions = get_notes_command_bar_actions(&info);
-            // Only new_note and browse_notes (auto_sizing enabled, so no enable_auto_sizing)
-            assert_eq!(actions.len(), 2);
+            // Only new_note, browse_notes, reset_window_position (auto_sizing enabled, so no enable_auto_sizing)
+            assert_eq!(actions.len(), 3);
         }
 
         // =========================================================================
@@ -10541,11 +10548,11 @@ mod from_dialog_builtin_action_validation_tests_16 {
                 .iter()
                 .filter_map(|a| a.section.as_deref())
                 .collect();
-            // Notes, Edit, Copy, Export, AI, Settings
+            // Notes, Edit, Copy, Export, AI, Settings, Window (reset_window_position)
             assert_eq!(
                 sections.len(),
-                6,
-                "full feature has 6 sections: {:?}",
+                7,
+                "full feature has 7 sections: {:?}",
                 sections
             );
         }
@@ -15373,8 +15380,9 @@ mod from_dialog_builtin_action_validation_tests_18 {
             // Export: export
             // AI: send_to_ai
             // Settings: enable_auto_sizing
-            // = 15 (move_list_item_up/down + copy_backlinks were added for active notes)
-            assert_eq!(actions.len(), 15);
+            // Window: reset_window_position
+            // = 16 (move_list_item_up/down + copy_backlinks were added for active notes)
+            assert_eq!(actions.len(), 16);
         }
 
         #[test]
@@ -15385,8 +15393,8 @@ mod from_dialog_builtin_action_validation_tests_18 {
                 auto_sizing_enabled: true,
             };
             let actions = get_notes_command_bar_actions(&info);
-            // Full-feature set (15) minus enable_auto_sizing = 14
-            assert_eq!(actions.len(), 14);
+            // Full-feature set (16) minus enable_auto_sizing = 15
+            assert_eq!(actions.len(), 15);
             assert!(!actions.iter().any(|a| a.id == "enable_auto_sizing"));
         }
 
@@ -15398,8 +15406,9 @@ mod from_dialog_builtin_action_validation_tests_18 {
                 auto_sizing_enabled: false,
             };
             let actions = get_notes_command_bar_actions(&info);
-            // new_note, restore_note, permanently_delete_note, browse_notes, enable_auto_sizing
-            assert_eq!(actions.len(), 5);
+            // new_note, restore_note, permanently_delete_note, browse_notes, enable_auto_sizing,
+            // reset_window_position
+            assert_eq!(actions.len(), 6);
         }
 
         #[test]
@@ -15410,8 +15419,8 @@ mod from_dialog_builtin_action_validation_tests_18 {
                 auto_sizing_enabled: false,
             };
             let actions = get_notes_command_bar_actions(&info);
-            // Only new_note, browse_notes, enable_auto_sizing
-            assert_eq!(actions.len(), 3);
+            // Only new_note, browse_notes, enable_auto_sizing, reset_window_position
+            assert_eq!(actions.len(), 4);
         }
 
         #[test]
@@ -15422,8 +15431,8 @@ mod from_dialog_builtin_action_validation_tests_18 {
                 auto_sizing_enabled: true,
             };
             let actions = get_notes_command_bar_actions(&info);
-            // Only new_note, browse_notes (auto_sizing hidden)
-            assert_eq!(actions.len(), 2);
+            // Only new_note, browse_notes, reset_window_position (auto_sizing hidden)
+            assert_eq!(actions.len(), 3);
         }
 
         // =========================================================================
