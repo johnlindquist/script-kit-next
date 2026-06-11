@@ -151,6 +151,7 @@ pub(super) fn build_style_rows(
     query: &str,
     segment_index: usize,
     segment_byte_range: Range<usize>,
+    auto_submit_rewrite: bool,
 ) -> Vec<SpineListRow> {
     resolved_styles()
         .into_iter()
@@ -176,7 +177,10 @@ pub(super) fn build_style_rows(
                 badges: vec![ss(".")],
                 score: i32::MAX.saturating_sub(rank as i32),
                 is_selectable: true,
-                action_label: None,
+                // Style-only input auto-submits the rewrite plan to Agent
+                // Chat on Enter (A9 decision), so the footer verb is
+                // "Rewrite", not the generic prompt-builder "Attach".
+                action_label: auto_submit_rewrite.then(|| ss("Rewrite")),
                 action: SpineListAction::ResolveSegment {
                     segment_index,
                     segment_byte_range: segment_byte_range.clone(),

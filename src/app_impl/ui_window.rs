@@ -602,9 +602,16 @@ impl ScriptListApp {
             );
         }
         if matches!(self.current_view, AppView::ScriptList) {
-            buttons.push(
-                FooterButtonConfig::new(FooterAction::Ai, "⌘↵", "Agent").enabled(!footer_disabled),
-            );
+            // Style-only input (`.professional`): Enter already rewrites
+            // via Agent Chat, so the Agent ⌘↵ button is dropped here.
+            let style_owns_submit = self.spine_enabled
+                && crate::spine::prompt_plan::spine_parse_is_style_only(&self.spine_parse);
+            if !style_owns_submit {
+                buttons.push(
+                    FooterButtonConfig::new(FooterAction::Ai, "⌘↵", "Agent")
+                        .enabled(!footer_disabled),
+                );
+            }
         }
         buttons
     }

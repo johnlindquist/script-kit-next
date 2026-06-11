@@ -258,7 +258,9 @@ fn prompt_catalog_rows_for_segment(
             super::catalog_profile::build_profile_rows(query, segment_index, range)
         }
         SpineSegmentKind::Style { .. } => {
-            super::catalog_style::build_style_rows(query, segment_index, range)
+            // Span-tone matching only inspects row replacements, never the
+            // action label, so the auto-submit label variant is irrelevant.
+            super::catalog_style::build_style_rows(query, segment_index, range, false)
         }
         _ => Vec::new(),
     }

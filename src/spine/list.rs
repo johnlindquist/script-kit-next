@@ -483,8 +483,12 @@ fn build_style_section(
     let range = active_segment_range(parse, projection);
     let query = projection.active_query.as_str();
 
-    let mut rows =
-        super::catalog_style::build_style_rows(query, projection.active_segment_index, range);
+    let mut rows = super::catalog_style::build_style_rows(
+        query,
+        projection.active_segment_index,
+        range,
+        super::prompt_plan::spine_parse_is_style_only(parse),
+    );
 
     if let Some(lp) = live_preview {
         let preview = lp.style_selection_preview();

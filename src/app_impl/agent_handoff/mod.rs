@@ -38,6 +38,72 @@ enum TabAiHarnessCloseDisposition {
     CloseMainWindowStateFirst,
 }
 
+/// Replace the lazy `@selection` resource part with a concrete text block
+/// captured before Agent Chat takes over app activation.
+///
+/// Capture order: a fresh AX read of the still-focused source app first, then
+/// the spine live-preview cache (captured seconds earlier while the style/
+/// context list was open). When both are empty the lazy part is kept so the
+/// downstream resolution failure surfaces in the receipt instead of silently
+/// dropping the attachment.
+fn materialize_selection_context_parts(
+    parts: Vec<crate::ai::message_parts::AiContextPart>,
+    cached_selection: Option<&str>,
+    capture_live: impl FnOnce() -> Option<String>,
+) -> Vec<crate::ai::message_parts::AiContextPart> {
+    use crate::ai::message_parts::AiContextPart;
+
+    let selection_uri = crate::ai::context_contract::ContextAttachmentKind::Selection
+        .spec()
+        .uri;
+    let needs_selection = parts.iter().any(
+        |part| matches!(part, AiContextPart::ResourceUri { uri, .. } if uri == selection_uri),
+    );
+    if !needs_selection {
+        return parts;
+    }
+
+    let captured = capture_live()
+        .filter(|text| !text.trim().is_empty())
+        .or_else(|| {
+            cached_selection
+                .filter(|text| !text.trim().is_empty())
+                .map(str::to_string)
+        });
+
+    let Some(text) = captured else {
+        tracing::warn!(
+            target: "script_kit::spine",
+            event = "spine_selection_capture_empty_at_handoff",
+            "No selection text available at prompt-plan handoff; keeping lazy resource part"
+        );
+        return parts;
+    };
+
+    tracing::info!(
+        target: "script_kit::spine",
+        event = "spine_selection_materialized_at_handoff",
+        text_len = text.len(),
+    );
+
+    parts
+        .into_iter()
+        .map(|part| match part {
+            AiContextPart::ResourceUri { uri, label } if uri == selection_uri => {
+                AiContextPart::TextBlock {
+                    label,
+                    // `#selection=` keys the `@selected` inline token, keeping
+                    // the chip distinct from the lazy `@selection` mention.
+                    source: "frontmost-app#selection=full".to_string(),
+                    text: text.clone(),
+                    mime_type: None,
+                }
+            }
+            other => other,
+        })
+        .collect()
+}
+
 impl ScriptListApp {
     /// Give the Agent Chat chat one frame to paint before deferred context staging runs.
     const AGENT_CHAT_CONTEXT_FIRST_PAINT_DELAY_MS: u64 = 16;
@@ -407,7 +473,20 @@ impl ScriptListApp {
         }
 
         let prompt = plan.normalized_prompt.trim().to_string();
-        let parts = plan.context_parts.clone();
+        // Freeze `@selection` into real text NOW, while the launcher panel is
+        // still a non-activating overlay and the source app owns focus. The
+        // Selection part is otherwise a lazy `kit://context?selectedText=1`
+        // resource resolved at thread submit time — by then Agent Chat has
+        // taken over app activation and the AX/Cmd+C capture reads from the
+        // wrong window ("No selected text was provided").
+        let parts = materialize_selection_context_parts(
+            plan.context_parts.clone(),
+            self.spine_live_preview_cache
+                .current
+                .selection_text
+                .as_deref(),
+            || crate::selected_text::get_selected_text().ok(),
+        );
         let selected_profile_name = if let Some(profile) = plan.selected_profile.as_ref() {
             let mut prefs = crate::config::load_user_preferences();
             let ctx = crate::ai::agent_chat::profiles::AgentChatProfileContext::from_setup();
@@ -5825,6 +5904,68 @@ impl ScriptListApp {
 #[cfg(test)]
 mod tests {
     use crate::{AppView, ScriptListApp};
+
+    fn selection_resource_part() -> crate::ai::message_parts::AiContextPart {
+        crate::ai::context_contract::ContextAttachmentKind::Selection.part()
+    }
+
+    #[test]
+    fn materialize_selection_swaps_resource_for_captured_text() {
+        let parts = super::materialize_selection_context_parts(
+            vec![selection_resource_part()],
+            None,
+            || Some("captured live".to_string()),
+        );
+        match &parts[0] {
+            crate::ai::message_parts::AiContextPart::TextBlock { text, source, .. } => {
+                assert_eq!(text, "captured live");
+                assert!(
+                    source.contains("#selection="),
+                    "source must key the @selected inline token, got {source}"
+                );
+            }
+            other => panic!("expected TextBlock, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn materialize_selection_falls_back_to_live_preview_cache() {
+        let parts = super::materialize_selection_context_parts(
+            vec![selection_resource_part()],
+            Some("cached preview"),
+            || None,
+        );
+        match &parts[0] {
+            crate::ai::message_parts::AiContextPart::TextBlock { text, .. } => {
+                assert_eq!(text, "cached preview");
+            }
+            other => panic!("expected TextBlock, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn materialize_selection_keeps_lazy_part_when_nothing_captured() {
+        let parts = super::materialize_selection_context_parts(
+            vec![selection_resource_part()],
+            Some("   "),
+            || Some("  ".to_string()),
+        );
+        assert!(matches!(
+            &parts[0],
+            crate::ai::message_parts::AiContextPart::ResourceUri { .. }
+        ));
+    }
+
+    #[test]
+    fn materialize_selection_never_captures_without_selection_part() {
+        let clipboard_part = crate::ai::context_contract::ContextAttachmentKind::Clipboard.part();
+        let parts = super::materialize_selection_context_parts(
+            vec![clipboard_part.clone()],
+            None,
+            || panic!("capture must not run when no @selection part is present"),
+        );
+        assert_eq!(parts, vec![clipboard_part]);
+    }
 
     #[test]
     fn tab_ai_user_prompt_contains_intent_and_context() {
