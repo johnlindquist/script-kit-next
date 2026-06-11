@@ -33,6 +33,7 @@ include!("screenshots_window_open.rs");
 include!("selfie_capture.rs");
 include!("path_actions.rs");
 include!("ai_commands.rs");
+include!("screen_capture_sck.rs");
 include!("osascript.rs");
 include!("cursor.rs");
 include!("screen_capture_overlay.rs");

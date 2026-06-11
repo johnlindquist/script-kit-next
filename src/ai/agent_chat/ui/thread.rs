@@ -1022,6 +1022,10 @@ impl AgentChatThread {
 
     /// Capture the explicit screenshot chip as an Agent Chat image block.
     ///
+    /// `@screenshot` captures the active desktop — the display the Script Kit
+    /// panel is on — with Script Kit's own windows excluded so the chat panel
+    /// does not cover the content being asked about.
+    ///
     /// Returns `Ok(None)` for non-screenshot parts so the normal prompt-block
     /// resolver can handle them. On capture failure the caller falls back to
     /// the canonical `kit://context?...` resource path.
@@ -1032,10 +1036,10 @@ impl AgentChatThread {
             return Ok(None);
         }
 
-        let capture = crate::platform::capture_focused_window_screenshot()
-            .map_err(|error| error.to_string())?;
-        if capture.png_data.is_empty() {
-            return Err("Focused window screenshot was empty".to_string());
+        let (png_data, width, height) =
+            crate::platform::capture_screen_screenshot().map_err(|error| error.to_string())?;
+        if png_data.is_empty() {
+            return Err("Active desktop screenshot was empty".to_string());
         }
 
         use base64::Engine as _;
@@ -1043,14 +1047,13 @@ impl AgentChatThread {
         tracing::info!(
             target: "script_kit::tab_ai",
             event = "agent_chat_inline_screenshot_attachment_captured",
-            width = capture.width,
-            height = capture.height,
-            title = %capture.window_title,
-            used_fallback = capture.used_fallback,
-            bytes = capture.png_data.len(),
+            width,
+            height,
+            title = "Active desktop",
+            bytes = png_data.len(),
         );
 
-        let base64_png = base64::engine::general_purpose::STANDARD.encode(&capture.png_data);
+        let base64_png = base64::engine::general_purpose::STANDARD.encode(&png_data);
         Ok(Some(ContentBlock::Image(ImageContent::new(
             base64_png,
             "image/png",

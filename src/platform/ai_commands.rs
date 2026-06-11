@@ -2,11 +2,14 @@
 // Screen Capture for AI Commands
 // ============================================================================
 
-/// Capture a screenshot of the entire primary screen, excluding Script Kit windows.
+/// Capture a screenshot of the active display, excluding Script Kit windows.
 ///
-/// On macOS, uses `CGWindowListCreateImageFromArray` to composite all on-screen
-/// windows except those owned by this process, so the capture shows what is
-/// behind the Script Kit panel. Falls back to xcap on other platforms.
+/// On macOS, uses ScreenCaptureKit (macOS 14+) to capture the display the
+/// Script Kit panel is on with this process's windows excluded, so the
+/// capture shows what is behind the panel. The legacy
+/// `CGWindowListCreateImageFromArray` composite remains as a fallback for
+/// macOS versions without `SCScreenshotManager`; it was obsoleted in
+/// macOS 15 and returns null there. Falls back to xcap on other platforms.
 ///
 /// # Returns
 /// A tuple of (png_data, width, height) on success.
@@ -14,7 +17,20 @@ pub fn capture_screen_screenshot(
 ) -> Result<(Vec<u8>, u32, u32), Box<dyn std::error::Error + Send + Sync>> {
     #[cfg(target_os = "macos")]
     {
-        capture_screen_excluding_self()
+        let sck_error = match capture_active_display_screenshot_sck() {
+            Ok(captured) => return Ok(captured),
+            Err(error) => error,
+        };
+        tracing::warn!(
+            error = %sck_error,
+            "ScreenCaptureKit capture failed; trying legacy CGWindowList capture"
+        );
+        capture_screen_excluding_self().map_err(|legacy_error| {
+            format!(
+                "ScreenCaptureKit capture failed: {sck_error}; legacy CGWindowList fallback also failed: {legacy_error}"
+            )
+            .into()
+        })
     }
     #[cfg(not(target_os = "macos"))]
     {
@@ -303,7 +319,6 @@ fn cgimage_to_rgba(
     use std::ffi::c_void;
 
     const K_CG_IMAGE_ALPHA_PREMULTIPLIED_LAST: u32 = 1;
-    const K_CG_BITMAP_BYTE_ORDER_32_BIG: u32 = 1 << 12;
 
     #[link(name = "CoreGraphics", kind = "framework")]
     unsafe extern "C" {
@@ -345,7 +360,11 @@ fn cgimage_to_rgba(
         return Err("Failed to create RGB color space".into());
     }
 
-    let bitmap_info = K_CG_IMAGE_ALPHA_PREMULTIPLIED_LAST | K_CG_BITMAP_BYTE_ORDER_32_BIG;
+    // Byte-order default, not kCGBitmapByteOrder32Big (1 << 12): macOS 26
+    // rejects the explicit 32Big flag (CGBitmapContextCreate returns null for
+    // every size), while default byte order is big-endian for 32-bit formats
+    // anyway, so the RGBA byte layout is unchanged.
+    let bitmap_info = K_CG_IMAGE_ALPHA_PREMULTIPLIED_LAST;
 
     // SAFETY: We pass a valid buffer, correct dimensions, and a valid color
     // space. The buffer is large enough for width * height * 4 bytes.
@@ -365,7 +384,7 @@ fn cgimage_to_rgba(
     unsafe { CGColorSpaceRelease(color_space) };
 
     if context.is_null() {
-        return Err("Failed to create bitmap context".into());
+        return Err(format!("Failed to create bitmap context ({width}x{height})").into());
     }
 
     let draw_rect = core_graphics::display::CGRect {
