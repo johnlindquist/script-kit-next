@@ -426,6 +426,25 @@ impl NotesApp {
                         cx.stop_propagation();
                         return;
                     }
+                    // Row shortcuts (⌘D Duplicate, ⌘⌫ Delete Note, …) must
+                    // work whichever window AppKit made key: the detached
+                    // popup matches these in ActionsWindow::on_key_down, and
+                    // this branch mirrors it for when the Notes window keeps
+                    // key focus.
+                    let matched_action_id = self.command_bar.dialog().and_then(|dialog| {
+                        let d = dialog.read(cx);
+                        crate::actions::matching_filtered_action_id_for_keystroke(
+                            &d.actions,
+                            &d.filtered_actions,
+                            key,
+                            modifiers,
+                        )
+                    });
+                    if let Some(action_id) = matched_action_id {
+                        self.execute_action(&action_id, window, cx);
+                        cx.stop_propagation();
+                        return;
+                    }
                     if modifiers.platform
                         && !modifiers.shift
                         && !modifiers.control

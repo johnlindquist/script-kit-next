@@ -133,11 +133,16 @@ impl NotesApp {
                 return; // Early return - browse panel handles its own focus
             }
             NotesAction::FindInNote => {
-                self.close_actions_panel(window, cx);
+                // Close WITHOUT close_actions_panel: its deferred Editor
+                // focus-surface apply lands after the Search action opens the
+                // find bar, stealing focus away from the find input (find bar
+                // visible but typing goes to the note body).
+                self.command_bar.close(cx);
                 self.editor_state.update(cx, |state, cx| {
                     state.focus(window, cx);
                 });
                 window.dispatch_action(Box::new(Search), cx);
+                cx.notify();
                 return; // Early return - already handled focus
             }
             NotesAction::CopyNoteAs => self.copy_note_as_markdown(cx),
