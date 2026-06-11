@@ -1921,6 +1921,27 @@ impl ScriptListApp {
             .font_family(font_family)
             .key_context("script_list")
             .track_focus(&self.focus_handle)
+            // GPUI auto-transfers keyboard focus to this root's tracked handle on
+            // any mouse down that no deeper focusable claimed (see
+            // paint_mouse_listeners in vendor/gpui/src/elements/div.rs). Dragging
+            // the window by dead space or clicking a list row would dump focus on
+            // the script_list root and kill typing in the filter input. Deeper
+            // focusables (the filter input itself, overlay dialogs) run earlier in
+            // the bubble phase and call prevent_default, and the detached actions
+            // popup keeps its own window focus, so this only fires when focus
+            // would otherwise land on the root handle.
+            .on_any_mouse_down(cx.listener(|this, _event, window, cx| {
+                if window.default_prevented() {
+                    return;
+                }
+                let filter_focus = this.gpui_input_state.focus_handle(cx);
+                if filter_focus.is_focused(window) {
+                    window.prevent_default();
+                } else if this.focus_handle.is_focused(window) {
+                    this.focus_main_filter(window, cx);
+                    window.prevent_default();
+                }
+            }))
             .on_action(cx.listener(
                 |this,
                  action: &crate::actions::MainListDisplayedActionShortcut,

@@ -5,7 +5,8 @@
  */
 import { Driver } from "../devtools/driver";
 
-const BINARY = "target-agent/artifacts/notes-popup-fix/script-kit-gpui";
+const BINARY =
+  process.env.PROBE_BINARY ?? "target-agent/artifacts/notes-popup-fix/script-kit-gpui";
 
 function osa(script: string) {
   return Bun.$`osascript -e ${script}`.quiet();
