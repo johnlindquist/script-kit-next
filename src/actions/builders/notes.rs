@@ -373,6 +373,31 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_get_day_page_switcher_actions_builds_daypage_ids_in_day_pages_section() {
+        let actions = get_day_page_switcher_actions(&[
+            DayPageSwitcherInfo {
+                date: "2026-06-12".to_string(),
+                title: "Today · 2026-06-12 · Friday".to_string(),
+                preview: "today entry".to_string(),
+            },
+            DayPageSwitcherInfo {
+                date: "2026-06-11".to_string(),
+                title: "2026-06-11 · Thursday".to_string(),
+                preview: String::new(),
+            },
+        ]);
+
+        assert_eq!(actions.len(), 2);
+        assert_eq!(actions[0].id, "daypage_2026-06-12");
+        assert_eq!(actions[0].title, "Today · 2026-06-12 · Friday");
+        assert_eq!(actions[0].description.as_deref(), Some("today entry"));
+        assert_eq!(actions[0].section.as_deref(), Some("Day Pages"));
+        assert_eq!(actions[1].id, "daypage_2026-06-11");
+        // Empty previews still get a useful description.
+        assert_eq!(actions[1].description.as_deref(), Some("Open in Day Page"));
+    }
+
+    #[test]
     fn test_get_notes_command_bar_actions_uses_markdown_and_html_copy_labels_when_selected() {
         let info = NotesInfo {
             has_selection: true,
@@ -901,4 +926,38 @@ pub fn get_note_switcher_actions(notes: &[NoteSwitcherNoteInfo]) -> Vec<Action> 
     }
 
     actions
+}
+
+/// One day page row for the note switcher (Cmd+P) — sourced read-through
+/// from `brain/days/*.md`, never from the notes database. Picking one hands
+/// off to the main window's Day Page surface.
+#[derive(Debug, Clone)]
+pub struct DayPageSwitcherInfo {
+    /// `YYYY-MM-DD`; becomes the `daypage_{date}` action id.
+    pub date: String,
+    pub title: String,
+    pub preview: String,
+}
+
+/// Build the "Day Pages" section appended after the note rows in the note
+/// switcher dialog.
+pub fn get_day_page_switcher_actions(day_pages: &[DayPageSwitcherInfo]) -> Vec<Action> {
+    day_pages
+        .iter()
+        .map(|day| {
+            let description = if day.preview.is_empty() {
+                "Open in Day Page".to_string()
+            } else {
+                truncated_preview(&day.preview)
+            };
+            Action::new(
+                format!("daypage_{}", day.date),
+                day.title.clone(),
+                Some(description),
+                ActionCategory::ScriptContext,
+            )
+            .with_icon(IconName::Pencil)
+            .with_section("Day Pages")
+        })
+        .collect()
 }

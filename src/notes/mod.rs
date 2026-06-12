@@ -35,6 +35,7 @@
 
 mod actions_panel;
 pub(crate) mod code_highlight;
+pub(crate) mod day_page_rows;
 pub(crate) mod file_mirror;
 pub(crate) mod ghost;
 pub(crate) mod ghost_llm;
@@ -57,7 +58,7 @@ pub(crate) use storage::{
     count_active_notes_with_tag, delete_note_cart_item, delete_note_cart_items,
     delete_note_permanently, get_all_notes, get_deleted_notes, get_note, get_note_aliases,
     get_note_backlink_count, get_note_backlinks, get_note_outbound_link_count, get_note_tags,
-    init_notes_db, list_note_cart_items, list_note_cart_items_deduped,
+    init_notes_db, list_note_cart_items, list_note_cart_items_deduped, notes_brain_days_dir,
     root_notes_query_is_eligible, save_note, save_note_cart_item, search_notes,
     search_root_notes_meta, search_root_notes_meta_cached, search_root_notes_meta_direct,
     NoteBacklinkSummary, RootNoteSearchHit, RootNotesSectionOptions,

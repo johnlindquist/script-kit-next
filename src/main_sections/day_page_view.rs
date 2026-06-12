@@ -824,6 +824,44 @@ impl ScriptListApp {
         self.show_day_page_view_with_substrate(None, window, cx);
     }
 
+    /// Binary-side body for the Notes Cmd+P "open day page" handoff.
+    /// Registered with
+    /// `notes::day_page_rows::register_open_day_page_in_main_hook` at startup
+    /// because the dual-compiled Notes code cannot name `ScriptListApp`.
+    pub(crate) fn open_day_page_in_main_window_hook(
+        date: chrono::NaiveDate,
+        cx: &mut gpui::App,
+    ) -> bool {
+        let Some(handle) = crate::get_main_window_handle() else {
+            return false;
+        };
+        handle
+            .update(cx, |any_view, window, cx| {
+                let Ok(root) = any_view.downcast::<gpui_component::Root>() else {
+                    return false;
+                };
+                let inner = root.read(cx).view().clone();
+                let Ok(app) = inner.downcast::<ScriptListApp>() else {
+                    return false;
+                };
+                app.update(cx, |app, cx| {
+                    app.dispatch_window_event(
+                        crate::window_orchestrator::WindowEvent::ShowMain {
+                            activate_app: false,
+                        },
+                        cx,
+                    );
+                    app.show_day_page_view(window, cx);
+                    if let AppView::DayPage { entity } = &app.current_view {
+                        let entity = entity.clone();
+                        entity.update(cx, |view, cx| view.bind_day(date, window, cx));
+                    }
+                });
+                true
+            })
+            .unwrap_or(false)
+    }
+
     pub(crate) fn show_day_page_view_with_substrate(
         &mut self,
         substrate: Option<BrainSubstrate>,

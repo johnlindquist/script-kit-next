@@ -182,6 +182,13 @@ fn get_notes_brain_base_path() -> PathBuf {
     crate::setup::get_kit_path().join("brain")
 }
 
+/// Days directory under the notes brain root. The Notes Cmd+P switcher
+/// lists day pages read-through from here; day files are never copied into
+/// the notes database.
+pub(crate) fn notes_brain_days_dir() -> PathBuf {
+    get_notes_brain_base_path().join("days")
+}
+
 fn notes_substrate() -> Result<Arc<BrainSubstrate>> {
     Ok(NOTES_SUBSTRATE
         .get_or_init(|| Arc::new(BrainSubstrate::new(get_notes_brain_base_path())))
