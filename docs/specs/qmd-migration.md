@@ -1,6 +1,6 @@
 # Spec: QMD Cutover — Markdown Files As Memory Substrate
 
-Status: accepted, pre-implementation. Owning decision:
+Status: implemented (T1/T5/T6/T7). Owning decision:
 [ADR 0003](../adr/0003-markdown-files-as-memory-substrate.md). Product framing:
 `VISION.md` → "The Memory Layer". Task breakdown: `.notes/brain-time.md`.
 
@@ -16,17 +16,19 @@ derived, rebuildable index (FTS, embeddings, signals, links). This is the
 original QMD intent (github.com/tobi/qmd) — the retrieval recipe was built
 natively (`src/brain/search.rs`), but the substrate was not.
 
-## Current State (verified June 2026)
+## Current State (verified June 2026, post-cutover)
 
 | Store | Location | Canonical? | Notes |
 | --- | --- | --- | --- |
-| Notes | `~/.scriptkit/db/notes.sqlite` (`notes`, `note_tags`, `note_aliases`, `note_links`, `note_cart_items`) | Yes (problem) | Markdown *content* in sqlite rows; frontmatter parsed by `src/notes/metadata.rs` |
-| Todos | `~/.scriptkit/menu-syntax/todos.jsonl` | Yes (problem) | DELETED by this cutover; `;todo` becomes a day-page task line |
+| Day pages | `~/.scriptkit/brain/days/YYYY-MM-DD.md` | Yes | Append-only diary via `src/brain/substrate/`; indexed by `sync_day_pages` |
+| Fragments | `~/.scriptkit/brain/fragments/*.md` | Yes | Long captures with provenance frontmatter; indexed by `sync_fragments` |
+| Notes | `~/.scriptkit/brain/notes/<slug>.md` | Yes | Files canonical; `notes.sqlite` is derived index (`src/notes/storage.rs`) |
+| Todos | *(deleted)* | — | `todos.jsonl` removed; `;todo` appends task lines to today's day page |
 | Links | `~/.scriptkit/plugins/main/scriptlets/links.md` | Yes (already files) | Section-based |
 | Snippets | `~/.scriptkit/plugins/main/scriptlets/snippets.md` | Yes (already files) | Section-based |
-| Brain index | `~/.scriptkit/db/brain.sqlite` (docs, embeddings, signals, inbox) | Derived (correct) | Mirrors sources via `src/brain/indexer.rs` |
-| Clipboard | `~/.scriptkit/db/clipboard.sqlite` | Yes | Pinned entries mirror to brain |
-| Agent Chat | `~/.scriptkit/agent_chat-history.jsonl` + `agent_chat-conversations/*.json` | Yes | Stays as-is; day pages get one-line traces |
+| Brain index | `~/.scriptkit/db/brain.sqlite` (docs, embeddings, signals, inbox) | Derived | Rebuildable from files via `src/brain/indexer.rs` |
+| Clipboard | `~/.scriptkit/db/clipboard.sqlite` | Yes | Sediment tiers + pinned entries mirror to brain |
+| Agent Chat | `~/.scriptkit/agent_chat-history.jsonl` + `agent_chat-conversations/*.json` | Yes | Stays as-is; one trace line per thread per day (`src/brain/day_trace.rs`) |
 
 ## Target Layout (confirmed)
 

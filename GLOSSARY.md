@@ -60,3 +60,16 @@ Searchable utility lists available directly from the launcher.
 | **Permissions Wizard** | Guided grant flow for the macOS permissions Script Kit needs (Accessibility, Screen Recording, Event Synthesizing, Input Monitoring, Microphone) with live TCC status cards. Opens on fresh installs and via "Set Up Permissions". | `PermissionsWizardView` | [permissions_wizard.rs](file:///Users/johnlindquist/dev/script-kit-gpui/src/render_builtins/permissions_wizard.rs) & [permissions_wizard.rs](file:///Users/johnlindquist/dev/script-kit-gpui/src/permissions_wizard.rs) |
 
 ---
+
+## 5. Memory Layer (Script Kit Brain)
+
+| UI Element | Description | Key Structs / Entities | Main Source File |
+| :--- | :--- | :--- | :--- |
+| **Day Page** | Today's diary surface inside the main launcher window — same window frame as Script List, hosts the shared notes editor bound to `brain/days/YYYY-MM-DD.md`. Tap toggles launcher ↔ Day Page; Esc dismisses. | `DayPageView`, `AppView::DayPage` | [day_page_view.rs](file:///Users/johnlindquist/dev/script-kit-gpui/src/main_sections/day_page_view.rs) & [day_page_types.rs](file:///Users/johnlindquist/dev/script-kit-gpui/src/main_sections/day_page_types.rs) |
+| **Script Kit Brain substrate** | Canonical markdown memory under `~/.scriptkit/brain/{days,fragments,notes,trash}` — day-page append API, fragment writer, atomic writes, trash/restore. SQLite indexes are derived only. | `BrainSubstrate`, `DayEntry` | [substrate/mod.rs](file:///Users/johnlindquist/dev/script-kit-gpui/src/brain/substrate/mod.rs) |
+| **Gesture classifier** | Pure state machine classifying main-hotkey key-down/key-up into tap, hold, double-tap, and key-down instant show. Wired into main-window surface morphs. | `GestureClassifier`, `GestureEvent` | [gesture.rs](file:///Users/johnlindquist/dev/script-kit-gpui/src/hotkeys/gesture.rs) & [gesture_routing.rs](file:///Users/johnlindquist/dev/script-kit-gpui/src/main_sections/gesture_routing.rs) |
+| **Fragment** | Long captures (>200 words) stored as `brain/fragments/<date>-<HHMM>-<source-slug>.md` with provenance frontmatter; the day page references them via excerpt + relative link. | `BrainSubstrate::write_fragment` | [fragment.rs](file:///Users/johnlindquist/dev/script-kit-gpui/src/brain/substrate/fragment.rs) |
+| **Sediment** | Clipboard auto-keep: URLs land on today's day page; non-URLs promote on re-copy (`copy_count ≥ 2`). Day Page renders kept-URL links and fragment excerpt cards. | `ClipboardSedimentTier`, `DayPageSegment` | [sediment.rs (clipboard)](file:///Users/johnlindquist/dev/script-kit-gpui/src/clipboard_history/sediment.rs) & [sediment.rs (day page)](file:///Users/johnlindquist/dev/script-kit-gpui/src/day_page/sediment.rs) |
+| **Post-copy quick menu** | After a kept-or-keepable copy, a bare ⌘ tap within ~2.5s opens a popup to annotate ("why"), reject, or dismiss. Auto-keeps show a quiet HUD "Kept" whisper. | `TapWindowState`, post-copy popup | [post_copy.rs](file:///Users/johnlindquist/dev/script-kit-gpui/src/clipboard_history/post_copy.rs) & [tap_window.rs](file:///Users/johnlindquist/dev/script-kit-gpui/src/clipboard_history/tap_window.rs) |
+
+---

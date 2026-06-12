@@ -47,6 +47,64 @@ impl Default for BuiltInConfig {
     }
 }
 
+/// Hard clipboard secret-rejection extensions (see ADR 0004).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(default, rename_all = "camelCase")]
+pub struct ClipboardHistorySecretRejectionConfig {
+    /// Additional bundle IDs (prefix match) whose clipboard copies are never stored.
+    #[serde(default)]
+    pub extra_blocked_source_apps: Vec<String>,
+    /// Additional regex patterns for secret-shaped clipboard text.
+    #[serde(default)]
+    pub extra_secret_patterns: Vec<String>,
+}
+
+impl Default for ClipboardHistorySecretRejectionConfig {
+    fn default() -> Self {
+        Self {
+            extra_blocked_source_apps: Vec::new(),
+            extra_secret_patterns: Vec::new(),
+        }
+    }
+}
+
+/// Post-copy ⌘-tap quick menu settings (T12 / ADR 0004).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(default, rename_all = "camelCase")]
+pub struct ClipboardHistoryPostCopyMenuConfig {
+    /// Whether the post-copy quick menu is enabled.
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    /// Milliseconds to watch for a bare modifier tap after copy (default 2500).
+    #[serde(default = "default_post_copy_tap_window_ms")]
+    pub tap_window_ms: u64,
+    /// Modifier names that trigger the menu (default: `["meta"]` = ⌘).
+    #[serde(default = "default_post_copy_trigger_modifiers")]
+    pub trigger_modifiers: Vec<String>,
+}
+
+fn default_true() -> bool {
+    true
+}
+
+fn default_post_copy_tap_window_ms() -> u64 {
+    2500
+}
+
+fn default_post_copy_trigger_modifiers() -> Vec<String> {
+    vec!["meta".to_string()]
+}
+
+impl Default for ClipboardHistoryPostCopyMenuConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            tap_window_ms: default_post_copy_tap_window_ms(),
+            trigger_modifiers: default_post_copy_trigger_modifiers(),
+        }
+    }
+}
+
 // ============================================
 // UNIFIED SEARCH CONFIG
 // ============================================
@@ -1658,6 +1716,20 @@ pub struct Config {
         rename = "clipboardHistoryMaxTextLength"
     )]
     pub clipboard_history_max_text_length: Option<usize>,
+    /// Hard secret-rejection extensions for clipboard history (ADR 0004).
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "clipboardHistorySecretRejection"
+    )]
+    pub clipboard_history_secret_rejection: Option<ClipboardHistorySecretRejectionConfig>,
+    /// Post-copy modifier-tap quick menu (T12).
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "clipboardHistoryPostCopyMenu"
+    )]
+    pub clipboard_history_post_copy_menu: Option<ClipboardHistoryPostCopyMenuConfig>,
     /// Suggested section configuration (frecency-based ranking)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub suggested: Option<SuggestedConfig>,
@@ -1826,6 +1898,8 @@ impl Default for Config {
             built_ins: None,          // Will use BuiltInConfig::default() via getter
             process_limits: None,     // Will use ProcessLimits::default() via getter
             clipboard_history_max_text_length: None, // Will use default via getter
+            clipboard_history_secret_rejection: None, // Will use default via getter
+            clipboard_history_post_copy_menu: None, // Will use default via getter
             suggested: None,          // Will use SuggestedConfig::default() via getter
             unified_search: None,     // Will use UnifiedSearchConfig::default() via getter
             notes_hotkey: None,       // Will use HotkeyConfig::default_notes_hotkey() via getter
@@ -1917,6 +1991,20 @@ impl Config {
     pub fn get_clipboard_history_max_text_length(&self) -> usize {
         self.clipboard_history_max_text_length
             .unwrap_or(DEFAULT_CLIPBOARD_HISTORY_MAX_TEXT_LENGTH)
+    }
+
+    /// Returns clipboard secret-rejection extensions, or defaults if not configured.
+    pub fn get_clipboard_history_secret_rejection(&self) -> ClipboardHistorySecretRejectionConfig {
+        self.clipboard_history_secret_rejection
+            .clone()
+            .unwrap_or_default()
+    }
+
+    /// Returns post-copy quick-menu settings, or defaults if not configured.
+    pub fn get_clipboard_history_post_copy_menu(&self) -> ClipboardHistoryPostCopyMenuConfig {
+        self.clipboard_history_post_copy_menu
+            .clone()
+            .unwrap_or_default()
     }
 
     /// Returns the process limits configuration, or defaults if not configured

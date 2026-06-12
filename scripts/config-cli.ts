@@ -268,6 +268,17 @@ interface UpdatesConfig {
   autoCheck?: boolean;
 }
 
+interface ClipboardHistorySecretRejectionConfig {
+  extraBlockedSourceApps?: string[];
+  extraSecretPatterns?: string[];
+}
+
+interface ClipboardHistoryPostCopyMenuConfig {
+  enabled?: boolean;
+  tapWindowMs?: number;
+  triggerModifiers?: KeyModifier[];
+}
+
 interface Config {
   hotkey: HotkeyConfig;
   bun_path?: string;
@@ -278,6 +289,8 @@ interface Config {
   uiScale?: number;
   builtIns?: BuiltInConfig;
   clipboardHistoryMaxTextLength?: number;
+  clipboardHistorySecretRejection?: ClipboardHistorySecretRejectionConfig;
+  clipboardHistoryPostCopyMenu?: ClipboardHistoryPostCopyMenuConfig;
   processLimits?: ProcessLimits;
   suggested?: SuggestedConfig;
   notesHotkey?: HotkeyConfig;
@@ -501,6 +514,38 @@ const CONFIG_SCHEMA: ConfigOption[] = [
     type: "number",
     default: 100000,
     description: "Maximum text length (bytes) to store for clipboard history entries (0 = no limit)"
+  },
+  {
+    key: "clipboardHistorySecretRejection.extraBlockedSourceApps",
+    type: "string[]",
+    default: [],
+    description:
+      "Additional bundle ID prefixes whose clipboard copies are never stored (hard secret rejection; defaults cover 1Password, Bitwarden, KeePassXC, Apple Passwords, Keychain Access)"
+  },
+  {
+    key: "clipboardHistorySecretRejection.extraSecretPatterns",
+    type: "string[]",
+    default: [],
+    description:
+      "Additional regex patterns for secret-shaped clipboard text rejected before storage (conservative built-in defaults always apply)"
+  },
+  {
+    key: "clipboardHistoryPostCopyMenu.enabled",
+    type: "boolean",
+    default: true,
+    description: "Enable post-copy modifier-tap quick menu for annotate/reject (T12)"
+  },
+  {
+    key: "clipboardHistoryPostCopyMenu.tapWindowMs",
+    type: "number",
+    default: 2500,
+    description: "Milliseconds to watch for a bare modifier tap after copy before the quick menu window expires"
+  },
+  {
+    key: "clipboardHistoryPostCopyMenu.triggerModifiers",
+    type: "string[]",
+    default: ["meta"],
+    description: "Modifier keys that open the post-copy quick menu (default meta = Command)"
   },
   {
     key: "processLimits.maxMemoryMb",

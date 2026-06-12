@@ -410,6 +410,33 @@
  * - Larger limit:  200000
  * - No limit:      0
  *
+ * FIELD: clipboardHistorySecretRejection
+ * TYPE: ClipboardHistorySecretRejectionConfig (optional)
+ * PURPOSE: Extend hard clipboard secret-rejection rules (validated before storage; ADR 0004)
+ * DEFAULT: { extraBlockedSourceApps: [], extraSecretPatterns: [] }
+ *
+ * STRUCTURE:
+ * ```typescript
+ * clipboardHistorySecretRejection: {
+ *   extraBlockedSourceApps?: string[], // bundle ID prefix blocklist extensions
+ *   extraSecretPatterns?: string[],    // additional conservative regex patterns
+ * }
+ * ```
+ *
+ * FIELD: clipboardHistoryPostCopyMenu
+ * TYPE: ClipboardHistoryPostCopyMenuConfig (optional)
+ * PURPOSE: Post-copy modifier-tap quick menu for annotate/reject (T12 / ADR 0004)
+ * DEFAULT: { enabled: true, tapWindowMs: 2500, triggerModifiers: ["meta"] }
+ *
+ * STRUCTURE:
+ * ```typescript
+ * clipboardHistoryPostCopyMenu: {
+ *   enabled?: boolean,           // default true
+ *   tapWindowMs?: number,        // watch window after copy (default 2500)
+ *   triggerModifiers?: string[], // default ["meta"] (Command)
+ * }
+ * ```
+ *
  * ═══════════════════════════════════════════════════════════════════════════
  * CATEGORY 4: PROCESS LIMITS (OPTIONAL)
  * ═══════════════════════════════════════════════════════════════════════════
@@ -664,6 +691,7 @@
  * | builtIns.appLauncher      | boolean | true                       | no       |
  * | builtIns.windowSwitcher   | boolean | true                       | no       |
  * | clipboardHistoryMaxTextLength | number | 100000                  | no       |
+ * | clipboardHistorySecretRejection | object | {} (extra lists empty) | no       |
  * | processLimits     | ProcessLimits  | {healthCheck:5000}          | no       |
  * | processLimits.maxMemoryMb        | number | unlimited            | no       |
  * | processLimits.maxRuntimeSeconds  | number | unlimited            | no       |

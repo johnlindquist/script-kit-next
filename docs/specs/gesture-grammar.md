@@ -1,6 +1,6 @@
 # Spec: One-Key Gesture Grammar
 
-Status: accepted direction, pre-implementation. Owning decision:
+Status: implemented (T2/T8/T9/T11 in flight). Owning decision:
 [ADR 0002](../adr/0002-one-key-gesture-grammar.md). Product framing:
 `VISION.md` → "The Memory Layer".
 
@@ -46,11 +46,11 @@ DAY_PAGE (open, steady)
   └─ Esc ──► CLOSED
 ```
 
-Proposed timings (tune against feel, not benchmarks):
+Confirmed timings (`src/hotkeys/gesture.rs`, module-level constants):
 
-- `HOLD_MS` ≈ 250ms — long enough that fast taps never trip it, short enough
+- `HOLD_MS` = 250ms — long enough that fast taps never trip it, short enough
   that push-to-talk feels immediate.
-- `DOUBLE_MS` ≈ 300ms — second key-down window after a tap's key-up.
+- `DOUBLE_MS` = 300ms — second key-down window after a tap's key-up.
 
 ## Hard Requirements
 
@@ -104,13 +104,18 @@ referenced by excerpt + link, per
 
 ## Open Questions
 
-- Hold while the window is already open: dead gesture, or push-to-talk into
-  the focused surface? (Lean: push-to-talk everywhere, but unvalidated.)
-- Exact `HOLD_MS`/`DOUBLE_MS` values need feel-testing with the real hotkey
-  path latency.
-- Whether double-tap morphs to the in-window Chat Prompt or focuses the
-  dedicated Agent Chat surface when one is already open.
-- Key-repeat suppression while held (OS key-repeat must not retrigger).
+- **Hold while the window is already open:** still unanswered. Current behavior
+  (T8): `HoldStart` while open is not wired — hold only opens the Day Page from
+  closed; tap-while-open toggles surfaces. Push-to-talk everywhere remains the
+  lean direction but is unvalidated.
+- ~~Exact `HOLD_MS`/`DOUBLE_MS` values~~ — **answered:** `HOLD_MS = 250`,
+  `DOUBLE_MS = 300` in `src/hotkeys/gesture.rs`, overridable for tests.
+- ~~Whether double-tap morphs to the in-window Chat Prompt or focuses the
+  dedicated Agent Chat surface~~ — **answered:** double-tap routes to the
+  dedicated Agent Chat surface via `open_tab_ai_agent_chat_with_entry_intent`
+  (`src/main_sections/gesture_routing.rs`).
+- ~~Key-repeat suppression while held~~ — **answered:** repeated `KeyDown`
+  while already down are ignored (`src/hotkeys/gesture.rs`, unit-tested).
 
 ## Verification Expectations
 

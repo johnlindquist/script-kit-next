@@ -394,6 +394,16 @@ fn recover_config_fields(value: Value, correlation_id: &str) -> Config {
             "clipboardHistoryMaxTextLength",
             correlation_id,
         ),
+        clipboard_history_secret_rejection: parse_optional_field(
+            object,
+            "clipboardHistorySecretRejection",
+            correlation_id,
+        ),
+        clipboard_history_post_copy_menu: parse_optional_field(
+            object,
+            "clipboardHistoryPostCopyMenu",
+            correlation_id,
+        ),
         suggested: parse_optional_field(object, "suggested", correlation_id),
         unified_search: parse_optional_field(object, "unifiedSearch", correlation_id),
         notes_hotkey: parse_optional_field(object, "notesHotkey", correlation_id),

@@ -834,6 +834,63 @@ Every feature below should be locked with the smallest proof set that can fail f
 - Pass evidence: Runtime filter exposes skill rows when available and plugin inventory/search/launch/main-menu contracts pass.
 - Fail evidence: Skills missing from inventory, wrong runtime owner, launch route stale, or tests fail.
 
+### Day Page opens in the main launcher window
+
+- Stable anchor: `day-page-opens-in-main-launcher-window`
+- Choice id: `day-page-surface-main-window-contract`
+- Surface: Day Page / Main Launcher
+- Status: Active (Brain Time T9)
+- User contract: Tap-while-open toggles Script List ↔ Day Page in the same main window (no resize, no window swap). Today's `brain/days/YYYY-MM-DD.md` binds on entry; the shared notes editor (`day-page-editor`) persists edits through the brain substrate. Esc dismisses the main window.
+- Regression risk: Gesture routing or `AppView` morph refactors can break in-place toggle, day rollover binding, or editor save semantics.
+- Proof commands:
+  - `./scripts/agentic/agent-cargo.sh test --lib day_page`
+  - `bun scripts/devtools/inspect.ts --session brain-time --start --show --main --surface DayPage --limit 200`
+- Pass evidence: Day-page unit tests pass; DevTools inspect shows `day-page-editor` and stable main-window bounds across launcher ↔ Day Page toggle.
+- Fail evidence: Wrong view after toggle, missing editor semantic id, day file not created, or unit tests fail.
+
+### Main hotkey gesture grammar morphs surfaces in place
+
+- Stable anchor: `main-hotkey-gesture-grammar-morphs-surfaces`
+- Choice id: `gesture-grammar-tap-hold-double-tap-contract`
+- Surface: Main Launcher / Day Page / Agent Chat
+- Status: Active (Brain Time T2/T8)
+- User contract: Key-down shows the launcher immediately. Tap-while-open toggles launcher ↔ Day Page with query carry-over. Double-tap opens Agent Chat. Hold (~250ms) opens Day Page. Tap never dismisses — Esc is the only dismiss.
+- Regression risk: Hotkey delivery or classifier wiring can regress instant show, retire tap-to-dismiss, or route gestures to the wrong surface.
+- Proof commands:
+  - `./scripts/agentic/agent-cargo.sh test --lib gesture`
+  - `scripts/agentic/main-hotkey-gesture-probe.ts` (runtime receipt when available)
+- Pass evidence: Gesture classifier unit tests pass; runtime probe shows stable window id across morphs and carry-over text in Day Page editor after toggle.
+- Fail evidence: Delayed first paint, tap hides window, wrong surface after double-tap/hold, or classifier tests fail.
+
+### Script Kit Brain substrate persists memory as markdown files
+
+- Stable anchor: `script-kit-brain-substrate-markdown-canonical`
+- Choice id: `brain-substrate-files-canonical-contract`
+- Surface: Script Kit Brain / Storage
+- Status: Active (Brain Time T1/T5/T7)
+- User contract: User memory lives under `~/.scriptkit/brain/{days,fragments,notes,trash}` as plain markdown. Day-page appends are timestamped and append-only. Fragments split at the word threshold with excerpt + link on the day page. `brain.sqlite` and `notes.sqlite` are derived indexes rebuildable from files alone.
+- Regression risk: Path construction outside `src/brain/substrate/`, partial writes, or indexer source drift can break the files-canonical contract.
+- Proof commands:
+  - `./scripts/agentic/agent-cargo.sh test --lib brain::substrate`
+  - `./scripts/agentic/agent-cargo.sh test notes`
+  - `./scripts/agentic/agent-cargo.sh test --lib brain`
+- Pass evidence: Substrate unit tests pass; notes rebuild-from-files test passes; brain indexer includes day pages and fragments.
+- Fail evidence: Content only in sqlite, failed atomic writes, missing rebuild parity, or tests fail.
+
+### Clipboard sediment and post-copy quick menu keep brain content
+
+- Stable anchor: `clipboard-sediment-and-post-copy-menu`
+- Choice id: `clipboard-sediment-post-copy-contract`
+- Surface: Clipboard History / Day Page
+- Status: Active (Brain Time T4/T10/T12/T14)
+- User contract: Secrets are rejected before storage. URLs auto-keep to today's day page. Non-URLs promote on re-copy. After a keepable copy, bare ⌘ tap within the tap window opens annotate/reject/dismiss; auto-keeps whisper "Kept". Day Page renders fragment excerpt cards and kept-URL links.
+- Regression risk: Monitor ordering, sediment tiers, or tap-window state machine changes can leak secrets, skip keeps, or break the quick menu.
+- Proof commands:
+  - `./scripts/agentic/agent-cargo.sh test --lib clipboard_history`
+  - `scripts/agentic/clipboard-post-copy-menu-probe.ts` (runtime receipt when available)
+- Pass evidence: Rejection, sediment, and tap-window unit tests pass; runtime probe shows menu target after copy + ⌘ tap.
+- Fail evidence: Rejected content stored, duplicate URL lines same day, chord cancels menu incorrectly, or tests fail.
+
 ## Submission Feedback Applied
 
 - `spine-sigils-project-main-input-catalogs`: `>` no longer selects cwd; Tab is the cwd trigger.
