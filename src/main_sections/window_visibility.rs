@@ -323,6 +323,12 @@ fn show_main_window_helper(
                     if agent_chat_focus_handle.is_some() {
                         view.focused_input = FocusedInput::None;
                         view.pending_focus = Some(FocusTarget::AgentChat);
+                    } else if matches!(view.current_view, AppView::DayPage { .. }) {
+                        // Hold-from-closed shows the Day Page before this deferred
+                        // restore runs — keep focus on the day-page editor instead
+                        // of stomping it back to the launcher filter.
+                        view.focused_input = FocusedInput::None;
+                        view.pending_focus = Some(FocusTarget::EditorPrompt);
                     } else {
                         view.focused_input = FocusedInput::MainFilter;
                         view.pending_focus = Some(FocusTarget::MainFilter);

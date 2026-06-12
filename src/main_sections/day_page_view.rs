@@ -1,7 +1,5 @@
 // Day Page surface entry, render host, and footer helpers.
 
-use std::time::Duration;
-
 use chrono::Utc;
 
 use crate::components::notes_editor::{NotesEditorConfig, NotesEditorLayout};
@@ -9,7 +7,6 @@ use crate::components::unified_list_item::{
     Density, ItemState, TextContent, TrailingContent, UnifiedListItem, UnifiedListItemColors,
 };
 use crate::footer_popup::{FooterAction, FooterButtonConfig};
-use crate::ui_foundation::HexColorExt;
 use script_kit_gpui::brain::substrate::BrainSubstrate;
 use script_kit_gpui::day_page::{
     parse_day_page_segments, resolve_fragment_path, DayPageBinding, DayPageSegment,
@@ -46,19 +43,19 @@ impl DayPageView {
             )
         });
 
-        let editor_subscription = cx.subscribe_in(&editor_state, window, {
-            let view = cx.entity().downgrade();
-            move |_, _, event: &InputEvent, window, cx| {
+        // `subscribe_in` already runs the handler with this DayPageView leased
+        // (`this` is `&mut Self`); re-leasing via `entity.update` here would
+        // double-lease and panic the moment the editor emits a Change.
+        let editor_subscription = cx.subscribe_in(
+            &editor_state,
+            window,
+            |this, _, event: &InputEvent, window, cx| {
                 if !matches!(event, InputEvent::Change) {
                     return;
                 }
-                if let Some(view) = view.upgrade() {
-                    view.update(cx, |this, cx| {
-                        this.on_editor_change(window, cx);
-                    });
-                }
-            }
-        });
+                this.on_editor_change(window, cx);
+            },
+        );
 
         Self {
             app: app.downgrade(),
@@ -68,8 +65,6 @@ impl DayPageView {
             editor_subscription,
             focus_handle: cx.focus_handle(),
             fragment_open_targets: Vec::new(),
-            dictation_chrome: DayPageDictationChrome::Hidden,
-            pending_dictation_commit: None,
         }
     }
 
@@ -208,78 +203,23 @@ impl DayPageView {
         });
     }
 
-    pub(crate) fn set_dictation_chrome(&mut self, chrome: DayPageDictationChrome, cx: &mut Context<Self>) {
-        self.dictation_chrome = chrome;
-        cx.notify();
-    }
-
-    pub(crate) fn clear_dictation_chrome(&mut self, cx: &mut Context<Self>) {
-        if !matches!(self.dictation_chrome, DayPageDictationChrome::Hidden) {
-            self.dictation_chrome = DayPageDictationChrome::Hidden;
-            cx.notify();
-        }
-    }
-
-    pub(crate) fn stage_dictation_commit(
-        &mut self,
-        updated_content: String,
-        caret_offset: usize,
-        cx: &mut Context<Self>,
-    ) {
-        if let Err(error) = self
-            .session
-            .adopt_disk_content_after_external_write(updated_content.clone())
-        {
-            tracing::error!(error = %error, "Failed to sync day page session after dictation");
-        }
-        self.refresh_fragment_open_targets(&updated_content);
-        self.pending_dictation_commit = Some((updated_content, caret_offset));
-        self.dictation_chrome = DayPageDictationChrome::Hidden;
-        cx.notify();
-    }
-
-    fn apply_pending_dictation_commit(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let Some((content, caret)) = self.pending_dictation_commit.take() else {
-            return;
-        };
-        let caret = caret.min(content.len());
-        self.notes_editor.update(cx, |editor, cx| {
-            editor.set_value(content, window, cx);
-            editor.set_selection(caret, caret, window, cx);
-        });
-        self.focus_editor(window, cx);
-        self.sync_footer(window, cx);
-        cx.notify();
-    }
-
-    fn refresh_dictation_listening_chrome(&mut self, cx: &mut Context<Self>) {
-        let DayPageDictationChrome::Listening { display_bars } = self.dictation_chrome.clone() else {
-            return;
-        };
-        let Some(state) = crate::dictation::snapshot_overlay_state() else {
-            self.dictation_chrome = DayPageDictationChrome::Hidden;
-            cx.notify();
-            return;
-        };
-        let next_bars = crate::dictation::animate_bars(
-            display_bars,
-            state.bars,
-            Duration::from_millis(16),
-        );
-        if next_bars != display_bars {
-            self.dictation_chrome = DayPageDictationChrome::Listening {
-                display_bars: next_bars,
-            };
-            cx.notify();
-        }
-    }
-
     fn sync_footer(&self, window: &mut Window, cx: &mut Context<Self>) {
-        if let Some(app) = self.app.upgrade() {
+        // Deferred on purpose: several callers run while the ScriptListApp
+        // lease is already held (e.g. `show_day_page_view` → `bind_today`
+        // inside `app_entity.update`, including the hotkey gesture path).
+        // A synchronous `app.update` here double-leases ScriptListApp and
+        // panics ("cannot update ... while it is already being updated").
+        // `window.defer` (not `cx.defer_in`) — the deferred closure must hold
+        // NO entity lease, because `sync_main_footer_popup` reads this
+        // DayPageView back (`is_dirty` for the footer save button).
+        let Some(app) = self.app.upgrade() else {
+            return;
+        };
+        window.defer(cx, move |window, cx| {
             app.update(cx, |app, cx| {
                 app.sync_main_footer_popup(window, cx);
             });
-        }
+        });
     }
 }
 
@@ -291,8 +231,6 @@ impl Focusable for DayPageView {
 
 impl Render for DayPageView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        self.refresh_dictation_listening_chrome(cx);
-        self.apply_pending_dictation_commit(window, cx);
         self.poll_external_disk_changes(window, cx);
 
         let app = self
@@ -474,8 +412,6 @@ impl Render for DayPageView {
             None
         };
 
-        let dictation_chrome = self.render_dictation_chrome(&theme, cx);
-
         let editor_body = div()
             .id(DAY_PAGE_EDITOR_ID)
             .flex_1()
@@ -486,7 +422,6 @@ impl Render for DayPageView {
             .flex()
             .flex_col()
             .when_some(back_bar, |parent, bar| parent.child(bar))
-            .when_some(dictation_chrome, |parent, chrome| parent.child(chrome))
             .child(
                 div()
                     .relative()
@@ -564,101 +499,6 @@ impl Render for DayPageView {
 }
 
 impl DayPageView {
-    fn render_dictation_chrome(
-        &self,
-        theme: &crate::theme::Theme,
-        cx: &mut Context<Self>,
-    ) -> Option<gpui::AnyElement> {
-        match &self.dictation_chrome {
-            DayPageDictationChrome::Hidden => None,
-            DayPageDictationChrome::Listening { display_bars } => {
-                let success = theme.colors.ui.success;
-                let hint = theme.colors.text.secondary;
-                let opacity = theme.get_opacity().text_hint;
-                let active = display_bars.iter().any(|bar| *bar > 0.05);
-                let bar_color = if active {
-                    success.with_opacity(1.0)
-                } else {
-                    theme.colors.text.primary.with_opacity(opacity)
-                };
-
-                let mut bars = div().flex().items_center().gap(px(2.));
-                for &level in display_bars {
-                    let height = px(4. + level * 10.);
-                    bars = bars.child(
-                        div()
-                            .w(px(2.))
-                            .h(height)
-                            .min_h(px(3.))
-                            .bg(bar_color)
-                            .rounded(px(1.)),
-                    );
-                }
-
-                Some(
-                    div()
-                        .id(DAY_PAGE_DICTATION_LISTENING_ID)
-                        .w_full()
-                        .flex()
-                        .items_center()
-                        .gap(px(8.))
-                        .pb(px(6.))
-                        .text_sm()
-                        .text_color(rgb(hint))
-                        .child("Listening…")
-                        .child(bars)
-                        .into_any_element(),
-                )
-            }
-            DayPageDictationChrome::Transcribing => {
-                let hint = theme.colors.text.secondary;
-                Some(
-                    div()
-                        .id(DAY_PAGE_DICTATION_LISTENING_ID)
-                        .w_full()
-                        .pb(px(6.))
-                        .text_sm()
-                        .text_color(rgb(hint))
-                        .child("Transcribing…")
-                        .into_any_element(),
-                )
-            }
-            DayPageDictationChrome::Unavailable { message } => {
-                let hint = theme.colors.text.secondary;
-                let accent = theme.colors.accent.selected;
-                Some(
-                    div()
-                        .id(DAY_PAGE_DICTATION_UNAVAILABLE_ID)
-                        .w_full()
-                        .flex()
-                        .flex_col()
-                        .gap(px(4.))
-                        .pb(px(6.))
-                        .text_sm()
-                        .text_color(rgb(hint))
-                        .child(message.clone())
-                        .child(
-                            div()
-                                .text_color(rgb(accent))
-                                .cursor_pointer()
-                                .on_mouse_down(
-                                    gpui::MouseButton::Left,
-                                    cx.listener(|this, _, _window, cx| {
-                                        if let Some(app) = this.app.upgrade() {
-                                            app.update(cx, |app, cx| {
-                                                app.open_dictation_model_prompt(cx);
-                                            });
-                                        }
-                                    }),
-                                )
-                                .child("Open Dictation Setup"),
-                        )
-                        .into_any_element(),
-                )
-            }
-        }
-    }
-
     fn handle_key_down(
         &mut self,
         event: &gpui::KeyDownEvent,

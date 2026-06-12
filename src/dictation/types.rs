@@ -96,7 +96,6 @@ pub enum DictationDestination {
     NotesEditor,
     AiChatComposer,
     TabAiHarness,
-    DayPage,
 }
 
 /// The Script Kit surface that was active when dictation was invoked.
@@ -120,8 +119,6 @@ pub enum DictationTarget {
     /// No internal Script Kit surface was active — deliver to the
     /// frontmost external app via simulated paste.
     ExternalApp,
-    /// Today's day page in the main window (hold-to-dictate gesture).
-    DayPage,
 }
 
 impl DictationTarget {
@@ -134,7 +131,6 @@ impl DictationTarget {
             Self::AiChatComposer => "AI",
             Self::TabAiHarness => "Agent",
             Self::ExternalApp => "App",
-            Self::DayPage => "Day Page",
         }
     }
 }

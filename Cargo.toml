@@ -120,6 +120,7 @@ alacritty_terminal = "0.25"    # Zed uses 0.25.1-rc1, this gets latest 0.25.x st
 vte = "0.15"                   # ANSI escape sequence parser, required by alacritty_terminal 0.25
 bitflags = "2.10"              # For cell attribute flags
 async-channel = "2.3"          # Async channel for stdin command listener
+smol.workspace = true          # future::or for the main-hotkey gesture listener select
 
 # Local speech-to-text via Whisper.cpp + Parakeet ONNX (used by dictation feature)
 transcribe-rs = { version = "0.3", features = ["whisper-cpp", "onnx"] }

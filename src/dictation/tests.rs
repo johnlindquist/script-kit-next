@@ -4554,7 +4554,6 @@ fn dictation_target_enum_covers_all_surfaces() {
         DictationTarget::AiChatComposer,
         DictationTarget::TabAiHarness,
         DictationTarget::ExternalApp,
-        DictationTarget::DayPage,
     ];
     for target in &targets {
         match target {
@@ -4564,7 +4563,6 @@ fn dictation_target_enum_covers_all_surfaces() {
             DictationTarget::AiChatComposer => {}
             DictationTarget::TabAiHarness => {}
             DictationTarget::ExternalApp => {}
-            DictationTarget::DayPage => {}
         }
     }
 }
@@ -4581,9 +4579,8 @@ fn dictation_destination_includes_internal_surfaces() {
         DictationDestination::NotesEditor,
         DictationDestination::AiChatComposer,
         DictationDestination::TabAiHarness,
-        DictationDestination::DayPage,
     ];
-    assert_eq!(destinations.len(), 7);
+    assert_eq!(destinations.len(), 6);
 }
 
 #[test]
@@ -5041,7 +5038,6 @@ fn dictation_target_enum_includes_main_window_filter_variant() {
         DictationTarget::AiChatComposer => {}
         DictationTarget::TabAiHarness => {}
         DictationTarget::ExternalApp => {}
-        DictationTarget::DayPage => {}
     }
     assert_eq!(target.overlay_label(), "Script Kit");
 }
@@ -5058,9 +5054,8 @@ fn dictation_destination_includes_main_window_filter_variant() {
         DictationDestination::NotesEditor,
         DictationDestination::AiChatComposer,
         DictationDestination::TabAiHarness,
-        DictationDestination::DayPage,
     ];
-    assert_eq!(destinations.len(), 7);
+    assert_eq!(destinations.len(), 6);
 }
 
 #[test]

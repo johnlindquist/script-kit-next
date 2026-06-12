@@ -218,7 +218,6 @@ pub(crate) fn to_orchestrator_target(
         crate::dictation::DictationTarget::AiChatComposer => super::DictationTarget::AiChatComposer,
         crate::dictation::DictationTarget::TabAiHarness => super::DictationTarget::TabAiHarness,
         crate::dictation::DictationTarget::ExternalApp => super::DictationTarget::ExternalApp,
-        crate::dictation::DictationTarget::DayPage => super::DictationTarget::DayPage,
     };
     tracing::info!(
         category = "ORCHESTRATOR",

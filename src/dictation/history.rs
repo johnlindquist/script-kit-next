@@ -118,7 +118,6 @@ fn target_label(target: DictationTarget) -> String {
         DictationTarget::NotesEditor => "Notes".to_string(),
         DictationTarget::AiChatComposer => "AI Chat".to_string(),
         DictationTarget::TabAiHarness => "Agent Chat".to_string(),
-        DictationTarget::DayPage => "Day Page".to_string(),
         DictationTarget::ExternalApp => crate::frontmost_app_tracker::get_last_real_app()
             .map(|app| app.name.trim().to_string())
             .filter(|name| !name.is_empty())

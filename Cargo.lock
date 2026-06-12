@@ -8153,6 +8153,7 @@ dependencies = [
  "shellexpand 2.1.2",
  "smallvec",
  "smappservice-rs",
+ "smol",
  "strum 0.26.3",
  "syntect",
  "sysinfo 0.37.2",

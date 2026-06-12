@@ -100,7 +100,6 @@ pub enum DictationTarget {
     AiChatComposer,
     TabAiHarness,
     ExternalApp,
-    DayPage,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

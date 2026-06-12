@@ -6077,10 +6077,7 @@ impl ScriptListApp {
                 target,
                 job,
             }) => {
-                if transcribe && matches!(target, crate::dictation::DictationTarget::DayPage) {
-                    self.set_day_page_dictation_chrome(DayPageDictationChrome::Transcribing, cx);
-                }
-                if transcribe && !matches!(target, crate::dictation::DictationTarget::DayPage) {
+                if transcribe {
                     let _ = crate::dictation::begin_overlay_session();
                     let _ = crate::dictation::open_dictation_overlay(cx);
                     let _ = crate::dictation::update_dictation_overlay(
@@ -6108,12 +6105,7 @@ impl ScriptListApp {
                                 this.begin_dictation_transcription(capture, target, cx);
                             }
                             Ok(_) => {
-                                if matches!(target, crate::dictation::DictationTarget::DayPage) {
-                                    this.clear_day_page_dictation_chrome(cx);
-                                }
-                                if !matches!(target, crate::dictation::DictationTarget::DayPage) {
-                                    let _ = crate::dictation::close_dictation_overlay(cx);
-                                }
+                                let _ = crate::dictation::close_dictation_overlay(cx);
                                 this.dispatch_window_event(
                                     crate::window_orchestrator::WindowEvent::AbortDictation,
                                     cx,
@@ -6201,20 +6193,15 @@ impl ScriptListApp {
         target: crate::dictation::DictationTarget,
         cx: &mut Context<Self>,
     ) {
-        if matches!(target, crate::dictation::DictationTarget::DayPage) {
-            self.set_day_page_dictation_chrome(DayPageDictationChrome::Transcribing, cx);
-        }
-        if !matches!(target, crate::dictation::DictationTarget::DayPage) {
-            let _ = crate::dictation::update_dictation_overlay(
-                crate::dictation::DictationOverlayState {
-                    phase: crate::dictation::DictationSessionPhase::Transcribing,
-                    elapsed: capture.audio_duration,
-                    target,
-                    ..Default::default()
-                },
-                cx,
-            );
-        }
+        let _ = crate::dictation::update_dictation_overlay(
+            crate::dictation::DictationOverlayState {
+                phase: crate::dictation::DictationSessionPhase::Transcribing,
+                elapsed: capture.audio_duration,
+                target,
+                ..Default::default()
+            },
+            cx,
+        );
         let audio_duration = capture.audio_duration;
         let chunks = capture.chunks;
         cx.spawn(async move |this, cx| {
@@ -6327,48 +6314,6 @@ impl ScriptListApp {
                             }
                         }
                     }
-                    crate::dictation::DictationTarget::DayPage => {
-                        let substrate = crate::brain::substrate::BrainSubstrate::default_kit();
-                        let now = chrono::Utc::now();
-                        match crate::dictation::deliver_transcript_to_day_page(
-                            &substrate,
-                            now,
-                            &transcript,
-                        ) {
-                            Ok(delivery) => {
-                                if let AppView::DayPage { entity } = &self.current_view {
-                                    let entity = entity.clone();
-                                    entity.update(cx, |view, cx| {
-                                        view.stage_dictation_commit(
-                                            delivery.updated_content,
-                                            delivery.caret_offset,
-                                            cx,
-                                        );
-                                    });
-                                }
-                                delivery_insertion_range = Some(serde_json::json!({
-                                    "available": true,
-                                    "unit": "utf8Bytes",
-                                    "start": delivery.caret_offset.saturating_sub(transcript.len()),
-                                    "end": delivery.caret_offset,
-                                    "insertedLength": transcript.len(),
-                                    "operation": "appendDayPageCapture",
-                                    "source": "deliveryPipeline",
-                                    "redacted": true,
-                                }));
-                                true
-                            }
-                            Err(error) => {
-                                tracing::error!(
-                                    category = "DICTATION",
-                                    error = %error,
-                                    "Day page dictation delivery failed"
-                                );
-                                self.clear_day_page_dictation_chrome(cx);
-                                false
-                            }
-                        }
-                    }
                     crate::dictation::DictationTarget::TabAiHarness => {
                         self.seed_agent_chat_dictation_return_origin();
                         // A detached chat window is an independent workspace:
@@ -6407,17 +6352,11 @@ impl ScriptListApp {
                         crate::dictation::DictationTarget::TabAiHarness => {
                             crate::dictation::DictationDestination::TabAiHarness
                         }
-                        crate::dictation::DictationTarget::DayPage => {
-                            crate::dictation::DictationDestination::DayPage
-                        }
                         crate::dictation::DictationTarget::ExternalApp => {
                             crate::dictation::DictationDestination::FrontmostApp
                         }
                     };
                     let insertion_range = match destination {
-                        crate::dictation::DictationDestination::DayPage => {
-                            delivery_insertion_range
-                        }
                         crate::dictation::DictationDestination::MainWindowFilter
                         | crate::dictation::DictationDestination::ActivePrompt
                         | crate::dictation::DictationDestination::AiChatComposer
@@ -6455,12 +6394,7 @@ impl ScriptListApp {
                         insertion_range,
                     );
 
-                    if matches!(target, crate::dictation::DictationTarget::DayPage) {
-                        self.clear_day_page_dictation_chrome(cx);
-                    }
-                    if !matches!(target, crate::dictation::DictationTarget::DayPage) {
-                        let _ = crate::dictation::close_dictation_overlay(cx);
-                    }
+                    let _ = crate::dictation::close_dictation_overlay(cx);
                     if matches!(target, crate::dictation::DictationTarget::MainWindowFilter)
                         && !script_kit_gpui::is_main_window_visible()
                     {
@@ -6674,17 +6608,7 @@ impl ScriptListApp {
                     ?target,
                     "No dictation transcript recognized; aborting delivery"
                 );
-                if matches!(target, crate::dictation::DictationTarget::DayPage) {
-                    self.clear_day_page_dictation_chrome(cx);
-                    self.show_hud(
-                        "No speech detected".to_string(),
-                        Some(HUD_MEDIUM_MS),
-                        cx,
-                    );
-                }
-                if !matches!(target, crate::dictation::DictationTarget::DayPage) {
-                    self.schedule_dictation_overlay_close(cx, std::time::Duration::from_millis(150));
-                }
+                self.schedule_dictation_overlay_close(cx, std::time::Duration::from_millis(150));
                 self.schedule_dictation_transcriber_cleanup(
                     cx,
                     std::time::Duration::from_secs(300),
@@ -7515,7 +7439,6 @@ impl ScriptListApp {
             | crate::dictation::DictationTarget::NotesEditor
             | crate::dictation::DictationTarget::AiChatComposer
             | crate::dictation::DictationTarget::TabAiHarness => Ok(()),
-            crate::dictation::DictationTarget::DayPage => Ok(()),
         }
     }
 
@@ -7552,9 +7475,6 @@ impl ScriptListApp {
                 crate::dictation::DictationTarget::TabAiHarness,
                 crate::dictation::DictationTarget::ExternalApp,
             ],
-            crate::dictation::DictationTarget::DayPage => {
-                vec![crate::dictation::DictationTarget::DayPage]
-            }
         }
     }
 
