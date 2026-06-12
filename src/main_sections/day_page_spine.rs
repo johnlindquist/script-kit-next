@@ -340,6 +340,25 @@ fn source_icon(source: crate::spine::catalog_subsearch::ContextSubsearchSource) 
     }
 }
 
+fn day_page_spine_prompt_plan_can_submit(
+    parse: &crate::spine::SpineParse,
+    cwd_anchor: bool,
+    mention_aliases: &std::collections::HashMap<String, crate::ai::message_parts::AiContextPart>,
+) -> bool {
+    let plan = crate::spine::prompt_plan::build_spine_prompt_plan_with_aliases(
+        parse,
+        mention_aliases,
+    );
+    plan.should_submit_to_chat()
+        || (cwd_anchor
+            && matches!(
+                plan.blocked_reason,
+                Some(crate::spine::prompt_plan::SpinePromptPlanBlockReason::NoPromptBuilderSegments)
+            )
+            && plan.unknown_warnings.is_empty()
+            && !plan.normalized_prompt.trim().is_empty())
+}
+
 impl ScriptListApp {
     fn day_page_rich_spine_rows(
         &self,
@@ -471,6 +490,25 @@ impl ScriptListApp {
 }
 
 impl DayPageView {
+    fn shared_day_page_spine_rows(
+        &self,
+        parse: &crate::spine::SpineParse,
+        projection: &crate::spine::SpineCursorProjection,
+        app_state: Option<&ScriptListApp>,
+    ) -> DayPageSpineRows {
+        let sections = crate::spine::list::build_spine_list_sections_full_with_resolved_tokens(
+            parse,
+            projection,
+            None,
+            &|token| {
+                self.spine_mention_aliases.contains_key(token)
+                    || app_state
+                        .is_some_and(|app_state| app_state.spine_mention_aliases.contains_key(token))
+            },
+        );
+        push_spine_sections_as_grouped(sections)
+    }
+
     fn render_day_page_spine_panel(&mut self, cx: &mut Context<Self>) -> Option<AnyElement> {
         let model = self.day_page_spine_model(cx)?;
         let app = self.app.upgrade()?;
@@ -688,8 +726,7 @@ impl DayPageView {
                 )
             };
             if recent_dirs.is_empty() {
-                let sections = crate::spine::list::build_spine_list_sections(parse, projection);
-                return Some(push_spine_sections_as_grouped(sections));
+                return Some(self.shared_day_page_spine_rows(parse, projection, app_state));
             }
             let (grouped, flat) = if query.is_empty() {
                 filtering_cache::build_rich_cwd_root_rows(&recent_dirs)
@@ -700,8 +737,7 @@ impl DayPageView {
                 query, projection, parse, grouped, flat,
             ))
         } else {
-            let sections = crate::spine::list::build_spine_list_sections(parse, projection);
-            Some(push_spine_sections_as_grouped(sections))
+            Some(self.shared_day_page_spine_rows(parse, projection, app_state))
         }
     }
 
@@ -939,14 +975,12 @@ impl DayPageView {
                     );
                     if applied {
                         self.spine_cwd_revision = self.spine_cwd_revision.wrapping_add(1);
+                        self.spine_cwd_submit_anchor = true;
                         if let Some(app) = self.app.upgrade() {
                             let app_resolution_id = resolution_id.to_string();
                             let app_resolution_label = resolution_label.to_string();
-                            cx.spawn(async move |_this, cx| {
-                                cx.background_executor()
-                                    .timer(std::time::Duration::from_millis(0))
-                                    .await;
-                                let _ = app.update(cx, |app, cx| {
+                            window.defer(cx, move |_window, cx| {
+                                app.update(cx, |app, cx| {
                                     let path = std::path::PathBuf::from(&app_resolution_id);
                                     app.spine_cwd = Some(path);
                                     app.spine_cwd_label = Some(app_resolution_label);
@@ -956,8 +990,7 @@ impl DayPageView {
                                     app.invalidate_grouped_cache();
                                     cx.notify();
                                 });
-                            })
-                            .detach();
+                            });
                         }
                     }
                     return applied;
@@ -1072,6 +1105,14 @@ impl DayPageView {
         }
 
         let parse = crate::spine::parse_spine(line);
+        if !day_page_spine_prompt_plan_can_submit(
+            &parse,
+            self.spine_cwd_submit_anchor,
+            &self.spine_mention_aliases,
+        ) {
+            return false;
+        }
+
         let Some(app) = self.app.upgrade() else {
             return false;
         };
@@ -1096,6 +1137,7 @@ impl DayPageView {
             return false;
         };
         if let Some((token, part)) = self.spine_alias_cache.get(row.id.as_ref()).cloned() {
+            self.spine_mention_aliases.insert(token.clone(), part.clone());
             if let Some(app) = self.app.upgrade() {
                 window.defer(cx, move |_window, cx| {
                     app.update(cx, |app, _cx| {
@@ -1361,5 +1403,62 @@ mod day_page_spine_tests {
         assert_eq!(resolution_id.as_ref(), "/Users/test/dev");
         assert_eq!(resolution_label.as_ref(), "/Users/test/dev");
         assert_eq!(resolution_source.as_ref(), "cwd");
+    }
+
+    #[test]
+    fn cmd_enter_preflight_rejects_plain_text_without_cwd_anchor() {
+        let parse = crate::spine::parse_spine("summarize this folder");
+        let aliases = std::collections::HashMap::new();
+
+        assert!(!day_page_spine_prompt_plan_can_submit(
+            &parse, false, &aliases
+        ));
+    }
+
+    #[test]
+    fn cmd_enter_preflight_allows_plain_text_with_cwd_anchor() {
+        let parse = crate::spine::parse_spine("summarize this folder");
+        let aliases = std::collections::HashMap::new();
+
+        assert!(day_page_spine_prompt_plan_can_submit(&parse, true, &aliases));
+    }
+
+    #[test]
+    fn cmd_enter_preflight_allows_prompt_builder_plan_without_cwd_anchor() {
+        let parse = crate::spine::parse_spine("@selection summarize this");
+        let aliases = std::collections::HashMap::new();
+
+        assert!(day_page_spine_prompt_plan_can_submit(
+            &parse, false, &aliases
+        ));
+    }
+
+    #[test]
+    fn cmd_enter_preflight_rejects_partial_context_even_with_cwd_anchor() {
+        let parse = crate::spine::parse_spine("@clip");
+        let aliases = std::collections::HashMap::new();
+
+        assert!(!day_page_spine_prompt_plan_can_submit(
+            &parse, true, &aliases
+        ));
+    }
+
+    #[test]
+    fn cmd_enter_preflight_allows_alias_backed_context() {
+        let parse = crate::spine::parse_spine("@clipboard:Latest");
+        let mut aliases = std::collections::HashMap::new();
+        aliases.insert(
+            "@clipboard:Latest".to_string(),
+            crate::ai::message_parts::AiContextPart::TextBlock {
+                label: "Latest".to_string(),
+                source: "clipboard/test".to_string(),
+                text: "Copied context".to_string(),
+                mime_type: None,
+            },
+        );
+
+        assert!(day_page_spine_prompt_plan_can_submit(
+            &parse, false, &aliases
+        ));
     }
 }

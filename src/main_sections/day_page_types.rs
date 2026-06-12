@@ -25,7 +25,10 @@ pub struct DayPageView {
         Option<crate::spine::catalog_subsearch::ContextSubsearchSource>,
     pub(crate) spine_cache_key: String,
     pub(crate) spine_cwd_revision: u64,
+    pub(crate) spine_cwd_submit_anchor: bool,
     pub(crate) spine_dismissed_cache_key: Option<String>,
+    pub(crate) spine_mention_aliases:
+        std::collections::HashMap<String, crate::ai::message_parts::AiContextPart>,
     pub(crate) spine_grouped_cache: Vec<crate::list_item::GroupedListItem>,
     pub(crate) spine_flat_cache: Vec<crate::scripts::SearchResult>,
     pub(crate) spine_alias_cache:

@@ -64,6 +64,83 @@ async function editorText(driver: Driver): Promise<string | null> {
   return (editor?.value as string | undefined) ?? null;
 }
 
+async function setDayPageInput(driver: Driver, text: string, label: string) {
+  const batch = (await driver.batch(
+    [
+      { type: "setInput", text },
+      {
+        type: "waitFor",
+        condition: {
+          type: "stateMatch",
+          state: { promptType: "dayPage", inputValue: text },
+        },
+      },
+    ],
+    { timeoutMs: 5000 },
+  )) as Json;
+  check(`batch_set_${label}`, batch.success === true, { batch });
+  await Bun.sleep(150);
+}
+
+async function verifyFragmentCompletion(
+  driver: Driver,
+  label: string,
+  text: string,
+  expectedSemanticId: string | ((id: string) => boolean),
+  expectedText: string | ((beforeId: string) => string),
+) {
+  await setDayPageInput(driver, text, label);
+  const elements = (await driver.getElements(
+    { target: { type: "main" }, limit: 240 },
+    { timeoutMs: 5000 },
+  )) as Json;
+  const flat = walkElements(elements);
+  const row = flat.find((el) => {
+    if (typeof el.semanticId !== "string") return false;
+    return typeof expectedSemanticId === "string"
+      ? el.semanticId === expectedSemanticId
+      : expectedSemanticId(el.semanticId);
+  });
+  check(`row_visible_${label}`, Boolean(row), {
+    expectedSemanticId: typeof expectedSemanticId === "string" ? expectedSemanticId : "predicate",
+    selectedSemanticId: elements.selectedSemanticId ?? null,
+    row: row ?? null,
+    ids: flat.slice(0, 20).map((el) => el.semanticId ?? el.id),
+  });
+  check(`row_selected_${label}`, Boolean(row) && elements.selectedSemanticId === row?.semanticId, {
+    selectedSemanticId: elements.selectedSemanticId ?? null,
+    rowSemanticId: row?.semanticId ?? null,
+  });
+
+  await driver.simulateKey("enter");
+  await Bun.sleep(200);
+  const afterText = await editorText(driver);
+  const expected =
+    typeof expectedText === "string" ? expectedText : expectedText(String(row?.semanticId ?? ""));
+  check(`enter_completes_${label}`, afterText === expected, { afterText, expected });
+}
+
+async function verifyModeExitRow(driver: Driver, label: string, text: string, expectedSemanticId: string) {
+  await setDayPageInput(driver, text, label);
+  const elements = (await driver.getElements(
+    { target: { type: "main" }, limit: 120 },
+    { timeoutMs: 5000 },
+  )) as Json;
+  const flat = walkElements(elements);
+  const row = flat.find((el) => el.semanticId === expectedSemanticId);
+  check(`mode_exit_row_visible_${label}`, Boolean(row), {
+    expectedSemanticId,
+    selectedSemanticId: elements.selectedSemanticId ?? null,
+    row: row ?? null,
+    ids: flat.slice(0, 16).map((el) => el.semanticId ?? el.id),
+  });
+  check(
+    `mode_exit_row_selected_${label}`,
+    Boolean(row) && elements.selectedSemanticId === expectedSemanticId,
+    { selectedSemanticId: elements.selectedSemanticId ?? null },
+  );
+}
+
 const driver = await Driver.launch({
   binary: BINARY,
   sandboxHome: true,
@@ -233,6 +310,88 @@ try {
     selectedSemanticId: submitElements.selectedSemanticId ?? null,
   });
 
+  await verifyFragmentCompletion(
+    driver,
+    "context_builtin_selection",
+    "@sel",
+    "spine:@:builtin:selection",
+    "@selection ",
+  );
+
+  await verifyFragmentCompletion(
+    driver,
+    "slash_rewrite",
+    "/rew",
+    "spine:/:rewrite",
+    "/rewrite ",
+  );
+
+  await verifyFragmentCompletion(
+    driver,
+    "style_professional",
+    ".pro",
+    "spine:.:professional",
+    ".professional ",
+  );
+
+  await verifyFragmentCompletion(
+    driver,
+    "capture_todo",
+    ";to",
+    "spine:;:todo",
+    "todo; ",
+  );
+
+  await verifyFragmentCompletion(
+    driver,
+    "filter_script",
+    ":type:s",
+    "spine:::qualifier:type:script",
+    ":type:script ",
+  );
+
+  await verifyFragmentCompletion(
+    driver,
+    "profile_first",
+    "|",
+    (id) => id.startsWith("spine:|:"),
+    (id) => `|${id.replace("spine:|:", "")} `,
+  );
+
+  await verifyModeExitRow(driver, "tilde_file_search", "~readme", "spine:~:mode-exit");
+  await verifyModeExitRow(driver, "bang_terminal", "!echo hi", "spine:!:mode-exit");
+  await verifyModeExitRow(driver, "question_actions", "?", "spine:?:mode-exit");
+
+  const plainNoCwdBatch = (await driver.batch(
+    [
+      { type: "setInput", text: "plain text before cwd" },
+      {
+        type: "waitFor",
+        condition: {
+          type: "stateMatch",
+          state: { promptType: "dayPage", inputValue: "plain text before cwd" },
+        },
+      },
+    ],
+    { timeoutMs: 5000 },
+  )) as Json;
+  check("batch_set_day_page_plain_without_cwd", plainNoCwdBatch.success === true, {
+    batch: plainNoCwdBatch,
+  });
+
+  await driver.simulateKey("enter", ["cmd"]);
+  await Bun.sleep(250);
+  const afterPlainNoCwdState = (await driver.getState({ timeoutMs: 5000 })) as Json;
+  check(
+    "cmd_enter_plain_without_cwd_stays_on_day_page",
+    afterPlainNoCwdState.promptType === "dayPage" &&
+      afterPlainNoCwdState.inputValue === "plain text before cwd",
+    {
+      promptType: afterPlainNoCwdState.promptType,
+      inputValue: afterPlainNoCwdState.inputValue,
+    },
+  );
+
   const cwdBatch = (await driver.batch(
     [
       { type: "setInput", text: ">d" },
@@ -268,9 +427,38 @@ try {
   );
 
   await driver.simulateKey("enter");
-  await Bun.sleep(250);
   const afterCwdText = await editorText(driver);
   check("enter_sets_cwd_and_strips_segment", afterCwdText === "", { afterCwdText });
+
+  const unresolvedAfterCwdBatch = (await driver.batch(
+    [
+      { type: "setInput", text: "@clip" },
+      {
+        type: "waitFor",
+        condition: {
+          type: "stateMatch",
+          state: { promptType: "dayPage", inputValue: "@clip" },
+        },
+      },
+    ],
+    { timeoutMs: 5000 },
+  )) as Json;
+  check("batch_set_day_page_unresolved_context_after_cwd", unresolvedAfterCwdBatch.success === true, {
+    batch: unresolvedAfterCwdBatch,
+  });
+
+  await driver.simulateKey("enter", ["cmd"]);
+  await Bun.sleep(250);
+  const afterUnresolvedContextState = (await driver.getState({ timeoutMs: 5000 })) as Json;
+  check(
+    "cmd_enter_unresolved_context_after_cwd_stays_on_day_page",
+    afterUnresolvedContextState.promptType === "dayPage" &&
+      afterUnresolvedContextState.inputValue === "@clip",
+    {
+      promptType: afterUnresolvedContextState.promptType,
+      inputValue: afterUnresolvedContextState.inputValue,
+    },
+  );
 
   const cwdPromptBatch = (await driver.batch(
     [
