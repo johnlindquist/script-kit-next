@@ -244,6 +244,36 @@ mod tests {
         }
     }
 
+    /// Day Page autosave is debounced and its trailing flush runs from render
+    /// side effects, which stop once the window hides. Every teardown path
+    /// (blur close, Cmd+W, hidden re-show reset) funnels through
+    /// reset_to_script_list, so it must flush the Day Page save synchronously
+    /// before the entity is dropped — otherwise the last ~300ms of typing is
+    /// lost in the surface whose job is capturing thoughts.
+    #[test]
+    fn test_reset_to_script_list_flushes_day_page_save() {
+        let content = read_source_file("app_impl/registries_state.rs");
+        let start = content
+            .find("pub(crate) fn reset_to_script_list")
+            .expect("reset_to_script_list should exist in app_impl/registries_state.rs");
+        let body = &content[start..];
+
+        let flush = body
+            .find("AppView::DayPage { entity, .. }")
+            .expect("reset_to_script_list must flush the Day Page save before dropping the view");
+        let view_reset = body
+            .find("self.current_view = AppView::ScriptList;")
+            .expect("reset_to_script_list should reset current_view");
+        assert!(
+            flush < view_reset,
+            "Day Page save flush must run BEFORE current_view is replaced (the entity drops with it)"
+        );
+        assert!(
+            body[flush..view_reset].contains("view.save(cx)"),
+            "Day Page flush must call view.save(cx) so the debounced autosave cannot be outrun by teardown"
+        );
+    }
+
     /// Verify close_and_reset_window records Notes/AI state for diagnostics.
     #[test]
     fn test_close_and_reset_window_checks_secondary_windows() {
@@ -361,12 +391,12 @@ mod tests {
 
     #[test]
     fn test_simulate_key_escape_uses_go_back_or_close_for_opened_from_main_menu() {
-        let content = read_source_file("main_entry/app_run_setup.rs");
-        let anchor = "SimulateKey: Escape - clear filter, go back, or hide";
+        let content = read_source_file("app_impl/simulate_key_dispatch.rs");
+        let anchor = "SimulateKey: Escape - close menu-syntax popup, clear filter, go back, or hide";
         let start = content
             .find(anchor)
             .unwrap_or_else(|| panic!("Expected Escape SimulateKey branch log anchor"));
-        let branch = &content[start..std::cmp::min(start + 3000, content.len())];
+        let branch = &content[start..std::cmp::min(start + 6000, content.len())];
 
         assert!(
             branch.contains("view.opened_from_main_menu"),

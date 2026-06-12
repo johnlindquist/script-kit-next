@@ -605,3 +605,9 @@ pub fn save_window_from_gpui(role: WindowRole, window_bounds: WindowBounds) {
     save_window_bounds(role, PersistedWindowBounds::from_gpui(window_bounds));
 }
 // Tests are in src/window_state_persistence_tests.rs
+
+// Audit/decision-lock tests live in tests.rs → tests/{window_state,persistence}.rs.
+// This declaration is load-bearing: without it the whole audit suite silently
+// never compiles (discovered 2026-06-12 — the file had been orphaned).
+#[cfg(test)]
+mod tests;
