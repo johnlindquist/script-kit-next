@@ -4,7 +4,6 @@
 //! This module depends on `config`, `scripts`, `shortcuts`, and `logging`, and is used by app startup/reload flows.
 
 pub mod gesture;
-pub mod gesture_routing;
 
 // --- merged from part_000.rs ---
 use crate::{config, logging, scripts, shortcuts};

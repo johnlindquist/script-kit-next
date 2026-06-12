@@ -5,14 +5,13 @@ use std::time::Instant;
 use gpui::AsyncApp;
 
 use crate::hotkeys::gesture::GestureEvent;
-use crate::hotkeys::gesture_routing::merge_launcher_query_into_day_page_content;
 use crate::hotkeys::process_main_hotkey_physical_event;
 
 /// True while the in-flight gesture began from the closed (window hidden) state,
 /// i.e. its key-down emitted `ShowImmediate`. The classifier does not carry this
 /// distinction, but routing needs it: the opening tap's deferred `Tap` must NOT
-/// toggle to Day Page, and `HoldStart` only acts for hold-from-closed
-/// (hold-while-open is intentionally dead until a later task).
+/// immediately hide the window it just opened, and `HoldStart` only acts for
+/// hold-from-closed (hold-while-open is intentionally dead until a later task).
 static MAIN_GESTURE_BEGAN_CLOSED: AtomicBool = AtomicBool::new(false);
 static MAIN_GESTURE_TAP_PREVIEW_APPLIED: AtomicBool = AtomicBool::new(false);
 
@@ -144,7 +143,7 @@ fn dispatch_main_gesture_event(
                 );
                 return;
             }
-            logging::log("GESTURE", "Tap — toggle launcher ↔ Day Page");
+            logging::log("GESTURE", "Tap — hide launcher (hotkey toggle)");
             if !script_kit_gpui::is_main_window_visible() {
                 return;
             }
@@ -192,8 +191,12 @@ fn dispatch_main_gesture_event(
 }
 
 impl ScriptListApp {
-    /// Fast path for taps that are safe to preview before the double-tap
-    /// window expires. Side-effectful carry-over stays on the delayed Tap path.
+    /// Fast path for taps that are safe to apply before the double-tap window
+    /// expires. Hiding resets state (`close_and_reset_window` clears the
+    /// filter), so it only previews where there is nothing to lose: an empty
+    /// launcher, or the Day Page (whose dirty content is flushed by
+    /// `reset_to_script_list`). Taps over typed filter text or prompts stay
+    /// on the delayed `Tap` path so a double-tap cannot destroy input.
     pub(crate) fn try_handle_main_hotkey_tap_preview(
         &mut self,
         window: &mut Window,
@@ -212,74 +215,12 @@ impl ScriptListApp {
         }
     }
 
-    /// Tap-while-open: toggle launcher ↔ Day Page; carry launcher query on entry.
-    pub(crate) fn handle_main_hotkey_tap(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        match &self.current_view {
-            AppView::ScriptList => {
-                let carry = self.filter_text.trim().to_string();
-                if !carry.is_empty() {
-                    self.set_filter_text_immediate(String::new(), window, cx);
-                }
-                self.show_day_page_view(window, cx);
-                if !carry.is_empty() {
-                    if let AppView::DayPage { entity } = &self.current_view {
-                        let entity = entity.clone();
-                        entity.update(cx, |view, cx| {
-                            view.insert_capture_start(carry, window, cx);
-                        });
-                    }
-                }
-            }
-            AppView::DayPage { .. } => {
-                self.reset_to_script_list(cx);
-                self.request_script_list_main_filter_focus(cx);
-                self.sync_main_footer_popup(window, cx);
-                cx.notify();
-            }
-            _ => {
-                self.reset_to_script_list(cx);
-                self.request_script_list_main_filter_focus(cx);
-                self.sync_main_footer_popup(window, cx);
-                cx.notify();
-            }
-        }
-    }
-}
-
-impl DayPageView {
-    /// Insert launcher carry-over text as the start of a new capture line.
-    pub(crate) fn insert_capture_start(
-        &mut self,
-        query: String,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let existing = self.notes_editor.read(cx).content(cx);
-        let merged = merge_launcher_query_into_day_page_content(&existing, &query);
-        self.notes_editor.update(cx, |editor, cx| {
-            editor.load_value_with_cursor_at_end(merged.clone(), window, cx);
-        });
-        self.session.apply_editor_content(&merged);
-        self.refresh_fragment_open_targets(&merged);
-        self.focus_editor(window, cx);
-        self.sync_footer(window, cx);
-        cx.notify();
-    }
-}
-
-#[cfg(test)]
-mod gesture_routing_tests {
-    use crate::hotkeys::gesture_routing::merge_launcher_query_into_day_page_content;
-
-    #[test]
-    fn tap_toggle_carry_over_contract() {
-        assert_eq!(
-            merge_launcher_query_into_day_page_content("", "capture me"),
-            "capture me"
-        );
-        assert_eq!(
-            merge_launcher_query_into_day_page_content("09:00 line", "next"),
-            "09:00 line\nnext"
-        );
+    /// Tap-while-open: hide the launcher (the universal hotkey-toggle
+    /// convention). Day Page entry lives on the `,` first-character trigger
+    /// and hold-from-closed instead. `close_and_reset_window` funnels through
+    /// `reset_to_script_list`, which flushes a dirty Day Page before the
+    /// entity drops.
+    pub(crate) fn handle_main_hotkey_tap(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+        self.close_and_reset_window(cx);
     }
 }
