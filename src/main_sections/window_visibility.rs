@@ -188,6 +188,7 @@ fn show_main_window_helper(
     // normalized for the first visible frame.
     set_main_window_visible(true);
     script_kit_gpui::mark_window_shown();
+    hotkeys::sync_main_gesture_window_shown();
 
     logging::log(
         "POSITION_TRACE",
@@ -326,6 +327,7 @@ fn show_main_window_helper(
                         view.focused_input = FocusedInput::MainFilter;
                         view.pending_focus = Some(FocusTarget::MainFilter);
                     }
+                    view.maybe_show_tap_dismiss_retired_hint(ctx);
                     ctx.notify();
                 });
 
@@ -388,6 +390,7 @@ fn hide_main_window_helper(app_entity: Entity<ScriptListApp>, cx: &mut App) {
 
     // 2. Set visibility state
     set_main_window_visible(false);
+    hotkeys::reset_main_gesture_classifier();
     app_entity.update(cx, |view, _| {
         view.was_window_focused = false;
     });

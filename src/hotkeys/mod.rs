@@ -3,8 +3,12 @@
 //! and dynamic shortcut registration/unregistration utilities.
 //! This module depends on `config`, `scripts`, `shortcuts`, and `logging`, and is used by app startup/reload flows.
 
+pub mod gesture;
+pub mod gesture_routing;
+
 // --- merged from part_000.rs ---
 use crate::{config, logging, scripts, shortcuts};
+use gesture::{GestureClassifier, GestureEvent, GestureInput};
 use global_hotkey::{
     hotkey::{Code, HotKey, Modifiers},
     Error as HotkeyError, GlobalHotKeyEvent, GlobalHotKeyManager, HotKeyState,
@@ -1166,6 +1170,95 @@ mod gcd {
 pub(crate) struct HotkeyEvent {
     pub correlation_id: String,
 }
+
+/// Physical phase of the main launcher hotkey (key-down / key-up).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MainHotkeyPhase {
+    KeyDown,
+    KeyUp,
+}
+
+/// Main hotkey physical event with an injected timestamp for gesture classification.
+#[derive(Debug, Clone)]
+pub struct MainHotkeyPhysicalEvent {
+    pub phase: MainHotkeyPhase,
+    pub correlation_id: String,
+    pub at: std::time::Instant,
+}
+
+static MAIN_GESTURE_CLASSIFIER: LazyLock<Mutex<GestureClassifier>> =
+    LazyLock::new(|| Mutex::new(GestureClassifier::with_defaults()));
+
+static MAIN_HOTKEY_PHYSICAL_CHANNEL: LazyLock<(
+    async_channel::Sender<MainHotkeyPhysicalEvent>,
+    async_channel::Receiver<MainHotkeyPhysicalEvent>,
+)> = LazyLock::new(|| async_channel::bounded(32));
+
+/// Channel carrying key-down/key-up pairs for the main launcher hotkey.
+pub fn main_hotkey_physical_channel() -> &'static (
+    async_channel::Sender<MainHotkeyPhysicalEvent>,
+    async_channel::Receiver<MainHotkeyPhysicalEvent>,
+) {
+    &MAIN_HOTKEY_PHYSICAL_CHANNEL
+}
+
+/// Reset gesture classification when the main window is hidden (Esc dismiss, etc.).
+pub fn reset_main_gesture_classifier() {
+    if let Ok(mut classifier) = MAIN_GESTURE_CLASSIFIER.lock() {
+        classifier.sync_window_hidden();
+    }
+}
+
+/// Align gesture state when the main window is shown outside the hotkey path.
+pub fn sync_main_gesture_window_shown() {
+    if let Ok(mut classifier) = MAIN_GESTURE_CLASSIFIER.lock() {
+        classifier.sync_window_shown();
+    }
+}
+
+/// Advance time-based gesture transitions (`HoldStart`, deferred `Tap`).
+pub fn poll_main_gesture_classifier(now: std::time::Instant) -> Option<GestureEvent> {
+    MAIN_GESTURE_CLASSIFIER
+        .lock()
+        .ok()
+        .and_then(|mut classifier| classifier.poll(now))
+}
+
+/// Next poll deadline for hold/double-tap windows.
+pub fn main_gesture_next_deadline() -> Option<std::time::Instant> {
+    MAIN_GESTURE_CLASSIFIER
+        .lock()
+        .ok()
+        .and_then(|classifier| classifier.next_deadline())
+}
+
+pub fn process_main_hotkey_physical_event(event: MainHotkeyPhysicalEvent) -> Vec<GestureEvent> {
+    let Ok(mut classifier) = MAIN_GESTURE_CLASSIFIER.lock() else {
+        return Vec::new();
+    };
+    let input = match event.phase {
+        MainHotkeyPhase::KeyDown => GestureInput::KeyDown(event.at),
+        MainHotkeyPhase::KeyUp => GestureInput::KeyUp(event.at),
+    };
+    classifier.handle_input(input)
+}
+
+/// Agentic/devtools injection — mirrors the global-hotkey thread delivery path.
+pub fn inject_main_hotkey_phase_for_agentic(phase: MainHotkeyPhase) {
+    let correlation_id = format!("hotkey:main:inject:{}", Uuid::new_v4());
+    let event = MainHotkeyPhysicalEvent {
+        phase,
+        correlation_id,
+        at: std::time::Instant::now(),
+    };
+    if main_hotkey_physical_channel().0.try_send(event).is_err() {
+        logging::log(
+            "HOTKEY",
+            "Main hotkey physical channel full/closed (inject)",
+        );
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ScriptHotkeyEvent {
     pub command_id: String,
@@ -1660,15 +1753,18 @@ pub(crate) fn start_hotkey_listener(config: config::Config) {
 
         loop {
             if let Ok(event) = receiver.recv() {
-                if event.state != HotKeyState::Pressed {
-                    continue;
-                }
-
                 // Look up action in unified routing table (fast read lock)
                 let action = {
                     let routes_guard = routes().read();
                     routes_guard.get_action(event.id)
                 };
+
+                match (action.as_ref(), event.state) {
+                    (_, HotKeyState::Pressed) => {}
+                    (Some(HotkeyAction::Main), HotKeyState::Released) => {}
+                    _ => continue,
+                }
+
                 let action_label = action
                     .as_ref()
                     .map(hotkey_action_label)
@@ -1683,25 +1779,33 @@ pub(crate) fn start_hotkey_listener(config: config::Config) {
 
                 match action {
                     Some(HotkeyAction::Main) => {
-                        // Set correlation ID for this hotkey event
                         let correlation_id = format!("hotkey:main:{}", Uuid::new_v4());
                         let _guard = logging::set_correlation_id(correlation_id.clone());
 
-                        let count = HOTKEY_TRIGGER_COUNT.fetch_add(1, Ordering::Relaxed);
-                        // NON-BLOCKING: Use try_send to prevent hotkey thread from blocking
-                        if hotkey_channel()
-                            .0
-                            .try_send(HotkeyEvent {
-                                correlation_id: correlation_id.clone(),
-                            })
-                            .is_err()
-                        {
-                            logging::log("HOTKEY", "Main hotkey channel full/closed");
+                        let phase = match event.state {
+                            HotKeyState::Pressed => MainHotkeyPhase::KeyDown,
+                            HotKeyState::Released => MainHotkeyPhase::KeyUp,
+                        };
+                        let physical = MainHotkeyPhysicalEvent {
+                            phase,
+                            correlation_id: correlation_id.clone(),
+                            at: std::time::Instant::now(),
+                        };
+
+                        if main_hotkey_physical_channel().0.try_send(physical).is_err() {
+                            logging::log("HOTKEY", "Main hotkey physical channel full/closed");
                         }
-                        logging::log(
-                            "HOTKEY",
-                            &format!("Main hotkey pressed (trigger #{})", count + 1),
-                        );
+
+                        if phase == MainHotkeyPhase::KeyDown {
+                            let count = HOTKEY_TRIGGER_COUNT.fetch_add(1, Ordering::Relaxed);
+                            logging::log(
+                                "HOTKEY",
+                                &format!("Main hotkey key-down (trigger #{})", count + 1),
+                            );
+                        } else {
+                            logging::log("HOTKEY", "Main hotkey key-up");
+                        }
+                        gcd::dispatch_to_main(|| {});
                     }
                     Some(HotkeyAction::Notes) => {
                         // Set correlation ID for this hotkey event

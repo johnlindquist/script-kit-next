@@ -106,6 +106,9 @@ pub mod script_creation;
 // Permissions wizard - Check and request macOS permissions
 pub mod permissions_wizard;
 
+// One-shot NUX markers (release hints, habit changes)
+pub mod nux;
+
 // Menu bar reader - macOS Accessibility API for reading app menus
 // Provides get_frontmost_menu_bar() with recursive parsing up to 3 levels
 #[cfg(target_os = "macos")]
@@ -137,6 +140,7 @@ pub mod app_launcher;
 pub mod browser_history;
 pub mod browser_tabs;
 pub mod builtins;
+pub mod day_page;
 pub mod favicons;
 
 // Typed handle for path-prompt action ids. Physically lives under

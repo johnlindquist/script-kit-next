@@ -324,6 +324,10 @@ enum AppView {
     AgentChatView {
         entity: Entity<crate::ai::agent_chat::ui::AgentChatView>,
     },
+    /// Today's brain day page in the main launcher window (same frame as ScriptList).
+    DayPage {
+        entity: Entity<DayPageView>,
+    },
     /// In-window confirm state — replaces the popup dialog when the main window
     /// is the active context. Restored to `previous` when the user confirms or
     /// cancels via Esc / Enter / Tab + ↵ / footer Apply / Close.
@@ -397,6 +401,7 @@ pub(crate) enum SurfaceKind {
     AgentChatHistory,
     AttachmentPortalBrowser,
     AgentChat,
+    DayPage,
     ConfirmPrompt,
 }
 
@@ -756,6 +761,7 @@ impl AppView {
             AppView::DictationHistoryView { .. } => "DictationHistoryView",
             AppView::NotesBrowseView { .. } => "NotesBrowseView",
             AppView::AgentChatView { .. } => "AgentChatView",
+            AppView::DayPage { .. } => "DayPage",
             AppView::ConfirmPrompt { .. } => "ConfirmPrompt",
         }
     }
@@ -829,6 +835,7 @@ impl AppView {
             | AppView::DictationHistoryView { .. }
             | AppView::NotesBrowseView { .. } => SurfaceKind::AttachmentPortalBrowser,
             AppView::AgentChatView { .. } => SurfaceKind::AgentChat,
+            AppView::DayPage { .. } => SurfaceKind::DayPage,
             AppView::ConfirmPrompt { .. } => SurfaceKind::ConfirmPrompt,
         }
     }
@@ -871,6 +878,7 @@ impl AppView {
                 | AppView::SdkReferenceView { .. }
                 | AppView::ScriptTemplateCatalogView { .. }
                 | AppView::AgentChatView { .. }
+                | AppView::DayPage { .. }
         )
     }
 
@@ -912,6 +920,7 @@ impl AppView {
             AppView::BrowserHistoryView { .. } => Some("browser_history"),
             AppView::DictationHistoryView { .. } => Some("dictation_history"),
             AppView::AgentChatView { .. } => Some("agent_chat"),
+            AppView::DayPage { .. } => Some("day_page"),
             AppView::ChatPrompt { .. } => Some("chat_prompt"),
             AppView::QuickTerminalView { .. } => Some("quick_terminal"),
             AppView::PathPrompt { .. } => Some("path_prompt"),
@@ -1444,6 +1453,16 @@ impl SurfaceKind {
                 ContentPaneVisual,
                 explicit,
                 "agentChatChat",
+            ),
+            SurfaceKind::DayPage => LauncherSurfaceContract::new(
+                LauncherSurfaceContractVocabulary::new(AssistantWorkspace, ChildView, ContentPane),
+                ChildViewFocus,
+                ChildViewKeyboard,
+                MainMenuActions,
+                ChildViewStateProof,
+                ContentPaneVisual,
+                standard,
+                "dayPage",
             ),
             SurfaceKind::ConfirmPrompt => LauncherSurfaceContract::new(
                 LauncherSurfaceContractVocabulary::new(

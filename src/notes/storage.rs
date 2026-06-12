@@ -1,25 +1,37 @@
 //! Notes Storage Layer
 //!
-//! SQLite-backed persistence for notes with CRUD operations.
-//! Follows the same patterns as clipboard_history.rs for consistency.
+//! Markdown files under `brain/notes/` are canonical; `notes.sqlite` is a
+//! derived, rebuildable index (FTS, tags, aliases, backlinks). See ADR 0003.
 
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
+use notify::{recommended_watcher, RecursiveMode, Watcher};
 use rusqlite::{params, Connection, OptionalExtension};
+use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
-use std::path::PathBuf;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::fs;
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
-use tracing::{debug, info};
+use std::time::{Duration, Instant};
+use tracing::{debug, info, warn};
+
+use crate::brain::substrate::{BrainFrontmatter, BrainSlugDir, BrainSubstrate};
 
 use super::metadata;
 use super::model::{Note, NoteId};
 
+/// SQLite index schema generation — bump when index shape changes.
+const NOTES_INDEX_SCHEMA_VERSION: i32 = 2;
+
 /// Global database connection for notes
 static NOTES_DB: OnceLock<Arc<Mutex<Connection>>> = OnceLock::new();
+static NOTES_SUBSTRATE: OnceLock<Arc<BrainSubstrate>> = OnceLock::new();
+static NOTE_CONTENT_HASHES: OnceLock<Mutex<HashMap<NoteId, String>>> = OnceLock::new();
 static ROOT_NOTES_SEARCH_CACHE: OnceLock<Mutex<RootNotesSearchCache>> = OnceLock::new();
 static ROOT_NOTES_SEARCH_CACHE_GENERATION: AtomicU64 = AtomicU64::new(0);
 static NOTES_STORAGE_GENERATION: AtomicU64 = AtomicU64::new(0);
+static NOTES_DIR_WATCHER_STARTED: AtomicBool = AtomicBool::new(false);
 
 fn db_lock_err(e: impl std::fmt::Display) -> anyhow::Error {
     anyhow::anyhow!("DB lock error: {e}")
@@ -155,6 +167,567 @@ fn get_notes_db_path() -> PathBuf {
     kit_dir.join("db").join("notes.sqlite")
 }
 
+fn get_notes_brain_base_path() -> PathBuf {
+    if let Ok(path) = std::env::var("SCRIPT_KIT_TEST_NOTES_BRAIN_PATH") {
+        return PathBuf::from(path);
+    }
+
+    if cfg!(test) {
+        return std::env::temp_dir()
+            .join("script-kit-gpui-tests")
+            .join(std::process::id().to_string())
+            .join("brain");
+    }
+
+    crate::setup::get_kit_path().join("brain")
+}
+
+fn notes_substrate() -> Result<Arc<BrainSubstrate>> {
+    Ok(NOTES_SUBSTRATE
+        .get_or_init(|| Arc::new(BrainSubstrate::new(get_notes_brain_base_path())))
+        .clone())
+}
+
+fn note_content_hashes() -> &'static Mutex<HashMap<NoteId, String>> {
+    NOTE_CONTENT_HASHES.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+fn content_hash(text: &str) -> String {
+    let digest = Sha256::digest(text.as_bytes());
+    format!("{:x}", digest)
+}
+
+fn slug_from_path(path: &Path) -> Option<String> {
+    path.file_stem()
+        .and_then(|stem| stem.to_str())
+        .map(str::to_string)
+        .filter(|slug| !slug.is_empty())
+}
+
+fn is_conflict_copy_path(path: &Path) -> bool {
+    path.file_name()
+        .and_then(|name| name.to_str())
+        .is_some_and(|name| name.contains(".conflict-"))
+}
+
+fn note_body_for_file(content: &str) -> String {
+    metadata::strip_frontmatter(content).to_string()
+}
+
+fn user_facing_content(frontmatter: &BrainFrontmatter, body: &str) -> String {
+    frontmatter.merge_into_body(body)
+}
+
+fn brain_frontmatter_from_note(note: &Note, preserved_source: Option<String>) -> BrainFrontmatter {
+    let parsed = metadata::parse_note_metadata(&note.title, &note.content);
+    let source = preserved_source.or_else(|| source_from_note_content(&note.content));
+    BrainFrontmatter {
+        id: note.id,
+        created: note.created_at,
+        updated: note.updated_at,
+        tags: parsed.tags.into_iter().map(|tag| tag.display).collect(),
+        aliases: parsed
+            .aliases
+            .into_iter()
+            .filter(|alias| alias.source != "title")
+            .map(|alias| alias.alias)
+            .collect(),
+        pinned: note.is_pinned,
+        source,
+        why: None,
+    }
+}
+
+fn source_from_note_content(content: &str) -> Option<String> {
+    if let Ok(substrate) = notes_substrate() {
+        if let Ok((frontmatter, _)) = substrate.parse_document(content) {
+            return frontmatter.source;
+        }
+    }
+    None
+}
+
+fn note_from_brain_document(
+    frontmatter: BrainFrontmatter,
+    body: &str,
+    deleted_at: Option<DateTime<Utc>>,
+    sort_order: i32,
+) -> Note {
+    let content = user_facing_content(&frontmatter, body);
+    let title = Note::with_content(&content).title;
+    Note {
+        id: frontmatter.id,
+        title,
+        content,
+        created_at: frontmatter.created,
+        updated_at: frontmatter.updated,
+        deleted_at,
+        is_pinned: frontmatter.pinned,
+        sort_order,
+    }
+}
+
+fn load_note_from_file(
+    substrate: &BrainSubstrate,
+    path: &Path,
+    deleted_at: Option<DateTime<Utc>>,
+    sort_order: i32,
+) -> Result<(Note, String, String)> {
+    let raw = fs::read_to_string(path)
+        .with_context(|| format!("reading note file {}", path.display()))?;
+    let hash = content_hash(&raw);
+    let (frontmatter, body) = substrate
+        .parse_document(&raw)
+        .with_context(|| format!("parsing note file {}", path.display()))?;
+    let slug = slug_from_path(path).context("note file missing slug stem")?;
+    let note = note_from_brain_document(frontmatter, &body, deleted_at, sort_order);
+    Ok((note, slug, hash))
+}
+
+fn lookup_note_slug(conn: &Connection, note_id: NoteId) -> Result<Option<String>> {
+    conn.query_row(
+        "SELECT file_slug FROM notes WHERE id = ?1",
+        params![note_id.as_str()],
+        |row| row.get::<_, Option<String>>(0),
+    )
+    .optional()
+    .context("Failed to look up note slug")
+    .map(|row| row.flatten())
+}
+
+fn resolve_note_slug(conn: &Connection, note: &Note) -> Result<String> {
+    if let Some(slug) = lookup_note_slug(conn, note.id)? {
+        return Ok(slug);
+    }
+
+    let substrate = notes_substrate()?;
+    Ok(substrate.allocate_slug(&note.title, BrainSlugDir::Notes))
+}
+
+fn write_conflict_copy(path: &Path, contents: &str) -> Result<()> {
+    let Some(stem) = path.file_stem().and_then(|stem| stem.to_str()) else {
+        return Ok(());
+    };
+    let parent = path.parent().context("conflict copy path missing parent")?;
+    let timestamp = Utc::now().format("%Y%m%d%H%M%S");
+    let conflict_path = parent.join(format!("{stem}.conflict-{timestamp}.md"));
+    fs::write(&conflict_path, contents)
+        .with_context(|| format!("writing conflict copy {}", conflict_path.display()))?;
+    warn!(
+        original = %path.display(),
+        conflict = %conflict_path.display(),
+        "External note edit conflict preserved as conflict copy"
+    );
+    Ok(())
+}
+
+fn guard_external_edit_before_write(path: &Path, note_id: NoteId) -> Result<()> {
+    if !path.exists() {
+        return Ok(());
+    }
+    let disk = fs::read_to_string(path)
+        .with_context(|| format!("reading note file before write {}", path.display()))?;
+    let disk_hash = content_hash(&disk);
+    let known_hash = note_content_hashes()
+        .lock()
+        .map_err(db_lock_err)?
+        .get(&note_id)
+        .cloned();
+    if let Some(known_hash) = known_hash {
+        if known_hash != disk_hash {
+            write_conflict_copy(path, &disk)?;
+        }
+    }
+    Ok(())
+}
+
+fn remember_note_hash(note_id: NoteId, hash: String) {
+    if let Ok(mut guard) = note_content_hashes().lock() {
+        guard.insert(note_id, hash);
+    }
+}
+
+fn forget_note_hash(note_id: NoteId) {
+    if let Ok(mut guard) = note_content_hashes().lock() {
+        guard.remove(&note_id);
+    }
+}
+
+fn deleted_at_from_trash_path(path: &Path) -> DateTime<Utc> {
+    fs::metadata(path)
+        .and_then(|meta| meta.modified())
+        .map(|mtime| DateTime::<Utc>::from(mtime))
+        .unwrap_or_else(|_| Utc::now())
+}
+
+fn clear_index_tables(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        r#"
+        DELETE FROM note_links;
+        DELETE FROM note_aliases;
+        DELETE FROM note_tags;
+        DELETE FROM note_cart_items;
+        DELETE FROM notes;
+        "#,
+    )
+    .context("Failed to clear notes index tables")?;
+    Ok(())
+}
+
+fn schema_needs_rebuild(conn: &Connection) -> Result<bool> {
+    let version: i32 = conn
+        .query_row("PRAGMA user_version", [], |row| row.get(0))
+        .unwrap_or(0);
+    if version != NOTES_INDEX_SCHEMA_VERSION {
+        return Ok(true);
+    }
+
+    let has_file_slug: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM pragma_table_info('notes') WHERE name = 'file_slug'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap_or(0);
+    Ok(has_file_slug == 0)
+}
+
+/// Rebuild the sqlite index from canonical markdown files.
+///
+/// Contract: delete the DB, rebuild from files, nothing user-visible is lost.
+pub fn rebuild_index_from_files() -> Result<()> {
+    let db = get_db()?;
+    let conn = db.lock().map_err(db_lock_err)?;
+    rebuild_index_from_files_with_conn(&conn)
+}
+
+fn rebuild_index_from_files_with_conn(conn: &Connection) -> Result<()> {
+    clear_index_tables(conn)?;
+
+    let substrate = notes_substrate()?;
+    let notes_dir = substrate.paths().notes_dir();
+    if notes_dir.exists() {
+        for entry in fs::read_dir(&notes_dir)
+            .with_context(|| format!("reading notes dir {}", notes_dir.display()))?
+        {
+            let entry = entry.context("reading notes dir entry")?;
+            let path = entry.path();
+            if path.extension().and_then(|ext| ext.to_str()) != Some("md") {
+                continue;
+            }
+            if is_conflict_copy_path(&path) {
+                continue;
+            }
+            let (note, slug, hash) = load_note_from_file(&substrate, &path, None, 0)?;
+            upsert_note_index_with_conn(conn, &note, &slug, &hash)?;
+            remember_note_hash(note.id, hash);
+        }
+    }
+
+    let trash_dir = substrate.paths().trash_dir();
+    if trash_dir.exists() {
+        for entry in fs::read_dir(&trash_dir)
+            .with_context(|| format!("reading trash dir {}", trash_dir.display()))?
+        {
+            let entry = entry.context("reading trash dir entry")?;
+            let path = entry.path();
+            if path.extension().and_then(|ext| ext.to_str()) != Some("md") {
+                continue;
+            }
+            if is_conflict_copy_path(&path) {
+                continue;
+            }
+            let deleted_at = Some(deleted_at_from_trash_path(&path));
+            let (note, slug, hash) = load_note_from_file(&substrate, &path, deleted_at, 0)?;
+            upsert_note_index_with_conn(conn, &note, &slug, &hash)?;
+            remember_note_hash(note.id, hash);
+        }
+    }
+
+    recompute_all_note_link_targets_with_conn(conn)?;
+    rebuild_notes_search_index_with_conn(conn)?;
+    conn.execute(
+        &format!("PRAGMA user_version = {NOTES_INDEX_SCHEMA_VERSION}"),
+        [],
+    )
+    .context("Failed to set notes index schema version")?;
+    invalidate_root_notes_search_cache();
+    info!("Rebuilt notes sqlite index from brain files");
+    Ok(())
+}
+
+fn upsert_note_index_with_conn(
+    conn: &Connection,
+    note: &Note,
+    slug: &str,
+    hash: &str,
+) -> Result<()> {
+    conn.execute(
+        r#"
+        INSERT INTO notes (
+            id, title, content, created_at, updated_at, deleted_at,
+            is_pinned, sort_order, file_slug, content_hash
+        )
+        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+        ON CONFLICT(id) DO UPDATE SET
+            title = excluded.title,
+            content = excluded.content,
+            updated_at = excluded.updated_at,
+            deleted_at = excluded.deleted_at,
+            is_pinned = excluded.is_pinned,
+            sort_order = excluded.sort_order,
+            file_slug = excluded.file_slug,
+            content_hash = excluded.content_hash
+        "#,
+        params![
+            note.id.as_str(),
+            note.title,
+            note.content,
+            note.created_at.to_rfc3339(),
+            note.updated_at.to_rfc3339(),
+            note.deleted_at.map(|dt| dt.to_rfc3339()),
+            note.is_pinned as i32,
+            note.sort_order,
+            slug,
+            hash,
+        ],
+    )
+    .context("Failed to upsert note index row")?;
+    replace_note_metadata_with_conn(conn, note)?;
+    Ok(())
+}
+
+fn write_canonical_note_file(
+    substrate: &BrainSubstrate,
+    note: &Note,
+    slug: &str,
+) -> Result<String> {
+    let path = substrate.paths().note_file(slug);
+    let preserved_source = if path.exists() {
+        fs::read_to_string(&path)
+            .ok()
+            .and_then(|raw| substrate.parse_document(&raw).ok())
+            .and_then(|(frontmatter, _)| frontmatter.source)
+    } else {
+        None
+    };
+
+    guard_external_edit_before_write(&path, note.id)?;
+
+    let frontmatter = brain_frontmatter_from_note(note, preserved_source);
+    let body = note_body_for_file(&note.content);
+    substrate.write_document(&path, &frontmatter, &body)?;
+
+    let raw = fs::read_to_string(&path)
+        .with_context(|| format!("reading note file after write {}", path.display()))?;
+    Ok(content_hash(&raw))
+}
+
+fn trash_canonical_note_file(substrate: &BrainSubstrate, slug: &str) -> Result<()> {
+    let path = substrate.paths().note_file(slug);
+    if path.exists() {
+        substrate.trash(&path)?;
+    }
+    Ok(())
+}
+
+fn restore_canonical_note_file(substrate: &BrainSubstrate, slug: &str) -> Result<()> {
+    let destination = substrate.paths().note_file(slug);
+    let trash_dir = substrate.paths().trash_dir();
+    if !trash_dir.exists() {
+        return Ok(());
+    }
+
+    let suffix = format!("{slug}.md");
+    for entry in fs::read_dir(&trash_dir)
+        .with_context(|| format!("reading trash dir {}", trash_dir.display()))?
+    {
+        let entry = entry.context("reading trash entry")?;
+        let path = entry.path();
+        let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
+            continue;
+        };
+        if !name.ends_with(".md") {
+            continue;
+        }
+        if name == suffix || name.starts_with(&format!("{slug}-")) {
+            substrate.restore(&path, &destination)?;
+            return Ok(());
+        }
+    }
+    Ok(())
+}
+
+fn delete_trashed_note_file(substrate: &BrainSubstrate, slug: &str) -> Result<()> {
+    let trash_dir = substrate.paths().trash_dir();
+    if !trash_dir.exists() {
+        return Ok(());
+    }
+    let suffix = format!("{slug}.md");
+    for entry in fs::read_dir(&trash_dir)
+        .with_context(|| format!("reading trash dir {}", trash_dir.display()))?
+    {
+        let entry = entry.context("reading trash entry")?;
+        let path = entry.path();
+        let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
+            continue;
+        };
+        if name == suffix || name.starts_with(&format!("{slug}-")) {
+            fs::remove_file(&path)
+                .with_context(|| format!("removing trashed note {}", path.display()))?;
+            return Ok(());
+        }
+    }
+    Ok(())
+}
+
+fn reindex_external_note_file(path: &Path) -> Result<()> {
+    if is_conflict_copy_path(path) {
+        return Ok(());
+    }
+    if path.extension().and_then(|ext| ext.to_str()) != Some("md") {
+        return Ok(());
+    }
+
+    let substrate = notes_substrate()?;
+    let notes_dir = substrate.paths().notes_dir();
+    if !path.starts_with(&notes_dir) {
+        return Ok(());
+    }
+
+    if !path.exists() {
+        if let Some(slug) = slug_from_path(path) {
+            let db = get_db()?;
+            let conn = db.lock().map_err(db_lock_err)?;
+            if let Some(note_id) = conn
+                .query_row(
+                    "SELECT id FROM notes WHERE file_slug = ?1",
+                    params![slug],
+                    |row| row.get::<_, String>(0),
+                )
+                .optional()
+                .context("Failed to look up note id for deleted file")?
+            {
+                if let Some(id) = NoteId::parse(&note_id) {
+                    conn.execute("DELETE FROM notes WHERE id = ?1", params![id.as_str()])
+                        .context("Failed to remove deleted note from index")?;
+                    forget_note_hash(id);
+                    invalidate_root_notes_search_cache();
+                }
+            }
+        }
+        return Ok(());
+    }
+
+    let raw = fs::read_to_string(path)
+        .with_context(|| format!("reading external note edit {}", path.display()))?;
+    let hash = content_hash(&raw);
+    let (note, slug, _) = load_note_from_file(&substrate, path, None, 0)?;
+
+    let known_hash = note_content_hashes()
+        .lock()
+        .map_err(db_lock_err)?
+        .get(&note.id)
+        .cloned();
+    if known_hash.as_deref() == Some(hash.as_str()) {
+        return Ok(());
+    }
+
+    let db = get_db()?;
+    let conn = db.lock().map_err(db_lock_err)?;
+    let sort_order = conn
+        .query_row(
+            "SELECT sort_order FROM notes WHERE id = ?1",
+            params![note.id.as_str()],
+            |row| row.get::<_, i32>(0),
+        )
+        .unwrap_or(0);
+    let mut indexed = note;
+    indexed.sort_order = sort_order;
+    upsert_note_index_with_conn(&conn, &indexed, &slug, &hash)?;
+    remember_note_hash(indexed.id, hash);
+    invalidate_root_notes_search_cache();
+    debug!(note_id = %indexed.id, file = %path.display(), "Reindexed externally edited note");
+    Ok(())
+}
+
+fn start_notes_dir_watcher() {
+    if NOTES_DIR_WATCHER_STARTED.swap(true, Ordering::SeqCst) {
+        return;
+    }
+
+    let Ok(substrate) = notes_substrate() else {
+        return;
+    };
+    let notes_dir = substrate.paths().notes_dir();
+    let _ = fs::create_dir_all(&notes_dir);
+
+    let spawn_result = std::thread::Builder::new()
+        .name("notes-brain-watcher".to_string())
+        .spawn(move || notes_dir_watcher_loop(notes_dir));
+
+    if let Err(error) = spawn_result {
+        warn!(%error, "Failed to start notes brain directory watcher");
+        NOTES_DIR_WATCHER_STARTED.store(false, Ordering::SeqCst);
+    }
+}
+
+fn notes_dir_watcher_loop(notes_dir: PathBuf) {
+    let (tx, rx) = std::sync::mpsc::channel();
+    let mut watcher = match recommended_watcher(move |res| {
+        let _ = tx.send(res);
+    }) {
+        Ok(watcher) => watcher,
+        Err(error) => {
+            warn!(%error, "Failed to create notes brain watcher");
+            NOTES_DIR_WATCHER_STARTED.store(false, Ordering::SeqCst);
+            return;
+        }
+    };
+
+    if let Err(error) = watcher.watch(&notes_dir, RecursiveMode::NonRecursive) {
+        warn!(
+            %error,
+            dir = %notes_dir.display(),
+            "Failed to watch notes brain directory"
+        );
+        NOTES_DIR_WATCHER_STARTED.store(false, Ordering::SeqCst);
+        return;
+    }
+
+    let debounce = Duration::from_millis(crate::config::defaults::DEFAULT_WATCHER_DEBOUNCE_MS);
+    let mut pending: HashMap<PathBuf, Instant> = HashMap::new();
+
+    loop {
+        match rx.recv_timeout(Duration::from_millis(100)) {
+            Ok(Ok(event)) => {
+                for path in event.paths {
+                    if path.extension().and_then(|ext| ext.to_str()) == Some("md") {
+                        pending.insert(path, Instant::now() + debounce);
+                    }
+                }
+            }
+            Ok(Err(error)) => {
+                warn!(%error, "Notes brain watcher notify error");
+            }
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {}
+            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => break,
+        }
+
+        let now = Instant::now();
+        let ready: Vec<PathBuf> = pending
+            .iter()
+            .filter_map(|(path, deadline)| (*deadline <= now).then_some(path.clone()))
+            .collect();
+        for path in ready {
+            pending.remove(&path);
+            if let Err(error) = reindex_external_note_file(&path) {
+                warn!(%error, file = %path.display(), "Failed to reindex external note edit");
+            }
+        }
+    }
+}
+
 /// Ensure the notes tables and virtual search table exist.
 fn ensure_notes_schema(conn: &Connection) -> Result<()> {
     conn.execute_batch(
@@ -167,7 +740,9 @@ fn ensure_notes_schema(conn: &Connection) -> Result<()> {
             updated_at TEXT NOT NULL,
             deleted_at TEXT,
             is_pinned INTEGER NOT NULL DEFAULT 0,
-            sort_order INTEGER NOT NULL DEFAULT 0
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            file_slug TEXT,
+            content_hash TEXT
         );
 
         CREATE INDEX IF NOT EXISTS idx_notes_updated_at ON notes(updated_at DESC);
@@ -244,7 +819,29 @@ fn ensure_notes_schema(conn: &Connection) -> Result<()> {
     )
     .context("Failed to create notes tables")?;
 
+    migrate_notes_schema(conn)?;
     ensure_notes_fts_triggers(conn)?;
+    Ok(())
+}
+
+fn migrate_notes_schema(conn: &Connection) -> Result<()> {
+    let columns = [("file_slug", "TEXT"), ("content_hash", "TEXT")];
+    for (name, column_type) in columns {
+        let exists: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM pragma_table_info('notes') WHERE name = ?1",
+                params![name],
+                |row| row.get(0),
+            )
+            .unwrap_or(0);
+        if exists == 0 {
+            conn.execute(
+                &format!("ALTER TABLE notes ADD COLUMN {name} {column_type}"),
+                [],
+            )
+            .with_context(|| format!("Failed to add notes.{name} column"))?;
+        }
+    }
     Ok(())
 }
 
@@ -281,20 +878,43 @@ fn ensure_notes_fts_triggers(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
+/// Serializes first-time notes DB initialization across threads.
+///
+/// Without this, concurrent callers can each pass the `NOTES_DB.get()` miss,
+/// open separate connections to the same sqlite file, and race the
+/// DROP/CREATE TRIGGER batch in `ensure_notes_schema` ("Failed to create FTS
+/// triggers"). Poison-tolerant: a panicking initializer must not wedge every
+/// later caller.
+static NOTES_DB_INIT_LOCK: Mutex<()> = Mutex::new(());
+
 /// Initialize the notes database
 ///
 /// This function is idempotent - it's safe to call multiple times.
 /// If the database is already initialized, it verifies schema and triggers
 /// are up-to-date on the existing connection.
 pub fn init_notes_db() -> Result<()> {
+    let _init_guard = NOTES_DB_INIT_LOCK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+
+    let substrate = notes_substrate()?;
+    let _ = fs::create_dir_all(substrate.paths().notes_dir());
+    let _ = fs::create_dir_all(substrate.paths().trash_dir());
+
     if let Some(db) = NOTES_DB.get() {
         let conn = db.lock().map_err(db_lock_err)?;
 
         conn.execute_batch("PRAGMA foreign_keys=ON;")
             .context("Failed to enable notes foreign keys")?;
         ensure_notes_schema(&conn)?;
-        backfill_note_metadata_with_conn(&conn)
-            .context("Failed to backfill notes metadata schema")?;
+        if schema_needs_rebuild(&conn)? {
+            rebuild_index_from_files_with_conn(&conn)
+                .context("Failed to rebuild notes index from brain files")?;
+        } else {
+            backfill_note_metadata_with_conn(&conn)
+                .context("Failed to backfill notes metadata schema")?;
+        }
+        start_notes_dir_watcher();
         debug!("Notes database already initialized, schema verified");
         return Ok(());
     }
@@ -302,9 +922,10 @@ pub fn init_notes_db() -> Result<()> {
     let db_path = get_notes_db_path();
 
     if let Some(parent) = db_path.parent() {
-        std::fs::create_dir_all(parent).context("Failed to create notes db directory")?;
+        fs::create_dir_all(parent).context("Failed to create notes db directory")?;
     }
 
+    let db_exists = db_path.exists();
     let conn = Connection::open(&db_path).context("Failed to open notes database")?;
 
     conn.execute_batch("PRAGMA journal_mode=WAL;")
@@ -313,20 +934,27 @@ pub fn init_notes_db() -> Result<()> {
         .context("Failed to enable notes foreign keys")?;
 
     ensure_notes_schema(&conn)?;
-    backfill_note_metadata_with_conn(&conn).context("Failed to backfill notes metadata schema")?;
 
-    rebuild_notes_search_index_with_conn(&conn).context("Failed to backfill notes FTS index")?;
+    if !db_exists || schema_needs_rebuild(&conn)? {
+        rebuild_index_from_files_with_conn(&conn)
+            .context("Failed to rebuild notes index from brain files")?;
+    } else {
+        backfill_note_metadata_with_conn(&conn)
+            .context("Failed to backfill notes metadata schema")?;
+        rebuild_notes_search_index_with_conn(&conn)
+            .context("Failed to backfill notes FTS index")?;
+        conn.execute(
+            &format!("PRAGMA user_version = {NOTES_INDEX_SCHEMA_VERSION}"),
+            [],
+        )
+        .context("Failed to set notes index schema version")?;
+    }
 
     info!(db_path = %db_path.display(), "Notes database initialized");
 
     let _ = NOTES_DB.get_or_init(|| Arc::new(Mutex::new(conn)));
 
-    // Backfill the markdown file mirror for notes saved before the mirror
-    // existed. Best-effort: mirror failures never block initialization.
-    if let Ok(notes) = get_all_notes() {
-        super::file_mirror::mirror_all_active_notes(&notes);
-    }
-
+    start_notes_dir_watcher();
     Ok(())
 }
 
@@ -361,45 +989,35 @@ fn get_db() -> Result<Arc<Mutex<Connection>>> {
 
 /// Save a note (insert or update)
 pub fn save_note(note: &Note) -> Result<()> {
+    let substrate = notes_substrate()?;
     let db = get_db()?;
     let mut conn = db.lock().map_err(db_lock_err)?;
+
+    let slug = resolve_note_slug(&conn, note)?;
+    let hash = if note.deleted_at.is_some() {
+        trash_canonical_note_file(&substrate, &slug)?;
+        String::new()
+    } else {
+        restore_canonical_note_file(&substrate, &slug)?;
+        write_canonical_note_file(&substrate, note, &slug)?
+    };
 
     let tx = conn
         .transaction()
         .context("Failed to start note save transaction")?;
 
-    tx.execute(
-        r#"
-        INSERT INTO notes (id, title, content, created_at, updated_at, deleted_at, is_pinned, sort_order)
-        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
-        ON CONFLICT(id) DO UPDATE SET
-            title = excluded.title,
-            content = excluded.content,
-            updated_at = excluded.updated_at,
-            deleted_at = excluded.deleted_at,
-            is_pinned = excluded.is_pinned,
-            sort_order = excluded.sort_order
-        "#,
-        params![
-            note.id.as_str(),
-            note.title,
-            note.content,
-            note.created_at.to_rfc3339(),
-            note.updated_at.to_rfc3339(),
-            note.deleted_at.map(|dt| dt.to_rfc3339()),
-            note.is_pinned as i32,
-            note.sort_order,
-        ],
-    )
-    .context("Failed to save note")?;
-
-    replace_note_metadata_with_conn(&tx, note).context("Failed to save note metadata")?;
+    upsert_note_index_with_conn(&tx, note, &slug, &hash)?;
     tx.commit()
         .context("Failed to commit note save transaction")?;
 
-    debug!(note_id = %note.id, title = %note.title, "Note saved");
+    if !hash.is_empty() {
+        remember_note_hash(note.id, hash);
+    } else if note.deleted_at.is_some() {
+        forget_note_hash(note.id);
+    }
+
+    debug!(note_id = %note.id, title = %note.title, slug = %slug, "Note saved to brain file");
     invalidate_root_notes_search_cache();
-    super::file_mirror::mirror_note_save(note);
     Ok(())
 }
 
@@ -1188,22 +1806,41 @@ fn search_root_notes_meta_like(
 
 /// Permanently delete a note
 pub fn delete_note_permanently(id: NoteId) -> Result<()> {
+    let substrate = notes_substrate()?;
     let db = get_db()?;
     let conn = db.lock().map_err(db_lock_err)?;
 
+    let slug = lookup_note_slug(&conn, id)?;
     conn.execute("DELETE FROM notes WHERE id = ?1", params![id.as_str()])
         .context("Failed to delete note")?;
 
+    if let Some(slug) = slug {
+        let active_path = substrate.paths().note_file(&slug);
+        if active_path.exists() {
+            fs::remove_file(&active_path)
+                .with_context(|| format!("removing active note file {}", active_path.display()))?;
+        }
+        delete_trashed_note_file(&substrate, &slug)?;
+    }
+
+    forget_note_hash(id);
     info!(note_id = %id, "Note permanently deleted");
     invalidate_root_notes_search_cache();
-    super::file_mirror::mirror_note_delete(id);
     Ok(())
 }
 
 /// Permanently delete all soft-deleted notes in a single batch operation.
 pub fn delete_all_deleted_notes() -> Result<()> {
+    let substrate = notes_substrate()?;
     let db = get_db()?;
     let mut conn = db.lock().map_err(db_lock_err)?;
+
+    let slugs: Vec<String> = conn
+        .prepare(
+            "SELECT file_slug FROM notes WHERE deleted_at IS NOT NULL AND file_slug IS NOT NULL",
+        )?
+        .query_map([], |row| row.get(0))?
+        .collect::<Result<Vec<_>, _>>()?;
 
     let tx = conn
         .transaction()
@@ -1216,6 +1853,10 @@ pub fn delete_all_deleted_notes() -> Result<()> {
     tx.commit()
         .context("Failed to commit delete_all_deleted_notes transaction")?;
 
+    for slug in slugs {
+        delete_trashed_note_file(&substrate, &slug)?;
+    }
+
     info!(deleted_count = count, "Deleted all soft-deleted notes");
     if count > 0 {
         invalidate_root_notes_search_cache();
@@ -1225,10 +1866,18 @@ pub fn delete_all_deleted_notes() -> Result<()> {
 
 /// Prune notes deleted more than `days` ago
 pub fn prune_old_deleted_notes(days: u32) -> Result<usize> {
+    let substrate = notes_substrate()?;
     let db = get_db()?;
     let conn = db.lock().map_err(db_lock_err)?;
 
     let cutoff = Utc::now() - chrono::Duration::days(days as i64);
+
+    let slugs: Vec<String> = conn
+        .prepare(
+            "SELECT file_slug FROM notes WHERE deleted_at IS NOT NULL AND deleted_at < ?1 AND file_slug IS NOT NULL",
+        )?
+        .query_map(params![cutoff.to_rfc3339()], |row| row.get(0))?
+        .collect::<Result<Vec<_>, _>>()?;
 
     let count = conn
         .execute(
@@ -1236,6 +1885,10 @@ pub fn prune_old_deleted_notes(days: u32) -> Result<usize> {
             params![cutoff.to_rfc3339()],
         )
         .context("Failed to prune old deleted notes")?;
+
+    for slug in slugs {
+        delete_trashed_note_file(&substrate, &slug)?;
+    }
 
     if count > 0 {
         info!(count, days, "Pruned old deleted notes");
@@ -1468,15 +2121,21 @@ fn row_to_root_note_hit(row: &rusqlite::Row) -> rusqlite::Result<RootNoteSearchH
     })
 }
 
+/// Serialize tests that mutate the shared per-process notes DB.
+///
+/// Shared with `notes::menu_syntax_capture` tests, which hit the same DB.
+/// Poison-tolerant so one failing test reports its own assertion instead of
+/// cascading `PoisonError` panics into unrelated tests.
+#[cfg(test)]
+pub(crate) fn notes_db_test_guard() -> std::sync::MutexGuard<'static, ()> {
+    static LOCK: Mutex<()> = Mutex::new(());
+    LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::time::{SystemTime, UNIX_EPOCH};
-
-    fn notes_db_test_lock() -> &'static std::sync::Mutex<()> {
-        static LOCK: std::sync::OnceLock<std::sync::Mutex<()>> = std::sync::OnceLock::new();
-        LOCK.get_or_init(|| std::sync::Mutex::new(()))
-    }
 
     fn unique_test_token(prefix: &str) -> String {
         let millis = SystemTime::now()
@@ -1497,7 +2156,7 @@ mod tests {
 
     #[test]
     fn test_search_notes_handles_special_characters() {
-        let _guard = notes_db_test_lock().lock().expect("lock");
+        let _guard = notes_db_test_guard();
         init_notes_db().expect("notes db should initialize for special-character search");
 
         // Search with special characters should not error (even if no results)
@@ -1527,7 +2186,7 @@ mod tests {
 
     #[test]
     fn test_notes_au_trigger_has_when_guard_for_real_content_changes() {
-        let _guard = notes_db_test_lock().lock().expect("lock");
+        let _guard = notes_db_test_guard();
         init_notes_db().expect("notes db should initialize before trigger inspection");
 
         let db = get_db().expect("notes db should be initialized");
@@ -1549,7 +2208,7 @@ mod tests {
 
     #[test]
     fn test_init_notes_db_recreates_triggers_for_existing_connection() {
-        let _guard = notes_db_test_lock().lock().expect("lock");
+        let _guard = notes_db_test_guard();
         init_notes_db().expect("notes db should initialize before trigger recreation");
 
         let db = get_db().expect("notes db should be initialized");
@@ -1592,7 +2251,7 @@ mod tests {
 
     #[test]
     fn test_search_notes_limits_fts_results_to_200() {
-        let _guard = notes_db_test_lock().lock().expect("lock");
+        let _guard = notes_db_test_guard();
         init_notes_db().expect("notes db should initialize before search limit test");
         let token = unique_test_token("search_limit");
         let now = Utc::now();
@@ -1649,7 +2308,7 @@ mod tests {
 
     #[test]
     fn test_search_root_notes_meta_is_bounded_active_only_and_metadata_only() {
-        let _guard = notes_db_test_lock().lock().expect("lock");
+        let _guard = notes_db_test_guard();
         init_notes_db().expect("notes db should initialize before root notes search test");
         let token = unique_test_token("root_notes");
         let now = Utc::now();
@@ -1699,7 +2358,7 @@ mod tests {
 
     #[test]
     fn test_search_root_notes_meta_matches_title_substrings_when_fts_has_no_hit() {
-        let _guard = notes_db_test_lock().lock().expect("lock");
+        let _guard = notes_db_test_guard();
         init_notes_db().expect("notes db should initialize before root notes substring test");
         let now = Utc::now();
         let note = Note {
@@ -1736,7 +2395,7 @@ mod tests {
 
     #[test]
     fn test_delete_all_deleted_notes_removes_soft_deleted_notes_in_batch() {
-        let _guard = notes_db_test_lock().lock().expect("lock");
+        let _guard = notes_db_test_guard();
         init_notes_db().expect("notes db should initialize before batch delete test");
         let token = unique_test_token("batch_delete");
         let now = Utc::now();
@@ -1784,7 +2443,7 @@ mod tests {
 
     #[test]
     fn test_rebuild_notes_search_index_recovers_desynced_rows() {
-        let _guard = notes_db_test_lock().lock().expect("lock");
+        let _guard = notes_db_test_guard();
         init_notes_db().expect("notes db should initialize before FTS rebuild test");
         let token = unique_test_token("fts_rebuild");
         let now = Utc::now();
@@ -1842,7 +2501,7 @@ mod tests {
 
     #[test]
     fn test_search_notes_returns_matching_note_for_special_character_content() {
-        let _guard = notes_db_test_lock().lock().expect("lock");
+        let _guard = notes_db_test_guard();
         init_notes_db().expect("notes db should initialize before special-character match test");
         let token = unique_test_token("search_special_match");
         let query = format!("{token}@example.com");
@@ -1881,7 +2540,7 @@ mod tests {
 
     #[test]
     fn test_note_metadata_tables_roundtrip() {
-        let _guard = notes_db_test_lock().lock().expect("lock");
+        let _guard = notes_db_test_guard();
         init_notes_db().expect("notes db should initialize before metadata roundtrip test");
         let token = unique_test_token("metadata_roundtrip");
         let note = Note::with_content(format!(
@@ -1912,7 +2571,7 @@ mod tests {
 
     #[test]
     fn test_search_notes_matches_tags_and_aliases() {
-        let _guard = notes_db_test_lock().lock().expect("lock");
+        let _guard = notes_db_test_guard();
         init_notes_db().expect("notes db should initialize before metadata search test");
         let token = unique_test_token("metadata_search");
         let note = Note::with_content(format!(
@@ -1933,7 +2592,7 @@ mod tests {
 
     #[test]
     fn test_count_active_notes_with_tag_ignores_soft_deleted_notes() {
-        let _guard = notes_db_test_lock().lock().expect("lock");
+        let _guard = notes_db_test_guard();
         init_notes_db().expect("notes db should initialize before tag count test");
         let token = unique_test_token("instr_count");
         let mut note = Note::with_content(format!("---\ntags: [{token}]\n---\n# Instruction"));
@@ -1955,7 +2614,7 @@ mod tests {
 
     #[test]
     fn test_backlinks_resolve_after_target_note_is_created() {
-        let _guard = notes_db_test_lock().lock().expect("lock");
+        let _guard = notes_db_test_guard();
         init_notes_db().expect("notes db should initialize before backlink test");
         let token = unique_test_token("backlink_target");
         let source = Note::with_content(format!("# Source\n[[{token} Target]]"));
@@ -1981,7 +2640,7 @@ mod tests {
 
     #[test]
     fn test_backlink_count_matches_distinct_active_backlink_sources() {
-        let _guard = notes_db_test_lock().lock().expect("lock");
+        let _guard = notes_db_test_guard();
         init_notes_db().expect("notes db should initialize before backlink count test");
         let token = unique_test_token("backlink_distinct");
         let target = Note::with_content(format!("# {token} Target\nBody"));
@@ -2028,7 +2687,7 @@ mod tests {
 
     #[test]
     fn test_metadata_backfills_existing_notes_after_schema_creation() {
-        let _guard = notes_db_test_lock().lock().expect("lock");
+        let _guard = notes_db_test_guard();
         init_notes_db().expect("notes db should initialize before metadata backfill test");
         let token = unique_test_token("metadata_backfill");
         let note = Note::with_content(format!("# Backfill\nBody #{token}"));
@@ -2054,8 +2713,143 @@ mod tests {
     }
 
     #[test]
+    fn test_save_note_persists_canonical_brain_markdown_file() {
+        let _guard = notes_db_test_guard();
+        init_notes_db().expect("notes db should initialize before canonical file test");
+        let token = unique_test_token("canonical_file");
+        let note = Note::with_content(format!("# {token}\nBody with #{token}"));
+        let id = note.id;
+
+        save_note(&note).expect("failed to save note");
+
+        let db = get_db().expect("db");
+        let conn = db.lock().expect("lock");
+        let slug = lookup_note_slug(&conn, id)
+            .expect("slug lookup")
+            .expect("slug should exist after save");
+        drop(conn);
+
+        let substrate = notes_substrate().expect("substrate");
+        let path = substrate.paths().note_file(&slug);
+        assert!(
+            path.exists(),
+            "save_note should write canonical markdown at {}",
+            path.display()
+        );
+
+        let raw = fs::read_to_string(&path).expect("read canonical note file");
+        assert!(
+            raw.contains(&id.as_str()),
+            "file frontmatter should preserve note id"
+        );
+        assert!(
+            raw.contains(&token),
+            "file body should preserve note content"
+        );
+
+        delete_note_permanently(id).expect("cleanup");
+    }
+
+    #[test]
+    fn test_rebuild_index_from_files_restores_search_tags_pins_and_backlinks() {
+        let _guard = notes_db_test_guard();
+        init_notes_db().expect("notes db should initialize before rebuild contract test");
+        let token = unique_test_token("rebuild_contract");
+
+        let target = Note::with_content(format!("# {token} Target\nBody"));
+        let target_id = target.id;
+        save_note(&target).expect("failed to save target note");
+
+        let mut source = Note::with_content(format!(
+            "---\ntags: [{token}, instructions]\naliases: [{token} Alias]\n---\n# Source\n[[{token} Target]]"
+        ));
+        source.is_pinned = true;
+        let source_id = source.id;
+        save_note(&source).expect("failed to save source note");
+
+        let golden_search = search_notes(&token).expect("search should work");
+        let golden_tags = get_note_tags(source_id).expect("tags should work");
+        let golden_aliases = get_note_aliases(source_id).expect("aliases should work");
+        let golden_backlinks = get_note_backlinks(target_id).expect("backlinks should work");
+        let golden_backlink_count =
+            get_note_backlink_count(target_id).expect("backlink count should work");
+        let golden_pin = get_note(source_id)
+            .expect("get note should work")
+            .expect("source note should exist")
+            .is_pinned;
+
+        clear_index_tables(&get_db().expect("db").lock().expect("lock"))
+            .expect("failed to clear index for rebuild test");
+        rebuild_index_from_files().expect("rebuild should succeed");
+
+        let rebuilt_search = search_notes(&token).expect("search after rebuild should work");
+        let rebuilt_tags = get_note_tags(source_id).expect("tags after rebuild should work");
+        let rebuilt_aliases =
+            get_note_aliases(source_id).expect("aliases after rebuild should work");
+        let rebuilt_backlinks =
+            get_note_backlinks(target_id).expect("backlinks after rebuild should work");
+        let rebuilt_backlink_count =
+            get_note_backlink_count(target_id).expect("backlink count after rebuild should work");
+        let rebuilt_pin = get_note(source_id)
+            .expect("get note after rebuild should work")
+            .expect("source note should exist after rebuild")
+            .is_pinned;
+
+        delete_note_permanently(source_id).expect("cleanup source");
+        delete_note_permanently(target_id).expect("cleanup target");
+
+        assert_eq!(
+            golden_search.iter().map(|note| note.id).collect::<Vec<_>>(),
+            rebuilt_search
+                .iter()
+                .map(|note| note.id)
+                .collect::<Vec<_>>()
+        );
+        assert_eq!(golden_tags, rebuilt_tags);
+        assert_eq!(golden_aliases, rebuilt_aliases);
+        assert_eq!(golden_backlinks.len(), rebuilt_backlinks.len());
+        assert_eq!(
+            golden_backlinks.first().map(|hit| hit.id),
+            rebuilt_backlinks.first().map(|hit| hit.id)
+        );
+        assert_eq!(golden_backlink_count, rebuilt_backlink_count);
+        assert_eq!(golden_pin, rebuilt_pin);
+        assert!(golden_pin, "fixture note should be pinned");
+    }
+
+    #[test]
+    fn test_soft_delete_moves_file_to_trash_and_restore_returns_it() {
+        let _guard = notes_db_test_guard();
+        init_notes_db().expect("notes db should initialize before trash roundtrip test");
+        let token = unique_test_token("trash_roundtrip");
+        let mut note = Note::with_content(format!("# {token}\nBody"));
+        let id = note.id;
+        save_note(&note).expect("failed to save active note");
+
+        let substrate = notes_substrate().expect("substrate");
+        let slug = lookup_note_slug(&get_db().expect("db").lock().expect("lock"), id)
+            .expect("slug lookup")
+            .expect("slug should exist");
+        let active_path = substrate.paths().note_file(&slug);
+        assert!(active_path.exists(), "canonical note file should exist");
+
+        note.soft_delete();
+        save_note(&note).expect("failed to soft-delete note");
+        assert!(!active_path.exists(), "active note file should be trashed");
+
+        let deleted = get_deleted_notes().expect("deleted notes");
+        assert!(deleted.iter().any(|candidate| candidate.id == id));
+
+        note.restore();
+        save_note(&note).expect("failed to restore note");
+        assert!(active_path.exists(), "restored note file should exist");
+
+        delete_note_permanently(id).expect("cleanup");
+    }
+
+    #[test]
     fn test_backlinks_recompute_when_target_alias_changes() {
-        let _guard = notes_db_test_lock().lock().expect("lock");
+        let _guard = notes_db_test_guard();
         init_notes_db().expect("notes db should initialize before stale backlink test");
         let token = unique_test_token("stale_backlink");
         let source = Note::with_content(format!("# Source\n[[{token} Target]]"));
@@ -2084,7 +2878,7 @@ mod tests {
 
     #[test]
     fn test_backlinks_do_not_resolve_ambiguous_aliases() {
-        let _guard = notes_db_test_lock().lock().expect("lock");
+        let _guard = notes_db_test_guard();
         init_notes_db().expect("notes db should initialize before ambiguous backlink test");
         let token = unique_test_token("ambiguous_backlink");
         let source = Note::with_content(format!("# Source\n[[{token} Target]]"));
@@ -2110,7 +2904,7 @@ mod tests {
 
     #[test]
     fn test_search_notes_matches_link_metadata() {
-        let _guard = notes_db_test_lock().lock().expect("lock");
+        let _guard = notes_db_test_guard();
         init_notes_db().expect("notes db should initialize before link metadata search test");
         let token = unique_test_token("link_search");
         let source = Note::with_content(format!("# Source\n[[{token} Target]]"));

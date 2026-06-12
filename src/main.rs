@@ -345,9 +345,13 @@ include!("main_sections/deeplink.rs");
 include!("main_sections/window_visibility.rs");
 include!("main_sections/fallbacks.rs");
 include!("main_sections/fonts.rs");
+include!("main_sections/day_page_types.rs");
 include!("main_sections/app_view_state.rs");
 include!("main_sections/prompt_messages.rs");
 include!("main_sections/app_state.rs");
+include!("main_sections/day_page_view.rs");
+include!("main_sections/gesture_routing.rs");
+include!("main_sections/release_hints.rs");
 include!("main_sections/kitchen_sink_fixture.rs");
 // Core ScriptListApp implementation extracted to app_impl/mod.rs
 include!("app_impl/mod.rs");

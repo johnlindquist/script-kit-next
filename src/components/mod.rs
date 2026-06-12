@@ -45,6 +45,7 @@ pub(crate) mod launcher_ask_ai_hint;
 pub(crate) mod main_view_chrome;
 pub mod minimal_prompt_shell;
 pub(crate) mod non_list_state;
+pub mod notes_editor;
 pub(crate) mod overlay_modal;
 pub mod prompt_container;
 pub mod prompt_footer;
@@ -106,6 +107,8 @@ pub(crate) use non_list_state::{
     non_list_metrics, non_list_palette, non_list_requirement_row, NonListDensity, NonListMetrics,
     NonListPalette,
 };
+#[allow(unused_imports)]
+pub use notes_editor::{NotesEditor, NotesEditorConfig, NotesEditorLayout};
 #[allow(unused_imports)]
 pub use scrollbar::{
     Scrollbar, ScrollbarColors, MIN_THUMB_HEIGHT, SCROLLBAR_PADDING, SCROLLBAR_WIDTH,

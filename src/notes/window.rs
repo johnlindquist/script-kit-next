@@ -39,9 +39,9 @@ use crate::theme;
 
 use super::actions_panel::NotesAction;
 use super::markdown;
-use super::markdown_highlighting::register_markdown_highlighter;
 use super::model::{ExportFormat, Note, NoteId};
 use super::storage;
+use crate::components::notes_editor::NotesEditor;
 
 /// Global handle to the notes window
 static NOTES_WINDOW: std::sync::OnceLock<std::sync::Mutex<Option<gpui::WindowHandle<Root>>>> =
@@ -306,6 +306,9 @@ pub struct NotesApp {
     /// Currently selected note ID
     selected_note_id: Option<NoteId>,
 
+    /// Shared markdown editor component (Day Page will host the same surface).
+    notes_editor: Entity<NotesEditor>,
+
     /// Editor input state (using gpui-component's Input)
     pub(crate) editor_state: Entity<InputState>,
 
@@ -356,7 +359,6 @@ pub struct NotesApp {
     last_autosize_transition: Option<NotesAutosizeTransition>,
     /// Scroll handle for the markdown preview, used by DevTools scroll anchors.
     preview_scroll_handle: ScrollHandle,
-
     /// Focus handle for keyboard navigation
     focus_handle: FocusHandle,
 

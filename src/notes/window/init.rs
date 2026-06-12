@@ -1,5 +1,7 @@
 use super::*;
 
+use crate::components::notes_editor::{NotesEditor, NotesEditorConfig, NotesEditorLayout};
+
 impl NotesApp {
     /// Create a new NotesApp
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
@@ -48,10 +50,7 @@ impl NotesApp {
         // Calculate initial line count for auto-resize (before moving content)
         let initial_line_count = initial_content.lines().count().max(1);
 
-        // Ensure markdown language is registered before editor initialization
-        register_markdown_highlighter();
-
-        // Create input states - use code_editor for markdown highlighting
+        let metrics = style::adopted_metrics();
         let editor_state = cx.new(|cx| {
             InputState::new(window, cx)
                 .code_editor("markdown")
@@ -60,7 +59,18 @@ impl NotesApp {
                 .searchable(true)
                 .rows(20)
                 .placeholder("Start typing your note...")
-                .default_value(initial_content)
+                .default_value(initial_content.clone())
+        });
+        let preview_scroll_handle = ScrollHandle::new();
+        let notes_editor = cx.new(|_| {
+            NotesEditor::new(
+                editor_state.clone(),
+                NotesEditorConfig::new(initial_content).layout(NotesEditorLayout::new(
+                    metrics.editor_padding_x,
+                    metrics.editor_padding_y,
+                )),
+                preview_scroll_handle.clone(),
+            )
         });
 
         let search_state = cx.new(|cx| InputState::new(window, cx).placeholder("Search notes..."));
@@ -132,6 +142,7 @@ impl NotesApp {
             deleted_notes,
             view_mode: NotesViewMode::AllNotes,
             selected_note_id,
+            notes_editor,
             editor_state,
             search_state,
             search_query: String::new(),
@@ -148,7 +159,7 @@ impl NotesApp {
             last_window_height: initial_height, // Track for manual resize detection
             autosize_generation: 0,
             last_autosize_transition: None,
-            preview_scroll_handle: ScrollHandle::new(),
+            preview_scroll_handle,
             focus_handle,
             _subscriptions: vec![editor_sub, search_sub],
             // Initialize CommandBar with notes-specific actions

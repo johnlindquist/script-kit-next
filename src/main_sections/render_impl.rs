@@ -306,6 +306,7 @@ impl Render for ScriptListApp {
                 | AppView::NotesBrowseView { .. }
                 | AppView::MiniPrompt { .. }
                 | AppView::ArgPrompt { .. }
+                | AppView::DayPage { .. }
         ) {
             self.sync_filter_input_if_needed(window, cx);
         }
@@ -670,6 +671,7 @@ impl Render for ScriptListApp {
                 .render_notes_browse_portal(filter, selected_index, cx)
                 .into_any_element(),
             AppView::AgentChatView { entity } => entity.into_any_element(),
+            AppView::DayPage { entity } => entity.into_any_element(),
             AppView::ConfirmPrompt {
                 options,
                 focused_button,

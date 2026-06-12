@@ -28,7 +28,7 @@ gpui-component = { path = "vendor/gpui-component/crates/ui", version = "0.5.0" }
 gpui-component-macros = { path = "vendor/gpui-component/crates/macros", version = "0.5.0" }
 gpui-component-assets = { path = "vendor/gpui-component/crates/assets", version = "0.5.0" }
 story = { path = "vendor/gpui-component/crates/story" }
-gpui = { path = "vendor/gpui" }
+gpui = { path = "vendor/gpui", features = ["test-support"] }
 gpui-macros = { path = "vendor/gpui_macros", package = "gpui_macros" }
 sum-tree = { version = "0.2.0", package = "zed-sum-tree" }
 reqwest = { git = "https://github.com/zed-industries/reqwest.git", rev = "c15662463bda39148ba154100dd44d3fba5873a4", default-features = false, features = ["charset", "http2", "macos-system-configuration", "multipart", "rustls-tls-native-roots", "socks", "stream"], package = "zed-reqwest", version = "0.12.15-zed" }
@@ -80,7 +80,7 @@ path = "src/main.rs"
 test = false  # Tests run via lib.rs only - avoids duplicate test runs
 
 [dependencies]
-gpui = { path = "vendor/gpui" }
+gpui = { path = "vendor/gpui", features = ["test-support"] }
 gpui_platform = { path = "vendor/gpui_platform", features = ["font-kit"] }
 gpui_macos = { path = "vendor/gpui_macos" }
 gpui_macros = { path = "vendor/gpui_macros" }
@@ -231,7 +231,7 @@ foreign-types = "0.5"
 smappservice-rs = "0.1"
 
 [patch."https://github.com/zed-industries/zed"]
-gpui = { path = "vendor/gpui" }
+gpui = { path = "vendor/gpui", features = ["test-support"] }
 gpui_platform = { path = "vendor/gpui_platform" }
 gpui_macos = { path = "vendor/gpui_macos" }
 gpui_macros = { path = "vendor/gpui_macros" }
