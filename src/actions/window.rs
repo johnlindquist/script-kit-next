@@ -132,7 +132,12 @@ enum ActionsWindowKeyIntent {
     ExecuteSelected,
     /// Cmd+Enter: hand the selected action to Agent Chat as a canonical target.
     SendToAgentChat,
+    /// Escape: pop a drill-down route first, close only at the top level.
     Close,
+    /// Cmd+K: the open/close toggle — always fully closes, never route-pops,
+    /// matching the main-hosted popup's `route_key_to_actions_dialog` path so
+    /// the same chord cannot mean two different things across hosts.
+    Dismiss,
     Backspace,
     /// Option+Backspace: delete the trailing word, like the main search input.
     BackspaceWord,
@@ -184,7 +189,7 @@ fn actions_window_key_intent(
         && !modifiers.alt
         && key.eq_ignore_ascii_case("k")
     {
-        return Some(ActionsWindowKeyIntent::Close);
+        return Some(ActionsWindowKeyIntent::Dismiss);
     }
     if is_key_backspace(key) || key.eq_ignore_ascii_case("delete") {
         // Option+Backspace deletes a word like the main search input.
@@ -722,6 +727,10 @@ impl ActionsWindow {
                 }
                 true
             }
+            Some(ActionsWindowKeyIntent::Dismiss) => {
+                self.request_close(window, cx, "cmd_k_toggle", true);
+                true
+            }
             Some(ActionsWindowKeyIntent::Backspace) => {
                 crate::logging::log("ACTIONS", "ActionsWindow: backspace pressed");
                 self.dialog.update(cx, |d, cx| d.handle_backspace(cx));
@@ -1099,9 +1108,11 @@ mod window_lifecycle_tests {
             actions_window_key_intent("Escape", None, &no_mods),
             Some(ActionsWindowKeyIntent::Close)
         );
+        // ⌘K is the toggle chord: it must fully dismiss (never route-pop),
+        // unlike Escape's pop-then-close ladder.
         assert_eq!(
             actions_window_key_intent("k", None, &cmd_only),
-            Some(ActionsWindowKeyIntent::Close)
+            Some(ActionsWindowKeyIntent::Dismiss)
         );
     }
 

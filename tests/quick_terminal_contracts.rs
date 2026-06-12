@@ -128,9 +128,12 @@ fn quick_terminal_native_footer_does_not_capture_sdk_term_prompt_footer() {
         !APP_VIEW_STATE_SOURCE.contains("AppView::TermPrompt { .. } => Some(\"term_prompt\")"),
         "SDK TermPrompt must not register a native footer surface; it keeps the GPUI terminal hint strip"
     );
+    // SDK terminals keep the GPUI hint strip and pass escape_cancels = true
+    // so it advertises that Escape cancels the script (audit finding #15).
     assert!(
-        RENDER_TERM_PROMPT_SOURCE.contains("render_terminal_prompt_hint_strip(None, None)"),
-        "non-quick terminal prompts must keep the route-aware GPUI hint strip"
+        RENDER_TERM_PROMPT_SOURCE.contains("render_terminal_prompt_hint_strip(")
+            && RENDER_TERM_PROMPT_SOURCE.contains("None, None, true,"),
+        "non-quick terminal prompts must keep the route-aware GPUI hint strip with escape_cancels = true"
     );
     assert!(
         RENDER_TERM_PROMPT_SOURCE.contains("\"native_footer_spacer\"")

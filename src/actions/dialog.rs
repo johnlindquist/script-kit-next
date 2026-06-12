@@ -4120,6 +4120,21 @@ impl Render for ActionsDialog {
                 // Full-width search input - no box styling, just text.
                 build_search_content(search_display.clone()),
             );
+        // Drill-down depth is otherwise invisible: surface the Escape
+        // contract ("Esc Back") inline at the search row's right edge while a
+        // parent route exists (audit finding #28). The dialog stays
+        // footerless by contract, so this is the only chrome that may change
+        // with route depth.
+        if self.can_pop_route() {
+            input_container = input_container.child(
+                div()
+                    .flex_none()
+                    .ml(px(popup_theme.search.prefix_gap))
+                    .text_size(px(popup_theme.search.font_size))
+                    .text_color(hint_text_color)
+                    .child(self.route_hint_label()),
+            );
+        }
         if style.show_search_divider {
             input_container = input_container.border_t_1().border_color(separator_color);
         }

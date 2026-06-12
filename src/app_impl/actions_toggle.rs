@@ -1,9 +1,12 @@
 use super::*;
 
 pub(crate) const TERM_PROMPT_CLEAR_ACTION_ID: &str = "clear";
-pub(crate) const TERM_PROMPT_CLEAR_SHORTCUT: &str = "⌘K";
+// ⌘K means "Actions" on every surface of the app; the terminal is no
+// exception (audit finding #24). Clear moved to ⌘⇧K so scrollback can't be
+// destroyed by the app-wide Actions chord.
+pub(crate) const TERM_PROMPT_CLEAR_SHORTCUT: &str = "⌘⇧K";
 pub(crate) const TERM_PROMPT_ACTIONS_TOGGLE_ACTION_ID: &str = "term_prompt_toggle_actions";
-pub(crate) const TERM_PROMPT_ACTIONS_TOGGLE_SHORTCUT: &str = "⌘⇧K";
+pub(crate) const TERM_PROMPT_ACTIONS_TOGGLE_SHORTCUT: &str = "⌘K";
 const TERM_PROMPT_SCROLL_TO_BOTTOM_ACTION_ID: &str = "scroll_to_bottom";
 
 fn terminal_action_sort_key(action_id: &str) -> Option<usize> {
@@ -630,6 +633,10 @@ impl ScriptListApp {
                 trigger = trigger,
                 "Ignored shared actions toggle because clipboard history has no selected entry"
             );
+            // The footer advertises ⌘K — a dead press must explain itself.
+            if let Some(reason) = self.actions_toggle_dead_without_selection_reason() {
+                self.show_hud(reason.to_string(), None, cx);
+            }
             return false;
         }
 
@@ -648,6 +655,9 @@ impl ScriptListApp {
                 trigger = trigger,
                 "Ignored shared actions toggle because dictation history has no selected entry"
             );
+            if let Some(reason) = self.actions_toggle_dead_without_selection_reason() {
+                self.show_hud(reason.to_string(), None, cx);
+            }
             return false;
         }
 
@@ -665,6 +675,9 @@ impl ScriptListApp {
                 trigger = trigger,
                 "Ignored shared actions toggle because favorites has no selected item"
             );
+            if let Some(reason) = self.actions_toggle_dead_without_selection_reason() {
+                self.show_hud(reason.to_string(), None, cx);
+            }
             return false;
         }
 
@@ -1812,26 +1825,57 @@ impl ScriptListApp {
 mod on_close_reentrancy_tests {
     use std::fs;
 
-    #[test]
-    fn test_actions_toggle_on_close_defers_script_list_app_updates() {
+    /// The popup-window toggle paths (detached vibrancy ActionsWindow).
+    /// Every entry must route open/close through the shared helpers so
+    /// close re-entrancy and filter resync cannot drift per surface. A new
+    /// toggle path must be added HERE (and use the shared helpers), not
+    /// counted silently — exact-count assertions rotted three times before
+    /// this enumeration replaced them (see Source Audit Test Policy).
+    const POPUP_WINDOW_TOGGLE_FNS: &[&str] = &[
+        "fn toggle_actions(",
+        "fn toggle_root_file_actions(",
+        "fn toggle_root_unified_result_actions(",
+        "fn toggle_webcam_actions(",
+        "fn toggle_terminal_commands(",
+        "fn toggle_chat_actions(",
+    ];
+
+    fn impl_source() -> String {
         let source = fs::read_to_string("src/app_impl/actions_toggle.rs")
             .expect("Failed to read src/app_impl/actions_toggle.rs");
-        let impl_source = source
+        source
             .split("\n#[cfg(test)]")
             .next()
-            .expect("Expected implementation section before tests");
+            .expect("Expected implementation section before tests")
+            .to_string()
+    }
 
-        let set_on_close_count = impl_source
-            .matches("d.set_on_close(Self::make_actions_window_on_close_callback(")
-            .count();
-        let defer_count = impl_source.matches("cx.defer(move |cx| {").count();
+    fn function_body<'a>(source: &'a str, signature: &str) -> &'a str {
+        let start = source
+            .find(signature)
+            .unwrap_or_else(|| panic!("missing function signature: {signature}"));
+        let tail = &source[start + signature.len()..];
+        let end = ["\n    fn ", "\n    pub fn ", "\n    pub(crate) fn "]
+            .iter()
+            .filter_map(|marker| tail.find(marker))
+            .min()
+            .unwrap_or(tail.len());
+        &tail[..end]
+    }
 
-        assert_eq!(
-            set_on_close_count, 4,
-            "actions_toggle should use the shared on_close callback factory at four popup-window call sites"
-        );
+    #[test]
+    fn test_actions_toggle_on_close_defers_script_list_app_updates() {
+        let impl_source = impl_source();
+
+        for signature in POPUP_WINDOW_TOGGLE_FNS {
+            let body = function_body(&impl_source, signature);
+            assert!(
+                body.contains("d.set_on_close(Self::make_actions_window_on_close_callback("),
+                "{signature} should use the shared on_close callback factory"
+            );
+        }
         assert!(
-            defer_count >= 1,
+            impl_source.contains("cx.defer(move |cx| {"),
             "actions_toggle on_close callback factory should defer ScriptListApp updates"
         );
         assert!(
@@ -1842,127 +1886,80 @@ mod on_close_reentrancy_tests {
 
     #[test]
     fn test_toggle_actions_paths_resync_filter_input_state() {
-        let source = fs::read_to_string("src/app_impl/actions_toggle.rs")
-            .expect("Failed to read src/app_impl/actions_toggle.rs");
-        let impl_source = source
-            .split("\n#[cfg(test)]")
-            .next()
-            .expect("Expected implementation section before tests");
+        let impl_source = impl_source();
 
-        let pre_open_resync_count = impl_source
-            .matches("self.resync_filter_input_after_actions_if_needed(window, cx);")
-            .count();
-        assert_eq!(
-            pre_open_resync_count, 5,
-            "all toggle_*_actions open paths should resync canonical filter input first"
-        );
-
-        let on_close_mark_count = impl_source
-            .matches("app.mark_filter_resync_after_actions_if_needed();")
-            .count();
-        assert_eq!(
-            on_close_mark_count, 1,
+        // toggle_arg_actions opens inline (no popup window) but must still
+        // resync the canonical filter input before opening.
+        for signature in POPUP_WINDOW_TOGGLE_FNS
+            .iter()
+            .chain(std::iter::once(&"fn toggle_arg_actions("))
+        {
+            let body = function_body(&impl_source, signature);
+            assert!(
+                body.contains("self.resync_filter_input_after_actions_if_needed(window, cx);"),
+                "{signature} should resync canonical filter input before opening"
+            );
+        }
+        assert!(
+            impl_source.contains("app.mark_filter_resync_after_actions_if_needed();"),
             "shared actions window on_close callback should mark filter resync for next render"
         );
     }
 
     #[test]
     fn test_actions_toggle_uses_shared_spawn_open_actions_window_helper() {
-        let source = fs::read_to_string("src/app_impl/actions_toggle.rs")
-            .expect("Failed to read src/app_impl/actions_toggle.rs");
-        let impl_source = source
-            .split("\n#[cfg(test)]")
-            .next()
-            .expect("Expected implementation section before tests");
+        let impl_source = impl_source();
 
-        let helper_call_count = impl_source
-            .matches("Self::spawn_open_actions_window(")
-            .count();
-        assert_eq!(
-            helper_call_count, 4,
-            "toggle_actions, toggle_webcam_actions, toggle_chat_actions, and toggle_terminal_commands should use the shared spawn helper"
+        for signature in POPUP_WINDOW_TOGGLE_FNS {
+            let body = function_body(&impl_source, signature);
+            assert!(
+                body.contains("Self::spawn_open_actions_window("),
+                "{signature} should open the detached window through the shared spawn helper"
+            );
+        }
+
+        // The slim wrapper delegates to the _with_parent_id variant, which
+        // owns the actual open_actions_window match and focus handoff.
+        let wrapper_body = function_body(&impl_source, "fn spawn_open_actions_window(");
+        assert!(
+            wrapper_body.contains("Self::spawn_open_actions_window_with_parent_id("),
+            "spawn_open_actions_window should delegate to spawn_open_actions_window_with_parent_id"
         );
-
-        let open_call_count = impl_source.matches("match open_actions_window(").count();
-        assert_eq!(
-            open_call_count, 1,
-            "open_actions_window match block should live only in spawn_open_actions_window helper"
+        let helper_body =
+            function_body(&impl_source, "fn spawn_open_actions_window_with_parent_id(");
+        assert!(
+            helper_body.contains("match open_actions_window("),
+            "spawn_open_actions_window_with_parent_id should own the open_actions_window match block"
         );
-
-        let helper_start = impl_source
-            .find("pub(crate) fn spawn_open_actions_window(")
-            .expect("spawn_open_actions_window helper should exist");
-        let helper_body = &impl_source[helper_start..];
-        let helper_end = helper_body
-            .find("/// Resolve the actions popup window position")
-            .expect("helper should end before the next function");
-        let helper_body = &helper_body[..helper_end];
+        let outside_helper = impl_source.replacen(helper_body, "", 1);
+        assert!(
+            !outside_helper.contains("match open_actions_window("),
+            "open_actions_window match block should live only in spawn_open_actions_window_with_parent_id"
+        );
         assert!(
             helper_body.contains("dialog.set_skip_track_focus(true);"),
-            "spawn_open_actions_window should centralize detached popup focus ownership"
+            "spawn_open_actions_window_with_parent_id should centralize detached popup focus ownership"
         );
     }
 
     #[test]
     fn test_begin_actions_popup_window_open_is_used_by_popup_window_toggles_only() {
-        let source = fs::read_to_string("src/app_impl/actions_toggle.rs")
-            .expect("Failed to read src/app_impl/actions_toggle.rs");
-        let impl_source = source
-            .split("\n#[cfg(test)]")
-            .next()
-            .expect("Expected implementation section before tests");
+        let impl_source = impl_source();
 
         assert!(
-            impl_source.contains(
-                "fn begin_actions_popup_window_open(&mut self, cx: &mut Context<Self>, window: &mut Window) {"
-            ),
+            impl_source.contains("fn begin_actions_popup_window_open("),
             "actions_toggle should define begin_actions_popup_window_open helper"
         );
 
-        let helper_call_count = impl_source
-            .matches("self.begin_actions_popup_window_open(cx, window);")
-            .count();
-        assert_eq!(
-            helper_call_count, 4,
-            "toggle_actions, toggle_webcam_actions, toggle_chat_actions, and toggle_terminal_commands should call begin_actions_popup_window_open"
-        );
+        for signature in POPUP_WINDOW_TOGGLE_FNS {
+            let body = function_body(&impl_source, signature);
+            assert!(
+                body.contains("self.begin_actions_popup_window_open(cx, window);"),
+                "{signature} should mark popup-window open state via the shared helper"
+            );
+        }
 
-        let toggle_actions_source = impl_source
-            .split("pub(crate) fn toggle_actions")
-            .nth(1)
-            .and_then(|section| section.split("pub(crate) fn toggle_arg_actions").next())
-            .expect("toggle_actions source section should exist");
-        assert!(
-            toggle_actions_source.contains("self.begin_actions_popup_window_open(cx, window);"),
-            "toggle_actions should use begin_actions_popup_window_open"
-        );
-
-        let toggle_webcam_actions_source = impl_source
-            .split("pub fn toggle_webcam_actions")
-            .nth(1)
-            .and_then(|section| section.split("pub fn toggle_terminal_commands").next())
-            .expect("toggle_webcam_actions source section should exist");
-        assert!(
-            toggle_webcam_actions_source
-                .contains("self.begin_actions_popup_window_open(cx, window);"),
-            "toggle_webcam_actions should use begin_actions_popup_window_open"
-        );
-
-        let toggle_chat_actions_source = impl_source
-            .split("pub fn toggle_chat_actions")
-            .nth(1)
-            .expect("toggle_chat_actions source section should exist");
-        assert!(
-            toggle_chat_actions_source
-                .contains("self.begin_actions_popup_window_open(cx, window);"),
-            "toggle_chat_actions should use begin_actions_popup_window_open"
-        );
-
-        let toggle_arg_actions_source = impl_source
-            .split("pub(crate) fn toggle_arg_actions")
-            .nth(1)
-            .and_then(|section| section.split("pub fn toggle_webcam_actions").next())
-            .expect("toggle_arg_actions source section should exist");
+        let toggle_arg_actions_source = function_body(&impl_source, "fn toggle_arg_actions(");
         assert!(
             !toggle_arg_actions_source.contains("self.begin_actions_popup_window_open(cx, window);"),
             "toggle_arg_actions should not use begin_actions_popup_window_open (inline dialog, not a window)"
@@ -1999,7 +1996,7 @@ mod terminal_command_shortcut_tests {
     use std::fs;
 
     #[test]
-    fn test_terminal_actions_for_dialog_shows_cmd_k_for_clear_terminal() {
+    fn test_terminal_actions_for_dialog_shows_cmd_shift_k_for_clear_terminal() {
         let clear_action = terminal_actions_for_dialog()
             .into_iter()
             .find(|action| action.id == TERM_PROMPT_CLEAR_ACTION_ID)
@@ -2012,7 +2009,7 @@ mod terminal_command_shortcut_tests {
     }
 
     #[test]
-    fn test_terminal_actions_for_dialog_adds_cmd_shift_k_toggle_shortcut() {
+    fn test_terminal_actions_for_dialog_adds_cmd_k_toggle_shortcut() {
         let toggle_actions = terminal_actions_for_dialog()
             .into_iter()
             .find(|action| action.id == TERM_PROMPT_ACTIONS_TOGGLE_ACTION_ID)

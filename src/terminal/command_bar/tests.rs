@@ -28,7 +28,7 @@ fn test_terminal_action_ids() {
 
 #[test]
 fn test_terminal_action_shortcuts() {
-    assert_eq!(TerminalAction::Clear.default_shortcut(), Some("⌘K"));
+    assert_eq!(TerminalAction::Clear.default_shortcut(), Some("⇧⌘K"));
     assert_eq!(TerminalAction::Copy.default_shortcut(), Some("⌘C"));
     assert_eq!(TerminalAction::Paste.default_shortcut(), Some("⌘V"));
     assert_eq!(TerminalAction::Interrupt.default_shortcut(), Some("⌃C"));
@@ -69,13 +69,13 @@ fn test_command_item_creation() {
     let item = TerminalCommandItem::new(
         "Clear Terminal",
         "Clear the screen",
-        Some("⌘K"),
+        Some("⇧⌘K"),
         TerminalAction::Clear,
     );
 
     assert_eq!(item.name, "Clear Terminal");
     assert_eq!(item.description, "Clear the screen");
-    assert_eq!(item.shortcut, Some("⌘K".to_string()));
+    assert_eq!(item.shortcut, Some("⇧⌘K".to_string()));
     assert_eq!(item.action, TerminalAction::Clear);
     assert_eq!(item.name_lower, "clear terminal");
     assert_eq!(item.description_lower, "clear the screen");
@@ -100,7 +100,7 @@ fn test_command_item_matches() {
     let item = TerminalCommandItem::new(
         "Clear Terminal",
         "Clear the screen and scrollback",
-        Some("⌘K"),
+        Some("⇧⌘K"),
         TerminalAction::Clear,
     );
 

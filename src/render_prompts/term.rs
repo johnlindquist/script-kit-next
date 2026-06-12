@@ -62,12 +62,12 @@ fn terminal_action_from_id(action_id: &str) -> Option<crate::terminal::TerminalA
 
 #[inline]
 fn is_term_prompt_clear_shortcut(has_cmd: bool, has_shift: bool, key: &str) -> bool {
-    has_cmd && !has_shift && ui_foundation::is_key_k(key)
+    has_cmd && has_shift && ui_foundation::is_key_k(key)
 }
 
 #[inline]
 fn is_term_prompt_actions_toggle_shortcut(has_cmd: bool, has_shift: bool, key: &str) -> bool {
-    has_cmd && has_shift && ui_foundation::is_key_k(key)
+    has_cmd && !has_shift && ui_foundation::is_key_k(key)
 }
 
 #[inline]
@@ -115,6 +115,10 @@ fn render_terminal_prompt_hint_strip(
     if can_apply_back {
         items.push("⌘↩ Apply".to_string());
     }
+
+    // The Actions palette always exists for terminals (SDK actions or the
+    // terminal-commands fallback), and ⌘K is the app-wide chord for it.
+    items.push("⌘K Actions".to_string());
 
     if escape_cancels {
         // SDK terminal prompts: the TermPrompt entity cancels the script on
@@ -300,13 +304,14 @@ impl ScriptListApp {
                             return true;
                         }
 
-                        // Cmd+K clears terminal output.
+                        // Cmd+Shift+K clears terminal output (plain Cmd+K is
+                        // the app-wide Actions toggle).
                         if is_term_prompt_clear_shortcut(has_cmd, has_shift, key) {
                             let correlation_id = logging::current_correlation_id();
                             logging::log(
                                 "KEY",
                                 &format!(
-                                    "{TERM_PROMPT_KEY_CONTEXT}: Cmd+K clears terminal (correlation_id={correlation_id})"
+                                    "{TERM_PROMPT_KEY_CONTEXT}: Cmd+Shift+K clears terminal (correlation_id={correlation_id})"
                                 ),
                             );
                             this.execute_term_prompt_action_by_id(
@@ -333,7 +338,7 @@ impl ScriptListApp {
                         logging::log(
                             "KEY",
                             &format!(
-                                "{TERM_PROMPT_KEY_CONTEXT}: Cmd+Shift+K toggles actions (mode={actions_mode_for_handler:?}, correlation_id={correlation_id})"
+                                "{TERM_PROMPT_KEY_CONTEXT}: Cmd+K toggles actions (mode={actions_mode_for_handler:?}, correlation_id={correlation_id})"
                             ),
                         );
                         this.toggle_term_prompt_actions(actions_mode_for_handler, cx, window);
@@ -595,28 +600,35 @@ mod term_prompt_render_tests {
         assert_eq!(terminal_action_from_id("unknown"), None);
     }
 
+    /// ⌘K means "Actions" on every surface (audit finding #24); the
+    /// destructive clear lives behind ⌘⇧K so the app-wide chord can never
+    /// silently destroy scrollback.
     #[test]
-    fn test_term_prompt_clear_shortcut_matches_cmd_k_without_shift() {
-        assert!(is_term_prompt_clear_shortcut(true, false, "k"));
-        assert!(is_term_prompt_clear_shortcut(true, false, "K"));
-        assert!(!is_term_prompt_clear_shortcut(true, true, "k"));
-        assert!(!is_term_prompt_clear_shortcut(false, false, "k"));
+    fn test_term_prompt_clear_shortcut_matches_cmd_shift_k() {
+        assert!(is_term_prompt_clear_shortcut(true, true, "k"));
+        assert!(is_term_prompt_clear_shortcut(true, true, "K"));
+        assert!(!is_term_prompt_clear_shortcut(true, false, "k"));
+        assert!(!is_term_prompt_clear_shortcut(false, true, "k"));
     }
 
+    /// The terminal renders in the editor chrome layout but owns its footer
+    /// (a contextual hint strip for SDK terminals, the native footer spacer
+    /// for the quick terminal). The audit emission moved from struct-literal
+    /// fields to `PromptChromeAudit::editor(..)` + field assignments; pin the
+    /// current shape so the divergence stays documented.
     #[test]
     fn test_term_chrome_audit_uses_editor_layout_with_custom_footer() {
         const TERM_RENDER_SOURCE: &str = include_str!("term.rs");
         assert!(
-            TERM_RENDER_SOURCE.contains("layout_mode: \"editor\""),
-            "term prompt should emit an editor layout mode"
+            TERM_RENDER_SOURCE.contains("PromptChromeAudit::editor(\"render_prompts::term\""),
+            "term prompt should emit an editor layout chrome audit"
         );
         assert!(
-            TERM_RENDER_SOURCE.contains("footer_mode: \"custom_hint_strip\""),
+            TERM_RENDER_SOURCE.contains("\"custom_hint_strip\""),
             "term prompt should declare a custom hint strip footer, not the universal one"
         );
         assert!(
-            TERM_RENDER_SOURCE
-                .contains("exception_reason: Some(\"terminal_owns_contextual_footer\")"),
+            TERM_RENDER_SOURCE.contains("\"terminal_owns_contextual_footer\""),
             "term prompt should document why it has a custom footer"
         );
         assert!(
@@ -652,11 +664,11 @@ mod term_prompt_render_tests {
     }
 
     #[test]
-    fn test_term_prompt_actions_toggle_shortcut_matches_cmd_shift_k() {
-        assert!(is_term_prompt_actions_toggle_shortcut(true, true, "k"));
-        assert!(is_term_prompt_actions_toggle_shortcut(true, true, "K"));
-        assert!(!is_term_prompt_actions_toggle_shortcut(true, false, "k"));
-        assert!(!is_term_prompt_actions_toggle_shortcut(false, true, "k"));
+    fn test_term_prompt_actions_toggle_shortcut_matches_cmd_k() {
+        assert!(is_term_prompt_actions_toggle_shortcut(true, false, "k"));
+        assert!(is_term_prompt_actions_toggle_shortcut(true, false, "K"));
+        assert!(!is_term_prompt_actions_toggle_shortcut(true, true, "k"));
+        assert!(!is_term_prompt_actions_toggle_shortcut(false, false, "k"));
     }
 
     #[test]

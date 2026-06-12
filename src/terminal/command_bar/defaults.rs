@@ -49,7 +49,7 @@ pub fn get_terminal_commands() -> Vec<TerminalCommandItem> {
         TerminalCommandItem::new(
             "Clear Terminal",
             "Clear screen and scrollback buffer",
-            Some("⌘K"),
+            Some("⇧⌘K"),
             TerminalAction::Clear,
         ),
         TerminalCommandItem::new(

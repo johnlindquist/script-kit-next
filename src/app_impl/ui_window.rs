@@ -611,11 +611,18 @@ impl ScriptListApp {
         );
 
         if self.current_view_supports_shared_actions() {
-            buttons.push(
-                FooterButtonConfig::new(FooterAction::Actions, "⌘K", "Actions")
-                    .selected(actions_open)
-                    .enabled(!footer_disabled),
-            );
+            let chip = FooterButtonConfig::new(FooterAction::Actions, "⌘K", "Actions")
+                .selected(actions_open);
+            // Selection-gated views (clipboard/dictation/favorites) only have
+            // per-entry actions, so the advertised ⌘K would be a dead key
+            // without a selected row — grey it out with the reason instead of
+            // lying (audit finding #29). Stay enabled while the popup is open
+            // so the chip can still close it.
+            let chip = match self.actions_toggle_dead_without_selection_reason() {
+                Some(reason) if !actions_open && !footer_disabled => chip.disabled_reason(reason),
+                _ => chip.enabled(!footer_disabled),
+            };
+            buttons.push(chip);
         }
         if matches!(self.current_view, AppView::ScriptList) {
             // Style-only input (`.professional`): Enter already rewrites
@@ -634,6 +641,26 @@ impl ScriptListApp {
 
     fn main_window_footer_buttons_blocked(&self) -> bool {
         crate::confirm::is_confirm_window_open()
+    }
+
+    /// Views whose actions are all per-entry have a dead ⌘K toggle when no
+    /// row is selected. Returns the user-facing reason in that state so both
+    /// the footer chip (disabled) and the key press (HUD) explain themselves.
+    pub(crate) fn actions_toggle_dead_without_selection_reason(&self) -> Option<&'static str> {
+        match &self.current_view {
+            AppView::ClipboardHistoryView { .. } if !has_selected_clipboard_entry(self) => {
+                Some("Select an entry to see actions")
+            }
+            AppView::DictationHistoryView { .. }
+                if !has_selected_dictation_history_entry(self) =>
+            {
+                Some("Select an entry to see actions")
+            }
+            AppView::FavoritesBrowseView { .. } if self.selected_favorite_id().is_none() => {
+                Some("Select a favorite to see actions")
+            }
+            _ => None,
+        }
     }
 
     fn main_window_footer_surface(&self) -> Option<&'static str> {

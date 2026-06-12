@@ -149,7 +149,9 @@ impl TerminalAction {
     /// Returns the keyboard shortcut for this action, if any.
     pub fn default_shortcut(&self) -> Option<&'static str> {
         match self {
-            TerminalAction::Clear => Some("⌘K"),
+            // ⇧⌘K, not ⌘K: plain ⌘K is the app-wide Actions toggle on every
+            // surface, so the destructive clear lives behind shift.
+            TerminalAction::Clear => Some("⇧⌘K"),
             TerminalAction::Copy => Some("⌘C"),
             TerminalAction::CopyAll => Some("⇧⌘C"),
             TerminalAction::CopyLastCommand => Some("⌥⌘C"),
