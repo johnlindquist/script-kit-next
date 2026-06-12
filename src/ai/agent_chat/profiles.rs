@@ -567,7 +567,72 @@ pub fn resolve_user_profile(profile: &AgentChatProfile) -> ResolvedAgentChatProf
     }
 }
 
+/// Plugin-profile resolution walks `<kit>/plugins/**` and reads every
+/// manifest and prompt file from disk. Hot paths resolve profiles several
+/// times per keystroke/frame (Profile Search navigation, the Agent Chat
+/// profile picker, footer label refresh, automation state snapshots), so the
+/// disk-backed pass is memoized here. Plugin installs/removals surface after
+/// the TTL elapses; callers that mutate plugins on disk and need the change
+/// immediately should call [`invalidate_plugin_profile_cache`].
+const PLUGIN_PROFILE_CACHE_TTL: std::time::Duration = std::time::Duration::from_secs(2);
+
+struct PluginProfileCacheEntry {
+    plugins_dir: PathBuf,
+    kit_path: PathBuf,
+    refreshed_at: std::time::Instant,
+    profiles: Vec<ResolvedAgentChatProfile>,
+}
+
+static PLUGIN_PROFILE_CACHE: std::sync::Mutex<Option<PluginProfileCacheEntry>> =
+    std::sync::Mutex::new(None);
+
+pub fn invalidate_plugin_profile_cache() {
+    if let Ok(mut cache) = PLUGIN_PROFILE_CACHE.lock() {
+        *cache = None;
+    }
+}
+
+fn plugin_profile_cache_entry_is_fresh(
+    entry: &PluginProfileCacheEntry,
+    plugins_dir: &std::path::Path,
+    kit_path: &std::path::Path,
+    now: std::time::Instant,
+) -> bool {
+    entry.plugins_dir == plugins_dir
+        && entry.kit_path == kit_path
+        && now.duration_since(entry.refreshed_at) < PLUGIN_PROFILE_CACHE_TTL
+}
+
 pub fn resolved_plugin_profiles(ctx: &AgentChatProfileContext) -> Vec<ResolvedAgentChatProfile> {
+    let plugins_dir = crate::plugins::plugins_container_dir();
+    if let Ok(cache) = PLUGIN_PROFILE_CACHE.lock() {
+        if let Some(entry) = cache.as_ref() {
+            if plugin_profile_cache_entry_is_fresh(
+                entry,
+                &plugins_dir,
+                &ctx.kit_path,
+                std::time::Instant::now(),
+            ) {
+                return entry.profiles.clone();
+            }
+        }
+    }
+
+    let profiles = resolved_plugin_profiles_uncached(ctx);
+    if let Ok(mut cache) = PLUGIN_PROFILE_CACHE.lock() {
+        *cache = Some(PluginProfileCacheEntry {
+            plugins_dir,
+            kit_path: ctx.kit_path.clone(),
+            refreshed_at: std::time::Instant::now(),
+            profiles: profiles.clone(),
+        });
+    }
+    profiles
+}
+
+fn resolved_plugin_profiles_uncached(
+    ctx: &AgentChatProfileContext,
+) -> Vec<ResolvedAgentChatProfile> {
     let profiles = match discover_plugin_profiles() {
         Ok(profiles) => profiles,
         Err(error) => {
@@ -788,5 +853,89 @@ pub fn generated_legacy_profile_id(name: &str) -> String {
         "legacy:profile".to_string()
     } else {
         format!("legacy:{slug}")
+    }
+}
+
+#[cfg(test)]
+mod plugin_profile_cache_tests {
+    use super::*;
+    use std::path::Path;
+    use std::time::{Duration, Instant};
+
+    fn entry(
+        plugins_dir: &Path,
+        kit_path: &Path,
+        refreshed_at: Instant,
+    ) -> PluginProfileCacheEntry {
+        PluginProfileCacheEntry {
+            plugins_dir: plugins_dir.to_path_buf(),
+            kit_path: kit_path.to_path_buf(),
+            refreshed_at,
+            profiles: Vec::new(),
+        }
+    }
+
+    /// Profile Search navigation and the Agent Chat profile picker resolve
+    /// plugin profiles several times per keystroke; a fresh same-key entry
+    /// must be served from memory instead of re-walking `<kit>/plugins/**`.
+    #[test]
+    fn fresh_same_key_entry_hits() {
+        let now = Instant::now();
+        let e = entry(Path::new("/kit/plugins"), Path::new("/kit"), now);
+        assert!(plugin_profile_cache_entry_is_fresh(
+            &e,
+            Path::new("/kit/plugins"),
+            Path::new("/kit"),
+            now + Duration::from_millis(50),
+        ));
+    }
+
+    #[test]
+    fn expired_entry_misses() {
+        let now = Instant::now();
+        let e = entry(Path::new("/kit/plugins"), Path::new("/kit"), now);
+        assert!(!plugin_profile_cache_entry_is_fresh(
+            &e,
+            Path::new("/kit/plugins"),
+            Path::new("/kit"),
+            now + PLUGIN_PROFILE_CACHE_TTL,
+        ));
+    }
+
+    #[test]
+    fn different_kit_path_misses() {
+        let now = Instant::now();
+        let e = entry(Path::new("/kit/plugins"), Path::new("/kit"), now);
+        assert!(!plugin_profile_cache_entry_is_fresh(
+            &e,
+            Path::new("/kit/plugins"),
+            Path::new("/other-kit"),
+            now,
+        ));
+    }
+
+    #[test]
+    fn different_plugins_dir_misses() {
+        let now = Instant::now();
+        let e = entry(Path::new("/kit/plugins"), Path::new("/kit"), now);
+        assert!(!plugin_profile_cache_entry_is_fresh(
+            &e,
+            Path::new("/other-kit/plugins"),
+            Path::new("/kit"),
+            now,
+        ));
+    }
+
+    #[test]
+    fn invalidate_clears_cache() {
+        if let Ok(mut cache) = PLUGIN_PROFILE_CACHE.lock() {
+            *cache = Some(entry(
+                Path::new("/kit/plugins"),
+                Path::new("/kit"),
+                Instant::now(),
+            ));
+        }
+        invalidate_plugin_profile_cache();
+        assert!(PLUGIN_PROFILE_CACHE.lock().unwrap().is_none());
     }
 }
