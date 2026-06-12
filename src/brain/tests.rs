@@ -7,12 +7,19 @@
 //! this module's setup runs — a per-module env var would then disagree with
 //! the already-bound connection.
 
+use chrono::TimeZone as _;
+
 use super::curator;
 use super::inbox::{self, InboxKind};
-use super::indexer::extract_topics;
+use super::indexer::{
+    extract_topics, sync_day_pages_with_substrate, sync_fragments_with_substrate,
+    sync_notes_with_substrate,
+};
 use super::search::{self, aggregate_signals, cosine_top_ids, fuse_ranks};
 use super::store::{self, BrainDoc, BrainSignal, DocSource};
+use super::substrate::{BrainFrontmatter, BrainSubstrate, DayEntry};
 use super::telegram;
+use crate::notes::NoteId;
 
 fn init_test_db() {
     static INIT: std::sync::Once = std::sync::Once::new();
@@ -960,27 +967,201 @@ fn telegram_redaction_strips_token_from_error_text() {
     assert_eq!(telegram::redact_token("", "unchanged"), "unchanged");
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct IndexedDocSnapshot {
+    source: DocSource,
+    source_id: String,
+    title: String,
+    content: String,
+}
+
+fn snapshot_doc(source: DocSource, source_id: &str) -> Option<IndexedDocSnapshot> {
+    store::get_doc(source, source_id)
+        .expect("doc lookup")
+        .map(|doc| IndexedDocSnapshot {
+            source: doc.source,
+            source_id: doc.source_id,
+            title: doc.title,
+            content: doc.content,
+        })
+}
+
+/// Simulate "delete brain.sqlite" for ONLY this test's docs. The suite shares
+/// one process-global DB across parallel threads, so truncating brain_docs /
+/// brain_embeddings here would nuke concurrent tests' data — delete the
+/// enumerated (source, source_id) rows instead (embeddings cascade via FK).
+fn clear_brain_docs_for_rebuild_test(docs: &[(DocSource, &str)]) {
+    for (source, source_id) in docs {
+        store::remove_doc(*source, source_id).expect("clear rebuild test doc");
+    }
+}
+
+fn test_substrate(base: &std::path::Path) -> BrainSubstrate {
+    BrainSubstrate::with_timezone(base, chrono_tz::UTC)
+}
+
+#[test]
+fn file_sources_sync_day_page_fragment_and_forget_trashed_note() {
+    init_test_db();
+    let tmp = tempfile::TempDir::new().expect("tempdir");
+    let substrate = test_substrate(&tmp.path().join("brain"));
+    let now = chrono::Utc.with_ymd_and_hms(2026, 6, 11, 10, 0, 0).unwrap();
+
+    substrate
+        .append_to_day(
+            now,
+            DayEntry::Capture {
+                text: "capture for brain".to_string(),
+            },
+        )
+        .expect("append day capture");
+
+    let long = (0..250)
+        .map(|index| format!("word{index}"))
+        .collect::<Vec<_>>()
+        .join(" ");
+    substrate
+        .write_fragment(now, "clipboard", "scriptkit://clipboard/entry-t7", &long)
+        .expect("write fragment");
+
+    let note_id = NoteId::new();
+    let note_path = substrate.paths().note_file("t7-note");
+    substrate
+        .write_document(
+            &note_path,
+            &BrainFrontmatter::new(note_id, now, now),
+            "# T7 Note\n\nbrain indexer note body",
+        )
+        .expect("write note");
+
+    sync_notes_with_substrate(&substrate).expect("sync notes");
+    sync_day_pages_with_substrate(&substrate).expect("sync day pages");
+    sync_fragments_with_substrate(&substrate).expect("sync fragments");
+
+    let day_doc = store::get_doc(DocSource::DayPage, "2026-06-11")
+        .expect("day page lookup")
+        .expect("day page doc");
+    assert!(day_doc.content.contains("capture for brain"));
+    assert_eq!(day_doc.title, "Day Page 2026-06-11");
+
+    // Shared test DB: other parallel tests may also index fragments, so find
+    // this test's doc by provenance rather than asserting a global count.
+    let fragment_docs =
+        store::recent_docs_for_source(DocSource::Fragment, 0, 100).expect("fragments");
+    let fragment_doc = fragment_docs
+        .iter()
+        .find(|doc| doc.content.contains("scriptkit://clipboard/entry-t7"))
+        .expect("fragment doc indexed with provenance");
+    assert!(fragment_doc
+        .title
+        .contains("scriptkit://clipboard/entry-t7"));
+
+    let note_doc = store::get_doc(DocSource::Note, &note_id.to_string())
+        .expect("note lookup")
+        .expect("note doc");
+    assert!(note_doc.content.contains("brain indexer note body"));
+
+    substrate.trash(&note_path).expect("trash note");
+    sync_notes_with_substrate(&substrate).expect("re-sync notes after trash");
+    assert!(
+        store::get_doc(DocSource::Note, &note_id.to_string())
+            .expect("note lookup after trash")
+            .is_none(),
+        "trashed note must be forgotten"
+    );
+}
+
+#[test]
+fn file_sources_rebuild_restores_doc_parity() {
+    init_test_db();
+    let tmp = tempfile::TempDir::new().expect("tempdir");
+    let substrate = test_substrate(&tmp.path().join("brain"));
+    let now = chrono::Utc
+        .with_ymd_and_hms(2026, 6, 12, 14, 30, 0)
+        .unwrap();
+
+    substrate
+        .append_to_day(
+            now,
+            DayEntry::Task {
+                body: "rebuild parity task".to_string(),
+                tags: vec!["t7".to_string()],
+                due: None,
+            },
+        )
+        .expect("append task");
+    let long = (0..250)
+        .map(|index| format!("parity{index}"))
+        .collect::<Vec<_>>()
+        .join(" ");
+    substrate
+        .write_fragment(
+            now,
+            "Slack Paste",
+            "scriptkit://clipboard/rebuild-t7",
+            &long,
+        )
+        .expect("write fragment");
+    let note_id = NoteId::new();
+    substrate
+        .write_document(
+            &substrate.paths().note_file("rebuild-note"),
+            &BrainFrontmatter::new(note_id, now, now),
+            "# Rebuild note\n\nparity body",
+        )
+        .expect("write note");
+
+    sync_notes_with_substrate(&substrate).expect("sync notes");
+    sync_day_pages_with_substrate(&substrate).expect("sync day pages");
+    sync_fragments_with_substrate(&substrate).expect("sync fragments");
+
+    let fragment_source_id = store::recent_docs_for_source(DocSource::Fragment, 0, 100)
+        .expect("fragment docs")
+        .into_iter()
+        .find(|doc| doc.content.contains("scriptkit://clipboard/rebuild-t7"))
+        .expect("fragment indexed before rebuild")
+        .source_id
+        .clone();
+    let note_source_id = note_id.to_string();
+    let day_source_id = "2026-06-12".to_string();
+
+    let before = [
+        snapshot_doc(DocSource::DayPage, &day_source_id).expect("day page indexed"),
+        snapshot_doc(DocSource::Fragment, &fragment_source_id).expect("fragment indexed"),
+        snapshot_doc(DocSource::Note, &note_source_id).expect("note indexed"),
+    ];
+
+    clear_brain_docs_for_rebuild_test(&[
+        (DocSource::DayPage, &day_source_id),
+        (DocSource::Fragment, &fragment_source_id),
+        (DocSource::Note, &note_source_id),
+    ]);
+    assert!(
+        snapshot_doc(DocSource::DayPage, &day_source_id).is_none()
+            && snapshot_doc(DocSource::Fragment, &fragment_source_id).is_none()
+            && snapshot_doc(DocSource::Note, &note_source_id).is_none(),
+        "rebuild test docs must be gone before re-sync"
+    );
+
+    sync_notes_with_substrate(&substrate).expect("re-sync notes");
+    sync_day_pages_with_substrate(&substrate).expect("re-sync day pages");
+    sync_fragments_with_substrate(&substrate).expect("re-sync fragments");
+
+    let after = [
+        snapshot_doc(DocSource::DayPage, &day_source_id).expect("day page rebuilt"),
+        snapshot_doc(DocSource::Fragment, &fragment_source_id).expect("fragment rebuilt"),
+        snapshot_doc(DocSource::Note, &note_source_id).expect("note rebuilt"),
+    ];
+    assert_eq!(before, after, "rebuild must restore indexed file sources");
+}
+
 #[test]
 fn capture_stores_sync_into_brain_and_respect_deletion() {
     init_test_db();
     let tmp = tempfile::TempDir::new().expect("tempdir");
 
-    // Todos: one open, one already deleted.
-    let menu_syntax_dir = tmp.path().join("menu-syntax");
-    std::fs::create_dir_all(&menu_syntax_dir).expect("mkdir");
-    std::fs::write(
-        menu_syntax_dir.join("todos.jsonl"),
-        concat!(
-            r#"{"schema":"menu-syntax.todo.v1","kind":"todo","id":"todo_open","body":"Renew passport","status":"open","tags":["errands"],"updatedAt":"2026-06-01T10:00:00Z","deletedAt":null}"#,
-            "\n",
-            r#"{"schema":"menu-syntax.todo.v1","kind":"todo","id":"todo_gone","body":"Old thing","status":"deleted","updatedAt":"2026-06-01T10:00:00Z","deletedAt":"2026-06-02T10:00:00Z"}"#,
-            "\n",
-        ),
-    )
-    .expect("seed todos");
-
     // Link + snippet through their real stores (same writers the `;` capture
-    // path uses).
+    // path uses). Todos live on day pages (indexed in T7), not capture stores.
     let link = match crate::menu_syntax::capture::parse_capture(
         ";link https://example.com Example description:Docs",
     ) {
@@ -1002,33 +1183,9 @@ fn capture_stores_sync_into_brain_and_respect_deletion() {
         .expect("write snippet");
 
     let synced = super::indexer::sync_capture_stores_in_sk_path(tmp.path()).expect("sync");
-    assert_eq!(
-        synced, 3,
-        "open todo + link + snippet (deleted todo skipped)"
-    );
+    assert_eq!(synced, 2, "link + snippet");
 
-    let todo = store::get_doc(DocSource::Capture, "todo:todo_open")
-        .unwrap()
-        .expect("open todo mirrored");
-    assert!(todo.content.contains("Renew passport"));
-    assert!(todo.content.contains("errands"));
-    assert!(
-        store::get_doc(DocSource::Capture, "todo:todo_gone")
-            .unwrap()
-            .is_none(),
-        "deleted todo must not enter the brain"
-    );
     let docs = store::recent_docs_for_source(DocSource::Capture, 0, 10).unwrap();
     assert!(docs.iter().any(|d| d.title == "Link: Example"));
     assert!(docs.iter().any(|d| d.title.starts_with("Snippet:")));
-
-    // Deleting the todo from its store must make the brain forget it.
-    std::fs::write(menu_syntax_dir.join("todos.jsonl"), "").expect("clear todos");
-    super::indexer::sync_capture_stores_in_sk_path(tmp.path()).expect("resync");
-    assert!(
-        store::get_doc(DocSource::Capture, "todo:todo_open")
-            .unwrap()
-            .is_none(),
-        "brain forgets a todo the user erased"
-    );
 }

@@ -9,19 +9,26 @@
 //!
 //! File layout expected under `$SK_PATH/menu-syntax/`:
 //!
-//! - `todos.jsonl` — `+todo` captures, one JSON line per entry.
 //! - `events.jsonl` — `+cal` captures.
 //! - `notes.jsonl` — `+note` captures (shipped example uses per-day markdown
 //!   but scaffolded handlers default to JSONL, so both are valid — the
 //!   reader only enumerates JSONL for now).
 //! - `drafts.jsonl` — `+social` draft append log.
 //! - `bookmarks.jsonl` — `+link` captures.
+//!
+//! Unchecked `;todo` tasks are read from `$SK_PATH/brain/days/*.md` (most
+//! recent 30 day pages).
 //! - `payloads/capture_v1-*.json` — per-execution payload tempfiles (written
 //!   by `menu_syntax::execute::write_payload_tempfile`).
 
 use std::fs::{read_dir, File};
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
+
+use chrono::NaiveDate;
+
+/// How many recent day pages to scan for unchecked todo task lines (v1).
+pub const RECENT_DAY_PAGE_SCAN_LIMIT: usize = 30;
 
 /// Maximum warning messages retained per `ReadArtifactReport`. Oracle iter 004
 /// explicit rule: the reader must tolerate dirty JSONL, surface warning
@@ -68,7 +75,7 @@ impl CaptureArtifactKind {
 
     pub fn filename(self) -> &'static str {
         match self {
-            Self::Todo => "todos.jsonl",
+            Self::Todo => "day-pages",
             Self::CalendarEvent => "events.jsonl",
             Self::Note => "notes.jsonl",
             Self::SocialDraft => "drafts.jsonl",
@@ -294,9 +301,13 @@ pub fn read_all_artifacts(sk_path: &Path) -> ReadArtifactReport {
     let base = sk_path.join("menu-syntax");
 
     for kind in CaptureArtifactKind::BROWSER_ORDER {
-        let filename = kind.filename();
-        let path = base.join(filename);
-        let sub = read_jsonl_artifact(&path, *kind);
+        let sub = if *kind == CaptureArtifactKind::Todo {
+            read_day_page_task_artifacts(sk_path)
+        } else {
+            let filename = kind.filename();
+            let path = base.join(filename);
+            read_jsonl_artifact(&path, *kind)
+        };
         report.merge(sub);
     }
 
@@ -329,21 +340,186 @@ pub fn search_root_todos_in_sk_path(
     if !options.enabled {
         return Vec::new();
     }
-    let path = sk_path
-        .join("menu-syntax")
-        .join(CaptureArtifactKind::Todo.filename());
-    let report = read_jsonl_artifact(&path, CaptureArtifactKind::Todo);
     let normalized_query = normalize_match_text(query);
-    let mut hits = report
-        .entries
+    let mut hits = collect_day_page_todo_hits(sk_path, RECENT_DAY_PAGE_SCAN_LIMIT)
         .into_iter()
-        .rev()
-        .filter_map(todo_hit_from_artifact)
         .filter(|hit| todo_hit_matches(hit, &normalized_query))
         .take(options.max_results)
         .collect::<Vec<_>>();
     hits.shrink_to_fit();
     hits
+}
+
+fn brain_days_dir(sk_path: &Path) -> PathBuf {
+    sk_path.join("brain").join("days")
+}
+
+fn recent_day_page_paths(sk_path: &Path, limit: usize) -> Vec<PathBuf> {
+    let days_dir = brain_days_dir(sk_path);
+    let Ok(entries) = read_dir(&days_dir) else {
+        return Vec::new();
+    };
+    let mut paths: Vec<(NaiveDate, PathBuf)> = entries
+        .filter_map(|entry| {
+            let entry = entry.ok()?;
+            let path = entry.path();
+            if !path.is_file() {
+                return None;
+            }
+            let date = path
+                .file_name()?
+                .to_string_lossy()
+                .strip_suffix(".md")?
+                .parse::<NaiveDate>()
+                .ok()?;
+            Some((date, path))
+        })
+        .collect();
+    paths.sort_by(|left, right| right.0.cmp(&left.0));
+    paths
+        .into_iter()
+        .take(limit)
+        .map(|(_, path)| path)
+        .collect()
+}
+
+pub fn read_day_page_task_artifacts(sk_path: &Path) -> ReadArtifactReport {
+    let mut report = ReadArtifactReport::default();
+    for path in recent_day_page_paths(sk_path, RECENT_DAY_PAGE_SCAN_LIMIT) {
+        let contents = match std::fs::read_to_string(&path) {
+            Ok(contents) => contents,
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => continue,
+            Err(err) => {
+                push_warning(
+                    &mut report,
+                    format!("could not read {}: {err}", path.display()),
+                );
+                report.skipped = report.skipped.saturating_add(1);
+                continue;
+            }
+        };
+        for (idx, line) in contents.lines().enumerate() {
+            let Some(parsed) = parse_unchecked_task_line(line) else {
+                continue;
+            };
+            report.entries.push(CaptureArtifact {
+                kind: CaptureArtifactKind::Todo,
+                path: path.clone(),
+                line_number: Some(idx + 1),
+                created_at: parsed.day_label.clone(),
+                snippet: truncate_snippet(&parsed.body),
+                raw_line: line.to_string(),
+            });
+        }
+    }
+    report
+}
+
+fn collect_day_page_todo_hits(sk_path: &Path, limit: usize) -> Vec<RootTodoSearchHit> {
+    let mut hits = Vec::new();
+    for path in recent_day_page_paths(sk_path, limit) {
+        let day_label = path
+            .file_stem()
+            .map(|stem| stem.to_string_lossy().to_string());
+        let Ok(contents) = std::fs::read_to_string(&path) else {
+            continue;
+        };
+        let lines: Vec<&str> = contents.lines().collect();
+        for (idx, line) in lines.iter().enumerate().rev() {
+            let Some(parsed) = parse_unchecked_task_line(line) else {
+                continue;
+            };
+            let line_number = idx + 1;
+            let stable_key = format!(
+                "day/{}:{}",
+                path.file_name()
+                    .map(|name| name.to_string_lossy().to_string())
+                    .unwrap_or_else(|| "unknown.md".to_string()),
+                line_number
+            );
+            let subtitle = todo_subtitle(
+                &parsed.tags,
+                parsed.priority,
+                parsed.due.as_deref(),
+                day_label.as_deref(),
+            );
+            hits.push(RootTodoSearchHit {
+                stable_key,
+                title: parsed.body.clone(),
+                body: parsed.body,
+                subtitle,
+                tags: parsed.tags,
+                priority: parsed.priority,
+                due: parsed.due,
+                created_at: day_label.clone(),
+                path: path.clone(),
+                line_number: Some(line_number),
+                raw_line: line.to_string(),
+            });
+        }
+    }
+    hits
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ParsedDayTaskLine {
+    body: String,
+    tags: Vec<String>,
+    due: Option<String>,
+    priority: Option<u8>,
+    day_label: Option<String>,
+}
+
+fn parse_unchecked_task_line(line: &str) -> Option<ParsedDayTaskLine> {
+    let trimmed = line.trim();
+    if trimmed.is_empty()
+        || trimmed.contains("- [x]")
+        || trimmed.contains("- [X]")
+        || trimmed.starts_with('>')
+    {
+        return None;
+    }
+    let marker = "- [ ] ";
+    let rest = trimmed.split_once(marker).map(|(_, tail)| tail.trim())?;
+    let mut body_parts = Vec::new();
+    let mut tags = Vec::new();
+    let mut due = None;
+    let mut priority = None;
+    for token in rest.split_whitespace() {
+        if let Some(tag) = token.strip_prefix('#') {
+            if !tag.is_empty() {
+                tags.push(tag.to_string());
+            }
+        } else if let Some(due_value) = token.strip_prefix("due:") {
+            if !due_value.is_empty() {
+                due = Some(due_value.to_string());
+            }
+        } else if token.len() == 2 {
+            let lower = token.to_ascii_lowercase();
+            if lower.starts_with('p') {
+                if let Ok(value) = lower[1..].parse::<u8>() {
+                    if (1..=4).contains(&value) {
+                        priority = Some(value);
+                        continue;
+                    }
+                }
+            }
+            body_parts.push(token);
+        } else {
+            body_parts.push(token);
+        }
+    }
+    let body = body_parts.join(" ");
+    if body.trim().is_empty() {
+        return None;
+    }
+    Some(ParsedDayTaskLine {
+        body,
+        tags,
+        due,
+        priority,
+        day_label: None,
+    })
 }
 
 pub fn search_root_object_candidates_in_sk_path(
@@ -507,105 +683,6 @@ fn search_jsonl_object_candidates(
         .collect()
 }
 
-fn todo_hit_from_artifact(artifact: CaptureArtifact) -> Option<RootTodoSearchHit> {
-    if artifact.kind != CaptureArtifactKind::Todo {
-        return None;
-    }
-    let parsed = serde_json::from_str::<serde_json::Value>(&artifact.raw_line).ok()?;
-    if parsed
-        .get("deletedAt")
-        .and_then(|value| value.as_str())
-        .map(|value| !value.trim().is_empty())
-        .unwrap_or(false)
-        || parsed
-            .get("status")
-            .and_then(|value| value.as_str())
-            .map(|value| value.eq_ignore_ascii_case("deleted"))
-            .unwrap_or(false)
-    {
-        return None;
-    }
-    let body = parsed
-        .get("body")
-        .and_then(|value| value.as_str())
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .unwrap_or(artifact.snippet.as_str())
-        .to_string();
-    let tags = parsed
-        .get("tags")
-        .and_then(|value| value.as_array())
-        .map(|values| {
-            values
-                .iter()
-                .filter_map(|value| value.as_str())
-                .map(str::trim)
-                .filter(|value| !value.is_empty())
-                .map(ToString::to_string)
-                .collect::<Vec<_>>()
-        })
-        .unwrap_or_default();
-    let priority = parsed
-        .get("priority")
-        .and_then(|value| value.as_u64())
-        .and_then(|value| u8::try_from(value).ok());
-    let due = parsed
-        .get("due")
-        .and_then(|value| value.as_str())
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .map(ToString::to_string)
-        .or_else(|| first_date_display(&parsed));
-    let subtitle = todo_subtitle(
-        &tags,
-        priority,
-        due.as_deref(),
-        artifact.created_at.as_deref(),
-    );
-    let line_number = artifact.line_number;
-    let record_id = parsed
-        .get("id")
-        .and_then(|value| value.as_str())
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .map(ToString::to_string);
-    let stable_key = record_id.unwrap_or_else(|| {
-        format!(
-            "todo/{}:{}",
-            artifact.path.display(),
-            line_number.unwrap_or_default()
-        )
-    });
-    Some(RootTodoSearchHit {
-        stable_key,
-        title: body.clone(),
-        body,
-        subtitle,
-        tags,
-        priority,
-        due,
-        created_at: artifact.created_at,
-        path: artifact.path,
-        line_number,
-        raw_line: artifact.raw_line,
-    })
-}
-
-fn first_date_display(parsed: &serde_json::Value) -> Option<String> {
-    parsed
-        .get("dates")
-        .and_then(|value| value.as_array())
-        .and_then(|dates| dates.first())
-        .and_then(|date| {
-            date.get("iso")
-                .or_else(|| date.get("source"))
-                .and_then(|value| value.as_str())
-        })
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .map(ToString::to_string)
-}
-
 fn todo_subtitle(
     tags: &[String],
     priority: Option<u8>,
@@ -737,25 +814,29 @@ mod tests {
         path
     }
 
+    fn write_day_page_task(dir: &Path, date: &str, line: &str) -> PathBuf {
+        let path = dir.join("brain").join("days").join(format!("{date}.md"));
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent).expect("mkdir day page parent");
+        }
+        use std::io::Write as _;
+        let mut file = fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&path)
+            .expect("open day page");
+        writeln!(file, "{line}").expect("append day page line");
+        path
+    }
+
     #[test]
-    fn read_jsonl_artifact_returns_all_valid_entries() {
+    fn read_day_page_task_artifacts_returns_unchecked_task_lines() {
         let tmp = TempDir::new().expect("tempdir");
-        let path = write_file(
-            tmp.path(),
-            "todos.jsonl",
-            r#"{"body":"buy milk","createdAt":"2026-04-24T00:00:00Z"}
-{"body":"walk dog","createdAt":"2026-04-24T00:01:00Z"}
-"#,
-        );
-        let report = read_jsonl_artifact(&path, CaptureArtifactKind::Todo);
+        write_day_page_task(tmp.path(), "2026-05-19", "09:00 - [ ] buy milk");
+        write_day_page_task(tmp.path(), "2026-05-19", "09:01 - [ ] walk dog");
+        let report = read_day_page_task_artifacts(tmp.path());
         assert_eq!(report.entries.len(), 2);
-        assert_eq!(report.skipped, 0);
-        assert!(report.warnings.is_empty());
         assert_eq!(report.entries[0].snippet, "buy milk");
-        assert_eq!(
-            report.entries[0].created_at.as_deref(),
-            Some("2026-04-24T00:00:00Z")
-        );
         assert_eq!(report.entries[0].line_number, Some(1));
         assert_eq!(report.entries[1].line_number, Some(2));
     }
@@ -763,13 +844,15 @@ mod tests {
     #[test]
     fn search_root_todos_reads_newest_first_and_matches_tags_due_and_body() {
         let tmp = TempDir::new().expect("tempdir");
-        let base = tmp.path().join("menu-syntax");
-        write_file(
-            &base,
-            "todos.jsonl",
-            r#"{"body":"renew passport","tags":["errands"],"priority":1,"createdAt":"2026-05-19T10:00:00Z"}
-{"body":"book design review","tags":["work"],"due":"Friday","createdAt":"2026-05-19T11:00:00Z"}
-"#,
+        write_day_page_task(
+            tmp.path(),
+            "2026-05-19",
+            "09:00 - [ ] renew passport #errands p1",
+        );
+        write_day_page_task(
+            tmp.path(),
+            "2026-05-20",
+            "10:00 - [ ] book design review #work due:Friday",
         );
 
         let hits = search_root_todos_in_sk_path(
@@ -794,14 +877,12 @@ mod tests {
     }
 
     #[test]
-    fn root_todo_object_candidates_prefer_record_id_over_line_key() {
+    fn root_todo_object_candidates_use_day_page_line_keys() {
         let tmp = TempDir::new().expect("tempdir");
-        let base = tmp.path().join("menu-syntax");
-        write_file(
-            &base,
-            "todos.jsonl",
-            r#"{"id":"todo_stable_1","body":"review selected mutation","status":"open","createdAt":"2026-05-20T10:00:00Z"}
-"#,
+        write_day_page_task(
+            tmp.path(),
+            "2026-05-20",
+            "09:00 - [ ] review selected mutation",
         );
 
         let hits = search_root_object_candidates_in_sk_path(
@@ -812,7 +893,7 @@ mod tests {
         );
 
         assert_eq!(hits.len(), 1);
-        assert_eq!(hits[0].id, "todo_stable_1");
+        assert_eq!(hits[0].id, "day/2026-05-20.md:1");
         assert_eq!(hits[0].label, "review selected mutation");
     }
 
@@ -867,16 +948,12 @@ mod tests {
     }
 
     #[test]
-    fn search_root_todos_ignores_deleted_app_owned_rows() {
+    fn search_root_todos_ignores_checked_task_lines() {
         let tmp = TempDir::new().expect("tempdir");
-        let base = tmp.path().join("menu-syntax");
-        write_file(
-            &base,
-            "todos.jsonl",
-            r#"{"body":"old hidden task","status":"deleted","createdAt":"2026-05-19T10:00:00Z"}
-{"body":"new hidden task","deletedAt":"2026-05-19T11:00:00Z","createdAt":"2026-05-19T11:00:00Z"}
-{"body":"visible task","status":"open","createdAt":"2026-05-19T12:00:00Z"}
-"#,
+        write_day_page_task(
+            tmp.path(),
+            "2026-05-19",
+            "09:00 - [x] old hidden task\n10:00 - [ ] visible task",
         );
 
         let hits =
@@ -891,14 +968,14 @@ mod tests {
         let tmp = TempDir::new().expect("tempdir");
         let path = write_file(
             tmp.path(),
-            "todos.jsonl",
+            "notes.jsonl",
             r#"{"body":"ok"}
 this is not json
 {"body":"also ok"}
 {oops: true}
 "#,
         );
-        let report = read_jsonl_artifact(&path, CaptureArtifactKind::Todo);
+        let report = read_jsonl_artifact(&path, CaptureArtifactKind::Note);
         assert_eq!(report.entries.len(), 2, "only valid JSON lines surface");
         assert_eq!(report.skipped, 2, "each malformed line bumps skipped");
         assert!(
@@ -911,7 +988,7 @@ this is not json
     fn read_jsonl_artifact_handles_missing_file_gracefully() {
         let tmp = TempDir::new().expect("tempdir");
         let path = tmp.path().join("does-not-exist.jsonl");
-        let report = read_jsonl_artifact(&path, CaptureArtifactKind::Todo);
+        let report = read_jsonl_artifact(&path, CaptureArtifactKind::Note);
         assert!(report.entries.is_empty());
         assert_eq!(report.skipped, 0);
         assert!(
@@ -925,10 +1002,10 @@ this is not json
         let tmp = TempDir::new().expect("tempdir");
         let path = write_file(
             tmp.path(),
-            "todos.jsonl",
+            "notes.jsonl",
             "\n\n{\"body\":\"ok\"}\n  \n{\"body\":\"also\"}\n\n",
         );
-        let report = read_jsonl_artifact(&path, CaptureArtifactKind::Todo);
+        let report = read_jsonl_artifact(&path, CaptureArtifactKind::Note);
         assert_eq!(report.entries.len(), 2);
         assert_eq!(report.skipped, 0);
     }
@@ -941,8 +1018,8 @@ this is not json
             long_body
         );
         let tmp = TempDir::new().expect("tempdir");
-        let path = write_file(tmp.path(), "todos.jsonl", &format!("{line}\n"));
-        let report = read_jsonl_artifact(&path, CaptureArtifactKind::Todo);
+        let path = write_file(tmp.path(), "notes.jsonl", &format!("{line}\n"));
+        let report = read_jsonl_artifact(&path, CaptureArtifactKind::Note);
         assert_eq!(report.entries.len(), 1);
         let snippet = &report.entries[0].snippet;
         assert!(
@@ -1018,7 +1095,7 @@ this is not json
         let sk = tmp.path().join(".scriptkit");
         let base = sk.join("menu-syntax");
 
-        write_file(&base, "todos.jsonl", "{\"body\":\"t\"}\n");
+        write_day_page_task(&sk, "2026-05-20", "09:00 - [ ] task line");
         write_file(&base, "events.jsonl", "{\"body\":\"e\"}\n");
         write_file(&base, "notes.jsonl", "{\"body\":\"n\"}\n");
         write_file(&base, "drafts.jsonl", "{\"body\":\"d\"}\n");
@@ -1056,12 +1133,11 @@ this is not json
         let tmp = TempDir::new().expect("tempdir");
         let sk = tmp.path().join(".scriptkit");
         let base = sk.join("menu-syntax");
-        write_file(&base, "todos.jsonl", "bad json\n{\"body\":\"ok\"}\n");
         write_file(&base, "events.jsonl", "nope\n");
         let report = read_all_artifacts(&sk);
-        assert_eq!(report.entries.len(), 1, "only valid lines surface");
-        assert_eq!(report.skipped, 2, "dirty rows across files accumulate");
-        assert_eq!(report.warnings.len(), 2);
+        assert_eq!(report.entries.len(), 0, "only valid lines surface");
+        assert_eq!(report.skipped, 1, "dirty rows across files accumulate");
+        assert_eq!(report.warnings.len(), 1);
     }
 
     #[test]
@@ -1071,8 +1147,8 @@ this is not json
         for _ in 0..(MAX_WARNINGS * 3) {
             buf.push_str("garbage\n");
         }
-        let path = write_file(tmp.path(), "todos.jsonl", &buf);
-        let report = read_jsonl_artifact(&path, CaptureArtifactKind::Todo);
+        let path = write_file(tmp.path(), "notes.jsonl", &buf);
+        let report = read_jsonl_artifact(&path, CaptureArtifactKind::Note);
         assert_eq!(report.entries.len(), 0);
         assert_eq!(
             report.warnings.len(),
@@ -1088,7 +1164,7 @@ this is not json
 
     #[test]
     fn artifact_filename_for_matches_templates_and_shipped_examples() {
-        assert_eq!(CaptureArtifactKind::Todo.filename(), "todos.jsonl");
+        assert_eq!(CaptureArtifactKind::Todo.filename(), "day-pages");
         assert_eq!(
             CaptureArtifactKind::CalendarEvent.filename(),
             "events.jsonl"

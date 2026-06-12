@@ -11,7 +11,10 @@
 
 use super::embedder::{resolve_embed_model, BrainEmbedder};
 use super::store::{self, DocSource};
-use anyhow::Result;
+use super::substrate::BrainSubstrate;
+use anyhow::{Context as _, Result};
+use std::fs;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, RecvTimeoutError, Sender};
 use std::sync::OnceLock;
@@ -112,6 +115,14 @@ pub fn run_cycle(embedder: &mut Option<BrainEmbedder>) -> Result<()> {
         tracing::debug!(target: "script_kit::brain", error = %err, "notes sync skipped");
         0
     });
+    let day_pages = sync_day_pages().unwrap_or_else(|err| {
+        tracing::debug!(target: "script_kit::brain", error = %err, "day page sync skipped");
+        0
+    });
+    let fragments = sync_fragments().unwrap_or_else(|err| {
+        tracing::debug!(target: "script_kit::brain", error = %err, "fragment sync skipped");
+        0
+    });
     let promoted = sync_pinned_clipboard().unwrap_or_else(|err| {
         tracing::debug!(target: "script_kit::brain", error = %err, "clipboard sync skipped");
         0
@@ -128,10 +139,17 @@ pub fn run_cycle(embedder: &mut Option<BrainEmbedder>) -> Result<()> {
         tracing::warn!(target: "script_kit::brain", error = %err, "embedding pass skipped");
         0
     });
-    if synced > 0 || promoted > 0 || captured > 0 || embedded > 0 {
+    if synced > 0 || day_pages > 0 || fragments > 0 || promoted > 0 || captured > 0 || embedded > 0
+    {
         tracing::info!(
             target: "script_kit::brain",
-            synced, promoted, captured, embedded, "brain index cycle"
+            synced,
+            day_pages,
+            fragments,
+            promoted,
+            captured,
+            embedded,
+            "brain index cycle"
         );
     }
     // Daily distillation pass (no-op until due; silently skips without pi).
@@ -252,38 +270,260 @@ fn sync_browser_attention() {
     }
 }
 
-/// Mirror active notes into brain_docs. Hash-guarded upserts make this
-/// cheap, and deletion sync forgets notes the user deleted — a brain that
-/// remembers what its owner erased is a bug, not a feature.
+fn brain_substrate() -> BrainSubstrate {
+    BrainSubstrate::default_kit()
+}
+
+fn list_markdown_files(dir: &Path) -> Result<Vec<PathBuf>> {
+    if !dir.exists() {
+        return Ok(Vec::new());
+    }
+    let mut files = Vec::new();
+    for entry in fs::read_dir(dir).with_context(|| format!("reading {}", dir.display()))? {
+        let entry = entry.context("reading dir entry")?;
+        let path = entry.path();
+        if path.extension().and_then(|ext| ext.to_str()) != Some("md") {
+            continue;
+        }
+        if is_conflict_copy_path(&path) {
+            continue;
+        }
+        files.push(path);
+    }
+    files.sort();
+    Ok(files)
+}
+
+fn is_conflict_copy_path(path: &Path) -> bool {
+    path.file_stem()
+        .and_then(|stem| stem.to_str())
+        .is_some_and(|stem| stem.contains(".conflict-"))
+}
+
+fn title_from_note_body(body: &str) -> String {
+    body.lines()
+        .find(|line| !line.trim().is_empty())
+        .map(|line| line.trim().trim_start_matches('#').trim().to_string())
+        .filter(|title| !title.is_empty())
+        .unwrap_or_else(|| "Untitled Note".to_string())
+}
+
+fn fragment_title(fragment_id: &str, source: Option<&str>) -> String {
+    if let Some(uri) = source {
+        format!("Fragment: {uri}")
+    } else {
+        format!("Fragment: {fragment_id}")
+    }
+}
+
+/// Meta key holding the source_ids produced by the LAST file sync for one
+/// (source, substrate base path) pair.
+///
+/// Why scoped instead of `retain_docs`: a blanket "keep only what I just saw"
+/// retain deletes every doc of that source produced by ANY other root —
+/// brain tests share one process-global DB across parallel threads (each
+/// test syncing its own temp substrate), and the same hazard exists for any
+/// future multi-root setup. Scoping the previous-set by substrate base path
+/// means each root only ever forgets docs it produced itself; production
+/// behavior is unchanged (one stable `~/.scriptkit/brain` base → trashed or
+/// deleted files are forgotten on the next cycle).
+fn file_sync_meta_key(source: DocSource, base: &Path) -> String {
+    use sha2::{Digest, Sha256};
+    let canonical = std::fs::canonicalize(base).unwrap_or_else(|_| base.to_path_buf());
+    let digest = Sha256::digest(canonical.to_string_lossy().as_bytes());
+    // First 8 bytes = 16 hex chars: plenty to keep distinct roots apart.
+    let hex: String = digest
+        .iter()
+        .take(8)
+        .map(|byte| format!("{byte:02x}"))
+        .collect();
+    format!("file_sync_ids:{}:{hex}", source.as_str())
+}
+
+/// Forget docs this substrate produced in a previous sync that no longer
+/// exist on disk: previous_set − current_set via targeted deletes, then the
+/// current set is persisted for the next cycle. A fresh DB has an empty
+/// previous set, which is exactly right — nothing stale can exist there, so
+/// the full-rebuild contract (delete brain.sqlite, re-run, parity) holds.
+fn forget_missing_file_docs(source: DocSource, base: &Path, live_ids: &[String]) -> Result<usize> {
+    let key = file_sync_meta_key(source, base);
+    let previous: std::collections::HashSet<String> = store::meta_get(&key)?
+        .map(|value| value.lines().map(str::to_string).collect())
+        .unwrap_or_default();
+    let live: std::collections::HashSet<&str> = live_ids.iter().map(String::as_str).collect();
+    let stale: Vec<String> = previous
+        .into_iter()
+        .filter(|id| !live.contains(id.as_str()))
+        .collect();
+    let removed = if stale.is_empty() {
+        0
+    } else {
+        store::delete_docs_by_source_ids(source, &stale)?
+    };
+    store::meta_set(&key, &live_ids.join("\n"))?;
+    Ok(removed)
+}
+
+/// Mirror active notes into brain_docs from canonical `brain/notes/*.md`
+/// files. Hash-guarded upserts make this cheap, and deletion sync forgets
+/// notes the user trashed — a brain that remembers what its owner erased is
+/// a bug, not a feature.
 fn sync_notes() -> Result<usize> {
-    let notes = crate::notes::get_all_notes()?;
+    sync_notes_with_substrate(&brain_substrate())
+}
+
+pub(crate) fn sync_notes_with_substrate(substrate: &BrainSubstrate) -> Result<usize> {
+    let notes_dir = substrate.paths().notes_dir();
     let mut synced = 0usize;
-    let mut live_ids = Vec::with_capacity(notes.len());
-    for note in &notes {
-        let source_id = note.id.to_string();
-        let updated_at = note.updated_at.timestamp();
-        store::upsert_doc(
-            DocSource::Note,
-            &source_id,
-            &note.title,
-            &note.content,
-            updated_at,
-        )?;
+    let mut live_ids = Vec::new();
+    for path in list_markdown_files(&notes_dir)? {
+        let raw = match fs::read_to_string(&path) {
+            Ok(raw) => raw,
+            Err(error) => {
+                tracing::debug!(
+                    target: "script_kit::brain",
+                    path = %path.display(),
+                    error = %error,
+                    "note file read skipped"
+                );
+                continue;
+            }
+        };
+        let (frontmatter, body) = match substrate.parse_document(&raw) {
+            Ok(parsed) => parsed,
+            Err(error) => {
+                tracing::debug!(
+                    target: "script_kit::brain",
+                    path = %path.display(),
+                    error = %error,
+                    "note file parse skipped"
+                );
+                continue;
+            }
+        };
+        let title = title_from_note_body(&body);
+        let source_id = frontmatter.id.to_string();
+        let updated_at = frontmatter.updated.timestamp();
+        store::upsert_doc(DocSource::Note, &source_id, &title, &body, updated_at)?;
         live_ids.push(source_id);
         synced += 1;
     }
-    let removed = store::retain_docs(DocSource::Note, &live_ids)?;
+    let removed = forget_missing_file_docs(DocSource::Note, substrate.paths().base(), &live_ids)?;
     if removed > 0 {
         tracing::info!(target: "script_kit::brain", removed, "brain forgot deleted notes");
     }
     Ok(synced)
 }
 
-/// Mirror `;` capture stores into brain_docs: todos (todos.jsonl), links
-/// (links.md), and snippets (snippets.md). Notes captured via `;note` already
-/// arrive through [`sync_notes`]. Same contract as the other mirrors:
-/// hash-guarded upserts, and deletion sync so a todo/link/snippet the user
-/// removed is forgotten by the brain.
+/// Mirror day pages (`brain/days/YYYY-MM-DD.md`) into brain_docs — one doc
+/// per day, re-upserted only when content hash changes.
+fn sync_day_pages() -> Result<usize> {
+    sync_day_pages_with_substrate(&brain_substrate())
+}
+
+pub(crate) fn sync_day_pages_with_substrate(substrate: &BrainSubstrate) -> Result<usize> {
+    let days_dir = substrate.paths().days_dir();
+    let mut synced = 0usize;
+    let mut live_ids = Vec::new();
+    for path in list_markdown_files(&days_dir)? {
+        let source_id = match path.file_stem().and_then(|stem| stem.to_str()) {
+            Some(stem) if !stem.is_empty() => stem.to_string(),
+            _ => continue,
+        };
+        let content = match fs::read_to_string(&path) {
+            Ok(content) => content,
+            Err(error) => {
+                tracing::debug!(
+                    target: "script_kit::brain",
+                    path = %path.display(),
+                    error = %error,
+                    "day page read skipped"
+                );
+                continue;
+            }
+        };
+        let title = format!("Day Page {source_id}");
+        let updated_at = file_mtime_timestamp(&path);
+        store::upsert_doc(DocSource::DayPage, &source_id, &title, &content, updated_at)?;
+        live_ids.push(source_id);
+        synced += 1;
+    }
+    let removed =
+        forget_missing_file_docs(DocSource::DayPage, substrate.paths().base(), &live_ids)?;
+    if removed > 0 {
+        tracing::info!(target: "script_kit::brain", removed, "brain forgot deleted day pages");
+    }
+    Ok(synced)
+}
+
+/// Mirror fragment files (`brain/fragments/*.md`) into brain_docs — one doc
+/// per fragment with provenance from frontmatter.
+fn sync_fragments() -> Result<usize> {
+    sync_fragments_with_substrate(&brain_substrate())
+}
+
+pub(crate) fn sync_fragments_with_substrate(substrate: &BrainSubstrate) -> Result<usize> {
+    let fragments_dir = substrate.paths().fragments_dir();
+    let mut synced = 0usize;
+    let mut live_ids = Vec::new();
+    for path in list_markdown_files(&fragments_dir)? {
+        let fragment_id = match path.file_stem().and_then(|stem| stem.to_str()) {
+            Some(stem) if !stem.is_empty() => stem.to_string(),
+            _ => continue,
+        };
+        let raw = match fs::read_to_string(&path) {
+            Ok(raw) => raw,
+            Err(error) => {
+                tracing::debug!(
+                    target: "script_kit::brain",
+                    path = %path.display(),
+                    error = %error,
+                    "fragment read skipped"
+                );
+                continue;
+            }
+        };
+        let (frontmatter, body) = match substrate.parse_document(&raw) {
+            Ok(parsed) => parsed,
+            Err(error) => {
+                tracing::debug!(
+                    target: "script_kit::brain",
+                    path = %path.display(),
+                    error = %error,
+                    "fragment parse skipped"
+                );
+                continue;
+            }
+        };
+        let title = fragment_title(&fragment_id, frontmatter.source.as_deref());
+        let mut content = body;
+        if let Some(source) = &frontmatter.source {
+            content.push_str(&format!("\n\nProvenance: {source}"));
+        }
+        let updated_at = frontmatter.updated.timestamp();
+        store::upsert_doc(
+            DocSource::Fragment,
+            &fragment_id,
+            &title,
+            &content,
+            updated_at,
+        )?;
+        live_ids.push(fragment_id);
+        synced += 1;
+    }
+    let removed =
+        forget_missing_file_docs(DocSource::Fragment, substrate.paths().base(), &live_ids)?;
+    if removed > 0 {
+        tracing::info!(target: "script_kit::brain", removed, "brain forgot deleted fragments");
+    }
+    Ok(synced)
+}
+
+/// Mirror `;` capture stores into brain_docs: links (`links.md`) and snippets
+/// (`snippets.md`). Notes captured via `;note` already arrive through
+/// [`sync_notes`]. Todos now live on day pages (indexed in T7). Same contract
+/// as the other mirrors: hash-guarded upserts, and deletion sync so a
+/// link/snippet the user removed is forgotten by the brain.
 fn sync_capture_stores() -> Result<usize> {
     sync_capture_stores_in_sk_path(&capture_sk_path())
 }
@@ -315,67 +555,6 @@ fn file_mtime_timestamp(path: &std::path::Path) -> i64 {
 pub(crate) fn sync_capture_stores_in_sk_path(sk_path: &std::path::Path) -> Result<usize> {
     let mut synced = 0usize;
     let mut live_ids: Vec<String> = Vec::new();
-
-    // Todos: ~/.scriptkit/menu-syntax/todos.jsonl. Done todos stay (a kept
-    // commitment is still memory); deleted ones are erased here too.
-    let todos_path = sk_path.join("menu-syntax").join("todos.jsonl");
-    if let Ok(contents) = std::fs::read_to_string(&todos_path) {
-        let fallback_ts = file_mtime_timestamp(&todos_path);
-        for line in contents.lines() {
-            let Ok(record) = serde_json::from_str::<serde_json::Value>(line.trim()) else {
-                continue;
-            };
-            let deleted = record
-                .get("deletedAt")
-                .and_then(|v| v.as_str())
-                .map(|v| !v.trim().is_empty())
-                .unwrap_or(false)
-                || record
-                    .get("status")
-                    .and_then(|v| v.as_str())
-                    .map(|v| v.eq_ignore_ascii_case("deleted"))
-                    .unwrap_or(false);
-            if deleted {
-                continue;
-            }
-            let Some(id) = record.get("id").and_then(|v| v.as_str()) else {
-                continue;
-            };
-            let body = record.get("body").and_then(|v| v.as_str()).unwrap_or("");
-            if body.trim().is_empty() {
-                continue;
-            }
-            let mut content = body.to_string();
-            for (key, label) in [
-                ("status", "status"),
-                ("due", "due"),
-                ("remindAt", "remind at"),
-                ("snoozeUntil", "snoozed until"),
-                ("deferUntil", "deferred until"),
-            ] {
-                if let Some(value) = record.get(key).and_then(|v| v.as_str()) {
-                    content.push_str(&format!("\n{label}: {value}"));
-                }
-            }
-            if let Some(tags) = record.get("tags").and_then(|v| v.as_array()) {
-                let tags: Vec<&str> = tags.iter().filter_map(|t| t.as_str()).collect();
-                if !tags.is_empty() {
-                    content.push_str(&format!("\ntags: {}", tags.join(", ")));
-                }
-            }
-            let updated_at = record
-                .get("updatedAt")
-                .and_then(|v| v.as_str())
-                .and_then(|v| chrono::DateTime::parse_from_rfc3339(v).ok())
-                .map(|dt| dt.timestamp())
-                .unwrap_or(fallback_ts);
-            let title: String = format!("Todo: {}", body.chars().take(60).collect::<String>());
-            let source_id = format!("todo:{id}");
-            store::upsert_doc(DocSource::Capture, &source_id, &title, &content, updated_at)?;
-            live_ids.push(source_id);
-            synced += 1;
-        }
-    }
 
     // Links: plugins/main/scriptlets/links.md sections.
     let links_path = crate::scriptlets::link_markdown_store::links_markdown_path(sk_path);

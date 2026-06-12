@@ -1,0 +1,73 @@
+//! Fragment writer for long captures.
+
+use anyhow::Result;
+use chrono::{DateTime, Utc};
+use chrono_tz::Tz;
+
+use crate::notes::NoteId;
+
+use super::day::local_day_and_time;
+use super::frontmatter::BrainFrontmatter;
+use super::io::atomic_write;
+use super::paths::BrainPaths;
+use super::slug::{dedupe_slug_in_dir, source_slug};
+use super::words::{excerpt_words, word_count};
+
+/// Relative path + excerpt returned for day-page fragment references.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FragmentReference {
+    pub excerpt: String,
+    pub relative_link: String,
+}
+
+/// Word count above which content should become a fragment file.
+pub const FRAGMENT_WORD_THRESHOLD: usize = 200;
+
+/// Target excerpt length for day-page fragment reference lines.
+pub const FRAGMENT_EXCERPT_WORDS: usize = 40;
+
+pub fn write_fragment(
+    paths: &BrainPaths,
+    now: DateTime<Utc>,
+    tz: Tz,
+    source_label: &str,
+    source_uri: &str,
+    content: &str,
+) -> Result<Option<FragmentReference>> {
+    write_fragment_with_why(paths, now, tz, source_label, source_uri, content, None)
+}
+
+pub fn write_fragment_with_why(
+    paths: &BrainPaths,
+    now: DateTime<Utc>,
+    tz: Tz,
+    source_label: &str,
+    source_uri: &str,
+    content: &str,
+    why: Option<&str>,
+) -> Result<Option<FragmentReference>> {
+    if word_count(content) <= FRAGMENT_WORD_THRESHOLD {
+        return Ok(None);
+    }
+
+    let (date, time_hm) = local_day_and_time(now, tz);
+    let stamp = time_hm.replace(':', "");
+    let base_id = format!("{date}-{stamp}-{}", source_slug(source_label));
+    let fragment_id = dedupe_slug_in_dir(&paths.fragments_dir(), &base_id);
+    let fragment_path = paths.fragment_file(&fragment_id);
+
+    let mut frontmatter = BrainFrontmatter::new(NoteId::new(), now, now).with_source(source_uri);
+    if let Some(why) = why.filter(|value| !value.trim().is_empty()) {
+        frontmatter = frontmatter.with_why(why);
+    }
+    let document = frontmatter.render(content.trim());
+    atomic_write(&fragment_path, &document)?;
+
+    let excerpt = excerpt_words(content, FRAGMENT_EXCERPT_WORDS);
+    let relative_link = format!("../fragments/{fragment_id}.md");
+
+    Ok(Some(FragmentReference {
+        excerpt,
+        relative_link,
+    }))
+}

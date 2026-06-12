@@ -29,6 +29,8 @@ pub enum DocSource {
     Clipboard,
     Activity,
     Capture,
+    DayPage,
+    Fragment,
 }
 
 impl DocSource {
@@ -39,6 +41,8 @@ impl DocSource {
             DocSource::Clipboard => "clipboard",
             DocSource::Activity => "activity",
             DocSource::Capture => "capture",
+            DocSource::DayPage => "day_page",
+            DocSource::Fragment => "fragment",
         }
     }
 
@@ -49,6 +53,8 @@ impl DocSource {
             "clipboard" => Some(DocSource::Clipboard),
             "activity" => Some(DocSource::Activity),
             "capture" => Some(DocSource::Capture),
+            "day_page" => Some(DocSource::DayPage),
+            "fragment" => Some(DocSource::Fragment),
             _ => None,
         }
     }
@@ -61,12 +67,82 @@ impl DocSource {
             DocSource::Clipboard => "Clipboard",
             DocSource::Activity => "Activity journal",
             DocSource::Capture => "Capture",
+            DocSource::DayPage => "Day Page",
+            DocSource::Fragment => "Fragment",
         }
     }
 }
 
 /// Max lines retained in a daily activity journal (newest first).
 const ACTIVITY_JOURNAL_MAX_LINES: usize = 400;
+
+/// Low attention weight for auto-kept clipboard sediment. Deliberate captures
+/// and chat turns use weight 2 — kept copies must not outrank them at equal
+/// relevance.
+pub const CLIPBOARD_SEDIMENT_SIGNAL_WEIGHT: i64 = 1;
+
+/// Memory tier for brain-kept clipboard entries (stored on the clipboard row;
+/// T7 indexer reads this when syncing sediment docs).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ClipboardSedimentTier {
+    /// Auto-kept URLs and re-copy promotions.
+    Sediment = 1,
+}
+
+impl ClipboardSedimentTier {
+    pub fn as_i64(self) -> i64 {
+        self as i64
+    }
+
+    pub fn signal_weight(self) -> i64 {
+        CLIPBOARD_SEDIMENT_SIGNAL_WEIGHT
+    }
+}
+
+/// Record low-weight attention signals for clipboard sediment content.
+/// Fire-and-forget; never blocks the monitor path.
+pub fn record_sediment_signals(content: &str) {
+    let text = content.trim().to_string();
+    if text.is_empty() {
+        return;
+    }
+    let _ = std::thread::Builder::new()
+        .name("script-kit-clipboard-sediment-signal".to_string())
+        .spawn(move || {
+            let _ = init_brain_db();
+            for topic in sediment_signal_topics(&text) {
+                let _ = record_signal(
+                    &topic,
+                    ClipboardSedimentTier::Sediment.signal_weight(),
+                    "clipboard_sediment",
+                );
+            }
+        });
+}
+
+fn sediment_signal_topics(content: &str) -> Vec<String> {
+    let trimmed = content.trim();
+    if trimmed.starts_with("http://") || trimmed.starts_with("https://") {
+        if let Some(host) = trimmed
+            .trim_start_matches("https://")
+            .trim_start_matches("http://")
+            .split('/')
+            .next()
+            .filter(|host| !host.is_empty())
+        {
+            return vec![host.trim_start_matches("www.").to_lowercase()];
+        }
+    }
+    trimmed
+        .split_whitespace()
+        .filter(|word| word.len() > 3)
+        .take(3)
+        .map(|word| word.to_lowercase())
+        .collect()
+}
+
+/// Signal weight for deliberate `;` captures, chat turns, and pin acts.
+pub const CAPTURE_SIGNAL_WEIGHT: i64 = 2;
 
 /// Append a line to today's activity journal — the brain's record of what
 /// the user actually DID (searches run, files opened, items chosen). One doc
@@ -407,6 +483,28 @@ pub fn retain_docs(source: DocSource, keep: &[String]) -> Result<usize> {
             )?;
             removed += 1;
         }
+    }
+    Ok(removed)
+}
+
+/// Delete specific docs of one source by source_id — the targeted-forget
+/// primitive for the file syncs' previous-set tracking (unlike
+/// [`retain_docs`], this never touches docs the caller didn't enumerate).
+/// Returns the number removed. Embeddings cascade via the FK.
+pub fn delete_docs_by_source_ids(source: DocSource, source_ids: &[String]) -> Result<usize> {
+    if source_ids.is_empty() {
+        return Ok(0);
+    }
+    let db = get_db()?;
+    let conn = db.lock().map_err(|_| anyhow!("brain db lock poisoned"))?;
+    let mut removed = 0usize;
+    for source_id in source_ids {
+        removed += conn
+            .execute(
+                "DELETE FROM brain_docs WHERE source = ?1 AND source_id = ?2",
+                params![source.as_str(), source_id],
+            )
+            .context("delete brain doc by source id")?;
     }
     Ok(removed)
 }

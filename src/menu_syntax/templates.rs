@@ -26,6 +26,9 @@ use super::payload::is_known_capture_target;
 /// the same target (`capture-todo-inbox.ts`, `capture-todo-jira.ts`) stay
 /// distinguishable in the picker.
 pub fn render_capture_handler_template(target: &str, slug: &str) -> String {
+    if target.eq_ignore_ascii_case("todo") {
+        return render_todo_day_page_handler_template(slug);
+    }
     let target_slug = slug_or_target(target, slug);
     let handler_name = display_name_from_slug(target, &target_slug);
     let artifact_hint = artifact_hint_for(target);
@@ -149,13 +152,79 @@ fn artifact_hint_for(target: &str) -> &'static str {
         return "entries.jsonl";
     }
     match target.to_ascii_lowercase().as_str() {
-        "todo" => "todos.jsonl",
         "cal" => "events.jsonl",
         "note" => "notes.jsonl",
         "social" => "drafts.jsonl",
         "link" => "bookmarks.jsonl",
         _ => "entries.jsonl",
     }
+}
+
+fn render_todo_day_page_handler_template(slug: &str) -> String {
+    let target_slug = slug_or_target("todo", slug);
+    let handler_name = display_name_from_slug("todo", &target_slug);
+    let accepts = accepts_hint_for("todo");
+
+    format!(
+        r##"// capture-{target_slug}.ts
+// Auto-scaffolded by Script Kit — menu-syntax capture handler.
+//
+// This handler fires whenever the launcher sees a `;todo` or `todo:`
+// menu-syntax invocation. Script Kit writes the parsed payload to a JSON
+// tempfile and passes its path through the `KIT_MENU_SYNTAX_PAYLOAD_PATH`
+// env var. See removed-docs Payload for the contract.
+//
+// Edit this file to decide what to do with the captured payload. The body
+// below appends a markdown task line to today's day page under
+// `$SK_PATH/brain/days/YYYY-MM-DD.md`.
+
+import {{ mkdir, appendFile, readFile }} from "node:fs/promises";
+import {{ join }} from "node:path";
+
+export const metadata = {{
+  name: "{handler_name}",
+  description: "Handle ;todo menu-syntax captures ({target_slug}).",
+  menuSyntax: [
+    {{
+      family: "capture.v1",
+      targets: ["todo"],
+      accepts: {accepts},
+      label: "{handler_name}",
+      payloadSchema: "kit://schema/menu-syntax/payload-v1",
+      // Set defaultHandler to true to make this the preferred handler for
+      // ;todo. Only set it on ONE handler per target — the ranker uses
+      // it to place a row at the very top of the capture picker.
+      defaultHandler: false,
+    }},
+  ],
+}};
+
+const payloadPath = process.env.KIT_MENU_SYNTAX_PAYLOAD_PATH;
+if (!payloadPath) {{
+  throw new Error(
+    "KIT_MENU_SYNTAX_PAYLOAD_PATH is required — did Script Kit launch this script?",
+  );
+}}
+
+const payload = JSON.parse(await readFile(payloadPath, "utf8"));
+const skPath = process.env.SK_PATH || join(process.env.HOME || ".", ".scriptkit");
+const today = new Date().toISOString().slice(0, 10);
+const dayDir = join(skPath, "brain", "days");
+await mkdir(dayDir, {{ recursive: true }});
+
+const tags = (payload.tags ?? []).map((tag) => `#${{String(tag).replace(/^#/, "")}}`).join(" ");
+const due = payload.dates?.find((date) => date.role === "due")?.iso?.slice(0, 10)
+  ?? payload.dates?.[0]?.iso?.slice(0, 10)
+  ?? null;
+const stamp = new Date().toTimeString().slice(0, 5);
+let line = `${{stamp}} - [ ] ${{payload.body}}`;
+if (tags) line += ` ${{tags}}`;
+if (due) line += ` due:${{due}}`;
+line += "\n";
+
+await appendFile(join(dayDir, `${{today}}.md`), line);
+"##
+    )
 }
 
 fn accepts_hint_for(target: &str) -> &'static str {
@@ -309,8 +378,16 @@ console.log(JSON.stringify(mod.metadata));
 
     #[test]
     fn template_core_target_artifact_hints_are_taxonomy_pins() {
+        let todo = render_capture_handler_template("todo", "inbox");
+        assert!(
+            todo.contains("brain/days"),
+            "`todo` should scaffold to brain day pages"
+        );
+        assert!(
+            todo.contains("- [ ]"),
+            "`todo` scaffold should append markdown task lines"
+        );
         for (target, slug, filename) in [
-            ("todo", "inbox", "todos.jsonl"),
             ("cal", "events", "events.jsonl"),
             ("note", "daily", "notes.jsonl"),
             ("social", "draft", "drafts.jsonl"),

@@ -1,6 +1,10 @@
-use crate::menu_syntax::payload::{CaptureInvocation, CaptureObjectKind, CaptureObjectRef};
+use crate::brain::substrate::{BrainSubstrate, DayEntry};
+use crate::menu_syntax::date::ResolvedDate;
+use crate::menu_syntax::payload::{
+    CaptureInvocation, CaptureObjectKind, CaptureObjectRef, CaptureOperation, DateRole,
+};
 use crate::notes::{metadata, storage, Note, NoteId};
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use serde::Serialize;
 
 const CAPTURE_META_START: &str = "<!-- kit-menu-syntax-note";
@@ -11,6 +15,131 @@ pub(crate) enum NoteCaptureOperation {
     Create,
     Update,
     Delete,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum TodoCaptureOperation {
+    Create,
+    Remind,
+    Snooze,
+    Defer,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct AppliedMenuSyntaxTodoCapture {
+    pub(crate) operation: TodoCaptureOperation,
+}
+
+/// Append a `;todo` capture as an unchecked task line on today's day page.
+///
+/// Line format v1 preserves body, `#tags`, and `due:` only. Parsed
+/// `remindAt` / `snoozeUntil` / `deferUntil` semantics are not represented on
+/// the markdown line yet — those operations map to `due:` when a date resolves.
+pub(crate) fn apply_menu_syntax_todo_capture(
+    invocation: &CaptureInvocation,
+    operation: CaptureOperation,
+) -> Result<AppliedMenuSyntaxTodoCapture, String> {
+    let todo_operation = match operation {
+        CaptureOperation::Create => TodoCaptureOperation::Create,
+        CaptureOperation::Remind => TodoCaptureOperation::Remind,
+        CaptureOperation::Snooze => TodoCaptureOperation::Snooze,
+        CaptureOperation::Defer => TodoCaptureOperation::Defer,
+        _ => {
+            return Err(format!(
+                "Unsupported todo operation: {}",
+                operation.as_str()
+            ))
+        }
+    };
+
+    let resolved = resolve_for_todo_capture(invocation);
+    let object_refs = crate::menu_syntax::payload::object_refs_for_raw_capture(
+        &invocation.target,
+        &invocation.raw,
+    );
+    if primary_resolved_todo_ref(&object_refs)?.is_some() {
+        return Err(
+            "Updating an existing todo by reference is not supported on day pages yet.".to_string(),
+        );
+    }
+
+    let body = resolved.body.trim();
+    if body.is_empty() {
+        return Err("Add todo text.".to_string());
+    }
+
+    if matches!(
+        todo_operation,
+        TodoCaptureOperation::Remind | TodoCaptureOperation::Snooze | TodoCaptureOperation::Defer
+    ) && resolved.dates.is_empty()
+    {
+        return Err(match todo_operation {
+            TodoCaptureOperation::Remind => "Add a reminder time.".to_string(),
+            TodoCaptureOperation::Snooze => "Add a snooze time.".to_string(),
+            TodoCaptureOperation::Defer => "Add a defer time.".to_string(),
+            TodoCaptureOperation::Create => unreachable!(),
+        });
+    }
+
+    let due = due_token_for_task_line(&resolved.dates);
+    let substrate = BrainSubstrate::default_kit();
+    let now = Utc::now();
+    substrate
+        .append_to_day(
+            now,
+            DayEntry::Task {
+                body: body.to_string(),
+                tags: resolved.tags.clone(),
+                due,
+            },
+        )
+        .map_err(|err| format!("Brain: failed to append todo to day page: {err}"))?;
+
+    Ok(AppliedMenuSyntaxTodoCapture {
+        operation: todo_operation,
+    })
+}
+
+pub(crate) fn apply_menu_syntax_todo_capture_with_substrate(
+    substrate: &BrainSubstrate,
+    now: DateTime<Utc>,
+    invocation: &CaptureInvocation,
+    operation: CaptureOperation,
+) -> Result<AppliedMenuSyntaxTodoCapture, String> {
+    let todo_operation = match operation {
+        CaptureOperation::Create => TodoCaptureOperation::Create,
+        CaptureOperation::Remind => TodoCaptureOperation::Remind,
+        CaptureOperation::Snooze => TodoCaptureOperation::Snooze,
+        CaptureOperation::Defer => TodoCaptureOperation::Defer,
+        _ => {
+            return Err(format!(
+                "Unsupported todo operation: {}",
+                operation.as_str()
+            ))
+        }
+    };
+
+    let resolved = resolve_for_todo_capture(invocation);
+    let body = resolved.body.trim();
+    if body.is_empty() {
+        return Err("Add todo text.".to_string());
+    }
+
+    let due = due_token_for_task_line(&resolved.dates);
+    substrate
+        .append_to_day(
+            now,
+            DayEntry::Task {
+                body: body.to_string(),
+                tags: resolved.tags.clone(),
+                due,
+            },
+        )
+        .map_err(|err| format!("Brain: failed to append todo to day page: {err}"))?;
+
+    Ok(AppliedMenuSyntaxTodoCapture {
+        operation: todo_operation,
+    })
 }
 
 #[derive(Debug, Clone)]
@@ -233,6 +362,64 @@ fn primary_note_ref(object_refs: &[CaptureObjectRef]) -> Result<Option<&CaptureO
     Ok((!object_ref.id.trim().is_empty()).then_some(object_ref))
 }
 
+fn resolve_for_todo_capture(
+    invocation: &CaptureInvocation,
+) -> crate::menu_syntax::date::ResolvedCaptureInvocation {
+    let accepts = vec![
+        "date".to_string(),
+        "relativeDate".to_string(),
+        "duration".to_string(),
+        "recurrence".to_string(),
+        "url".to_string(),
+        "kv".to_string(),
+    ];
+    let clock = crate::menu_syntax::MenuSyntaxClock::local_now();
+    crate::menu_syntax::date::resolve_capture_dates_with_accepts(invocation, &clock, &accepts)
+}
+
+fn due_token_for_task_line(dates: &[ResolvedDate]) -> Option<String> {
+    dates
+        .iter()
+        .find(|date| date.role == DateRole::Due)
+        .or_else(|| dates.first())
+        .and_then(|date| format_task_due_token(&date.iso))
+}
+
+fn format_task_due_token(iso: &str) -> Option<String> {
+    let trimmed = iso.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    if let Ok(parsed) = chrono::DateTime::parse_from_rfc3339(trimmed) {
+        return Some(parsed.format("%Y-%m-%d").to_string());
+    }
+    if chrono::NaiveDate::parse_from_str(trimmed, "%Y-%m-%d").is_ok() {
+        return Some(trimmed.to_string());
+    }
+    None
+}
+
+fn primary_resolved_todo_ref(
+    object_refs: &[CaptureObjectRef],
+) -> Result<Option<&CaptureObjectRef>, String> {
+    let Some(object_ref) = object_refs
+        .iter()
+        .find(|object_ref| object_ref.role == "primary")
+    else {
+        return Ok(None);
+    };
+    if !object_ref.resolved {
+        return Ok(None);
+    }
+    if object_ref.kind != CaptureObjectKind::Todo {
+        return Err(format!(
+            "Selected object is {}, expected todo.",
+            object_ref.kind.as_str()
+        ));
+    }
+    Ok((!object_ref.id.trim().is_empty()).then_some(object_ref))
+}
+
 fn resolve_for_note_capture(
     invocation: &CaptureInvocation,
 ) -> crate::menu_syntax::date::ResolvedCaptureInvocation {
@@ -363,12 +550,8 @@ fn note_operation_str(operation: NoteCaptureOperation) -> &'static str {
 mod tests {
     use super::*;
     use crate::menu_syntax::capture::{parse_capture, CaptureParse};
-    use std::sync::Mutex;
-
-    fn notes_db_test_lock() -> &'static Mutex<()> {
-        static LOCK: std::sync::OnceLock<Mutex<()>> = std::sync::OnceLock::new();
-        LOCK.get_or_init(|| Mutex::new(()))
-    }
+    use crate::menu_syntax::payload::CaptureOperation;
+    use crate::notes::storage::notes_db_test_guard;
 
     fn parse(raw: &str) -> CaptureInvocation {
         match parse_capture(raw) {
@@ -379,7 +562,7 @@ mod tests {
 
     #[test]
     fn note_create_writes_builtin_notes_db() {
-        let _guard = notes_db_test_lock().lock().expect("lock");
+        let _guard = notes_db_test_guard();
         let token = format!("note-create-{}", uuid::Uuid::new_v4());
         let raw = format!(";note {token} Decision #product title:\"Ship decision\"");
         let invocation = parse(&raw);
@@ -399,7 +582,7 @@ mod tests {
 
     #[test]
     fn note_selected_ref_updates_existing_note_without_creating_new_note() {
-        let _guard = notes_db_test_lock().lock().expect("lock");
+        let _guard = notes_db_test_guard();
         storage::init_notes_db().expect("init notes");
         let token = format!("note-update-{}", uuid::Uuid::new_v4());
         let seed = Note::with_content(format!("# Existing {token}\n\nOriginal body"));
@@ -422,8 +605,29 @@ mod tests {
     }
 
     #[test]
+    fn todo_create_appends_task_line_to_day_page() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let substrate = BrainSubstrate::with_timezone(dir.path().join("brain"), chrono_tz::UTC);
+        let now = chrono::TimeZone::with_ymd_and_hms(&chrono::Utc, 2026, 6, 11, 10, 15, 0).unwrap();
+        let raw = ";todo x #y due:2026-06-12";
+        let invocation = parse(raw);
+
+        apply_menu_syntax_todo_capture_with_substrate(
+            &substrate,
+            now,
+            &invocation,
+            CaptureOperation::Create,
+        )
+        .expect("append todo");
+
+        let path = substrate.paths().day_page(now.date_naive());
+        let contents = std::fs::read_to_string(path).expect("read day page");
+        assert!(contents.contains("10:15 - [ ] x #y due:2026-06-12"));
+    }
+
+    #[test]
     fn note_delete_selected_ref_soft_deletes() {
-        let _guard = notes_db_test_lock().lock().expect("lock");
+        let _guard = notes_db_test_guard();
         storage::init_notes_db().expect("init notes");
         let seed = Note::with_content(format!("Delete me {}", uuid::Uuid::new_v4()));
         let id = seed.id;

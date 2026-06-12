@@ -8,8 +8,8 @@
 //! - Outside the newest-250 window, files older than
 //!   [`AGE_CUTOFF_DAYS_DEFAULT`] = 30 days get deleted.
 //! - Touch ONLY payload tempfiles (`capture_v1-*.json`). Never touch
-//!   `todos.jsonl`, `events.jsonl`, `notes.jsonl`, `drafts.jsonl`,
-//!   `bookmarks.jsonl`, per-day markdown notes, `.ics` calendar files, or
+//!   `events.jsonl`, `notes.jsonl`, `drafts.jsonl`, `bookmarks.jsonl`,
+//!   brain day pages, per-day markdown notes, `.ics` calendar files, or
 //!   social drafts — those are user data, not launcher byproducts.
 //!
 //! The planning function [`plan_retention`] is pure: it operates on a

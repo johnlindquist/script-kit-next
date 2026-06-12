@@ -477,7 +477,7 @@ mod tests {
                 priority: None,
                 due: None,
                 created_at: None,
-                path: PathBuf::from("/tmp/todos.jsonl"),
+                path: PathBuf::from("/tmp/brain/days/2026-06-11.md"),
                 line_number: Some(1),
                 raw_line: title.to_string(),
             },

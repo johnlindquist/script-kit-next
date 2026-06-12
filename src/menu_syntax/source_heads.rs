@@ -55,7 +55,7 @@ pub const SOURCE_HEAD_DESCRIPTORS: &[SourceHeadDescriptor] = &[
         long: "todo:",
         short: None,
         label: "Todos",
-        description: "Search local ;todo captures",
+        description: "Search unchecked tasks on recent day pages",
         browse_blurb: "Browse captured todos.",
         example: "todo: renew passport",
         lat_section_id: ADVANCED_QUERY_LAT_SECTION,

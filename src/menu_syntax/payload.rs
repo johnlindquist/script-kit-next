@@ -222,7 +222,7 @@ pub const SOURCE_HEAD_SPECS: &[SourceHeadSpec] = &[
         canonical: "todo:",
         short: None,
         label: "Todos",
-        description: "Search local ;todo captures",
+        description: "Search unchecked tasks on recent day pages",
         planned: true,
     },
     SourceHeadSpec {

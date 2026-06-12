@@ -20,6 +20,7 @@
 //! store is plain sqlite the user can inspect or delete.
 
 pub mod curator;
+pub mod day_trace;
 pub mod download;
 pub mod embedder;
 pub mod inbox;
@@ -29,6 +30,7 @@ pub mod resources;
 pub mod search;
 pub mod seed;
 pub mod store;
+pub mod substrate;
 pub mod telegram;
 
 #[cfg(test)]

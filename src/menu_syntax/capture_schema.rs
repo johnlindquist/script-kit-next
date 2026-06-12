@@ -641,7 +641,7 @@ mod tests {
     fn selected_todo_ref_satisfies_todo_alias_body_requirement() {
         let schema = builtin_schema("snooze").expect("snooze schema");
         let mut inv = empty_invocation("snooze");
-        inv.raw = ";snooze @todo:todo/tmp/sk/menu-syntax/todos.jsonl:1 in 30 minutes".to_string();
+        inv.raw = ";snooze @todo:day/2026-06-11.md:1 in 30 minutes".to_string();
         inv.date_phrases.push(DatePhrase {
             role: DateRole::Inferred,
             source: "in 30 minutes".to_string(),
