@@ -1233,3 +1233,73 @@ fn capture_stores_sync_into_brain_and_respect_deletion() {
     assert!(docs.iter().any(|d| d.title == "Link: Example"));
     assert!(docs.iter().any(|d| d.title.starts_with("Snippet:")));
 }
+
+/// End-to-end embed cycle with the embedder injected: a long doc rides one
+/// batch call as multiple chunks, vectors split back per doc, and the docs
+/// stop reporting as pending. Guards the chunk/batch/split bookkeeping in
+/// `indexer::embed_pending_with` without the helper subprocess.
+#[test]
+fn embed_cycle_chunks_long_docs_and_clears_pending() {
+    init_test_db();
+    let model = "model-embed-cycle";
+    let long_content = "## Section\n\nlong day page text about embedding cycles. ".repeat(160); // ~8.6 KB
+    let long_id = store::upsert_doc(
+        DocSource::DayPage,
+        "d-embed-cycle-long",
+        "Long",
+        &long_content,
+        100,
+    )
+    .unwrap();
+    let short_id = store::upsert_doc(
+        DocSource::Note,
+        "n-embed-cycle-short",
+        "Short",
+        "tiny note",
+        100,
+    )
+    .unwrap();
+
+    let mut calls: Vec<usize> = Vec::new();
+    let embedded = super::indexer::embed_pending_with(model, |texts| {
+        calls.push(texts.len());
+        // Deterministic fake embedder: unit vector per text.
+        Ok(texts.iter().map(|_| vec![1.0f32, 0.0]).collect())
+    })
+    .unwrap();
+    assert!(embedded >= 2, "both docs embed in the cycle: {embedded}");
+
+    let loaded = store::load_embeddings(model).unwrap();
+    let long_chunks = loaded.iter().filter(|(id, _)| *id == long_id).count();
+    let short_chunks = loaded.iter().filter(|(id, _)| *id == short_id).count();
+    assert!(
+        long_chunks > 1,
+        "long doc must store multiple chunks: {long_chunks}"
+    );
+    assert_eq!(short_chunks, 1, "short doc stays single-chunk");
+    assert!(
+        calls.iter().sum::<usize>() >= long_chunks + short_chunks,
+        "all chunks rode the embed batches: {calls:?}"
+    );
+
+    let pending = store::docs_needing_embedding(model, 500).unwrap();
+    assert!(
+        !pending.iter().any(|d| d.id == long_id || d.id == short_id),
+        "embedded docs no longer pending"
+    );
+
+    // An embedder that returns empty vectors must not spin the cycle.
+    store::upsert_doc(
+        DocSource::Note,
+        "n-embed-cycle-short",
+        "Short",
+        "tiny note v2",
+        200,
+    )
+    .unwrap();
+    let embedded = super::indexer::embed_pending_with(model, |texts| {
+        Ok(texts.iter().map(|_| Vec::new()).collect())
+    })
+    .unwrap();
+    assert_eq!(embedded, 0, "all-empty vectors store nothing and terminate");
+}

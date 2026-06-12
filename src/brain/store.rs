@@ -281,14 +281,14 @@ fn ensure_brain_schema(conn: &Connection) -> Result<()> {
 
         CREATE TABLE IF NOT EXISTS brain_chunk_embeddings (
             doc_id INTEGER NOT NULL REFERENCES brain_docs(id) ON DELETE CASCADE,
-            chunk_index INTEGER NOT NULL,
             model_id TEXT NOT NULL,
+            chunk_index INTEGER NOT NULL,
             content_hash TEXT NOT NULL,
             chunk_start INTEGER NOT NULL DEFAULT 0,
             dim INTEGER NOT NULL,
             vec BLOB NOT NULL,
             embedded_at INTEGER NOT NULL DEFAULT (unixepoch()),
-            PRIMARY KEY (doc_id, chunk_index)
+            PRIMARY KEY (doc_id, model_id, chunk_index)
         );
         CREATE INDEX IF NOT EXISTS idx_brain_chunk_embeddings_model
             ON brain_chunk_embeddings(model_id);
@@ -322,6 +322,7 @@ fn ensure_brain_schema(conn: &Connection) -> Result<()> {
             ON brain_inbox(resolved_at, created_at DESC);",
     )
     .context("ensure brain schema")?;
+    migrate_chunk_embeddings_pk(conn)?;
     migrate_whole_doc_embeddings(conn)?;
     migrate_fts_tokenizer(conn)
 }
@@ -413,6 +414,48 @@ pub(crate) fn with_conn<T>(f: impl FnOnce(&Connection) -> Result<T>) -> Result<T
     let db = get_db()?;
     let conn = db.lock().map_err(|_| anyhow!("brain db lock poisoned"))?;
     f(&conn)
+}
+
+/// Short-lived shape fix: the first chunked schema keyed rows on
+/// (doc_id, chunk_index) only, so two models' rows collided. Recreate with
+/// model_id in the key; vectors re-embed lazily over the next cycles.
+fn migrate_chunk_embeddings_pk(conn: &Connection) -> Result<()> {
+    let create_sql: Option<String> = conn
+        .query_row(
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name='brain_chunk_embeddings'",
+            [],
+            |row| row.get(0),
+        )
+        .optional()
+        .context("inspect chunk embeddings shape")?;
+    let Some(create_sql) = create_sql else {
+        return Ok(());
+    };
+    if create_sql.contains("PRIMARY KEY (doc_id, model_id, chunk_index)") {
+        return Ok(());
+    }
+    conn.execute_batch(
+        "DROP TABLE brain_chunk_embeddings;
+        CREATE TABLE brain_chunk_embeddings (
+            doc_id INTEGER NOT NULL REFERENCES brain_docs(id) ON DELETE CASCADE,
+            model_id TEXT NOT NULL,
+            chunk_index INTEGER NOT NULL,
+            content_hash TEXT NOT NULL,
+            chunk_start INTEGER NOT NULL DEFAULT 0,
+            dim INTEGER NOT NULL,
+            vec BLOB NOT NULL,
+            embedded_at INTEGER NOT NULL DEFAULT (unixepoch()),
+            PRIMARY KEY (doc_id, model_id, chunk_index)
+        );
+        CREATE INDEX IF NOT EXISTS idx_brain_chunk_embeddings_model
+            ON brain_chunk_embeddings(model_id);",
+    )
+    .context("rekey chunk embeddings table")?;
+    tracing::info!(
+        target: "script_kit::brain",
+        "rekeyed brain_chunk_embeddings to include model_id"
+    );
+    Ok(())
 }
 
 /// One-time migration from whole-doc embeddings (`brain_embeddings`, one
@@ -674,8 +717,8 @@ pub fn store_chunk_embeddings(
     let hash = content_hash(title, content);
     let tx = conn_guard.transaction().context("chunk embed tx")?;
     tx.execute(
-        "DELETE FROM brain_chunk_embeddings WHERE doc_id = ?1",
-        params![doc_id],
+        "DELETE FROM brain_chunk_embeddings WHERE doc_id = ?1 AND model_id = ?2",
+        params![doc_id, model_id],
     )
     .context("clear stale chunk embeddings")?;
     for (index, (chunk_start, vec)) in chunks.iter().enumerate() {

@@ -629,9 +629,19 @@ fn embed_pending(embedder: &mut Option<BrainEmbedder>) -> Result<usize> {
         Some(e) if e.model_id() == model.model_id => e,
         slot => slot.insert(BrainEmbedder::spawn(model)?),
     };
+    let model_id = embedder.model_id().to_string();
+    embed_pending_with(&model_id, |texts| embedder.embed(texts))
+}
+
+/// The embed cycle with the embedder injected — the chunk → one-batch-call →
+/// split-back-per-doc bookkeeping is testable without the helper subprocess.
+pub(crate) fn embed_pending_with(
+    model_id: &str,
+    mut embed: impl FnMut(Vec<String>) -> Result<Vec<Vec<f32>>>,
+) -> Result<usize> {
     let mut total = 0usize;
     while total < MAX_EMBED_PER_CYCLE {
-        let pending = store::docs_needing_embedding(embedder.model_id(), EMBED_BATCH)?;
+        let pending = store::docs_needing_embedding(model_id, EMBED_BATCH)?;
         if pending.is_empty() {
             break;
         }
@@ -650,25 +660,18 @@ fn embed_pending(embedder: &mut Option<BrainEmbedder>) -> Result<usize> {
             // Whitespace-only docs produce zero chunks; store an empty set so
             // they stop reporting as pending.
             for doc in &pending {
-                store::store_chunk_embeddings(
-                    doc.id,
-                    embedder.model_id(),
-                    &doc.title,
-                    &doc.content,
-                    &[],
-                )?;
+                store::store_chunk_embeddings(doc.id, model_id, &doc.title, &doc.content, &[])?;
                 total += 1;
             }
             continue;
         }
-        let vectors = embedder.embed(texts)?;
+        let vectors = embed(texts)?;
         let mut cursor = 0usize;
-        let mut exhausted = false;
+        let mut stored_this_round = 0usize;
         for (doc, chunks) in pending.iter().zip(doc_chunks.iter()) {
             let end = cursor + chunks.len();
             if end > vectors.len() {
-                exhausted = true;
-                break;
+                break; // embedder returned a short batch; retry next cycle
             }
             let chunk_vecs: Vec<(usize, Vec<f32>)> = chunks
                 .iter()
@@ -679,16 +682,13 @@ fn embed_pending(embedder: &mut Option<BrainEmbedder>) -> Result<usize> {
             if chunk_vecs.iter().all(|(_, vec)| vec.is_empty()) && !chunks.is_empty() {
                 continue; // embedder returned nothing usable; retry next cycle
             }
-            store::store_chunk_embeddings(
-                doc.id,
-                embedder.model_id(),
-                &doc.title,
-                &doc.content,
-                &chunk_vecs,
-            )?;
+            store::store_chunk_embeddings(doc.id, model_id, &doc.title, &doc.content, &chunk_vecs)?;
             total += 1;
+            stored_this_round += 1;
         }
-        if exhausted {
+        if stored_this_round == 0 {
+            // Nothing stored means the same docs would come back pending —
+            // bail rather than spin inside one cycle.
             break;
         }
     }
