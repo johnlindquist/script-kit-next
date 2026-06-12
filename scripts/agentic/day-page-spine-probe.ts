@@ -54,7 +54,10 @@ function walkElements(node: unknown, out: Json[] = []): Json[] {
 }
 
 async function editorText(driver: Driver): Promise<string | null> {
-  const elements = (await driver.getElements({ target: { type: "main" } }, { timeoutMs: 5000 })) as Json;
+  const elements = (await driver.getElements(
+    { target: { type: "main" } },
+    { timeoutMs: 5000 },
+  )) as Json;
   const editor = walkElements(elements).find(
     (el) => el.semanticId === "input:day-page-editor" || el.id === "day-page-editor",
   );
@@ -87,9 +90,19 @@ try {
     promptType: maybeDayState.promptType,
   });
 
-  const batch = (await driver.batch([{ type: "setInput", text: "@fi" }], {
-    timeoutMs: 5000,
-  })) as Json;
+  const batch = (await driver.batch(
+    [
+      { type: "setInput", text: "@fi" },
+      {
+        type: "waitFor",
+        condition: {
+          type: "stateMatch",
+          state: { promptType: "dayPage", inputValue: "@fi" },
+        },
+      },
+    ],
+    { timeoutMs: 5000 },
+  )) as Json;
   check("batch_set_day_page_input", batch.success === true, { batch });
 
   await Bun.sleep(250);
@@ -112,7 +125,51 @@ try {
     fileRow: fileRow ?? null,
   });
 
-  driver.simulateKey("enter");
+  await driver.simulateKey("escape");
+  await Bun.sleep(250);
+  const dismissedElements = (await driver.getElements(
+    { target: { type: "main" }, limit: 200 },
+    { timeoutMs: 5000 },
+  )) as Json;
+  const dismissedFlat = walkElements(dismissedElements);
+  const dismissedPanel = dismissedFlat.find(
+    (el) => el.semanticId === "list:day-page-spine-list" || el.id === "day-page-spine-list",
+  );
+  check("escape_dismisses_spine_elements", !dismissedPanel, {
+    ids: dismissedFlat.slice(0, 12).map((el) => el.semanticId ?? el.id),
+  });
+
+  const restoreBatch = (await driver.batch(
+    [
+      { type: "setInput", text: "@fi" },
+      {
+        type: "waitFor",
+        condition: {
+          type: "stateMatch",
+          state: { promptType: "dayPage", inputValue: "@fi" },
+        },
+      },
+    ],
+    { timeoutMs: 5000 },
+  )) as Json;
+  check("batch_restore_day_page_spine_input", restoreBatch.success === true, {
+    batch: restoreBatch,
+  });
+
+  const restoredElements = (await driver.getElements(
+    { target: { type: "main" }, limit: 200 },
+    { timeoutMs: 5000 },
+  )) as Json;
+  const restoredFlat = walkElements(restoredElements);
+  check("spine_elements_restore_after_input_change", Boolean(
+    restoredFlat.find((el) => el.semanticId === "spine:@:subsearch:file"),
+  ), {
+    selectedSemanticId: restoredElements.selectedSemanticId ?? null,
+    ids: restoredFlat.slice(0, 12).map((el) => el.semanticId ?? el.id),
+  });
+
+  await Bun.sleep(250);
+  await driver.simulateKey("enter");
   await Bun.sleep(250);
   const afterText = await editorText(driver);
   check("enter_completes_file_fragment", afterText === "@file:", { afterText });
@@ -138,7 +195,7 @@ try {
     selectedSemanticId: immediateFileElements.selectedSemanticId ?? null,
   });
 
-  driver.simulateKey("down");
+  await driver.simulateKey("down");
   await Bun.sleep(250);
   const armedFileElements = (await driver.getElements(
     { target: { type: "main" }, limit: 200 },
@@ -146,6 +203,42 @@ try {
   )) as Json;
   check("empty_file_subsearch_down_arms_selection", Boolean(armedFileElements.selectedSemanticId), {
     selectedSemanticId: armedFileElements.selectedSemanticId ?? null,
+  });
+
+  const submitBatch = (await driver.batch(
+    [
+      { type: "setInput", text: "@selection summarize this" },
+      {
+        type: "waitFor",
+        condition: {
+          type: "stateMatch",
+          state: { promptType: "dayPage", inputValue: "@selection summarize this" },
+        },
+      },
+    ],
+    { timeoutMs: 5000 },
+  )) as Json;
+  check("batch_set_day_page_submit_prompt", submitBatch.success === true, {
+    batch: submitBatch,
+  });
+
+  const submitElements = (await driver.getElements(
+    { target: { type: "main" }, limit: 200 },
+    { timeoutMs: 5000 },
+  )) as Json;
+  const submitFlat = walkElements(submitElements);
+  const readyRow = submitFlat.find((el) => el.semanticId === "spine:tail:ready");
+  check("submit_prompt_ready_row_visible", Boolean(readyRow), {
+    readyRow: readyRow ?? null,
+    selectedSemanticId: submitElements.selectedSemanticId ?? null,
+  });
+
+  await driver.simulateKey("enter");
+  await Bun.sleep(750);
+  const afterSubmitState = (await driver.getState({ timeoutMs: 5000 })) as Json;
+  check("enter_submits_day_page_prompt_to_agent_chat", afterSubmitState.promptType === "agentChatChat", {
+    promptType: afterSubmitState.promptType,
+    inputValue: afterSubmitState.inputValue,
   });
 
   const pass = failures.length === 0;

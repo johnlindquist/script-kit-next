@@ -56,9 +56,9 @@ fn materialize_selection_context_parts(
     let selection_uri = crate::ai::context_contract::ContextAttachmentKind::Selection
         .spec()
         .uri;
-    let needs_selection = parts.iter().any(
-        |part| matches!(part, AiContextPart::ResourceUri { uri, .. } if uri == selection_uri),
-    );
+    let needs_selection = parts
+        .iter()
+        .any(|part| matches!(part, AiContextPart::ResourceUri { uri, .. } if uri == selection_uri));
     if !needs_selection {
         return parts;
     }
@@ -456,9 +456,30 @@ impl ScriptListApp {
         }
 
         self.set_spine_parse_from_filter_and_cursor(&raw, raw.len());
+        self.try_submit_spine_prompt_plan_from_parse(self.spine_parse.clone(), true, true, true, cx)
+    }
 
+    pub(crate) fn submit_day_page_spine_prompt_plan(
+        &mut self,
+        parse: crate::spine::SpineParse,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        // Day Page text persists after handoff, so aliases may still back
+        // visible note mentions; launcher-only filter and preview caches must
+        // not be mutated from this path.
+        self.try_submit_spine_prompt_plan_from_parse(parse, false, false, false, cx)
+    }
+
+    pub(crate) fn try_submit_spine_prompt_plan_from_parse(
+        &mut self,
+        parse: crate::spine::SpineParse,
+        reset_launcher_filter: bool,
+        clear_aliases_after_submit: bool,
+        use_selection_preview_cache: bool,
+        cx: &mut Context<Self>,
+    ) -> bool {
         let plan = crate::spine::prompt_plan::build_spine_prompt_plan_with_aliases(
-            &self.spine_parse,
+            &parse,
             &self.spine_mention_aliases,
         );
         // Plain prose without sigils normally doesn't submit to chat. But when
@@ -479,12 +500,17 @@ impl ScriptListApp {
         // resource resolved at thread submit time — by then Agent Chat has
         // taken over app activation and the AX/Cmd+C capture reads from the
         // wrong window ("No selected text was provided").
-        let parts = materialize_selection_context_parts(
-            plan.context_parts.clone(),
+        let cached_selection = if use_selection_preview_cache {
             self.spine_live_preview_cache
                 .current
                 .selection_text
-                .as_deref(),
+                .as_deref()
+        } else {
+            None
+        };
+        let parts = materialize_selection_context_parts(
+            plan.context_parts.clone(),
+            cached_selection,
             || crate::selected_text::get_selected_text().ok(),
         );
         let selected_profile_name = if let Some(profile) = plan.selected_profile.as_ref() {
@@ -543,17 +569,22 @@ impl ScriptListApp {
             style = ?plan.selected_style.as_ref().map(|s| s.id.as_str()),
         );
 
-        self.filter_text.clear();
-        self.computed_filter_text.clear();
-        self.pending_filter_sync = true;
-        self.spine_parse = Default::default();
-        self.spine_projection = None;
-        self.spine_empty_subsearch_armed_for = None;
-        self.spine_live_preview_cache = Default::default();
-        // Alias hygiene: the plan has already resolved tokens into context
-        // parts; stale aliases would leak into the next prompt's tokens.
-        self.spine_mention_aliases.clear();
-        self.invalidate_grouped_cache();
+        if reset_launcher_filter {
+            self.filter_text.clear();
+            self.computed_filter_text.clear();
+            self.pending_filter_sync = true;
+            self.spine_parse = Default::default();
+            self.spine_projection = None;
+            self.spine_empty_subsearch_armed_for = None;
+            self.spine_live_preview_cache = Default::default();
+            self.invalidate_grouped_cache();
+        }
+        // Launcher input aliases are tied to a cleared ephemeral prompt. Day
+        // Page aliases may still back visible note text, so callers decide
+        // when clearing them is appropriate.
+        if clear_aliases_after_submit {
+            self.spine_mention_aliases.clear();
+        }
 
         let spine_cwd = self.spine_cwd.clone();
         self.embedded_agent_chat = None;
@@ -5964,11 +5995,10 @@ mod tests {
     #[test]
     fn materialize_selection_never_captures_without_selection_part() {
         let clipboard_part = crate::ai::context_contract::ContextAttachmentKind::Clipboard.part();
-        let parts = super::materialize_selection_context_parts(
-            vec![clipboard_part.clone()],
-            None,
-            || panic!("capture must not run when no @selection part is present"),
-        );
+        let parts =
+            super::materialize_selection_context_parts(vec![clipboard_part.clone()], None, || {
+                panic!("capture must not run when no @selection part is present")
+            });
         assert_eq!(parts, vec![clipboard_part]);
     }
 

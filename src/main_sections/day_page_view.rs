@@ -219,6 +219,9 @@ impl DayPageView {
         self.spine_selected_index = 0;
         self.spine_empty_subsearch_armed_for = None;
         self.spine_dismissed_cache_key = None;
+        self.spine_cache_key.clear();
+        self.spine_grouped_cache.clear();
+        self.spine_flat_cache.clear();
         self.spine_alias_cache.clear();
         self.sync_footer(window, cx);
         cx.notify();

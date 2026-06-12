@@ -29,6 +29,7 @@ struct DayPageSpineModel {
 
 impl DayPageSpineModel {
     fn selected_row(&self, selected_index: usize) -> Option<crate::spine::SpineListRow> {
+        let selected_index = crate::list_item::coerce_selection(&self.grouped, selected_index)?;
         let GroupedListItem::Item(flat_idx) = self.grouped.get(selected_index)? else {
             return None;
         };
@@ -166,7 +167,6 @@ fn day_page_supports_spine_action(action: &crate::spine::SpineListAction) -> boo
     !matches!(
         action,
         crate::spine::SpineListAction::OpenFileSearchPortal { .. }
-            | crate::spine::SpineListAction::SubmitPromptPlan
             | crate::spine::SpineListAction::Noop
     )
 }
@@ -544,6 +544,11 @@ impl DayPageView {
         }
 
         if self.spine_cache_key == key {
+            self.spine_selected_index = crate::list_item::coerce_selection(
+                &self.spine_grouped_cache,
+                self.spine_selected_index,
+            )
+            .unwrap_or(0);
             return Some(DayPageSpineModel {
                 line_range,
                 parse,
@@ -638,6 +643,10 @@ impl DayPageView {
             let total_count = elements.len();
             return (elements.into_iter().take(limit).collect(), total_count);
         };
+        if self.spine_dismissed_cache_key.as_deref() == Some(key.as_str()) {
+            let total_count = elements.len();
+            return (elements.into_iter().take(limit).collect(), total_count);
+        }
         let rows = if self.spine_cache_key == key {
             Some(DayPageSpineRows {
                 grouped: self.spine_grouped_cache.clone(),
@@ -918,8 +927,19 @@ impl DayPageView {
                     true
                 })
             }
+            crate::spine::SpineListAction::SubmitPromptPlan => {
+                let Some(app) = self.app.upgrade() else {
+                    return false;
+                };
+                let parse = model.parse.clone();
+                window.defer(cx, move |_window, cx| {
+                    app.update(cx, |app, cx| {
+                        app.submit_day_page_spine_prompt_plan(parse, cx);
+                    });
+                });
+                true
+            }
             crate::spine::SpineListAction::OpenFileSearchPortal { .. }
-            | crate::spine::SpineListAction::SubmitPromptPlan
             | crate::spine::SpineListAction::Noop => false,
         }
     }
@@ -947,8 +967,16 @@ impl DayPageView {
                 });
             }
         }
-        let _handled = self.apply_day_page_spine_action(row.action, &model, window, cx);
-        true
+        let row_id = row.id.to_string();
+        let handled = self.apply_day_page_spine_action(row.action, &model, window, cx);
+        if !handled {
+            tracing::warn!(
+                target: "script_kit::spine",
+                event = "day_page_spine_action_unhandled",
+                row_id = %row_id,
+            );
+        }
+        handled
     }
 }
 
@@ -1036,7 +1064,7 @@ mod day_page_spine_tests {
     }
 
     #[test]
-    fn day_page_projection_filters_selectable_dead_end_actions() {
+    fn day_page_projection_keeps_submit_and_filters_dead_end_actions() {
         let rows = push_spine_sections_as_grouped(vec![crate::spine::SpineListSection {
             id: "test-section".into(),
             title: "Test".into(),
@@ -1055,6 +1083,23 @@ mod day_page_spine_tests {
                     is_selectable: true,
                     action_label: None,
                     action: crate::spine::SpineListAction::SubmitPromptPlan,
+                },
+                crate::spine::SpineListRow {
+                    id: "spine:@file:portal".into(),
+                    kind: crate::spine::SpineListRowKind::Hint,
+                    title: "Browse files".into(),
+                    subtitle: None,
+                    meta: None,
+                    icon: None,
+                    badges: vec![],
+                    score: 0,
+                    is_selectable: true,
+                    action_label: None,
+                    action: crate::spine::SpineListAction::OpenFileSearchPortal {
+                        segment_index: 0,
+                        segment_byte_range: 0..6,
+                        query: "".into(),
+                    },
                 },
                 crate::spine::SpineListRow {
                     id: "spine:@:subsearch:file".into(),
@@ -1079,10 +1124,59 @@ mod day_page_spine_tests {
             ],
         }]);
 
-        assert_eq!(rows.flat.len(), 1);
+        assert_eq!(rows.flat.len(), 2);
         let scripts::SearchResult::SpineProjection(row) = &rows.flat[0] else {
             panic!("expected projected spine row");
         };
+        assert_eq!(row.id.as_ref(), "spine:tail:ready");
+        let scripts::SearchResult::SpineProjection(row) = &rows.flat[1] else {
+            panic!("expected projected spine row");
+        };
+        assert_eq!(row.id.as_ref(), "spine:@:subsearch:file");
+    }
+
+    #[test]
+    fn selected_row_coerces_section_header_index_to_first_item() {
+        let rows = push_spine_sections_as_grouped(vec![crate::spine::SpineListSection {
+            id: "test-section".into(),
+            title: "Test".into(),
+            subtitle: None,
+            icon: None,
+            rows: vec![crate::spine::SpineListRow {
+                id: "spine:@:subsearch:file".into(),
+                kind: crate::spine::SpineListRowKind::ContextSubSearch {
+                    context_type: "file".into(),
+                },
+                title: "Files".into(),
+                subtitle: None,
+                meta: None,
+                icon: None,
+                badges: vec![],
+                score: 0,
+                is_selectable: true,
+                action_label: None,
+                action: crate::spine::SpineListAction::InsertSegmentText {
+                    segment_index: 0,
+                    segment_byte_range: 0..3,
+                    text: "@file:".into(),
+                    trailing_space: false,
+                },
+            }],
+        }]);
+        let parse = crate::spine::parse_spine("@fi");
+        let projection = crate::spine::project_cursor(&parse, "@fi".len());
+        let model = DayPageSpineModel {
+            line_range: 0..3,
+            parse,
+            projection,
+            grouped: rows.grouped,
+            flat: rows.flat,
+            active_empty_subsearch: None,
+        };
+
+        let row = model
+            .selected_row(0)
+            .expect("section-header selection should coerce to first item");
         assert_eq!(row.id.as_ref(), "spine:@:subsearch:file");
     }
 }
