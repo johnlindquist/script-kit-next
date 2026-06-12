@@ -1447,8 +1447,11 @@ impl App {
                     })
                     .collect::<Vec<_>>()
                 {
+                    // The window may have been removed by an earlier draw in this
+                    // loop (e.g. a floating popup closed during a focus-loss hide),
+                    // so a missing window is not an error here.
                     self.update_window(window, |_, window, cx| window.draw(cx).clear())
-                        .unwrap();
+                        .ok();
                 }
 
                 if self.pending_effects.is_empty() {
