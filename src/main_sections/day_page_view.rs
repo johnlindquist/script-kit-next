@@ -608,8 +608,10 @@ impl DayPageView {
                 return;
             }
             if let Some(app) = self.app.upgrade() {
-                app.update(cx, |app, cx| {
-                    app.close_and_reset_window(cx);
+                window.defer(cx, move |_window, cx| {
+                    app.update(cx, |app, cx| {
+                        app.close_and_reset_window(cx);
+                    });
                 });
             }
             return;

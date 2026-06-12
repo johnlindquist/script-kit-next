@@ -14,6 +14,7 @@ use crate::hotkeys::process_main_hotkey_physical_event;
 /// toggle to Day Page, and `HoldStart` only acts for hold-from-closed
 /// (hold-while-open is intentionally dead until a later task).
 static MAIN_GESTURE_BEGAN_CLOSED: AtomicBool = AtomicBool::new(false);
+static MAIN_GESTURE_TAP_PREVIEW_APPLIED: AtomicBool = AtomicBool::new(false);
 
 /// Start the async listener that classifies main-hotkey key-down/key-up pairs.
 ///
@@ -103,11 +104,36 @@ fn dispatch_main_gesture_event(
         GestureEvent::ShowImmediate => {
             logging::log("GESTURE", "ShowImmediate — key-down show");
             MAIN_GESTURE_BEGAN_CLOSED.store(true, Ordering::SeqCst);
+            MAIN_GESTURE_TAP_PREVIEW_APPLIED.store(false, Ordering::SeqCst);
             if !script_kit_gpui::is_main_window_visible() {
                 show_main_window_helper(window, app_entity, cx);
             }
         }
+        GestureEvent::TapPreview => {
+            if MAIN_GESTURE_BEGAN_CLOSED.load(Ordering::SeqCst) {
+                return;
+            }
+            if !script_kit_gpui::is_main_window_visible() {
+                return;
+            }
+
+            let applied = window
+                .update(cx, |_root, window, cx| {
+                    app_entity.update(cx, |view, cx| {
+                        view.try_handle_main_hotkey_tap_preview(window, cx)
+                    })
+                })
+                .unwrap_or(false);
+            MAIN_GESTURE_TAP_PREVIEW_APPLIED.store(applied, Ordering::SeqCst);
+            if applied {
+                logging::log("GESTURE", "TapPreview — immediate safe toggle applied");
+            }
+        }
         GestureEvent::Tap => {
+            if MAIN_GESTURE_TAP_PREVIEW_APPLIED.swap(false, Ordering::SeqCst) {
+                logging::log("GESTURE", "Tap — final tap ignored after preview");
+                return;
+            }
             let began_closed = MAIN_GESTURE_BEGAN_CLOSED.swap(false, Ordering::SeqCst);
             if began_closed {
                 // The tap that opened the window resolves to the launcher
@@ -131,6 +157,7 @@ fn dispatch_main_gesture_event(
         GestureEvent::DoubleTap => {
             logging::log("GESTURE", "DoubleTap — Agent Chat entry intent");
             MAIN_GESTURE_BEGAN_CLOSED.store(false, Ordering::SeqCst);
+            MAIN_GESTURE_TAP_PREVIEW_APPLIED.store(false, Ordering::SeqCst);
             if !script_kit_gpui::is_main_window_visible() {
                 show_main_window_helper(window, app_entity.clone(), cx);
             }
@@ -165,6 +192,26 @@ fn dispatch_main_gesture_event(
 }
 
 impl ScriptListApp {
+    /// Fast path for taps that are safe to preview before the double-tap
+    /// window expires. Side-effectful carry-over stays on the delayed Tap path.
+    pub(crate) fn try_handle_main_hotkey_tap_preview(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        match &self.current_view {
+            AppView::ScriptList if self.filter_text.trim().is_empty() => {
+                self.handle_main_hotkey_tap(window, cx);
+                true
+            }
+            AppView::DayPage { .. } => {
+                self.handle_main_hotkey_tap(window, cx);
+                true
+            }
+            _ => false,
+        }
+    }
+
     /// Tap-while-open: toggle launcher ↔ Day Page; carry launcher query on entry.
     pub(crate) fn handle_main_hotkey_tap(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         match &self.current_view {

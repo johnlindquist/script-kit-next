@@ -204,6 +204,7 @@ impl ScriptListApp {
 
         // Update visibility state FIRST to prevent race conditions
         script_kit_gpui::set_main_window_visible(false);
+        crate::hotkeys::reset_main_gesture_classifier();
         self.was_window_focused = false;
         crate::windows::set_automation_visibility("main", false);
         crate::windows::ensure_embedded_ai_window(false);
