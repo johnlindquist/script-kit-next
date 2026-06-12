@@ -107,6 +107,11 @@ impl ScriptListApp {
         clipboard_history::set_max_text_content_len(
             self.config.get_clipboard_history_max_text_length(),
         );
+        let secret_rejection = self.config.get_clipboard_history_secret_rejection();
+        clipboard_history::configure_secret_rejection(clipboard_history::SecretRejectionConfig {
+            extra_blocked_source_apps: secret_rejection.extra_blocked_source_apps,
+            extra_secret_patterns: secret_rejection.extra_secret_patterns,
+        });
         // Hot-reload hotkeys from updated config
         hotkeys::update_hotkeys(&self.config);
         info!(
@@ -300,16 +305,22 @@ impl ScriptListApp {
                 }
             }
             FocusTarget::EditorPrompt => {
-                let entity = match &self.current_view {
-                    AppView::EditorPrompt { entity, .. } => Some(entity),
-                    AppView::ScratchPadView { entity, .. } => Some(entity),
-                    _ => None,
-                };
-                if let Some(entity) = entity {
-                    let fh = entity.read(cx).focus_handle(cx);
-                    window.focus(&fh, cx);
-                    // EditorPrompt has its own cursor management
+                if let AppView::DayPage { entity, .. } = &self.current_view {
+                    let entity = entity.clone();
+                    entity.update(cx, |view, cx| view.focus_editor(window, cx));
                     self.focused_input = FocusedInput::None;
+                } else {
+                    let entity = match &self.current_view {
+                        AppView::EditorPrompt { entity, .. } => Some(entity),
+                        AppView::ScratchPadView { entity, .. } => Some(entity),
+                        _ => None,
+                    };
+                    if let Some(entity) = entity {
+                        let fh = entity.read(cx).focus_handle(cx);
+                        window.focus(&fh, cx);
+                        // EditorPrompt has its own cursor management
+                        self.focused_input = FocusedInput::None;
+                    }
                 }
             }
             FocusTarget::PathPrompt => {

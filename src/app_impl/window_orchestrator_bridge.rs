@@ -57,6 +57,7 @@ impl ScriptListApp {
                 }
                 AppView::ChatPrompt { .. } => FocusTarget::ChatPrompt,
                 AppView::AgentChatView { .. } => FocusTarget::AgentChat,
+                AppView::DayPage { .. } => FocusTarget::EditorPrompt,
                 AppView::NamingPrompt { .. } => FocusTarget::NamingPrompt,
                 AppView::ConfirmPrompt { .. } => FocusTarget::AppRoot,
                 AppView::NonListStatesView { .. } => FocusTarget::AppRoot,

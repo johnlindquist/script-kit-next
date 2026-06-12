@@ -144,9 +144,7 @@ pub(crate) fn parse_context_subsearch<'a>(
 /// searching seamlessly: `@filesreadme` searches files for "readme" exactly
 /// like `@file:readme`. Partial fragments (`@fi`) return None so the context
 /// catalog can keep offering completion rows.
-fn parse_root_subsearch_fragment(
-    context_type: &str,
-) -> Option<(ContextSubsearchSource, &str)> {
+fn parse_root_subsearch_fragment(context_type: &str) -> Option<(ContextSubsearchSource, &str)> {
     if context_type.is_empty() {
         return None;
     }

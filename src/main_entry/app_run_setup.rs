@@ -157,6 +157,11 @@
     clipboard_history::set_max_text_content_len(
         loaded_config.get_clipboard_history_max_text_length(),
     );
+    let secret_rejection = loaded_config.get_clipboard_history_secret_rejection();
+    clipboard_history::configure_secret_rejection(clipboard_history::SecretRejectionConfig {
+        extra_blocked_source_apps: secret_rejection.extra_blocked_source_apps,
+        extra_secret_patterns: secret_rejection.extra_secret_patterns,
+    });
 
     // Initialize clipboard history monitoring (background thread)
     if let Err(e) = clipboard_history::init_clipboard_history() {
@@ -446,6 +451,17 @@ app.run(move |cx: &mut App| {
                 target: "script_kit::snap_monitor",
                 %e,
                 "failed to install snap drag monitor"
+            );
+        }
+
+        clipboard_history::register_kept_hud_whisper(|cx| {
+            hud_manager::show_hud("Kept".to_string(), Some(1200), cx);
+        });
+        if let Err(e) = clipboard_history::install_post_copy_quick_menu(cx) {
+            tracing::warn!(
+                target: "script_kit::clipboard_post_copy",
+                %e,
+                "failed to install post-copy quick menu"
             );
         }
 
@@ -1133,106 +1149,8 @@ app.run(move |cx: &mut App| {
             }
         }).detach();
 
-        // Main window hotkey listener - uses Entity<ScriptListApp> instead of WindowHandle
-        let app_entity_for_hotkey = app_entity.clone();
-        let window_for_hotkey = window;
-        cx.spawn(async move |cx: &mut gpui::AsyncApp| {
-            logging::log("HOTKEY", "Main hotkey listener started");
-            while let Ok(hotkey_event) = hotkeys::hotkey_channel().1.recv().await {
-                let _guard = logging::set_correlation_id(hotkey_event.correlation_id.clone());
-                logging::log("VISIBILITY", "");
-                logging::log("VISIBILITY", "╔════════════════════════════════════════════════════════════╗");
-                logging::log("VISIBILITY", "║  HOTKEY TRIGGERED - TOGGLE WINDOW                          ║");
-                logging::log("VISIBILITY", "╚════════════════════════════════════════════════════════════╝");
-
-                let is_visible = script_kit_gpui::is_main_window_visible();
-                logging::log("VISIBILITY", &format!("State: WINDOW_VISIBLE={}", is_visible));
-
-                let app_entity_inner = app_entity_for_hotkey.clone();
-                let window_inner = window_for_hotkey;
-
-                if is_visible {
-                    // Don't hide when AgentChatView is active — the AI chat
-                    // should persist through hotkey toggles.
-                    let app_check = app_entity_inner.clone();
-                    let is_agent_chat = cx.update(|cx| {
-                        matches!(
-                            app_check.read(cx).current_view,
-                            AppView::AgentChatView { .. }
-                        )
-                    });
-
-                    if is_agent_chat {
-                        // Detach Agent Chat to its own window, keep main panel showing ScriptList
-                        logging::log("VISIBILITY", "Decision: DETACH Agent Chat + SHOW main");
-                        let app_for_detach = app_entity_inner.clone();
-                        cx.update(move |cx: &mut gpui::App| {
-                            let inherit_bounds = window_inner
-                                .update(cx, |_root, window, _cx| {
-                                    match window.window_bounds() {
-                                        gpui::WindowBounds::Windowed(bounds) => Some(bounds),
-                                        _ => Some(window.bounds()),
-                                    }
-                                })
-                                .ok()
-                                .flatten();
-                            tracing::info!(
-                                event = "hotkey_detach_agent_chat_requested",
-                                has_inherited_bounds = inherit_bounds.is_some(),
-                            );
-                            app_for_detach.update(cx, |view, cx| {
-                                let detach_result = if let AppView::AgentChatView { ref entity } = view.current_view {
-                                    if let Some(thread) = entity.read(cx).thread() {
-                                        crate::ai::agent_chat::ui::chat_window::open_chat_window_with_thread(
-                                            thread,
-                                            inherit_bounds,
-                                            cx,
-                                        )
-                                    } else {
-                                        Ok(())
-                                    }
-                                } else {
-                                    Ok(())
-                                };
-
-                                match detach_result {
-                                    Ok(()) => {
-                                        // Keep the main panel visible on ScriptList, but do not
-                                        // reclaim keyboard focus from the newly detached chat window.
-                                        // Activation is handled inside open_chat_window_with_thread.
-                                        view.close_agent_chat_to_script_list(false, cx);
-                                        tracing::info!(
-                                            event = "hotkey_detach_agent_chat_completed",
-                                            restored_view = "ScriptList",
-                                            focus_main_filter = false,
-                                            detached_window_activated = true,
-                                        );
-                                    }
-                                    Err(e) => {
-                                        tracing::warn!(%e, "hotkey_detach_agent_chat_failed");
-                                        tracing::info!(
-                                            event = "hotkey_detach_agent_chat_aborted",
-                                            kept_view = "AgentChatView",
-                                        );
-                                    }
-                                }
-                            });
-                        });
-                    } else {
-                        logging::log("VISIBILITY", "Decision: HIDE");
-                        cx.update(move |cx: &mut gpui::App| {
-                            hide_main_window_helper(app_entity_inner, cx);
-                        });
-                    }
-                } else {
-                    logging::log("VISIBILITY", "Decision: SHOW");
-                    cx.update(move |cx: &mut gpui::App| {
-                        show_main_window_helper(window_inner, app_entity_inner, cx);
-                    });
-                }
-            }
-            logging::log("HOTKEY", "Main hotkey listener exiting");
-        }).detach();
+        // Main window hotkey listener — gesture classifier (key-down show, tap toggle, double-tap Agent Chat)
+        spawn_main_hotkey_gesture_listener(cx, app_entity.clone(), window);
 
         // Notes hotkey listener - event-driven via async_channel
         // The hotkey thread dispatches via GPUI's ForegroundExecutor, which wakes this task
@@ -2511,6 +2429,54 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                             None,
                                         ),
                                     );
+                                }
+                            }
+
+                            ExternalCommand::SimulateMainHotkeyGesture { ref phase, ref request_id } => {
+                                let rid = request_id.as_deref().unwrap_or("-");
+                                logging::log(
+                                    "STDIN",
+                                    &format!("[{}] SimulateMainHotkeyGesture phase={}", rid, phase),
+                                );
+                                let normalized = phase.trim().to_ascii_lowercase();
+                                if let Some(hotkey_phase) = match normalized.as_str() {
+                                    "down" | "keydown" | "key-down" => {
+                                        Some(hotkeys::MainHotkeyPhase::KeyDown)
+                                    }
+                                    "up" | "keyup" | "key-up" => {
+                                        Some(hotkeys::MainHotkeyPhase::KeyUp)
+                                    }
+                                    _ => None,
+                                } {
+                                    hotkeys::inject_main_hotkey_phase_for_agentic(hotkey_phase);
+                                    if let Some(rid) = request_id {
+                                        if let Some(sender) = view.response_sender.clone() {
+                                            let _ = sender.try_send(
+                                                crate::protocol::Message::external_command_result(
+                                                    rid.to_string(),
+                                                    "simulateMainHotkeyGesture".to_string(),
+                                                    true,
+                                                    None,
+                                                    None,
+                                                ),
+                                            );
+                                        }
+                                    }
+                                } else if let Some(rid) = request_id {
+                                    if let Some(sender) = view.response_sender.clone() {
+                                        let _ = sender.try_send(
+                                            crate::protocol::Message::external_command_result(
+                                                rid.to_string(),
+                                                "simulateMainHotkeyGesture".to_string(),
+                                                false,
+                                                Some("invalid_phase".to_string()),
+                                                Some(format!(
+                                                    "expected 'down' or 'up', got '{}'",
+                                                    normalized
+                                                )),
+                                            ),
+                                        );
+                                    }
                                 }
                             }
 

@@ -38,7 +38,8 @@ impl ScriptListApp {
             | AppView::DictationHistoryView { .. }
             | AppView::NotesBrowseView { .. }
             | AppView::ProfileSearchView { .. }
-            | AppView::AgentChatView { .. } => crate::window_resize::ViewType::MainWindow,
+            | AppView::AgentChatView { .. }
+            | AppView::DayPage { .. } => crate::window_resize::ViewType::MainWindow,
             AppView::AppLauncherView { .. }
             | AppView::WindowSwitcherView { .. }
             | AppView::BrowserTabsView { .. }
@@ -113,6 +114,7 @@ impl ScriptListApp {
             AppView::DictationHistoryView { .. } => "dictationHistory",
             AppView::NotesBrowseView { .. } => "notesBrowse",
             AppView::AgentChatView { .. } => "agentChatChat",
+            AppView::DayPage { .. } => "dayPage",
             AppView::ScriptIssuesView { .. } => "scriptIssues",
             AppView::SdkReferenceView { .. } => "sdkReference",
             AppView::ScriptTemplateCatalogView { .. } => "scriptTemplateCatalog",
@@ -151,6 +153,7 @@ impl ScriptListApp {
                 | AppView::SdkReferenceView { .. }
                 | AppView::ScriptTemplateCatalogView { .. }
                 | AppView::AgentChatView { .. }
+                | AppView::DayPage { .. }
         );
         let shell_horizontal_padding = shell.header_padding_x;
         let main_view_context_zone_height = menu_def.header_info_bar.height_px;

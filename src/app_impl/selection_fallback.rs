@@ -695,7 +695,9 @@ impl ScriptListApp {
             }
             crate::brain::DocSource::Clipboard
             | crate::brain::DocSource::Activity
-            | crate::brain::DocSource::Capture => {
+            | crate::brain::DocSource::Capture
+            | crate::brain::DocSource::DayPage
+            | crate::brain::DocSource::Fragment => {
                 self.open_brain_memory_preview(hit, cx);
             }
         }

@@ -36,7 +36,7 @@ impl ScriptListApp {
     /// whether the visible view may open the shared ActionsDialog.
     pub(crate) fn actions_host_for_view(view: &AppView) -> Option<ActionsDialogHost> {
         match view {
-            AppView::ScriptList => Some(ActionsDialogHost::MainList),
+            AppView::ScriptList | AppView::DayPage { .. } => Some(ActionsDialogHost::MainList),
             AppView::ClipboardHistoryView { .. } => Some(ActionsDialogHost::ClipboardHistory),
             AppView::DictationHistoryView { .. } => Some(ActionsDialogHost::DictationHistory),
             AppView::FavoritesBrowseView { .. } => Some(ActionsDialogHost::Favorites),

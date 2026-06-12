@@ -196,6 +196,7 @@ impl ScriptListApp {
             AppView::DictationHistoryView { .. } => "DictationHistoryView",
             AppView::NotesBrowseView { .. } => "NotesBrowseView",
             AppView::AgentChatView { .. } => "AgentChatView",
+            AppView::DayPage { .. } => "DayPage",
             AppView::ScriptIssuesView { .. } => "ScriptIssuesView",
             AppView::SdkReferenceView { .. } => "SdkReferenceView",
             AppView::ScriptTemplateCatalogView { .. } => "ScriptTemplateCatalogView",

@@ -3755,6 +3755,7 @@ impl ScriptListApp {
             }
 
             AppView::ChatPrompt { .. } | AppView::AgentChatView { .. } => FocusTarget::ChatPrompt,
+            AppView::DayPage { .. } => FocusTarget::EditorPrompt,
             AppView::NamingPrompt { .. } => FocusTarget::NamingPrompt,
 
             AppView::ConfirmPrompt { .. } => FocusTarget::AppRoot,
@@ -5057,6 +5058,7 @@ impl ScriptListApp {
             AppView::DictationHistoryView { .. } => "DictationHistoryView".to_string(),
             AppView::NotesBrowseView { .. } => "NotesBrowse".to_string(),
             AppView::AgentChatView { .. } => "AgentChatView".to_string(),
+            AppView::DayPage { .. } => "DayPage".to_string(),
             AppView::ScriptIssuesView { .. } => "ScriptIssuesView".to_string(),
             AppView::SdkReferenceView { .. } => "SdkReferenceView".to_string(),
             AppView::ScriptTemplateCatalogView { .. } => "ScriptTemplateCatalogView".to_string(),
@@ -5111,6 +5113,9 @@ impl ScriptListApp {
             }
             AppView::ScratchPadView { entity, .. } => {
                 entity.read_with(cx, |editor, app| non_empty(editor.content_from_app(app)))
+            }
+            AppView::DayPage { entity } => {
+                non_empty(entity.read(cx).notes_editor.read(cx).content(cx))
             }
             AppView::ChatPrompt { entity, .. } => {
                 non_empty(entity.read(cx).input.text().to_string())

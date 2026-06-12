@@ -268,7 +268,7 @@ impl ScriptListApp {
                      The user typed `;{slug}` in the launcher, but does not have a capture handler for it yet.\n\
                      Nearest existing targets: {nearest}\n\n\
                      Existing capture handler examples in Script Kit:\n\
-                     - `todo` (targets: [\"todo\"], accepts: [\"tags\", \"date\", \"priority\", \"url\", \"kv\"]) -> Appends to `$SK_PATH/menu-syntax/todos.jsonl`\n\
+                     - `todo` (targets: [\"todo\"], accepts: [\"tags\", \"date\", \"priority\", \"url\", \"kv\"]) -> Appends a task line to `$SK_PATH/brain/days/YYYY-MM-DD.md`\n\
                      - `cal` (targets: [\"cal\"], accepts: [\"date\", \"duration\", \"tags\", \"kv\"]) -> Appends to `$SK_PATH/menu-syntax/events.jsonl`\n\
                      - `note` (targets: [\"note\"], accepts: [\"tags\", \"date\", \"kv\"]) -> Appends to `$SK_PATH/menu-syntax/notes.jsonl`\n\
                      - `social` (targets: [\"social\"], accepts: [\"tags\", \"url\", \"kv\"]) -> Appends to `$SK_PATH/menu-syntax/drafts.jsonl`\n\

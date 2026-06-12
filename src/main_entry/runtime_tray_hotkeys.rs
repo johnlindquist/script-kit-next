@@ -201,38 +201,8 @@
             }
         }).detach();
 
-        // Main window hotkey listener - uses Entity<ScriptListApp> instead of WindowHandle
-        let app_entity_for_hotkey = app_entity.clone();
-        let window_for_hotkey = window;
-        cx.spawn(async move |cx: &mut gpui::AsyncApp| {
-            logging::log("HOTKEY", "Main hotkey listener started");
-            while let Ok(hotkey_event) = hotkeys::hotkey_channel().1.recv().await {
-                let _guard = logging::set_correlation_id(hotkey_event.correlation_id.clone());
-                logging::log("VISIBILITY", "");
-                logging::log("VISIBILITY", "╔════════════════════════════════════════════════════════════╗");
-                logging::log("VISIBILITY", "║  HOTKEY TRIGGERED - TOGGLE WINDOW                          ║");
-                logging::log("VISIBILITY", "╚════════════════════════════════════════════════════════════╝");
-
-                let is_visible = script_kit_gpui::is_main_window_visible();
-                logging::log("VISIBILITY", &format!("State: WINDOW_VISIBLE={}", is_visible));
-
-                let app_entity_inner = app_entity_for_hotkey.clone();
-                let window_inner = window_for_hotkey;
-
-                if is_visible {
-                    logging::log("VISIBILITY", "Decision: HIDE");
-                    let _ = cx.update(move |cx: &mut gpui::App| {
-                        hide_main_window_helper(app_entity_inner, cx);
-                    });
-                } else {
-                    logging::log("VISIBILITY", "Decision: SHOW");
-                    let _ = cx.update(move |cx: &mut gpui::App| {
-                        show_main_window_helper(window_inner, app_entity_inner, cx);
-                    });
-                }
-            }
-            logging::log("HOTKEY", "Main hotkey listener exiting");
-        }).detach();
+        // Main window hotkey listener — gesture classifier (key-down show, tap toggle, double-tap Agent Chat)
+        spawn_main_hotkey_gesture_listener(cx, app_entity.clone(), window);
 
         // Notes hotkey listener - event-driven via async_channel
         // The hotkey thread dispatches via GPUI's ForegroundExecutor, which wakes this task

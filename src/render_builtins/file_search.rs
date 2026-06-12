@@ -533,7 +533,7 @@ impl ScriptListApp {
             crate::theme::TypographyResolver::new_theme_first(&self.theme, self.current_design);
         let empty_text_color = color_resolver.empty_text_color();
         let empty_font_family = typography_resolver.primary_font().to_string();
-        let is_default_design = self.current_design == DesignVariant::Default;
+        let is_default_design = self.current_design.is_default();
 
         let _opacity = self.theme.get_opacity();
         // bg_with_alpha removed - let vibrancy show through from Root (matches main menu)

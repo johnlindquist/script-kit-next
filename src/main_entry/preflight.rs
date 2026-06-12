@@ -95,6 +95,17 @@
     clipboard_history::set_max_text_content_len(
         loaded_config.get_clipboard_history_max_text_length(),
     );
+    let secret_rejection = loaded_config.get_clipboard_history_secret_rejection();
+    clipboard_history::configure_secret_rejection(clipboard_history::SecretRejectionConfig {
+        extra_blocked_source_apps: secret_rejection.extra_blocked_source_apps,
+        extra_secret_patterns: secret_rejection.extra_secret_patterns,
+    });
+    let post_copy_menu = loaded_config.get_clipboard_history_post_copy_menu();
+    clipboard_history::configure_post_copy_menu(clipboard_history::PostCopyMenuConfig {
+        enabled: post_copy_menu.enabled,
+        tap_window_ms: post_copy_menu.tap_window_ms,
+        trigger_modifiers: post_copy_menu.trigger_modifiers,
+    });
 
     // Initialize clipboard history monitoring (background thread)
     if let Err(e) = clipboard_history::init_clipboard_history() {

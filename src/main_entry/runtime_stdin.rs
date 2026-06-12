@@ -406,6 +406,54 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                 }
                             }
 
+                            ExternalCommand::SimulateMainHotkeyGesture { ref phase, ref request_id } => {
+                                let rid = request_id.as_deref().unwrap_or("-");
+                                logging::log(
+                                    "STDIN",
+                                    &format!("[{}] SimulateMainHotkeyGesture phase={}", rid, phase),
+                                );
+                                let normalized = phase.trim().to_ascii_lowercase();
+                                if let Some(hotkey_phase) = match normalized.as_str() {
+                                    "down" | "keydown" | "key-down" => {
+                                        Some(hotkeys::MainHotkeyPhase::KeyDown)
+                                    }
+                                    "up" | "keyup" | "key-up" => {
+                                        Some(hotkeys::MainHotkeyPhase::KeyUp)
+                                    }
+                                    _ => None,
+                                } {
+                                    hotkeys::inject_main_hotkey_phase_for_agentic(hotkey_phase);
+                                    if let Some(rid) = request_id {
+                                        if let Some(sender) = view.response_sender.clone() {
+                                            let _ = sender.try_send(
+                                                crate::protocol::Message::external_command_result(
+                                                    rid.to_string(),
+                                                    "simulateMainHotkeyGesture".to_string(),
+                                                    true,
+                                                    None,
+                                                    None,
+                                                ),
+                                            );
+                                        }
+                                    }
+                                } else if let Some(rid) = request_id {
+                                    if let Some(sender) = view.response_sender.clone() {
+                                        let _ = sender.try_send(
+                                            crate::protocol::Message::external_command_result(
+                                                rid.to_string(),
+                                                "simulateMainHotkeyGesture".to_string(),
+                                                false,
+                                                Some("invalid_phase".to_string()),
+                                                Some(format!(
+                                                    "expected 'down' or 'up', got '{}'",
+                                                    normalized
+                                                )),
+                                            ),
+                                        );
+                                    }
+                                }
+                            }
+
                             ExternalCommand::OpenNotes => {
                                 logging::log("STDIN", "Opening notes window via stdin command");
                                 if let Err(e) = notes::open_notes_window(ctx) {

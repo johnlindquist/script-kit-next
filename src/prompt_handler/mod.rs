@@ -4386,6 +4386,19 @@ impl ScriptListApp {
                         -1,
                         None,
                     ),
+                    AppView::DayPage { entity } => {
+                        let content = entity.read(cx).notes_editor.read(cx).content(cx);
+                        (
+                            "dayPage".to_string(),
+                            None,
+                            None,
+                            content,
+                            0,
+                            0,
+                            -1,
+                            None,
+                        )
+                    }
                     AppView::ScriptIssuesView { .. } => (
                         "scriptIssues".to_string(),
                         None,

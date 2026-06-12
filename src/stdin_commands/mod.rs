@@ -424,6 +424,13 @@ pub enum ExternalCommand {
         #[serde(default, rename = "requestId")]
         request_id: Option<ExternalCommandRequestId>,
     },
+    /// Inject a main launcher hotkey key-down or key-up for gesture-probe tests.
+    SimulateMainHotkeyGesture {
+        /// `"down"` or `"up"`
+        phase: String,
+        #[serde(default, rename = "requestId")]
+        request_id: Option<ExternalCommandRequestId>,
+    },
     /// Open the Notes window (for testing)
     OpenNotes,
     /// Open the About surface in the main window (for testing)
@@ -800,6 +807,7 @@ impl ExternalCommand {
             | Self::SetMenuSyntaxFormField { request_id, .. }
             | Self::TriggerBuiltin { request_id, .. }
             | Self::SimulateKey { request_id, .. }
+            | Self::SimulateMainHotkeyGesture { request_id, .. }
             | Self::SimulateAiKey { request_id, .. }
             | Self::CaptureWindow { request_id, .. }
             | Self::SetAiSearch { request_id, .. }
@@ -842,6 +850,7 @@ impl ExternalCommand {
             Self::SetMenuSyntaxFormField { .. } => "setMenuSyntaxFormField",
             Self::TriggerBuiltin { .. } => "triggerBuiltin",
             Self::SimulateKey { .. } => "simulateKey",
+            Self::SimulateMainHotkeyGesture { .. } => "simulateMainHotkeyGesture",
             Self::OpenNotes => "openNotes",
             Self::OpenAbout => "openAbout",
             Self::OpenCreationFeedback { .. } => "openCreationFeedback",

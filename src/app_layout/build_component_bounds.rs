@@ -68,6 +68,7 @@ impl ScriptListApp {
             AppView::DictationHistoryView { .. } => "DictationHistory",
             AppView::NotesBrowseView { .. } => "NotesBrowse",
             AppView::AgentChatView { .. } => "AgentChat",
+            AppView::DayPage { .. } => "DayPage",
             AppView::ScriptIssuesView { .. } => "ScriptIssues",
             AppView::SdkReferenceView { .. } => "SdkReference",
             AppView::ScriptTemplateCatalogView { .. } => "ScriptTemplateCatalog",
@@ -101,6 +102,7 @@ impl ScriptListApp {
                 | AppView::SdkReferenceView { .. }
                 | AppView::ScriptTemplateCatalogView { .. }
                 | AppView::AgentChatView { .. }
+                | AppView::DayPage { .. }
         );
         let main_view_context_zone_height = menu_def.header_info_bar.height_px;
         let main_view_header_content_height = if main_view_has_context_zone {
@@ -332,7 +334,7 @@ impl ScriptListApp {
                 }
             }
 
-            AppView::AgentChatView { .. } => {
+            AppView::AgentChatView { .. } | AppView::DayPage { .. } => {
                 let info_columns =
                     crate::components::main_view_chrome::main_view_content_columns(menu_def);
                 let info_metrics = crate::components::info_state::info_metrics(
@@ -488,6 +490,7 @@ impl ScriptListApp {
                 | AppView::SdkReferenceView { .. }
                 | AppView::ScriptTemplateCatalogView { .. }
                 | AppView::AgentChatView { .. }
+                | AppView::DayPage { .. }
         ) {
             if main_view_has_context_zone {
                 let context_outset_x = px(menu_def.header_info_bar.context_edge_outset_x);

@@ -92,6 +92,13 @@ impl DesignVariant {
         all[prev_idx]
     }
 
+    /// Whether this is the default design (header constants instead of design
+    /// spacing tokens). Prefer this over comparing against the enum variant so
+    /// call sites stay registry-migratable (see tests/no_legacy_design_variant.rs).
+    pub fn is_default(&self) -> bool {
+        matches!(self, DesignVariant::Default)
+    }
+
     /// Get the display name for this variant
     pub fn name(&self) -> &'static str {
         match self {

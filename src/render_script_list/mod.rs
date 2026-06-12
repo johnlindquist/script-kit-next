@@ -858,7 +858,7 @@ impl ScriptListApp {
             crate::theme::ColorResolver::new_for_shell(&self.theme, self.current_design);
 
         // For Default design, use header constants; for others, use design spacing
-        let is_default_design = self.current_design == DesignVariant::Default;
+        let is_default_design = self.current_design.is_default();
         let design_spacing = tokens.spacing();
 
         let item_count = grouped_items.len();

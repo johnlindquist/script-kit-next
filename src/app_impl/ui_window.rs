@@ -233,7 +233,10 @@ impl ScriptListApp {
 
         match action {
             crate::footer_popup::FooterAction::Run => {
-                if let AppView::AgentChatView { entity } = &self.current_view {
+                if matches!(self.current_view, AppView::DayPage { .. }) {
+                    self.dispatch_day_page_save_with_footer(window, cx);
+                    return;
+                } else if let AppView::AgentChatView { entity } = &self.current_view {
                     let entity = entity.clone();
                     entity.update(cx, |chat, cx| {
                         chat.submit_with_expanded_tokens(cx);
@@ -726,6 +729,18 @@ impl ScriptListApp {
                 view = ?self.current_view,
                 button_count = buttons.len(),
                 "Resolved Quick Terminal footer buttons"
+            );
+            return buttons;
+        }
+
+        if matches!(self.current_view, AppView::DayPage { .. }) {
+            let buttons = day_page_footer_buttons(self, cx);
+            tracing::debug!(
+                target: "script_kit::footer_popup",
+                event = "main_window_footer_buttons_resolved",
+                view = ?self.current_view,
+                button_count = buttons.len(),
+                "Resolved Day Page footer buttons"
             );
             return buttons;
         }
@@ -1623,6 +1638,7 @@ impl ScriptListApp {
                 }
                 Some((compact_ai_view_type_for_mode(self.main_window_mode), 0))
             }
+            AppView::DayPage { .. } => Some((ViewType::MainWindow, 0)),
             AppView::ConfirmPrompt { .. } => Some((ViewType::DivPrompt, 0)),
         }
     }

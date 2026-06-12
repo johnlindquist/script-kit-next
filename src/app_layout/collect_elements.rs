@@ -125,6 +125,23 @@ impl ScriptListApp {
                 }
             }
 
+            AppView::DayPage { entity } => {
+                let content = entity.read(cx).notes_editor.read(cx).content(cx);
+                let elements = vec![
+                    protocol::ElementInfo::panel("day-page"),
+                    protocol::ElementInfo::input(
+                        "day-page-editor",
+                        Some(content.as_str()),
+                        true,
+                    ),
+                ];
+                let total_count = elements.len();
+                ElementCollectionOutcome::new(
+                    elements.into_iter().take(limit).collect(),
+                    total_count,
+                )
+            }
+
             AppView::ArgPrompt { choices, .. } => self
                 .collect_choice_view_elements(
                     "filter",

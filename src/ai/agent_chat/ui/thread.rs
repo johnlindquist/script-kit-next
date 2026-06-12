@@ -1613,7 +1613,7 @@ impl AgentChatThread {
                 // Save conversation summary + full messages to history.
                 // Build a rich index entry from the full conversation so
                 // search_history() can match on later transcript content.
-                if self
+                let history_trace_label = if self
                     .messages
                     .iter()
                     .any(|m| matches!(m.role, AgentChatThreadMessageRole::User))
@@ -1633,7 +1633,7 @@ impl AgentChatThread {
                     };
                     super::history::save_conversation(&conversation);
 
-                    if let Some(entry) = super::history::build_history_entry(&conversation) {
+                    super::history::build_history_entry(&conversation).map(|entry| {
                         tracing::info!(
                             target: "script_kit::tab_ai",
                             event = "agent_chat_history_index_entry_built",
@@ -1643,8 +1643,11 @@ impl AgentChatThread {
                             message_count = entry.message_count,
                         );
                         super::history::save_history_entry(&entry);
-                    }
-                }
+                        entry.title_display().to_string()
+                    })
+                } else {
+                    None
+                };
 
                 // The finished turn appended a user message; refresh the
                 // rewind checkpoints so Cmd+K can offer it for editing.
@@ -1669,6 +1672,14 @@ impl AgentChatThread {
                 if let Some(user_text) = last_user {
                     let assistant_text = last_assistant.unwrap_or_default();
                     let thread_id = self.ui_thread_id.clone();
+                    // Thread title when history has one; otherwise first user snippet.
+                    let trace_label = history_trace_label.unwrap_or_else(|| {
+                        self.messages
+                            .iter()
+                            .find(|m| matches!(m.role, AgentChatThreadMessageRole::User))
+                            .map(|m| m.body.to_string())
+                            .unwrap_or_default()
+                    });
                     let turn_index = self
                         .messages
                         .iter()
@@ -1678,6 +1689,10 @@ impl AgentChatThread {
                     let _ = std::thread::Builder::new()
                         .name("script-kit-brain-ingest".to_string())
                         .spawn(move || {
+                            crate::brain::day_trace::maybe_append_agent_chat_trace(
+                                &thread_id,
+                                &trace_label,
+                            );
                             if let Err(error) = crate::brain::ingest_chat_turn(
                                 &thread_id,
                                 turn_index,

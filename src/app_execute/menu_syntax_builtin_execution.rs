@@ -18,14 +18,9 @@ impl ScriptListApp {
         };
 
         let result = match resolution.canonical_target {
-            crate::menu_syntax::CanonicalCaptureTarget::Todo => match resolution.operation {
-                crate::menu_syntax::CaptureOperation::Remind
-                | crate::menu_syntax::CaptureOperation::Snooze
-                | crate::menu_syntax::CaptureOperation::Defer => {
-                    write_app_owned_todo_capture(invocation, resolution.operation)
-                }
-                _ => return AppOwnedCaptureOutcome::NotOwned,
-            },
+            crate::menu_syntax::CanonicalCaptureTarget::Todo => {
+                write_app_owned_todo_capture(invocation, resolution.operation)
+            }
             crate::menu_syntax::CanonicalCaptureTarget::Link => {
                 write_app_owned_link_capture(invocation)
             }
@@ -61,142 +56,22 @@ fn write_app_owned_todo_capture(
     invocation: &crate::menu_syntax::CaptureInvocation,
     operation: crate::menu_syntax::CaptureOperation,
 ) -> Result<String, String> {
-    write_app_owned_todo_capture_in_sk_path(invocation, operation, &default_app_owned_sk_path())
-}
-
-fn write_app_owned_todo_capture_in_sk_path(
-    invocation: &crate::menu_syntax::CaptureInvocation,
-    operation: crate::menu_syntax::CaptureOperation,
-    sk_path: &std::path::Path,
-) -> Result<String, String> {
-    let resolved = resolve_for_app_owned(invocation);
-    let now = chrono::Local::now().to_rfc3339();
-    let target_time = resolved.dates.first().map(|date| date.iso.clone());
-    if target_time.is_none() {
-        return Err(match operation {
-            crate::menu_syntax::CaptureOperation::Remind => "Add a reminder time.".to_string(),
-            crate::menu_syntax::CaptureOperation::Snooze => "Add a snooze time.".to_string(),
-            crate::menu_syntax::CaptureOperation::Defer => "Add a defer time.".to_string(),
-            _ => "Add a todo time.".to_string(),
-        });
-    }
-    let object_refs = crate::menu_syntax::payload::object_refs_for_raw_capture(
-        &invocation.target,
-        &invocation.raw,
-    );
-    if let Some(todo_id) =
-        primary_resolved_object_ref_id(&object_refs, crate::menu_syntax::CaptureObjectKind::Todo)?
-    {
-        update_app_owned_todo_ref_in_sk_path(
-            &todo_id,
-            invocation,
-            operation,
-            &resolved,
-            target_time.as_deref(),
-            &now,
-            &object_refs,
-            sk_path,
-        )?;
-        return Ok(format!("Updated todo ({})", operation.as_str()));
-    }
-
-    let body = resolved.body.trim();
-    if body.is_empty() {
-        return Err("Add todo text.".to_string());
-    }
-
-    let mut record = serde_json::json!({
-        "schema": "menu-syntax.todo.v1",
-        "kind": "todo",
-        "id": app_owned_id("todo"),
-        "body": body,
-        "status": "open",
-        "tags": resolved.tags,
-        "priority": resolved.priority,
-        "due": target_time,
-        "createdAt": now,
-        "updatedAt": now,
-        "deletedAt": null,
-        "objectRefs": object_refs,
-        "source": app_owned_source(invocation, "todo", operation.as_str()),
-    });
-    if let Some(time) = target_time {
-        let key = match operation {
-            crate::menu_syntax::CaptureOperation::Remind => "remindAt",
-            crate::menu_syntax::CaptureOperation::Snooze => "snoozeUntil",
-            crate::menu_syntax::CaptureOperation::Defer => "deferUntil",
-            _ => "due",
-        };
-        record[key] = serde_json::Value::String(time);
-    }
-    record["dates"] = serde_json::to_value(resolved.dates).unwrap_or(serde_json::Value::Null);
-    append_app_owned_jsonl_in_sk_path(sk_path, "todos.jsonl", &record)?;
-    Ok(format!("Captured to todo ({})", operation.as_str()))
-}
-
-fn update_app_owned_todo_ref_in_sk_path(
-    todo_id: &str,
-    invocation: &crate::menu_syntax::CaptureInvocation,
-    operation: crate::menu_syntax::CaptureOperation,
-    resolved: &crate::menu_syntax::date::ResolvedCaptureInvocation,
-    target_time: Option<&str>,
-    now: &str,
-    object_refs: &[crate::menu_syntax::CaptureObjectRef],
-    sk_path: &std::path::Path,
-) -> Result<(), String> {
-    let mut record =
-        read_app_owned_jsonl_record_by_key_in_sk_path(sk_path, "todos.jsonl", "id", todo_id)
-            .ok_or_else(|| "Todo not found.".to_string())?;
-    if record
-        .get("deletedAt")
-        .and_then(|value| value.as_str())
-        .map(|value| !value.trim().is_empty())
-        .unwrap_or(false)
-        || record
-            .get("status")
-            .and_then(|value| value.as_str())
-            .map(|value| value.eq_ignore_ascii_case("deleted"))
-            .unwrap_or(false)
-    {
-        return Err("Selected todo is deleted.".to_string());
-    }
-
-    let next_body = if resolved.body.trim().is_empty() {
-        record
-            .get("body")
-            .and_then(|value| value.as_str())
-            .unwrap_or("")
-            .to_string()
-    } else {
-        resolved.body.trim().to_string()
-    };
-    if next_body.trim().is_empty() {
-        return Err("Selected todo has no text.".to_string());
-    }
-
-    record["body"] = serde_json::Value::String(next_body);
-    record["updatedAt"] = serde_json::Value::String(now.to_string());
-    record["objectRefs"] = serde_json::to_value(object_refs).unwrap_or(serde_json::Value::Null);
-    record["source"] = app_owned_source(invocation, "todo", operation.as_str());
-    record["dates"] = serde_json::to_value(&resolved.dates).unwrap_or(serde_json::Value::Null);
-    if let Some(time) = target_time {
-        record["due"] = serde_json::Value::String(time.to_string());
-        let key = match operation {
-            crate::menu_syntax::CaptureOperation::Remind => "remindAt",
-            crate::menu_syntax::CaptureOperation::Snooze => "snoozeUntil",
-            crate::menu_syntax::CaptureOperation::Defer => "deferUntil",
-            _ => "due",
-        };
-        record[key] = serde_json::Value::String(time.to_string());
-    }
-    if !resolved.tags.is_empty() {
-        record["tags"] = serde_json::to_value(&resolved.tags).unwrap_or(serde_json::Value::Null);
-    }
-    if let Some(priority) = resolved.priority {
-        record["priority"] = serde_json::Value::Number(serde_json::Number::from(priority));
-    }
-
-    upsert_app_owned_jsonl_by_key_in_sk_path(sk_path, "todos.jsonl", "id", todo_id, &record)
+    let result =
+        crate::notes::menu_syntax_capture::apply_menu_syntax_todo_capture(invocation, operation)?;
+    Ok(match result.operation {
+        crate::notes::menu_syntax_capture::TodoCaptureOperation::Create => {
+            "Captured to todo".to_string()
+        }
+        crate::notes::menu_syntax_capture::TodoCaptureOperation::Remind => {
+            "Captured to todo (remind)".to_string()
+        }
+        crate::notes::menu_syntax_capture::TodoCaptureOperation::Snooze => {
+            "Captured to todo (snooze)".to_string()
+        }
+        crate::notes::menu_syntax_capture::TodoCaptureOperation::Defer => {
+            "Captured to todo (defer)".to_string()
+        }
+    })
 }
 
 fn write_app_owned_link_capture(
@@ -666,81 +541,56 @@ mod menu_syntax_builtin_execution_tests {
         result
     }
 
-    fn read_todo_lines(tmp: &TempDir) -> Vec<serde_json::Value> {
-        let path = tmp.path().join("menu-syntax").join("todos.jsonl");
-        std::fs::read_to_string(path)
-            .expect("read todos")
-            .lines()
-            .map(|line| serde_json::from_str(line).expect("todo json"))
-            .collect()
+    fn read_day_page_task_lines(tmp: &TempDir) -> Vec<String> {
+        let days_dir = tmp.path().join("brain").join("days");
+        let mut lines = Vec::new();
+        if !days_dir.exists() {
+            return lines;
+        }
+        for entry in std::fs::read_dir(days_dir).expect("read days dir") {
+            let entry = entry.expect("day entry");
+            let content = std::fs::read_to_string(entry.path()).expect("read day page");
+            lines.extend(
+                content
+                    .lines()
+                    .filter(|line| line.contains("- [ ] "))
+                    .map(str::to_string),
+            );
+        }
+        lines
     }
 
-    fn read_jsonl(tmp: &TempDir, filename: &str) -> Vec<serde_json::Value> {
-        let path = tmp.path().join("menu-syntax").join(filename);
-        std::fs::read_to_string(path)
-            .expect("read jsonl")
-            .lines()
-            .map(|line| serde_json::from_str(line).expect("json line"))
-            .collect()
-    }
-
-    #[test]
-    fn snooze_selected_todo_updates_existing_row_in_place() {
-        let tmp = TempDir::new().expect("tempdir");
-        {
-            let dir = tmp.path().join("menu-syntax");
-            std::fs::create_dir_all(&dir).expect("mkdir");
-            let todos_path = dir.join("todos.jsonl");
-            std::fs::write(
-                &todos_path,
-                r#"{"schema":"menu-syntax.todo.v1","kind":"todo","id":"todo_existing","body":"Review PR","status":"open","tags":["work"],"createdAt":"2026-05-20T10:00:00Z","updatedAt":"2026-05-20T10:00:00Z","deletedAt":null}
-"#,
-            )
-            .expect("seed todo");
-
+    fn snooze_selected_todo_by_reference_is_not_supported_on_day_pages() {
+        with_sk_path(|tmp| {
             let input = ";snooze @todo:todo_existing in 30 minutes";
             let invocation = invocation(&input);
-            let message = write_app_owned_todo_capture_in_sk_path(
+            let err = write_app_owned_todo_capture(
                 &invocation,
                 crate::menu_syntax::CaptureOperation::Snooze,
-                tmp.path(),
             )
-            .expect("snooze selected todo");
-
-            assert_eq!(message, "Updated todo (snooze)");
-            let rows = read_todo_lines(&tmp);
-            assert_eq!(rows.len(), 1);
-            assert_eq!(rows[0]["id"], "todo_existing");
-            assert_eq!(rows[0]["body"], "Review PR");
-            assert_eq!(rows[0]["source"]["operation"], "snooze");
-            assert!(rows[0]["snoozeUntil"].as_str().is_some());
-            assert!(rows[0]["due"].as_str().is_some());
-            assert_eq!(rows[0]["objectRefs"][0]["id"], "todo_existing");
-            assert_eq!(rows[0]["objectRefs"][0]["resolved"], true);
-        }
+            .expect_err("selected todo update should fail");
+            assert!(err.contains("not supported on day pages"));
+            assert!(read_day_page_task_lines(tmp).is_empty());
+        });
     }
 
     #[test]
     fn snooze_selected_missing_todo_does_not_create_row() {
-        let tmp = TempDir::new().expect("tempdir");
-        let invocation = invocation(";snooze @todo:missing_todo tomorrow");
-        let err = write_app_owned_todo_capture_in_sk_path(
-            &invocation,
-            crate::menu_syntax::CaptureOperation::Snooze,
-            tmp.path(),
-        )
-        .expect_err("missing selected todo should fail");
+        with_sk_path(|tmp| {
+            let invocation = invocation(";snooze @todo:missing_todo tomorrow");
+            let err = write_app_owned_todo_capture(
+                &invocation,
+                crate::menu_syntax::CaptureOperation::Snooze,
+            )
+            .expect_err("missing selected todo should fail");
 
-        assert_eq!(err, "Todo not found.");
-        let path = tmp.path().join("menu-syntax").join("todos.jsonl");
-        assert!(
-            !path.exists(),
-            "missing selected todo must not create a row"
-        );
+            assert!(err.contains("not supported on day pages"));
+            assert!(read_day_page_task_lines(tmp).is_empty());
+        });
     }
 
     #[test]
-    fn reminder_without_selected_todo_still_appends_new_row() {
+    fn reminder_without_selected_todo_appends_day_page_task_line() {
         with_sk_path(|tmp| {
             let invocation = invocation(";reminder Walk dog tomorrow p1 #home");
             let message = write_app_owned_todo_capture(
@@ -750,29 +600,26 @@ mod menu_syntax_builtin_execution_tests {
             .expect("create reminder");
 
             assert_eq!(message, "Captured to todo (remind)");
-            let rows = read_todo_lines(tmp);
-            assert_eq!(rows.len(), 1);
-            assert_eq!(rows[0]["body"], "Walk dog");
-            assert_eq!(rows[0]["source"]["canonicalTarget"], "todo");
-            assert_eq!(rows[0]["source"]["targetAliasOf"], "todo");
-            assert_eq!(rows[0]["source"]["operation"], "remind");
-            assert!(rows[0]["remindAt"].as_str().is_some());
-            assert_eq!(rows[0]["priority"], 1);
-            assert_eq!(rows[0]["tags"][0], "home");
+            let lines = read_day_page_task_lines(tmp);
+            assert_eq!(lines.len(), 1);
+            assert!(lines[0].contains("- [ ] Walk dog"));
+            assert!(lines[0].contains("#home"));
+            assert!(lines[0].contains("due:"));
         });
     }
 
     #[test]
     fn selected_todo_ref_outside_app_owned_store_is_rejected() {
-        let tmp = TempDir::new().expect("tempdir");
-        let invocation = invocation(";defer @todo:not_a_real_todo tomorrow");
-        let err = write_app_owned_todo_capture_in_sk_path(
-            &invocation,
-            crate::menu_syntax::CaptureOperation::Defer,
-            tmp.path(),
-        )
-        .expect_err("missing todo should reject");
-        assert_eq!(err, "Todo not found.");
+        with_sk_path(|tmp| {
+            let invocation = invocation(";defer @todo:not_a_real_todo tomorrow");
+            let err = write_app_owned_todo_capture(
+                &invocation,
+                crate::menu_syntax::CaptureOperation::Defer,
+            )
+            .expect_err("selected todo update should reject");
+            assert!(err.contains("not supported on day pages"));
+            assert!(read_day_page_task_lines(tmp).is_empty());
+        });
     }
 
     #[test]
