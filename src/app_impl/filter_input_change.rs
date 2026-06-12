@@ -13,6 +13,7 @@ impl ScriptListApp {
             ScriptListSpecialEntry::FileSearchMini { .. } => "file_search_mini",
             ScriptListSpecialEntry::QuickTerminal => "quick_terminal",
             ScriptListSpecialEntry::ActionsHelp => "actions_help",
+            ScriptListSpecialEntry::DayPage => "day_page",
         };
         let raw_filter_text_safe = logging::log_user_value(raw_filter_text);
 
@@ -46,6 +47,13 @@ impl ScriptListApp {
                 if self.has_actions() {
                     self.toggle_actions(cx, window);
                 }
+            }
+            ScriptListSpecialEntry::DayPage => {
+                // A bare `,` is a launch trigger, not content: clear it before
+                // the swap so the Day Page editor starts clean and ScriptList
+                // has no stray comma on return.
+                self.set_filter_text_immediate(String::new(), window, cx);
+                self.show_day_page_view(window, cx);
             }
         }
 
