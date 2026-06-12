@@ -1,6 +1,36 @@
 use super::*;
 
+/// Split `conflicts` into the subset not yet announced, and the replacement
+/// announced set (the full current conflicts). Persistent conflicts that every
+/// watcher refresh re-detects stay silent after their first announcement; a
+/// conflict that resolves and later reappears is announced again because the
+/// set is replaced (not accumulated) on every rebuild.
+pub(crate) fn split_unannounced_registry_conflicts(
+    announced: &std::collections::HashSet<String>,
+    conflicts: Vec<String>,
+) -> (Vec<String>, std::collections::HashSet<String>) {
+    let fresh: Vec<String> = conflicts
+        .iter()
+        .filter(|conflict| !announced.contains(*conflict))
+        .cloned()
+        .collect();
+    (fresh, conflicts.into_iter().collect())
+}
+
 impl ScriptListApp {
+    /// HUD-gating wrapper around [`split_unannounced_registry_conflicts`]:
+    /// returns only conflicts the user has not seen yet and records the
+    /// current set for the next rebuild.
+    pub(crate) fn take_unannounced_registry_conflicts(
+        &mut self,
+        conflicts: Vec<String>,
+    ) -> Vec<String> {
+        let (fresh, announced) =
+            split_unannounced_registry_conflicts(&self.announced_registry_conflicts, conflicts);
+        self.announced_registry_conflicts = announced;
+        fresh
+    }
+
     pub(crate) fn rebuild_registries(&mut self) -> Vec<String> {
         let mut conflicts = Vec::new();
         self.alias_registry.clear();
@@ -374,5 +404,52 @@ impl ScriptListApp {
             ),
         );
         cx.notify();
+    }
+}
+
+#[cfg(test)]
+mod registry_conflict_hud_tests {
+    use super::split_unannounced_registry_conflicts;
+    use std::collections::HashSet;
+
+    fn conflicts(items: &[&str]) -> Vec<String> {
+        items.iter().map(|s| s.to_string()).collect()
+    }
+
+    /// A standing conflict (e.g. two scriptlets both binding ctrl+shift+t)
+    /// is re-detected by every watcher refresh; it must toast at most once,
+    /// not once per refresh.
+    #[test]
+    fn persistent_conflict_announces_once() {
+        let announced = HashSet::new();
+        let (fresh, announced) = split_unannounced_registry_conflicts(
+            &announced,
+            conflicts(&["Shortcut conflict: 'ctrl shift t' already used by main.md"]),
+        );
+        assert_eq!(fresh.len(), 1);
+
+        let (fresh, _) = split_unannounced_registry_conflicts(
+            &announced,
+            conflicts(&["Shortcut conflict: 'ctrl shift t' already used by main.md"]),
+        );
+        assert!(fresh.is_empty(), "repeat refresh must not re-toast");
+    }
+
+    #[test]
+    fn new_conflict_announces_alongside_existing() {
+        let announced: HashSet<String> = conflicts(&["old"]).into_iter().collect();
+        let (fresh, _) = split_unannounced_registry_conflicts(&announced, conflicts(&["old", "new"]));
+        assert_eq!(fresh, conflicts(&["new"]));
+    }
+
+    #[test]
+    fn resolved_then_reintroduced_conflict_announces_again() {
+        let announced: HashSet<String> = conflicts(&["flaky"]).into_iter().collect();
+        // Refresh with the conflict resolved: announced set is replaced.
+        let (fresh, announced) = split_unannounced_registry_conflicts(&announced, Vec::new());
+        assert!(fresh.is_empty());
+        // Conflict reappears: it should toast again.
+        let (fresh, _) = split_unannounced_registry_conflicts(&announced, conflicts(&["flaky"]));
+        assert_eq!(fresh, conflicts(&["flaky"]));
     }
 }

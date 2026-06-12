@@ -397,9 +397,10 @@ impl ScriptListApp {
             .scroll_to_reveal_item(self.selected_index);
         self.last_scrolled_index = Some(self.selected_index);
 
-        // Rebuild alias/shortcut registries and show HUD for any conflicts
+        // Rebuild alias/shortcut registries and show HUD for newly appearing
+        // conflicts only — persistent ones already toasted on a prior refresh.
         let conflicts = self.rebuild_registries();
-        for conflict in conflicts {
+        for conflict in self.take_unannounced_registry_conflicts(conflicts) {
             self.show_hud(conflict, Some(HUD_CONFLICT_MS), cx); // 4s for conflict messages
         }
 
@@ -650,9 +651,10 @@ impl ScriptListApp {
         self.sync_list_state();
         self.validate_selection_bounds(cx);
 
-        // Rebuild alias/shortcut registries for this file's scriptlets
+        // Rebuild alias/shortcut registries for this file's scriptlets;
+        // toast only conflicts that were not already announced.
         let conflicts = self.rebuild_registries();
-        for conflict in conflicts {
+        for conflict in self.take_unannounced_registry_conflicts(conflicts) {
             self.show_hud(conflict, Some(HUD_CONFLICT_MS), cx);
         }
 

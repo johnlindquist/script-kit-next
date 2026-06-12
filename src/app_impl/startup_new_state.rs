@@ -216,6 +216,7 @@
             // Alias/shortcut registries - populated below
             alias_registry: std::collections::HashMap::new(),
             shortcut_registry: std::collections::HashMap::new(),
+            announced_registry_conflicts: std::collections::HashSet::new(),
             // SDK actions - starts empty, populated by setActions() from scripts
             sdk_actions: None,
             action_shortcuts: std::collections::HashMap::new(),
@@ -315,6 +316,10 @@
                 ),
             );
         }
+        // Mark startup conflicts announced so the first watcher refresh does
+        // not toast what startup deliberately kept silent; only conflicts
+        // introduced by later file edits HUD.
+        app.announced_registry_conflicts = conflicts.into_iter().collect();
 }
         // Build provider registry in background to avoid blocking UI when opening AI chat
         {

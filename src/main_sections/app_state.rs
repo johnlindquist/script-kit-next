@@ -1104,6 +1104,11 @@ pub(crate) struct ScriptListApp {
     /// Shortcut registry: shortcut -> script_path (for O(1) lookup)
     /// Conflict rule: first-registered wins
     shortcut_registry: std::collections::HashMap<String, String>,
+    /// Alias/shortcut conflicts already surfaced (startup log or HUD).
+    /// Watcher refreshes re-detect persistent conflicts on every rebuild;
+    /// only conflicts NOT in this set toast, so a standing conflict shows
+    /// once instead of spamming a HUD per refresh.
+    announced_registry_conflicts: std::collections::HashSet<String>,
     /// SDK actions set via setActions() - stored for trigger_action_by_name lookup
     sdk_actions: Option<Vec<protocol::ProtocolAction>>,
     /// SDK action shortcuts: normalized_shortcut -> action_name (for O(1) lookup)
