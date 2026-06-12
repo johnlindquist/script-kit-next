@@ -603,6 +603,10 @@ impl NotesApp {
             if handled {
                 return;
             }
+            // Escape close must have the same data-loss profile as Cmd+W:
+            // the autosave debounce (SAVE_DEBOUNCE_MS) cannot outrun
+            // remove_window(), so save synchronously first.
+            self.save_current_note();
             let wb = window.window_bounds();
             crate::window_state::save_window_from_gpui(crate::window_state::WindowRole::Notes, wb);
             window.close_all_dialogs(cx);
