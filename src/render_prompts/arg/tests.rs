@@ -229,21 +229,30 @@ mod arg_prompt_render_tests {
             include_str!("render.rs").contains("handle_prompt_key_preamble_default("),
             "arg prompt key handler should use handle_prompt_key_preamble_default"
         );
+        // Every preamble-based prompt renderer routes through the shared cfg
+        // struct; none may declare its own dismissability — Escape ownership
+        // derives from the DismissPolicy table inside key_preamble.
+        for (name, source) in [
+            ("div", include_str!("../div.rs")),
+            ("editor", include_str!("../editor.rs")),
+            ("form", include_str!("../form/render.rs")),
+            ("term", include_str!("../term.rs")),
+        ] {
+            assert!(
+                (source.contains("handle_prompt_key_preamble(")
+                    || source.contains("handle_prompt_key_preamble_default("))
+                    && source.contains("PromptKeyPreambleCfg {"),
+                "{name} prompt key handler should use the shared preamble cfg"
+            );
+            assert!(
+                !source.contains("is_dismissable:"),
+                "{name} prompt must not declare per-renderer dismissability — \
+                 Escape derives from AppView::dismiss_policy()"
+            );
+        }
         assert!(
-            include_str!("../div.rs").contains("key_preamble(this, event, true, true, cx)"),
-            "div prompt key handler should use key_preamble with propagation stop"
-        );
-        assert!(
-            include_str!("../editor.rs").contains("key_preamble(this, event, false, false, cx)"),
-            "editor prompt key handler should use key_preamble"
-        );
-        assert!(
-            include_str!("../form/render.rs").contains("key_preamble(this, event, true, false, cx)"),
-            "form prompt key handler should use key_preamble"
-        );
-        assert!(
-            include_str!("../term.rs").contains("key_preamble(this, event, false, false, cx)"),
-            "term prompt key handler should use key_preamble"
+            include_str!("helpers.rs").contains("GlobalShortcutEscape::FromDismissPolicy"),
+            "key_preamble must derive Escape behavior from the dismiss-policy table"
         );
     }
 

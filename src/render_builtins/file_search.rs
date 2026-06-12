@@ -865,6 +865,13 @@ impl ScriptListApp {
                                 this.toggle_file_search_actions(selected.as_ref(), window, cx);
                                 return;
                             }
+                            // Handle Cmd+F (focus the search input) — this chord is
+                            // advertised in the footer hint set ("⌘F Focus"), so it
+                            // must have a live handler.
+                            if has_cmd && !has_shift && key.eq_ignore_ascii_case("f") {
+                                this.focus_main_filter(window, cx);
+                                return;
+                            }
                             // Handle Cmd+Shift+F (Reveal in Finder) — kept explicit
                             // because it is not a secondary command in the shared contract.
                             if has_cmd && has_shift && key.eq_ignore_ascii_case("f") {

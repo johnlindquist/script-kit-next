@@ -35,7 +35,6 @@ impl ScriptListApp {
                     window,
                     cx,
                     PromptKeyPreambleCfg {
-                        is_dismissable: true,
                         stop_propagation_on_global_shortcut: true,
                         stop_propagation_when_handled: true,
                         host: ActionsDialogHost::DivPrompt,

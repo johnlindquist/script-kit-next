@@ -804,10 +804,17 @@ impl EditorPrompt {
     }
 
     /// Submit the current content
-    fn submit(&self, cx: &Context<Self>) {
+    pub fn submit(&self, cx: &Context<Self>) {
         let content = self.content(cx);
         logging::log("EDITOR", &format!("Submit id={}", self.id));
         (self.on_submit)(self.id.clone(), Some(content));
+    }
+
+    /// Cancel the prompt: the script receives `None` and can run its cancel
+    /// path, same contract as the other cancellable prompt entities.
+    pub fn submit_cancel(&self) {
+        logging::log("EDITOR", &format!("Cancel id={}", self.id));
+        (self.on_submit)(self.id.clone(), None);
     }
 }
 

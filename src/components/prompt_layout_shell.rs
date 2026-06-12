@@ -736,6 +736,17 @@ pub(crate) fn template_prompt_hints() -> Vec<SharedString> {
     ]
 }
 
+/// Surface-specific footer hints for the SDK editor prompt.
+///
+/// The editor must not use the universal set: plain Enter inserts a newline
+/// (submit is ⌘↵/⌘S) and ⌘↵ is reserved by the editor for submit, so both
+/// "↵ Run" and "⌘↵ Agent" would lie on this surface.
+#[allow(dead_code)]
+#[inline]
+pub(crate) fn editor_prompt_hints() -> Vec<SharedString> {
+    vec!["⌘↵ Submit".into(), "⌘K Actions".into(), "Esc Cancel".into()]
+}
+
 /// Zero-argument renderer for the canonical three-key footer.
 #[allow(dead_code)]
 #[inline]

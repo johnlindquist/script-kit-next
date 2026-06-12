@@ -220,7 +220,6 @@ fn prompt_footer_config_with_status(
 fn key_preamble(
     app: &mut ScriptListApp,
     event: &gpui::KeyDownEvent,
-    is_dismissable: bool,
     stop_propagation_on_global_shortcut: bool,
     cx: &mut Context<ScriptListApp>,
 ) -> bool {
@@ -229,7 +228,14 @@ fn key_preamble(
         return true;
     }
 
-    if !app.show_actions_popup && app.handle_global_shortcut_with_options(event, is_dismissable, cx)
+    // Escape-closes derives from the per-view DismissPolicy table — renderers
+    // may not declare their own dismissability.
+    if !app.show_actions_popup
+        && app.handle_global_shortcut_with_options(
+            event,
+            GlobalShortcutEscape::FromDismissPolicy,
+            cx,
+        )
     {
         if stop_propagation_on_global_shortcut {
             cx.stop_propagation();

@@ -13,7 +13,11 @@ impl ScriptListApp {
                   _window: &mut Window,
                   cx: &mut Context<Self>| {
                 this.hide_mouse_cursor(cx);
-                let _ = this.handle_global_shortcut_with_options(event, true, cx);
+                let _ = this.handle_global_shortcut_with_options(
+                    event,
+                    GlobalShortcutEscape::FromDismissPolicy,
+                    cx,
+                );
             },
         );
 

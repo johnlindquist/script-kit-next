@@ -1494,7 +1494,7 @@ impl ScriptListApp {
                 }
 
                 // Global shortcuts (Cmd+W only - ScriptList has special ESC handling below)
-                if this.handle_global_shortcut_with_options(event, false, cx) {
+                if this.handle_global_shortcut_with_options(event, GlobalShortcutEscape::CallerOwned, cx) {
                     return;
                 }
 

@@ -370,6 +370,11 @@ pub(crate) enum SurfaceKind {
     About,
     ActionsDialog,
     PromptEntity,
+    /// Prompt entities whose Escape is owned by the entity itself: the entity
+    /// calls `submit_cancel()` so the script receives `None` and can run its
+    /// cancel path. The launcher shell must NOT also close on Escape — two
+    /// owners made Escape a race between "window gone" and "script got None".
+    PromptEntityCancelsToScript,
     PromptChildContent,
     ExplicitPromptEntity,
     Webcam,
@@ -649,6 +654,32 @@ impl DismissPolicy {
         )
     }
 
+    /// Cancel-to-script prompts: blur/backdrop/Cmd+W close like a standard
+    /// launcher surface, but Escape belongs to the prompt entity, which calls
+    /// `submit_cancel()` so the running script receives `None`. The shell
+    /// must never also close on Escape — one key, one owner.
+    pub(crate) const fn cancel_to_script_prompt() -> Self {
+        Self::new(
+            DismissEffect::CloseMainWindow,
+            DismissEffect::CloseMainWindow,
+            DismissEffect::LetViewHandle,
+            DismissEffect::CloseMainWindow,
+        )
+    }
+
+    /// Sticky capture surfaces (webcam): blur/backdrop are ignored so an
+    /// accidental click-away cannot kill a live capture session, but Escape
+    /// and Cmd+W close. This is the behavior the webcam key handler always
+    /// implemented; the contract previously claimed LetViewHandle for Escape.
+    pub(crate) const fn sticky_escape_closes() -> Self {
+        Self::new(
+            DismissEffect::Ignore,
+            DismissEffect::Ignore,
+            DismissEffect::CloseMainWindow,
+            DismissEffect::CloseMainWindow,
+        )
+    }
+
     pub(crate) const fn effect_for(self, trigger: DismissTrigger) -> DismissEffect {
         match trigger {
             DismissTrigger::WindowBlur => self.window_blur,
@@ -778,14 +809,17 @@ impl AppView {
             AppView::ArgPrompt { .. }
             | AppView::DivPrompt { .. }
             | AppView::FormPrompt { .. }
-            | AppView::SelectPrompt { .. }
-            | AppView::PathPrompt { .. }
-            | AppView::DropPrompt { .. }
-            | AppView::TemplatePrompt { .. }
             | AppView::HotkeyPrompt { .. }
             | AppView::ChatPrompt { .. }
             | AppView::MiniPrompt { .. }
             | AppView::MicroPrompt { .. } => SurfaceKind::PromptEntity,
+            // These prompt entities call submit_cancel() on Escape themselves;
+            // classifying them as PromptEntity (escape = CloseMainWindow) made
+            // the shell race the entity for the same key.
+            AppView::SelectPrompt { .. }
+            | AppView::PathPrompt { .. }
+            | AppView::DropPrompt { .. }
+            | AppView::TemplatePrompt { .. } => SurfaceKind::PromptEntityCancelsToScript,
             AppView::TermPrompt { .. } | AppView::EditorPrompt { .. } => {
                 SurfaceKind::PromptChildContent
             }
@@ -1048,6 +1082,20 @@ impl SurfaceKind {
                 standard,
                 "scriptList",
             ),
+            SurfaceKind::PromptEntityCancelsToScript => LauncherSurfaceContract::new(
+                LauncherSurfaceContractVocabulary::new(
+                    ScriptPrompt,
+                    PromptEntity,
+                    NoPersistentPreview,
+                ),
+                PromptEntityFocus,
+                PromptEntityKeyboard,
+                PromptEntityActions,
+                StateReceiptProof,
+                CompactLauncherVisual,
+                DismissPolicy::cancel_to_script_prompt(),
+                "scriptList",
+            ),
 
             SurfaceKind::PromptChildContent => LauncherSurfaceContract::new(
                 LauncherSurfaceContractVocabulary::new(ScriptPrompt, ChildView, ContentPane),
@@ -1080,7 +1128,7 @@ impl SurfaceKind {
                 ChildViewActions,
                 ChildViewStateProof,
                 ContentPaneVisual,
-                explicit,
+                DismissPolicy::sticky_escape_closes(),
                 "scriptList",
             ),
 
@@ -1694,4 +1742,86 @@ struct TabAiSaveOfferState {
     filename_stem: String,
     /// Error message if save attempt failed, shown inline in the overlay.
     error: Option<SharedString>,
+}
+
+#[cfg(test)]
+mod dismiss_contract_tests {
+    use super::*;
+
+    /// One Escape owner per prompt kind, declared in the DismissPolicy table.
+    ///
+    /// Cancel-to-script prompts (select/path/drop/template + env/naming) call
+    /// `submit_cancel()` from their entities so the script receives `None`;
+    /// the launcher shell must NOT also close on Escape — two owners made
+    /// Escape a race between "window gone" and "script got None". Editor and
+    /// terminal child content likewise own Escape locally (guarded cancel /
+    /// PTY pass-through).
+    #[test]
+    fn escape_ownership_is_declared_once_per_prompt_kind() {
+        // Shell-owned: Escape closes the launcher window.
+        for kind in [SurfaceKind::PromptEntity, SurfaceKind::Webcam] {
+            assert!(
+                kind.surface_contract()
+                    .dismiss_policy
+                    .closes_main_window_on(DismissTrigger::Escape),
+                "{kind:?}: Escape should close the main window"
+            );
+        }
+        // Entity-owned: the shell must defer on Escape.
+        for kind in [
+            SurfaceKind::PromptEntityCancelsToScript,
+            SurfaceKind::ExplicitPromptEntity,
+            SurfaceKind::PromptChildContent,
+        ] {
+            assert!(
+                !kind
+                    .surface_contract()
+                    .dismiss_policy
+                    .closes_main_window_on(DismissTrigger::Escape),
+                "{kind:?}: Escape belongs to the prompt entity, not the shell"
+            );
+        }
+        // Cancel-to-script prompts still blur-close like standard surfaces.
+        assert!(SurfaceKind::PromptEntityCancelsToScript
+            .surface_contract()
+            .dismiss_policy
+            .closes_main_window_on(DismissTrigger::WindowBlur));
+        // Webcam: sticky on blur (live capture), but Escape/Cmd+W close.
+        assert!(!SurfaceKind::Webcam
+            .surface_contract()
+            .dismiss_policy
+            .closes_main_window_on(DismissTrigger::WindowBlur));
+        assert!(SurfaceKind::Webcam
+            .surface_contract()
+            .dismiss_policy
+            .closes_main_window_on(DismissTrigger::CmdW));
+    }
+
+    /// The cancellable prompt views must map to the cancel-to-script surface
+    /// kind — adding a new cancellable prompt without reclassifying it here
+    /// silently reintroduces the double-Escape-owner race.
+    #[test]
+    fn cancellable_prompt_views_use_cancel_to_script_kind() {
+        // Compile-time companion: surface_kind() is an exhaustive match, so
+        // new AppView variants already force a classification decision. This
+        // test locks the four known cancellable prompts to the right kind via
+        // the variant list in surface_kind() — see SelectPrompt/PathPrompt/
+        // DropPrompt/TemplatePrompt arm.
+        let source = include_str!("app_view_state.rs");
+        let arm_start = source
+            .find("=> SurfaceKind::PromptEntityCancelsToScript")
+            .expect("cancel-to-script arm should exist");
+        let preceding = &source[arm_start.saturating_sub(400)..arm_start];
+        for variant in [
+            "AppView::SelectPrompt",
+            "AppView::PathPrompt",
+            "AppView::DropPrompt",
+            "AppView::TemplatePrompt",
+        ] {
+            assert!(
+                preceding.contains(variant),
+                "{variant} must classify as PromptEntityCancelsToScript (entity owns Escape)"
+            );
+        }
+    }
 }

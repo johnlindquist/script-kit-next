@@ -260,6 +260,24 @@ impl ScriptListApp {
         // Stop process manager refresh if it was running
         self.stop_process_manager_refresh();
 
+        // Day Page autosave is debounced (SAVE_DEBOUNCE_MS) and its trailing
+        // flush is driven by render side effects, which stop once the window
+        // hides. Every teardown path (blur close, Cmd+W, hidden re-show reset)
+        // funnels through here, so flush synchronously before the entity drops
+        // or the last ~300ms of typing never lands on disk.
+        if let AppView::DayPage { entity, .. } = &self.current_view {
+            entity.update(cx, |view, cx| {
+                if view.is_dirty() {
+                    let saved = view.save(cx);
+                    tracing::info!(
+                        target: "script_kit::day_page",
+                        event = "day_page_flushed_on_reset",
+                        saved,
+                    );
+                }
+            });
+        }
+
         // If reset bypasses the normal Agent Chat close button/Escape route, still
         // hide Agent Chat-owned popups before the view is dropped. This covers
         // window hide/reset paths after launcher-triggered "/" or "@" opens.
@@ -271,6 +289,7 @@ impl ScriptListApp {
         }
 
         // Reset view
+        self.editor_escape_armed_at = None;
         self.current_view = AppView::ScriptList;
         self.set_main_window_mode_state_only(MainWindowMode::Mini, cx, "reset_to_script_list");
 

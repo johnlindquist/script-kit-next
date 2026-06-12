@@ -98,4 +98,5 @@ mod webcam_actions;
 #[path = "window_orchestrator_bridge.rs"]
 mod window_orchestrator_bridge;
 
+pub(crate) use shortcuts_hud_grid::GlobalShortcutEscape;
 pub(crate) use startup::calculate_fallback_error_message;

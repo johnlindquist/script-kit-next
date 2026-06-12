@@ -40,7 +40,7 @@ impl ScriptListApp {
 
         // Global shortcuts (Cmd+W, ESC for dismissable prompts)
         // Other keys are handled by each prompt entity's own key handler.
-        let _ = self.handle_global_shortcut_with_options(event, true, cx);
+        let _ = self.handle_global_shortcut_with_options(event, GlobalShortcutEscape::FromDismissPolicy, cx);
     }
 
     #[inline]
@@ -96,7 +96,7 @@ impl ScriptListApp {
 
         // Global shortcuts (Cmd+W, ESC for dismissable prompts)
         // Other keys are handled by the ChatPrompt entity's own key handler.
-        let _ = self.handle_global_shortcut_with_options(event, true, cx);
+        let _ = self.handle_global_shortcut_with_options(event, GlobalShortcutEscape::FromDismissPolicy, cx);
     }
 
     #[inline]
@@ -112,7 +112,7 @@ impl ScriptListApp {
         // Global shortcuts (Cmd+W, ESC for dismissable prompts)
         // Note: Escape when actions popup is open is handled by central interceptor
         if !self.show_actions_popup {
-            let _ = self.handle_global_shortcut_with_options(event, true, cx);
+            let _ = self.handle_global_shortcut_with_options(event, GlobalShortcutEscape::FromDismissPolicy, cx);
         }
     }
 
@@ -198,13 +198,24 @@ impl ScriptListApp {
                 "gpui_footer",
             );
         });
+        let on_ai = cx.listener(|this, _: &gpui::ClickEvent, window, cx| {
+            this.dispatch_main_window_footer_action(
+                crate::footer_popup::FooterAction::Ai,
+                window,
+                cx,
+                "gpui_footer",
+            );
+        });
 
-        crate::components::HintStrip::new(
-            crate::components::universal_prompt_hints_with_primary_label("Capture Photo"),
+        // The shared helper owns label↔index wiring; hand-rolled on_hint_click
+        // indices against the universal label list is how the "⌘K Actions"
+        // chip ended up dead while "⌘↵ Agent" opened Actions.
+        crate::components::render_universal_prompt_hint_strip_clickable_with_primary_label(
+            "Capture Photo",
+            on_capture,
+            on_actions,
+            on_ai,
         )
-        .on_hint_click(0, on_capture)
-        .on_hint_click(2, on_actions)
-        .into_any_element()
     }
 
     fn clickable_env_hint_strip(&self, cx: &mut Context<Self>) -> AnyElement {

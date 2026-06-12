@@ -80,6 +80,7 @@ impl ScriptListApp {
 
         // Key handler for Cmd+K actions toggle (at parent level to intercept before editor)
         let has_actions_for_handler = has_actions;
+        let entity_for_escape = entity.clone();
         let handle_key = cx.listener(
             move |this: &mut Self,
                   event: &gpui::KeyDownEvent,
@@ -91,7 +92,6 @@ impl ScriptListApp {
                     window,
                     cx,
                     PromptKeyPreambleCfg {
-                        is_dismissable: false,
                         stop_propagation_on_global_shortcut: false,
                         stop_propagation_when_handled: false,
                         host: ActionsDialogHost::EditorPrompt,
@@ -101,7 +101,6 @@ impl ScriptListApp {
                         let has_cmd = event.keystroke.modifiers.platform;
 
                         // For ScratchPadView (built-in utility): ESC returns to main menu or closes window
-                        // This is different from EditorPrompt (SDK prompt) which doesn't respond to ESC
                         if matches!(this.current_view, AppView::ScratchPadView { .. }) {
                             if is_editor_escape_key_variant(&key_str) && !this.show_actions_popup {
                                 logging::log("KEY", "ESC in ScratchPadView");
@@ -114,6 +113,37 @@ impl ScriptListApp {
                                 this.close_and_reset_window(cx);
                                 return true;
                             }
+                        }
+
+                        // SDK editor prompt: Escape cancels with a two-press
+                        // guard so a stray Escape cannot discard unsaved
+                        // content. First press arms + HUD; second press within
+                        // the window cancels (script receives None).
+                        if matches!(this.current_view, AppView::EditorPrompt { .. })
+                            && is_editor_escape_key_variant(&key_str)
+                            && !this.show_actions_popup
+                        {
+                            const EDITOR_ESCAPE_GUARD_MS: u128 = 2000;
+                            let armed_recently = this
+                                .editor_escape_armed_at
+                                .map(|at| at.elapsed().as_millis() <= EDITOR_ESCAPE_GUARD_MS)
+                                .unwrap_or(false);
+                            if armed_recently {
+                                this.editor_escape_armed_at = None;
+                                logging::log(
+                                    "KEY",
+                                    "ESC ESC in EditorPrompt - canceling prompt (script receives None)",
+                                );
+                                entity_for_escape.update(cx, |editor, _| editor.submit_cancel());
+                            } else {
+                                this.editor_escape_armed_at = Some(std::time::Instant::now());
+                                this.show_hud(
+                                    "Press Esc again to discard and cancel".to_string(),
+                                    None,
+                                    cx,
+                                );
+                            }
+                            return true;
                         }
 
                         false
@@ -167,6 +197,37 @@ impl ScriptListApp {
             },
         );
 
+        // Truthful editor footer: Enter inserts a newline here (submit is
+        // ⌘↵/⌘S) and ⌘↵ is editor-reserved for submit, so the universal
+        // "↵ Run · ⌘K Actions · ⌘↵ Agent" set would lie twice on this surface.
+        let editor_hints = crate::components::editor_prompt_hints();
+        crate::components::emit_surface_prompt_hint_audit(
+            "render_prompts::editor",
+            &editor_hints,
+            "editor_submit_cancel_footer",
+        );
+        let entity_for_submit = entity.clone();
+        let on_submit = move |_: &gpui::ClickEvent, _w: &mut Window, cx: &mut gpui::App| {
+            entity_for_submit.update(cx, |editor, cx| editor.submit(cx));
+        };
+        let on_actions = cx.listener(|this, _: &gpui::ClickEvent, window, cx| {
+            this.dispatch_main_window_footer_action(
+                crate::footer_popup::FooterAction::Actions,
+                window,
+                cx,
+                "gpui_footer",
+            );
+        });
+        let entity_for_cancel = entity.clone();
+        let on_cancel = move |_: &gpui::ClickEvent, _w: &mut Window, cx: &mut gpui::App| {
+            entity_for_cancel.update(cx, |editor, _| editor.submit_cancel());
+        };
+        let editor_footer = crate::components::HintStrip::new(editor_hints)
+            .on_hint_click(0, on_submit)
+            .on_hint_click(1, on_actions)
+            .on_hint_click(2, on_cancel)
+            .into_any_element();
+
         // NOTE: The EditorPrompt entity has its own track_focus and on_key_down in its render method.
         // We do NOT add track_focus here to avoid duplicate focus tracking on the same handle.
         //
@@ -195,11 +256,10 @@ impl ScriptListApp {
                     .overflow_hidden()
                     .child(entity),
             )
-            // Universal three-key hint strip footer (native or GPUI)
-            .when_some(
-                self.main_window_footer_slot(self.clickable_universal_hint_strip(cx)),
-                |d, footer| d.child(footer),
-            )
+            // Editor-truthful hint strip footer (native or GPUI)
+            .when_some(self.main_window_footer_slot(editor_footer), |d, footer| {
+                d.child(footer)
+            })
             // Actions dialog overlay
             .when_some(
                 render_actions_backdrop(
@@ -266,12 +326,21 @@ mod editor_prompt_tests {
         );
     }
 
+    /// The editor footer must stay truthful: plain Enter inserts a newline
+    /// (submit is ⌘↵/⌘S), so the universal "↵ Run" strip lied on the surface
+    /// where trusting it is most destructive.
     #[test]
-    fn test_editor_uses_universal_hint_strip_footer() {
+    fn test_editor_uses_truthful_hint_strip_footer() {
         const EDITOR_RENDER_SOURCE: &str = include_str!("editor.rs");
         assert!(
-            EDITOR_RENDER_SOURCE.contains("clickable_universal_hint_strip("),
-            "editor prompt should use the clickable three-key hint strip"
+            EDITOR_RENDER_SOURCE.contains("editor_prompt_hints()"),
+            "editor prompt should use the editor-truthful hint set (⌘↵ Submit · ⌘K Actions · Esc Cancel)"
+        );
+        // Split literal so this test's own source can't satisfy the match.
+        let universal_strip_call = "clickable_universal_".to_owned() + "hint_strip(";
+        assert!(
+            !EDITOR_RENDER_SOURCE.contains(&universal_strip_call),
+            "editor prompt must not advertise the universal '↵ Run' footer — Enter is a newline here"
         );
     }
 
@@ -345,9 +414,16 @@ mod editor_prompt_tests {
             EDITOR_RENDER_SOURCE.contains("handle_prompt_key_preamble("),
             "editor key handling should delegate shared preamble behavior to helper"
         );
+        // Escape is entity-guarded, not shell-dismissable: the dismiss policy
+        // table (PromptChildContent → LetViewHandle) keeps the shell out, and
+        // the two-press guard owns cancellation.
         assert!(
-            EDITOR_RENDER_SOURCE.contains("is_dismissable: false"),
-            "editor key preamble should remain non-dismissable"
+            EDITOR_RENDER_SOURCE.contains("editor_escape_armed_at"),
+            "editor escape must keep the two-press cancel guard"
+        );
+        assert!(
+            EDITOR_RENDER_SOURCE.contains("editor.submit_cancel()"),
+            "editor escape guard must cancel to the script (None), not close the window"
         );
         assert!(
             EDITOR_RENDER_SOURCE.contains("editor_reserved_shortcut_reason(&key_lower, modifiers)"),

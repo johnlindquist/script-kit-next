@@ -203,6 +203,10 @@ impl ScriptListApp {
             "Dispatching main-window footer action"
         );
 
+        // Standard macOS menu dismissal: clicking a real footer button while
+        // the actions popup is open closes the popup AND performs the clicked
+        // action in the same event. Swallowing the click (close-only) made
+        // visible, enabled-looking footer buttons dead until a second click.
         let shared_actions_open = self.show_actions_popup;
         let detached_actions_open = crate::actions::is_actions_window_open();
         if (shared_actions_open || detached_actions_open) && !action.is_actions() {
@@ -217,18 +221,15 @@ impl ScriptListApp {
                 crate::actions::close_actions_window(cx);
                 closed = true;
             }
-            if shared_actions_open || detached_actions_open {
-                tracing::info!(
-                    target: "script_kit::footer_popup",
-                    event = "main_window_footer_action_closed_actions_only",
-                    source,
-                    action = ?action,
-                    main_window_mode = ?self.main_window_mode,
-                    closed,
-                    "Closed actions dialog from footer outside-click target without dispatching action"
-                );
-            }
-            return;
+            tracing::info!(
+                target: "script_kit::footer_popup",
+                event = "main_window_footer_action_closed_actions_then_dispatched",
+                source,
+                action = ?action,
+                main_window_mode = ?self.main_window_mode,
+                closed,
+                "Closed actions dialog from footer click, dispatching the clicked action"
+            );
         }
 
         match action {
@@ -258,6 +259,10 @@ impl ScriptListApp {
                 } else if let AppView::TemplatePrompt { entity, .. } = &self.current_view {
                     let entity = entity.clone();
                     entity.update(cx, |prompt, cx| prompt.submit(cx));
+                } else if let AppView::EditorPrompt { entity, .. } = &self.current_view {
+                    let entity = entity.clone();
+                    entity.update(cx, |editor, cx| editor.submit(cx));
+                    return;
                 } else if matches!(self.current_view, AppView::WebcamView { .. }) {
                     if self.capture_webcam_photo(cx) {
                         self.hide_main_and_reset(cx);
@@ -390,6 +395,14 @@ impl ScriptListApp {
                     );
                     self.submit_prompt_response(id.clone(), None, cx);
                     self.cancel_script_execution(cx);
+                } else if let AppView::EditorPrompt { entity, .. } = &self.current_view {
+                    tracing::info!(
+                        target: "script_kit::footer_popup",
+                        event = "editor_prompt_footer_cancel",
+                        "Cancelling editor prompt from native footer (script receives None)"
+                    );
+                    let entity = entity.clone();
+                    entity.update(cx, |editor, _| editor.submit_cancel());
                 } else {
                     tracing::info!(
                         target: "script_kit::footer_popup",
@@ -986,6 +999,32 @@ impl ScriptListApp {
                 view = ?self.current_view,
                 button_count = buttons.len(),
                 "Resolved Kit Store installed footer buttons"
+            );
+            return buttons;
+        }
+
+        // EditorPrompt: Enter inserts a newline (submit is ⌘↵/⌘S), so the
+        // standard "↵ Run" native footer would lie on this surface.
+        if matches!(self.current_view, AppView::EditorPrompt { .. }) {
+            use crate::footer_popup::{FooterAction, FooterButtonConfig};
+
+            let footer_disabled = self.main_window_footer_buttons_blocked();
+            let actions_open = self.show_actions_popup || crate::actions::is_actions_window_open();
+            let buttons = vec![
+                FooterButtonConfig::new(FooterAction::Run, "⌘↵", "Submit")
+                    .enabled(!footer_disabled),
+                FooterButtonConfig::new(FooterAction::Actions, "⌘K", "Actions")
+                    .selected(actions_open)
+                    .enabled(!footer_disabled),
+                FooterButtonConfig::new(FooterAction::Close, "Esc", "Cancel")
+                    .enabled(!footer_disabled),
+            ];
+            tracing::debug!(
+                target: "script_kit::footer_popup",
+                event = "main_window_footer_buttons_resolved",
+                view = ?self.current_view,
+                button_count = buttons.len(),
+                "Resolved EditorPrompt footer buttons"
             );
             return buttons;
         }

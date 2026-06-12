@@ -1376,7 +1376,8 @@ impl Render for TermPrompt {
                 let has_shift = event.keystroke.modifiers.shift;
                 let has_alt = event.keystroke.modifiers.alt;
 
-                // SDK terminals remain non-dismissable; quick terminals pass Escape through.
+                // SDK terminals cancel the prompt on Escape (script receives
+                // None); quick terminals pass Escape through to the PTY.
                 if this.escape_cancels && is_term_prompt_escape_key_variant(&key_str) {
                     this.submit_cancel();
                     return;

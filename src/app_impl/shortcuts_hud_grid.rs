@@ -1,12 +1,33 @@
 use super::*;
 
+/// Who owns Escape for a `handle_global_shortcut_with_options` call site.
+///
+/// Callers may not pass a raw bool: Escape-closes-the-window is derived from
+/// the one [`DismissPolicy`] table (`AppView::dismiss_policy`), so per-surface
+/// escape behavior cannot drift renderer by renderer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum GlobalShortcutEscape {
+    /// Escape derives from `current_view.dismiss_policy()` — the normal case.
+    FromDismissPolicy,
+    /// The caller implements its own Escape ladder (ScriptList) and this
+    /// handler must leave Escape alone.
+    CallerOwned,
+}
+
 impl ScriptListApp {
     pub(crate) fn handle_global_shortcut_with_options(
         &mut self,
         event: &gpui::KeyDownEvent,
-        is_dismissable: bool,
+        escape: GlobalShortcutEscape,
         cx: &mut Context<Self>,
     ) -> bool {
+        let is_dismissable = match escape {
+            GlobalShortcutEscape::CallerOwned => false,
+            GlobalShortcutEscape::FromDismissPolicy => self
+                .current_view
+                .dismiss_policy()
+                .closes_main_window_on(DismissTrigger::Escape),
+        };
         // If the shortcut recorder is active, don't process any shortcuts here.
         // The recorder has its own key handlers and should receive all key events.
         if self.shortcut_recorder_state.is_some() {

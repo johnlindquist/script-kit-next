@@ -239,6 +239,7 @@
             was_window_focused: false,
             // Pin state - when true, window stays open on blur
             is_pinned: false,
+            editor_escape_armed_at: None,
             // Pending focus: start with MainFilter since that's what we want focused initially
             // DEPRECATED: Use focus_coordinator instead. This remains for gradual migration.
             pending_focus: Some(FocusTarget::MainFilter),

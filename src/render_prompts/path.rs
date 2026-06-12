@@ -228,7 +228,7 @@ impl ScriptListApp {
                 }
 
                 // Global shortcuts (Cmd+W, ESC for dismissable prompts)
-                if this.handle_global_shortcut_with_options(event, true, cx) {
+                if this.handle_global_shortcut_with_options(event, GlobalShortcutEscape::FromDismissPolicy, cx) {
                     return;
                 }
 

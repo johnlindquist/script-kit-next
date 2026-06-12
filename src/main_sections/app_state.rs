@@ -1129,6 +1129,10 @@ pub(crate) struct ScriptListApp {
     /// Pin state - when true, window stays open on blur (only closes via ESC/Cmd+W)
     /// Toggle with Cmd+Shift+P
     is_pinned: bool,
+    /// Editor prompt Escape guard: first Escape arms (HUD "Esc again to
+    /// discard"), a second Escape within the guard window cancels the prompt
+    /// (script receives None). Cleared on view reset.
+    editor_escape_armed_at: Option<std::time::Instant>,
     /// Pending focus target - when set, focus will be applied once on next render
     /// then cleared. This avoids the "perpetually enforce focus in render()" anti-pattern.
     /// DEPRECATED: Use focus_coordinator instead. This remains for gradual migration.

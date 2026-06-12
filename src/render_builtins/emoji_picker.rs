@@ -471,8 +471,11 @@ impl ScriptListApp {
             true,
         ));
 
+        // Enter records usage, copies the emoji, and pastes it into the
+        // previous app — "Paste" is the truthful primary verb (same precedent
+        // as clipboard history), not the universal "Run".
         let gpui_footer = crate::components::render_simple_hint_strip(
-            crate::components::universal_prompt_hints(),
+            crate::components::universal_prompt_hints_with_primary_label("Paste"),
             None,
         );
         let footer = self.main_window_footer_slot(gpui_footer);
@@ -541,9 +544,12 @@ mod emoji_picker_spec_tests {
                 && source.contains("\"render_builtins::emoji_picker\""),
             "emoji picker should declare grid layout in runtime audit"
         );
+        // Enter on this surface copies + pastes + hides — the shared three-key
+        // footer must say "Paste", not "Run" (same contract as clipboard
+        // history). A footer hint may never advertise a verb Enter doesn't do.
         assert!(
-            source.contains("universal_prompt_hints()"),
-            "emoji picker should use the shared three-key footer"
+            source.contains("universal_prompt_hints_with_primary_label(\"Paste\")"),
+            "emoji picker should use the shared three-key footer with the truthful Paste primary verb"
         );
         assert!(
             !source.contains("\"↵ Copy\"") && !source.contains("\"Esc Back\""),

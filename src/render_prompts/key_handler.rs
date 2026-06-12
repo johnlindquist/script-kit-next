@@ -1,6 +1,5 @@
 #[derive(Clone, Copy)]
 struct PromptKeyPreambleCfg {
-    is_dismissable: bool,
     stop_propagation_on_global_shortcut: bool,
     stop_propagation_when_handled: bool,
     host: ActionsDialogHost,
@@ -52,7 +51,6 @@ where
     if key_preamble(
         app,
         event,
-        cfg.is_dismissable,
         cfg.stop_propagation_on_global_shortcut,
         cx,
     ) {

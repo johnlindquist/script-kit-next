@@ -29,15 +29,6 @@ fn term_prompt_actions_mode(has_sdk_actions: bool) -> TermPromptActionsMode {
 }
 
 #[inline]
-fn should_block_escape_for_non_dismissable_term(
-    is_quick_terminal: bool,
-    show_actions_popup: bool,
-    key: &str,
-) -> bool {
-    !is_quick_terminal && !show_actions_popup && ui_foundation::is_key_escape(key)
-}
-
-#[inline]
 fn terminal_action_from_id(action_id: &str) -> Option<crate::terminal::TerminalAction> {
     use crate::terminal::TerminalAction;
 
@@ -101,6 +92,7 @@ fn terminal_escape_hint_label(return_view: Option<&AppView>) -> Option<&'static 
 fn render_terminal_prompt_hint_strip(
     route: Option<&crate::ai::TabAiApplyBackRoute>,
     return_view: Option<&AppView>,
+    escape_cancels: bool,
 ) -> AnyElement {
     let show_script_verification_hint = return_view.is_some();
     let can_apply_back = route.is_some() && return_view.is_some();
@@ -124,7 +116,11 @@ fn render_terminal_prompt_hint_strip(
         items.push("⌘↩ Apply".to_string());
     }
 
-    if let Some(escape_label) = terminal_escape_hint_label(return_view) {
+    if escape_cancels {
+        // SDK terminal prompts: the TermPrompt entity cancels the script on
+        // Escape (submit_cancel → script receives None).
+        items.push("Esc Cancel".to_string());
+    } else if let Some(escape_label) = terminal_escape_hint_label(return_view) {
         items.push(escape_label.to_string());
     }
 
@@ -255,7 +251,6 @@ impl ScriptListApp {
                     window,
                     cx,
                     PromptKeyPreambleCfg {
-                        is_dismissable: false,
                         stop_propagation_on_global_shortcut: false,
                         stop_propagation_when_handled: false,
                         host: ActionsDialogHost::TermPrompt,
@@ -267,20 +262,12 @@ impl ScriptListApp {
                         let is_quick_terminal =
                             matches!(this.current_view, AppView::QuickTerminalView { .. });
 
-                        if should_block_escape_for_non_dismissable_term(
-                            is_quick_terminal,
-                            this.show_actions_popup,
-                            key,
-                        ) {
-                            let correlation_id = logging::current_correlation_id();
-                            logging::log_debug(
-                                "KEY",
-                                &format!(
-                                    "{TERM_PROMPT_KEY_CONTEXT}: swallow non-dismissable escape (correlation_id={correlation_id})"
-                                ),
-                            );
-                            return true;
-                        }
+                        // Escape is owned by the TermPrompt entity: SDK
+                        // terminals set `escape_cancels = true` and call
+                        // submit_cancel() so the script receives None; quick
+                        // terminals pass Escape through to the PTY. The
+                        // wrapper must NOT swallow Escape here — that left a
+                        // dead key with live cancel code behind it.
 
                         // QuickTerminalView wrapper semantics contract:
                         // - Plain Escape is forwarded to the PTY (harness TUI owns it).
@@ -444,9 +431,12 @@ impl ScriptListApp {
                     self.main_window_footer_slot(render_terminal_prompt_hint_strip(
                         self.tab_ai_harness_apply_back_route.as_ref(),
                         self.tab_ai_harness_return_view.as_ref(),
+                        false,
                     ))
                 } else {
-                    self.main_window_footer_slot(render_terminal_prompt_hint_strip(None, None))
+                    self.main_window_footer_slot(render_terminal_prompt_hint_strip(
+                        None, None, true,
+                    ))
                 },
                 |d, footer| d.child(footer),
             )
@@ -560,23 +550,26 @@ mod term_prompt_render_tests {
         );
     }
 
+    /// SDK terminal Escape contract: the wrapper must not swallow Escape —
+    /// the TermPrompt entity owns it (`escape_cancels = !is_quick_terminal` →
+    /// submit_cancel), and the footer must advertise the cancel.
     #[test]
-    fn test_term_prompt_escape_does_not_close_sdk_terminal_when_non_dismissable() {
-        assert!(should_block_escape_for_non_dismissable_term(
-            false, false, "escape"
-        ));
-        assert!(should_block_escape_for_non_dismissable_term(
-            false, false, "Esc"
-        ));
-        assert!(!should_block_escape_for_non_dismissable_term(
-            false, false, "enter"
-        ));
-        assert!(!should_block_escape_for_non_dismissable_term(
-            true, false, "escape"
-        ));
-        assert!(!should_block_escape_for_non_dismissable_term(
-            false, true, "escape"
-        ));
+    fn test_sdk_terminal_escape_cancels_and_is_advertised() {
+        const TERM_RENDER_SOURCE: &str = include_str!("term.rs");
+        // Split literal so this test's own source can't satisfy the match.
+        let escape_swallow_helper = "should_block_escape_".to_owned() + "for_non_dismissable_term";
+        assert!(
+            !TERM_RENDER_SOURCE.contains(&escape_swallow_helper),
+            "the wrapper-level Escape swallow must stay deleted; Escape belongs to the TermPrompt entity"
+        );
+        assert!(
+            TERM_RENDER_SOURCE.contains("term.escape_cancels = !is_quick_terminal;"),
+            "SDK terminals must keep entity-owned Escape cancellation"
+        );
+        assert!(
+            TERM_RENDER_SOURCE.contains("\"Esc Cancel\""),
+            "SDK terminal footer must advertise that Escape cancels the script"
+        );
     }
 
     #[test]
