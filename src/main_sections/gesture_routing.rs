@@ -35,20 +35,19 @@ pub(crate) fn spawn_main_hotkey_gesture_listener(
         loop {
             // Wait for the next physical event, or wake at the classifier
             // deadline (hold threshold / double-tap window expiry).
-            let waited: Option<
-                Result<hotkeys::MainHotkeyPhysicalEvent, async_channel::RecvError>,
-            > = match hotkeys::main_gesture_next_deadline() {
-                Some(deadline) => {
-                    let wait = deadline.saturating_duration_since(Instant::now());
-                    let recv = async { Some(receiver.recv().await) };
-                    let timer = async {
-                        executor.timer(wait).await;
-                        None
-                    };
-                    smol::future::or(recv, timer).await
-                }
-                None => Some(receiver.recv().await),
-            };
+            let waited: Option<Result<hotkeys::MainHotkeyPhysicalEvent, async_channel::RecvError>> =
+                match hotkeys::main_gesture_next_deadline() {
+                    Some(deadline) => {
+                        let wait = deadline.saturating_duration_since(Instant::now());
+                        let recv = async { Some(receiver.recv().await) };
+                        let timer = async {
+                            executor.timer(wait).await;
+                            None
+                        };
+                        smol::future::or(recv, timer).await
+                    }
+                    None => Some(receiver.recv().await),
+                };
 
             let mut events = Vec::new();
             let mut correlation_id = None;
@@ -77,11 +76,19 @@ pub(crate) fn spawn_main_hotkey_gesture_listener(
             let window_inner = window;
             let _ = cx.update(move |cx: &mut App| {
                 for gesture in events {
-                    dispatch_main_gesture_event(gesture, window_inner, app_entity_inner.clone(), cx);
+                    dispatch_main_gesture_event(
+                        gesture,
+                        window_inner,
+                        app_entity_inner.clone(),
+                        cx,
+                    );
                 }
             });
         }
-        logging::log("HOTKEY", "Main hotkey gesture listener exiting (channel closed)");
+        logging::log(
+            "HOTKEY",
+            "Main hotkey gesture listener exiting (channel closed)",
+        );
     })
     .detach();
 }
@@ -105,7 +112,10 @@ fn dispatch_main_gesture_event(
             if began_closed {
                 // The tap that opened the window resolves to the launcher
                 // steady state — it must not also toggle to Day Page.
-                logging::log("GESTURE", "Tap — opening tap resolved (launcher steady state)");
+                logging::log(
+                    "GESTURE",
+                    "Tap — opening tap resolved (launcher steady state)",
+                );
                 return;
             }
             logging::log("GESTURE", "Tap — toggle launcher ↔ Day Page");
