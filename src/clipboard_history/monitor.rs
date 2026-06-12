@@ -22,7 +22,11 @@ use super::database::{
 };
 use super::image::{compute_image_hash, decode_to_render_image, encode_image_as_blob};
 use super::ocr;
-use super::should_exclude_clipboard;
+use super::rejection::{
+    evaluate_text_capture_rejection, record_rejection, reject_before_reading_payload,
+    ClipboardPreCaptureProbe, RejectionReason,
+};
+use super::sediment::process_text_sediment;
 use super::types::ContentType;
 
 /// Interval between background pruning checks (1 hour)
@@ -235,10 +239,13 @@ fn capture_clipboard_content(
     }
 
     let source_bundle_id = crate::frontmost_app_tracker::get_last_real_app_bundle_id();
-    if should_skip_clipboard_capture(source_bundle_id.as_deref()) {
+    let pre_capture = ClipboardPreCaptureProbe::live();
+    if let Some(reason) = reject_before_reading_payload(source_bundle_id.as_deref(), pre_capture) {
+        record_rejection(reason);
         debug!(
+            reason = ?reason,
             source_bundle_id = %source_bundle_id.as_deref().unwrap_or("unknown"),
-            "clipboard_capture_skipped_excluded_source"
+            "clipboard_capture_rejected_before_read"
         );
         return;
     }
@@ -265,14 +272,28 @@ fn capture_clipboard_content(
                     // Update hash even for oversized entries (intentionally skipped)
                     *last_text_hash = Some(text_hash);
                 } else {
-                    match add_entry(&text, ContentType::Text) {
-                        Ok(entry_id) => {
+                    match capture_text_entry(
+                        &text,
+                        source_bundle_id.as_deref(),
+                        pre_capture,
+                        |content| add_entry(content, ContentType::Text),
+                    ) {
+                        TextCaptureOutcome::Stored(entry_id) => {
                             debug!(entry_id = %entry_id, "Added text entry to history");
+                            process_text_sediment(&entry_id, &text, chrono::Utc::now());
+                            super::post_copy::notify_text_copy_stored(&entry_id);
                             *last_text_hash = Some(text_hash);
                         }
-                        Err(e) => {
+                        TextCaptureOutcome::Rejected(reason) => {
+                            debug!(reason = ?reason, "Rejected text clipboard capture");
+                            *last_text_hash = Some(text_hash);
+                        }
+                        TextCaptureOutcome::Failed(error) => {
                             // DON'T update hash on failure - we'll retry on next change
-                            warn!(error = %e, "Failed to add text entry to history (will retry)");
+                            warn!(
+                                error = %error,
+                                "Failed to add text entry to history (will retry)"
+                            );
                         }
                     }
                 }
@@ -283,12 +304,25 @@ fn capture_clipboard_content(
                     text_len = text.len(),
                     "Same text copied again, updating timestamp"
                 );
-                match add_entry(&text, ContentType::Text) {
-                    Ok(entry_id) => {
-                        debug!(entry_id = %entry_id, "Updated timestamp for existing text entry");
+                match capture_text_entry(
+                    &text,
+                    source_bundle_id.as_deref(),
+                    pre_capture,
+                    |content| add_entry(content, ContentType::Text),
+                ) {
+                    TextCaptureOutcome::Stored(entry_id) => {
+                        debug!(
+                            entry_id = %entry_id,
+                            "Updated timestamp for existing text entry"
+                        );
+                        process_text_sediment(&entry_id, &text, chrono::Utc::now());
+                        super::post_copy::notify_text_copy_stored(&entry_id);
                     }
-                    Err(e) => {
-                        warn!(error = %e, "Failed to update text entry timestamp");
+                    TextCaptureOutcome::Rejected(reason) => {
+                        debug!(reason = ?reason, "Rejected repeated text clipboard capture");
+                    }
+                    TextCaptureOutcome::Failed(error) => {
+                        warn!(error = %error, "Failed to update text entry timestamp");
                     }
                 }
             }
@@ -384,8 +418,28 @@ fn cached_blob_key_for_hash(last_image_state: &Option<LastImageState>, hash: u64
         .and_then(|state| state.blob_key.as_deref())
 }
 
-fn should_skip_clipboard_capture(source_bundle_id: Option<&str>) -> bool {
-    source_bundle_id.is_some_and(should_exclude_clipboard)
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum TextCaptureOutcome {
+    Stored(String),
+    Rejected(RejectionReason),
+    Failed(String),
+}
+
+fn capture_text_entry(
+    text: &str,
+    source_bundle_id: Option<&str>,
+    probe: ClipboardPreCaptureProbe,
+    add_entry: impl FnOnce(&str) -> Result<String>,
+) -> TextCaptureOutcome {
+    if let Some(reason) = evaluate_text_capture_rejection(source_bundle_id, probe, text) {
+        record_rejection(reason);
+        return TextCaptureOutcome::Rejected(reason);
+    }
+
+    match add_entry(text) {
+        Ok(entry_id) => TextCaptureOutcome::Stored(entry_id),
+        Err(error) => TextCaptureOutcome::Failed(error.to_string()),
+    }
 }
 
 /// Compute a simple hash of text content for change detection.
@@ -553,20 +607,72 @@ mod tests {
     }
 
     #[test]
-    fn test_should_skip_clipboard_capture_returns_true_when_source_bundle_id_is_excluded() {
-        assert!(should_skip_clipboard_capture(Some(
-            "com.1password.1password"
-        )));
-        assert!(should_skip_clipboard_capture(Some(
-            "com.bitwarden.desktop.autofill"
-        )));
+    fn test_capture_text_entry_rejects_concealed_pasteboard_flag_without_add_entry() {
+        let add_called = std::cell::Cell::new(false);
+        let outcome = capture_text_entry(
+            "hello",
+            None,
+            ClipboardPreCaptureProbe {
+                pasteboard_has_concealed_types: true,
+            },
+            |_| {
+                add_called.set(true);
+                Ok("entry-id".to_string())
+            },
+        );
+
+        assert_eq!(
+            outcome,
+            TextCaptureOutcome::Rejected(RejectionReason::ConcealedPasteboardType)
+        );
+        assert!(
+            !add_called.get(),
+            "add_entry must not run when concealed pasteboard types are present"
+        );
     }
 
     #[test]
-    fn test_should_skip_clipboard_capture_returns_false_when_source_bundle_id_is_not_excluded_or_missing(
-    ) {
-        assert!(!should_skip_clipboard_capture(Some("com.apple.TextEdit")));
-        assert!(!should_skip_clipboard_capture(None));
+    fn test_capture_text_entry_rejects_blocked_source_without_add_entry() {
+        let add_called = std::cell::Cell::new(false);
+        let outcome = capture_text_entry(
+            "hello",
+            Some("com.1password.1password"),
+            ClipboardPreCaptureProbe {
+                pasteboard_has_concealed_types: false,
+            },
+            |_| {
+                add_called.set(true);
+                Ok("entry-id".to_string())
+            },
+        );
+
+        assert_eq!(
+            outcome,
+            TextCaptureOutcome::Rejected(RejectionReason::BlockedSourceApp)
+        );
+        assert!(!add_called.get());
+    }
+
+    #[test]
+    fn test_capture_text_entry_rejects_secret_pattern_without_add_entry() {
+        let add_called = std::cell::Cell::new(false);
+        let outcome = capture_text_entry(
+            "token ghp_1234567890abcdefghijklmnopqrstuvwxyz",
+            None,
+            ClipboardPreCaptureProbe {
+                pasteboard_has_concealed_types: false,
+            },
+            |_| {
+                add_called.set(true);
+                Ok("entry-id".to_string())
+            },
+        );
+
+        assert_eq!(
+            outcome,
+            TextCaptureOutcome::Rejected(RejectionReason::SecretContentPattern)
+        );
+        assert!(!add_called.get());
     }
 
     #[test]

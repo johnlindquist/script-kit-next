@@ -25,6 +25,10 @@ use super::types::{
 /// Global database connection (thread-safe)
 static DB_CONNECTION: OnceLock<Arc<Mutex<Connection>>> = OnceLock::new();
 
+#[cfg(test)]
+static TEST_DB_CONNECTION: std::sync::Mutex<Option<Arc<Mutex<Connection>>>> =
+    std::sync::Mutex::new(None);
+
 fn db_lock_err(e: impl std::fmt::Display) -> anyhow::Error {
     anyhow::anyhow!("DB lock error: {e}")
 }
@@ -42,6 +46,15 @@ pub fn compute_content_hash(content: &str) -> String {
 
 /// Get the database path (~/.scriptkit/db/clipboard-history.sqlite)
 pub fn get_db_path() -> Result<PathBuf> {
+    #[cfg(test)]
+    if let Some(path) = get_test_db_path() {
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)
+                .context("Failed to create test clipboard db directory")?;
+        }
+        return Ok(path);
+    }
+
     let kit_dir = PathBuf::from(shellexpand::tilde("~/.scriptkit").as_ref());
     let db_dir = kit_dir.join("db");
 
@@ -52,33 +65,16 @@ pub fn get_db_path() -> Result<PathBuf> {
     Ok(db_dir.join("clipboard-history.sqlite"))
 }
 
-/// Get or create the database connection
-pub fn get_connection() -> Result<Arc<Mutex<Connection>>> {
-    if let Some(conn) = DB_CONNECTION.get() {
-        return Ok(conn.clone());
-    }
+/// Sediment columns on a clipboard row (T10).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SedimentState {
+    pub brain_kept: bool,
+    pub brain_tier: i64,
+    pub copy_count: i64,
+    pub kept_url_day: Option<String>,
+}
 
-    let db_path = get_db_path()?;
-    let conn = Connection::open(&db_path)
-        .with_context(|| format!("Failed to open database at {:?}", db_path))?;
-
-    // Enable WAL mode for better concurrency
-    conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL;")
-        .context("Failed to enable WAL mode")?;
-    debug!("Enabled WAL mode for clipboard history database");
-
-    // Set busy timeout to 5 seconds to avoid "database is locked" errors
-    // This is critical for preventing silent entry loss during lock contention
-    conn.execute_batch("PRAGMA busy_timeout = 5000;")
-        .context("Failed to set busy_timeout")?;
-    debug!("Set SQLite busy_timeout to 5000ms");
-
-    // Enable incremental vacuum for disk space recovery after large blob deletes
-    conn.execute_batch("PRAGMA auto_vacuum = INCREMENTAL;")
-        .context("Failed to enable incremental auto_vacuum")?;
-    debug!("Enabled incremental auto_vacuum for clipboard history database");
-
-    // Create the table if it doesn't exist
+fn ensure_clipboard_schema(conn: &Connection) -> Result<()> {
     conn.execute(
         "CREATE TABLE IF NOT EXISTS history (
             id TEXT PRIMARY KEY,
@@ -93,41 +89,17 @@ pub fn get_connection() -> Result<Arc<Mutex<Connection>>> {
     )
     .context("Failed to create history table")?;
 
-    // Migration: Add ocr_text column if it doesn't exist
-    let has_ocr_column: bool = conn
-        .query_row(
-            "SELECT COUNT(*) FROM pragma_table_info('history') WHERE name='ocr_text'",
-            [],
-            |row| row.get::<_, i32>(0),
-        )
-        .map(|count| count > 0)
-        .unwrap_or(false);
+    migrate_add_column_if_missing(
+        conn,
+        "ocr_text",
+        "ALTER TABLE history ADD COLUMN ocr_text TEXT",
+    )?;
+    migrate_add_column_if_missing(
+        conn,
+        "content_hash",
+        "ALTER TABLE history ADD COLUMN content_hash TEXT",
+    )?;
 
-    if !has_ocr_column {
-        conn.execute("ALTER TABLE history ADD COLUMN ocr_text TEXT", [])
-            .context("Failed to add ocr_text column")?;
-        info!("Migrated clipboard history: added ocr_text column");
-    }
-
-    // Migration: Add content_hash column if it doesn't exist
-    let has_hash_column: bool = conn
-        .query_row(
-            "SELECT COUNT(*) FROM pragma_table_info('history') WHERE name='content_hash'",
-            [],
-            |row| row.get::<_, i32>(0),
-        )
-        .map(|count| count > 0)
-        .unwrap_or(false);
-
-    if !has_hash_column {
-        conn.execute("ALTER TABLE history ADD COLUMN content_hash TEXT", [])
-            .context("Failed to add content_hash column")?;
-        info!("Migrated clipboard history: added content_hash column");
-    }
-
-    // Migration: Convert seconds timestamps to milliseconds
-    // Timestamps < 100_000_000_000 (year ~5138 in seconds, year ~1973 in ms) are seconds
-    // We multiply by 1000 to convert to milliseconds
     let needs_migration: i64 = conn
         .query_row(
             "SELECT COUNT(*) FROM history WHERE timestamp < 100000000000 AND timestamp > 0",
@@ -148,19 +120,7 @@ pub fn get_connection() -> Result<Arc<Mutex<Connection>>> {
         );
     }
 
-    // Migration: Add metadata columns for memory-efficient list views
-    // These columns store pre-computed metadata so we don't need to load full content
-    let has_text_preview: bool = conn
-        .query_row(
-            "SELECT COUNT(*) FROM pragma_table_info('history') WHERE name='text_preview'",
-            [],
-            |row| row.get::<_, i32>(0),
-        )
-        .map(|count| count > 0)
-        .unwrap_or(false);
-
-    if !has_text_preview {
-        // Add metadata columns
+    if !column_exists(conn, "text_preview")? {
         conn.execute("ALTER TABLE history ADD COLUMN text_preview TEXT", [])
             .context("Failed to add text_preview column")?;
         conn.execute("ALTER TABLE history ADD COLUMN image_width INTEGER", [])
@@ -172,33 +132,108 @@ pub fn get_connection() -> Result<Arc<Mutex<Connection>>> {
             [],
         )
         .context("Failed to add byte_size column")?;
-
         info!("Migrated clipboard history: added metadata columns");
-
-        // Populate metadata for existing entries (in batches)
-        populate_existing_metadata(&conn)?;
+        populate_existing_metadata(conn)?;
     }
 
-    // Create indexes for faster queries
+    migrate_add_column_if_missing(
+        conn,
+        "brain_kept",
+        "ALTER TABLE history ADD COLUMN brain_kept INTEGER NOT NULL DEFAULT 0",
+    )?;
+    migrate_add_column_if_missing(
+        conn,
+        "brain_tier",
+        "ALTER TABLE history ADD COLUMN brain_tier INTEGER NOT NULL DEFAULT 0",
+    )?;
+    migrate_add_column_if_missing(
+        conn,
+        "copy_count",
+        "ALTER TABLE history ADD COLUMN copy_count INTEGER NOT NULL DEFAULT 1",
+    )?;
+    migrate_add_column_if_missing(
+        conn,
+        "kept_url_day",
+        "ALTER TABLE history ADD COLUMN kept_url_day TEXT",
+    )?;
+
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_timestamp ON history(timestamp DESC)",
         [],
     )
     .context("Failed to create timestamp index")?;
-
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_pinned_timestamp ON history(pinned DESC, timestamp DESC)",
         [],
     )
     .context("Failed to create pinned+timestamp index")?;
-
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_dedup ON history(content_type, content_hash)",
         [],
     )
     .context("Failed to create dedup index")?;
 
-    let conn = Arc::new(Mutex::new(conn));
+    Ok(())
+}
+
+fn column_exists(conn: &Connection, name: &str) -> Result<bool> {
+    conn.query_row(
+        "SELECT COUNT(*) FROM pragma_table_info('history') WHERE name = ?1",
+        params![name],
+        |row| row.get::<_, i32>(0),
+    )
+    .map(|count| count > 0)
+    .context("Failed to inspect history columns")
+}
+
+fn migrate_add_column_if_missing(conn: &Connection, column: &str, ddl: &str) -> Result<()> {
+    if column_exists(conn, column)? {
+        return Ok(());
+    }
+    conn.execute(ddl, [])
+        .with_context(|| format!("Failed to add {column} column"))?;
+    info!(column, "Migrated clipboard history: added sediment column");
+    Ok(())
+}
+
+fn open_and_init_connection(db_path: &PathBuf) -> Result<Connection> {
+    let conn = Connection::open(db_path)
+        .with_context(|| format!("Failed to open database at {:?}", db_path))?;
+
+    conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL;")
+        .context("Failed to enable WAL mode")?;
+    debug!("Enabled WAL mode for clipboard history database");
+
+    conn.execute_batch("PRAGMA busy_timeout = 5000;")
+        .context("Failed to set busy_timeout")?;
+    debug!("Set SQLite busy_timeout to 5000ms");
+
+    conn.execute_batch("PRAGMA auto_vacuum = INCREMENTAL;")
+        .context("Failed to enable incremental auto_vacuum")?;
+    debug!("Enabled incremental auto_vacuum for clipboard history database");
+
+    ensure_clipboard_schema(&conn)?;
+
+    Ok(conn)
+}
+
+/// Get or create the database connection
+pub fn get_connection() -> Result<Arc<Mutex<Connection>>> {
+    #[cfg(test)]
+    {
+        if let Ok(guard) = TEST_DB_CONNECTION.lock() {
+            if let Some(conn) = guard.as_ref() {
+                return Ok(conn.clone());
+            }
+        }
+    }
+
+    if let Some(conn) = DB_CONNECTION.get() {
+        return Ok(conn.clone());
+    }
+
+    let db_path = get_db_path()?;
+    let conn = Arc::new(Mutex::new(open_and_init_connection(&db_path)?));
 
     if DB_CONNECTION.set(conn.clone()).is_err() {
         return DB_CONNECTION
@@ -313,7 +348,7 @@ pub fn add_entry(content: &str, content_type: ContentType) -> Result<String> {
 
     if let Some((existing_id, existing_pinned, existing_ocr_text)) = existing {
         conn.execute(
-            "UPDATE history SET timestamp = ? WHERE id = ?",
+            "UPDATE history SET timestamp = ?, copy_count = copy_count + 1 WHERE id = ?",
             params![timestamp, &existing_id],
         )
         .context("Failed to update existing entry timestamp")?;
@@ -339,8 +374,8 @@ pub fn add_entry(content: &str, content_type: ContentType) -> Result<String> {
 
     let id = Uuid::new_v4().to_string();
     conn.execute(
-        "INSERT INTO history (id, content, content_hash, content_type, timestamp, pinned, ocr_text, text_preview, image_width, image_height, byte_size)
-         VALUES (?1, ?2, ?3, ?4, ?5, 0, NULL, ?6, ?7, ?8, ?9)",
+        "INSERT INTO history (id, content, content_hash, content_type, timestamp, pinned, ocr_text, text_preview, image_width, image_height, byte_size, brain_kept, brain_tier, copy_count)
+         VALUES (?1, ?2, ?3, ?4, ?5, 0, NULL, ?6, ?7, ?8, ?9, 0, 0, 1)",
         params![&id, content, &content_hash, content_type.as_str(), timestamp, text_preview, image_width, image_height, byte_size as i64],
     )
     .context("Failed to insert clipboard entry")?;
@@ -863,6 +898,41 @@ pub fn run_incremental_vacuum() -> Result<()> {
     Ok(())
 }
 
+/// Read sediment columns for a clipboard entry.
+pub fn get_entry_sediment_state(id: &str) -> Option<SedimentState> {
+    let conn = get_connection().ok()?;
+    let conn = conn.lock().ok()?;
+    conn.query_row(
+        "SELECT brain_kept, brain_tier, copy_count, kept_url_day FROM history WHERE id = ?1",
+        params![id],
+        |row| {
+            Ok(SedimentState {
+                brain_kept: row.get::<_, i64>(0)? != 0,
+                brain_tier: row.get(1)?,
+                copy_count: row.get(2)?,
+                kept_url_day: row.get(3)?,
+            })
+        },
+    )
+    .ok()
+}
+
+/// Mark an entry as brain-kept with the given sediment tier.
+pub fn mark_brain_kept(id: &str, tier: i64, kept_url_day: Option<&str>) -> Result<()> {
+    let conn = get_connection()?;
+    let conn = conn.lock().map_err(db_lock_err)?;
+    let affected = conn
+        .execute(
+            "UPDATE history SET brain_kept = 1, brain_tier = ?1, kept_url_day = COALESCE(?2, kept_url_day) WHERE id = ?3",
+            params![tier, kept_url_day, id],
+        )
+        .context("Failed to mark clipboard entry brain-kept")?;
+    if affected == 0 {
+        anyhow::bail!("Entry not found: {id}");
+    }
+    Ok(())
+}
+
 /// Run WAL checkpoint (passive mode, doesn't block writers)
 pub fn run_wal_checkpoint() -> Result<()> {
     let conn = get_connection()?;
@@ -875,30 +945,41 @@ pub fn run_wal_checkpoint() -> Result<()> {
     Ok(())
 }
 
+/// Test-only override for database path
+#[cfg(test)]
+static TEST_DB_PATH: OnceLock<std::sync::Mutex<Option<PathBuf>>> = OnceLock::new();
+
+#[cfg(test)]
+pub(crate) fn set_test_db_path(path: Option<PathBuf>) {
+    let lock = TEST_DB_PATH.get_or_init(|| std::sync::Mutex::new(None));
+    if let Ok(mut guard) = lock.lock() {
+        *guard = path;
+    }
+}
+
+#[cfg(test)]
+pub(crate) fn get_test_db_path() -> Option<PathBuf> {
+    TEST_DB_PATH
+        .get()
+        .and_then(|m| m.lock().ok())
+        .and_then(|guard| guard.clone())
+}
+
+/// Point clipboard history at an isolated sqlite file (tests only).
+#[cfg(test)]
+pub fn init_test_clipboard_db(path: &std::path::Path) -> Result<()> {
+    set_test_db_path(Some(path.to_path_buf()));
+    let conn = Arc::new(Mutex::new(open_and_init_connection(&path.to_path_buf())?));
+    if let Ok(mut guard) = TEST_DB_CONNECTION.lock() {
+        *guard = Some(conn);
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::path::PathBuf;
-    use std::sync::Mutex as StdMutex;
-
-    /// Test-only override for database path
-    static TEST_DB_PATH: OnceLock<StdMutex<Option<PathBuf>>> = OnceLock::new();
-
-    #[cfg(test)]
-    fn set_test_db_path(path: Option<PathBuf>) {
-        let lock = TEST_DB_PATH.get_or_init(|| StdMutex::new(None));
-        if let Ok(mut guard) = lock.lock() {
-            *guard = path;
-        }
-    }
-
-    #[cfg(test)]
-    fn get_test_db_path() -> Option<PathBuf> {
-        TEST_DB_PATH
-            .get()
-            .and_then(|m| m.lock().ok())
-            .and_then(|guard| guard.clone())
-    }
 
     #[test]
     fn test_db_path_format() {

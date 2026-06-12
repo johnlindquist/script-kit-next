@@ -34,7 +34,11 @@ mod monitor;
 pub mod ocr;
 mod open_with;
 pub mod paste_sequential;
+mod post_copy;
 mod quick_look;
+mod rejection;
+mod sediment;
+mod tap_window;
 mod temp_file;
 mod types;
 
@@ -94,6 +98,17 @@ pub use temp_file::save_entry_to_temp_file;
 // Open With helpers (macOS Launch Services)
 #[allow(unused_imports)]
 pub use open_with::{get_apps_for_file, open_file_with_app, AppInfo};
+
+// Secret rejection
+pub use rejection::{
+    configure_secret_rejection, rejection_count, RejectionReason, SecretRejectionConfig,
+};
+
+// Post-copy quick menu (T12)
+pub use post_copy::{
+    configure_post_copy_menu, install_post_copy_quick_menu, register_kept_hud_whisper,
+    PostCopyMenuConfig, POST_COPY_MENU_AUTOMATION_ID,
+};
 
 // Monitor/Init
 #[allow(unused_imports)]

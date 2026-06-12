@@ -442,7 +442,7 @@ fn test_config_key_preservation() {
             process_limits: None,
             clipboard_history_max_text_length: None,
             clipboard_history_secret_rejection: None,
-        clipboard_history_post_copy_menu: None,
+            clipboard_history_post_copy_menu: None,
             suggested: None,
             unified_search: None,
             notes_hotkey: None,

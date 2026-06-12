@@ -18,9 +18,9 @@ mod window;
 
 pub use capture::{start_capture, DictationCaptureHandle};
 pub use delivery::{
-    parse_dictation_target_label, resolve_delivery_target_request,
-    DictationDeliveryTargetResolution, DictationDeliveryTargetSource, DictationWrongTargetReason,
-    DictationWrongTargetRefusalDraft,
+    deliver_transcript_to_day_page, parse_dictation_target_label, resolve_delivery_target_request,
+    DayPageTranscriptDelivery, DictationDeliveryTargetResolution, DictationDeliveryTargetSource,
+    DictationWrongTargetReason, DictationWrongTargetRefusalDraft,
 };
 pub use device::{
     apply_device_selection, build_device_menu_items, default_input_device,
