@@ -247,6 +247,82 @@ fn attach_rows_from_rich_results(
     }
 }
 
+fn cwd_rows_from_directory_results(
+    query: &str,
+    projection: &crate::spine::SpineCursorProjection,
+    parse: &crate::spine::SpineParse,
+    grouped: Vec<GroupedListItem>,
+    directory_flat: Vec<scripts::SearchResult>,
+) -> DayPageSpineRows {
+    let Some(segment) = parse.segments.get(projection.active_segment_index) else {
+        return DayPageSpineRows::new(grouped, Vec::new());
+    };
+
+    let mut remapped_grouped = Vec::new();
+    let mut flat = Vec::new();
+
+    for grouped_item in grouped {
+        match grouped_item {
+            GroupedListItem::SectionHeader(label, icon) => {
+                remapped_grouped.push(GroupedListItem::SectionHeader(label, icon));
+            }
+            GroupedListItem::Status(status) => {
+                remapped_grouped.push(GroupedListItem::Status(status));
+            }
+            GroupedListItem::Item(result_idx) => {
+                let Some(scripts::SearchResult::File(file_match)) = directory_flat.get(result_idx)
+                else {
+                    continue;
+                };
+                if file_match.file.file_type != crate::file_search::FileType::Directory {
+                    continue;
+                }
+                let label = crate::file_search::shorten_path(&file_match.file.path)
+                    .trim_end_matches('/')
+                    .to_string();
+                let replacement = format!(
+                    ">:{}",
+                    crate::spine::catalog_subsearch::escape_ref_component(&label)
+                );
+                let row_id = format!(
+                    "spine:>:dir:{}",
+                    crate::spine::catalog_subsearch::escape_ref_component(&label)
+                );
+                let row = crate::spine::SpineListRow {
+                    id: row_id.into(),
+                    kind: crate::spine::SpineListRowKind::Hint,
+                    title: file_match.file.name.clone().into(),
+                    subtitle: Some(label.clone().into()),
+                    meta: Some(">:".into()),
+                    icon: Some("folder".into()),
+                    badges: Vec::new(),
+                    score: 0,
+                    is_selectable: true,
+                    action_label: None,
+                    action: crate::spine::SpineListAction::ResolveSegment {
+                        segment_index: projection.active_segment_index,
+                        segment_byte_range: segment.byte_range.clone(),
+                        replacement: replacement.into(),
+                        resolution_id: file_match.file.path.clone().into(),
+                        resolution_label: label.into(),
+                        resolution_source: "cwd".into(),
+                        trailing_space: false,
+                    },
+                };
+                let new_idx = flat.len();
+                flat.push(scripts::SearchResult::SpineProjection(row));
+                remapped_grouped.push(GroupedListItem::Item(new_idx));
+            }
+        }
+    }
+
+    if query.trim().is_empty() {
+        filtering_cache::append_choose_hint_to_first_section_header(&mut remapped_grouped);
+    }
+
+    DayPageSpineRows::new(remapped_grouped, flat)
+}
+
 fn source_icon(source: crate::spine::catalog_subsearch::ContextSubsearchSource) -> &'static str {
     match source {
         crate::spine::catalog_subsearch::ContextSubsearchSource::File => "file",
@@ -530,8 +606,8 @@ impl DayPageView {
 
         let active_empty_subsearch = active_empty_day_page_subsearch(&projection);
         let key = format!(
-            "{}\u{1f}cursor={}\u{1f}active={:?}",
-            line, line_cursor, projection.active_segment_kind
+            "{}\u{1f}cursor={}\u{1f}active={:?}\u{1f}cwd_rev={}",
+            line, line_cursor, projection.active_segment_kind, self.spine_cwd_revision
         );
         Some((key, line_range, parse, projection, active_empty_subsearch))
     }
@@ -601,24 +677,28 @@ impl DayPageView {
             &projection.active_segment_kind
         {
             let query = sub_query.as_deref().unwrap_or("").trim();
-            let files = crate::file_search::search_files(
-                if query.is_empty() {
-                    crate::file_search::RECENTLY_USED_FILES_MDQUERY
-                } else {
-                    query
-                },
-                dirs::home_dir()
-                    .as_ref()
-                    .map(|path| path.to_string_lossy().to_string())
-                    .as_deref(),
-                crate::spine::catalog_subsearch::SUBSEARCH_RENDER_LIMIT,
-            );
-            let (grouped, flat) = if query.is_empty() {
-                filtering_cache::build_rich_cwd_root_rows(&files)
+            let recent_dirs = if let Some(app_state) = app_state {
+                app_state.recent_directory_results_from_frecency(
+                    crate::spine::catalog_subsearch::SUBSEARCH_RENDER_LIMIT,
+                )
             } else {
-                filtering_cache::build_rich_cwd_subsearch_rows(query, &files)
+                let app = self.app.upgrade()?;
+                app.read(cx).recent_directory_results_from_frecency(
+                    crate::spine::catalog_subsearch::SUBSEARCH_RENDER_LIMIT,
+                )
             };
-            Some(DayPageSpineRows::new(grouped, flat))
+            if recent_dirs.is_empty() {
+                let sections = crate::spine::list::build_spine_list_sections(parse, projection);
+                return Some(push_spine_sections_as_grouped(sections));
+            }
+            let (grouped, flat) = if query.is_empty() {
+                filtering_cache::build_rich_cwd_root_rows(&recent_dirs)
+            } else {
+                filtering_cache::build_rich_cwd_subsearch_rows(query, &recent_dirs)
+            };
+            Some(cwd_rows_from_directory_results(
+                query, projection, parse, grouped, flat,
+            ))
         } else {
             let sections = crate::spine::list::build_spine_list_sections(parse, projection);
             Some(push_spine_sections_as_grouped(sections))
@@ -847,33 +927,66 @@ impl DayPageView {
                 resolution_source,
                 trailing_space,
             } => {
-                if let Some(app) = self.app.upgrade() {
-                    app.update(cx, |app, cx| {
-                        if resolution_source.as_ref() == "file" {
-                            if let Some(path) = resolution_id.as_ref().strip_prefix("file/") {
-                                app.register_spine_file_mention_alias(
-                                    replacement.as_ref().to_string(),
-                                    path.to_string(),
-                                );
-                            }
-                        } else if resolution_source.as_ref() == "clipboard" {
-                            if let Some(id) = resolution_id.as_ref().strip_prefix("clipboard/") {
-                                app.register_spine_clipboard_mention_alias(
-                                    replacement.as_ref().to_string(),
-                                    id.to_string(),
-                                    resolution_label.as_ref().to_string(),
-                                );
-                            }
-                        } else if resolution_source.as_ref() == "cwd" {
-                            let path = std::path::PathBuf::from(resolution_id.as_ref());
-                            let label = resolution_label.as_ref().to_string();
-                            app.spine_cwd = Some(path);
-                            app.spine_cwd_label = Some(label);
-                            app.spine_cwd_revision = app.spine_cwd_revision.wrapping_add(1);
-                            app.persist_spine_cwd();
-                            app.prewarm_agent_chat_for_spine_cwd(cx);
-                            app.invalidate_grouped_cache();
+                if resolution_source.as_ref() == "cwd" {
+                    let applied = self.replace_day_page_spine_segment(
+                        model,
+                        segment_index,
+                        segment_byte_range,
+                        "",
+                        false,
+                        window,
+                        cx,
+                    );
+                    if applied {
+                        self.spine_cwd_revision = self.spine_cwd_revision.wrapping_add(1);
+                        if let Some(app) = self.app.upgrade() {
+                            let app_resolution_id = resolution_id.to_string();
+                            let app_resolution_label = resolution_label.to_string();
+                            cx.spawn(async move |_this, cx| {
+                                cx.background_executor()
+                                    .timer(std::time::Duration::from_millis(0))
+                                    .await;
+                                let _ = app.update(cx, |app, cx| {
+                                    let path = std::path::PathBuf::from(&app_resolution_id);
+                                    app.spine_cwd = Some(path);
+                                    app.spine_cwd_label = Some(app_resolution_label);
+                                    app.spine_cwd_revision = app.spine_cwd_revision.wrapping_add(1);
+                                    app.persist_spine_cwd();
+                                    app.prewarm_agent_chat_for_spine_cwd(cx);
+                                    app.invalidate_grouped_cache();
+                                    cx.notify();
+                                });
+                            })
+                            .detach();
                         }
+                    }
+                    return applied;
+                }
+
+                if let Some(app) = self.app.upgrade() {
+                    let app_resolution_source = resolution_source.to_string();
+                    let app_resolution_id = resolution_id.to_string();
+                    let app_resolution_label = resolution_label.to_string();
+                    let app_replacement = replacement.to_string();
+                    window.defer(cx, move |_window, cx| {
+                        app.update(cx, |app, _cx| {
+                            if app_resolution_source.as_str() == "file" {
+                                if let Some(path) = app_resolution_id.strip_prefix("file/") {
+                                    app.register_spine_file_mention_alias(
+                                        app_replacement.clone(),
+                                        path.to_string(),
+                                    );
+                                }
+                            } else if app_resolution_source.as_str() == "clipboard" {
+                                if let Some(id) = app_resolution_id.strip_prefix("clipboard/") {
+                                    app.register_spine_clipboard_mention_alias(
+                                        app_replacement.clone(),
+                                        id.to_string(),
+                                        app_resolution_label.clone(),
+                                    );
+                                }
+                            }
+                        });
                     });
                 }
                 self.replace_day_page_spine_segment(
@@ -944,6 +1057,33 @@ impl DayPageView {
         }
     }
 
+    fn submit_day_page_spine_prompt_from_current_line(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let content = self.notes_editor.read(cx).content(cx);
+        let selection = self.notes_editor.read(cx).selection(cx);
+        let cursor = clamp_to_char_boundary(&content, selection.end.min(content.len()));
+        let line_range = current_line_range(&content, cursor);
+        let line = &content[line_range];
+        if line.trim().is_empty() {
+            return false;
+        }
+
+        let parse = crate::spine::parse_spine(line);
+        let Some(app) = self.app.upgrade() else {
+            return false;
+        };
+
+        window.defer(cx, move |_window, cx| {
+            app.update(cx, |app, cx| {
+                app.submit_day_page_spine_prompt_plan(parse, cx);
+            });
+        });
+        true
+    }
+
     fn accept_day_page_spine_selection(
         &mut self,
         window: &mut Window,
@@ -957,13 +1097,15 @@ impl DayPageView {
         };
         if let Some((token, part)) = self.spine_alias_cache.get(row.id.as_ref()).cloned() {
             if let Some(app) = self.app.upgrade() {
-                app.update(cx, |app, _cx| {
-                    tracing::info!(
-                        target: "script_kit::spine",
-                        event = "day_page_spine_subsearch_alias_registered",
-                        token = %token,
-                    );
-                    app.spine_mention_aliases.insert(token, part);
+                window.defer(cx, move |_window, cx| {
+                    app.update(cx, |app, _cx| {
+                        tracing::info!(
+                            target: "script_kit::spine",
+                            event = "day_page_spine_subsearch_alias_registered",
+                            token = %token,
+                        );
+                        app.spine_mention_aliases.insert(token, part);
+                    });
                 });
             }
         }
@@ -1178,5 +1320,46 @@ mod day_page_spine_tests {
             .selected_row(0)
             .expect("section-header selection should coerce to first item");
         assert_eq!(row.id.as_ref(), "spine:@:subsearch:file");
+    }
+
+    #[test]
+    fn cwd_directory_results_remap_to_spine_projection_rows() {
+        let parse = crate::spine::parse_spine(">dev");
+        let projection = crate::spine::project_cursor(&parse, ">dev".len());
+        let directory = crate::file_search::FileResult {
+            path: "/Users/test/dev".to_string(),
+            name: "dev".to_string(),
+            size: 0,
+            modified: 0,
+            file_type: crate::file_search::FileType::Directory,
+        };
+        let grouped = vec![
+            GroupedListItem::SectionHeader("Directories".to_string(), Some("folder".to_string())),
+            GroupedListItem::Item(0),
+        ];
+        let flat = vec![scripts::SearchResult::File(scripts::FileMatch {
+            file: directory,
+            score: 0,
+        })];
+
+        let rows = cwd_rows_from_directory_results("dev", &projection, &parse, grouped, flat);
+
+        assert_eq!(rows.flat.len(), 1);
+        let scripts::SearchResult::SpineProjection(row) = &rows.flat[0] else {
+            panic!("cwd rows should be remapped to spine projections");
+        };
+        assert_eq!(row.id.as_ref(), "spine:>:dir:/Users/test/dev");
+        let crate::spine::SpineListAction::ResolveSegment {
+            resolution_id,
+            resolution_label,
+            resolution_source,
+            ..
+        } = &row.action
+        else {
+            panic!("cwd row should resolve the active segment");
+        };
+        assert_eq!(resolution_id.as_ref(), "/Users/test/dev");
+        assert_eq!(resolution_label.as_ref(), "/Users/test/dev");
+        assert_eq!(resolution_source.as_ref(), "cwd");
     }
 }

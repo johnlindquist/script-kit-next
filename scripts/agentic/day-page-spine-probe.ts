@@ -233,13 +233,73 @@ try {
     selectedSemanticId: submitElements.selectedSemanticId ?? null,
   });
 
+  const cwdBatch = (await driver.batch(
+    [
+      { type: "setInput", text: ">d" },
+      {
+        type: "waitFor",
+        condition: {
+          type: "stateMatch",
+          state: { promptType: "dayPage", inputValue: ">d" },
+        },
+      },
+    ],
+    { timeoutMs: 5000 },
+  )) as Json;
+  check("batch_set_day_page_cwd_prompt", cwdBatch.success === true, {
+    batch: cwdBatch,
+  });
+
+  const cwdElements = (await driver.getElements(
+    { target: { type: "main" }, limit: 200 },
+    { timeoutMs: 5000 },
+  )) as Json;
+  const cwdFlat = walkElements(cwdElements);
+  const cwdRow = cwdFlat.find(
+    (el) => typeof el.semanticId === "string" && el.semanticId.startsWith("spine:>:dir:"),
+  );
+  check(
+    "cwd_row_visible_and_selected",
+    Boolean(cwdRow) && cwdElements.selectedSemanticId === cwdRow?.semanticId,
+    {
+      cwdRow: cwdRow ?? null,
+      selectedSemanticId: cwdElements.selectedSemanticId ?? null,
+    },
+  );
+
   await driver.simulateKey("enter");
+  await Bun.sleep(250);
+  const afterCwdText = await editorText(driver);
+  check("enter_sets_cwd_and_strips_segment", afterCwdText === "", { afterCwdText });
+
+  const cwdPromptBatch = (await driver.batch(
+    [
+      { type: "setInput", text: "summarize this folder" },
+      {
+        type: "waitFor",
+        condition: {
+          type: "stateMatch",
+          state: { promptType: "dayPage", inputValue: "summarize this folder" },
+        },
+      },
+    ],
+    { timeoutMs: 5000 },
+  )) as Json;
+  check("batch_set_day_page_cwd_plain_prompt", cwdPromptBatch.success === true, {
+    batch: cwdPromptBatch,
+  });
+
+  await driver.simulateKey("enter", ["cmd"]);
   await Bun.sleep(750);
   const afterSubmitState = (await driver.getState({ timeoutMs: 5000 })) as Json;
-  check("enter_submits_day_page_prompt_to_agent_chat", afterSubmitState.promptType === "agentChatChat", {
-    promptType: afterSubmitState.promptType,
-    inputValue: afterSubmitState.inputValue,
-  });
+  check(
+    "cmd_enter_submits_day_page_prompt_to_agent_chat",
+    afterSubmitState.promptType === "agentChatChat",
+    {
+      promptType: afterSubmitState.promptType,
+      inputValue: afterSubmitState.inputValue,
+    },
+  );
 
   const pass = failures.length === 0;
   console.log(

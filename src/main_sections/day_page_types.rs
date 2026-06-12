@@ -24,6 +24,7 @@ pub struct DayPageView {
     pub(crate) spine_empty_subsearch_armed_for:
         Option<crate::spine::catalog_subsearch::ContextSubsearchSource>,
     pub(crate) spine_cache_key: String,
+    pub(crate) spine_cwd_revision: u64,
     pub(crate) spine_dismissed_cache_key: Option<String>,
     pub(crate) spine_grouped_cache: Vec<crate::list_item::GroupedListItem>,
     pub(crate) spine_flat_cache: Vec<crate::scripts::SearchResult>,

@@ -67,6 +67,7 @@ impl DayPageView {
             spine_hovered_index: None,
             spine_empty_subsearch_armed_for: None,
             spine_cache_key: String::new(),
+            spine_cwd_revision: 0,
             spine_dismissed_cache_key: None,
             spine_grouped_cache: Vec::new(),
             spine_flat_cache: Vec::new(),
@@ -585,6 +586,12 @@ impl DayPageView {
 
         if exact_plain && key == "enter" {
             if self.accept_day_page_spine_selection(window, cx) {
+                return;
+            }
+        }
+
+        if exact_cmd && key == "enter" {
+            if self.submit_day_page_spine_prompt_from_current_line(window, cx) {
                 return;
             }
         }
