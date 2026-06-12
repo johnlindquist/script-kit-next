@@ -210,9 +210,10 @@ impl DayPageView {
         let existing = self.notes_editor.read(cx).content(cx);
         let merged = merge_launcher_query_into_day_page_content(&existing, &query);
         self.notes_editor.update(cx, |editor, cx| {
-            editor.set_value(merged.clone(), window, cx);
+            editor.load_value_with_cursor_at_end(merged.clone(), window, cx);
         });
         self.session.apply_editor_content(&merged);
+        self.refresh_fragment_open_targets(&merged);
         self.focus_editor(window, cx);
         self.sync_footer(window, cx);
         cx.notify();

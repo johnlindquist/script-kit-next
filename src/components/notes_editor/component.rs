@@ -69,16 +69,27 @@ impl NotesEditor {
         });
     }
 
+    pub fn load_value_with_cursor_at_end(
+        &mut self,
+        value: impl Into<String>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let value = value.into();
+        let cursor = value.len();
+        self.input_state.update(cx, |state, cx| {
+            state.set_value(value, window, cx);
+            state.set_selection(cursor, cursor, window, cx);
+        });
+    }
+
     pub fn set_value_with_cursor_at_end(
         &mut self,
         text: String,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.input_state.update(cx, |state, inner_cx| {
-            state.set_value(text.clone(), window, inner_cx);
-            state.set_selection(text.len(), text.len(), window, inner_cx);
-        });
+        self.load_value_with_cursor_at_end(text, window, cx);
     }
 
     pub fn set_selection(

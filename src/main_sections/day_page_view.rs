@@ -102,7 +102,7 @@ impl DayPageView {
         self.reset_day_page_spine_runtime_state(true, true);
         self.refresh_fragment_open_targets(&content);
         self.notes_editor.update(cx, |editor, cx| {
-            editor.set_value(content, window, cx);
+            editor.load_value_with_cursor_at_end(content, window, cx);
         });
         self.sync_footer(window, cx);
     }

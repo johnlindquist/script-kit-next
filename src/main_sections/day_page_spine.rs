@@ -813,10 +813,13 @@ impl DayPageView {
         cx: &App,
     ) -> (Vec<protocol::ElementInfo>, usize) {
         let content = self.notes_editor.read(cx).content(cx);
-        let mut elements = vec![
-            protocol::ElementInfo::panel("day-page"),
-            protocol::ElementInfo::input("day-page-editor", Some(content.as_str()), true),
-        ];
+        let selection = self.notes_editor.read(cx).selection(cx);
+        let mut editor = protocol::ElementInfo::input("day-page-editor", Some(content.as_str()), true);
+        editor.role = Some("day_page_editor".to_string());
+        editor.kind = Some("editor_selection".to_string());
+        editor.source = Some(format!("{}:{}", selection.start, selection.end));
+        editor.source_name = Some(content.len().to_string());
+        let mut elements = vec![protocol::ElementInfo::panel("day-page"), editor];
 
         let Some((key, _, parse, projection, active_empty_subsearch)) =
             self.day_page_spine_input(cx)

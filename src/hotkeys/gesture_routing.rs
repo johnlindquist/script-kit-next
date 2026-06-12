@@ -8,6 +8,8 @@ pub fn merge_launcher_query_into_day_page_content(existing: &str, query: &str) -
     }
     if existing.trim().is_empty() {
         query.to_string()
+    } else if existing.ends_with('\n') {
+        format!("{existing}{query}")
     } else {
         format!("{existing}\n{query}")
     }
@@ -30,6 +32,14 @@ mod tests {
         assert_eq!(
             merge_launcher_query_into_day_page_content("09:00 — note", "buy milk"),
             "09:00 — note\nbuy milk"
+        );
+    }
+
+    #[test]
+    fn carry_over_uses_existing_empty_end_line() {
+        assert_eq!(
+            merge_launcher_query_into_day_page_content("09:00 — note\n\n", "buy milk"),
+            "09:00 — note\n\nbuy milk"
         );
     }
 
