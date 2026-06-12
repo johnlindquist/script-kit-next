@@ -167,93 +167,52 @@ try {
     promptType: maybeDayState.promptType,
   });
 
-  const batch = (await driver.batch(
-    [
-      { type: "setInput", text: "@fi" },
-      {
-        type: "waitFor",
-        condition: {
-          type: "stateMatch",
-          state: { promptType: "dayPage", inputValue: "@fi" },
-        },
-      },
-    ],
-    { timeoutMs: 5000 },
-  )) as Json;
-  check("batch_set_day_page_input", batch.success === true, { batch });
+  // ============================ `@` mentions =============================
+  // The Day Page renders NO `@` selector of its own. Typing into any `@`
+  // mention swaps to the REAL main menu (the launcher's own context UX) with
+  // the segment text as the filter; accept returns to Today with the token,
+  // Escape cancels back unchanged.
 
-  await Bun.sleep(250);
-  const beforeText = await editorText(driver);
-  const elementsBefore = (await driver.getElements(
-    { target: { type: "main" }, limit: 200 },
-    { timeoutMs: 5000 },
-  )) as Json;
-  const flatBefore = walkElements(elementsBefore);
-  const fileRow = flatBefore.find((el) => el.semanticId === "spine:@:subsearch:file");
-  const spinePanel = flatBefore.find(
-    (el) => el.semanticId === "list:day-page-spine-list" || el.id === "day-page-spine-list",
+  // Typing "@fi" auto-swaps to the launcher. Clear first: the day-page entry
+  // gesture carries the launcher filter into the editor, and the growth
+  // detector compares whole-content lengths on protocol setInput.
+  await driver.batch([{ type: "setInput", text: "" }], { timeoutMs: 5000 });
+  await Bun.sleep(300);
+  await driver.batch([{ type: "setInput", text: "@fi" }], { timeoutMs: 5000 });
+  await Bun.sleep(700);
+  const swapFiState = (await driver.getState({ timeoutMs: 5000 })) as Json;
+  check(
+    "typing_at_mention_swaps_to_main_menu",
+    swapFiState.promptType === "none" && swapFiState.inputValue === "@fi",
+    { promptType: swapFiState.promptType, inputValue: swapFiState.inputValue },
   );
 
-  check("editor_contains_fragment", beforeText === "@fi", { beforeText });
-  check("spine_panel_visible", Boolean(spinePanel), {
-    ids: flatBefore.slice(0, 20).map((el) => el.semanticId ?? el.id),
-  });
-  check("files_row_visible", Boolean(fileRow), {
-    fileRow: fileRow ?? null,
-  });
-
-  await driver.simulateKey("escape");
-  await Bun.sleep(250);
-  const dismissedElements = (await driver.getElements(
+  // The launcher (not the Day Page) shows the shared context rows.
+  const launcherElements = (await driver.getElements(
     { target: { type: "main" }, limit: 200 },
     { timeoutMs: 5000 },
   )) as Json;
-  const dismissedFlat = walkElements(dismissedElements);
-  const dismissedPanel = dismissedFlat.find(
-    (el) => el.semanticId === "list:day-page-spine-list" || el.id === "day-page-spine-list",
-  );
-  check("escape_dismisses_spine_elements", !dismissedPanel, {
-    ids: dismissedFlat.slice(0, 12).map((el) => el.semanticId ?? el.id),
-  });
-
-  const restoreBatch = (await driver.batch(
-    [
-      { type: "setInput", text: "@fi" },
-      {
-        type: "waitFor",
-        condition: {
-          type: "stateMatch",
-          state: { promptType: "dayPage", inputValue: "@fi" },
-        },
-      },
-    ],
-    { timeoutMs: 5000 },
-  )) as Json;
-  check("batch_restore_day_page_spine_input", restoreBatch.success === true, {
-    batch: restoreBatch,
-  });
-
-  const restoredElements = (await driver.getElements(
-    { target: { type: "main" }, limit: 200 },
-    { timeoutMs: 5000 },
-  )) as Json;
-  const restoredFlat = walkElements(restoredElements);
-  check("spine_elements_restore_after_input_change", Boolean(
-    restoredFlat.find((el) => el.semanticId === "spine:@:subsearch:file"),
+  const launcherFlat = walkElements(launcherElements);
+  check("launcher_shows_files_row", Boolean(
+    launcherFlat.find(
+      (el) =>
+        typeof el.semanticId === "string" &&
+        (el.semanticId === "spine:@:subsearch:file" ||
+          ((el.semanticId as string).startsWith("choice:") &&
+            (el.semanticId as string).includes("file"))),
+    ),
   ), {
-    selectedSemanticId: restoredElements.selectedSemanticId ?? null,
-    ids: restoredFlat.slice(0, 12).map((el) => el.semanticId ?? el.id),
+    selectedSemanticId: launcherElements.selectedSemanticId ?? null,
+    ids: launcherFlat.slice(0, 12).map((el) => el.semanticId ?? el.id),
   });
 
-  // Completing "@fi" → "@file:" enters a rich @context subsearch. The Day
-  // Page no longer renders its own subsearch popup — it swaps to the REAL
-  // main menu with the segment as the launcher filter (round-trip contract).
-  await Bun.sleep(250);
+  // Enter completes "@fi" → "@file:" colon mode INSIDE the launcher; the
+  // round trip stays pending (no bounce back to Today yet).
   await driver.simulateKey("enter");
   await Bun.sleep(600);
   const afterCompleteState = (await driver.getState({ timeoutMs: 5000 })) as Json;
   check(
-    "enter_completes_file_fragment_and_swaps_to_main_menu",
+    "launcher_enter_completes_colon_mode_in_launcher",
     afterCompleteState.promptType === "none" && afterCompleteState.inputValue === "@file:",
     {
       promptType: afterCompleteState.promptType,
@@ -261,28 +220,61 @@ try {
     },
   );
 
-  // Escape cancels the round trip back to Today with the segment intact.
+  // Escape cancels the round trip back to Today with the original segment.
   await driver.simulateKey("escape");
   await Bun.sleep(500);
   const afterCancelState = (await driver.getState({ timeoutMs: 5000 })) as Json;
   const afterCancelText = await editorText(driver);
   check(
     "escape_returns_to_day_page_with_fragment",
-    afterCancelState.promptType === "dayPage" && afterCancelText === "@file:",
+    afterCancelState.promptType === "dayPage" && afterCancelText === "@fi",
     { promptType: afterCancelState.promptType, afterCancelText },
   );
 
-  // No Day Page-local subsearch popup may render for rich subsearches.
+  // No Day Page-local spine panel may render for `@` (cursor is inside the
+  // mention after the cancel restore).
   const afterCancelElements = (await driver.getElements(
     { target: { type: "main" }, limit: 200 },
     { timeoutMs: 5000 },
   )) as Json;
   const afterCancelFlat = walkElements(afterCancelElements);
-  check("no_inline_subsearch_panel_on_day_page", !afterCancelFlat.find(
+  check("no_inline_at_selector_on_day_page", !afterCancelFlat.find(
     (el) => el.semanticId === "list:day-page-spine-list",
   ), {
     ids: afterCancelFlat.slice(0, 12).map((el) => el.semanticId ?? el.id),
   });
+
+  // Builtin acceptance: "@sel" swaps, Enter on the launcher's Selection row
+  // resolves immediately and returns to Today with "@selection ".
+  await driver.batch([{ type: "setInput", text: "" }], { timeoutMs: 5000 });
+  await Bun.sleep(300);
+  await driver.batch([{ type: "setInput", text: "@sel" }], { timeoutMs: 5000 });
+  await Bun.sleep(700);
+  const swapSelState = (await driver.getState({ timeoutMs: 5000 })) as Json;
+  check(
+    "builtin_mention_swaps_to_main_menu",
+    swapSelState.promptType === "none" && swapSelState.inputValue === "@sel",
+    { promptType: swapSelState.promptType, inputValue: swapSelState.inputValue },
+  );
+  const selElements = (await driver.getElements(
+    { target: { type: "main" }, limit: 200 },
+    { timeoutMs: 5000 },
+  )) as Json;
+  check(
+    "launcher_selection_row_selected",
+    typeof selElements.selectedSemanticId === "string" &&
+      (selElements.selectedSemanticId as string).includes("selection"),
+    { selectedSemanticId: selElements.selectedSemanticId ?? null },
+  );
+  await driver.simulateKey("enter");
+  await Bun.sleep(600);
+  const afterBuiltinState = (await driver.getState({ timeoutMs: 5000 })) as Json;
+  const afterBuiltinText = await editorText(driver);
+  check(
+    "builtin_accept_returns_to_today_with_token",
+    afterBuiltinState.promptType === "dayPage" && afterBuiltinText === "@selection ",
+    { promptType: afterBuiltinState.promptType, afterBuiltinText },
+  );
 
   const submitBatch = (await driver.batch(
     [
@@ -312,13 +304,8 @@ try {
     selectedSemanticId: submitElements.selectedSemanticId ?? null,
   });
 
-  await verifyFragmentCompletion(
-    driver,
-    "context_builtin_selection",
-    "@sel",
-    "spine:@:builtin:selection",
-    "@selection ",
-  );
+  // ("@sel" builtin completion is covered by the round-trip flow above —
+  // the Day Page no longer completes `@` fragments inline.)
 
   await verifyFragmentCompletion(
     driver,
@@ -432,6 +419,22 @@ try {
   const afterCwdText = await editorText(driver);
   check("enter_sets_cwd_and_strips_segment", afterCwdText === "", { afterCwdText });
 
+  // Reaching "@clip" without triggering the auto-swap: GROW with the cursor
+  // landing in tail free text, then SHRINK back to the bare mention
+  // (deletions never trigger the round trip).
+  const unresolvedGrowBatch = (await driver.batch(
+    [
+      { type: "setInput", text: "@clip extra" },
+      {
+        type: "waitFor",
+        condition: {
+          type: "stateMatch",
+          state: { promptType: "dayPage", inputValue: "@clip extra" },
+        },
+      },
+    ],
+    { timeoutMs: 5000 },
+  )) as Json;
   const unresolvedAfterCwdBatch = (await driver.batch(
     [
       { type: "setInput", text: "@clip" },
@@ -445,9 +448,11 @@ try {
     ],
     { timeoutMs: 5000 },
   )) as Json;
-  check("batch_set_day_page_unresolved_context_after_cwd", unresolvedAfterCwdBatch.success === true, {
-    batch: unresolvedAfterCwdBatch,
-  });
+  check(
+    "batch_set_day_page_unresolved_context_after_cwd",
+    unresolvedGrowBatch.success === true && unresolvedAfterCwdBatch.success === true,
+    { grow: unresolvedGrowBatch, shrink: unresolvedAfterCwdBatch },
+  );
 
   await driver.simulateKey("enter", ["cmd"]);
   await Bun.sleep(250);

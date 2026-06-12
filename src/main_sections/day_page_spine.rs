@@ -547,9 +547,12 @@ impl DayPageView {
         app_state: Option<&ScriptListApp>,
         cx: &App,
     ) -> Option<DayPageSpineRows> {
-        if filtering_cache::active_rich_spine_subsearch(projection).is_some() {
-            // `@context:` subsearch never renders an inline Day Page popup —
-            // it swaps to the real main menu instead (the round trip in
+        if matches!(
+            projection.active_segment_kind,
+            crate::spine::SpineSegmentKind::ContextMention { .. }
+        ) {
+            // `@` mentions never render an inline Day Page selector — typing
+            // into one swaps to the real main menu instead (the round trip in
             // day_page_round_trip.rs, triggered from on_editor_change), so
             // the selection UX is exactly the launcher's own.
             None

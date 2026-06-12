@@ -21,10 +21,10 @@ pub(crate) struct DayPageContextReturn {
 }
 
 impl DayPageView {
-    /// Auto-trigger: typing into an `@context:` subsearch on the active line
-    /// swaps to the real main menu (the exact launcher selection UX), not an
-    /// inline Day Page popup. Called from `on_editor_change`; only insertions
-    /// trigger so deletions can still edit a mention inline.
+    /// Auto-trigger: typing into ANY `@` mention on the active line swaps to
+    /// the real main menu (the exact launcher selection UX) — the Day Page
+    /// renders no `@` selector of its own. Called from `on_editor_change`;
+    /// only insertions trigger so deletions can still edit a mention inline.
     pub(crate) fn maybe_begin_day_page_context_round_trip_from_edit(
         &mut self,
         previous_len: usize,
@@ -47,12 +47,21 @@ impl DayPageView {
         let parse = crate::spine::parse_spine(line);
         let cursor_in_line = cursor.saturating_sub(line_range.start);
         let projection = crate::spine::project_cursor(&parse, cursor_in_line);
-        if filtering_cache::active_rich_spine_subsearch(&projection).is_none() {
-            return false;
-        }
         let Some(segment) = parse.segments.get(projection.active_segment_index) else {
             return false;
         };
+        if !matches!(
+            segment.kind,
+            crate::spine::SpineSegmentKind::ContextMention { .. }
+        ) {
+            return false;
+        }
+        // `project_cursor` defaults to the last segment when the cursor sits
+        // past the trailing space; only a cursor INSIDE the mention swaps, so
+        // a completed `@selection ` doesn't bounce back to the launcher.
+        if cursor_in_line < segment.byte_range.start || cursor_in_line > segment.byte_range.end {
+            return false;
+        }
         let segment_byte_range = segment.byte_range.clone();
         let Some(segment_text) = line.get(segment_byte_range.clone()).map(str::to_string) else {
             return false;
