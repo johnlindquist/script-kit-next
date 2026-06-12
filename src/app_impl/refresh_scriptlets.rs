@@ -5,6 +5,39 @@ static SCRIPT_REFRESH_REQUEST_ID: std::sync::atomic::AtomicU64 =
 
 const HUD_PLUGIN_INVENTORY_MS: u64 = 1400;
 
+/// Canonical string spelling of a scriptlet markdown path. Falls back to
+/// canonicalizing the parent (deleted files can't canonicalize) and then to
+/// the raw spelling.
+fn canonical_scriptlet_path_string(path: &std::path::Path) -> String {
+    if let Ok(canonical) = path.canonicalize() {
+        return canonical.to_string_lossy().to_string();
+    }
+    if let (Some(parent), Some(name)) = (path.parent(), path.file_name()) {
+        if let Ok(parent) = parent.canonicalize() {
+            return parent.join(name).to_string_lossy().to_string();
+        }
+    }
+    path.to_string_lossy().to_string()
+}
+
+/// True when a stored scriptlet `file_path` (`/path/to/file.md#command`)
+/// refers to the changed file. Compared through canonical spellings: the
+/// watcher delivers FSEvents-canonical paths (e.g. `/private/tmp/...`) while
+/// the loader records whatever spelling the kit path uses (`/tmp/...`,
+/// symlinked dotfiles). A raw prefix compare misses across spellings, so the
+/// incremental update would remove nothing and append duplicates — after
+/// which every scriptlet shortcut conflicts with itself and HUDs fire.
+fn scriptlet_file_path_matches(
+    file_path: &str,
+    changed_raw: &str,
+    changed_canonical: &str,
+) -> bool {
+    let md_part = file_path.split('#').next().unwrap_or(file_path);
+    md_part == changed_raw
+        || md_part == changed_canonical
+        || canonical_scriptlet_path_string(std::path::Path::new(md_part)) == changed_canonical
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct PluginInventoryCounts {
     plugins: usize,
@@ -499,6 +532,11 @@ impl ScriptListApp {
             ),
         );
 
+        // Watcher paths arrive FSEvents-canonical; stored file_paths use the
+        // loader's spelling. Compare canonical forms or duplicates accumulate.
+        let changed_raw = path.to_string_lossy().to_string();
+        let changed_canonical = canonical_scriptlet_path_string(path);
+
         // Get old cached scriptlets for this file (if any)
         // Note: We're using a simple approach here - comparing name+shortcut+expand+alias
         let old_scriptlets: Vec<CachedScriptlet> = self
@@ -507,7 +545,7 @@ impl ScriptListApp {
             .filter(|s| {
                 s.file_path
                     .as_ref()
-                    .map(|fp| fp.starts_with(&path.to_string_lossy().to_string()))
+                    .map(|fp| scriptlet_file_path_matches(fp, &changed_raw, &changed_canonical))
                     .unwrap_or(false)
             })
             .map(|s| {
@@ -627,12 +665,12 @@ impl ScriptListApp {
         }
 
         // Update the scriptlets list
-        // Remove old scriptlets from this file
-        let path_str = path.to_string_lossy().to_string();
+        // Remove old scriptlets from this file (canonical compare — see
+        // scriptlet_file_path_matches for why raw prefix match is not enough)
         self.scriptlets.retain(|s| {
             !s.file_path
                 .as_ref()
-                .map(|fp| fp.starts_with(&path_str))
+                .map(|fp| scriptlet_file_path_matches(fp, &changed_raw, &changed_canonical))
                 .unwrap_or(false)
         });
 
@@ -963,5 +1001,67 @@ mod tests {
             .as_ref()
             .expect("hud should be Some")
             .contains("No plugin entrypoints yet"),);
+    }
+}
+
+#[cfg(test)]
+mod scriptlet_path_match_tests {
+    use super::{canonical_scriptlet_path_string, scriptlet_file_path_matches};
+
+    /// Reproduces the probe-session bug: the loader stored `/tmp/...` (kit
+    /// path spelling) while the watcher delivered `/private/tmp/...`
+    /// (FSEvents-canonical). The raw prefix compare missed, the incremental
+    /// update appended duplicates, and every scriptlet shortcut conflicted
+    /// with itself.
+    #[test]
+    fn symlinked_spelling_matches_canonical_watcher_path() {
+        let real_root = tempfile::tempdir().expect("tempdir");
+        let real_dir = real_root.path().join("scriptlets");
+        std::fs::create_dir_all(&real_dir).expect("create scriptlets dir");
+        let md = real_dir.join("main.md");
+        std::fs::write(&md, "## Test\n").expect("write md");
+
+        let link_root = tempfile::tempdir().expect("link tempdir");
+        let link = link_root.path().join("kit-link");
+        std::os::unix::fs::symlink(real_root.path(), &link).expect("symlink");
+        let md_via_link = link.join("scriptlets").join("main.md");
+
+        let stored = format!("{}#translate-to-english", md_via_link.display());
+        let changed_raw = md.to_string_lossy().to_string();
+        let changed_canonical = canonical_scriptlet_path_string(&md);
+
+        assert!(
+            scriptlet_file_path_matches(&stored, &changed_raw, &changed_canonical),
+            "symlink spelling {stored} must match canonical watcher path {changed_canonical}"
+        );
+    }
+
+    #[test]
+    fn deleted_file_matches_via_parent_canonicalization() {
+        let root = tempfile::tempdir().expect("tempdir");
+        let md = root.path().join("gone.md");
+        // Never created: canonicalize(md) fails, parent fallback must engage.
+        let canonical = canonical_scriptlet_path_string(&md);
+        let stored = format!("{}#cmd", md.display());
+        assert!(scriptlet_file_path_matches(
+            &stored,
+            &md.to_string_lossy(),
+            &canonical
+        ));
+    }
+
+    #[test]
+    fn unrelated_file_does_not_match() {
+        let root = tempfile::tempdir().expect("tempdir");
+        let a = root.path().join("a.md");
+        let b = root.path().join("b.md");
+        std::fs::write(&a, "## A\n").expect("write a");
+        std::fs::write(&b, "## B\n").expect("write b");
+        let stored = format!("{}#cmd", a.display());
+        assert!(!scriptlet_file_path_matches(
+            &stored,
+            &b.to_string_lossy(),
+            &canonical_scriptlet_path_string(&b)
+        ));
     }
 }
