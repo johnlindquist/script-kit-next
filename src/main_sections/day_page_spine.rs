@@ -359,6 +359,76 @@ fn day_page_spine_prompt_plan_can_submit(
             && !plan.normalized_prompt.trim().is_empty())
 }
 
+fn day_page_spine_single_char_deletion_index(previous: &str, next: &str) -> Option<usize> {
+    let previous_chars: Vec<char> = previous.chars().collect();
+    let next_chars: Vec<char> = next.chars().collect();
+    if previous_chars.len() != next_chars.len() + 1 {
+        return None;
+    }
+    let mut index = 0;
+    while index < next_chars.len() && previous_chars[index] == next_chars[index] {
+        index += 1;
+    }
+    (previous_chars[index + 1..] == next_chars[index..]).then_some(index)
+}
+
+fn byte_index_for_char_index(text: &str, char_index: usize) -> usize {
+    if char_index == text.chars().count() {
+        return text.len();
+    }
+    text.char_indices()
+        .nth(char_index)
+        .map(|(idx, _)| idx)
+        .unwrap_or(text.len())
+}
+
+fn day_page_spine_mention_atomic_delete_fixup(
+    previous: &str,
+    next: &str,
+    mention_aliases: &std::collections::HashMap<String, crate::ai::message_parts::AiContextPart>,
+) -> Option<(String, usize)> {
+    if mention_aliases.is_empty() {
+        return None;
+    }
+    let deleted_char_index = day_page_spine_single_char_deletion_index(previous, next)?;
+    let deleted_registered_token = crate::ai::context_mentions::inline_token_spans(previous)
+        .into_iter()
+        .any(|span| {
+            deleted_char_index >= span.range.start
+                && deleted_char_index < span.range.end
+                && mention_aliases.contains_key(&span.token)
+        });
+    if !deleted_registered_token {
+        return None;
+    }
+    let (fixed, cursor_char) =
+        crate::ai::context_mentions::remove_inline_mention_at_cursor_with_aliases(
+            previous,
+            deleted_char_index + 1,
+            false,
+            mention_aliases,
+        )?;
+    let cursor = byte_index_for_char_index(&fixed, cursor_char);
+    Some((fixed, cursor))
+}
+
+fn prune_day_page_spine_mention_aliases(
+    mention_aliases: &mut std::collections::HashMap<
+        String,
+        crate::ai::message_parts::AiContextPart,
+    >,
+    content: &str,
+) {
+    if mention_aliases.is_empty() {
+        return;
+    }
+    let visible_tokens = crate::ai::context_mentions::inline_token_spans(content)
+        .into_iter()
+        .map(|span| span.token)
+        .collect::<std::collections::HashSet<_>>();
+    mention_aliases.retain(|token, _| visible_tokens.contains(token));
+}
+
 impl ScriptListApp {
     fn day_page_rich_spine_rows(
         &self,
@@ -494,17 +564,12 @@ impl DayPageView {
         &self,
         parse: &crate::spine::SpineParse,
         projection: &crate::spine::SpineCursorProjection,
-        app_state: Option<&ScriptListApp>,
     ) -> DayPageSpineRows {
         let sections = crate::spine::list::build_spine_list_sections_full_with_resolved_tokens(
             parse,
             projection,
             None,
-            &|token| {
-                self.spine_mention_aliases.contains_key(token)
-                    || app_state
-                        .is_some_and(|app_state| app_state.spine_mention_aliases.contains_key(token))
-            },
+            &|token| self.spine_mention_aliases.contains_key(token),
         );
         push_spine_sections_as_grouped(sections)
     }
@@ -726,7 +791,7 @@ impl DayPageView {
                 )
             };
             if recent_dirs.is_empty() {
-                return Some(self.shared_day_page_spine_rows(parse, projection, app_state));
+                return Some(self.shared_day_page_spine_rows(parse, projection));
             }
             let (grouped, flat) = if query.is_empty() {
                 filtering_cache::build_rich_cwd_root_rows(&recent_dirs)
@@ -737,7 +802,7 @@ impl DayPageView {
                 query, projection, parse, grouped, flat,
             ))
         } else {
-            Some(self.shared_day_page_spine_rows(parse, projection, app_state))
+            Some(self.shared_day_page_spine_rows(parse, projection))
         }
     }
 
@@ -1078,9 +1143,14 @@ impl DayPageView {
                     return false;
                 };
                 let parse = model.parse.clone();
+                let mention_aliases = self.spine_mention_aliases.clone();
                 window.defer(cx, move |_window, cx| {
                     app.update(cx, |app, cx| {
-                        app.submit_day_page_spine_prompt_plan(parse, cx);
+                        app.submit_day_page_spine_prompt_plan_with_aliases(
+                            parse,
+                            mention_aliases,
+                            cx,
+                        );
                     });
                 });
                 true
@@ -1116,10 +1186,11 @@ impl DayPageView {
         let Some(app) = self.app.upgrade() else {
             return false;
         };
+        let mention_aliases = self.spine_mention_aliases.clone();
 
         window.defer(cx, move |_window, cx| {
             app.update(cx, |app, cx| {
-                app.submit_day_page_spine_prompt_plan(parse, cx);
+                app.submit_day_page_spine_prompt_plan_with_aliases(parse, mention_aliases, cx);
             });
         });
         true
@@ -1237,6 +1308,79 @@ mod day_page_spine_tests {
 
         assert_eq!(new_content, "ask @file: ");
         assert_eq!(cursor, "ask @file: ".len());
+    }
+
+    fn test_text_block_part(label: &str) -> crate::ai::message_parts::AiContextPart {
+        crate::ai::message_parts::AiContextPart::TextBlock {
+            label: label.to_string(),
+            source: format!("test:{label}"),
+            text: format!("{label} body"),
+            mime_type: None,
+        }
+    }
+
+    #[test]
+    fn alias_backed_token_deletes_atomically_and_consumes_space() {
+        let mut aliases = std::collections::HashMap::new();
+        aliases.insert(
+            "@clipboard:Latest".to_string(),
+            test_text_block_part("Latest"),
+        );
+
+        let fixed = day_page_spine_mention_atomic_delete_fixup(
+            "ask @clipboard:Latest now",
+            "ask @clipboard:Lates now",
+            &aliases,
+        )
+        .expect("registered token should delete atomically");
+
+        assert_eq!(fixed, ("ask now".to_string(), "ask ".len()));
+    }
+
+    #[test]
+    fn unresolved_subsearch_token_keeps_normal_character_delete() {
+        let mut aliases = std::collections::HashMap::new();
+        aliases.insert(
+            "@clipboard:Latest".to_string(),
+            test_text_block_part("Latest"),
+        );
+
+        assert_eq!(
+            day_page_spine_mention_atomic_delete_fixup(
+                "ask @file:readme now",
+                "ask @file:readm now",
+                &aliases,
+            ),
+            None
+        );
+    }
+
+    #[test]
+    fn prune_aliases_drops_tokens_no_longer_visible() {
+        let mut aliases = std::collections::HashMap::new();
+        aliases.insert(
+            "@clipboard:Latest".to_string(),
+            test_text_block_part("Latest"),
+        );
+        aliases.insert("@file:demo.rs".to_string(), test_text_block_part("demo.rs"));
+
+        prune_day_page_spine_mention_aliases(&mut aliases, "ask @file:demo.rs");
+
+        assert!(!aliases.contains_key("@clipboard:Latest"));
+        assert!(aliases.contains_key("@file:demo.rs"));
+    }
+
+    #[test]
+    fn set_input_prune_boundary_uses_inline_token_spans_not_substrings() {
+        let mut aliases = std::collections::HashMap::new();
+        aliases.insert(
+            "@clipboard:Latest".to_string(),
+            test_text_block_part("Latest"),
+        );
+
+        prune_day_page_spine_mention_aliases(&mut aliases, "literal @clipboard:Latest-ish");
+
+        assert!(aliases.is_empty());
     }
 
     #[test]

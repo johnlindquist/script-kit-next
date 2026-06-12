@@ -99,6 +99,7 @@ impl DayPageView {
 
     fn apply_loaded_content_to_editor(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let content = self.session.disk_content().to_string();
+        self.reset_day_page_spine_runtime_state(true, true);
         self.refresh_fragment_open_targets(&content);
         self.notes_editor.update(cx, |editor, cx| {
             editor.set_value(content, window, cx);
@@ -153,9 +154,30 @@ impl DayPageView {
     }
 
     fn on_editor_change(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let previous = self.session.disk_content().to_string();
         let content = self.notes_editor.read(cx).content(cx);
+        if let Some((fixed, cursor)) = day_page_spine_mention_atomic_delete_fixup(
+            &previous,
+            &content,
+            &self.spine_mention_aliases,
+        ) {
+            self.notes_editor.update(cx, |editor, cx| {
+                editor.set_value(fixed.clone(), window, cx);
+                editor.set_selection(cursor, cursor, window, cx);
+            });
+            self.session.apply_editor_content(&fixed);
+            self.refresh_fragment_open_targets(&fixed);
+            prune_day_page_spine_mention_aliases(&mut self.spine_mention_aliases, &fixed);
+            self.spine_dismissed_cache_key = None;
+            self.spine_alias_cache.clear();
+            self.poll_external_disk_changes(window, cx);
+            self.sync_footer(window, cx);
+            cx.notify();
+            return;
+        }
         self.session.apply_editor_content(&content);
         self.refresh_fragment_open_targets(&content);
+        prune_day_page_spine_mention_aliases(&mut self.spine_mention_aliases, &content);
         self.spine_dismissed_cache_key = None;
         self.spine_alias_cache.clear();
         self.poll_external_disk_changes(window, cx);
@@ -165,6 +187,8 @@ impl DayPageView {
 
     pub fn poll_external_disk_changes(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if let Ok(Some(content)) = self.session.maybe_refresh_from_disk() {
+            self.reset_day_page_spine_runtime_state(true, true);
+            self.refresh_fragment_open_targets(&content);
             self.notes_editor.update(cx, |editor, cx| {
                 editor.set_value(content, window, cx);
             });
@@ -219,15 +243,30 @@ impl DayPageView {
         });
         self.session.apply_editor_content(&text);
         self.refresh_fragment_open_targets(&text);
+        self.reset_day_page_spine_runtime_state(false, true);
+        self.sync_footer(window, cx);
+        cx.notify();
+    }
+
+    fn reset_day_page_spine_runtime_state(
+        &mut self,
+        clear_cwd_anchor: bool,
+        clear_mentions: bool,
+    ) {
         self.spine_selected_index = 0;
+        self.spine_hovered_index = None;
         self.spine_empty_subsearch_armed_for = None;
+        if clear_cwd_anchor {
+            self.spine_cwd_submit_anchor = false;
+        }
         self.spine_dismissed_cache_key = None;
+        if clear_mentions {
+            self.spine_mention_aliases.clear();
+        }
         self.spine_cache_key.clear();
         self.spine_grouped_cache.clear();
         self.spine_flat_cache.clear();
         self.spine_alias_cache.clear();
-        self.sync_footer(window, cx);
-        cx.notify();
     }
 
     fn sync_footer(&self, window: &mut Window, cx: &mut Context<Self>) {

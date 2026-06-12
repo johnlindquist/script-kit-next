@@ -459,15 +459,26 @@ impl ScriptListApp {
         self.try_submit_spine_prompt_plan_from_parse(self.spine_parse.clone(), true, true, true, cx)
     }
 
-    pub(crate) fn submit_day_page_spine_prompt_plan(
+    pub(crate) fn submit_day_page_spine_prompt_plan_with_aliases(
         &mut self,
         parse: crate::spine::SpineParse,
+        mention_aliases: std::collections::HashMap<
+            String,
+            crate::ai::message_parts::AiContextPart,
+        >,
         cx: &mut Context<Self>,
     ) -> bool {
         // Day Page text persists after handoff, so aliases may still back
         // visible note mentions; launcher-only filter and preview caches must
         // not be mutated from this path.
-        self.try_submit_spine_prompt_plan_from_parse(parse, false, false, false, cx)
+        self.try_submit_spine_prompt_plan_from_parse_with_aliases(
+            parse,
+            &mention_aliases,
+            false,
+            false,
+            false,
+            cx,
+        )
     }
 
     pub(crate) fn try_submit_spine_prompt_plan_from_parse(
@@ -478,10 +489,30 @@ impl ScriptListApp {
         use_selection_preview_cache: bool,
         cx: &mut Context<Self>,
     ) -> bool {
-        let plan = crate::spine::prompt_plan::build_spine_prompt_plan_with_aliases(
-            &parse,
-            &self.spine_mention_aliases,
-        );
+        let mention_aliases = self.spine_mention_aliases.clone();
+        self.try_submit_spine_prompt_plan_from_parse_with_aliases(
+            parse,
+            &mention_aliases,
+            reset_launcher_filter,
+            clear_aliases_after_submit,
+            use_selection_preview_cache,
+            cx,
+        )
+    }
+
+    pub(crate) fn try_submit_spine_prompt_plan_from_parse_with_aliases(
+        &mut self,
+        parse: crate::spine::SpineParse,
+        mention_aliases: &std::collections::HashMap<
+            String,
+            crate::ai::message_parts::AiContextPart,
+        >,
+        reset_launcher_filter: bool,
+        clear_aliases_after_submit: bool,
+        use_selection_preview_cache: bool,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let plan = Self::spine_prompt_plan_for_aliases(&parse, mention_aliases);
         // Plain prose without sigils normally doesn't submit to chat. But when
         // the user has already established a working directory via the cwd
         // chip (typed `>` then picked a folder), Cmd+Enter on a non-empty
@@ -618,6 +649,16 @@ impl ScriptListApp {
 
         cx.notify();
         true
+    }
+
+    fn spine_prompt_plan_for_aliases(
+        parse: &crate::spine::SpineParse,
+        mention_aliases: &std::collections::HashMap<
+            String,
+            crate::ai::message_parts::AiContextPart,
+        >,
+    ) -> crate::spine::prompt_plan::SpinePromptPlan {
+        crate::spine::prompt_plan::build_spine_prompt_plan_with_aliases(parse, mention_aliases)
     }
 
     /// Entry point that always routes to Agent Chat chat, bypassing the surface
@@ -5943,6 +5984,45 @@ mod tests {
 
     fn selection_resource_part() -> crate::ai::message_parts::AiContextPart {
         crate::ai::context_contract::ContextAttachmentKind::Selection.part()
+    }
+
+    fn text_block_part(label: &str) -> crate::ai::message_parts::AiContextPart {
+        crate::ai::message_parts::AiContextPart::TextBlock {
+            label: label.to_string(),
+            source: format!("test:{label}"),
+            text: format!("{label} body"),
+            mime_type: None,
+        }
+    }
+
+    #[test]
+    fn day_page_submit_plan_uses_explicit_aliases_not_stale_app_aliases() {
+        let parse = crate::spine::parse_spine("@clipboard:Latest summarize");
+        let mut app_aliases = std::collections::HashMap::new();
+        app_aliases.insert(
+            "@clipboard:Latest".to_string(),
+            text_block_part("stale app clipboard"),
+        );
+        let day_page_aliases = std::collections::HashMap::new();
+
+        let stale_app_plan = ScriptListApp::spine_prompt_plan_for_aliases(&parse, &app_aliases);
+        let day_page_plan =
+            ScriptListApp::spine_prompt_plan_for_aliases(&parse, &day_page_aliases);
+
+        assert_eq!(
+            stale_app_plan.context_parts.len(),
+            1,
+            "control: app alias map would resolve the compact token"
+        );
+        assert!(
+            day_page_plan.context_parts.is_empty(),
+            "Day Page submission must not attach stale app aliases after local alias reset"
+        );
+        assert_eq!(
+            day_page_plan.unknown_warnings.len(),
+            1,
+            "unbacked compact Day Page token should remain an explicit warning"
+        );
     }
 
     #[test]
