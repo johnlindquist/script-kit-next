@@ -38,8 +38,8 @@ impl ScriptListApp {
             | AppView::DictationHistoryView { .. }
             | AppView::NotesBrowseView { .. }
             | AppView::ProfileSearchView { .. }
-            | AppView::AgentChatView { .. }
-            | AppView::DayPage { .. } => crate::window_resize::ViewType::MainWindow,
+            | AppView::DayPage { .. }
+            | AppView::AgentChatView { .. } => crate::window_resize::ViewType::MainWindow,
             AppView::AppLauncherView { .. }
             | AppView::WindowSwitcherView { .. }
             | AppView::BrowserTabsView { .. }

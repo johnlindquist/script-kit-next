@@ -17,16 +17,12 @@ pub struct NotesEditor {
 }
 
 impl NotesEditor {
-    pub fn new(
-        input_state: Entity<InputState>,
-        config: NotesEditorConfig,
-        preview_scroll_handle: ScrollHandle,
-    ) -> Self {
+    pub fn new(input_state: Entity<InputState>, config: NotesEditorConfig) -> Self {
         register_markdown_highlighter();
 
         Self {
             input_state,
-            preview_scroll_handle,
+            preview_scroll_handle: ScrollHandle::new(),
             layout: config.layout,
         }
     }

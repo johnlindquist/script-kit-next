@@ -7514,8 +7514,8 @@ impl ScriptListApp {
             | crate::dictation::DictationTarget::MainWindowPrompt
             | crate::dictation::DictationTarget::NotesEditor
             | crate::dictation::DictationTarget::AiChatComposer
-            |             crate::dictation::DictationTarget::TabAiHarness
-            | crate::dictation::DictationTarget::DayPage => Ok(()),
+            | crate::dictation::DictationTarget::TabAiHarness => Ok(()),
+            crate::dictation::DictationTarget::DayPage => Ok(()),
         }
     }
 

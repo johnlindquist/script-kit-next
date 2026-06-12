@@ -43,7 +43,6 @@ impl DayPageView {
                         metrics.editor_padding_x,
                         metrics.editor_padding_y,
                     )),
-                gpui::ScrollHandle::new(),
             )
         });
 

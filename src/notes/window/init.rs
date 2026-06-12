@@ -61,7 +61,6 @@ impl NotesApp {
                 .placeholder("Start typing your note...")
                 .default_value(initial_content.clone())
         });
-        let preview_scroll_handle = ScrollHandle::new();
         let notes_editor = cx.new(|_| {
             NotesEditor::new(
                 editor_state.clone(),
@@ -69,7 +68,6 @@ impl NotesApp {
                     metrics.editor_padding_x,
                     metrics.editor_padding_y,
                 )),
-                preview_scroll_handle.clone(),
             )
         });
 
@@ -159,7 +157,7 @@ impl NotesApp {
             last_window_height: initial_height, // Track for manual resize detection
             autosize_generation: 0,
             last_autosize_transition: None,
-            preview_scroll_handle,
+            preview_scroll_handle: ScrollHandle::new(),
             focus_handle,
             _subscriptions: vec![editor_sub, search_sub],
             // Initialize CommandBar with notes-specific actions
