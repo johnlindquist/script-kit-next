@@ -23,8 +23,6 @@ use std::time::Duration;
 const CYCLE_INTERVAL: Duration = Duration::from_secs(120);
 const EMBED_BATCH: usize = 16;
 const MAX_EMBED_PER_CYCLE: usize = 256;
-/// Truncate doc text fed to the embedder; the index keeps full content.
-const EMBED_TEXT_CAP: usize = 6_000;
 /// Hard latency budget for query embedding on the submit path. When the
 /// model isn't warm yet the caller falls back to lexical recall.
 const QUERY_EMBED_BUDGET: Duration = Duration::from_millis(200);
@@ -637,25 +635,60 @@ fn embed_pending(embedder: &mut Option<BrainEmbedder>) -> Result<usize> {
         if pending.is_empty() {
             break;
         }
-        let texts: Vec<String> = pending
+        // qmd-style chunking: long docs embed as ~900-token pieces with
+        // overlap so nothing past a truncation cap goes semantically dark.
+        // All chunks of the batch ride one embed call, then split back out.
+        let doc_chunks: Vec<Vec<super::chunker::Chunk>> = pending
             .iter()
-            .map(|doc| {
-                let mut text = format!("{}\n{}", doc.title, doc.content);
-                if text.len() > EMBED_TEXT_CAP {
-                    text.truncate(EMBED_TEXT_CAP);
-                }
-                text
-            })
+            .map(|doc| super::chunker::chunk_markdown(&format!("{}\n{}", doc.title, doc.content)))
             .collect();
-        let vectors = embedder.embed(texts)?;
-        for (doc, vec) in pending.iter().zip(vectors.iter()) {
-            if vec.is_empty() {
-                continue;
+        let texts: Vec<String> = doc_chunks
+            .iter()
+            .flat_map(|chunks| chunks.iter().map(|chunk| chunk.text.clone()))
+            .collect();
+        if texts.is_empty() {
+            // Whitespace-only docs produce zero chunks; store an empty set so
+            // they stop reporting as pending.
+            for doc in &pending {
+                store::store_chunk_embeddings(
+                    doc.id,
+                    embedder.model_id(),
+                    &doc.title,
+                    &doc.content,
+                    &[],
+                )?;
+                total += 1;
             }
-            store::store_embedding(doc.id, embedder.model_id(), &doc.title, &doc.content, vec)?;
+            continue;
+        }
+        let vectors = embedder.embed(texts)?;
+        let mut cursor = 0usize;
+        let mut exhausted = false;
+        for (doc, chunks) in pending.iter().zip(doc_chunks.iter()) {
+            let end = cursor + chunks.len();
+            if end > vectors.len() {
+                exhausted = true;
+                break;
+            }
+            let chunk_vecs: Vec<(usize, Vec<f32>)> = chunks
+                .iter()
+                .zip(vectors[cursor..end].iter())
+                .map(|(chunk, vec)| (chunk.start, vec.clone()))
+                .collect();
+            cursor = end;
+            if chunk_vecs.iter().all(|(_, vec)| vec.is_empty()) && !chunks.is_empty() {
+                continue; // embedder returned nothing usable; retry next cycle
+            }
+            store::store_chunk_embeddings(
+                doc.id,
+                embedder.model_id(),
+                &doc.title,
+                &doc.content,
+                &chunk_vecs,
+            )?;
             total += 1;
         }
-        if vectors.len() < pending.len() {
+        if exhausted {
             break;
         }
     }

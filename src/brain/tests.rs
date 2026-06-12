@@ -292,6 +292,50 @@ fn cosine_orders_by_similarity() {
 }
 
 #[test]
+fn cosine_dedupes_chunks_keeping_best_per_doc() {
+    // Doc 1 has two chunks: one weak, one strong; doc 2 one medium chunk.
+    // The doc's score is its BEST chunk — one strong passage in a long day
+    // page must outrank a diffuse single-vector match.
+    let embeddings = vec![
+        (1, vec![0.1, 0.9]),
+        (1, vec![1.0, 0.0]),
+        (2, vec![0.7, 0.3]),
+    ];
+    let top = cosine_top_ids(&[1.0, 0.0], &embeddings, 10);
+    assert_eq!(top, vec![1, 2], "best chunk wins and doc ids are unique");
+}
+
+#[test]
+fn chunked_embeddings_roundtrip_and_staleness() {
+    init_test_db();
+    let long_content = "alpha section about rust gpui internals. ".repeat(40);
+    let id = store::upsert_doc(DocSource::Note, "n-chunked", "T", &long_content, 100).unwrap();
+    let chunk_vecs = vec![(0usize, vec![1.0, 0.0]), (1800usize, vec![0.0, 1.0])];
+    store::store_chunk_embeddings(id, "model-a", "T", &long_content, &chunk_vecs).unwrap();
+
+    // Both chunks load for cosine; doc no longer pending.
+    let loaded = store::load_embeddings("model-a").unwrap();
+    let mine: Vec<_> = loaded.iter().filter(|(i, _)| *i == id).collect();
+    assert_eq!(mine.len(), 2, "one row per chunk");
+    let pending = store::docs_needing_embedding("model-a", 500).unwrap();
+    assert!(
+        !pending.iter().any(|d| d.id == id),
+        "chunked doc is current"
+    );
+
+    // Content change invalidates ALL chunks via the doc-level hash.
+    store::upsert_doc(DocSource::Note, "n-chunked", "T", "changed", 200).unwrap();
+    let pending = store::docs_needing_embedding("model-a", 500).unwrap();
+    assert!(pending.iter().any(|d| d.id == id), "stale chunks re-embed");
+
+    // Re-storing replaces the old chunk set atomically.
+    store::store_chunk_embeddings(id, "model-a", "T", "changed", &[(0, vec![0.5, 0.5])]).unwrap();
+    let loaded = store::load_embeddings("model-a").unwrap();
+    let mine: Vec<_> = loaded.iter().filter(|(i, _)| *i == id).collect();
+    assert_eq!(mine.len(), 1, "stale chunk rows are deleted on re-store");
+}
+
+#[test]
 fn rrf_prefers_docs_ranked_by_both_systems() {
     let docs = vec![doc(1, "a", ""), doc(2, "b", ""), doc(3, "c", "")];
     // doc 2 is mid-ranked by both; doc 1 only lexical; doc 3 only semantic.

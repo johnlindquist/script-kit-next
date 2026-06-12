@@ -61,19 +61,26 @@ pub(crate) fn fuse_ranks(
     ranked
 }
 
+/// Rank doc ids by cosine similarity. `embeddings` carries one row per CHUNK
+/// (the same doc id can appear many times); a doc's score is its best chunk,
+/// so one strong passage in a long day page outranks a diffuse match.
 pub(crate) fn cosine_top_ids(
     query_vec: &[f32],
     embeddings: &[(i64, Vec<f32>)],
     limit: usize,
 ) -> Vec<i64> {
-    let mut scored: Vec<(i64, f32)> = embeddings
-        .iter()
-        .filter(|(_, v)| v.len() == query_vec.len() && !v.is_empty())
-        .map(|(id, v)| {
-            let dot: f32 = query_vec.iter().zip(v.iter()).map(|(a, b)| a * b).sum();
-            (*id, dot)
-        })
-        .collect();
+    let mut best: HashMap<i64, f32> = HashMap::new();
+    for (id, v) in embeddings {
+        if v.len() != query_vec.len() || v.is_empty() {
+            continue;
+        }
+        let dot: f32 = query_vec.iter().zip(v.iter()).map(|(a, b)| a * b).sum();
+        let entry = best.entry(*id).or_insert(f32::NEG_INFINITY);
+        if dot > *entry {
+            *entry = dot;
+        }
+    }
+    let mut scored: Vec<(i64, f32)> = best.into_iter().collect();
     scored.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
     scored.truncate(limit);
     scored.into_iter().map(|(id, _)| id).collect()

@@ -19,6 +19,7 @@
 //! the machine except through Agent Chat sessions the user already runs; the
 //! store is plain sqlite the user can inspect or delete.
 
+pub mod chunker;
 pub mod curator;
 pub mod day_trace;
 pub mod download;

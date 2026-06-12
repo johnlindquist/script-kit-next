@@ -2,8 +2,9 @@
 //!
 //! Documents from every source (notes, chat turns, future: clipboard
 //! promotions, browser captures) are normalized into `brain_docs` with their
-//! own FTS5 index, and embedded into `brain_embeddings` by the background
-//! indexer. `brain_signals` is the append-only attention log: what John
+//! own FTS5 index, and embedded per-chunk into `brain_chunk_embeddings` by
+//! the background indexer (qmd-style chunking lives in `super::chunker`).
+//! `brain_signals` is the append-only attention log: what John
 //! searches, asks, and selects — used to boost ranking toward what currently
 //! matters.
 //!
@@ -278,14 +279,19 @@ fn ensure_brain_schema(conn: &Connection) -> Result<()> {
             VALUES (new.id, new.title, new.content);
         END;
 
-        CREATE TABLE IF NOT EXISTS brain_embeddings (
-            doc_id INTEGER PRIMARY KEY REFERENCES brain_docs(id) ON DELETE CASCADE,
+        CREATE TABLE IF NOT EXISTS brain_chunk_embeddings (
+            doc_id INTEGER NOT NULL REFERENCES brain_docs(id) ON DELETE CASCADE,
+            chunk_index INTEGER NOT NULL,
             model_id TEXT NOT NULL,
             content_hash TEXT NOT NULL,
+            chunk_start INTEGER NOT NULL DEFAULT 0,
             dim INTEGER NOT NULL,
             vec BLOB NOT NULL,
-            embedded_at INTEGER NOT NULL DEFAULT (unixepoch())
+            embedded_at INTEGER NOT NULL DEFAULT (unixepoch()),
+            PRIMARY KEY (doc_id, chunk_index)
         );
+        CREATE INDEX IF NOT EXISTS idx_brain_chunk_embeddings_model
+            ON brain_chunk_embeddings(model_id);
 
         CREATE TABLE IF NOT EXISTS brain_signals (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -316,6 +322,7 @@ fn ensure_brain_schema(conn: &Connection) -> Result<()> {
             ON brain_inbox(resolved_at, created_at DESC);",
     )
     .context("ensure brain schema")?;
+    migrate_whole_doc_embeddings(conn)?;
     migrate_fts_tokenizer(conn)
 }
 
@@ -406,6 +413,44 @@ pub(crate) fn with_conn<T>(f: impl FnOnce(&Connection) -> Result<T>) -> Result<T
     let db = get_db()?;
     let conn = db.lock().map_err(|_| anyhow!("brain db lock poisoned"))?;
     f(&conn)
+}
+
+/// One-time migration from whole-doc embeddings (`brain_embeddings`, one
+/// vector per doc, embed text truncated at 6 KB) to chunked embeddings.
+/// Vectors for docs that fit in a single chunk are carried over unchanged —
+/// their embed text is identical under both schemes. Longer docs are dropped
+/// so the indexer re-embeds them in full as chunks (their old vectors only
+/// ever saw the truncated prefix).
+fn migrate_whole_doc_embeddings(conn: &Connection) -> Result<()> {
+    let legacy_exists: bool = conn
+        .query_row(
+            "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND name='brain_embeddings')",
+            [],
+            |row| row.get(0),
+        )
+        .context("check legacy embeddings table")?;
+    if !legacy_exists {
+        return Ok(());
+    }
+    let carried = conn
+        .execute(
+            "INSERT OR IGNORE INTO brain_chunk_embeddings
+                (doc_id, chunk_index, model_id, content_hash, chunk_start, dim, vec, embedded_at)
+             SELECT e.doc_id, 0, e.model_id, e.content_hash, 0, e.dim, e.vec, e.embedded_at
+             FROM brain_embeddings e
+             JOIN brain_docs d ON d.id = e.doc_id
+             WHERE length(d.title) + 1 + length(d.content) <= ?1",
+            params![super::chunker::CHUNK_TARGET_BYTES as i64],
+        )
+        .context("carry single-chunk embeddings forward")?;
+    conn.execute("DROP TABLE brain_embeddings", [])
+        .context("drop legacy embeddings table")?;
+    tracing::info!(
+        target: "script_kit::brain",
+        carried,
+        "migrated whole-doc embeddings to chunked schema"
+    );
+    Ok(())
 }
 
 pub(crate) fn content_hash(title: &str, content: &str) -> String {
@@ -557,17 +602,21 @@ pub fn remove_doc(source: DocSource, source_id: &str) -> Result<()> {
 }
 
 /// Docs whose embedding is missing or stale for the given model. Ordered by
-/// recency so fresh material becomes searchable first.
+/// recency so fresh material becomes searchable first. A doc is current only
+/// when chunk rows exist for this model AND they were produced from the
+/// doc's current content (chunk rows all carry the doc-level hash).
 pub fn docs_needing_embedding(model_id: &str, limit: usize) -> Result<Vec<BrainDoc>> {
     let db = get_db()?;
     let conn = db.lock().map_err(|_| anyhow!("brain db lock poisoned"))?;
     let mut stmt = conn.prepare(
         "SELECT d.id, d.source, d.source_id, d.title, d.content, d.updated_at
          FROM brain_docs d
-         LEFT JOIN brain_embeddings e ON e.doc_id = d.id
-         WHERE e.doc_id IS NULL
-            OR e.model_id != ?1
-            OR e.content_hash != d.content_hash
+         WHERE NOT EXISTS (
+            SELECT 1 FROM brain_chunk_embeddings e
+            WHERE e.doc_id = d.id
+              AND e.model_id = ?1
+              AND e.content_hash = d.content_hash
+         )
          ORDER BY d.updated_at DESC
          LIMIT ?2",
     )?;
@@ -598,6 +647,8 @@ pub fn docs_needing_embedding(model_id: &str, limit: usize) -> Result<Vec<BrainD
         .collect())
 }
 
+/// Single-vector convenience wrapper over [`store_chunk_embeddings`] — the
+/// whole doc as chunk 0. Kept for short docs and existing call sites/tests.
 pub fn store_embedding(
     doc_id: i64,
     model_id: &str,
@@ -605,31 +656,63 @@ pub fn store_embedding(
     content: &str,
     vec: &[f32],
 ) -> Result<()> {
+    store_chunk_embeddings(doc_id, model_id, title, content, &[(0, vec.to_vec())])
+}
+
+/// Replace all chunk vectors for `doc_id` atomically. Every chunk row carries
+/// the doc-level content hash, so staleness stays a single comparison in
+/// [`docs_needing_embedding`]. `chunks` is (chunk_start_byte, vector).
+pub fn store_chunk_embeddings(
+    doc_id: i64,
+    model_id: &str,
+    title: &str,
+    content: &str,
+    chunks: &[(usize, Vec<f32>)],
+) -> Result<()> {
     let db = get_db()?;
-    let conn = db.lock().map_err(|_| anyhow!("brain db lock poisoned"))?;
+    let mut conn_guard = db.lock().map_err(|_| anyhow!("brain db lock poisoned"))?;
     let hash = content_hash(title, content);
-    let bytes: Vec<u8> = vec.iter().flat_map(|f| f.to_le_bytes()).collect();
-    conn.execute(
-        "INSERT INTO brain_embeddings (doc_id, model_id, content_hash, dim, vec)
-         VALUES (?1, ?2, ?3, ?4, ?5)
-         ON CONFLICT(doc_id) DO UPDATE SET
-            model_id = excluded.model_id,
-            content_hash = excluded.content_hash,
-            dim = excluded.dim,
-            vec = excluded.vec,
-            embedded_at = unixepoch()",
-        params![doc_id, model_id, hash, vec.len() as i64, bytes],
+    let tx = conn_guard.transaction().context("chunk embed tx")?;
+    tx.execute(
+        "DELETE FROM brain_chunk_embeddings WHERE doc_id = ?1",
+        params![doc_id],
     )
-    .context("store brain embedding")?;
+    .context("clear stale chunk embeddings")?;
+    for (index, (chunk_start, vec)) in chunks.iter().enumerate() {
+        if vec.is_empty() {
+            continue;
+        }
+        let bytes: Vec<u8> = vec.iter().flat_map(|f| f.to_le_bytes()).collect();
+        tx.execute(
+            "INSERT INTO brain_chunk_embeddings
+                (doc_id, chunk_index, model_id, content_hash, chunk_start, dim, vec)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            params![
+                doc_id,
+                index as i64,
+                model_id,
+                hash,
+                *chunk_start as i64,
+                vec.len() as i64,
+                bytes
+            ],
+        )
+        .context("store brain chunk embedding")?;
+    }
+    tx.commit().context("commit chunk embeddings")?;
     Ok(())
 }
 
-/// All embeddings for the given model: (doc_id, vector). Loaded into memory
-/// for brute-force cosine — see module docs for why this is fine.
+/// All chunk embeddings for the given model: (doc_id, vector). A doc appears
+/// once per chunk; cosine ranking dedupes to best-chunk-per-doc. Loaded into
+/// memory for brute-force cosine — see module docs for why this is fine.
 pub fn load_embeddings(model_id: &str) -> Result<Vec<(i64, Vec<f32>)>> {
     let db = get_db()?;
     let conn = db.lock().map_err(|_| anyhow!("brain db lock poisoned"))?;
-    let mut stmt = conn.prepare("SELECT doc_id, vec FROM brain_embeddings WHERE model_id = ?1")?;
+    let mut stmt = conn.prepare(
+        "SELECT doc_id, vec FROM brain_chunk_embeddings WHERE model_id = ?1
+         ORDER BY doc_id, chunk_index",
+    )?;
     let rows = stmt
         .query_map(params![model_id], |row| {
             Ok((row.get::<_, i64>(0)?, row.get::<_, Vec<u8>>(1)?))
@@ -988,8 +1071,86 @@ pub fn doc_stats() -> Result<(i64, i64, i64)> {
     let db = get_db()?;
     let conn = db.lock().map_err(|_| anyhow!("brain db lock poisoned"))?;
     let docs: i64 = conn.query_row("SELECT COUNT(*) FROM brain_docs", [], |r| r.get(0))?;
-    let embedded: i64 =
-        conn.query_row("SELECT COUNT(*) FROM brain_embeddings", [], |r| r.get(0))?;
+    let embedded: i64 = conn.query_row(
+        "SELECT COUNT(DISTINCT doc_id) FROM brain_chunk_embeddings",
+        [],
+        |r| r.get(0),
+    )?;
     let signals: i64 = conn.query_row("SELECT COUNT(*) FROM brain_signals", [], |r| r.get(0))?;
     Ok((docs, embedded, signals))
+}
+
+#[cfg(test)]
+mod store_migration_tests {
+    use super::*;
+
+    /// Upgrading from the whole-doc embedding era: short docs carry their
+    /// vector forward as chunk 0 (identical embed text under both schemes);
+    /// long docs are dropped so the indexer re-embeds them chunked — their
+    /// old vector only ever saw the truncated 6 KB prefix.
+    #[test]
+    fn whole_doc_embeddings_migrate_to_chunks() {
+        let conn = Connection::open_in_memory().expect("open in-memory db");
+        conn.execute_batch(
+            "CREATE TABLE brain_docs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                source TEXT NOT NULL,
+                source_id TEXT NOT NULL,
+                title TEXT NOT NULL DEFAULT '',
+                content TEXT NOT NULL DEFAULT '',
+                content_hash TEXT NOT NULL DEFAULT '',
+                created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+                updated_at INTEGER NOT NULL DEFAULT (unixepoch()),
+                UNIQUE(source, source_id)
+            );
+            CREATE TABLE brain_embeddings (
+                doc_id INTEGER PRIMARY KEY REFERENCES brain_docs(id) ON DELETE CASCADE,
+                model_id TEXT NOT NULL,
+                content_hash TEXT NOT NULL,
+                dim INTEGER NOT NULL,
+                vec BLOB NOT NULL,
+                embedded_at INTEGER NOT NULL DEFAULT (unixepoch())
+            );",
+        )
+        .expect("create legacy schema");
+        let long_content = "x".repeat(super::super::chunker::CHUNK_TARGET_BYTES + 100);
+        conn.execute(
+            "INSERT INTO brain_docs (id, source, source_id, title, content, content_hash)
+             VALUES (1, 'note', 'short', 'T', 'small body', 'h1'),
+                    (2, 'note', 'long', 'T', ?1, 'h2')",
+            params![long_content],
+        )
+        .expect("seed docs");
+        conn.execute(
+            "INSERT INTO brain_embeddings (doc_id, model_id, content_hash, dim, vec)
+             VALUES (1, 'm', 'h1', 1, x'0000803f'), (2, 'm', 'h2', 1, x'0000803f')",
+            [],
+        )
+        .expect("seed legacy embeddings");
+
+        ensure_brain_schema(&conn).expect("schema upgrade");
+
+        let carried: i64 = conn
+            .query_row("SELECT COUNT(*) FROM brain_chunk_embeddings", [], |r| {
+                r.get(0)
+            })
+            .unwrap();
+        assert_eq!(carried, 1, "only the single-chunk doc carries forward");
+        let carried_doc: i64 = conn
+            .query_row("SELECT doc_id FROM brain_chunk_embeddings", [], |r| {
+                r.get(0)
+            })
+            .unwrap();
+        assert_eq!(carried_doc, 1);
+        let legacy_gone: bool = conn
+            .query_row(
+                "SELECT NOT EXISTS(SELECT 1 FROM sqlite_master WHERE name='brain_embeddings')",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert!(legacy_gone, "legacy table dropped");
+        // Idempotent: running again must not error.
+        ensure_brain_schema(&conn).expect("second upgrade is a no-op");
+    }
 }
