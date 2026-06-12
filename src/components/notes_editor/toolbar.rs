@@ -7,8 +7,8 @@ use super::NotesEditor;
 /// Toolbar action routed through the shared notes editor formatting entry points.
 #[derive(Clone, Copy)]
 pub struct NotesEditorToolbarAction {
-    pub spec: UiActionSpec,
-    pub run: fn(&mut NotesEditor, &mut Window, &mut Context<NotesEditor>),
+    pub(crate) spec: UiActionSpec,
+    pub(crate) run: fn(&mut NotesEditor, &mut Window, &mut Context<NotesEditor>),
 }
 
 fn apply_bold(editor: &mut NotesEditor, window: &mut Window, cx: &mut Context<NotesEditor>) {

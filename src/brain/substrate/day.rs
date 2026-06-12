@@ -1,7 +1,7 @@
 //! Day-page append API.
 
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use anyhow::{Context as _, Result};
 use chrono::{DateTime, NaiveDate, Utc};
@@ -77,10 +77,6 @@ pub fn local_day_and_time(now: DateTime<Utc>, tz: Tz) -> (chrono::NaiveDate, Str
     let date = local.date_naive();
     let time = local.format("%H:%M").to_string();
     (date, time)
-}
-
-pub fn day_page_path(paths: &BrainPaths, date: chrono::NaiveDate) -> PathBuf {
-    paths.day_page(date)
 }
 
 /// Remove day-page lines (and linked fragments) written by clipboard sediment.
@@ -211,7 +207,7 @@ fn filter_day_page_lines(path: &PathBuf, keep: impl Fn(&str) -> bool) -> Result<
     write_filtered_lines(path, kept)
 }
 
-fn write_filtered_lines(path: &PathBuf, lines: Vec<&str>) -> Result<()> {
+fn write_filtered_lines(path: &Path, lines: Vec<&str>) -> Result<()> {
     let mut contents = lines.join("\n");
     if !contents.is_empty() {
         contents.push('\n');

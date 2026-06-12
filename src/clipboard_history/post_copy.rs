@@ -9,9 +9,9 @@ use std::time::{Duration, Instant};
 
 use anyhow::Result;
 use gpui::{
-    div, prelude::*, px, App, AppContext, Bounds, Context, DisplayId, Entity, FocusHandle,
-    Focusable, InteractiveElement, IntoElement, KeyDownEvent, ParentElement, Pixels, Render,
-    SharedString, StatefulInteractiveElement, Styled, Window, WindowHandle, WindowOptions,
+    div, px, App, AppContext, Bounds, Context, DisplayId, Entity, FocusHandle, Focusable,
+    InteractiveElement, IntoElement, KeyDownEvent, ParentElement, Pixels, Render, SharedString,
+    StatefulInteractiveElement, Styled, Window, WindowHandle,
 };
 use gpui_component::input::{Input, InputEvent, InputState};
 use parking_lot::Mutex as ParkingMutex;
@@ -182,7 +182,7 @@ fn command_modifier_is_down() -> bool {
         // SAFETY: NSEvent modifierFlags is a class property safe on any thread.
         unsafe {
             let flags: u64 = msg_send![class!(NSEvent), modifierFlags];
-            return flags & NS_COMMAND_KEY_MASK != 0;
+            flags & NS_COMMAND_KEY_MASK != 0
         }
     }
 

@@ -56,7 +56,7 @@ impl BrainSubstrate {
     }
 
     pub fn default_kit() -> Self {
-        Self::new(BrainPaths::default_kit().base().to_path_buf())
+        Self::new(BrainPaths::default_kit().base())
     }
 
     pub fn paths(&self) -> &BrainPaths {

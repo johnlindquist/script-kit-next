@@ -496,8 +496,8 @@ fn parse_unchecked_task_line(line: &str) -> Option<ParsedDayTaskLine> {
             }
         } else if token.len() == 2 {
             let lower = token.to_ascii_lowercase();
-            if lower.starts_with('p') {
-                if let Ok(value) = lower[1..].parse::<u8>() {
+            if let Some(digits) = lower.strip_prefix('p') {
+                if let Ok(value) = digits.parse::<u8>() {
                     if (1..=4).contains(&value) {
                         priority = Some(value);
                         continue;

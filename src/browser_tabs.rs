@@ -1135,9 +1135,11 @@ tell application "{app_name}"
 /// user's Enter press. JXA is used for the same reason as `build_list_tabs_jxa`:
 /// it reliably enumerates windows on other Spaces.
 fn build_activate_tab_by_url_jxa(browser: &SupportedBrowser, url: &str) -> String {
+    // Serializing a &str is infallible; fall back to an empty JSON string so the
+    // generated JXA stays syntactically valid even in the impossible case.
     let app_name_json =
-        serde_json::to_string(browser.app_name).expect("app name serializes as a JSON string");
-    let target_json = serde_json::to_string(url).expect("URL serializes as a JSON string");
+        serde_json::to_string(browser.app_name).unwrap_or_else(|_| "\"\"".to_string());
+    let target_json = serde_json::to_string(url).unwrap_or_else(|_| "\"\"".to_string());
     let select_tab = match browser.family {
         BrowserFamily::Safari => "win.currentTab = win.tabs[t];",
         BrowserFamily::Chromium => "win.activeTabIndex = t + 1;",

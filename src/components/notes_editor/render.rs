@@ -7,7 +7,6 @@ use gpui_component::{
 
 use crate::notes::markdown;
 
-use super::types::NotesEditorLayout;
 use super::NotesEditor;
 
 impl NotesEditor {
@@ -50,9 +49,5 @@ impl NotesEditor {
             .text_size(cx.theme().mono_font_size);
 
         div().h_full().child(editor).into_any_element()
-    }
-
-    pub(crate) fn sync_layout_from_metrics(&mut self, layout: NotesEditorLayout) {
-        self.layout = layout;
     }
 }

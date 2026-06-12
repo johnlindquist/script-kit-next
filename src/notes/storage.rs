@@ -356,7 +356,7 @@ fn forget_note_hash(note_id: NoteId) {
 fn deleted_at_from_trash_path(path: &Path) -> DateTime<Utc> {
     fs::metadata(path)
         .and_then(|meta| meta.modified())
-        .map(|mtime| DateTime::<Utc>::from(mtime))
+        .map(DateTime::<Utc>::from)
         .unwrap_or_else(|_| Utc::now())
 }
 

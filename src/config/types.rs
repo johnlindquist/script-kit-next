@@ -48,7 +48,7 @@ impl Default for BuiltInConfig {
 }
 
 /// Hard clipboard secret-rejection extensions (see ADR 0004).
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(default, rename_all = "camelCase")]
 pub struct ClipboardHistorySecretRejectionConfig {
     /// Additional bundle IDs (prefix match) whose clipboard copies are never stored.
@@ -57,15 +57,6 @@ pub struct ClipboardHistorySecretRejectionConfig {
     /// Additional regex patterns for secret-shaped clipboard text.
     #[serde(default)]
     pub extra_secret_patterns: Vec<String>,
-}
-
-impl Default for ClipboardHistorySecretRejectionConfig {
-    fn default() -> Self {
-        Self {
-            extra_blocked_source_apps: Vec::new(),
-            extra_secret_patterns: Vec::new(),
-        }
-    }
 }
 
 /// Post-copy ⌘-tap quick menu settings (T12 / ADR 0004).

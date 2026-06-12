@@ -52,6 +52,7 @@ impl TapWindowMachine {
         }
     }
 
+    #[cfg(test)]
     pub fn is_pending(&self) -> bool {
         matches!(self.phase, Phase::Pending { .. })
     }
