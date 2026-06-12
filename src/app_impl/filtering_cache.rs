@@ -216,6 +216,7 @@ impl ScriptListApp {
         windows: Vec<crate::window_control::WindowInfo>,
         cx: &mut Context<Self>,
     ) {
+        let selection_before = self.main_menu_selection_snapshot();
         self.cached_windows = windows;
         self.cached_root_windows = Self::build_root_window_entries(
             &self.cached_windows,
@@ -228,7 +229,11 @@ impl ScriptListApp {
             crate::window_control::RootWindowsProviderStatus::Ready { count };
         self.root_windows_last_completed_at = Some(std::time::Instant::now());
         self.invalidate_grouped_cache();
-        self.reconcile_script_list_after_filter_change("root_windows_refresh_complete", cx);
+        self.reconcile_script_list_after_results_refresh(
+            "root_windows_refresh_complete",
+            selection_before,
+            cx,
+        );
         cx.notify();
     }
 
@@ -241,6 +246,7 @@ impl ScriptListApp {
             return;
         }
 
+        let selection_before = self.main_menu_selection_snapshot();
         self.cached_root_windows = Self::build_root_window_entries(
             &self.cached_windows,
             &self.apps,
@@ -248,8 +254,7 @@ impl ScriptListApp {
         );
         self.root_windows_refresh_generation = self.root_windows_refresh_generation.wrapping_add(1);
         self.invalidate_grouped_cache();
-        self.reconcile_script_list_after_filter_change(reason, cx);
-        self.rebuild_main_window_preflight_if_needed();
+        self.reconcile_script_list_after_results_refresh(reason, selection_before, cx);
     }
 
     pub(crate) fn maybe_start_root_windows_refresh_for_query(
@@ -302,6 +307,7 @@ impl ScriptListApp {
                 match result {
                     Ok(windows) => app.install_root_windows(windows, cx),
                     Err(error) => {
+                        let selection_before = app.main_menu_selection_snapshot();
                         let message = error.to_string();
                         let lower = message.to_ascii_lowercase();
                         app.root_windows_provider_status =
@@ -319,8 +325,9 @@ impl ScriptListApp {
                         app.root_windows_refresh_generation =
                             app.root_windows_refresh_generation.wrapping_add(1);
                         app.invalidate_grouped_cache();
-                        app.reconcile_script_list_after_filter_change(
+                        app.reconcile_script_list_after_results_refresh(
                             "root_windows_refresh_error",
+                            selection_before,
                             cx,
                         );
                         cx.notify();
@@ -446,14 +453,17 @@ impl ScriptListApp {
                 if !changed {
                     return;
                 }
+                let selection_before = app.main_menu_selection_snapshot();
                 app.invalidate_root_passive_and_grouped_cache();
                 if app.current_query_can_show_root_browser_tabs(&app.computed_filter_text) {
-                    app.reconcile_script_list_after_filter_change(
+                    app.reconcile_script_list_after_results_refresh(
                         "browser_tabs_refresh_complete",
+                        selection_before,
                         cx,
                     );
+                } else {
+                    app.rebuild_main_window_preflight_if_needed();
                 }
-                app.rebuild_main_window_preflight_if_needed();
                 cx.notify();
             });
         })
@@ -522,14 +532,17 @@ impl ScriptListApp {
                 if !changed {
                     return;
                 }
+                let selection_before = app.main_menu_selection_snapshot();
                 app.invalidate_root_passive_and_grouped_cache();
                 if app.current_query_includes_root_source(&app.computed_filter_text, source) {
-                    app.reconcile_script_list_after_filter_change(
+                    app.reconcile_script_list_after_results_refresh(
                         "browser_history_refresh_complete",
+                        selection_before,
                         cx,
                     );
+                } else {
+                    app.rebuild_main_window_preflight_if_needed();
                 }
-                app.rebuild_main_window_preflight_if_needed();
                 cx.notify();
             });
         })

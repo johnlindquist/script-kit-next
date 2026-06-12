@@ -69,6 +69,53 @@ impl ScriptListApp {
         self.refresh_ghost_with_input(cx);
     }
 
+    /// Reconcile ScriptList after async result providers refresh the current query.
+    ///
+    /// Unlike a real filter change, provider completions should keep the user's
+    /// current row selected when that row still exists in the refreshed list.
+    pub(crate) fn reconcile_script_list_after_results_refresh(
+        &mut self,
+        reason: &'static str,
+        selection_before: MainMenuSelectionSnapshot,
+        cx: &mut Context<Self>,
+    ) {
+        if !matches!(self.current_view, AppView::ScriptList) {
+            return;
+        }
+
+        self.sync_list_state_for_filter_replacement();
+        self.validate_selection_bounds(cx);
+
+        let restored = self.restore_main_menu_selection_from_snapshot(selection_before);
+        if restored {
+            tracing::debug!(
+                target: "script_kit::selection",
+                event = "main_menu_async_refresh_selection_reconciled",
+                reason,
+                selected_index = self.selected_index,
+            );
+        } else if self.selected_index == 0 {
+            tracing::warn!(
+                target: "script_kit::selection",
+                event = "main_menu_async_refresh_selected_first_without_restore",
+                reason,
+                selected_index = self.selected_index,
+            );
+        } else {
+            tracing::debug!(
+                target: "script_kit::selection",
+                event = "main_menu_async_refresh_selection_reconciled",
+                reason,
+                selected_index = self.selected_index,
+                restored = false,
+            );
+        }
+
+        self.scroll_to_selected_if_needed(reason);
+        self.rebuild_main_window_preflight_if_needed();
+        self.refresh_ghost_with_input(cx);
+    }
+
     pub(crate) fn queue_filter_compute(&mut self, value: String, cx: &mut Context<Self>) {
         if self.computed_filter_text == value {
             tracing::debug!(

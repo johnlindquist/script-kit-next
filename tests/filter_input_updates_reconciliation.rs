@@ -23,6 +23,33 @@ fn slice_from(source: &str, start_marker: &str, max_len: usize) -> String {
     source[start..end].to_string()
 }
 
+/// Extract the full Rust function body that starts at `start_marker`.
+fn function_body(source: &str, start_marker: &str) -> String {
+    let start = source
+        .find(start_marker)
+        .unwrap_or_else(|| panic!("marker not found: '{start_marker}'"));
+    let body_start = source[start..]
+        .find('{')
+        .map(|offset| start + offset)
+        .unwrap_or_else(|| panic!("body start not found for: '{start_marker}'"));
+
+    let mut depth = 0usize;
+    for (offset, ch) in source[body_start..].char_indices() {
+        match ch {
+            '{' => depth += 1,
+            '}' => {
+                depth = depth.saturating_sub(1);
+                if depth == 0 {
+                    return source[start..=body_start + offset].to_string();
+                }
+            }
+            _ => {}
+        }
+    }
+
+    panic!("body end not found for: '{start_marker}'");
+}
+
 // ---------------------------------------------------------------------------
 // 1) Shared reconciliation helper exists with required call sites
 // ---------------------------------------------------------------------------
@@ -71,10 +98,10 @@ fn reconcile_helper_calls_rebuild_preflight() {
 #[test]
 fn queue_filter_compute_uses_shared_helper() {
     let source = read_source();
-    let section = slice_from(&source, "pub(crate) fn queue_filter_compute", 2600);
+    let section = function_body(&source, "pub(crate) fn queue_filter_compute");
     assert!(
         section
-            .contains("app.reconcile_script_list_after_filter_change(\"filter_coalesced\", cx);"),
+            .contains("self.reconcile_script_list_after_filter_change(\"filter_immediate\", cx);"),
         "queue_filter_compute must delegate to reconcile_script_list_after_filter_change"
     );
 }
@@ -82,7 +109,7 @@ fn queue_filter_compute_uses_shared_helper() {
 #[test]
 fn queue_filter_compute_does_not_bypass_scroll_helper() {
     let source = read_source();
-    let section = slice_from(&source, "pub(crate) fn queue_filter_compute", 2600);
+    let section = function_body(&source, "pub(crate) fn queue_filter_compute");
     assert!(
         !section.contains("scroll_to_reveal_item(app.selected_index)"),
         "queue_filter_compute must not bypass scroll_to_selected_if_needed with a direct scroll_to_reveal_item call"
@@ -96,7 +123,7 @@ fn queue_filter_compute_does_not_bypass_scroll_helper() {
 #[test]
 fn set_filter_text_immediate_uses_shared_helper() {
     let source = read_source();
-    let section = slice_from(&source, "pub(crate) fn set_filter_text_immediate", 2600);
+    let section = function_body(&source, "pub(crate) fn set_filter_text_immediate");
     assert!(
         section.contains(
             "self.reconcile_script_list_after_filter_change(\"set_filter_text_immediate\", cx);"
