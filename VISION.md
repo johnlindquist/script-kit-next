@@ -177,8 +177,8 @@ new chords.
 - Tap (closed): the launcher, visible on key-down, instant, unchanged.
 - Tap (open): toggle launcher <-> Day Page. In-flight query text carries over
   as the start of a capture. Esc is the only dismiss.
-- Hold (~250ms): the window deepens into the Day Page and dictation goes hot
-  (push-to-talk; release commits the transcript to today's page).
+- Hold (~250ms): the window deepens into the Day Page. (Dictation stays with
+  the dedicated dictation shortcut and window.)
 - Double-tap: Agent Chat, from closed or from either surface.
 
 The disambiguation rule is "always open, then deepen": the launcher appears on
@@ -189,7 +189,7 @@ never swapped.
 ### The Day Page
 
 The Day Page is one markdown file per day on disk. Humans think in time blocks
-("what happened yesterday"), so time is the structure: hold-to-dictate appends
+("what happened yesterday"), so time is the structure: captures append
 to today, grabs and promoted clipboard entries append with provenance, and
 Agent Chat threads leave one-line traces. The day page must stay human-readable
 in any editor: long captures live as separate markdown fragment files with

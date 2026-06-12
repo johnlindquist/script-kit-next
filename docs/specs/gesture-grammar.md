@@ -15,7 +15,7 @@ window. Surfaces morph in place inside the main window. No new chords.
 | Gesture | Window closed | Window open (launcher or Day Page) |
 | --- | --- | --- |
 | Tap | Launcher, visible on key-down | Toggle launcher ↔ Day Page |
-| Hold (≥ hold threshold) | Day Page + dictation hot (push-to-talk) | — (window already open; see Open Questions) |
+| Hold (≥ hold threshold) | Day Page | — (window already open; see Open Questions) |
 | Double-tap | Agent Chat | Agent Chat |
 | Cmd+Enter | — | Agent Chat (established convention, unchanged) |
 | Esc | — | Dismiss (the only dismiss) |
@@ -30,9 +30,9 @@ CLOSED
         │     ├─ key-down < DOUBLE_MS ──► AGENT_CHAT (morph in place)
         │     └─ DOUBLE_MS elapses ─────► LAUNCHER (plain tap, steady state)
         │
-        └─ key still down at HOLD_MS ──► DAY_PAGE + DICTATION_ACTIVE
-              └─ key-up ──► dictation stops, transcript commits to today's
-                            page, caret placed after committed text
+        └─ key still down at HOLD_MS ──► DAY_PAGE
+              └─ key-up ──► no-op (Day Page stays; dictation is owned by the
+                            dedicated dictation shortcut/window)
 
 LAUNCHER (open, steady)
   ├─ tap ──► DAY_PAGE  (in-flight query text carries over as capture start)
@@ -49,7 +49,7 @@ DAY_PAGE (open, steady)
 Confirmed timings (`src/hotkeys/gesture.rs`, module-level constants):
 
 - `HOLD_MS` = 250ms — long enough that fast taps never trip it, short enough
-  that push-to-talk feels immediate.
+  that hold-to-open-Day-Page feels immediate.
 - `DOUBLE_MS` = 300ms — second key-down window after a tap's key-up.
 
 ## Hard Requirements
@@ -70,12 +70,11 @@ Confirmed timings (`src/hotkeys/gesture.rs`, module-level constants):
 4. **Query carry-over.** Toggling launcher → Day Page with text in the search
    input moves that text into the Day Page as the start of a capture. Toggling
    back does not resurrect it in the launcher (it now belongs to the page).
-5. **Push-to-talk dictation.** On hold, dictation starts at the hold threshold
-   while the key is down; key-up stops capture and commits the transcript to
-   today's page with a timestamp. Dictation readiness reuses the existing
-   dictation pipeline and its setup NUX; if the model/mic is not ready, the
-   hold gesture still opens the Day Page with a visible dictation-unavailable
-   hint rather than failing silently.
+5. **No dictation on hold.** Hold opens the Day Page and nothing else.
+   Dictation is invoked exclusively through the dedicated dictation
+   shortcut/window; the Day Page does not start, render, or manage dictation.
+   (An earlier push-to-talk-on-hold design was implemented and deliberately
+   removed.)
 6. **Tap-to-dismiss is retired.** Tap-while-open toggles surfaces; Esc is the
    only dismiss. This is a deliberate habit break and should be called out in
    release notes / first-run hints.
@@ -96,7 +95,7 @@ editor entity in different shells.
 ## Day Page Content Rendering
 
 The Day Page shows everything captured today — deliberate captures, auto-kept
-URLs, promoted clipboard entries, dictation commits, Agent Chat traces — in
+URLs, promoted clipboard entries, Agent Chat traces — in
 time order. Long content renders truncated as excerpt cards (the underlying
 file structure already enforces this: long captures are fragment files
 referenced by excerpt + link, per
@@ -106,8 +105,7 @@ referenced by excerpt + link, per
 
 - **Hold while the window is already open:** still unanswered. Current behavior
   (T8): `HoldStart` while open is not wired — hold only opens the Day Page from
-  closed; tap-while-open toggles surfaces. Push-to-talk everywhere remains the
-  lean direction but is unvalidated.
+  closed; tap-while-open toggles surfaces.
 - ~~Exact `HOLD_MS`/`DOUBLE_MS` values~~ — **answered:** `HOLD_MS = 250`,
   `DOUBLE_MS = 300` in `src/hotkeys/gesture.rs`, overridable for tests.
 - ~~Whether double-tap morphs to the in-window Chat Prompt or focuses the

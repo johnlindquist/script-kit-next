@@ -1,10 +1,15 @@
 /**
  * T8 gesture grammar runtime proof:
- * - key-down → main window visible (ShowImmediate)
- * - tap (down+up + double window) → Day Page surface
- * - launcher query carry-over into day-page editor
+ * - key-down → main window visible (ShowImmediate), opening tap stays on launcher
+ * - tap-while-open (down+up + double window) → Day Page surface
+ * - launcher query carry-over into day-page editor; cleared and not restored
+ * - tap-while-open on Day Page → back to launcher
  * - double-tap → Agent Chat view
  * - stable main window id across transitions
+ *
+ * Timing intent: the opening press is a TAP — key-up is sent ~30ms after
+ * key-down, well inside HOLD_MS (250ms). The 400ms settles afterwards let the
+ * classifier's deferred Tap resolve (DOUBLE_MS = 300ms) before the next gesture.
  *
  * Usage:
  *   PROBE_BINARY=target-agent/artifacts/t8-gesture/script-kit-gpui \
@@ -52,19 +57,22 @@ async function listMainWindow(): Promise<Json | null> {
 
 async function getEditorText(driver: Driver): Promise<string | null> {
   const elements = (await driver.request(
-    { type: "getElements", target: { id: "main" } },
+    { type: "getElements", target: { type: "main" } },
     { timeoutMs: 5000 },
   )) as Json;
   const list = (elements.elements ?? []) as Json[];
-  const editor = list.find((el) => el.id === "day-page-editor");
+  const editor = list.find(
+    (el) => el.semanticId === "input:day-page-editor" || el.id === "day-page-editor",
+  );
   return (editor?.value as string | undefined) ?? null;
 }
 
+/** A tap: down, quick up (well inside HOLD_MS), then wait out DOUBLE_MS. */
 async function tapHotkey(driver: Driver, label: string) {
   await simulateMainHotkeyGesture(driver, "down", `${label}-down`);
   await Bun.sleep(30);
   await simulateMainHotkeyGesture(driver, "up", `${label}-up`);
-  await Bun.sleep(350);
+  await Bun.sleep(400);
 }
 
 async function doubleTapHotkey(driver: Driver, label: string) {
@@ -92,29 +100,49 @@ try {
   const before = await listMainWindow();
   check("starts_hidden", before?.visible !== true, { before });
 
+  // Opening tap: key-down shows the window immediately; release quickly so the
+  // press is a tap (not a hold). The deferred Tap for this opening press must
+  // resolve to the launcher steady state, NOT toggle to Day Page.
   await simulateMainHotkeyGesture(driver, "down", "show-down");
+  await Bun.sleep(30);
+  await simulateMainHotkeyGesture(driver, "up", "show-up");
   await driver.waitForState({ windowVisible: true }, { timeoutMs: 8000 });
-  await Bun.sleep(400);
 
   const afterDown = await listMainWindow();
   const windowIdAfterDown = afterDown?.id;
   check("keydown_shows_main", afterDown?.visible === true, { afterDown });
 
+  // Let the opening tap's double window expire, then confirm we're still on
+  // the launcher (opening tap must not toggle).
+  await Bun.sleep(400);
+  const stateAfterShow = (await driver.getState({ timeoutMs: 5000 })) as Json;
+  check("opening_tap_stays_on_launcher", stateAfterShow.promptType === "none", {
+    promptType: stateAfterShow.promptType,
+  });
+
   await driver.setFilterAndWait("carry me to the page");
   await tapHotkey(driver, "toggle-to-day-page");
 
   const stateAfterTap = (await driver.getState({ timeoutMs: 5000 })) as Json;
-  check("tap_opens_day_page_surface", stateAfterTap.semanticSurface === "dayPage", {
-    semanticSurface: stateAfterTap.semanticSurface,
+  check("tap_opens_day_page_surface", stateAfterTap.promptType === "dayPage", {
+    promptType: stateAfterTap.promptType,
   });
 
   const editorAfterCarry = await getEditorText(driver);
-  check("carry_over_in_editor", editorAfterCarry?.includes("carry me to the page") === true, {
-    editorAfterCarry,
-    inputValue: stateAfterTap.inputValue,
+  check(
+    "carry_over_in_editor",
+    editorAfterCarry?.includes("carry me to the page") === true,
+    { editorAfterCarry },
+  );
+
+  // Tap back to the launcher: query must NOT be restored.
+  await tapHotkey(driver, "toggle-back-to-launcher");
+  const stateBack = (await driver.getState({ timeoutMs: 5000 })) as Json;
+  check("tap_back_returns_to_launcher", stateBack.promptType === "none", {
+    promptType: stateBack.promptType,
   });
-  check("launcher_query_cleared", (stateAfterTap.inputValue ?? "") === "", {
-    inputValue: stateAfterTap.inputValue,
+  check("launcher_query_cleared", (stateBack.inputValue ?? "") === "", {
+    inputValue: stateBack.inputValue,
   });
 
   await doubleTapHotkey(driver, "agent-chat");
@@ -122,11 +150,11 @@ try {
   const stateAgent = (await driver.getState({ timeoutMs: 5000 })) as Json;
   check(
     "double_tap_agent_chat",
-    String(stateAgent.semanticSurface ?? "")
+    String(stateAgent.promptType ?? "")
       .toLowerCase()
       .includes("agentchat"),
     {
-      semanticSurface: stateAgent.semanticSurface,
+      promptType: stateAgent.promptType,
     },
   );
 
@@ -137,7 +165,9 @@ try {
     { windowIdAfterDown, afterAgentId: afterAgent?.id },
   );
 
-  console.log(JSON.stringify({ ok: failures.length === 0, failures, receipts }, null, 2));
+  console.log(
+    JSON.stringify({ ok: failures.length === 0, failures, receipts }, null, 2),
+  );
   await driver.close();
   process.exit(failures.length === 0 ? 0 : 1);
 } catch (error) {
