@@ -230,6 +230,29 @@ impl ScriptListApp {
         let token = self.unique_spine_file_mention_token(path);
         self.register_spine_file_mention_alias(token.clone(), path.clone());
 
+        // Today → main-menu round trip: route the resolved token back into
+        // the Day Page line instead of the launcher filter. Deferred via the
+        // main window handle because this path has no `window`.
+        if self.day_page_context_return.is_some() {
+            let app_entity = cx.entity();
+            let token_for_day_page = token.clone();
+            cx.defer(move |cx| {
+                let Some(handle) = crate::get_main_window_handle() else {
+                    return;
+                };
+                let _ = handle.update(cx, |_, window, cx| {
+                    app_entity.update(cx, |app, cx| {
+                        app.try_complete_day_page_context_round_trip(
+                            &token_for_day_page,
+                            window,
+                            cx,
+                        );
+                    });
+                });
+            });
+            return;
+        }
+
         let current = self.filter_text.clone();
         let new_text = if segment_byte_range.end <= current.len()
             && current.is_char_boundary(segment_byte_range.start)

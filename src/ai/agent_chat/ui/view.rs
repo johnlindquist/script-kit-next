@@ -8063,6 +8063,12 @@ impl AgentChatView {
         &mut self,
         cx: &mut Context<Self>,
     ) -> bool {
+        // Protocol dispatch (simulateKey Cmd+Enter) reaches here without the
+        // render/handle_key_down setup-mode early-returns; there is no live
+        // thread to submit to while setup is showing.
+        if self.is_setup_mode() {
+            return false;
+        }
         let (text, cursor, thread_cwd) = {
             let thread = self.live_thread().read(cx);
             (

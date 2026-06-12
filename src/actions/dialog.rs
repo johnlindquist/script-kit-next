@@ -777,6 +777,10 @@ pub struct ActionsDialog {
     /// Currently focused scriptlet (for H3-defined custom actions)
     pub focused_scriptlet: Option<Scriptlet>,
     pub menu_syntax_section: Option<PowerSyntaxActionSection>,
+    /// Host-owned contextual section (e.g. the Day Page "Today" actions).
+    /// Rendered above script/global rows; rows are full `Action` values so the
+    /// host controls ids, shortcuts, and section titles.
+    pub host_section: Option<Vec<Action>>,
     /// List state for variable-height list (section headers 22px, items 36px)
     pub list_state: ListState,
     /// Grouped items for list rendering (includes section headers)
@@ -1149,6 +1153,7 @@ impl ActionsDialog {
             focused_script,
             focused_scriptlet,
             menu_syntax_section: None,
+            host_section: None,
             list_state,
             grouped_items,
             theme,
@@ -1436,7 +1441,7 @@ impl ActionsDialog {
         theme: Arc<theme::Theme>,
         design_variant: DesignVariant,
     ) -> Self {
-        let actions = Self::build_actions(&focused_script, &None, &None);
+        let actions = Self::build_actions(&focused_script, &None, &None, &None);
         let config = ActionsDialogConfig::default();
 
         logging::log(
@@ -2880,6 +2885,7 @@ impl ActionsDialog {
                 &self.focused_script,
                 &self.focused_scriptlet,
                 &self.menu_syntax_section,
+                &self.host_section,
             );
             self.reset_filter_to_all();
             self.search_text.clear();
@@ -2933,6 +2939,7 @@ impl ActionsDialog {
         focused_script: &Option<ScriptInfo>,
         focused_scriptlet: &Option<Scriptlet>,
         menu_syntax_section: &Option<PowerSyntaxActionSection>,
+        host_section: &Option<Vec<Action>>,
     ) -> Vec<Action> {
         if let Some(section) = menu_syntax_section {
             let mut power_syntax_actions = power_syntax_section_to_actions(section);
@@ -2940,12 +2947,19 @@ impl ActionsDialog {
                 return power_syntax_actions;
             }
 
-            let mut actions = Self::build_actions(focused_script, focused_scriptlet, &None);
+            let mut actions =
+                Self::build_actions(focused_script, focused_scriptlet, &None, host_section);
             power_syntax_actions.append(&mut actions);
             return power_syntax_actions;
         }
 
         let mut actions = Vec::new();
+
+        // Host-owned contextual rows (e.g. Day Page "Today" section) lead the
+        // list so the surface's own affordances outrank generic global rows.
+        if let Some(host_actions) = host_section {
+            actions.extend(host_actions.iter().cloned());
+        }
 
         // Add script-specific actions first if a script is focused
         if let Some(script) = focused_script {
@@ -2975,6 +2989,7 @@ impl ActionsDialog {
             &self.focused_script,
             &self.focused_scriptlet,
             &self.menu_syntax_section,
+            &self.host_section,
         );
         self.refilter();
     }
@@ -2994,6 +3009,7 @@ impl ActionsDialog {
             &self.focused_script,
             &self.focused_scriptlet,
             &self.menu_syntax_section,
+            &self.host_section,
         );
         self.refilter();
 
@@ -3019,6 +3035,20 @@ impl ActionsDialog {
             &self.focused_script,
             &self.focused_scriptlet,
             &self.menu_syntax_section,
+            &self.host_section,
+        );
+        self.refilter();
+    }
+
+    /// Push host-owned contextual rows (e.g. the Day Page "Today" section).
+    /// Rows lead the rebuilt list; pass `None` to clear.
+    pub fn set_host_section(&mut self, section: Option<Vec<Action>>) {
+        self.host_section = section;
+        self.actions = Self::build_actions(
+            &self.focused_script,
+            &self.focused_scriptlet,
+            &self.menu_syntax_section,
+            &self.host_section,
         );
         self.refilter();
     }
@@ -4938,7 +4968,7 @@ mod tests {
         }
 
         let focused_script = Some(focused_script());
-        let normal_actions = ActionsDialog::build_actions(&focused_script, &None, &None);
+        let normal_actions = ActionsDialog::build_actions(&focused_script, &None, &None, &None);
         assert!(
             normal_actions
                 .iter()
@@ -4948,7 +4978,7 @@ mod tests {
 
         let replace_section = Some(power_syntax_section(SectionMode::Replace));
         let replace_actions =
-            ActionsDialog::build_actions(&focused_script, &None, &replace_section);
+            ActionsDialog::build_actions(&focused_script, &None, &replace_section, &None);
         assert_eq!(replace_actions.len(), 1);
         assert_eq!(replace_actions[0].id, "menu_syntax:capture.cancel");
         assert!(
@@ -4960,7 +4990,7 @@ mod tests {
 
         let prepend_section = Some(power_syntax_section(SectionMode::Prepend));
         let prepend_actions =
-            ActionsDialog::build_actions(&focused_script, &None, &prepend_section);
+            ActionsDialog::build_actions(&focused_script, &None, &prepend_section, &None);
         assert_eq!(prepend_actions[0].id, "menu_syntax:capture.cancel");
         assert_eq!(&prepend_actions[1..], normal_actions.as_slice());
         assert!(

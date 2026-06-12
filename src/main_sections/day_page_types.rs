@@ -33,4 +33,14 @@ pub struct DayPageView {
     pub(crate) spine_flat_cache: Vec<crate::scripts::SearchResult>,
     pub(crate) spine_alias_cache:
         std::collections::HashMap<String, (String, crate::ai::message_parts::AiContextPart)>,
+    /// Last debounced autosave write (Notes-parity SAVE_DEBOUNCE_MS throttle).
+    pub(crate) last_autosave: Option<std::time::Instant>,
+    /// True while a trailing autosave flush timer is pending.
+    pub(crate) autosave_flush_scheduled: bool,
+    /// Open past-day switcher (Cmd+P); None when closed.
+    pub(crate) day_switcher: Option<DaySwitcherState>,
+    /// Editor byte length at the last observed change. The `@context`
+    /// main-menu swap only triggers on growth so deleting inside an existing
+    /// mention never re-opens the search (day_page_round_trip.rs).
+    pub(crate) last_editor_content_len: usize,
 }

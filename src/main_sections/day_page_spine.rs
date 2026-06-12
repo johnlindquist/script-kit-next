@@ -171,81 +171,6 @@ fn day_page_supports_spine_action(action: &crate::spine::SpineListAction) -> boo
     )
 }
 
-fn attach_rows_from_rich_results(
-    source: crate::spine::catalog_subsearch::ContextSubsearchSource,
-    query: &str,
-    projection: &crate::spine::SpineCursorProjection,
-    parse: &crate::spine::SpineParse,
-    grouped: Vec<GroupedListItem>,
-    rich_flat: Vec<scripts::SearchResult>,
-) -> DayPageSpineRows {
-    let Some(segment) = parse.segments.get(projection.active_segment_index) else {
-        return DayPageSpineRows::new(grouped, Vec::new());
-    };
-
-    let mut remapped_grouped = Vec::new();
-    let mut flat = Vec::new();
-    let mut aliases = HashMap::new();
-
-    for grouped_item in grouped {
-        match grouped_item {
-            GroupedListItem::SectionHeader(label, icon) => {
-                remapped_grouped.push(GroupedListItem::SectionHeader(label, icon));
-            }
-            GroupedListItem::Status(status) => {
-                remapped_grouped.push(GroupedListItem::Status(status));
-            }
-            GroupedListItem::Item(result_idx) => {
-                let Some(result) = rich_flat.get(result_idx) else {
-                    continue;
-                };
-                let Some(outcome) = crate::spine::attach::attach_outcome_for_result(
-                    source,
-                    &result,
-                    projection.active_segment_index,
-                    segment.byte_range.clone(),
-                ) else {
-                    continue;
-                };
-                let row_id = format!("day-page-spine:{}:{}", source.prefix(), flat.len());
-                let row = crate::spine::SpineListRow {
-                    id: row_id.clone().into(),
-                    kind: crate::spine::SpineListRowKind::ContextResult {
-                        context_type: source.prefix().into(),
-                        result_id: flat.len().to_string().into(),
-                    },
-                    title: result.name().to_string().into(),
-                    subtitle: result
-                        .description()
-                        .map(|description| description.to_string().into()),
-                    meta: Some(format!("@{}:", source.prefix()).into()),
-                    icon: Some(source_icon(source).into()),
-                    badges: Vec::new(),
-                    score: 0,
-                    is_selectable: true,
-                    action_label: None,
-                    action: outcome.action,
-                };
-                if let Some(alias) = outcome.alias {
-                    aliases.insert(row_id, alias);
-                }
-                let new_idx = flat.len();
-                flat.push(scripts::SearchResult::SpineProjection(row));
-                remapped_grouped.push(GroupedListItem::Item(new_idx));
-            }
-        }
-    }
-
-    if query.trim().is_empty() {
-        filtering_cache::append_choose_hint_to_first_section_header(&mut remapped_grouped);
-    }
-
-    DayPageSpineRows {
-        grouped: remapped_grouped,
-        flat,
-        aliases,
-    }
-}
 
 fn cwd_rows_from_directory_results(
     query: &str,
@@ -323,22 +248,6 @@ fn cwd_rows_from_directory_results(
     DayPageSpineRows::new(remapped_grouped, flat)
 }
 
-fn source_icon(source: crate::spine::catalog_subsearch::ContextSubsearchSource) -> &'static str {
-    match source {
-        crate::spine::catalog_subsearch::ContextSubsearchSource::File => "file",
-        crate::spine::catalog_subsearch::ContextSubsearchSource::Project => "folder",
-        crate::spine::catalog_subsearch::ContextSubsearchSource::BrowserHistory => "globe",
-        crate::spine::catalog_subsearch::ContextSubsearchSource::Clipboard => "clipboard",
-        crate::spine::catalog_subsearch::ContextSubsearchSource::Dictation => "mic",
-        crate::spine::catalog_subsearch::ContextSubsearchSource::Scripts => "file-code",
-        crate::spine::catalog_subsearch::ContextSubsearchSource::Scriptlets => "scroll-text",
-        crate::spine::catalog_subsearch::ContextSubsearchSource::Skills => "workflow",
-        crate::spine::catalog_subsearch::ContextSubsearchSource::Notes => "notebook-text",
-        crate::spine::catalog_subsearch::ContextSubsearchSource::History => "message-circle",
-        crate::spine::catalog_subsearch::ContextSubsearchSource::Calendar => "calendar",
-        crate::spine::catalog_subsearch::ContextSubsearchSource::Notifications => "bell",
-    }
-}
 
 fn day_page_spine_prompt_plan_can_submit(
     parse: &crate::spine::SpineParse,
@@ -429,135 +338,6 @@ fn prune_day_page_spine_mention_aliases(
     mention_aliases.retain(|token, _| visible_tokens.contains(token));
 }
 
-impl ScriptListApp {
-    fn day_page_rich_spine_rows(
-        &self,
-        source: crate::spine::catalog_subsearch::ContextSubsearchSource,
-        query: &str,
-        parse: &crate::spine::SpineParse,
-        projection: &crate::spine::SpineCursorProjection,
-    ) -> DayPageSpineRows {
-        let limit = crate::spine::catalog_subsearch::SUBSEARCH_RENDER_LIMIT;
-        let query = query.trim();
-        let (grouped, flat) = match source {
-            crate::spine::catalog_subsearch::ContextSubsearchSource::File => {
-                let provider_query = if query.is_empty() {
-                    crate::file_search::RECENTLY_USED_FILES_MDQUERY.to_string()
-                } else {
-                    crate::file_search::root_file_provider_query_for_user_query(query)
-                };
-                let files = crate::file_search::search_files(&provider_query, None, limit);
-                filtering_cache::build_rich_file_subsearch_rows(
-                    filtering_cache::FileSubsearchFlavor::Global,
-                    query,
-                    false,
-                    &files,
-                    &[],
-                )
-            }
-            crate::spine::catalog_subsearch::ContextSubsearchSource::Project => {
-                let onlyin = self
-                    .spine_cwd
-                    .as_ref()
-                    .map(|path| path.to_string_lossy().to_string())
-                    .or_else(|| dirs::home_dir().map(|path| path.to_string_lossy().to_string()));
-                let provider_query = if query.is_empty() {
-                    crate::file_search::RECENTLY_USED_FILES_MDQUERY.to_string()
-                } else {
-                    query.to_string()
-                };
-                let files =
-                    crate::file_search::search_files(&provider_query, onlyin.as_deref(), limit);
-                filtering_cache::build_rich_file_subsearch_rows(
-                    filtering_cache::FileSubsearchFlavor::Project,
-                    query,
-                    false,
-                    &files,
-                    &[],
-                )
-            }
-            crate::spine::catalog_subsearch::ContextSubsearchSource::Clipboard => {
-                let hits = crate::clipboard_history::search_root_clipboard_history_meta_direct(
-                    query,
-                    crate::clipboard_history::RootClipboardHistorySectionOptions {
-                        enabled: true,
-                        max_results: limit,
-                        min_query_chars: 0,
-                        ..Default::default()
-                    },
-                );
-                filtering_cache::build_rich_clipboard_subsearch_rows(query, &hits)
-            }
-            crate::spine::catalog_subsearch::ContextSubsearchSource::BrowserHistory => {
-                let hits = crate::browser_history::search_root_browser_history_meta_direct(
-                    query,
-                    crate::browser_history::RootBrowserHistorySectionOptions {
-                        enabled: true,
-                        max_results: limit,
-                        min_query_chars: 0,
-                        ..Default::default()
-                    },
-                );
-                filtering_cache::build_rich_browser_history_rows(query, &hits)
-            }
-            crate::spine::catalog_subsearch::ContextSubsearchSource::Notes => {
-                let hits = crate::notes::search_root_notes_meta_direct(
-                    query,
-                    crate::notes::RootNotesSectionOptions {
-                        enabled: true,
-                        max_results: limit,
-                        min_query_chars: 0,
-                        ..Default::default()
-                    },
-                );
-                filtering_cache::build_rich_notes_rows(query, &hits)
-            }
-            crate::spine::catalog_subsearch::ContextSubsearchSource::Dictation => {
-                let hits = crate::dictation::search_root_dictation_history_direct(
-                    query,
-                    crate::dictation::RootDictationHistorySectionOptions {
-                        enabled: true,
-                        max_results: limit,
-                        min_query_chars: 0,
-                        ..Default::default()
-                    },
-                );
-                filtering_cache::build_rich_dictation_rows(query, &hits)
-            }
-            crate::spine::catalog_subsearch::ContextSubsearchSource::History => {
-                let hits = crate::ai::agent_chat::ui::history::search_history_direct(query, limit);
-                filtering_cache::build_rich_agent_chat_history_rows(query, &hits)
-            }
-            crate::spine::catalog_subsearch::ContextSubsearchSource::Scripts => {
-                filtering_cache::build_rich_script_rows(query, &self.scripts)
-            }
-            crate::spine::catalog_subsearch::ContextSubsearchSource::Scriptlets => {
-                filtering_cache::build_rich_scriptlet_rows(query, &self.scriptlets)
-            }
-            crate::spine::catalog_subsearch::ContextSubsearchSource::Skills => {
-                filtering_cache::build_rich_skill_rows(query, &self.skills)
-            }
-            crate::spine::catalog_subsearch::ContextSubsearchSource::Calendar => {
-                filtering_cache::build_rich_provider_json_rows(
-                    query,
-                    crate::mcp_resources::ProviderJsonResourceKind::Calendar,
-                    "Calendar Events",
-                    "calendar",
-                )
-            }
-            crate::spine::catalog_subsearch::ContextSubsearchSource::Notifications => {
-                filtering_cache::build_rich_provider_json_rows(
-                    query,
-                    crate::mcp_resources::ProviderJsonResourceKind::Notifications,
-                    "Notifications",
-                    "bell",
-                )
-            }
-        };
-
-        attach_rows_from_rich_results(source, query, projection, parse, grouped, flat)
-    }
-}
 
 impl DayPageView {
     fn shared_day_page_spine_rows(
@@ -767,16 +547,12 @@ impl DayPageView {
         app_state: Option<&ScriptListApp>,
         cx: &App,
     ) -> Option<DayPageSpineRows> {
-        if let Some((source, query)) = filtering_cache::active_rich_spine_subsearch(projection) {
-            if let Some(app_state) = app_state {
-                Some(app_state.day_page_rich_spine_rows(source, &query, parse, projection))
-            } else {
-                let app = self.app.upgrade()?;
-                Some(
-                    app.read(cx)
-                        .day_page_rich_spine_rows(source, &query, parse, projection),
-                )
-            }
+        if filtering_cache::active_rich_spine_subsearch(projection).is_some() {
+            // `@context:` subsearch never renders an inline Day Page popup —
+            // it swaps to the real main menu instead (the round trip in
+            // day_page_round_trip.rs, triggered from on_editor_change), so
+            // the selection UX is exactly the launcher's own.
+            None
         } else if let crate::spine::SpineSegmentKind::ProjectCwd { sub_query } =
             &projection.active_segment_kind
         {
@@ -835,6 +611,46 @@ impl DayPageView {
             text_size_source: Some("theme.mono_font_size".to_string()),
         });
         let mut elements = vec![protocol::ElementInfo::panel("day-page"), editor];
+
+        if let Some(state) = self.day_switcher.as_ref() {
+            let today = Utc::now()
+                .with_timezone(&self.session.substrate().timezone())
+                .date_naive();
+            let filtered = filtered_day_switcher_indices(state, today);
+            elements.push(protocol::ElementInfo::list(
+                DAY_SWITCHER_LIST_ID,
+                filtered.len(),
+            ));
+            let selected_row = if filtered.is_empty() {
+                None
+            } else {
+                Some(state.selected.min(filtered.len() - 1))
+            };
+            for (row_ix, entry_index) in filtered.iter().enumerate() {
+                let Some(entry) = state.entries.get(*entry_index) else {
+                    continue;
+                };
+                elements.push(protocol::ElementInfo {
+                    semantic_id: day_switcher_semantic_id(entry.date),
+                    element_type: protocol::ElementType::Choice,
+                    text: Some(day_switcher_entry_label(entry.date, today)),
+                    value: Some(entry.date.to_string()),
+                    selected: Some(selected_row == Some(row_ix)),
+                    focused: None,
+                    index: Some(row_ix),
+                    role: Some("day_page_day_switcher_row".to_string()),
+                    kind: None,
+                    source: Some(state.query.clone()),
+                    source_name: None,
+                    selectable: Some(true),
+                    status_kind: None,
+                    action_disabled: None,
+                    style: None,
+                });
+            }
+            let total_count = elements.len();
+            return (elements.into_iter().take(limit).collect(), total_count);
+        }
 
         let Some((key, _, parse, projection, active_empty_subsearch)) =
             self.day_page_spine_input(cx)

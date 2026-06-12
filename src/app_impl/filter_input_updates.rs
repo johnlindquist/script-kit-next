@@ -610,6 +610,15 @@ impl ScriptListApp {
     }
 
     pub(crate) fn clear_filter(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        // Today → main-menu `@context` round trip: Escape (the only
+        // user-facing path into clear_filter while the launcher hosts the
+        // pending search) cancels back to Today instead of stranding the
+        // user on an emptied launcher filter.
+        if matches!(self.current_view, AppView::ScriptList)
+            && self.try_cancel_day_page_context_round_trip(window, cx)
+        {
+            return;
+        }
         self.cancel_history_filter_render_pending_if_obsolete("");
         self.set_filter_text_immediate(String::new(), window, cx);
     }
@@ -944,6 +953,16 @@ impl ScriptListApp {
                         cx,
                     )
                 } else {
+                    // Today → main-menu round trip: the resolved token goes
+                    // back into the originating Day Page line instead of the
+                    // launcher filter (see day_page_round_trip.rs).
+                    if self.day_page_context_return.is_some() {
+                        return self.try_complete_day_page_context_round_trip(
+                            replacement.as_ref(),
+                            window,
+                            cx,
+                        );
+                    }
                     // A9 decision (2026-06-09): picking a style when the
                     // style segment is the whole input is a single-keystroke
                     // "rewrite selected text" — auto-submit the prompt plan

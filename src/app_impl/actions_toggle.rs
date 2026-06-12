@@ -905,14 +905,24 @@ impl ScriptListApp {
             // selected_index belongs to that built-in list, not the script list
             // cache read by `get_focused_script_info`.
             let on_builtin_list = matches!(host, ActionsDialogHost::BuiltinList);
-            let script_info = if on_builtin_list {
+            // Day Page: the launcher's selected_index is stale background
+            // state, so the dialog must not surface script-row actions there.
+            // The Today host section below carries the contextual rows.
+            let day_page_section: Option<Vec<crate::actions::Action>> =
+                if let AppView::DayPage { ref entity } = self.current_view {
+                    Some(day_page_host_actions_section(entity.read(cx), cx))
+                } else {
+                    None
+                };
+            let on_day_page = day_page_section.is_some();
+            let script_info = if on_builtin_list || on_day_page {
                 None
             } else {
                 self.get_focused_script_info()
             };
 
             // Get the full scriptlet with actions if focused item is a scriptlet
-            let focused_scriptlet = if on_builtin_list {
+            let focused_scriptlet = if on_builtin_list || on_day_page {
                 None
             } else {
                 self.get_focused_scriptlet_with_actions()
@@ -925,7 +935,11 @@ impl ScriptListApp {
             // the legacy script_context + global rows.
             let power_syntax_section_for_dialog: Option<
                 crate::menu_syntax_actions::PowerSyntaxActionSection,
-            > = {
+            > = if on_day_page {
+                // The launcher filter text is background state while the Day
+                // Page owns the main window; its parse must not leak rows.
+                None
+            } else {
                 use crate::menu_syntax::{builtin_schema, MenuSyntaxActionState};
                 let raw = self.filter_text().to_string();
                 let mode = &self.menu_syntax_mode;
@@ -1038,6 +1052,7 @@ impl ScriptListApp {
                 // action rebuild there.
                 if !is_agent_chat_actions_dialog {
                     dialog.set_menu_syntax_section(power_syntax_section_for_dialog.clone());
+                    dialog.set_host_section(day_page_section.clone());
                 }
 
                 // Skip track_focus so the parent window keeps keyboard routing

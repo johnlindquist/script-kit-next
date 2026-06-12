@@ -267,7 +267,21 @@ impl ScriptListApp {
                     }
 
                     // Main script list key handling
-                    if view.try_execute_root_file_action_shortcut(
+                    //
+                    // Spine-owned Enter must run BEFORE the displayed-shortcut
+                    // route: when the filter is a `@context` subsearch the
+                    // selected row attaches a mention (and may complete the
+                    // Today round trip); the run_script ↵ shortcut would
+                    // otherwise consume the key and open the file instead.
+                    if key_lower == "enter"
+                        && !has_cmd
+                        && !has_shift
+                        && !_has_alt
+                        && !_has_ctrl
+                        && view.try_handle_spine_enter(window, ctx)
+                    {
+                        logging::log("STDIN", "SimulateKey: Enter - spine consumed (script list)");
+                    } else if view.try_execute_root_file_action_shortcut(
                         &key_lower, has_cmd, has_shift, _has_alt, _has_ctrl, window, ctx,
                     ) {
                         logging::log("STDIN", "SimulateKey: root file direct action shortcut");

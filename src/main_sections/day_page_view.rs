@@ -76,6 +76,10 @@ impl DayPageView {
             spine_grouped_cache: Vec::new(),
             spine_flat_cache: Vec::new(),
             spine_alias_cache: std::collections::HashMap::new(),
+            last_autosave: None,
+            autosave_flush_scheduled: false,
+            day_switcher: None,
+            last_editor_content_len: 0,
         }
     }
 
@@ -103,6 +107,9 @@ impl DayPageView {
         let content = self.session.disk_content().to_string();
         self.reset_day_page_spine_runtime_state(true, true);
         self.refresh_fragment_open_targets(&content);
+        // Loads are not typing: pre-set the length so the Change event this
+        // emits cannot read as growth and auto-swap to the main menu.
+        self.last_editor_content_len = content.len();
         self.notes_editor.update(cx, |editor, cx| {
             editor.load_value_with_cursor_at_end(content, window, cx);
         });
@@ -158,6 +165,8 @@ impl DayPageView {
     fn on_editor_change(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let previous = self.session.disk_content().to_string();
         let content = self.notes_editor.read(cx).content(cx);
+        let previous_len = self.last_editor_content_len;
+        self.last_editor_content_len = content.len();
         if let Some((fixed, cursor)) = day_page_spine_mention_atomic_delete_fixup(
             &previous,
             &content,
@@ -167,12 +176,14 @@ impl DayPageView {
                 editor.set_value(fixed.clone(), window, cx);
                 editor.set_selection(cursor, cursor, window, cx);
             });
+            self.last_editor_content_len = fixed.len();
             self.session.apply_editor_content(&fixed);
             self.refresh_fragment_open_targets(&fixed);
             prune_day_page_spine_mention_aliases(&mut self.spine_mention_aliases, &fixed);
             self.spine_dismissed_cache_key = None;
             self.spine_alias_cache.clear();
             self.poll_external_disk_changes(window, cx);
+            self.schedule_autosave_flush(cx);
             self.sync_footer(window, cx);
             cx.notify();
             return;
@@ -183,14 +194,68 @@ impl DayPageView {
         self.spine_dismissed_cache_key = None;
         self.spine_alias_cache.clear();
         self.poll_external_disk_changes(window, cx);
+        self.schedule_autosave_flush(cx);
         self.sync_footer(window, cx);
+        self.maybe_begin_day_page_context_round_trip_from_edit(previous_len, &content, window, cx);
         cx.notify();
+    }
+
+    /// Notes-parity autosave: same debounce interval as the Notes window
+    /// (`NotesApp::SAVE_DEBOUNCE_MS`), driven from render side effects the
+    /// same way `NotesApp::process_render_side_effects` drives
+    /// `save_current_note`. A trailing flush timer (scheduled in
+    /// `on_editor_change`) guarantees the final keystroke also lands on disk
+    /// so the footer dirty state always converges to the real disk state.
+    const SAVE_DEBOUNCE_MS: u64 = 300;
+
+    fn maybe_autosave(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if !self.session.is_dirty() {
+            return;
+        }
+        let due = self
+            .last_autosave
+            .map_or(true, |at| {
+                at.elapsed() >= std::time::Duration::from_millis(Self::SAVE_DEBOUNCE_MS)
+            });
+        if !due {
+            return;
+        }
+        self.last_autosave = Some(std::time::Instant::now());
+        if self.save(cx) {
+            tracing::debug!(
+                target: "script_kit::day_page",
+                event = "day_page_autosaved",
+            );
+        }
+        self.sync_footer(window, cx);
+    }
+
+    fn schedule_autosave_flush(&mut self, cx: &mut Context<Self>) {
+        if self.autosave_flush_scheduled {
+            return;
+        }
+        self.autosave_flush_scheduled = true;
+        let flush_delay =
+            std::time::Duration::from_millis(Self::SAVE_DEBOUNCE_MS + 50);
+        cx.spawn(async move |this, cx| {
+            cx.background_executor().timer(flush_delay).await;
+            this.update(cx, |this, cx| {
+                this.autosave_flush_scheduled = false;
+                // Render side effects run the actual save; notify forces a
+                // render even when no further input arrives.
+                cx.notify();
+            })
+            .ok();
+        })
+        .detach();
     }
 
     pub fn poll_external_disk_changes(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if let Ok(Some(content)) = self.session.maybe_refresh_from_disk() {
             self.reset_day_page_spine_runtime_state(true, true);
             self.refresh_fragment_open_targets(&content);
+            // External refresh is not typing: keep the growth detector quiet.
+            self.last_editor_content_len = content.len();
             self.notes_editor.update(cx, |editor, cx| {
                 editor.set_value(content, window, cx);
             });
@@ -300,6 +365,7 @@ impl Focusable for DayPageView {
 impl Render for DayPageView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.poll_external_disk_changes(window, cx);
+        self.maybe_autosave(window, cx);
 
         let app = self.app.upgrade().expect("DayPageView app entity dropped");
 
@@ -344,6 +410,16 @@ impl Render for DayPageView {
         let theme = app_state.theme.clone();
         let editor_padding_y = editor_metrics.editor_padding_y;
         let spine_panel = self.render_day_page_spine_panel(cx);
+        let day_switcher_panel = self.render_day_page_day_switcher_panel(cx);
+
+        let local_today = Utc::now()
+            .with_timezone(&self.session.substrate().timezone())
+            .date_naive();
+        let viewing_past_day = !viewing_fragment
+            && self
+                .session
+                .bound_date()
+                .is_some_and(|date| date != local_today);
 
         let back_bar = if viewing_fragment {
             let label = match self.session.binding() {
@@ -368,6 +444,32 @@ impl Render for DayPageView {
                         gpui::MouseButton::Left,
                         cx.listener(|this, _, window, cx| {
                             this.return_to_day_page(window, cx);
+                        }),
+                    )
+                    .child("←")
+                    .child(label),
+            )
+        } else if viewing_past_day {
+            let label = self
+                .session
+                .bound_date()
+                .map(|date| format!("Back to Today · viewing {date}"))
+                .unwrap_or_else(|| "Back to Today".to_string());
+            Some(
+                div()
+                    .id("day-page-past-day-back")
+                    .w_full()
+                    .flex()
+                    .items_center()
+                    .gap(px(8.))
+                    .pb(px(6.))
+                    .text_sm()
+                    .cursor_pointer()
+                    .on_mouse_down(
+                        gpui::MouseButton::Left,
+                        cx.listener(|this, _, window, cx| {
+                            this.bind_today(window, cx);
+                            this.focus_editor(window, cx);
                         }),
                     )
                     .child("←")
@@ -496,7 +598,8 @@ impl Render for DayPageView {
                     .min_h(px(0.))
                     .when_some(sediment_layer, |parent, layer| parent.child(layer))
                     .child(editor_input)
-                    .when_some(spine_panel, |parent, panel| parent.child(panel)),
+                    .when_some(spine_panel, |parent, panel| parent.child(panel))
+                    .when_some(day_switcher_panel, |parent, panel| parent.child(panel)),
             );
 
         let context_zone = app.update(cx, |app, cx| {
@@ -598,6 +701,12 @@ impl DayPageView {
         let exact_plain = !cmd && !shift && !alt && !control;
         let exact_cmd = cmd && !shift && !alt && !control;
 
+        if self.is_day_switcher_open() {
+            if self.handle_day_switcher_key(key, cmd, shift, alt, control, window, cx) {
+                return;
+            }
+        }
+
         if exact_plain && crate::ui_foundation::is_key_escape(&key) {
             if self.day_page_spine_model(cx).is_some() {
                 self.reset_day_page_spine_navigation(cx);
@@ -605,6 +714,16 @@ impl DayPageView {
             }
             if self.session.is_viewing_fragment() {
                 self.return_to_day_page(window, cx);
+                return;
+            }
+            // Escape from a past day returns to today before closing the
+            // window, keeping the dismissal ladder predictable.
+            let today = Utc::now()
+                .with_timezone(&self.session.substrate().timezone())
+                .date_naive();
+            if self.session.bound_date().is_some_and(|date| date != today) {
+                self.bind_today(window, cx);
+                self.focus_editor(window, cx);
                 return;
             }
             if let Some(app) = self.app.upgrade() {
@@ -643,6 +762,31 @@ impl DayPageView {
 
         if exact_cmd && key == "s" {
             self.save_and_sync_footer(window, cx);
+            return;
+        }
+
+        if exact_cmd && key == "p" {
+            self.toggle_day_switcher(window, cx);
+            return;
+        }
+
+        // Markdown formatting shortcuts — same bindings as the Notes window
+        // (`src/notes/window/keyboard.rs`), routed through the shared
+        // NotesEditor formatting helper.
+        if exact_cmd && key == "b" {
+            self.insert_markdown_formatting("**", "**", window, cx);
+            return;
+        }
+        if exact_cmd && key == "i" {
+            self.insert_markdown_formatting("_", "_", window, cx);
+            return;
+        }
+        if exact_cmd && key == "e" {
+            self.insert_markdown_formatting("`", "`", window, cx);
+            return;
+        }
+        if cmd && shift && !alt && !control && key == "x" {
+            self.insert_markdown_formatting("~~", "~~", window, cx);
         }
     }
 }
@@ -688,6 +832,14 @@ impl ScriptListApp {
     ) {
         let substrate = substrate.unwrap_or_else(BrainSubstrate::default_kit);
         let app_entity = cx.entity();
+
+        // A pending Today → main-menu context round trip holds the live Day
+        // Page entity; re-entering Today resumes it (and abandons the search)
+        // instead of binding a fresh view.
+        if let Some(pending) = self.day_page_context_return.take() {
+            self.restore_day_page_view_after_round_trip(pending.entity, window, cx);
+            return;
+        }
 
         let entity = if let AppView::DayPage { entity } = &self.current_view {
             let entity = entity.clone();

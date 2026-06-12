@@ -1227,6 +1227,11 @@ pub(crate) struct ScriptListApp {
     /// The launcher-side mirror of `AgentChatView::typed_mention_aliases`.
     pub(crate) spine_mention_aliases:
         std::collections::HashMap<String, crate::ai::message_parts::AiContextPart>,
+    /// Pending Today → main-menu `@context` round trip. `Some` while the user
+    /// searches context in the main menu on behalf of the Day Page; accepting
+    /// a context row returns to the held Day Page entity with the resolved
+    /// token spliced into the originating line. Escape cancels back to Today.
+    pub(crate) day_page_context_return: Option<DayPageContextReturn>,
     /// App-owned placement machine for the Agent Chat surface. Source of
     /// truth for the `blocks_launcher_ai_entry` and
     /// `is_attachment_portal` predicates. Written only through

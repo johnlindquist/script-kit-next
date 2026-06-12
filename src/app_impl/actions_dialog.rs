@@ -245,6 +245,13 @@ impl ScriptListApp {
             return;
         }
 
+        // Day Page "Today" section rows (host_section in the shared dialog).
+        if action_id.starts_with("day_page:")
+            && self.execute_day_page_action(&action_id, window, cx)
+        {
+            return;
+        }
+
         match host {
             ActionsDialogHost::MainList => {
                 // Agent & Model picker (Shift+Tab): persist the selected model

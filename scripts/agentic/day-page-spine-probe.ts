@@ -245,41 +245,43 @@ try {
     ids: restoredFlat.slice(0, 12).map((el) => el.semanticId ?? el.id),
   });
 
+  // Completing "@fi" → "@file:" enters a rich @context subsearch. The Day
+  // Page no longer renders its own subsearch popup — it swaps to the REAL
+  // main menu with the segment as the launcher filter (round-trip contract).
   await Bun.sleep(250);
   await driver.simulateKey("enter");
-  await Bun.sleep(250);
-  const afterText = await editorText(driver);
-  check("enter_completes_file_fragment", afterText === "@file:", { afterText });
+  await Bun.sleep(600);
+  const afterCompleteState = (await driver.getState({ timeoutMs: 5000 })) as Json;
+  check(
+    "enter_completes_file_fragment_and_swaps_to_main_menu",
+    afterCompleteState.promptType === "none" && afterCompleteState.inputValue === "@file:",
+    {
+      promptType: afterCompleteState.promptType,
+      inputValue: afterCompleteState.inputValue,
+    },
+  );
 
-  const fileBatch = (await driver.batch(
-    [{ type: "setInput", text: "@file:" }],
-    { timeoutMs: 5000 },
-  )) as Json;
-  check("batch_set_empty_file_subsearch", fileBatch.success === true, { batch: fileBatch });
+  // Escape cancels the round trip back to Today with the segment intact.
+  await driver.simulateKey("escape");
+  await Bun.sleep(500);
+  const afterCancelState = (await driver.getState({ timeoutMs: 5000 })) as Json;
+  const afterCancelText = await editorText(driver);
+  check(
+    "escape_returns_to_day_page_with_fragment",
+    afterCancelState.promptType === "dayPage" && afterCancelText === "@file:",
+    { promptType: afterCancelState.promptType, afterCancelText },
+  );
 
-  const immediateFileElements = (await driver.getElements(
+  // No Day Page-local subsearch popup may render for rich subsearches.
+  const afterCancelElements = (await driver.getElements(
     { target: { type: "main" }, limit: 200 },
     { timeoutMs: 5000 },
   )) as Json;
-  const immediateFlat = walkElements(immediateFileElements);
-  check("empty_file_subsearch_immediate_elements", Boolean(
-    immediateFlat.find((el) => el.semanticId === "list:day-page-spine-list"),
+  const afterCancelFlat = walkElements(afterCancelElements);
+  check("no_inline_subsearch_panel_on_day_page", !afterCancelFlat.find(
+    (el) => el.semanticId === "list:day-page-spine-list",
   ), {
-    selectedSemanticId: immediateFileElements.selectedSemanticId ?? null,
-    ids: immediateFlat.slice(0, 12).map((el) => el.semanticId ?? el.id),
-  });
-  check("empty_file_subsearch_unarmed_selection", !immediateFileElements.selectedSemanticId, {
-    selectedSemanticId: immediateFileElements.selectedSemanticId ?? null,
-  });
-
-  await driver.simulateKey("down");
-  await Bun.sleep(250);
-  const armedFileElements = (await driver.getElements(
-    { target: { type: "main" }, limit: 200 },
-    { timeoutMs: 5000 },
-  )) as Json;
-  check("empty_file_subsearch_down_arms_selection", Boolean(armedFileElements.selectedSemanticId), {
-    selectedSemanticId: armedFileElements.selectedSemanticId ?? null,
+    ids: afterCancelFlat.slice(0, 12).map((el) => el.semanticId ?? el.id),
   });
 
   const submitBatch = (await driver.batch(

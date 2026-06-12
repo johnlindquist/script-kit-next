@@ -1160,6 +1160,7 @@ impl ScriptListApp {
             active_attachment_portal_kind: None,
             spine_mention_portal_segment: None,
             spine_mention_aliases: std::collections::HashMap::new(),
+            day_page_context_return: None,
             agent_chat_surface_state:
                 crate::ai::agent_chat::ui::surface_state::AgentChatSurfaceState::Hidden,
             // Input history for shell-like up/down navigation

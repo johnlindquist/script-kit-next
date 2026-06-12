@@ -173,6 +173,15 @@ impl ScriptListApp {
     }
 
     pub(crate) fn close_and_reset_window(&mut self, cx: &mut Context<Self>) {
+        // Today → main-menu `@context` round trip: Escape/close while the
+        // search is pending cancels back to Today instead of closing the
+        // launcher (the second Escape then closes from Today as usual).
+        if self.day_page_context_return.is_some()
+            && matches!(self.current_view, AppView::ScriptList)
+        {
+            self.cancel_day_page_context_round_trip_deferred(cx);
+            return;
+        }
         logging::log("VISIBILITY", "=== Close and reset window ===");
         self.close_floating_popups_for_owner_loss("close_and_reset_window", cx);
         clear_main_state_restore_after_focus_loss();
