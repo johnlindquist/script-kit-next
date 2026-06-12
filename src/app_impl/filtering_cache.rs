@@ -3085,7 +3085,7 @@ mod tests {
     }
 }
 
-fn active_rich_spine_subsearch(
+pub(crate) fn active_rich_spine_subsearch(
     projection: &crate::spine::SpineCursorProjection,
 ) -> Option<(
     crate::spine::catalog_subsearch::ContextSubsearchSource,
@@ -3112,7 +3112,7 @@ fn active_rich_spine_subsearch(
 /// explicit Down/click (see `spine_empty_subsearch_selection_suppressed`).
 /// Skipped when the list has no selectable item — "↓ to choose" over an
 /// empty list would be a lie.
-fn append_choose_hint_to_first_section_header(grouped: &mut [GroupedListItem]) {
+pub(crate) fn append_choose_hint_to_first_section_header(grouped: &mut [GroupedListItem]) {
     if !grouped
         .iter()
         .any(|item| matches!(item, GroupedListItem::Item(_)))
@@ -3131,7 +3131,7 @@ fn append_choose_hint_to_first_section_header(grouped: &mut [GroupedListItem]) {
 /// Spotlight) or `@project:` (cwd-scoped). Same row anatomy, different
 /// header language and icon.
 #[derive(Clone, Copy, PartialEq, Eq)]
-enum FileSubsearchFlavor {
+pub(crate) enum FileSubsearchFlavor {
     Global,
     Project,
 }
@@ -3194,7 +3194,7 @@ impl FileSubsearchFlavor {
     }
 }
 
-fn build_rich_file_subsearch_rows(
+pub(crate) fn build_rich_file_subsearch_rows(
     flavor: FileSubsearchFlavor,
     query: &str,
     loading: bool,
@@ -3275,7 +3275,7 @@ fn build_rich_file_subsearch_rows(
     (grouped, flat)
 }
 
-fn build_rich_clipboard_subsearch_rows(
+pub(crate) fn build_rich_clipboard_subsearch_rows(
     query: &str,
     hits: &[crate::clipboard_history::ClipboardEntryMeta],
 ) -> (Vec<GroupedListItem>, Vec<scripts::SearchResult>) {
@@ -3325,7 +3325,7 @@ fn build_rich_clipboard_subsearch_rows(
     (grouped, flat)
 }
 
-fn build_rich_browser_history_rows(
+pub(crate) fn build_rich_browser_history_rows(
     query: &str,
     hits: &[crate::browser_history::RootBrowserHistorySearchHit],
 ) -> (Vec<GroupedListItem>, Vec<scripts::SearchResult>) {
@@ -3366,7 +3366,7 @@ fn build_rich_browser_history_rows(
     (grouped, flat)
 }
 
-fn build_rich_notes_rows(
+pub(crate) fn build_rich_notes_rows(
     query: &str,
     hits: &[crate::notes::RootNoteSearchHit],
 ) -> (Vec<GroupedListItem>, Vec<scripts::SearchResult>) {
@@ -3406,7 +3406,7 @@ fn build_rich_notes_rows(
     (grouped, flat)
 }
 
-fn build_rich_dictation_rows(
+pub(crate) fn build_rich_dictation_rows(
     query: &str,
     hits: &[crate::dictation::RootDictationHistorySearchHit],
 ) -> (Vec<GroupedListItem>, Vec<scripts::SearchResult>) {
@@ -3452,7 +3452,7 @@ fn build_rich_dictation_rows(
     (grouped, flat)
 }
 
-fn build_rich_agent_chat_history_rows(
+pub(crate) fn build_rich_agent_chat_history_rows(
     query: &str,
     hits: &[crate::ai::agent_chat::ui::history::AgentChatHistorySearchHit],
 ) -> (Vec<GroupedListItem>, Vec<scripts::SearchResult>) {
@@ -3494,7 +3494,7 @@ fn build_rich_agent_chat_history_rows(
     (grouped, flat)
 }
 
-fn build_rich_script_rows(
+pub(crate) fn build_rich_script_rows(
     query: &str,
     all_scripts: &[std::sync::Arc<scripts::Script>],
 ) -> (Vec<GroupedListItem>, Vec<scripts::SearchResult>) {
@@ -3551,7 +3551,7 @@ fn build_rich_script_rows(
     (grouped, flat)
 }
 
-fn build_rich_scriptlet_rows(
+pub(crate) fn build_rich_scriptlet_rows(
     query: &str,
     all_scriptlets: &[std::sync::Arc<scripts::Scriptlet>],
 ) -> (Vec<GroupedListItem>, Vec<scripts::SearchResult>) {
@@ -3594,7 +3594,7 @@ fn build_rich_scriptlet_rows(
     (grouped, flat)
 }
 
-fn build_rich_skill_rows(
+pub(crate) fn build_rich_skill_rows(
     query: &str,
     all_skills: &[std::sync::Arc<crate::plugins::PluginSkill>],
 ) -> (Vec<GroupedListItem>, Vec<scripts::SearchResult>) {
@@ -3636,7 +3636,7 @@ fn build_rich_skill_rows(
     (grouped, flat)
 }
 
-fn build_rich_provider_json_rows(
+pub(crate) fn build_rich_provider_json_rows(
     query: &str,
     kind: crate::mcp_resources::ProviderJsonResourceKind,
     section_label: &str,
@@ -3719,7 +3719,7 @@ fn build_rich_provider_json_rows(
     (grouped, flat)
 }
 
-fn build_rich_cwd_root_rows(
+pub(crate) fn build_rich_cwd_root_rows(
     recent_dirs: &[crate::file_search::FileResult],
 ) -> (Vec<GroupedListItem>, Vec<scripts::SearchResult>) {
     let limit = crate::spine::catalog_subsearch::SUBSEARCH_RENDER_LIMIT;
@@ -3752,7 +3752,7 @@ fn build_rich_cwd_root_rows(
     (grouped, flat)
 }
 
-fn build_rich_cwd_subsearch_rows(
+pub(crate) fn build_rich_cwd_subsearch_rows(
     query: &str,
     recent_dirs: &[crate::file_search::FileResult],
 ) -> (Vec<GroupedListItem>, Vec<scripts::SearchResult>) {

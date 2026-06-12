@@ -126,20 +126,9 @@ impl ScriptListApp {
             }
 
             AppView::DayPage { entity } => {
-                let content = entity.read(cx).notes_editor.read(cx).content(cx);
-                let elements = vec![
-                    protocol::ElementInfo::panel("day-page"),
-                    protocol::ElementInfo::input(
-                        "day-page-editor",
-                        Some(content.as_str()),
-                        true,
-                    ),
-                ];
-                let total_count = elements.len();
-                ElementCollectionOutcome::new(
-                    elements.into_iter().take(limit).collect(),
-                    total_count,
-                )
+                let (elements, total_count) =
+                    entity.read(cx).collect_day_page_elements(limit, self, cx);
+                ElementCollectionOutcome::new(elements, total_count)
             }
 
             AppView::ArgPrompt { choices, .. } => self

@@ -19,4 +19,14 @@ pub struct DayPageView {
     pub(crate) focus_handle: FocusHandle,
     /// Resolved fragment paths aligned with parsed fragment card indices.
     pub(crate) fragment_open_targets: Vec<PathBuf>,
+    pub(crate) spine_selected_index: usize,
+    pub(crate) spine_hovered_index: Option<usize>,
+    pub(crate) spine_empty_subsearch_armed_for:
+        Option<crate::spine::catalog_subsearch::ContextSubsearchSource>,
+    pub(crate) spine_cache_key: String,
+    pub(crate) spine_dismissed_cache_key: Option<String>,
+    pub(crate) spine_grouped_cache: Vec<crate::list_item::GroupedListItem>,
+    pub(crate) spine_flat_cache: Vec<crate::scripts::SearchResult>,
+    pub(crate) spine_alias_cache:
+        std::collections::HashMap<String, (String, crate::ai::message_parts::AiContextPart)>,
 }

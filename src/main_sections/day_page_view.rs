@@ -31,17 +31,15 @@ impl DayPageView {
                 .placeholder("Today...")
                 .default_value("")
         });
-        let notes_editor = cx.new(|_| {
-            NotesEditor::new(
-                editor_state.clone(),
-                NotesEditorConfig::new("")
-                    .placeholder("Today...")
-                    .layout(NotesEditorLayout::new(
-                        metrics.editor_padding_x,
-                        metrics.editor_padding_y,
-                    )),
-            )
-        });
+        let notes_editor =
+            cx.new(|_| {
+                NotesEditor::new(
+                    editor_state.clone(),
+                    NotesEditorConfig::new("").placeholder("Today...").layout(
+                        NotesEditorLayout::new(metrics.editor_padding_x, metrics.editor_padding_y),
+                    ),
+                )
+            });
 
         // `subscribe_in` already runs the handler with this DayPageView leased
         // (`this` is `&mut Self`); re-leasing via `entity.update` here would
@@ -65,6 +63,14 @@ impl DayPageView {
             editor_subscription,
             focus_handle: cx.focus_handle(),
             fragment_open_targets: Vec::new(),
+            spine_selected_index: 0,
+            spine_hovered_index: None,
+            spine_empty_subsearch_armed_for: None,
+            spine_cache_key: String::new(),
+            spine_dismissed_cache_key: None,
+            spine_grouped_cache: Vec::new(),
+            spine_flat_cache: Vec::new(),
+            spine_alias_cache: std::collections::HashMap::new(),
         }
     }
 
@@ -118,12 +124,7 @@ impl DayPageView {
             .collect();
     }
 
-    pub fn open_fragment_at(
-        &mut self,
-        index: usize,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    pub fn open_fragment_at(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {
         let Some(fragment_path) = self.fragment_open_targets.get(index).cloned() else {
             return;
         };
@@ -152,6 +153,8 @@ impl DayPageView {
         let content = self.notes_editor.read(cx).content(cx);
         self.session.apply_editor_content(&content);
         self.refresh_fragment_open_targets(&content);
+        self.spine_dismissed_cache_key = None;
+        self.spine_alias_cache.clear();
         self.poll_external_disk_changes(window, cx);
         self.sync_footer(window, cx);
         cx.notify();
@@ -197,10 +200,28 @@ impl DayPageView {
         }
     }
 
+    pub(crate) fn automation_input_value(&self, cx: &App) -> String {
+        self.notes_editor.read(cx).content(cx)
+    }
+
     pub fn focus_editor(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.notes_editor.update(cx, |editor, cx| {
             editor.focus(window, cx);
         });
+    }
+
+    pub fn set_input(&mut self, text: String, window: &mut Window, cx: &mut Context<Self>) {
+        self.notes_editor.update(cx, |editor, cx| {
+            editor.set_value_with_cursor_at_end(text.clone(), window, cx);
+        });
+        self.session.apply_editor_content(&text);
+        self.refresh_fragment_open_targets(&text);
+        self.spine_selected_index = 0;
+        self.spine_empty_subsearch_armed_for = None;
+        self.spine_dismissed_cache_key = None;
+        self.spine_alias_cache.clear();
+        self.sync_footer(window, cx);
+        cx.notify();
     }
 
     fn sync_footer(&self, window: &mut Window, cx: &mut Context<Self>) {
@@ -233,10 +254,7 @@ impl Render for DayPageView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.poll_external_disk_changes(window, cx);
 
-        let app = self
-            .app
-            .upgrade()
-            .expect("DayPageView app entity dropped");
+        let app = self.app.upgrade().expect("DayPageView app entity dropped");
 
         let app_state = app.read(cx);
         let menu_def = app_state.current_main_menu_theme.def();
@@ -278,11 +296,13 @@ impl Render for DayPageView {
         let accent_color = app_state.theme.colors.accent.selected;
         let theme = app_state.theme.clone();
         let editor_padding_y = editor_metrics.editor_padding_y;
-        drop(app_state);
+        let spine_panel = self.render_day_page_spine_panel(cx);
 
         let back_bar = if viewing_fragment {
             let label = match self.session.binding() {
-                DayPageBinding::Fragment { return_day_date, .. } => {
+                DayPageBinding::Fragment {
+                    return_day_date, ..
+                } => {
                     format!("Today · {return_day_date}")
                 }
                 DayPageBinding::Day => "Today".to_string(),
@@ -428,7 +448,8 @@ impl Render for DayPageView {
                     .flex_1()
                     .min_h(px(0.))
                     .when_some(sediment_layer, |parent, layer| parent.child(layer))
-                    .child(editor_input),
+                    .child(editor_input)
+                    .when_some(spine_panel, |parent, panel| parent.child(panel)),
             );
 
         let context_zone = app.update(cx, |app, cx| {
@@ -506,9 +527,35 @@ impl DayPageView {
         cx: &mut Context<Self>,
     ) {
         let key = event.keystroke.key.to_lowercase();
-        let cmd = event.keystroke.modifiers.platform;
+        self.handle_key_parts(
+            &key,
+            event.keystroke.modifiers.platform,
+            event.keystroke.modifiers.shift,
+            event.keystroke.modifiers.alt,
+            event.keystroke.modifiers.control,
+            window,
+            cx,
+        );
+    }
 
-        if crate::ui_foundation::is_key_escape(&key) {
+    pub(crate) fn handle_key_parts(
+        &mut self,
+        key: &str,
+        cmd: bool,
+        shift: bool,
+        alt: bool,
+        control: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let exact_plain = !cmd && !shift && !alt && !control;
+        let exact_cmd = cmd && !shift && !alt && !control;
+
+        if exact_plain && crate::ui_foundation::is_key_escape(&key) {
+            if self.day_page_spine_model(cx).is_some() {
+                self.reset_day_page_spine_navigation(cx);
+                return;
+            }
             if self.session.is_viewing_fragment() {
                 self.return_to_day_page(window, cx);
                 return;
@@ -521,7 +568,25 @@ impl DayPageView {
             return;
         }
 
-        if cmd && key == "s" {
+        if exact_plain && matches!(key, "down" | "arrowdown") {
+            if self.move_day_page_spine_selection(1, cx) {
+                return;
+            }
+        }
+
+        if exact_plain && matches!(key, "up" | "arrowup") {
+            if self.move_day_page_spine_selection(-1, cx) {
+                return;
+            }
+        }
+
+        if exact_plain && key == "enter" {
+            if self.accept_day_page_spine_selection(window, cx) {
+                return;
+            }
+        }
+
+        if exact_cmd && key == "s" {
             self.save_and_sync_footer(window, cx);
         }
     }

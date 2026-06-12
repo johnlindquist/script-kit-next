@@ -20,13 +20,20 @@ fn set_main_window_input_text_for_batch(
     cx: &mut gpui::AsyncApp,
 ) -> anyhow::Result<()> {
     let text = text.to_string();
-    if let Some(handle) = main_window_handle {
+    if let Some(handle) = main_window_handle.or_else(crate::get_main_window_handle) {
         handle.update(cx, |_root, window, cx| {
             this.update(cx, |app, cx| {
                 app.set_input_text_in_window(&text, window, cx);
             })
         })??;
         return Ok(());
+    }
+
+    let needs_window = this.update(cx, |app, _cx| {
+        matches!(app.current_view, AppView::DayPage { .. })
+    })?;
+    if needs_window {
+        anyhow::bail!("main window handle unavailable for Day Page setInput");
     }
 
     this.update(cx, |app, cx| {
@@ -4388,16 +4395,7 @@ impl ScriptListApp {
                     ),
                     AppView::DayPage { entity } => {
                         let content = entity.read(cx).notes_editor.read(cx).content(cx);
-                        (
-                            "dayPage".to_string(),
-                            None,
-                            None,
-                            content,
-                            0,
-                            0,
-                            -1,
-                            None,
-                        )
+                        ("dayPage".to_string(), None, None, content, 0, 0, -1, None)
                     }
                     AppView::ScriptIssuesView { .. } => (
                         "scriptIssues".to_string(),
@@ -9655,7 +9653,7 @@ impl ScriptListApp {
                         .any(|el| el.element_type == protocol::ElementType::Choice)
                 }
                 protocol::WaitNamedCondition::InputEmpty => {
-                    let input = self.current_input_value();
+                    let input = self.current_input_value(cx);
                     input.is_empty()
                 }
                 protocol::WaitNamedCondition::WindowVisible => {
@@ -9683,24 +9681,8 @@ impl ScriptListApp {
                         .any(|el| el.semantic_id == *semantic_id && el.focused == Some(true))
                 }
                 protocol::WaitDetailedCondition::StateMatch { state: expected } => {
-                    let prompt_type = self.current_prompt_type(cx);
-                    let input_value = self.current_input_value();
-                    let selected_value = self.current_selected_value();
-                    let window_visible = script_kit_gpui::is_main_window_visible();
-
-                    expected
-                        .prompt_type
-                        .as_deref()
-                        .is_none_or(|v| v == prompt_type)
-                        && expected
-                            .input_value
-                            .as_deref()
-                            .is_none_or(|v| v == input_value)
-                        && expected
-                            .selected_value
-                            .as_deref()
-                            .is_none_or(|v| selected_value.as_deref() == Some(v))
-                        && expected.window_visible.is_none_or(|v| v == window_visible)
+                    let snapshot = self.build_main_ui_snapshot(cx);
+                    crate::protocol::transaction_executor::matches_state_spec(&snapshot, expected)
                 }
                 // ── Agent Chat-specific wait conditions ────────────────────
                 protocol::WaitDetailedCondition::AgentChatReady => {
@@ -9930,6 +9912,7 @@ impl ScriptListApp {
             AppView::ChatPrompt { .. } => "chat".to_string(),
             AppView::MiniPrompt { .. } => "mini".to_string(),
             AppView::MicroPrompt { .. } => "micro".to_string(),
+            AppView::DayPage { .. } => "dayPage".to_string(),
             _ => "unknown".to_string(),
         }
     }
@@ -10183,12 +10166,13 @@ impl ScriptListApp {
     /// and the full contract (stdin line cap `MAX_STDIN_COMMAND_BYTES`
     /// = 16 KiB is the only bound). Pinned by
     /// `tests/stdin_setfilter_input_value_verbatim_contract.rs`.
-    fn current_input_value(&self) -> String {
+    fn current_input_value(&self, cx: &App) -> String {
         match &self.current_view {
             AppView::ScriptList => self.filter_text.clone(),
             AppView::ArgPrompt { .. } => self.arg_input.text().to_string(),
             AppView::MiniPrompt { .. } => self.arg_input.text().to_string(),
             AppView::MicroPrompt { .. } => self.arg_input.text().to_string(),
+            AppView::DayPage { entity } => entity.read(cx).automation_input_value(cx),
             _ => String::new(),
         }
     }
@@ -10244,7 +10228,7 @@ impl ScriptListApp {
     fn build_main_ui_snapshot(&self, cx: &Context<Self>) -> protocol::UiStateSnapshot {
         let window_visible = script_kit_gpui::is_main_window_visible();
         let window_focused = window_visible && self.focused_input != FocusedInput::None;
-        let input_value = self.current_input_value();
+        let input_value = self.current_input_value(cx);
         let selected_value = self.current_selected_value();
         let outcome = self.collect_visible_elements(200, cx);
         let focused_semantic_id = outcome.focused_semantic_id();
@@ -10261,7 +10245,7 @@ impl ScriptListApp {
         protocol::UiStateSnapshot {
             window_visible,
             window_focused,
-            prompt_type: Some(self.app_view_name()),
+            prompt_type: Some(self.current_prompt_type(cx)),
             input_value: if input_value.is_empty() {
                 None
             } else {
@@ -10367,6 +10351,13 @@ impl ScriptListApp {
                 self.menu_syntax_form_suggestion_field_id = None;
                 self.menu_syntax_form_suggestion_selected_index = None;
                 self.set_filter_text_immediate(text.to_string(), window, cx);
+                cx.notify();
+            }
+            AppView::DayPage { entity } => {
+                let entity = entity.clone();
+                entity.update(cx, |view, cx| {
+                    view.set_input(text.to_string(), window, cx);
+                });
                 cx.notify();
             }
             _ => self.set_input_text(text, cx),
@@ -10845,14 +10836,14 @@ fn menu_syntax_object_refs_by_range_for_filter(
 #[cfg(test)]
 mod prompt_handler_message_tests {
     use super::{
-        PromptMessageRoute, build_script_error_agent_chat_prompt,
-        build_script_error_report_markdown, classify_prompt_message_route,
-        escape_windows_cmd_open_target, persist_script_error_agent_chat_context_bundle_in_dir,
-        prompt_coming_soon_warning, resolve_ai_start_chat_provider,
-        should_restore_main_window_after_script_exit, unhandled_message_warning,
+        build_script_error_agent_chat_prompt, build_script_error_report_markdown,
+        classify_prompt_message_route, escape_windows_cmd_open_target,
+        persist_script_error_agent_chat_context_bundle_in_dir, prompt_coming_soon_warning,
+        resolve_ai_start_chat_provider, should_restore_main_window_after_script_exit,
+        unhandled_message_warning, PromptMessageRoute,
     };
-    use crate::PromptMessage;
     use crate::ai::providers::OpenAiProvider;
+    use crate::PromptMessage;
 
     #[test]
     fn test_handle_prompt_message_routes_confirm_request_to_confirm_window() {

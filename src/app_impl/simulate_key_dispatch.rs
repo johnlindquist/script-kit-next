@@ -2011,6 +2011,28 @@ impl ScriptListApp {
                         );
                     }
                 }
+                AppView::DayPage { entity } => {
+                    if view.simulate_key_requests_generic_actions_toggle(
+                        &key_lower, has_cmd, has_shift, _has_alt, _has_ctrl,
+                    ) {
+                        logging::log(
+                            "STDIN",
+                            "SimulateKey: Cmd+K - generic actions toggle (DayPage)",
+                        );
+                        view.toggle_actions(ctx, window);
+                    } else {
+                        logging::log(
+                            "STDIN",
+                            &format!("SimulateKey: Dispatching '{}' to DayPage", key_lower),
+                        );
+                        let entity = entity.clone();
+                        entity.update(ctx, |day_page, cx| {
+                            day_page.handle_key_parts(
+                                &key_lower, has_cmd, has_shift, _has_alt, _has_ctrl, window, cx,
+                            );
+                        });
+                    }
+                }
                 _ => {
                     // Generic fallback: any view whose current_actions_host()
                     // resolves (i.e. participates in the shared ActionsDialog)
