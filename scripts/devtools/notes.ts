@@ -447,6 +447,7 @@ function notesState(elements: JsonObject, focus: JsonObject, text: JsonObject, r
     editorPresent: Boolean(editor),
     editorFocused: focus.focusedSemanticId === "input:notes-editor" || editor?.focused === true,
     focusedSemanticId: focus.focusedSemanticId ?? elements.focusedSemanticId ?? null,
+    editorStyle: editor?.style ?? (editor?.raw as JsonObject | undefined)?.style ?? null,
     activeNoteId: runtimeNotes.activeNoteId ?? null,
     dirtyState: runtimeNotes.dirtyState ?? null,
     editorTextLength: runtimeEditor.textLength ?? editorText.length,

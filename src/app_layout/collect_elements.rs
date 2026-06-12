@@ -83,6 +83,7 @@ impl ScriptListApp {
             selectable: None,
             status_kind: None,
             action_disabled: None,
+            style: None,
         }
     }
 
@@ -339,6 +340,7 @@ impl ScriptListApp {
                     selectable: Some(false),
                     status_kind: None,
                     action_disabled: None,
+            style: None,
                 }];
 
                 for (index, (value, label)) in rows.iter().enumerate() {
@@ -360,6 +362,7 @@ impl ScriptListApp {
                             selectable: Some(false),
                             status_kind: None,
                             action_disabled: None,
+            style: None,
                         },
                     ) {
                         break;
@@ -654,6 +657,7 @@ impl ScriptListApp {
                     selectable: Some(true),
                     status_kind: None,
                     action_disabled: None,
+            style: None,
                 });
 
                 elements.push(protocol::ElementInfo {
@@ -671,6 +675,7 @@ impl ScriptListApp {
                     selectable: Some(false),
                     status_kind: Some(management.status_kind.clone()),
                     action_disabled: None,
+            style: None,
                 });
                 elements.push(protocol::ElementInfo {
                     semantic_id: "control:theme-chooser:save-name".to_string(),
@@ -687,6 +692,7 @@ impl ScriptListApp {
                     selectable: Some(true),
                     status_kind: management.duplicate_status_kind.clone(),
                     action_disabled: None,
+            style: None,
                 });
 
                 elements.push(protocol::ElementInfo {
@@ -704,6 +710,7 @@ impl ScriptListApp {
                     selectable: Some(true),
                     status_kind: None,
                     action_disabled: None,
+            style: None,
                 });
                 elements.push(protocol::ElementInfo {
                     semantic_id: "button:theme-chooser-edit-theme-as-text".to_string(),
@@ -720,6 +727,7 @@ impl ScriptListApp {
                     selectable: Some(true),
                     status_kind: None,
                     action_disabled: None,
+            style: None,
                 });
                 elements.push(protocol::ElementInfo {
                     semantic_id: "button:theme-chooser-update-user-theme".to_string(),
@@ -736,6 +744,7 @@ impl ScriptListApp {
                     selectable: Some(management.update_disabled.is_none()),
                     status_kind: None,
                     action_disabled: management.update_disabled.clone(),
+            style: None,
                 });
                 elements.push(protocol::ElementInfo {
                     semantic_id: "button:theme-chooser-delete-user-theme".to_string(),
@@ -752,6 +761,7 @@ impl ScriptListApp {
                     selectable: Some(management.delete_disabled.is_none()),
                     status_kind: None,
                     action_disabled: management.delete_disabled.clone(),
+            style: None,
                 });
                 elements.push(protocol::ElementInfo {
                     semantic_id: "button:theme-chooser-restore-deleted-user-theme".to_string(),
@@ -768,6 +778,7 @@ impl ScriptListApp {
                     selectable: Some(management.restore_disabled.is_none()),
                     status_kind: None,
                     action_disabled: management.restore_disabled.clone(),
+            style: None,
                 });
                 elements.push(protocol::ElementInfo {
                     semantic_id: "button:theme-chooser-gradient-cycle".to_string(),
@@ -788,6 +799,7 @@ impl ScriptListApp {
                     selectable: Some(true),
                     status_kind: None,
                     action_disabled: None,
+            style: None,
                 });
                 let gradient_layer_count = self
                     .theme
@@ -810,6 +822,7 @@ impl ScriptListApp {
                     selectable: Some(true),
                     status_kind: None,
                     action_disabled: None,
+            style: None,
                 });
                 elements.push(protocol::ElementInfo {
                     semantic_id: "button:theme-chooser-gradient-layer-remove".to_string(),
@@ -827,6 +840,7 @@ impl ScriptListApp {
                     status_kind: None,
                     action_disabled: (gradient_layer_count == 0)
                         .then_some("no_gradient_layers".to_string()),
+                    style: None,
                 });
 
                 let opacity = self.theme.get_opacity();
@@ -859,6 +873,7 @@ impl ScriptListApp {
                             selectable: Some(true),
                             status_kind: None,
                             action_disabled: None,
+            style: None,
                         });
                     };
                 push_theme_control(
@@ -1064,6 +1079,7 @@ impl ScriptListApp {
                         selectable: Some(true),
                         status_kind: None,
                         action_disabled: None,
+            style: None,
                     });
                 }
 
@@ -1293,6 +1309,7 @@ impl ScriptListApp {
                         selectable: Some(false),
                         status_kind: status_kind.map(str::to_string),
                         action_disabled: action_disabled.map(str::to_string),
+            style: None,
                     });
                 };
 
@@ -1411,6 +1428,7 @@ impl ScriptListApp {
                         selectable: Some(disabled.is_none()),
                         status_kind: disabled.map(str::to_string),
                         action_disabled: disabled.map(str::to_string),
+            style: None,
                     });
                 }
 
@@ -1547,6 +1565,7 @@ impl ScriptListApp {
             selectable: Some(false),
             status_kind: footer.mismatch.clone(),
             action_disabled: None,
+            style: None,
         });
 
         for (index, button) in footer.buttons.iter().enumerate() {
@@ -1578,6 +1597,7 @@ impl ScriptListApp {
                 selectable: Some(button.enabled),
                 status_kind: button.action_disabled.clone(),
                 action_disabled: button.action_disabled.clone(),
+            style: None,
             });
         }
     }
@@ -1673,6 +1693,7 @@ impl ScriptListApp {
                 selectable: None,
                 status_kind: None,
                 action_disabled: None,
+            style: None,
             });
         }
 
@@ -1722,6 +1743,7 @@ impl ScriptListApp {
                 selectable: Some(true),
                 status_kind: None,
                 action_disabled: None,
+            style: None,
             },
         );
 
@@ -1743,6 +1765,7 @@ impl ScriptListApp {
                 selectable: Some(false),
                 status_kind: None,
                 action_disabled: None,
+            style: None,
             },
         );
 
@@ -1765,6 +1788,7 @@ impl ScriptListApp {
                     selectable: Some(false),
                     status_kind: Some("current".to_string()),
                     action_disabled: None,
+            style: None,
                 },
             );
         }
@@ -1790,6 +1814,7 @@ impl ScriptListApp {
                     selectable: Some(true),
                     status_kind: result.selected.then(|| "current".to_string()),
                     action_disabled: None,
+            style: None,
                 },
             );
         }
@@ -1923,6 +1948,7 @@ impl ScriptListApp {
                         selectable: Some(false),
                         status_kind,
                         action_disabled: None,
+            style: None,
                     },
                 );
             }
@@ -1949,6 +1975,7 @@ impl ScriptListApp {
                     selectable: Some(false),
                     status_kind: Some("empty".to_string()),
                     action_disabled: None,
+            style: None,
                 },
             );
         }
@@ -2010,6 +2037,7 @@ impl ScriptListApp {
                     selectable: Some(false),
                     status_kind: None,
                     action_disabled: None,
+            style: None,
                 },
             );
             return (elements, total_count);
@@ -2034,6 +2062,7 @@ impl ScriptListApp {
                 selectable: Some(true),
                 status_kind: None,
                 action_disabled: None,
+            style: None,
             });
         }
 
@@ -2108,6 +2137,7 @@ impl ScriptListApp {
             selectable: None,
             status_kind: None,
             action_disabled: None,
+            style: None,
         }
     }
 
@@ -2132,6 +2162,7 @@ impl ScriptListApp {
             selectable: None,
             status_kind: None,
             action_disabled: None,
+            style: None,
         }
     }
 
@@ -2207,6 +2238,7 @@ impl ScriptListApp {
                         selectable: None,
                         status_kind: None,
                         action_disabled: None,
+            style: None,
                     }
                 }
             };
@@ -2366,6 +2398,7 @@ impl ScriptListApp {
                 selectable: Some(false),
                 status_kind: Some(path_prompt.visible_status_kind().as_str().to_string()),
                 action_disabled: None,
+            style: None,
             },
         );
 
@@ -2474,6 +2507,7 @@ impl ScriptListApp {
                     selectable: None,
                     status_kind: None,
                     action_disabled: None,
+            style: None,
                 },
             );
         }
@@ -2500,6 +2534,7 @@ impl ScriptListApp {
                     selectable: Some(false),
                     status_kind: Some(error.kind_str().to_string()),
                     action_disabled: None,
+            style: None,
                 },
             );
         }
@@ -2547,6 +2582,7 @@ impl ScriptListApp {
                 selectable: Some(false),
                 status_kind: None,
                 action_disabled: None,
+            style: None,
             });
         }
 
@@ -2874,6 +2910,7 @@ impl ScriptListApp {
                     selectable: Some(row.enabled),
                     status_kind: None,
                     action_disabled: (!row.enabled).then(|| "disabled".to_string()),
+            style: None,
                 });
             }
 
@@ -2921,6 +2958,7 @@ impl ScriptListApp {
                     selectable: Some(row.enabled),
                     status_kind: None,
                     action_disabled: (!row.enabled).then(|| "disabled".to_string()),
+            style: None,
                 });
             }
 
@@ -2963,6 +3001,7 @@ impl ScriptListApp {
                     selectable: Some(selectable),
                     status_kind: None,
                     action_disabled: None,
+            style: None,
                 });
             }
         }
@@ -3003,6 +3042,7 @@ impl ScriptListApp {
                         selectable: Some(true),
                         status_kind: None,
                         action_disabled: None,
+            style: None,
                     };
                     if matches!(result, scripts::SearchResult::File(_)) {
                         element.kind = Some("file".to_string());
@@ -3030,6 +3070,7 @@ impl ScriptListApp {
                         selectable: Some(false),
                         status_kind: Some(status.status_kind.as_str().to_string()),
                         action_disabled: None,
+            style: None,
                     });
                     row_index += 1;
                 }
@@ -3059,6 +3100,7 @@ impl ScriptListApp {
                 selectable: Some(false),
                 status_kind: Some(status.status_kind.as_str().to_string()),
                 action_disabled: None,
+            style: None,
             });
             row_index += 1;
         }

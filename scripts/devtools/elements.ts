@@ -167,6 +167,7 @@ function snapshot(nodes: JsonObject[]) {
       focused: node.focused ?? null,
       index: node.index ?? null,
       owner: node.sourceName ?? node.source ?? null,
+      style: node.style ?? null,
       actions: [],
       bounds: node.bounds ?? null,
       raw: node,

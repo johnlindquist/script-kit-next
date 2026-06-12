@@ -2,7 +2,9 @@
 
 use chrono::Utc;
 
-use crate::components::notes_editor::{NotesEditorConfig, NotesEditorLayout};
+use crate::components::notes_editor::{
+    NotesEditorConfig, NotesEditorLayout, NotesEditorSurfaceStyle,
+};
 use crate::components::unified_list_item::{
     Density, ItemState, TextContent, TrailingContent, UnifiedListItem, UnifiedListItemColors,
 };
@@ -337,7 +339,7 @@ impl Render for DayPageView {
         let viewing_fragment = self.session.is_viewing_fragment();
         let editor_metrics = crate::notes::window::style::adopted_metrics();
         let list_colors = UnifiedListItemColors::from_theme(&app_state.theme);
-        let editor_bg = app_state.theme.colors.background.main;
+        let editor_surface = NotesEditorSurfaceStyle::from_theme(&app_state.theme);
         let accent_color = app_state.theme.colors.accent.selected;
         let theme = app_state.theme.clone();
         let editor_padding_y = editor_metrics.editor_padding_y;
@@ -430,7 +432,7 @@ impl Render for DayPageView {
                                 .right(px(0.))
                                 .top(px(top))
                                 .h(px(height))
-                                .bg(rgba((editor_bg << 8) | 0xFF))
+                                .bg(rgba(editor_surface.occlusion_rgba))
                                 .occlude()
                                 .cursor_pointer()
                                 .on_mouse_down(
@@ -458,7 +460,7 @@ impl Render for DayPageView {
                                 .right(px(0.))
                                 .top(px(top))
                                 .h(px(SEDIMENT_LINE_HEIGHT))
-                                .bg(rgba((editor_bg << 8) | 0xFF))
+                                .bg(rgba(editor_surface.occlusion_rgba))
                                 .occlude()
                                 .flex()
                                 .items_center()

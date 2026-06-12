@@ -581,7 +581,8 @@ impl DayPageView {
         let theme = app_state.theme.clone();
         let item_colors = crate::list_item::ListItemColors::from_theme(&theme);
         let main_menu_theme = app_state.current_main_menu_theme;
-        let editor_bg = theme.colors.background.main;
+        let editor_surface =
+            crate::components::notes_editor::NotesEditorSurfaceStyle::from_theme(&theme);
 
         let selected = if self.day_page_spine_empty_selection_suppressed(&model) {
             None
@@ -677,7 +678,7 @@ impl DayPageView {
                 .id("day-page-spine-list")
                 .absolute()
                 .inset_0()
-                .bg(rgba((editor_bg << 8) | 0xFF))
+                .bg(rgba(editor_surface.occlusion_rgba))
                 .occlude()
                 .overflow_y_scroll()
                 .child(rows)
@@ -814,11 +815,25 @@ impl DayPageView {
     ) -> (Vec<protocol::ElementInfo>, usize) {
         let content = self.notes_editor.read(cx).content(cx);
         let selection = self.notes_editor.read(cx).selection(cx);
-        let mut editor = protocol::ElementInfo::input("day-page-editor", Some(content.as_str()), true);
+        let mut editor =
+            protocol::ElementInfo::input("day-page-editor", Some(content.as_str()), true);
+        let metrics = crate::notes::window::style::adopted_metrics();
+        let editor_surface =
+            crate::components::notes_editor::NotesEditorSurfaceStyle::from_theme(&app_state.theme);
         editor.role = Some("day_page_editor".to_string());
         editor.kind = Some("editor_selection".to_string());
         editor.source = Some(format!("{}:{}", selection.start, selection.end));
         editor.source_name = Some(content.len().to_string());
+        editor.style = Some(protocol::ElementStyleInfo {
+            owner: editor_surface.owner.to_string(),
+            input_render_path: Some(editor_surface.input_render_path.to_string()),
+            surface_background_rgb: Some(editor_surface.background_rgb),
+            occlusion_rgba: Some(editor_surface.occlusion_rgba),
+            padding_x: Some(metrics.editor_padding_x),
+            padding_y: Some(metrics.editor_padding_y),
+            font_family_source: Some("theme.mono_font_family".to_string()),
+            text_size_source: Some("theme.mono_font_size".to_string()),
+        });
         let mut elements = vec![protocol::ElementInfo::panel("day-page"), editor];
 
         let Some((key, _, parse, projection, active_empty_subsearch)) =
@@ -885,6 +900,7 @@ impl DayPageView {
                 selectable: Some(row.is_selectable),
                 status_kind: None,
                 action_disabled: None,
+                style: None,
             });
         }
 

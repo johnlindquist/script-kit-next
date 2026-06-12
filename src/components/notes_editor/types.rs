@@ -1,5 +1,9 @@
 //! Host-facing configuration for the shared markdown notes editor.
 
+pub const NOTES_EDITOR_STYLE_OWNER: &str = "components.notes_editor";
+pub const NOTES_EDITOR_INPUT_RENDER_PATH: &str = "components.notes_editor.render_input_state";
+pub const NOTES_EDITOR_OCCLUSION_ALPHA: u32 = 0xFF;
+
 /// Layout padding for the editor body and preview surfaces.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct NotesEditorLayout {
@@ -41,5 +45,39 @@ impl NotesEditorConfig {
     pub fn layout(mut self, layout: NotesEditorLayout) -> Self {
         self.layout = layout;
         self
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct NotesEditorSurfaceStyle {
+    pub owner: &'static str,
+    pub input_render_path: &'static str,
+    pub background_rgb: u32,
+    pub occlusion_rgba: u32,
+}
+
+impl NotesEditorSurfaceStyle {
+    pub fn from_theme(theme: &crate::theme::Theme) -> Self {
+        let background_rgb = theme.colors.background.main;
+        Self {
+            owner: NOTES_EDITOR_STYLE_OWNER,
+            input_render_path: NOTES_EDITOR_INPUT_RENDER_PATH,
+            background_rgb,
+            occlusion_rgba: notes_editor_occlusion_rgba(background_rgb),
+        }
+    }
+}
+
+pub const fn notes_editor_occlusion_rgba(background_rgb: u32) -> u32 {
+    (background_rgb << 8) | NOTES_EDITOR_OCCLUSION_ALPHA
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn notes_editor_surface_occlusion_is_solid_theme_background() {
+        assert_eq!(notes_editor_occlusion_rgba(0x112233), 0x112233ff);
     }
 }

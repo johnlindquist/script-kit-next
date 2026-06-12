@@ -1,9 +1,8 @@
-use gpui::{div, prelude::*, px, AnyElement, App, IntoElement, ParentElement, Styled};
+use gpui::{div, prelude::*, px, AnyElement, App, Entity, IntoElement, ParentElement, Styled};
 use gpui_component::{
-    input::Input,
+    input::{Input, InputState},
     scroll::ScrollableElement,
     theme::{ActiveTheme, Theme},
-    Sizable,
 };
 
 use crate::notes::markdown;
@@ -40,7 +39,11 @@ impl NotesEditor {
 
     /// Render the editable markdown input surface.
     pub fn render_input(&self, cx: &App) -> AnyElement {
-        let editor = Input::new(&self.input_state)
+        Self::render_input_state(&self.input_state, cx)
+    }
+
+    pub fn render_input_state(input_state: &Entity<InputState>, cx: &App) -> AnyElement {
+        let editor = Input::new(input_state)
             .h_full()
             .appearance(false)
             .font_family(cx.theme().mono_font_family.clone())

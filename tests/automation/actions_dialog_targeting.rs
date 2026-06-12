@@ -864,6 +864,7 @@ fn prompt_popup_inspect_result_with_full_quality() {
             selectable: None,
             status_kind: None,
             action_disabled: None,
+            style: None,
             semantic_id: "button:0:confirm".into(),
         }],
         total_count: 1,

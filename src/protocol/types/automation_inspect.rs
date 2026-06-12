@@ -292,6 +292,7 @@ mod tests {
                 selectable: None,
                 status_kind: None,
                 action_disabled: None,
+                style: None,
             }],
             total_count: 1,
             focused_semantic_id: Some("panel:notes".to_string()),

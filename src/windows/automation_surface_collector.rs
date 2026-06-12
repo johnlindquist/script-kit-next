@@ -10,7 +10,9 @@ use std::collections::HashMap;
 use std::sync::{Mutex, OnceLock};
 
 use crate::menu_syntax::TriggerPickerSnapshot;
-use crate::protocol::{AutomationWindowInfo, AutomationWindowKind, ElementInfo, ElementType};
+use crate::protocol::{
+    AutomationWindowInfo, AutomationWindowKind, ElementInfo, ElementStyleInfo, ElementType,
+};
 
 /// Machine-readable indicator of the semantic element quality level.
 ///
@@ -256,6 +258,7 @@ fn element(
         selectable: None,
         status_kind: None,
         action_disabled: None,
+        style: None,
     }
 }
 
@@ -1142,6 +1145,29 @@ fn collect_notes_snapshot(
     cx: &gpui::App,
 ) -> Option<SurfaceElementSnapshot> {
     let text = crate::notes::get_notes_editor_text(cx)?;
+    let metrics = crate::notes::window::style::adopted_metrics();
+    let theme = crate::theme::get_cached_theme();
+    let editor_surface =
+        crate::components::notes_editor::NotesEditorSurfaceStyle::from_theme(&theme);
+    let mut editor = element(
+        "input:notes-editor",
+        ElementType::Input,
+        None,
+        Some(text),
+        None,
+        Some(true),
+        None,
+    );
+    editor.style = Some(ElementStyleInfo {
+        owner: editor_surface.owner.to_string(),
+        input_render_path: Some(editor_surface.input_render_path.to_string()),
+        surface_background_rgb: Some(editor_surface.background_rgb),
+        occlusion_rgba: Some(editor_surface.occlusion_rgba),
+        padding_x: Some(metrics.editor_padding_x),
+        padding_y: Some(metrics.editor_padding_y),
+        font_family_source: Some("theme.mono_font_family".to_string()),
+        text_size_source: Some("theme.mono_font_size".to_string()),
+    });
 
     Some(SurfaceElementSnapshot {
         elements: vec![
@@ -1154,15 +1180,7 @@ fn collect_notes_snapshot(
                 None,
                 None,
             ),
-            element(
-                "input:notes-editor",
-                ElementType::Input,
-                None,
-                Some(text),
-                None,
-                Some(true),
-                None,
-            ),
+            editor,
         ],
         total_count: 2,
         focused_semantic_id: Some("input:notes-editor".to_string()),

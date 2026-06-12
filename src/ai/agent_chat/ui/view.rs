@@ -2578,6 +2578,7 @@ impl AgentChatView {
                 selectable: Some(false),
                 status_kind: Some(Self::agent_chat_thread_status_label(thread.status).to_string()),
                 action_disabled: None,
+                style: None,
             },
             crate::protocol::ElementInfo {
                 semantic_id: "focused-text-input".to_string(),
@@ -2594,6 +2595,7 @@ impl AgentChatView {
                 selectable: Some(!input_locked),
                 status_kind: Some(input_status.to_string()),
                 action_disabled: input_locked.then(|| "submitted_prompt_locked".to_string()),
+                style: None,
             },
             crate::protocol::ElementInfo {
                 semantic_id: "focused-text-context-badge".to_string(),
@@ -2610,6 +2612,7 @@ impl AgentChatView {
                 selectable: Some(false),
                 status_kind: None,
                 action_disabled: None,
+                style: None,
             },
             crate::protocol::ElementInfo {
                 semantic_id: "focused-text-context-status".to_string(),
@@ -2630,6 +2633,7 @@ impl AgentChatView {
                     "capture_failed".to_string()
                 }),
                 action_disabled: None,
+                style: None,
             },
             crate::protocol::ElementInfo {
                 semantic_id: "focused-text-profile-icon".to_string(),
@@ -2650,6 +2654,7 @@ impl AgentChatView {
                     "idle".to_string()
                 }),
                 action_disabled: None,
+                style: None,
             },
         ];
 
@@ -2676,6 +2681,7 @@ impl AgentChatView {
                     "output_empty".to_string()
                 }),
                 action_disabled: None,
+                style: None,
             });
         }
 
@@ -2695,6 +2701,7 @@ impl AgentChatView {
                 selectable: Some(action.enabled),
                 status_kind: None,
                 action_disabled: action.disabled_reason.map(str::to_string),
+                style: None,
             });
         }
 

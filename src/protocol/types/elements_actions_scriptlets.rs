@@ -25,6 +25,31 @@ pub enum ElementType {
     Unknown,
 }
 
+/// Style ownership metadata for semantic UI elements.
+///
+/// This is intentionally token/source-level metadata, not computed pixel
+/// sampling. Runtime probes use it to prove that two surfaces share the same
+/// component and theme-token owner.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ElementStyleInfo {
+    pub owner: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub input_render_path: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub surface_background_rgb: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub occlusion_rgba: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub padding_x: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub padding_y: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub font_family_source: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub text_size_source: Option<String>,
+}
+
 /// Information about a UI element returned by getElements
 ///
 /// Contains semantic ID, type, text content, and state information
@@ -73,6 +98,9 @@ pub struct ElementInfo {
     /// Machine-stable disabled reason for action-like elements.
     #[serde(rename = "actionDisabled", skip_serializing_if = "Option::is_none")]
     pub action_disabled: Option<String>,
+    /// Shared component/style owner metadata for runtime parity probes.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub style: Option<ElementStyleInfo>,
 }
 
 impl ElementInfo {
@@ -93,6 +121,7 @@ impl ElementInfo {
             selectable: None,
             status_kind: None,
             action_disabled: None,
+            style: None,
         }
     }
 
@@ -113,6 +142,7 @@ impl ElementInfo {
             selectable: None,
             status_kind: None,
             action_disabled: None,
+            style: None,
         }
     }
 
@@ -133,6 +163,7 @@ impl ElementInfo {
             selectable: None,
             status_kind: None,
             action_disabled: None,
+            style: None,
         }
     }
 
@@ -153,6 +184,7 @@ impl ElementInfo {
             selectable: None,
             status_kind: None,
             action_disabled: None,
+            style: None,
         }
     }
 
@@ -173,6 +205,7 @@ impl ElementInfo {
             selectable: None,
             status_kind: None,
             action_disabled: None,
+            style: None,
         }
     }
 }

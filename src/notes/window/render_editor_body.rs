@@ -131,12 +131,6 @@ impl NotesApp {
         // not reintroduce an absolutely positioned overlay here: hand-derived
         // padding/advance/line-height math drifts from the Input's real
         // metrics and renders the ghost offset from the text.
-        let editor = Input::new(&self.editor_state)
-            .h_full()
-            .appearance(false)
-            .font_family(cx.theme().mono_font_family.clone())
-            .text_size(cx.theme().mono_font_size);
-
-        div().h_full().child(editor).into_any_element()
+        crate::components::notes_editor::NotesEditor::render_input_state(&self.editor_state, cx)
     }
 }

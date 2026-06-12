@@ -63,7 +63,8 @@ pub use batch_wait::{
 };
 pub use chat::{ChatMessagePosition, ChatMessageRole, ChatPromptConfig, ChatPromptMessage};
 pub use elements_actions_scriptlets::{
-    ElementInfo, ElementType, ProtocolAction, ScriptletData, ScriptletMetadataData,
+    ElementInfo, ElementStyleInfo, ElementType, ProtocolAction, ScriptletData,
+    ScriptletMetadataData,
 };
 pub use grid_layout::{
     BoxModelSides, ComputedBoxModel, ComputedFlexStyle, GridColorScheme, GridDepthOption,
