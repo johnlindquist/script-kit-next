@@ -19,9 +19,9 @@ use tracing::{debug, warn};
 use crate::brain::store::{self, ClipboardSedimentTier};
 use crate::brain::substrate::{BrainSubstrate, DayEntry};
 
-use super::database::{
-    get_entry_content, get_entry_sediment_state, mark_brain_kept, remove_entry, SedimentState,
-};
+#[cfg(test)]
+use super::database::{get_entry_content, remove_entry};
+use super::database::{get_entry_sediment_state, mark_brain_kept, SedimentState};
 
 static SUBSTRATE: OnceLock<RwLock<Option<BrainSubstrate>>> = OnceLock::new();
 
@@ -172,6 +172,7 @@ pub fn should_whisper_kept_hud(text: &str, content_is_image: bool) -> bool {
 }
 
 /// Promote a clipboard entry to brain with an optional post-copy why (T12).
+#[cfg(test)]
 pub fn annotate_clipboard_entry(
     entry_id: &str,
     why: &str,
@@ -209,11 +210,7 @@ pub fn annotate_clipboard_entry(
     Ok(())
 }
 
-/// Reject a clipboard capture: remove DB row and undo sediment day-page writes (T12).
-pub fn reject_clipboard_entry(entry_id: &str) -> anyhow::Result<()> {
-    reject_clipboard_entry_at(entry_id, chrono::Utc::now())
-}
-
+#[cfg(test)]
 fn reject_clipboard_entry_at(entry_id: &str, now: DateTime<Utc>) -> anyhow::Result<()> {
     let text = get_entry_content(entry_id).unwrap_or_default();
     let state = get_entry_sediment_state(entry_id);

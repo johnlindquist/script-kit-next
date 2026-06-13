@@ -38,7 +38,6 @@ mod post_copy;
 mod quick_look;
 mod rejection;
 mod sediment;
-mod tap_window;
 mod temp_file;
 mod types;
 
@@ -104,10 +103,10 @@ pub use rejection::{
     configure_secret_rejection, rejection_count, RejectionReason, SecretRejectionConfig,
 };
 
-// Post-copy quick menu (T12)
+// Post-copy clipboard tracking
 pub use post_copy::{
-    configure_post_copy_menu, install_post_copy_quick_menu, register_kept_hud_whisper,
-    PostCopyMenuConfig, POST_COPY_MENU_AUTOMATION_ID,
+    configure_post_copy_menu, install_post_copy_tracker, register_kept_hud_whisper,
+    PostCopyMenuConfig,
 };
 
 // Monitor/Init

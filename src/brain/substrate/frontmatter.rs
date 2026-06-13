@@ -21,7 +21,7 @@ pub struct BrainFrontmatter {
     pub pinned: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub source: Option<String>,
-    /// User-provided "why" from the post-copy quick menu (T12).
+    /// User-provided "why" retained from older annotated clipboard captures.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub why: Option<String>,
 }

@@ -1,16 +1,15 @@
 #!/usr/bin/env bun
 /**
- * Post-copy ⌘-tap quick menu runtime probe (T12).
+ * Clipboard sediment no-popup runtime probe.
  *
- * Simulates: copy text → bare ⌘ tap → menu visible → annotate → brain doc
- * contains why → reject path removes entry + day-page line.
- *
- * Requires accessibility permission for the CGEventTap lane and cliclick for
- * synthetic modifier events.
+ * The historical filename is kept so existing checklists still find the probe,
+ * but the expected behavior is now: copy keepable content -> brain sediment
+ * records it -> no post-copy popup automation window appears.
  *
  *   bun scripts/agentic/clipboard-post-copy-menu-probe.ts
  */
 
+import { readdir, readFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { Driver } from "../devtools/driver";
 
@@ -20,106 +19,65 @@ const BINARY = join(
   "target-agent/artifacts/t12-post-copy/script-kit-gpui",
 );
 
-const MENU_AUTOMATION_ID = "clipboard-post-copy-menu";
-const PROBE_TEXT = `t12-probe-${Date.now()}`;
-const WHY_TEXT = "auth doc reference";
+const POPUP_AUTOMATION_ID = "clipboard-post-copy-menu";
+const PROBE_URL = `https://example.com/script-kit-t12-${Date.now()}`;
 
-async function findMenuWindow(driver: Driver) {
+async function findPostCopyPopup(driver: Driver) {
   const windows = await driver.listAutomationWindows();
   const list = (windows.windows ?? []) as Array<Record<string, any>>;
   return (
-    list.find((w) => w.automationId === MENU_AUTOMATION_ID) ??
+    list.find((w) => w.automationId === POPUP_AUTOMATION_ID) ??
     list.find((w) => w.semanticSurface === "clipboardPostCopyMenu") ??
     null
   );
 }
 
-async function waitForMenu(driver: Driver, timeoutMs = 8000) {
+async function readDayFiles(brainDaysDir: string) {
+  const names = await readdir(brainDaysDir).catch(() => [] as string[]);
+  const contents: string[] = [];
+  for (const name of names.filter((name) => name.endsWith(".md"))) {
+    contents.push(await readFile(join(brainDaysDir, name), "utf8"));
+  }
+  return contents;
+}
+
+async function waitForBrainUrl(brainDaysDir: string, timeoutMs = 8000) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    const menu = await findMenuWindow(driver);
-    if (menu) return menu;
-    await Bun.sleep(50);
+    const contents = await readDayFiles(brainDaysDir);
+    if (contents.some((content) => content.includes(PROBE_URL))) {
+      return contents;
+    }
+    await Bun.sleep(100);
   }
-  throw new Error("post-copy menu window never appeared");
+  return readDayFiles(brainDaysDir);
 }
 
 const driver = await Driver.launch({
   binary: BINARY,
-  sessionName: "clipboard-post-copy-menu",
+  sessionName: "clipboard-sediment-no-popup",
   sandboxHome: true,
 });
 
-const report: Record<string, any> = { probe_text: PROBE_TEXT };
+const report: Record<string, any> = { probe_url: PROBE_URL };
 
 try {
   await driver.request({ type: "show" }, { timeoutMs: 5000 }).catch(() => {});
   await Bun.sleep(500);
 
-  // Seed clipboard with keepable text (non-URL, single copy).
-  await Bun.$`printf ${PROBE_TEXT} | pbcopy`.quiet();
-  await Bun.sleep(800);
-
-  // Bare ⌘ tap: press and release command without other keys.
-  await Bun.$`cliclick kd:cmd`.quiet();
-  await Bun.sleep(80);
-  await Bun.$`cliclick ku:cmd`.quiet();
-
-  const menu = await waitForMenu(driver);
-  report.menu_appeared = true;
-  report.menu_bounds = menu.bounds;
-
-  const elements = await driver.getElements({ automationId: MENU_AUTOMATION_ID });
-  report.menu_elements = elements?.elements?.length ?? 0;
-
-  // Select Annotate row via keyboard (first row default).
-  driver.simulateKey("enter", []);
-  await Bun.sleep(300);
-
-  for (const ch of WHY_TEXT) {
-    driver.simulateKey(ch, []);
-  }
-  driver.simulateKey("enter", []);
-  await Bun.sleep(500);
+  await Bun.$`printf ${PROBE_URL} | pbcopy`.quiet();
 
   const brainDir = join(driver.sandboxHome ?? "", ".scriptkit/brain/days");
-  const dayFiles = await Array.fromAsync(
-    new Bun.Glob("*.md").scan(brainDir).catch(() => [] as string[]),
-  );
-  let whyFound = false;
-  for (const file of dayFiles) {
-    const content = await Bun.file(join(brainDir, file)).text();
-    if (content.includes(PROBE_TEXT) && content.includes(WHY_TEXT)) {
-      whyFound = true;
-      break;
-    }
-  }
-  report.annotate_why_on_day_page = whyFound;
+  const contents = await waitForBrainUrl(brainDir);
+  const joined = contents.join("\n");
+  const occurrences = joined.split(PROBE_URL).length - 1;
+  const popup = await findPostCopyPopup(driver);
 
-  // Re-copy and reject path.
-  await Bun.$`printf ${PROBE_TEXT} | pbcopy`.quiet();
-  await Bun.sleep(800);
-  await Bun.$`cliclick kd:cmd`.quiet();
-  await Bun.sleep(80);
-  await Bun.$`cliclick ku:cmd`.quiet();
-  await waitForMenu(driver);
-  driver.simulateKey("down", []);
-  driver.simulateKey("enter", []);
-  await Bun.sleep(500);
-
-  let dayStillHasProbe = false;
-  for (const file of dayFiles) {
-    const content = await Bun.file(join(brainDir, file)).text();
-    if (content.includes(PROBE_TEXT)) {
-      dayStillHasProbe = true;
-    }
-  }
-  report.reject_removed_day_line = !dayStillHasProbe;
-
-  report.ok =
-    report.menu_appeared &&
-    report.annotate_why_on_day_page &&
-    report.reject_removed_day_line;
+  report.brain_day_page_contains_url = occurrences >= 1;
+  report.url_occurrences = occurrences;
+  report.post_copy_popup_present = Boolean(popup);
+  report.post_copy_popup = popup;
+  report.ok = report.brain_day_page_contains_url && !report.post_copy_popup_present;
 
   console.log(JSON.stringify(report, null, 2));
   if (!report.ok) {

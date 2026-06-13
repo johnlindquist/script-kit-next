@@ -76,18 +76,18 @@ the matrix only through a future QA lock-in selection.
 - Pass evidence: Substrate unit tests pass; notes rebuild-from-files test passes; brain indexer includes day pages and fragments.
 - Fail evidence: Content only in sqlite, failed atomic writes, missing rebuild parity, or tests fail.
 
-### Clipboard sediment and post-copy quick menu keep brain content
+### Clipboard sediment keeps brain content without popup UI
 
-- Stable anchor: `clipboard-sediment-and-post-copy-menu`
+- Stable anchor: `clipboard-sediment-no-popup`
 - Surface: Clipboard History / Day Page
 - Status: Active (Brain Time T4/T10/T12/T14), pending QA lock-in selection
-- User contract: Secrets are rejected before storage. URLs auto-keep to today's day page. Non-URLs promote on re-copy. After a keepable copy, bare ⌘ tap within the tap window opens annotate/reject/dismiss; auto-keeps whisper "Kept". Day Page renders fragment excerpt cards and kept-URL links.
-- Regression risk: Monitor ordering, sediment tiers, or tap-window state machine changes can leak secrets, skip keeps, or break the quick menu.
+- User contract: Secrets are rejected before storage. URLs auto-keep to today's day page. Non-URLs promote on re-copy. Copy tracking must not open a post-copy popup; auto-keeps may whisper "Kept". Day Page renders fragment excerpt cards and kept-URL links.
+- Regression risk: Monitor ordering, sediment tiers, or post-copy popup regressions can leak secrets, skip keeps, or reintroduce surprise UI.
 - Proof commands:
   - `./scripts/agentic/agent-cargo.sh test --lib clipboard_history`
-  - `scripts/agentic/clipboard-post-copy-menu-probe.ts` (runtime receipt when available)
-- Pass evidence: Rejection, sediment, and tap-window unit tests pass; runtime probe shows menu target after copy + ⌘ tap.
-- Fail evidence: Rejected content stored, duplicate URL lines same day, chord cancels menu incorrectly, or tests fail.
+  - `bun scripts/agentic/clipboard-post-copy-menu-probe.ts` (runtime no-popup receipt when available)
+- Pass evidence: Rejection and sediment unit tests pass; runtime probe shows brain insertion with no post-copy popup target.
+- Fail evidence: Rejected content stored, duplicate URL lines same day, copied content opens a post-copy popup, or tests fail.
 
 ## Feature Matrix
 

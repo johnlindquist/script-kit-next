@@ -532,20 +532,20 @@ const CONFIG_SCHEMA: ConfigOption[] = [
   {
     key: "clipboardHistoryPostCopyMenu.enabled",
     type: "boolean",
-    default: true,
-    description: "Enable post-copy modifier-tap quick menu for annotate/reject (T12)"
+    default: false,
+    description: "Deprecated no-op; copied content no longer opens a post-copy popup"
   },
   {
     key: "clipboardHistoryPostCopyMenu.tapWindowMs",
     type: "number",
     default: 2500,
-    description: "Milliseconds to watch for a bare modifier tap after copy before the quick menu window expires"
+    description: "Deprecated no-op retained for existing config files"
   },
   {
     key: "clipboardHistoryPostCopyMenu.triggerModifiers",
     type: "string[]",
     default: ["meta"],
-    description: "Modifier keys that open the post-copy quick menu (default meta = Command)"
+    description: "Deprecated no-op retained for existing config files"
   },
   {
     key: "processLimits.maxMemoryMb",

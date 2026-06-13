@@ -425,15 +425,16 @@
  *
  * FIELD: clipboardHistoryPostCopyMenu
  * TYPE: ClipboardHistoryPostCopyMenuConfig (optional)
- * PURPOSE: Post-copy modifier-tap quick menu for annotate/reject (T12 / ADR 0004)
- * DEFAULT: { enabled: true, tapWindowMs: 2500, triggerModifiers: ["meta"] }
+ * PURPOSE: Deprecated no-op retained for existing config files. Copied content
+ *          no longer opens a post-copy popup.
+ * DEFAULT: { enabled: false, tapWindowMs: 2500, triggerModifiers: ["meta"] }
  *
  * STRUCTURE:
  * ```typescript
  * clipboardHistoryPostCopyMenu: {
- *   enabled?: boolean,           // default true
- *   tapWindowMs?: number,        // watch window after copy (default 2500)
- *   triggerModifiers?: string[], // default ["meta"] (Command)
+ *   enabled?: boolean,           // deprecated no-op, default false
+ *   tapWindowMs?: number,        // deprecated no-op
+ *   triggerModifiers?: string[], // deprecated no-op
  * }
  * ```
  *

@@ -457,11 +457,11 @@ app.run(move |cx: &mut App| {
         clipboard_history::register_kept_hud_whisper(|cx| {
             hud_manager::show_hud("Kept".to_string(), Some(1200), cx);
         });
-        if let Err(e) = clipboard_history::install_post_copy_quick_menu(cx) {
+        if let Err(e) = clipboard_history::install_post_copy_tracker(cx) {
             tracing::warn!(
                 target: "script_kit::clipboard_post_copy",
                 %e,
-                "failed to install post-copy quick menu"
+                "failed to install post-copy tracker"
             );
         }
 

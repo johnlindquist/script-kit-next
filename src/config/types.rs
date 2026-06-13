@@ -59,23 +59,19 @@ pub struct ClipboardHistorySecretRejectionConfig {
     pub extra_secret_patterns: Vec<String>,
 }
 
-/// Post-copy ⌘-tap quick menu settings (T12 / ADR 0004).
+/// Deprecated post-copy popup settings.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(default, rename_all = "camelCase")]
 pub struct ClipboardHistoryPostCopyMenuConfig {
-    /// Whether the post-copy quick menu is enabled.
-    #[serde(default = "default_true")]
+    /// Deprecated no-op; copied content no longer opens a post-copy popup.
+    #[serde(default)]
     pub enabled: bool,
-    /// Milliseconds to watch for a bare modifier tap after copy (default 2500).
+    /// Deprecated no-op retained for existing config files.
     #[serde(default = "default_post_copy_tap_window_ms")]
     pub tap_window_ms: u64,
-    /// Modifier names that trigger the menu (default: `["meta"]` = ⌘).
+    /// Deprecated no-op retained for existing config files.
     #[serde(default = "default_post_copy_trigger_modifiers")]
     pub trigger_modifiers: Vec<String>,
-}
-
-fn default_true() -> bool {
-    true
 }
 
 fn default_post_copy_tap_window_ms() -> u64 {
@@ -89,7 +85,7 @@ fn default_post_copy_trigger_modifiers() -> Vec<String> {
 impl Default for ClipboardHistoryPostCopyMenuConfig {
     fn default() -> Self {
         Self {
-            enabled: true,
+            enabled: false,
             tap_window_ms: default_post_copy_tap_window_ms(),
             trigger_modifiers: default_post_copy_trigger_modifiers(),
         }
@@ -1714,7 +1710,7 @@ pub struct Config {
         rename = "clipboardHistorySecretRejection"
     )]
     pub clipboard_history_secret_rejection: Option<ClipboardHistorySecretRejectionConfig>,
-    /// Post-copy modifier-tap quick menu (T12).
+    /// Deprecated post-copy popup settings retained for config compatibility.
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
@@ -1991,7 +1987,7 @@ impl Config {
             .unwrap_or_default()
     }
 
-    /// Returns post-copy quick-menu settings, or defaults if not configured.
+    /// Returns deprecated post-copy popup settings, or defaults if not configured.
     pub fn get_clipboard_history_post_copy_menu(&self) -> ClipboardHistoryPostCopyMenuConfig {
         self.clipboard_history_post_copy_menu
             .clone()
