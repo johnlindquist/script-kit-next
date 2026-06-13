@@ -36,7 +36,6 @@
 mod actions_panel;
 pub(crate) mod code_highlight;
 pub(crate) mod day_page_rows;
-pub(crate) mod file_mirror;
 pub(crate) mod ghost;
 pub(crate) mod ghost_llm;
 pub(crate) mod markdown;
