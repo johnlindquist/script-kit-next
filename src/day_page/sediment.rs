@@ -769,23 +769,26 @@ mod tests {
 
     #[test]
     fn normalizes_raw_urls_to_markdown_links() {
-        let content = "https://eggo-expression-grid.wzrrd.sh/\n\
-            see https://eggo-brand.wzrrd.sh/ now";
+        let content = "https://reference-one.example/docs\n\
+            see https://reference-two.example/brief now";
 
         let normalized = normalize_day_page_markdown_references(content);
 
+        assert!(
+            normalized.contains("[reference-one.example/docs](https://reference-one.example/docs)")
+        );
         assert!(normalized
-            .contains("[eggo-expression-grid.wzrrd.sh](https://eggo-expression-grid.wzrrd.sh/)"));
-        assert!(normalized.contains("[eggo-brand.wzrrd.sh](https://eggo-brand.wzrrd.sh/) now"));
+            .contains("[reference-two.example/brief](https://reference-two.example/brief) now"));
     }
 
     #[test]
     fn normalizes_completed_typed_url_after_trailing_whitespace() {
-        let content = "See https://eggo-brand.wzrrd.sh/ \nnext";
+        let content = "See https://reference-two.example/brief \nnext";
 
         let normalized = normalize_day_page_markdown_references(content);
 
-        assert!(normalized.contains("See [eggo-brand.wzrrd.sh](https://eggo-brand.wzrrd.sh/) "));
+        assert!(normalized
+            .contains("See [reference-two.example/brief](https://reference-two.example/brief) "));
     }
 
     #[test]
@@ -807,11 +810,12 @@ mod tests {
 
     #[test]
     fn normalizes_raw_context_references_to_markdown_links() {
-        let normalized = normalize_day_page_markdown_references("@file:screenflow\n@notes:daily");
+        let normalized =
+            normalize_day_page_markdown_references("@file:project-brief\n@notes:daily");
 
         assert_eq!(
             normalized,
-            "[screenflow](scriptkit://spine/file/screenflow)\n[daily](scriptkit://spine/notes/daily)"
+            "[project brief](scriptkit://spine/file/project-brief)\n[daily](scriptkit://spine/notes/daily)"
         );
     }
 

@@ -62,9 +62,6 @@
 //!      cleanup half.
 //!
 //! Complements:
-//!   - `tests/detached_agent_chat_popup_registry_surface_contract.rs` (Pass #46,
-//!     supplier-side: pins the single `upsert_automation_window` call
-//!     shape and kind+surface parity).
 //!   - `tests/trigger_action_agent_chat_detached_host_contract.rs` (Pass #29,
 //!     external dispatcher-side: pins the `host=agentChatDetached` routing
 //!     that calls into `close_chat_window`).

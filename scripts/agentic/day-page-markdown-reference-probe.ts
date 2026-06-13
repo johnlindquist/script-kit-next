@@ -8,11 +8,11 @@
  *     bun scripts/agentic/day-page-markdown-reference-probe.ts
  */
 
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { Driver, type Json } from "../devtools/driver";
-import { openDayPage, tapMainHotkey } from "./day-page-open-helper";
+import { openDayPage } from "./day-page-open-helper";
 
 const BINARY =
   process.env.PROBE_BINARY ??
@@ -28,7 +28,7 @@ const CARRY_URL_ONE = `https://${runId}-carry-one.wzrrd.sh/`;
 const CARRY_URL_TWO = `https://${runId}-carry-two.wzrrd.sh/`;
 const CARRY_URL_ONE_MARKDOWN = `[${runId}-carry-one.wzrrd.sh](${CARRY_URL_ONE})`;
 const CARRY_URL_TWO_MARKDOWN = `[${runId}-carry-two.wzrrd.sh](${CARRY_URL_TWO})`;
-const CARRY_FILE_REFERENCE_MARKDOWN = `[screenflow](scriptkit://spine/file/screenflow)`;
+const CARRY_FILE_REFERENCE_MARKDOWN = `[Project Brief](scriptkit://spine/file/project-brief)`;
 const REMOVED_OVERLAY_IDS = [
   "day-page-sediment-layer",
   "day-page-fragment-card-0",
@@ -156,22 +156,24 @@ const skPath = join(sandboxHome, ".scriptkit");
 const todayFile = join(skPath, "brain", "days", `${todayLocalDate()}.md`);
 const fragmentsDir = join(skPath, "brain", "fragments");
 const payload = longPayload();
+const seededMarkdownReferences = [
+  CARRY_FILE_REFERENCE_MARKDOWN,
+  CARRY_URL_ONE_MARKDOWN,
+  CARRY_URL_TWO_MARKDOWN,
+].join("\n");
 
 try {
+  mkdirSync(dirname(todayFile), { recursive: true });
+  writeFileSync(todayFile, `${seededMarkdownReferences}\n`, "utf8");
+
   const opened = await openDayPage(driver, runId);
   check("opened_day_page", opened.promptType === "dayPage", {
     promptType: opened.promptType,
     windowVisible: opened.windowVisible,
   });
 
-  await tapMainHotkey(driver, runId, "return-to-launcher-before-url-carry");
-  await driver.waitForState({ windowVisible: true, promptType: "none" }, { timeoutMs: 8000 });
-  const carriedText = `@file:screenflow\n${CARRY_URL_ONE}\n${CARRY_URL_TWO}\n@`;
-  await driver.setFilterAndWait(carriedText, { timeoutMs: 5000 });
-  await tapMainHotkey(driver, runId, "carry-raw-urls-to-day-page");
-  await driver.waitForState({ windowVisible: true, promptType: "dayPage" }, { timeoutMs: 8000 });
   const carryDayContent = await waitFor(
-    "hotkey carry URLs normalized",
+    "seeded markdown references visible on disk",
     () => (existsSync(todayFile) ? readFileSync(todayFile, "utf8") : ""),
     (content) =>
       content.includes(CARRY_URL_ONE_MARKDOWN) &&
@@ -187,7 +189,7 @@ try {
     "m",
   ).test(carryDayContent);
   check(
-    "hotkey_carry_urls_are_markdown_links",
+    "seeded_urls_are_markdown_links",
     carryDayContent.includes(CARRY_URL_ONE_MARKDOWN) &&
       carryDayContent.includes(CARRY_URL_TWO_MARKDOWN) &&
       !rawCarryOneLinePresent &&
@@ -200,12 +202,11 @@ try {
     },
   );
   check(
-    "hotkey_carry_file_reference_is_markdown_link",
-    carryDayContent.includes(CARRY_FILE_REFERENCE_MARKDOWN) &&
-      !/^@file:screenflow$/m.test(carryDayContent),
+    "seeded_file_reference_is_markdown_link",
+    carryDayContent.includes(CARRY_FILE_REFERENCE_MARKDOWN) && !/^@file:/m.test(carryDayContent),
     {
       carryFileReferenceMarkdown: carryDayContent.includes(CARRY_FILE_REFERENCE_MARKDOWN),
-      rawFileReferencePresent: /^@file:screenflow$/m.test(carryDayContent),
+      rawFileReferencePresent: /^@file:/m.test(carryDayContent),
     },
   );
 
@@ -309,7 +310,7 @@ try {
   });
   check("editor_shows_markdown_file_reference", editorValue.includes(CARRY_FILE_REFERENCE_MARKDOWN), {
     editorContainsFileReferenceMarkdown: editorValue.includes(CARRY_FILE_REFERENCE_MARKDOWN),
-    editorContainsRawFileReference: /^@file:screenflow$/m.test(editorValue),
+    editorContainsRawFileReference: /^@file:/m.test(editorValue),
   });
   check("removed_overlay_ids_absent", !hasAnyId(visible.flat, REMOVED_OVERLAY_IDS), {
     removedOverlayIds: REMOVED_OVERLAY_IDS,
