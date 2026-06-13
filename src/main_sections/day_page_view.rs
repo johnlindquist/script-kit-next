@@ -4,6 +4,7 @@ use chrono::Utc;
 
 use crate::components::notes_editor::{NotesEditorLayout, NotesEditorMarkdownConfig};
 use crate::footer_popup::{FooterAction, FooterButtonConfig};
+use script_kit_gpui::day_page::normalize_day_page_markdown_references;
 use script_kit_gpui::brain::{substrate::BrainSubstrate, wake_indexer};
 use script_kit_gpui::day_page::{
     parse_day_page_segments, resolve_fragment_path, DayPageBinding, DayPageSegment,
@@ -140,9 +141,27 @@ impl DayPageView {
 
     fn on_editor_change(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let previous = self.session.disk_content().to_string();
-        let content = self.notes_editor.read(cx).content(cx);
+        let mut content = self.notes_editor.read(cx).content(cx);
         let previous_len = self.last_editor_content_len;
+        let selection = self.notes_editor.read(cx).selection(cx);
         self.last_editor_content_len = content.len();
+        if content.len().saturating_sub(previous_len) > 1 {
+            let normalized = normalize_day_page_markdown_references(&content);
+            if normalized != content {
+                let mut cursor = selection.end.min(content.len());
+                while cursor > 0 && !content.is_char_boundary(cursor) {
+                    cursor -= 1;
+                }
+                let normalized_cursor =
+                    normalize_day_page_markdown_references(&content[..cursor]).len();
+                self.last_editor_content_len = normalized.len();
+                self.notes_editor.update(cx, |editor, cx| {
+                    editor.set_value(normalized.clone(), window, cx);
+                    editor.set_selection(normalized_cursor, normalized_cursor, window, cx);
+                });
+                content = normalized;
+            }
+        }
         if let Some((fixed, cursor)) =
             mention_atomic_delete_fixup(&previous, &content, &self.spine_runtime.mention_aliases)
         {
@@ -293,7 +312,7 @@ impl DayPageView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let text = text.trim().to_string();
+        let text = normalize_day_page_markdown_references(text.trim());
         if text.is_empty() {
             return;
         }

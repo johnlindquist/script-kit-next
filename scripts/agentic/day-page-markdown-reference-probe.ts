@@ -12,7 +12,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { Driver, type Json } from "../devtools/driver";
-import { openDayPage } from "./day-page-open-helper";
+import { openDayPage, tapMainHotkey } from "./day-page-open-helper";
 
 const BINARY =
   process.env.PROBE_BINARY ??
@@ -24,6 +24,10 @@ const FULL_TOKEN = `FULL-PAYLOAD-${runId}`;
 const PRIVACY_SEPARATOR = `separator-${runId}`;
 const KEPT_URL = `https://${runId}.wzrrd.sh/guide`;
 const KEPT_URL_MARKDOWN = `[${runId}.wzrrd.sh/guide](${KEPT_URL})`;
+const CARRY_URL_ONE = `https://${runId}-carry-one.wzrrd.sh/`;
+const CARRY_URL_TWO = `https://${runId}-carry-two.wzrrd.sh/`;
+const CARRY_URL_ONE_MARKDOWN = `[${runId}-carry-one.wzrrd.sh](${CARRY_URL_ONE})`;
+const CARRY_URL_TWO_MARKDOWN = `[${runId}-carry-two.wzrrd.sh](${CARRY_URL_TWO})`;
 const REMOVED_OVERLAY_IDS = [
   "day-page-sediment-layer",
   "day-page-fragment-card-0",
@@ -163,6 +167,42 @@ try {
     promptType: opened.promptType,
     windowVisible: opened.windowVisible,
   });
+
+  await tapMainHotkey(driver, runId, "return-to-launcher-before-url-carry");
+  await driver.waitForState({ windowVisible: true, promptType: "none" }, { timeoutMs: 8000 });
+  const carriedText = `@file:screenflow\n${CARRY_URL_ONE}\n${CARRY_URL_TWO}\n@`;
+  await driver.setFilterAndWait(carriedText, { timeoutMs: 5000 });
+  await tapMainHotkey(driver, runId, "carry-raw-urls-to-day-page");
+  await driver.waitForState({ windowVisible: true, promptType: "dayPage" }, { timeoutMs: 8000 });
+  const carryDayContent = await waitFor(
+    "hotkey carry URLs normalized",
+    () => (existsSync(todayFile) ? readFileSync(todayFile, "utf8") : ""),
+    (content) =>
+      content.includes(CARRY_URL_ONE_MARKDOWN) &&
+      content.includes(CARRY_URL_TWO_MARKDOWN),
+    12_000,
+  );
+  const rawCarryOneLinePresent = new RegExp(
+    `^${CARRY_URL_ONE.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`,
+    "m",
+  ).test(carryDayContent);
+  const rawCarryTwoLinePresent = new RegExp(
+    `^${CARRY_URL_TWO.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`,
+    "m",
+  ).test(carryDayContent);
+  check(
+    "hotkey_carry_urls_are_markdown_links",
+    carryDayContent.includes(CARRY_URL_ONE_MARKDOWN) &&
+      carryDayContent.includes(CARRY_URL_TWO_MARKDOWN) &&
+      !rawCarryOneLinePresent &&
+      !rawCarryTwoLinePresent,
+    {
+      carryUrlOneMarkdown: carryDayContent.includes(CARRY_URL_ONE_MARKDOWN),
+      carryUrlTwoMarkdown: carryDayContent.includes(CARRY_URL_TWO_MARKDOWN),
+      rawCarryOneLinePresent,
+      rawCarryTwoLinePresent,
+    },
+  );
 
   await copyText(KEPT_URL);
   const urlDayContent = await waitFor(

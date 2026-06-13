@@ -1,4 +1,4 @@
-//! Day Page markdown reference parsing and fragment path resolution.
+//! Day Page markdown reference parsing, normalization, and fragment path resolution.
 //!
 //! Fragment-reference and kept-URL lines stay plain markdown on disk and in the
 //! editor. This module identifies them only for navigation/automation metadata.
@@ -156,6 +156,106 @@ pub fn parse_day_page_segments(content: &str) -> Vec<DayPageSegment> {
 
     flush_plain(&mut segments, &mut plain_buffer, &mut plain_start);
     segments
+}
+
+/// Normalize raw link/reference tokens entering the Day Page editor into
+/// markdown so they render through the same markdown editor path as Notes.
+pub fn normalize_day_page_markdown_references(content: &str) -> String {
+    let mut normalized = String::with_capacity(content.len());
+    for (line_index, line) in content.split('\n').enumerate() {
+        if line_index > 0 {
+            normalized.push('\n');
+        }
+        normalized.push_str(&normalize_day_page_markdown_reference_line(line));
+    }
+    normalized
+}
+
+fn normalize_day_page_markdown_reference_line(line: &str) -> String {
+    let mut output = String::with_capacity(line.len());
+    let mut index = 0usize;
+    while index < line.len() {
+        let rest = &line[index..];
+        let Some(relative_start) = next_markdown_reference_start(rest) else {
+            output.push_str(rest);
+            break;
+        };
+        let start = index + relative_start;
+        output.push_str(&line[index..start]);
+        let end = raw_reference_end(line, start);
+        let token = &line[start..end];
+        if raw_reference_is_already_markdown_link(line, start, end) {
+            output.push_str(token);
+        } else if let Some(link) = markdown_link_for_raw_reference(token) {
+            output.push_str(&link);
+        } else {
+            output.push_str(token);
+        }
+        index = end;
+    }
+    output
+}
+
+fn next_markdown_reference_start(text: &str) -> Option<usize> {
+    ["https://", "http://", "../fragments/"]
+        .into_iter()
+        .filter_map(|needle| text.find(needle))
+        .min()
+}
+
+fn raw_reference_end(line: &str, start: usize) -> usize {
+    if line[..start].ends_with('<') {
+        if let Some(offset) = line[start..].find('>') {
+            return start + offset;
+        }
+    }
+    let mut end = line.len();
+    for (offset, ch) in line[start..].char_indices() {
+        if ch.is_whitespace() {
+            end = start + offset;
+            break;
+        }
+    }
+    while end > start {
+        let Some((ch_start, ch)) = line[..end].char_indices().next_back() else {
+            break;
+        };
+        if matches!(ch, '.' | ',' | ';' | ':' | '!' | '?' | ')' | ']' | '}') {
+            end = ch_start;
+        } else {
+            break;
+        }
+    }
+    end
+}
+
+fn raw_reference_is_already_markdown_link(line: &str, start: usize, end: usize) -> bool {
+    line[..start].ends_with("](")
+        || (line[..start].ends_with('<') && line[end..].trim_start().starts_with('>'))
+}
+
+fn markdown_link_for_raw_reference(token: &str) -> Option<String> {
+    if is_single_token_http_url(token) {
+        let label = token
+            .trim()
+            .trim_start_matches("https://")
+            .trim_start_matches("http://")
+            .trim_end_matches('/');
+        let label = if label.is_empty() {
+            token.trim()
+        } else {
+            label
+        };
+        return Some(format!("[{}]({token})", markdown_link_label(label)));
+    }
+    if token.starts_with("../fragments/") && token.ends_with(".md") {
+        return Some(format!("[Open fragment]({token})"));
+    }
+    None
+}
+
+fn markdown_link_label(label: &str) -> String {
+    label.replace('[', "\\[").replace(']', "\\]")
 }
 
 fn parse_fragment_card_lines(
@@ -421,6 +521,37 @@ mod tests {
             }
             other => panic!("expected fragment segment, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn normalizes_raw_urls_to_markdown_links() {
+        let content = "https://eggo-expression-grid.wzrrd.sh/\n\
+            see https://eggo-brand.wzrrd.sh/ now";
+
+        let normalized = normalize_day_page_markdown_references(content);
+
+        assert!(normalized
+            .contains("[eggo-expression-grid.wzrrd.sh](https://eggo-expression-grid.wzrrd.sh/)"));
+        assert!(normalized.contains("[eggo-brand.wzrrd.sh](https://eggo-brand.wzrrd.sh/) now"));
+    }
+
+    #[test]
+    fn normalizes_raw_fragment_references_to_markdown_links() {
+        let content = "09:15 > First words\n../fragments/2026-06-11-0942-clipboard.md";
+
+        let normalized = normalize_day_page_markdown_references(content);
+
+        assert!(normalized.contains("[Open fragment](../fragments/2026-06-11-0942-clipboard.md)"));
+    }
+
+    #[test]
+    fn leaves_existing_markdown_links_unchanged() {
+        let content = "09:20 [example.com/docs](https://example.com/docs)\n\
+            <https://example.com/autolink>";
+
+        let normalized = normalize_day_page_markdown_references(content);
+
+        assert_eq!(normalized, content);
     }
 
     #[test]
