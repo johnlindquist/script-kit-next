@@ -837,6 +837,16 @@ impl DayPageView {
             return false;
         };
         let mention_aliases = self.spine_mention_aliases.clone();
+        let alias_count = mention_aliases.len();
+        let context_token_count = crate::ai::context_mentions::inline_token_spans(line).len();
+        tracing::info!(
+            target: "script_kit::day_page",
+            event = "day_page_cmd_enter_handoff_started",
+            line_len = line.len(),
+            alias_count,
+            context_token_count,
+            cwd_anchor = self.spine_cwd_submit_anchor,
+        );
 
         window.defer(cx, move |_window, cx| {
             app.update(cx, |app, cx| {

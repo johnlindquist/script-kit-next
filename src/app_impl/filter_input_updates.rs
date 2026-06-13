@@ -956,11 +956,11 @@ impl ScriptListApp {
                     // Today → main-menu round trip: the resolved token goes
                     // back into the originating Day Page line instead of the
                     // launcher filter (see day_page_round_trip.rs).
-                    if self.day_page_context_return.is_some() {
-                        return self.try_complete_day_page_context_round_trip(
-                            replacement.as_ref(),
-                            window,
-                            cx,
+                    if self.has_day_page_context_round_trip_pending() {
+                        let token = replacement.as_ref().trim();
+                        let alias = self.spine_mention_aliases.get(token).cloned();
+                        return self.try_complete_day_page_context_round_trip_with_alias(
+                            token, alias, window, cx,
                         );
                     }
                     // A9 decision (2026-06-09): picking a style when the

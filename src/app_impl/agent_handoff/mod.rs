@@ -594,6 +594,13 @@ impl ScriptListApp {
             return false;
         }
 
+        let handoff_source =
+            if !reset_launcher_filter && !clear_aliases_after_submit && !use_selection_preview_cache
+            {
+                "day_page_line_handoff"
+            } else {
+                "spine_prompt_plan"
+            };
         tracing::info!(
             target: "script_kit::spine",
             event = "spine_prompt_plan_submit",
@@ -603,6 +610,15 @@ impl ScriptListApp {
             warning_count = plan.unknown_warnings.len(),
             profile = ?plan.selected_profile.as_ref().map(|p| p.id.as_str()),
             style = ?plan.selected_style.as_ref().map(|s| s.id.as_str()),
+        );
+        tracing::info!(
+            target: "script_kit::agent_chat",
+            event = "agent_chat_reused_entry_intent_with_host_context_submitted",
+            source = handoff_source,
+            intent_len = prompt.len(),
+            context_part_count = parts.len(),
+            alias_count = mention_aliases.len(),
+            unknown_warning_count = plan.unknown_warnings.len(),
         );
 
         if reset_launcher_filter {
@@ -640,7 +656,7 @@ impl ScriptListApp {
                 if let Err(e) = chat.submit_reused_entry_intent_with_host_context(
                     prompt,
                     parts,
-                    "spine_prompt_plan",
+                    handoff_source,
                     cx,
                 ) {
                     tracing::warn!(

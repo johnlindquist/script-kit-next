@@ -174,10 +174,26 @@ impl ScriptListApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> bool {
+        self.try_complete_day_page_context_round_trip_with_alias(token, None, window, cx)
+    }
+
+    pub(crate) fn try_complete_day_page_context_round_trip_with_alias(
+        &mut self,
+        token: &str,
+        alias: Option<crate::ai::message_parts::AiContextPart>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
         let Some(pending) = self.day_page_context_return.take() else {
             return false;
         };
-        let alias = self.spine_mention_aliases.get(token).cloned();
+        let token = token.trim();
+        if token.is_empty() {
+            self.day_page_context_return = Some(pending);
+            return false;
+        }
+        let alias = alias.or_else(|| self.spine_mention_aliases.get(token).cloned());
+        let has_alias = alias.is_some();
         let entity = pending.entity.clone();
         entity.update(cx, |view, cx| {
             view.complete_context_round_trip(
@@ -194,8 +210,13 @@ impl ScriptListApp {
             target: "script_kit::day_page",
             event = "day_page_context_round_trip_completed",
             token = %token,
+            has_alias,
         );
         true
+    }
+
+    pub(crate) fn has_day_page_context_round_trip_pending(&self) -> bool {
+        self.day_page_context_return.is_some()
     }
 
     /// Cancel hook: Escape/close from the main menu while a Day Page round
