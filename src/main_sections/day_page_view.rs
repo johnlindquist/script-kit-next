@@ -789,21 +789,21 @@ impl DayPageView {
 
         // Markdown formatting shortcuts — same bindings as the Notes window
         // (`src/notes/window/keyboard.rs`), routed through the shared
-        // NotesEditor formatting helper.
+        // NotesEditor toolbar action executor.
         if exact_cmd && key == "b" {
-            self.insert_markdown_formatting("**", "**", window, cx);
+            self.run_shared_markdown_toolbar_action("bold", window, cx);
             return;
         }
         if exact_cmd && key == "i" {
-            self.insert_markdown_formatting("_", "_", window, cx);
+            self.run_shared_markdown_toolbar_action("italic", window, cx);
             return;
         }
         if exact_cmd && key == "e" {
-            self.insert_markdown_formatting("`", "`", window, cx);
+            self.run_shared_markdown_toolbar_action("code", window, cx);
             return;
         }
         if cmd && shift && !alt && !control && key == "x" {
-            self.insert_markdown_formatting("~~", "~~", window, cx);
+            self.run_shared_markdown_toolbar_action("strikethrough", window, cx);
         }
     }
 }

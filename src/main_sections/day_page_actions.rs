@@ -8,6 +8,26 @@
 
 pub(crate) const DAY_PAGE_ACTIONS_SECTION_TITLE: &str = "Today";
 
+fn day_page_editor_action_id(toolbar_id: &str) -> String {
+    format!("day_page:format_{}", toolbar_id.replace('-', "_"))
+}
+
+fn day_page_toolbar_id_from_action_id(action_id: &str) -> Option<String> {
+    action_id
+        .strip_prefix("day_page:format_")
+        .map(|id| id.replace('_', "-"))
+}
+
+fn day_page_editor_action_shortcut(toolbar_id: &str) -> Option<&'static str> {
+    match toolbar_id {
+        "bold" => Some("cmd+b"),
+        "italic" => Some("cmd+i"),
+        "code" => Some("cmd+e"),
+        "strikethrough" => Some("cmd+shift+x"),
+        _ => None,
+    }
+}
+
 /// Build the Today section rows for the current Day Page state.
 pub(crate) fn day_page_host_actions_section(
     view: &DayPageView,
@@ -84,26 +104,16 @@ pub(crate) fn day_page_host_actions_section(
         );
     }
 
-    for (id, title, prefix_suffix, shortcut) in [
-        ("day_page:format_bold", "Bold", ("**", "**"), Some("cmd+b")),
-        ("day_page:format_italic", "Italic", ("_", "_"), Some("cmd+i")),
-        ("day_page:format_code", "Code", ("`", "`"), Some("cmd+e")),
-        (
-            "day_page:format_strikethrough",
-            "Strikethrough",
-            ("~~", "~~"),
-            Some("cmd+shift+x"),
-        ),
-    ] {
-        let _ = prefix_suffix;
+    for item in crate::components::notes_editor::NOTES_EDITOR_TOOLBAR_ACTIONS {
+        let toolbar_id = item.spec.id;
         actions.push(
             Action::new(
-                id,
-                title,
-                Some("Markdown formatting (same as Notes)".to_string()),
+                day_page_editor_action_id(toolbar_id),
+                crate::components::notes_editor::notes_editor_toolbar_action_title(toolbar_id),
+                Some("Apply shared Notes editor Markdown formatting".to_string()),
                 ActionCategory::ScriptContext,
             )
-            .with_shortcut_opt(shortcut.map(str::to_string))
+            .with_shortcut_opt(day_page_editor_action_shortcut(toolbar_id).map(str::to_string))
             .with_section(DAY_PAGE_ACTIONS_SECTION_TITLE),
         );
     }
@@ -140,17 +150,23 @@ impl DayPageView {
         cx.notify();
     }
 
-    pub(crate) fn insert_markdown_formatting(
+    pub(crate) fn run_shared_markdown_toolbar_action(
         &mut self,
-        prefix: &str,
-        suffix: &str,
+        toolbar_id: &str,
         window: &mut Window,
         cx: &mut Context<Self>,
-    ) {
+    ) -> bool {
+        let Some(action) =
+            crate::components::notes_editor::notes_editor_toolbar_action_by_id(toolbar_id)
+        else {
+            return false;
+        };
         self.notes_editor.update(cx, |editor, cx| {
-            editor.insert_formatting(prefix, suffix, window, cx);
+            (action.run)(editor, window, cx);
         });
+        self.sync_footer(window, cx);
         cx.notify();
+        true
     }
 
     /// Explicit Agent Chat handoff for the current line. Falls back to a plain
@@ -239,31 +255,13 @@ impl ScriptListApp {
                 });
                 true
             }
-            "day_page:format_bold" => {
-                entity.update(cx, |view, cx| {
-                    view.insert_markdown_formatting("**", "**", window, cx)
-                });
-                true
-            }
-            "day_page:format_italic" => {
-                entity.update(cx, |view, cx| {
-                    view.insert_markdown_formatting("_", "_", window, cx)
-                });
-                true
-            }
-            "day_page:format_code" => {
-                entity.update(cx, |view, cx| {
-                    view.insert_markdown_formatting("`", "`", window, cx)
-                });
-                true
-            }
-            "day_page:format_strikethrough" => {
-                entity.update(cx, |view, cx| {
-                    view.insert_markdown_formatting("~~", "~~", window, cx)
-                });
-                true
-            }
-            _ => false,
+            _ => day_page_toolbar_id_from_action_id(action_id)
+                .map(|toolbar_id| {
+                    entity.update(cx, |view, cx| {
+                        view.run_shared_markdown_toolbar_action(&toolbar_id, window, cx)
+                    })
+                })
+                .unwrap_or(false),
         };
         if handled {
             tracing::info!(
@@ -273,5 +271,43 @@ impl ScriptListApp {
             );
         }
         handled
+    }
+}
+
+#[cfg(test)]
+mod day_page_markdown_action_tests {
+    use super::*;
+    use crate::components::notes_editor::NOTES_EDITOR_TOOLBAR_ACTIONS;
+
+    #[test]
+    fn day_page_markdown_action_catalog_covers_notes_toolbar_actions() {
+        for item in NOTES_EDITOR_TOOLBAR_ACTIONS {
+            let action_id = day_page_editor_action_id(item.spec.id);
+            let round_trip = day_page_toolbar_id_from_action_id(&action_id)
+                .expect("day page action id should map back to toolbar id");
+            assert_eq!(round_trip, item.spec.id);
+        }
+    }
+
+    #[test]
+    fn day_page_legacy_format_action_ids_are_preserved() {
+        assert_eq!(day_page_editor_action_id("bold"), "day_page:format_bold");
+        assert_eq!(
+            day_page_editor_action_id("italic"),
+            "day_page:format_italic"
+        );
+        assert_eq!(day_page_editor_action_id("code"), "day_page:format_code");
+        assert_eq!(
+            day_page_editor_action_id("strikethrough"),
+            "day_page:format_strikethrough"
+        );
+    }
+
+    #[test]
+    fn day_page_hyphenated_toolbar_ids_round_trip() {
+        assert_eq!(
+            day_page_toolbar_id_from_action_id("day_page:format_numbered_list").as_deref(),
+            Some("numbered-list")
+        );
     }
 }

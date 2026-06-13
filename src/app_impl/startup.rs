@@ -2761,6 +2761,24 @@ impl ScriptListApp {
                     return;
                 }
 
+                if is_actions {
+                    let routed = crate::actions::route_key_to_detached_actions_window(
+                        key,
+                        key_char,
+                        &event.keystroke.modifiers,
+                        cx,
+                    );
+                    if routed {
+                        tracing::debug!(
+                            target: "script_kit::actions",
+                            event = "actions_interceptor_routed_from_actions_window_owner",
+                            key = %key,
+                        );
+                        cx.stop_propagation();
+                    }
+                    return;
+                }
+
                 // Agent Chat can open the shared actions dialog from its own focused
                 // composer even when the launcher visibility flag is false.
                 // Close keys still need to reach the shared dialog before the
@@ -2807,68 +2825,6 @@ impl ScriptListApp {
                     if close_key_routed {
                         return;
                     }
-                }
-
-                if is_actions {
-                    let mut actions_key_routed = false;
-                    if let Some(app) = app_entity.upgrade() {
-                        app.update(cx, |this, cx| {
-                            logging::log(
-                                "KEY",
-                                &format!(
-                                    "Actions interceptor saw actions-window key={} shortcut={} popup={} focused_input={:?}",
-                                    key,
-                                    crate::shortcuts::keystroke_to_shortcut(
-                                        key,
-                                        &event.keystroke.modifiers,
-                                    ),
-                                    this.show_actions_popup,
-                                    this.focused_input
-                                ),
-                            );
-                            let Some(host) = this.current_actions_host() else {
-                                return;
-                            };
-                            match this.route_key_to_actions_dialog(
-                                key,
-                                key_char,
-                                &event.keystroke.modifiers,
-                                host,
-                                window,
-                                cx,
-                            ) {
-                                ActionsRoute::NotHandled => {}
-                                ActionsRoute::Handled => {
-                                    tracing::debug!(
-                                        target: "script_kit::actions",
-                                        event = "actions_interceptor_routed_from_actions_window",
-                                        host = ?host,
-                                        key = %key,
-                                    );
-                                    cx.stop_propagation();
-                                    actions_key_routed = true;
-                                }
-                                ActionsRoute::Execute {
-                                    action_id,
-                                    should_close,
-                                } => {
-                                    this.execute_actions_route_action(
-                                        host,
-                                        action_id,
-                                        should_close,
-                                        window,
-                                        cx,
-                                    );
-                                    cx.stop_propagation();
-                                    actions_key_routed = true;
-                                }
-                            }
-                        });
-                    }
-                    if actions_key_routed {
-                        return;
-                    }
-                    return;
                 }
 
                 // When the main window is hidden (e.g. Notes/AI open), main-menu

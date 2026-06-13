@@ -166,6 +166,31 @@ pub const NOTES_EDITOR_TOOLBAR_ACTIONS: [NotesEditorToolbarAction; 12] = [
     },
 ];
 
+pub fn notes_editor_toolbar_action_by_id(id: &str) -> Option<NotesEditorToolbarAction> {
+    NOTES_EDITOR_TOOLBAR_ACTIONS
+        .iter()
+        .copied()
+        .find(|action| action.spec.id == id)
+}
+
+pub fn notes_editor_toolbar_action_title(id: &str) -> &'static str {
+    match id {
+        "bold" => "Bold",
+        "italic" => "Italic",
+        "heading" => "Heading",
+        "list" => "Bullet List",
+        "numbered-list" => "Numbered List",
+        "code" => "Inline Code",
+        "codeblock" => "Code Block",
+        "strikethrough" => "Strikethrough",
+        "checklist" => "Checklist",
+        "link" => "Link",
+        "rule" => "Horizontal Rule",
+        "blockquote" => "Blockquote",
+        _ => "Markdown Action",
+    }
+}
+
 /// Host-side adapter: run a toolbar action against a notes editor entity.
 pub fn run_toolbar_action(
     notes_editor: gpui::Entity<NotesEditor>,
@@ -176,4 +201,23 @@ pub fn run_toolbar_action(
     notes_editor.update(cx, |editor, cx| {
         (action.run)(editor, window, cx);
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashSet;
+
+    use super::*;
+
+    #[test]
+    fn toolbar_action_ids_are_unique() {
+        let mut ids = HashSet::new();
+        for action in NOTES_EDITOR_TOOLBAR_ACTIONS {
+            assert!(
+                ids.insert(action.spec.id),
+                "duplicate notes editor toolbar action id: {}",
+                action.spec.id
+            );
+        }
+    }
 }
