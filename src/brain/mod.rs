@@ -68,6 +68,18 @@ pub fn recall_context_block(query: &str) -> Result<Option<String>> {
     if query.len() < 3 {
         return Ok(None);
     }
+    let refresh_start = std::time::Instant::now();
+    let source_sync = indexer::sync_file_sources_for_recall();
+    tracing::info!(
+        target: "script_kit::brain",
+        event = "brain_recall_file_sources_synced",
+        query_len = query.chars().count(),
+        notes = source_sync.notes,
+        day_pages = source_sync.day_pages,
+        fragments = source_sync.fragments,
+        failed_sources = ?source_sync.failed_sources,
+        elapsed_ms = refresh_start.elapsed().as_secs_f64() * 1000.0,
+    );
     let query_embedding = indexer::embed_query_within_budget(query);
     let hits = match &query_embedding {
         Some((model_id, vector)) => {
@@ -75,6 +87,29 @@ pub fn recall_context_block(query: &str) -> Result<Option<String>> {
         }
         None => brain_search(query, None, None, BRAIN_CONTEXT_HITS)?,
     };
+    let sources: Vec<&str> = hits.iter().map(|hit| hit.doc.source.as_str()).collect();
+    let hit_fingerprints: Vec<String> = hits
+        .iter()
+        .map(|hit| {
+            use sha2::{Digest as _, Sha256};
+            let digest = Sha256::digest(hit.doc.content.as_bytes());
+            let hex: String = digest
+                .iter()
+                .take(8)
+                .map(|byte| format!("{byte:02x}"))
+                .collect();
+            format!("{}:{}:{hex}", hit.doc.source.as_str(), hit.doc.source_id)
+        })
+        .collect();
+    tracing::info!(
+        target: "script_kit::brain",
+        event = "brain_recall_context_built",
+        query_len = query.chars().count(),
+        hit_count = hits.len(),
+        sources = ?sources,
+        hit_fingerprints = ?hit_fingerprints,
+        max_chars = BRAIN_CONTEXT_MAX_CHARS,
+    );
     if hits.is_empty() {
         return Ok(None);
     }

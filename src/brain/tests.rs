@@ -13,8 +13,8 @@ use chrono::TimeZone as _;
 use super::curator;
 use super::inbox::{self, InboxKind};
 use super::indexer::{
-    extract_topics, sync_day_pages_with_substrate, sync_fragments_with_substrate,
-    sync_notes_with_substrate,
+    extract_topics, sync_day_pages_with_substrate, sync_file_sources_for_recall_with_substrate,
+    sync_fragments_with_substrate, sync_notes_with_substrate,
 };
 use super::search::{self, aggregate_signals, cosine_top_ids, fuse_ranks};
 use super::store::{self, BrainDoc, BrainSignal, DocSource};
@@ -706,6 +706,53 @@ fn file_derived_day_page_recall_context_block() {
     assert!(block.contains("[Day Page] Day Page 2026-06-13"));
     assert!(block.contains("calico-lighthouse"));
     assert!(block.contains("49217"));
+}
+
+#[test]
+fn recall_file_source_refresh_indexes_notes_and_day_pages_together() {
+    let _db = init_test_db();
+    let tmp = tempfile::TempDir::new().expect("tempdir");
+    let substrate = test_substrate(&tmp.path().join("brain"));
+    let now = chrono::Utc
+        .with_ymd_and_hms(2026, 6, 13, 16, 45, 0)
+        .unwrap();
+    let day_token = "day-violet-bridge-49217";
+    let note_token = "note-violet-bridge-8841";
+
+    substrate
+        .append_to_day(
+            now,
+            DayEntry::Capture {
+                text: format!("The violet bridge day gate is {day_token}."),
+            },
+        )
+        .expect("append day fact");
+    let note_id = NoteId::new();
+    substrate
+        .write_document(
+            &substrate.paths().note_file("violet-bridge-note"),
+            &BrainFrontmatter::new(note_id, now, now),
+            &format!("# Violet Bridge Note\n\nThe violet bridge note gate is {note_token}."),
+        )
+        .expect("write note fact");
+
+    let receipt = sync_file_sources_for_recall_with_substrate(&substrate);
+    assert_eq!(receipt.failed_sources, Vec::<&'static str>::new());
+    assert!(receipt.day_pages >= 1);
+    assert!(receipt.notes >= 1);
+    assert_eq!(
+        store::meta_get("last_index_cycle").unwrap(),
+        None,
+        "recall refresh must not masquerade as a full index cycle"
+    );
+
+    let block = super::recall_context_block("violet bridge gate")
+        .expect("recall context")
+        .expect("recall block");
+    assert!(block.contains("[Day Page]"), "{block}");
+    assert!(block.contains("[Note]"), "{block}");
+    assert!(block.contains(day_token), "{block}");
+    assert!(block.contains(note_token), "{block}");
 }
 
 #[test]

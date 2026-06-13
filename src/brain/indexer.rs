@@ -38,6 +38,14 @@ enum IndexerRequest {
 static WAKE: OnceLock<Sender<IndexerRequest>> = OnceLock::new();
 static STARTED: AtomicBool = AtomicBool::new(false);
 
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(crate) struct BrainFileSourceSyncReceipt {
+    pub notes: usize,
+    pub day_pages: usize,
+    pub fragments: usize,
+    pub failed_sources: Vec<&'static str>,
+}
+
 /// Ask the indexer to run a cycle soon (e.g. after a chat turn ingests new
 /// docs). Cheap; coalesces with pending wakes.
 pub fn wake_indexer() {
@@ -268,8 +276,71 @@ fn sync_browser_attention() {
     }
 }
 
+#[cfg(not(test))]
 fn brain_substrate() -> BrainSubstrate {
     BrainSubstrate::default_kit()
+}
+
+#[cfg(test)]
+fn brain_substrate() -> BrainSubstrate {
+    let base =
+        std::env::temp_dir().join(format!("script-kit-gpui-test-brain-{}", std::process::id()));
+    BrainSubstrate::with_timezone(base, chrono_tz::UTC)
+}
+
+pub(crate) fn sync_file_sources_for_recall() -> BrainFileSourceSyncReceipt {
+    sync_file_sources_for_recall_with_substrate(&brain_substrate())
+}
+
+pub(crate) fn sync_file_sources_for_recall_with_substrate(
+    substrate: &BrainSubstrate,
+) -> BrainFileSourceSyncReceipt {
+    let mut receipt = BrainFileSourceSyncReceipt::default();
+    if let Err(error) = store::init_brain_db() {
+        receipt.failed_sources.push("db");
+        tracing::debug!(
+            target: "script_kit::brain",
+            error = %error,
+            "brain recall file sync init skipped"
+        );
+        return receipt;
+    }
+
+    match sync_notes_with_substrate(substrate) {
+        Ok(count) => receipt.notes = count,
+        Err(error) => {
+            receipt.failed_sources.push("notes");
+            tracing::debug!(
+                target: "script_kit::brain",
+                error = %error,
+                "brain recall notes sync skipped"
+            );
+        }
+    }
+    match sync_day_pages_with_substrate(substrate) {
+        Ok(count) => receipt.day_pages = count,
+        Err(error) => {
+            receipt.failed_sources.push("day_pages");
+            tracing::debug!(
+                target: "script_kit::brain",
+                error = %error,
+                "brain recall day pages sync skipped"
+            );
+        }
+    }
+    match sync_fragments_with_substrate(substrate) {
+        Ok(count) => receipt.fragments = count,
+        Err(error) => {
+            receipt.failed_sources.push("fragments");
+            tracing::debug!(
+                target: "script_kit::brain",
+                error = %error,
+                "brain recall fragments sync skipped"
+            );
+        }
+    }
+
+    receipt
 }
 
 fn list_markdown_files(dir: &Path) -> Result<Vec<PathBuf>> {
