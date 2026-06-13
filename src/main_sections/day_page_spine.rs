@@ -3,7 +3,7 @@
 use std::{collections::HashMap, ops::Range};
 
 use crate::components::notes_editor::spine::{
-    clamp_to_char_boundary, current_line_range, mention_atomic_delete_fixup, prune_mention_aliases,
+    clamp_to_char_boundary, current_line_range, mention_atomic_delete_fixup,
     replace_segment_content, spine_prompt_plan_can_submit,
 };
 
@@ -207,7 +207,7 @@ impl DayPageView {
             parse,
             projection,
             None,
-            &|token| self.spine_mention_aliases.contains_key(token),
+            &|token| self.spine_runtime.mention_aliases.contains_key(token),
         );
         push_spine_sections_as_grouped(sections)
     }
@@ -223,7 +223,7 @@ impl DayPageView {
             crate::components::notes_editor::NotesEditorSurfaceStyle::from_theme(&theme);
 
         let selected =
-            crate::list_item::coerce_selection(&model.grouped, self.spine_selected_index);
+            crate::list_item::coerce_selection(&model.grouped, self.spine_runtime.selected_index);
 
         let mut rows = div().flex().flex_col().w_full();
         for (ix, grouped_item) in model.grouped.iter().enumerate() {
@@ -273,7 +273,7 @@ impl DayPageView {
                               _event: &gpui::MouseDownEvent,
                               _window,
                               cx| {
-                            this.spine_selected_index = ix;
+                            this.spine_runtime.selected_index = ix;
                             cx.notify();
                         },
                     );
@@ -339,29 +339,25 @@ impl DayPageView {
 
         let key = format!(
             "{}\u{1f}cursor={}\u{1f}active={:?}\u{1f}cwd_rev={}",
-            line, line_cursor, projection.active_segment_kind, self.spine_cwd_revision
+            line, line_cursor, projection.active_segment_kind, self.spine_runtime.cwd_revision
         );
         Some((key, line_range, parse, projection))
     }
 
     fn day_page_spine_model(&mut self, cx: &App) -> Option<DayPageSpineModel> {
         let (key, line_range, parse, projection) = self.day_page_spine_input(cx)?;
-        if self.spine_dismissed_cache_key.as_deref() == Some(key.as_str()) {
+        if self.spine_runtime.dismissed_cache_key.as_deref() == Some(key.as_str()) {
             return None;
         }
 
-        if self.spine_cache_key == key {
-            self.spine_selected_index = crate::list_item::coerce_selection(
-                &self.spine_grouped_cache,
-                self.spine_selected_index,
-            )
-            .unwrap_or(0);
+        if self.spine_runtime.cache_key == key {
+            self.spine_runtime.coerce_selection_for_cached_rows();
             return Some(DayPageSpineModel {
                 line_range,
                 parse,
                 projection,
-                grouped: self.spine_grouped_cache.clone(),
-                flat: self.spine_flat_cache.clone(),
+                grouped: self.spine_runtime.grouped_cache.clone(),
+                flat: self.spine_runtime.flat_cache.clone(),
             });
         }
 
@@ -369,12 +365,12 @@ impl DayPageView {
         let grouped = rows.grouped;
         let flat = rows.flat;
 
-        self.spine_cache_key = key;
-        self.spine_grouped_cache = grouped.clone();
-        self.spine_flat_cache = flat.clone();
-        self.spine_alias_cache = rows.aliases;
-        self.spine_selected_index =
-            crate::list_item::coerce_selection(&grouped, self.spine_selected_index).unwrap_or(0);
+        self.spine_runtime.replace_cached_rows(
+            key,
+            grouped.clone(),
+            flat.clone(),
+            rows.aliases,
+        );
 
         Some(DayPageSpineModel {
             line_range,
@@ -656,15 +652,15 @@ impl DayPageView {
             let total_count = elements.len();
             return (elements.into_iter().take(limit).collect(), total_count);
         };
-        if self.spine_dismissed_cache_key.as_deref() == Some(key.as_str()) {
+        if self.spine_runtime.dismissed_cache_key.as_deref() == Some(key.as_str()) {
             let total_count = elements.len();
             return (elements.into_iter().take(limit).collect(), total_count);
         }
-        let rows = if self.spine_cache_key == key {
+        let rows = if self.spine_runtime.cache_key == key {
             Some(DayPageSpineRows {
-                grouped: self.spine_grouped_cache.clone(),
-                flat: self.spine_flat_cache.clone(),
-                aliases: self.spine_alias_cache.clone(),
+                grouped: self.spine_runtime.grouped_cache.clone(),
+                flat: self.spine_runtime.flat_cache.clone(),
+                aliases: self.spine_runtime.alias_cache.clone(),
             })
         } else {
             self.build_day_page_spine_rows(&parse, &projection, Some(app_state), cx)
@@ -685,7 +681,7 @@ impl DayPageView {
             item_count,
         ));
 
-        let selected = crate::list_item::coerce_selection(&grouped, self.spine_selected_index);
+        let selected = crate::list_item::coerce_selection(&grouped, self.spine_runtime.selected_index);
         for (ix, grouped_item) in grouped.iter().enumerate() {
             let GroupedListItem::Item(flat_idx) = grouped_item else {
                 continue;
@@ -720,7 +716,7 @@ impl DayPageView {
         &self,
         model: &DayPageSpineModel,
     ) -> Option<crate::spine::SpineListRow> {
-        model.selected_row(self.spine_selected_index)
+        model.selected_row(self.spine_runtime.selected_index)
     }
 
     fn move_day_page_spine_selection(&mut self, direction: isize, cx: &mut Context<Self>) -> bool {
@@ -732,7 +728,7 @@ impl DayPageView {
         if len == 0 {
             return false;
         }
-        let mut next = self.spine_selected_index.min(len - 1);
+        let mut next = self.spine_runtime.selected_index.min(len - 1);
         loop {
             next = if direction < 0 {
                 next.saturating_sub(1)
@@ -740,7 +736,7 @@ impl DayPageView {
                 (next + 1).min(len - 1)
             };
             if matches!(model.grouped.get(next), Some(GroupedListItem::Item(_))) {
-                self.spine_selected_index = next;
+                self.spine_runtime.selected_index = next;
                 cx.notify();
                 return true;
             }
@@ -751,11 +747,10 @@ impl DayPageView {
     }
 
     fn reset_day_page_spine_navigation(&mut self, cx: &mut Context<Self>) {
-        if let Some((key, _, _, _)) = self.day_page_spine_input(cx) {
-            self.spine_dismissed_cache_key = Some(key);
-        }
-        self.spine_selected_index = 0;
-        self.spine_hovered_index = None;
+        let key = self
+            .day_page_spine_input(cx)
+            .map(|(key, _, _, _)| key);
+        self.spine_runtime.dismiss_current_key(key);
         cx.notify();
     }
 
@@ -792,8 +787,8 @@ impl DayPageView {
         });
         self.session.apply_editor_content(&new_content);
         self.refresh_fragment_open_targets(&new_content);
-        self.spine_selected_index = 0;
-        self.spine_alias_cache.clear();
+        self.spine_runtime.selected_index = 0;
+        self.spine_runtime.clear_alias_cache();
         self.sync_footer(window, cx);
         cx.notify();
         true
@@ -841,8 +836,8 @@ impl DayPageView {
                         cx,
                     );
                     if applied {
-                        self.spine_cwd_revision = self.spine_cwd_revision.wrapping_add(1);
-                        self.spine_cwd_submit_anchor = true;
+                        self.spine_runtime.cwd_revision = self.spine_runtime.cwd_revision.wrapping_add(1);
+                        self.spine_runtime.cwd_submit_anchor = true;
                         if let Some(app) = self.app.upgrade() {
                             let app_resolution_id = resolution_id.to_string();
                             let app_resolution_label = resolution_label.to_string();
@@ -945,7 +940,7 @@ impl DayPageView {
                     return false;
                 };
                 let parse = model.parse.clone();
-                let mention_aliases = self.spine_mention_aliases.clone();
+                let mention_aliases = self.spine_runtime.mention_aliases.clone();
                 window.defer(cx, move |_window, cx| {
                     app.update(cx, |app, cx| {
                         app.submit_day_page_spine_prompt_plan_with_aliases(
@@ -979,8 +974,8 @@ impl DayPageView {
         let parse = crate::spine::parse_spine(line);
         if !spine_prompt_plan_can_submit(
             &parse,
-            self.spine_cwd_submit_anchor,
-            &self.spine_mention_aliases,
+            self.spine_runtime.cwd_submit_anchor,
+            &self.spine_runtime.mention_aliases,
         ) {
             return false;
         }
@@ -988,7 +983,7 @@ impl DayPageView {
         let Some(app) = self.app.upgrade() else {
             return false;
         };
-        let mention_aliases = self.spine_mention_aliases.clone();
+        let mention_aliases = self.spine_runtime.mention_aliases.clone();
         let alias_count = mention_aliases.len();
         let context_token_count = crate::ai::context_mentions::inline_token_spans(line).len();
         tracing::info!(
@@ -997,7 +992,7 @@ impl DayPageView {
             line_len = line.len(),
             alias_count,
             context_token_count,
-            cwd_anchor = self.spine_cwd_submit_anchor,
+            cwd_anchor = self.spine_runtime.cwd_submit_anchor,
         );
 
         window.defer(cx, move |_window, cx| {
@@ -1019,9 +1014,9 @@ impl DayPageView {
         let Some(row) = self.selected_day_page_spine_row(&model) else {
             return false;
         };
-        if let Some((token, part)) = self.spine_alias_cache.get(row.id.as_ref()).cloned() {
-            self.spine_mention_aliases
-                .insert(token.clone(), part.clone());
+        if let Some((token, part)) = self.spine_runtime.alias_cache.get(row.id.as_ref()).cloned() {
+            self.spine_runtime
+                .register_mention_alias(token.clone(), part.clone());
             if let Some(app) = self.app.upgrade() {
                 window.defer(cx, move |_window, cx| {
                     app.update(cx, |app, _cx| {

@@ -886,9 +886,9 @@ fn agent_chat_picker_popup_row_rendering_uses_shared_list_item_chrome() {
     );
     assert!(
         AGENT_CHAT_POPUP_WINDOW_SOURCE
-            .contains("crate::components::inline_dropdown::CONTEXT_PICKER_ROW_HEIGHT")
+            .contains("crate::components::inline_dropdown::CONTEXT_SELECTOR_ROW_HEIGHT")
             && !AGENT_CHAT_POPUP_WINDOW_SOURCE
-                .contains("crate::ai::context_picker_row::CONTEXT_PICKER_ROW_HEIGHT"),
+                .contains("crate::ai::context_selector_row::CONTEXT_SELECTOR_ROW_HEIGHT"),
         "Agent Chat popup facade should derive dense picker height from the shared inline-dropdown row contract"
     );
 }
@@ -1512,10 +1512,10 @@ fn agent_chat_picker_portals_require_host_callbacks_before_staging() {
 fn detached_agent_chat_limits_portals_to_history() {
     assert!(
         AGENT_CHAT_WINDOW_SOURCE
-            .contains("view.set_allowed_portal_kinds(vec![PortalKind::AgentChatHistory]);")
+            .contains("view.set_allowed_portal_kinds(vec![ContextPortalKind::AgentChatHistory]);")
             && AGENT_CHAT_WINDOW_SOURCE
                 .contains("view.set_on_open_portal(move |kind, cx| match kind {")
-            && AGENT_CHAT_WINDOW_SOURCE.contains("PortalKind::AgentChatHistory => {")
+            && AGENT_CHAT_WINDOW_SOURCE.contains("ContextPortalKind::AgentChatHistory => {")
             && AGENT_CHAT_WINDOW_SOURCE.contains("open_history_portal_in_detached_chat_window(cx)")
             && AGENT_CHAT_WINDOW_SOURCE
                 .contains("cancel_portal_session_in_detached_chat_window(kind, cx)")
@@ -1544,7 +1544,7 @@ fn agent_chat_history_popup_attach_consumes_pending_history_portal_session() {
             && popup_select_fn.contains("if had_pending_history_portal {")
             && popup_select_fn.contains("event = \"agent_chat_history_popup_attach_failed\"")
             && popup_select_fn.contains("self.cancel_pending_portal_session(")
-            && popup_select_fn.contains("PortalKind::AgentChatHistory")
+            && popup_select_fn.contains("ContextPortalKind::AgentChatHistory")
             && popup_select_fn.contains("return;"),
         "Agent Chat history attachment should consume the staged AgentChatHistory portal session instead of bypassing the shared replacement contract"
     );
@@ -1559,7 +1559,7 @@ fn agent_chat_history_popup_dismiss_restores_pending_history_portal_session() {
                 .contains("event = \"agent_chat_history_portal_dismissed_from_window\"")
             && AGENT_CHAT_VIEW_SOURCE.contains("self.has_pending_history_portal_session()")
             && AGENT_CHAT_VIEW_SOURCE.contains("self.cancel_pending_portal_session(")
-            && AGENT_CHAT_VIEW_SOURCE.contains("PortalKind::AgentChatHistory"),
+            && AGENT_CHAT_VIEW_SOURCE.contains("ContextPortalKind::AgentChatHistory"),
         "Agent Chat history popup dismissals should cancel the staged AgentChatHistory portal session so the composer text and caret are restored on close"
     );
 }
@@ -2381,26 +2381,22 @@ fn agent_chat_emits_inline_mention_deleted_atomically_event() {
 // AI-window inline-token unification source contracts
 // =========================================================================
 //
-// These tests verify that the AI window picker, chip rendering, and input
-// handling use the same shared inline-token infrastructure as Agent Chat.
+// These tests verify that AI-window chip rendering/input handling and Agent
+// Chat use the same shared inline-token infrastructure.
 
-const AI_WINDOW_CONTEXT_PICKER_SOURCE: &str = include_str!("../../window/context_picker/mod.rs");
+const AI_WINDOW_CONTEXT_COMMANDS_SOURCE: &str = include_str!("../../window/context_commands.rs");
 const AI_WINDOW_RENDER_SOURCE: &str = include_str!("../../window/render_main_panel.rs");
 const AI_WINDOW_INPUT_SOURCE: &str = include_str!("../../window/render_keydown.rs");
 
 #[test]
-fn ai_window_picker_inserts_inline_token_and_syncs_parts() {
+fn ai_window_context_commands_sync_inline_mentions() {
     assert!(
-        AI_WINDOW_CONTEXT_PICKER_SOURCE.contains("ai_context_picker_token_inserted"),
-        "AI window picker must log inline token insertion",
+        AI_WINDOW_CONTEXT_COMMANDS_SOURCE.contains("fn sync_inline_mentions"),
+        "AI window context commands must own inline mention synchronization",
     );
     assert!(
-        AI_WINDOW_CONTEXT_PICKER_SOURCE.contains("part_to_inline_token(&part)"),
-        "AI window picker must derive canonical inline tokens from attached parts",
-    );
-    assert!(
-        AI_WINDOW_CONTEXT_PICKER_SOURCE.contains("sync_inline_mentions(cx)"),
-        "AI window picker must synchronize inline tokens back into pending_context_parts",
+        AI_WINDOW_CONTEXT_COMMANDS_SOURCE.contains("pending_context_parts"),
+        "AI window context commands must synchronize inline tokens back into pending_context_parts",
     );
 }
 
@@ -2423,7 +2419,7 @@ fn ai_window_uses_atomic_inline_delete() {
 #[test]
 fn ai_window_emits_inline_mentions_synced_event() {
     assert!(
-        AI_WINDOW_CONTEXT_PICKER_SOURCE.contains("ai_inline_mentions_synced"),
+        AI_WINDOW_CONTEXT_COMMANDS_SOURCE.contains("ai_inline_mentions_synced"),
         "AI window must emit ai_inline_mentions_synced tracing event on sync",
     );
 }
@@ -2443,7 +2439,7 @@ fn agent_chat_and_ai_window_share_inline_sync_kernel() {
         "Agent Chat must use shared inline sync planning",
     );
     assert!(
-        AI_WINDOW_CONTEXT_PICKER_SOURCE.contains("build_inline_mention_sync_plan"),
+        AI_WINDOW_CONTEXT_COMMANDS_SOURCE.contains("build_inline_mention_sync_plan"),
         "AI window must use shared inline sync planning",
     );
 }
@@ -2618,7 +2614,7 @@ fn agent_chat_slash_command_entry_qualified_keys_are_distinct() {
 #[test]
 fn agent_chat_default_slash_accept_inserts_command_text() {
     use super::view::SlashCommandEntry;
-    use crate::ai::window::context_picker::types::SlashCommandPayload;
+    use crate::ai::context_selector::types::SlashCommandPayload;
 
     let entry = SlashCommandEntry::default_command("compact");
     let payload = entry.to_payload();

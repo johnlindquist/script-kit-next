@@ -45,16 +45,16 @@ use super::{
     AgentChatApprovalOption, AgentChatApprovalPreview, AgentChatApprovalPreviewKind,
     AgentChatApprovalRequest,
 };
-use crate::ai::window::context_picker::types::PROFILE_TRIGGER_STR;
+use crate::ai::context_selector::types::PROFILE_TRIGGER_STR;
 
+use crate::ai::context_selector::types::{
+    ContextSelectorRow, ContextSelectorRowKind, ContextSelectorTrigger, SlashCommandPayload,
+};
+use crate::ai::context_selector::{
+    context_selector_rows, slash_command_empty_row, slash_command_loading_row,
+    slash_command_no_match_row, slash_command_rows_with_payloads,
+};
 use crate::ai::message_parts::AiContextPart;
-use crate::ai::window::context_picker::types::{
-    ContextPickerItem, ContextPickerItemKind, ContextPickerTrigger, SlashCommandPayload,
-};
-use crate::ai::window::context_picker::{
-    build_picker_items, build_slash_picker_items_with_payloads, slash_picker_empty_row,
-    slash_picker_loading_row, slash_picker_no_match_row,
-};
 use crate::list_item::{IconKind, ListItem, ListItemColors, TypeAccessory};
 use crate::spine::list::{SpineListAction, SpineListRow, SpineListRowKind, SpineListSection};
 
@@ -76,7 +76,7 @@ type AgentChatFooterActionHandler = std::sync::Arc<dyn Fn(&mut Window, &mut App)
 /// via entity update, and this callback is invoked from contexts where
 /// `Window` is not available (e.g. `accept_mention_selection_impl`).
 type AgentChatPortalHandler = std::sync::Arc<
-    dyn Fn(crate::ai::window::context_picker::types::PortalKind, &mut App) + 'static,
+    dyn Fn(crate::ai::context_selector::types::ContextPortalKind, &mut App) + 'static,
 >;
 type AgentChatProfileSelectionHandler = std::sync::Arc<dyn Fn(String, &mut App) + 'static>;
 type AgentChatHostAppHandler = std::sync::Arc<dyn Fn(&mut App) + 'static>;
@@ -514,7 +514,7 @@ impl SlashCommandEntry {
         }
     }
 
-    /// Convert to a `SlashCommandPayload` for the context picker item kind.
+    /// Convert to a `SlashCommandPayload` for the context selector item kind.
     pub(crate) fn to_payload(&self) -> SlashCommandPayload {
         match &self.source {
             SlashCommandSource::Default => SlashCommandPayload::Default {
@@ -847,7 +847,7 @@ pub(crate) struct AgentChatView {
     /// `AgentChatHistory` because it cannot own file-search or clipboard views.
     /// Items for disallowed kinds are filtered from the mention picker and
     /// rejected at the portal-open dispatch as defense-in-depth.
-    allowed_portal_kinds: Vec<crate::ai::window::context_picker::types::PortalKind>,
+    allowed_portal_kinds: Vec<crate::ai::context_selector::types::ContextPortalKind>,
     _footer_action_task: Option<gpui::Task<()>>,
 }
 
@@ -874,20 +874,20 @@ use crate::protocol::AGENT_CHAT_TEST_PROBE_MAX_EVENTS;
 
 impl AgentChatView {
     /// All portal kinds — the default for launcher/detached Agent Chat surfaces.
-    fn all_portal_kinds() -> Vec<crate::ai::window::context_picker::types::PortalKind> {
-        use crate::ai::window::context_picker::types::PortalKind;
+    fn all_portal_kinds() -> Vec<crate::ai::context_selector::types::ContextPortalKind> {
+        use crate::ai::context_selector::types::ContextPortalKind;
         vec![
-            PortalKind::AgentChatHistory,
-            PortalKind::FileSearch,
-            PortalKind::BrowserHistory,
-            PortalKind::BrowserTabs,
-            PortalKind::ClipboardHistory,
-            PortalKind::DictationHistory,
-            PortalKind::ScriptSearch,
-            PortalKind::ScriptletSearch,
-            PortalKind::SkillSearch,
-            PortalKind::NotesBrowse,
-            PortalKind::Terminal,
+            ContextPortalKind::AgentChatHistory,
+            ContextPortalKind::FileSearch,
+            ContextPortalKind::BrowserHistory,
+            ContextPortalKind::BrowserTabs,
+            ContextPortalKind::ClipboardHistory,
+            ContextPortalKind::DictationHistory,
+            ContextPortalKind::ScriptSearch,
+            ContextPortalKind::ScriptletSearch,
+            ContextPortalKind::SkillSearch,
+            ContextPortalKind::NotesBrowse,
+            ContextPortalKind::Terminal,
         ]
     }
 
@@ -993,7 +993,7 @@ impl AgentChatView {
                 event = "agent_chat_history_portal_dismissed_via_popup",
             );
             let _ = self.cancel_pending_portal_session(
-                crate::ai::window::context_picker::types::PortalKind::AgentChatHistory,
+                crate::ai::context_selector::types::ContextPortalKind::AgentChatHistory,
                 cx,
             );
         }
@@ -1023,7 +1023,7 @@ impl AgentChatView {
                 reason,
             );
             let _ = self.cancel_pending_portal_session(
-                crate::ai::window::context_picker::types::PortalKind::AgentChatHistory,
+                crate::ai::context_selector::types::ContextPortalKind::AgentChatHistory,
                 cx,
             );
         }
@@ -1036,17 +1036,17 @@ impl AgentChatView {
             .unwrap_or(text.len())
     }
 
-    fn telemetry_item_id(item: &ContextPickerItem) -> String {
+    fn telemetry_item_id(item: &ContextSelectorRow) -> String {
         match &item.kind {
-            ContextPickerItemKind::BuiltIn(_)
-            | ContextPickerItemKind::SlashCommand(_)
-            | ContextPickerItemKind::AgentChatProfile { .. } => item.id.to_string(),
-            ContextPickerItemKind::File(_) => format!("file:{}", item.label),
-            ContextPickerItemKind::Folder(_) => format!("folder:{}", item.label),
-            ContextPickerItemKind::Portal(_)
-            | ContextPickerItemKind::PortalPrefix(_)
-            | ContextPickerItemKind::PortalResult(_)
-            | ContextPickerItemKind::Inert => item.id.to_string(),
+            ContextSelectorRowKind::BuiltIn(_)
+            | ContextSelectorRowKind::SlashCommand(_)
+            | ContextSelectorRowKind::AgentChatProfile { .. } => item.id.to_string(),
+            ContextSelectorRowKind::File(_) => format!("file:{}", item.label),
+            ContextSelectorRowKind::Folder(_) => format!("folder:{}", item.label),
+            ContextSelectorRowKind::Portal(_)
+            | ContextSelectorRowKind::PortalPrefix(_)
+            | ContextSelectorRowKind::PortalResult(_)
+            | ContextSelectorRowKind::Inert => item.id.to_string(),
         }
     }
 
@@ -1094,7 +1094,7 @@ impl AgentChatView {
         crate::ai::agent_chat::profiles::agent_chat_profile_picker_entries(&prefs.ai, &ctx)
     }
 
-    fn build_profile_picker_items(&self, query: &str) -> Vec<ContextPickerItem> {
+    fn build_profile_picker_items(&self, query: &str) -> Vec<ContextSelectorRow> {
         let query_lower = query.trim().to_ascii_lowercase();
         let mut items = self
             .profile_selector_entries()
@@ -1119,12 +1119,12 @@ impl AgentChatView {
                 } else {
                     125
                 };
-                Some(ContextPickerItem {
+                Some(ContextSelectorRow {
                     id: SharedString::from(format!("agent-chat-profile:{}", entry.id)),
                     label: SharedString::from(entry.name),
                     description: SharedString::from(format!("{source} Agent Chat profile")),
                     meta: SharedString::from(format!("'{} · {backend}", entry.id)),
-                    kind: ContextPickerItemKind::AgentChatProfile {
+                    kind: ContextSelectorRowKind::AgentChatProfile {
                         profile_id: entry.id,
                         icon_name: entry.icon_name,
                     },
@@ -1193,7 +1193,7 @@ impl AgentChatView {
 
     pub(crate) fn set_on_open_portal(
         &mut self,
-        callback: impl Fn(crate::ai::window::context_picker::types::PortalKind, &mut App) + 'static,
+        callback: impl Fn(crate::ai::context_selector::types::ContextPortalKind, &mut App) + 'static,
     ) {
         self.on_open_portal = Some(std::sync::Arc::new(callback));
     }
@@ -3492,7 +3492,7 @@ impl AgentChatView {
     /// rejected at the portal-open dispatch. Call before wiring host callbacks.
     pub(crate) fn set_allowed_portal_kinds(
         &mut self,
-        kinds: Vec<crate::ai::window::context_picker::types::PortalKind>,
+        kinds: Vec<crate::ai::context_selector::types::ContextPortalKind>,
     ) {
         self.allowed_portal_kinds = kinds;
     }
@@ -3500,7 +3500,7 @@ impl AgentChatView {
     /// Whether the given portal kind is allowed by the host.
     fn is_portal_kind_allowed(
         &self,
-        kind: crate::ai::window::context_picker::types::PortalKind,
+        kind: crate::ai::context_selector::types::ContextPortalKind,
     ) -> bool {
         self.allowed_portal_kinds.contains(&kind)
     }
@@ -4179,7 +4179,7 @@ impl AgentChatView {
                     error = %error,
                 );
                 let _ = self.cancel_pending_portal_session(
-                    crate::ai::window::context_picker::types::PortalKind::AgentChatHistory,
+                    crate::ai::context_selector::types::ContextPortalKind::AgentChatHistory,
                     cx,
                 );
                 return;
@@ -4339,7 +4339,7 @@ impl AgentChatView {
             self.pending_portal_session.as_ref(),
             Some(session)
                 if session.contract.portal_kind
-                    == crate::ai::window::context_picker::types::PortalKind::AgentChatHistory
+                    == crate::ai::context_selector::types::ContextPortalKind::AgentChatHistory
         )
     }
 
@@ -4399,7 +4399,7 @@ impl AgentChatView {
     /// Read the staged portal query for `kind`.
     pub(crate) fn portal_query_for(
         &self,
-        kind: crate::ai::window::context_picker::types::PortalKind,
+        kind: crate::ai::context_selector::types::ContextPortalKind,
     ) -> Option<String> {
         self.pending_portal_session
             .as_ref()
@@ -4415,7 +4415,7 @@ impl AgentChatView {
     /// Backward-compatible helper for the Agent Chat history host flow.
     pub(crate) fn take_pending_history_portal_query(&mut self) -> Option<String> {
         self.portal_query_for(
-            crate::ai::window::context_picker::types::PortalKind::AgentChatHistory,
+            crate::ai::context_selector::types::ContextPortalKind::AgentChatHistory,
         )
     }
 
@@ -5091,9 +5091,9 @@ impl AgentChatView {
                 .get(session.selected_index)
                 .map(|item| item.label.to_string());
             let trigger = match session.trigger {
-                ContextPickerTrigger::Mention => "@",
-                ContextPickerTrigger::Slash => "/",
-                ContextPickerTrigger::Profile => PROFILE_TRIGGER_STR,
+                ContextSelectorTrigger::Mention => "@",
+                ContextSelectorTrigger::Slash => "/",
+                ContextSelectorTrigger::Profile => PROFILE_TRIGGER_STR,
             };
             crate::protocol::AgentChatPickerState {
                 open: true,
@@ -5853,9 +5853,9 @@ impl AgentChatView {
 
         let pre_accept_item = session.items.get(session.selected_index).map(|item| {
             let trigger_str = match session.trigger {
-                crate::ai::window::context_picker::types::ContextPickerTrigger::Mention => "@",
-                crate::ai::window::context_picker::types::ContextPickerTrigger::Slash => "/",
-                crate::ai::window::context_picker::types::ContextPickerTrigger::Profile => {
+                crate::ai::context_selector::types::ContextSelectorTrigger::Mention => "@",
+                crate::ai::context_selector::types::ContextSelectorTrigger::Slash => "/",
+                crate::ai::context_selector::types::ContextSelectorTrigger::Profile => {
                     PROFILE_TRIGGER_STR
                 }
             };
@@ -5983,7 +5983,7 @@ impl AgentChatView {
 
     fn open_picker_portal(
         &mut self,
-        portal_kind: crate::ai::window::context_picker::types::PortalKind,
+        portal_kind: crate::ai::context_selector::types::ContextPortalKind,
         replace_range: std::ops::Range<usize>,
         query: String,
         cx: &mut Context<Self>,
@@ -6142,7 +6142,7 @@ impl AgentChatView {
 
     pub(crate) fn cancel_pending_portal_session(
         &mut self,
-        portal_kind: crate::ai::window::context_picker::types::PortalKind,
+        portal_kind: crate::ai::context_selector::types::ContextPortalKind,
         cx: &mut Context<Self>,
     ) -> bool {
         let Some(session) = self.pending_portal_session.take() else {
@@ -6255,7 +6255,7 @@ impl AgentChatView {
             session.state = next_portal_state(session.state, AgentChatPortalSessionEvent::Activate)
                 .unwrap_or(AgentChatPortalSessionState::Active);
         }
-        if portal_kind == crate::ai::window::context_picker::types::PortalKind::AgentChatHistory {
+        if portal_kind == crate::ai::context_selector::types::ContextPortalKind::AgentChatHistory {
             tracing::info!(
                 target: "script_kit::tab_ai",
                 event = "agent_chat_history_portal_query_staged",
@@ -7810,7 +7810,7 @@ impl AgentChatView {
                 ..
             } => {
                 // The composer spine's Files row routes through the same
-                // portal contract as the context picker's top-level Files
+                // portal contract as the context selector's top-level Files
                 // row: full built-in File Search with preview, accept
                 // replaces the `@file` segment with a compact token.
                 let text = self.live_thread().read(cx).input.text().to_string();
@@ -7823,7 +7823,7 @@ impl AgentChatView {
                 let char_start = text[..segment_byte_range.start].chars().count();
                 let char_end = text[..segment_byte_range.end].chars().count();
                 self.open_picker_portal(
-                    crate::ai::window::context_picker::types::PortalKind::FileSearch,
+                    crate::ai::context_selector::types::ContextPortalKind::FileSearch,
                     char_start..char_end,
                     query.to_string(),
                     cx,
@@ -10512,8 +10512,8 @@ impl AgentChatView {
     fn find_active_trigger(
         text: &str,
         cursor: usize,
-    ) -> Option<(ContextPickerTrigger, std::ops::Range<usize>, String)> {
-        crate::ai::window::context_picker::extract_context_picker_query_before_cursor(text, cursor)
+    ) -> Option<(ContextSelectorTrigger, std::ops::Range<usize>, String)> {
+        crate::ai::context_selector::context_selector_query_before_cursor(text, cursor)
             .map(|m| (m.trigger, m.char_range, m.query))
     }
 
@@ -10614,12 +10614,14 @@ impl AgentChatView {
                         None
                     } else {
                         let mut items = match trigger {
-                            ContextPickerTrigger::Mention => build_picker_items(trigger, &query),
-                            ContextPickerTrigger::Slash => {
+                            ContextSelectorTrigger::Mention => {
+                                context_selector_rows(trigger, &query)
+                            }
+                            ContextSelectorTrigger::Slash => {
                                 if self.cached_slash_commands.is_empty() {
                                     // Async discovery hasn't completed yet — show
                                     // intentional loading row instead of blank list.
-                                    vec![slash_picker_loading_row()]
+                                    vec![slash_command_loading_row()]
                                 } else {
                                     let entries = if available_commands.is_empty() {
                                         self.cached_slash_commands.clone()
@@ -10629,33 +10631,33 @@ impl AgentChatView {
                                     if entries.is_empty() {
                                         // Discovery completed but catalog is empty
                                         // (no defaults, no plugins, no Claude skills).
-                                        vec![slash_picker_empty_row()]
+                                        vec![slash_command_empty_row()]
                                     } else {
                                         let payloads: Vec<(SlashCommandPayload, String)> = entries
                                             .iter()
                                             .map(|e| (e.to_payload(), e.description.clone()))
                                             .collect();
-                                        let mut items = build_slash_picker_items_with_payloads(
+                                        let mut items = slash_command_rows_with_payloads(
                                             &query,
                                             payloads.iter().map(|(p, d)| (p, d.as_str())),
                                         );
                                         if items.is_empty() {
                                             // Non-empty catalog filtered to zero by
                                             // query — distinct from empty catalog.
-                                            items.push(slash_picker_no_match_row());
+                                            items.push(slash_command_no_match_row());
                                         }
                                         items
                                     }
                                 }
                             }
-                            ContextPickerTrigger::Profile => {
+                            ContextSelectorTrigger::Profile => {
                                 self.build_profile_picker_items(&query)
                             }
                         };
 
                         // Filter out portal items the host does not support.
                         items.retain(|item| {
-                            if let ContextPickerItemKind::Portal(kind) = item.kind {
+                            if let ContextSelectorRowKind::Portal(kind) = item.kind {
                                 self.is_portal_kind_allowed(kind)
                             } else {
                                 true
@@ -10670,11 +10672,11 @@ impl AgentChatView {
 
                         // If a slash prime is pending, pre-select the matching row.
                         if let Some(ref prime_name) = self.pending_slash_prime {
-                            if trigger == ContextPickerTrigger::Slash {
+                            if trigger == ContextSelectorTrigger::Slash {
                                 if let Some(ix) = items.iter().position(|item| {
                                     matches!(
                                         &item.kind,
-                                        ContextPickerItemKind::SlashCommand(payload)
+                                        ContextSelectorRowKind::SlashCommand(payload)
                                         if payload.slash_name() == prime_name
                                     )
                                 }) {
@@ -10927,7 +10929,7 @@ impl AgentChatView {
         };
 
         // Inert items (loading spinner, empty state) are non-actionable.
-        if matches!(item.kind, ContextPickerItemKind::Inert) {
+        if matches!(item.kind, ContextSelectorRowKind::Inert) {
             tracing::debug!(item_id = %item.id, "agent_chat_picker_inert_item_ignored");
             let transition = reduce_agent_chat_composer_picker(
                 self.composer_picker_state(),
@@ -10938,9 +10940,9 @@ impl AgentChatView {
         }
 
         let trigger_str = match session.trigger {
-            ContextPickerTrigger::Mention => "@",
-            ContextPickerTrigger::Slash => "/",
-            ContextPickerTrigger::Profile => PROFILE_TRIGGER_STR,
+            ContextSelectorTrigger::Mention => "@",
+            ContextSelectorTrigger::Slash => "/",
+            ContextSelectorTrigger::Profile => PROFILE_TRIGGER_STR,
         };
 
         tracing::info!(
@@ -10962,8 +10964,8 @@ impl AgentChatView {
         });
 
         // ── Slash command acceptance: default inserts text, skills stage content ──
-        if session.trigger == ContextPickerTrigger::Slash {
-            if let ContextPickerItemKind::SlashCommand(ref payload) = item.kind {
+        if session.trigger == ContextSelectorTrigger::Slash {
+            if let ContextSelectorRowKind::SlashCommand(ref payload) = item.kind {
                 match payload {
                     SlashCommandPayload::Default { name } => {
                         // Default commands insert literal `/command ` text.
@@ -11083,8 +11085,8 @@ impl AgentChatView {
             }
         }
 
-        if session.trigger == ContextPickerTrigger::Profile {
-            if let ContextPickerItemKind::AgentChatProfile { profile_id, .. } = item.kind {
+        if session.trigger == ContextSelectorTrigger::Profile {
+            if let ContextSelectorRowKind::AgentChatProfile { profile_id, .. } = item.kind {
                 let current_text = self.live_thread().read(cx).input.text().to_string();
                 let next_text = Self::replace_text_in_char_range(
                     &current_text,
@@ -11109,7 +11111,7 @@ impl AgentChatView {
 
         // ── Build context part; decide if inline-mention sync applies ──
         let (part, inline_text, allow_inline_sync) = match &item.kind {
-            ContextPickerItemKind::PortalPrefix(payload) => {
+            ContextSelectorRowKind::PortalPrefix(payload) => {
                 let current_text = self.live_thread().read(cx).input.text().to_string();
                 let prefix_text = format!("@{}:", payload.prefix);
                 let next_text = Self::replace_text_in_char_range(
@@ -11141,10 +11143,10 @@ impl AgentChatView {
                 self.sync_mention_popup_window_from_cached_parent(cx);
                 return;
             }
-            ContextPickerItemKind::BuiltIn(kind) => {
+            ContextSelectorRowKind::BuiltIn(kind) => {
                 if *kind == crate::ai::context_contract::ContextAttachmentKind::Dictation {
                     let portal_kind =
-                        crate::ai::window::context_picker::types::PortalKind::DictationHistory;
+                        crate::ai::context_selector::types::ContextPortalKind::DictationHistory;
                     self.open_picker_portal(
                         portal_kind,
                         session.trigger_range.clone(),
@@ -11160,11 +11162,11 @@ impl AgentChatView {
                 (
                     kind.part(),
                     kind.spec().mention.unwrap_or("@here").to_string(),
-                    session.trigger == ContextPickerTrigger::Mention,
+                    session.trigger == ContextSelectorTrigger::Mention,
                 )
             }
 
-            ContextPickerItemKind::File(path) | ContextPickerItemKind::Folder(path) => {
+            ContextSelectorRowKind::File(path) | ContextSelectorRowKind::Folder(path) => {
                 let path_text = path.to_string_lossy().to_string();
                 let file_part = AiContextPart::FilePath {
                     path: path_text.clone(),
@@ -11181,29 +11183,29 @@ impl AgentChatView {
                 (
                     file_part,
                     inline_text,
-                    session.trigger == ContextPickerTrigger::Mention,
+                    session.trigger == ContextSelectorTrigger::Mention,
                 )
             }
-            ContextPickerItemKind::SlashCommand(_)
-            | ContextPickerItemKind::AgentChatProfile { .. }
-            | ContextPickerItemKind::Inert => return,
-            ContextPickerItemKind::PortalResult(payload) => {
+            ContextSelectorRowKind::SlashCommand(_)
+            | ContextSelectorRowKind::AgentChatProfile { .. }
+            | ContextSelectorRowKind::Inert => return,
+            ContextSelectorRowKind::PortalResult(payload) => {
                 let part = match &payload.attachment {
-                    crate::ai::window::context_picker::types::InlinePortalAttachment::ResourceUri {
+                    crate::ai::context_selector::types::InlinePortalAttachment::ResourceUri {
                         uri,
                         label,
                     } => AiContextPart::ResourceUri {
                         uri: uri.clone(),
                         label: label.clone(),
                     },
-                    crate::ai::window::context_picker::types::InlinePortalAttachment::FilePath {
+                    crate::ai::context_selector::types::InlinePortalAttachment::FilePath {
                         path,
                         label,
                     } => AiContextPart::FilePath {
                         path: path.clone(),
                         label: label.clone(),
                     },
-                    crate::ai::window::context_picker::types::InlinePortalAttachment::SkillFile {
+                    crate::ai::context_selector::types::InlinePortalAttachment::SkillFile {
                         path,
                         label,
                         skill_name,
@@ -11216,7 +11218,7 @@ impl AgentChatView {
                         owner_label: owner_label.clone(),
                         slash_name: slash_name.clone(),
                     },
-                    crate::ai::window::context_picker::types::InlinePortalAttachment::TextBlock {
+                    crate::ai::context_selector::types::InlinePortalAttachment::TextBlock {
                         label,
                         source,
                         text,
@@ -11227,7 +11229,7 @@ impl AgentChatView {
                         text: text.clone(),
                         mime_type: mime_type.clone(),
                     },
-                    crate::ai::window::context_picker::types::InlinePortalAttachment::FocusedTarget {
+                    crate::ai::context_selector::types::InlinePortalAttachment::FocusedTarget {
                         source,
                         kind,
                         semantic_id,
@@ -11245,27 +11247,27 @@ impl AgentChatView {
                     },
                 };
                 let fallback_prefix = match payload.portal_kind {
-                    crate::ai::window::context_picker::types::PortalKind::FileSearch => "file",
-                    crate::ai::window::context_picker::types::PortalKind::BrowserHistory => {
+                    crate::ai::context_selector::types::ContextPortalKind::FileSearch => "file",
+                    crate::ai::context_selector::types::ContextPortalKind::BrowserHistory => {
                         "browser-history"
                     }
-                    crate::ai::window::context_picker::types::PortalKind::BrowserTabs => "tabs",
-                    crate::ai::window::context_picker::types::PortalKind::ClipboardHistory => {
+                    crate::ai::context_selector::types::ContextPortalKind::BrowserTabs => "tabs",
+                    crate::ai::context_selector::types::ContextPortalKind::ClipboardHistory => {
                         "clipboard"
                     }
-                    crate::ai::window::context_picker::types::PortalKind::DictationHistory => {
+                    crate::ai::context_selector::types::ContextPortalKind::DictationHistory => {
                         "dictation"
                     }
-                    crate::ai::window::context_picker::types::PortalKind::ScriptSearch => "script",
-                    crate::ai::window::context_picker::types::PortalKind::ScriptletSearch => {
+                    crate::ai::context_selector::types::ContextPortalKind::ScriptSearch => "script",
+                    crate::ai::context_selector::types::ContextPortalKind::ScriptletSearch => {
                         "scriptlet"
                     }
-                    crate::ai::window::context_picker::types::PortalKind::SkillSearch => "skill",
-                    crate::ai::window::context_picker::types::PortalKind::NotesBrowse => "note",
-                    crate::ai::window::context_picker::types::PortalKind::AgentChatHistory => {
+                    crate::ai::context_selector::types::ContextPortalKind::SkillSearch => "skill",
+                    crate::ai::context_selector::types::ContextPortalKind::NotesBrowse => "note",
+                    crate::ai::context_selector::types::ContextPortalKind::AgentChatHistory => {
                         "history"
                     }
-                    crate::ai::window::context_picker::types::PortalKind::Terminal => "terminal",
+                    crate::ai::context_selector::types::ContextPortalKind::Terminal => "terminal",
                 };
                 let inline_text = part_to_inline_token(&part).unwrap_or_else(|| {
                     crate::ai::context_mentions::format_typed_label_mention_token(
@@ -11282,10 +11284,10 @@ impl AgentChatView {
                 (
                     part,
                     inline_text,
-                    session.trigger == ContextPickerTrigger::Mention,
+                    session.trigger == ContextSelectorTrigger::Mention,
                 )
             }
-            ContextPickerItemKind::Portal(portal_kind) => {
+            ContextSelectorRowKind::Portal(portal_kind) => {
                 self.open_picker_portal(
                     *portal_kind,
                     session.trigger_range.clone(),
@@ -11342,9 +11344,9 @@ impl AgentChatView {
         // resolve typed @type:name tokens back to the full AiContextPart.
         if matches!(
             item.kind,
-            ContextPickerItemKind::File(_)
-                | ContextPickerItemKind::Folder(_)
-                | ContextPickerItemKind::PortalResult(_)
+            ContextSelectorRowKind::File(_)
+                | ContextSelectorRowKind::Folder(_)
+                | ContextSelectorRowKind::PortalResult(_)
         ) {
             if let Some(token) = part_to_inline_token(&part) {
                 self.typed_mention_aliases.insert(token, part.clone());
@@ -11625,9 +11627,9 @@ impl AgentChatView {
         let trigger_start_byte = Self::char_to_byte_offset(input_text, session.trigger_range.start);
         let prefix = &input_text[..trigger_start_byte];
         let trigger_text = match session.trigger {
-            ContextPickerTrigger::Mention => "@",
-            ContextPickerTrigger::Slash => "/",
-            ContextPickerTrigger::Profile => PROFILE_TRIGGER_STR,
+            ContextSelectorTrigger::Mention => "@",
+            ContextSelectorTrigger::Slash => "/",
+            ContextSelectorTrigger::Profile => PROFILE_TRIGGER_STR,
         };
         let trigger_width = Self::measure_agent_chat_input_prefix_width(trigger_text, cx);
         let (after_trigger_x, after_trigger_y) = Self::measure_agent_chat_input_cursor_position(
@@ -14209,7 +14211,7 @@ mod tests {
         AgentChatApprovalPreview, AgentChatApprovalRequest,
     };
     use crate::ai::agent_chat::ui::thread::{AgentChatThreadMessage, AgentChatThreadMessageRole};
-    use crate::ai::window::context_picker::types::{ContextPickerItem, ContextPickerItemKind};
+    use crate::ai::context_selector::types::{ContextSelectorRow, ContextSelectorRowKind};
     use gpui::{Modifiers, SharedString};
     use std::collections::HashMap;
 
@@ -14375,22 +14377,22 @@ mod tests {
 
     #[test]
     fn telemetry_item_id_redacts_local_paths() {
-        let file_item = ContextPickerItem {
+        let file_item = ContextSelectorRow {
             id: SharedString::from("file:/tmp/secrets.txt"),
             label: SharedString::from("secrets.txt"),
             description: SharedString::from("/tmp/secrets.txt"),
             meta: SharedString::from("@file:/tmp/secrets.txt"),
-            kind: ContextPickerItemKind::File(std::path::PathBuf::from("/tmp/secrets.txt")),
+            kind: ContextSelectorRowKind::File(std::path::PathBuf::from("/tmp/secrets.txt")),
             score: 100,
             label_highlight_indices: Vec::new(),
             meta_highlight_indices: Vec::new(),
         };
-        let folder_item = ContextPickerItem {
+        let folder_item = ContextSelectorRow {
             id: SharedString::from("folder:/Users/john/Documents"),
             label: SharedString::from("Documents"),
             description: SharedString::from("/Users/john/Documents"),
             meta: SharedString::from("@file:/Users/john/Documents"),
-            kind: ContextPickerItemKind::Folder(std::path::PathBuf::from("/Users/john/Documents")),
+            kind: ContextSelectorRowKind::Folder(std::path::PathBuf::from("/Users/john/Documents")),
             score: 100,
             label_highlight_indices: Vec::new(),
             meta_highlight_indices: Vec::new(),
@@ -14460,30 +14462,30 @@ mod tests {
 
     #[test]
     fn portal_target_from_inline_token_supports_dictation_portal_tokens() {
-        use crate::ai::window::context_picker::types::PortalKind;
+        use crate::ai::context_selector::types::ContextPortalKind;
 
         assert_eq!(
             crate::ai::agent_chat::ui::portal_contract::portal_target_from_inline_token(
                 "@dictation"
             ),
-            Some((PortalKind::DictationHistory, String::new()))
+            Some((ContextPortalKind::DictationHistory, String::new()))
         );
 
         assert_eq!(
             crate::ai::agent_chat::ui::portal_contract::portal_target_from_inline_token(
                 "@dictation:entry-123",
             ),
-            Some((PortalKind::DictationHistory, "entry-123".to_string()))
+            Some((ContextPortalKind::DictationHistory, "entry-123".to_string()))
         );
     }
 
     #[test]
     fn picker_portal_query_clears_in_progress_dictation_picker_text() {
-        use crate::ai::window::context_picker::types::PortalKind;
+        use crate::ai::context_selector::types::ContextPortalKind;
 
         assert_eq!(
             crate::ai::agent_chat::ui::portal_contract::picker_portal_query(
-                PortalKind::DictationHistory,
+                ContextPortalKind::DictationHistory,
                 "di",
             ),
             ""
@@ -14492,11 +14494,11 @@ mod tests {
 
     #[test]
     fn picker_portal_query_preserves_non_dictation_portal_text() {
-        use crate::ai::window::context_picker::types::PortalKind;
+        use crate::ai::context_selector::types::ContextPortalKind;
 
         assert_eq!(
             crate::ai::agent_chat::ui::portal_contract::picker_portal_query(
-                PortalKind::BrowserHistory,
+                ContextPortalKind::BrowserHistory,
                 "bro"
             ),
             "bro"

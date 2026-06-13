@@ -1,6 +1,6 @@
 //! Shared dense-monoline picker row for InlineDropdown surfaces.
 //!
-//! All inline dropdown consumers (Agent Chat popups, AI context pickers, model
+//! All inline dropdown consumers (Agent Chat popups, context selectors, model
 //! selectors, presets dropdown) render through these helpers so the chrome
 //! stays consistent: launcher-aligned row height, theme accent bar on
 //! selection, fuzzy-match highlights, and optional leading visual / accessory.
@@ -24,15 +24,15 @@ pub(crate) const SOFT_COMPACT_SELECTED_ROW_OPACITY: f32 = 0.18;
 pub(crate) const COMMAND_OPACITY: f32 = 0.30;
 
 /// Picker rows should align with the main launcher row rhythm.
-pub(crate) const CONTEXT_PICKER_ROW_HEIGHT: f32 = LIST_ITEM_HEIGHT;
+pub(crate) const CONTEXT_SELECTOR_ROW_HEIGHT: f32 = LIST_ITEM_HEIGHT;
 pub(crate) const SOFT_COMPACT_PICKER_ROW_HEIGHT: f32 = 36.0;
-pub(crate) const CONTEXT_PICKER_SYNOPSIS_HEIGHT: f32 = 64.0;
-const CONTEXT_PICKER_SYNOPSIS_MAX_LINES: usize = 4;
-const CONTEXT_PICKER_SYNOPSIS_LINE_HEIGHT: f32 = 16.0;
+pub(crate) const CONTEXT_SELECTOR_SYNOPSIS_HEIGHT: f32 = 64.0;
+const CONTEXT_SELECTOR_SYNOPSIS_MAX_LINES: usize = 4;
+const CONTEXT_SELECTOR_SYNOPSIS_LINE_HEIGHT: f32 = 16.0;
 
 /// Render a single dense-monoline picker row.
 ///
-/// Shared by Agent Chat popups, inline context pickers, model selectors, and any
+/// Shared by Agent Chat popups, inline context selectors, model selectors, and any
 /// future smart-input dropdown that wants the same launcher-aligned chrome.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn render_dense_monoline_picker_row(
@@ -224,7 +224,7 @@ fn render_dense_monoline_picker_row_full(
     let mut row = div()
         .id(id)
         .w_full()
-        .h(px(CONTEXT_PICKER_ROW_HEIGHT))
+        .h(px(CONTEXT_SELECTOR_ROW_HEIGHT))
         .flex()
         .items_center()
         .justify_between()
@@ -539,7 +539,7 @@ pub(crate) fn render_compact_synopsis_strip(
     // Intrinsic height: the description text measures its own wrapped lines
     // (capped by `line_clamp`), so no chars-per-line height estimate is needed.
     div()
-        .min_h(px(CONTEXT_PICKER_SYNOPSIS_HEIGHT))
+        .min_h(px(CONTEXT_SELECTOR_SYNOPSIS_HEIGHT))
         .flex_shrink_0()
         .overflow_hidden()
         .bg(footer_bg)
@@ -577,8 +577,8 @@ pub(crate) fn render_compact_synopsis_strip(
         .child(
             div()
                 .text_xs()
-                .line_height(px(CONTEXT_PICKER_SYNOPSIS_LINE_HEIGHT))
-                .line_clamp(CONTEXT_PICKER_SYNOPSIS_MAX_LINES)
+                .line_height(px(CONTEXT_SELECTOR_SYNOPSIS_LINE_HEIGHT))
+                .line_clamp(CONTEXT_SELECTOR_SYNOPSIS_MAX_LINES)
                 .text_color(foreground.opacity(MUTED_OP))
                 .child(description),
         )

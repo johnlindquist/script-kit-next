@@ -595,7 +595,6 @@ fn debug_snapshot_is_serializable_and_complete() {
         "new_chat_menu_open",
         "presets_dropdown_open",
         "api_key_input_visible",
-        "context_picker_open",
         "selected_model",
         "selected_chat_id",
         "pending_context_parts",
@@ -631,10 +630,8 @@ fn window_api_has_no_logging_log_calls() {
 
 #[test]
 fn mini_context_contract_keeps_essential_surfaces_reachable() {
-    // Mini mode must render context bar, picker, chips, and image preview.
-    // Context recommendations are hidden in mini (too much vertical space
-    // in a 440px window — users can still attach via Cmd+Shift+A).
-    // Inspector/drawer are full-mode-only.
+    // Mini mode must keep the shared context bar, recommendations, and image
+    // preview without adding another inline selector layer.
     let panel = read("src/ai/window/render_main_panel.rs");
     let mini_fn_start = panel
         .find("fn render_mini_main_panel")
@@ -644,18 +641,17 @@ fn mini_context_contract_keeps_essential_surfaces_reachable() {
         .expect("render_full_main_panel must exist");
     let mini_body = &panel[mini_fn_start..full_fn_start];
 
-    // Surfaces that MUST be in mini mode
-    // Note: render_pending_context_chips removed — attachments are inline @type:name tokens now.
-    for surface in [
-        "render_context_bar",
-        "render_context_picker",
-        "render_pending_image_preview",
-    ] {
+    for surface in ["render_context_bar", "render_pending_image_preview"] {
         assert!(
             mini_body.contains(surface),
             "Mini main panel must render {surface}"
         );
     }
+
+    assert!(
+        !mini_body.contains(concat!("render_context_", "picker")),
+        "Mini main panel must not render another inline selector layer"
+    );
 
     // Context recommendations are now shown in mini mode (parity with full mode)
     assert!(
@@ -767,7 +763,6 @@ fn snapshot_exposes_interaction_state_fields() {
         ("renaming_chat_present", "self.renaming_chat_id.is_some()"),
         ("presets_dropdown_open", "self.showing_presets_dropdown"),
         ("api_key_input_visible", "self.showing_api_key_input"),
-        ("context_picker_open", "self.is_context_picker_open()"),
         ("streaming_error_present", "self.streaming_error.is_some()"),
         (
             "pending_delete_chat_present",

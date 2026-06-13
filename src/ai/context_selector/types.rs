@@ -3,10 +3,10 @@ use gpui::SharedString;
 pub(crate) const PROFILE_TRIGGER_CHAR: char = '|';
 pub(crate) const PROFILE_TRIGGER_STR: &str = "|";
 
-/// Whether the picker was triggered by `@` (mention), `/` (slash command), or `|` (profile).
+/// Whether selector rows were requested by `@` (mention), `/` (slash command), or `|` (profile).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
-pub enum ContextPickerTrigger {
+pub enum ContextSelectorTrigger {
     Mention,
     Slash,
     Profile,
@@ -14,7 +14,7 @@ pub enum ContextPickerTrigger {
 
 /// Which full built-in view a portal item opens for rich browsing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum PortalKind {
+pub enum ContextPortalKind {
     /// Open the Spotlight-powered file search view.
     FileSearch,
     /// Open the recent browser history browser.
@@ -40,8 +40,8 @@ pub enum PortalKind {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PortalPrefixPayload {
-    pub portal_kind: PortalKind,
+pub struct ContextPortalPrefixPayload {
+    pub portal_kind: ContextPortalKind,
     pub prefix: &'static str,
 }
 
@@ -79,7 +79,7 @@ pub enum InlinePortalAttachment {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct InlinePortalResultPayload {
-    pub portal_kind: PortalKind,
+    pub portal_kind: ContextPortalKind,
     pub attachment: InlinePortalAttachment,
 }
 
@@ -122,7 +122,7 @@ impl SlashCommandPayload {
         }
     }
 
-    /// Formatted meta string for the picker row, showing the slash name
+    /// Formatted meta string for the selector row, showing the slash name
     /// and owner context. Default commands show just the slash name;
     /// plugin and Claude skills include the owner label.
     pub fn picker_owner_meta(&self) -> String {
@@ -142,7 +142,7 @@ impl SlashCommandPayload {
         }
     }
 
-    /// Human-readable owner label for display in the picker meta column.
+    /// Human-readable owner label for display in the selector meta column.
     pub fn owner_label(&self) -> String {
         match self {
             Self::Default { .. } => "Built-in".to_string(),
@@ -158,9 +158,9 @@ impl SlashCommandPayload {
     }
 }
 
-/// The kind of item in the context picker.
+/// The kind of item in the context selector.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ContextPickerItemKind {
+pub enum ContextSelectorRowKind {
     /// A built-in context attachment (seeded from `context_attachment_specs()`).
     BuiltIn(crate::ai::context_contract::ContextAttachmentKind),
     /// A local file attachment.
@@ -177,10 +177,10 @@ pub enum ContextPickerItemKind {
     },
     /// Opens a full built-in view as a portal for rich browsing.
     /// Selection in the portal attaches the result back to the Agent Chat chat.
-    Portal(PortalKind),
+    Portal(ContextPortalKind),
     /// Inserts a portal prefix such as `@browser-history:` and keeps the
-    /// inline picker open for provider-backed results.
-    PortalPrefix(PortalPrefixPayload),
+    /// owning selector open for provider-backed results.
+    PortalPrefix(ContextPortalPrefixPayload),
     /// A concrete provider-backed result from an inline portal query.
     PortalResult(InlinePortalResultPayload),
     /// A non-actionable placeholder row (loading spinner, empty state).
@@ -188,9 +188,9 @@ pub enum ContextPickerItemKind {
     Inert,
 }
 
-/// A single row in the context picker.
+/// A single row in the context selector.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ContextPickerItem {
+pub struct ContextSelectorRow {
     /// Unique identifier for this row (e.g. `"builtin:selection"`, `"file:/path"`).
     pub id: SharedString,
     /// Display label (e.g. `"Selection"`, `"chat.rs"`).
@@ -200,7 +200,7 @@ pub struct ContextPickerItem {
     /// Right-side metadata (slash command, mention, or path).
     pub meta: SharedString,
     /// The kind of item — determines how acceptance creates a context part.
-    pub kind: ContextPickerItemKind,
+    pub kind: ContextSelectorRowKind,
     /// Relevance score used for deterministic ranking (higher = better match).
     /// Ties are broken by insertion order.
     pub score: u32,
@@ -208,101 +208,4 @@ pub struct ContextPickerItem {
     pub label_highlight_indices: Vec<usize>,
     /// Indices into `meta` that matched the query (for gold highlighting).
     pub meta_highlight_indices: Vec<usize>,
-}
-
-/// Mutable state for the inline context picker overlay.
-///
-/// Created when the user types `@` or `/` in the composer; dropped on Escape,
-/// Enter (accept), or when the composer loses focus.
-#[derive(Debug, Clone)]
-pub struct ContextPickerState {
-    /// Which trigger character opened this picker.
-    pub trigger: ContextPickerTrigger,
-    /// The raw query string after the trigger (e.g. `"sel"` from `@sel`).
-    pub query: String,
-    /// Ranked items matching the current query.
-    pub items: Vec<ContextPickerItem>,
-    /// Currently highlighted row index (keyboard navigation).
-    pub selected_index: usize,
-}
-
-impl ContextPickerState {
-    pub fn new(
-        trigger: ContextPickerTrigger,
-        query: String,
-        items: Vec<ContextPickerItem>,
-    ) -> Self {
-        Self {
-            trigger,
-            query,
-            items,
-            selected_index: 0,
-        }
-    }
-
-    /// Machine-readable snapshot of picker entries and selection state.
-    /// Used by agents to verify UI state without brittle string scraping.
-    pub fn snapshot(&self) -> ContextPickerSnapshot {
-        ContextPickerSnapshot {
-            trigger: self.trigger,
-            query: self.query.clone(),
-            selected_index: self.selected_index,
-            items: self
-                .items
-                .iter()
-                .map(|item| ContextPickerItemSnapshot {
-                    id: item.id.to_string(),
-                    label: item.label.to_string(),
-                    section: match &item.kind {
-                        ContextPickerItemKind::BuiltIn(_) => "builtin",
-                        ContextPickerItemKind::File(_) => "file",
-                        ContextPickerItemKind::Folder(_) => "folder",
-                        ContextPickerItemKind::SlashCommand(_) => "slash_command",
-                        ContextPickerItemKind::AgentChatProfile { .. } => "agent_chat_profile",
-                        ContextPickerItemKind::Portal(_) => "portal",
-                        ContextPickerItemKind::PortalPrefix(_) => "portal_prefix",
-                        ContextPickerItemKind::PortalResult(_) => "portal_result",
-                        ContextPickerItemKind::Inert => "inert",
-                    },
-                    score: item.score,
-                })
-                .collect(),
-        }
-    }
-}
-
-/// Serializable snapshot of picker state for agent verification.
-#[derive(Debug, Clone, serde::Serialize)]
-pub struct ContextPickerSnapshot {
-    pub trigger: ContextPickerTrigger,
-    pub query: String,
-    pub selected_index: usize,
-    pub items: Vec<ContextPickerItemSnapshot>,
-}
-
-/// Serializable snapshot of a single picker item.
-#[derive(Debug, Clone, serde::Serialize)]
-pub struct ContextPickerItemSnapshot {
-    pub id: String,
-    pub label: String,
-    pub section: &'static str,
-    pub score: u32,
-}
-
-/// Section header for grouped picker results.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ContextPickerSection {
-    BuiltIn,
-    Files,
-    Folders,
-}
-
-impl ContextPickerSection {
-    pub fn label(self) -> &'static str {
-        match self {
-            Self::BuiltIn => "Context",
-            Self::Files => "Files",
-            Self::Folders => "Folders",
-        }
-    }
 }

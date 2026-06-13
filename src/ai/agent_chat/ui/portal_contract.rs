@@ -1,7 +1,7 @@
 use std::ops::Range;
 
+use crate::ai::context_selector::types::ContextPortalKind;
 use crate::ai::message_parts::AiContextPart;
-use crate::ai::window::context_picker::types::PortalKind;
 
 const PREVIEW_TARGET_MAX_CHARS: usize = 48;
 
@@ -30,7 +30,7 @@ impl AgentChatPortalReplacementTarget {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct AgentChatPortalLaunchContract {
-    pub portal_kind: PortalKind,
+    pub portal_kind: ContextPortalKind,
     pub query: String,
     pub replacement: AgentChatPortalReplacementTarget,
 }
@@ -69,35 +69,35 @@ pub(crate) enum AgentChatPortalIntent {
     },
 }
 
-pub(crate) fn portal_kind_detail_label(kind: PortalKind) -> &'static str {
+pub(crate) fn portal_kind_detail_label(kind: ContextPortalKind) -> &'static str {
     match kind {
-        PortalKind::FileSearch => "file portal",
-        PortalKind::BrowserHistory => "browser history portal",
-        PortalKind::BrowserTabs => "browser tabs portal",
-        PortalKind::ClipboardHistory => "clipboard portal",
-        PortalKind::DictationHistory => "dictation portal",
-        PortalKind::ScriptSearch => "script portal",
-        PortalKind::ScriptletSearch => "scriptlet portal",
-        PortalKind::SkillSearch => "skill portal",
-        PortalKind::NotesBrowse => "notes portal",
-        PortalKind::AgentChatHistory => "history portal",
-        PortalKind::Terminal => "terminal portal",
+        ContextPortalKind::FileSearch => "file portal",
+        ContextPortalKind::BrowserHistory => "browser history portal",
+        ContextPortalKind::BrowserTabs => "browser tabs portal",
+        ContextPortalKind::ClipboardHistory => "clipboard portal",
+        ContextPortalKind::DictationHistory => "dictation portal",
+        ContextPortalKind::ScriptSearch => "script portal",
+        ContextPortalKind::ScriptletSearch => "scriptlet portal",
+        ContextPortalKind::SkillSearch => "skill portal",
+        ContextPortalKind::NotesBrowse => "notes portal",
+        ContextPortalKind::AgentChatHistory => "history portal",
+        ContextPortalKind::Terminal => "terminal portal",
     }
 }
 
-fn portal_prefix_for_kind(kind: PortalKind) -> &'static str {
+fn portal_prefix_for_kind(kind: ContextPortalKind) -> &'static str {
     match kind {
-        PortalKind::FileSearch => "file",
-        PortalKind::BrowserHistory => "browser-history",
-        PortalKind::BrowserTabs => "tabs",
-        PortalKind::ClipboardHistory => "clipboard",
-        PortalKind::DictationHistory => "dictation",
-        PortalKind::ScriptSearch => "script",
-        PortalKind::ScriptletSearch => "scriptlet",
-        PortalKind::SkillSearch => "skill",
-        PortalKind::NotesBrowse => "note",
-        PortalKind::AgentChatHistory => "history",
-        PortalKind::Terminal => "terminal",
+        ContextPortalKind::FileSearch => "file",
+        ContextPortalKind::BrowserHistory => "browser-history",
+        ContextPortalKind::BrowserTabs => "tabs",
+        ContextPortalKind::ClipboardHistory => "clipboard",
+        ContextPortalKind::DictationHistory => "dictation",
+        ContextPortalKind::ScriptSearch => "script",
+        ContextPortalKind::ScriptletSearch => "scriptlet",
+        ContextPortalKind::SkillSearch => "skill",
+        ContextPortalKind::NotesBrowse => "note",
+        ContextPortalKind::AgentChatHistory => "history",
+        ContextPortalKind::Terminal => "terminal",
     }
 }
 
@@ -162,14 +162,14 @@ fn preview_only_part_description(part: &AiContextPart) -> Option<String> {
     }
 }
 
-pub(crate) fn portal_target_from_part(part: &AiContextPart) -> Option<(PortalKind, String)> {
+pub(crate) fn portal_target_from_part(part: &AiContextPart) -> Option<(ContextPortalKind, String)> {
     match part {
         AiContextPart::ResourceUri { uri, label } => match uri.as_str() {
-            "kit://clipboard-history" => Some((PortalKind::ClipboardHistory, label.clone())),
-            "kit://dictation" => Some((PortalKind::DictationHistory, String::new())),
-            "kit://scripts" => Some((PortalKind::ScriptSearch, label.clone())),
+            "kit://clipboard-history" => Some((ContextPortalKind::ClipboardHistory, label.clone())),
+            "kit://dictation" => Some((ContextPortalKind::DictationHistory, String::new())),
+            "kit://scripts" => Some((ContextPortalKind::ScriptSearch, label.clone())),
             _ if uri.starts_with("kit://clipboard-history?id=") => Some((
-                PortalKind::ClipboardHistory,
+                ContextPortalKind::ClipboardHistory,
                 label
                     .strip_prefix("Clipboard: ")
                     .map(str::to_string)
@@ -181,7 +181,7 @@ pub(crate) fn portal_target_from_part(part: &AiContextPart) -> Option<(PortalKin
                     .and_then(crate::dictation::get_history_entry)
                     .map(|entry| entry.preview)
                     .unwrap_or_else(|| label.clone());
-                Some((PortalKind::DictationHistory, query))
+                Some((ContextPortalKind::DictationHistory, query))
             }
             _ => None,
         },
@@ -195,12 +195,12 @@ pub(crate) fn portal_target_from_part(part: &AiContextPart) -> Option<(PortalKin
                 );
                 return None;
             }
-            Some((PortalKind::FileSearch, label.clone()))
+            Some((ContextPortalKind::FileSearch, label.clone()))
         }
         AiContextPart::SkillFile {
             label, skill_name, ..
         } => Some((
-            PortalKind::SkillSearch,
+            ContextPortalKind::SkillSearch,
             if skill_name.trim().is_empty() {
                 label.clone()
             } else {
@@ -208,15 +208,17 @@ pub(crate) fn portal_target_from_part(part: &AiContextPart) -> Option<(PortalKin
             },
         )),
         AiContextPart::FocusedTarget { target, .. } => match target.kind.as_str() {
-            "script" => Some((PortalKind::ScriptSearch, target.label.clone())),
-            "scriptlet" => Some((PortalKind::ScriptletSearch, target.label.clone())),
-            "note" => Some((PortalKind::NotesBrowse, target.label.clone())),
-            "browser_history_entry" => Some((PortalKind::BrowserHistory, target.label.clone())),
-            "browser_tab" => Some((PortalKind::BrowserTabs, target.label.clone())),
-            "clipboard_entry" => Some((PortalKind::ClipboardHistory, target.label.clone())),
-            "skill" => Some((PortalKind::SkillSearch, target.label.clone())),
+            "script" => Some((ContextPortalKind::ScriptSearch, target.label.clone())),
+            "scriptlet" => Some((ContextPortalKind::ScriptletSearch, target.label.clone())),
+            "note" => Some((ContextPortalKind::NotesBrowse, target.label.clone())),
+            "browser_history_entry" => {
+                Some((ContextPortalKind::BrowserHistory, target.label.clone()))
+            }
+            "browser_tab" => Some((ContextPortalKind::BrowserTabs, target.label.clone())),
+            "clipboard_entry" => Some((ContextPortalKind::ClipboardHistory, target.label.clone())),
+            "skill" => Some((ContextPortalKind::SkillSearch, target.label.clone())),
             "file" | "directory" => Some((
-                PortalKind::FileSearch,
+                ContextPortalKind::FileSearch,
                 target
                     .metadata
                     .as_ref()
@@ -236,38 +238,38 @@ pub(crate) fn portal_target_from_part(part: &AiContextPart) -> Option<(PortalKin
     }
 }
 
-pub(crate) fn portal_target_from_inline_token(token: &str) -> Option<(PortalKind, String)> {
+pub(crate) fn portal_target_from_inline_token(token: &str) -> Option<(ContextPortalKind, String)> {
     if preview_only_inline_token_description(token).is_some() {
         return None;
     }
 
     match token {
-        "@browser-history" => return Some((PortalKind::BrowserHistory, String::new())),
-        "@tabs" | "@browser-tabs" => return Some((PortalKind::BrowserTabs, String::new())),
-        "@clipboard" => return Some((PortalKind::ClipboardHistory, String::new())),
-        "@dictation" => return Some((PortalKind::DictationHistory, String::new())),
-        "@recent-scripts" => return Some((PortalKind::ScriptSearch, String::new())),
-        "@terminal" => return Some((PortalKind::Terminal, String::new())),
+        "@browser-history" => return Some((ContextPortalKind::BrowserHistory, String::new())),
+        "@tabs" | "@browser-tabs" => return Some((ContextPortalKind::BrowserTabs, String::new())),
+        "@clipboard" => return Some((ContextPortalKind::ClipboardHistory, String::new())),
+        "@dictation" => return Some((ContextPortalKind::DictationHistory, String::new())),
+        "@recent-scripts" => return Some((ContextPortalKind::ScriptSearch, String::new())),
+        "@terminal" => return Some((ContextPortalKind::Terminal, String::new())),
         _ => {}
     }
 
     let (prefix, value) = crate::ai::context_mentions::typed_mention_token_parts(token)?;
     let value = value.trim().to_string();
     let kind = match prefix.as_str() {
-        "browser-history" => PortalKind::BrowserHistory,
-        "tabs" | "browser-tabs" => PortalKind::BrowserTabs,
-        "dictation" => PortalKind::DictationHistory,
-        "note" => PortalKind::NotesBrowse,
-        "script" => PortalKind::ScriptSearch,
-        "scriptlet" => PortalKind::ScriptletSearch,
-        "skill" => PortalKind::SkillSearch,
-        "clipboard" => PortalKind::ClipboardHistory,
-        "history" => PortalKind::AgentChatHistory,
-        "terminal" => PortalKind::Terminal,
-        file_prefix if is_fileish_typed_prefix(file_prefix) => PortalKind::FileSearch,
+        "browser-history" => ContextPortalKind::BrowserHistory,
+        "tabs" | "browser-tabs" => ContextPortalKind::BrowserTabs,
+        "dictation" => ContextPortalKind::DictationHistory,
+        "note" => ContextPortalKind::NotesBrowse,
+        "script" => ContextPortalKind::ScriptSearch,
+        "scriptlet" => ContextPortalKind::ScriptletSearch,
+        "skill" => ContextPortalKind::SkillSearch,
+        "clipboard" => ContextPortalKind::ClipboardHistory,
+        "history" => ContextPortalKind::AgentChatHistory,
+        "terminal" => ContextPortalKind::Terminal,
+        file_prefix if is_fileish_typed_prefix(file_prefix) => ContextPortalKind::FileSearch,
         _ => return None,
     };
-    let query = if kind == PortalKind::DictationHistory {
+    let query = if kind == ContextPortalKind::DictationHistory {
         crate::dictation::get_history_entry(&value)
             .map(|entry| entry.preview)
             .unwrap_or(value)
@@ -277,8 +279,8 @@ pub(crate) fn portal_target_from_inline_token(token: &str) -> Option<(PortalKind
     Some((kind, query))
 }
 
-pub(crate) fn picker_portal_query(portal_kind: PortalKind, session_query: &str) -> String {
-    if portal_kind == PortalKind::DictationHistory {
+pub(crate) fn picker_portal_query(portal_kind: ContextPortalKind, session_query: &str) -> String {
+    if portal_kind == ContextPortalKind::DictationHistory {
         return String::new();
     }
 
@@ -599,10 +601,13 @@ mod tests {
     #[test]
     fn picker_portal_query_strips_file_prefix_for_full_file_search() {
         assert_eq!(
-            picker_portal_query(PortalKind::FileSearch, "file:demo.rs"),
+            picker_portal_query(ContextPortalKind::FileSearch, "file:demo.rs"),
             "demo.rs"
         );
-        assert_eq!(picker_portal_query(PortalKind::FileSearch, "file"), "");
+        assert_eq!(
+            picker_portal_query(ContextPortalKind::FileSearch, "file"),
+            ""
+        );
     }
 
     #[test]

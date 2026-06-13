@@ -251,14 +251,17 @@ try {
   const afterCwdText = await editorText(driver);
   check("enter_sets_cwd_and_strips_segment", afterCwdText === "", { afterCwdText });
 
+  const forbiddenLine = "forbidden context line must stay out of handoff";
+  const activeLine = "summarize this folder with allowed active token";
+  const scopedPrompt = `${forbiddenLine}\n${activeLine}`;
   const cwdPromptBatch = (await driver.batch(
     [
-      { type: "setInput", text: "summarize this folder" },
+      { type: "setInput", text: scopedPrompt },
       {
         type: "waitFor",
         condition: {
           type: "stateMatch",
-          state: { promptType: "dayPage", inputValue: "summarize this folder" },
+          state: { promptType: "dayPage", inputValue: scopedPrompt },
         },
       },
     ],
@@ -270,6 +273,19 @@ try {
 
   await driver.simulateKey("enter", ["cmd"]);
   await Bun.sleep(750);
+  const appLog = await Bun.file(`${driver.sessionDir}/app.log`).text();
+  const handoffLine = appLog
+    .split("\n")
+    .reverse()
+    .find((line) => line.includes("event=day_page_cmd_enter_handoff_started"));
+  const handoffLineLen = Number(/line_len=(\d+)/.exec(handoffLine ?? "")?.[1] ?? -1);
+  check("cmd_enter_handoff_scopes_to_active_line", handoffLineLen === activeLine.length, {
+    handoffLineLen,
+    activeLineLen: activeLine.length,
+    forbiddenLineLen: forbiddenLine.length,
+    fullPromptLen: scopedPrompt.length,
+    handoffLine: handoffLine ?? null,
+  });
   const afterSubmitState = (await driver.getState({ timeoutMs: 5000 })) as Json;
   check(
     "cmd_enter_submits_day_page_prompt_to_agent_chat",
@@ -279,6 +295,16 @@ try {
       inputValue: afterSubmitState.inputValue,
     },
   );
+
+  check("no_deprecated_inline_context_popup", !appLog.includes("inline-context-popup"), {
+    deprecatedIds: [
+      "day-page-inline-context-popup",
+      "day-page-context-popup",
+      "inline-context-popup",
+    ].filter((id) => appLog.includes(id)),
+  });
+  check("no_gpui_entity_double_lease", !appLog.includes("gpui_entity_double_lease"), {});
+  check("no_runtime_panic", !appLog.includes("panicked at"), {});
 
   const pass = failures.length === 0;
   console.log(

@@ -7,9 +7,9 @@ use gpui::{
     SharedString, StatefulInteractiveElement, Styled, WeakEntity, Window, WindowHandle,
 };
 
-use crate::ai::window::context_picker::empty_state_hints;
-use crate::ai::window::context_picker::types::{
-    ContextPickerItem, ContextPickerItemKind, ContextPickerTrigger,
+use crate::ai::context_selector::context_selector_empty_state_hints;
+use crate::ai::context_selector::types::{
+    ContextSelectorRow, ContextSelectorRowKind, ContextSelectorTrigger,
 };
 use crate::components::inline_dropdown::{
     inline_dropdown_visible_range_from_start, InlineDropdown, InlineDropdownColors,
@@ -29,18 +29,18 @@ use super::view::AgentChatView;
 const AGENT_CHAT_MENTION_POPUP_AUTOMATION_ID: &str = "agent_chat-mention-popup";
 const AGENT_CHAT_MENTION_POPUP_MAX_PARENT_HEIGHT_RATIO: f32 = 0.90;
 
-pub(crate) fn agent_chat_context_picker_item_to_inline_picker_row(
-    item: &ContextPickerItem,
+pub(crate) fn agent_chat_context_selector_row_to_inline_picker_row(
+    item: &ContextSelectorRow,
 ) -> InlinePickerRow {
     let (kind, title, token, token_highlights, enabled) = match &item.kind {
-        ContextPickerItemKind::SlashCommand(payload) => (
+        ContextSelectorRowKind::SlashCommand(payload) => (
             InlinePickerRowKind::SlashCommand,
             SharedString::from(format!("/{}", payload.slash_name())),
             Some(SharedString::from(payload.owner_label())),
             item.meta_highlight_indices.clone(),
             true,
         ),
-        ContextPickerItemKind::Inert => (
+        ContextSelectorRowKind::Inert => (
             InlinePickerRowKind::Context,
             item.label.clone(),
             Some(item.meta.clone()),
@@ -90,16 +90,16 @@ pub(crate) fn agent_chat_context_picker_item_to_inline_picker_row(
             detail: Vec::new(),
         },
         enabled,
-        disabled_reason: (!enabled).then(|| SharedString::from("Inert context picker row")),
+        disabled_reason: (!enabled).then(|| SharedString::from("Inert context selector row")),
     }
 }
 
 #[derive(Clone)]
 pub(crate) struct AgentChatMentionPopupSnapshot {
-    pub(crate) trigger: ContextPickerTrigger,
+    pub(crate) trigger: ContextSelectorTrigger,
     pub(crate) selected_index: usize,
     pub(crate) visible_start: usize,
-    pub(crate) items: Vec<ContextPickerItem>,
+    pub(crate) items: Vec<ContextSelectorRow>,
     pub(crate) width: f32,
 }
 
@@ -472,8 +472,8 @@ fn non_empty_string(value: &SharedString) -> Option<String> {
     (!value.is_empty()).then(|| value.to_string())
 }
 
-fn agent_chat_context_picker_item_to_list_row_spec(
-    item: &ContextPickerItem,
+fn agent_chat_context_selector_row_to_list_row_spec(
+    item: &ContextSelectorRow,
 ) -> AgentChatMentionListRowSpec {
     let mut title = item.label.to_string();
     let mut description = non_empty_string(&item.description);
@@ -485,10 +485,10 @@ fn agent_chat_context_picker_item_to_list_row_spec(
     };
     let mut title_highlights = item.label_highlight_indices.clone();
     let description_highlights = Vec::new();
-    let enabled = !matches!(item.kind, ContextPickerItemKind::Inert);
+    let enabled = !matches!(item.kind, ContextSelectorRowKind::Inert);
 
     match &item.kind {
-        ContextPickerItemKind::SlashCommand(payload) => {
+        ContextSelectorRowKind::SlashCommand(payload) => {
             title = format!("/{}", payload.slash_name());
             source_hint = Some(payload.owner_label().to_string());
             title_highlights = item
@@ -501,7 +501,7 @@ fn agent_chat_context_picker_item_to_list_row_spec(
                 icon_name: "command",
             };
         }
-        ContextPickerItemKind::AgentChatProfile { icon_name, .. } => {
+        ContextSelectorRowKind::AgentChatProfile { icon_name, .. } => {
             let icon_path = crate::components::footer_chrome::footer_icon_path_or_profile(
                 icon_name
                     .as_deref()
@@ -513,32 +513,32 @@ fn agent_chat_context_picker_item_to_list_row_spec(
                 icon_name: "bot",
             };
         }
-        ContextPickerItemKind::File(_) => {
+        ContextSelectorRowKind::File(_) => {
             type_accessory = crate::list_item::TypeAccessory {
                 label: "File",
                 icon_name: "file",
             };
         }
-        ContextPickerItemKind::Folder(_) => {
+        ContextSelectorRowKind::Folder(_) => {
             type_accessory = crate::list_item::TypeAccessory {
                 label: "Folder",
                 icon_name: "folder",
             };
         }
-        ContextPickerItemKind::Portal(_) | ContextPickerItemKind::PortalPrefix(_) => {
+        ContextSelectorRowKind::Portal(_) | ContextSelectorRowKind::PortalPrefix(_) => {
             type_accessory = crate::list_item::TypeAccessory {
                 label: "Portal",
                 icon_name: "panel-top-open",
             };
         }
-        ContextPickerItemKind::PortalResult(_) => {
+        ContextSelectorRowKind::PortalResult(_) => {
             type_accessory = crate::list_item::TypeAccessory {
                 label: "Result",
                 icon_name: "search",
             };
         }
-        ContextPickerItemKind::BuiltIn(_) => {}
-        ContextPickerItemKind::Inert => {
+        ContextSelectorRowKind::BuiltIn(_) => {}
+        ContextSelectorRowKind::Inert => {
             if description.is_none() {
                 description = source_hint.clone();
             }
@@ -655,7 +655,7 @@ impl AgentChatMentionPopupWindow {
             return;
         };
         let item_id = item.id.to_string();
-        let is_actionable = !matches!(item.kind, ContextPickerItemKind::Inert);
+        let is_actionable = !matches!(item.kind, ContextSelectorRowKind::Inert);
         let was_mouse_armed = self
             .mouse_armed_row
             .as_ref()
@@ -706,12 +706,12 @@ impl AgentChatMentionPopupWindow {
     fn render_picker_row(
         &self,
         idx: usize,
-        item: &ContextPickerItem,
+        item: &ContextSelectorRow,
         is_selected: bool,
         theme: &crate::theme::Theme,
         main_menu_theme: crate::designs::MainMenuThemeVariant,
     ) -> gpui::Stateful<gpui::Div> {
-        let spec = agent_chat_context_picker_item_to_list_row_spec(item);
+        let spec = agent_chat_context_selector_row_to_list_row_spec(item);
         let colors = crate::list_item::ListItemColors::from_theme(theme);
         let row_height = agent_chat_mention_popup_row_height_for_theme(main_menu_theme);
         let row = crate::list_item::ListItem::new(spec.title, colors)
@@ -834,7 +834,7 @@ impl AgentChatMentionPopupWindow {
         let muted_fg = colors.muted_foreground;
 
         let mut chips: Vec<gpui::AnyElement> = Vec::new();
-        for hint in empty_state_hints(self.snapshot.trigger).iter() {
+        for hint in context_selector_empty_state_hints(self.snapshot.trigger).iter() {
             let hint_display = SharedString::from(hint.display);
             let hint_insertion = hint.insertion.to_string();
             let close_after_apply = !hint.insertion.ends_with(':');
@@ -872,9 +872,9 @@ impl AgentChatMentionPopupWindow {
         )
         .empty_state(InlineDropdownEmptyState {
             message: SharedString::from(match self.snapshot.trigger {
-                ContextPickerTrigger::Slash => "No matching commands",
-                ContextPickerTrigger::Profile => "No matching profiles",
-                ContextPickerTrigger::Mention => "No matching context",
+                ContextSelectorTrigger::Slash => "No matching commands",
+                ContextSelectorTrigger::Profile => "No matching profiles",
+                ContextSelectorTrigger::Mention => "No matching context",
             }),
             hints: chips,
         })
@@ -934,33 +934,38 @@ mod tests {
         popup_visible_row_limit, should_submit_agent_chat_picker_row_click,
         AgentChatMentionPopupSnapshot,
     };
-    use crate::ai::window::context_picker::types::{
-        ContextPickerItem, ContextPickerItemKind, ContextPickerTrigger, SlashCommandPayload,
+    use crate::ai::context_selector::types::{
+        ContextSelectorRow, ContextSelectorRowKind, ContextSelectorTrigger, SlashCommandPayload,
     };
     use gpui::SharedString;
 
     #[test]
     fn popup_height_clamps_to_visible_rows() {
         let snapshot = AgentChatMentionPopupSnapshot {
-            trigger: ContextPickerTrigger::Mention,
+            trigger: ContextSelectorTrigger::Mention,
             selected_index: 0,
             visible_start: 0,
-            items: (0..16)
-                .map(|ix| crate::ai::window::context_picker::types::ContextPickerItem {
+            items:
+                (0..16)
+                    .map(
+                        |ix| {
+                            crate::ai::context_selector::types::ContextSelectorRow {
                     id: SharedString::from(format!("item-{ix}")),
                     label: SharedString::from(format!("Item {ix}")),
                     description: SharedString::from(format!("Description {ix}")),
                     meta: SharedString::from(""),
-                    kind: crate::ai::window::context_picker::types::ContextPickerItemKind::SlashCommand(
-                        crate::ai::window::context_picker::types::SlashCommandPayload::Default {
+                    kind: crate::ai::context_selector::types::ContextSelectorRowKind::SlashCommand(
+                        crate::ai::context_selector::types::SlashCommandPayload::Default {
                             name: format!("cmd-{ix}"),
                         },
                     ),
                     score: 0,
                     label_highlight_indices: Vec::new(),
                     meta_highlight_indices: Vec::new(),
-                })
-                .collect(),
+                }
+                        },
+                    )
+                    .collect(),
             width: 320.0,
         };
         assert!(popup_height(&snapshot) > 0.0);
@@ -968,13 +973,13 @@ mod tests {
 
     #[test]
     fn mention_popup_height_uses_row_height_for_both_triggers() {
-        let items: Vec<ContextPickerItem> = (0..12)
-            .map(|ix| ContextPickerItem {
+        let items: Vec<ContextSelectorRow> = (0..12)
+            .map(|ix| ContextSelectorRow {
                 id: SharedString::from(format!("slash-cmd:default:cmd-{ix}")),
                 label: SharedString::from(format!("cmd-{ix}")),
                 description: SharedString::from(format!("Description {ix}")),
                 meta: SharedString::from(format!("/cmd-{ix}")),
-                kind: ContextPickerItemKind::SlashCommand(SlashCommandPayload::Default {
+                kind: ContextSelectorRowKind::SlashCommand(SlashCommandPayload::Default {
                     name: format!("cmd-{ix}"),
                 }),
                 score: 0,
@@ -984,14 +989,14 @@ mod tests {
             .collect();
 
         let slash_snapshot = AgentChatMentionPopupSnapshot {
-            trigger: ContextPickerTrigger::Slash,
+            trigger: ContextSelectorTrigger::Slash,
             selected_index: 0,
             visible_start: 0,
             items: items.clone(),
             width: 320.0,
         };
         let mention_snapshot = AgentChatMentionPopupSnapshot {
-            trigger: ContextPickerTrigger::Mention,
+            trigger: ContextSelectorTrigger::Mention,
             selected_index: 0,
             visible_start: 0,
             items,
@@ -1028,16 +1033,16 @@ mod tests {
             size: gpui::size(gpui::px(700.0), gpui::px(500.0)),
         };
         let snapshot = AgentChatMentionPopupSnapshot {
-            trigger: ContextPickerTrigger::Mention,
+            trigger: ContextSelectorTrigger::Mention,
             selected_index: 0,
             visible_start: 0,
             items: (0..3)
-                .map(|ix| ContextPickerItem {
+                .map(|ix| ContextSelectorRow {
                     id: SharedString::from(format!("item-{ix}")),
                     label: SharedString::from(format!("Item {ix}")),
                     description: SharedString::from(""),
                     meta: SharedString::from("@item"),
-                    kind: ContextPickerItemKind::Inert,
+                    kind: ContextSelectorRowKind::Inert,
                     score: 0,
                     label_highlight_indices: Vec::new(),
                     meta_highlight_indices: Vec::new(),
@@ -1066,16 +1071,16 @@ mod tests {
             size: gpui::size(gpui::px(700.0), gpui::px(400.0)),
         };
         let snapshot = AgentChatMentionPopupSnapshot {
-            trigger: ContextPickerTrigger::Mention,
+            trigger: ContextSelectorTrigger::Mention,
             selected_index: 0,
             visible_start: 0,
             items: (0..20)
-                .map(|ix| ContextPickerItem {
+                .map(|ix| ContextSelectorRow {
                     id: SharedString::from(format!("item-{ix}")),
                     label: SharedString::from(format!("Item {ix}")),
                     description: SharedString::from(format!("Description {ix}")),
                     meta: SharedString::from("@item"),
-                    kind: ContextPickerItemKind::Inert,
+                    kind: ContextSelectorRowKind::Inert,
                     score: 0,
                     label_highlight_indices: Vec::new(),
                     meta_highlight_indices: Vec::new(),
@@ -1103,16 +1108,16 @@ mod tests {
             size: gpui::size(gpui::px(700.0), gpui::px(600.0)),
         };
         let snapshot = AgentChatMentionPopupSnapshot {
-            trigger: ContextPickerTrigger::Mention,
+            trigger: ContextSelectorTrigger::Mention,
             selected_index: 0,
             visible_start: 0,
             items: (0..3)
-                .map(|ix| ContextPickerItem {
+                .map(|ix| ContextSelectorRow {
                     id: SharedString::from(format!("item-{ix}")),
                     label: SharedString::from(format!("Item {ix}")),
                     description: SharedString::from(""),
                     meta: SharedString::from("@item"),
-                    kind: ContextPickerItemKind::Inert,
+                    kind: ContextSelectorRowKind::Inert,
                     score: 0,
                     label_highlight_indices: Vec::new(),
                     meta_highlight_indices: Vec::new(),

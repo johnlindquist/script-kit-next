@@ -1323,7 +1323,7 @@ mod tests {
     }
 
     #[test]
-    fn current_context_picker_part_is_not_treated_as_ambient_bootstrap() {
+    fn current_context_selector_part_is_not_treated_as_ambient_bootstrap() {
         let part = AiContextPart::ResourceUri {
             uri: ASK_ANYTHING_RESOURCE_URI.to_string(),
             label: "Current Context".to_string(),

@@ -2,7 +2,7 @@ use super::component::{
     inline_dropdown_clamp_selected_index, inline_dropdown_select_next, inline_dropdown_select_prev,
     inline_dropdown_visible_range, inline_dropdown_visible_range_from_start,
 };
-use super::row::{CONTEXT_PICKER_ROW_HEIGHT, SOFT_COMPACT_PICKER_ROW_HEIGHT};
+use super::row::{CONTEXT_SELECTOR_ROW_HEIGHT, SOFT_COMPACT_PICKER_ROW_HEIGHT};
 
 #[test]
 fn inline_dropdown_navigation_wraps() {
@@ -33,14 +33,14 @@ fn inline_dropdown_clamps_after_filter_shrink() {
 #[test]
 fn inline_dropdown_rows_match_launcher_row_height() {
     assert_eq!(
-        CONTEXT_PICKER_ROW_HEIGHT,
+        CONTEXT_SELECTOR_ROW_HEIGHT,
         crate::list_item::LIST_ITEM_HEIGHT
     );
 }
 
 #[test]
 fn soft_compact_picker_row_is_tighter_than_launcher_rows() {
-    assert!(SOFT_COMPACT_PICKER_ROW_HEIGHT < CONTEXT_PICKER_ROW_HEIGHT);
+    assert!(SOFT_COMPACT_PICKER_ROW_HEIGHT < CONTEXT_SELECTOR_ROW_HEIGHT);
 }
 
 #[test]
@@ -76,13 +76,13 @@ fn compact_synopsis_uses_footer_surface_tokens_and_grows_for_description() {
         "focused item synopsis must share the main/dictation footer surface and spacing tokens"
     );
     assert!(
-        synopsis_source.contains(".min_h(px(CONTEXT_PICKER_SYNOPSIS_HEIGHT))")
+        synopsis_source.contains(".min_h(px(CONTEXT_SELECTOR_SYNOPSIS_HEIGHT))")
             && !synopsis_source.contains(".h(px(description_height))"),
         "synopsis strip must size intrinsically from measured text (min-height floor only), \
          not from a chars-per-line height estimate"
     );
     assert!(
-        synopsis_source.contains("line_clamp(CONTEXT_PICKER_SYNOPSIS_MAX_LINES)"),
+        synopsis_source.contains("line_clamp(CONTEXT_SELECTOR_SYNOPSIS_MAX_LINES)"),
         "synopsis description must stay capped by line_clamp so intrinsic growth is bounded"
     );
 }

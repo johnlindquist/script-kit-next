@@ -22,10 +22,10 @@ fn clipboard_builtin_and_attachment_portal_share_opener() {
     );
 
     let portal_clipboard_arm = portal
-        .split("PortalKind::ClipboardHistory =>")
+        .split("ContextPortalKind::ClipboardHistory =>")
         .nth(1)
         .expect("clipboard portal arm should exist")
-        .split("PortalKind::DictationHistory =>")
+        .split("ContextPortalKind::DictationHistory =>")
         .next()
         .expect("clipboard portal arm should be bounded");
     assert!(
@@ -35,8 +35,8 @@ fn clipboard_builtin_and_attachment_portal_share_opener() {
 }
 
 #[test]
-fn context_picker_top_level_portals_are_full_surface_openers() {
-    let picker = source("src/ai/window/context_picker/mod.rs");
+fn context_selector_top_level_portals_are_full_surface_openers() {
+    let picker = source("src/ai/context_selector/mod.rs");
     let inject_portals = picker
         .split("fn inject_portal_items(")
         .nth(1)
@@ -46,11 +46,11 @@ fn context_picker_top_level_portals_are_full_surface_openers() {
         .expect("inject_portal_items should be bounded");
 
     assert!(
-        inject_portals.contains("kind: ContextPickerItemKind::Portal(*kind)"),
-        "top-level context picker portal rows should open full portal surfaces"
+        inject_portals.contains("kind: ContextSelectorRowKind::Portal(*kind)"),
+        "top-level context selector portal rows should open full portal surfaces"
     );
     assert!(
-        !inject_portals.contains("ContextPickerItemKind::PortalPrefix("),
+        !inject_portals.contains("ContextSelectorRowKind::PortalPrefix("),
         "top-level portal rows should not insert colon prefixes; colon mode owns inline search"
     );
 
@@ -62,15 +62,31 @@ fn context_picker_top_level_portals_are_full_surface_openers() {
         .next()
         .expect("inject_full_portal_fallback should be bounded");
     assert!(
-        inline_fallback.contains("kind: ContextPickerItemKind::Portal(inline_query.kind)"),
+        inline_fallback.contains("kind: ContextSelectorRowKind::Portal(inline_query.kind)"),
         "colon inline searches should keep an explicit full-portal fallback"
     );
 }
 
 #[test]
-fn context_picker_does_not_render_builtin_previews() {
-    let picker_mod = source("src/ai/window/context_picker/mod.rs");
-    let picker_render = source("src/ai/window/context_picker/render.rs");
+fn context_selector_does_not_render_builtin_previews() {
+    let selector_mod = source("src/ai/context_selector/mod.rs");
+    let selector_types = source("src/ai/context_selector/types.rs");
+
+    for forbidden in [
+        "impl AiApp",
+        concat!("render_context_", "picker"),
+        "InlineDropdown::new",
+        concat!("Context", "PickerState"),
+    ] {
+        assert!(
+            !selector_mod.contains(forbidden),
+            "context selector domain must stay UI-state-free: {forbidden}"
+        );
+        assert!(
+            !selector_types.contains(forbidden),
+            "context selector types must not reintroduce picker state: {forbidden}"
+        );
+    }
 
     for forbidden in [
         "render_clipboard_history",
@@ -81,12 +97,12 @@ fn context_picker_does_not_render_builtin_previews() {
         "file-search-preview",
     ] {
         assert!(
-            !picker_mod.contains(forbidden),
-            "context picker model must not copy built-in preview code: {forbidden}"
+            !selector_mod.contains(forbidden),
+            "context selector model must not copy built-in preview code: {forbidden}"
         );
         assert!(
-            !picker_render.contains(forbidden),
-            "context picker renderer must stay generic and preview-free: {forbidden}"
+            !selector_types.contains(forbidden),
+            "context selector renderer must stay generic and preview-free: {forbidden}"
         );
     }
 }
@@ -103,7 +119,7 @@ fn file_search_builtin_and_attachment_portal_use_full_surface_path() {
         "direct File Search built-in should call the shared file-search opener"
     );
     assert!(
-        portal.contains("PortalKind::FileSearch =>")
+        portal.contains("ContextPortalKind::FileSearch =>")
             && portal.contains("open_file_search(portal_query"),
         "attachment portal File Search should call the same file-search opener"
     );

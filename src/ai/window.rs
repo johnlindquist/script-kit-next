@@ -49,7 +49,6 @@ use state::*;
 mod chat;
 mod command_bar;
 mod context_commands;
-pub(crate) mod context_picker;
 pub(crate) mod context_preflight;
 #[cfg(test)]
 mod context_preflight_tests;

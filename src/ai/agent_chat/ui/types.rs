@@ -1,5 +1,5 @@
 use crate::ai::agent_chat::content::{ContentBlock, TextContent};
-use crate::ai::window::context_picker::types::{ContextPickerItem, ContextPickerTrigger};
+use crate::ai::context_selector::types::{ContextSelectorRow, ContextSelectorTrigger};
 
 /// Maps a Script Kit UI session to the Agent Chat session ID returned by `session/new`.
 #[derive(Debug, Clone)]
@@ -44,11 +44,11 @@ pub(crate) fn build_prompt_blocks(
 
 // ── Extracted Agent Chat view types ────────────────────────────────────────────
 
-/// Active @-mention session state for the Agent Chat inline context picker.
+/// Active @-mention session state for the Agent Chat inline context selector.
 #[derive(Debug, Clone)]
 pub(crate) struct AgentChatMentionSession {
     /// Which trigger character opened this session (`@` or `/`).
-    pub(crate) trigger: ContextPickerTrigger,
+    pub(crate) trigger: ContextSelectorTrigger,
     /// Character range of the trigger+query in the input text.
     pub(crate) trigger_range: std::ops::Range<usize>,
     /// Query text typed after the trigger.
@@ -58,12 +58,12 @@ pub(crate) struct AgentChatMentionSession {
     /// First visible row in the popup list.
     pub(crate) visible_start: usize,
     /// Ranked picker items for the current query.
-    pub(crate) items: Vec<ContextPickerItem>,
+    pub(crate) items: Vec<ContextSelectorRow>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct AgentChatDismissedMentionTrigger {
-    pub(crate) trigger: ContextPickerTrigger,
+    pub(crate) trigger: ContextSelectorTrigger,
     pub(crate) trigger_range: std::ops::Range<usize>,
     pub(crate) query: String,
     pub(crate) cursor: usize,

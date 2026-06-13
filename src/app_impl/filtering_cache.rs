@@ -1061,8 +1061,8 @@ impl ScriptListApp {
 
     fn active_script_list_attachment_portal_kind(
         &self,
-    ) -> Option<crate::ai::window::context_picker::types::PortalKind> {
-        use crate::ai::window::context_picker::types::PortalKind;
+    ) -> Option<crate::ai::context_selector::types::ContextPortalKind> {
+        use crate::ai::context_selector::types::ContextPortalKind;
 
         if !matches!(self.current_view, AppView::ScriptList) {
             return None;
@@ -1070,34 +1070,34 @@ impl ScriptListApp {
 
         match self.active_attachment_portal_kind {
             Some(
-                kind @ (PortalKind::ScriptSearch
-                | PortalKind::ScriptletSearch
-                | PortalKind::SkillSearch),
+                kind @ (ContextPortalKind::ScriptSearch
+                | ContextPortalKind::ScriptletSearch
+                | ContextPortalKind::SkillSearch),
             ) => Some(kind),
             _ => None,
         }
     }
 
     fn script_list_result_matches_attachment_portal(
-        kind: crate::ai::window::context_picker::types::PortalKind,
+        kind: crate::ai::context_selector::types::ContextPortalKind,
         result: &scripts::SearchResult,
     ) -> bool {
-        use crate::ai::window::context_picker::types::PortalKind;
+        use crate::ai::context_selector::types::ContextPortalKind;
 
         matches!(
             (kind, result),
-            (PortalKind::ScriptSearch, scripts::SearchResult::Script(_))
+            (ContextPortalKind::ScriptSearch, scripts::SearchResult::Script(_))
                 | (
-                    PortalKind::ScriptletSearch,
+                    ContextPortalKind::ScriptletSearch,
                     scripts::SearchResult::Scriptlet(_)
                 )
-                | (PortalKind::SkillSearch, scripts::SearchResult::Skill(_))
+                | (ContextPortalKind::SkillSearch, scripts::SearchResult::Skill(_))
         )
     }
 
     fn apply_script_list_attachment_portal_filter(
         &self,
-        kind: crate::ai::window::context_picker::types::PortalKind,
+        kind: crate::ai::context_selector::types::ContextPortalKind,
         flat_results: Vec<scripts::SearchResult>,
     ) -> (Vec<GroupedListItem>, Vec<scripts::SearchResult>) {
         let filtered_results: Vec<scripts::SearchResult> = flat_results
@@ -1385,7 +1385,7 @@ impl ScriptListApp {
                         append_choose_hint_to_first_section_header(&mut grouped_items);
                     }
 
-                    // Colon-mode parity with the Agent Chat context picker:
+                    // Colon-mode parity with the Agent Chat context selector:
                     // inline `@file:` results keep an explicit full-portal
                     // fallback row that opens the built-in File Search
                     // surface with the current sub-query.

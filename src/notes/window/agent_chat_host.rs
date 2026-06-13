@@ -223,7 +223,7 @@ impl NotesApp {
         );
     }
 
-    /// Handle a portal open request from the embedded Agent Chat context picker.
+    /// Handle a portal open request from the embedded Agent Chat context selector.
     ///
     /// Static helper so it can be called from the `set_on_open_portal` closure
     /// without holding an immutable borrow on `NotesApp` while also needing
@@ -236,10 +236,10 @@ impl NotesApp {
     /// defense-in-depth logging.
     fn handle_agent_chat_portal_static(
         chat: Option<Entity<crate::ai::agent_chat::ui::AgentChatView>>,
-        kind: crate::ai::window::context_picker::types::PortalKind,
+        kind: crate::ai::context_selector::types::ContextPortalKind,
         cx: &mut gpui::App,
     ) {
-        use crate::ai::window::context_picker::types::PortalKind;
+        use crate::ai::context_selector::types::ContextPortalKind;
 
         let Some(chat) = chat else {
             tracing::info!(
@@ -252,7 +252,7 @@ impl NotesApp {
         };
 
         match kind {
-            PortalKind::AgentChatHistory => {
+            ContextPortalKind::AgentChatHistory => {
                 let query = chat.update(cx, |view, _cx| {
                     view.take_pending_history_portal_query().unwrap_or_default()
                 });
@@ -277,20 +277,20 @@ impl NotesApp {
                 });
                 if !opened {
                     chat.update(cx, |view, cx| {
-                        let _ =
-                            view.cancel_pending_portal_session(PortalKind::AgentChatHistory, cx);
+                        let _ = view
+                            .cancel_pending_portal_session(ContextPortalKind::AgentChatHistory, cx);
                     });
                 }
             }
-            PortalKind::FileSearch
-            | PortalKind::BrowserHistory
-            | PortalKind::BrowserTabs
-            | PortalKind::DictationHistory
-            | PortalKind::ScriptSearch
-            | PortalKind::ScriptletSearch
-            | PortalKind::SkillSearch
-            | PortalKind::NotesBrowse
-            | PortalKind::Terminal => {
+            ContextPortalKind::FileSearch
+            | ContextPortalKind::BrowserHistory
+            | ContextPortalKind::BrowserTabs
+            | ContextPortalKind::DictationHistory
+            | ContextPortalKind::ScriptSearch
+            | ContextPortalKind::ScriptletSearch
+            | ContextPortalKind::SkillSearch
+            | ContextPortalKind::NotesBrowse
+            | ContextPortalKind::Terminal => {
                 tracing::info!(
                     event = "notes_agent_chat_portal_requested",
                     kind = ?kind,
@@ -301,7 +301,7 @@ impl NotesApp {
                     let _ = view.cancel_pending_portal_session(kind, cx);
                 });
             }
-            PortalKind::ClipboardHistory => {
+            ContextPortalKind::ClipboardHistory => {
                 tracing::info!(
                     event = "notes_agent_chat_portal_requested",
                     kind = "ClipboardHistory",
@@ -309,7 +309,8 @@ impl NotesApp {
                     reason = "unsupported_in_notes_host",
                 );
                 chat.update(cx, |view, cx| {
-                    let _ = view.cancel_pending_portal_session(PortalKind::ClipboardHistory, cx);
+                    let _ =
+                        view.cancel_pending_portal_session(ContextPortalKind::ClipboardHistory, cx);
                 });
             }
         }
@@ -330,7 +331,7 @@ impl NotesApp {
         view.update(cx, |chat, _cx| {
             chat.set_footer_host(crate::ai::agent_chat::ui::view::AgentChatFooterHost::External);
             chat.set_allowed_portal_kinds(vec![
-                crate::ai::window::context_picker::types::PortalKind::AgentChatHistory,
+                crate::ai::context_selector::types::ContextPortalKind::AgentChatHistory,
             ]);
         });
 

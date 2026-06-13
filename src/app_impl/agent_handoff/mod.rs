@@ -888,9 +888,25 @@ impl ScriptListApp {
             .filter(|value| !value.is_empty())
             .map(str::to_string);
 
-        // A detached chat window is an independent workspace: main-window AI
-        // entries open the embedded chat as if it did not exist (no reroute,
-        // no focus steal).
+        if crate::ai::agent_chat::ui::chat_window::is_chat_window_open() {
+            match normalized_entry_intent.as_ref().map(|intent| {
+                crate::ai::agent_chat::ui::chat_window::submit_reused_entry_intent_in_detached_chat(
+                    intent.clone(),
+                    cx,
+                )
+            }) {
+                Some(Ok(true)) => return,
+                Some(Err(error)) => {
+                    tracing::warn!(
+                        target: "script_kit::tab_ai",
+                        event = "tab_ai_reuse_detached_window_entry_intent_failed",
+                        error = %error,
+                    );
+                }
+                _ => {}
+            }
+        }
+
         let has_cached_retry_request = self
             .embedded_agent_chat
             .as_ref()
@@ -945,6 +961,27 @@ impl ScriptListApp {
 
         let focused_part =
             Some(crate::ai::message_parts::AiContextPart::FocusedTarget { target, label });
+
+        if let Some(part) = focused_part.clone() {
+            if crate::ai::agent_chat::ui::chat_window::is_chat_window_open() {
+                match crate::ai::agent_chat::ui::chat_window::submit_reused_entry_intent_with_host_context_in_detached_chat(
+                    String::new(),
+                    vec![part],
+                    "explicit_target",
+                    cx,
+                ) {
+                    Ok(true) => return,
+                    Ok(false) => {}
+                    Err(error) => {
+                        tracing::warn!(
+                            target: "script_kit::tab_ai",
+                            event = "tab_ai_reuse_detached_window_explicit_target_failed",
+                            error = %error,
+                        );
+                    }
+                }
+            }
+        }
 
         // Minimal snapshot for the launch request — we already know the target.
         let (ui_snapshot, invocation_receipt) = self.snapshot_tab_ai_ui(cx);
@@ -1124,7 +1161,7 @@ impl ScriptListApp {
         cx: &mut Context<Self>,
     ) -> bool {
         if self.active_attachment_portal_kind()
-            != Some(crate::ai::window::context_picker::types::PortalKind::Terminal)
+            != Some(crate::ai::context_selector::types::ContextPortalKind::Terminal)
         {
             return false;
         }

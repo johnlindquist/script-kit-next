@@ -70,8 +70,8 @@ fn picker_layout_and_context_builders_preserve_snapshot_fields() {
     );
     for required in [
         "crate::protocol::AgentChatPickerState",
-        "ContextPickerTrigger::Mention => \"@\"",
-        "ContextPickerTrigger::Slash => \"/\"",
+        "ContextSelectorTrigger::Mention => \"@\"",
+        "ContextSelectorTrigger::Slash => \"/\"",
         "open: true",
         "item_count: session.items.len()",
         "selected_index: session.selected_index",

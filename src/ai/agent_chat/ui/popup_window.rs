@@ -13,9 +13,9 @@
 //! text audit tests in `src/ai/agent_chat/ui/tests.rs` all continue to compile without
 //! edits. Add the Agent Chat-flavored `dense_picker_height(item_count)` convenience
 //! on top so callers can keep passing a bare item count and get
-//! `CONTEXT_PICKER_ROW_HEIGHT` applied automatically.
+//! `CONTEXT_SELECTOR_ROW_HEIGHT` applied automatically.
 
-use crate::components::inline_dropdown::CONTEXT_PICKER_ROW_HEIGHT;
+use crate::components::inline_dropdown::CONTEXT_SELECTOR_ROW_HEIGHT;
 use gpui::{AnyWindowHandle, Bounds, Pixels};
 
 // Re-export constants under Agent Chat-compatible names. Consumers continue to
@@ -50,12 +50,12 @@ pub(crate) use crate::components::inline_popup_window::{
 };
 
 /// Agent Chat-flavored convenience: popup height in rows measured against the Agent Chat
-/// context-picker row height. The neutral
+/// context-selector row height. The neutral
 /// [`crate::components::inline_popup_window::inline_popup_height_for_row_height`]
 /// is what callers use when their row height differs (e.g. the history
 /// popup's taller header rows).
 pub(crate) fn dense_picker_height(item_count: usize) -> f32 {
-    dense_picker_height_for_row_height(item_count, CONTEXT_PICKER_ROW_HEIGHT)
+    dense_picker_height_for_row_height(item_count, CONTEXT_SELECTOR_ROW_HEIGHT)
 }
 
 pub(crate) fn automation_bounds(bounds: Bounds<Pixels>) -> crate::protocol::AutomationWindowBounds {

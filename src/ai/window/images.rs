@@ -57,41 +57,13 @@ struct PreparedImageCacheWork {
 
 impl AiApp {
     pub(super) fn on_input_change(&mut self, cx: &mut Context<Self>) {
-        let value = self.input_state.read(cx).value().to_string();
-
-        // Detect @mention or /slash trigger for context picker
-        if let Some(tq) = super::context_picker::extract_context_picker_query(&value) {
-            if self.is_context_picker_open() {
-                // Update existing picker with new trigger+query
-                self.update_context_picker_query(tq.trigger, tq.query, cx);
-            } else {
-                // Open the picker inline (Window is only needed when accepting)
-                let items = super::context_picker::build_picker_items(tq.trigger, &tq.query);
-                tracing::info!(
-                    target: "ai",
-                    trigger = ?tq.trigger,
-                    query = %tq.query,
-                    item_count = items.len(),
-                    selected_index = 0,
-                    "ai_context_picker_opened"
-                );
-                self.context_picker = Some(super::context_picker::types::ContextPickerState::new(
-                    tq.trigger, tq.query, items,
-                ));
-                cx.notify();
-            }
-        } else if self.is_context_picker_open() {
-            // No trigger query detected — close the picker
-            self.close_context_picker(cx);
-        }
-
         // Sync inline @mention tokens with pending_context_parts so that
         // manually typed (or deleted) tokens keep the attachment list in sync.
         self.sync_inline_mentions(cx);
 
         // Context preflight is intentionally NOT run per-keystroke.
         // It only runs when the user explicitly adds context parts
-        // (via /context slash commands or the context picker).
+        // (via /context slash commands or explicit context actions).
     }
 
     /// Handle paste event - check for clipboard images
@@ -840,5 +812,5 @@ impl AiApp {
     }
 }
 
-// `extract_at_query` replaced by `context_picker::extract_context_picker_query`
-// which handles both `@` and `/` triggers. Tests migrated to context_picker/tests.rs.
+// Legacy inline picker query extraction was removed with the AiWindow picker.
+// Inline token sync now lives in context_commands.rs.

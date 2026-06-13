@@ -1219,7 +1219,7 @@ pub(crate) struct ScriptListApp {
     pub(crate) attachment_portal_return_width: Option<f32>,
     /// Which attachment portal is currently active, when any.
     pub(crate) active_attachment_portal_kind:
-        Option<crate::ai::window::context_picker::types::PortalKind>,
+        Option<crate::ai::context_selector::types::ContextPortalKind>,
     /// Byte range of the `@file` spine segment that opened a ScriptList-hosted
     /// file-search attachment portal. `Some` marks the portal as spine-hosted:
     /// accept resolves the segment into a compact `@file:basename` token

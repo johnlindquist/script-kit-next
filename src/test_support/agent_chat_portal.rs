@@ -6,39 +6,39 @@ use crate::ai::agent_chat::ui::portal_contract::{
     portal_target_from_inline_token, portal_target_from_part, AgentChatPortalOpenRefusal,
     AgentChatPortalSessionEvent, AgentChatPortalSessionState,
 };
+use crate::ai::context_selector::types::ContextPortalKind;
 use crate::ai::message_parts::AiContextPart;
-use crate::ai::window::context_picker::types::PortalKind;
 
-fn parse_kind(kind: &str) -> Option<PortalKind> {
+fn parse_kind(kind: &str) -> Option<ContextPortalKind> {
     match kind {
-        "file_search" => Some(PortalKind::FileSearch),
-        "browser_history" => Some(PortalKind::BrowserHistory),
-        "browser_tabs" => Some(PortalKind::BrowserTabs),
-        "clipboard_history" => Some(PortalKind::ClipboardHistory),
-        "dictation_history" => Some(PortalKind::DictationHistory),
-        "script_search" => Some(PortalKind::ScriptSearch),
-        "scriptlet_search" => Some(PortalKind::ScriptletSearch),
-        "skill_search" => Some(PortalKind::SkillSearch),
-        "notes_browse" => Some(PortalKind::NotesBrowse),
-        "agent_chat_history" => Some(PortalKind::AgentChatHistory),
-        "terminal" => Some(PortalKind::Terminal),
+        "file_search" => Some(ContextPortalKind::FileSearch),
+        "browser_history" => Some(ContextPortalKind::BrowserHistory),
+        "browser_tabs" => Some(ContextPortalKind::BrowserTabs),
+        "clipboard_history" => Some(ContextPortalKind::ClipboardHistory),
+        "dictation_history" => Some(ContextPortalKind::DictationHistory),
+        "script_search" => Some(ContextPortalKind::ScriptSearch),
+        "scriptlet_search" => Some(ContextPortalKind::ScriptletSearch),
+        "skill_search" => Some(ContextPortalKind::SkillSearch),
+        "notes_browse" => Some(ContextPortalKind::NotesBrowse),
+        "agent_chat_history" => Some(ContextPortalKind::AgentChatHistory),
+        "terminal" => Some(ContextPortalKind::Terminal),
         _ => None,
     }
 }
 
-fn format_kind(kind: PortalKind) -> String {
+fn format_kind(kind: ContextPortalKind) -> String {
     match kind {
-        PortalKind::FileSearch => "file_search",
-        PortalKind::BrowserHistory => "browser_history",
-        PortalKind::BrowserTabs => "browser_tabs",
-        PortalKind::ClipboardHistory => "clipboard_history",
-        PortalKind::DictationHistory => "dictation_history",
-        PortalKind::ScriptSearch => "script_search",
-        PortalKind::ScriptletSearch => "scriptlet_search",
-        PortalKind::SkillSearch => "skill_search",
-        PortalKind::NotesBrowse => "notes_browse",
-        PortalKind::AgentChatHistory => "agent_chat_history",
-        PortalKind::Terminal => "terminal",
+        ContextPortalKind::FileSearch => "file_search",
+        ContextPortalKind::BrowserHistory => "browser_history",
+        ContextPortalKind::BrowserTabs => "browser_tabs",
+        ContextPortalKind::ClipboardHistory => "clipboard_history",
+        ContextPortalKind::DictationHistory => "dictation_history",
+        ContextPortalKind::ScriptSearch => "script_search",
+        ContextPortalKind::ScriptletSearch => "scriptlet_search",
+        ContextPortalKind::SkillSearch => "skill_search",
+        ContextPortalKind::NotesBrowse => "notes_browse",
+        ContextPortalKind::AgentChatHistory => "agent_chat_history",
+        ContextPortalKind::Terminal => "terminal",
     }
     .to_string()
 }

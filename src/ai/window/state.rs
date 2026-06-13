@@ -157,16 +157,6 @@ pub struct AiApp {
     /// Last used settings (derived from recent chats)
     pub(super) last_used_settings: Vec<LastUsedSetting>,
 
-    // === Context Picker State ===
-    /// Inline `@` context picker state. `Some` when the picker overlay is open.
-    pub(super) context_picker: Option<super::context_picker::types::ContextPickerState>,
-
-    /// Virtualized list state for the context picker overlay (scroll-to-reveal on Up/Down).
-    pub(super) context_picker_list_state: ListState,
-
-    /// Last index scrolled to in the picker (avoids redundant reveal calls).
-    pub(super) context_picker_last_scrolled_index: Option<usize>,
-
     // === Attachments State ===
     /// Pending context parts (file paths and resource URIs) that will be resolved
     /// into prompt blocks at submit time.
@@ -305,7 +295,6 @@ pub struct AiMiniDebugSnapshot {
     pub new_chat_menu_open: bool,
     pub presets_dropdown_open: bool,
     pub api_key_input_visible: bool,
-    pub context_picker_open: bool,
     pub selected_model: Option<String>,
     pub selected_chat_id: Option<String>,
     pub pending_context_parts: usize,
@@ -341,7 +330,6 @@ impl AiApp {
             new_chat_menu_open: self.new_chat_command_bar.is_open(),
             presets_dropdown_open: self.showing_presets_dropdown,
             api_key_input_visible: self.showing_api_key_input,
-            context_picker_open: self.is_context_picker_open(),
             selected_model: self.selected_model.as_ref().map(|m| m.display_name.clone()),
             selected_chat_id: self.selected_chat_id.map(|id| id.to_string()),
             pending_context_parts: self.pending_context_parts.len(),
@@ -383,7 +371,6 @@ mod tests {
             new_chat_menu_open: false,
             presets_dropdown_open: false,
             api_key_input_visible: false,
-            context_picker_open: false,
             selected_model: Some("Claude 3.7 Sonnet".to_string()),
             selected_chat_id: Some("abc-123".to_string()),
             pending_context_parts: 2,
@@ -435,7 +422,6 @@ mod tests {
             new_chat_menu_open: false,
             presets_dropdown_open: false,
             api_key_input_visible: false,
-            context_picker_open: false,
             selected_model: None,
             selected_chat_id: None,
             pending_context_parts: 0,

@@ -4,7 +4,7 @@
  *
  * Proves Day Page exposes the shared Notes editor Markdown action catalog
  * through the existing main Actions menu and executes representative actions
- * without restoring the deprecated inline @ context popup.
+ * through shared menu/context flows.
  */
 
 import { existsSync, readFileSync } from "node:fs";

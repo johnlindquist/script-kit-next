@@ -7,6 +7,100 @@ use std::{collections::HashMap, ops::Range};
 
 use crate::ai::message_parts::AiContextPart;
 
+#[derive(Debug)]
+pub(crate) struct NotesEditorSpineRuntime<Flat> {
+    pub(crate) selected_index: usize,
+    pub(crate) hovered_index: Option<usize>,
+    pub(crate) cache_key: String,
+    pub(crate) cwd_revision: u64,
+    pub(crate) cwd_submit_anchor: bool,
+    pub(crate) dismissed_cache_key: Option<String>,
+    pub(crate) mention_aliases: HashMap<String, AiContextPart>,
+    pub(crate) grouped_cache: Vec<crate::list_item::GroupedListItem>,
+    pub(crate) flat_cache: Vec<Flat>,
+    pub(crate) alias_cache: HashMap<String, (String, AiContextPart)>,
+}
+
+impl<Flat> Default for NotesEditorSpineRuntime<Flat> {
+    fn default() -> Self {
+        Self {
+            selected_index: 0,
+            hovered_index: None,
+            cache_key: String::new(),
+            cwd_revision: 0,
+            cwd_submit_anchor: false,
+            dismissed_cache_key: None,
+            mention_aliases: HashMap::new(),
+            grouped_cache: Vec::new(),
+            flat_cache: Vec::new(),
+            alias_cache: HashMap::new(),
+        }
+    }
+}
+
+impl<Flat> NotesEditorSpineRuntime<Flat> {
+    pub(crate) fn reset(&mut self, clear_cwd_anchor: bool, clear_mentions: bool) {
+        self.selected_index = 0;
+        self.hovered_index = None;
+        if clear_cwd_anchor {
+            self.cwd_submit_anchor = false;
+        }
+        self.dismissed_cache_key = None;
+        if clear_mentions {
+            self.mention_aliases.clear();
+        }
+        self.cache_key.clear();
+        self.grouped_cache.clear();
+        self.flat_cache.clear();
+        self.alias_cache.clear();
+    }
+
+    pub(crate) fn dismiss_current_key(&mut self, key: Option<String>) {
+        self.dismissed_cache_key = key;
+        self.selected_index = 0;
+        self.hovered_index = None;
+    }
+
+    pub(crate) fn clear_alias_cache(&mut self) {
+        self.alias_cache.clear();
+    }
+
+    pub(crate) fn register_mention_alias(&mut self, token: String, part: AiContextPart) {
+        self.mention_aliases.insert(token, part);
+    }
+
+    pub(crate) fn prune_mention_aliases_for_content(&mut self, content: &str) {
+        prune_mention_aliases(&mut self.mention_aliases, content);
+    }
+
+    pub(crate) fn clear_transient_cache(&mut self) {
+        self.dismissed_cache_key = None;
+        self.alias_cache.clear();
+    }
+
+    pub(crate) fn coerce_selection_for_cached_rows(&mut self) {
+        self.selected_index =
+            crate::list_item::coerce_selection(&self.grouped_cache, self.selected_index)
+                .unwrap_or(0);
+    }
+
+    pub(crate) fn replace_cached_rows(
+        &mut self,
+        key: String,
+        grouped: Vec<crate::list_item::GroupedListItem>,
+        flat: Vec<Flat>,
+        aliases: HashMap<String, (String, AiContextPart)>,
+    ) where
+        Flat: Clone,
+    {
+        self.cache_key = key;
+        self.grouped_cache = grouped;
+        self.flat_cache = flat;
+        self.alias_cache = aliases;
+        self.coerce_selection_for_cached_rows();
+    }
+}
+
 pub(crate) fn current_line_range(content: &str, cursor: usize) -> Range<usize> {
     let cursor = clamp_to_char_boundary(content, cursor.min(content.len()));
     let start = content[..cursor].rfind('\n').map_or(0, |idx| idx + 1);
@@ -279,6 +373,91 @@ mod tests {
         prune_mention_aliases(&mut aliases, "literal @clipboard:Latest-ish");
 
         assert!(aliases.is_empty());
+    }
+
+    #[test]
+    fn runtime_reset_clears_transient_state_and_optionally_mentions() {
+        let mut runtime = NotesEditorSpineRuntime::<usize>::default();
+        runtime.selected_index = 3;
+        runtime.hovered_index = Some(2);
+        runtime.cache_key = "key".to_string();
+        runtime.cwd_submit_anchor = true;
+        runtime.dismissed_cache_key = Some("dismissed".to_string());
+        runtime.grouped_cache = vec![crate::list_item::GroupedListItem::Item(0)];
+        runtime.flat_cache = vec![1];
+        runtime.alias_cache.insert(
+            "row".to_string(),
+            (
+                "@clipboard:Latest".to_string(),
+                test_text_block_part("Latest"),
+            ),
+        );
+        runtime.register_mention_alias(
+            "@clipboard:Latest".to_string(),
+            test_text_block_part("Latest"),
+        );
+
+        runtime.reset(false, false);
+
+        assert_eq!(runtime.selected_index, 0);
+        assert_eq!(runtime.hovered_index, None);
+        assert_eq!(runtime.cache_key, "");
+        assert!(runtime.cwd_submit_anchor);
+        assert!(runtime.dismissed_cache_key.is_none());
+        assert!(runtime.grouped_cache.is_empty());
+        assert!(runtime.flat_cache.is_empty());
+        assert!(runtime.alias_cache.is_empty());
+        assert!(runtime.mention_aliases.contains_key("@clipboard:Latest"));
+
+        runtime.reset(true, true);
+
+        assert!(!runtime.cwd_submit_anchor);
+        assert!(runtime.mention_aliases.is_empty());
+    }
+
+    #[test]
+    fn runtime_prunes_mentions_using_inline_token_spans() {
+        let mut runtime = NotesEditorSpineRuntime::<usize>::default();
+        runtime.register_mention_alias(
+            "@clipboard:Latest".to_string(),
+            test_text_block_part("Latest"),
+        );
+
+        runtime.prune_mention_aliases_for_content("literal @clipboard:Latest-ish");
+
+        assert!(runtime.mention_aliases.is_empty());
+    }
+
+    #[test]
+    fn runtime_dismisses_only_the_current_cache_key() {
+        let mut runtime = NotesEditorSpineRuntime::<usize>::default();
+
+        runtime.dismiss_current_key(Some("alpha".to_string()));
+
+        assert_eq!(runtime.dismissed_cache_key.as_deref(), Some("alpha"));
+        assert_ne!(runtime.dismissed_cache_key.as_deref(), Some("beta"));
+        assert_eq!(runtime.selected_index, 0);
+        assert_eq!(runtime.hovered_index, None);
+    }
+
+    #[test]
+    fn runtime_cache_replacement_coerces_selected_index_to_item() {
+        let mut runtime = NotesEditorSpineRuntime::<usize>::default();
+        runtime.selected_index = 0;
+
+        runtime.replace_cached_rows(
+            "key".to_string(),
+            vec![
+                crate::list_item::GroupedListItem::SectionHeader("Suggested".to_string(), None),
+                crate::list_item::GroupedListItem::Item(0),
+            ],
+            vec![42],
+            HashMap::new(),
+        );
+
+        assert_eq!(runtime.cache_key, "key");
+        assert_eq!(runtime.selected_index, 1);
+        assert_eq!(runtime.flat_cache, vec![42]);
     }
 
     #[test]

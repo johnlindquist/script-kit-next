@@ -322,7 +322,6 @@ impl AiApp {
                 "chat_switch_cleared_context_parts"
             );
         }
-        self.context_picker = None;
         self.collapsed_messages.clear();
         self.expanded_messages.clear();
         self.copied_message_id = None;

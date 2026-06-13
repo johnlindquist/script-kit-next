@@ -244,10 +244,6 @@ impl AiApp {
             presets: AiPreset::load_all_presets(),
             presets_selected_index: 0,
             last_used_settings,
-            // Context picker state
-            context_picker: None,
-            context_picker_list_state: ListState::new(0, ListAlignment::Top, px(128.)),
-            context_picker_last_scrolled_index: None,
             // Attachments state
             pending_context_parts: Vec::new(),
             inline_owned_context_tokens: std::collections::HashSet::new(),

@@ -32,7 +32,8 @@ pub(crate) mod context_contract;
 #[cfg(test)]
 mod context_contract_integration_tests;
 pub(crate) mod context_mentions;
-pub(crate) mod context_picker_row;
+pub(crate) mod context_selector;
+pub(crate) mod context_selector_row;
 pub(crate) mod current_app_automation_memory;
 pub(crate) mod explicit_target_handoff;
 pub mod focused_text;
@@ -153,15 +154,14 @@ pub use self::context_contract::{
 pub use self::context_mentions::{
     mention_range_at_cursor, parse_inline_context_mentions, InlineContextMention,
 };
+pub use self::context_selector::types::{
+    ContextPortalKind, ContextPortalPrefixPayload, ContextSelectorRow, ContextSelectorRowKind,
+    ContextSelectorTrigger, InlinePortalAttachment, InlinePortalResultPayload, SlashCommandPayload,
+};
+pub use self::context_selector::{
+    context_selector_rows, score_builtin, score_builtin_with_trigger, slash_command_rows,
+};
 pub(crate) use self::explicit_target_handoff::request_explicit_agent_chat_handoff_from_secondary_window;
-pub use self::window::context_picker::types::ContextPickerTrigger;
-pub use self::window::context_picker::types::{
-    ContextPickerItem, ContextPickerItemKind, ContextPickerItemSnapshot, ContextPickerSection,
-    ContextPickerSnapshot, ContextPickerState, SlashCommandPayload,
-};
-pub use self::window::context_picker::{
-    build_picker_items, build_slash_picker_items, score_builtin, score_builtin_with_trigger,
-};
 pub use self::window::context_preflight::{
     estimate_tokens_from_text, preflight_state_from_receipt, status_from_decision,
     ContextPreflightSnapshot, ContextPreflightState, ContextPreflightStatus,

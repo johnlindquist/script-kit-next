@@ -132,11 +132,12 @@ impl DayPageView {
         self.session.apply_editor_content(&new_content);
         self.refresh_fragment_open_targets(&new_content);
         if let Some(part) = alias {
-            self.spine_mention_aliases.insert(token.to_string(), part);
+            self.spine_runtime
+                .register_mention_alias(token.to_string(), part);
         }
-        self.spine_alias_cache.clear();
-        self.spine_dismissed_cache_key = None;
-        self.spine_selected_index = 0;
+        self.spine_runtime.clear_alias_cache();
+        self.spine_runtime.dismissed_cache_key = None;
+        self.spine_runtime.selected_index = 0;
         self.schedule_autosave_flush(cx);
         self.sync_footer(window, cx);
         cx.notify();

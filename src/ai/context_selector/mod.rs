@@ -1,20 +1,16 @@
-//! Inline `@`/`/` context picker for the AI chat composer.
+//! Shared context selector catalog and row types for Agent Chat and portals.
 //!
-//! Typing `@` or `/` in the composer opens a filtered list of context
-//! attachments seeded from the canonical `context_attachment_specs()` plus
-//! local files and folders. Accepting a row creates the matching
-//! `AiContextPart` and schedules a preflight update automatically.
+//! This module is deliberately UI-state-free. It builds selector rows and
+//! parses trigger queries, but popup lifecycle and selection state belong to
+//! the surface that renders them.
 
 pub mod types;
 
-mod render;
-
-use super::*;
 use crate::ai::context_contract::{context_attachment_specs, ContextAttachmentKind};
-use crate::ai::message_parts::AiContextPart;
+use gpui::SharedString;
 use types::{
-    ContextPickerItem, ContextPickerItemKind, ContextPickerState, ContextPickerTrigger,
-    InlinePortalAttachment, InlinePortalResultPayload, PortalKind, PortalPrefixPayload,
+    ContextPortalKind, ContextPortalPrefixPayload, ContextSelectorRow, ContextSelectorRowKind,
+    ContextSelectorTrigger, InlinePortalAttachment, InlinePortalResultPayload,
     PROFILE_TRIGGER_CHAR,
 };
 
@@ -26,15 +22,15 @@ const INLINE_PORTAL_RESULTS_LIMIT: usize = 10;
 
 /// Parsed trigger + query extracted from the composer input.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct ContextTriggerQuery {
-    pub trigger: ContextPickerTrigger,
+pub(crate) struct ContextSelectorQuery {
+    pub trigger: ContextSelectorTrigger,
     pub query: String,
 }
 
 /// Cursor-aware trigger extraction result with char range.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct ContextTriggerQueryAtCursor {
-    pub trigger: ContextPickerTrigger,
+pub(crate) struct ContextSelectorQueryAtCursor {
+    pub trigger: ContextSelectorTrigger,
     pub char_range: std::ops::Range<usize>,
     pub query: String,
 }
@@ -48,12 +44,12 @@ fn char_to_byte_offset(text: &str, char_idx: usize) -> usize {
 
 /// Extract a trigger query from the composer text at a specific cursor position.
 ///
-/// Shared implementation used by both the AI window picker and Agent Chat.
+/// Shared implementation used by Agent Chat and other selector-capable surfaces.
 /// Returns `None` when there is no active trigger before the cursor.
-pub(crate) fn extract_context_picker_query_before_cursor(
+pub(crate) fn context_selector_query_before_cursor(
     input: &str,
     cursor: usize,
-) -> Option<ContextTriggerQueryAtCursor> {
+) -> Option<ContextSelectorQueryAtCursor> {
     if cursor > input.chars().count() {
         return None;
     }
@@ -65,9 +61,9 @@ pub(crate) fn extract_context_picker_query_before_cursor(
     let trigger_byte = before_cursor.as_bytes().get(trigger_pos).copied()?;
 
     let trigger = match trigger_byte {
-        b'@' => ContextPickerTrigger::Mention,
-        b'/' => ContextPickerTrigger::Slash,
-        b'|' => ContextPickerTrigger::Profile,
+        b'@' => ContextSelectorTrigger::Mention,
+        b'/' => ContextSelectorTrigger::Slash,
+        b'|' => ContextSelectorTrigger::Profile,
         _ => return None,
     };
 
@@ -94,9 +90,9 @@ pub(crate) fn extract_context_picker_query_before_cursor(
 
     // Reject if query contains another trigger char or any whitespace
     let trigger_char = match trigger {
-        ContextPickerTrigger::Mention => '@',
-        ContextPickerTrigger::Slash => '/',
-        ContextPickerTrigger::Profile => PROFILE_TRIGGER_CHAR,
+        ContextSelectorTrigger::Mention => '@',
+        ContextSelectorTrigger::Slash => '/',
+        ContextSelectorTrigger::Profile => PROFILE_TRIGGER_CHAR,
     };
     if query.contains(trigger_char) || query.chars().any(char::is_whitespace) {
         return None;
@@ -110,10 +106,10 @@ pub(crate) fn extract_context_picker_query_before_cursor(
         cursor,
         trigger_char_idx,
         query = %query,
-        "context_picker_trigger_extracted"
+        "context_selector_trigger_extracted"
     );
 
-    Some(ContextTriggerQueryAtCursor {
+    Some(ContextSelectorQueryAtCursor {
         trigger,
         char_range: trigger_char_idx..cursor,
         query: query.to_string(),
@@ -122,10 +118,10 @@ pub(crate) fn extract_context_picker_query_before_cursor(
 
 /// Extract a trigger query from the composer text (end-of-string cursor).
 ///
-/// Thin wrapper around `extract_context_picker_query_before_cursor`.
-pub(crate) fn extract_context_picker_query(input: &str) -> Option<ContextTriggerQuery> {
-    let result = extract_context_picker_query_before_cursor(input, input.chars().count())?;
-    Some(ContextTriggerQuery {
+/// Thin wrapper around `context_selector_query_before_cursor`.
+pub(crate) fn context_selector_query(input: &str) -> Option<ContextSelectorQuery> {
+    let result = context_selector_query_before_cursor(input, input.chars().count())?;
+    Some(ContextSelectorQuery {
         trigger: result.trigger,
         query: result.query,
     })
@@ -178,7 +174,7 @@ pub(crate) fn match_query_chars_in_display_meta(
 
 /// A hint chip for the empty state when no results match.
 #[derive(Debug, Clone, Copy)]
-pub(crate) struct ContextPickerEmptyStateHint {
+pub(crate) struct ContextSelectorEmptyStateHint {
     /// What is displayed in the hint chip.
     pub display: &'static str,
     /// What is inserted into the composer when clicked.
@@ -187,76 +183,76 @@ pub(crate) struct ContextPickerEmptyStateHint {
 
 /// Hint chips for the empty state when no results match.
 ///
-/// These are the canonical entries shared by both the AI window picker and
-/// Agent Chat.  `@file:<path>` uses `insertion: "@file:"` so clicking it keeps
-/// the picker open for file suggestions instead of fabricating a fake path.
-pub(crate) fn empty_state_hints(
-    trigger: ContextPickerTrigger,
-) -> std::borrow::Cow<'static, [ContextPickerEmptyStateHint]> {
-    static MENTION_HINTS: &[ContextPickerEmptyStateHint] = &[
-        ContextPickerEmptyStateHint {
+/// These are the canonical entries shared by Agent Chat and inline mention sync.
+/// `@file:<path>` uses `insertion: "@file:"` so clicking it keeps file
+/// suggestion flows open instead of fabricating a fake path.
+pub(crate) fn context_selector_empty_state_hints(
+    trigger: ContextSelectorTrigger,
+) -> std::borrow::Cow<'static, [ContextSelectorEmptyStateHint]> {
+    static MENTION_HINTS: &[ContextSelectorEmptyStateHint] = &[
+        ContextSelectorEmptyStateHint {
             display: "@screenshot",
             insertion: "@screenshot",
         },
-        ContextPickerEmptyStateHint {
+        ContextSelectorEmptyStateHint {
             display: "@clipboard",
             insertion: "@clipboard",
         },
-        ContextPickerEmptyStateHint {
+        ContextSelectorEmptyStateHint {
             display: "@git-diff",
             insertion: "@git-diff",
         },
-        ContextPickerEmptyStateHint {
+        ContextSelectorEmptyStateHint {
             display: "@recent-scripts",
             insertion: "@recent-scripts",
         },
-        ContextPickerEmptyStateHint {
+        ContextSelectorEmptyStateHint {
             display: "@dictation",
             insertion: "@dictation",
         },
-        ContextPickerEmptyStateHint {
+        ContextSelectorEmptyStateHint {
             display: "@calendar",
             insertion: "@calendar",
         },
-        ContextPickerEmptyStateHint {
+        ContextSelectorEmptyStateHint {
             display: "@file:<path>",
             insertion: "@file:",
         },
     ];
-    static SLASH_HINTS: &[ContextPickerEmptyStateHint] = &[
-        ContextPickerEmptyStateHint {
+    static SLASH_HINTS: &[ContextSelectorEmptyStateHint] = &[
+        ContextSelectorEmptyStateHint {
             display: "/compact",
             insertion: "/compact ",
         },
-        ContextPickerEmptyStateHint {
+        ContextSelectorEmptyStateHint {
             display: "/clear",
             insertion: "/clear ",
         },
-        ContextPickerEmptyStateHint {
+        ContextSelectorEmptyStateHint {
             display: "/help",
             insertion: "/help ",
         },
     ];
-    static PROFILE_HINTS: &[ContextPickerEmptyStateHint] = &[
-        ContextPickerEmptyStateHint {
+    static PROFILE_HINTS: &[ContextSelectorEmptyStateHint] = &[
+        ContextSelectorEmptyStateHint {
             display: "|general",
             insertion: "|general",
         },
-        ContextPickerEmptyStateHint {
+        ContextSelectorEmptyStateHint {
             display: "|script-kit",
             insertion: "|script-kit",
         },
     ];
     let base = match trigger {
-        ContextPickerTrigger::Mention => MENTION_HINTS,
-        ContextPickerTrigger::Slash => SLASH_HINTS,
-        ContextPickerTrigger::Profile => PROFILE_HINTS,
+        ContextSelectorTrigger::Mention => MENTION_HINTS,
+        ContextSelectorTrigger::Slash => SLASH_HINTS,
+        ContextSelectorTrigger::Profile => PROFILE_HINTS,
     };
 
-    if trigger != ContextPickerTrigger::Mention {
+    if trigger != ContextSelectorTrigger::Mention {
         tracing::debug!(
             target: "ai",
-            event = "ai_context_picker_empty_state_hints_selected",
+            event = "ai_context_selector_context_selector_empty_state_hints_selected",
             trigger = ?trigger,
             hint_count = base.len(),
             filtered_hint_count = base.len(),
@@ -264,7 +260,7 @@ pub(crate) fn empty_state_hints(
         return std::borrow::Cow::Borrowed(base);
     }
 
-    let filtered: Vec<ContextPickerEmptyStateHint> = base
+    let filtered: Vec<ContextSelectorEmptyStateHint> = base
         .iter()
         .copied()
         .filter(|hint| {
@@ -276,7 +272,7 @@ pub(crate) fn empty_state_hints(
 
     tracing::debug!(
         target: "ai",
-        event = "ai_context_picker_empty_state_hints_selected",
+        event = "ai_context_selector_context_selector_empty_state_hints_selected",
         trigger = ?trigger,
         hint_count = base.len(),
         filtered_hint_count = filtered.len(),
@@ -351,46 +347,46 @@ fn builtin_seed(kind: ContextAttachmentKind) -> &'static BuiltinPickerSeed {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct InlinePortalQuery {
-    kind: PortalKind,
+    kind: ContextPortalKind,
     prefix: &'static str,
     query: String,
 }
 
-fn portal_prefix_for_kind(kind: PortalKind) -> &'static str {
+fn portal_prefix_for_kind(kind: ContextPortalKind) -> &'static str {
     match kind {
-        PortalKind::FileSearch => "file",
-        PortalKind::BrowserHistory => "browser-history",
-        PortalKind::BrowserTabs => "tabs",
-        PortalKind::ClipboardHistory => "clipboard",
-        PortalKind::DictationHistory => "dictation",
-        PortalKind::ScriptSearch => "script",
-        PortalKind::ScriptletSearch => "scriptlet",
-        PortalKind::SkillSearch => "skill",
-        PortalKind::NotesBrowse => "note",
-        PortalKind::AgentChatHistory => "history",
-        PortalKind::Terminal => "terminal",
+        ContextPortalKind::FileSearch => "file",
+        ContextPortalKind::BrowserHistory => "browser-history",
+        ContextPortalKind::BrowserTabs => "tabs",
+        ContextPortalKind::ClipboardHistory => "clipboard",
+        ContextPortalKind::DictationHistory => "dictation",
+        ContextPortalKind::ScriptSearch => "script",
+        ContextPortalKind::ScriptletSearch => "scriptlet",
+        ContextPortalKind::SkillSearch => "skill",
+        ContextPortalKind::NotesBrowse => "note",
+        ContextPortalKind::AgentChatHistory => "history",
+        ContextPortalKind::Terminal => "terminal",
     }
 }
 
-fn portal_kind_from_prefix(prefix: &str) -> Option<PortalKind> {
+fn portal_kind_from_prefix(prefix: &str) -> Option<ContextPortalKind> {
     match prefix {
-        "file" => Some(PortalKind::FileSearch),
-        "browser-history" => Some(PortalKind::BrowserHistory),
-        "tabs" | "browser-tabs" => Some(PortalKind::BrowserTabs),
-        "clipboard" => Some(PortalKind::ClipboardHistory),
-        "dictation" => Some(PortalKind::DictationHistory),
-        "script" => Some(PortalKind::ScriptSearch),
-        "scriptlet" => Some(PortalKind::ScriptletSearch),
-        "skill" => Some(PortalKind::SkillSearch),
-        "note" => Some(PortalKind::NotesBrowse),
-        "history" => Some(PortalKind::AgentChatHistory),
-        "terminal" => Some(PortalKind::Terminal),
+        "file" => Some(ContextPortalKind::FileSearch),
+        "browser-history" => Some(ContextPortalKind::BrowserHistory),
+        "tabs" | "browser-tabs" => Some(ContextPortalKind::BrowserTabs),
+        "clipboard" => Some(ContextPortalKind::ClipboardHistory),
+        "dictation" => Some(ContextPortalKind::DictationHistory),
+        "script" => Some(ContextPortalKind::ScriptSearch),
+        "scriptlet" => Some(ContextPortalKind::ScriptletSearch),
+        "skill" => Some(ContextPortalKind::SkillSearch),
+        "note" => Some(ContextPortalKind::NotesBrowse),
+        "history" => Some(ContextPortalKind::AgentChatHistory),
+        "terminal" => Some(ContextPortalKind::Terminal),
         _ => None,
     }
 }
 
-fn inline_portal_query(trigger: ContextPickerTrigger, query: &str) -> Option<InlinePortalQuery> {
-    if trigger != ContextPickerTrigger::Mention {
+fn inline_portal_query(trigger: ContextSelectorTrigger, query: &str) -> Option<InlinePortalQuery> {
+    if trigger != ContextSelectorTrigger::Mention {
         return None;
     }
     let trimmed = query.trim();
@@ -413,9 +409,9 @@ fn inline_portal_query(trigger: ContextPickerTrigger, query: &str) -> Option<Inl
     None
 }
 
-fn file_search_query(trigger: ContextPickerTrigger, query: &str) -> Option<String> {
+fn file_search_query(trigger: ContextSelectorTrigger, query: &str) -> Option<String> {
     inline_portal_query(trigger, query)
-        .filter(|inline| inline.kind == PortalKind::FileSearch)
+        .filter(|inline| inline.kind == ContextPortalKind::FileSearch)
         .map(|inline| inline.query)
 }
 
@@ -450,7 +446,7 @@ fn split_file_query(base_dir: &std::path::Path, raw_query: &str) -> (std::path::
 
 fn score_builtin_seed(
     seed: &BuiltinPickerSeed,
-    trigger: ContextPickerTrigger,
+    trigger: ContextSelectorTrigger,
     query: &str,
 ) -> (u32, Vec<usize>, Vec<usize>) {
     if query.is_empty() {
@@ -458,17 +454,17 @@ fn score_builtin_seed(
     }
 
     let (display_meta, primary, secondary): (&str, &str, &str) = match trigger {
-        ContextPickerTrigger::Mention => (
+        ContextSelectorTrigger::Mention => (
             seed.mention_meta,
             seed.mention_meta_lower.trim_start_matches(['@', '/']),
             seed.slash_meta_lower.trim_start_matches(['@', '/']),
         ),
-        ContextPickerTrigger::Slash => (
+        ContextSelectorTrigger::Slash => (
             seed.slash_meta,
             seed.slash_meta_lower.trim_start_matches(['@', '/']),
             seed.mention_meta_lower.trim_start_matches(['@', '/']),
         ),
-        ContextPickerTrigger::Profile => ("", "", ""),
+        ContextSelectorTrigger::Profile => ("", "", ""),
     };
 
     let mut best_score = 0u32;
@@ -545,7 +541,7 @@ fn score_builtin_seed(
                 score = best_score,
                 label_hits = ?best_label_hits,
                 meta_hits = ?best_meta_hits,
-                "ai_context_picker_builtin_fuzzy_match"
+                "ai_context_selector_builtin_fuzzy_match"
             );
         }
     }
@@ -553,321 +549,21 @@ fn score_builtin_seed(
     (best_score, best_label_hits, best_meta_hits)
 }
 
-impl AiApp {
-    /// Synchronize the `context_picker_list_state` item count with the
-    /// current picker items. Must be called after the picker opens or
-    /// its filtered result set changes.
-    pub(super) fn sync_context_picker_list_state(&mut self) {
-        let item_count = self
-            .context_picker
-            .as_ref()
-            .map(|p| p.items.len())
-            .unwrap_or(0);
-        let old_count = self.context_picker_list_state.item_count();
-        if old_count != item_count {
-            self.context_picker_list_state
-                .splice(0..old_count, item_count);
-        }
-        self.context_picker_last_scrolled_index = None;
-    }
-
-    /// Scroll the picker list so the currently selected row is visible.
-    /// De-duplicates consecutive calls for the same index.
-    pub(super) fn reveal_selected_context_picker_item(
-        &mut self,
-        reason: &'static str,
-        cx: &mut Context<Self>,
-    ) {
-        let Some(target) = self.context_picker.as_ref().map(|p| p.selected_index) else {
-            return;
-        };
-        if self.context_picker_last_scrolled_index == Some(target) {
-            return;
-        }
-        self.context_picker_list_state.scroll_to_reveal_item(target);
-        self.context_picker_last_scrolled_index = Some(target);
-        tracing::info!(
-            target: "ai",
-            reason,
-            selected_index = target,
-            "ai_context_picker_scrolled_to_selected"
-        );
-        cx.notify();
-    }
-
-    /// Open the context picker with an initial seed query.
-    pub(super) fn open_context_picker(
-        &mut self,
-        trigger: ContextPickerTrigger,
-        seed_query: String,
-        _window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let items = build_picker_items(trigger, &seed_query);
-        tracing::info!(
-            target: "ai",
-            ?trigger,
-            layout = "main_list_item",
-            item_count = items.len(),
-            selected_index = 0,
-            "ai_context_picker_opened"
-        );
-        self.context_picker = Some(ContextPickerState::new(trigger, seed_query, items));
-        self.sync_context_picker_list_state();
-        self.reveal_selected_context_picker_item("picker_opened", cx);
-    }
-
-    /// Update the picker query and re-rank results.
-    pub(super) fn update_context_picker_query(
-        &mut self,
-        trigger: ContextPickerTrigger,
-        query: String,
-        cx: &mut Context<Self>,
-    ) {
-        let items = build_picker_items(trigger, &query);
-        if let Some(picker) = self.context_picker.as_mut() {
-            picker.trigger = trigger;
-            picker.query = query.clone();
-            picker.items = items;
-            picker.selected_index =
-                crate::components::inline_dropdown::inline_dropdown_clamp_selected_index(
-                    picker.selected_index,
-                    picker.items.len(),
-                );
-            tracing::info!(
-                target: "ai",
-                ?trigger,
-                item_count = picker.items.len(),
-                selected_index = picker.selected_index,
-                "ai_context_picker_filtered"
-            );
-        }
-        self.sync_context_picker_list_state();
-        self.reveal_selected_context_picker_item("picker_filtered", cx);
-    }
-
-    /// Accept the currently selected picker row.
-    ///
-    /// For parts that have a canonical inline token (`part_to_inline_token`),
-    /// replaces the active trigger/query text with the short `@token` plus a
-    /// trailing space and claims inline ownership. For parts without an inline
-    /// representation (e.g. slash commands), falls back to the strip-and-chip
-    /// path.
-    pub(super) fn accept_context_picker_selection(
-        &mut self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let (part, label, source, trigger) = {
-            let picker = match &self.context_picker {
-                Some(p) if !p.items.is_empty() => p,
-                _ => return,
-            };
-            let item = match picker.items.get(picker.selected_index) {
-                Some(i) => i,
-                None => return,
-            };
-            let part = match &item.kind {
-                ContextPickerItemKind::BuiltIn(kind) => kind.part(),
-                ContextPickerItemKind::File(path) => AiContextPart::FilePath {
-                    path: path.to_string_lossy().to_string(),
-                    label: item.label.to_string(),
-                },
-                ContextPickerItemKind::Folder(path) => AiContextPart::FilePath {
-                    path: path.to_string_lossy().to_string(),
-                    label: item.label.to_string(),
-                },
-                ContextPickerItemKind::SlashCommand(_)
-                | ContextPickerItemKind::AgentChatProfile { .. }
-                | ContextPickerItemKind::Portal(_)
-                | ContextPickerItemKind::PortalPrefix(_)
-                | ContextPickerItemKind::PortalResult(_)
-                | ContextPickerItemKind::Inert => {
-                    // Portal and slash items are Agent Chat-only; the window picker
-                    // should never encounter them, but handle gracefully.
-                    return;
-                }
-            };
-            let label = part.label().to_string();
-            let source = part.source().to_string();
-            let trigger = picker.trigger;
-            (part, label, source, trigger)
-        };
-
-        let current_value = self.input_state.read(cx).value().to_string();
-        let cursor = current_value.chars().count();
-
-        if let Some(token) = crate::ai::context_mentions::part_to_inline_token(&part) {
-            let replacement = format!("{token} ");
-            let next_value = extract_context_picker_query_before_cursor(&current_value, cursor)
-                .filter(|query| query.trigger == trigger)
-                .map(|query| {
-                    crate::ai::context_mentions::replace_text_in_char_range(
-                        &current_value,
-                        query.char_range,
-                        &replacement,
-                    )
-                })
-                .unwrap_or_else(|| format!("{current_value}{replacement}"));
-
-            tracing::info!(
-                target: "ai",
-                event = "ai_context_picker_token_inserted",
-                ?trigger,
-                label = %label,
-                source = %source,
-                token = %token,
-            );
-
-            self.set_composer_value(next_value, window, cx);
-            self.inline_owned_context_tokens.insert(token);
-            self.add_context_part(part, cx);
-            self.sync_inline_mentions(cx);
-        } else {
-            tracing::info!(
-                target: "ai",
-                event = "ai_context_picker_non_inline_part_attached",
-                ?trigger,
-                label = %label,
-                source = %source,
-            );
-
-            self.strip_context_trigger_from_composer(trigger, window, cx);
-            self.add_context_part(part, cx);
-        }
-
-        // Close picker
-        self.close_context_picker(cx);
-    }
-
-    /// Synchronise `pending_context_parts` from the live inline `@mention`
-    /// tokens in the composer. Removes stale parts whose token was deleted
-    /// and adds new parts for freshly typed tokens.
-    pub(super) fn sync_inline_mentions(&mut self, cx: &mut Context<Self>) {
-        let text = self.input_state.read(cx).value().to_string();
-
-        let plan = crate::ai::context_mentions::build_inline_mention_sync_plan(
-            &text,
-            &self.pending_context_parts,
-            &self.inline_owned_context_tokens,
-        );
-
-        // Remove stale parts in reverse order to preserve indices.
-        for ix in plan.stale_indices.iter().rev().copied() {
-            self.remove_context_part(ix, cx);
-        }
-        for part in &plan.added_parts {
-            self.add_context_part(part.clone(), cx);
-        }
-
-        self.inline_owned_context_tokens
-            .retain(|token| plan.desired_tokens.contains(token));
-        self.inline_owned_context_tokens
-            .extend(plan.added_tokens.iter().cloned());
-
-        // Invalidate preview if it targets a part now hidden inline.
-        let visible: std::collections::HashSet<usize> =
-            crate::ai::context_mentions::visible_context_chip_indices(
-                &text,
-                &self.pending_context_parts,
-            )
-            .into_iter()
-            .collect();
-
-        if self
-            .context_preview_index
-            .is_some_and(|ix| !visible.contains(&ix))
-        {
-            self.context_preview_index = None;
-        }
-
-        tracing::info!(
-            target: "ai",
-            event = "ai_inline_mentions_synced",
-            desired_count = plan.desired_parts.len(),
-            added_count = plan.added_parts.len(),
-            removed_count = plan.stale_indices.len(),
-            token_count = self.inline_owned_context_tokens.len(),
-        );
-
-        cx.notify();
-    }
-
-    /// Close the context picker without accepting.
-    pub(super) fn close_context_picker(&mut self, cx: &mut Context<Self>) {
-        if self.context_picker.is_some() {
-            tracing::info!(target: "ai", "ai_context_picker_closed");
-            self.context_picker = None;
-            cx.notify();
-        }
-    }
-
-    /// Move selection up in the picker.
-    pub(super) fn context_picker_select_prev(&mut self, cx: &mut Context<Self>) {
-        if let Some(picker) = self.context_picker.as_mut() {
-            picker.selected_index = crate::components::inline_dropdown::inline_dropdown_select_prev(
-                picker.selected_index,
-                picker.items.len(),
-            );
-        }
-        self.reveal_selected_context_picker_item("keyboard_prev", cx);
-    }
-
-    /// Move selection down in the picker.
-    pub(super) fn context_picker_select_next(&mut self, cx: &mut Context<Self>) {
-        if let Some(picker) = self.context_picker.as_mut() {
-            picker.selected_index = crate::components::inline_dropdown::inline_dropdown_select_next(
-                picker.selected_index,
-                picker.items.len(),
-            );
-        }
-        self.reveal_selected_context_picker_item("keyboard_next", cx);
-    }
-
-    /// Whether the context picker is currently open.
-    pub(super) fn is_context_picker_open(&self) -> bool {
-        self.context_picker.is_some()
-    }
-
-    /// Strip the trigger character and its query from the current composer input.
-    fn strip_context_trigger_from_composer(
-        &mut self,
-        trigger: ContextPickerTrigger,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let needle = match trigger {
-            ContextPickerTrigger::Mention => '@',
-            ContextPickerTrigger::Slash => '/',
-            ContextPickerTrigger::Profile => PROFILE_TRIGGER_CHAR,
-        };
-        let current_value = self.input_state.read(cx).value().to_string();
-        if let Some(pos) = current_value.rfind(needle) {
-            let mut new_value = current_value[..pos].to_string();
-            let after_trigger = &current_value[pos + 1..];
-            if let Some(space_pos) = after_trigger.find(char::is_whitespace) {
-                new_value.push_str(&after_trigger[space_pos..]);
-            }
-            self.set_composer_value(new_value, window, cx);
-        }
-    }
-}
-
 /// Populate `items` with built-in context attachment entries and optional
-/// portal results. Shared by both `build_picker_items` and
-/// `build_slash_picker_items`.
+/// portal results. Shared by both `context_selector_rows` and
+/// `slash_command_rows`.
 fn extend_builtin_picker_items(
-    trigger: ContextPickerTrigger,
+    trigger: ContextSelectorTrigger,
     query: &str,
     query_lower: &str,
-    items: &mut Vec<ContextPickerItem>,
+    items: &mut Vec<ContextSelectorRow>,
 ) {
-    if trigger == ContextPickerTrigger::Profile {
+    if trigger == ContextSelectorTrigger::Profile {
         return;
     }
 
     for seed in builtin_picker_seeds() {
-        if trigger == ContextPickerTrigger::Slash && !seed.has_slash_command {
+        if trigger == ContextSelectorTrigger::Slash && !seed.has_slash_command {
             continue;
         }
 
@@ -875,7 +571,7 @@ fn extend_builtin_picker_items(
         if !seed.kind.provider_data_available() {
             tracing::info!(
                 target: "ai",
-                event = "ai_context_picker_seed_skipped_provider_unavailable",
+                event = "ai_context_selector_seed_skipped_provider_unavailable",
                 kind = ?seed.kind,
                 trigger = ?trigger,
             );
@@ -889,17 +585,17 @@ fn extend_builtin_picker_items(
         }
 
         let meta = match trigger {
-            ContextPickerTrigger::Mention => seed.mention_meta,
-            ContextPickerTrigger::Slash => seed.slash_meta,
-            ContextPickerTrigger::Profile => "",
+            ContextSelectorTrigger::Mention => seed.mention_meta,
+            ContextSelectorTrigger::Slash => seed.slash_meta,
+            ContextSelectorTrigger::Profile => "",
         };
 
-        items.push(ContextPickerItem {
+        items.push(ContextSelectorRow {
             id: SharedString::from(format!("builtin:{:?}", seed.kind).to_lowercase()),
             label: SharedString::from(seed.label),
             description: SharedString::from(seed.kind.spec().action_title),
             meta: SharedString::from(meta),
-            kind: ContextPickerItemKind::BuiltIn(seed.kind),
+            kind: ContextSelectorRowKind::BuiltIn(seed.kind),
             score: if query_lower.is_empty() { 100 } else { score },
             label_highlight_indices: label_hits,
             meta_highlight_indices: meta_hits,
@@ -911,7 +607,7 @@ fn extend_builtin_picker_items(
     // the full built-in File Search surface so preview and folder browsing
     // stay identical to the direct Search Files command.
     if let Some(inline_query) = inline_portal_query(trigger, query) {
-        if inline_query.kind != PortalKind::FileSearch {
+        if inline_query.kind != ContextPortalKind::FileSearch {
             collect_inline_portal_items(&inline_query, items);
         }
         inject_full_portal_fallback(&inline_query, items);
@@ -921,22 +617,22 @@ fn extend_builtin_picker_items(
             target: "ai",
             ?trigger,
             query = %query,
-            "ai_context_picker_file_scan_skipped"
+            "ai_context_selector_file_scan_skipped"
         );
     }
 
     // Portal items — rich browse surfaces that attach their selection back to Agent Chat.
     // Only in mention mode; slash mode is command-only.
-    if trigger == ContextPickerTrigger::Mention {
+    if trigger == ContextSelectorTrigger::Mention {
         inject_portal_items(query_lower, items);
     }
 }
 
 /// Inject portal items for rich browsing. These open a temporary browse
 /// surface and attach the selected result back to Agent Chat.
-fn inject_portal_items(query_lower: &str, items: &mut Vec<ContextPickerItem>) {
+fn inject_portal_items(query_lower: &str, items: &mut Vec<ContextSelectorRow>) {
     struct PortalDef {
-        kind: PortalKind,
+        kind: ContextPortalKind,
         id: &'static str,
         label: &'static str,
         description: &'static str,
@@ -946,7 +642,7 @@ fn inject_portal_items(query_lower: &str, items: &mut Vec<ContextPickerItem>) {
 
     let portals: &[PortalDef] = &[
         PortalDef {
-            kind: PortalKind::FileSearch,
+            kind: ContextPortalKind::FileSearch,
             id: "portal:file_search",
             label: "@file",
             description: "Search files with Spotlight and browse folders",
@@ -954,7 +650,7 @@ fn inject_portal_items(query_lower: &str, items: &mut Vec<ContextPickerItem>) {
             match_terms: &["file", "files", "browse", "search"],
         },
         PortalDef {
-            kind: PortalKind::BrowserHistory,
+            kind: ContextPortalKind::BrowserHistory,
             id: "portal:browser_history",
             label: "@browser-history",
             description: "Browse recent browser history across supported browsers",
@@ -965,7 +661,7 @@ fn inject_portal_items(query_lower: &str, items: &mut Vec<ContextPickerItem>) {
             ],
         },
         PortalDef {
-            kind: PortalKind::BrowserTabs,
+            kind: ContextPortalKind::BrowserTabs,
             id: "portal:browser_tabs",
             label: "@tabs",
             description: "Attach an open browser tab with title, URL, and browser metadata",
@@ -986,7 +682,7 @@ fn inject_portal_items(query_lower: &str, items: &mut Vec<ContextPickerItem>) {
             ],
         },
         PortalDef {
-            kind: PortalKind::ClipboardHistory,
+            kind: ContextPortalKind::ClipboardHistory,
             id: "portal:clipboard_history",
             label: "@clipboard",
             description: "Browse clipboard history with previews",
@@ -994,7 +690,7 @@ fn inject_portal_items(query_lower: &str, items: &mut Vec<ContextPickerItem>) {
             match_terms: &["clipboard", "clip", "paste"],
         },
         PortalDef {
-            kind: PortalKind::ScriptSearch,
+            kind: ContextPortalKind::ScriptSearch,
             id: "portal:script_search",
             label: "@script",
             description: "Browse installed scripts and attach one to Agent Chat",
@@ -1002,7 +698,7 @@ fn inject_portal_items(query_lower: &str, items: &mut Vec<ContextPickerItem>) {
             match_terms: &["script", "scripts", "command", "commands", "browse"],
         },
         PortalDef {
-            kind: PortalKind::ScriptletSearch,
+            kind: ContextPortalKind::ScriptletSearch,
             id: "portal:scriptlet_search",
             label: "@scriptlet",
             description: "Browse scriptlets and attach one to Agent Chat",
@@ -1010,7 +706,7 @@ fn inject_portal_items(query_lower: &str, items: &mut Vec<ContextPickerItem>) {
             match_terms: &["scriptlet", "scriptlets", "snippet", "snippets", "browse"],
         },
         PortalDef {
-            kind: PortalKind::SkillSearch,
+            kind: ContextPortalKind::SkillSearch,
             id: "portal:skill_search",
             label: "@skill",
             description: "Browse skills and attach one to Agent Chat",
@@ -1018,7 +714,7 @@ fn inject_portal_items(query_lower: &str, items: &mut Vec<ContextPickerItem>) {
             match_terms: &["skill", "skills", "agent", "agents", "browse"],
         },
         PortalDef {
-            kind: PortalKind::NotesBrowse,
+            kind: ContextPortalKind::NotesBrowse,
             id: "portal:notes_browse",
             label: "@note",
             description: "Browse notes and attach one to Agent Chat",
@@ -1026,7 +722,7 @@ fn inject_portal_items(query_lower: &str, items: &mut Vec<ContextPickerItem>) {
             match_terms: &["note", "notes", "markdown", "browse"],
         },
         PortalDef {
-            kind: PortalKind::AgentChatHistory,
+            kind: ContextPortalKind::AgentChatHistory,
             id: "portal:agent_chat_history",
             label: "@history",
             description: "Browse prior Agent Chat conversations",
@@ -1034,7 +730,7 @@ fn inject_portal_items(query_lower: &str, items: &mut Vec<ContextPickerItem>) {
             match_terms: &["history", "conversation", "chat", "resume", "reuse"],
         },
         PortalDef {
-            kind: PortalKind::Terminal,
+            kind: ContextPortalKind::Terminal,
             id: "portal:terminal",
             label: "@terminal",
             description: "Run commands and attach the terminal output",
@@ -1073,12 +769,12 @@ fn inject_portal_items(query_lower: &str, items: &mut Vec<ContextPickerItem>) {
 
         let meta_hits = match_query_chars_in_display_meta(query_lower, meta).unwrap_or_default();
 
-        items.push(ContextPickerItem {
+        items.push(ContextSelectorRow {
             id: SharedString::from(*id),
             label: SharedString::from(*label),
             description: SharedString::from(*description),
             meta: SharedString::from(*meta),
-            kind: ContextPickerItemKind::Portal(*kind),
+            kind: ContextSelectorRowKind::Portal(*kind),
             score,
             label_highlight_indices: label_hits,
             meta_highlight_indices: meta_hits,
@@ -1086,28 +782,28 @@ fn inject_portal_items(query_lower: &str, items: &mut Vec<ContextPickerItem>) {
     }
 }
 
-fn portal_kind_detail_label(kind: PortalKind) -> &'static str {
+fn portal_kind_detail_label(kind: ContextPortalKind) -> &'static str {
     match kind {
-        PortalKind::FileSearch => "file search",
-        PortalKind::BrowserHistory => "browser history",
-        PortalKind::BrowserTabs => "browser tabs",
-        PortalKind::ClipboardHistory => "clipboard history",
-        PortalKind::DictationHistory => "dictation history",
-        PortalKind::ScriptSearch => "script search",
-        PortalKind::ScriptletSearch => "scriptlet search",
-        PortalKind::SkillSearch => "skill search",
-        PortalKind::NotesBrowse => "notes",
-        PortalKind::AgentChatHistory => "Agent Chat history",
-        PortalKind::Terminal => "terminal",
+        ContextPortalKind::FileSearch => "file search",
+        ContextPortalKind::BrowserHistory => "browser history",
+        ContextPortalKind::BrowserTabs => "browser tabs",
+        ContextPortalKind::ClipboardHistory => "clipboard history",
+        ContextPortalKind::DictationHistory => "dictation history",
+        ContextPortalKind::ScriptSearch => "script search",
+        ContextPortalKind::ScriptletSearch => "scriptlet search",
+        ContextPortalKind::SkillSearch => "skill search",
+        ContextPortalKind::NotesBrowse => "notes",
+        ContextPortalKind::AgentChatHistory => "Agent Chat history",
+        ContextPortalKind::Terminal => "terminal",
     }
 }
 
 fn inject_full_portal_fallback(
     inline_query: &InlinePortalQuery,
-    items: &mut Vec<ContextPickerItem>,
+    items: &mut Vec<ContextSelectorRow>,
 ) {
     let label = format!("Open full {}", portal_kind_detail_label(inline_query.kind));
-    items.push(ContextPickerItem {
+    items.push(ContextSelectorRow {
         id: SharedString::from(format!("portal-full:{}", inline_query.prefix)),
         label: SharedString::from(label.clone()),
         description: SharedString::from(format!(
@@ -1115,7 +811,7 @@ fn inject_full_portal_fallback(
             portal_kind_detail_label(inline_query.kind)
         )),
         meta: SharedString::from("Portal"),
-        kind: ContextPickerItemKind::Portal(inline_query.kind),
+        kind: ContextSelectorRowKind::Portal(inline_query.kind),
         score: 10,
         label_highlight_indices: match_query_chars(&inline_query.query.to_lowercase(), &label)
             .unwrap_or_default(),
@@ -1125,28 +821,36 @@ fn inject_full_portal_fallback(
 
 fn collect_inline_portal_items(
     inline_query: &InlinePortalQuery,
-    items: &mut Vec<ContextPickerItem>,
+    items: &mut Vec<ContextSelectorRow>,
 ) {
     match inline_query.kind {
-        PortalKind::FileSearch => {}
-        PortalKind::BrowserHistory => {
+        ContextPortalKind::FileSearch => {}
+        ContextPortalKind::BrowserHistory => {
             collect_browser_history_inline_items(&inline_query.query, items)
         }
-        PortalKind::BrowserTabs => collect_browser_tabs_inline_items(&inline_query.query, items),
-        PortalKind::ClipboardHistory => collect_clipboard_inline_items(&inline_query.query, items),
-        PortalKind::DictationHistory => collect_dictation_inline_items(&inline_query.query, items),
-        PortalKind::ScriptSearch | PortalKind::ScriptletSearch | PortalKind::SkillSearch => {
-            collect_script_list_inline_items(inline_query, items)
+        ContextPortalKind::BrowserTabs => {
+            collect_browser_tabs_inline_items(&inline_query.query, items)
         }
-        PortalKind::NotesBrowse => collect_notes_inline_items(&inline_query.query, items),
-        PortalKind::AgentChatHistory => {
+        ContextPortalKind::ClipboardHistory => {
+            collect_clipboard_inline_items(&inline_query.query, items)
+        }
+        ContextPortalKind::DictationHistory => {
+            collect_dictation_inline_items(&inline_query.query, items)
+        }
+        ContextPortalKind::ScriptSearch
+        | ContextPortalKind::ScriptletSearch
+        | ContextPortalKind::SkillSearch => collect_script_list_inline_items(inline_query, items),
+        ContextPortalKind::NotesBrowse => collect_notes_inline_items(&inline_query.query, items),
+        ContextPortalKind::AgentChatHistory => {
             collect_agent_chat_history_inline_items(&inline_query.query, items)
         }
-        PortalKind::Terminal => collect_terminal_history_inline_items(&inline_query.query, items),
+        ContextPortalKind::Terminal => {
+            collect_terminal_history_inline_items(&inline_query.query, items)
+        }
     }
 }
 
-fn collect_terminal_history_inline_items(query: &str, items: &mut Vec<ContextPickerItem>) {
+fn collect_terminal_history_inline_items(query: &str, items: &mut Vec<ContextSelectorRow>) {
     let query_lower = query.to_lowercase();
     for entry in crate::terminal_history::recent(INLINE_PORTAL_RESULTS_LIMIT) {
         let haystack = format!("{} {}", entry.label, entry.text).to_lowercase();
@@ -1161,13 +865,13 @@ fn collect_terminal_history_inline_items(query: &str, items: &mut Vec<ContextPic
             .chars()
             .take(96)
             .collect::<String>();
-        items.push(ContextPickerItem {
+        items.push(ContextSelectorRow {
             id: SharedString::from(format!("terminal-history:{}", entry.source)),
             label: SharedString::from(entry.label.clone()),
             description: SharedString::from(preview),
             meta: SharedString::from("Terminal"),
-            kind: ContextPickerItemKind::PortalResult(InlinePortalResultPayload {
-                portal_kind: PortalKind::Terminal,
+            kind: ContextSelectorRowKind::PortalResult(InlinePortalResultPayload {
+                portal_kind: ContextPortalKind::Terminal,
                 attachment: InlinePortalAttachment::TextBlock {
                     label: entry.label,
                     source: entry.source,
@@ -1212,7 +916,7 @@ fn inline_portal_skills() -> &'static [Arc<crate::plugins::PluginSkill>] {
 
 fn collect_script_list_inline_items(
     inline_query: &InlinePortalQuery,
-    items: &mut Vec<ContextPickerItem>,
+    items: &mut Vec<ContextSelectorRow>,
 ) {
     let results = crate::scripts::fuzzy_search_unified_all_with_skills(
         inline_portal_scripts(),
@@ -1235,28 +939,28 @@ fn collect_script_list_inline_items(
 }
 
 fn script_list_result_matches_portal_kind(
-    kind: PortalKind,
+    kind: ContextPortalKind,
     result: &crate::scripts::SearchResult,
 ) -> bool {
     matches!(
         (kind, result),
         (
-            PortalKind::ScriptSearch,
+            ContextPortalKind::ScriptSearch,
             crate::scripts::SearchResult::Script(_)
         ) | (
-            PortalKind::ScriptletSearch,
+            ContextPortalKind::ScriptletSearch,
             crate::scripts::SearchResult::Scriptlet(_)
         ) | (
-            PortalKind::SkillSearch,
+            ContextPortalKind::SkillSearch,
             crate::scripts::SearchResult::Skill(_)
         )
     )
 }
 
 fn inline_portal_item_from_search_result(
-    portal_kind: PortalKind,
+    portal_kind: ContextPortalKind,
     result: crate::scripts::SearchResult,
-) -> Option<ContextPickerItem> {
+) -> Option<ContextSelectorRow> {
     let query_prefix = portal_prefix_for_kind(portal_kind);
     match result {
         crate::scripts::SearchResult::Script(script_match) => {
@@ -1267,12 +971,12 @@ fn inline_portal_item_from_search_result(
                 .description
                 .clone()
                 .unwrap_or_else(|| path.clone());
-            Some(ContextPickerItem {
+            Some(ContextSelectorRow {
                 id: SharedString::from(format!("portal-result:script:{path}")),
                 label: SharedString::from(label.clone()),
                 description: SharedString::from(description),
                 meta: SharedString::from(format!("@{query_prefix}:{}", label)),
-                kind: ContextPickerItemKind::PortalResult(InlinePortalResultPayload {
+                kind: ContextSelectorRowKind::PortalResult(InlinePortalResultPayload {
                     portal_kind,
                     attachment: InlinePortalAttachment::FilePath { path, label },
                 }),
@@ -1284,7 +988,7 @@ fn inline_portal_item_from_search_result(
         crate::scripts::SearchResult::Scriptlet(scriptlet_match) => {
             let label = scriptlet_match.scriptlet.name.clone();
             let semantic_id = scriptlet_match.scriptlet.launcher_command_id();
-            Some(ContextPickerItem {
+            Some(ContextSelectorRow {
                 id: SharedString::from(format!("portal-result:scriptlet:{semantic_id}")),
                 label: SharedString::from(label.clone()),
                 description: SharedString::from(
@@ -1295,7 +999,7 @@ fn inline_portal_item_from_search_result(
                         .unwrap_or_else(|| "Scriptlet".to_string()),
                 ),
                 meta: SharedString::from(format!("@{query_prefix}:{}", label)),
-                kind: ContextPickerItemKind::PortalResult(InlinePortalResultPayload {
+                kind: ContextSelectorRowKind::PortalResult(InlinePortalResultPayload {
                     portal_kind,
                     attachment: InlinePortalAttachment::FocusedTarget {
                         source: "ScriptList".to_string(),
@@ -1324,7 +1028,7 @@ fn inline_portal_item_from_search_result(
             } else {
                 skill_match.skill.plugin_title.clone()
             };
-            Some(ContextPickerItem {
+            Some(ContextSelectorRow {
                 id: SharedString::from(format!(
                     "portal-result:skill:{}:{}",
                     skill_match.skill.plugin_id, skill_match.skill.skill_id
@@ -1332,7 +1036,7 @@ fn inline_portal_item_from_search_result(
                 label: SharedString::from(skill_match.skill.title.clone()),
                 description: SharedString::from(skill_match.skill.description.clone()),
                 meta: SharedString::from(format!("@{query_prefix}:{}", skill_match.skill.title)),
-                kind: ContextPickerItemKind::PortalResult(InlinePortalResultPayload {
+                kind: ContextSelectorRowKind::PortalResult(InlinePortalResultPayload {
                     portal_kind,
                     attachment: InlinePortalAttachment::SkillFile {
                         path: skill_match.skill.path.to_string_lossy().to_string(),
@@ -1351,7 +1055,7 @@ fn inline_portal_item_from_search_result(
     }
 }
 
-fn collect_browser_history_inline_items(query: &str, items: &mut Vec<ContextPickerItem>) {
+fn collect_browser_history_inline_items(query: &str, items: &mut Vec<ContextSelectorRow>) {
     let Ok(entries) = crate::browser_history::list_recent_history(200) else {
         return;
     };
@@ -1361,7 +1065,7 @@ fn collect_browser_history_inline_items(query: &str, items: &mut Vec<ContextPick
 fn collect_browser_history_inline_items_from_entries(
     query: &str,
     entries: Vec<crate::browser_history::BrowserHistoryEntry>,
-    items: &mut Vec<ContextPickerItem>,
+    items: &mut Vec<ContextSelectorRow>,
 ) {
     let query_lower = query.trim().to_lowercase();
     let matches = crate::browser_history::fuzzy_search_browser_history(&entries, query);
@@ -1369,7 +1073,7 @@ fn collect_browser_history_inline_items_from_entries(
         let entry = matched.entry;
         let label = entry.display_title().to_string();
         let meta = format!("@browser-history:{}", entry.host);
-        items.push(ContextPickerItem {
+        items.push(ContextSelectorRow {
             id: SharedString::from(format!(
                 "portal-result:browser-history:{}",
                 entry.history_key()
@@ -1377,8 +1081,8 @@ fn collect_browser_history_inline_items_from_entries(
             label: SharedString::from(label.clone()),
             description: SharedString::from(entry.url.clone()),
             meta: SharedString::from(meta),
-            kind: ContextPickerItemKind::PortalResult(InlinePortalResultPayload {
-                portal_kind: PortalKind::BrowserHistory,
+            kind: ContextSelectorRowKind::PortalResult(InlinePortalResultPayload {
+                portal_kind: ContextPortalKind::BrowserHistory,
                 attachment: InlinePortalAttachment::FocusedTarget {
                     source: "BrowserHistory".to_string(),
                     kind: "browser_history_entry".to_string(),
@@ -1403,7 +1107,7 @@ fn collect_browser_history_inline_items_from_entries(
     }
 }
 
-fn collect_browser_tabs_inline_items(query: &str, items: &mut Vec<ContextPickerItem>) {
+fn collect_browser_tabs_inline_items(query: &str, items: &mut Vec<ContextSelectorRow>) {
     let Ok(tabs) = crate::browser_tabs::list_open_tabs() else {
         return;
     };
@@ -1413,7 +1117,7 @@ fn collect_browser_tabs_inline_items(query: &str, items: &mut Vec<ContextPickerI
 fn collect_browser_tabs_inline_items_from_tabs(
     query: &str,
     tabs: Vec<crate::browser_tabs::BrowserTabInfo>,
-    items: &mut Vec<ContextPickerItem>,
+    items: &mut Vec<ContextSelectorRow>,
 ) {
     let query_lower = query.trim().to_lowercase();
     let matches = crate::browser_tabs::fuzzy_search_browser_tabs(&tabs, query);
@@ -1426,13 +1130,13 @@ fn collect_browser_tabs_inline_items_from_tabs(
         let label = tab.display_title().to_string();
         let stable_key = crate::browser_tabs::browser_tab_stable_key(&tab);
         let host = crate::browser_tabs::browser_tab_host(&tab);
-        items.push(ContextPickerItem {
+        items.push(ContextSelectorRow {
             id: SharedString::from(format!("portal-result:browser-tabs:{stable_key}")),
             label: SharedString::from(label.clone()),
             description: SharedString::from(tab.url.to_string()),
             meta: SharedString::from(format!("@tabs:{host}")),
-            kind: ContextPickerItemKind::PortalResult(InlinePortalResultPayload {
-                portal_kind: PortalKind::BrowserTabs,
+            kind: ContextSelectorRowKind::PortalResult(InlinePortalResultPayload {
+                portal_kind: ContextPortalKind::BrowserTabs,
                 attachment: InlinePortalAttachment::FocusedTarget {
                     source: "BrowserTabs".to_string(),
                     kind: "browser_tab".to_string(),
@@ -1461,7 +1165,7 @@ fn collect_browser_tabs_inline_items_from_tabs(
     }
 }
 
-fn collect_clipboard_inline_items(query: &str, items: &mut Vec<ContextPickerItem>) {
+fn collect_clipboard_inline_items(query: &str, items: &mut Vec<ContextSelectorRow>) {
     let entries = crate::clipboard_history::get_cached_entries(200);
     collect_clipboard_inline_items_from_entries(query, entries, items);
 }
@@ -1469,7 +1173,7 @@ fn collect_clipboard_inline_items(query: &str, items: &mut Vec<ContextPickerItem
 fn collect_clipboard_inline_items_from_entries(
     query: &str,
     entries: Vec<crate::clipboard_history::ClipboardEntryMeta>,
-    items: &mut Vec<ContextPickerItem>,
+    items: &mut Vec<ContextSelectorRow>,
 ) {
     let query_lower = query.trim().to_lowercase();
     entries
@@ -1481,7 +1185,7 @@ fn collect_clipboard_inline_items_from_entries(
         .take(INLINE_PORTAL_RESULTS_LIMIT)
         .for_each(|entry| {
             let label = entry.display_preview();
-            items.push(ContextPickerItem {
+            items.push(ContextSelectorRow {
                 id: SharedString::from(format!("portal-result:clipboard:{}", entry.id)),
                 label: SharedString::from(label.clone()),
                 description: SharedString::from(format!(
@@ -1489,8 +1193,8 @@ fn collect_clipboard_inline_items_from_entries(
                     entry.content_type.as_str()
                 )),
                 meta: SharedString::from(format!("@clipboard:{}", entry.id)),
-                kind: ContextPickerItemKind::PortalResult(InlinePortalResultPayload {
-                    portal_kind: PortalKind::ClipboardHistory,
+                kind: ContextSelectorRowKind::PortalResult(InlinePortalResultPayload {
+                    portal_kind: ContextPortalKind::ClipboardHistory,
                     attachment: InlinePortalAttachment::ResourceUri {
                         uri: format!("kit://clipboard-history?id={}", entry.id),
                         label: format!("Clipboard: {label}"),
@@ -1504,17 +1208,17 @@ fn collect_clipboard_inline_items_from_entries(
         });
 }
 
-fn collect_dictation_inline_items(query: &str, items: &mut Vec<ContextPickerItem>) {
+fn collect_dictation_inline_items(query: &str, items: &mut Vec<ContextSelectorRow>) {
     let query_lower = query.trim().to_lowercase();
     for hit in crate::dictation::search_history(query, INLINE_PORTAL_RESULTS_LIMIT) {
         let label = hit.entry.preview.clone();
-        items.push(ContextPickerItem {
+        items.push(ContextSelectorRow {
             id: SharedString::from(format!("portal-result:dictation:{}", hit.entry.id)),
             label: SharedString::from(label.clone()),
             description: SharedString::from(format!("Dictation to {}", hit.entry.target)),
             meta: SharedString::from(format!("@dictation:{}", hit.entry.id)),
-            kind: ContextPickerItemKind::PortalResult(InlinePortalResultPayload {
-                portal_kind: PortalKind::DictationHistory,
+            kind: ContextSelectorRowKind::PortalResult(InlinePortalResultPayload {
+                portal_kind: ContextPortalKind::DictationHistory,
                 attachment: InlinePortalAttachment::ResourceUri {
                     uri: format!("kit://dictation-history?id={}", hit.entry.id),
                     label: format!("Dictation: {label}"),
@@ -1527,7 +1231,7 @@ fn collect_dictation_inline_items(query: &str, items: &mut Vec<ContextPickerItem
     }
 }
 
-fn collect_notes_inline_items(query: &str, items: &mut Vec<ContextPickerItem>) {
+fn collect_notes_inline_items(query: &str, items: &mut Vec<ContextSelectorRow>) {
     // Always read fresh from storage so the picker reflects creates, renames,
     // and deletes that happened outside the Agent Chat composer. For blank queries
     // prefer `get_all_notes()` so the picker shows the current note list
@@ -1553,13 +1257,13 @@ fn collect_notes_inline_items(query: &str, items: &mut Vec<ContextPickerItem>) {
         let content = note.content;
         let updated_at = note.updated_at.to_rfc3339();
         let is_pinned = note.is_pinned;
-        items.push(ContextPickerItem {
+        items.push(ContextSelectorRow {
             id: SharedString::from(format!("portal-result:note:{semantic_id}")),
             label: SharedString::from(title.clone()),
             description: SharedString::from(format!("{} chars", content.chars().count())),
             meta: SharedString::from(format!("@note:{title}")),
-            kind: ContextPickerItemKind::PortalResult(InlinePortalResultPayload {
-                portal_kind: PortalKind::NotesBrowse,
+            kind: ContextSelectorRowKind::PortalResult(InlinePortalResultPayload {
+                portal_kind: ContextPortalKind::NotesBrowse,
                 attachment: InlinePortalAttachment::FocusedTarget {
                     source: "NotesBrowse".to_string(),
                     kind: "note".to_string(),
@@ -1581,7 +1285,7 @@ fn collect_notes_inline_items(query: &str, items: &mut Vec<ContextPickerItem>) {
     }
 }
 
-fn collect_agent_chat_history_inline_items(query: &str, items: &mut Vec<ContextPickerItem>) {
+fn collect_agent_chat_history_inline_items(query: &str, items: &mut Vec<ContextSelectorRow>) {
     let query_lower = query.trim().to_lowercase();
     for hit in
         crate::ai::agent_chat::ui::history::search_history(query, INLINE_PORTAL_RESULTS_LIMIT)
@@ -1592,13 +1296,13 @@ fn collect_agent_chat_history_inline_items(query: &str, items: &mut Vec<ContextP
         let first_message = hit.entry.first_message;
         let message_count = hit.entry.message_count;
         let timestamp = hit.entry.timestamp;
-        items.push(ContextPickerItem {
+        items.push(ContextSelectorRow {
             id: SharedString::from(format!("portal-result:history:{session_id}")),
             label: SharedString::from(title.clone()),
             description: SharedString::from(preview.clone()),
             meta: SharedString::from(format!("@history:{session_id}")),
-            kind: ContextPickerItemKind::PortalResult(InlinePortalResultPayload {
-                portal_kind: PortalKind::AgentChatHistory,
+            kind: ContextSelectorRowKind::PortalResult(InlinePortalResultPayload {
+                portal_kind: ContextPortalKind::AgentChatHistory,
                 attachment: InlinePortalAttachment::FocusedTarget {
                     source: "AgentChatHistory".to_string(),
                     kind: "agent_chatHistory".to_string(),
@@ -1628,7 +1332,7 @@ fn collect_agent_chat_history_inline_items(query: &str, items: &mut Vec<ContextP
 fn extend_agent_slash_command_items<'a, I>(
     query_lower: &str,
     commands: I,
-    items: &mut Vec<ContextPickerItem>,
+    items: &mut Vec<ContextSelectorRow>,
 ) where
     I: IntoIterator<Item = (&'a str, &'a str)>,
 {
@@ -1658,7 +1362,7 @@ fn extend_agent_slash_command_items<'a, I>(
 fn extend_agent_slash_command_items_with_payloads<'a, I>(
     query_lower: &str,
     commands: I,
-    items: &mut Vec<ContextPickerItem>,
+    items: &mut Vec<ContextSelectorRow>,
 ) where
     I: IntoIterator<Item = (&'a types::SlashCommandPayload, &'a str)>,
 {
@@ -1697,12 +1401,12 @@ fn extend_agent_slash_command_items_with_payloads<'a, I>(
             "agent_chat_slash_picker_entry_built"
         );
 
-        items.push(ContextPickerItem {
+        items.push(ContextSelectorRow {
             id: SharedString::from(format!("slash-cmd:{}", payload.stable_id())),
             label: SharedString::from(name.to_string()),
             description: SharedString::from(slash_command_description(name, description)),
             meta: SharedString::from(meta_str),
-            kind: ContextPickerItemKind::SlashCommand(payload.clone()),
+            kind: ContextSelectorRowKind::SlashCommand(payload.clone()),
             score,
             label_highlight_indices: label_hits,
             meta_highlight_indices: meta_hits,
@@ -1734,7 +1438,7 @@ fn slash_command_description(name: &str, discovered_description: &str) -> String
 }
 
 /// Sort items by section priority then score (descending).
-fn sort_picker_items(items: &mut [ContextPickerItem]) {
+fn sort_picker_items(items: &mut [ContextSelectorRow]) {
     items.sort_by(|a, b| {
         let section_a = section_priority(&a.kind);
         let section_b = section_priority(&b.kind);
@@ -1743,7 +1447,7 @@ fn sort_picker_items(items: &mut [ContextPickerItem]) {
 }
 
 /// Log the top ranked items for debugging.
-fn log_top_ranked_items(items: &[ContextPickerItem]) {
+fn log_top_ranked_items(items: &[ContextSelectorRow]) {
     for (rank, item) in items.iter().enumerate().take(5) {
         tracing::debug!(
             target: "ai",
@@ -1752,7 +1456,7 @@ fn log_top_ranked_items(items: &[ContextPickerItem]) {
             score = item.score,
             label_hits = ?item.label_highlight_indices,
             meta_hits = ?item.meta_highlight_indices,
-            "ai_context_picker_ranked_item"
+            "ai_context_selector_ranked_item"
         );
     }
 }
@@ -1762,7 +1466,10 @@ fn log_top_ranked_items(items: &[ContextPickerItem]) {
 /// Uses the cached `BuiltinPickerSeed` catalog to avoid per-query
 /// lowercasing and metadata reconstruction. File results are only
 /// included when the query resolves to explicit `@file:` intent.
-pub fn build_picker_items(trigger: ContextPickerTrigger, query: &str) -> Vec<ContextPickerItem> {
+pub fn context_selector_rows(
+    trigger: ContextSelectorTrigger,
+    query: &str,
+) -> Vec<ContextSelectorRow> {
     let query_lower = query.to_lowercase();
     let mut items = Vec::with_capacity(builtin_picker_seeds().len() + FILE_RESULTS_LIMIT);
 
@@ -1774,7 +1481,7 @@ pub fn build_picker_items(trigger: ContextPickerTrigger, query: &str) -> Vec<Con
         ?trigger,
         query = %query,
         item_count = items.len(),
-        "ai_context_picker_items_built"
+        "ai_context_selector_items_built"
     );
     log_top_ranked_items(&items);
 
@@ -1785,20 +1492,17 @@ pub fn build_picker_items(trigger: ContextPickerTrigger, query: &str) -> Vec<Con
 /// commands.
 ///
 /// Slash mode is command-only. Context attachments belong behind `@`.
-pub fn build_slash_picker_items<'a, I>(query: &str, agent_commands: I) -> Vec<ContextPickerItem>
+pub fn slash_command_rows<'a, I>(query: &str, agent_commands: I) -> Vec<ContextSelectorRow>
 where
     I: IntoIterator<Item = &'a str>,
 {
-    build_slash_picker_items_with_descriptions(
-        query,
-        agent_commands.into_iter().map(|name| (name, "")),
-    )
+    slash_command_rows_with_descriptions(query, agent_commands.into_iter().map(|name| (name, "")))
 }
 
-pub fn build_slash_picker_items_with_descriptions<'a, I>(
+pub fn slash_command_rows_with_descriptions<'a, I>(
     query: &str,
     agent_commands: I,
-) -> Vec<ContextPickerItem>
+) -> Vec<ContextSelectorRow>
 where
     I: IntoIterator<Item = (&'a str, &'a str)>,
 {
@@ -1815,7 +1519,7 @@ where
         query = %query,
         command_count,
         item_count = items.len(),
-        "ai_context_picker_slash_items_built"
+        "ai_context_selector_slash_items_built"
     );
     log_top_ranked_items(&items);
 
@@ -1825,10 +1529,10 @@ where
 /// Build a ranked list of picker items for slash mode using source-aware
 /// payloads. Each payload carries plugin/Claude ownership so duplicate
 /// skill slugs produce rows with distinct stable IDs.
-pub fn build_slash_picker_items_with_payloads<'a, I>(
+pub fn slash_command_rows_with_payloads<'a, I>(
     query: &str,
     payload_commands: I,
-) -> Vec<ContextPickerItem>
+) -> Vec<ContextSelectorRow>
 where
     I: IntoIterator<Item = (&'a types::SlashCommandPayload, &'a str)>,
 {
@@ -1845,7 +1549,7 @@ where
         query = %query,
         command_count,
         item_count = items.len(),
-        "ai_context_picker_slash_items_built"
+        "ai_context_selector_slash_items_built"
     );
     log_top_ranked_items(&items);
 
@@ -1859,7 +1563,7 @@ pub fn score_builtin(
 ) -> u32 {
     score_builtin_seed(
         builtin_seed(spec.kind),
-        ContextPickerTrigger::Mention,
+        ContextSelectorTrigger::Mention,
         &query.to_lowercase(),
     )
     .0
@@ -1868,14 +1572,14 @@ pub fn score_builtin(
 /// Score a built-in spec against the user query with a specific trigger mode.
 pub fn score_builtin_with_trigger(
     spec: &crate::ai::context_contract::ContextAttachmentSpec,
-    trigger: ContextPickerTrigger,
+    trigger: ContextSelectorTrigger,
     query: &str,
 ) -> (u32, Vec<usize>, Vec<usize>) {
     score_builtin_seed(builtin_seed(spec.kind), trigger, &query.to_lowercase())
 }
 
 /// Collect file and folder items from the given directory matching the query.
-fn collect_file_items(dir: &std::path::Path, raw_query: &str, items: &mut Vec<ContextPickerItem>) {
+fn collect_file_items(dir: &std::path::Path, raw_query: &str, items: &mut Vec<ContextSelectorRow>) {
     let (search_dir, name_filter) = split_file_query(dir, raw_query);
 
     let read_dir = match std::fs::read_dir(&search_dir) {
@@ -1886,7 +1590,7 @@ fn collect_file_items(dir: &std::path::Path, raw_query: &str, items: &mut Vec<Co
                 query = %raw_query,
                 dir = %search_dir.display(),
                 %error,
-                "ai_context_picker_file_scan_failed"
+                "ai_context_selector_file_scan_failed"
             );
             return;
         }
@@ -1924,7 +1628,7 @@ fn collect_file_items(dir: &std::path::Path, raw_query: &str, items: &mut Vec<Co
 
         let meta = format!("@file:{}", path.display());
 
-        let item = ContextPickerItem {
+        let item = ContextSelectorRow {
             id: SharedString::from(format!(
                 "{}:{}",
                 if is_dir { "folder" } else { "file" },
@@ -1934,9 +1638,9 @@ fn collect_file_items(dir: &std::path::Path, raw_query: &str, items: &mut Vec<Co
             description: SharedString::from(path.display().to_string()),
             meta: SharedString::from(meta.clone()),
             kind: if is_dir {
-                ContextPickerItemKind::Folder(path.clone())
+                ContextSelectorRowKind::Folder(path.clone())
             } else {
-                ContextPickerItemKind::File(path.clone())
+                ContextSelectorRowKind::File(path.clone())
             },
             score,
             label_highlight_indices: if name_filter.is_empty() {
@@ -1968,23 +1672,23 @@ fn collect_file_items(dir: &std::path::Path, raw_query: &str, items: &mut Vec<Co
         dir = %search_dir.display(),
         file_count,
         folder_count,
-        "ai_context_picker_file_scan_complete"
+        "ai_context_selector_file_scan_complete"
     );
 }
 
 /// Map item kind to section priority for stable sort grouping.
-fn section_priority(kind: &ContextPickerItemKind) -> u8 {
+fn section_priority(kind: &ContextSelectorRowKind) -> u8 {
     match kind {
-        ContextPickerItemKind::BuiltIn(_) => 0,
-        ContextPickerItemKind::Portal(_) => 0,
-        ContextPickerItemKind::PortalPrefix(_) | ContextPickerItemKind::PortalResult(_) => 1,
-        ContextPickerItemKind::SlashCommand(_) => 2,
-        ContextPickerItemKind::AgentChatProfile { .. } => 2,
-        ContextPickerItemKind::File(_) => 3,
-        ContextPickerItemKind::Folder(_) => 4,
+        ContextSelectorRowKind::BuiltIn(_) => 0,
+        ContextSelectorRowKind::Portal(_) => 0,
+        ContextSelectorRowKind::PortalPrefix(_) | ContextSelectorRowKind::PortalResult(_) => 1,
+        ContextSelectorRowKind::SlashCommand(_) => 2,
+        ContextSelectorRowKind::AgentChatProfile { .. } => 2,
+        ContextSelectorRowKind::File(_) => 3,
+        ContextSelectorRowKind::Folder(_) => 4,
         // Inert rows (loading / empty state) sort last so live results
         // always appear above them.
-        ContextPickerItemKind::Inert => 255,
+        ContextSelectorRowKind::Inert => 255,
     }
 }
 
@@ -1994,17 +1698,17 @@ fn section_priority(kind: &ContextPickerItemKind) -> u8 {
 ///
 /// Shown when the Agent Chat slash picker opens before async discovery completes
 /// (i.e. `cached_slash_commands` is still empty).
-pub(crate) fn slash_picker_loading_row() -> ContextPickerItem {
+pub(crate) fn slash_command_loading_row() -> ContextSelectorRow {
     tracing::debug!(
         event = "agent_chat_slash_picker_loading",
         "Building slash picker loading row"
     );
-    ContextPickerItem {
+    ContextSelectorRow {
         id: SharedString::from("slash-loading"),
         label: SharedString::from("Discovering plugin skills\u{2026}"),
         description: SharedString::from("Scanning installed plugins and Claude Code skills"),
         meta: SharedString::from(""),
-        kind: ContextPickerItemKind::Inert,
+        kind: ContextSelectorRowKind::Inert,
         score: 0,
         label_highlight_indices: Vec::new(),
         meta_highlight_indices: Vec::new(),
@@ -2015,17 +1719,17 @@ pub(crate) fn slash_picker_loading_row() -> ContextPickerItem {
 ///
 /// Shown when async discovery completed but the catalog is empty
 /// (no defaults, no plugins, no Claude skills were found).
-pub(crate) fn slash_picker_empty_row() -> ContextPickerItem {
+pub(crate) fn slash_command_empty_row() -> ContextSelectorRow {
     tracing::debug!(
         event = "agent_chat_slash_picker_empty_state",
         "Building slash picker empty row"
     );
-    ContextPickerItem {
+    ContextSelectorRow {
         id: SharedString::from("slash-empty"),
         label: SharedString::from("No slash commands or skills found"),
         description: SharedString::from("Install a plugin skill or try a built-in slash command"),
         meta: SharedString::from(""),
-        kind: ContextPickerItemKind::Inert,
+        kind: ContextSelectorRowKind::Inert,
         score: 0,
         label_highlight_indices: Vec::new(),
         meta_highlight_indices: Vec::new(),
@@ -2036,21 +1740,21 @@ pub(crate) fn slash_picker_empty_row() -> ContextPickerItem {
 ///
 /// Shown when the discovered catalog is non-empty but the current query
 /// filters every entry to zero. This is distinct from the empty catalog
-/// state (`slash_picker_empty_row`) and the loading state
-/// (`slash_picker_loading_row`).
-pub(crate) fn slash_picker_no_match_row() -> ContextPickerItem {
+/// state (`slash_command_empty_row`) and the loading state
+/// (`slash_command_loading_row`).
+pub(crate) fn slash_command_no_match_row() -> ContextSelectorRow {
     tracing::debug!(
         event = "agent_chat_slash_picker_no_match",
         "Building slash picker no-match row"
     );
-    ContextPickerItem {
+    ContextSelectorRow {
         id: SharedString::from("slash-no-match"),
         label: SharedString::from("No matching skills or commands"),
         description: SharedString::from(
             "Try another slash name or choose a different plugin skill",
         ),
         meta: SharedString::from(""),
-        kind: ContextPickerItemKind::Inert,
+        kind: ContextSelectorRowKind::Inert,
         score: 0,
         label_highlight_indices: Vec::new(),
         meta_highlight_indices: Vec::new(),

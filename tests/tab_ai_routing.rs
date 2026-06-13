@@ -104,17 +104,17 @@ fn quick_terminal_output_routes_through_text_block_context_part() {
 }
 
 #[test]
-fn terminal_context_picker_portal_opens_quick_terminal() {
-    let picker_source = include_str!("../src/ai/window/context_picker/mod.rs");
+fn terminal_context_selector_portal_opens_quick_terminal() {
+    let picker_source = include_str!("../src/ai/context_selector/mod.rs");
     let attachment_portal_source = include_str!("../src/app_impl/attachment_portal.rs");
     assert!(
-        picker_source.contains("PortalKind::Terminal")
+        picker_source.contains("ContextPortalKind::Terminal")
             && picker_source.contains("label: \"@terminal\"")
             && picker_source.contains("match_terms: &[\"terminal\""),
-        "@Terminal must be offered by the @ context picker as a portal option"
+        "@Terminal must be offered by the @ context selector as a portal option"
     );
     assert!(
-        attachment_portal_source.contains("PortalKind::Terminal =>")
+        attachment_portal_source.contains("ContextPortalKind::Terminal =>")
             && attachment_portal_source.contains("self.open_quick_terminal(None, cx);"),
         "Terminal portal selection must open the Quick Terminal workflow"
     );

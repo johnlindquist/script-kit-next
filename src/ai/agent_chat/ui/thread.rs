@@ -4606,7 +4606,8 @@ mod tests {
     }
 
     #[test]
-    fn current_context_picker_part_marks_bootstrap_ready_instead_of_waiting_for_ambient_capture() {
+    fn current_context_selector_part_marks_bootstrap_ready_instead_of_waiting_for_ambient_capture()
+    {
         let mut thread = test_thread(Vec::new(), false);
         thread.context_bootstrap_state = AgentChatContextBootstrapState::Preparing;
         thread.context_bootstrap_note = Some("Capturing Current Context…".into());

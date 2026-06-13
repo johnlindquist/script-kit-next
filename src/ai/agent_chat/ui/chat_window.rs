@@ -12,7 +12,7 @@ use gpui::{
 
 use super::thread::AgentChatThread;
 use super::view::AgentChatView;
-use crate::ai::window::context_picker::types::PortalKind;
+use crate::ai::context_selector::types::ContextPortalKind;
 use crate::theme;
 
 /// State for the detached Agent Chat Chat window.
@@ -295,7 +295,7 @@ pub fn open_chat_window_with_thread(
         let view = cx.new(|cx| AgentChatView::new(thread, cx));
         let entity_weak = view.downgrade();
         view.update(cx, |view, _cx| {
-            view.set_allowed_portal_kinds(vec![PortalKind::AgentChatHistory]);
+            view.set_allowed_portal_kinds(vec![ContextPortalKind::AgentChatHistory]);
             view.set_on_toggle_actions(move |_window, cx| {
                 toggle_detached_actions(cx);
             });
@@ -310,7 +310,7 @@ pub fn open_chat_window_with_thread(
                 dispatch_detached_action(&paste_entity_weak, "agent_chat_paste_to_frontmost", cx);
             });
             view.set_on_open_portal(move |kind, cx| match kind {
-                PortalKind::AgentChatHistory => {
+                ContextPortalKind::AgentChatHistory => {
                     let opened = open_history_portal_in_detached_chat_window(cx);
                     if !opened {
                         let _ = cancel_portal_session_in_detached_chat_window(kind, cx);
@@ -463,7 +463,7 @@ fn open_history_portal_in_detached_chat_window(cx: &mut App) -> bool {
         .is_ok()
 }
 
-fn cancel_portal_session_in_detached_chat_window(kind: PortalKind, cx: &mut App) -> bool {
+fn cancel_portal_session_in_detached_chat_window(kind: ContextPortalKind, cx: &mut App) -> bool {
     let entity = {
         let slot = CHAT_WINDOW.get_or_init(|| Mutex::new(None));
         let guard = match slot.lock() {

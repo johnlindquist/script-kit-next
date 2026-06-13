@@ -32,7 +32,7 @@
 //! also a no-op — mirrors the "one portal at a time" guard in
 //! `open_attachment_portal`.
 
-use crate::ai::window::context_picker::types::PortalKind;
+use crate::ai::context_selector::types::ContextPortalKind;
 
 /// Where the Agent Chat surface physically lives right now.
 ///
@@ -52,7 +52,7 @@ pub enum AgentChatSurfaceState {
     /// behalf of the embedded Agent Chat view. The portal kind is preserved so
     /// the close-cancel path can route the cancel back through the
     /// right `AgentChatView::cancel_pending_portal_session` arm.
-    AttachmentPortal { kind: PortalKind },
+    AttachmentPortal { kind: ContextPortalKind },
 }
 
 /// Events that move the placement machine.
@@ -74,7 +74,7 @@ pub enum AgentChatSurfaceEvent {
     EmbeddedClosed,
     /// An attachment portal opened on behalf of the embedded Agent Chat view.
     /// Only valid while embedded — from `Hidden` it is a no-op.
-    PortalOpened { kind: PortalKind },
+    PortalOpened { kind: ContextPortalKind },
     /// The attachment portal closed (attach or cancel). Only valid
     /// from `AttachmentPortal { .. }`.
     PortalClosed,
@@ -128,7 +128,7 @@ impl AgentChatSurfaceState {
 
     /// The portal kind, when in the `AttachmentPortal` state. Returns
     /// `None` from `Hidden` / `Embedded`.
-    pub fn attachment_portal_kind(self) -> Option<PortalKind> {
+    pub fn attachment_portal_kind(self) -> Option<ContextPortalKind> {
         match self {
             Self::AttachmentPortal { kind } => Some(kind),
             _ => None,
@@ -175,13 +175,13 @@ mod tests {
         let next = reduce_agent_chat_surface(
             AgentChatSurfaceState::Embedded,
             AgentChatSurfaceEvent::PortalOpened {
-                kind: PortalKind::FileSearch,
+                kind: ContextPortalKind::FileSearch,
             },
         );
         assert_eq!(
             next,
             AgentChatSurfaceState::AttachmentPortal {
-                kind: PortalKind::FileSearch
+                kind: ContextPortalKind::FileSearch
             }
         );
     }
@@ -193,7 +193,7 @@ mod tests {
         let next = reduce_agent_chat_surface(
             AgentChatSurfaceState::Hidden,
             AgentChatSurfaceEvent::PortalOpened {
-                kind: PortalKind::FileSearch,
+                kind: ContextPortalKind::FileSearch,
             },
         );
         assert_eq!(next, AgentChatSurfaceState::Hidden);
@@ -203,7 +203,7 @@ mod tests {
     fn portal_close_returns_to_embedded() {
         let next = reduce_agent_chat_surface(
             AgentChatSurfaceState::AttachmentPortal {
-                kind: PortalKind::ClipboardHistory,
+                kind: ContextPortalKind::ClipboardHistory,
             },
             AgentChatSurfaceEvent::PortalClosed,
         );
@@ -229,7 +229,7 @@ mod tests {
         // portal must not outlive its embedded parent.
         let next = reduce_agent_chat_surface(
             AgentChatSurfaceState::AttachmentPortal {
-                kind: PortalKind::AgentChatHistory,
+                kind: ContextPortalKind::AgentChatHistory,
             },
             AgentChatSurfaceEvent::EmbeddedClosed,
         );
@@ -241,7 +241,7 @@ mod tests {
         assert!(!AgentChatSurfaceState::Hidden.blocks_launcher_ai_entry());
         assert!(!AgentChatSurfaceState::Embedded.blocks_launcher_ai_entry());
         assert!(AgentChatSurfaceState::AttachmentPortal {
-            kind: PortalKind::FileSearch
+            kind: ContextPortalKind::FileSearch
         }
         .blocks_launcher_ai_entry());
     }
@@ -255,10 +255,10 @@ mod tests {
         );
         assert_eq!(
             AgentChatSurfaceState::AttachmentPortal {
-                kind: PortalKind::BrowserHistory
+                kind: ContextPortalKind::BrowserHistory
             }
             .attachment_portal_kind(),
-            Some(PortalKind::BrowserHistory)
+            Some(ContextPortalKind::BrowserHistory)
         );
     }
 }

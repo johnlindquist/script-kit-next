@@ -370,8 +370,6 @@ impl AiApp {
         // Close new-chat command bar (Raycast-style Cmd+N dropdown)
         self.new_chat_command_bar.close(cx);
         self.showing_presets_dropdown = false;
-        // Close context picker if open
-        self.context_picker = None;
         cx.notify();
     }
 }

@@ -181,9 +181,6 @@ impl AiApp {
                         d.child(self.render_context_recommendations(cx))
                     })
                     .when(is_editing, |d| d.child(self.render_editing_indicator(cx)))
-                    .when(self.is_context_picker_open(), |d| {
-                        d.child(self.render_context_picker(cx))
-                    })
                     // Context chips removed — attachments are now inline @type:name tokens.
                     .when(has_pending_image, |d| {
                         d.child(
@@ -380,10 +377,6 @@ impl AiApp {
             })
             // Editing indicator (shown above input when editing a message)
             .when(is_editing, |d| d.child(self.render_editing_indicator(cx)))
-            // Context picker overlay (shown above input when @ trigger is active)
-            .when(self.is_context_picker_open(), |d| {
-                d.child(self.render_context_picker(cx))
-            })
             // Context chips removed — attachments are now inline @type:name tokens.
             // Pending image preview (shown above input when image is attached)
             .when(has_pending_image, |d| {

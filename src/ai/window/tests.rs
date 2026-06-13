@@ -592,7 +592,6 @@ fn test_new_conversation_reset_contract_clears_all_per_conversation_transient_fi
     struct ConversationTransientState {
         pending_image: Option<String>,
         pending_context_parts: Vec<crate::ai::message_parts::AiContextPart>,
-        context_picker_open: bool,
         collapsed_messages: std::collections::HashSet<String>,
         expanded_messages: std::collections::HashSet<String>,
         copied_message_id: Option<String>,
@@ -613,7 +612,6 @@ fn test_new_conversation_reset_contract_clears_all_per_conversation_transient_fi
         fn reset(&mut self) {
             self.pending_image = None;
             self.pending_context_parts.clear();
-            self.context_picker_open = false;
             self.collapsed_messages.clear();
             self.expanded_messages.clear();
             self.copied_message_id = None;
@@ -637,7 +635,6 @@ fn test_new_conversation_reset_contract_clears_all_per_conversation_transient_fi
             path: "/tmp/file.txt".to_string(),
             label: "file.txt".to_string(),
         }],
-        context_picker_open: true,
         collapsed_messages: ["msg-1".to_string()].into_iter().collect(),
         expanded_messages: ["msg-2".to_string()].into_iter().collect(),
         copied_message_id: Some("msg-1".to_string()),
@@ -656,7 +653,6 @@ fn test_new_conversation_reset_contract_clears_all_per_conversation_transient_fi
     // Verify dirty state is non-default
     assert!(state.pending_image.is_some());
     assert!(!state.pending_context_parts.is_empty());
-    assert!(state.context_picker_open);
     assert!(!state.collapsed_messages.is_empty());
     assert!(!state.expanded_messages.is_empty());
     assert!(state.copied_message_id.is_some());
@@ -682,10 +678,6 @@ fn test_new_conversation_reset_contract_clears_all_per_conversation_transient_fi
     assert!(
         state.pending_context_parts.is_empty(),
         "pending_context_parts must be cleared on new conversation"
-    );
-    assert!(
-        !state.context_picker_open,
-        "context_picker must be cleared on new conversation"
     );
     assert!(
         state.collapsed_messages.is_empty(),

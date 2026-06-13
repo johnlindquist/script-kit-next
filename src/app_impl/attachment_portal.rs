@@ -5,7 +5,7 @@ const ATTACHMENT_PORTAL_WIDTH_RESTORE_EPSILON: f32 = 1.0;
 impl ScriptListApp {
     fn open_script_list_attachment_portal(
         &mut self,
-        kind: crate::ai::window::context_picker::types::PortalKind,
+        kind: crate::ai::context_selector::types::ContextPortalKind,
         query: &str,
         placeholder: &str,
         _cx: &mut Context<Self>,
@@ -147,7 +147,7 @@ impl ScriptListApp {
     }
 
     /// Whether the app is currently in an attachment portal (file search or
-    /// clipboard history opened from the Agent Chat chat context picker, or
+    /// clipboard history opened from the Agent Chat chat context selector, or
     /// file search opened from the main-menu `@file` spine flow).
     ///
     /// Agent-chat-hosted portals read from the app-owned
@@ -193,7 +193,7 @@ impl ScriptListApp {
         self.attachment_portal_return_width = Self::current_main_window_width();
         self.attachment_portal_host_snapshot = Some(self.capture_attachment_portal_host_snapshot());
         self.active_attachment_portal_kind =
-            Some(crate::ai::window::context_picker::types::PortalKind::FileSearch);
+            Some(crate::ai::context_selector::types::ContextPortalKind::FileSearch);
         self.spine_mention_portal_segment = Some(segment_byte_range);
 
         tracing::info!(
@@ -293,7 +293,7 @@ impl ScriptListApp {
 
     pub(crate) fn active_attachment_portal_kind(
         &self,
-    ) -> Option<crate::ai::window::context_picker::types::PortalKind> {
+    ) -> Option<crate::ai::context_selector::types::ContextPortalKind> {
         self.active_attachment_portal_kind
     }
 
@@ -348,10 +348,10 @@ impl ScriptListApp {
     /// Agent Chat chat, Escape cancels and returns.
     pub(crate) fn open_attachment_portal(
         &mut self,
-        kind: crate::ai::window::context_picker::types::PortalKind,
+        kind: crate::ai::context_selector::types::ContextPortalKind,
         cx: &mut Context<Self>,
     ) {
-        use crate::ai::window::context_picker::types::PortalKind;
+        use crate::ai::context_selector::types::ContextPortalKind;
 
         // Prevent nesting — only one portal at a time.
         if self.is_in_attachment_portal() {
@@ -415,10 +415,10 @@ impl ScriptListApp {
         }
 
         match kind {
-            PortalKind::FileSearch => {
+            ContextPortalKind::FileSearch => {
                 self.open_file_search(portal_query, cx);
             }
-            PortalKind::BrowserHistory => {
+            ContextPortalKind::BrowserHistory => {
                 cx.spawn(async move |this, cx| {
                     let result = crate::browser_history::list_recent_history(500);
                     this.update(cx, |this, cx| {
@@ -442,7 +442,7 @@ impl ScriptListApp {
                     cx,
                 );
             }
-            PortalKind::BrowserTabs => {
+            ContextPortalKind::BrowserTabs => {
                 cx.spawn(async move |this, cx| {
                     let result = crate::browser_tabs::list_open_tabs();
                     this.update(cx, |this, cx| {
@@ -476,10 +476,10 @@ impl ScriptListApp {
                     cx,
                 );
             }
-            PortalKind::ClipboardHistory => {
+            ContextPortalKind::ClipboardHistory => {
                 self.open_clipboard_history_surface_with_filter(portal_query.clone(), cx);
             }
-            PortalKind::DictationHistory => {
+            ContextPortalKind::DictationHistory => {
                 self.open_builtin_filterable_view_with_filter(
                     AppView::DictationHistoryView {
                         filter: portal_query.clone(),
@@ -491,7 +491,7 @@ impl ScriptListApp {
                     cx,
                 );
             }
-            PortalKind::ScriptSearch => {
+            ContextPortalKind::ScriptSearch => {
                 self.open_script_list_attachment_portal(
                     kind,
                     &portal_query,
@@ -499,7 +499,7 @@ impl ScriptListApp {
                     cx,
                 );
             }
-            PortalKind::ScriptletSearch => {
+            ContextPortalKind::ScriptletSearch => {
                 self.open_script_list_attachment_portal(
                     kind,
                     &portal_query,
@@ -507,7 +507,7 @@ impl ScriptListApp {
                     cx,
                 );
             }
-            PortalKind::SkillSearch => {
+            ContextPortalKind::SkillSearch => {
                 self.open_script_list_attachment_portal(
                     kind,
                     &portal_query,
@@ -515,7 +515,7 @@ impl ScriptListApp {
                     cx,
                 );
             }
-            PortalKind::NotesBrowse => {
+            ContextPortalKind::NotesBrowse => {
                 self.open_builtin_filterable_view_with_filter(
                     AppView::NotesBrowseView {
                         filter: portal_query.clone(),
@@ -527,7 +527,7 @@ impl ScriptListApp {
                     cx,
                 );
             }
-            PortalKind::AgentChatHistory => {
+            ContextPortalKind::AgentChatHistory => {
                 self.open_builtin_filterable_view_with_filter(
                     AppView::AgentChatHistoryView {
                         filter: portal_query.clone(),
@@ -539,7 +539,7 @@ impl ScriptListApp {
                     cx,
                 );
             }
-            PortalKind::Terminal => {
+            ContextPortalKind::Terminal => {
                 self.open_quick_terminal(None, cx);
             }
         }
