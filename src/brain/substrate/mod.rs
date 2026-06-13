@@ -343,7 +343,7 @@ mod tests {
         assert_eq!(lines.len(), 3);
         assert_eq!(lines[0], "09:42 first capture");
         assert_eq!(lines[1], "09:45 - [ ] buy milk #errand due:2026-06-12");
-        assert_eq!(lines[2], "09:50 https://example.com");
+        assert_eq!(lines[2], "09:50 [example.com](https://example.com)");
     }
 
     #[test]

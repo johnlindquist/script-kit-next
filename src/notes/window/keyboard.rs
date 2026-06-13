@@ -85,6 +85,10 @@ impl NotesApp {
             self.switch_to_notes_surface(window, cx);
             return ("switchAgentChatToNotes", true);
         }
+        if self.notes_spine_input(cx).is_some() {
+            self.reset_notes_spine_navigation(cx);
+            return ("dismissNotesSpine", true);
+        }
         if self.dismiss_notes_ghost(cx) {
             return ("dismissNotesGhost", true);
         }
@@ -624,7 +628,26 @@ impl NotesApp {
             return;
         }
 
+        if !modifiers.platform && !modifiers.control && !modifiers.alt {
+            if is_key_up(key) && self.move_notes_spine_selection(-1, cx) {
+                cx.stop_propagation();
+                return;
+            }
+            if is_key_down(key) && self.move_notes_spine_selection(1, cx) {
+                cx.stop_propagation();
+                return;
+            }
+            if is_key_enter(key) && self.accept_notes_spine_selection(window, cx) {
+                cx.stop_propagation();
+                return;
+            }
+        }
+
         if is_key_tab(key) && !modifiers.platform && !modifiers.control && !modifiers.alt {
+            if !modifiers.shift && self.accept_notes_spine_selection(window, cx) {
+                cx.stop_propagation();
+                return;
+            }
             if !modifiers.shift
                 && self.try_accept_notes_ghost(NotesGhostAcceptMode::Word, window, cx)
             {

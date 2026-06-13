@@ -27,7 +27,7 @@ impl NotesApp {
         }
     }
 
-    pub(super) fn render_editor(&self, cx: &mut Context<Self>) -> impl IntoElement {
+    pub(super) fn render_editor(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
         let is_trash = self.view_mode == NotesViewMode::Trash;
         let has_selection = self.selected_note_id.is_some();
         let show_toolbar = self.show_format_toolbar;

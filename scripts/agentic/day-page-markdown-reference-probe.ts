@@ -22,6 +22,8 @@ const runId = `markdown-reference-${Date.now().toString(36)}`;
 const EXCERPT_TOKEN = `EXCERPT-${runId}`;
 const FULL_TOKEN = `FULL-PAYLOAD-${runId}`;
 const PRIVACY_SEPARATOR = `separator-${runId}`;
+const KEPT_URL = `https://${runId}.wzrrd.sh/guide`;
+const KEPT_URL_MARKDOWN = `[${runId}.wzrrd.sh/guide](${KEPT_URL})`;
 const REMOVED_OVERLAY_IDS = [
   "day-page-sediment-layer",
   "day-page-fragment-card-0",
@@ -162,6 +164,28 @@ try {
     windowVisible: opened.windowVisible,
   });
 
+  await copyText(KEPT_URL);
+  const urlDayContent = await waitFor(
+    "markdown kept URL line",
+    () => (existsSync(todayFile) ? readFileSync(todayFile, "utf8") : ""),
+    (content) => content.includes(KEPT_URL_MARKDOWN),
+    12_000,
+  );
+  check(
+    "kept_url_is_markdown_link_not_raw_url_line",
+    urlDayContent.includes(KEPT_URL_MARKDOWN) &&
+      !new RegExp(`^\\d\\d:\\d\\d ${KEPT_URL.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "m").test(
+        urlDayContent,
+      ),
+    {
+      markdownUrl: KEPT_URL_MARKDOWN,
+      rawUrlLinePresent: new RegExp(
+        `^\\d\\d:\\d\\d ${KEPT_URL.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`,
+        "m",
+      ).test(urlDayContent),
+    },
+  );
+
   await copyText(payload);
   await Bun.sleep(500);
   await copyText(PRIVACY_SEPARATOR);
@@ -227,6 +251,10 @@ try {
   check("editor_shows_markdown_reference_text", editorValue.includes(markdownReferenceMatch?.[0] ?? ""), {
     editorContainsExcerpt: editorValue.includes(EXCERPT_TOKEN),
     editorContainsMarkdownLink: editorValue.includes("]("),
+  });
+  check("editor_shows_markdown_kept_url", editorValue.includes(KEPT_URL_MARKDOWN), {
+    editorContainsKeptUrlMarkdown: editorValue.includes(KEPT_URL_MARKDOWN),
+    editorContainsRawUrl: editorValue.includes(` ${KEPT_URL}`),
   });
   check("removed_overlay_ids_absent", !hasAnyId(visible.flat, REMOVED_OVERLAY_IDS), {
     removedOverlayIds: REMOVED_OVERLAY_IDS,

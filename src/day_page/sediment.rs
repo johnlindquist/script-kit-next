@@ -188,14 +188,39 @@ fn parse_fragment_link_line(line: &str) -> Option<String> {
 
 fn parse_kept_url_line(line: &str) -> Option<(String, String)> {
     let trimmed = line.trim_end();
-    let (timestamp, url) = trimmed.split_once(' ')?;
+    let (timestamp, rest) = trimmed.split_once(' ')?;
     if !is_timestamp(timestamp) {
         return None;
     }
+    if let Some((_label, url)) = parse_markdown_link(rest.trim()) {
+        if is_single_token_http_url(&url) {
+            return Some((timestamp.to_string(), url));
+        }
+    }
+    let url = rest.trim();
     if !is_single_token_http_url(url) {
         return None;
     }
     Some((timestamp.to_string(), url.to_string()))
+}
+
+fn parse_markdown_link(text: &str) -> Option<(String, String)> {
+    let label_start = text.find('[')?;
+    if label_start != 0 {
+        return None;
+    }
+    let label_end = text[label_start + 1..].find("](")? + label_start + 1;
+    let link_start = label_end + 2;
+    let link_end = text[link_start..].rfind(')')? + link_start;
+    if link_end + 1 != text.len() {
+        return None;
+    }
+    let label = text[label_start + 1..label_end].trim();
+    let url = text[link_start..link_end].trim();
+    if label.is_empty() || url.is_empty() {
+        return None;
+    }
+    Some((label.to_string(), url.to_string()))
 }
 
 fn is_timestamp(value: &str) -> bool {
@@ -259,7 +284,7 @@ mod tests {
     fn parse_fragment_and_kept_url_segments() {
         let content = "09:00 morning note\n\
             09:15 [First words of the pasted article without cutting mid-word...](../fragments/2026-06-11-0942-clipboard.md)\n\
-            09:20 https://example.com/docs\n\
+            09:20 [example.com/docs](https://example.com/docs)\n\
             09:30 closing thought";
 
         let segments = parse_day_page_segments(content);
@@ -297,6 +322,21 @@ mod tests {
         match &segments[3] {
             DayPageSegment::Plain { text, .. } => assert_eq!(text, "09:30 closing thought"),
             other => panic!("expected plain segment, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parses_legacy_raw_kept_url_lines_for_existing_day_pages() {
+        let content = "09:20 https://example.com/docs\n";
+
+        let segments = parse_day_page_segments(content);
+        assert_eq!(segments.len(), 1);
+        match &segments[0] {
+            DayPageSegment::KeptUrl { url, index, .. } => {
+                assert_eq!(index, &0);
+                assert_eq!(url, "https://example.com/docs");
+            }
+            other => panic!("expected kept url segment, got {other:?}"),
         }
     }
 

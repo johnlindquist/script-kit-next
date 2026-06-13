@@ -139,6 +139,47 @@ impl ScriptListApp {
                 }
             }
         }
+        if simulate_key_target_is_notes
+            && ((has_cmd
+                && !has_shift
+                && !_has_alt
+                && !_has_ctrl
+                && key_lower == "enter")
+                || (!has_cmd
+                    && !_has_alt
+                    && !_has_ctrl
+                    && (key_lower == "enter"
+                        || key_lower == "return"
+                        || key_lower == "tab"
+                        || key_lower == "up"
+                        || key_lower == "arrowup"
+                        || key_lower == "down"
+                        || key_lower == "arrowdown")))
+        {
+            match notes::handle_notes_editor_key_for_automation(
+                ctx, key, has_cmd, has_shift, _has_ctrl, _has_alt,
+            ) {
+                Ok(result) => {
+                    let handled = result
+                        .get("handled")
+                        .and_then(|value| value.as_bool())
+                        .unwrap_or(false);
+                    logging::log(
+                        "STDIN",
+                        &format!("SimulateKey: {key} - Notes editor key {result}"),
+                    );
+                    if handled {
+                        return;
+                    }
+                }
+                Err(error) => {
+                    logging::log(
+                        "STDIN",
+                        &format!("SimulateKey: {key} - Notes editor key unavailable: {error}"),
+                    );
+                }
+            }
+        }
         // Mirror live GPUI Keystroke.key_char: Some(&str) only for
         // single-character keys (printable input like "a", "!", "A"),
         // None for named keys ("Escape", "Up", "Enter"). This lets

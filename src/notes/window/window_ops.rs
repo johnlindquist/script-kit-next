@@ -1301,6 +1301,60 @@ pub fn handle_notes_ghost_key_for_automation(
     .map_err(|error| format!("Failed to handle Notes ghost autocomplete key: {error}"))
 }
 
+/// Handle Notes editor keys that automation cannot route through the root
+/// `capture_key_down` path, while still calling the same surface methods as the
+/// live keyboard handler.
+pub fn handle_notes_editor_key_for_automation(
+    cx: &mut App,
+    key: &str,
+    platform: bool,
+    shift: bool,
+    control: bool,
+    alt: bool,
+) -> Result<serde_json::Value, String> {
+    let (entity, handle) =
+        get_notes_app_entity_and_handle().ok_or_else(|| "Notes window is not open".to_string())?;
+    update_notes_window_detached(handle, cx, |window, cx| {
+        entity.update(cx, |app, cx| {
+            let key = key.to_ascii_lowercase();
+            let mut action = "unsupportedNotesEditorKey";
+            let mut handled = false;
+
+            if !platform && !control && !alt {
+                if crate::ui_foundation::is_key_up(&key) {
+                    action = "moveNotesSpineSelectionUp";
+                    handled = app.move_notes_spine_selection(-1, cx);
+                } else if crate::ui_foundation::is_key_down(&key) {
+                    action = "moveNotesSpineSelectionDown";
+                    handled = app.move_notes_spine_selection(1, cx);
+                } else if crate::ui_foundation::is_key_enter(&key) {
+                    action = "acceptNotesSpineSelection";
+                    handled = app.accept_notes_spine_selection(window, cx);
+                } else if crate::ui_foundation::is_key_tab(&key) && !shift {
+                    action = "acceptNotesSpineSelectionFromTab";
+                    handled = app.accept_notes_spine_selection(window, cx);
+                }
+            } else if platform
+                && !shift
+                && !control
+                && !alt
+                && crate::ui_foundation::is_key_enter(&key)
+            {
+                action = "openNotesAgentChatFromCmdEnter";
+                handled =
+                    app.open_selected_note_cart_in_embedded_agent_chat("NotesWindowCmdEnter", cx);
+            }
+
+            serde_json::json!({
+                "handled": handled,
+                "target": "notes",
+                "action": action,
+            })
+        })
+    })
+    .map_err(|error| format!("Failed to handle Notes editor key: {error}"))
+}
+
 /// Toggle a Notes popup from the automation/simulateKey path, mirroring the
 /// live Cmd+K ("actions" command bar) and Cmd+P ("noteSwitcher") keyboard arms
 /// so target-scoped `simulateKey` can drive the same popups the user sees.

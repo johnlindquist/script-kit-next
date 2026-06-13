@@ -57,7 +57,10 @@ impl DayEntry {
                 }
                 line
             }
-            Self::KeptUrl { url } => format!("{timestamp} {url}"),
+            Self::KeptUrl { url } => {
+                let label = markdown_url_label(url);
+                format!("{timestamp} [{label}]({url})")
+            }
             Self::FragmentRef(reference) => {
                 format!(
                     "{timestamp} [{}]({})",
@@ -218,4 +221,14 @@ fn write_filtered_lines(path: &Path, lines: Vec<&str>) -> Result<()> {
 fn line_contains_token(line: &str, token: &str) -> bool {
     let body = line.split_once(' ').map(|(_, rest)| rest).unwrap_or(line);
     body.contains(token)
+}
+
+fn markdown_url_label(url: &str) -> String {
+    let label = url
+        .trim()
+        .trim_start_matches("https://")
+        .trim_start_matches("http://")
+        .trim_end_matches('/');
+    let label = if label.is_empty() { url.trim() } else { label };
+    label.replace('[', "\\[").replace(']', "\\]")
 }

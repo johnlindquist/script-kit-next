@@ -525,6 +525,7 @@ impl NotesApp {
                 "actions": self.command_bar.automation_state("notes.actions", cx),
                 "noteSwitcher": self.note_switcher.automation_state("notes.switcher", cx),
             },
+            "spine": self.automation_notes_spine_state(cx),
             "embeddedAgentChat": self.automation_embedded_agent_chat_isolation_snapshot(),
             "shortcutRegistry": self.automation_shortcut_registry(),
             "focusTransitions": self.automation_focus_transition_timeline(),
@@ -542,6 +543,64 @@ impl NotesApp {
                 "historyBack": self.history_back.len(),
                 "historyForward": self.history_forward.len(),
             },
+        })
+    }
+
+    fn automation_notes_spine_state(&self, cx: &gpui::App) -> serde_json::Value {
+        let current_key = self.notes_spine_input(cx).map(|(key, _, _, _)| key);
+        let active = current_key
+            .as_deref()
+            .is_some_and(|key| self.spine_runtime.dismissed_cache_key.as_deref() != Some(key));
+        let cache_matches = current_key.as_deref() == Some(self.spine_runtime.cache_key.as_str());
+        let row_ids = if active && cache_matches {
+            self.spine_runtime
+                .grouped_cache
+                .iter()
+                .filter_map(|grouped| {
+                    let crate::list_item::GroupedListItem::Item(flat_idx) = grouped else {
+                        return None;
+                    };
+                    self.spine_runtime
+                        .flat_cache
+                        .get(*flat_idx)
+                        .map(|row| row.id.to_string())
+                })
+                .collect::<Vec<_>>()
+        } else {
+            Vec::new()
+        };
+        let selected_semantic_id = if active && cache_matches {
+            crate::list_item::coerce_selection(
+                &self.spine_runtime.grouped_cache,
+                self.spine_runtime.selected_index,
+            )
+            .and_then(|selected| {
+                match self.spine_runtime.grouped_cache.get(selected) {
+                    Some(crate::list_item::GroupedListItem::Item(flat_idx)) => self
+                        .spine_runtime
+                        .flat_cache
+                        .get(*flat_idx)
+                        .map(|row| row.id.to_string()),
+                    _ => None,
+                }
+            })
+        } else {
+            None
+        };
+
+        serde_json::json!({
+            "schemaVersion": 1,
+            "source": "runtime.notes.spine",
+            "redacted": true,
+            "active": active,
+            "cacheKeyPresent": !self.spine_runtime.cache_key.is_empty(),
+            "cacheMatchesInput": cache_matches,
+            "dismissed": current_key
+                .as_deref()
+                .is_some_and(|key| self.spine_runtime.dismissed_cache_key.as_deref() == Some(key)),
+            "rowCount": row_ids.len(),
+            "selectedSemanticId": selected_semantic_id,
+            "rowSemanticIds": row_ids,
         })
     }
 

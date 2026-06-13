@@ -41,6 +41,7 @@ use super::actions_panel::NotesAction;
 use super::markdown;
 use super::model::{ExportFormat, Note, NoteId};
 use super::storage;
+use crate::components::notes_editor::spine::NotesEditorSpineRuntime;
 use crate::components::notes_editor::NotesEditor;
 
 /// Global handle to the notes window
@@ -312,6 +313,9 @@ pub struct NotesApp {
     /// Editor input state (using gpui-component's Input)
     pub(crate) editor_state: Entity<InputState>,
 
+    /// Shared editor-spine runtime for safe Notes inline command rows.
+    spine_runtime: NotesEditorSpineRuntime<crate::spine::SpineListRow>,
+
     /// Search input state (for future browse panel)
     search_state: Entity<InputState>,
 
@@ -480,10 +484,11 @@ pub(crate) use window_ops::update_notes_window_detached;
 pub use window_ops::{
     accept_notes_ghost_for_automation, apply_mcp_notes_mutation_on_main_thread, close_notes_window,
     get_notes_app_entity_and_handle, get_notes_editor_runtime_info, get_notes_editor_text,
-    handle_notes_ghost_key_for_automation, inject_text_into_notes, is_notes_window,
-    is_notes_window_open, open_note_in_notes_window, open_notes_search, open_notes_window,
-    open_notes_window_without_launcher_restore, quick_capture, save_note_with_content,
-    save_note_with_content_and_source, toggle_notes_popup_for_automation,
+    handle_notes_editor_key_for_automation, handle_notes_ghost_key_for_automation,
+    inject_text_into_notes, is_notes_window, is_notes_window_open, open_note_in_notes_window,
+    open_notes_search, open_notes_window, open_notes_window_without_launcher_restore,
+    quick_capture, save_note_with_content, save_note_with_content_and_source,
+    toggle_notes_popup_for_automation,
 };
 
 #[cfg(test)]

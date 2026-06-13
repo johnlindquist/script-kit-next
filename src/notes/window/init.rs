@@ -133,6 +133,7 @@ impl NotesApp {
             selected_note_id,
             notes_editor,
             editor_state,
+            spine_runtime: Default::default(),
             search_state,
             search_query: String::new(),
             titlebar_hovered: false,
@@ -288,6 +289,7 @@ impl NotesApp {
     pub(crate) fn on_editor_change(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let content = self.editor_state.read(cx).value();
         let content_string = content.to_string();
+        self.spine_runtime.clear_transient_cache();
 
         // Auto-create a note if user is typing with no note selected
         // This prevents data loss when users start typing immediately
@@ -344,6 +346,7 @@ impl NotesApp {
             || self.show_search
             || self.command_bar.is_open()
             || self.note_switcher.is_open()
+            || self.notes_spine_input(cx).is_some()
         {
             self.notes_ghost_prediction = None;
             self.cancel_notes_ghost_llm();
