@@ -158,11 +158,9 @@ impl DayPageView {
         let content = self.notes_editor.read(cx).content(cx);
         let previous_len = self.last_editor_content_len;
         self.last_editor_content_len = content.len();
-        if let Some((fixed, cursor)) = day_page_spine_mention_atomic_delete_fixup(
-            &previous,
-            &content,
-            &self.spine_mention_aliases,
-        ) {
+        if let Some((fixed, cursor)) =
+            mention_atomic_delete_fixup(&previous, &content, &self.spine_mention_aliases)
+        {
             self.notes_editor.update(cx, |editor, cx| {
                 editor.set_value(fixed.clone(), window, cx);
                 editor.set_selection(cursor, cursor, window, cx);
@@ -170,7 +168,7 @@ impl DayPageView {
             self.last_editor_content_len = fixed.len();
             self.session.apply_editor_content(&fixed);
             self.refresh_fragment_open_targets(&fixed);
-            prune_day_page_spine_mention_aliases(&mut self.spine_mention_aliases, &fixed);
+            prune_mention_aliases(&mut self.spine_mention_aliases, &fixed);
             self.spine_dismissed_cache_key = None;
             self.spine_alias_cache.clear();
             self.poll_external_disk_changes(window, cx);
@@ -181,7 +179,7 @@ impl DayPageView {
         }
         self.session.apply_editor_content(&content);
         self.refresh_fragment_open_targets(&content);
-        prune_day_page_spine_mention_aliases(&mut self.spine_mention_aliases, &content);
+        prune_mention_aliases(&mut self.spine_mention_aliases, &content);
         self.spine_dismissed_cache_key = None;
         self.spine_alias_cache.clear();
         self.poll_external_disk_changes(window, cx);

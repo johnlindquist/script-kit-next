@@ -8,6 +8,7 @@ mod component;
 mod formatting;
 mod ops;
 mod render;
+pub(crate) mod spine;
 mod toolbar;
 mod types;
 
