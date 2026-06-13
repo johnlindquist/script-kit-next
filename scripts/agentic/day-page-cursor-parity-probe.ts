@@ -8,10 +8,11 @@
  * - repeated main-hotkey tap toggles still work through the same session
  */
 import { Driver, type Json } from "../devtools/driver";
+import { tapMainHotkey } from "./day-page-open-helper";
 
 const BINARY =
   process.env.PROBE_BINARY ??
-  "target-agent/artifacts/today-feature/script-kit-gpui";
+  "target-agent/artifacts/today/script-kit-gpui";
 
 const receipts: Record<string, Json> = {};
 const failures: string[] = [];
@@ -22,22 +23,8 @@ function check(name: string, ok: boolean, detail: Json = {}) {
   if (!ok) failures.push(name);
 }
 
-async function simulateMainHotkeyGesture(
-  driver: Driver,
-  phase: "down" | "up",
-  requestId: string,
-) {
-  return driver.request(
-    { type: "simulateMainHotkeyGesture", phase, requestId },
-    { expect: "externalCommandResult", timeoutMs: 5000 },
-  );
-}
-
 async function tapHotkey(driver: Driver, label: string) {
-  await simulateMainHotkeyGesture(driver, "down", `${runId}-${label}-down`);
-  await Bun.sleep(30);
-  await simulateMainHotkeyGesture(driver, "up", `${runId}-${label}-up`);
-  await Bun.sleep(420);
+  await tapMainHotkey(driver, runId, label);
 }
 
 function walkElements(node: unknown, out: Json[] = []): Json[] {

@@ -9,6 +9,7 @@
 import { join } from "node:path";
 import { mkdirSync, writeFileSync, readFileSync, readdirSync, existsSync } from "node:fs";
 import { Driver, type Json } from "../devtools/driver";
+import { openDayPage } from "./day-page-open-helper";
 
 const BINARY =
   process.env.PROBE_BINARY ?? "target-agent/artifacts/today/script-kit-gpui";
@@ -34,20 +35,6 @@ function walkElements(node: unknown, out: Json[] = []): Json[] {
   }
   for (const value of Object.values(json)) walkElements(value, out);
   return out;
-}
-
-async function simulateMainHotkeyGesture(driver: Driver, phase: "down" | "up", label: string) {
-  return driver.request(
-    { type: "simulateMainHotkeyGesture", phase, requestId: `${runId}-${label}` },
-    { expect: "externalCommandResult", timeoutMs: 5000 },
-  );
-}
-
-async function tapHotkey(driver: Driver, label: string) {
-  await simulateMainHotkeyGesture(driver, "down", `${label}-down`);
-  await Bun.sleep(30);
-  await simulateMainHotkeyGesture(driver, "up", `${label}-up`);
-  await Bun.sleep(400);
 }
 
 const driver = await Driver.launch({
@@ -101,17 +88,7 @@ function todayLocalDate(): string {
 
 try {
   // --- Enter Day Page through the real gesture path ---
-  await simulateMainHotkeyGesture(driver, "down", "show-down");
-  await Bun.sleep(30);
-  await simulateMainHotkeyGesture(driver, "up", "show-up");
-  await driver.waitForState({ windowVisible: true }, { timeoutMs: 8000 });
-  await Bun.sleep(400);
-
-  let state = (await driver.getState({ timeoutMs: 5000 })) as Json;
-  if (state.promptType !== "dayPage") {
-    await tapHotkey(driver, "toggle-day-page");
-    state = (await driver.getState({ timeoutMs: 5000 })) as Json;
-  }
+  let state = await openDayPage(driver, runId);
   check("opened_day_page", state.promptType === "dayPage", { promptType: state.promptType });
 
   // --- Autosave proof: type, wait past the debounce, read disk ---

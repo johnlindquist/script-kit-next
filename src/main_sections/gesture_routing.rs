@@ -192,11 +192,9 @@ fn dispatch_main_gesture_event(
 
 impl ScriptListApp {
     /// Fast path for taps that are safe to apply before the double-tap window
-    /// expires. Hiding resets state (`close_and_reset_window` clears the
-    /// filter), so it only previews where there is nothing to lose: an empty
-    /// launcher, or the Day Page (whose dirty content is flushed by
-    /// `reset_to_script_list`). Taps over typed filter text or prompts stay
-    /// on the delayed `Tap` path so a double-tap cannot destroy input.
+    /// expires. Empty launcher and Day Page taps are reversible surface morphs,
+    /// so they can preview immediately. Taps over typed filter text or prompts
+    /// stay on the delayed `Tap` path so a double-tap cannot destroy input.
     pub(crate) fn try_handle_main_hotkey_tap_preview(
         &mut self,
         window: &mut Window,
@@ -215,12 +213,52 @@ impl ScriptListApp {
         }
     }
 
-    /// Tap-while-open: hide the launcher (the universal hotkey-toggle
-    /// convention). Day Page entry lives on the `,` first-character trigger
-    /// and hold-from-closed instead. `close_and_reset_window` funnels through
-    /// `reset_to_script_list`, which flushes a dirty Day Page before the
-    /// entity drops.
-    pub(crate) fn handle_main_hotkey_tap(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        self.close_and_reset_window(cx);
+    /// Tap-while-open toggles the main window between Script List and Day Page.
+    /// Esc remains the dismiss path; prompts and other subviews keep the legacy
+    /// close behavior until they get explicit surface toggles.
+    pub(crate) fn handle_main_hotkey_tap(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        match &self.current_view {
+            AppView::ScriptList => self.open_day_page_from_main_hotkey_tap(window, cx),
+            AppView::DayPage { .. } => self.return_to_script_list_from_day_page_tap(window, cx),
+            _ => self.close_and_reset_window(cx),
+        }
+    }
+
+    fn open_day_page_from_main_hotkey_tap(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let carry = self.filter_text.clone();
+        if self.day_page_context_return.is_some() {
+            self.set_filter_text_immediate(String::new(), window, cx);
+            self.show_day_page_view(window, cx);
+            return;
+        }
+
+        self.set_filter_text_immediate(String::new(), window, cx);
+        self.show_day_page_view(window, cx);
+        if carry.trim().is_empty() {
+            return;
+        }
+        if let AppView::DayPage { entity } = &self.current_view {
+            let entity = entity.clone();
+            entity.update(cx, |view, cx| {
+                view.append_main_hotkey_carry(carry, window, cx);
+            });
+        }
+    }
+
+    fn return_to_script_list_from_day_page_tap(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.reset_to_script_list(cx);
+        self.set_filter_text_immediate(String::new(), window, cx);
+        self.request_script_list_main_filter_focus(cx);
+        self.rekey_main_automation_surface_from_current_view();
+        self.sync_main_footer_popup(window, cx);
+        cx.notify();
     }
 }

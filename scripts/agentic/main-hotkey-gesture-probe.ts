@@ -16,10 +16,11 @@
  *     bun scripts/agentic/main-hotkey-gesture-probe.ts
  */
 import { Driver } from "../devtools/driver";
+import { tapMainHotkey } from "./day-page-open-helper";
 
 const BINARY =
   process.env.PROBE_BINARY ??
-  "target-agent/artifacts/t8-gesture/script-kit-gpui";
+  "target-agent/artifacts/today/script-kit-gpui";
 
 type Json = Record<string, unknown>;
 const receipts: Record<string, Json> = {};
@@ -60,19 +61,24 @@ async function getEditorText(driver: Driver): Promise<string | null> {
     { type: "getElements", target: { type: "main" } },
     { timeoutMs: 5000 },
   )) as Json;
-  const list = (elements.elements ?? []) as Json[];
-  const editor = list.find(
+  const editor = walkElements(elements).find(
     (el) => el.semanticId === "input:day-page-editor" || el.id === "day-page-editor",
   );
   return (editor?.value as string | undefined) ?? null;
 }
 
-/** A tap: down, quick up (well inside HOLD_MS), then wait out DOUBLE_MS. */
-async function tapHotkey(driver: Driver, label: string) {
-  await simulateMainHotkeyGesture(driver, "down", `${label}-down`);
-  await Bun.sleep(30);
-  await simulateMainHotkeyGesture(driver, "up", `${label}-up`);
-  await Bun.sleep(400);
+function walkElements(node: unknown, out: Json[] = []): Json[] {
+  if (!node || typeof node !== "object") return out;
+  if (Array.isArray(node)) {
+    for (const item of node) walkElements(item, out);
+    return out;
+  }
+  const json = node as Json;
+  if (typeof json.semanticId === "string" || typeof json.id === "string") {
+    out.push(json);
+  }
+  for (const value of Object.values(json)) walkElements(value, out);
+  return out;
 }
 
 async function doubleTapHotkey(driver: Driver, label: string) {
@@ -96,6 +102,7 @@ try {
     env: { SCRIPT_KIT_PANEL_INVARIANTS_ALLOW_MISMATCH: "1" },
   });
   globalDriver = driver;
+  const runId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
   const before = await listMainWindow();
   check("starts_hidden", before?.visible !== true, { before });
@@ -121,7 +128,7 @@ try {
   });
 
   await driver.setFilterAndWait("carry me to the page");
-  await tapHotkey(driver, "toggle-to-day-page");
+  await tapMainHotkey(driver, runId, "toggle-to-day-page");
 
   const stateAfterTap = (await driver.getState({ timeoutMs: 5000 })) as Json;
   check("tap_opens_day_page_surface", stateAfterTap.promptType === "dayPage", {
@@ -136,7 +143,7 @@ try {
   );
 
   // Tap back to the launcher: query must NOT be restored.
-  await tapHotkey(driver, "toggle-back-to-launcher");
+  await tapMainHotkey(driver, runId, "toggle-back-to-launcher");
   const stateBack = (await driver.getState({ timeoutMs: 5000 })) as Json;
   check("tap_back_returns_to_launcher", stateBack.promptType === "none", {
     promptType: stateBack.promptType,

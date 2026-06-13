@@ -6,6 +6,7 @@
  * current line (not the whole day note).
  */
 import { Driver, type Json } from "../devtools/driver";
+import { openDayPage } from "./day-page-open-helper";
 
 const BINARY =
   process.env.PROBE_BINARY ?? "target-agent/artifacts/today/script-kit-gpui";
@@ -17,20 +18,6 @@ const runId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 function check(name: string, ok: boolean, detail: Json = {}) {
   receipts[name] = { ok, ...detail };
   if (!ok) failures.push(name);
-}
-
-async function gesture(driver: Driver, phase: "down" | "up", label: string) {
-  return driver.request(
-    { type: "simulateMainHotkeyGesture", phase, requestId: `${runId}-${label}` },
-    { expect: "externalCommandResult", timeoutMs: 5000 },
-  );
-}
-
-async function tapHotkey(driver: Driver, label: string) {
-  await gesture(driver, "down", `${label}-down`);
-  await Bun.sleep(30);
-  await gesture(driver, "up", `${label}-up`);
-  await Bun.sleep(400);
 }
 
 const driver = await Driver.launch({
@@ -62,14 +49,7 @@ for (const rel of [
 }
 
 try {
-  await tapHotkey(driver, "show");
-  await driver.waitForState({ windowVisible: true }, { timeoutMs: 8000 });
-  await Bun.sleep(400);
-  let state = (await driver.getState({ timeoutMs: 5000 })) as Json;
-  if (state.promptType !== "dayPage") {
-    await tapHotkey(driver, "toggle-day-page");
-    state = (await driver.getState({ timeoutMs: 5000 })) as Json;
-  }
+  let state = await openDayPage(driver, runId);
   check("opened_day_page", state.promptType === "dayPage", {
     promptType: state.promptType,
   });
@@ -95,14 +75,8 @@ try {
   for (let attempt = 0; attempt < 2; attempt++) {
     // Make sure we're on the Day Page with the seeded content before Cmd+K.
     let pre = (await driver.getState({ timeoutMs: 5000 })) as Json;
-    for (let nav = 0; nav < 4 && pre.promptType !== "dayPage"; nav++) {
-      if (pre.promptType === "agentChatChat") {
-        await driver.simulateKey("escape");
-      } else {
-        await tapHotkey(driver, `nav-${attempt}-${nav}`);
-      }
-      await Bun.sleep(500);
-      pre = (await driver.getState({ timeoutMs: 5000 })) as Json;
+    if (pre.promptType !== "dayPage") {
+      pre = await openDayPage(driver, `${runId}-retry-${attempt}`);
     }
     if (pre.promptType !== "dayPage") {
       attempts.push({ attempt, error: "could not navigate back to dayPage", pre });
