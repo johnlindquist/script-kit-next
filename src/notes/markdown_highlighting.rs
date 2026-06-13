@@ -10,12 +10,7 @@ pub fn register_markdown_highlighter() {
         let markdown = LanguageConfig::new(
             "markdown",
             tree_sitter_md::LANGUAGE.into(),
-            vec![
-                "markdown_inline".into(),
-                "html".into(),
-                "toml".into(),
-                "yaml".into(),
-            ],
+            vec!["html".into(), "toml".into(), "yaml".into()],
             include_str!("markdown_queries/markdown_highlights.scm"),
             include_str!("markdown_queries/markdown_injections.scm"),
             "",
@@ -57,6 +52,19 @@ mod tests {
         assert!(
             !markdown.highlights.as_ref().is_empty(),
             "markdown highlight query should not be empty"
+        );
+        assert!(
+            !markdown
+                .injection_languages
+                .iter()
+                .any(|language| language.as_ref() == "markdown_inline"),
+            "Editable markdown must not inject markdown_inline for every inline node; \
+             gpui-component reparses injections while styling visible lines, which makes \
+             long Notes scrolling lag"
+        );
+        assert!(
+            !markdown.injections.as_ref().contains("markdown_inline"),
+            "Editable markdown injection query should avoid per-inline markdown reparsing"
         );
     }
 
