@@ -626,6 +626,34 @@ mod tests {
     }
 
     #[test]
+    fn todo_capture_appends_to_configured_local_day() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let substrate =
+            BrainSubstrate::with_timezone(dir.path().join("brain"), chrono_tz::America::Denver);
+        let now = chrono::TimeZone::with_ymd_and_hms(&chrono::Utc, 2026, 6, 14, 5, 30, 0).unwrap();
+        let raw = ";todo local day task #qmd";
+        let invocation = parse(raw);
+
+        apply_menu_syntax_todo_capture_with_substrate(
+            &substrate,
+            now,
+            &invocation,
+            CaptureOperation::Create,
+        )
+        .expect("append local day todo");
+
+        let local_path = substrate
+            .paths()
+            .day_page(chrono::NaiveDate::from_ymd_opt(2026, 6, 13).unwrap());
+        let utc_path = substrate
+            .paths()
+            .day_page(chrono::NaiveDate::from_ymd_opt(2026, 6, 14).unwrap());
+        let contents = std::fs::read_to_string(local_path).expect("read local day page");
+        assert!(contents.contains("23:30 - [ ] local day task #qmd"));
+        assert!(!utc_path.exists(), "UTC day file must not be created");
+    }
+
+    #[test]
     fn note_delete_selected_ref_soft_deletes() {
         let _guard = notes_db_test_guard();
         storage::init_notes_db().expect("init notes");

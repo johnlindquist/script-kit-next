@@ -56,7 +56,7 @@ impl BrainSubstrate {
     }
 
     pub fn default_kit() -> Self {
-        Self::new(BrainPaths::default_kit().base())
+        Self::with_timezone(BrainPaths::default_kit().base(), default_brain_timezone())
     }
 
     pub fn paths(&self) -> &BrainPaths {
@@ -168,11 +168,89 @@ impl BrainSubstrate {
     }
 }
 
+fn default_brain_timezone() -> Tz {
+    if let Some(tz) = parse_timezone_env("SCRIPT_KIT_BRAIN_TZ") {
+        return tz;
+    }
+    if let Some(tz) = parse_timezone_env("TZ") {
+        return tz;
+    }
+    if let Some(tz) = detect_local_timezone() {
+        return tz;
+    }
+
+    tracing::debug!(target: "script_kit::brain", "local brain timezone detection failed; falling back to UTC");
+    chrono_tz::UTC
+}
+
+fn parse_timezone_env(key: &str) -> Option<Tz> {
+    let value = std::env::var(key).ok()?;
+    parse_timezone_name(&value)
+}
+
+fn parse_timezone_name(name: &str) -> Option<Tz> {
+    let trimmed = name.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    let trimmed = trimmed.strip_prefix(':').unwrap_or(trimmed);
+    trimmed.parse::<Tz>().ok()
+}
+
+fn detect_local_timezone() -> Option<Tz> {
+    detect_local_timezone_from_etc_localtime().or_else(detect_local_timezone_from_systemsetup)
+}
+
+#[cfg(unix)]
+fn detect_local_timezone_from_etc_localtime() -> Option<Tz> {
+    let link = std::fs::read_link("/etc/localtime").ok()?;
+    let link = link.to_string_lossy();
+    for marker in ["zoneinfo/", "zoneinfo.default/"] {
+        if let Some((_, tail)) = link.rsplit_once(marker) {
+            let tail = tail
+                .strip_prefix("posix/")
+                .or_else(|| tail.strip_prefix("right/"))
+                .unwrap_or(tail);
+            if let Some(tz) = parse_timezone_name(tail) {
+                return Some(tz);
+            }
+        }
+    }
+    None
+}
+
+#[cfg(not(unix))]
+fn detect_local_timezone_from_etc_localtime() -> Option<Tz> {
+    None
+}
+
+#[cfg(target_os = "macos")]
+fn detect_local_timezone_from_systemsetup() -> Option<Tz> {
+    let output = std::process::Command::new("/usr/sbin/systemsetup")
+        .arg("-gettimezone")
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let name = stdout
+        .lines()
+        .find_map(|line| line.split_once(':').map(|(_, value)| value.trim()))?;
+    parse_timezone_name(name)
+}
+
+#[cfg(not(target_os = "macos"))]
+fn detect_local_timezone_from_systemsetup() -> Option<Tz> {
+    None
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use chrono::TimeZone as _;
     use std::fs;
+    use std::sync::Mutex;
     use std::thread;
     use std::time::Duration;
 
@@ -186,6 +264,44 @@ mod tests {
 
     fn fixed_now() -> DateTime<Utc> {
         Utc.with_ymd_and_hms(2026, 6, 11, 9, 42, 0).unwrap()
+    }
+
+    fn env_lock() -> &'static Mutex<()> {
+        static LOCK: std::sync::OnceLock<Mutex<()>> = std::sync::OnceLock::new();
+        LOCK.get_or_init(|| Mutex::new(()))
+    }
+
+    #[test]
+    fn default_kit_uses_script_kit_brain_tz_override_for_local_day() {
+        let _guard = env_lock().lock().expect("env lock");
+        let previous_brain_tz = std::env::var("SCRIPT_KIT_BRAIN_TZ").ok();
+        let previous_tz = std::env::var("TZ").ok();
+        unsafe {
+            std::env::set_var("SCRIPT_KIT_BRAIN_TZ", "America/Denver");
+            std::env::remove_var("TZ");
+        }
+
+        let substrate = BrainSubstrate::default_kit();
+
+        match previous_brain_tz {
+            Some(value) => unsafe { std::env::set_var("SCRIPT_KIT_BRAIN_TZ", value) },
+            None => unsafe { std::env::remove_var("SCRIPT_KIT_BRAIN_TZ") },
+        }
+        match previous_tz {
+            Some(value) => unsafe { std::env::set_var("TZ", value) },
+            None => unsafe { std::env::remove_var("TZ") },
+        }
+
+        assert_eq!(substrate.timezone(), chrono_tz::America::Denver);
+    }
+
+    #[test]
+    fn parse_tz_env_accepts_colon_prefixed_local_day_names() {
+        assert_eq!(
+            parse_timezone_name(":Pacific/Honolulu"),
+            Some(chrono_tz::Pacific::Honolulu)
+        );
+        assert_eq!(parse_timezone_name("Not/AZone"), None);
     }
 
     #[test]
@@ -228,6 +344,33 @@ mod tests {
         assert_eq!(lines[0], "09:42 first capture");
         assert_eq!(lines[1], "09:45 - [ ] buy milk #errand due:2026-06-12");
         assert_eq!(lines[2], "09:50 https://example.com");
+    }
+
+    #[test]
+    fn append_to_day_uses_configured_local_day_at_utc_boundary() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let substrate =
+            BrainSubstrate::with_timezone(dir.path().join("brain"), chrono_tz::America::Denver);
+        let utc_boundary = Utc.with_ymd_and_hms(2026, 6, 14, 5, 30, 0).unwrap();
+
+        substrate
+            .append_to_day(
+                utc_boundary,
+                DayEntry::Capture {
+                    text: "local day boundary".to_string(),
+                },
+            )
+            .expect("append local day");
+
+        let local_path = substrate
+            .paths()
+            .day_page(chrono::NaiveDate::from_ymd_opt(2026, 6, 13).unwrap());
+        let utc_path = substrate
+            .paths()
+            .day_page(chrono::NaiveDate::from_ymd_opt(2026, 6, 14).unwrap());
+        let contents = fs::read_to_string(local_path).expect("read local day");
+        assert!(contents.contains("23:30 local day boundary"));
+        assert!(!utc_path.exists(), "UTC day file must not be created");
     }
 
     #[test]
@@ -292,6 +435,37 @@ mod tests {
         let fragment = fs::read_to_string(fragment_path).expect("read fragment");
         assert!(fragment.contains("source: scriptkit://clipboard/entry-2"));
         assert!(fragment.contains("word249"));
+    }
+
+    #[test]
+    fn fragment_writer_uses_configured_local_day_and_time_in_filename() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let substrate =
+            BrainSubstrate::with_timezone(dir.path().join("brain"), chrono_tz::America::Denver);
+        let utc_boundary = Utc.with_ymd_and_hms(2026, 6, 14, 5, 30, 0).unwrap();
+        let long = (0..250)
+            .map(|index| format!("word{index}"))
+            .collect::<Vec<_>>()
+            .join(" ");
+
+        let reference = substrate
+            .write_fragment(
+                utc_boundary,
+                "Clipboard",
+                "scriptkit://clipboard/local-day",
+                &long,
+            )
+            .expect("fragment write")
+            .expect("fragment reference");
+
+        assert_eq!(
+            reference.relative_link,
+            "../fragments/2026-06-13-2330-clipboard.md"
+        );
+        assert!(substrate
+            .paths()
+            .fragment_file("2026-06-13-2330-clipboard")
+            .exists());
     }
 
     #[test]

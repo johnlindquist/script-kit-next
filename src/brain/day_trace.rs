@@ -150,6 +150,10 @@ mod tests {
         BrainSubstrate::with_timezone(base, chrono_tz::UTC)
     }
 
+    fn test_substrate_with_timezone(base: &Path, tz: chrono_tz::Tz) -> BrainSubstrate {
+        BrainSubstrate::with_timezone(base, tz)
+    }
+
     fn day_contents(substrate: &BrainSubstrate, date: NaiveDate) -> String {
         fs::read_to_string(substrate.paths().day_page(date)).unwrap_or_default()
     }
@@ -196,6 +200,43 @@ mod tests {
         assert_eq!(count_trace_lines(&second_day, "thread-b"), 1);
         assert!(first_day.contains("10:00 — Agent Chat: first day chat"));
         assert!(second_day.contains("08:15 — Agent Chat: second day chat"));
+    }
+
+    #[test]
+    fn agent_chat_trace_dedupes_by_configured_local_day() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let substrate =
+            test_substrate_with_timezone(&dir.path().join("brain"), chrono_tz::America::Denver);
+        let trace = AgentChatDayTrace::new(substrate);
+        let late_local_day = Utc.with_ymd_and_hms(2026, 6, 14, 5, 30, 0).unwrap();
+        let same_local_day = late_local_day + chrono::Duration::minutes(20);
+
+        trace.maybe_append("thread-local", "first local day trace", late_local_day);
+        trace.maybe_append("thread-local", "same local day follow-up", same_local_day);
+
+        let local_date = chrono::NaiveDate::from_ymd_opt(2026, 6, 13).unwrap();
+        let utc_date = chrono::NaiveDate::from_ymd_opt(2026, 6, 14).unwrap();
+        let local_contents = day_contents(&trace.substrate, local_date);
+        let utc_contents = day_contents(&trace.substrate, utc_date);
+        assert_eq!(count_trace_lines(&local_contents, "thread-local"), 1);
+        assert!(local_contents.contains("23:30 — Agent Chat: first local day trace"));
+        assert!(utc_contents.is_empty(), "UTC day must not receive trace");
+    }
+
+    #[test]
+    fn agent_chat_trace_writes_local_timestamp() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let substrate =
+            test_substrate_with_timezone(&dir.path().join("brain"), chrono_tz::America::Denver);
+        let trace = AgentChatDayTrace::new(substrate);
+        let utc_boundary = Utc.with_ymd_and_hms(2026, 6, 14, 5, 30, 0).unwrap();
+
+        trace.maybe_append("thread-local-time", "local timestamp", utc_boundary);
+
+        let local_date = chrono::NaiveDate::from_ymd_opt(2026, 6, 13).unwrap();
+        let contents = day_contents(&trace.substrate, local_date);
+        assert!(contents.contains("23:30 — Agent Chat: local timestamp"));
+        assert!(contents.contains(&provenance_link("thread-local-time")));
     }
 
     #[test]
