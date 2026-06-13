@@ -7,6 +7,7 @@
  * the same stdin simulateKey path used by the main spine probes.
  */
 import { Driver, type Json } from "../devtools/driver";
+import { openDayPage } from "./day-page-open-helper";
 
 const BINARY =
   process.env.PROBE_BINARY ??
@@ -19,24 +20,6 @@ const runId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 function check(name: string, ok: boolean, detail: Json = {}) {
   receipts[name] = { ok, ...detail };
   if (!ok) failures.push(name);
-}
-
-async function simulateMainHotkeyGesture(
-  driver: Driver,
-  phase: "down" | "up",
-  requestId: string,
-) {
-  return driver.request(
-    { type: "simulateMainHotkeyGesture", phase, requestId },
-    { expect: "externalCommandResult", timeoutMs: 5000 },
-  );
-}
-
-async function tapHotkey(driver: Driver, label: string) {
-  await simulateMainHotkeyGesture(driver, "down", `${runId}-${label}-down`);
-  await Bun.sleep(30);
-  await simulateMainHotkeyGesture(driver, "up", `${runId}-${label}-up`);
-  await Bun.sleep(400);
 }
 
 function walkElements(node: unknown, out: Json[] = []): Json[] {
@@ -150,18 +133,7 @@ const driver = await Driver.launch({
 });
 
 try {
-  await simulateMainHotkeyGesture(driver, "down", `${runId}-show-down`);
-  await Bun.sleep(30);
-  await simulateMainHotkeyGesture(driver, "up", `${runId}-show-up`);
-  await driver.waitForState({ windowVisible: true }, { timeoutMs: 8000 });
-  await Bun.sleep(400);
-
-  let maybeDayState = (await driver.getState({ timeoutMs: 5000 })) as Json;
-  if (maybeDayState.promptType !== "dayPage") {
-    await driver.setFilterAndWait("day page spine seed", { timeoutMs: 5000 });
-    await tapHotkey(driver, "toggle-day-page");
-    maybeDayState = (await driver.getState({ timeoutMs: 5000 })) as Json;
-  }
+  const maybeDayState = await openDayPage(driver, runId);
 
   check("opened_day_page", maybeDayState.promptType === "dayPage", {
     promptType: maybeDayState.promptType,
@@ -197,9 +169,8 @@ try {
     launcherFlat.find(
       (el) =>
         typeof el.semanticId === "string" &&
-        (el.semanticId === "spine:@:subsearch:file" ||
-          ((el.semanticId as string).startsWith("choice:") &&
-            (el.semanticId as string).includes("file"))),
+        (el.semanticId as string).startsWith("choice:") &&
+        (el.semanticId as string).includes("file"),
     ),
   ), {
     selectedSemanticId: launcherElements.selectedSemanticId ?? null,

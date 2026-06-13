@@ -63,6 +63,13 @@ fn spine_projection_owns_day_page_list(
 ) -> bool {
     if matches!(
         projection.active_segment_kind,
+        crate::spine::SpineSegmentKind::ContextMention { .. }
+    ) {
+        return false;
+    }
+
+    if matches!(
+        projection.active_segment_kind,
         crate::spine::SpineSegmentKind::Capture { .. }
     ) {
         let raw = parse
@@ -1222,11 +1229,11 @@ mod day_page_spine_tests {
     }
 
     #[test]
-    fn day_page_spine_owns_context_fragment_on_active_line() {
+    fn day_page_spine_does_not_own_context_mentions() {
         let line = "@file:readme";
         let parse = crate::spine::parse_spine(line);
         let projection = crate::spine::project_cursor(&parse, line.len());
-        assert!(spine_projection_owns_day_page_list(&parse, &projection));
+        assert!(!spine_projection_owns_day_page_list(&parse, &projection));
     }
 
     #[test]
@@ -1268,11 +1275,11 @@ mod day_page_spine_tests {
                     },
                 },
                 crate::spine::SpineListRow {
-                    id: "spine:@:subsearch:file".into(),
-                    kind: crate::spine::SpineListRowKind::ContextSubSearch {
-                        context_type: "file".into(),
+                    id: "spine:/:rewrite".into(),
+                    kind: crate::spine::SpineListRowKind::SlashCommand {
+                        command: "rewrite".into(),
                     },
-                    title: "Files".into(),
+                    title: "Rewrite".into(),
                     subtitle: None,
                     meta: None,
                     icon: None,
@@ -1283,7 +1290,7 @@ mod day_page_spine_tests {
                     action: crate::spine::SpineListAction::InsertSegmentText {
                         segment_index: 0,
                         segment_byte_range: 0..3,
-                        text: "@file:".into(),
+                        text: "/rewrite ".into(),
                         trailing_space: false,
                     },
                 },
@@ -1298,7 +1305,7 @@ mod day_page_spine_tests {
         let scripts::SearchResult::SpineProjection(row) = &rows.flat[1] else {
             panic!("expected projected spine row");
         };
-        assert_eq!(row.id.as_ref(), "spine:@:subsearch:file");
+        assert_eq!(row.id.as_ref(), "spine:/:rewrite");
     }
 
     #[test]
@@ -1309,11 +1316,11 @@ mod day_page_spine_tests {
             subtitle: None,
             icon: None,
             rows: vec![crate::spine::SpineListRow {
-                id: "spine:@:subsearch:file".into(),
-                kind: crate::spine::SpineListRowKind::ContextSubSearch {
-                    context_type: "file".into(),
+                id: "spine:/:rewrite".into(),
+                kind: crate::spine::SpineListRowKind::SlashCommand {
+                    command: "rewrite".into(),
                 },
-                title: "Files".into(),
+                title: "Rewrite".into(),
                 subtitle: None,
                 meta: None,
                 icon: None,
@@ -1324,15 +1331,15 @@ mod day_page_spine_tests {
                 action: crate::spine::SpineListAction::InsertSegmentText {
                     segment_index: 0,
                     segment_byte_range: 0..3,
-                    text: "@file:".into(),
+                    text: "/rewrite ".into(),
                     trailing_space: false,
                 },
             }],
         }]);
-        let parse = crate::spine::parse_spine("@fi");
-        let projection = crate::spine::project_cursor(&parse, "@fi".len());
+        let parse = crate::spine::parse_spine("/rew");
+        let projection = crate::spine::project_cursor(&parse, "/rew".len());
         let model = DayPageSpineModel {
-            line_range: 0..3,
+            line_range: 0..4,
             parse,
             projection,
             grouped: rows.grouped,
@@ -1343,7 +1350,7 @@ mod day_page_spine_tests {
         let row = model
             .selected_row(0)
             .expect("section-header selection should coerce to first item");
-        assert_eq!(row.id.as_ref(), "spine:@:subsearch:file");
+        assert_eq!(row.id.as_ref(), "spine:/:rewrite");
     }
 
     #[test]

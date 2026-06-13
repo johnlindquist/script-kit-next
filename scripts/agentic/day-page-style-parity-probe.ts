@@ -9,6 +9,7 @@
  *   Notes window titlebar/footer semantics.
  */
 import { Driver, type Json } from "../devtools/driver";
+import { openDayPage } from "./day-page-open-helper";
 
 const BINARY =
   process.env.PROBE_BINARY ??
@@ -35,24 +36,6 @@ function walkElements(node: unknown, out: Json[] = []): Json[] {
   }
   for (const value of Object.values(json)) walkElements(value, out);
   return out;
-}
-
-async function simulateMainHotkeyGesture(
-  driver: Driver,
-  phase: "down" | "up",
-  requestId: string,
-) {
-  return driver.request(
-    { type: "simulateMainHotkeyGesture", phase, requestId },
-    { expect: "externalCommandResult", timeoutMs: 5000 },
-  );
-}
-
-async function tapHotkey(driver: Driver, label: string) {
-  await simulateMainHotkeyGesture(driver, "down", `${runId}-${label}-down`);
-  await Bun.sleep(30);
-  await simulateMainHotkeyGesture(driver, "up", `${runId}-${label}-up`);
-  await Bun.sleep(420);
 }
 
 function findSemantic(elements: Json, semanticId: string): Json | null {
@@ -120,10 +103,7 @@ try {
   check("notes_panel_present", Boolean(notesPanel), { notesPanel });
   check("notes_style_present", Boolean(notesStyle), { notesStyle });
 
-  await tapHotkey(driver, "show-launcher");
-  await driver.waitForState({ windowVisible: true, promptType: "none" }, { timeoutMs: 8000 });
-  await tapHotkey(driver, "open-day-page");
-  const dayState = (await driver.getState({ timeoutMs: 8000 })) as Json;
+  const dayState = await openDayPage(driver, runId);
   check("day_page_stays_main_surface", dayState.promptType === "dayPage", {
     promptType: dayState.promptType ?? null,
     windowVisible: dayState.windowVisible ?? null,
