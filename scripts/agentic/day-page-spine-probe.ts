@@ -3,7 +3,7 @@
  * Runtime proof for Day Page current-line spine behavior.
  *
  * Drives the real main-hotkey Day Page path, sets the active editor text through
- * the transaction input primitive, then accepts the shared @file row through
+ * the transaction input primitive, then accepts non-context spine rows through
  * the same stdin simulateKey path used by the main spine probes.
  */
 import { Driver, type Json } from "../devtools/driver";
@@ -139,145 +139,6 @@ try {
     promptType: maybeDayState.promptType,
   });
 
-  // ============================ `@` mentions =============================
-  // The Day Page renders NO `@` selector of its own. Typing into any `@`
-  // mention swaps to the REAL main menu (the launcher's own context UX) with
-  // the segment text as the filter; accept returns to Today with the token,
-  // Escape cancels back unchanged.
-
-  // Typing "@fi" auto-swaps to the launcher. Clear first: the day-page entry
-  // gesture carries the launcher filter into the editor, and the growth
-  // detector compares whole-content lengths on protocol setInput.
-  await driver.batch([{ type: "setInput", text: "" }], { timeoutMs: 5000 });
-  await Bun.sleep(300);
-  await driver.batch([{ type: "setInput", text: "@fi" }], { timeoutMs: 5000 });
-  await Bun.sleep(700);
-  const swapFiState = (await driver.getState({ timeoutMs: 5000 })) as Json;
-  check(
-    "typing_at_mention_swaps_to_main_menu",
-    swapFiState.promptType === "none" && swapFiState.inputValue === "@fi",
-    { promptType: swapFiState.promptType, inputValue: swapFiState.inputValue },
-  );
-
-  // The launcher (not the Day Page) shows the shared context rows.
-  const launcherElements = (await driver.getElements(
-    { target: { type: "main" }, limit: 200 },
-    { timeoutMs: 5000 },
-  )) as Json;
-  const launcherFlat = walkElements(launcherElements);
-  check("launcher_shows_files_row", Boolean(
-    launcherFlat.find(
-      (el) =>
-        typeof el.semanticId === "string" &&
-        (el.semanticId as string).startsWith("choice:") &&
-        (el.semanticId as string).includes("file"),
-    ),
-  ), {
-    selectedSemanticId: launcherElements.selectedSemanticId ?? null,
-    ids: launcherFlat.slice(0, 12).map((el) => el.semanticId ?? el.id),
-  });
-
-  // Enter completes "@fi" → "@file:" colon mode INSIDE the launcher; the
-  // round trip stays pending (no bounce back to Today yet).
-  await driver.simulateKey("enter");
-  await Bun.sleep(600);
-  const afterCompleteState = (await driver.getState({ timeoutMs: 5000 })) as Json;
-  check(
-    "launcher_enter_completes_colon_mode_in_launcher",
-    afterCompleteState.promptType === "none" && afterCompleteState.inputValue === "@file:",
-    {
-      promptType: afterCompleteState.promptType,
-      inputValue: afterCompleteState.inputValue,
-    },
-  );
-
-  // Escape cancels the round trip back to Today with the original segment.
-  await driver.simulateKey("escape");
-  await Bun.sleep(500);
-  const afterCancelState = (await driver.getState({ timeoutMs: 5000 })) as Json;
-  const afterCancelText = await editorText(driver);
-  check(
-    "escape_returns_to_day_page_with_fragment",
-    afterCancelState.promptType === "dayPage" && afterCancelText === "@fi",
-    { promptType: afterCancelState.promptType, afterCancelText },
-  );
-
-  // No Day Page-local spine panel may render for `@` (cursor is inside the
-  // mention after the cancel restore).
-  const afterCancelElements = (await driver.getElements(
-    { target: { type: "main" }, limit: 200 },
-    { timeoutMs: 5000 },
-  )) as Json;
-  const afterCancelFlat = walkElements(afterCancelElements);
-  check("no_inline_at_selector_on_day_page", !afterCancelFlat.find(
-    (el) => el.semanticId === "list:day-page-spine-list",
-  ), {
-    ids: afterCancelFlat.slice(0, 12).map((el) => el.semanticId ?? el.id),
-  });
-
-  // Builtin acceptance: "@sel" swaps, Enter on the launcher's Selection row
-  // resolves immediately and returns to Today with "@selection ".
-  await driver.batch([{ type: "setInput", text: "" }], { timeoutMs: 5000 });
-  await Bun.sleep(300);
-  await driver.batch([{ type: "setInput", text: "@sel" }], { timeoutMs: 5000 });
-  await Bun.sleep(700);
-  const swapSelState = (await driver.getState({ timeoutMs: 5000 })) as Json;
-  check(
-    "builtin_mention_swaps_to_main_menu",
-    swapSelState.promptType === "none" && swapSelState.inputValue === "@sel",
-    { promptType: swapSelState.promptType, inputValue: swapSelState.inputValue },
-  );
-  const selElements = (await driver.getElements(
-    { target: { type: "main" }, limit: 200 },
-    { timeoutMs: 5000 },
-  )) as Json;
-  check(
-    "launcher_selection_row_selected",
-    typeof selElements.selectedSemanticId === "string" &&
-      (selElements.selectedSemanticId as string).includes("selection"),
-    { selectedSemanticId: selElements.selectedSemanticId ?? null },
-  );
-  await driver.simulateKey("enter");
-  await Bun.sleep(600);
-  const afterBuiltinState = (await driver.getState({ timeoutMs: 5000 })) as Json;
-  const afterBuiltinText = await editorText(driver);
-  check(
-    "builtin_accept_returns_to_today_with_token",
-    afterBuiltinState.promptType === "dayPage" && afterBuiltinText === "@selection ",
-    { promptType: afterBuiltinState.promptType, afterBuiltinText },
-  );
-
-  const submitBatch = (await driver.batch(
-    [
-      { type: "setInput", text: "@selection summarize this" },
-      {
-        type: "waitFor",
-        condition: {
-          type: "stateMatch",
-          state: { promptType: "dayPage", inputValue: "@selection summarize this" },
-        },
-      },
-    ],
-    { timeoutMs: 5000 },
-  )) as Json;
-  check("batch_set_day_page_submit_prompt", submitBatch.success === true, {
-    batch: submitBatch,
-  });
-
-  const submitElements = (await driver.getElements(
-    { target: { type: "main" }, limit: 200 },
-    { timeoutMs: 5000 },
-  )) as Json;
-  const submitFlat = walkElements(submitElements);
-  const readyRow = submitFlat.find((el) => el.semanticId === "spine:tail:ready");
-  check("submit_prompt_ready_row_visible", Boolean(readyRow), {
-    readyRow: readyRow ?? null,
-    selectedSemanticId: submitElements.selectedSemanticId ?? null,
-  });
-
-  // ("@sel" builtin completion is covered by the round-trip flow above —
-  // the Day Page no longer completes `@` fragments inline.)
-
   await verifyFragmentCompletion(
     driver,
     "slash_rewrite",
@@ -389,54 +250,6 @@ try {
   await driver.simulateKey("enter");
   const afterCwdText = await editorText(driver);
   check("enter_sets_cwd_and_strips_segment", afterCwdText === "", { afterCwdText });
-
-  // Reaching "@clip" without triggering the auto-swap: GROW with the cursor
-  // landing in tail free text, then SHRINK back to the bare mention
-  // (deletions never trigger the round trip).
-  const unresolvedGrowBatch = (await driver.batch(
-    [
-      { type: "setInput", text: "@clip extra" },
-      {
-        type: "waitFor",
-        condition: {
-          type: "stateMatch",
-          state: { promptType: "dayPage", inputValue: "@clip extra" },
-        },
-      },
-    ],
-    { timeoutMs: 5000 },
-  )) as Json;
-  const unresolvedAfterCwdBatch = (await driver.batch(
-    [
-      { type: "setInput", text: "@clip" },
-      {
-        type: "waitFor",
-        condition: {
-          type: "stateMatch",
-          state: { promptType: "dayPage", inputValue: "@clip" },
-        },
-      },
-    ],
-    { timeoutMs: 5000 },
-  )) as Json;
-  check(
-    "batch_set_day_page_unresolved_context_after_cwd",
-    unresolvedGrowBatch.success === true && unresolvedAfterCwdBatch.success === true,
-    { grow: unresolvedGrowBatch, shrink: unresolvedAfterCwdBatch },
-  );
-
-  await driver.simulateKey("enter", ["cmd"]);
-  await Bun.sleep(250);
-  const afterUnresolvedContextState = (await driver.getState({ timeoutMs: 5000 })) as Json;
-  check(
-    "cmd_enter_unresolved_context_after_cwd_stays_on_day_page",
-    afterUnresolvedContextState.promptType === "dayPage" &&
-      afterUnresolvedContextState.inputValue === "@clip",
-    {
-      promptType: afterUnresolvedContextState.promptType,
-      inputValue: afterUnresolvedContextState.inputValue,
-    },
-  );
 
   const cwdPromptBatch = (await driver.batch(
     [

@@ -387,12 +387,27 @@ fn test_copy_as_markdown_notifies_after_feedback_state_update() {
 
 #[test]
 fn test_notes_editor_disables_dynamic_code_editor_bottom_margin() {
+    const COMPONENT_SOURCE: &str = include_str!("../../components/notes_editor/component.rs");
     const INIT_SOURCE: &str = include_str!("init.rs");
+    let highlighter_idx = COMPONENT_SOURCE
+        .find("register_markdown_highlighter();")
+        .expect("shared notes markdown constructor should register highlighting");
+    let code_editor_idx = COMPONENT_SOURCE
+        .find(".code_editor(\"markdown\")")
+        .expect("shared notes markdown constructor should enable markdown code editor mode");
     assert!(
-        INIT_SOURCE.contains(
+        highlighter_idx < code_editor_idx,
+        "Shared notes markdown editor should register highlighting before enabling markdown code editor mode"
+    );
+    assert!(
+        COMPONENT_SOURCE.contains(
             ".code_editor(\"markdown\")\n                .code_editor_dynamic_bottom_margin(false)"
         ),
-        "Notes editor should not reserve a large code-editor bottom scroll margin after trailing lines are deleted"
+        "Shared notes markdown editor should not reserve a large code-editor bottom scroll margin after trailing lines are deleted"
+    );
+    assert!(
+        INIT_SOURCE.contains("NotesEditor::new_markdown_pair("),
+        "Notes window should use the shared markdown editor constructor"
     );
 }
 

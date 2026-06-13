@@ -105,13 +105,8 @@ impl DayPageView {
         cx: &mut Context<Self>,
     ) {
         let content = self.notes_editor.read(cx).content(cx);
-        let spliced = replace_segment_content(
-            &content,
-            line_range,
-            segment_byte_range,
-            token,
-            true,
-        );
+        let spliced =
+            replace_segment_content(&content, line_range, segment_byte_range, token, true);
         let (new_content, cursor) = match spliced {
             Some(done) => done,
             None => {
@@ -142,7 +137,6 @@ impl DayPageView {
         self.spine_alias_cache.clear();
         self.spine_dismissed_cache_key = None;
         self.spine_selected_index = 0;
-        self.spine_empty_subsearch_armed_for = None;
         self.schedule_autosave_flush(cx);
         self.sync_footer(window, cx);
         cx.notify();

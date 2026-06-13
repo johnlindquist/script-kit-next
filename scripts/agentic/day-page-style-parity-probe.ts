@@ -136,8 +136,8 @@ try {
     { semanticIds: dayFlat.map((el) => el.semanticId ?? el.id).filter(Boolean).slice(0, 80) },
   );
 
-  // "/rew" keeps the inline spine list on the Day Page; `@` fragments now
-  // swap to the main menu (round-trip contract) so they can't style-probe.
+  // "/rew" keeps the inline spine list on the Day Page without invoking the
+  // main-menu context handoff.
   const setSpine = (await driver.batch(
     [
       { type: "setInput", text: "/rew" },

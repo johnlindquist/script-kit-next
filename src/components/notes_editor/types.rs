@@ -49,6 +49,47 @@ impl NotesEditorConfig {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NotesEditorInputSizing {
+    Rows(usize),
+    AutoGrow { min_rows: usize, max_rows: usize },
+}
+
+#[derive(Debug, Clone)]
+pub struct NotesEditorMarkdownConfig {
+    pub editor: NotesEditorConfig,
+    pub sizing: NotesEditorInputSizing,
+}
+
+impl NotesEditorMarkdownConfig {
+    pub fn new(initial_content: impl Into<String>) -> Self {
+        Self {
+            editor: NotesEditorConfig::new(initial_content),
+            sizing: NotesEditorInputSizing::Rows(20),
+        }
+    }
+
+    pub fn placeholder(mut self, placeholder: impl Into<String>) -> Self {
+        self.editor = self.editor.placeholder(placeholder);
+        self
+    }
+
+    pub fn layout(mut self, layout: NotesEditorLayout) -> Self {
+        self.editor = self.editor.layout(layout);
+        self
+    }
+
+    pub fn rows(mut self, rows: usize) -> Self {
+        self.sizing = NotesEditorInputSizing::Rows(rows);
+        self
+    }
+
+    pub fn auto_grow(mut self, min_rows: usize, max_rows: usize) -> Self {
+        self.sizing = NotesEditorInputSizing::AutoGrow { min_rows, max_rows };
+        self
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct NotesEditorSurfaceStyle {
     pub owner: &'static str,
     pub input_render_path: &'static str,

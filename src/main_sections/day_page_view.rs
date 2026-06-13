@@ -3,7 +3,7 @@
 use chrono::Utc;
 
 use crate::components::notes_editor::{
-    NotesEditorConfig, NotesEditorLayout, NotesEditorSurfaceStyle,
+    NotesEditorLayout, NotesEditorMarkdownConfig, NotesEditorSurfaceStyle,
 };
 use crate::components::unified_list_item::{
     Density, ItemState, TextContent, TrailingContent, UnifiedListItem, UnifiedListItemColors,
@@ -23,25 +23,17 @@ impl DayPageView {
         cx: &mut Context<Self>,
     ) -> Self {
         let metrics = crate::notes::window::style::adopted_metrics();
-        let editor_state = cx.new(|cx| {
-            InputState::new(window, cx)
-                .code_editor("markdown")
-                .code_editor_dynamic_bottom_margin(false)
-                .line_number(false)
-                .searchable(true)
-                .auto_grow(20, 500)
+        let (editor_state, notes_editor) = NotesEditor::new_markdown_pair(
+            window,
+            cx,
+            NotesEditorMarkdownConfig::new("")
                 .placeholder("Today...")
-                .default_value("")
-        });
-        let notes_editor =
-            cx.new(|_| {
-                NotesEditor::new(
-                    editor_state.clone(),
-                    NotesEditorConfig::new("").placeholder("Today...").layout(
-                        NotesEditorLayout::new(metrics.editor_padding_x, metrics.editor_padding_y),
-                    ),
-                )
-            });
+                .layout(NotesEditorLayout::new(
+                    metrics.editor_padding_x,
+                    metrics.editor_padding_y,
+                ))
+                .auto_grow(20, 500),
+        );
 
         // `subscribe_in` already runs the handler with this DayPageView leased
         // (`this` is `&mut Self`); re-leasing via `entity.update` here would
@@ -67,7 +59,6 @@ impl DayPageView {
             fragment_open_targets: Vec::new(),
             spine_selected_index: 0,
             spine_hovered_index: None,
-            spine_empty_subsearch_armed_for: None,
             spine_cache_key: String::new(),
             spine_cwd_revision: 0,
             spine_cwd_submit_anchor: false,
@@ -212,11 +203,9 @@ impl DayPageView {
         if !self.session.is_dirty() {
             return;
         }
-        let due = self
-            .last_autosave
-            .map_or(true, |at| {
-                at.elapsed() >= std::time::Duration::from_millis(Self::SAVE_DEBOUNCE_MS)
-            });
+        let due = self.last_autosave.map_or(true, |at| {
+            at.elapsed() >= std::time::Duration::from_millis(Self::SAVE_DEBOUNCE_MS)
+        });
         if !due {
             return;
         }
@@ -235,8 +224,7 @@ impl DayPageView {
             return;
         }
         self.autosave_flush_scheduled = true;
-        let flush_delay =
-            std::time::Duration::from_millis(Self::SAVE_DEBOUNCE_MS + 50);
+        let flush_delay = std::time::Duration::from_millis(Self::SAVE_DEBOUNCE_MS + 50);
         cx.spawn(async move |this, cx| {
             cx.background_executor().timer(flush_delay).await;
             this.update(cx, |this, cx| {
@@ -315,14 +303,9 @@ impl DayPageView {
         cx.notify();
     }
 
-    fn reset_day_page_spine_runtime_state(
-        &mut self,
-        clear_cwd_anchor: bool,
-        clear_mentions: bool,
-    ) {
+    fn reset_day_page_spine_runtime_state(&mut self, clear_cwd_anchor: bool, clear_mentions: bool) {
         self.spine_selected_index = 0;
         self.spine_hovered_index = None;
-        self.spine_empty_subsearch_armed_for = None;
         if clear_cwd_anchor {
             self.spine_cwd_submit_anchor = false;
         }

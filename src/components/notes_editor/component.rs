@@ -1,9 +1,11 @@
-use gpui::{App, Context, Entity, FocusHandle, Focusable, ScrollHandle, Window};
+use gpui::{App, AppContext, Context, Entity, FocusHandle, Focusable, ScrollHandle, Window};
 use gpui_component::input::InputState;
 
 use crate::notes::markdown_highlighting::register_markdown_highlighter;
 
-use super::types::{NotesEditorConfig, NotesEditorLayout};
+use super::types::{
+    NotesEditorConfig, NotesEditorInputSizing, NotesEditorLayout, NotesEditorMarkdownConfig,
+};
 
 /// Shared markdown editor used by the Notes window and future Day Page surface.
 ///
@@ -17,6 +19,39 @@ pub struct NotesEditor {
 }
 
 impl NotesEditor {
+    pub fn new_markdown_pair<T>(
+        window: &mut Window,
+        cx: &mut Context<T>,
+        config: NotesEditorMarkdownConfig,
+    ) -> (Entity<InputState>, Entity<Self>)
+    where
+        T: 'static,
+    {
+        register_markdown_highlighter();
+
+        let editor_config = config.editor;
+        let placeholder = editor_config.placeholder.clone();
+        let initial_content = editor_config.initial_content.clone();
+        let sizing = config.sizing;
+        let input_state = cx.new(|cx| {
+            let state = InputState::new(window, cx)
+                .code_editor("markdown")
+                .code_editor_dynamic_bottom_margin(false)
+                .line_number(false)
+                .searchable(true)
+                .placeholder(placeholder)
+                .default_value(initial_content);
+            match sizing {
+                NotesEditorInputSizing::Rows(rows) => state.rows(rows),
+                NotesEditorInputSizing::AutoGrow { min_rows, max_rows } => {
+                    state.auto_grow(min_rows, max_rows)
+                }
+            }
+        });
+        let notes_editor = cx.new(|_| NotesEditor::new(input_state.clone(), editor_config));
+        (input_state, notes_editor)
+    }
+
     pub fn new(input_state: Entity<InputState>, config: NotesEditorConfig) -> Self {
         register_markdown_highlighter();
 

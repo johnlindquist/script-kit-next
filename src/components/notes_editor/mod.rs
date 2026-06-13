@@ -13,4 +13,7 @@ mod types;
 
 pub use component::NotesEditor;
 pub use toolbar::{run_toolbar_action, NotesEditorToolbarAction, NOTES_EDITOR_TOOLBAR_ACTIONS};
-pub use types::{NotesEditorConfig, NotesEditorLayout, NotesEditorSurfaceStyle};
+pub use types::{
+    NotesEditorConfig, NotesEditorInputSizing, NotesEditorLayout, NotesEditorMarkdownConfig,
+    NotesEditorSurfaceStyle,
+};

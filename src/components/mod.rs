@@ -108,7 +108,10 @@ pub(crate) use non_list_state::{
     NonListPalette,
 };
 #[allow(unused_imports)]
-pub use notes_editor::{NotesEditor, NotesEditorConfig, NotesEditorLayout};
+pub use notes_editor::{
+    NotesEditor, NotesEditorConfig, NotesEditorInputSizing, NotesEditorLayout,
+    NotesEditorMarkdownConfig,
+};
 #[allow(unused_imports)]
 pub use scrollbar::{
     Scrollbar, ScrollbarColors, MIN_THUMB_HEIGHT, SCROLLBAR_PADDING, SCROLLBAR_WIDTH,

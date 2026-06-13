@@ -21,8 +21,6 @@ pub struct DayPageView {
     pub(crate) fragment_open_targets: Vec<PathBuf>,
     pub(crate) spine_selected_index: usize,
     pub(crate) spine_hovered_index: Option<usize>,
-    pub(crate) spine_empty_subsearch_armed_for:
-        Option<crate::spine::catalog_subsearch::ContextSubsearchSource>,
     pub(crate) spine_cache_key: String,
     pub(crate) spine_cwd_revision: u64,
     pub(crate) spine_cwd_submit_anchor: bool,

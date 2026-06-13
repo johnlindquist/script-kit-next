@@ -1,6 +1,6 @@
 use super::*;
 
-use crate::components::notes_editor::{NotesEditor, NotesEditorConfig, NotesEditorLayout};
+use crate::components::notes_editor::{NotesEditor, NotesEditorLayout, NotesEditorMarkdownConfig};
 
 impl NotesApp {
     /// Create a new NotesApp
@@ -51,25 +51,16 @@ impl NotesApp {
         let initial_line_count = initial_content.lines().count().max(1);
 
         let metrics = style::adopted_metrics();
-        let editor_state = cx.new(|cx| {
-            InputState::new(window, cx)
-                .code_editor("markdown")
-                .code_editor_dynamic_bottom_margin(false)
-                .line_number(false)
-                .searchable(true)
-                .rows(20)
-                .placeholder("Start typing your note...")
-                .default_value(initial_content.clone())
-        });
-        let notes_editor = cx.new(|_| {
-            NotesEditor::new(
-                editor_state.clone(),
-                NotesEditorConfig::new(initial_content).layout(NotesEditorLayout::new(
+        let (editor_state, notes_editor) = NotesEditor::new_markdown_pair(
+            window,
+            cx,
+            NotesEditorMarkdownConfig::new(initial_content)
+                .layout(NotesEditorLayout::new(
                     metrics.editor_padding_x,
                     metrics.editor_padding_y,
-                )),
-            )
-        });
+                ))
+                .rows(20),
+        );
 
         let search_state = cx.new(|cx| InputState::new(window, cx).placeholder("Search notes..."));
 

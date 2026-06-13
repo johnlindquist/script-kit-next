@@ -24,7 +24,6 @@ struct DayPageSpineModel {
     projection: crate::spine::SpineCursorProjection,
     grouped: Vec<GroupedListItem>,
     flat: Vec<scripts::SearchResult>,
-    active_empty_subsearch: Option<crate::spine::catalog_subsearch::ContextSubsearchSource>,
 }
 
 impl DayPageSpineModel {
@@ -88,23 +87,6 @@ fn spine_projection_owns_day_page_list(
     ) || (projection.is_tail
         && projection.has_prompt_segments
         && crate::spine::parse_has_prompt_builder_segments(parse))
-}
-
-fn active_empty_day_page_subsearch(
-    projection: &crate::spine::SpineCursorProjection,
-) -> Option<crate::spine::catalog_subsearch::ContextSubsearchSource> {
-    let crate::spine::SpineSegmentKind::ContextMention {
-        context_type,
-        sub_query,
-    } = &projection.active_segment_kind
-    else {
-        return None;
-    };
-    let (source, query) = crate::spine::catalog_subsearch::parse_context_subsearch(
-        context_type,
-        sub_query.as_deref(),
-    )?;
-    query.trim().is_empty().then_some(source)
 }
 
 fn replace_segment_content(
@@ -177,7 +159,6 @@ fn day_page_supports_spine_action(action: &crate::spine::SpineListAction) -> boo
             | crate::spine::SpineListAction::Noop
     )
 }
-
 
 fn cwd_rows_from_directory_results(
     query: &str,
@@ -255,21 +236,20 @@ fn cwd_rows_from_directory_results(
     DayPageSpineRows::new(remapped_grouped, flat)
 }
 
-
 fn day_page_spine_prompt_plan_can_submit(
     parse: &crate::spine::SpineParse,
     cwd_anchor: bool,
     mention_aliases: &std::collections::HashMap<String, crate::ai::message_parts::AiContextPart>,
 ) -> bool {
-    let plan = crate::spine::prompt_plan::build_spine_prompt_plan_with_aliases(
-        parse,
-        mention_aliases,
-    );
+    let plan =
+        crate::spine::prompt_plan::build_spine_prompt_plan_with_aliases(parse, mention_aliases);
     plan.should_submit_to_chat()
         || (cwd_anchor
             && matches!(
                 plan.blocked_reason,
-                Some(crate::spine::prompt_plan::SpinePromptPlanBlockReason::NoPromptBuilderSegments)
+                Some(
+                    crate::spine::prompt_plan::SpinePromptPlanBlockReason::NoPromptBuilderSegments
+                )
             )
             && plan.unknown_warnings.is_empty()
             && !plan.normalized_prompt.trim().is_empty())
@@ -345,7 +325,6 @@ fn prune_day_page_spine_mention_aliases(
     mention_aliases.retain(|token, _| visible_tokens.contains(token));
 }
 
-
 impl DayPageView {
     fn shared_day_page_spine_rows(
         &self,
@@ -371,11 +350,8 @@ impl DayPageView {
         let editor_surface =
             crate::components::notes_editor::NotesEditorSurfaceStyle::from_theme(&theme);
 
-        let selected = if self.day_page_spine_empty_selection_suppressed(&model) {
-            None
-        } else {
-            crate::list_item::coerce_selection(&model.grouped, self.spine_selected_index)
-        };
+        let selected =
+            crate::list_item::coerce_selection(&model.grouped, self.spine_selected_index);
 
         let mut rows = div().flex().flex_col().w_full();
         for (ix, grouped_item) in model.grouped.iter().enumerate() {
@@ -426,11 +402,6 @@ impl DayPageView {
                               _window,
                               cx| {
                             this.spine_selected_index = ix;
-                            if let Some(model) = this.day_page_spine_model(cx) {
-                                if let Some(source) = model.active_empty_subsearch {
-                                    this.spine_empty_subsearch_armed_for = Some(source);
-                                }
-                            }
                             cx.notify();
                         },
                     );
@@ -481,7 +452,6 @@ impl DayPageView {
         Range<usize>,
         crate::spine::SpineParse,
         crate::spine::SpineCursorProjection,
-        Option<crate::spine::catalog_subsearch::ContextSubsearchSource>,
     )> {
         let content = self.notes_editor.read(cx).content(cx);
         let selection = self.notes_editor.read(cx).selection(cx);
@@ -495,17 +465,15 @@ impl DayPageView {
             return None;
         }
 
-        let active_empty_subsearch = active_empty_day_page_subsearch(&projection);
         let key = format!(
             "{}\u{1f}cursor={}\u{1f}active={:?}\u{1f}cwd_rev={}",
             line, line_cursor, projection.active_segment_kind, self.spine_cwd_revision
         );
-        Some((key, line_range, parse, projection, active_empty_subsearch))
+        Some((key, line_range, parse, projection))
     }
 
     fn day_page_spine_model(&mut self, cx: &App) -> Option<DayPageSpineModel> {
-        let (key, line_range, parse, projection, active_empty_subsearch) =
-            self.day_page_spine_input(cx)?;
+        let (key, line_range, parse, projection) = self.day_page_spine_input(cx)?;
         if self.spine_dismissed_cache_key.as_deref() == Some(key.as_str()) {
             return None;
         }
@@ -522,7 +490,6 @@ impl DayPageView {
                 projection,
                 grouped: self.spine_grouped_cache.clone(),
                 flat: self.spine_flat_cache.clone(),
-                active_empty_subsearch,
             });
         }
 
@@ -543,7 +510,6 @@ impl DayPageView {
             projection,
             grouped,
             flat,
-            active_empty_subsearch,
         })
     }
 
@@ -662,9 +628,7 @@ impl DayPageView {
             return (elements.into_iter().take(limit).collect(), total_count);
         }
 
-        let Some((key, _, parse, projection, active_empty_subsearch)) =
-            self.day_page_spine_input(cx)
-        else {
+        let Some((key, _, parse, projection)) = self.day_page_spine_input(cx) else {
             let total_count = elements.len();
             return (elements.into_iter().take(limit).collect(), total_count);
         };
@@ -697,13 +661,7 @@ impl DayPageView {
             item_count,
         ));
 
-        let selection_suppressed = active_empty_subsearch
-            .is_some_and(|source| self.spine_empty_subsearch_armed_for != Some(source));
-        let selected = if selection_suppressed {
-            None
-        } else {
-            crate::list_item::coerce_selection(&grouped, self.spine_selected_index)
-        };
+        let selected = crate::list_item::coerce_selection(&grouped, self.spine_selected_index);
         for (ix, grouped_item) in grouped.iter().enumerate() {
             let GroupedListItem::Item(flat_idx) = grouped_item else {
                 continue;
@@ -734,20 +692,10 @@ impl DayPageView {
         (elements.into_iter().take(limit).collect(), total_count)
     }
 
-    fn day_page_spine_empty_selection_suppressed(&self, model: &DayPageSpineModel) -> bool {
-        match model.active_empty_subsearch {
-            Some(source) => self.spine_empty_subsearch_armed_for != Some(source),
-            None => false,
-        }
-    }
-
     fn selected_day_page_spine_row(
         &self,
         model: &DayPageSpineModel,
     ) -> Option<crate::spine::SpineListRow> {
-        if self.day_page_spine_empty_selection_suppressed(model) {
-            return None;
-        }
         model.selected_row(self.spine_selected_index)
     }
 
@@ -755,19 +703,6 @@ impl DayPageView {
         let Some(model) = self.day_page_spine_model(cx) else {
             return false;
         };
-
-        if direction > 0 {
-            if let Some(source) = model.active_empty_subsearch {
-                if self.spine_empty_subsearch_armed_for != Some(source) {
-                    self.spine_empty_subsearch_armed_for = Some(source);
-                    if let Some(index) = crate::list_item::coerce_selection(&model.grouped, 0) {
-                        self.spine_selected_index = index;
-                    }
-                    cx.notify();
-                    return true;
-                }
-            }
-        }
 
         let len = model.grouped.len();
         if len == 0 {
@@ -792,12 +727,11 @@ impl DayPageView {
     }
 
     fn reset_day_page_spine_navigation(&mut self, cx: &mut Context<Self>) {
-        if let Some((key, _, _, _, _)) = self.day_page_spine_input(cx) {
+        if let Some((key, _, _, _)) = self.day_page_spine_input(cx) {
             self.spine_dismissed_cache_key = Some(key);
         }
         self.spine_selected_index = 0;
         self.spine_hovered_index = None;
-        self.spine_empty_subsearch_armed_for = None;
         cx.notify();
     }
 
@@ -835,7 +769,6 @@ impl DayPageView {
         self.session.apply_editor_content(&new_content);
         self.refresh_fragment_open_targets(&new_content);
         self.spine_selected_index = 0;
-        self.spine_empty_subsearch_armed_for = None;
         self.spine_alias_cache.clear();
         self.sync_footer(window, cx);
         cx.notify();
@@ -1053,7 +986,8 @@ impl DayPageView {
             return false;
         };
         if let Some((token, part)) = self.spine_alias_cache.get(row.id.as_ref()).cloned() {
-            self.spine_mention_aliases.insert(token.clone(), part.clone());
+            self.spine_mention_aliases
+                .insert(token.clone(), part.clone());
             if let Some(app) = self.app.upgrade() {
                 window.defer(cx, move |_window, cx| {
                     app.update(cx, |app, _cx| {
@@ -1086,31 +1020,31 @@ mod day_page_spine_tests {
 
     #[test]
     fn current_line_parser_ignores_prior_captured_mentions() {
-        let content = "captured @file:old\nnew @file:read";
+        let content = "captured text\nnew /rewrite";
         let cursor = content.len();
         let range = current_line_range(content, cursor);
-        assert_eq!(&content[range], "new @file:read");
+        assert_eq!(&content[range], "new /rewrite");
     }
 
     #[test]
     fn current_line_parser_targets_non_final_active_line() {
-        let content = "first @file:old\nmiddle @file:read\nlast @clipboard:tail";
-        let cursor = content.find("read").expect("active query exists") + "re".len();
+        let content = "first /rewrite\nmiddle .professional\nlast ;todo";
+        let cursor = content.find("professional").expect("active query exists") + "pro".len();
         let range = current_line_range(content, cursor);
-        assert_eq!(&content[range], "middle @file:read");
+        assert_eq!(&content[range], "middle .professional");
     }
 
     #[test]
     fn current_line_parser_clamps_unicode_cursor_to_char_boundary() {
-        let content = "emoji é @file:read\nnext";
+        let content = "emoji é /rewrite\nnext";
         let cursor_inside_e_acute = "emoji ".len() + 1;
         let range = current_line_range(content, cursor_inside_e_acute);
-        assert_eq!(&content[range], "emoji é @file:read");
+        assert_eq!(&content[range], "emoji é /rewrite");
     }
 
     #[test]
     fn current_line_parser_handles_blank_active_line() {
-        let content = "above\n\nbelow @file:read";
+        let content = "above\n\nbelow /rewrite";
         let cursor = "above\n".len();
         let range = current_line_range(content, cursor);
         assert_eq!(&content[range], "");
@@ -1118,41 +1052,41 @@ mod day_page_spine_tests {
 
     #[test]
     fn replace_segment_content_preserves_surrounding_lines() {
-        let content = "captured @file:old\nnew @fi\nnext line";
+        let content = "captured old\nnew /rew\nnext line";
         let line_start = content.find("new ").expect("line exists");
-        let line_range = line_start.."captured @file:old\nnew @fi".len();
+        let line_range = line_start.."captured old\nnew /rew".len();
         let segment_start = "new ".len();
-        let segment_end = segment_start + "@fi".len();
+        let segment_end = segment_start + "/rew".len();
         let (new_content, cursor) = replace_segment_content(
             content,
             line_range,
             segment_start..segment_end,
-            "@file:",
+            "/rewrite",
             false,
         )
         .expect("replacement should fit current line");
 
-        assert_eq!(new_content, "captured @file:old\nnew @file:\nnext line");
-        assert_eq!(cursor, "captured @file:old\nnew @file:".len());
+        assert_eq!(new_content, "captured old\nnew /rewrite\nnext line");
+        assert_eq!(cursor, "captured old\nnew /rewrite".len());
     }
 
     #[test]
     fn replace_segment_content_adds_trailing_space_when_needed() {
-        let content = "ask @fi";
+        let content = "ask /rew";
         let line_range = 0..content.len();
         let segment_start = "ask ".len();
-        let segment_end = segment_start + "@fi".len();
+        let segment_end = segment_start + "/rew".len();
         let (new_content, cursor) = replace_segment_content(
             content,
             line_range,
             segment_start..segment_end,
-            "@file:",
+            "/rewrite",
             true,
         )
         .expect("replacement should fit");
 
-        assert_eq!(new_content, "ask @file: ");
-        assert_eq!(cursor, "ask @file: ".len());
+        assert_eq!(new_content, "ask /rewrite ");
+        assert_eq!(cursor, "ask /rewrite ".len());
     }
 
     fn test_text_block_part(label: &str) -> crate::ai::message_parts::AiContextPart {
@@ -1229,14 +1163,6 @@ mod day_page_spine_tests {
     }
 
     #[test]
-    fn day_page_spine_does_not_own_context_mentions() {
-        let line = "@file:readme";
-        let parse = crate::spine::parse_spine(line);
-        let projection = crate::spine::project_cursor(&parse, line.len());
-        assert!(!spine_projection_owns_day_page_list(&parse, &projection));
-    }
-
-    #[test]
     fn day_page_projection_keeps_submit_and_filters_dead_end_actions() {
         let rows = push_spine_sections_as_grouped(vec![crate::spine::SpineListSection {
             id: "test-section".into(),
@@ -1258,9 +1184,9 @@ mod day_page_spine_tests {
                     action: crate::spine::SpineListAction::SubmitPromptPlan,
                 },
                 crate::spine::SpineListRow {
-                    id: "spine:@file:portal".into(),
+                    id: "spine:noop".into(),
                     kind: crate::spine::SpineListRowKind::Hint,
-                    title: "Browse files".into(),
+                    title: "Unavailable".into(),
                     subtitle: None,
                     meta: None,
                     icon: None,
@@ -1268,11 +1194,7 @@ mod day_page_spine_tests {
                     score: 0,
                     is_selectable: true,
                     action_label: None,
-                    action: crate::spine::SpineListAction::OpenFileSearchPortal {
-                        segment_index: 0,
-                        segment_byte_range: 0..6,
-                        query: "".into(),
-                    },
+                    action: crate::spine::SpineListAction::Noop,
                 },
                 crate::spine::SpineListRow {
                     id: "spine:/:rewrite".into(),
@@ -1344,7 +1266,6 @@ mod day_page_spine_tests {
             projection,
             grouped: rows.grouped,
             flat: rows.flat,
-            active_empty_subsearch: None,
         };
 
         let row = model
@@ -1409,45 +1330,8 @@ mod day_page_spine_tests {
         let parse = crate::spine::parse_spine("summarize this folder");
         let aliases = std::collections::HashMap::new();
 
-        assert!(day_page_spine_prompt_plan_can_submit(&parse, true, &aliases));
-    }
-
-    #[test]
-    fn cmd_enter_preflight_allows_prompt_builder_plan_without_cwd_anchor() {
-        let parse = crate::spine::parse_spine("@selection summarize this");
-        let aliases = std::collections::HashMap::new();
-
         assert!(day_page_spine_prompt_plan_can_submit(
-            &parse, false, &aliases
-        ));
-    }
-
-    #[test]
-    fn cmd_enter_preflight_rejects_partial_context_even_with_cwd_anchor() {
-        let parse = crate::spine::parse_spine("@clip");
-        let aliases = std::collections::HashMap::new();
-
-        assert!(!day_page_spine_prompt_plan_can_submit(
             &parse, true, &aliases
-        ));
-    }
-
-    #[test]
-    fn cmd_enter_preflight_allows_alias_backed_context() {
-        let parse = crate::spine::parse_spine("@clipboard:Latest");
-        let mut aliases = std::collections::HashMap::new();
-        aliases.insert(
-            "@clipboard:Latest".to_string(),
-            crate::ai::message_parts::AiContextPart::TextBlock {
-                label: "Latest".to_string(),
-                source: "clipboard/test".to_string(),
-                text: "Copied context".to_string(),
-                mime_type: None,
-            },
-        );
-
-        assert!(day_page_spine_prompt_plan_can_submit(
-            &parse, false, &aliases
         ));
     }
 }
