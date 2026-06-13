@@ -1,117 +1,13 @@
 // Day Page spine adapter: current-line parsing, row projection, and acceptance.
 
-use std::{collections::HashMap, ops::Range};
+use std::ops::Range;
 
 use crate::components::notes_editor::spine::{
     clamp_to_char_boundary, current_line_range, mention_atomic_delete_fixup,
-    replace_segment_content, spine_prompt_plan_can_submit,
+    push_spine_sections_as_grouped, replace_segment_content, spine_projection_owns_editor_list,
+    spine_prompt_plan_can_submit, NotesEditorSpineModel as DayPageSpineModel,
+    NotesEditorSpineRows as DayPageSpineRows,
 };
-
-struct DayPageSpineRows {
-    grouped: Vec<GroupedListItem>,
-    flat: Vec<scripts::SearchResult>,
-    aliases: HashMap<String, (String, crate::ai::message_parts::AiContextPart)>,
-}
-
-impl DayPageSpineRows {
-    fn new(grouped: Vec<GroupedListItem>, flat: Vec<scripts::SearchResult>) -> Self {
-        Self {
-            grouped,
-            flat,
-            aliases: HashMap::new(),
-        }
-    }
-}
-
-struct DayPageSpineModel {
-    line_range: Range<usize>,
-    parse: crate::spine::SpineParse,
-    projection: crate::spine::SpineCursorProjection,
-    grouped: Vec<GroupedListItem>,
-    flat: Vec<scripts::SearchResult>,
-}
-
-impl DayPageSpineModel {
-    fn selected_row(&self, selected_index: usize) -> Option<crate::spine::SpineListRow> {
-        let selected_index = crate::list_item::coerce_selection(&self.grouped, selected_index)?;
-        let GroupedListItem::Item(flat_idx) = self.grouped.get(selected_index)? else {
-            return None;
-        };
-        let scripts::SearchResult::SpineProjection(row) = self.flat.get(*flat_idx)? else {
-            return None;
-        };
-        row.is_selectable.then(|| row.clone())
-    }
-}
-
-fn spine_projection_owns_day_page_list(
-    parse: &crate::spine::SpineParse,
-    projection: &crate::spine::SpineCursorProjection,
-) -> bool {
-    if matches!(
-        projection.active_segment_kind,
-        crate::spine::SpineSegmentKind::ContextMention { .. }
-    ) {
-        return false;
-    }
-
-    if matches!(
-        projection.active_segment_kind,
-        crate::spine::SpineSegmentKind::Capture { .. }
-    ) {
-        let raw = parse
-            .segments
-            .get(projection.active_segment_index)
-            .map(|segment| segment.raw.as_str())
-            .unwrap_or("");
-        if !raw.starts_with(';') {
-            return false;
-        }
-    }
-
-    !matches!(
-        projection.active_segment_kind,
-        crate::spine::SpineSegmentKind::FreeText
-    ) || (projection.is_tail
-        && projection.has_prompt_segments
-        && crate::spine::parse_has_prompt_builder_segments(parse))
-}
-
-fn push_spine_sections_as_grouped(
-    sections: Vec<crate::spine::SpineListSection>,
-) -> DayPageSpineRows {
-    let mut grouped = Vec::new();
-    let mut flat = Vec::new();
-    for section in sections {
-        grouped.push(GroupedListItem::SectionHeader(
-            section.title.to_string(),
-            section.icon.as_ref().map(|icon| icon.as_ref().to_string()),
-        ));
-        for row in section.rows {
-            if row.is_selectable && !day_page_supports_spine_action(&row.action) {
-                continue;
-            }
-            if !row.is_selectable {
-                let mut label = row.title.to_string();
-                if let Some(subtitle) = row.subtitle.as_ref() {
-                    if !subtitle.is_empty() {
-                        label.push_str(" \u{b7} ");
-                        label.push_str(subtitle.as_ref());
-                    }
-                }
-                grouped.push(GroupedListItem::SectionHeader(
-                    label,
-                    row.icon.as_ref().map(|icon| icon.as_ref().to_string()),
-                ));
-                continue;
-            }
-            let flat_idx = flat.len();
-            flat.push(scripts::SearchResult::SpineProjection(row));
-            grouped.push(GroupedListItem::Item(flat_idx));
-        }
-    }
-    DayPageSpineRows::new(grouped, flat)
-}
 
 fn day_page_supports_spine_action(action: &crate::spine::SpineListAction) -> bool {
     !matches!(
@@ -184,7 +80,7 @@ fn cwd_rows_from_directory_results(
                     },
                 };
                 let new_idx = flat.len();
-                flat.push(scripts::SearchResult::SpineProjection(row));
+                flat.push(row);
                 remapped_grouped.push(GroupedListItem::Item(new_idx));
             }
         }
@@ -209,7 +105,7 @@ impl DayPageView {
             None,
             &|token| self.spine_runtime.mention_aliases.contains_key(token),
         );
-        push_spine_sections_as_grouped(sections)
+        push_spine_sections_as_grouped(sections, day_page_supports_spine_action)
     }
 
     fn render_day_page_spine_panel(&mut self, cx: &mut Context<Self>) -> Option<AnyElement> {
@@ -261,9 +157,7 @@ impl DayPageView {
                     );
                 }
                 GroupedListItem::Item(flat_idx) => {
-                    let Some(scripts::SearchResult::SpineProjection(row)) =
-                        model.flat.get(*flat_idx)
-                    else {
+                    let Some(row) = model.flat.get(*flat_idx) else {
                         continue;
                     };
                     let is_selected = selected == Some(ix);
@@ -333,7 +227,7 @@ impl DayPageView {
         let line_cursor = cursor.saturating_sub(line_range.start);
         let parse = crate::spine::parse_spine(line);
         let projection = crate::spine::project_cursor(&parse, line_cursor);
-        if !spine_projection_owns_day_page_list(&parse, &projection) {
+        if !spine_projection_owns_editor_list(&parse, &projection) {
             return None;
         }
 
@@ -559,7 +453,7 @@ impl DayPageView {
             let GroupedListItem::Item(flat_idx) = grouped_item else {
                 continue;
             };
-            let Some(scripts::SearchResult::SpineProjection(row)) = flat.get(*flat_idx) else {
+            let Some(row) = flat.get(*flat_idx) else {
                 continue;
             };
             elements.push(protocol::ElementInfo {
@@ -922,39 +816,80 @@ mod day_page_spine_tests {
 
     #[test]
     fn day_page_projection_keeps_submit_and_filters_dead_end_actions() {
-        let rows = push_spine_sections_as_grouped(vec![crate::spine::SpineListSection {
-            id: "test-section".into(),
-            title: "Test".into(),
-            subtitle: None,
-            icon: None,
-            rows: vec![
-                crate::spine::SpineListRow {
-                    id: "spine:tail:ready".into(),
-                    kind: crate::spine::SpineListRowKind::Hint,
-                    title: "Ready to send".into(),
-                    subtitle: None,
-                    meta: None,
-                    icon: None,
-                    badges: vec![],
-                    score: 0,
-                    is_selectable: true,
-                    action_label: None,
-                    action: crate::spine::SpineListAction::SubmitPromptPlan,
-                },
-                crate::spine::SpineListRow {
-                    id: "spine:noop".into(),
-                    kind: crate::spine::SpineListRowKind::Hint,
-                    title: "Unavailable".into(),
-                    subtitle: None,
-                    meta: None,
-                    icon: None,
-                    badges: vec![],
-                    score: 0,
-                    is_selectable: true,
-                    action_label: None,
-                    action: crate::spine::SpineListAction::Noop,
-                },
-                crate::spine::SpineListRow {
+        let rows = push_spine_sections_as_grouped(
+            vec![crate::spine::SpineListSection {
+                id: "test-section".into(),
+                title: "Test".into(),
+                subtitle: None,
+                icon: None,
+                rows: vec![
+                    crate::spine::SpineListRow {
+                        id: "spine:tail:ready".into(),
+                        kind: crate::spine::SpineListRowKind::Hint,
+                        title: "Ready to send".into(),
+                        subtitle: None,
+                        meta: None,
+                        icon: None,
+                        badges: vec![],
+                        score: 0,
+                        is_selectable: true,
+                        action_label: None,
+                        action: crate::spine::SpineListAction::SubmitPromptPlan,
+                    },
+                    crate::spine::SpineListRow {
+                        id: "spine:noop".into(),
+                        kind: crate::spine::SpineListRowKind::Hint,
+                        title: "Unavailable".into(),
+                        subtitle: None,
+                        meta: None,
+                        icon: None,
+                        badges: vec![],
+                        score: 0,
+                        is_selectable: true,
+                        action_label: None,
+                        action: crate::spine::SpineListAction::Noop,
+                    },
+                    crate::spine::SpineListRow {
+                        id: "spine:/:rewrite".into(),
+                        kind: crate::spine::SpineListRowKind::SlashCommand {
+                            command: "rewrite".into(),
+                        },
+                        title: "Rewrite".into(),
+                        subtitle: None,
+                        meta: None,
+                        icon: None,
+                        badges: vec![],
+                        score: 0,
+                        is_selectable: true,
+                        action_label: None,
+                        action: crate::spine::SpineListAction::InsertSegmentText {
+                            segment_index: 0,
+                            segment_byte_range: 0..3,
+                            text: "/rewrite ".into(),
+                            trailing_space: false,
+                        },
+                    },
+                ],
+            }],
+            day_page_supports_spine_action,
+        );
+
+        assert_eq!(rows.flat.len(), 2);
+        let row = &rows.flat[0];
+        assert_eq!(row.id.as_ref(), "spine:tail:ready");
+        let row = &rows.flat[1];
+        assert_eq!(row.id.as_ref(), "spine:/:rewrite");
+    }
+
+    #[test]
+    fn selected_row_coerces_section_header_index_to_first_item() {
+        let rows = push_spine_sections_as_grouped(
+            vec![crate::spine::SpineListSection {
+                id: "test-section".into(),
+                title: "Test".into(),
+                subtitle: None,
+                icon: None,
+                rows: vec![crate::spine::SpineListRow {
                     id: "spine:/:rewrite".into(),
                     kind: crate::spine::SpineListRowKind::SlashCommand {
                         command: "rewrite".into(),
@@ -973,49 +908,10 @@ mod day_page_spine_tests {
                         text: "/rewrite ".into(),
                         trailing_space: false,
                     },
-                },
-            ],
-        }]);
-
-        assert_eq!(rows.flat.len(), 2);
-        let scripts::SearchResult::SpineProjection(row) = &rows.flat[0] else {
-            panic!("expected projected spine row");
-        };
-        assert_eq!(row.id.as_ref(), "spine:tail:ready");
-        let scripts::SearchResult::SpineProjection(row) = &rows.flat[1] else {
-            panic!("expected projected spine row");
-        };
-        assert_eq!(row.id.as_ref(), "spine:/:rewrite");
-    }
-
-    #[test]
-    fn selected_row_coerces_section_header_index_to_first_item() {
-        let rows = push_spine_sections_as_grouped(vec![crate::spine::SpineListSection {
-            id: "test-section".into(),
-            title: "Test".into(),
-            subtitle: None,
-            icon: None,
-            rows: vec![crate::spine::SpineListRow {
-                id: "spine:/:rewrite".into(),
-                kind: crate::spine::SpineListRowKind::SlashCommand {
-                    command: "rewrite".into(),
-                },
-                title: "Rewrite".into(),
-                subtitle: None,
-                meta: None,
-                icon: None,
-                badges: vec![],
-                score: 0,
-                is_selectable: true,
-                action_label: None,
-                action: crate::spine::SpineListAction::InsertSegmentText {
-                    segment_index: 0,
-                    segment_byte_range: 0..3,
-                    text: "/rewrite ".into(),
-                    trailing_space: false,
-                },
+                }],
             }],
-        }]);
+            day_page_supports_spine_action,
+        );
         let parse = crate::spine::parse_spine("/rew");
         let projection = crate::spine::project_cursor(&parse, "/rew".len());
         let model = DayPageSpineModel {
@@ -1055,9 +951,7 @@ mod day_page_spine_tests {
         let rows = cwd_rows_from_directory_results("dev", &projection, &parse, grouped, flat);
 
         assert_eq!(rows.flat.len(), 1);
-        let scripts::SearchResult::SpineProjection(row) = &rows.flat[0] else {
-            panic!("cwd rows should be remapped to spine projections");
-        };
+        let row = &rows.flat[0];
         assert_eq!(row.id.as_ref(), "spine:>:dir:/Users/test/dev");
         let crate::spine::SpineListAction::ResolveSegment {
             resolution_id,

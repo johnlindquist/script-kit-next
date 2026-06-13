@@ -20,7 +20,7 @@ pub struct DayPageView {
     pub(crate) focus_handle: FocusHandle,
     /// Resolved fragment paths aligned with parsed fragment reference indices.
     pub(crate) fragment_open_targets: Vec<PathBuf>,
-    pub(crate) spine_runtime: NotesEditorSpineRuntime<crate::scripts::SearchResult>,
+    pub(crate) spine_runtime: NotesEditorSpineRuntime<crate::spine::SpineListRow>,
     /// Last debounced autosave write (Notes-parity SAVE_DEBOUNCE_MS throttle).
     pub(crate) last_autosave: Option<std::time::Instant>,
     /// True while a trailing autosave flush timer is pending.

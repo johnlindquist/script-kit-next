@@ -7,6 +7,45 @@ use std::{collections::HashMap, ops::Range};
 
 use crate::ai::message_parts::AiContextPart;
 
+pub(crate) struct NotesEditorSpineRows {
+    pub(crate) grouped: Vec<crate::list_item::GroupedListItem>,
+    pub(crate) flat: Vec<crate::spine::SpineListRow>,
+    pub(crate) aliases: HashMap<String, (String, AiContextPart)>,
+}
+
+impl NotesEditorSpineRows {
+    pub(crate) fn new(
+        grouped: Vec<crate::list_item::GroupedListItem>,
+        flat: Vec<crate::spine::SpineListRow>,
+    ) -> Self {
+        Self {
+            grouped,
+            flat,
+            aliases: HashMap::new(),
+        }
+    }
+}
+
+pub(crate) struct NotesEditorSpineModel {
+    pub(crate) line_range: Range<usize>,
+    pub(crate) parse: crate::spine::SpineParse,
+    pub(crate) projection: crate::spine::SpineCursorProjection,
+    pub(crate) grouped: Vec<crate::list_item::GroupedListItem>,
+    pub(crate) flat: Vec<crate::spine::SpineListRow>,
+}
+
+impl NotesEditorSpineModel {
+    pub(crate) fn selected_row(&self, selected_index: usize) -> Option<crate::spine::SpineListRow> {
+        let selected_index = crate::list_item::coerce_selection(&self.grouped, selected_index)?;
+        let crate::list_item::GroupedListItem::Item(flat_idx) = self.grouped.get(selected_index)?
+        else {
+            return None;
+        };
+        let row = self.flat.get(*flat_idx)?;
+        row.is_selectable.then(|| row.clone())
+    }
+}
+
 #[derive(Debug)]
 pub(crate) struct NotesEditorSpineRuntime<Flat> {
     pub(crate) selected_index: usize,
@@ -162,6 +201,76 @@ pub(crate) fn spine_prompt_plan_can_submit(
             )
             && plan.unknown_warnings.is_empty()
             && !plan.normalized_prompt.trim().is_empty())
+}
+
+pub(crate) fn spine_projection_owns_editor_list(
+    parse: &crate::spine::SpineParse,
+    projection: &crate::spine::SpineCursorProjection,
+) -> bool {
+    if matches!(
+        projection.active_segment_kind,
+        crate::spine::SpineSegmentKind::ContextMention { .. }
+    ) {
+        return false;
+    }
+
+    if matches!(
+        projection.active_segment_kind,
+        crate::spine::SpineSegmentKind::Capture { .. }
+    ) {
+        let raw = parse
+            .segments
+            .get(projection.active_segment_index)
+            .map(|segment| segment.raw.as_str())
+            .unwrap_or("");
+        if !raw.starts_with(';') {
+            return false;
+        }
+    }
+
+    !matches!(
+        projection.active_segment_kind,
+        crate::spine::SpineSegmentKind::FreeText
+    ) || (projection.is_tail
+        && projection.has_prompt_segments
+        && crate::spine::parse_has_prompt_builder_segments(parse))
+}
+
+pub(crate) fn push_spine_sections_as_grouped(
+    sections: Vec<crate::spine::SpineListSection>,
+    supports_action: impl Fn(&crate::spine::SpineListAction) -> bool,
+) -> NotesEditorSpineRows {
+    let mut grouped = Vec::new();
+    let mut flat = Vec::new();
+    for section in sections {
+        grouped.push(crate::list_item::GroupedListItem::SectionHeader(
+            section.title.to_string(),
+            section.icon.as_ref().map(|icon| icon.as_ref().to_string()),
+        ));
+        for row in section.rows {
+            if row.is_selectable && !supports_action(&row.action) {
+                continue;
+            }
+            if !row.is_selectable {
+                let mut label = row.title.to_string();
+                if let Some(subtitle) = row.subtitle.as_ref() {
+                    if !subtitle.is_empty() {
+                        label.push_str(" \u{b7} ");
+                        label.push_str(subtitle.as_ref());
+                    }
+                }
+                grouped.push(crate::list_item::GroupedListItem::SectionHeader(
+                    label,
+                    row.icon.as_ref().map(|icon| icon.as_ref().to_string()),
+                ));
+                continue;
+            }
+            let flat_idx = flat.len();
+            flat.push(row);
+            grouped.push(crate::list_item::GroupedListItem::Item(flat_idx));
+        }
+    }
+    NotesEditorSpineRows::new(grouped, flat)
 }
 
 fn single_char_deletion_index(previous: &str, next: &str) -> Option<usize> {
