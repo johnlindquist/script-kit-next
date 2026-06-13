@@ -5,10 +5,45 @@ use std::path::PathBuf;
 use gpui::WeakEntity;
 
 use crate::components::notes_editor::NotesEditor;
-use crate::components::notes_editor::spine::NotesEditorSpineRuntime;
 use script_kit_gpui::day_page::DayPageDocumentSession;
 
 pub(crate) const DAY_PAGE_EDITOR_ID: &str = "day-page-editor";
+
+/// Minimal Day Page state for direct Cmd+Enter handoff and accepted `@`
+/// mention aliases. It intentionally does not carry list rows, selection, hover,
+/// or dismissed-cache state because Day must not own a local inline Spine UI.
+#[derive(Default)]
+pub(crate) struct DayPageSpineHandoffState {
+    pub(crate) cwd_submit_anchor: bool,
+    pub(crate) mention_aliases:
+        std::collections::HashMap<String, crate::ai::message_parts::AiContextPart>,
+}
+
+impl DayPageSpineHandoffState {
+    pub(crate) fn reset(&mut self, clear_cwd_anchor: bool, clear_mentions: bool) {
+        if clear_cwd_anchor {
+            self.cwd_submit_anchor = false;
+        }
+        if clear_mentions {
+            self.mention_aliases.clear();
+        }
+    }
+
+    pub(crate) fn register_mention_alias(
+        &mut self,
+        token: String,
+        part: crate::ai::message_parts::AiContextPart,
+    ) {
+        self.mention_aliases.insert(token, part);
+    }
+
+    pub(crate) fn prune_mention_aliases_for_content(&mut self, content: &str) {
+        crate::components::notes_editor::spine::prune_mention_aliases(
+            &mut self.mention_aliases,
+            content,
+        );
+    }
+}
 
 /// Host for today's day page inside the main launcher window.
 pub struct DayPageView {
@@ -20,7 +55,7 @@ pub struct DayPageView {
     pub(crate) focus_handle: FocusHandle,
     /// Resolved fragment paths aligned with parsed fragment reference indices.
     pub(crate) fragment_open_targets: Vec<PathBuf>,
-    pub(crate) spine_runtime: NotesEditorSpineRuntime<crate::spine::SpineListRow>,
+    pub(crate) spine_handoff: DayPageSpineHandoffState,
     /// Last debounced autosave write (Notes-parity SAVE_DEBOUNCE_MS throttle).
     pub(crate) last_autosave: Option<std::time::Instant>,
     /// True while a trailing autosave flush timer is pending.

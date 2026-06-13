@@ -52,7 +52,7 @@ impl DayPageView {
             editor_subscription,
             focus_handle: cx.focus_handle(),
             fragment_open_targets: Vec::new(),
-            spine_runtime: Default::default(),
+            spine_handoff: Default::default(),
             last_autosave: None,
             autosave_flush_scheduled: false,
             day_switcher: None,
@@ -82,7 +82,7 @@ impl DayPageView {
 
     fn apply_loaded_content_to_editor(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let content = self.session.disk_content().to_string();
-        self.reset_day_page_spine_runtime_state(true, true);
+        self.reset_day_page_spine_handoff_state(true, true);
         self.refresh_fragment_open_targets(&content);
         // Loads are not typing: pre-set the length so the Change event this
         // emits cannot read as growth and auto-swap to the main menu.
@@ -163,7 +163,7 @@ impl DayPageView {
             }
         }
         if let Some((fixed, cursor)) =
-            mention_atomic_delete_fixup(&previous, &content, &self.spine_runtime.mention_aliases)
+            mention_atomic_delete_fixup(&previous, &content, &self.spine_handoff.mention_aliases)
         {
             self.notes_editor.update(cx, |editor, cx| {
                 editor.set_value(fixed.clone(), window, cx);
@@ -172,8 +172,7 @@ impl DayPageView {
             self.last_editor_content_len = fixed.len();
             self.session.apply_editor_content(&fixed);
             self.refresh_fragment_open_targets(&fixed);
-            self.spine_runtime.prune_mention_aliases_for_content(&fixed);
-            self.spine_runtime.clear_transient_cache();
+            self.spine_handoff.prune_mention_aliases_for_content(&fixed);
             self.poll_external_disk_changes(window, cx);
             self.schedule_autosave_flush(cx);
             self.sync_footer(window, cx);
@@ -182,8 +181,7 @@ impl DayPageView {
         }
         self.session.apply_editor_content(&content);
         self.refresh_fragment_open_targets(&content);
-        self.spine_runtime.prune_mention_aliases_for_content(&content);
-        self.spine_runtime.clear_transient_cache();
+        self.spine_handoff.prune_mention_aliases_for_content(&content);
         self.poll_external_disk_changes(window, cx);
         self.schedule_autosave_flush(cx);
         self.sync_footer(window, cx);
@@ -240,7 +238,7 @@ impl DayPageView {
 
     pub fn poll_external_disk_changes(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if let Ok(Some(content)) = self.session.maybe_refresh_from_disk() {
-            self.reset_day_page_spine_runtime_state(true, true);
+            self.reset_day_page_spine_handoff_state(true, true);
             self.refresh_fragment_open_targets(&content);
             // External refresh is not typing: keep the growth detector quiet.
             self.last_editor_content_len = content.len();
@@ -301,7 +299,7 @@ impl DayPageView {
         });
         self.session.apply_editor_content(&text);
         self.refresh_fragment_open_targets(&text);
-        self.reset_day_page_spine_runtime_state(false, true);
+        self.reset_day_page_spine_handoff_state(false, true);
         self.sync_footer(window, cx);
         cx.notify();
     }
@@ -329,15 +327,15 @@ impl DayPageView {
         });
         self.session.apply_editor_content(&content);
         self.refresh_fragment_open_targets(&content);
-        self.reset_day_page_spine_runtime_state(false, true);
+        self.reset_day_page_spine_handoff_state(false, true);
         self.schedule_autosave_flush(cx);
         self.sync_footer(window, cx);
         self.focus_editor(window, cx);
         cx.notify();
     }
 
-    fn reset_day_page_spine_runtime_state(&mut self, clear_cwd_anchor: bool, clear_mentions: bool) {
-        self.spine_runtime.reset(clear_cwd_anchor, clear_mentions);
+    fn reset_day_page_spine_handoff_state(&mut self, clear_cwd_anchor: bool, clear_mentions: bool) {
+        self.spine_handoff.reset(clear_cwd_anchor, clear_mentions);
     }
 
     fn sync_footer(&self, window: &mut Window, cx: &mut Context<Self>) {

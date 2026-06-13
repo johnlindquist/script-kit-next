@@ -121,8 +121,8 @@ impl DayPageView {
         let parse = crate::spine::parse_spine(line);
         let can_submit_spine = spine_prompt_plan_can_submit(
             &parse,
-            self.spine_runtime.cwd_submit_anchor,
-            &self.spine_runtime.mention_aliases,
+            self.spine_handoff.cwd_submit_anchor,
+            &self.spine_handoff.mention_aliases,
         );
         let markdown_context_parts = day_page_context_parts_from_markdown_links(line);
         if !markdown_context_parts.is_empty() && !can_submit_spine {
@@ -156,7 +156,7 @@ impl DayPageView {
         let Some(app) = self.app.upgrade() else {
             return false;
         };
-        let mention_aliases = self.spine_runtime.mention_aliases.clone();
+        let mention_aliases = self.spine_handoff.mention_aliases.clone();
         let alias_count = mention_aliases.len();
         let context_token_count = crate::ai::context_mentions::inline_token_spans(line).len();
         tracing::info!(
@@ -165,7 +165,7 @@ impl DayPageView {
             line_len = line.len(),
             alias_count,
             context_token_count,
-            cwd_anchor = self.spine_runtime.cwd_submit_anchor,
+            cwd_anchor = self.spine_handoff.cwd_submit_anchor,
         );
 
         window.defer(cx, move |_window, cx| {

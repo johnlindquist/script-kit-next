@@ -136,8 +136,8 @@ try {
     { semanticIds: dayFlat.map((el) => el.semanticId ?? el.id).filter(Boolean).slice(0, 80) },
   );
 
-  // "/rew" keeps the inline spine list on the Day Page without invoking the
-  // main-menu context handoff.
+  // "/rew" remains plain editor text on the Day Page. The Day surface must not
+  // render a local inline spine/prompt-builder list for sigil input.
   const setSpine = (await driver.batch(
     [
       { type: "setInput", text: "/rew" },
@@ -151,17 +151,25 @@ try {
     ],
     { timeoutMs: 8000 },
   )) as Json;
-  check("spine_input_batch", setSpine.success === true, { batch: setSpine });
+  check("sigil_input_batch", setSpine.success === true, { batch: setSpine });
   const spineElements = (await driver.getElements(
     { target: { type: "main" }, limit: 160 },
     { timeoutMs: 8000 },
   )) as Json;
   const spineEditor = findSemantic(spineElements, "input:day-page-editor");
   const spineStyle = comparableStyle(spineEditor?.style);
-  check("spine_keeps_editor_style", spineStyle?.occlusionRgba === dayStyle?.occlusionRgba, {
+  const spineFlat = walkElements(spineElements);
+  const localSpineRows = spineFlat.filter((el) => {
+    const id = String(el.semanticId ?? el.id ?? el.role ?? "");
+    return id.includes("day-page-spine") || id.includes("day_page_spine");
+  });
+  check("sigil_keeps_editor_style", spineStyle?.occlusionRgba === dayStyle?.occlusionRgba, {
     spineStyle,
     dayStyle,
     selectedSemanticId: spineElements.selectedSemanticId ?? null,
+  });
+  check("sigil_does_not_render_day_spine_list", localSpineRows.length === 0, {
+    localSpineRows: localSpineRows.slice(0, 12),
   });
 
   const pass = failures.length === 0;
