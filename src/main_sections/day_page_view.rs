@@ -540,9 +540,12 @@ impl Render for DayPageView {
 
                         let top = editor_padding_y + (start_line as f32) * SEDIMENT_LINE_HEIGHT;
                         let height = (line_count as f32) * SEDIMENT_LINE_HEIGHT;
+                        let card_id = script_kit_gpui::day_page::fragment_card_id(index);
 
                         layer = layer.child(
                             div()
+                                .id(card_id.clone())
+                                .debug_selector(move || card_id.clone())
                                 .absolute()
                                 .left(px(0.))
                                 .right(px(0.))
@@ -610,8 +613,8 @@ impl Render for DayPageView {
                     .relative()
                     .flex_1()
                     .min_h(px(0.))
-                    .when_some(sediment_layer, |parent, layer| parent.child(layer))
                     .child(editor_input)
+                    .when_some(sediment_layer, |parent, layer| parent.child(layer))
                     .when_some(spine_panel, |parent, panel| parent.child(panel))
                     .when_some(day_switcher_panel, |parent, panel| parent.child(panel)),
             );

@@ -42,6 +42,27 @@ fn set_main_window_input_text_for_batch(
     Ok(())
 }
 
+fn select_main_window_semantic_id_for_batch(
+    this: &gpui::WeakEntity<ScriptListApp>,
+    main_window_handle: Option<gpui::AnyWindowHandle>,
+    semantic_id: &str,
+    submit: bool,
+    cx: &mut gpui::AsyncApp,
+) -> anyhow::Result<String> {
+    let semantic_id = semantic_id.to_string();
+    if let Some(handle) = main_window_handle.or_else(crate::get_main_window_handle) {
+        return handle.update(cx, |_root, window, cx| {
+            this.update(cx, |app, cx| {
+                app.select_choice_by_semantic_id_in_window(&semantic_id, submit, window, cx)
+            })
+        })??;
+    }
+
+    this.update(cx, |app, cx| {
+        app.select_choice_by_semantic_id(&semantic_id, submit, cx)
+    })?
+}
+
 fn run_dev_style_tool_semantic_action_for_batch(
     this: &gpui::WeakEntity<ScriptListApp>,
     main_window_handle: Option<gpui::AnyWindowHandle>,
@@ -7714,10 +7735,14 @@ impl ScriptListApp {
                                     }
                                     continue;
                                 }
-                                match this.update(cx, |this, cx| {
-                                    this.select_choice_by_semantic_id(&semantic_id, submit, cx)
-                                }) {
-                                    Ok(Ok(v)) => {
+                                match select_main_window_semantic_id_for_batch(
+                                    &this,
+                                    main_batch_window_handle,
+                                    &semantic_id,
+                                    submit,
+                                    cx,
+                                ) {
+                                    Ok(v) => {
                                         tracing::info!(category = "BATCH", request_id = %rid, index = index, command = "selectBySemanticId", value = %v, "batch.step.ok");
                                         results.push(protocol::BatchResultEntry {
                                             index,
@@ -7728,7 +7753,7 @@ impl ScriptListApp {
                                             error: None,
                                         });
                                     }
-                                    Ok(Err(e)) => {
+                                    Err(e) => {
                                         tracing::info!(category = "BATCH", request_id = %rid, index = index, command = "selectBySemanticId", error = %e, "batch.step.error");
                                         results.push(protocol::BatchResultEntry {
                                             index,
@@ -7737,18 +7762,6 @@ impl ScriptListApp {
                                             elapsed: Some(cmd_start.elapsed().as_millis() as u64),
                                             value: None,
                                             error: Some(protocol::TransactionError::selection_not_found(format!("{e}"))),
-                                        });
-                                        failed = true;
-                                        if opts.stop_on_error { break; }
-                                    }
-                                    Err(e) => {
-                                        results.push(protocol::BatchResultEntry {
-                                            index,
-                                            success: false,
-                                            command: "selectBySemanticId".to_string(),
-                                            elapsed: Some(cmd_start.elapsed().as_millis() as u64),
-                                            value: None,
-                                            error: Some(protocol::TransactionError::action_failed(format!("{e}"))),
                                         });
                                         failed = true;
                                         if opts.stop_on_error { break; }
@@ -10499,6 +10512,48 @@ impl ScriptListApp {
                 anyhow::bail!("selectBySemanticId only supports visible choice surfaces")
             }
         }
+    }
+
+    fn select_choice_by_semantic_id_in_window(
+        &mut self,
+        semantic_id: &str,
+        submit: bool,
+        window: &mut gpui::Window,
+        cx: &mut Context<Self>,
+    ) -> anyhow::Result<String> {
+        if let AppView::DayPage { entity } = &self.current_view {
+            let entity = entity.clone();
+            if let Some(index) = semantic_id
+                .strip_prefix(script_kit_gpui::day_page::FRAGMENT_CARD_ID_PREFIX)
+                .and_then(|value| value.parse::<usize>().ok())
+            {
+                return entity.update(cx, |view, cx| {
+                    if view.fragment_open_targets.get(index).is_none() {
+                        anyhow::bail!(
+                            "No visible Day Page fragment card matched semantic ID '{semantic_id}'"
+                        );
+                    }
+                    if submit {
+                        view.open_fragment_at(index, window, cx);
+                    }
+                    Ok(semantic_id.to_string())
+                });
+            }
+
+            if semantic_id == script_kit_gpui::day_page::FRAGMENT_BACK_ID {
+                return entity.update(cx, |view, cx| {
+                    if !view.session.is_viewing_fragment() {
+                        anyhow::bail!("Day Page fragment back is not visible");
+                    }
+                    if submit {
+                        view.return_to_day_page(window, cx);
+                    }
+                    Ok(semantic_id.to_string())
+                });
+            }
+        }
+
+        self.select_choice_by_semantic_id(semantic_id, submit, cx)
     }
 
     /// Select the first choice in the filtered list.

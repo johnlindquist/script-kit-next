@@ -460,6 +460,150 @@ impl DayPageView {
         });
         let mut elements = vec![protocol::ElementInfo::panel("day-page"), editor];
 
+        if self.session.is_viewing_fragment() {
+            elements.push(protocol::ElementInfo {
+                semantic_id: script_kit_gpui::day_page::FRAGMENT_BACK_ID.to_string(),
+                element_type: protocol::ElementType::Button,
+                text: Some("Back to Today".to_string()),
+                value: Some("day_page:back_to_today".to_string()),
+                selected: None,
+                focused: None,
+                index: None,
+                role: Some("day_page_fragment_back".to_string()),
+                kind: Some("FragmentBack".to_string()),
+                source: None,
+                source_name: None,
+                selectable: Some(true),
+                status_kind: None,
+                action_disabled: None,
+                style: None,
+            });
+        } else {
+            let segments = script_kit_gpui::day_page::parse_day_page_segments(&content);
+            let sediment_count = segments
+                .iter()
+                .filter(|segment| {
+                    matches!(
+                        segment,
+                        script_kit_gpui::day_page::DayPageSegment::FragmentRef { .. }
+                            | script_kit_gpui::day_page::DayPageSegment::KeptUrl { .. }
+                    )
+                })
+                .count();
+            if sediment_count > 0 {
+                elements.push(protocol::ElementInfo {
+                    semantic_id: script_kit_gpui::day_page::SEDIMENT_LAYER_ID.to_string(),
+                    element_type: protocol::ElementType::Panel,
+                    text: Some(format!("{sediment_count} items")),
+                    value: None,
+                    selected: None,
+                    focused: None,
+                    index: None,
+                    role: Some("day_page_sediment_layer".to_string()),
+                    kind: Some("SedimentLayer".to_string()),
+                    source: None,
+                    source_name: None,
+                    selectable: Some(false),
+                    status_kind: None,
+                    action_disabled: None,
+                    style: Some(protocol::ElementStyleInfo {
+                        owner: editor_surface.owner.to_string(),
+                        input_render_path: Some(editor_surface.input_render_path.to_string()),
+                        surface_background_rgb: Some(editor_surface.background_rgb),
+                        occlusion_rgba: Some(editor_surface.occlusion_rgba),
+                        padding_x: Some(metrics.editor_padding_x),
+                        padding_y: Some(metrics.editor_padding_y),
+                        font_family_source: Some("theme.mono_font_family".to_string()),
+                        text_size_source: Some("theme.mono_font_size".to_string()),
+                    }),
+                });
+            }
+
+            let day_path = self.session.path().cloned();
+            let tz = self.session.substrate().timezone();
+            for segment in segments {
+                match segment {
+                    script_kit_gpui::day_page::DayPageSegment::FragmentRef {
+                        excerpt,
+                        relative_link,
+                        index,
+                        ..
+                    } => {
+                        let provenance = day_path
+                            .as_ref()
+                            .and_then(|day| {
+                                script_kit_gpui::day_page::resolve_fragment_path(
+                                    day,
+                                    &relative_link,
+                                )
+                            })
+                            .and_then(|path| {
+                                script_kit_gpui::day_page::load_fragment_provenance(&path)
+                            })
+                            .map(|meta| {
+                                script_kit_gpui::day_page::format_provenance_hint(&meta, tz)
+                            })
+                            .unwrap_or_else(|| "Fragment".to_string());
+                        elements.push(protocol::ElementInfo {
+                            semantic_id: script_kit_gpui::day_page::fragment_card_id(index),
+                            element_type: protocol::ElementType::Choice,
+                            text: Some(excerpt),
+                            value: Some(relative_link),
+                            selected: Some(false),
+                            focused: None,
+                            index: Some(index),
+                            role: Some("day_page_fragment_card".to_string()),
+                            kind: Some("FragmentRef".to_string()),
+                            source: Some(provenance),
+                            source_name: None,
+                            selectable: Some(true),
+                            status_kind: None,
+                            action_disabled: None,
+                            style: Some(protocol::ElementStyleInfo {
+                                owner: "components.unified_list_item".to_string(),
+                                input_render_path: None,
+                                surface_background_rgb: Some(editor_surface.background_rgb),
+                                occlusion_rgba: Some(editor_surface.occlusion_rgba),
+                                padding_x: Some(metrics.editor_padding_x),
+                                padding_y: Some(metrics.editor_padding_y),
+                                font_family_source: Some("theme.mono_font_family".to_string()),
+                                text_size_source: Some("theme.mono_font_size".to_string()),
+                            }),
+                        });
+                    }
+                    script_kit_gpui::day_page::DayPageSegment::KeptUrl { url, index, .. } => {
+                        elements.push(protocol::ElementInfo {
+                            semantic_id: script_kit_gpui::day_page::kept_url_id(index),
+                            element_type: protocol::ElementType::Button,
+                            text: Some(url.clone()),
+                            value: Some(url),
+                            selected: None,
+                            focused: None,
+                            index: Some(index),
+                            role: Some("day_page_kept_url".to_string()),
+                            kind: Some("KeptUrl".to_string()),
+                            source: None,
+                            source_name: None,
+                            selectable: Some(false),
+                            status_kind: None,
+                            action_disabled: None,
+                            style: Some(protocol::ElementStyleInfo {
+                                owner: editor_surface.owner.to_string(),
+                                input_render_path: Some(editor_surface.input_render_path.to_string()),
+                                surface_background_rgb: Some(editor_surface.background_rgb),
+                                occlusion_rgba: Some(editor_surface.occlusion_rgba),
+                                padding_x: Some(metrics.editor_padding_x),
+                                padding_y: Some(metrics.editor_padding_y),
+                                font_family_source: Some("theme.mono_font_family".to_string()),
+                                text_size_source: Some("theme.mono_font_size".to_string()),
+                            }),
+                        });
+                    }
+                    script_kit_gpui::day_page::DayPageSegment::Plain { .. } => {}
+                }
+            }
+        }
+
         if let Some(state) = self.day_switcher.as_ref() {
             let today = Utc::now()
                 .with_timezone(&self.session.substrate().timezone())
