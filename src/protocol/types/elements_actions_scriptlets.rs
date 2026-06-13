@@ -37,6 +37,8 @@ pub struct ElementStyleInfo {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub input_render_path: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub editor_runtime: Option<ElementEditorRuntimeInfo>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub surface_background_rgb: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub occlusion_rgba: Option<u32>,
@@ -48,6 +50,27 @@ pub struct ElementStyleInfo {
     pub font_family_source: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub text_size_source: Option<String>,
+}
+
+/// Runtime Markdown editor metadata for parity probes.
+///
+/// This is intentionally configuration-level metadata. It proves which shared
+/// editor/highlighter path a surface uses without requiring visual screenshot
+/// sampling or peeking into gpui-component internals.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ElementEditorRuntimeInfo {
+    pub owner: String,
+    pub language: String,
+    pub markdown_registered: bool,
+    pub markdown_inline_registered: bool,
+    pub injection_languages: Vec<String>,
+    pub inline_markdown_injection_disabled: bool,
+    pub highlight_query_fingerprint: String,
+    pub injection_query_fingerprint: String,
+    pub inline_highlight_query_fingerprint: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub editor_scroll_metrics: Option<serde_json::Value>,
 }
 
 /// Information about a UI element returned by getElements

@@ -172,4 +172,18 @@ impl NotesEditor {
     {
         f(self.input_state.read(cx))
     }
+
+    pub fn markdown_runtime_info(&self) -> crate::protocol::ElementEditorRuntimeInfo {
+        crate::notes::markdown_highlighting::markdown_editor_runtime_info()
+    }
+
+    pub fn markdown_runtime_info_with_scroll(
+        &self,
+        cx: &App,
+    ) -> crate::protocol::ElementEditorRuntimeInfo {
+        let mut info = self.markdown_runtime_info();
+        info.editor_scroll_metrics =
+            Some(self.read_input(cx, |state| state.automation_scroll_metrics()));
+        info
+    }
 }

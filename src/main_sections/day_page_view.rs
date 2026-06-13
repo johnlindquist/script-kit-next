@@ -32,7 +32,7 @@ impl DayPageView {
                     metrics.editor_padding_x,
                     metrics.editor_padding_y,
                 ))
-                .auto_grow(20, 500),
+                .rows(20),
         );
 
         // `subscribe_in` already runs the handler with this DayPageView leased

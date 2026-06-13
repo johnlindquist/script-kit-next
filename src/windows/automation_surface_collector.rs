@@ -1149,6 +1149,7 @@ fn collect_notes_snapshot(
     let theme = crate::theme::get_cached_theme();
     let editor_surface =
         crate::components::notes_editor::NotesEditorSurfaceStyle::from_theme(&theme);
+    let editor_runtime = crate::notes::get_notes_editor_runtime_info(cx)?;
     let mut editor = element(
         "input:notes-editor",
         ElementType::Input,
@@ -1161,6 +1162,7 @@ fn collect_notes_snapshot(
     editor.style = Some(ElementStyleInfo {
         owner: editor_surface.owner.to_string(),
         input_render_path: Some(editor_surface.input_render_path.to_string()),
+        editor_runtime: Some(editor_runtime),
         surface_background_rgb: Some(editor_surface.background_rgb),
         occlusion_rgba: Some(editor_surface.occlusion_rgba),
         padding_x: Some(metrics.editor_padding_x),

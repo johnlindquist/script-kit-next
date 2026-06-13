@@ -451,6 +451,11 @@ impl DayPageView {
         editor.style = Some(protocol::ElementStyleInfo {
             owner: editor_surface.owner.to_string(),
             input_render_path: Some(editor_surface.input_render_path.to_string()),
+            editor_runtime: Some(
+                self.notes_editor
+                    .read(cx)
+                    .markdown_runtime_info_with_scroll(cx),
+            ),
             surface_background_rgb: Some(editor_surface.background_rgb),
             occlusion_rgba: Some(editor_surface.occlusion_rgba),
             padding_x: Some(metrics.editor_padding_x),
@@ -509,6 +514,7 @@ impl DayPageView {
                     style: Some(protocol::ElementStyleInfo {
                         owner: editor_surface.owner.to_string(),
                         input_render_path: Some(editor_surface.input_render_path.to_string()),
+                        editor_runtime: None,
                         surface_background_rgb: Some(editor_surface.background_rgb),
                         occlusion_rgba: Some(editor_surface.occlusion_rgba),
                         padding_x: Some(metrics.editor_padding_x),
@@ -562,6 +568,7 @@ impl DayPageView {
                             style: Some(protocol::ElementStyleInfo {
                                 owner: "components.unified_list_item".to_string(),
                                 input_render_path: None,
+                                editor_runtime: None,
                                 surface_background_rgb: Some(editor_surface.background_rgb),
                                 occlusion_rgba: Some(editor_surface.occlusion_rgba),
                                 padding_x: Some(metrics.editor_padding_x),
@@ -590,6 +597,7 @@ impl DayPageView {
                             style: Some(protocol::ElementStyleInfo {
                                 owner: editor_surface.owner.to_string(),
                                 input_render_path: Some(editor_surface.input_render_path.to_string()),
+                                editor_runtime: None,
                                 surface_background_rgb: Some(editor_surface.background_rgb),
                                 occlusion_rgba: Some(editor_surface.occlusion_rgba),
                                 padding_x: Some(metrics.editor_padding_x),

@@ -479,11 +479,11 @@ pub(crate) use agent_chat_host::NOTES_EMBEDDED_AI_AUTOMATION_ID;
 pub(crate) use window_ops::update_notes_window_detached;
 pub use window_ops::{
     accept_notes_ghost_for_automation, apply_mcp_notes_mutation_on_main_thread, close_notes_window,
-    get_notes_app_entity_and_handle, get_notes_editor_text, handle_notes_ghost_key_for_automation,
-    inject_text_into_notes, is_notes_window, is_notes_window_open, open_note_in_notes_window,
-    open_notes_search, open_notes_window, open_notes_window_without_launcher_restore,
-    quick_capture, save_note_with_content, save_note_with_content_and_source,
-    toggle_notes_popup_for_automation,
+    get_notes_app_entity_and_handle, get_notes_editor_runtime_info, get_notes_editor_text,
+    handle_notes_ghost_key_for_automation, inject_text_into_notes, is_notes_window,
+    is_notes_window_open, open_note_in_notes_window, open_notes_search, open_notes_window,
+    open_notes_window_without_launcher_restore, quick_capture, save_note_with_content,
+    save_note_with_content_and_source, toggle_notes_popup_for_automation,
 };
 
 #[cfg(test)]

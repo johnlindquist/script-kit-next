@@ -97,6 +97,58 @@ fn test_elements_result_contains_expected_semantic_ids() {
 }
 
 #[test]
+fn test_elements_result_serializes_editor_runtime_metadata() {
+    let mut editor = ElementInfo::input("notes-editor", Some("# Heading"), true);
+    editor.style = Some(ElementStyleInfo {
+        owner: "components.notes_editor".to_string(),
+        input_render_path: Some("components.notes_editor.render_input_state".to_string()),
+        editor_runtime: Some(ElementEditorRuntimeInfo {
+            owner: "components.notes_editor".to_string(),
+            language: "markdown".to_string(),
+            markdown_registered: true,
+            markdown_inline_registered: true,
+            injection_languages: vec!["html".to_string(), "toml".to_string(), "yaml".to_string()],
+            inline_markdown_injection_disabled: true,
+            highlight_query_fingerprint: "fnv1a64:1111111111111111".to_string(),
+            injection_query_fingerprint: "fnv1a64:2222222222222222".to_string(),
+            inline_highlight_query_fingerprint: "fnv1a64:3333333333333333".to_string(),
+            editor_scroll_metrics: Some(serde_json::json!({
+                "available": true,
+                "scrollTop": 0,
+                "scrollHeight": 1200,
+                "clientHeight": 400,
+                "canScrollY": true,
+            })),
+        }),
+        surface_background_rgb: Some(0x112233),
+        occlusion_rgba: Some(0x112233ff),
+        padding_x: Some(16.0),
+        padding_y: Some(12.0),
+        font_family_source: Some("theme.mono_font_family".to_string()),
+        text_size_source: Some("theme.mono_font_size".to_string()),
+    });
+
+    let response = crate::protocol::Message::elements_result(
+        "editor-runtime".to_string(),
+        vec![editor],
+        1,
+        Some("input:notes-editor".to_string()),
+        None,
+        Vec::new(),
+    );
+    let json = serde_json::to_value(&response).expect("Should serialize");
+    let runtime = &json["elements"][0]["style"]["editorRuntime"];
+    assert_eq!(runtime["owner"], "components.notes_editor");
+    assert_eq!(runtime["language"], "markdown");
+    assert_eq!(
+        runtime["injectionLanguages"],
+        serde_json::json!(["html", "toml", "yaml"])
+    );
+    assert_eq!(runtime["inlineMarkdownInjectionDisabled"], true);
+    assert_eq!(runtime["editorScrollMetrics"]["canScrollY"], true);
+}
+
+#[test]
 fn test_elements_result_roundtrip_preserves_structure() {
     let elements = vec![
         ElementInfo::input("filter", Some("test"), true),

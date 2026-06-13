@@ -1224,6 +1224,23 @@ pub fn get_notes_editor_text(cx: &gpui::App) -> Option<String> {
     Some(entity.read(cx).editor_state.read(cx).value().to_string())
 }
 
+/// Return shared Markdown editor runtime metadata for the live Notes window.
+pub fn get_notes_editor_runtime_info(
+    cx: &gpui::App,
+) -> Option<crate::protocol::ElementEditorRuntimeInfo> {
+    let entity = {
+        let slot = NOTES_APP_ENTITY.get_or_init(|| std::sync::Mutex::new(None));
+        slot.lock().ok()?.clone()?
+    };
+    Some(
+        entity
+            .read(cx)
+            .notes_editor
+            .read(cx)
+            .markdown_runtime_info_with_scroll(cx),
+    )
+}
+
 /// Return the live `NotesApp` entity and its window handle, if the Notes
 /// window is open.
 ///
