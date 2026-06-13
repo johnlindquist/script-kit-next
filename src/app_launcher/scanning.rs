@@ -47,6 +47,9 @@ pub fn scan_applications_fresh() -> Vec<AppInfo> {
 fn reset_icon_stats() {
     ICONS_EXTRACTED.store(0, Ordering::Relaxed);
     ICONS_FROM_CACHE.store(0, Ordering::Relaxed);
+    ICONS_FROM_BUNDLE_RESOURCE.store(0, Ordering::Relaxed);
+    ICONS_FROM_ICON_SERVICES.store(0, Ordering::Relaxed);
+    ICONS_SKIPPED_ICON_SERVICES.store(0, Ordering::Relaxed);
     EXTRACT_TIME_MS.store(0, Ordering::Relaxed);
 }
 
@@ -54,12 +57,18 @@ fn reset_icon_stats() {
 fn log_icon_stats_summary() {
     let extracted = ICONS_EXTRACTED.load(Ordering::Relaxed);
     let from_cache = ICONS_FROM_CACHE.load(Ordering::Relaxed);
+    let from_bundle_resource = ICONS_FROM_BUNDLE_RESOURCE.load(Ordering::Relaxed);
+    let from_icon_services = ICONS_FROM_ICON_SERVICES.load(Ordering::Relaxed);
+    let skipped_icon_services = ICONS_SKIPPED_ICON_SERVICES.load(Ordering::Relaxed);
     let total_ms = EXTRACT_TIME_MS.load(Ordering::Relaxed);
 
-    if extracted > 0 || from_cache > 0 {
+    if extracted > 0 || from_cache > 0 || skipped_icon_services > 0 {
         info!(
             icons_extracted = extracted,
             icons_from_cache = from_cache,
+            icons_from_bundle_resource = from_bundle_resource,
+            icons_from_icon_services = from_icon_services,
+            icons_skipped_icon_services = skipped_icon_services,
             total_extract_ms = total_ms,
             avg_extract_ms = if extracted > 0 {
                 total_ms / extracted
@@ -332,15 +341,157 @@ fn extract_bundle_id(app_path: &Path) -> Option<String> {
     None
 }
 
-/// Extract application icon using NSWorkspace
+fn icon_extraction_disabled() -> bool {
+    std::env::var("SCRIPT_KIT_DISABLE_APP_ICON_EXTRACTION")
+        .map(|value| matches!(value.as_str(), "1" | "true" | "TRUE" | "yes" | "YES"))
+        .unwrap_or(false)
+}
+
+fn icon_services_fallback_enabled() -> bool {
+    std::env::var("SCRIPT_KIT_ENABLE_ICON_SERVICES_FALLBACK")
+        .map(|value| matches!(value.as_str(), "1" | "true" | "TRUE" | "yes" | "YES"))
+        .unwrap_or(false)
+}
+
+fn plist_value(plist_path: &Path, key_path: &str) -> Option<String> {
+    let output = Command::new("/usr/libexec/PlistBuddy")
+        .args(["-c", &format!("Print {key_path}"), plist_path.to_str()?])
+        .output()
+        .ok()?;
+
+    if !output.status.success() {
+        return None;
+    }
+
+    let value = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    (!value.is_empty()).then_some(value)
+}
+
+fn icon_file_candidates(icon_name: &str) -> [String; 2] {
+    if icon_name.ends_with(".icns") {
+        [
+            icon_name.to_string(),
+            icon_name.trim_end_matches(".icns").to_string(),
+        ]
+    } else {
+        [format!("{icon_name}.icns"), icon_name.to_string()]
+    }
+}
+
+fn resolve_bundle_icon_resource_path(app_path: &Path) -> Option<PathBuf> {
+    let resources_dir = app_path.join("Contents/Resources");
+    if !resources_dir.exists() {
+        return None;
+    }
+
+    let plist_path = app_path.join("Contents/Info.plist");
+    let icon_names = [
+        ":CFBundleIconFile",
+        ":CFBundleIcons:CFBundlePrimaryIcon:CFBundleIconFiles:0",
+        ":CFBundleIcons:CFBundlePrimaryIcon:CFBundleIconName",
+    ]
+    .into_iter()
+    .filter_map(|key_path| plist_value(&plist_path, key_path));
+
+    for icon_name in icon_names {
+        for candidate in icon_file_candidates(&icon_name) {
+            let icon_path = resources_dir.join(candidate);
+            if icon_path.exists() {
+                return Some(icon_path);
+            }
+        }
+    }
+
+    fs::read_dir(&resources_dir)
+        .ok()?
+        .flatten()
+        .map(|entry| entry.path())
+        .find(|path| path.extension().map(|ext| ext == "icns").unwrap_or(false))
+}
+
+#[cfg(target_os = "macos")]
+fn image_to_png_bytes(image: id) -> Option<Vec<u8>> {
+    use std::slice;
+
+    if image == nil {
+        return None;
+    }
+
+    // Set the icon size to 32x32 for list display
+    let size = cocoa::foundation::NSSize::new(32.0, 32.0);
+    let _: () = unsafe { msg_send![image, setSize: size] };
+
+    // Get TIFF representation
+    let tiff_data: id = unsafe { msg_send![image, TIFFRepresentation] };
+    if tiff_data == nil {
+        return None;
+    }
+
+    // Create bitmap image rep from TIFF data
+    let bitmap_rep: id =
+        unsafe { msg_send![class!(NSBitmapImageRep), imageRepWithData: tiff_data] };
+    if bitmap_rep == nil {
+        return None;
+    }
+
+    // Convert to PNG (NSPNGFileType = 4)
+    let empty_dict: id = unsafe { msg_send![class!(NSDictionary), dictionary] };
+    let png_data: id = unsafe {
+        msg_send![
+            bitmap_rep,
+            representationUsingType: 4u64  // NSPNGFileType
+            properties: empty_dict
+        ]
+    };
+    if png_data == nil {
+        return None;
+    }
+
+    // Get bytes from NSData
+    let length: usize = unsafe { msg_send![png_data, length] };
+    let bytes: *const u8 = unsafe { msg_send![png_data, bytes] };
+
+    if bytes.is_null() || length == 0 {
+        return None;
+    }
+
+    Some(unsafe { slice::from_raw_parts(bytes, length).to_vec() })
+}
+
+/// Extract application icon from the bundle's declared icon resource.
+///
+/// This path avoids NSWorkspace/iconForFile so it does not populate Apple's
+/// global IconServices cache at `/Library/Caches/com.apple.iconservices.store`.
+#[cfg(target_os = "macos")]
+fn extract_app_icon_from_bundle_resource(app_path: &Path) -> Option<Vec<u8>> {
+    let icon_path = resolve_bundle_icon_resource_path(app_path)?;
+    let path_str = icon_path.to_str()?;
+
+    unsafe {
+        let ns_path = CocoaNSString::alloc(nil).init_str(path_str);
+        if ns_path == nil {
+            return None;
+        }
+
+        let image: id = msg_send![class!(NSImage), alloc];
+        if image == nil {
+            return None;
+        }
+
+        let image: id = msg_send![image, initWithContentsOfFile: ns_path];
+        let png_bytes = image_to_png_bytes(image)?;
+        ICONS_FROM_BUNDLE_RESOURCE.fetch_add(1, Ordering::Relaxed);
+        Some(png_bytes)
+    }
+}
+
+/// Extract application icon using NSWorkspace.
 ///
 /// Uses macOS Cocoa APIs to get the icon for an application bundle.
 /// The icon is converted to PNG format at 32x32 pixels for list display.
 /// Returns raw PNG bytes - caller should decode once and cache the RenderImage.
 #[cfg(target_os = "macos")]
-fn extract_app_icon(app_path: &Path) -> Option<Vec<u8>> {
-    use std::slice;
-
+fn extract_app_icon_via_icon_services(app_path: &Path) -> Option<Vec<u8>> {
     let path_str = app_path.to_str()?;
 
     unsafe {
@@ -358,48 +509,35 @@ fn extract_app_icon(app_path: &Path) -> Option<Vec<u8>> {
 
         // Get icon for file
         let icon: id = msg_send![workspace, iconForFile: ns_path];
-        if icon == nil {
-            return None;
-        }
-
-        // Set the icon size to 32x32 for list display
-        let size = cocoa::foundation::NSSize::new(32.0, 32.0);
-        let _: () = msg_send![icon, setSize: size];
-
-        // Get TIFF representation
-        let tiff_data: id = msg_send![icon, TIFFRepresentation];
-        if tiff_data == nil {
-            return None;
-        }
-
-        // Create bitmap image rep from TIFF data
-        let bitmap_rep: id = msg_send![class!(NSBitmapImageRep), imageRepWithData: tiff_data];
-        if bitmap_rep == nil {
-            return None;
-        }
-
-        // Convert to PNG (NSPNGFileType = 4)
-        let empty_dict: id = msg_send![class!(NSDictionary), dictionary];
-        let png_data: id = msg_send![
-            bitmap_rep,
-            representationUsingType: 4u64  // NSPNGFileType
-            properties: empty_dict
-        ];
-        if png_data == nil {
-            return None;
-        }
-
-        // Get bytes from NSData
-        let length: usize = msg_send![png_data, length];
-        let bytes: *const u8 = msg_send![png_data, bytes];
-
-        if bytes.is_null() || length == 0 {
-            return None;
-        }
-
-        // Copy bytes to Vec<u8>
-        let png_bytes = slice::from_raw_parts(bytes, length).to_vec();
-
+        let png_bytes = image_to_png_bytes(icon)?;
+        ICONS_FROM_ICON_SERVICES.fetch_add(1, Ordering::Relaxed);
         Some(png_bytes)
     }
+}
+
+/// Extract application icon without using IconServices by default.
+#[cfg(target_os = "macos")]
+fn extract_app_icon(app_path: &Path) -> Option<Vec<u8>> {
+    if icon_extraction_disabled() {
+        trace!(
+            app = %app_path.display(),
+            "Skipping app icon extraction because SCRIPT_KIT_DISABLE_APP_ICON_EXTRACTION is set"
+        );
+        return None;
+    }
+
+    if let Some(png_bytes) = extract_app_icon_from_bundle_resource(app_path) {
+        return Some(png_bytes);
+    }
+
+    if icon_services_fallback_enabled() {
+        return extract_app_icon_via_icon_services(app_path);
+    }
+
+    ICONS_SKIPPED_ICON_SERVICES.fetch_add(1, Ordering::Relaxed);
+    trace!(
+        app = %app_path.display(),
+        "Skipping IconServices app icon fallback; set SCRIPT_KIT_ENABLE_ICON_SERVICES_FALLBACK=1 to opt in"
+    );
+    None
 }

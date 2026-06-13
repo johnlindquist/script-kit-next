@@ -15,6 +15,9 @@ use tracing::{debug, error, info, info_span, trace, warn};
 /// Stats for icon extraction during a scan (thread-safe)
 static ICONS_EXTRACTED: AtomicUsize = AtomicUsize::new(0);
 static ICONS_FROM_CACHE: AtomicUsize = AtomicUsize::new(0);
+static ICONS_FROM_BUNDLE_RESOURCE: AtomicUsize = AtomicUsize::new(0);
+static ICONS_FROM_ICON_SERVICES: AtomicUsize = AtomicUsize::new(0);
+static ICONS_SKIPPED_ICON_SERVICES: AtomicUsize = AtomicUsize::new(0);
 static EXTRACT_TIME_MS: AtomicUsize = AtomicUsize::new(0);
 
 #[cfg(target_os = "macos")]

@@ -98,6 +98,34 @@ mod tests {
     }
 
     #[test]
+    fn test_resolve_bundle_icon_resource_uses_declared_icns_without_iconservices() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let app = temp.path().join("Example.app");
+        let contents = app.join("Contents");
+        let resources = contents.join("Resources");
+        std::fs::create_dir_all(&resources).expect("create resources");
+
+        std::fs::write(
+            contents.join("Info.plist"),
+            r#"<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleIconFile</key>
+  <string>ExampleIcon</string>
+</dict>
+</plist>
+"#,
+        )
+        .expect("write plist");
+        let icon_path = resources.join("ExampleIcon.icns");
+        std::fs::write(&icon_path, []).expect("write icon placeholder");
+
+        assert_eq!(resolve_bundle_icon_resource_path(&app), Some(icon_path));
+    }
+
+    #[test]
     fn test_parse_app_bundle() {
         let finder_path = Path::new("/System/Applications/Finder.app");
         if finder_path.exists() {
