@@ -42,7 +42,7 @@ fn write_fragment(
 
 #[test]
 fn fragment_line_parses_to_markdown_reference_segment() {
-    let content = "09:15 [First words of the pasted article without cutting mid-word...](../fragments/2026-06-11-0942-clipboard.md)\n";
+    let content = "09:15 Fragment\n> First words of the pasted article without cutting mid-word...\n[Open fragment](../fragments/2026-06-11-0942-clipboard.md)\n";
     let segments = parse_day_page_segments(content);
     assert_eq!(segments.len(), 1);
     match &segments[0] {
@@ -53,7 +53,7 @@ fn fragment_line_parses_to_markdown_reference_segment() {
             ..
         } => {
             assert_eq!(*index, 0);
-            assert_eq!(*line_count, 1);
+            assert_eq!(*line_count, 3);
             assert!(excerpt.contains("First words"));
         }
         other => panic!("expected fragment reference segment, got {other:?}"),
@@ -104,7 +104,7 @@ fn open_fragment_binds_editor_and_back_restores_day_page() {
 }
 
 #[test]
-fn fragment_reference_is_written_as_markdown_link() {
+fn fragment_reference_is_written_as_markdown_card() {
     let (_dir, substrate) = test_substrate();
     let now = utc("2026-06-11T09:42:00Z");
     substrate
@@ -120,12 +120,12 @@ fn fragment_reference_is_written_as_markdown_link() {
 
     let contents =
         fs::read_to_string(substrate.paths().day_page(now.date_naive())).expect("read day");
-    assert!(contents.contains(
-        "09:42 [First words of the pasted article without cutting mid-word...](../fragments/2026-06-11-0942-clipboard.md)"
-    ));
+    assert!(contents.contains("09:42 Fragment\n"));
+    assert!(contents.contains("> First words of the pasted article without cutting mid-word...\n"));
+    assert!(contents.contains("[Open fragment](../fragments/2026-06-11-0942-clipboard.md)"));
     assert!(
         !contents.contains("\n  ../fragments/"),
-        "fragment references should no longer render as a separate card/backing line"
+        "fragment references should not render an extra raw backing line"
     );
 }
 

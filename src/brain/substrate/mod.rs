@@ -607,11 +607,63 @@ mod tests {
 
         let contents =
             fs::read_to_string(substrate.paths().day_page(now.date_naive())).expect("read day");
-        assert!(contents.contains(
-            "09:42 [First words of the pasted article without cutting mid-word...](../fragments/2026-06-11-0942-clipboard.md)"
-        ));
+        assert!(contents.contains("09:42 Fragment\n"));
+        assert!(
+            contents.contains("> First words of the pasted article without cutting mid-word...\n")
+        );
+        assert!(contents.contains("[Open fragment](../fragments/2026-06-11-0942-clipboard.md)"));
         assert!(contents
-            .contains("09:43 — Agent Chat: flaky clock test (scriptkit://agent-chat/thread-9)"));
+            .contains("09:43 [Agent Chat: flaky clock test](scriptkit://agent-chat/thread-9)"));
+    }
+
+    #[test]
+    fn fragment_reference_card_undo_removes_day_card_and_trashes_fragment() {
+        let (_dir, substrate) = test_substrate();
+        let now = fixed_now();
+        let source_uri = "scriptkit://clipboard/entry-card";
+        let long = (0..250)
+            .map(|index| format!("word{index}"))
+            .collect::<Vec<_>>()
+            .join(" ");
+        let reference = substrate
+            .write_fragment(now, "clipboard", source_uri, &long)
+            .expect("write fragment")
+            .expect("fragment reference");
+        let fragment_id = reference
+            .relative_link
+            .trim_start_matches("../fragments/")
+            .trim_end_matches(".md")
+            .to_string();
+        let fragment_path = substrate.paths().fragment_file(&fragment_id);
+
+        substrate
+            .append_to_day(now, DayEntry::FragmentRef(reference))
+            .expect("append card");
+        let before =
+            fs::read_to_string(substrate.paths().day_page(now.date_naive())).expect("read day");
+        assert!(before.contains("09:42 Fragment\n"));
+        assert!(before.contains("[Open fragment](../fragments/2026-06-11-0942-clipboard.md)"));
+        assert!(fragment_path.exists());
+
+        substrate
+            .undo_clipboard_sediment_lines(now, "entry-card", &long, None, true)
+            .expect("undo sediment");
+
+        let after =
+            fs::read_to_string(substrate.paths().day_page(now.date_naive())).expect("read day");
+        assert!(!after.contains("09:42 Fragment"));
+        assert!(!after.contains("Open fragment"));
+        assert!(!fragment_path.exists(), "active fragment should be trashed");
+        assert!(
+            fs::read_dir(substrate.paths().trash_dir())
+                .expect("trash dir")
+                .filter_map(|entry| entry.ok())
+                .any(|entry| entry
+                    .file_name()
+                    .to_string_lossy()
+                    .contains("2026-06-11-0942-clipboard")),
+            "fragment file should move into brain trash"
+        );
     }
 
     #[test]

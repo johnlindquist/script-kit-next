@@ -12,6 +12,9 @@ use super::paths::BrainPaths;
 use super::trash::trash_file;
 use super::FragmentReference;
 
+const FRAGMENT_CARD_TITLE: &str = "Fragment";
+const FRAGMENT_CARD_LINK_LABEL: &str = "Open fragment";
+
 /// A single append-only entry for today's day page.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DayEntry {
@@ -61,18 +64,23 @@ impl DayEntry {
                 let label = markdown_url_label(url);
                 format!("{timestamp} [{label}]({url})")
             }
-            Self::FragmentRef(reference) => {
-                format!(
-                    "{timestamp} [{}]({})",
-                    reference.excerpt, reference.relative_link
-                )
-            }
+            Self::FragmentRef(reference) => format_fragment_reference_card(timestamp, reference),
             Self::Trace {
                 summary,
                 provenance_link,
-            } => format!("{timestamp} — {summary} ({provenance_link})"),
+            } => {
+                let label = markdown_link_label(summary);
+                format!("{timestamp} [{label}]({provenance_link})")
+            }
         }
     }
+}
+
+fn format_fragment_reference_card(timestamp: &str, reference: &FragmentReference) -> String {
+    format!(
+        "{timestamp} {FRAGMENT_CARD_TITLE}\n> {}\n[{FRAGMENT_CARD_LINK_LABEL}]({})",
+        reference.excerpt, reference.relative_link
+    )
 }
 
 pub fn local_day_and_time(now: DateTime<Utc>, tz: Tz) -> (chrono::NaiveDate, String) {
@@ -141,16 +149,12 @@ fn remove_fragment_reference_for_source(
     let mut changed = false;
     let mut index = 0;
     while index < lines.len() {
-        if lines[index].contains('>') && index + 1 < lines.len() {
-            let link_line = lines[index + 1].trim();
-            if let Some(fragment_path) = fragment_path_from_day_link(paths, link_line) {
-                if fragment_has_source(&fragment_path, source_uri) {
-                    lines.remove(index + 1);
-                    lines.remove(index);
-                    changed = true;
-                    continue;
-                }
-            }
+        if let Some(line_count) =
+            fragment_reference_line_count_for_source(paths, &lines, index, source_uri)
+        {
+            lines.drain(index..index + line_count);
+            changed = true;
+            continue;
         }
         index += 1;
     }
@@ -159,6 +163,35 @@ fn remove_fragment_reference_for_source(
         write_filtered_lines(&path, lines)?;
     }
     Ok(())
+}
+
+fn fragment_reference_line_count_for_source(
+    paths: &BrainPaths,
+    lines: &[&str],
+    index: usize,
+    source_uri: &str,
+) -> Option<usize> {
+    let first = lines.get(index)?.trim();
+
+    if is_fragment_card_header(first) && index + 2 < lines.len() {
+        let quote = lines.get(index + 1)?.trim();
+        if quote.strip_prefix('>')?.trim().is_empty() {
+            return None;
+        }
+        return fragment_path_from_day_link(paths, lines.get(index + 2)?.trim())
+            .filter(|path| fragment_has_source(path, source_uri))
+            .map(|_| 3);
+    }
+
+    if parse_legacy_fragment_header(first).is_some() && index + 1 < lines.len() {
+        return fragment_path_from_day_link(paths, lines.get(index + 1)?.trim())
+            .filter(|path| fragment_has_source(path, source_uri))
+            .map(|_| 2);
+    }
+
+    fragment_path_from_timestamped_markdown_fragment_link(paths, first)
+        .filter(|path| fragment_has_source(path, source_uri))
+        .map(|_| 1)
 }
 
 fn trash_fragment_for_source(paths: &BrainPaths, source_uri: &str) -> Result<()> {
@@ -183,12 +216,79 @@ fn trash_fragment_for_source(paths: &BrainPaths, source_uri: &str) -> Result<()>
 }
 
 fn fragment_path_from_day_link(paths: &BrainPaths, link_line: &str) -> Option<PathBuf> {
-    let relative = link_line.trim().trim_start_matches("../fragments/");
+    let trimmed = link_line.trim();
+    let relative_link = parse_markdown_link_destination(trimmed).unwrap_or(trimmed);
+    fragment_path_from_relative_link(paths, relative_link)
+}
+
+fn fragment_path_from_timestamped_markdown_fragment_link(
+    paths: &BrainPaths,
+    line: &str,
+) -> Option<PathBuf> {
+    let (timestamp, rest) = line.trim().split_once(' ')?;
+    if !is_timestamp(timestamp) {
+        return None;
+    }
+    let relative_link = parse_markdown_link_destination(rest.trim())?;
+    fragment_path_from_relative_link(paths, relative_link)
+}
+
+fn fragment_path_from_relative_link(paths: &BrainPaths, relative_link: &str) -> Option<PathBuf> {
+    let relative_link = relative_link.trim();
+    if !relative_link.starts_with("../fragments/") || !relative_link.ends_with(".md") {
+        return None;
+    }
+    let relative = relative_link.trim_start_matches("../fragments/");
     if relative.is_empty() {
         return None;
     }
     let fragment_id = relative.trim_end_matches(".md");
     Some(paths.fragment_file(fragment_id))
+}
+
+fn parse_markdown_link_destination(text: &str) -> Option<&str> {
+    let trimmed = text.trim();
+    let label_start = trimmed.find('[')?;
+    if label_start != 0 {
+        return None;
+    }
+    let label_end = trimmed[label_start + 1..].find("](")? + label_start + 1;
+    let link_start = label_end + 2;
+    let link_end = trimmed[link_start..].rfind(')')? + link_start;
+    if link_end + 1 != trimmed.len() {
+        return None;
+    }
+    let label = trimmed[label_start + 1..label_end].trim();
+    let url = trimmed[link_start..link_end].trim();
+    if label.is_empty() || url.is_empty() {
+        return None;
+    }
+    Some(url)
+}
+
+fn parse_legacy_fragment_header(line: &str) -> Option<(&str, &str)> {
+    let (timestamp, excerpt) = line.trim().split_once(" > ")?;
+    if !is_timestamp(timestamp) {
+        return None;
+    }
+    let excerpt = excerpt.trim();
+    if excerpt.is_empty() {
+        return None;
+    }
+    Some((timestamp, excerpt))
+}
+
+fn is_fragment_card_header(line: &str) -> bool {
+    let Some((timestamp, title)) = line.trim().split_once(' ') else {
+        return false;
+    };
+    is_timestamp(timestamp) && title.trim() == FRAGMENT_CARD_TITLE
+}
+
+fn is_timestamp(value: &str) -> bool {
+    value.len() == 5
+        && value.as_bytes().get(2) == Some(&b':')
+        && value.chars().all(|ch| ch.is_ascii_digit() || ch == ':')
 }
 
 fn fragment_has_source(fragment_path: &PathBuf, source_uri: &str) -> bool {
@@ -230,5 +330,9 @@ fn markdown_url_label(url: &str) -> String {
         .trim_start_matches("http://")
         .trim_end_matches('/');
     let label = if label.is_empty() { url.trim() } else { label };
+    markdown_link_label(label)
+}
+
+fn markdown_link_label(label: &str) -> String {
     label.replace('[', "\\[").replace(']', "\\]")
 }

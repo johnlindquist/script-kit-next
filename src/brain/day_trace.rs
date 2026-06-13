@@ -179,7 +179,9 @@ mod tests {
 
         let contents = day_contents(&trace.substrate, now.date_naive());
         assert_eq!(count_trace_lines(&contents, "thread-a"), 1);
-        assert!(contents.contains("09:40 — Agent Chat: flaky clock-mock test"));
+        assert!(contents.contains(
+            "09:40 [Agent Chat: flaky clock-mock test](scriptkit://agent-chat/thread-a)"
+        ));
         assert!(contents.contains(&provenance_link("thread-a")));
     }
 
@@ -198,8 +200,10 @@ mod tests {
         let second_day = day_contents(&trace.substrate, day_two.date_naive());
         assert_eq!(count_trace_lines(&first_day, "thread-b"), 1);
         assert_eq!(count_trace_lines(&second_day, "thread-b"), 1);
-        assert!(first_day.contains("10:00 — Agent Chat: first day chat"));
-        assert!(second_day.contains("08:15 — Agent Chat: second day chat"));
+        assert!(first_day
+            .contains("10:00 [Agent Chat: first day chat](scriptkit://agent-chat/thread-b)"));
+        assert!(second_day
+            .contains("08:15 [Agent Chat: second day chat](scriptkit://agent-chat/thread-b)"));
     }
 
     #[test]
@@ -219,7 +223,9 @@ mod tests {
         let local_contents = day_contents(&trace.substrate, local_date);
         let utc_contents = day_contents(&trace.substrate, utc_date);
         assert_eq!(count_trace_lines(&local_contents, "thread-local"), 1);
-        assert!(local_contents.contains("23:30 — Agent Chat: first local day trace"));
+        assert!(local_contents.contains(
+            "23:30 [Agent Chat: first local day trace](scriptkit://agent-chat/thread-local)"
+        ));
         assert!(utc_contents.is_empty(), "UTC day must not receive trace");
     }
 
@@ -235,7 +241,9 @@ mod tests {
 
         let local_date = chrono::NaiveDate::from_ymd_opt(2026, 6, 13).unwrap();
         let contents = day_contents(&trace.substrate, local_date);
-        assert!(contents.contains("23:30 — Agent Chat: local timestamp"));
+        assert!(contents.contains(
+            "23:30 [Agent Chat: local timestamp](scriptkit://agent-chat/thread-local-time)"
+        ));
         assert!(contents.contains(&provenance_link("thread-local-time")));
     }
 

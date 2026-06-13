@@ -219,19 +219,24 @@ try {
     (content) =>
       content.includes("../fragments/") &&
       content.includes(EXCERPT_TOKEN) &&
-      /\[[^\]]+\]\(\.\.\/fragments\/[^)]+\.md\)/.test(content),
+      /\d{2}:\d{2} Fragment\n> [^\n]*EXCERPT-[^\n]*\n\[Open fragment\]\(\.\.\/fragments\/[^)]+\.md\)/.test(content),
     12_000,
   );
-  const markdownReferenceMatch = dayContent.match(/\[[^\]]+\]\(\.\.\/fragments\/[^)]+\.md\)/);
+  const markdownReferenceMatch = dayContent.match(/\[Open fragment\]\(\.\.\/fragments\/[^)]+\.md\)/);
+  const markdownCardMatch = dayContent.match(
+    /\d{2}:\d{2} Fragment\n> [^\n]*EXCERPT-[^\n]*\n\[Open fragment\]\(\.\.\/fragments\/[^)]+\.md\)/,
+  );
   check(
     "day_page_contains_markdown_fragment_reference",
     Boolean(markdownReferenceMatch) &&
+      Boolean(markdownCardMatch) &&
       dayContent.includes(EXCERPT_TOKEN) &&
       !dayContent.includes(FULL_TOKEN) &&
       !dayContent.includes(payload) &&
       !dayContent.includes("\n  ../fragments/"),
     {
       markdownReference: markdownReferenceMatch?.[0] ?? null,
+      markdownCard: markdownCardMatch?.[0] ?? null,
       containsExcerpt: dayContent.includes(EXCERPT_TOKEN),
       containsLegacyBackingLine: dayContent.includes("\n  ../fragments/"),
     },
@@ -249,8 +254,9 @@ try {
   const editor = findEditor(visible.flat);
   const editorValue = String(editor?.value ?? "");
   check("editor_shows_markdown_reference_text", editorValue.includes(markdownReferenceMatch?.[0] ?? ""), {
+    editorContainsFragmentHeader: editorValue.includes("Fragment\n>"),
     editorContainsExcerpt: editorValue.includes(EXCERPT_TOKEN),
-    editorContainsMarkdownLink: editorValue.includes("]("),
+    editorContainsMarkdownLink: editorValue.includes("[Open fragment]("),
   });
   check("editor_shows_markdown_kept_url", editorValue.includes(KEPT_URL_MARKDOWN), {
     editorContainsKeptUrlMarkdown: editorValue.includes(KEPT_URL_MARKDOWN),
