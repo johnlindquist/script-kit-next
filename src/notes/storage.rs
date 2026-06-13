@@ -370,17 +370,72 @@ fn deleted_at_from_trash_path(path: &Path) -> DateTime<Utc> {
         .unwrap_or_else(|_| Utc::now())
 }
 
+fn preserve_note_cart_items_for_rebuild(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        r#"
+        DROP TABLE IF EXISTS temp.note_cart_items_rebuild_snapshot;
+        CREATE TEMP TABLE note_cart_items_rebuild_snapshot AS
+        SELECT id, note_id, label, payload_json, created_at, updated_at, sort_order
+        FROM note_cart_items;
+        "#,
+    )
+    .context("Failed to preserve note cart items before notes index rebuild")?;
+    Ok(())
+}
+
 fn clear_index_tables(conn: &Connection) -> Result<()> {
+    preserve_note_cart_items_for_rebuild(conn)?;
     conn.execute_batch(
         r#"
         DELETE FROM note_links;
         DELETE FROM note_aliases;
         DELETE FROM note_tags;
-        DELETE FROM note_cart_items;
         DELETE FROM notes;
         "#,
     )
     .context("Failed to clear notes index tables")?;
+    Ok(())
+}
+
+fn restore_note_cart_items_after_rebuild(conn: &Connection) -> Result<()> {
+    let restored = conn
+        .execute(
+            r#"
+            INSERT OR REPLACE INTO note_cart_items
+                (id, note_id, label, payload_json, created_at, updated_at, sort_order)
+            SELECT
+                snapshot.id,
+                snapshot.note_id,
+                snapshot.label,
+                snapshot.payload_json,
+                snapshot.created_at,
+                snapshot.updated_at,
+                snapshot.sort_order
+            FROM temp.note_cart_items_rebuild_snapshot snapshot
+            WHERE EXISTS (
+                SELECT 1 FROM notes WHERE notes.id = snapshot.note_id
+            )
+            "#,
+            [],
+        )
+        .context("Failed to restore note cart items after notes index rebuild")?;
+    let pruned = conn
+        .execute(
+            r#"
+            DELETE FROM note_cart_items
+            WHERE NOT EXISTS (
+                SELECT 1 FROM notes WHERE notes.id = note_cart_items.note_id
+            )
+            "#,
+            [],
+        )
+        .context("Failed to prune orphaned note cart items after notes index rebuild")?;
+    conn.execute_batch("DROP TABLE IF EXISTS temp.note_cart_items_rebuild_snapshot;")
+        .context("Failed to drop note cart item rebuild snapshot")?;
+    debug!(
+        restored,
+        pruned, "Restored note cart items after notes index rebuild"
+    );
     Ok(())
 }
 
@@ -412,6 +467,30 @@ pub fn rebuild_index_from_files() -> Result<()> {
 }
 
 fn rebuild_index_from_files_with_conn(conn: &Connection) -> Result<()> {
+    conn.execute_batch("BEGIN IMMEDIATE;")
+        .context("Failed to begin notes index rebuild transaction")?;
+    let result = rebuild_index_from_files_with_conn_inner(conn);
+    match result {
+        Ok(()) => {
+            conn.execute_batch("COMMIT;")
+                .context("Failed to commit notes index rebuild transaction")?;
+            invalidate_root_notes_search_cache();
+            info!("Rebuilt notes sqlite index from brain files");
+            Ok(())
+        }
+        Err(error) => {
+            if let Err(rollback_error) = conn.execute_batch("ROLLBACK;") {
+                warn!(
+                    %rollback_error,
+                    "Failed to roll back notes index rebuild transaction"
+                );
+            }
+            Err(error)
+        }
+    }
+}
+
+fn rebuild_index_from_files_with_conn_inner(conn: &Connection) -> Result<()> {
     clear_index_tables(conn)?;
 
     let substrate = notes_substrate()?;
@@ -454,6 +533,7 @@ fn rebuild_index_from_files_with_conn(conn: &Connection) -> Result<()> {
         }
     }
 
+    restore_note_cart_items_after_rebuild(conn)?;
     recompute_all_note_link_targets_with_conn(conn)?;
     rebuild_notes_search_index_with_conn(conn)?;
     conn.execute(
@@ -461,8 +541,6 @@ fn rebuild_index_from_files_with_conn(conn: &Connection) -> Result<()> {
         [],
     )
     .context("Failed to set notes index schema version")?;
-    invalidate_root_notes_search_cache();
-    info!("Rebuilt notes sqlite index from brain files");
     Ok(())
 }
 
@@ -2158,6 +2236,29 @@ mod tests {
         )
     }
 
+    fn text_cart_item(
+        note_id: NoteId,
+        id: String,
+        label: String,
+        text: String,
+        sort_order: i32,
+    ) -> crate::notes::model::NoteCartItem {
+        let now = Utc::now();
+        crate::notes::model::NoteCartItem {
+            id,
+            note_id,
+            label,
+            payload: crate::notes::model::NoteCartItemPayload::Text {
+                text,
+                source: "agentic://notes-cart-rebuild-test".to_string(),
+                mime_type: Some("text/plain".to_string()),
+            },
+            created_at: now,
+            updated_at: now,
+            sort_order,
+        }
+    }
+
     #[test]
     fn test_db_path() {
         let path = get_notes_db_path();
@@ -2790,6 +2891,115 @@ mod tests {
             raw.contains(&format!("source: {source}")),
             "canonical file should preserve source provenance in frontmatter: {raw}"
         );
+    }
+
+    #[test]
+    fn test_rebuild_index_from_files_preserves_cart_items_for_rebuilt_notes() {
+        let _guard = notes_db_test_guard();
+        init_notes_db().expect("notes db should initialize before cart rebuild preserve test");
+        let token = unique_test_token("cart_rebuild_preserve");
+        let note = Note::with_content(format!("# {token}\nBody"));
+        let note_id = note.id;
+        save_note(&note).expect("failed to save canonical note");
+        let item = text_cart_item(
+            note_id,
+            format!("{token}-cart"),
+            "Cart Preserve".to_string(),
+            format!("payload {token}"),
+            7,
+        );
+        save_note_cart_item(&item).expect("failed to save cart item before rebuild");
+
+        rebuild_index_from_files().expect("notes rebuild should succeed");
+        let rebuilt_items =
+            list_note_cart_items(note_id).expect("cart items should be readable after rebuild");
+
+        delete_note_permanently(note_id).expect("cleanup failed for preserved cart note");
+
+        assert_eq!(rebuilt_items.len(), 1);
+        assert_eq!(rebuilt_items[0].id, item.id);
+        assert_eq!(rebuilt_items[0].label, item.label);
+        assert_eq!(rebuilt_items[0].sort_order, item.sort_order);
+        assert_eq!(rebuilt_items[0].payload, item.payload);
+    }
+
+    #[test]
+    fn test_rebuild_index_from_files_prunes_cart_items_for_missing_canonical_notes() {
+        let _guard = notes_db_test_guard();
+        init_notes_db().expect("notes db should initialize before cart prune test");
+        let token = unique_test_token("cart_rebuild_prune");
+        let stale_note = Note::with_content(format!("# {token}\nDB only"));
+        let stale_note_id = stale_note.id;
+        {
+            let db = get_db().expect("db should be initialized");
+            let conn = db.lock().expect("db lock should succeed");
+            upsert_note_index_with_conn(
+                &conn,
+                &stale_note,
+                &format!("{token}-missing-file"),
+                "synthetic-hash",
+            )
+            .expect("failed to insert stale db-only note row");
+        }
+        let item = text_cart_item(
+            stale_note_id,
+            format!("{token}-orphan-cart"),
+            "Orphan Cart".to_string(),
+            format!("orphan payload {token}"),
+            0,
+        );
+        save_note_cart_item(&item).expect("failed to save cart item for stale note");
+        assert_eq!(
+            list_note_cart_items(stale_note_id)
+                .expect("cart item should exist before rebuild")
+                .len(),
+            1
+        );
+
+        rebuild_index_from_files().expect("notes rebuild should succeed");
+
+        assert!(
+            get_note(stale_note_id)
+                .expect("stale note lookup should succeed")
+                .is_none(),
+            "db-only note should disappear after markdown-source rebuild"
+        );
+        assert!(
+            list_note_cart_items(stale_note_id)
+                .expect("cart lookup after rebuild should succeed")
+                .is_empty(),
+            "cart rows for notes absent from canonical files should be pruned"
+        );
+    }
+
+    #[test]
+    fn test_rebuild_index_from_files_preserves_cart_items_for_trashed_notes() {
+        let _guard = notes_db_test_guard();
+        init_notes_db().expect("notes db should initialize before trashed cart rebuild test");
+        let token = unique_test_token("cart_rebuild_trash");
+        let mut note = Note::with_content(format!("# {token}\nBody"));
+        let note_id = note.id;
+        save_note(&note).expect("failed to save active note");
+        let item = text_cart_item(
+            note_id,
+            format!("{token}-trash-cart"),
+            "Trash Cart".to_string(),
+            format!("trash payload {token}"),
+            4,
+        );
+        save_note_cart_item(&item).expect("failed to save cart item before soft delete");
+
+        note.soft_delete();
+        save_note(&note).expect("failed to soft-delete note");
+        rebuild_index_from_files().expect("notes rebuild should succeed");
+        let rebuilt_items = list_note_cart_items(note_id)
+            .expect("cart items should be readable after trash rebuild");
+
+        delete_note_permanently(note_id).expect("cleanup failed for trashed note");
+
+        assert_eq!(rebuilt_items.len(), 1);
+        assert_eq!(rebuilt_items[0].id, item.id);
+        assert_eq!(rebuilt_items[0].payload, item.payload);
     }
 
     #[test]

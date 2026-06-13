@@ -20,6 +20,7 @@ export class NotesAgentChatHarness {
   readonly logLines: string[] = [];
 
   private proc: ReturnType<typeof Bun.spawn>;
+  private preserveHome: boolean;
   private writer: {
     write(chunk: string | Uint8Array): number | Promise<number>;
     end(): void | Promise<void>;
@@ -34,10 +35,15 @@ export class NotesAgentChatHarness {
     resolve: (line: string) => void;
   }> = [];
 
-  constructor(readonly scenario: string) {
-    this.home = mkdtempSync(join(tmpdir(), `sk-${scenario}-`));
+  constructor(
+    readonly scenario: string,
+    options: { home?: string; preserveHome?: boolean } = {}
+  ) {
+    this.home = options.home ?? mkdtempSync(join(tmpdir(), `sk-${scenario}-`));
+    this.preserveHome = options.preserveHome ?? false;
     this.dbPath = join(this.home, ".scriptkit", "db", "notes.sqlite");
-    this.proc = Bun.spawn(["target/debug/script-kit-gpui"], {
+    const binary = process.env.PROBE_BINARY ?? "target/debug/script-kit-gpui";
+    this.proc = Bun.spawn([binary], {
       cwd: join(import.meta.dir, "../.."),
       stdin: "pipe",
       stdout: "pipe",
@@ -155,7 +161,9 @@ export class NotesAgentChatHarness {
     } catch {
       // process may already be gone
     }
-    rmSync(this.home, { recursive: true, force: true });
+    if (!this.preserveHome) {
+      rmSync(this.home, { recursive: true, force: true });
+    }
   }
 
   private async readLines(stream: ReadableStream<Uint8Array> | null): Promise<void> {
