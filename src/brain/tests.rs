@@ -1036,14 +1036,25 @@ fn snapshot_doc(source: DocSource, source_id: &str) -> Option<IndexedDocSnapshot
         })
 }
 
-/// Simulate "delete brain.sqlite" for ONLY this test's docs. The suite shares
-/// one process-global DB across parallel threads, so truncating brain_docs /
-/// brain_embeddings here would nuke concurrent tests' data — delete the
-/// enumerated (source, source_id) rows instead (embeddings cascade via FK).
+/// Simulate "delete brain.sqlite" for only this test's docs. Targeted deletes
+/// let the rebuild contract exercise the same FK cascade production uses when
+/// a file source disappears.
 fn clear_brain_docs_for_rebuild_test(docs: &[(DocSource, &str)]) {
     for (source, source_id) in docs {
         store::remove_doc(*source, source_id).expect("clear rebuild test doc");
     }
+}
+
+fn chunk_embedding_count_for_doc(doc_id: i64) -> i64 {
+    store::with_conn(|conn| {
+        conn.query_row(
+            "SELECT COUNT(*) FROM brain_chunk_embeddings WHERE doc_id = ?1",
+            [doc_id],
+            |row| row.get(0),
+        )
+        .map_err(Into::into)
+    })
+    .expect("count chunk embeddings for doc")
 }
 
 fn orphan_chunk_embedding_count() -> i64 {
@@ -1137,7 +1148,7 @@ fn file_sources_sync_day_page_fragment_and_forget_trashed_note() {
 }
 
 #[test]
-fn file_sources_rebuild_restores_doc_parity() {
+fn brain_rebuild_from_files_restores_day_fragment_and_note_sources() {
     let _db = init_test_db();
     let tmp = tempfile::TempDir::new().expect("tempdir");
     let substrate = test_substrate(&tmp.path().join("brain"));
@@ -1168,11 +1179,16 @@ fn file_sources_rebuild_restores_doc_parity() {
         )
         .expect("write fragment");
     let note_id = NoteId::new();
+    let mut note_frontmatter =
+        BrainFrontmatter::new(note_id, now, now).with_source("scriptkit://note/rebuild-t7");
+    note_frontmatter.tags = vec!["qmd".to_string(), "brain".to_string()];
+    note_frontmatter.aliases = vec!["Rebuild Alias".to_string()];
+    note_frontmatter.pinned = true;
     substrate
         .write_document(
             &substrate.paths().note_file("rebuild-note"),
-            &BrainFrontmatter::new(note_id, now, now),
-            "# Rebuild note\n\nparity body",
+            &note_frontmatter,
+            "# Rebuild note\n\nparity body with [[Linked Note]]",
         )
         .expect("write note");
 
@@ -1195,6 +1211,35 @@ fn file_sources_rebuild_restores_doc_parity() {
         snapshot_doc(DocSource::Fragment, &fragment_source_id).expect("fragment indexed"),
         snapshot_doc(DocSource::Note, &note_source_id).expect("note indexed"),
     ];
+    assert!(before[1]
+        .content
+        .contains("Provenance: scriptkit://clipboard/rebuild-t7"));
+    assert!(before[2]
+        .content
+        .contains("parity body with [[Linked Note]]"));
+    let before_doc_ids = [
+        store::get_doc(DocSource::DayPage, &day_source_id)
+            .unwrap()
+            .unwrap()
+            .id,
+        store::get_doc(DocSource::Fragment, &fragment_source_id)
+            .unwrap()
+            .unwrap()
+            .id,
+        store::get_doc(DocSource::Note, &note_source_id)
+            .unwrap()
+            .unwrap()
+            .id,
+    ];
+    for doc_id in before_doc_ids {
+        store::store_embedding(doc_id, "rebuild-model", "T", "body", &[1.0, 0.0])
+            .expect("store rebuild-test embedding");
+        assert_eq!(
+            chunk_embedding_count_for_doc(doc_id),
+            1,
+            "fixture doc should have a chunk embedding before rebuild delete"
+        );
+    }
 
     clear_brain_docs_for_rebuild_test(&[
         (DocSource::DayPage, &day_source_id),
@@ -1207,6 +1252,18 @@ fn file_sources_rebuild_restores_doc_parity() {
             && snapshot_doc(DocSource::Note, &note_source_id).is_none(),
         "rebuild test docs must be gone before re-sync"
     );
+    for doc_id in before_doc_ids {
+        assert_eq!(
+            chunk_embedding_count_for_doc(doc_id),
+            0,
+            "removing file-source docs must cascade chunk embeddings"
+        );
+    }
+    assert_eq!(
+        orphan_chunk_embedding_count(),
+        0,
+        "targeted file-source delete must not leave orphan chunk embeddings"
+    );
 
     sync_notes_with_substrate(&substrate).expect("re-sync notes");
     sync_day_pages_with_substrate(&substrate).expect("re-sync day pages");
@@ -1218,6 +1275,38 @@ fn file_sources_rebuild_restores_doc_parity() {
         snapshot_doc(DocSource::Note, &note_source_id).expect("note rebuilt"),
     ];
     assert_eq!(before, after, "rebuild must restore indexed file sources");
+
+    let rebuilt_fragment_id = store::get_doc(DocSource::Fragment, &fragment_source_id)
+        .unwrap()
+        .unwrap()
+        .id;
+    store::store_embedding(
+        rebuilt_fragment_id,
+        "rebuild-model",
+        "Fragment",
+        &after[1].content,
+        &[0.0, 1.0],
+    )
+    .expect("store rebuilt fragment embedding");
+    assert_eq!(chunk_embedding_count_for_doc(rebuilt_fragment_id), 1);
+
+    std::fs::remove_file(substrate.paths().fragment_file(&fragment_source_id))
+        .expect("delete canonical fragment file");
+    sync_fragments_with_substrate(&substrate).expect("forget deleted fragment file");
+    assert!(
+        snapshot_doc(DocSource::Fragment, &fragment_source_id).is_none(),
+        "deleting a canonical fragment file must remove the derived brain doc"
+    );
+    assert_eq!(
+        chunk_embedding_count_for_doc(rebuilt_fragment_id),
+        0,
+        "forgetting a deleted fragment file must cascade chunk embeddings"
+    );
+    assert_eq!(
+        orphan_chunk_embedding_count(),
+        0,
+        "forgetting a deleted file-source doc must not leave orphan chunks"
+    );
 }
 
 #[test]
