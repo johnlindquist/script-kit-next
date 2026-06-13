@@ -171,7 +171,7 @@ impl ScriptListApp {
     pub(crate) fn reset_to_script_list(&mut self, cx: &mut Context<Self>) {
         clear_main_state_restore_after_focus_loss();
         // Any detached floating popups (Agent Chat composer picker state / history popup /
-        // menu-syntax trigger popup) are owned by the
+        // menu-syntax trigger picker) are owned by the
         // outgoing view. Returning to the script list abandons that owner,
         // so make sure none of them survive past the transition.
         self.close_floating_popups_for_owner_loss("reset_to_script_list", cx);

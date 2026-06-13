@@ -1,6 +1,6 @@
-//! Menu-syntax trigger popup — pure state machine and row adapter.
+//! Menu-syntax trigger picker — pure state machine and row adapter.
 //!
-//! This is commit D1 of the Oracle iter 015 popup-pivot plan. It lands the
+//! This is commit D1 of the Oracle iter 015 picker-pivot plan. It lands the
 //! owner-neutral state machine + adapter that `src/app_impl/filter_input_change.rs`
 //! will consume in commit D2 along with the GPUI window entity, keyboard
 //! dispatch, and removal of the `build_trigger_picker_grouped_results`
@@ -8,24 +8,24 @@
 //!
 //! Shape of this module:
 //!
-//! - [`MenuSyntaxTriggerPopupState`] is what the owner (launcher) stores
+//! - [`MenuSyntaxTriggerPickerState`] is what the owner (launcher) stores
 //!   between filter updates: the current snapshot and the selected row id.
 //!   Selection persistence is by **row id**, not index, so snapshot rebuilds
 //!   from filtering do not snap the cursor back to the top when the same row
 //!   is still visible.
-//! - [`plan_trigger_popup_transition`] is the pure state-machine function.
+//! - [`plan_trigger_picker_transition`] is the pure state-machine function.
 //!   Given the current state, a raw filter string, and a
-//!   [`TriggerPickerContext`], it returns a [`TriggerPopupTransition`]
+//!   [`TriggerPickerContext`], it returns a [`TriggerPickerTransition`]
 //!   describing what the owner should do:
-//!   - [`TriggerPopupTransition::Close`] when the filter routes to a legacy
+//!   - [`TriggerPickerTransition::Close`] when the filter routes to a legacy
 //!     handoff trigger (`~ / @ > ?`) or `build_trigger_picker_snapshot`
 //!     returns `None`.
-//!   - [`TriggerPopupTransition::Open`] when a new snapshot appears and the
-//!     popup was previously closed.
-//!   - [`TriggerPopupTransition::Update`] when a new snapshot appears and
-//!     the popup was already open; this variant carries the selected row id
+//!   - [`TriggerPickerTransition::Open`] when a new snapshot appears and the
+//!     picker was previously closed.
+//!   - [`TriggerPickerTransition::Update`] when a new snapshot appears and
+//!     the picker was already open; this variant carries the selected row id
 //!     chosen to preserve the user's cursor when possible.
-//!   - [`TriggerPopupTransition::NoChange`] when the new snapshot equals the
+//!   - [`TriggerPickerTransition::NoChange`] when the new snapshot equals the
 //!     current one — owners can skip GPUI work in that case.
 //! - [`adapt_trigger_picker_row`] converts a `TriggerPickerRow` (menu-syntax
 //!   domain type, `String` fields) into the neutral
@@ -34,7 +34,7 @@
 //!   menu-syntax types.
 //! - [`starts_with_legacy_trigger`] classifies a filter as routing to an
 //!   existing surface handoff (`~` command, `/` scripts, `@` ai mentions,
-//!   `>` shortcuts, `?` help). Legacy triggers MUST close the popup before
+//!   `>` shortcuts, `?` help). Legacy triggers MUST close the picker before
 //!   menu-syntax claims lifecycle, per Oracle iter 015.
 //!
 //! This module has no GPUI imports and no side effects. Every behavior is
@@ -50,13 +50,15 @@ use crate::menu_syntax::{
 };
 use gpui::SharedString;
 
-/// Currently-cached state for the menu-syntax trigger popup. Held by the
+const TRIGGER_PICKER_MAX_VISIBLE_ROWS: usize = 8;
+
+/// Currently-cached state for the menu-syntax trigger picker. Held by the
 /// launcher (`ScriptListApp`) between filter updates.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub(crate) struct MenuSyntaxTriggerPopupState {
-    /// None means the popup is closed.
+pub(crate) struct MenuSyntaxTriggerPickerState {
+    /// None means the picker is closed.
     pub(crate) snapshot: Option<TriggerPickerSnapshot>,
-    /// Row id currently highlighted. None when the popup is closed or no
+    /// Row id currently highlighted. None when the picker is closed or no
     /// enabled row exists in the current snapshot.
     pub(crate) selected_row_id: Option<String>,
     /// Start index of the visible page. Preserved across selection updates so
@@ -64,7 +66,7 @@ pub(crate) struct MenuSyntaxTriggerPopupState {
     pub(crate) visible_start: usize,
 }
 
-impl MenuSyntaxTriggerPopupState {
+impl MenuSyntaxTriggerPickerState {
     /// Picker snapshots own the ScriptList main list while the user is choosing
     /// a syntax head or value. Terminal structured queries stop producing a
     /// snapshot, so normal launcher results take over again.
@@ -82,19 +84,19 @@ impl MenuSyntaxTriggerPopupState {
 }
 
 /// Transition the owner should apply to its GPUI layer after
-/// [`plan_trigger_popup_transition`] runs.
+/// [`plan_trigger_picker_transition`] runs.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum TriggerPopupTransition {
+pub(crate) enum TriggerPickerTransition {
     /// Current snapshot stays valid; no GPUI work needed.
     NoChange,
-    /// Close the popup window if it is open; clear `MenuSyntaxTriggerPopupState`.
+    /// Close the picker window if it is open; clear `MenuSyntaxTriggerPickerState`.
     Close,
-    /// Open a new popup window with this snapshot and selection.
+    /// Open a new picker window with this snapshot and selection.
     Open {
         snapshot: TriggerPickerSnapshot,
         selected_row_id: Option<String>,
     },
-    /// Reuse the existing popup window but swap in this snapshot. Selection
+    /// Reuse the existing picker window but swap in this snapshot. Selection
     /// is carried across by row id when that row still exists and is enabled;
     /// otherwise the first enabled row wins.
     Update {
@@ -110,7 +112,7 @@ pub(crate) enum TriggerPopupTransition {
 /// are not highlighted.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 #[allow(dead_code)]
-pub(crate) struct TriggerPopupRowHighlightIndices {
+pub(crate) struct TriggerPickerRowHighlightIndices {
     pub(crate) title: Vec<usize>,
     pub(crate) meta: Vec<usize>,
 }
@@ -119,14 +121,14 @@ pub(crate) struct TriggerPopupRowHighlightIndices {
 ///
 /// Legacy triggers own their own surfaces (`~` command, `/` scripts, `@`
 /// mentions, `>` shortcuts, `?` help) and must not be claimed by the
-/// menu-syntax popup. Oracle iter 015 pins this check ahead of
-/// `build_trigger_picker_snapshot` so the popup closes immediately when the
+/// menu-syntax picker. Oracle iter 015 pins this check ahead of
+/// `build_trigger_picker_snapshot` so the picker closes immediately when the
 /// user types one.
 pub(crate) fn starts_with_legacy_trigger(raw: &str) -> bool {
     matches!(raw.chars().next(), Some('~' | '/' | '@' | '>' | '?'))
 }
 
-/// Compute the next [`TriggerPopupTransition`] given the current popup state,
+/// Compute the next [`TriggerPickerTransition`] given the current picker state,
 /// the raw filter text, and the launcher's trigger-picker context.
 ///
 /// Pure function: no I/O, no window updates, no global state. Owners call
@@ -136,20 +138,20 @@ pub(crate) fn starts_with_legacy_trigger(raw: &str) -> bool {
 // `#[allow(dead_code)]` is kept because this module is compiled twice — once
 // in the binary (via `include!("app_impl/mod.rs")` in `src/main.rs`) where it
 // IS consumed by `src/app_impl/filter_input_change.rs`, and once in the lib
-// (via `#[path] pub mod menu_syntax_trigger_popup;` in `src/lib.rs`) solely so
+// (via `#[path] pub mod menu_syntax_trigger_picker;` in `src/lib.rs`) solely so
 // the state-machine tests can run under `cargo test --lib`. The lib copy has
 // no consumer, so without this allow the lib build warns.
 #[allow(dead_code)]
-pub(crate) fn plan_trigger_popup_transition(
-    current: &MenuSyntaxTriggerPopupState,
+pub(crate) fn plan_trigger_picker_transition(
+    current: &MenuSyntaxTriggerPickerState,
     raw_filter: &str,
     ctx: &TriggerPickerContext,
-) -> TriggerPopupTransition {
+) -> TriggerPickerTransition {
     if starts_with_legacy_trigger(raw_filter) {
         return if current.snapshot.is_some() {
-            TriggerPopupTransition::Close
+            TriggerPickerTransition::Close
         } else {
-            TriggerPopupTransition::NoChange
+            TriggerPickerTransition::NoChange
         };
     }
 
@@ -157,11 +159,11 @@ pub(crate) fn plan_trigger_popup_transition(
         .or_else(|| partial_trigger_snapshot(raw_filter, ctx));
 
     match (&current.snapshot, next_snapshot) {
-        (None, None) => TriggerPopupTransition::NoChange,
-        (Some(_), None) => TriggerPopupTransition::Close,
+        (None, None) => TriggerPickerTransition::NoChange,
+        (Some(_), None) => TriggerPickerTransition::Close,
         (None, Some(snapshot)) => {
             let selected = preserve_or_pick_first_enabled(&snapshot, None);
-            TriggerPopupTransition::Open {
+            TriggerPickerTransition::Open {
                 snapshot,
                 selected_row_id: selected,
             }
@@ -171,11 +173,11 @@ pub(crate) fn plan_trigger_popup_transition(
                 && preserve_or_pick_first_enabled(&snapshot, current.selected_row_id.as_deref())
                     == current.selected_row_id
             {
-                return TriggerPopupTransition::NoChange;
+                return TriggerPickerTransition::NoChange;
             }
             let selected =
                 preserve_or_pick_first_enabled(&snapshot, current.selected_row_id.as_deref());
-            TriggerPopupTransition::Update {
+            TriggerPickerTransition::Update {
                 snapshot,
                 selected_row_id: selected,
             }
@@ -185,14 +187,14 @@ pub(crate) fn plan_trigger_popup_transition(
 
 /// Fallback snapshot when the raw parser rejects `;<partial>` or `:<partial>`.
 /// Without this, typing the first character after a trigger
-/// would close the popup (because the parser only claims
+/// would close the picker (because the parser only claims
 /// known capture targets and whitespace-qualified queries), which makes
-/// the popup unusable for power users who don't remember the full
+/// the picker unusable for power users who don't remember the full
 /// target / qualifier name.
 ///
 /// Policy:
 /// - Only kicks in for `;`, legacy `+`, and `:` heads (legacy triggers are handled
-///   earlier in `plan_trigger_popup_transition`).
+///   earlier in `plan_trigger_picker_transition`).
 /// - Only kicks in when the text AFTER the trigger is non-empty and
 ///   contains no whitespace. As soon as the user types a space, it's
 ///   body text, not a partial target / qualifier — the parser takes
@@ -203,9 +205,9 @@ pub(crate) fn plan_trigger_popup_transition(
 ///   "Create capture handler…" / "Open help" affordances remain
 ///   reachable.
 /// - If every selectable row filters out, returns `None` — nothing to
-///   show, so the popup closes (a cleaner UX than showing only the
+///   show, so the picker closes (a cleaner UX than showing only the
 ///   footer).
-#[allow(dead_code)] // Lib-crate copy has no consumer; see plan_trigger_popup_transition comment.
+#[allow(dead_code)] // Lib-crate copy has no consumer; see plan_trigger_picker_transition comment.
 fn partial_trigger_snapshot(
     raw_filter: &str,
     ctx: &TriggerPickerContext,
@@ -256,12 +258,12 @@ fn partial_trigger_snapshot(
     Some(snapshot)
 }
 
-/// Whether a trigger-popup row may become the keyboard/default selection.
+/// Whether a trigger-picker row may become the keyboard/default selection.
 ///
 /// Footer rows stay explicit and clickable, but should not be highlighted as
 /// the default keyboard target.
-#[allow(dead_code)] // Lib-crate copy has no consumer; see plan_trigger_popup_transition comment.
-pub(crate) fn trigger_popup_row_is_default_selectable(row: &TriggerPickerRow) -> bool {
+#[allow(dead_code)] // Lib-crate copy has no consumer; see plan_trigger_picker_transition comment.
+pub(crate) fn trigger_picker_row_is_default_selectable(row: &TriggerPickerRow) -> bool {
     row.enabled
         && (row.kind != TriggerPickerRowKind::FooterAction
             || matches!(row.action, TriggerPickerAction::CreateHandler { .. }))
@@ -270,7 +272,7 @@ pub(crate) fn trigger_popup_row_is_default_selectable(row: &TriggerPickerRow) ->
 /// Try to keep `previous_id` selected if the row still exists in
 /// `snapshot` and is keyboard-selectable. Otherwise fall back to the first
 /// selectable row. Returns `None` when the snapshot has no selectable rows.
-#[allow(dead_code)] // Lib-crate copy has no consumer; see plan_trigger_popup_transition comment.
+#[allow(dead_code)] // Lib-crate copy has no consumer; see plan_trigger_picker_transition comment.
 fn preserve_or_pick_first_enabled(
     snapshot: &TriggerPickerSnapshot,
     previous_id: Option<&str>,
@@ -279,7 +281,7 @@ fn preserve_or_pick_first_enabled(
         if let Some(row) = snapshot
             .rows
             .iter()
-            .find(|row| row.id == prev && trigger_popup_row_is_default_selectable(row))
+            .find(|row| row.id == prev && trigger_picker_row_is_default_selectable(row))
         {
             return Some(row.id.clone());
         }
@@ -287,12 +289,12 @@ fn preserve_or_pick_first_enabled(
     snapshot
         .rows
         .iter()
-        .find(|row| trigger_popup_row_is_default_selectable(row))
+        .find(|row| trigger_picker_row_is_default_selectable(row))
         .map(|row| row.id.clone())
 }
 
 #[allow(dead_code)]
-pub(crate) fn trigger_popup_visible_start_for_selection(
+pub(crate) fn trigger_picker_visible_start_for_selection(
     visible_start: usize,
     selected_index: usize,
     item_count: usize,
@@ -301,7 +303,7 @@ pub(crate) fn trigger_popup_visible_start_for_selection(
         visible_start,
         selected_index,
         item_count,
-        crate::components::inline_popup_window::INLINE_POPUP_MAX_VISIBLE_ROWS,
+        TRIGGER_PICKER_MAX_VISIBLE_ROWS,
     )
     .start
 }
@@ -386,13 +388,13 @@ pub(crate) fn trigger_picker_row_to_main_list_row(
             .map(|badge| SharedString::from(badge.clone()))
             .collect(),
         score: if row.enabled { 0 } else { i32::MIN },
-        is_selectable: trigger_popup_row_is_default_selectable(row),
+        is_selectable: trigger_picker_row_is_default_selectable(row),
         action_label: action_label.map(SharedString::from),
         action: crate::spine::SpineListAction::Noop,
     }
 }
 
-/// Compute compact-row highlights for the menu-syntax popup from the current
+/// Compute compact-row highlights for the menu-syntax picker from the current
 /// raw filter text.
 ///
 /// The renderer shows the row title on the left and either `token` or
@@ -400,16 +402,16 @@ pub(crate) fn trigger_picker_row_to_main_list_row(
 /// behavior as the Agent Chat `/` and `@` pickers, offsetting `;` / `:` token matches
 /// past the trigger prefix so the typed trigger itself stays neutral.
 #[allow(dead_code)]
-pub(crate) fn trigger_popup_row_highlight_indices(
+pub(crate) fn trigger_picker_row_highlight_indices(
     row: &TriggerPickerRow,
     raw_filter: &str,
-) -> TriggerPopupRowHighlightIndices {
+) -> TriggerPickerRowHighlightIndices {
     if matches!(row.kind, TriggerPickerRowKind::FooterAction) {
-        return TriggerPopupRowHighlightIndices::default();
+        return TriggerPickerRowHighlightIndices::default();
     }
 
-    let Some((trigger, query)) = trigger_popup_highlight_query(raw_filter) else {
-        return TriggerPopupRowHighlightIndices::default();
+    let Some((trigger, query)) = trigger_picker_highlight_query(raw_filter) else {
+        return TriggerPickerRowHighlightIndices::default();
     };
 
     let title = row.title.as_str();
@@ -419,16 +421,16 @@ pub(crate) fn trigger_popup_row_highlight_indices(
         .or(row.subtitle.as_deref())
         .unwrap_or("");
 
-    let title_hits = best_trigger_popup_hits(&query, title, trigger, false);
-    let meta_hits = best_trigger_popup_hits(&query, meta, trigger, true);
+    let title_hits = best_trigger_picker_hits(&query, title, trigger, false);
+    let meta_hits = best_trigger_picker_hits(&query, meta, trigger, true);
 
-    TriggerPopupRowHighlightIndices {
+    TriggerPickerRowHighlightIndices {
         title: title_hits,
         meta: meta_hits,
     }
 }
 
-fn trigger_popup_highlight_query(raw_filter: &str) -> Option<(char, String)> {
+fn trigger_picker_highlight_query(raw_filter: &str) -> Option<(char, String)> {
     let trimmed = raw_filter.trim_start();
     let trigger = trimmed.chars().next()?;
     if trigger != ';' && trigger != '+' && trigger != ':' {
@@ -444,7 +446,7 @@ fn trigger_popup_highlight_query(raw_filter: &str) -> Option<(char, String)> {
     Some((trigger, query.to_ascii_lowercase()))
 }
 
-fn best_trigger_popup_hits(
+fn best_trigger_picker_hits(
     query: &str,
     candidate: &str,
     trigger: char,
@@ -572,17 +574,17 @@ mod tests {
 
     #[test]
     fn legacy_trigger_closes_open_popup() {
-        let state = MenuSyntaxTriggerPopupState {
+        let state = MenuSyntaxTriggerPickerState {
             snapshot: Some(snapshot(vec![qualifier_row("type", true)])),
             selected_row_id: Some("type".to_string()),
             visible_start: 0,
         };
         for trigger in ["~home", "/scripts", "@file", ">shortcut", "?help"] {
-            let transition = plan_trigger_popup_transition(&state, trigger, &ctx());
+            let transition = plan_trigger_picker_transition(&state, trigger, &ctx());
             assert_eq!(
                 transition,
-                TriggerPopupTransition::Close,
-                "trigger `{}` should close the popup",
+                TriggerPickerTransition::Close,
+                "trigger `{}` should close the picker",
                 trigger
             );
         }
@@ -590,42 +592,42 @@ mod tests {
 
     #[test]
     fn legacy_trigger_on_closed_popup_is_no_change() {
-        let state = MenuSyntaxTriggerPopupState::default();
+        let state = MenuSyntaxTriggerPickerState::default();
         assert_eq!(
-            plan_trigger_popup_transition(&state, "/scripts", &ctx()),
-            TriggerPopupTransition::NoChange,
+            plan_trigger_picker_transition(&state, "/scripts", &ctx()),
+            TriggerPickerTransition::NoChange,
         );
     }
 
     #[test]
     fn non_menu_syntax_filter_stays_closed() {
-        let state = MenuSyntaxTriggerPopupState::default();
+        let state = MenuSyntaxTriggerPickerState::default();
         assert_eq!(
-            plan_trigger_popup_transition(&state, "plain search text", &ctx()),
-            TriggerPopupTransition::NoChange,
+            plan_trigger_picker_transition(&state, "plain search text", &ctx()),
+            TriggerPickerTransition::NoChange,
         );
     }
 
     #[test]
     fn non_menu_syntax_filter_closes_open_popup() {
         let prev = snapshot(vec![qualifier_row("type", true)]);
-        let state = MenuSyntaxTriggerPopupState {
+        let state = MenuSyntaxTriggerPickerState {
             snapshot: Some(prev),
             selected_row_id: Some("type".to_string()),
             visible_start: 0,
         };
         assert_eq!(
-            plan_trigger_popup_transition(&state, "plain text", &ctx()),
-            TriggerPopupTransition::Close,
+            plan_trigger_picker_transition(&state, "plain text", &ctx()),
+            TriggerPickerTransition::Close,
         );
     }
 
     #[test]
     fn colon_prefix_opens_popup_when_closed() {
-        let state = MenuSyntaxTriggerPopupState::default();
-        let transition = plan_trigger_popup_transition(&state, ":", &ctx());
+        let state = MenuSyntaxTriggerPickerState::default();
+        let transition = plan_trigger_picker_transition(&state, ":", &ctx());
         match transition {
-            TriggerPopupTransition::Open {
+            TriggerPickerTransition::Open {
                 snapshot,
                 selected_row_id,
             } => {
@@ -638,25 +640,25 @@ mod tests {
 
     #[test]
     fn source_filter_query_does_not_open_power_popup() {
-        let state = MenuSyntaxTriggerPopupState::default();
+        let state = MenuSyntaxTriggerPickerState::default();
         assert_eq!(
-            plan_trigger_popup_transition(&state, "png :f", &ctx()),
-            TriggerPopupTransition::NoChange,
-            "inline file source filters should refine search without showing the power-user popup"
+            plan_trigger_picker_transition(&state, "png :f", &ctx()),
+            TriggerPickerTransition::NoChange,
+            "inline file source filters should refine search without showing the power-user picker"
         );
         assert_eq!(
-            plan_trigger_popup_transition(&state, ":n meeting", &ctx()),
-            TriggerPopupTransition::NoChange,
+            plan_trigger_picker_transition(&state, ":n meeting", &ctx()),
+            TriggerPickerTransition::NoChange,
             "prefix source filters should still behave as normal search refinements"
         );
     }
 
     #[test]
     fn plus_prefix_opens_popup_when_closed() {
-        let state = MenuSyntaxTriggerPopupState::default();
-        let transition = plan_trigger_popup_transition(&state, "+", &ctx());
+        let state = MenuSyntaxTriggerPickerState::default();
+        let transition = plan_trigger_picker_transition(&state, "+", &ctx());
         match transition {
-            TriggerPopupTransition::Open { snapshot, .. } => {
+            TriggerPickerTransition::Open { snapshot, .. } => {
                 assert!(snapshot
                     .rows
                     .iter()
@@ -668,10 +670,10 @@ mod tests {
 
     #[test]
     fn semicolon_prefix_opens_canonical_capture_popup_when_closed() {
-        let state = MenuSyntaxTriggerPopupState::default();
-        let transition = plan_trigger_popup_transition(&state, ";", &ctx());
+        let state = MenuSyntaxTriggerPickerState::default();
+        let transition = plan_trigger_picker_transition(&state, ";", &ctx());
         match transition {
-            TriggerPopupTransition::Open { snapshot, .. } => {
+            TriggerPickerTransition::Open { snapshot, .. } => {
                 assert!(snapshot
                     .rows
                     .iter()
@@ -684,25 +686,25 @@ mod tests {
     #[test]
     fn capture_body_composer_closes_open_popup() {
         let prev = build_trigger_picker_snapshot(";todo", &ctx()).expect("todo target snapshot");
-        let state = MenuSyntaxTriggerPopupState {
+        let state = MenuSyntaxTriggerPickerState {
             snapshot: Some(prev),
             selected_row_id: Some("target:todo".to_string()),
             visible_start: 0,
         };
 
         assert_eq!(
-            plan_trigger_popup_transition(&state, ";todo Take out the garbage", &ctx()),
-            TriggerPopupTransition::Close,
+            plan_trigger_picker_transition(&state, ";todo Take out the garbage", &ctx()),
+            TriggerPickerTransition::Close,
             "body composition owns input after the capture target boundary"
         );
         assert_eq!(
-            plan_trigger_popup_transition(
-                &MenuSyntaxTriggerPopupState::default(),
+            plan_trigger_picker_transition(
+                &MenuSyntaxTriggerPickerState::default(),
                 ";todo ",
                 &ctx()
             ),
-            TriggerPopupTransition::NoChange,
-            "composer mode starts with a blank main surface, not a popup"
+            TriggerPickerTransition::NoChange,
+            "composer mode starts with a blank main surface, not a picker"
         );
     }
 
@@ -712,7 +714,7 @@ mod tests {
             qualifier_row("type", true),
             qualifier_row("shortcut", true),
         ]);
-        let state = MenuSyntaxTriggerPopupState {
+        let state = MenuSyntaxTriggerPickerState {
             snapshot: Some(prev),
             selected_row_id: Some("shortcut".to_string()),
             visible_start: 0,
@@ -785,10 +787,10 @@ mod tests {
 
     #[test]
     fn visible_start_preserves_page_until_selection_leaves_it() {
-        assert_eq!(trigger_popup_visible_start_for_selection(6, 9, 20), 6);
-        assert_eq!(trigger_popup_visible_start_for_selection(6, 13, 20), 6);
-        assert_eq!(trigger_popup_visible_start_for_selection(6, 14, 20), 7);
-        assert_eq!(trigger_popup_visible_start_for_selection(6, 5, 20), 5);
+        assert_eq!(trigger_picker_visible_start_for_selection(6, 9, 20), 6);
+        assert_eq!(trigger_picker_visible_start_for_selection(6, 13, 20), 6);
+        assert_eq!(trigger_picker_visible_start_for_selection(6, 14, 20), 7);
+        assert_eq!(trigger_picker_visible_start_for_selection(6, 5, 20), 5);
     }
 
     #[test]
@@ -797,19 +799,19 @@ mod tests {
             qualifier_row("type", true),
             qualifier_row("shortcut", true),
         ]);
-        let state = MenuSyntaxTriggerPopupState {
+        let state = MenuSyntaxTriggerPickerState {
             snapshot: Some(prev),
             selected_row_id: Some("type".to_string()),
             visible_start: 0,
         };
         // Same two rows, same state → NoChange.
-        let transition = plan_trigger_popup_transition(&state, ":type:", &ctx());
+        let transition = plan_trigger_picker_transition(&state, ":type:", &ctx());
         // `:type:` produces qualifier-value rows; we only check that the
         // transition is not spuriously Close / Open.
         match transition {
-            TriggerPopupTransition::NoChange
-            | TriggerPopupTransition::Update { .. }
-            | TriggerPopupTransition::Open { .. } => {}
+            TriggerPickerTransition::NoChange
+            | TriggerPickerTransition::Update { .. }
+            | TriggerPickerTransition::Open { .. } => {}
             other => panic!("unexpected transition {:?}", other),
         }
     }
@@ -899,7 +901,7 @@ mod tests {
             .find(|row| row.token.as_deref() == Some("todo;"))
             .expect("todo target row");
 
-        let highlights = trigger_popup_row_highlight_indices(row, "+to");
+        let highlights = trigger_picker_row_highlight_indices(row, "+to");
 
         assert_eq!(highlights.title, vec![0, 1]);
         assert_eq!(highlights.meta, vec![0, 1]);
@@ -914,7 +916,7 @@ mod tests {
             .find(|row| row.token.as_deref() == Some("todo;"))
             .expect("todo target row");
 
-        let highlights = trigger_popup_row_highlight_indices(row, ";todo");
+        let highlights = trigger_picker_row_highlight_indices(row, ";todo");
 
         assert_eq!(highlights.title, vec![0, 1, 2, 3]);
         assert_eq!(highlights.meta, vec![0, 1, 2, 3]);
@@ -931,7 +933,7 @@ mod tests {
             .find(|row| row.token.as_deref() == Some("type:script"))
             .expect("type script qualifier row");
 
-        let highlights = trigger_popup_row_highlight_indices(row, ":type");
+        let highlights = trigger_picker_row_highlight_indices(row, ":type");
 
         assert_eq!(highlights.title, Vec::<usize>::new());
         assert_eq!(highlights.meta, vec![0, 1, 2, 3]);
@@ -946,7 +948,7 @@ mod tests {
             .find(|row| row.token.as_deref() == Some("source:"))
             .expect("source qualifier row");
 
-        let highlights = trigger_popup_row_highlight_indices(row, ":source:main");
+        let highlights = trigger_picker_row_highlight_indices(row, ":source:main");
 
         assert_eq!(highlights.meta, vec![0, 1, 2, 3, 4, 5, 6]);
     }
@@ -963,7 +965,7 @@ mod tests {
             .find(|row| row.kind == TriggerPickerRowKind::FooterAction)
             .expect("footer action row");
 
-        let highlights = trigger_popup_row_highlight_indices(row, ";t");
+        let highlights = trigger_picker_row_highlight_indices(row, ";t");
 
         assert!(highlights.title.is_empty());
         assert!(highlights.meta.is_empty());
@@ -971,15 +973,15 @@ mod tests {
 
     #[test]
     fn partial_plus_trigger_keeps_popup_open_with_filtered_targets() {
-        let state = MenuSyntaxTriggerPopupState::default();
-        // `+t` should NARROW the popup to targets whose slug starts with
+        let state = MenuSyntaxTriggerPickerState::default();
+        // `+t` should NARROW the picker to targets whose slug starts with
         // 't' — `+todo` matches, `+cal`, `+note`, `+social`, `+link` do
         // not. Loose `contains` matches would spuriously keep "Daily note"
         // (title contains 't' in "note"), "Tagged link" (title starts
         // with 't' but slug doesn't), etc.; we want slug-prefix semantics.
-        let transition = plan_trigger_popup_transition(&state, "+t", &ctx());
+        let transition = plan_trigger_picker_transition(&state, "+t", &ctx());
         match transition {
-            TriggerPopupTransition::Open { snapshot, .. } => {
+            TriggerPickerTransition::Open { snapshot, .. } => {
                 let target_slugs: Vec<String> = snapshot
                     .rows
                     .iter()
@@ -1019,24 +1021,24 @@ mod tests {
 
     #[test]
     fn partial_colon_trigger_keeps_popup_open_with_filtered_qualifiers() {
-        let state = MenuSyntaxTriggerPopupState::default();
+        let state = MenuSyntaxTriggerPickerState::default();
         // `:typ` — partial match for `type:` qualifier. Parser returns
         // AdvancedQuery without filtering, so build_trigger_picker_snapshot
-        // already keeps the popup open. This test pins the behavior.
-        let transition = plan_trigger_popup_transition(&state, ":typ", &ctx());
+        // already keeps the picker open. This test pins the behavior.
+        let transition = plan_trigger_picker_transition(&state, ":typ", &ctx());
         assert!(
-            matches!(transition, TriggerPopupTransition::Open { .. }),
-            "`:typ` should open the popup, got {:?}",
+            matches!(transition, TriggerPickerTransition::Open { .. }),
+            "`:typ` should open the picker, got {:?}",
             transition
         );
     }
 
     #[test]
     fn partial_colon_trigger_matches_browser_source_labels() {
-        let state = MenuSyntaxTriggerPopupState::default();
-        let transition = plan_trigger_popup_transition(&state, ":bro", &ctx());
+        let state = MenuSyntaxTriggerPickerState::default();
+        let transition = plan_trigger_picker_transition(&state, ":bro", &ctx());
         match transition {
-            TriggerPopupTransition::Open { snapshot, .. } => {
+            TriggerPickerTransition::Open { snapshot, .. } => {
                 let titles: Vec<&str> =
                     snapshot.rows.iter().map(|row| row.title.as_str()).collect();
                 assert!(titles.contains(&"Browser Tabs"), "got {titles:?}");
@@ -1048,24 +1050,24 @@ mod tests {
 
     #[test]
     fn partial_colon_trigger_with_no_match_stays_closed() {
-        let state = MenuSyntaxTriggerPopupState::default();
-        let transition = plan_trigger_popup_transition(&state, ":zzzzzzz", &ctx());
+        let state = MenuSyntaxTriggerPickerState::default();
+        let transition = plan_trigger_picker_transition(&state, ":zzzzzzz", &ctx());
         assert_eq!(
             transition,
-            TriggerPopupTransition::NoChange,
-            "bogus partial `:zzzzzzz` should not spuriously open a blank popup"
+            TriggerPickerTransition::NoChange,
+            "bogus partial `:zzzzzzz` should not spuriously open a blank picker"
         );
     }
 
     #[test]
     fn partial_plus_trigger_with_no_match_closes_popup() {
-        // `+zzzzzzz` matches no known targets — popup should stay closed.
-        let state = MenuSyntaxTriggerPopupState::default();
-        let transition = plan_trigger_popup_transition(&state, "+zzzzzzz", &ctx());
+        // `+zzzzzzz` matches no known targets — picker should stay closed.
+        let state = MenuSyntaxTriggerPickerState::default();
+        let transition = plan_trigger_picker_transition(&state, "+zzzzzzz", &ctx());
         assert_eq!(
             transition,
-            TriggerPopupTransition::NoChange,
-            "bogus partial `+zzzzzzz` should not spuriously open the popup"
+            TriggerPickerTransition::NoChange,
+            "bogus partial `+zzzzzzz` should not spuriously open the picker"
         );
     }
 
@@ -1073,27 +1075,27 @@ mod tests {
     fn partial_plus_trigger_with_whitespace_falls_through_to_parser() {
         // Once whitespace appears, the parser claims the string as body
         // text. Our partial fallback must not kick in.
-        let state = MenuSyntaxTriggerPopupState::default();
-        let transition = plan_trigger_popup_transition(&state, "+ some text", &ctx());
+        let state = MenuSyntaxTriggerPickerState::default();
+        let transition = plan_trigger_picker_transition(&state, "+ some text", &ctx());
         // `+ ` is not a valid capture, parser returns None, partial fallback
         // sees whitespace → returns None, transition is NoChange.
-        assert_eq!(transition, TriggerPopupTransition::NoChange);
+        assert_eq!(transition, TriggerPickerTransition::NoChange);
     }
 
     #[test]
     fn partial_plus_trigger_updates_existing_open_popup() {
-        // Open on `+`, then type `+t` — popup should Update to the
+        // Open on `+`, then type `+t` — picker should Update to the
         // filtered snapshot, not Close.
-        let state = MenuSyntaxTriggerPopupState {
+        let state = MenuSyntaxTriggerPickerState {
             snapshot: Some(snapshot(vec![qualifier_row("todo", true)])),
             selected_row_id: Some("todo".to_string()),
             visible_start: 0,
         };
-        let transition = plan_trigger_popup_transition(&state, "+t", &ctx());
+        let transition = plan_trigger_picker_transition(&state, "+t", &ctx());
         match transition {
-            TriggerPopupTransition::Open { .. } | TriggerPopupTransition::Update { .. } => {}
+            TriggerPickerTransition::Open { .. } | TriggerPickerTransition::Update { .. } => {}
             other => panic!(
-                "typing `+t` over an open popup should keep it open, got {:?}",
+                "typing `+t` over an open picker should keep it open, got {:?}",
                 other
             ),
         }
@@ -1114,27 +1116,28 @@ mod tests {
             "trigger snapshots should be documented as feeding the main search area"
         );
         assert!(
-            !source.contains("sync_menu_syntax_trigger_popup_window_for_filter"),
-            "filter input changes must not sync trigger snapshots into the detached popup window"
+            !source.contains("sync_menu_syntax_trigger_picker_main_list_for_filter"),
+            "filter input changes must not sync trigger snapshots into the detached picker window"
         );
     }
 
     #[test]
     fn launcher_trigger_state_machine_does_not_open_popup_window() {
-        let source = std::fs::read_to_string("src/app_impl/menu_syntax_trigger_popup_window.rs")
-            .expect("Failed to read src/app_impl/menu_syntax_trigger_popup_window.rs");
+        let source =
+            std::fs::read_to_string("src/app_impl/menu_syntax_trigger_picker_main_list.rs")
+                .expect("Failed to read src/app_impl/menu_syntax_trigger_picker_main_list.rs");
         let body = source
-            .split("pub(crate) fn run_menu_syntax_trigger_popup_state_machine(")
+            .split("pub(crate) fn run_menu_syntax_trigger_picker_state_machine(")
             .nth(1)
             .and_then(|tail| {
                 tail.split("pub(crate) fn menu_syntax_trigger_picker_context")
                     .next()
             })
-            .expect("run_menu_syntax_trigger_popup_state_machine should exist");
+            .expect("run_menu_syntax_trigger_picker_state_machine should exist");
 
         assert!(
-            !body.contains("sync_menu_syntax_trigger_popup_window_for_filter"),
-            "trigger state machine must preserve snapshots for the main area without opening the popup"
+            !body.contains("sync_menu_syntax_trigger_picker_main_list_for_filter"),
+            "trigger state machine must preserve snapshots for the main area without opening the picker"
         );
     }
 }

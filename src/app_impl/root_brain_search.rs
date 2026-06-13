@@ -76,7 +76,7 @@ impl ScriptListApp {
         // main-list ownership checks the root file search applies.
         let can_collect = matches!(self.current_view, AppView::ScriptList)
             && !self.menu_syntax_object_selector_state.owns_main_list()
-            && !self.menu_syntax_trigger_popup_state.owns_main_list()
+            && !self.menu_syntax_trigger_picker_state.owns_main_list()
             && !self
                 .menu_syntax_mode
                 .capture_composer_owns_input_for(trimmed)

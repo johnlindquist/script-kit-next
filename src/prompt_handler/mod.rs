@@ -3587,13 +3587,13 @@ impl ScriptListApp {
                                 selected_value,
                             )
                         } else if let Some(snapshot) = self
-                            .menu_syntax_trigger_popup_state
+                            .menu_syntax_trigger_picker_state
                             .snapshot
                             .as_ref()
-                            .filter(|_| self.menu_syntax_trigger_popup_state.owns_main_list())
+                            .filter(|_| self.menu_syntax_trigger_picker_state.owns_main_list())
                         {
                             let selected_row_index = self
-                                .menu_syntax_trigger_popup_state
+                                .menu_syntax_trigger_picker_state
                                 .selected_row_id
                                 .as_deref()
                                 .and_then(|id| snapshot.rows.iter().position(|row| row.id == id));
@@ -10201,12 +10201,12 @@ impl ScriptListApp {
                 {
                     return Some(value);
                 }
-                self.menu_syntax_trigger_popup_state
+                self.menu_syntax_trigger_picker_state
                     .snapshot
                     .as_ref()
-                    .filter(|_| self.menu_syntax_trigger_popup_state.owns_main_list())
+                    .filter(|_| self.menu_syntax_trigger_picker_state.owns_main_list())
                     .and_then(|snapshot| {
-                        self.menu_syntax_trigger_popup_state
+                        self.menu_syntax_trigger_picker_state
                             .selected_row_id
                             .as_deref()
                             .and_then(|id| snapshot.rows.iter().find(|row| row.id == id))
@@ -10606,8 +10606,8 @@ impl ScriptListApp {
             .and_then(|index| index.parse::<usize>().ok())
             .ok_or_else(|| anyhow::anyhow!("Invalid main-menu semantic ID '{semantic_id}'"))?;
 
-        if self.menu_syntax_trigger_popup_state.owns_main_list() {
-            let Some(snapshot) = self.menu_syntax_trigger_popup_state.snapshot.as_ref() else {
+        if self.menu_syntax_trigger_picker_state.owns_main_list() {
+            let Some(snapshot) = self.menu_syntax_trigger_picker_state.snapshot.as_ref() else {
                 anyhow::bail!(
                     "No visible menu-syntax trigger picker matched semantic ID '{semantic_id}'"
                 );
@@ -10622,9 +10622,9 @@ impl ScriptListApp {
             }
             let row_id = row.id.clone();
             let selected = row.token.clone().unwrap_or_else(|| row.title.clone());
-            self.menu_syntax_trigger_popup_state.selected_row_id = Some(row_id.clone());
+            self.menu_syntax_trigger_picker_state.selected_row_id = Some(row_id.clone());
             if submit {
-                self.accept_menu_syntax_trigger_popup_row(&row_id, None, cx);
+                self.accept_menu_syntax_trigger_picker_row(&row_id, None, cx);
             }
             return Ok(selected);
         }

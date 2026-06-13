@@ -45,7 +45,7 @@ impl ScriptListApp {
         if !self.menu_syntax_form_input_active {
             self.sync_menu_syntax_form_suggestions_from_main_input(&form);
         }
-        self.sync_menu_syntax_form_trigger_popup_window(&form, window, cx);
+        self.sync_menu_syntax_form_trigger_picker_state(&form, window, cx);
     }
 
     fn clear_menu_syntax_form_inputs(&mut self) {
@@ -210,7 +210,7 @@ impl ScriptListApp {
             })
     }
 
-    fn menu_syntax_form_field_uses_popup(
+    fn menu_syntax_form_field_uses_suggestions(
         field: &crate::menu_syntax::MenuSyntaxFormFieldSnapshot,
     ) -> bool {
         matches!(
@@ -255,14 +255,14 @@ impl ScriptListApp {
         self.menu_syntax_form_suggestion_selected_index = None;
     }
 
-    fn menu_syntax_form_trigger_popup_target(
+    fn menu_syntax_form_trigger_picker_target(
         form: &crate::menu_syntax::MenuSyntaxFormSnapshot,
         field_id: &str,
     ) -> String {
         format!("form:{}:{field_id}", form.target)
     }
 
-    fn menu_syntax_form_trigger_popup_row_id(
+    fn menu_syntax_form_trigger_picker_row_id(
         form: &crate::menu_syntax::MenuSyntaxFormSnapshot,
         field_id: &str,
         index: usize,
@@ -270,7 +270,7 @@ impl ScriptListApp {
         format!("form-suggestion:{}:{field_id}:{index}", form.target)
     }
 
-    fn parse_menu_syntax_form_trigger_popup_row_id(row_id: &str) -> Option<(&str, usize)> {
+    fn parse_menu_syntax_form_trigger_picker_row_id(row_id: &str) -> Option<(&str, usize)> {
         let mut parts = row_id.split(':');
         match (
             parts.next(),
@@ -286,53 +286,53 @@ impl ScriptListApp {
         }
     }
 
-    fn trigger_popup_state_is_menu_syntax_form_suggestion(&self) -> bool {
-        self.menu_syntax_trigger_popup_state
+    fn trigger_picker_state_is_menu_syntax_form_suggestion(&self) -> bool {
+        self.menu_syntax_trigger_picker_state
             .snapshot
             .as_ref()
             .and_then(|snapshot| snapshot.target.as_deref())
             .is_some_and(|target| target.starts_with("form:"))
     }
 
-    fn selected_menu_syntax_form_trigger_popup_index(&self) -> Option<usize> {
-        self.menu_syntax_trigger_popup_state
+    fn selected_menu_syntax_form_trigger_picker_index(&self) -> Option<usize> {
+        self.menu_syntax_trigger_picker_state
             .selected_row_id
             .as_deref()
-            .and_then(Self::parse_menu_syntax_form_trigger_popup_row_id)
+            .and_then(Self::parse_menu_syntax_form_trigger_picker_row_id)
             .map(|(_, index)| index)
     }
 
-    fn selected_menu_syntax_form_trigger_popup_row_id(
+    fn selected_menu_syntax_form_trigger_picker_row_id(
         &self,
         form: &crate::menu_syntax::MenuSyntaxFormSnapshot,
         field: &crate::menu_syntax::MenuSyntaxFormFieldSnapshot,
     ) -> Option<String> {
         let selected = self
-            .selected_menu_syntax_form_trigger_popup_index()
+            .selected_menu_syntax_form_trigger_picker_index()
             .or(self.menu_syntax_form_suggestion_selected_index)
             .unwrap_or(0)
             .min(field.suggestions.len().saturating_sub(1));
-        Some(Self::menu_syntax_form_trigger_popup_row_id(
+        Some(Self::menu_syntax_form_trigger_picker_row_id(
             form, &field.id, selected,
         ))
     }
 
-    fn build_menu_syntax_form_trigger_popup_snapshot(
+    fn build_menu_syntax_form_trigger_picker_snapshot(
         &self,
         form: &crate::menu_syntax::MenuSyntaxFormSnapshot,
     ) -> Option<(crate::menu_syntax::TriggerPickerSnapshot, Option<String>)> {
-        let field = self.active_menu_syntax_form_popup_field(form)?;
+        let field = self.active_menu_syntax_form_suggestion_field(form)?;
         if field.suggestions.is_empty() {
             return None;
         }
 
-        let target = Self::menu_syntax_form_trigger_popup_target(form, &field.id);
+        let target = Self::menu_syntax_form_trigger_picker_target(form, &field.id);
         let rows = field
             .suggestions
             .iter()
             .enumerate()
             .map(|(index, suggestion)| crate::menu_syntax::TriggerPickerRow {
-                id: Self::menu_syntax_form_trigger_popup_row_id(form, &field.id, index),
+                id: Self::menu_syntax_form_trigger_picker_row_id(form, &field.id, index),
                 mode: crate::menu_syntax::TriggerPickerMode::Capture,
                 kind: crate::menu_syntax::TriggerPickerRowKind::CaptureArtifact,
                 title: suggestion.label.clone(),
@@ -349,7 +349,7 @@ impl ScriptListApp {
             })
             .collect::<Vec<_>>();
 
-        let selected_row_id = self.selected_menu_syntax_form_trigger_popup_row_id(form, field);
+        let selected_row_id = self.selected_menu_syntax_form_trigger_picker_row_id(form, field);
         Some((
             crate::menu_syntax::TriggerPickerSnapshot {
                 mode: crate::menu_syntax::TriggerPickerMode::Capture,
@@ -360,14 +360,14 @@ impl ScriptListApp {
         ))
     }
 
-    fn sync_menu_syntax_form_trigger_popup_window(
+    fn sync_menu_syntax_form_trigger_picker_state(
         &mut self,
         form: &crate::menu_syntax::MenuSyntaxFormSnapshot,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         if let Some((snapshot, selected_row_id)) =
-            self.build_menu_syntax_form_trigger_popup_snapshot(form)
+            self.build_menu_syntax_form_trigger_picker_snapshot(form)
         {
             let selected_index = selected_row_id
                 .as_deref()
@@ -375,13 +375,13 @@ impl ScriptListApp {
                 .unwrap_or(0);
             self.menu_syntax_form_suggestion_selected_index = Some(selected_index);
             let row_count = snapshot.rows.len();
-            self.menu_syntax_trigger_popup_state =
-                crate::menu_syntax_trigger_popup::MenuSyntaxTriggerPopupState {
+            self.menu_syntax_trigger_picker_state =
+                crate::menu_syntax_trigger_picker::MenuSyntaxTriggerPickerState {
                     snapshot: Some(snapshot),
                     selected_row_id,
                     visible_start:
-                        crate::menu_syntax_trigger_popup::trigger_popup_visible_start_for_selection(
-                            self.menu_syntax_trigger_popup_state.visible_start,
+                        crate::menu_syntax_trigger_picker::trigger_picker_visible_start_for_selection(
+                            self.menu_syntax_trigger_picker_state.visible_start,
                             selected_index,
                             row_count,
                         ),
@@ -389,15 +389,15 @@ impl ScriptListApp {
             let _ = window;
             self.invalidate_grouped_cache();
             cx.notify();
-        } else if self.trigger_popup_state_is_menu_syntax_form_suggestion() {
-            self.menu_syntax_trigger_popup_state = Default::default();
+        } else if self.trigger_picker_state_is_menu_syntax_form_suggestion() {
+            self.menu_syntax_trigger_picker_state = Default::default();
         }
     }
 
-    fn close_menu_syntax_form_suggestions_and_trigger_popup(&mut self, _cx: &mut Context<Self>) {
+    fn close_menu_syntax_form_suggestions_and_trigger_picker(&mut self, _cx: &mut Context<Self>) {
         self.close_menu_syntax_form_suggestions();
-        if self.trigger_popup_state_is_menu_syntax_form_suggestion() {
-            self.menu_syntax_trigger_popup_state = Default::default();
+        if self.trigger_picker_state_is_menu_syntax_form_suggestion() {
+            self.menu_syntax_trigger_picker_state = Default::default();
         }
     }
 
@@ -405,7 +405,7 @@ impl ScriptListApp {
         &mut self,
         field: &crate::menu_syntax::MenuSyntaxFormFieldSnapshot,
     ) {
-        if Self::menu_syntax_form_field_uses_popup(field) {
+        if Self::menu_syntax_form_field_uses_suggestions(field) {
             self.menu_syntax_form_suggestion_field_id = Some(field.id.clone());
             self.menu_syntax_form_suggestion_selected_index = Some(0);
         } else {
@@ -556,7 +556,7 @@ impl ScriptListApp {
             state.set_selection(len, len, window, cx);
             state.focus(window, cx);
         });
-        self.sync_menu_syntax_form_trigger_popup_window(form, window, cx);
+        self.sync_menu_syntax_form_trigger_picker_state(form, window, cx);
         cx.notify();
     }
 
@@ -564,7 +564,7 @@ impl ScriptListApp {
         self.menu_syntax_form_input_active = false;
         self.menu_syntax_form_draft_field_id = None;
         self.menu_syntax_form_draft_value.clear();
-        self.close_menu_syntax_form_suggestions_and_trigger_popup(cx);
+        self.close_menu_syntax_form_suggestions_and_trigger_picker(cx);
         self.gpui_input_state
             .update(cx, |state, cx| state.focus(window, cx));
         cx.notify();
@@ -675,7 +675,7 @@ impl ScriptListApp {
                 }
                 self.menu_syntax_form_draft_field_id = Some(resolved_field_id.clone());
                 self.menu_syntax_form_draft_value = value.clone();
-                self.sync_menu_syntax_form_trigger_popup_window(&form, window, cx);
+                self.sync_menu_syntax_form_trigger_picker_state(&form, window, cx);
             }
         }
         tracing::info!(
@@ -742,8 +742,8 @@ impl ScriptListApp {
         let Some(form) = snapshot.form else {
             return false;
         };
-        let popup_active = self.active_menu_syntax_form_popup_field(&form).is_some();
-        if !self.menu_syntax_form_input_active && !popup_active {
+        let suggestions_active = self.active_menu_syntax_form_suggestion_field(&form).is_some();
+        if !self.menu_syntax_form_input_active && !suggestions_active {
             return false;
         }
         let active_field = form
@@ -771,7 +771,7 @@ impl ScriptListApp {
             }
             "escape" | "esc" => {
                 if self.menu_syntax_form_suggestion_field_id.is_some() {
-                    self.close_menu_syntax_form_suggestions_and_trigger_popup(cx);
+                    self.close_menu_syntax_form_suggestions_and_trigger_picker(cx);
                     cx.notify();
                 } else {
                     self.focus_menu_syntax_main_input(window, cx);
@@ -934,13 +934,13 @@ impl ScriptListApp {
         field.selected_suggestion_index = Some(selected);
     }
 
-    fn active_menu_syntax_form_popup_field<'a>(
+    fn active_menu_syntax_form_suggestion_field<'a>(
         &self,
         form: &'a crate::menu_syntax::MenuSyntaxFormSnapshot,
     ) -> Option<&'a crate::menu_syntax::MenuSyntaxFormFieldSnapshot> {
         let owner_field_id = self.menu_syntax_form_suggestion_field_id.as_deref()?;
         form.fields.iter().find(|field| {
-            field.id == owner_field_id && Self::menu_syntax_form_field_uses_popup(field)
+            field.id == owner_field_id && Self::menu_syntax_form_field_uses_suggestions(field)
         })
     }
 
@@ -951,7 +951,7 @@ impl ScriptListApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(field) = self.active_menu_syntax_form_popup_field(form) else {
+        let Some(field) = self.active_menu_syntax_form_suggestion_field(form) else {
             self.close_menu_syntax_form_suggestions();
             cx.notify();
             return;
@@ -976,7 +976,7 @@ impl ScriptListApp {
         };
         self.menu_syntax_form_suggestion_field_id = Some(field.id.clone());
         self.menu_syntax_form_suggestion_selected_index = Some(next);
-        self.sync_menu_syntax_form_trigger_popup_window(form, window, cx);
+        self.sync_menu_syntax_form_trigger_picker_state(form, window, cx);
         cx.notify();
     }
 
@@ -987,7 +987,7 @@ impl ScriptListApp {
         cx: &mut Context<Self>,
     ) -> bool {
         let Some(field) = self
-            .active_menu_syntax_form_popup_field(form)
+            .active_menu_syntax_form_suggestion_field(form)
             .or_else(|| form.fields.iter().find(|field| field.focused))
         else {
             return false;
@@ -1061,9 +1061,9 @@ impl ScriptListApp {
             crate::menu_syntax::MenuSyntaxMainHintContext {
                 raw_filter_text,
                 mode: &self.menu_syntax_mode,
-                popup_snapshot: self.menu_syntax_trigger_popup_state.snapshot.as_ref(),
-                popup_selected_row_id: self
-                    .menu_syntax_trigger_popup_state
+                picker_snapshot: self.menu_syntax_trigger_picker_state.snapshot.as_ref(),
+                picker_selected_row_id: self
+                    .menu_syntax_trigger_picker_state
                     .selected_row_id
                     .as_deref(),
                 scripts: &self.scripts,

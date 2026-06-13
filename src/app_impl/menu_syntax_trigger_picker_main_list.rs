@@ -34,34 +34,34 @@ impl crate::menu_syntax::CaptureHandlerScaffoldEffects for AppCaptureHandlerScaf
 impl ScriptListApp {
     pub(crate) fn menu_syntax_trigger_picker_owns_main_keyboard(&self) -> bool {
         matches!(self.current_view, crate::AppView::ScriptList)
-            && self.menu_syntax_trigger_popup_state.owns_main_list()
+            && self.menu_syntax_trigger_picker_state.owns_main_list()
     }
-    /// Update the cached selected row id from a mouse-driven popup
-    /// selection change. The popup renders from this state on the next
+    /// Update the cached selected row id from a mouse-driven picker
+    /// selection change. The picker renders from this state on the next
     /// sync.
-    pub(crate) fn set_menu_syntax_trigger_popup_selection(&mut self, row_id: String) {
-        self.menu_syntax_trigger_popup_state.selected_row_id = Some(row_id);
+    pub(crate) fn set_menu_syntax_trigger_picker_selection(&mut self, row_id: String) {
+        self.menu_syntax_trigger_picker_state.selected_row_id = Some(row_id);
     }
 
-    /// Apply the Accept outcome for a clicked popup row. Mouse-click path
+    /// Apply the Accept outcome for a clicked picker row. Mouse-click path
     /// only — keyboard goes through
-    /// [`apply_menu_syntax_trigger_popup_intent`], which has access to
-    /// `&mut Window` and can therefore re-sync the popup after a
-    /// `keep_open` apply. Mouse clicks always close the popup (the row
+    /// [`apply_menu_syntax_trigger_picker_intent`], which has access to
+    /// `&mut Window` and can therefore re-sync the picker after a
+    /// `keep_open` apply. Mouse clicks always close the picker (the row
     /// action produces Accept, not Apply).
-    pub(crate) fn accept_menu_syntax_trigger_popup_row(
+    pub(crate) fn accept_menu_syntax_trigger_picker_row(
         &mut self,
         row_id: &str,
         window: Option<&mut Window>,
         cx: &mut Context<Self>,
     ) -> bool {
         if let Some((field_id, suggestion_index)) =
-            Self::parse_trigger_popup_form_suggestion_row_id(row_id)
+            Self::parse_trigger_picker_form_suggestion_row_id(row_id)
         {
             let Some(window) = window else {
                 return false;
             };
-            return self.accept_menu_syntax_form_trigger_popup_suggestion(
+            return self.accept_menu_syntax_form_trigger_picker_suggestion(
                 field_id,
                 suggestion_index,
                 window,
@@ -70,7 +70,7 @@ impl ScriptListApp {
         }
 
         let Some(snapshot) = self
-            .menu_syntax_trigger_popup_state
+            .menu_syntax_trigger_picker_state
             .snapshot
             .as_ref()
             .cloned()
@@ -96,31 +96,31 @@ impl ScriptListApp {
         );
 
         let has_window = window.is_some();
-        self.dispatch_menu_syntax_trigger_popup_outcome(outcome, window, cx);
+        self.dispatch_menu_syntax_trigger_picker_outcome(outcome, window, cx);
         if keep_open && !has_window {
             let text = self.filter_text.clone();
             let picker_ctx = self.menu_syntax_trigger_picker_context(&text);
-            let transition = crate::menu_syntax_trigger_popup::plan_trigger_popup_transition(
-                &self.menu_syntax_trigger_popup_state,
+            let transition = crate::menu_syntax_trigger_picker::plan_trigger_picker_transition(
+                &self.menu_syntax_trigger_picker_state,
                 &text,
                 &picker_ctx,
             );
-            use crate::menu_syntax_trigger_popup::TriggerPopupTransition;
+            use crate::menu_syntax_trigger_picker::TriggerPickerTransition;
             match transition {
-                TriggerPopupTransition::NoChange => {}
-                TriggerPopupTransition::Close => {
-                    self.menu_syntax_trigger_popup_state = Default::default();
+                TriggerPickerTransition::NoChange => {}
+                TriggerPickerTransition::Close => {
+                    self.menu_syntax_trigger_picker_state = Default::default();
                 }
-                TriggerPopupTransition::Open {
+                TriggerPickerTransition::Open {
                     snapshot,
                     selected_row_id,
                 }
-                | TriggerPopupTransition::Update {
+                | TriggerPickerTransition::Update {
                     snapshot,
                     selected_row_id,
                 } => {
-                    self.menu_syntax_trigger_popup_state =
-                        crate::menu_syntax_trigger_popup::MenuSyntaxTriggerPopupState {
+                    self.menu_syntax_trigger_picker_state =
+                        crate::menu_syntax_trigger_picker::MenuSyntaxTriggerPickerState {
                             snapshot: Some(snapshot),
                             selected_row_id,
                             visible_start: 0,
@@ -129,7 +129,7 @@ impl ScriptListApp {
             }
             self.invalidate_grouped_cache();
             self.reconcile_script_list_after_filter_change(
-                "menu_syntax_trigger_popup_keep_open_no_window",
+                "menu_syntax_trigger_picker_keep_open_main_list",
                 cx,
             );
             cx.notify();
@@ -137,7 +137,7 @@ impl ScriptListApp {
         keep_open
     }
 
-    fn dispatch_menu_syntax_trigger_popup_outcome(
+    fn dispatch_menu_syntax_trigger_picker_outcome(
         &mut self,
         outcome: crate::menu_syntax::TriggerPickerIntentOutcome,
         window: Option<&mut Window>,
@@ -159,41 +159,41 @@ impl ScriptListApp {
                 self.set_menu_syntax_mode_from_filter(&text);
                 self.invalidate_grouped_cache();
                 self.reconcile_script_list_after_filter_change(
-                    "menu_syntax_trigger_popup_replace",
+                    "menu_syntax_trigger_picker_replace",
                     cx,
                 );
 
                 if keep_open {
-                    // Re-run the popup state machine against the new filter
-                    // so the popup shows a snapshot matching the replaced
+                    // Re-run the picker state machine against the new filter
+                    // so the picker shows a snapshot matching the replaced
                     // text (e.g. Tab on `;` -> replace filter with `;todo `
-                    // -> popup should now show todo's capture-handler rows,
+                    // -> picker should now show todo's capture-handler rows,
                     // not the bare target list).
                     if let Some(window) = window {
-                        self.run_menu_syntax_trigger_popup_state_machine(&text, window, cx);
+                        self.run_menu_syntax_trigger_picker_state_machine(&text, window, cx);
                     }
                 } else {
-                    self.menu_syntax_trigger_popup_state = Default::default();
+                    self.menu_syntax_trigger_picker_state = Default::default();
                     // Mark this exact filter text as "user just accepted,
-                    // do not re-open the popup". Without this, pressing
+                    // do not re-open the picker". Without this, pressing
                     // Enter on `;` selects `;todo`, sets the filter to
                     // `;todo ` which parses to
                     // `Incomplete(MissingCaptureBody)`, and the next
                     // `handle_filter_input_change` re-runs
-                    // `plan_trigger_popup_transition` -> `Open` with the
-                    // handler snapshot - the popup flickers back open
+                    // `plan_trigger_picker_transition` -> `Open` with the
+                    // handler snapshot - the picker flickers back open
                     // immediately after the user dismissed it. The
                     // suppression is cleared as soon as the filter text
                     // changes (user types a body character or deletes).
-                    self.menu_syntax_trigger_popup_suppressed_filter = Some(text.clone());
+                    self.menu_syntax_trigger_picker_suppressed_filter = Some(text.clone());
                 }
                 cx.notify();
             }
             TriggerPickerIntentOutcome::Close => {
-                self.menu_syntax_trigger_popup_state = Default::default();
+                self.menu_syntax_trigger_picker_state = Default::default();
                 self.invalidate_grouped_cache();
                 self.reconcile_script_list_after_filter_change(
-                    "menu_syntax_trigger_popup_close",
+                    "menu_syntax_trigger_picker_close",
                     cx,
                 );
                 cx.notify();
@@ -201,12 +201,12 @@ impl ScriptListApp {
             TriggerPickerIntentOutcome::OpenCaptures { .. }
             | TriggerPickerIntentOutcome::OpenHelp => {
                 // Deferred — these routes wire through in follow-up work.
-                // For now, treat as a close so the popup dismisses instead
+                // For now, treat as a close so the picker dismisses instead
                 // of lingering with a stale snapshot.
-                self.menu_syntax_trigger_popup_state = Default::default();
+                self.menu_syntax_trigger_picker_state = Default::default();
                 self.invalidate_grouped_cache();
                 self.reconcile_script_list_after_filter_change(
-                    "menu_syntax_trigger_popup_close_deferred",
+                    "menu_syntax_trigger_picker_close_deferred",
                     cx,
                 );
                 cx.notify();
@@ -246,7 +246,7 @@ impl ScriptListApp {
                         }
                     }
                 }
-                self.menu_syntax_trigger_popup_state = Default::default();
+                self.menu_syntax_trigger_picker_state = Default::default();
                 cx.notify();
             }
             TriggerPickerIntentOutcome::AiScaffoldHandler {
@@ -279,14 +279,14 @@ impl ScriptListApp {
                      2. What fields/parameters should it accept from the captured text? (e.g. tags, dates, priority, URLs, custom key-values)\n\
                      3. What should the handler do when it executes? (e.g. append to a local JSONL file, call a webhook/API, run a shell command, etc.)"
                 );
-                self.menu_syntax_trigger_popup_state = Default::default();
+                self.menu_syntax_trigger_picker_state = Default::default();
                 self.open_tab_ai_agent_chat_with_entry_intent_preserving_return(Some(prompt), cx);
                 cx.notify();
             }
         }
     }
 
-    fn parse_trigger_popup_form_suggestion_row_id(row_id: &str) -> Option<(&str, usize)> {
+    fn parse_trigger_picker_form_suggestion_row_id(row_id: &str) -> Option<(&str, usize)> {
         let mut parts = row_id.split(':');
         match (
             parts.next(),
@@ -302,8 +302,8 @@ impl ScriptListApp {
         }
     }
 
-    fn menu_syntax_trigger_popup_state_is_form_suggestion(&self) -> bool {
-        self.menu_syntax_trigger_popup_state
+    fn menu_syntax_trigger_picker_state_is_form_suggestion(&self) -> bool {
+        self.menu_syntax_trigger_picker_state
             .snapshot
             .as_ref()
             .and_then(|snapshot| snapshot.target.as_deref())
@@ -328,21 +328,21 @@ impl ScriptListApp {
 
     fn sync_menu_syntax_form_selection_from_trigger_row(&mut self, row_id: Option<&str>) {
         if let Some((field_id, suggestion_index)) =
-            row_id.and_then(Self::parse_trigger_popup_form_suggestion_row_id)
+            row_id.and_then(Self::parse_trigger_picker_form_suggestion_row_id)
         {
             self.menu_syntax_form_suggestion_field_id = Some(field_id.to_string());
             self.menu_syntax_form_suggestion_selected_index = Some(suggestion_index);
         }
     }
 
-    fn close_menu_syntax_form_trigger_popup(&mut self, cx: &mut Context<Self>) {
+    fn close_menu_syntax_form_trigger_picker(&mut self, cx: &mut Context<Self>) {
         self.menu_syntax_form_suggestion_field_id = None;
         self.menu_syntax_form_suggestion_selected_index = None;
-        self.menu_syntax_trigger_popup_state = Default::default();
+        self.menu_syntax_trigger_picker_state = Default::default();
         cx.notify();
     }
 
-    fn accept_menu_syntax_form_trigger_popup_suggestion(
+    fn accept_menu_syntax_form_trigger_picker_suggestion(
         &mut self,
         field_id: &str,
         suggestion_index: usize,
@@ -376,46 +376,46 @@ impl ScriptListApp {
             cx,
         );
         if updated {
-            self.close_menu_syntax_form_trigger_popup(cx);
+            self.close_menu_syntax_form_trigger_picker(cx);
         }
         updated
     }
 
-    /// Re-run the popup state machine against a (possibly new) filter text
+    /// Re-run the picker state machine against a (possibly new) filter text
     /// and dispatch the resulting transition to the GPUI window. Extracted
-    /// here so both `apply_menu_syntax_trigger_popup_intent` (keyboard
+    /// here so both `apply_menu_syntax_trigger_picker_intent` (keyboard
     /// Tab-apply path) and `handle_filter_input_change` can share the
     /// state-machine invocation.
-    pub(crate) fn run_menu_syntax_trigger_popup_state_machine(
+    pub(crate) fn run_menu_syntax_trigger_picker_state_machine(
         &mut self,
         raw_filter: &str,
         _window: &mut Window,
         _cx: &mut Context<Self>,
     ) {
         let picker_ctx = self.menu_syntax_trigger_picker_context(raw_filter);
-        let transition = crate::menu_syntax_trigger_popup::plan_trigger_popup_transition(
-            &self.menu_syntax_trigger_popup_state,
+        let transition = crate::menu_syntax_trigger_picker::plan_trigger_picker_transition(
+            &self.menu_syntax_trigger_picker_state,
             raw_filter,
             &picker_ctx,
         );
-        use crate::menu_syntax_trigger_popup::TriggerPopupTransition;
+        use crate::menu_syntax_trigger_picker::TriggerPickerTransition;
         match transition {
-            TriggerPopupTransition::NoChange => {}
-            TriggerPopupTransition::Close => {
-                self.menu_syntax_trigger_popup_state = Default::default();
+            TriggerPickerTransition::NoChange => {}
+            TriggerPickerTransition::Close => {
+                self.menu_syntax_trigger_picker_state = Default::default();
             }
-            TriggerPopupTransition::Open {
+            TriggerPickerTransition::Open {
                 snapshot,
                 selected_row_id,
             } => {
-                self.menu_syntax_trigger_popup_state =
-                    crate::menu_syntax_trigger_popup::MenuSyntaxTriggerPopupState {
+                self.menu_syntax_trigger_picker_state =
+                    crate::menu_syntax_trigger_picker::MenuSyntaxTriggerPickerState {
                         snapshot: Some(snapshot),
                         selected_row_id,
                         visible_start: 0,
                     };
             }
-            TriggerPopupTransition::Update {
+            TriggerPickerTransition::Update {
                 snapshot,
                 selected_row_id,
             } => {
@@ -424,13 +424,13 @@ impl ScriptListApp {
                     .and_then(|id| snapshot.rows.iter().position(|row| row.id == id))
                     .unwrap_or(0);
                 let visible_start =
-                    crate::menu_syntax_trigger_popup::trigger_popup_visible_start_for_selection(
-                        self.menu_syntax_trigger_popup_state.visible_start,
+                    crate::menu_syntax_trigger_picker::trigger_picker_visible_start_for_selection(
+                        self.menu_syntax_trigger_picker_state.visible_start,
                         selected_index,
                         snapshot.rows.len(),
                     );
-                self.menu_syntax_trigger_popup_state =
-                    crate::menu_syntax_trigger_popup::MenuSyntaxTriggerPopupState {
+                self.menu_syntax_trigger_picker_state =
+                    crate::menu_syntax_trigger_picker::MenuSyntaxTriggerPickerState {
                         snapshot: Some(snapshot),
                         selected_row_id,
                         visible_start,
@@ -450,31 +450,31 @@ impl ScriptListApp {
         }
     }
 
-    /// Keyboard entry point for the menu-syntax trigger popup. Keyboard
+    /// Keyboard entry point for the menu-syntax trigger picker. Keyboard
     /// interceptors in `startup.rs` (arrow keys), `startup_new_tab.rs`
     /// (Tab / Enter), and `render_script_list/mod.rs` (Escape) call this
-    /// when the popup is open. Returns `true` when the intent was consumed
+    /// when the picker is active. Returns `true` when the intent was consumed
     /// and the caller should NOT route the keystroke anywhere else.
-    pub(crate) fn apply_menu_syntax_trigger_popup_intent(
+    pub(crate) fn apply_menu_syntax_trigger_picker_intent(
         &mut self,
         intent: crate::menu_syntax::InlinePickerKeyIntent,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> bool {
-        if self.menu_syntax_trigger_popup_state_is_form_suggestion() {
+        if self.menu_syntax_trigger_picker_state_is_form_suggestion() {
             match intent {
                 crate::menu_syntax::InlinePickerKeyIntent::Close => {
-                    self.close_menu_syntax_form_trigger_popup(cx);
+                    self.close_menu_syntax_form_trigger_picker(cx);
                     return true;
                 }
                 crate::menu_syntax::InlinePickerKeyIntent::Accept
                 | crate::menu_syntax::InlinePickerKeyIntent::Apply => {
                     let selected_row_id = self
-                        .menu_syntax_trigger_popup_state
+                        .menu_syntax_trigger_picker_state
                         .selected_row_id
                         .clone()
                         .or_else(|| {
-                            self.menu_syntax_trigger_popup_state
+                            self.menu_syntax_trigger_picker_state
                                 .snapshot
                                 .as_ref()
                                 .and_then(|snapshot| {
@@ -485,9 +485,9 @@ impl ScriptListApp {
                         return false;
                     };
                     if let Some((field_id, suggestion_index)) =
-                        Self::parse_trigger_popup_form_suggestion_row_id(&row_id)
+                        Self::parse_trigger_picker_form_suggestion_row_id(&row_id)
                     {
-                        return self.accept_menu_syntax_form_trigger_popup_suggestion(
+                        return self.accept_menu_syntax_form_trigger_picker_suggestion(
                             field_id,
                             suggestion_index,
                             window,
@@ -501,7 +501,7 @@ impl ScriptListApp {
         }
 
         let Some(snapshot) = self
-            .menu_syntax_trigger_popup_state
+            .menu_syntax_trigger_picker_state
             .snapshot
             .as_ref()
             .cloned()
@@ -511,7 +511,7 @@ impl ScriptListApp {
 
         let selected_row_id = self
             .selected_menu_syntax_trigger_row_id_from_main_list()
-            .or_else(|| self.menu_syntax_trigger_popup_state.selected_row_id.clone());
+            .or_else(|| self.menu_syntax_trigger_picker_state.selected_row_id.clone());
         let selected_index = selected_row_id
             .as_deref()
             .and_then(|id| snapshot.rows.iter().position(|row| row.id == id));
@@ -523,21 +523,21 @@ impl ScriptListApp {
         match outcome {
             crate::menu_syntax::TriggerPickerIntentOutcome::SelectionChanged { new_index } => {
                 let next_row_id = snapshot.rows.get(new_index).map(|row| row.id.clone());
-                self.menu_syntax_trigger_popup_state.visible_start =
-                    crate::menu_syntax_trigger_popup::trigger_popup_visible_start_for_selection(
-                        self.menu_syntax_trigger_popup_state.visible_start,
+                self.menu_syntax_trigger_picker_state.visible_start =
+                    crate::menu_syntax_trigger_picker::trigger_picker_visible_start_for_selection(
+                        self.menu_syntax_trigger_picker_state.visible_start,
                         new_index,
                         snapshot.rows.len(),
                     );
-                self.menu_syntax_trigger_popup_state.selected_row_id = next_row_id;
-                let selected_row_id = self.menu_syntax_trigger_popup_state.selected_row_id.clone();
+                self.menu_syntax_trigger_picker_state.selected_row_id = next_row_id;
+                let selected_row_id = self.menu_syntax_trigger_picker_state.selected_row_id.clone();
                 self.sync_menu_syntax_form_selection_from_trigger_row(selected_row_id.as_deref());
                 cx.notify();
                 true
             }
             crate::menu_syntax::TriggerPickerIntentOutcome::Ignored => false,
             other => {
-                self.dispatch_menu_syntax_trigger_popup_outcome(other, Some(window), cx);
+                self.dispatch_menu_syntax_trigger_picker_outcome(other, Some(window), cx);
                 true
             }
         }

@@ -42,12 +42,12 @@ pub(crate) mod menu_syntax_ai;
 pub(crate) mod menu_syntax_ai_apply;
 #[path = "menu_syntax_main_hint.rs"]
 mod menu_syntax_main_hint;
-#[path = "menu_syntax_object_selector_popup_window.rs"]
-mod menu_syntax_object_selector_popup_window;
-#[path = "menu_syntax_trigger_popup.rs"]
-mod menu_syntax_trigger_popup;
-#[path = "menu_syntax_trigger_popup_window.rs"]
-mod menu_syntax_trigger_popup_window;
+#[path = "menu_syntax_object_selector_main_list.rs"]
+mod menu_syntax_object_selector_main_list;
+#[path = "menu_syntax_trigger_picker.rs"]
+mod menu_syntax_trigger_picker;
+#[path = "menu_syntax_trigger_picker_main_list.rs"]
+mod menu_syntax_trigger_picker_main_list;
 #[path = "naming_dialog.rs"]
 mod naming_dialog;
 #[path = "path_action.rs"]

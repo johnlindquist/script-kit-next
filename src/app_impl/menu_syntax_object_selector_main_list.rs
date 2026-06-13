@@ -140,7 +140,7 @@ impl ScriptListApp {
                         selected_row_id,
                         visible_start: 0,
                     };
-                self.menu_syntax_trigger_popup_state = Default::default();
+                self.menu_syntax_trigger_picker_state = Default::default();
                 self.invalidate_grouped_cache();
                 self.reconcile_script_list_after_filter_change(
                     "menu_syntax_object_selector_open",
@@ -167,7 +167,7 @@ impl ScriptListApp {
                         selected_row_id,
                         visible_start,
                     };
-                self.menu_syntax_trigger_popup_state = Default::default();
+                self.menu_syntax_trigger_picker_state = Default::default();
                 self.invalidate_grouped_cache();
                 self.reconcile_script_list_after_filter_change(
                     "menu_syntax_object_selector_update",

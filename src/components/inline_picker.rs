@@ -9,12 +9,12 @@
 //! Agent Chat's slash/@ mention popup consumes that renderer today.
 //!
 //! What this module adds is the neutral **data shape** that callers like
-//! the menu-syntax `:`, `;`, and `!` trigger popups and cross-surface automation tooling
+//! the menu-syntax `:`, `;`, and `!` trigger pickers and cross-surface automation tooling
 //! that inspects picker state — can hold independent of Agent Chat's
 //! `ContextSelectorRow` or menu-syntax's `TriggerPickerRow`. Both owners map
 //! their domain row into `InlinePickerRow` via a small adapter function kept in
 //! the owner's module (`adapt_context_selector_row` inside Agent Chat code,
-//! `adapt_trigger_picker_row` inside the menu-syntax popup owner). The
+//! `adapt_trigger_picker_row` inside the menu-syntax picker owner). The
 //! adapters live with the domain types so this shared file never imports Agent Chat
 //! or menu-syntax types.
 //!

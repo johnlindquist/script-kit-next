@@ -1,5 +1,5 @@
                             ExternalCommand::SimulateKey { ref key, ref modifiers, ref target, ref request_id } => {
-                                // SimulateKey: Enter - accept menu-syntax popup
+                                // SimulateKey: Enter - accept menu-syntax picker
                                 // SimulateKey: Enter - execute selected
                                 let simulate_key_response = request_id
                                     .as_ref()

@@ -603,11 +603,11 @@ fn committed_handler_form_ownership_suppresses_global_popups_on_all_filter_paths
             && immediate.contains("self.menu_syntax_form_input_active && handler_form_owns_input")
             && immediate.contains("if handler_form_field_owns_input")
             && immediate.contains("self.menu_syntax_object_selector_state = Default::default();")
-            && immediate.contains("self.menu_syntax_trigger_popup_state = Default::default();")
-            && !immediate.contains("close_menu_syntax_object_selector_popup_window(cx)")
+            && immediate.contains("self.menu_syntax_trigger_picker_state = Default::default();")
+            && !immediate.contains("close_menu_syntax_object_selector_main_list(cx)")
             && immediate.contains("if !handler_form_field_owns_input")
             && immediate.contains("self.menu_syntax_object_selector_state.snapshot.is_none()")
-            && immediate.contains("self.run_menu_syntax_trigger_popup_state_machine(&text, window, cx);"),
+            && immediate.contains("self.run_menu_syntax_trigger_picker_state_machine(&text, window, cx);"),
         "programmatic setFilter/setInput must suppress trigger/object popups only while a focused handler-form field owns input"
     );
 
@@ -619,17 +619,17 @@ fn committed_handler_form_ownership_suppresses_global_popups_on_all_filter_paths
         .find("run_menu_syntax_object_selector_state_machine")
         .expect("typed input path should still run object selector outside handler forms");
     let trigger = input_change
-        .find("plan_trigger_popup_transition")
-        .expect("typed input path should still plan trigger popup outside handler forms");
+        .find("plan_trigger_picker_transition")
+        .expect("typed input path should still plan trigger picker outside handler forms");
     assert!(
         owner < object && owner < trigger,
-        "typed input must decide handler-form ownership before object/trigger popup machines can claim the surface"
+        "typed input must decide handler-form ownership before object/trigger picker machines can claim the surface"
     );
     assert!(
         input_change.contains("let capture_form_field_owns_input =")
             && input_change
                 .contains("self.menu_syntax_form_input_active && capture_composer_owns_input")
-            && input_change.contains("} else if capture_form_field_owns_input {\n                crate::menu_syntax_trigger_popup::TriggerPopupTransition::NoChange")
+            && input_change.contains("} else if capture_form_field_owns_input {\n                crate::menu_syntax_trigger_picker::TriggerPickerTransition::NoChange")
             && input_change.contains("!capture_form_field_owns_input\n                && self.menu_syntax_object_selector_state.snapshot.is_some()"),
         "focused handler-form fields must prevent stale popup transitions while plain object-ref segments can own the main list"
     );
@@ -723,7 +723,7 @@ fn script_list_printable_simulate_key_can_update_filter_text() {
 }
 
 #[test]
-fn handler_form_autocomplete_is_state_first_and_trigger_popup_owned() {
+fn handler_form_autocomplete_is_state_first_and_trigger_picker_owned() {
     let form = read("src/menu_syntax/form.rs");
     for symbol in [
         "pub struct MenuSyntaxFormSuggestionApplication",
@@ -747,8 +747,8 @@ fn handler_form_autocomplete_is_state_first_and_trigger_popup_owned() {
     }
 
     let app = read("src/app_impl/menu_syntax_main_hint.rs");
-    let popup = read("src/app_impl/menu_syntax_trigger_popup_window.rs");
-    let object_selector = read("src/app_impl/menu_syntax_object_selector_popup_window.rs");
+    let popup = read("src/app_impl/menu_syntax_trigger_picker_main_list.rs");
+    let object_selector = read("src/app_impl/menu_syntax_object_selector_main_list.rs");
     for symbol in [
         "handle_menu_syntax_form_control_key_input",
         "move_menu_syntax_form_suggestion_selection",
@@ -759,11 +759,11 @@ fn handler_form_autocomplete_is_state_first_and_trigger_popup_owned() {
         "menu_syntax_form_suggestion_field_id",
         "menu_syntax_form_suggestion_selected_index",
         "sync_menu_syntax_form_suggestions_from_main_input",
-        "build_menu_syntax_form_trigger_popup_snapshot",
-        "sync_menu_syntax_form_trigger_popup_window",
-        "menu_syntax_form_trigger_popup_row_id",
+        "build_menu_syntax_form_trigger_picker_snapshot",
+        "sync_menu_syntax_form_trigger_picker_state",
+        "menu_syntax_form_trigger_picker_row_id",
         "main_input_form_completion_field",
-        "active_menu_syntax_form_popup_field",
+        "active_menu_syntax_form_suggestion_field",
         "search_root_object_candidates_direct",
     ] {
         assert!(app.contains(symbol), "app autocomplete missing `{symbol}`");
@@ -788,10 +788,10 @@ fn handler_form_autocomplete_is_state_first_and_trigger_popup_owned() {
     );
 
     assert!(
-        popup.contains("accept_menu_syntax_form_trigger_popup_suggestion")
-            && popup.contains("parse_trigger_popup_form_suggestion_row_id")
-            && popup.contains("menu_syntax_trigger_popup_state_is_form_suggestion")
-            && popup.contains("close_menu_syntax_form_trigger_popup")
+        popup.contains("accept_menu_syntax_form_trigger_picker_suggestion")
+            && popup.contains("parse_trigger_picker_form_suggestion_row_id")
+            && popup.contains("menu_syntax_trigger_picker_state_is_form_suggestion")
+            && popup.contains("close_menu_syntax_form_trigger_picker")
             && popup.contains("apply_menu_syntax_form_suggestion")
             && popup.contains("update_menu_syntax_form_field"),
         "handler form suggestions must accept through the shared Trigger Popup window and sync through canonical form edits"
@@ -800,7 +800,7 @@ fn handler_form_autocomplete_is_state_first_and_trigger_popup_owned() {
     assert!(
         object_selector.contains("self.menu_syntax_form_input_active")
             && object_selector.contains("self.menu_syntax_capture_form_owns_input()")
-            && !object_selector.contains("close_menu_syntax_object_selector_popup_window(cx)")
+            && !object_selector.contains("close_menu_syntax_object_selector_main_list(cx)")
             && object_selector
                 .contains("self.menu_syntax_object_selector_state = Default::default();")
             && object_selector.contains("run_menu_syntax_object_selector_state_machine"),
@@ -938,7 +938,7 @@ fn live_input_field_updates_do_not_reset_existing_focus_selection() {
     assert!(
         update_body.contains("self.ensure_menu_syntax_form_inputs(&form, window, cx);")
             && update_body.contains("self.menu_syntax_form_draft_field_id = Some(resolved_field_id.clone());")
-            && update_body.contains("self.sync_menu_syntax_form_trigger_popup_window(&form, window, cx);"),
+            && update_body.contains("self.sync_menu_syntax_form_trigger_picker_state(&form, window, cx);"),
         "skipping live-input refocus must still sync form inputs, draft state, and autocomplete popup state"
     );
 }
@@ -960,7 +960,7 @@ fn priority_field_uses_sidebar_autocomplete_not_inline_choice_chips() {
             && !render.contains("fn render_menu_syntax_form_suggestion_popup(")
             && !render.contains("handler-form-autocomplete-popup")
             && read("src/app_impl/menu_syntax_main_hint.rs")
-                .contains("build_menu_syntax_form_trigger_popup_snapshot"),
+                .contains("build_menu_syntax_form_trigger_picker_snapshot"),
         "priority must use the shared Trigger Popup surface instead of inline choice chips or a bespoke sidebar"
     );
 
@@ -973,7 +973,7 @@ fn priority_field_uses_sidebar_autocomplete_not_inline_choice_chips() {
         && elements.contains("MenuSyntaxFormFieldKind::Priority")
         && elements.contains("handlerFormAutocompleteField")
         && elements.contains("\"combobox\""),
-        "getElements must expose priority as a combobox while popup choices come from the shared Trigger Popup target"
+        "getElements must expose priority as a combobox while picker choices come from the shared Trigger Popup target"
     );
 }
 
@@ -1006,11 +1006,11 @@ fn handler_form_uses_projected_invocation_for_natural_dates_and_main_input_token
 fn autocomplete_renders_owned_popup_list_and_escape_dismisses_first() {
     let app = read("src/app_impl/menu_syntax_main_hint.rs");
     assert!(
-        app.contains("fn menu_syntax_form_field_uses_popup(")
+        app.contains("fn menu_syntax_form_field_uses_suggestions(")
             && app.contains("fn open_menu_syntax_form_suggestions_for(")
             && app.contains("fn close_menu_syntax_form_suggestions(")
             && app.contains("menu_syntax_form_suggestion_field_id")
-            && app.contains("close_menu_syntax_form_suggestions_and_trigger_popup(cx);")
+            && app.contains("close_menu_syntax_form_suggestions_and_trigger_picker(cx);")
             && app.contains("focus_menu_syntax_main_input(window, cx)"),
         "autocomplete popup ownership must be explicit and Escape must dismiss it before returning to the main input"
     );
@@ -1029,12 +1029,12 @@ fn autocomplete_renders_owned_popup_list_and_escape_dismisses_first() {
         elements.contains("handlerFormAutocompleteField")
             && !elements.contains("handlerFormAutocompleteOption")
             && elements.contains("\"combobox\""),
-        "getElements must expose form combobox fields while popup options are exposed by the shared Trigger Popup automation target"
+        "getElements must expose form combobox fields while picker options are exposed by the shared Trigger Popup automation target"
     );
 
     let layout = read("src/app_layout/build_layout_info.rs");
     assert!(
-        layout.contains("\"surface\": \"menuSyntaxTriggerPopup\""),
+        layout.contains("\"surface\": \"menuSyntaxTriggerPicker\""),
         "layout receipts must identify form autocomplete as the shared Trigger Popup surface"
     );
 }

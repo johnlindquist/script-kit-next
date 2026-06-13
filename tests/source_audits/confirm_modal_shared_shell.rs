@@ -207,7 +207,7 @@ fn confirm_popup_native_background_matches_actions_popup_not_footer_flush_strip(
             && footer_config.contains("setIgnoresMouseEvents: true")
             && footer_config.contains("setHasShadow: false")
             && footer_config.contains("setCornerRadius: 0.0_f64"),
-        "flush footer popup owns the no-shadow/no-corner exception instead of confirm popup"
+        "flush footer picker owns the no-shadow/no-corner exception instead of confirm popup"
     );
 }
 
@@ -269,7 +269,7 @@ fn confirm_modal_inventory_tracks_routes_and_excludes_non_modals() {
 
     for excluded in [
         "Actions Menu",
-        "Trigger popup",
+        "Trigger picker",
         "Hover/dropdown menus",
         "Browse panels",
         "Editor choice popup",
@@ -282,14 +282,14 @@ fn confirm_modal_inventory_tracks_routes_and_excludes_non_modals() {
 }
 
 #[test]
-fn actions_and_trigger_popups_are_not_classified_as_confirm_modals() {
+fn actions_and_trigger_pickers_are_not_classified_as_confirm_modals() {
     let inventory = read(".goals/receipts/modal-inventory.md");
 
     assert!(
         inventory.contains("Actions Menu")
             && inventory.contains("not a confirm/deny modal")
-            && inventory.contains("Trigger popup"),
-        "actions menu and trigger popup must stay out of the confirm modal migration"
+            && inventory.contains("Trigger picker"),
+        "actions menu and trigger picker must stay out of the confirm modal migration"
     );
 }
 

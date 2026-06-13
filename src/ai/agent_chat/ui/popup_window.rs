@@ -3,7 +3,7 @@
 //! Window mechanics (bounds math, no-focus-steal config, child-window attach,
 //! AppKit pointer plumbing) moved to the shared
 //! [`crate::components::inline_popup_window`] module so Agent Chat and the
-//! menu-syntax `:`, `;`, and `!` trigger popups share a single implementation.
+//! menu-syntax `:`, `;`, and `!` trigger pickers share a single implementation.
 //!
 //! This file remains as a thin compatibility facade: every `DENSE_PICKER_*`
 //! / `dense_picker_*` / `popup_*` name historically exposed by this module is

@@ -25,7 +25,7 @@ impl ScriptListApp {
         if self.spine_enabled && (raw.starts_with('>') || raw.starts_with('!')) {
             self.menu_syntax_mode = crate::menu_syntax::MenuSyntaxMode::default();
             self.menu_syntax_object_selector_state = Default::default();
-            self.menu_syntax_trigger_popup_state = Default::default();
+            self.menu_syntax_trigger_picker_state = Default::default();
             return;
         }
         let capture_targets =

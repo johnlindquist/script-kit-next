@@ -23,7 +23,7 @@ This document defines the main user-facing UI surfaces and components in Script 
 | UI Element | Description | Key Structs / Entities | Main Source File |
 | :--- | :--- | :--- | :--- |
 | **Actions Menu** | Searchable, categorised contextual operations menu shown as a popover overlay (Cmd+K). | `ActionsDialog` | [dialog.rs](file:///Users/johnlindquist/dev/script-kit-gpui/src/actions/dialog.rs#L520) & [window.rs](file:///Users/johnlindquist/dev/script-kit-gpui/src/actions/window.rs) |
-| **Trigger Popup** | Dropdown overlay suggesting capture targets and handlers when prefix characters are typed (e.g. `;`, `+`, `:`). | `MenuSyntaxTriggerPopupWindow` | [menu_syntax_trigger_popup_window.rs](file:///Users/johnlindquist/dev/script-kit-gpui/src/app_impl/menu_syntax_trigger_popup_window.rs#L406) & [menu_syntax_trigger_popup.rs](file:///Users/johnlindquist/dev/script-kit-gpui/src/app_impl/menu_syntax_trigger_popup.rs) |
+| **Trigger Picker** | Main-list picker rows suggesting capture targets and handlers when prefix characters are typed (e.g. `;`, `+`, `:`). | `MenuSyntaxTriggerPickerState` | [menu_syntax_trigger_picker_main_list.rs](file:///Users/johnlindquist/dev/script-kit-gpui/src/app_impl/menu_syntax_trigger_picker_main_list.rs) & [menu_syntax_trigger_picker.rs](file:///Users/johnlindquist/dev/script-kit-gpui/src/app_impl/menu_syntax_trigger_picker.rs) |
 | **Confirm Popup** | Dialog box overlay with customizable buttons (e.g. Yes/No/Cancel). | `ConfirmPopup` | [confirm/mod.rs](file:///Users/johnlindquist/dev/script-kit-gpui/src/confirm/mod.rs) |
 
 ---

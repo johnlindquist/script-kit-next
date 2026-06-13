@@ -1,4 +1,4 @@
-//! Integration test for Run 12: advanced-query trigger popup must not
+//! Integration test for Run 12: advanced-query trigger picker must not
 //! emit a generic "Open Menu Syntax help" footer row.
 //!
 //! Runs as a separate integration test binary so it links the rlib
@@ -19,7 +19,7 @@ fn advanced_query_popup_has_no_help_footer_by_default() {
         snap.rows
             .iter()
             .all(|r| r.id != "footer:help" && r.action != TriggerPickerAction::OpenHelp),
-        "advanced-query popup must not emit a generic help footer",
+        "advanced-query picker must not emit a generic help footer",
     );
 }
 
@@ -28,6 +28,6 @@ fn colon_has_partial_popup_has_no_help_footer() {
     let snap = build_trigger_picker_snapshot(":has:", &empty_ctx()).expect("snapshot");
     assert!(
         snap.rows.iter().all(|r| r.id != "footer:help"),
-        ":has: popup must not emit a help footer",
+        ":has: picker must not emit a help footer",
     );
 }

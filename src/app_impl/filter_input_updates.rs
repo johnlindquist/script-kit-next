@@ -353,7 +353,7 @@ impl ScriptListApp {
                 self.menu_syntax_form_input_active && handler_form_owns_input;
             if handler_form_field_owns_input {
                 self.menu_syntax_object_selector_state = Default::default();
-                self.menu_syntax_trigger_popup_state = Default::default();
+                self.menu_syntax_trigger_picker_state = Default::default();
                 self.sync_menu_syntax_form_inputs_from_filter(window, cx);
             } else {
                 self.run_menu_syntax_object_selector_state_machine(&text, window, cx);
@@ -361,7 +361,7 @@ impl ScriptListApp {
             if !handler_form_field_owns_input
                 && self.menu_syntax_object_selector_state.snapshot.is_none()
             {
-                self.run_menu_syntax_trigger_popup_state_machine(&text, window, cx);
+                self.run_menu_syntax_trigger_picker_state_machine(&text, window, cx);
             }
             self.invalidate_grouped_cache();
         } else {
@@ -371,25 +371,25 @@ impl ScriptListApp {
 
         if !handled_by_subview
             && matches!(self.current_view, AppView::ScriptList)
-            && self.menu_syntax_trigger_popup_state.snapshot.is_none()
+            && self.menu_syntax_trigger_picker_state.snapshot.is_none()
             && self.menu_syntax_object_selector_state.snapshot.is_none()
         {
             let picker_ctx = self.menu_syntax_trigger_picker_context(&text);
             if crate::menu_syntax::build_trigger_picker_snapshot(&text, &picker_ctx).is_some() {
-                self.run_menu_syntax_trigger_popup_state_machine(&text, window, cx);
+                self.run_menu_syntax_trigger_picker_state_machine(&text, window, cx);
                 self.invalidate_grouped_cache();
             }
         }
 
         if self.menu_syntax_mode.is_menu_syntax_for(&text)
-            || self.menu_syntax_trigger_popup_state.snapshot.is_some()
+            || self.menu_syntax_trigger_picker_state.snapshot.is_some()
             || self.menu_syntax_object_selector_state.snapshot.is_some()
             || self.menu_syntax_capture_form_owns_input_for(&text)
         {
             // Menu syntax owns the result list entirely — clear any stale
             // fallback items so pressing Enter routes to execute_selected,
             // not execute_selected_fallback. Also clear when the trigger
-            // popup is open for a partial trigger like `;t` (where
+            // picker is active for a partial trigger like `;t` (where
             // `is_menu_syntax_for` still returns false because the parser
             // doesn't yet recognize `;t` as a full target).
             self.main_menu_fallback_state.clear();
@@ -415,7 +415,7 @@ impl ScriptListApp {
         if !handled_by_subview && !text.is_empty() {
             if !handler_form_owns_input
                 && !self.menu_syntax_mode.is_menu_syntax_for(&text)
-                && self.menu_syntax_trigger_popup_state.snapshot.is_none()
+                && self.menu_syntax_trigger_picker_state.snapshot.is_none()
                 && self.menu_syntax_object_selector_state.snapshot.is_none()
             {
                 let results = self.get_filtered_results_cached();

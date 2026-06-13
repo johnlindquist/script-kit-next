@@ -136,8 +136,22 @@ function choiceRows(elements: Json): Json[] {
   return (elements.elements ?? []).filter((element: Json) => element.type === "choice");
 }
 
-function popupOpen(windows: Json): boolean {
-  return (windows.windows ?? []).some((window: Json) => window.id === "menu-syntax-trigger-popup" && window.visible === true);
+function deprecatedDetachedPickerOpen(windows: Json): boolean {
+  return (windows.windows ?? []).some((window: Json) => {
+    if (window.visible !== true || String(window.kind ?? "").toLowerCase() !== "promptpopup") {
+      return false;
+    }
+    const identity = [
+      window.id,
+      window.title,
+      window.semanticSurface,
+      window.surfaceId,
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+    return identity.includes("menu") && identity.includes("syntax");
+  });
 }
 
 function rowValues(elements: Json): string[] {
@@ -192,7 +206,7 @@ function assertMainPicker(elements: Json, label: string) {
 }
 
 function assertNoDetachedPopup(windows: Json, label: string) {
-  assert(!popupOpen(windows), `${label}: detached menu-syntax-trigger-popup is visible`);
+  assert(!deprecatedDetachedPickerOpen(windows), `${label}: detached menu-syntax prompt popup is visible`);
 }
 
 function seedShortcutFixtures() {

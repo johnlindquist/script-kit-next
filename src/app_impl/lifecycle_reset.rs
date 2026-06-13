@@ -162,7 +162,7 @@ impl ScriptListApp {
         reason: &'static str,
         cx: &mut Context<Self>,
     ) {
-        self.menu_syntax_trigger_popup_state = Default::default();
+        self.menu_syntax_trigger_picker_state = Default::default();
         crate::ai::agent_chat::ui::history_popup::close_history_popup_window(cx);
         tracing::info!(
             target: "script_kit::popup_owner",

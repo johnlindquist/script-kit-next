@@ -320,11 +320,11 @@ async function runLivePngCase(): Promise<Json> {
   );
 }
 
-function assertSourceSessionDidNotOpenPowerPopup() {
+function assert_source_session_did_not_open_power_picker() {
   const logPath = sessionLogPath(session);
   const log = existsSync(logPath) ? readFileSync(logPath, "utf8") : "";
-  if (log.includes("menu_syntax_trigger_popup_render")) {
-    throw new Error("source-filter session rendered the menu syntax trigger popup");
+  if (log.includes("menu_syntax_trigger_picker_render")) {
+    throw new Error("source-filter session rendered the menu syntax trigger picker");
   }
   if (existsSync(logPath)) {
     copyFileSync(logPath, join(outputDir, "app.log"));
@@ -335,7 +335,7 @@ function assertSourceSessionDidNotOpenPowerPopup() {
   }
 }
 
-function proveSemicolonStillOpensCapturePopup(): Json {
+function prove_semicolon_still_opens_capture_picker(): Json {
   const semicolonSession = `${session}-semicolon`;
   runSession(["stop", semicolonSession]);
   runSession(["start", semicolonSession]);
@@ -347,8 +347,8 @@ function proveSemicolonStillOpensCapturePopup(): Json {
   waitForInputFor(semicolonSession, ";");
   const logPath = sessionLogPath(semicolonSession);
   const log = existsSync(logPath) ? readFileSync(logPath, "utf8") : "";
-  if (!log.includes("menu_syntax_trigger_popup_render")) {
-    throw new Error("semicolon did not render the menu syntax trigger popup");
+  if (!log.includes("menu_syntax_trigger_picker_render")) {
+    throw new Error("semicolon did not render the menu syntax trigger picker");
   }
   copyFileSync(logPath, join(outputDir, "semicolon-app.log"));
   const responsesPath = sessionResponsesPath(semicolonSession);
@@ -358,7 +358,7 @@ function proveSemicolonStillOpensCapturePopup(): Json {
   runSession(["stop", semicolonSession]);
   return {
     session: semicolonSession,
-    popupRenderLogged: true,
+    pickerRenderLogged: true,
   };
 }
 
@@ -397,8 +397,8 @@ async function main() {
     cases.push(await runCase(input));
   }
   const livePngCase = await runLivePngCase();
-  assertSourceSessionDidNotOpenPowerPopup();
-  const semicolonProof = proveSemicolonStillOpensCapturePopup();
+  assert_source_session_did_not_open_power_picker();
+  const semicolonProof = prove_semicolon_still_opens_capture_picker();
   runSession(["stop", session]);
 
   const receipt = {
@@ -408,7 +408,7 @@ async function main() {
     query,
     warmed,
     powerUi: {
-      sourceFilterPopupRenderLogged: false,
+      sourceFilterPickerRenderLogged: false,
       sourceFilterHintObserved: false,
       semicolonProof,
     },

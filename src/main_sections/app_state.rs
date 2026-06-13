@@ -988,11 +988,11 @@ pub(crate) struct ScriptListApp {
     /// 4.6"), shown alongside the agent in the footer marker.
     pub(crate) spine_model_label: Option<String>,
     spine_live_preview_cache: crate::spine::live_preview::SpineLivePreviewCache,
-    /// Cached state for the menu-syntax trigger popup. `filter_input_change` runs
-    /// `plan_trigger_popup_transition` on every filter update and keeps this
+    /// Cached state for the menu-syntax trigger picker. `filter_input_change` runs
+    /// `plan_trigger_picker_transition` on every filter update and keeps this
     /// field in sync while the detached popup window renders from the snapshot
     /// plus selected row id.
-    menu_syntax_trigger_popup_state: crate::menu_syntax_trigger_popup::MenuSyntaxTriggerPopupState,
+    menu_syntax_trigger_picker_state: crate::menu_syntax_trigger_picker::MenuSyntaxTriggerPickerState,
     menu_syntax_object_selector_state: crate::menu_syntax::MenuSyntaxObjectSelectorState,
     /// Focused field index for the grammar-derived handler form shown in
     /// capture composer mode. Tab/Shift-Tab mutate this instead of opening
@@ -1033,18 +1033,18 @@ pub(crate) struct ScriptListApp {
     /// real Agent Chat/LLM call wiring is a follow-up.
     pub(crate) pending_menu_syntax_ai_proposal:
         Option<crate::menu_syntax_ai::PendingMenuSyntaxAiProposal>,
-    /// When `Some(filter)`, the menu-syntax trigger popup must NOT
+    /// When `Some(filter)`, the menu-syntax trigger picker must NOT
     /// automatically re-open for that exact filter text. Set by the
     /// keyboard-apply dispatcher after an Accept (Enter) outcome so the
     /// user does not see the popup "flicker" back open immediately after
     /// they committed a target selection — e.g. typing `+`, pressing
     /// Enter on `Todo inbox` sets the filter to `;todo ` which would
-    /// otherwise re-trigger `plan_trigger_popup_transition` → `Open`
+    /// otherwise re-trigger `plan_trigger_picker_transition` → `Open`
     /// with the handler snapshot. The suppression is single-use: any
     /// filter change that produces a DIFFERENT raw text clears it so the
     /// popup can open again when the user keeps typing or deletes back
     /// to a partial trigger.
-    menu_syntax_trigger_popup_suppressed_filter: Option<String>,
+    menu_syntax_trigger_picker_suppressed_filter: Option<String>,
     // Scroll stabilization: track last scrolled-to index to avoid redundant scroll_to_item calls
     last_scrolled_index: Option<usize>,
     // Preview cache: avoid re-reading file and re-highlighting on every render

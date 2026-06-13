@@ -22,7 +22,7 @@ fn overlay_mic_button_opens_attached_prompt_popup_instead_of_cycling() {
 }
 
 #[test]
-fn popup_uses_trigger_popup_window_primitives_and_prompt_popup_registration() {
+fn popup_uses_shared_attached_window_primitives_and_prompt_popup_registration() {
     assert!(
         POPUP.contains("configure_inline_popup_window")
             && POPUP.contains("inline_popup_window_options")
@@ -33,7 +33,7 @@ fn popup_uses_trigger_popup_window_primitives_and_prompt_popup_registration() {
             && POPUP.contains("register_attached_popup")
             && POPUP.contains("AutomationWindowKind::PromptPopup")
             && POPUP.contains("dictationMicrophonePopup"),
-        "dictation mic selector must reuse attached trigger-popup window primitives and appear above the overlay"
+        "dictation mic selector must reuse attached popup window primitives and appear above the overlay"
     );
 }
 

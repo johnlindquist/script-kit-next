@@ -177,8 +177,8 @@ pub struct MenuSyntaxMainHintSnapshot {
 pub struct MenuSyntaxMainHintContext<'a> {
     pub raw_filter_text: &'a str,
     pub mode: &'a MenuSyntaxMode,
-    pub popup_snapshot: Option<&'a TriggerPickerSnapshot>,
-    pub popup_selected_row_id: Option<&'a str>,
+    pub picker_snapshot: Option<&'a TriggerPickerSnapshot>,
+    pub picker_selected_row_id: Option<&'a str>,
     pub scripts: &'a [Arc<Script>],
     pub scriptlets: &'a [Arc<Scriptlet>],
     pub advanced_query_results_empty: bool,
@@ -201,7 +201,7 @@ pub fn build_menu_syntax_main_hint(
         return capture_composer_hint(&ctx);
     }
 
-    if let Some(snapshot) = ctx.popup_snapshot {
+    if let Some(snapshot) = ctx.picker_snapshot {
         if matches!(snapshot.mode, TriggerPickerMode::AdvancedQuery)
             && !should_show_advanced_query_guide(ctx.raw_filter_text)
         {
@@ -244,7 +244,7 @@ pub fn build_menu_syntax_main_hint(
         }
     }
 
-    if let Some(snapshot) = ctx.popup_snapshot {
+    if let Some(snapshot) = ctx.picker_snapshot {
         match snapshot.mode {
             TriggerPickerMode::AdvancedQuery => {
                 if should_show_advanced_query_guide(ctx.raw_filter_text) {
@@ -497,7 +497,7 @@ fn capture_picker_companion_hint(
     ctx: &MenuSyntaxMainHintContext<'_>,
     snapshot: &TriggerPickerSnapshot,
 ) -> Option<MenuSyntaxMainHintSnapshot> {
-    let selected = selected_popup_row(snapshot, ctx.popup_selected_row_id);
+    let selected = selected_picker_row(snapshot, ctx.picker_selected_row_id);
 
     // No-match / create-handler-focused branch: when the typed slug has no
     // fuzzy matches, the picker renders only the "Create capture handler for
@@ -1170,7 +1170,7 @@ fn command_picker_companion_hint(
     ctx: &MenuSyntaxMainHintContext<'_>,
     snapshot: &TriggerPickerSnapshot,
 ) -> Option<MenuSyntaxMainHintSnapshot> {
-    let selected = selected_popup_row(snapshot, ctx.popup_selected_row_id);
+    let selected = selected_picker_row(snapshot, ctx.picker_selected_row_id);
     if let Some(row) = selected {
         if !row.enabled || row.badges.iter().any(|badge| badge == "duplicate") {
             return Some(finalize_hint(MenuSyntaxMainHintSnapshot {
@@ -2067,7 +2067,7 @@ fn resolve_command(
     }
 }
 
-fn selected_popup_row<'a>(
+fn selected_picker_row<'a>(
     snapshot: &'a TriggerPickerSnapshot,
     selected_row_id: Option<&str>,
 ) -> Option<&'a TriggerPickerRow> {
@@ -2493,7 +2493,7 @@ fn extract_head_prefix(token: &str) -> String {
 /// Build at most `limit` `has:<field>` rows whose canonical or alias
 /// matches `partial` (case-insensitively, prefix or substring). When
 /// `partial` is empty, return the entire shipped catalog. Used by both
-/// the main hint and the (existing) trigger popup completion path.
+/// the main hint and the (existing) trigger picker completion path.
 fn has_field_rows_for_partial(partial: &str) -> Vec<MenuSyntaxMainHintRow> {
     use crate::menu_syntax::has_fields::{HasFieldOwner, HAS_FIELD_SPECS};
     let probe = partial.trim().to_ascii_lowercase();
@@ -2851,8 +2851,8 @@ mod tests {
         build_menu_syntax_main_hint(MenuSyntaxMainHintContext {
             raw_filter_text: raw,
             mode: &mode,
-            popup_snapshot: None,
-            popup_selected_row_id: None,
+            picker_snapshot: None,
+            picker_selected_row_id: None,
             scripts,
             scriptlets: &[],
             advanced_query_results_empty: false,
@@ -2886,8 +2886,8 @@ mod tests {
         let hint = build_menu_syntax_main_hint(MenuSyntaxMainHintContext {
             raw_filter_text: ";gcal",
             mode: &mode,
-            popup_snapshot: Some(&snapshot),
-            popup_selected_row_id: Some("footer:create-handler"),
+            picker_snapshot: Some(&snapshot),
+            picker_selected_row_id: Some("footer:create-handler"),
             scripts: &[],
             scriptlets: &[],
             advanced_query_results_empty: false,
@@ -2939,8 +2939,8 @@ mod tests {
         let hint = build_menu_syntax_main_hint(MenuSyntaxMainHintContext {
             raw_filter_text: ";zzzz",
             mode: &mode,
-            popup_snapshot: Some(&snapshot),
-            popup_selected_row_id: Some("footer:create-handler"),
+            picker_snapshot: Some(&snapshot),
+            picker_selected_row_id: Some("footer:create-handler"),
             scripts: &[],
             scriptlets: &[],
             advanced_query_results_empty: false,
@@ -2968,8 +2968,8 @@ mod tests {
         let hint = build_menu_syntax_main_hint(MenuSyntaxMainHintContext {
             raw_filter_text: ";todo",
             mode: &mode,
-            popup_snapshot: Some(&snapshot),
-            popup_selected_row_id: Some("target:todo"),
+            picker_snapshot: Some(&snapshot),
+            picker_selected_row_id: Some("target:todo"),
             scripts: &[],
             scriptlets: &[],
             advanced_query_results_empty: false,
@@ -2990,8 +2990,8 @@ mod tests {
         let hint = build_menu_syntax_main_hint(MenuSyntaxMainHintContext {
             raw_filter_text: "+",
             mode: &mode,
-            popup_snapshot: Some(&snapshot),
-            popup_selected_row_id: Some("target:todo"),
+            picker_snapshot: Some(&snapshot),
+            picker_selected_row_id: Some("target:todo"),
             scripts: &[],
             scriptlets: &[],
             advanced_query_results_empty: false,
@@ -3015,8 +3015,8 @@ mod tests {
         let hint = build_menu_syntax_main_hint(MenuSyntaxMainHintContext {
             raw_filter_text: raw,
             mode: &mode,
-            popup_snapshot: None,
-            popup_selected_row_id: None,
+            picker_snapshot: None,
+            picker_selected_row_id: None,
             scripts: &[],
             scriptlets: &[],
             advanced_query_results_empty: false,
@@ -3049,8 +3049,8 @@ mod tests {
         let hint = build_menu_syntax_main_hint(MenuSyntaxMainHintContext {
             raw_filter_text: raw,
             mode: &mode,
-            popup_snapshot: None,
-            popup_selected_row_id: None,
+            picker_snapshot: None,
+            picker_selected_row_id: None,
             scripts: &[],
             scriptlets: &[],
             advanced_query_results_empty: false,
@@ -3081,8 +3081,8 @@ mod tests {
         assert!(build_menu_syntax_main_hint(MenuSyntaxMainHintContext {
             raw_filter_text: raw,
             mode: &mode,
-            popup_snapshot: None,
-            popup_selected_row_id: None,
+            picker_snapshot: None,
+            picker_selected_row_id: None,
             scripts: &[],
             scriptlets: &[],
             advanced_query_results_empty: false,
@@ -3099,8 +3099,8 @@ mod tests {
         let hint = build_menu_syntax_main_hint(MenuSyntaxMainHintContext {
             raw_filter_text: raw,
             mode: &mode,
-            popup_snapshot: None,
-            popup_selected_row_id: None,
+            picker_snapshot: None,
+            picker_selected_row_id: None,
             scripts: &[],
             scriptlets: &[],
             advanced_query_results_empty: false,
@@ -3120,8 +3120,8 @@ mod tests {
         let hint = build_menu_syntax_main_hint(MenuSyntaxMainHintContext {
             raw_filter_text: raw,
             mode: &mode,
-            popup_snapshot: None,
-            popup_selected_row_id: None,
+            picker_snapshot: None,
+            picker_selected_row_id: None,
             scripts: &scripts,
             scriptlets: &[],
             advanced_query_results_empty: false,
@@ -3153,8 +3153,8 @@ mod tests {
         let hint = build_menu_syntax_main_hint(MenuSyntaxMainHintContext {
             raw_filter_text: raw,
             mode: &mode,
-            popup_snapshot: None,
-            popup_selected_row_id: None,
+            picker_snapshot: None,
+            picker_selected_row_id: None,
             scripts: &[],
             scriptlets: &[],
             advanced_query_results_empty: false,
@@ -3180,8 +3180,8 @@ mod tests {
         let hint = build_menu_syntax_main_hint(MenuSyntaxMainHintContext {
             raw_filter_text: raw,
             mode: &mode,
-            popup_snapshot: None,
-            popup_selected_row_id: None,
+            picker_snapshot: None,
+            picker_selected_row_id: None,
             scripts: &scripts,
             scriptlets: &scriptlets,
             advanced_query_results_empty: false,
@@ -3203,8 +3203,8 @@ mod tests {
         let hint = build_menu_syntax_main_hint(MenuSyntaxMainHintContext {
             raw_filter_text: raw,
             mode: &mode,
-            popup_snapshot: Some(&snapshot),
-            popup_selected_row_id: None,
+            picker_snapshot: Some(&snapshot),
+            picker_selected_row_id: None,
             scripts: &[],
             scriptlets: &[],
             advanced_query_results_empty: false,
@@ -3230,8 +3230,8 @@ mod tests {
         let hint = build_menu_syntax_main_hint(MenuSyntaxMainHintContext {
             raw_filter_text: raw,
             mode: &mode,
-            popup_snapshot: Some(&snapshot),
-            popup_selected_row_id: Some("qualifier:#"),
+            picker_snapshot: Some(&snapshot),
+            picker_selected_row_id: Some("qualifier:#"),
             scripts: &[],
             scriptlets: &[],
             advanced_query_results_empty: false,
@@ -3262,8 +3262,8 @@ mod tests {
         let hint = build_menu_syntax_main_hint(MenuSyntaxMainHintContext {
             raw_filter_text: raw,
             mode: &mode,
-            popup_snapshot: None,
-            popup_selected_row_id: None,
+            picker_snapshot: None,
+            picker_selected_row_id: None,
             scripts: &[],
             scriptlets: &[],
             advanced_query_results_empty: true,
@@ -3301,8 +3301,8 @@ mod tests {
         let hint = build_menu_syntax_main_hint(MenuSyntaxMainHintContext {
             raw_filter_text: raw,
             mode: &mode,
-            popup_snapshot: None,
-            popup_selected_row_id: None,
+            picker_snapshot: None,
+            picker_selected_row_id: None,
             scripts: &[],
             scriptlets: &[],
             advanced_query_results_empty: true,
@@ -3359,8 +3359,8 @@ mod tests {
         let hint = build_menu_syntax_main_hint(MenuSyntaxMainHintContext {
             raw_filter_text: raw,
             mode: &mode,
-            popup_snapshot: None,
-            popup_selected_row_id: None,
+            picker_snapshot: None,
+            picker_selected_row_id: None,
             scripts: std::slice::from_ref(&s),
             scriptlets: &[],
             advanced_query_results_empty: false,
@@ -3415,8 +3415,8 @@ mod tests {
         let hint = build_menu_syntax_main_hint(MenuSyntaxMainHintContext {
             raw_filter_text: raw,
             mode: &mode,
-            popup_snapshot: None,
-            popup_selected_row_id: None,
+            picker_snapshot: None,
+            picker_selected_row_id: None,
             scripts: &[],
             scriptlets: &[],
             advanced_query_results_empty: false,
@@ -3846,8 +3846,8 @@ mod tests {
         let hint = build_menu_syntax_main_hint(MenuSyntaxMainHintContext {
             raw_filter_text: raw,
             mode: &mode,
-            popup_snapshot: None,
-            popup_selected_row_id: None,
+            picker_snapshot: None,
+            picker_selected_row_id: None,
             scripts: &scripts,
             scriptlets: &[],
             advanced_query_results_empty: false,
@@ -3865,8 +3865,8 @@ mod tests {
         let hint = build_menu_syntax_main_hint(MenuSyntaxMainHintContext {
             raw_filter_text: raw,
             mode: &mode,
-            popup_snapshot: None,
-            popup_selected_row_id: None,
+            picker_snapshot: None,
+            picker_selected_row_id: None,
             scripts: &[],
             scriptlets: &[],
             advanced_query_results_empty: true,
@@ -3884,8 +3884,8 @@ mod tests {
         build_menu_syntax_main_hint(MenuSyntaxMainHintContext {
             raw_filter_text: raw,
             mode: &mode,
-            popup_snapshot: None,
-            popup_selected_row_id: None,
+            picker_snapshot: None,
+            picker_selected_row_id: None,
             scripts: &[],
             scriptlets: &[],
             advanced_query_results_empty: true,
@@ -3901,8 +3901,8 @@ mod tests {
         build_menu_syntax_main_hint(MenuSyntaxMainHintContext {
             raw_filter_text: raw,
             mode: &mode,
-            popup_snapshot: Some(&snapshot),
-            popup_selected_row_id: None,
+            picker_snapshot: Some(&snapshot),
+            picker_selected_row_id: None,
             scripts: &[],
             scriptlets: &[],
             advanced_query_results_empty: false,

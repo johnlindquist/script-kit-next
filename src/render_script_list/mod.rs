@@ -903,9 +903,9 @@ impl ScriptListApp {
             || handler_form_owns_input_for_render;
         let popup_owns_main_list = !handler_form_owns_input_for_render
             && (self.menu_syntax_object_selector_state.owns_main_list()
-                || self.menu_syntax_trigger_popup_state.owns_main_list());
+                || self.menu_syntax_trigger_picker_state.owns_main_list());
         let trigger_picker_owns_main_list_for_render = !handler_form_owns_input_for_render
-            && self.menu_syntax_trigger_popup_state.owns_main_list();
+            && self.menu_syntax_trigger_picker_state.owns_main_list();
         let object_selector_owns_main_list_for_render = !handler_form_owns_input_for_render
             && self.menu_syntax_object_selector_state.owns_main_list();
         let spine_owns_main_list_for_render = self.spine_projection_owns_main_list()
@@ -1155,7 +1155,7 @@ impl ScriptListApp {
                                                     if let Some(row_id) = this
                                                         .selected_menu_syntax_trigger_row_id_from_main_list()
                                                     {
-                                                        this.accept_menu_syntax_trigger_popup_row(
+                                                        this.accept_menu_syntax_trigger_picker_row(
                                                             &row_id,
                                                             Some(window),
                                                             cx,
@@ -1547,7 +1547,7 @@ impl ScriptListApp {
                     }
                 }
 
-                // If actions popup is open, route all keyboard events through the shared router
+                // If actions picker is active, route all keyboard events through the shared router
                 match this.route_key_to_actions_dialog(
                     key_str,
                     key_char,
@@ -1780,7 +1780,7 @@ impl ScriptListApp {
                     }
                     key if sk_is_key_escape(key) => {
                         // Escape order on ScriptList:
-                        //   1. menu-syntax trigger popup visible → close popup
+                        //   1. menu-syntax trigger picker visible → close popup
                         //      only, leave filter text untouched. Second Escape
                         //      then falls through to the normal clear-filter
                         //      branch below.
@@ -1797,7 +1797,7 @@ impl ScriptListApp {
                             }
                         }
                         if this.menu_syntax_trigger_picker_owns_main_keyboard() {
-                            if this.apply_menu_syntax_trigger_popup_intent(
+                            if this.apply_menu_syntax_trigger_picker_intent(
                                 crate::menu_syntax::InlinePickerKeyIntent::Close,
                                 window,
                                 cx,

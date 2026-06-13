@@ -3,7 +3,7 @@
 //! Owns the parser-known committed-head list, the per-source labels, the
 //! browse-mode blurb, the user-facing runnable example, and a stable lat
 //! section id that backs the descriptor. Parser, input highlighting,
-//! trigger popup, hint legend, and lat docs all consume this list.
+//! trigger picker, hint legend, and lat docs all consume this list.
 
 use super::payload::RootUnifiedSourceFilter;
 

@@ -2918,10 +2918,10 @@ impl ScriptListApp {
         }
 
         if let Some(snapshot) = self
-            .menu_syntax_trigger_popup_state
+            .menu_syntax_trigger_picker_state
             .snapshot
             .as_ref()
-            .filter(|_| self.menu_syntax_trigger_popup_state.owns_main_list())
+            .filter(|_| self.menu_syntax_trigger_picker_state.owns_main_list())
         {
             if let Some(list) = elements
                 .iter_mut()
@@ -2944,7 +2944,7 @@ impl ScriptListApp {
                     text: Some(row.title.clone()),
                     value: Some(row.token.clone().unwrap_or_else(|| row.id.clone())),
                     selected: Some(
-                        self.menu_syntax_trigger_popup_state
+                        self.menu_syntax_trigger_picker_state
                             .selected_row_id
                             .as_deref()
                             == Some(row.id.as_str()),

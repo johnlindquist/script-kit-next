@@ -128,7 +128,7 @@ impl ScriptListApp {
             );
         }
 
-        // Skip filter updates when actions popup is open
+        // Skip filter updates when actions picker is active
         // (text input should go to actions dialog search, not main filter)
         if self.show_actions_popup {
             if shared_filter_view && new_text != self.filter_text {
@@ -692,9 +692,9 @@ impl ScriptListApp {
             self.maybe_start_spine_file_subsearch_for_current_projection(cx);
         }
 
-        // Iter 019 D1 / iter 020 D2a — run the pure popup state machine on
+        // Iter 019 D1 / iter 020 D2a — run the pure picker state machine on
         // every filter update and mirror the resulting transition into the
-        // cached `menu_syntax_trigger_popup_state` field. The GPUI window
+        // cached `menu_syntax_trigger_picker_state` field. The GPUI window
         // consumer lands in a follow-up commit; today we only track state +
         // emit tracing so the transitions are observable in production.
         {
@@ -707,14 +707,14 @@ impl ScriptListApp {
             // filter and clear the suppression the moment the filter
             // deviates (user types a body character or deletes back).
             let popup_suppressed_for_this_text = self
-                .menu_syntax_trigger_popup_suppressed_filter
+                .menu_syntax_trigger_picker_suppressed_filter
                 .as_deref()
                 .map(|s| s == new_text)
                 .unwrap_or(false);
             if !popup_suppressed_for_this_text
-                && self.menu_syntax_trigger_popup_suppressed_filter.is_some()
+                && self.menu_syntax_trigger_picker_suppressed_filter.is_some()
             {
-                self.menu_syntax_trigger_popup_suppressed_filter = None;
+                self.menu_syntax_trigger_picker_suppressed_filter = None;
             }
 
             let capture_composer_owns_input =
@@ -723,7 +723,7 @@ impl ScriptListApp {
                 self.menu_syntax_form_input_active && capture_composer_owns_input;
             if capture_form_field_owns_input {
                 self.menu_syntax_object_selector_state = Default::default();
-                self.menu_syntax_trigger_popup_state = Default::default();
+                self.menu_syntax_trigger_picker_state = Default::default();
             } else {
                 self.run_menu_syntax_object_selector_state_machine(&new_text, window, cx);
             }
@@ -732,58 +732,58 @@ impl ScriptListApp {
 
             let picker_ctx = self.menu_syntax_trigger_picker_context(&new_text);
             let transition = if popup_suppressed_for_this_text {
-                // User just accepted; popup should stay closed for this
+                // User just accepted; picker should stay closed for this
                 // exact filter. Represent that as NoChange so the rest of
                 // the block runs uniformly.
-                crate::menu_syntax_trigger_popup::TriggerPopupTransition::NoChange
+                crate::menu_syntax_trigger_picker::TriggerPickerTransition::NoChange
             } else if capture_form_field_owns_input {
-                crate::menu_syntax_trigger_popup::TriggerPopupTransition::NoChange
+                crate::menu_syntax_trigger_picker::TriggerPickerTransition::NoChange
             } else if object_selector_owns_input {
-                if self.menu_syntax_trigger_popup_state.snapshot.is_some() {
-                    crate::menu_syntax_trigger_popup::TriggerPopupTransition::Close
+                if self.menu_syntax_trigger_picker_state.snapshot.is_some() {
+                    crate::menu_syntax_trigger_picker::TriggerPickerTransition::Close
                 } else {
-                    crate::menu_syntax_trigger_popup::TriggerPopupTransition::NoChange
+                    crate::menu_syntax_trigger_picker::TriggerPickerTransition::NoChange
                 }
             } else {
-                crate::menu_syntax_trigger_popup::plan_trigger_popup_transition(
-                    &self.menu_syntax_trigger_popup_state,
+                crate::menu_syntax_trigger_picker::plan_trigger_picker_transition(
+                    &self.menu_syntax_trigger_picker_state,
                     &new_text,
                     &picker_ctx,
                 )
             };
             let mut trigger_state_changed = false;
             match &transition {
-                crate::menu_syntax_trigger_popup::TriggerPopupTransition::NoChange => {}
-                crate::menu_syntax_trigger_popup::TriggerPopupTransition::Close => {
-                    if self.menu_syntax_trigger_popup_state.snapshot.is_some() {
+                crate::menu_syntax_trigger_picker::TriggerPickerTransition::NoChange => {}
+                crate::menu_syntax_trigger_picker::TriggerPickerTransition::Close => {
+                    if self.menu_syntax_trigger_picker_state.snapshot.is_some() {
                         tracing::info!(
                             target: "script_kit::menu_syntax_popup",
-                            event = "menu_syntax_trigger_popup_close",
+                            event = "menu_syntax_trigger_picker_close",
                             filter = %new_text,
                         );
                     }
-                    self.menu_syntax_trigger_popup_state = Default::default();
+                    self.menu_syntax_trigger_picker_state = Default::default();
                 }
-                crate::menu_syntax_trigger_popup::TriggerPopupTransition::Open {
+                crate::menu_syntax_trigger_picker::TriggerPickerTransition::Open {
                     snapshot,
                     selected_row_id,
                 } => {
                     tracing::info!(
                         target: "script_kit::menu_syntax_popup",
-                        event = "menu_syntax_trigger_popup_open",
+                        event = "menu_syntax_trigger_picker_open",
                         filter = %new_text,
                         row_count = snapshot.rows.len(),
                         selected_row_id = ?selected_row_id,
                     );
-                    self.menu_syntax_trigger_popup_state =
-                        crate::menu_syntax_trigger_popup::MenuSyntaxTriggerPopupState {
+                    self.menu_syntax_trigger_picker_state =
+                        crate::menu_syntax_trigger_picker::MenuSyntaxTriggerPickerState {
                             snapshot: Some(snapshot.clone()),
                             selected_row_id: selected_row_id.clone(),
                             visible_start: 0,
                         };
                     trigger_state_changed = true;
                 }
-                crate::menu_syntax_trigger_popup::TriggerPopupTransition::Update {
+                crate::menu_syntax_trigger_picker::TriggerPickerTransition::Update {
                     snapshot,
                     selected_row_id,
                 } => {
@@ -792,20 +792,20 @@ impl ScriptListApp {
                         .and_then(|id| snapshot.rows.iter().position(|row| row.id == id))
                         .unwrap_or(0);
                     let visible_start =
-                        crate::menu_syntax_trigger_popup::trigger_popup_visible_start_for_selection(
-                            self.menu_syntax_trigger_popup_state.visible_start,
+                        crate::menu_syntax_trigger_picker::trigger_picker_visible_start_for_selection(
+                            self.menu_syntax_trigger_picker_state.visible_start,
                             selected_index,
                             snapshot.rows.len(),
                         );
                     tracing::info!(
                         target: "script_kit::menu_syntax_popup",
-                        event = "menu_syntax_trigger_popup_update",
+                        event = "menu_syntax_trigger_picker_update",
                         filter = %new_text,
                         row_count = snapshot.rows.len(),
                         selected_row_id = ?selected_row_id,
                     );
-                    self.menu_syntax_trigger_popup_state =
-                        crate::menu_syntax_trigger_popup::MenuSyntaxTriggerPopupState {
+                    self.menu_syntax_trigger_picker_state =
+                        crate::menu_syntax_trigger_picker::MenuSyntaxTriggerPickerState {
                             snapshot: Some(snapshot.clone()),
                             selected_row_id: selected_row_id.clone(),
                             visible_start,
@@ -829,7 +829,7 @@ impl ScriptListApp {
                 self.invalidate_grouped_cache();
             } else if matches!(
                 &transition,
-                crate::menu_syntax_trigger_popup::TriggerPopupTransition::Close
+                crate::menu_syntax_trigger_picker::TriggerPickerTransition::Close
             ) || capture_composer_owns_input
             {
                 // Popup just closed or the capture composer now owns the

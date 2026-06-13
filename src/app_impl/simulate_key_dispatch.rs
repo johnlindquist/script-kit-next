@@ -514,14 +514,14 @@ impl ScriptListApp {
                                     }
                                 }
                                 if view.menu_syntax_trigger_picker_owns_main_keyboard() {
-                                    if view.apply_menu_syntax_trigger_popup_intent(
+                                    if view.apply_menu_syntax_trigger_picker_intent(
                                         crate::menu_syntax::InlinePickerKeyIntent::Accept,
                                         window,
                                         ctx,
                                     ) {
                                         logging::log(
                                             "STDIN",
-                                            "SimulateKey: Enter - accept menu-syntax popup",
+                                            "SimulateKey: Enter - accept menu-syntax picker",
                                         );
                                         return;
                                     }
@@ -534,7 +534,7 @@ impl ScriptListApp {
                                 view.execute_selected(ctx);
                             }
                             "escape" => {
-                                logging::log("STDIN", "SimulateKey: Escape - close menu-syntax popup, clear filter, go back, or hide");
+                                logging::log("STDIN", "SimulateKey: Escape - close menu-syntax picker, clear filter, go back, or hide");
                                 if view.menu_syntax_object_selector_owns_main_keyboard() {
                                     if view.apply_menu_syntax_object_selector_intent(
                                         crate::menu_syntax::InlinePickerKeyIntent::Close,
@@ -545,7 +545,7 @@ impl ScriptListApp {
                                     }
                                 }
                                 if view.menu_syntax_trigger_picker_owns_main_keyboard() {
-                                    if view.apply_menu_syntax_trigger_popup_intent(
+                                    if view.apply_menu_syntax_trigger_picker_intent(
                                         crate::menu_syntax::InlinePickerKeyIntent::Close,
                                         window,
                                         ctx,

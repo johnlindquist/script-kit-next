@@ -3,7 +3,7 @@
 const FILTERING_CACHE: &str = include_str!("../src/app_impl/filtering_cache.rs");
 const OBJECT_SELECTOR: &str = include_str!("../src/menu_syntax/object_selector.rs");
 const OBJECT_SELECTOR_OWNER: &str =
-    include_str!("../src/app_impl/menu_syntax_object_selector_popup_window.rs");
+    include_str!("../src/app_impl/menu_syntax_object_selector_main_list.rs");
 const RENDER_SCRIPT_LIST: &str = include_str!("../src/render_script_list/mod.rs");
 const COLLECT_ELEMENTS: &str = include_str!("../src/app_layout/collect_elements.rs");
 const STARTUP: &str = include_str!("../src/app_impl/startup.rs");
@@ -112,7 +112,7 @@ fn object_selector_arrows_are_not_popup_intents() {
         .expect("split arrow menu-syntax ownership block");
     assert!(
         !split_arrow_block.contains("menu_syntax_object_selector_state.owns_main_list()")
-            && !split_arrow_block.contains("menu_syntax_trigger_popup_state.owns_main_list()"),
+            && !split_arrow_block.contains("menu_syntax_trigger_picker_state.owns_main_list()"),
         "split arrow routing must not divert object/trigger rows away from shared list movement"
     );
 }

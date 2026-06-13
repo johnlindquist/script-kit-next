@@ -93,7 +93,7 @@ fn build_menu_syntax_trigger_picker_main_list_results(
     for row in &snapshot.rows {
         let flat_index = flat_results.len();
         flat_results.push(scripts::SearchResult::SpineProjection(
-            crate::menu_syntax_trigger_popup::trigger_picker_row_to_main_list_row(row),
+            crate::menu_syntax_trigger_picker::trigger_picker_row_to_main_list_row(row),
         ));
         grouped_items.push(GroupedListItem::Item(flat_index));
     }
@@ -388,7 +388,7 @@ impl ScriptListApp {
         }
 
         if self.menu_syntax_object_selector_state.owns_main_list()
-            || self.menu_syntax_trigger_popup_state.owns_main_list()
+            || self.menu_syntax_trigger_picker_state.owns_main_list()
             || self
                 .menu_syntax_mode
                 .capture_composer_owns_input_for(query_text)
@@ -945,7 +945,7 @@ impl ScriptListApp {
     /// P1: Now uses caching - invalidates only when filter_text changes
     pub(crate) fn filtered_results(&self) -> Vec<scripts::SearchResult> {
         let filter_text = self.filter_text();
-        // When a composer-style menu-syntax popup owns the input (e.g. `;t`
+        // When a composer-style menu-syntax picker owns the input (e.g. `;t`
         // or `!dep`), the main launcher should not report or render fuzzy
         // matches — the popup is the sole surface for the typed characters.
         // Without this gate, `getState.visibleChoiceCount`, automation
@@ -953,7 +953,7 @@ impl ScriptListApp {
         // over stale fuzzy results (e.g. 8 semicolon-ish script matches) behind
         // the popup.
         if self.menu_syntax_object_selector_state.owns_main_list()
-            || self.menu_syntax_trigger_popup_state.owns_main_list()
+            || self.menu_syntax_trigger_picker_state.owns_main_list()
             || self
                 .menu_syntax_mode
                 .capture_composer_owns_input_for(filter_text)
@@ -988,7 +988,7 @@ impl ScriptListApp {
     /// Call this when you need to ensure cache is updated
     pub(crate) fn get_filtered_results_cached(&mut self) -> &Vec<scripts::SearchResult> {
         if self.menu_syntax_object_selector_state.owns_main_list()
-            || self.menu_syntax_trigger_popup_state.owns_main_list()
+            || self.menu_syntax_trigger_picker_state.owns_main_list()
             || self
                 .menu_syntax_mode
                 .capture_composer_owns_input_for(&self.filter_text)
@@ -1124,13 +1124,13 @@ impl ScriptListApp {
     ) -> (Arc<[GroupedListItem]>, Arc<[scripts::SearchResult]>) {
         // The grouped cache is keyed by `computed_filter_text`. Menu syntax is
         // an ownership boundary, so never return stale grouped rows while the
-        // live input is owned by the trigger popup or capture composer.
+        // live input is owned by the trigger picker or capture composer.
         let live_filter_text = self.filter_text.as_str();
         let computed_filter_text = self.computed_filter_text.as_str();
         let spine_owns_live_main_list =
             self.spine_projection_owns_main_list() && self.spine_parse.input == live_filter_text;
         let popup_owns_live_main_list = self.menu_syntax_object_selector_state.owns_main_list()
-            || self.menu_syntax_trigger_popup_state.owns_main_list();
+            || self.menu_syntax_trigger_picker_state.owns_main_list();
         let live_menu_syntax_owns_main_list = popup_owns_live_main_list
             || (!spine_owns_live_main_list
                 && (self
@@ -1648,7 +1648,7 @@ impl ScriptListApp {
         let spine_owns_for_computed =
             self.spine_projection_owns_main_list() && self.spine_parse.input == raw_filter_text;
         let popup_owns_computed_main_list = self.menu_syntax_object_selector_state.owns_main_list()
-            || self.menu_syntax_trigger_popup_state.owns_main_list();
+            || self.menu_syntax_trigger_picker_state.owns_main_list();
         let menu_syntax_owns_main_list = popup_owns_computed_main_list
             || (!spine_owns_for_computed
                 && (self
@@ -1667,8 +1667,8 @@ impl ScriptListApp {
             } else {
                 (Vec::new(), Vec::new())
             }
-        } else if self.menu_syntax_trigger_popup_state.owns_main_list() {
-            if let Some(snapshot) = self.menu_syntax_trigger_popup_state.snapshot.as_ref() {
+        } else if self.menu_syntax_trigger_picker_state.owns_main_list() {
+            if let Some(snapshot) = self.menu_syntax_trigger_picker_state.snapshot.as_ref() {
                 build_menu_syntax_trigger_picker_main_list_results(snapshot)
             } else {
                 (Vec::new(), Vec::new())
@@ -2427,7 +2427,7 @@ impl ScriptListApp {
     ) {
         let structural_clear = !matches!(self.current_view, AppView::ScriptList)
             || self.show_actions_popup
-            || self.menu_syntax_trigger_popup_state.owns_main_list()
+            || self.menu_syntax_trigger_picker_state.owns_main_list()
             || self.menu_syntax_capture_form_owns_input()
             || self.inline_calculator.is_some();
 

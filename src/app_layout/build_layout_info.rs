@@ -2542,7 +2542,7 @@ impl ScriptListApp {
             })
             .collect::<Vec<_>>();
 
-        let popup = sidebar_field_id.and_then(|field_id| {
+        let suggestions = sidebar_field_id.and_then(|field_id| {
             form.fields
                 .iter()
                 .any(|field| field.id == field_id)
@@ -2554,7 +2554,7 @@ impl ScriptListApp {
                     serde_json::json!({
                         "ownerFieldId": field_id,
                         "role": "listbox",
-                        "surface": "menuSyntaxTriggerPopup",
+                        "surface": "menuSyntaxTriggerPicker",
                         "bounds": {
                             "x": OUTER_PADDING_X + field_width + SIDEBAR_GAP,
                             "y": form_top - scroll_offset_y,
@@ -2587,7 +2587,7 @@ impl ScriptListApp {
             },
             "handlerFormFocusedVisibility": focused_visibility,
             "fields": fields,
-            "popup": popup,
+            "suggestions": suggestions,
         }))
     }
 }

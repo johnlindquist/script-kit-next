@@ -158,19 +158,19 @@ pub mod path_action;
 #[path = "app_impl/routes.rs"]
 pub mod routes;
 
-// Pure menu-syntax trigger popup state machine + row adapter. Same
+// Pure menu-syntax trigger picker state machine + row adapter. Same
 // `#[path]` re-export pattern as `path_action` and `routes` — the
-// binary consumes it via `app_impl::menu_syntax_trigger_popup` while
+// binary consumes it via `app_impl::menu_syntax_trigger_picker` while
 // the lib crate carries it so unit tests for the state transitions and
 // the `TriggerPickerRow` → `InlinePickerRow` adapter run under
 // `cargo test --lib`. GPUI wiring and keyboard dispatch land in commit
 // D2; this commit ships the pure-library half.
-#[path = "app_impl/menu_syntax_trigger_popup.rs"]
-pub mod menu_syntax_trigger_popup;
+#[path = "app_impl/menu_syntax_trigger_picker.rs"]
+pub mod menu_syntax_trigger_picker;
 
 // Pure adapter that bridges `menu_syntax::current_actions` (pure spec) into
 // the Cmd+K actions-dialog (live UI). Same `#[path]` re-export pattern as
-// `path_action` / `routes` / `menu_syntax_trigger_popup` so unit tests for
+// `path_action` / `routes` / `menu_syntax_trigger_picker` so unit tests for
 // the section title + replace/prepend mode run under `cargo test --lib`.
 #[path = "app_impl/menu_syntax_actions.rs"]
 pub mod menu_syntax_actions;
@@ -553,13 +553,13 @@ mod main_menu_input_guard_tests {
             .expect("physical Enter must preserve ScriptIssuesView handling first");
         // Since 8a4ef223f the popup windows are reached through the
         // owns-main-keyboard helpers rather than direct popup-window access;
-        // Enter must still Accept the object selector before the trigger popup.
+        // Enter must still Accept the object selector before the trigger picker.
         let object_popup_pos = physical_enter_section
             .find("menu_syntax_object_selector_owns_main_keyboard")
             .expect("physical Enter must preserve menu-syntax object popup Accept");
-        let trigger_popup_pos = physical_enter_section
+        let trigger_picker_pos = physical_enter_section
             .find("menu_syntax_trigger_picker_owns_main_keyboard")
-            .expect("physical Enter must preserve menu-syntax trigger popup Accept");
+            .expect("physical Enter must preserve menu-syntax trigger picker Accept");
         let script_list_pos = physical_enter_section
             .find("global_plain_enter_script_list")
             .expect("physical Enter must route ScriptList through the submit guard");
@@ -578,8 +578,8 @@ mod main_menu_input_guard_tests {
 
         assert!(
             script_issues_pos < object_popup_pos
-                && object_popup_pos < trigger_popup_pos
-                && trigger_popup_pos < script_list_pos
+                && object_popup_pos < trigger_picker_pos
+                && trigger_picker_pos < script_list_pos
                 && script_list_pos < spine_pos
                 && spine_pos < fallback_pos
                 && fallback_pos < execute_pos

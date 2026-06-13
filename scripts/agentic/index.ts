@@ -541,7 +541,7 @@ function buildCmd(
  * When `skipEnsureFocus` is true, the `--ensure-focus` flag is omitted so
  * macos-input.ts will not attempt OS-level focus enforcement before trying
  * protocol-level and GPUI dispatch paths. This is the correct mode for
- * detached Agent Chat and popup targets that don't need foreground keyboard focus.
+ * detached Agent Chat and picker targets that don't need foreground keyboard focus.
  */
 function nativeInputArgs(
   command: string,
@@ -5364,7 +5364,7 @@ Available scenarios:
   long-text-wrap-resize-surface-stress
                          Emit fail-closed long text wrapping/resizing UX requirements
   actions-command-discoverability-noop-stress
-                         Measure real Cmd-K action popup rows
+                         Measure real Cmd-K action picker rows
   dense-list-detail-preview-readability-stress
                          Emit fail-closed dense list/detail preview readability requirements
   toast-notification-queue-lifecycle-stress
@@ -5558,13 +5558,13 @@ Examples:
   bun scripts/agentic/index.ts loading-skeleton-progress-restoration-stress --session default --surfaces sdk-reference,script-template-catalog --fixture delayed-local --cycles 4 --json
   bun scripts/agentic/index.ts icon-image-fallback-redaction-stress --session default --surfaces app-launcher,file-search,clipboard-history --fixtures missing-file,corrupt-png,private-local-path,data-uri-redacted --json
   bun scripts/agentic/index.ts footer-status-persistence-stress --session default --surfaces main,clipboard-history,emoji-picker,file-search,actionsDialog --transitions filter,selection,cmd-k,escape,clear-filter --json
-  bun scripts/agentic/index.ts keyboard-hint-label-parity-stress --session default --surfaces main,clipboard-history,emoji-picker,file-search,actionsDialog,menuSyntaxTriggerPopup --families footer,row-accessory,tooltip,action-catalog --json
+  bun scripts/agentic/index.ts keyboard-hint-label-parity-stress --session default --surfaces main,clipboard-history,emoji-picker,file-search,actionsDialog,menuSyntaxTriggerPicker --families footer,row-accessory,tooltip,action-catalog --json
   bun scripts/agentic/index.ts row-state-parity-without-pointer-stress --session default --surfaces main,clipboard-history,emoji-picker,file-search,actionsDialog --states selected,focused,hovered,selected-hovered --json
   bun scripts/agentic/index.ts quiet-chrome-card-nesting-stress --session default --surfaces main,clipboard-history,emoji-picker,file-search,actionsDialog,promptPopup --chrome quiet --json
   bun scripts/agentic/index.ts scroll-shadow-sticky-header-density-stress --session default --surfaces clipboard-history,emoji-picker,file-search,app-launcher,actionsDialog --scroll-positions top,middle,bottom --density compact,default --json
-  bun scripts/agentic/index.ts popup-focus-keycap-visual-semantics-stress --session default --surfaces actionsDialog,menuSyntaxTriggerPopup,confirmPrompt --json
-  bun scripts/agentic/index.ts reduced-motion-animation-disable-stress --session default --surfaces main,actionsDialog,menuSyntaxTriggerPopup --fixture reduced-motion --json
-  bun scripts/agentic/index.ts command-search-highlighting-accessory-badges-stress --session default --hosts main,actionsDialog,app-launcher,menuSyntaxTriggerPopup --query agentic-loop-twenty-three --json
+  bun scripts/agentic/index.ts popup-focus-keycap-visual-semantics-stress --session default --surfaces actionsDialog,confirmPrompt --json
+  bun scripts/agentic/index.ts reduced-motion-animation-disable-stress --session default --surfaces main,actionsDialog,menuSyntaxTriggerPicker --fixture reduced-motion --json
+  bun scripts/agentic/index.ts command-search-highlighting-accessory-badges-stress --session default --hosts main,actionsDialog,app-launcher,menuSyntaxTriggerPicker --query agentic-loop-twenty-three --json
   bun scripts/agentic/index.ts clipboard-copy-visual-feedback-stress --session default --hosts file-search,actionsDialog,app-launcher --fixture agentic-copy-preview --pasteboard-scope fixture --no-system-pasteboard --json
   bun scripts/agentic/index.ts portal-cancel-return-state-restoration-stress --session default --origins agent_chat-composer,notes --portal file-search --query AGENTS.md --cancel-methods escape,back --fixture repo-file --no-native-picker --json
   bun scripts/agentic/index.ts tooltip-hover-focus-affordance-stress --session default --surfaces main,actionsDialog,app-launcher --targets truncated-row,disabled-action,footer-button --fixture agentic-tooltips --input-modes protocol-hover,keyboard-focus --no-native-pointer --json

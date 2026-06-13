@@ -710,11 +710,11 @@ impl ScriptListApp {
                     }
                 }
                 InputEvent::PressEnter { .. } => {
-                    // Block Enter when confirm popup is open — the confirm
+                    // Block Enter when confirm picker is active — the confirm
                     // popup's key routing already handled this Enter via
                     // capture_key_down in render_impl.
                     if confirm::is_confirm_window_open() {
-                        logging::log("KEY", "Ignoring PressEnter: confirm popup is open");
+                        logging::log("KEY", "Ignoring PressEnter: confirm picker is active");
                         return;
                     }
 
@@ -724,7 +724,7 @@ impl ScriptListApp {
                         } else {
                             logging::log(
                                 "KEY",
-                                "Ignoring ThemeChooser PressEnter: actions popup is open",
+                                "Ignoring ThemeChooser PressEnter: actions picker is active",
                             );
                         }
                         return;
@@ -1038,8 +1038,8 @@ impl ScriptListApp {
             spine_agent_label: initial_spine_agent_label,
             spine_model_label: initial_spine_model_label,
             spine_live_preview_cache: Default::default(),
-            menu_syntax_trigger_popup_state:
-                crate::menu_syntax_trigger_popup::MenuSyntaxTriggerPopupState::default(),
+            menu_syntax_trigger_picker_state:
+                crate::menu_syntax_trigger_picker::MenuSyntaxTriggerPickerState::default(),
             menu_syntax_object_selector_state:
                 crate::menu_syntax::MenuSyntaxObjectSelectorState::default(),
             menu_syntax_form_focused_index: 0,
@@ -1053,7 +1053,7 @@ impl ScriptListApp {
             menu_syntax_form_suggestion_field_id: None,
             menu_syntax_form_suggestion_selected_index: None,
             pending_menu_syntax_ai_proposal: None,
-            menu_syntax_trigger_popup_suppressed_filter: None,
+            menu_syntax_trigger_picker_suppressed_filter: None,
             // Scroll stabilization: start with no last scrolled index
             last_scrolled_index: None,
             // Preview cache: start empty, will populate on first render
@@ -1512,7 +1512,7 @@ impl ScriptListApp {
                                 }
                             }
 
-                            // Menu-syntax trigger popup owns Tab when it is
+                            // Menu-syntax trigger picker owns Tab when it is
                             // visible — Tab applies the selected row (keep-open
                             // for open-value qualifiers like `source:`,
                             // close-after-apply for bare qualifiers or capture
@@ -1543,7 +1543,7 @@ impl ScriptListApp {
                                 } else {
                                     crate::menu_syntax::InlinePickerKeyIntent::Apply
                                 };
-                                if this.apply_menu_syntax_trigger_popup_intent(
+                                if this.apply_menu_syntax_trigger_picker_intent(
                                     intent, window, cx,
                                 ) {
                                     cx.stop_propagation();
@@ -1584,7 +1584,7 @@ impl ScriptListApp {
 
                             // Tab on ScriptList opens the cwd picker — the
                             // chip-as-button affordance. Fires only when
-                            // nothing else above (menu-syntax popups, ghost
+                            // nothing else above (menu-syntax pickers, ghost
                             // prediction, capture form, Agent Chat/terminal locals)
                             // claimed the keystroke. The picker is the same
                             // FileSearchView that `>` used to open; the
@@ -1739,7 +1739,7 @@ impl ScriptListApp {
                                 cx.stop_propagation();
                                 return;
                             }
-                            // Menu-syntax trigger popup owns Enter when it is
+                            // Menu-syntax trigger picker owns Enter when it is
                             // visible on ScriptList — Accept the selected row
                             // the same way the Agent Chat composer picker does.
                             if matches!(this.current_view, AppView::ScriptList)
@@ -1757,7 +1757,7 @@ impl ScriptListApp {
                             if matches!(this.current_view, AppView::ScriptList)
                                 && this.menu_syntax_trigger_picker_owns_main_keyboard()
                             {
-                                if this.apply_menu_syntax_trigger_popup_intent(
+                                if this.apply_menu_syntax_trigger_picker_intent(
                                     crate::menu_syntax::InlinePickerKeyIntent::Accept,
                                     window,
                                     cx,
@@ -1877,7 +1877,7 @@ impl ScriptListApp {
                 if (is_left || is_right) && no_direction_modifiers {
                     if let Some(app) = app_entity.upgrade() {
                         app.update(cx, |this, cx| {
-                            // Keep left/right from moving any focused input while actions popup is open.
+                            // Keep left/right from moving any focused input while actions picker is active.
                             if this.show_actions_popup {
                                 cx.stop_propagation();
                                 return;
@@ -1934,7 +1934,7 @@ impl ScriptListApp {
                 if (is_up || is_down) && no_direction_modifiers {
                     if let Some(app) = app_entity.upgrade() {
                         app.update(cx, |this, cx| {
-                            // Universal: Route arrow keys to actions dialog when popup is open
+                            // Universal: Route arrow keys to actions dialog when picker is active
                             // This ensures ALL views (ChatPrompt, ArgPrompt, etc.) route
                             // arrows to the dialog, not just the few views with explicit cases below.
                             if this.show_actions_popup {
@@ -1958,7 +1958,7 @@ impl ScriptListApp {
                                     query,
                                     ..
                                 } => {
-                                    // CRITICAL: If actions popup is open, route to actions dialog instead
+                                    // CRITICAL: If actions picker is active, route to actions dialog instead
                                     if this.show_actions_popup {
                                         if let Some(ref dialog) = this.actions_dialog {
                                             if is_up {
@@ -2023,7 +2023,7 @@ impl ScriptListApp {
                                     selected_index,
                                     filter,
                                 } => {
-                                    // CRITICAL: If actions popup is open, route to actions dialog instead
+                                    // CRITICAL: If actions picker is active, route to actions dialog instead
                                     if this.show_actions_popup {
                                         if let Some(ref dialog) = this.actions_dialog {
                                             if is_up {
@@ -2409,7 +2409,7 @@ impl ScriptListApp {
                                     cx.stop_propagation();
                                 }
                                 AppView::ScriptList => {
-                                    // CRITICAL: If actions popup is open, route to actions dialog instead
+                                    // CRITICAL: If actions picker is active, route to actions dialog instead
                                     if this.show_actions_popup {
                                         if let Some(ref dialog) = this.actions_dialog {
                                             if is_up {
@@ -2691,7 +2691,7 @@ impl ScriptListApp {
                             return;
                         }
 
-                        // Don't handle if actions popup is open
+                        // Don't handle if actions picker is active
                         if this.show_actions_popup {
                             return;
                         }

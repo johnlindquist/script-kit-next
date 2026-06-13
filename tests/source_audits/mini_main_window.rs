@@ -128,7 +128,7 @@ fn simulate_key_escape_delegates_to_go_back_when_opened_from_main_menu() {
     for path in ["src/app_impl/simulate_key_dispatch.rs"] {
         let source = read(path);
         let escape_start = source
-            .find("SimulateKey: Escape - close menu-syntax popup, clear filter, go back, or hide")
+            .find("SimulateKey: Escape - close menu-syntax picker, clear filter, go back, or hide")
             .unwrap_or_else(|| panic!("SimulateKey escape handler must exist in {path}"));
         let escape_body = &source[escape_start..source.len().min(escape_start + 1800)];
         for marker in [

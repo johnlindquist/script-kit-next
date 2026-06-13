@@ -392,7 +392,7 @@ mod tests {
     #[test]
     fn test_simulate_key_escape_uses_go_back_or_close_for_opened_from_main_menu() {
         let content = read_source_file("app_impl/simulate_key_dispatch.rs");
-        let anchor = "SimulateKey: Escape - close menu-syntax popup, clear filter, go back, or hide";
+        let anchor = "SimulateKey: Escape - close menu-syntax picker, clear filter, go back, or hide";
         let start = content
             .find(anchor)
             .unwrap_or_else(|| panic!("Expected Escape SimulateKey branch log anchor"));

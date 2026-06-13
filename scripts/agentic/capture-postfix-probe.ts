@@ -58,14 +58,11 @@ async function main() {
     // Hidden-window probe: stdin simulateKey reaches spine enter handling
     // without stealing the user's focus.
 
-    // Step 1: ";" lists capture targets (trigger popup window).
+    // Step 1: ";" lists capture targets (trigger picker).
     await driver.setFilterAndWait(";");
     await Bun.sleep(500);
-    const semicolonLabels = [
-      ...(await labelsNow(driver)),
-      ...(await labelsNow(driver, "promptPopup")),
-    ];
-    // The trigger-popup capture catalog: todo/note/link/snippet (+cal/social).
+    const semicolonLabels = await labelsNow(driver);
+    // The trigger picker capture catalog: todo/note/link/snippet (+cal/social).
     const targetTitles = ["Todo", "Note", "Link", "Snippet"];
     const listedTargets = targetTitles.filter((t) =>
       semicolonLabels.some((l) => l.toLowerCase().includes(t.toLowerCase())),

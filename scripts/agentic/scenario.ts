@@ -730,7 +730,7 @@ export async function runPromptPopupExactIdScenario(
     index,
   });
 
-  // Step 1: Resolve the prompt popup target to an exact ID
+  // Step 1: Resolve the prompt picker target to an exact ID
   const resolved = await inspectAndPromoteTarget({
     session,
     kind: "promptPopup",
@@ -8885,7 +8885,7 @@ export async function runKeyboardHintLabelParityStressScenario(opts: {
     keyboardHintLabelParity: {
       kind: "ux.keyboardHintLabelParity",
       keyboardHintStressId: "loop-twenty-one-keyboard-hint-label-parity",
-      requestedSurfaces: opts.surfaces ?? ["main", "clipboard-history", "emoji-picker", "file-search", "actionsDialog", "menuSyntaxTriggerPopup"],
+      requestedSurfaces: opts.surfaces ?? ["main", "clipboard-history", "emoji-picker", "file-search", "actionsDialog", "menuSyntaxTriggerPicker"],
       requestedFamilies: opts.families ?? ["footer", "row-accessory", "tooltip", "action-catalog"],
       surfaceSamples: [],
       surface: null,
@@ -9057,7 +9057,7 @@ export async function runPopupFocusKeycapVisualSemanticsStressScenario(opts: {
     linearIssue: "file_linear:popup_focus_keycap_visual_semantics_receipts_missing",
     popupFocusKeycapVisualSemantics: {
       kind: "ux.popupFocusKeycapVisualSemantics", popupKeycapStressId: "loop-twenty-three-popup-focus-keycap",
-      requestedSurfaces: opts.surfaces ?? ["actionsDialog", "menuSyntaxTriggerPopup", "confirmPrompt"],
+      requestedSurfaces: opts.surfaces ?? ["actionsDialog", "confirmPrompt"],
       surfaceSamples: [], surface: null, popupKind: null, automationWindowId: null, osWindowId: null, parentAutomationWindowId: null, semanticSurface: null,
       stateReceipt: null, elementsReceipt: null, popupFocusKeycapVisualSemanticsReceipt: null,
       keycapSamples: [], keycapRole: null, keycapLabel: null, shortcutLabel: null, normalizedShortcutTokens: [], platformGlyph: null,
@@ -9090,7 +9090,7 @@ export async function runReducedMotionAnimationDisableStressScenario(opts: {
     linearIssue: "file_linear:reduced_motion_animation_disable_receipts_missing",
     reducedMotionAnimationDisable: {
       kind: "ux.reducedMotionAnimationDisable", reducedMotionStressId: "loop-twenty-three-reduced-motion-animation-disable",
-      requestedSurfaces: opts.surfaces ?? ["main", "actionsDialog", "menuSyntaxTriggerPopup"], requestedFixture: opts.fixture ?? "reduced-motion",
+      requestedSurfaces: opts.surfaces ?? ["main", "actionsDialog", "menuSyntaxTriggerPicker"], requestedFixture: opts.fixture ?? "reduced-motion",
       surfaceSamples: [], surface: null, automationWindowId: null, osWindowId: null, semanticSurface: null,
       stateReceipt: null, elementsReceipt: null, reducedMotionAnimationDisableReceipt: null,
       motionPolicyReceipt: null, motionPreferenceSource: null, fixtureOnlyReducedMotion: true, systemPreferenceNotRead: true,
@@ -9123,7 +9123,7 @@ export async function runCommandSearchHighlightingAccessoryBadgesStressScenario(
     linearIssue: "file_linear:command_search_highlighting_accessory_badges_receipts_missing",
     commandSearchHighlightingAccessoryBadges: {
       kind: "ux.commandSearchHighlightAccessoryBadges", commandHighlightBadgeStressId: "loop-twenty-three-command-search-highlighting-accessory-badges",
-      requestedHosts: opts.hosts ?? ["main", "actionsDialog", "app-launcher", "menuSyntaxTriggerPopup"], query: opts.query ?? "agentic-loop-twenty-three",
+      requestedHosts: opts.hosts ?? ["main", "actionsDialog", "app-launcher", "menuSyntaxTriggerPicker"], query: opts.query ?? "agentic-loop-twenty-three",
       hostSamples: [], host: null, popupKind: null, automationWindowId: null, osWindowId: null, semanticSurface: null,
       stateReceipt: null, elementsReceipt: null, commandSearchHighlightingAccessoryBadgesReceipt: null,
       querySamples: [], searchGeneration: null, commandRows: [], semanticId: null, commandId: null, commandLabel: null,

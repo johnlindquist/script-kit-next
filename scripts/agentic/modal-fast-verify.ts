@@ -347,7 +347,7 @@ const receipt: Receipt = {
   underThreshold: durationMs <= thresholdMs,
   scope: {
     modalDefinition: "confirm/deny interactions only",
-    excluded: ["actions menu", "trigger popups", "generic popups"],
+    excluded: ["actions menu", "trigger pickers", "generic popups"],
     slowRuntimeProof:
       "bun scripts/agentic/index.ts sdk-confirm-runtime-proof --session confirm-modal-sdk-proof --json",
   },

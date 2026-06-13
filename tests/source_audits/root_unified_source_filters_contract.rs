@@ -246,7 +246,7 @@ fn preflight_receipt_exposes_source_filter_state_for_agentic_proof() {
 #[test]
 fn colon_opens_discoverability_picker_while_source_filters_do_not_open_hint() {
     let trigger = include_str!("../../src/menu_syntax/trigger_picker.rs");
-    let popup = include_str!("../../src/app_impl/menu_syntax_trigger_popup.rs");
+    let popup = include_str!("../../src/app_impl/menu_syntax_trigger_picker.rs");
     let hint = include_str!("../../src/menu_syntax/main_hint.rs");
     let render = include_str!("../../src/render_script_list/mod.rs");
     let prompt_handler = include_str!("../../src/prompt_handler/mod.rs");

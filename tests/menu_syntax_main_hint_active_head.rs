@@ -15,8 +15,8 @@ fn empty_hint_for(raw: &str) -> MenuSyntaxMainHintSnapshot {
     build_menu_syntax_main_hint(MenuSyntaxMainHintContext {
         raw_filter_text: raw,
         mode: &mode,
-        popup_snapshot: None,
-        popup_selected_row_id: None,
+        picker_snapshot: None,
+        picker_selected_row_id: None,
         scripts: &[],
         scriptlets: &[],
         advanced_query_results_empty: true,

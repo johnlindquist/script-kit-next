@@ -182,7 +182,7 @@
                                 }
                             }
 
-                            // Menu-syntax trigger popup owns Tab when it is visible —
+                            // Menu-syntax trigger picker owns Tab when it is visible —
                             // Tab applies the selected row (keep-open for open-value
                             // qualifiers like `source:`, close-after-apply for bare
                             // qualifiers or capture targets). Runs BEFORE the Agent Chat
@@ -212,7 +212,7 @@
                                 } else {
                                     crate::menu_syntax::InlinePickerKeyIntent::Apply
                                 };
-                                if this.apply_menu_syntax_trigger_popup_intent(intent, window, cx) {
+                                if this.apply_menu_syntax_trigger_picker_intent(intent, window, cx) {
                                     cx.stop_propagation();
                                     return;
                                 }
@@ -340,7 +340,7 @@
 
                 // Keep plain Enter routed to Agent Chat mention acceptance in the
                 // embedded main-window host when the picker is open, and to
-                // the menu-syntax trigger popup when it is open on
+                // the menu-syntax trigger picker when it is open on
                 // ScriptList (Accept the selected qualifier / capture
                 // target — same behavior as the Agent Chat composer picker).
                 if is_plain_enter {
@@ -361,7 +361,7 @@
                             if matches!(this.current_view, AppView::ScriptList)
                                 && this.menu_syntax_trigger_picker_owns_main_keyboard()
                             {
-                                if this.apply_menu_syntax_trigger_popup_intent(
+                                if this.apply_menu_syntax_trigger_picker_intent(
                                     crate::menu_syntax::InlinePickerKeyIntent::Accept,
                                     window,
                                     cx,

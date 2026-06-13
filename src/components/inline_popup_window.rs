@@ -2,7 +2,7 @@
 //!
 //! These helpers own the detached child-window mechanics used by any inline
 //! popup surface (Agent Chat composer pickers, Agent Chat history popup, and the menu-syntax
-//! `:`, `;`, and `!` trigger popups). They are intentionally
+//! `:`, `;`, and `!` trigger pickers). They are intentionally
 //! neutral: no Agent Chat types, no menu-syntax types, no domain callbacks. Callers
 //! layer their own row models and accept behavior on top.
 //!

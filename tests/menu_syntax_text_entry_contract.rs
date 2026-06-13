@@ -139,8 +139,8 @@ fn live_menu_syntax_ownership_bypasses_debounced_grouped_cache() {
 
 #[test]
 fn refine_picker_owns_main_list_until_query_is_terminal() {
-    let popup = fs::read_to_string("src/app_impl/menu_syntax_trigger_popup.rs")
-        .expect("Failed to read src/app_impl/menu_syntax_trigger_popup.rs");
+    let popup = fs::read_to_string("src/app_impl/menu_syntax_trigger_picker.rs")
+        .expect("Failed to read src/app_impl/menu_syntax_trigger_picker.rs");
     let filtering_cache = fs::read_to_string("src/app_impl/filtering_cache.rs")
         .expect("Failed to read src/app_impl/filtering_cache.rs");
     let render = fs::read_to_string("src/render_script_list/mod.rs")
@@ -154,8 +154,8 @@ fn refine_picker_owns_main_list_until_query_is_terminal() {
         "colon filter-head and value pickers should own ScriptList rows until the query is terminal"
     );
     assert!(
-        filtering_cache.contains("self.menu_syntax_trigger_popup_state.owns_main_list()")
-            && render.contains("self.menu_syntax_trigger_popup_state.owns_main_list()"),
+        filtering_cache.contains("self.menu_syntax_trigger_picker_state.owns_main_list()")
+            && render.contains("self.menu_syntax_trigger_picker_state.owns_main_list()"),
         "refine (`:`) picker snapshots should suppress stale structured search results while selectable rows are open"
     );
     assert!(
@@ -244,15 +244,15 @@ fn trigger_picker_state_changes_rebuild_main_list() {
             && filter_input_change.contains("trigger_state_changed = true;")
             && filter_input_change.contains("} else if trigger_state_changed {")
             && filter_input_change.contains("self.invalidate_grouped_cache();")
-            && !filter_input_change.contains("sync_menu_syntax_trigger_popup_window_for_filter"),
+            && !filter_input_change.contains("sync_menu_syntax_trigger_picker_main_list_for_filter"),
         "filter changes should keep trigger rows in state and rebuild the main list without syncing a detached popup"
     );
 }
 
 #[test]
 fn trigger_picker_main_list_contract_exposes_rows_without_detached_popup() {
-    let trigger_owner = fs::read_to_string("src/app_impl/menu_syntax_trigger_popup_window.rs")
-        .expect("Failed to read src/app_impl/menu_syntax_trigger_popup_window.rs");
+    let trigger_owner = fs::read_to_string("src/app_impl/menu_syntax_trigger_picker_main_list.rs")
+        .expect("Failed to read src/app_impl/menu_syntax_trigger_picker_main_list.rs");
     let collect_elements = fs::read_to_string("src/app_layout/collect_elements.rs")
         .expect("Failed to read src/app_layout/collect_elements.rs");
     let prompt_handler =
@@ -260,7 +260,7 @@ fn trigger_picker_main_list_contract_exposes_rows_without_detached_popup() {
 
     assert!(
         trigger_owner.contains("menu_syntax_trigger_picker_owns_main_keyboard")
-            && trigger_owner.contains("self.menu_syntax_trigger_popup_state.owns_main_list()"),
+            && trigger_owner.contains("self.menu_syntax_trigger_picker_state.owns_main_list()"),
         "trigger picker keyboard ownership should be derived from ScriptList state"
     );
     assert!(
@@ -270,18 +270,19 @@ fn trigger_picker_main_list_contract_exposes_rows_without_detached_popup() {
         "ScriptList getElements should expose trigger picker rows as main-list rows"
     );
     assert!(
-        !prompt_handler
-            .contains("menu_syntax_trigger_popup_window::is_menu_syntax_trigger_popup_window_open"),
+        !prompt_handler.contains(
+            "menu_syntax_trigger_picker_main_list::is_menu_syntax_trigger_picker_main_list_open"
+        ),
         "PromptPopup automation target resolution must not include main-owned trigger rows"
     );
     assert!(
-        prompt_handler.contains("self.menu_syntax_trigger_popup_state.owns_main_list()")
+        prompt_handler.contains("self.menu_syntax_trigger_picker_state.owns_main_list()")
             && prompt_handler
-                .contains("self.accept_menu_syntax_trigger_popup_row(&row_id, None, cx)"),
+                .contains("self.accept_menu_syntax_trigger_picker_row(&row_id, None, cx)"),
         "main-window batch selectBySemanticId should activate main-owned trigger picker rows"
     );
     assert!(
-        trigger_owner.contains("menu_syntax_trigger_popup_keep_open_no_window")
+        trigger_owner.contains("menu_syntax_trigger_picker_keep_open_main_list")
             && trigger_owner.contains("self.invalidate_grouped_cache();")
             && trigger_owner.contains("self.reconcile_script_list_after_filter_change("),
         "batch selectBySemanticId keep-open transitions must invalidate rendered rows after rebuilding the picker snapshot"
@@ -292,17 +293,17 @@ fn trigger_picker_main_list_contract_exposes_rows_without_detached_popup() {
 fn stdin_setfilter_runs_menu_syntax_popup_state_machine() {
     let updates = fs::read_to_string("src/app_impl/filter_input_updates.rs")
         .expect("Failed to read src/app_impl/filter_input_updates.rs");
-    let popup_window = fs::read_to_string("src/app_impl/menu_syntax_trigger_popup_window.rs")
-        .expect("Failed to read src/app_impl/menu_syntax_trigger_popup_window.rs");
+    let popup_window = fs::read_to_string("src/app_impl/menu_syntax_trigger_picker_main_list.rs")
+        .expect("Failed to read src/app_impl/menu_syntax_trigger_picker_main_list.rs");
 
     assert!(
-        updates.contains("self.run_menu_syntax_trigger_popup_state_machine(&text, window, cx);")
+        updates.contains("self.run_menu_syntax_trigger_picker_state_machine(&text, window, cx);")
             && updates.contains("crate::menu_syntax::build_trigger_picker_snapshot(&text, &picker_ctx).is_some()")
             && updates.contains("self.invalidate_grouped_cache();"),
-        "programmatic setFilter must run the same menu-syntax popup state machine as real typing and invalidate stale grouped rows"
+        "programmatic setFilter must run the same menu-syntax picker state machine as real typing and invalidate stale grouped rows"
     );
     assert!(
-        popup_window.contains("pub(crate) fn run_menu_syntax_trigger_popup_state_machine"),
+        popup_window.contains("pub(crate) fn run_menu_syntax_trigger_picker_state_machine"),
         "the popup state-machine helper should be shared by keyboard input and setFilter"
     );
 }
@@ -432,8 +433,8 @@ fn power_syntax_tags_and_command_picker_are_first_class() {
         .expect("Failed to read src/menu_syntax/query.rs");
     let trigger_picker = fs::read_to_string("src/menu_syntax/trigger_picker.rs")
         .expect("Failed to read src/menu_syntax/trigger_picker.rs");
-    let popup = fs::read_to_string("src/app_impl/menu_syntax_trigger_popup.rs")
-        .expect("Failed to read src/app_impl/menu_syntax_trigger_popup.rs");
+    let popup = fs::read_to_string("src/app_impl/menu_syntax_trigger_picker.rs")
+        .expect("Failed to read src/app_impl/menu_syntax_trigger_picker.rs");
 
     assert!(
         query.contains("strip_prefix('#')")
@@ -446,7 +447,7 @@ fn power_syntax_tags_and_command_picker_are_first_class() {
             && trigger_picker.contains("insert: \"#\"")
             && trigger_picker.contains("insert: \"tag:\"")
             && trigger_picker.contains("keep_open: true"),
-        "`:` popup should teach both :#tag sugar and canonical tag: filters, keeping the popup open for a tag name"
+        "`:` picker should teach both :#tag sugar and canonical tag: filters, keeping the popup open for a tag name"
     );
     assert!(
         trigger_picker.contains("TriggerPickerMode::Command")
@@ -458,7 +459,7 @@ fn power_syntax_tags_and_command_picker_are_first_class() {
     assert!(
         trigger_picker.contains("bang_command_snapshot(input, ctx)")
             && popup.contains("trigger != ';' && trigger != '+' && trigger != ':'"),
-        "command trigger rows should be handled by the trigger picker while popup partial filtering stays scoped to text-composer triggers"
+        "command trigger rows should be handled by the trigger picker while picker partial filtering stays scoped to text-composer triggers"
     );
 }
 
@@ -486,7 +487,7 @@ fn registered_capture_targets_extend_parser_popup_and_input_highlight() {
     assert!(
         trigger_picker.contains("registered_capture_targets(ctx)")
             && trigger_picker.contains("capture_target_catalog(ctx, filter.is_some())"),
-        "the popup should show registered capture target rows and hidden aliases only when filtering"
+        "the picker should show registered capture target rows and hidden aliases only when filtering"
     );
     assert!(
         mode.contains("prefix_span_for_input_with_targets")
@@ -536,8 +537,8 @@ fn menu_syntax_hint_surface_is_not_grouped_results() {
 fn has_shortcut_accept_transition_cannot_reopen_popup() {
     let trigger_picker = fs::read_to_string("src/menu_syntax/trigger_picker.rs")
         .expect("Failed to read src/menu_syntax/trigger_picker.rs");
-    let dispatcher = fs::read_to_string("src/app_impl/menu_syntax_trigger_popup_window.rs")
-        .expect("Failed to read src/app_impl/menu_syntax_trigger_popup_window.rs");
+    let dispatcher = fs::read_to_string("src/app_impl/menu_syntax_trigger_picker_main_list.rs")
+        .expect("Failed to read src/app_impl/menu_syntax_trigger_picker_main_list.rs");
     let filter_change = fs::read_to_string("src/app_impl/filter_input_change.rs")
         .expect("Failed to read src/app_impl/filter_input_change.rs");
     let startup = fs::read_to_string("src/app_impl/startup.rs")
@@ -564,13 +565,13 @@ fn has_shortcut_accept_transition_cannot_reopen_popup() {
             && dispatcher.contains("self.set_menu_syntax_mode_from_filter(&text);")
             && dispatcher.contains("self.invalidate_grouped_cache();")
             && dispatcher
-                .contains("self.menu_syntax_trigger_popup_suppressed_filter = Some(text.clone());"),
+                .contains("self.menu_syntax_trigger_picker_suppressed_filter = Some(text.clone());"),
         "Accept must atomically replace input, advance parser/cache state, and suppress immediate reopen"
     );
     assert!(
         filter_change.contains("popup_suppressed_for_this_text")
-            && filter_change.contains("plan_trigger_popup_transition("),
-        "filter input changes must honor post-Accept suppression before re-running the popup state machine"
+            && filter_change.contains("plan_trigger_picker_transition("),
+        "filter input changes must honor post-Accept suppression before re-running the picker state machine"
     );
     assert!(
         startup.contains("InlinePickerKeyIntent::Accept")
@@ -583,14 +584,14 @@ fn has_shortcut_accept_transition_cannot_reopen_popup() {
     );
     for source in [&simulate_key, &app_run_setup, &runtime_stdin] {
         let accept = source
-            .find("SimulateKey: Enter - accept menu-syntax popup")
-            .expect("simulateKey Enter must log popup acceptance");
+            .find("SimulateKey: Enter - accept menu-syntax picker")
+            .expect("simulateKey Enter must log picker acceptance");
         let execute = source
             .find("SimulateKey: Enter - execute selected")
             .expect("simulateKey Enter must retain ordinary execution fallback");
         assert!(
             accept < execute,
-            "protocol simulateKey Enter must accept menu-syntax popup before ordinary launcher execution"
+            "protocol simulateKey Enter must accept menu-syntax picker before ordinary launcher execution"
         );
     }
 }
