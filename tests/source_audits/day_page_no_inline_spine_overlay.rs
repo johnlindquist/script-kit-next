@@ -153,3 +153,34 @@ fn day_page_context_round_trip_still_uses_main_menu() {
         );
     }
 }
+
+#[test]
+fn day_page_footer_cannot_open_generic_agent_chat_popup() {
+    let view = source("src/main_sections/day_page_view.rs");
+    let footer = function_body(&view, "pub(crate) fn day_page_footer_buttons(");
+
+    assert!(
+        footer.contains("FooterAction::Run") && footer.contains("FooterAction::Actions"),
+        "Day footer should keep Save/Actions affordances"
+    );
+    assert!(
+        !footer.contains("FooterAction::Ai"),
+        "Day footer must not expose the generic Agent footer button; stale clicks opened the Prompt Builder panel"
+    );
+
+    let ui_window = source("src/app_impl/ui_window.rs");
+    let dispatcher = function_body(&ui_window, "fn dispatch_main_window_footer_action(");
+    let ai_arm = dispatcher
+        .split("crate::footer_popup::FooterAction::Ai =>")
+        .nth(1)
+        .and_then(|tail| {
+            tail.split("crate::footer_popup::FooterAction::Stop =>")
+                .next()
+        })
+        .expect("FooterAction::Ai arm should exist before Stop arm");
+    assert!(
+        ai_arm.contains("AppView::DayPage { .. }")
+            && ai_arm.contains("main_window_footer_ai_ignored_day_page"),
+        "stale Day footer AI events must be ignored before the generic Agent Chat open path"
+    );
+}

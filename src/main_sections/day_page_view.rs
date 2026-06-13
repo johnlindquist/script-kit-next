@@ -699,7 +699,6 @@ pub(crate) fn day_page_footer_buttons(
         FooterButtonConfig::new(FooterAction::Actions, "⌘K", "Actions")
             .selected(actions_open)
             .enabled(enabled),
-        FooterButtonConfig::new(FooterAction::Ai, "⌘↵", "Agent").enabled(enabled),
     ]
 }
 

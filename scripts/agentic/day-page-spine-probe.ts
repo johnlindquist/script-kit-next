@@ -98,6 +98,19 @@ async function assertNoDayOverlay(driver: Driver, label: string) {
     promptType: state.promptType,
     inputValue: state.inputValue,
   });
+  const activeFooter = (state.activeFooter ?? {}) as Json;
+  const footerButtons = Array.isArray(activeFooter.buttons)
+    ? (activeFooter.buttons as Json[])
+    : [];
+  const agentButtons = footerButtons.filter((button) => {
+    const action = typeof button.action === "string" ? button.action.toLowerCase() : "";
+    const label = typeof button.label === "string" ? button.label.toLowerCase() : "";
+    return action === "ai" || label === "agent";
+  });
+  check(`no_day_agent_footer_button_${label}`, agentButtons.length === 0, {
+    activeFooter,
+    agentButtons,
+  });
 }
 
 const samples = [

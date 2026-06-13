@@ -299,6 +299,12 @@ impl ScriptListApp {
                     entity.update(cx, |chat, cx| {
                         chat.open_profile_trigger_picker_in_window(window, cx);
                     });
+                } else if matches!(self.current_view, AppView::DayPage { .. }) {
+                    tracing::info!(
+                        target: "script_kit::footer_popup",
+                        event = "main_window_footer_ai_ignored_day_page",
+                        "Ignored stale Day Page Agent footer action"
+                    );
                 } else if let AppView::QuickTerminalView { entity } = &self.current_view {
                     let entity = entity.clone();
                     self.open_agent_chat_with_quick_terminal_output(entity, cx);
