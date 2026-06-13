@@ -47,6 +47,24 @@ const driver = await Driver.launch({
 
 const sandboxHome = join(driver.sessionDir, "home");
 const daysDir = join(sandboxHome, ".scriptkit", "brain", "days");
+const realHome = process.env.HOME ?? "";
+
+// The handoff action submits into a live Agent Chat thread. Seed only the
+// small auth files the sandbox needs; never copy all of ~/.codex.
+for (const rel of [
+  ".codex/auth.json",
+  ".pi/agent/auth.json",
+  ".pi/agent/settings.json",
+]) {
+  const src = `${realHome}/${rel}`;
+  const dest = `${sandboxHome}/${rel}`;
+  try {
+    await Bun.$`mkdir -p ${dest.slice(0, dest.lastIndexOf("/"))} && cp ${src} ${dest}`
+      .quiet();
+  } catch {
+    // Missing auth file is reported by the handoff checks if Agent Chat opens in setup mode.
+  }
+}
 
 async function mainElements(limit = 240): Promise<Json[]> {
   const elements = (await driver.getElements(
@@ -139,7 +157,19 @@ try {
       (v) => typeof v === "string" && (v.includes("Save Today") || v.includes("day_page:save")),
     ),
   );
-  check("today_actions_rows_visible", hasOpenPastDay, { dialogIds, hasSaveToday });
+  const hasSendLine = dialogFlat.some((el) =>
+    [el.semanticId, el.id, el.text, el.value].some(
+      (v) =>
+        typeof v === "string" &&
+        (v.includes("Send Line to Agent Chat") || v.includes("day_page:handoff_line")),
+    ),
+  );
+  check("today_actions_rows_visible", hasOpenPastDay && hasSaveToday && hasSendLine, {
+    dialogIds,
+    hasOpenPastDay,
+    hasSaveToday,
+    hasSendLine,
+  });
 
   await driver.simulateKey("escape");
   await Bun.sleep(500);
@@ -230,6 +260,101 @@ try {
     refreshedEditor,
     externalText,
   });
+
+  // --- Execute Send Line to Agent Chat from the Today Cmd+K menu ---
+  const lineOne = "context line one stays in the day page";
+  const lineTwo = "send only this today action line to agent chat";
+  const fullNote = `${lineOne}\n${lineTwo}`;
+  await setDayPageInput(fullNote, "handoff_lines");
+  await Bun.sleep(300);
+
+  let afterHandoffState: Json = {};
+  let handoffLog = "";
+  const handoffAttempts: Json[] = [];
+  for (let attempt = 0; attempt < 2; attempt++) {
+    let pre = (await driver.getState({ timeoutMs: 5000 })) as Json;
+    if (pre.promptType !== "dayPage") {
+      state = await openDayPage(driver, `${runId}-handoff-retry-${attempt}`);
+      pre = state as Json;
+    }
+    if (pre.promptType !== "dayPage") {
+      handoffAttempts.push({ attempt, error: "could not return to dayPage", pre });
+      break;
+    }
+    await setDayPageInput(fullNote, `handoff_retry_${attempt}`);
+    await Bun.sleep(300);
+
+    await driver.simulateKey("k", ["cmd"]);
+    await Bun.sleep(900);
+    for (const ch of "send line") {
+      await driver.simulateKey(ch === " " ? "space" : ch);
+      await Bun.sleep(40);
+    }
+    await Bun.sleep(400);
+    await driver.simulateKey("enter");
+    await Bun.sleep(2500);
+
+    afterHandoffState = (await driver.getState({ timeoutMs: 5000 })) as Json;
+    handoffLog = await Bun.file(`${driver.sessionDir}/app.log`).text();
+    const submitted = handoffLog.includes(
+      "event=agent_chat_reused_entry_intent_with_host_context_submitted source=day_page_line_handoff",
+    );
+    handoffAttempts.push({
+      attempt,
+      promptType: afterHandoffState.promptType,
+      submitted,
+    });
+    if (afterHandoffState.promptType === "agentChatChat" && submitted) {
+      break;
+    }
+    await driver.simulateKey("escape");
+    await Bun.sleep(800);
+  }
+
+  check(
+    "send_line_action_opens_agent_chat",
+    afterHandoffState.promptType === "agentChatChat",
+    {
+      promptType: afterHandoffState.promptType,
+      attempts: handoffAttempts,
+    },
+  );
+
+  const submitLine = handoffLog
+    .split("\n")
+    .find((line) =>
+      line.includes(
+        "event=agent_chat_reused_entry_intent_with_host_context_submitted source=day_page_line_handoff",
+      ),
+    );
+  const intentLen = Number(/intent_len=(\d+)/.exec(submitLine ?? "")?.[1] ?? -1);
+  check("send_line_action_carries_current_line_only", intentLen === lineTwo.length, {
+    intentLen,
+    lineTwoLen: lineTwo.length,
+    lineOneLen: lineOne.length,
+    fullNoteLen: fullNote.length,
+    submitLine: submitLine ?? null,
+  });
+  check(
+    "send_line_action_does_not_include_whole_day",
+    intentLen > 0 && intentLen < fullNote.length,
+    {
+      intentLen,
+      fullNoteLen: fullNote.length,
+    },
+  );
+
+  const deprecatedInlineDayPopupPresent = await driver
+    .getElements({ target: { type: "main" }, limit: 220 }, { timeoutMs: 5000 })
+    .then((elements) => JSON.stringify(elements).includes("context-picker"))
+    .catch(() => false);
+  check("deprecated_inline_context_popup_absent", !deprecatedInlineDayPopupPresent, {
+    deprecatedInlineDayPopupPresent,
+  });
+
+  const unknownWarningCount = (handoffLog.match(/unknown_warning_count=[1-9][0-9]*/g) ?? [])
+    .length;
+  check("unknown_warning_count_zero", unknownWarningCount === 0, { unknownWarningCount });
 
   const pass = failures.length === 0;
   console.log(
