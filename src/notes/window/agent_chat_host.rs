@@ -396,11 +396,7 @@ impl NotesApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        use crate::actions::{self, ActionsDialog, WindowPosition};
-
-        let actions_open_before = actions::is_actions_window_open();
-
-        if actions_open_before {
+        if crate::actions::is_actions_window_open() {
             self.close_notes_agent_chat_actions_via_host(
                 "toggle_existing_window",
                 Some(window),
@@ -408,6 +404,56 @@ impl NotesApp {
             );
             return;
         }
+
+        self.defer_open_agent_chat_actions(window, cx);
+    }
+
+    fn defer_open_agent_chat_actions(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let expected_generation = self.notes_agent_chat_generation;
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "notes_agent_chat_actions_open_deferred",
+            expected_generation,
+        );
+
+        cx.spawn_in(window, async move |this, cx| {
+            cx.background_executor()
+                .timer(std::time::Duration::from_millis(1))
+                .await;
+
+            let _ = cx.update(|window, app_cx| {
+                let Some(entity) = this.upgrade() else {
+                    return;
+                };
+                entity.update(app_cx, |app: &mut NotesApp, cx| {
+                    if app.surface_mode != NotesSurfaceMode::AgentChat {
+                        tracing::warn!(
+                            target: "script_kit::tab_ai",
+                            event = "notes_agent_chat_actions_open_skipped",
+                            reason = "not_agent_chat_surface",
+                            expected_generation,
+                        );
+                        return;
+                    }
+                    if app.notes_agent_chat_generation != expected_generation {
+                        tracing::warn!(
+                            target: "script_kit::tab_ai",
+                            event = "notes_agent_chat_actions_open_skipped",
+                            reason = "generation_mismatch",
+                            expected_generation,
+                            actual_generation = app.notes_agent_chat_generation,
+                        );
+                        return;
+                    }
+                    app.open_agent_chat_actions_now(window, cx);
+                });
+            });
+        })
+        .detach();
+    }
+
+    fn open_agent_chat_actions_now(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        use crate::actions::{self, ActionsDialog, WindowPosition};
 
         let Some(ref agent_chat_view) = self.embedded_agent_chat else {
             return;
@@ -897,6 +943,56 @@ fn dispatch_notes_agent_chat_action(
             };
             if let Some(md) = maybe_markdown {
                 cx.write_to_clipboard(gpui::ClipboardItem::new_string(md));
+            }
+        }
+        "agent_chat_save_as_note" => {
+            let (maybe_markdown, thread_source) = {
+                let view = agent_chat_entity.read(cx);
+                let maybe_markdown = view.thread().and_then(|thread| {
+                    crate::ai::agent_chat::ui::export::build_agent_chat_conversation_markdown_from_thread(
+                        thread.read(cx),
+                    )
+                });
+                let thread_source = view.thread().map(|thread| {
+                    crate::notes::agent_chat_thread_source(thread.read(cx).ui_thread_id())
+                });
+                (maybe_markdown, thread_source)
+            };
+            if let Some(markdown) = maybe_markdown {
+                let markdown_len = markdown.len();
+                let source_for_log = thread_source.clone();
+                match crate::notes::save_note_with_content_and_source(cx, markdown, thread_source) {
+                    Ok(()) => {
+                        entity.update(cx, |app: &mut NotesApp, cx| {
+                            app.close_embedded_agent_chat_via_host(
+                                "agent_chat_save_as_note",
+                                Some(window),
+                                cx,
+                            );
+                        });
+                        tracing::info!(
+                            target: "script_kit::tab_ai",
+                            event = "notes_agent_chat_save_as_note",
+                            saved = true,
+                            markdown_len,
+                            source = ?source_for_log,
+                            closed_host = true,
+                        );
+                    }
+                    Err(error) => {
+                        tracing::warn!(
+                            target: "script_kit::tab_ai",
+                            event = "notes_agent_chat_save_as_note_failed",
+                            error = %error,
+                        );
+                    }
+                }
+            } else {
+                tracing::warn!(
+                    target: "script_kit::tab_ai",
+                    event = "notes_agent_chat_save_as_note_blocked",
+                    reason = "empty_transcript",
+                );
             }
         }
         "agent_chat_retry_last" => {

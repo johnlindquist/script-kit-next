@@ -246,6 +246,9 @@ fn brain_frontmatter_from_note(note: &Note, preserved_source: Option<String>) ->
 }
 
 fn source_from_note_content(content: &str) -> Option<String> {
+    if let Some(source) = metadata::parse_frontmatter_source(content) {
+        return Some(source);
+    }
     if let Ok(substrate) = notes_substrate() {
         if let Ok((frontmatter, _)) = substrate.parse_document(content) {
             return frontmatter.source;
@@ -2755,6 +2758,38 @@ mod tests {
         );
 
         delete_note_permanently(id).expect("cleanup");
+    }
+
+    #[test]
+    fn test_save_note_preserves_source_frontmatter_in_canonical_file() {
+        let _guard = notes_db_test_guard();
+        init_notes_db().expect("notes db should initialize before source frontmatter test");
+        let token = unique_test_token("canonical_source");
+        let source = format!("scriptkit://agent-chat/{token}");
+        let note = Note::with_content(format!(
+            "---\nsource: {source}\n---\n# Agent Chat Conversation\nBody with {token}"
+        ));
+        let id = note.id;
+
+        save_note(&note).expect("failed to save note with source frontmatter");
+
+        let db = get_db().expect("db");
+        let conn = db.lock().expect("lock");
+        let slug = lookup_note_slug(&conn, id)
+            .expect("slug lookup")
+            .expect("slug should exist after save");
+        drop(conn);
+
+        let substrate = notes_substrate().expect("substrate");
+        let path = substrate.paths().note_file(&slug);
+        let raw = fs::read_to_string(&path).expect("read canonical note file");
+
+        delete_note_permanently(id).expect("cleanup");
+
+        assert!(
+            raw.contains(&format!("source: {source}")),
+            "canonical file should preserve source provenance in frontmatter: {raw}"
+        );
     }
 
     #[test]

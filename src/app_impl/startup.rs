@@ -2723,12 +2723,14 @@ impl ScriptListApp {
                 let is_ai = crate::ai::is_ai_window(window);
                 let is_detached_agent_chat = crate::ai::agent_chat::ui::chat_window::is_chat_window(window);
                 let is_actions = crate::actions::is_actions_window(window);
+                let is_secondary_surface_window = is_notes || is_ai || is_detached_agent_chat;
+                let actions_open_for_main = crate::actions::is_actions_window_open_for_main();
 
                 // A detached actions popup hosted by a secondary window (Notes,
                 // detached Agent Chat) owns its keys via ActionsWindow::on_key_down.
                 // Routing them through the main app's dialog router would land on
                 // the wrong (or absent) dialog entity and swallow every keystroke.
-                if is_actions && !crate::actions::is_actions_window_open_for_main() {
+                if is_actions && !actions_open_for_main {
                     return;
                 }
 
@@ -2742,6 +2744,23 @@ impl ScriptListApp {
                 let is_actions_close_key = crate::ui_foundation::is_key_escape(key)
                     || (has_cmd && key.eq_ignore_ascii_case("k") && !has_shift);
 
+                // The global interceptor sees every app window. Secondary parent
+                // surfaces own their own Cmd+K/Escape routing; do not lease the
+                // main ScriptListApp before their host callbacks can handle it.
+                if !is_actions && is_secondary_surface_window {
+                    tracing::debug!(
+                        target: "script_kit::keyboard",
+                        event = "actions_interceptor_skipped_secondary_window",
+                        is_notes,
+                        is_ai,
+                        is_detached_agent_chat,
+                        is_actions,
+                        key = %key,
+                        is_actions_close_key,
+                    );
+                    return;
+                }
+
                 // Agent Chat can open the shared actions dialog from its own focused
                 // composer even when the launcher visibility flag is false.
                 // Close keys still need to reach the shared dialog before the
@@ -2752,7 +2771,7 @@ impl ScriptListApp {
                         app.update(cx, |this, cx| {
                             if !is_actions
                                 && !this.show_actions_popup
-                                && !crate::actions::is_actions_window_open_for_main()
+                                && !actions_open_for_main
                             {
                                 return;
                             }
@@ -2864,21 +2883,6 @@ impl ScriptListApp {
                         is_actions,
                     );
                     return;
-                }
-
-                // CRITICAL: Skip processing if this keystroke is from a secondary window.
-                // intercept_keystrokes is GLOBAL and fires for ALL windows in the app.
-                // We only want to handle keystrokes for the main window.
-                if is_notes || is_ai || is_detached_agent_chat {
-                    tracing::debug!(
-                        target: "script_kit::keyboard",
-                        event = "actions_interceptor_skipped_secondary_window",
-                        is_notes,
-                        is_ai,
-                        is_detached_agent_chat,
-                        is_actions,
-                    );
-                    return; // Let the secondary window handle its own keystrokes
                 }
 
                 if confirm::consume_main_window_key_while_confirm_open(

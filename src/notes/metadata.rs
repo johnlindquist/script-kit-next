@@ -131,6 +131,31 @@ pub(crate) fn merge_frontmatter(content: &str, patch: MetadataFrontmatterPatch) 
     lines.join("\n")
 }
 
+pub(crate) fn parse_frontmatter_source(content: &str) -> Option<String> {
+    let frontmatter = parse_frontmatter(content)?;
+    if let Ok(serde_yaml::Value::Mapping(map)) =
+        serde_yaml::from_str::<serde_yaml::Value>(&frontmatter)
+    {
+        if let Some(value) = map.get(serde_yaml::Value::String("source".to_string())) {
+            if let Some(source) = value
+                .as_str()
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+            {
+                return Some(source.to_string());
+            }
+        }
+    }
+
+    frontmatter.lines().find_map(|line| {
+        let (line_key, value) = line.split_once(':')?;
+        (line_key.trim() == "source")
+            .then(|| value.trim())
+            .filter(|value| !value.is_empty())
+            .map(str::to_string)
+    })
+}
+
 pub(crate) fn normalize_tag(tag: &str) -> Option<String> {
     let trimmed = tag.trim().trim_start_matches('#').trim();
     if trimmed.is_empty() || trimmed.chars().all(|ch| ch.is_ascii_digit()) {
@@ -511,6 +536,14 @@ mod tests {
         assert!(merged.contains("source: scriptkit://agent-chat/thread-456"));
         assert!(!merged.contains("old-value"));
         assert!(merged.contains("owner: John"));
+    }
+
+    #[test]
+    fn parse_frontmatter_source_reads_source_without_brain_fields() {
+        assert_eq!(
+            parse_frontmatter_source("---\nsource: scriptkit://agent-chat/thread-789\n---\n# Note"),
+            Some("scriptkit://agent-chat/thread-789".to_string())
+        );
     }
 
     #[test]

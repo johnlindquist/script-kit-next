@@ -1504,7 +1504,7 @@ pub(crate) enum AgentChatActionsDialogHost {
     Shared,
     /// Notes-hosted Agent Chat surface — subset that works inside the Notes window.
     /// `agent_chat_close` returns to the Notes editor rather than closing a window.
-    /// `agent_chat_save_as_note` is excluded because the user is already in Notes.
+    /// `agent_chat_save_as_note` saves the embedded transcript as a new canonical note.
     Notes,
     /// Detached Agent Chat chat window — only actions that work without the main panel.
     Detached,
@@ -1540,9 +1540,9 @@ fn agent_chat_host_action_plan(
             }
         }
         AgentChatActionsDialogHost::Notes => {
-            // Notes-hosted: same as Detached but without `agent_chat_save_as_note`
-            // (already in Notes), keeping `agent_chat_close` (returns to editor),
-            // and routing `agent_chat_show_history` through the shared ActionsDialog.
+            // Notes-hosted: same as Detached, keeping `agent_chat_close`
+            // (returns to editor), and routing `agent_chat_show_history`
+            // through the shared ActionsDialog.
             if matches!(
                 action_id,
                 "agent_chat:change_profile"
@@ -1550,6 +1550,7 @@ fn agent_chat_host_action_plan(
                     | "agent_chat_copy_last_response"
                     | "agent_chat_retry_last"
                     | "agent_chat_export_markdown"
+                    | "agent_chat_save_as_note"
                     | "agent_chat_show_history"
                     | AGENT_CHAT_SHOW_RECEIPT_HISTORY_ACTION_ID
                     | "agent_chat_scroll_to_top"
@@ -2392,7 +2393,7 @@ mod tests {
                 AgentChatActionsDialogHost::Notes,
                 "agent_chat_save_as_note"
             ),
-            AgentChatHostActionPlan::Exclude
+            AgentChatHostActionPlan::IncludeWithShortcut
         );
         assert_eq!(
             agent_chat_host_action_plan(
