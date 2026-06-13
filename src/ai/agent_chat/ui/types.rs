@@ -44,11 +44,45 @@ pub(crate) fn build_prompt_blocks(
 
 // ── Extracted Agent Chat view types ────────────────────────────────────────────
 
+/// Agent Chat's composer popup supports command/profile triggers only.
+///
+/// `@` context is owned by the shared Spine/main-menu path, so it is
+/// intentionally not representable as an Agent Chat popup session.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum AgentChatComposerPickerTrigger {
+    Slash,
+    Profile,
+}
+
+impl AgentChatComposerPickerTrigger {
+    pub(crate) fn from_context_selector(trigger: ContextSelectorTrigger) -> Option<Self> {
+        match trigger {
+            ContextSelectorTrigger::Slash => Some(Self::Slash),
+            ContextSelectorTrigger::Profile => Some(Self::Profile),
+            ContextSelectorTrigger::Mention => None,
+        }
+    }
+
+    pub(crate) fn as_context_selector(self) -> ContextSelectorTrigger {
+        match self {
+            Self::Slash => ContextSelectorTrigger::Slash,
+            Self::Profile => ContextSelectorTrigger::Profile,
+        }
+    }
+
+    pub(crate) fn label(self) -> &'static str {
+        match self {
+            Self::Slash => "/",
+            Self::Profile => crate::ai::context_selector::types::PROFILE_TRIGGER_STR,
+        }
+    }
+}
+
 /// Active slash/profile composer picker state for Agent Chat.
 #[derive(Debug, Clone)]
-pub(crate) struct AgentChatMentionSession {
+pub(crate) struct AgentChatComposerPickerSession {
     /// Which trigger character opened this session (`/` or `|`).
-    pub(crate) trigger: ContextSelectorTrigger,
+    pub(crate) trigger: AgentChatComposerPickerTrigger,
     /// Character range of the trigger+query in the input text.
     pub(crate) trigger_range: std::ops::Range<usize>,
     /// Query text typed after the trigger.
@@ -62,8 +96,8 @@ pub(crate) struct AgentChatMentionSession {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct AgentChatDismissedMentionTrigger {
-    pub(crate) trigger: ContextSelectorTrigger,
+pub(crate) struct AgentChatDismissedComposerPickerTrigger {
+    pub(crate) trigger: AgentChatComposerPickerTrigger,
     pub(crate) trigger_range: std::ops::Range<usize>,
     pub(crate) query: String,
     pub(crate) cursor: usize,

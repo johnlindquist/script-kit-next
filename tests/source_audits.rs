@@ -221,6 +221,9 @@ mod context_selector_portal_builtin_parity_contract;
 #[path = "source_audits/removed_inline_context_selector.rs"]
 mod removed_inline_context_selector;
 
+#[path = "source_audits/day_page_no_inline_spine_overlay.rs"]
+mod day_page_no_inline_spine_overlay;
+
 #[path = "source_audits/dev_style_tool_knob_catalog.rs"]
 mod dev_style_tool_knob_catalog;
 

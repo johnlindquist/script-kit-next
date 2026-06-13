@@ -422,7 +422,6 @@ impl Render for DayPageView {
         let editor_input = self.notes_editor.read(cx).render_input(cx);
         let viewing_fragment = self.session.is_viewing_fragment();
         let theme = app_state.theme.clone();
-        let spine_panel = self.render_day_page_spine_panel(cx);
         let day_switcher_panel = self.render_day_page_day_switcher_panel(cx);
 
         let local_today = Utc::now()
@@ -508,7 +507,6 @@ impl Render for DayPageView {
                     .flex_1()
                     .min_h(px(0.))
                     .child(editor_input)
-                    .when_some(spine_panel, |parent, panel| parent.child(panel))
                     .when_some(day_switcher_panel, |parent, panel| parent.child(panel)),
             );
 
@@ -618,10 +616,6 @@ impl DayPageView {
         }
 
         if exact_plain && crate::ui_foundation::is_key_escape(&key) {
-            if self.day_page_spine_model(cx).is_some() {
-                self.reset_day_page_spine_navigation(cx);
-                return;
-            }
             if self.session.is_viewing_fragment() {
                 self.return_to_day_page(window, cx);
                 return;
@@ -644,24 +638,6 @@ impl DayPageView {
                 });
             }
             return;
-        }
-
-        if exact_plain && matches!(key, "down" | "arrowdown") {
-            if self.move_day_page_spine_selection(1, cx) {
-                return;
-            }
-        }
-
-        if exact_plain && matches!(key, "up" | "arrowup") {
-            if self.move_day_page_spine_selection(-1, cx) {
-                return;
-            }
-        }
-
-        if exact_plain && key == "enter" {
-            if self.accept_day_page_spine_selection(window, cx) {
-                return;
-            }
         }
 
         if exact_cmd && key == "enter" {

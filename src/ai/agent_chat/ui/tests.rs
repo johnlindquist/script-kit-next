@@ -862,7 +862,7 @@ fn agent_chat_show_history_action_opens_main_history_list() {
 #[test]
 fn agent_chat_picker_refresh_and_navigation_sync_popup_window() {
     assert!(
-        AGENT_CHAT_VIEW_SOURCE.contains("pub(super) fn refresh_mention_session")
+        AGENT_CHAT_VIEW_SOURCE.contains("pub(super) fn refresh_composer_picker_session")
             && AGENT_CHAT_VIEW_SOURCE.contains("fn cache_composer_parent_window")
             && AGENT_CHAT_VIEW_SOURCE
                 .contains("self.refresh_composer_picker_state_after_parent_change(cx);"),
@@ -870,7 +870,7 @@ fn agent_chat_picker_refresh_and_navigation_sync_popup_window() {
     );
 
     let keydown_block_start = AGENT_CHAT_VIEW_SOURCE
-        .find("if self.mention_session.is_some() {")
+        .find("if self.composer_picker_session.is_some() {")
         .expect("mention-session keydown block should exist");
     let keydown_block_end = AGENT_CHAT_VIEW_SOURCE[keydown_block_start..]
         .find("// Shift+Enter inserts a newline.")
@@ -887,22 +887,22 @@ fn agent_chat_picker_refresh_and_navigation_sync_popup_window() {
 }
 
 #[test]
-fn agent_chat_picker_parent_mouse_down_dismisses_slash_and_mention_session() {
+fn agent_chat_picker_parent_mouse_down_dismisses_slash_and_composer_picker_session() {
     let render_body = agent_chat_source_between(
         AGENT_CHAT_VIEW_SOURCE,
         "impl Render for AgentChatView",
         "#[cfg(test)]",
     );
     assert!(
-        AGENT_CHAT_VIEW_SOURCE.contains("pub(crate) fn dismiss_mention_picker")
-            && AGENT_CHAT_VIEW_SOURCE.contains("self.mention_session.take()")
+        AGENT_CHAT_VIEW_SOURCE.contains("pub(crate) fn dismiss_composer_picker")
+            && AGENT_CHAT_VIEW_SOURCE.contains("self.composer_picker_session.take()")
             && AGENT_CHAT_VIEW_SOURCE
                 .contains("self.refresh_composer_picker_state_after_parent_change(cx);"),
         "AgentChatView must expose a shared picker dismiss helper for slash/profile composer sessions"
     );
     assert!(
         render_body.contains(".on_any_mouse_down(cx.listener(|this, _event, _window, cx| {")
-            && render_body.contains("this.dismiss_mention_picker(cx);"),
+            && render_body.contains("this.dismiss_composer_picker(cx);"),
         "Agent Chat chat root mouse-down should dismiss the shared slash/profile composer picker when clicking outside"
     );
 }
@@ -911,7 +911,7 @@ fn agent_chat_picker_parent_mouse_down_dismisses_slash_and_mention_session() {
 fn agent_chat_picker_outside_dismiss_suppresses_unchanged_trigger_reopen() {
     let dismiss = agent_chat_source_between(
         AGENT_CHAT_VIEW_SOURCE,
-        "pub(crate) fn dismiss_mention_picker",
+        "pub(crate) fn dismiss_composer_picker",
         "/// Access the live thread entity",
     );
     assert!(
@@ -926,7 +926,7 @@ fn agent_chat_picker_outside_dismiss_suppresses_unchanged_trigger_reopen() {
 
     let refresh = agent_chat_source_between(
         AGENT_CHAT_VIEW_SOURCE,
-        "pub(super) fn refresh_mention_session",
+        "pub(super) fn refresh_composer_picker_session",
         "/// Log the visible window range",
     );
     assert!(
@@ -934,12 +934,12 @@ fn agent_chat_picker_outside_dismiss_suppresses_unchanged_trigger_reopen() {
             && refresh.contains("self.dismissed_mention_trigger.as_ref() == Some(&active_trigger)")
             && refresh.contains("active_dismissed_trigger = Some(active_trigger);")
             && refresh.contains("active_trigger: active_dismissed_trigger"),
-        "refresh_mention_session must keep the dismissed trigger closed until the input/cursor context changes"
+        "refresh_composer_picker_session must keep the dismissed trigger closed until the input/cursor context changes"
     );
 }
 
 #[test]
-fn agent_chat_close_paths_close_slash_and_mention_session() {
+fn agent_chat_close_paths_close_slash_and_composer_picker_session() {
     let detached_cmd_w_block = agent_chat_source_between(
         AGENT_CHAT_VIEW_SOURCE,
         "event = \"detached_agent_chat_cmd_w_close_requested\"",
@@ -1159,7 +1159,7 @@ fn agent_chat_view_exposes_escape_popup_dismiss_helper() {
         AGENT_CHAT_VIEW_SOURCE.contains("pub(crate) fn dismiss_escape_popup")
             && AGENT_CHAT_VIEW_SOURCE.contains("pub(crate) fn has_escape_dismissible_popup")
             && AGENT_CHAT_VIEW_SOURCE.contains("self.history_menu.is_some()")
-            && AGENT_CHAT_VIEW_SOURCE.contains("self.mention_session = None;")
+            && AGENT_CHAT_VIEW_SOURCE.contains("self.composer_picker_session = None;")
             && AGENT_CHAT_VIEW_SOURCE
                 .contains("self.refresh_composer_picker_state_after_parent_change(cx);")
             && AGENT_CHAT_VIEW_SOURCE.contains("if self.attach_menu_open {")
@@ -1479,19 +1479,19 @@ fn call_sites_pass_real_permission_active() {
 // Composer picker windowing — selected item always visible
 // =========================================================================
 
-/// Helper: call the private `mention_visible_range_for` and assert the
+/// Helper: call the private `composer_picker_visible_range_for` and assert the
 /// selected index falls within the returned range.
 fn assert_selected_visible(selected: usize, item_count: usize) {
-    let range = super::view::AgentChatView::mention_visible_range_for(selected, item_count);
+    let range = super::view::AgentChatView::composer_picker_visible_range_for(selected, item_count);
     assert!(
         range.contains(&selected),
         "selected_index={selected} must be inside visible range {range:?} (item_count={item_count})",
     );
     assert!(
-        range.len() <= super::view::AgentChatView::MENTION_PICKER_MAX_VISIBLE,
+        range.len() <= super::view::AgentChatView::COMPOSER_PICKER_MAX_VISIBLE,
         "visible range len {} exceeds max {}",
         range.len(),
-        super::view::AgentChatView::MENTION_PICKER_MAX_VISIBLE,
+        super::view::AgentChatView::COMPOSER_PICKER_MAX_VISIBLE,
     );
 }
 
@@ -1499,7 +1499,7 @@ fn assert_selected_visible(selected: usize, item_count: usize) {
 fn mention_picker_windowing_small_list() {
     // Fewer items than max_visible → range is 0..item_count
     for selected in 0..5 {
-        let range = super::view::AgentChatView::mention_visible_range_for(selected, 5);
+        let range = super::view::AgentChatView::composer_picker_visible_range_for(selected, 5);
         assert_eq!(range, 0..5);
     }
 }

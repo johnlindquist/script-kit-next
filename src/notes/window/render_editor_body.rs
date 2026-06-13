@@ -503,8 +503,6 @@ impl NotesApp {
             }
             crate::spine::SpineListAction::OpenFileSearchPortal { .. }
             | crate::spine::SpineListAction::OpenModeExit { .. }
-            | crate::spine::SpineListAction::OpenConversation { .. }
-            | crate::spine::SpineListAction::SubmitPromptPlan
             | crate::spine::SpineListAction::Noop => false,
         }
     }

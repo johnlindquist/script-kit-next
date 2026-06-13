@@ -6184,7 +6184,7 @@ impl ScriptListApp {
                                             }
                                             // Route through `AgentChatView::set_input` so mention
                                             // picker sessions refresh (thread-only updates
-                                            // leave `mention_session` stale for selectByValue).
+                                            // leave `composer_picker_session` stale for selectByValue).
                                             view.set_input(text, cx);
                                             tracing::info!(
                                                 target: "script_kit::transaction",
@@ -6233,7 +6233,7 @@ impl ScriptListApp {
                                     // Returns Option<String>: Some(matched) or None if not found.
                                     let selected = this.update(cx, |_this, cx| {
                                         agent_chat_entity.update(cx, |view, _cx| -> Option<String> {
-                                            let session = view.mention_session.as_ref()?;
+                                            let session = view.composer_picker_session.as_ref()?;
                                             let idx = session.items.iter().position(|item| {
                                                 item.label.as_ref() == value || item.id.as_ref() == value
                                             })?;
@@ -6247,7 +6247,7 @@ impl ScriptListApp {
                                                 let agent_chat_entity2 = agent_chat_entity.clone();
                                                 let _ = this.update(cx, |_this, cx| {
                                                     agent_chat_entity2.update(cx, |view, cx| {
-                                                        view.accept_mention_selection(cx);
+                                                        view.accept_composer_picker_selection(cx);
                                                     });
                                                 });
                                             }
@@ -6293,7 +6293,7 @@ impl ScriptListApp {
                                     let agent_chat_entity = agent_chat_entity.clone();
                                     let selected = this.update(cx, |_this, cx| {
                                         agent_chat_entity.update(cx, |view, _cx| -> Option<String> {
-                                            let session = view.mention_session.as_ref()?;
+                                            let session = view.composer_picker_session.as_ref()?;
                                             let idx = session.items.iter().position(|item| {
                                                 item.label.as_ref() == semantic_id || item.id.as_ref() == semantic_id
                                             })?;
@@ -6307,7 +6307,7 @@ impl ScriptListApp {
                                                 let agent_chat_entity2 = agent_chat_entity.clone();
                                                 let _ = this.update(cx, |_this, cx| {
                                                     agent_chat_entity2.update(cx, |view, cx| {
-                                                        view.accept_mention_selection(cx);
+                                                        view.accept_composer_picker_selection(cx);
                                                     });
                                                 });
                                             }

@@ -56,7 +56,8 @@ fn agent_chat_setup_mode_blocks_script_list_picker_handoff_before_live_thread() 
         "setup-mode Agent Chat input mutation must not call live_thread"
     );
     assert!(
-        AGENT_CHAT_VIEW_SOURCE.contains("event = \"agent_chat_mention_picker_cleared_setup_mode\""),
+        AGENT_CHAT_VIEW_SOURCE
+            .contains("event = \"agent_chat_composer_picker_cleared_setup_mode\""),
         "setup-mode mention refresh must clear picker state without reading live_thread"
     );
     assert!(

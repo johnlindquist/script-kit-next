@@ -58,12 +58,6 @@ pub enum SpineListRowKind {
     CaptureTarget {
         target: SharedString,
     },
-    RecentPrompt {
-        prompt_id: SharedString,
-    },
-    Conversation {
-        conversation_id: SharedString,
-    },
     Hint,
     Empty,
 }
@@ -78,8 +72,6 @@ impl SpineListRowKind {
             Self::Profile { .. } => "Profile",
             Self::Style { .. } => "Style",
             Self::CaptureTarget { .. } => "Capture",
-            Self::RecentPrompt { .. } => "Recent Prompt",
-            Self::Conversation { .. } => "Conversation",
             Self::Hint => "Hint",
             Self::Empty => "Empty",
         }
@@ -94,8 +86,6 @@ impl SpineListRowKind {
             Self::Profile { .. } => ("Profile", "user-round"),
             Self::Style { .. } => ("Style", "sparkles"),
             Self::CaptureTarget { .. } => ("Capture", "inbox"),
-            Self::RecentPrompt { .. } => ("Recent Prompt", "history"),
-            Self::Conversation { .. } => ("Conversation", "message-circle"),
             Self::Hint => ("Hint", "info"),
             Self::Empty => ("Empty", "circle"),
         }
@@ -131,13 +121,6 @@ pub enum SpineListAction {
         segment_byte_range: Range<usize>,
         query: SharedString,
     },
-    OpenConversation {
-        conversation_id: SharedString,
-    },
-    /// Submit the current spine prompt plan to Agent Chat — the same path
-    /// as Cmd+Enter. Used by the prompt-builder tail row so "Send" really
-    /// sends instead of being a decorative Noop.
-    SubmitPromptPlan,
     Noop,
 }
 
@@ -150,8 +133,6 @@ impl SpineListRow {
                 SpineListAction::Noop => "No Action",
                 SpineListAction::OpenModeExit { .. } => "Open",
                 SpineListAction::OpenFileSearchPortal { .. } => "Browse",
-                SpineListAction::OpenConversation { .. } => "Resume",
-                SpineListAction::SubmitPromptPlan => "Send",
                 // One verb per Enter mechanic: rows that insert text and
                 // keep you typing say "Refine"; rows that resolve into a
                 // prompt segment say "Attach".
@@ -177,16 +158,6 @@ pub fn parse_has_prompt_builder_segments(parse: &SpineParse) -> bool {
         .segments
         .iter()
         .any(|segment| is_prompt_builder_segment_kind(&segment.kind))
-}
-
-pub fn projection_is_prompt_builder_tail(
-    parse: &SpineParse,
-    projection: &SpineCursorProjection,
-) -> bool {
-    matches!(projection.active_segment_kind, SpineSegmentKind::FreeText)
-        && projection.is_tail
-        && projection.has_prompt_segments
-        && parse_has_prompt_builder_segments(parse)
 }
 
 pub(crate) fn ss(value: impl Into<SharedString>) -> SharedString {
@@ -289,7 +260,7 @@ pub(crate) fn build_spine_list_sections_full_with_resolved_tokens(
     parse: &SpineParse,
     projection: &SpineCursorProjection,
     live_preview: Option<&super::live_preview::SpineLivePreview>,
-    is_resolved_token: &dyn Fn(&str) -> bool,
+    _is_resolved_token: &dyn Fn(&str) -> bool,
 ) -> Vec<SpineListSection> {
     let segment = active_segment(parse, projection);
     let raw = segment.map(|segment| segment.raw.as_str()).unwrap_or("");
@@ -354,17 +325,6 @@ pub(crate) fn build_spine_list_sections_full_with_resolved_tokens(
                 projection.active_segment_index,
                 range,
             )]
-        }
-        SpineSegmentKind::FreeText if projection_is_prompt_builder_tail(parse, projection) => {
-            let mut sections = vec![build_prompt_builder_tail_section(parse, is_resolved_token)];
-            // Only surface history sections that have real rows — the tail
-            // must not grow "No recent prompts yet" placeholders.
-            sections.extend(
-                build_tail_history_sections(parse, projection)
-                    .into_iter()
-                    .filter(|section| section.rows.iter().any(|row| row.is_selectable)),
-            );
-            sections
         }
         SpineSegmentKind::FreeText => Vec::new(),
     }
@@ -549,216 +509,6 @@ fn build_mode_exit_section(
             },
         }],
     }
-}
-
-const PROMPT_BUILDER_VISIBLE_LABEL_LIMIT: usize = 4;
-
-/// Whether a context-mention segment will actually deliver content at
-/// submit. Mirrors the prompt plan's resolution ladder: exact builtin
-/// mention → alias-registered compact token → literal `@file:path` →
-/// explicit Resolved state. Everything else becomes a preflight warning at
-/// submit, and the tail summary must say so instead of pretending the
-/// context is attached.
-fn context_mention_will_attach(
-    segment: &SpineSegment,
-    is_resolved_token: &dyn Fn(&str) -> bool,
-) -> bool {
-    let text = segment.raw.trim();
-    if crate::ai::context_contract::ContextAttachmentKind::from_mention_line(text).is_some() {
-        return true;
-    }
-    if is_resolved_token(text) {
-        return true;
-    }
-    if let Some(path) = text.strip_prefix("@file:") {
-        if !path.trim().is_empty() {
-            return true;
-        }
-    }
-    matches!(segment.resolution, SpineSegmentResolution::Resolved { .. })
-}
-
-fn prompt_builder_segment_label(
-    segment: &SpineSegment,
-    is_resolved_token: &dyn Fn(&str) -> bool,
-) -> Option<String> {
-    if !is_prompt_builder_segment_kind(&segment.kind) {
-        return None;
-    }
-
-    if matches!(segment.kind, SpineSegmentKind::ContextMention { .. })
-        && !context_mention_will_attach(segment, is_resolved_token)
-    {
-        let raw = segment.raw.trim();
-        if raw.is_empty() {
-            return None;
-        }
-        return Some(format!("\u{26a0} {raw}"));
-    }
-
-    if let SpineSegmentResolution::Resolved { label, .. } = &segment.resolution {
-        let label = normalize_prompt_builder_label(label);
-        if !label.is_empty() {
-            return Some(label);
-        }
-    }
-
-    let fallback = match &segment.kind {
-        SpineSegmentKind::ContextMention { context_type, .. } => context_type.as_str(),
-        SpineSegmentKind::SlashCommand { command } => command.as_str(),
-        SpineSegmentKind::Profile { profile_id } => profile_id.as_str(),
-        SpineSegmentKind::Style { style_id } => style_id.as_str(),
-        SpineSegmentKind::ProjectCwd { sub_query } => {
-            sub_query.as_deref().unwrap_or(segment.raw.as_str())
-        }
-        _ => return None,
-    };
-
-    let label = normalize_prompt_builder_label(fallback);
-    if label.is_empty() {
-        None
-    } else {
-        Some(label)
-    }
-}
-
-fn normalize_prompt_builder_label(raw: &str) -> String {
-    let mut value = raw.trim();
-
-    if let Some(rest) = value.strip_prefix(">:") {
-        value = rest;
-    } else if let Some(rest) = value.strip_prefix('@') {
-        value = rest;
-    } else if let Some(rest) = value.strip_prefix('/') {
-        value = rest;
-    } else if let Some(rest) = value.strip_prefix('|') {
-        value = rest;
-    } else if let Some(rest) = value.strip_prefix('.') {
-        value = rest;
-    } else if let Some(rest) = value.strip_prefix('>') {
-        value = rest;
-    }
-
-    value = value.trim_end_matches(':').trim();
-    humanize_label(value)
-}
-
-fn humanize_label(raw: &str) -> String {
-    raw.replace(['-', '_'], " ")
-        .split_whitespace()
-        .map(|word| {
-            let mut chars = word.chars();
-            match chars.next() {
-                None => String::new(),
-                Some(first) => {
-                    let mut out = String::new();
-                    out.extend(first.to_uppercase());
-                    out.push_str(chars.as_str());
-                    out
-                }
-            }
-        })
-        .collect::<Vec<_>>()
-        .join(" ")
-}
-
-fn prompt_builder_tail_summary(labels: &[String]) -> String {
-    if labels.is_empty() {
-        return "Press Cmd+Enter to send".to_string();
-    }
-
-    let visible_count = labels.len().min(PROMPT_BUILDER_VISIBLE_LABEL_LIMIT);
-    let mut summary = labels[..visible_count].join(" · ");
-    let remaining = labels.len().saturating_sub(visible_count);
-    if remaining > 0 {
-        let noun = if remaining == 1 {
-            "more item"
-        } else {
-            "more items"
-        };
-        let _ = write!(summary, " · +{remaining} {noun}");
-    }
-    summary.push_str(" → Cmd+Enter");
-    summary
-}
-
-fn build_prompt_builder_tail_section(
-    parse: &SpineParse,
-    is_resolved_token: &dyn Fn(&str) -> bool,
-) -> SpineListSection {
-    let attached_labels: Vec<String> = parse
-        .segments
-        .iter()
-        .filter_map(|segment| prompt_builder_segment_label(segment, is_resolved_token))
-        .collect();
-    let has_warnings = attached_labels
-        .iter()
-        .any(|label| label.starts_with('\u{26a0}'));
-    let attached_summary = prompt_builder_tail_summary(&attached_labels);
-
-    let (title, icon) = if has_warnings {
-        ("Some context won't attach", "triangle-alert")
-    } else {
-        ("Ready to send", "send")
-    };
-
-    SpineListSection {
-        id: ss("spine-section-tail-ready"),
-        title: ss("Prompt Builder"),
-        subtitle: Some(ss("Review prompt context before sending")),
-        icon: Some(ss("sparkles")),
-        rows: vec![SpineListRow {
-            id: ss("spine:tail:ready"),
-            kind: SpineListRowKind::Hint,
-            title: ss(title),
-            subtitle: Some(ss(attached_summary)),
-            meta: None,
-            icon: Some(ss(icon)),
-            badges: vec![],
-            score: i32::MAX,
-            is_selectable: true,
-            action_label: None,
-            action: SpineListAction::SubmitPromptPlan,
-        }],
-    }
-}
-
-fn build_tail_history_sections(
-    parse: &SpineParse,
-    projection: &SpineCursorProjection,
-) -> Vec<SpineListSection> {
-    let segment_index = projection.active_segment_index;
-    let segment_byte_range = active_segment(parse, projection)
-        .map(|s| s.byte_range.clone())
-        .unwrap_or_else(|| {
-            let end = parse.input.len();
-            end..end
-        });
-    let tail_query = projection.active_query.as_str();
-
-    let prompt_rows = super::catalog_history::build_recent_prompt_rows(
-        tail_query,
-        segment_index,
-        segment_byte_range,
-    );
-    let conversation_rows = super::catalog_history::build_conversation_rows(tail_query);
-
-    vec![
-        SpineListSection {
-            id: ss("spine-section-recent-prompts"),
-            title: ss("Recent Prompts"),
-            subtitle: Some(ss("Reuse a previous prompt")),
-            icon: Some(ss("history")),
-            rows: prompt_rows,
-        },
-        SpineListSection {
-            id: ss("spine-section-conversations"),
-            title: ss("Conversations"),
-            subtitle: Some(ss("Resume a past conversation")),
-            icon: Some(ss("message-circle")),
-            rows: conversation_rows,
-        },
-    ]
 }
 
 pub fn spine_projection_cache_key(
@@ -1065,26 +815,16 @@ mod tests {
     }
 
     #[test]
-    fn free_text_tail_after_prompt_builder_segments_builds_history_sections() {
-        // Input with actual free text after prompt-builder segments
+    fn free_text_tail_after_prompt_builder_segments_returns_empty() {
         let input = "@selection /rewrite make it punchier";
         let parse = parse_spine(input);
         let proj = project_cursor(&parse, parse.input.len());
-        assert!(projection_is_prompt_builder_tail(&parse, &proj));
         let sections = build_spine_list_sections(&parse, &proj);
-        assert!(!sections.is_empty());
-        assert_eq!(sections[0].title.as_ref(), "Prompt Builder");
-        let row = sections[0].rows.first().expect("expected ready row");
-        assert_eq!(row.title.as_ref(), "Ready to send");
-        assert_eq!(
-            row.subtitle.as_ref().map(|s| s.as_ref()),
-            Some("Selection · Rewrite → Cmd+Enter")
-        );
-        assert!(row.meta.is_none());
+        assert!(sections.is_empty());
     }
 
     #[test]
-    fn synthetic_tail_projection_builds_prompt_builder_tail() {
+    fn synthetic_tail_projection_returns_empty() {
         let parse = parse_spine("@selection /rewrite ");
         let synthetic_proj = SpineCursorProjection {
             active_segment_index: parse.segments.len(),
@@ -1093,19 +833,8 @@ mod tests {
             is_tail: true,
             has_prompt_segments: true,
         };
-        assert!(projection_is_prompt_builder_tail(&parse, &synthetic_proj));
         let sections = build_spine_list_sections(&parse, &synthetic_proj);
-        // The first section is always the prompt-builder tail; history
-        // sections (Recent Prompts / Conversations) may follow when the
-        // environment has Agent Chat history.
-        assert!(!sections.is_empty());
-        assert_eq!(sections[0].title.as_ref(), "Prompt Builder");
-        let row = sections[0].rows.first().expect("expected ready row");
-        assert_eq!(
-            row.subtitle.as_ref().map(|s| s.as_ref()),
-            Some("Selection · Rewrite → Cmd+Enter")
-        );
-        assert!(row.meta.is_none());
+        assert!(sections.is_empty());
     }
 
     #[test]
@@ -1120,65 +849,6 @@ mod tests {
             rows.iter().any(|row| row.id.as_ref() == "spine:/:rewrite"),
             "fuzzy subsequence must match /rewrite"
         );
-    }
-
-    #[test]
-    fn tail_summary_warns_for_tokens_that_wont_attach() {
-        // `@notes:groceries` with no registered alias becomes a preflight
-        // warning at submit — the tail row must say so instead of listing
-        // "Notes" as if it were attached.
-        let input = "@selection @notes:groceries explain";
-        let parse = parse_spine(input);
-        let proj = project_cursor(&parse, input.len());
-        let sections = build_spine_list_sections(&parse, &proj);
-        assert!(!sections.is_empty());
-        let row = sections[0].rows.first().expect("expected tail row");
-        assert_eq!(row.title.as_ref(), "Some context won't attach");
-        let subtitle = row.subtitle.as_ref().map(|s| s.as_ref()).unwrap_or("");
-        assert!(
-            subtitle.contains("\u{26a0} @notes:groceries"),
-            "warning label missing from summary: {subtitle}"
-        );
-        assert!(subtitle.contains("Selection"));
-    }
-
-    #[test]
-    fn tail_summary_trusts_alias_registered_tokens() {
-        let input = "@selection @notes:groceries explain";
-        let parse = parse_spine(input);
-        let proj = project_cursor(&parse, input.len());
-        let sections =
-            build_spine_list_sections_full_with_resolved_tokens(&parse, &proj, None, &|token| {
-                token == "@notes:groceries"
-            });
-        let row = sections[0].rows.first().expect("expected tail row");
-        assert_eq!(row.title.as_ref(), "Ready to send");
-        let subtitle = row.subtitle.as_ref().map(|s| s.as_ref()).unwrap_or("");
-        assert!(
-            !subtitle.contains('\u{26a0}'),
-            "alias-registered token must not warn: {subtitle}"
-        );
-    }
-
-    #[test]
-    fn plain_text_free_text_does_not_own_spine_projection() {
-        let parse = parse_spine("punchier");
-        let proj = project_cursor(&parse, parse.input.len());
-        assert!(!projection_is_prompt_builder_tail(&parse, &proj));
-    }
-
-    #[test]
-    fn list_filter_tail_does_not_count_as_prompt_builder() {
-        let parse = parse_spine(":type:script stuff");
-        let proj = project_cursor(&parse, parse.input.len());
-        assert!(!projection_is_prompt_builder_tail(&parse, &proj));
-    }
-
-    #[test]
-    fn capture_tail_does_not_count_as_prompt_builder() {
-        let parse = parse_spine(";todo stuff");
-        let proj = project_cursor(&parse, parse.input.len());
-        assert!(!projection_is_prompt_builder_tail(&parse, &proj));
     }
 
     /// A partial fragment (`@fi`) still offers the completion row; an exact

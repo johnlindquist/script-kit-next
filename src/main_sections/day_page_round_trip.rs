@@ -12,6 +12,10 @@
 // ranges recorded here stay valid (only this round trip may mutate the
 // content in between).
 
+use std::ops::Range;
+
+use crate::components::notes_editor::spine::replace_segment_content;
+
 pub(crate) struct DayPageContextReturn {
     pub entity: Entity<DayPageView>,
     /// Byte range of the active line within the day content at hand-off.

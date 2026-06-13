@@ -111,7 +111,7 @@ fn terminal_context_selector_portal_opens_quick_terminal() {
         picker_source.contains("ContextPortalKind::Terminal")
             && picker_source.contains("label: \"@terminal\"")
             && picker_source.contains("match_terms: &[\"terminal\""),
-        "@Terminal must be offered by the @ context selector as a portal option"
+        "Terminal must be offered by the shared context menu as a portal option"
     );
     assert!(
         attachment_portal_source.contains("ContextPortalKind::Terminal =>")

@@ -79,7 +79,7 @@ impl<'a> TransactionStateProvider for DetachedAgentChatTransactionProvider<'a> {
     fn select_by_value(&mut self, value: &str, submit: bool) -> Result<Option<String>> {
         let value = value.to_string();
         self.entity.update(self.cx, |view, cx| {
-            let Some(ref session) = view.mention_session else {
+            let Some(ref session) = view.composer_picker_session else {
                 return Ok(None);
             };
             let Some(index) = session
@@ -91,7 +91,7 @@ impl<'a> TransactionStateProvider for DetachedAgentChatTransactionProvider<'a> {
             };
             view.select_mention_index(index);
             if submit {
-                view.accept_mention_selection(cx);
+                view.accept_composer_picker_selection(cx);
             }
             tracing::info!(
                 target: "script_kit::transaction",

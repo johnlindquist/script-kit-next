@@ -1,10 +1,11 @@
 //! State transitions for the Agent Chat composer picker lifecycle.
 
-use crate::ai::context_selector::types::ContextSelectorTrigger;
+use super::types::{
+    AgentChatComposerPickerSession, AgentChatComposerPickerTrigger,
+    AgentChatDismissedComposerPickerTrigger,
+};
 
-use super::types::{AgentChatDismissedMentionTrigger, AgentChatMentionSession};
-
-const MENTION_PICKER_MAX_VISIBLE: usize = 8;
+const COMPOSER_PICKER_MAX_VISIBLE: usize = 8;
 
 /// Surface-local Spine state for the Agent Chat composer. Mirrors the main-menu
 /// `ScriptListApp` Spine fields but stays scoped to a single `AgentChatView`
@@ -33,9 +34,8 @@ impl AgentChatComposerSpineState {
         }
     }
 
-    /// Does the projection currently own the conversation-area list (i.e. a
-    /// sigil segment is active or the cursor is on a prompt-builder tail with
-    /// at least one resolved segment)?
+    /// Does the projection currently own the conversation-area list?
+    /// Only active sigil segments own the list.
     pub(crate) fn owns_list(&self) -> bool {
         crate::spine::input_projection::projection_owns_prompt_builder_list(
             self.input.projection.as_ref(),
@@ -51,14 +51,14 @@ impl AgentChatComposerSpineState {
 #[derive(Debug, Clone)]
 pub(crate) enum AgentChatComposerPickerState {
     Closed,
-    Open(AgentChatMentionSession),
-    Dismissed(AgentChatDismissedMentionTrigger),
+    Open(AgentChatComposerPickerSession),
+    Dismissed(AgentChatDismissedComposerPickerTrigger),
 }
 
 #[derive(Debug, Clone)]
 pub(crate) struct AgentChatComposerPickerRefreshInput {
-    pub(crate) active_trigger: Option<AgentChatDismissedMentionTrigger>,
-    pub(crate) next_session: Option<AgentChatMentionSession>,
+    pub(crate) active_trigger: Option<AgentChatDismissedComposerPickerTrigger>,
+    pub(crate) next_session: Option<AgentChatComposerPickerSession>,
     pub(crate) focused_inline_preview: bool,
 }
 
@@ -82,7 +82,7 @@ pub(crate) enum AgentChatComposerPickerEvent {
         cursor: usize,
     },
     Accept,
-    AcceptIgnoredKeepOpen(AgentChatMentionSession),
+    AcceptIgnoredKeepOpen(AgentChatComposerPickerSession),
     SubmitStarted,
     SlashToggle,
 }
@@ -95,7 +95,7 @@ pub(crate) struct AgentChatComposerPickerTransition {
     pub(crate) close_competing_popups: bool,
     pub(crate) clear_last_accepted_item: bool,
     pub(crate) log_visible_reason: Option<&'static str>,
-    pub(crate) accepted_session: Option<AgentChatMentionSession>,
+    pub(crate) accepted_session: Option<AgentChatComposerPickerSession>,
     pub(crate) insert_slash_input: bool,
     pub(crate) clear_slash_input: bool,
 }
@@ -204,7 +204,7 @@ fn navigate_transition(
             session.visible_start,
             session.selected_index,
             len,
-            MENTION_PICKER_MAX_VISIBLE,
+            COMPOSER_PICKER_MAX_VISIBLE,
         );
         session.visible_start = visible.start;
     }
@@ -225,7 +225,7 @@ fn dismiss_transition(
         (
             AgentChatComposerPickerState::Open(session),
             AgentChatComposerPickerDismissReason::Outside,
-        ) => AgentChatComposerPickerState::Dismissed(AgentChatDismissedMentionTrigger {
+        ) => AgentChatComposerPickerState::Dismissed(AgentChatDismissedComposerPickerTrigger {
             trigger: session.trigger,
             trigger_range: session.trigger_range,
             query: session.query,
@@ -254,8 +254,8 @@ fn slash_toggle_transition(
 ) -> AgentChatComposerPickerTransition {
     let open_slash = matches!(
         state,
-        AgentChatComposerPickerState::Open(AgentChatMentionSession {
-            trigger: ContextSelectorTrigger::Slash,
+        AgentChatComposerPickerState::Open(AgentChatComposerPickerSession {
+            trigger: AgentChatComposerPickerTrigger::Slash,
             ..
         })
     );
@@ -272,23 +272,26 @@ fn slash_toggle_transition(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ai::context_selector::{slash_command_loading_row, types::ContextSelectorTrigger};
+    use crate::ai::context_selector::slash_command_loading_row;
 
-    fn slash_trigger(query: &str, cursor: usize) -> AgentChatDismissedMentionTrigger {
-        AgentChatDismissedMentionTrigger {
-            trigger: ContextSelectorTrigger::Slash,
+    fn slash_trigger(query: &str, cursor: usize) -> AgentChatDismissedComposerPickerTrigger {
+        AgentChatDismissedComposerPickerTrigger {
+            trigger: AgentChatComposerPickerTrigger::Slash,
             trigger_range: 0..(query.chars().count() + 1),
             query: query.to_string(),
             cursor,
         }
     }
 
-    fn session(trigger: ContextSelectorTrigger, item_count: usize) -> AgentChatMentionSession {
+    fn session(
+        trigger: AgentChatComposerPickerTrigger,
+        item_count: usize,
+    ) -> AgentChatComposerPickerSession {
         let mut items = Vec::new();
         for _ in 0..item_count {
             items.push(slash_command_loading_row());
         }
-        AgentChatMentionSession {
+        AgentChatComposerPickerSession {
             trigger,
             trigger_range: 0..1,
             query: String::new(),
@@ -304,15 +307,15 @@ mod tests {
             AgentChatComposerPickerState::Closed,
             AgentChatComposerPickerEvent::Refresh(AgentChatComposerPickerRefreshInput {
                 active_trigger: Some(slash_trigger("", 1)),
-                next_session: Some(session(ContextSelectorTrigger::Slash, 1)),
+                next_session: Some(session(AgentChatComposerPickerTrigger::Slash, 1)),
                 focused_inline_preview: false,
             }),
         );
 
         assert!(matches!(
             transition.state,
-            AgentChatComposerPickerState::Open(AgentChatMentionSession {
-                trigger: ContextSelectorTrigger::Slash,
+            AgentChatComposerPickerState::Open(AgentChatComposerPickerSession {
+                trigger: AgentChatComposerPickerTrigger::Slash,
                 ..
             })
         ));
@@ -322,7 +325,7 @@ mod tests {
 
     #[test]
     fn navigate_wraps_selection_and_updates_visible_start() {
-        let mut open = session(ContextSelectorTrigger::Slash, 10);
+        let mut open = session(AgentChatComposerPickerTrigger::Slash, 10);
         open.selected_index = 0;
         let transition = reduce_agent_chat_composer_picker(
             AgentChatComposerPickerState::Open(open),
@@ -338,7 +341,7 @@ mod tests {
 
     #[test]
     fn outside_dismiss_records_exact_trigger() {
-        let open = session(ContextSelectorTrigger::Slash, 1);
+        let open = session(AgentChatComposerPickerTrigger::Slash, 1);
         let transition = reduce_agent_chat_composer_picker(
             AgentChatComposerPickerState::Open(open),
             AgentChatComposerPickerEvent::Dismiss {
@@ -349,8 +352,8 @@ mod tests {
 
         assert!(matches!(
             transition.state,
-            AgentChatComposerPickerState::Dismissed(AgentChatDismissedMentionTrigger {
-                trigger: ContextSelectorTrigger::Slash,
+            AgentChatComposerPickerState::Dismissed(AgentChatDismissedComposerPickerTrigger {
+                trigger: AgentChatComposerPickerTrigger::Slash,
                 cursor: 1,
                 ..
             })
@@ -360,7 +363,7 @@ mod tests {
     #[test]
     fn escape_dismiss_closes_without_suppression() {
         let transition = reduce_agent_chat_composer_picker(
-            AgentChatComposerPickerState::Open(session(ContextSelectorTrigger::Slash, 1)),
+            AgentChatComposerPickerState::Open(session(AgentChatComposerPickerTrigger::Slash, 1)),
             AgentChatComposerPickerEvent::Dismiss {
                 reason: AgentChatComposerPickerDismissReason::Escape,
                 cursor: 1,
@@ -410,7 +413,7 @@ mod tests {
 
     #[test]
     fn accept_inert_row_can_keep_session_open() {
-        let open = session(ContextSelectorTrigger::Slash, 1);
+        let open = session(AgentChatComposerPickerTrigger::Slash, 1);
         let transition = reduce_agent_chat_composer_picker(
             AgentChatComposerPickerState::Closed,
             AgentChatComposerPickerEvent::AcceptIgnoredKeepOpen(open),
@@ -425,7 +428,7 @@ mod tests {
     #[test]
     fn accept_actionable_row_closes_and_returns_session() {
         let transition = reduce_agent_chat_composer_picker(
-            AgentChatComposerPickerState::Open(session(ContextSelectorTrigger::Slash, 1)),
+            AgentChatComposerPickerState::Open(session(AgentChatComposerPickerTrigger::Slash, 1)),
             AgentChatComposerPickerEvent::Accept,
         );
 
@@ -439,7 +442,7 @@ mod tests {
     #[test]
     fn submit_started_closes_picker() {
         let transition = reduce_agent_chat_composer_picker(
-            AgentChatComposerPickerState::Open(session(ContextSelectorTrigger::Slash, 1)),
+            AgentChatComposerPickerState::Open(session(AgentChatComposerPickerTrigger::Slash, 1)),
             AgentChatComposerPickerEvent::SubmitStarted,
         );
 
@@ -463,7 +466,7 @@ mod tests {
     #[test]
     fn slash_toggle_from_open_slash_requests_input_clear() {
         let transition = reduce_agent_chat_composer_picker(
-            AgentChatComposerPickerState::Open(session(ContextSelectorTrigger::Slash, 1)),
+            AgentChatComposerPickerState::Open(session(AgentChatComposerPickerTrigger::Slash, 1)),
             AgentChatComposerPickerEvent::SlashToggle,
         );
 
@@ -474,7 +477,7 @@ mod tests {
     #[test]
     fn focused_inline_token_preview_closes_without_opening_empty_state() {
         let transition = reduce_agent_chat_composer_picker(
-            AgentChatComposerPickerState::Open(session(ContextSelectorTrigger::Slash, 1)),
+            AgentChatComposerPickerState::Open(session(AgentChatComposerPickerTrigger::Slash, 1)),
             AgentChatComposerPickerEvent::Refresh(AgentChatComposerPickerRefreshInput {
                 active_trigger: Some(slash_trigger("", 1)),
                 next_session: None,

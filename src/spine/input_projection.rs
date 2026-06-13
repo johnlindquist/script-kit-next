@@ -6,8 +6,7 @@
 //! duplicating it.
 
 use crate::spine::{
-    list::parse_has_prompt_builder_segments, parse_spine, project_cursor, SpineCursorProjection,
-    SpineParse, SpineSegmentKind,
+    parse_spine, project_cursor, SpineCursorProjection, SpineParse, SpineSegmentKind,
 };
 
 #[derive(Debug, Clone, Default)]
@@ -52,15 +51,14 @@ pub(crate) fn project_text_at_byte_cursor(text: &str, cursor_byte: usize) -> Spi
 }
 
 /// Returns `true` when the current cursor projection should drive a Spine
-/// list (sigil picker or prompt-builder tail with at least one resolved
-/// prompt-builder segment).
+/// list. Only active sigil segments own a list; free-text tails stay plain
+/// editor text and use Cmd+Enter for direct handoff.
 pub(crate) fn projection_owns_prompt_builder_list(
     projection: Option<&SpineCursorProjection>,
-    parse: &SpineParse,
+    _parse: &SpineParse,
 ) -> bool {
     let Some(proj) = projection else {
         return false;
     };
     !matches!(proj.active_segment_kind, SpineSegmentKind::FreeText)
-        || (proj.is_tail && proj.has_prompt_segments && parse_has_prompt_builder_segments(parse))
 }

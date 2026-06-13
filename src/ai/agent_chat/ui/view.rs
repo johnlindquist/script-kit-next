@@ -37,8 +37,9 @@ use super::thread::{
     AgentChatThreadMessageRole, AgentChatThreadStatus,
 };
 use super::types::{
-    AgentChatComposerParentWindow, AgentChatDismissedMentionTrigger,
-    AgentChatFocusedMentionPreview, AgentChatMentionSession, AgentChatPendingPortalSession,
+    AgentChatComposerParentWindow, AgentChatComposerPickerSession, AgentChatComposerPickerTrigger,
+    AgentChatDismissedComposerPickerTrigger, AgentChatFocusedMentionPreview,
+    AgentChatPendingPortalSession,
 };
 use super::ui_variant::{AgentChatComposerPlacement, AgentChatUiVariant};
 use super::{
@@ -74,7 +75,7 @@ type AgentChatFooterActionHandler = std::sync::Arc<dyn Fn(&mut Window, &mut App)
 /// appropriate built-in view (file search, clipboard history, etc.).
 /// Takes `&mut App` (not `&mut Window`) because the handler opens a new view
 /// via entity update, and this callback is invoked from contexts where
-/// `Window` is not available (e.g. `accept_mention_selection_impl`).
+/// `Window` is not available (e.g. `accept_composer_picker_selection_impl`).
 type AgentChatPortalHandler = std::sync::Arc<
     dyn Fn(crate::ai::context_selector::types::ContextPortalKind, &mut App) + 'static,
 >;
@@ -736,14 +737,14 @@ pub(crate) struct AgentChatView {
     /// Handle to the deferred slash command discovery task.
     _slash_discovery_task: Task<()>,
     /// Active slash/profile composer picker session (None = picker hidden).
-    pub(crate) mention_session: Option<AgentChatMentionSession>,
+    pub(crate) composer_picker_session: Option<AgentChatComposerPickerSession>,
     /// Surface-local Spine state for the Agent Chat composer. When this projection
     /// owns the conversation area, the transcript is replaced with the
     /// Spine list (context / slash / profile / style / capture / CWD rows).
     pub(crate) composer_spine:
         crate::ai::agent_chat::ui::composer_state::AgentChatComposerSpineState,
     /// Exact active trigger dismissed by pointer/escape while the input text remains unchanged.
-    dismissed_mention_trigger: Option<AgentChatDismissedMentionTrigger>,
+    dismissed_mention_trigger: Option<AgentChatDismissedComposerPickerTrigger>,
     /// Cached parent window metadata for toolbar-triggered popups.
     composer_parent_window: Option<AgentChatComposerParentWindow>,
     /// Canonical inline tokens that currently own their attached context part.
@@ -1063,7 +1064,7 @@ impl AgentChatView {
 
     fn sync_agent_chat_popup_windows_from_cached_parent(&mut self, cx: &mut Context<Self>) {
         if self.is_setup_mode() {
-            self.mention_session = None;
+            self.composer_picker_session = None;
             self.history_menu = None;
             crate::ai::agent_chat::ui::history_popup::close_history_popup_window(cx);
             tracing::info!(
@@ -1321,12 +1322,12 @@ impl AgentChatView {
             self.composer_picker_state(),
             crate::ai::agent_chat::ui::composer_state::AgentChatComposerPickerState::Open(_)
         ) {
-            let picker_width = Self::mention_picker_width_for_window(window_width);
+            let picker_width = Self::composer_picker_width_for_window(window_width);
             components.push(
                 LayoutComponentInfo::new("AgentChatComposerPicker", LayoutComponentType::Panel)
                     .with_bounds(
                         Self::AGENT_CHAT_INPUT_PADDING_X,
-                        (composer_y + composer_height + Self::AGENT_CHAT_MENTION_PICKER_OFFSET_Y)
+                        (composer_y + composer_height + Self::AGENT_CHAT_COMPOSER_PICKER_OFFSET_Y)
                             .min(window_height),
                         picker_width,
                         220.0_f32.min(window_height),
@@ -1340,7 +1341,7 @@ impl AgentChatView {
                     .with_depth(2)
                     .with_parent("AgentChatDetachedWindow")
                     .with_explanation(
-                        "Composer mention/slash picker floating from the detached Agent Chat composer.",
+                        "Composer slash/profile picker floating from the detached Agent Chat composer.",
                     ),
             );
         }
@@ -1567,7 +1568,7 @@ impl AgentChatView {
         }
 
         let actions_selected = crate::actions::is_actions_window_open();
-        let attach_picker_active = self.mention_session.is_some()
+        let attach_picker_active = self.composer_picker_session.is_some()
             || self.agent_chat_spine_owns_list()
             || self.pending_portal_session.is_some();
         let mut buttons = Vec::new();
@@ -3167,8 +3168,8 @@ impl AgentChatView {
                 {
                     return;
                 }
-                if self.mention_session.is_some() {
-                    self.accept_mention_selection_impl(false, cx);
+                if self.composer_picker_session.is_some() {
+                    self.accept_composer_picker_selection_impl(false, cx);
                     return;
                 }
                 self.submit_with_expanded_tokens(cx);
@@ -3908,7 +3909,7 @@ impl AgentChatView {
         // transient entry. Without this, the thread-change observer
         // registered at `Self::new` can re-fire on a later notify (agent
         // preflight, model discovery, etc.), see the lingering trigger
-        // character still in the composer, and pop the mention/slash
+        // character still in the composer, and pop the slash/profile
         // picker back open on top of the now-visible main menu.
         if let AgentChatSession::Live(thread) = &self.session {
             let text = thread.read(cx).input.text().to_string();
@@ -4514,7 +4515,7 @@ impl AgentChatView {
             return true;
         }
 
-        if self.dismiss_mention_picker(cx) {
+        if self.dismiss_composer_picker(cx) {
             return true;
         }
 
@@ -4575,13 +4576,13 @@ impl AgentChatView {
 
     pub(crate) fn has_escape_dismissible_popup(&self) -> bool {
         self.focused_text_editing_variation.is_some()
-            || self.mention_session.is_some()
+            || self.composer_picker_session.is_some()
             || self.history_menu.is_some()
             || self.attach_menu_open
     }
 
     fn composer_picker_state(&self) -> AgentChatComposerPickerState {
-        if let Some(session) = self.mention_session.clone() {
+        if let Some(session) = self.composer_picker_session.clone() {
             AgentChatComposerPickerState::Open(session)
         } else if let Some(trigger) = self.dismissed_mention_trigger.clone() {
             AgentChatComposerPickerState::Dismissed(trigger)
@@ -4594,7 +4595,7 @@ impl AgentChatView {
         &mut self,
         transition: AgentChatComposerPickerTransition,
         cx: &mut Context<Self>,
-    ) -> Option<AgentChatMentionSession> {
+    ) -> Option<AgentChatComposerPickerSession> {
         let AgentChatComposerPickerTransition {
             state,
             sync_popup,
@@ -4609,15 +4610,15 @@ impl AgentChatView {
 
         match state {
             AgentChatComposerPickerState::Closed => {
-                self.mention_session.take();
+                self.composer_picker_session.take();
                 self.dismissed_mention_trigger = None;
             }
             AgentChatComposerPickerState::Open(session) => {
-                self.mention_session = Some(session);
+                self.composer_picker_session = Some(session);
                 self.dismissed_mention_trigger = None;
             }
             AgentChatComposerPickerState::Dismissed(trigger) => {
-                self.mention_session.take();
+                self.composer_picker_session.take();
                 self.dismissed_mention_trigger = Some(trigger);
             }
         }
@@ -4649,7 +4650,7 @@ impl AgentChatView {
             }
         }
         if let Some(reason) = log_visible_reason {
-            self.log_mention_visible_range(reason);
+            self.log_composer_picker_visible_range(reason);
         }
         if sync_popup {
             self.sync_agent_chat_popup_windows_from_cached_parent(cx);
@@ -4673,8 +4674,8 @@ impl AgentChatView {
         self.apply_composer_picker_transition(transition, cx);
     }
 
-    pub(crate) fn dismiss_mention_picker(&mut self, cx: &mut Context<Self>) -> bool {
-        if self.mention_session.is_none() {
+    pub(crate) fn dismiss_composer_picker(&mut self, cx: &mut Context<Self>) -> bool {
+        if self.composer_picker_session.is_none() {
             return false;
         };
         let cursor = self.live_thread().read(cx).input.cursor();
@@ -4692,7 +4693,7 @@ impl AgentChatView {
         self.apply_composer_picker_transition(transition, cx);
         tracing::info!(
             target: "script_kit::tab_ai",
-            event = "agent_chat_mention_picker_dismissed",
+            event = "agent_chat_composer_picker_dismissed",
             trigger = ?trigger.as_ref().map(|trigger| trigger.trigger),
             query = %trigger.as_ref().map(|trigger| trigger.query.as_str()).unwrap_or(""),
         );
@@ -4740,7 +4741,7 @@ impl AgentChatView {
             cx.notify();
         });
         self.refresh_agent_chat_spine_from_composer(cx);
-        self.refresh_mention_session(cx);
+        self.refresh_composer_picker_session(cx);
         tracing::info!(
             target: "script_kit::tab_ai",
             event = "agent_chat_slash_entry_primed",
@@ -5020,16 +5021,12 @@ impl AgentChatView {
     fn build_agent_chat_picker_state_snapshot(
         &self,
     ) -> Option<crate::protocol::AgentChatPickerState> {
-        self.mention_session.as_ref().map(|session| {
+        self.composer_picker_session.as_ref().map(|session| {
             let selected_label = session
                 .items
                 .get(session.selected_index)
                 .map(|item| item.label.to_string());
-            let trigger = match session.trigger {
-                ContextSelectorTrigger::Mention => "@",
-                ContextSelectorTrigger::Slash => "/",
-                ContextSelectorTrigger::Profile => PROFILE_TRIGGER_STR,
-            };
+            let trigger = session.trigger.label();
             crate::protocol::AgentChatPickerState {
                 open: true,
                 trigger: trigger.to_string(),
@@ -5159,8 +5156,6 @@ impl AgentChatView {
             SpineListRowKind::Profile { .. } => "profile",
             SpineListRowKind::Style { .. } => "style",
             SpineListRowKind::CaptureTarget { .. } => "captureTarget",
-            SpineListRowKind::RecentPrompt { .. } => "recentPrompt",
-            SpineListRowKind::Conversation { .. } => "conversation",
             SpineListRowKind::Hint => "hint",
             SpineListRowKind::Empty => "empty",
         };
@@ -5171,8 +5166,6 @@ impl AgentChatView {
             } => resolution_source.as_ref(),
             SpineListAction::OpenModeExit { .. } => "openModeExit",
             SpineListAction::OpenFileSearchPortal { .. } => "openFileSearchPortal",
-            SpineListAction::OpenConversation { .. } => "openConversation",
-            SpineListAction::SubmitPromptPlan => "submitPromptPlan",
             SpineListAction::Noop => "noop",
         };
         Self::agent_chat_spine_hash_parts(&[
@@ -5378,7 +5371,7 @@ impl AgentChatView {
             // Update composer projections on any input/cursor change.
             this.refresh_agent_chat_spine_from_composer(cx);
             if !this.agent_chat_spine_owns_list() {
-                this.refresh_mention_session(cx);
+                this.refresh_composer_picker_session(cx);
             }
 
             if let Some(item_count) = this.focused_text_mini_sizing_count(&*cx) {
@@ -5435,7 +5428,7 @@ impl AgentChatView {
                     view.cached_slash_commands = commands;
                     view.refresh_agent_chat_spine_from_composer(cx);
                     if !view.agent_chat_spine_owns_list() {
-                        view.refresh_mention_session(cx);
+                        view.refresh_composer_picker_session(cx);
                     }
                     cx.notify();
                 })
@@ -5459,7 +5452,7 @@ impl AgentChatView {
             search_state: None,
             cached_slash_commands: Vec::new(),
             _slash_discovery_task: slash_task,
-            mention_session: None,
+            composer_picker_session: None,
             composer_spine: Default::default(),
             dismissed_mention_trigger: None,
             composer_parent_window: None,
@@ -5544,7 +5537,7 @@ impl AgentChatView {
             search_state: None,
             cached_slash_commands: Vec::new(),
             _slash_discovery_task: noop_slash,
-            mention_session: None,
+            composer_picker_session: None,
             composer_spine: Default::default(),
             dismissed_mention_trigger: None,
             composer_parent_window: None,
@@ -5782,18 +5775,12 @@ impl AgentChatView {
             return false;
         };
 
-        let Some(session) = self.mention_session.as_ref() else {
+        let Some(session) = self.composer_picker_session.as_ref() else {
             return false;
         };
 
         let pre_accept_item = session.items.get(session.selected_index).map(|item| {
-            let trigger_str = match session.trigger {
-                crate::ai::context_selector::types::ContextSelectorTrigger::Mention => "@",
-                crate::ai::context_selector::types::ContextSelectorTrigger::Slash => "/",
-                crate::ai::context_selector::types::ContextSelectorTrigger::Profile => {
-                    PROFILE_TRIGGER_STR
-                }
-            };
+            let trigger_str = session.trigger.label();
             (
                 trigger_str.to_string(),
                 item.label.to_string(),
@@ -5802,7 +5789,7 @@ impl AgentChatView {
         });
         let cursor_before = self.live_thread().read(cx).input.cursor();
 
-        self.accept_mention_selection_impl(false, cx);
+        self.accept_composer_picker_selection_impl(false, cx);
 
         let cursor_after = self.live_thread().read(cx).input.cursor();
         let permission_active = self.live_thread().read(cx).pending_permission.is_some();
@@ -6479,7 +6466,7 @@ impl AgentChatView {
             .update(cx, |thread, cx| thread.set_input(value, cx));
         self.refresh_agent_chat_spine_from_composer(cx);
         if !self.agent_chat_spine_owns_list() {
-            self.refresh_mention_session(cx);
+            self.refresh_composer_picker_session(cx);
         }
     }
 
@@ -7142,7 +7129,7 @@ impl AgentChatView {
 
     fn open_picker_trigger(&mut self, trigger: &str, cx: &mut Context<Self>) {
         if self.is_setup_mode() {
-            self.mention_session = None;
+            self.composer_picker_session = None;
             self.dismissed_mention_trigger = None;
             tracing::info!(
                 target: "script_kit::tab_ai",
@@ -7159,7 +7146,7 @@ impl AgentChatView {
         self.set_input(trigger.to_string(), cx);
         self.refresh_agent_chat_spine_from_composer(cx);
         if !self.agent_chat_spine_owns_list() {
-            self.refresh_mention_session(cx);
+            self.refresh_composer_picker_session(cx);
         }
     }
 
@@ -7208,7 +7195,7 @@ impl AgentChatView {
             active_kind = %kind,
         );
         if owns {
-            self.mention_session = None;
+            self.composer_picker_session = None;
             self.dismissed_mention_trigger = None;
         }
         cx.notify();
@@ -7877,12 +7864,7 @@ impl AgentChatView {
                 }
                 ok
             }
-            // SubmitPromptPlan falls through (false) so the composer's
-            // normal Enter-to-send path delivers the message.
-            SpineListAction::OpenModeExit { .. }
-            | SpineListAction::OpenConversation { .. }
-            | SpineListAction::SubmitPromptPlan
-            | SpineListAction::Noop => false,
+            SpineListAction::OpenModeExit { .. } | SpineListAction::Noop => false,
         }
     }
 
@@ -7931,7 +7913,7 @@ impl AgentChatView {
 
     pub(crate) fn dismiss_agent_chat_spine_projection(&mut self, cx: &mut Context<Self>) {
         self.composer_spine.clear();
-        self.mention_session = None;
+        self.composer_picker_session = None;
         self.dismissed_mention_trigger = None;
         cx.notify();
     }
@@ -8751,7 +8733,7 @@ impl AgentChatView {
         if self.ui_variant != AgentChatUiVariant::FocusedTextMini
             || self.focused_text.is_none()
             || self.scope_focused
-            || self.mention_session.is_some()
+            || self.composer_picker_session.is_some()
         {
             return false;
         }
@@ -10289,7 +10271,7 @@ impl AgentChatView {
                                             });
                                             this.refresh_agent_chat_spine_from_composer(cx);
                                             if !this.agent_chat_spine_owns_list() {
-                                                this.refresh_mention_session(cx);
+                                                this.refresh_composer_picker_session(cx);
                                             }
                                             this.cursor_visible = true;
                                         }
@@ -10328,7 +10310,7 @@ impl AgentChatView {
                                 });
                                 this.refresh_agent_chat_spine_from_composer(cx);
                                 if !this.agent_chat_spine_owns_list() {
-                                    this.refresh_mention_session(cx);
+                                    this.refresh_composer_picker_session(cx);
                                 }
                                 this.attach_menu_open = false;
                                 this.cursor_visible = true;
@@ -10418,22 +10400,28 @@ impl AgentChatView {
     // ── Composer picker ────────────────────────────────────────────
 
     /// Maximum visible rows in the composer picker.
-    pub(super) const MENTION_PICKER_MAX_VISIBLE: usize = 8;
+    pub(super) const COMPOSER_PICKER_MAX_VISIBLE: usize = 8;
 
-    /// Detect an active `@query` from the input text and cursor position.
+    /// Detect an active slash/profile query from the input text and cursor position.
     ///
     /// Returns the character range of `@query` and the query string, or `None`
-    /// if the cursor is not inside a valid mention trigger.
-    /// Find an active trigger (`@` or `/`) before the cursor.
+    /// if the cursor is not inside a popup-owned trigger.
+    /// Find an active trigger (`/` or profile) before the cursor.
     ///
     /// Returns `(trigger, char_range, query_text)` when the cursor is
     /// immediately after an in-progress `@query` or `/query`.
     fn find_active_trigger(
         text: &str,
         cursor: usize,
-    ) -> Option<(ContextSelectorTrigger, std::ops::Range<usize>, String)> {
-        crate::ai::context_selector::context_selector_query_before_cursor(text, cursor)
-            .map(|m| (m.trigger, m.char_range, m.query))
+    ) -> Option<(
+        AgentChatComposerPickerTrigger,
+        std::ops::Range<usize>,
+        String,
+    )> {
+        let query =
+            crate::ai::context_selector::context_selector_query_before_cursor(text, cursor)?;
+        let trigger = AgentChatComposerPickerTrigger::from_context_selector(query.trigger)?;
+        Some((trigger, query.char_range, query.query))
     }
 
     fn focused_inline_token_prefers_preview(
@@ -10471,21 +10459,21 @@ impl AgentChatView {
     /// Re-derive the composer session from current input state.
     ///
     /// Called after every input mutation and cursor movement.
-    pub(super) fn refresh_mention_session(&mut self, cx: &mut Context<Self>) {
+    pub(super) fn refresh_composer_picker_session(&mut self, cx: &mut Context<Self>) {
         if self.agent_chat_spine_owns_list() {
-            self.mention_session = None;
+            self.composer_picker_session = None;
             self.dismissed_mention_trigger = None;
             cx.notify();
             return;
         }
 
         if self.is_setup_mode() {
-            let had_picker = self.mention_session.take().is_some()
+            let had_picker = self.composer_picker_session.take().is_some()
                 || self.dismissed_mention_trigger.take().is_some();
             if had_picker {
                 tracing::info!(
                     target: "script_kit::tab_ai",
-                    event = "agent_chat_mention_picker_cleared_setup_mode",
+                    event = "agent_chat_composer_picker_cleared_setup_mode",
                 );
                 cx.notify();
             }
@@ -10502,12 +10490,12 @@ impl AgentChatView {
         };
 
         let previous_index = self
-            .mention_session
+            .composer_picker_session
             .as_ref()
             .map(|s| s.selected_index)
             .unwrap_or(0);
         let previous_visible_start = self
-            .mention_session
+            .composer_picker_session
             .as_ref()
             .map(|s| s.visible_start)
             .unwrap_or(0);
@@ -10520,7 +10508,7 @@ impl AgentChatView {
         } else {
             match Self::find_active_trigger(&text, cursor) {
                 Some((trigger, trigger_range, query)) => {
-                    let active_trigger = AgentChatDismissedMentionTrigger {
+                    let active_trigger = AgentChatDismissedComposerPickerTrigger {
                         trigger,
                         trigger_range: trigger_range.clone(),
                         query: query.clone(),
@@ -10529,17 +10517,9 @@ impl AgentChatView {
                     if self.dismissed_mention_trigger.as_ref() == Some(&active_trigger) {
                         active_dismissed_trigger = Some(active_trigger);
                         None
-                    } else if trigger == ContextSelectorTrigger::Mention {
-                        tracing::info!(
-                            target: "script_kit::tab_ai",
-                            event = "agent_chat_at_context_picker_suppressed",
-                            query = %query,
-                            "Agent Chat no longer opens a detached @ context picker; @ tokens stay inline/spine-owned"
-                        );
-                        None
                     } else {
                         let mut items = match trigger {
-                            ContextSelectorTrigger::Slash => {
+                            AgentChatComposerPickerTrigger::Slash => {
                                 if self.cached_slash_commands.is_empty() {
                                     // Async discovery hasn't completed yet — show
                                     // intentional loading row instead of blank list.
@@ -10572,10 +10552,9 @@ impl AgentChatView {
                                     }
                                 }
                             }
-                            ContextSelectorTrigger::Profile => {
+                            AgentChatComposerPickerTrigger::Profile => {
                                 self.build_profile_picker_items(&query)
                             }
-                            ContextSelectorTrigger::Mention => unreachable!(),
                         };
 
                         // Filter out portal items the host does not support.
@@ -10595,7 +10574,7 @@ impl AgentChatView {
 
                         // If a slash prime is pending, pre-select the matching row.
                         if let Some(ref prime_name) = self.pending_slash_prime {
-                            if trigger == ContextSelectorTrigger::Slash {
+                            if trigger == AgentChatComposerPickerTrigger::Slash {
                                 if let Some(ix) = items.iter().position(|item| {
                                     matches!(
                                         &item.kind,
@@ -10610,14 +10589,14 @@ impl AgentChatView {
                             }
                         }
 
-                        let visible = Self::mention_visible_range_from_start(
+                        let visible = Self::composer_picker_visible_range_from_start(
                             previous_visible_start,
                             selected_index,
                             items.len(),
                         );
                         tracing::info!(
                             target: "script_kit::tab_ai",
-                            event = "agent_chat_mention_picker_refreshed",
+                            event = "agent_chat_composer_picker_refreshed",
                             layout = "inline_dropdown",
                             ?trigger,
                             query = %query,
@@ -10628,7 +10607,7 @@ impl AgentChatView {
                             visible_start = visible.start,
                             visible_end = visible.end,
                         );
-                        Some(AgentChatMentionSession {
+                        Some(AgentChatComposerPickerSession {
                             trigger,
                             trigger_range,
                             query,
@@ -10654,14 +10633,14 @@ impl AgentChatView {
     }
 
     /// Log the visible window range for observability.
-    fn log_mention_visible_range(&self, reason: &'static str) {
-        let Some(session) = self.mention_session.as_ref() else {
+    fn log_composer_picker_visible_range(&self, reason: &'static str) {
+        let Some(session) = self.composer_picker_session.as_ref() else {
             return;
         };
-        let visible = Self::mention_visible_range(session);
+        let visible = Self::composer_picker_visible_range(session);
         tracing::info!(
             target: "script_kit::tab_ai",
-            event = "agent_chat_mention_visible_range",
+            event = "agent_chat_composer_picker_visible_range",
             reason,
             selected_index = session.selected_index,
             item_count = session.items.len(),
@@ -10689,17 +10668,17 @@ impl AgentChatView {
         });
         self.refresh_agent_chat_spine_from_composer(cx);
         if !self.agent_chat_spine_owns_list() {
-            self.refresh_mention_session(cx);
+            self.refresh_composer_picker_session(cx);
         }
         tracing::info!(
             target: "script_kit::tab_ai",
             event = "agent_chat_picker_hint_applied",
             token,
-            has_session = self.mention_session.is_some(),
+            has_session = self.composer_picker_session.is_some(),
             cursor_after = next_cursor,
         );
-        if self.mention_session.is_some() {
-            self.accept_mention_selection_impl(false, cx);
+        if self.composer_picker_session.is_some() {
+            self.accept_composer_picker_selection_impl(false, cx);
         } else {
             self.sync_inline_mentions(cx);
             self.clear_composer_picker(AgentChatComposerPickerDismissReason::HostHide, cx);
@@ -10728,7 +10707,7 @@ impl AgentChatView {
         );
         self.refresh_agent_chat_spine_from_composer(cx);
         if !self.agent_chat_spine_owns_list() {
-            self.refresh_mention_session(cx);
+            self.refresh_composer_picker_session(cx);
         }
         self.sync_inline_mentions(cx);
         self.refresh_composer_picker_state_after_parent_change(cx);
@@ -10739,8 +10718,8 @@ impl AgentChatView {
     /// Both Enter and Tab autocomplete the focused picker row. Literal slash
     /// commands are inserted into the composer; slash-picked context items
     /// attach a pending context part and remove the typed `/query` token.
-    pub(crate) fn accept_mention_selection(&mut self, cx: &mut Context<Self>) {
-        self.accept_mention_selection_impl(false, cx);
+    pub(crate) fn accept_composer_picker_selection(&mut self, cx: &mut Context<Self>) {
+        self.accept_composer_picker_selection_impl(false, cx);
     }
 
     /// Fallback entry for main-window key interceptors that need to keep Enter
@@ -10750,10 +10729,10 @@ impl AgentChatView {
     }
 
     pub(crate) fn select_mention_index(&mut self, index: usize) {
-        if let Some(session) = self.mention_session.as_mut() {
+        if let Some(session) = self.composer_picker_session.as_mut() {
             if !session.items.is_empty() {
                 session.selected_index = index.min(session.items.len().saturating_sub(1));
-                let visible = Self::mention_visible_range_from_start(
+                let visible = Self::composer_picker_visible_range_from_start(
                     session.visible_start,
                     session.selected_index,
                     session.items.len(),
@@ -10835,7 +10814,7 @@ impl AgentChatView {
     ///
     /// `submit` only applies to literal slash commands such as `/compact`.
     /// Context attachments picked from slash mode never auto-submit.
-    fn accept_mention_selection_impl(&mut self, submit: bool, cx: &mut Context<Self>) {
+    fn accept_composer_picker_selection_impl(&mut self, submit: bool, cx: &mut Context<Self>) {
         use crate::ai::context_mentions::part_to_inline_token;
 
         let transition = reduce_agent_chat_composer_picker(
@@ -10862,11 +10841,7 @@ impl AgentChatView {
             return;
         }
 
-        let trigger_str = match session.trigger {
-            ContextSelectorTrigger::Mention => "@",
-            ContextSelectorTrigger::Slash => "/",
-            ContextSelectorTrigger::Profile => PROFILE_TRIGGER_STR,
-        };
+        let trigger_str = session.trigger.label();
 
         tracing::info!(
             target: "script_kit::tab_ai",
@@ -10887,7 +10862,7 @@ impl AgentChatView {
         });
 
         // ── Slash command acceptance: default inserts text, skills stage content ──
-        if session.trigger == ContextSelectorTrigger::Slash {
+        if session.trigger == AgentChatComposerPickerTrigger::Slash {
             if let ContextSelectorRowKind::SlashCommand(ref payload) = item.kind {
                 match payload {
                     SlashCommandPayload::Default { name } => {
@@ -11008,7 +10983,7 @@ impl AgentChatView {
             }
         }
 
-        if session.trigger == ContextSelectorTrigger::Profile {
+        if session.trigger == AgentChatComposerPickerTrigger::Profile {
             if let ContextSelectorRowKind::AgentChatProfile { profile_id, .. } = item.kind {
                 let current_text = self.live_thread().read(cx).input.text().to_string();
                 let next_text = Self::replace_text_in_char_range(
@@ -11061,7 +11036,7 @@ impl AgentChatView {
                 );
                 self.refresh_agent_chat_spine_from_composer(cx);
                 if !self.agent_chat_spine_owns_list() {
-                    self.refresh_mention_session(cx);
+                    self.refresh_composer_picker_session(cx);
                 }
                 self.refresh_composer_picker_state_after_parent_change(cx);
                 return;
@@ -11085,7 +11060,7 @@ impl AgentChatView {
                 (
                     kind.part(),
                     kind.spec().mention.unwrap_or("@here").to_string(),
-                    session.trigger == ContextSelectorTrigger::Mention,
+                    false,
                 )
             }
 
@@ -11103,11 +11078,7 @@ impl AgentChatView {
                     path = %path_text,
                     inline_text = %inline_text,
                 );
-                (
-                    file_part,
-                    inline_text,
-                    session.trigger == ContextSelectorTrigger::Mention,
-                )
+                (file_part, inline_text, false)
             }
             ContextSelectorRowKind::SlashCommand(_)
             | ContextSelectorRowKind::AgentChatProfile { .. }
@@ -11204,11 +11175,7 @@ impl AgentChatView {
                     portal_kind = ?payload.portal_kind,
                     inline_text = %inline_text,
                 );
-                (
-                    part,
-                    inline_text,
-                    session.trigger == ContextSelectorTrigger::Mention,
-                )
+                (part, inline_text, false)
             }
             ContextSelectorRowKind::Portal(portal_kind) => {
                 self.open_picker_portal(
@@ -11423,16 +11390,16 @@ impl AgentChatView {
     }
 
     /// Fixed picker dropdown width.
-    const AGENT_CHAT_MENTION_PICKER_WIDTH: f32 = 320.0;
+    const AGENT_CHAT_COMPOSER_PICKER_WIDTH: f32 = 320.0;
 
     /// Minimum usable picker width when the window is narrow.
-    const AGENT_CHAT_MENTION_PICKER_MIN_WIDTH: f32 = 200.0;
+    const AGENT_CHAT_COMPOSER_PICKER_MIN_WIDTH: f32 = 200.0;
 
     /// Horizontal padding used by the Agent Chat composer input row.
     const AGENT_CHAT_INPUT_PADDING_X: f32 = 12.0;
 
     /// Keep the picker inset from the right edge so it never clips.
-    const AGENT_CHAT_MENTION_PICKER_EDGE_GUTTER: f32 = 12.0;
+    const AGENT_CHAT_COMPOSER_PICKER_EDGE_GUTTER: f32 = 12.0;
 
     /// Top padding used by the Agent Chat composer input row.
     const AGENT_CHAT_INPUT_PADDING_Y: f32 = 10.0;
@@ -11441,7 +11408,7 @@ impl AgentChatView {
     const AGENT_CHAT_INPUT_LINE_HEIGHT: f32 = 22.0;
 
     /// Gap between the active mention line and the picker.
-    const AGENT_CHAT_MENTION_PICKER_OFFSET_Y: f32 = 4.0;
+    const AGENT_CHAT_COMPOSER_PICKER_OFFSET_Y: f32 = 4.0;
 
     /// Composer text size used for the inline Agent Chat input.
     const AGENT_CHAT_INPUT_FONT_SIZE: f32 = 17.0;
@@ -11459,15 +11426,15 @@ impl AgentChatView {
     const FOCUSED_TEXT_VARIATION_AREA_PADDING_Y: f32 = 8.0;
     const FOCUSED_TEXT_VARIATION_AREA_MAX_HEIGHT: f32 = 500.0;
 
-    fn mention_picker_width_for_window(window_width: f32) -> f32 {
-        let max_width = (window_width - (Self::AGENT_CHAT_MENTION_PICKER_EDGE_GUTTER * 2.0))
-            .min(Self::AGENT_CHAT_MENTION_PICKER_WIDTH);
-        max_width.max(Self::AGENT_CHAT_MENTION_PICKER_MIN_WIDTH)
+    fn composer_picker_width_for_window(window_width: f32) -> f32 {
+        let max_width = (window_width - (Self::AGENT_CHAT_COMPOSER_PICKER_EDGE_GUTTER * 2.0))
+            .min(Self::AGENT_CHAT_COMPOSER_PICKER_WIDTH);
+        max_width.max(Self::AGENT_CHAT_COMPOSER_PICKER_MIN_WIDTH)
     }
 
-    fn clamp_mention_picker_left(anchor_left: f32, picker_width: f32, window_width: f32) -> f32 {
+    fn clamp_composer_picker_left(anchor_left: f32, picker_width: f32, window_width: f32) -> f32 {
         let min_left = Self::AGENT_CHAT_INPUT_PADDING_X;
-        let max_left = (window_width - picker_width - Self::AGENT_CHAT_MENTION_PICKER_EDGE_GUTTER)
+        let max_left = (window_width - picker_width - Self::AGENT_CHAT_COMPOSER_PICKER_EDGE_GUTTER)
             .max(min_left);
         anchor_left.clamp(min_left, max_left)
     }
@@ -11539,20 +11506,19 @@ impl AgentChatView {
 
     /// Returns `(left, top, width)` for the composer picker, anchored to the
     /// trigger character position in the Agent Chat composer, including wrapping.
-    fn mention_picker_anchor_for_session(
+    fn composer_picker_anchor_for_session(
         &self,
-        session: &AgentChatMentionSession,
+        session: &AgentChatComposerPickerSession,
         input_text: &str,
         window_width: f32,
         cx: &App,
     ) -> (f32, f32, f32) {
-        let picker_width = Self::mention_picker_width_for_window(window_width);
+        let picker_width = Self::composer_picker_width_for_window(window_width);
         let trigger_start_byte = Self::char_to_byte_offset(input_text, session.trigger_range.start);
         let prefix = &input_text[..trigger_start_byte];
         let trigger_text = match session.trigger {
-            ContextSelectorTrigger::Mention => "@",
-            ContextSelectorTrigger::Slash => "/",
-            ContextSelectorTrigger::Profile => PROFILE_TRIGGER_STR,
+            AgentChatComposerPickerTrigger::Slash => "/",
+            AgentChatComposerPickerTrigger::Profile => PROFILE_TRIGGER_STR,
         };
         let trigger_width = Self::measure_agent_chat_input_prefix_width(trigger_text, cx);
         let (after_trigger_x, after_trigger_y) = Self::measure_agent_chat_input_cursor_position(
@@ -11562,28 +11528,28 @@ impl AgentChatView {
         );
         let unclamped_left =
             Self::AGENT_CHAT_INPUT_PADDING_X + (after_trigger_x - trigger_width).max(0.0);
-        let left = Self::clamp_mention_picker_left(unclamped_left, picker_width, window_width);
+        let left = Self::clamp_composer_picker_left(unclamped_left, picker_width, window_width);
         let top = Self::AGENT_CHAT_INPUT_PADDING_Y
             + after_trigger_y
             + Self::AGENT_CHAT_INPUT_LINE_HEIGHT
-            + Self::AGENT_CHAT_MENTION_PICKER_OFFSET_Y;
+            + Self::AGENT_CHAT_COMPOSER_PICKER_OFFSET_Y;
         (left, top, picker_width)
     }
 
     /// Compute the visible range of items for a selected index.
-    pub(super) fn mention_visible_range_for(
+    pub(super) fn composer_picker_visible_range_for(
         selected_index: usize,
         item_count: usize,
     ) -> std::ops::Range<usize> {
         crate::components::inline_dropdown::inline_dropdown_visible_range(
             selected_index,
             item_count,
-            Self::MENTION_PICKER_MAX_VISIBLE,
+            Self::COMPOSER_PICKER_MAX_VISIBLE,
         )
     }
 
     /// Compute the visible range of items for the selected index.
-    fn mention_visible_range_from_start(
+    fn composer_picker_visible_range_from_start(
         visible_start: usize,
         selected_index: usize,
         item_count: usize,
@@ -11592,13 +11558,15 @@ impl AgentChatView {
             visible_start,
             selected_index,
             item_count,
-            Self::MENTION_PICKER_MAX_VISIBLE,
+            Self::COMPOSER_PICKER_MAX_VISIBLE,
         )
     }
 
     /// Compute the visible range of items for the selected index.
-    fn mention_visible_range(session: &AgentChatMentionSession) -> std::ops::Range<usize> {
-        Self::mention_visible_range_from_start(
+    fn composer_picker_visible_range(
+        session: &AgentChatComposerPickerSession,
+    ) -> std::ops::Range<usize> {
+        Self::composer_picker_visible_range_from_start(
             session.visible_start,
             session.selected_index,
             session.items.len(),
@@ -11621,7 +11589,7 @@ impl AgentChatView {
                 this.confirm_setup_agent_selection(entry.clone(), cx);
             }
             AgentChatSetupCardEvent::CancelPicker => {
-                this.mention_session = None;
+                this.composer_picker_session = None;
                 cx.notify();
             }
             AgentChatSetupCardEvent::OpenPicker => {
@@ -12366,7 +12334,7 @@ impl AgentChatView {
         key: &str,
         telemetry_args: AgentChatKeyRouteTelemetryArgs,
     ) {
-        let picker_open = self.mention_session.is_some();
+        let picker_open = self.composer_picker_session.is_some();
         let telemetry = crate::protocol::AgentChatKeyRouteTelemetry {
             key: key.to_string(),
             route: telemetry_args.route.clone(),
@@ -12408,7 +12376,7 @@ impl AgentChatView {
         );
     }
 
-    /// Emit structured picker-accepted telemetry after a mention/slash item is accepted.
+    /// Emit structured picker-accepted telemetry after a slash/profile item is accepted.
     fn emit_picker_accepted_telemetry(
         &mut self,
         trigger: &str,
@@ -12863,7 +12831,7 @@ impl AgentChatView {
             && !self.focused_text_variations.is_empty()
             && self.focused_text_editing_variation.is_none()
             && !self.scope_focused
-            && self.mention_session.is_none()
+            && self.composer_picker_session.is_none()
             && self.live_thread().read(cx).input.is_empty()
             && !modifiers.platform
             && !modifiers.control
@@ -12889,7 +12857,7 @@ impl AgentChatView {
             && self.focused_text.is_some()
             && self.focused_text_editing_variation.is_none()
             && !self.scope_focused
-            && self.mention_session.is_none()
+            && self.composer_picker_session.is_none()
             && !modifiers.platform
             && !modifiers.control
             && !modifiers.alt
@@ -12942,7 +12910,7 @@ impl AgentChatView {
             if should_refresh {
                 self.refresh_agent_chat_spine_from_composer(cx);
                 if !self.agent_chat_spine_owns_list() {
-                    self.refresh_mention_session(cx);
+                    self.refresh_composer_picker_session(cx);
                 }
             }
             cx.stop_propagation();
@@ -13026,14 +12994,14 @@ impl AgentChatView {
         }
 
         // ── Unified picker intercept (slash/profile commands) ─────
-        if self.mention_session.is_some() {
+        if self.composer_picker_session.is_some() {
             if crate::ui_foundation::is_key_up(key) {
                 let transition = reduce_agent_chat_composer_picker(
                     self.composer_picker_state(),
                     AgentChatComposerPickerEvent::NavigatePrevious,
                 );
                 self.apply_composer_picker_transition(transition, cx);
-                if let Some(session) = self.mention_session.as_ref() {
+                if let Some(session) = self.composer_picker_session.as_ref() {
                     tracing::info!(
                         target: "script_kit::tab_ai",
                         event = "agent_chat_mention_selection_changed",
@@ -13051,7 +13019,7 @@ impl AgentChatView {
                     AgentChatComposerPickerEvent::NavigateNext,
                 );
                 self.apply_composer_picker_transition(transition, cx);
-                if let Some(session) = self.mention_session.as_ref() {
+                if let Some(session) = self.composer_picker_session.as_ref() {
                     tracing::info!(
                         target: "script_kit::tab_ai",
                         event = "agent_chat_mention_selection_changed",
@@ -13106,7 +13074,7 @@ impl AgentChatView {
             });
             self.refresh_agent_chat_spine_from_composer(cx);
             if !self.agent_chat_spine_owns_list() {
-                self.refresh_mention_session(cx);
+                self.refresh_composer_picker_session(cx);
             }
             cx.stop_propagation();
             return;
@@ -13203,7 +13171,7 @@ impl AgentChatView {
             && !self.focused_text_variations.is_empty()
             && self.focused_text_editing_variation.is_none()
             && !self.scope_focused
-            && self.mention_session.is_none()
+            && self.composer_picker_session.is_none()
         {
             self.regenerate_focused_text_variations(cx);
             cx.stop_propagation();
@@ -13215,7 +13183,7 @@ impl AgentChatView {
             && !self.focused_text_variations.is_empty()
             && self.focused_text_editing_variation.is_none()
             && !self.scope_focused
-            && self.mention_session.is_none()
+            && self.composer_picker_session.is_none()
             && modifiers.platform
             && !modifiers.shift
             && !modifiers.control
@@ -13257,7 +13225,7 @@ impl AgentChatView {
             && !modifiers.alt
             && !modifiers.shift
             && !self.scope_focused
-            && self.mention_session.is_none()
+            && self.composer_picker_session.is_none()
             && self.focused_text_editing_variation.is_none()
         {
             let input_empty = self.live_thread().read(cx).input.text().trim().is_empty();
@@ -13339,7 +13307,7 @@ impl AgentChatView {
         {
             self.refresh_agent_chat_spine_from_composer(cx);
             if !self.agent_chat_spine_owns_list() {
-                self.refresh_mention_session(cx);
+                self.refresh_composer_picker_session(cx);
             }
             cx.stop_propagation();
             return;
@@ -13369,7 +13337,7 @@ impl AgentChatView {
                 });
                 self.refresh_agent_chat_spine_from_composer(cx);
                 if !self.agent_chat_spine_owns_list() {
-                    self.refresh_mention_session(cx);
+                    self.refresh_composer_picker_session(cx);
                 }
                 self.sync_pasted_clipboard_tokens(cx);
                 self.sync_inline_mentions(cx);
@@ -13394,7 +13362,7 @@ impl AgentChatView {
                 });
                 self.refresh_agent_chat_spine_from_composer(cx);
                 if !self.agent_chat_spine_owns_list() {
-                    self.refresh_mention_session(cx);
+                    self.refresh_composer_picker_session(cx);
                 }
                 self.sync_pasted_clipboard_tokens(cx);
                 self.sync_inline_mentions(cx);
@@ -13427,7 +13395,7 @@ impl AgentChatView {
                 });
                 self.refresh_agent_chat_spine_from_composer(cx);
                 if !self.agent_chat_spine_owns_list() {
-                    self.refresh_mention_session(cx);
+                    self.refresh_composer_picker_session(cx);
                 }
                 self.sync_inline_mentions(cx);
                 cx.notify();
@@ -13466,7 +13434,7 @@ impl AgentChatView {
             self.sync_pasted_clipboard_tokens(cx);
             self.refresh_agent_chat_spine_from_composer(cx);
             if !self.agent_chat_spine_owns_list() {
-                self.refresh_mention_session(cx);
+                self.refresh_composer_picker_session(cx);
             }
             self.sync_inline_mentions(cx);
             self.check_for_transient_exit(window, cx);
@@ -13620,7 +13588,7 @@ impl Render for AgentChatView {
                     this.handle_key_down(event, window, cx);
                 }))
                 .on_any_mouse_down(cx.listener(|this, _event, _window, cx| {
-                    this.dismiss_mention_picker(cx);
+                    this.dismiss_composer_picker(cx);
                 }))
                 .child(self.render_focused_text_mini(
                     active_pending,
@@ -13671,7 +13639,7 @@ impl Render for AgentChatView {
                 this.handle_key_down(event, window, cx);
             }))
             .on_any_mouse_down(cx.listener(|this, _event, _window, cx| {
-                this.dismiss_mention_picker(cx);
+                this.dismiss_composer_picker(cx);
             }));
 
         if matches!(variant_config.composer, AgentChatComposerPlacement::Default) {
@@ -14168,7 +14136,7 @@ mod tests {
 
     #[test]
     fn mention_picker_width_respects_window_gutters() {
-        let width = AgentChatView::mention_picker_width_for_window(240.0);
+        let width = AgentChatView::composer_picker_width_for_window(240.0);
         assert_eq!(
             width, 216.0,
             "picker width should shrink to fit within the window gutters"
@@ -14177,17 +14145,17 @@ mod tests {
 
     #[test]
     fn mention_picker_width_caps_at_design_width() {
-        let width = AgentChatView::mention_picker_width_for_window(1200.0);
+        let width = AgentChatView::composer_picker_width_for_window(1200.0);
         assert_eq!(
             width,
-            AgentChatView::AGENT_CHAT_MENTION_PICKER_WIDTH,
+            AgentChatView::AGENT_CHAT_COMPOSER_PICKER_WIDTH,
             "wide windows should keep the canonical picker width"
         );
     }
 
     #[test]
     fn mention_picker_left_clamps_to_visible_right_edge() {
-        let left = AgentChatView::clamp_mention_picker_left(640.0, 320.0, 800.0);
+        let left = AgentChatView::clamp_composer_picker_left(640.0, 320.0, 800.0);
         assert_eq!(
             left, 468.0,
             "picker should shift left so its right edge stays onscreen"
@@ -14196,7 +14164,7 @@ mod tests {
 
     #[test]
     fn mention_picker_left_never_moves_past_left_padding() {
-        let left = AgentChatView::clamp_mention_picker_left(-30.0, 320.0, 800.0);
+        let left = AgentChatView::clamp_composer_picker_left(-30.0, 320.0, 800.0);
         assert_eq!(
             left,
             AgentChatView::AGENT_CHAT_INPUT_PADDING_X,

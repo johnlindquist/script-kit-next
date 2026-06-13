@@ -1,21 +1,25 @@
 #!/usr/bin/env bun
 /**
- * Runtime proof for Day Page current-line spine behavior.
+ * Negative runtime proof for the deleted Day Page inline Spine/Prompt Builder overlay.
  *
- * Drives the real main-hotkey Day Page path, sets the active editor text through
- * the transaction input primitive, then accepts non-context spine rows through
- * the same stdin simulateKey path used by the main spine probes.
+ * The main menu still owns Spine/context rows. Day/Today must not render a
+ * local absolute overlay, expose Day spine rows through getElements, or show
+ * Prompt Builder/Ready to send after editor focus/click-like interaction.
  */
 import { Driver, type Json } from "../devtools/driver";
 import { openDayPage } from "./day-page-open-helper";
 
 const BINARY =
   process.env.PROBE_BINARY ??
-  "target-agent/artifacts/day-page-spine/script-kit-gpui";
+  process.env.SCRIPT_KIT_GPUI_BINARY ??
+  "target-agent/artifacts/day-page-no-spine/script-kit-gpui";
 
 const receipts: Record<string, Json> = {};
 const failures: string[] = [];
 const runId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+const forbiddenText = ["Prompt Builder", "Ready to send"];
+const forbiddenIds = ["day-page-spine-list", "day_page_spine_row"];
 
 function check(name: string, ok: boolean, detail: Json = {}) {
   receipts[name] = { ok, ...detail };
@@ -29,22 +33,31 @@ function walkElements(node: unknown, out: Json[] = []): Json[] {
     return out;
   }
   const json = node as Json;
-  if (typeof json.semanticId === "string" || typeof json.id === "string") {
-    out.push(json);
-  }
+  if (typeof json.semanticId === "string" || typeof json.id === "string") out.push(json);
   for (const value of Object.values(json)) walkElements(value, out);
   return out;
 }
 
-async function editorText(driver: Driver): Promise<string | null> {
-  const elements = (await driver.getElements(
-    { target: { type: "main" } },
-    { timeoutMs: 5000 },
-  )) as Json;
-  const editor = walkElements(elements).find(
-    (el) => el.semanticId === "input:day-page-editor" || el.id === "day-page-editor",
-  );
-  return (editor?.value as string | undefined) ?? null;
+function containsForbidden(value: unknown): string[] {
+  const text = JSON.stringify(value);
+  const hits: string[] = [];
+  for (const forbidden of [...forbiddenText, ...forbiddenIds]) {
+    if (text.includes(forbidden)) hits.push(forbidden);
+  }
+  return hits;
+}
+
+function spineRowsInDayElements(elements: Json): Json[] {
+  return walkElements(elements).filter((el) => {
+    const semanticId = typeof el.semanticId === "string" ? el.semanticId : "";
+    const id = typeof el.id === "string" ? el.id : "";
+    const role = typeof el.role === "string" ? el.role : "";
+    return (
+      id.includes("day-page-spine") ||
+      semanticId.includes("day-page-spine") ||
+      role === "day_page_spine_row"
+    );
+  });
 }
 
 async function setDayPageInput(driver: Driver, text: string, label: string) {
@@ -61,258 +74,80 @@ async function setDayPageInput(driver: Driver, text: string, label: string) {
     ],
     { timeoutMs: 5000 },
   )) as Json;
-  check(`batch_set_${label}`, batch.success === true, { batch });
-  await Bun.sleep(150);
+  check(`set_${label}`, batch.success === true, { batch });
+  await Bun.sleep(100);
 }
 
-async function verifyFragmentCompletion(
-  driver: Driver,
-  label: string,
-  text: string,
-  expectedSemanticId: string | ((id: string) => boolean),
-  expectedText: string | ((beforeId: string) => string),
-) {
-  await setDayPageInput(driver, text, label);
+async function assertNoDayOverlay(driver: Driver, label: string) {
+  const state = (await driver.getState({ timeoutMs: 5000 })) as Json;
   const elements = (await driver.getElements(
-    { target: { type: "main" }, limit: 240 },
+    { target: { type: "main" }, limit: 260 },
     { timeoutMs: 5000 },
   )) as Json;
-  const flat = walkElements(elements);
-  const row = flat.find((el) => {
-    if (typeof el.semanticId !== "string") return false;
-    return typeof expectedSemanticId === "string"
-      ? el.semanticId === expectedSemanticId
-      : expectedSemanticId(el.semanticId);
+  const rows = spineRowsInDayElements(elements);
+  const stateHits = containsForbidden(state);
+  const elementHits = containsForbidden(elements);
+  check(`no_day_spine_rows_${label}`, rows.length === 0, {
+    rows: rows.slice(0, 12),
   });
-  check(`row_visible_${label}`, Boolean(row), {
-    expectedSemanticId: typeof expectedSemanticId === "string" ? expectedSemanticId : "predicate",
-    selectedSemanticId: elements.selectedSemanticId ?? null,
-    row: row ?? null,
-    ids: flat.slice(0, 20).map((el) => el.semanticId ?? el.id),
+  check(`no_prompt_builder_text_${label}`, stateHits.length === 0 && elementHits.length === 0, {
+    stateHits,
+    elementHits,
   });
-  check(`row_selected_${label}`, Boolean(row) && elements.selectedSemanticId === row?.semanticId, {
-    selectedSemanticId: elements.selectedSemanticId ?? null,
-    rowSemanticId: row?.semanticId ?? null,
+  check(`still_day_page_${label}`, state.promptType === "dayPage", {
+    promptType: state.promptType,
+    inputValue: state.inputValue,
   });
-
-  await driver.simulateKey("enter");
-  await Bun.sleep(200);
-  const afterText = await editorText(driver);
-  const expected =
-    typeof expectedText === "string" ? expectedText : expectedText(String(row?.semanticId ?? ""));
-  check(`enter_completes_${label}`, afterText === expected, { afterText, expected });
 }
 
-async function verifyModeExitRow(driver: Driver, label: string, text: string, expectedSemanticId: string) {
-  await setDayPageInput(driver, text, label);
-  const elements = (await driver.getElements(
-    { target: { type: "main" }, limit: 120 },
-    { timeoutMs: 5000 },
-  )) as Json;
-  const flat = walkElements(elements);
-  const row = flat.find((el) => el.semanticId === expectedSemanticId);
-  check(`mode_exit_row_visible_${label}`, Boolean(row), {
-    expectedSemanticId,
-    selectedSemanticId: elements.selectedSemanticId ?? null,
-    row: row ?? null,
-    ids: flat.slice(0, 16).map((el) => el.semanticId ?? el.id),
-  });
-  check(
-    `mode_exit_row_selected_${label}`,
-    Boolean(row) && elements.selectedSemanticId === expectedSemanticId,
-    { selectedSemanticId: elements.selectedSemanticId ?? null },
-  );
-}
+const samples = [
+  ["slash_rewrite", "/rew"],
+  ["style_professional", ".pro"],
+  ["capture_todo", ";to"],
+  ["profile", "|"],
+  ["cwd", ">d"],
+  ["prompt_tail", "/rewrite summarize this folder"],
+  ["markdown_link", "[release notes](https://example.com/release-notes)"],
+] as const;
 
 const driver = await Driver.launch({
   binary: BINARY,
   sandboxHome: true,
-  sessionName: "day-page-spine",
+  sessionName: "day-page-no-spine-overlay",
   defaultTimeoutMs: 8000,
   env: { SCRIPT_KIT_PANEL_INVARIANTS_ALLOW_MISMATCH: "1" },
 });
 
 try {
-  const maybeDayState = await openDayPage(driver, runId);
-
-  check("opened_day_page", maybeDayState.promptType === "dayPage", {
-    promptType: maybeDayState.promptType,
+  const dayState = await openDayPage(driver, runId);
+  check("opened_day_page", dayState.promptType === "dayPage", {
+    promptType: dayState.promptType,
   });
 
-  await verifyFragmentCompletion(
-    driver,
-    "slash_rewrite",
-    "/rew",
-    "spine:/:rewrite",
-    "/rewrite ",
-  );
+  for (const [label, text] of samples) {
+    await setDayPageInput(driver, text, label);
+    await assertNoDayOverlay(driver, label);
+    await driver.simulateKey("enter");
+    await Bun.sleep(75);
+    await assertNoDayOverlay(driver, `${label}_after_enter`);
+  }
 
-  await verifyFragmentCompletion(
-    driver,
-    "style_professional",
-    ".pro",
-    "spine:.:professional",
-    ".professional ",
-  );
-
-  await verifyFragmentCompletion(
-    driver,
-    "capture_todo",
-    ";to",
-    "spine:;:todo",
-    "todo; ",
-  );
-
-  await verifyFragmentCompletion(
-    driver,
-    "filter_script",
-    ":type:s",
-    "spine:::qualifier:type:script",
-    ":type:script ",
-  );
-
-  await verifyFragmentCompletion(
-    driver,
-    "profile_first",
-    "|",
-    (id) => id.startsWith("spine:|:"),
-    (id) => `|${id.replace("spine:|:", "")} `,
-  );
-
-  await verifyModeExitRow(driver, "tilde_file_search", "~readme", "spine:~:mode-exit");
-  await verifyModeExitRow(driver, "bang_terminal", "!echo hi", "spine:!:mode-exit");
-  await verifyModeExitRow(driver, "question_actions", "?", "spine:?:mode-exit");
-
-  const plainNoCwdBatch = (await driver.batch(
-    [
-      { type: "setInput", text: "plain text before cwd" },
-      {
-        type: "waitFor",
-        condition: {
-          type: "stateMatch",
-          state: { promptType: "dayPage", inputValue: "plain text before cwd" },
-        },
-      },
-    ],
-    { timeoutMs: 5000 },
-  )) as Json;
-  check("batch_set_day_page_plain_without_cwd", plainNoCwdBatch.success === true, {
-    batch: plainNoCwdBatch,
+} catch (error) {
+  check("probe_exception", false, {
+    message: error instanceof Error ? error.message : String(error),
+    stack: error instanceof Error ? error.stack : null,
   });
-
-  await driver.simulateKey("enter", ["cmd"]);
-  await Bun.sleep(250);
-  const afterPlainNoCwdState = (await driver.getState({ timeoutMs: 5000 })) as Json;
-  check(
-    "cmd_enter_plain_without_cwd_stays_on_day_page",
-    afterPlainNoCwdState.promptType === "dayPage" &&
-      afterPlainNoCwdState.inputValue === "plain text before cwd",
-    {
-      promptType: afterPlainNoCwdState.promptType,
-      inputValue: afterPlainNoCwdState.inputValue,
-    },
-  );
-
-  const cwdBatch = (await driver.batch(
-    [
-      { type: "setInput", text: ">d" },
-      {
-        type: "waitFor",
-        condition: {
-          type: "stateMatch",
-          state: { promptType: "dayPage", inputValue: ">d" },
-        },
-      },
-    ],
-    { timeoutMs: 5000 },
-  )) as Json;
-  check("batch_set_day_page_cwd_prompt", cwdBatch.success === true, {
-    batch: cwdBatch,
-  });
-
-  const cwdElements = (await driver.getElements(
-    { target: { type: "main" }, limit: 200 },
-    { timeoutMs: 5000 },
-  )) as Json;
-  const cwdFlat = walkElements(cwdElements);
-  const cwdRow = cwdFlat.find(
-    (el) => typeof el.semanticId === "string" && el.semanticId.startsWith("spine:>:dir:"),
-  );
-  check(
-    "cwd_row_visible_and_selected",
-    Boolean(cwdRow) && cwdElements.selectedSemanticId === cwdRow?.semanticId,
-    {
-      cwdRow: cwdRow ?? null,
-      selectedSemanticId: cwdElements.selectedSemanticId ?? null,
-    },
-  );
-
-  await driver.simulateKey("enter");
-  const afterCwdText = await editorText(driver);
-  check("enter_sets_cwd_and_strips_segment", afterCwdText === "", { afterCwdText });
-
-  const forbiddenLine = "forbidden context line must stay out of handoff";
-  const activeLine = "summarize this folder with allowed active token";
-  const scopedPrompt = `${forbiddenLine}\n${activeLine}`;
-  const cwdPromptBatch = (await driver.batch(
-    [
-      { type: "setInput", text: scopedPrompt },
-      {
-        type: "waitFor",
-        condition: {
-          type: "stateMatch",
-          state: { promptType: "dayPage", inputValue: scopedPrompt },
-        },
-      },
-    ],
-    { timeoutMs: 5000 },
-  )) as Json;
-  check("batch_set_day_page_cwd_plain_prompt", cwdPromptBatch.success === true, {
-    batch: cwdPromptBatch,
-  });
-
-  await driver.simulateKey("enter", ["cmd"]);
-  await Bun.sleep(750);
-  const appLog = await Bun.file(`${driver.sessionDir}/app.log`).text();
-  const handoffLine = appLog
-    .split("\n")
-    .reverse()
-    .find((line) => line.includes("event=day_page_cmd_enter_handoff_started"));
-  const handoffLineLen = Number(/line_len=(\d+)/.exec(handoffLine ?? "")?.[1] ?? -1);
-  check("cmd_enter_handoff_scopes_to_active_line", handoffLineLen === activeLine.length, {
-    handoffLineLen,
-    activeLineLen: activeLine.length,
-    forbiddenLineLen: forbiddenLine.length,
-    fullPromptLen: scopedPrompt.length,
-    handoffLine: handoffLine ?? null,
-  });
-  const afterSubmitState = (await driver.getState({ timeoutMs: 5000 })) as Json;
-  check(
-    "cmd_enter_submits_day_page_prompt_to_agent_chat",
-    afterSubmitState.promptType === "agentChatChat",
-    {
-      promptType: afterSubmitState.promptType,
-      inputValue: afterSubmitState.inputValue,
-    },
-  );
-
-  check("no_gpui_entity_double_lease", !appLog.includes("gpui_entity_double_lease"), {});
-  check("no_runtime_panic", !appLog.includes("panicked at"), {});
-
-  const pass = failures.length === 0;
-  console.log(
-    JSON.stringify(
-      {
-        pass,
-        failures,
-        sessionDir: driver.sessionDir,
-        receipts,
-      },
-      null,
-      2,
-    ),
-  );
-  if (!pass) process.exitCode = 1;
 } finally {
   await driver.close();
 }
+
+const result = {
+  tool: "day-page-spine-probe",
+  classification: failures.length === 0 ? "completed" : "failed",
+  pass: failures.length === 0,
+  failures,
+  receipts,
+};
+
+console.log(JSON.stringify(result, null, 2));
+process.exit(failures.length === 0 ? 0 : 1);

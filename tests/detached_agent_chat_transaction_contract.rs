@@ -12,7 +12,10 @@ fn batch_handler_accepts_agent_chat_detached_target() {
     // The batch handler must resolve targets through resolve_automation_read_target
     // (which accepts AgentChatDetached and Notes) instead of resolve_main_only_target.
     assert!(
-        source.contains("resolve_automation_read_target(&rid, \"batch\""),
+        source.contains("resolve_automation_read_target") && (
+            source.contains("resolve_automation_read_target(\n                        &rid,\n                        \"batch\",") ||
+            source.contains("resolve_automation_read_target(\n                            &rid,\n                            \"batch\",")
+        ),
         "batch handler should use resolve_automation_read_target for target resolution"
     );
 }
@@ -69,7 +72,10 @@ fn detached_agent_chat_batch_emits_wait_complete_log() {
 fn wait_for_uses_agent_chat_read_target_for_agent_chat_conditions() {
     let source = include_str!("../src/prompt_handler/mod.rs");
     assert!(
-        source.contains("resolve_agent_chat_read_target(&rid, \"waitFor\""),
+        source.contains("resolve_agent_chat_read_target") && (
+            source.contains("resolve_agent_chat_read_target(\n                            &rid,\n                            \"waitFor\",") ||
+            source.contains("resolve_agent_chat_read_target(\n                        &rid,\n                        \"waitFor\",")
+        ),
         "waitFor handler should use resolve_agent_chat_read_target for Agent Chat conditions"
     );
 }
@@ -332,11 +338,11 @@ fn batch_with_actions_dialog_target_parses() {
 // ============================================================
 
 #[test]
-fn agent_chat_mention_session_is_crate_visible() {
+fn agent_chat_composer_picker_session_is_crate_visible() {
     let source = include_str!("../src/ai/agent_chat/ui/view.rs");
     assert!(
-        source.contains("pub(crate) mention_session"),
-        "mention_session must be pub(crate) for transaction provider access"
+        source.contains("pub(crate) composer_picker_session"),
+        "composer_picker_session must be pub(crate) for transaction provider access"
     );
 }
 
@@ -350,11 +356,11 @@ fn agent_chat_select_mention_index_is_crate_visible() {
 }
 
 #[test]
-fn agent_chat_accept_mention_selection_is_crate_visible() {
+fn agent_chat_accept_composer_picker_selection_is_crate_visible() {
     let source = include_str!("../src/ai/agent_chat/ui/view.rs");
     assert!(
-        source.contains("pub(crate) fn accept_mention_selection"),
-        "accept_mention_selection must be pub(crate) for batch handler access"
+        source.contains("pub(crate) fn accept_composer_picker_selection"),
+        "accept_composer_picker_selection must be pub(crate) for batch handler access"
     );
 }
 

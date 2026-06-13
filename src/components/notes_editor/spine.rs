@@ -231,9 +231,7 @@ pub(crate) fn spine_projection_owns_editor_list(
     !matches!(
         projection.active_segment_kind,
         crate::spine::SpineSegmentKind::FreeText
-    ) || (projection.is_tail
-        && projection.has_prompt_segments
-        && crate::spine::parse_has_prompt_builder_segments(parse))
+    )
 }
 
 pub(crate) fn push_spine_sections_as_grouped(

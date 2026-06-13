@@ -19,21 +19,21 @@ fn agent_chat_composer_picker_has_explicit_transition_owner() {
 }
 
 #[test]
-fn refresh_mention_session_delegates_to_state_machine() {
+fn refresh_composer_picker_session_delegates_to_state_machine() {
     let refresh = function_body_after(
         AGENT_CHAT_VIEW,
-        "pub(super) fn refresh_mention_session",
-        "fn log_mention_visible_range",
+        "pub(super) fn refresh_composer_picker_session",
+        "fn log_composer_picker_visible_range",
     );
 
     assert!(
         refresh.contains("reduce_agent_chat_composer_picker")
             && refresh.contains("AgentChatComposerPickerEvent::Refresh")
             && refresh.contains("apply_composer_picker_transition"),
-        "refresh_mention_session must delegate lifecycle decisions to the composer picker state machine"
+        "refresh_composer_picker_session must delegate lifecycle decisions to the composer picker state machine"
     );
     assert!(
-        !refresh.contains("self.mention_session = next_session"),
+        !refresh.contains("self.composer_picker_session = next_session"),
         "refresh must not assign the derived session directly"
     );
 }
@@ -56,7 +56,7 @@ fn key_handler_routes_picker_navigation_and_dismissal_through_state_machine() {
     }
 
     assert!(
-        !handle_key_down.contains("self.mention_session = None"),
+        !handle_key_down.contains("self.composer_picker_session = None"),
         "key handling must not close the picker by direct field assignment"
     );
 }
@@ -65,15 +65,15 @@ fn key_handler_routes_picker_navigation_and_dismissal_through_state_machine() {
 fn accept_handler_uses_state_machine_for_close_and_inert_keep_open() {
     let accept = function_body_after(
         AGENT_CHAT_VIEW,
-        "fn accept_mention_selection_impl",
+        "fn accept_composer_picker_selection_impl",
         "fn should_claim_inline_mention_ownership",
     );
 
     assert!(accept.contains("AgentChatComposerPickerEvent::Accept"));
     assert!(accept.contains("AgentChatComposerPickerEvent::AcceptIgnoredKeepOpen"));
     assert!(
-        !accept.contains("self.mention_session.take()")
-            && !accept.contains("self.mention_session = Some(session)"),
+        !accept.contains("self.composer_picker_session.take()")
+            && !accept.contains("self.composer_picker_session = Some(session)"),
         "accept handler should ask the transition owner to close or restore picker state"
     );
 }

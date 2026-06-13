@@ -287,7 +287,7 @@
       "description": "Detaching Agent Chat from a note loses the note context it should answer with.",
       "goal": "Verify detached Agent Chat parent note id, context chips, and attachment fingerprints.",
       "risk": "Agent replies without the context the user intended.",
-      "suggestedProofCommands": ["bun scripts/devtools/notes.ts inspect --session <session> --open", "bun scripts/devtools/agent_chat-mention.ts verify --session <session> --start"],
+      "suggestedProofCommands": ["bun scripts/devtools/notes.ts inspect --session <session> --open"],
       "expectedEvidence": { "pass": "Detached Agent Chat retains originating note identity and context chip.", "fail": "Detached Agent Chat has no parent note id or wrong context fingerprint." }
     },
     {

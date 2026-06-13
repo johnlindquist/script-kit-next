@@ -586,8 +586,11 @@ fn pipe_trigger_selects_agent_chat_profiles_without_context_attachment() {
     assert!(CONTEXT_SELECTOR_TYPES_SOURCE.contains("PROFILE_TRIGGER_CHAR: char = '|'"));
     assert!(CONTEXT_SELECTOR_TYPES_SOURCE.contains("AgentChatProfile"));
     assert!(CONTEXT_SELECTOR_SOURCE.contains("b'|' => ContextSelectorTrigger::Profile"));
-    let accept_body = fn_body(AGENT_CHAT_VIEW_SOURCE, "fn accept_mention_selection_impl(");
-    assert!(accept_body.contains("ContextSelectorTrigger::Profile"));
+    let accept_body = fn_body(
+        AGENT_CHAT_VIEW_SOURCE,
+        "fn accept_composer_picker_selection_impl(",
+    );
+    assert!(accept_body.contains("AgentChatComposerPickerTrigger::Profile"));
     assert!(accept_body.contains("ContextSelectorRowKind::AgentChatProfile"));
     assert!(accept_body.contains("Self::replace_text_in_char_range("));
     assert!(accept_body.contains("session.trigger_range.clone()"));

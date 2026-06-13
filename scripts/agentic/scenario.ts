@@ -181,7 +181,6 @@ export interface HardScenarioReceipt {
     | "agent_chat-footer-activity-indicator-stress"
     | "agent_chat-model-history-popover-visual-state-stress"
     | "agent_chat-context-insertion-preview-parity-stress"
-    | "agent_chat-slash-mention-provider-visibility-stress"
     | "agent_chat-composer-token-keyboard-edit-parity-stress"
     | "agent_chat-transcript-stream-retry-virtualization-stress"
     | "agent_chat-plugin-skill-entry-thread-affinity-stress"
@@ -312,7 +311,6 @@ export interface HardScenarioReceipt {
   agent_chatFooterActivityIndicatorReceipt?: Record<string, unknown>;
   agent_chatModelHistoryPopoverVisualStateReceipt?: Record<string, unknown>;
   agent_chatContextInsertionPreviewParityReceipt?: Record<string, unknown>;
-  agent_chatSlashMentionProviderVisibilityReceipt?: Record<string, unknown>;
   agent_chatComposerTokenKeyboardEditParityReceipt?: Record<string, unknown>;
   agent_chatTranscriptStreamRetryVirtualizationReceipt?: Record<string, unknown>;
   agent_chatPluginSkillEntryThreadAffinityReceipt?: Record<string, unknown>;
@@ -9330,7 +9328,7 @@ export async function runInlinePopoverAnchorResizeStressScenario(opts: {
       kind: "ux.inlinePopoverAnchorResize",
       inlinePopoverAnchorResizeStressId: "loop-twenty-five-inline-popover-anchor-resize",
       session: opts.session,
-      requestedFamilies: opts.families ?? ["agent_chat-slash", "agent_chat-mention", "menu-syntax-colon"],
+      requestedFamilies: opts.families ?? ["agent_chat-slash", "menu-syntax-colon"],
       requestedWidths: opts.widths ?? ["mini", "narrow", "full"],
       requestedFixture: opts.fixture ?? "agentic-inline-popover",
       requestedInputModes: opts.inputModes ?? ["protocol-key", "protocol-resize"],
@@ -10278,63 +10276,6 @@ export async function runAgentChatContextInsertionPreviewParityStressScenario(op
     steps: [{ name: "declare-required-receipt", status: "fail", output: { reason: "missing_agent_chat_context_insertion_preview_parity_receipt" } }],
     failure: { code: "missing_agent_chat_context_insertion_preview_parity_receipt", stepName: "declare-required-receipt", message: "Missing app-side Agent Chat context insertion preview parity receipts." },
     warnings: ["file_linear:agent_chat_context_insertion_preview_parity_receipts_missing"],
-  };
-}
-
-export async function runAgentChatSlashMentionProviderVisibilityStressScenario(opts: {
-  session: string;
-  families?: string[];
-  fixture?: string;
-  providers?: string[];
-  queries?: string[];
-  states?: string[];
-  inputModes?: string[];
-  noNativeInput?: boolean;
-  noNativePointer?: boolean;
-  noNativePicker?: boolean;
-  noQuickLook?: boolean;
-  noSystemPasteboard?: boolean;
-  noNetwork?: boolean;
-  noSubmit?: boolean;
-  dryRunOnly?: boolean;
-  localFixtureOnly?: boolean;
-}): Promise<HardScenarioReceipt> {
-  return {
-    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
-    scenario: "agent_chat-slash-mention-provider-visibility-stress",
-    status: "fail",
-    failClosed: true,
-    failureMode: "fail_closed",
-    missingReceipt: "missing_agent_chat_slash_mention_provider_visibility_receipt",
-    linearIssue: "file_linear:agent_chat_slash_mention_provider_visibility_receipts_missing",
-    agent_chatSlashMentionProviderVisibilityReceipt: {
-      kind: "ux.agent_chatSlashMentionProviderVisibility",
-      agent_chatSlashMentionProviderVisibilityStressId: "loop-thirty-two-agent_chat-slash-mention-provider-visibility",
-      session: opts.session, requestedFamilies: opts.families ?? ["slash", "mention"],
-      fixture: opts.fixture ?? "agentic-agent_chat-provider-hints",
-      requestedProviders: opts.providers ?? ["dictation-history", "browser-history", "notes", "files", "skills"],
-      requestedQueries: opts.queries ?? ["@di", "@browser-history", "@missing", "/new-script", "/unknown"],
-      requestedStates: opts.states ?? ["ready", "unavailable", "loading", "error-recovered", "filtered-empty"],
-      requestedInputModes: opts.inputModes ?? ["protocol-set-input", "protocol-key", "batch"],
-      noNativeInput: opts.noNativeInput ?? true, noNativePointer: opts.noNativePointer ?? true,
-      noNativePicker: opts.noNativePicker ?? true, noQuickLook: opts.noQuickLook ?? true,
-      noSystemPasteboard: opts.noSystemPasteboard ?? true, noNetwork: opts.noNetwork ?? true,
-      noSubmit: opts.noSubmit ?? true, dryRunOnly: opts.dryRunOnly ?? true,
-      localFixtureOnly: opts.localFixtureOnly ?? true,
-      providerHintCatalogId: null, popupFamily: null, triggerText: null, queryText: null,
-      providerReadinessGeneration: null, providerVisibilityRows: [], providerHintText: null,
-      providerUnavailableReason: null, providerLoadingState: null, providerErrorRecoveredState: null,
-      hiddenUntilResourceAvailable: null, dictationProviderVisibleWhenKitResourceReady: null,
-      browserHistoryProviderVisibleWhenCacheReady: null, slashCommandProviderRows: [],
-      mentionProviderRows: [], selectedRowSemanticId: null, focusedRowSemanticId: null,
-      disabledProviderRowsNotAccepted: null, staleProviderGenerationRejected: null,
-      wrongPopupRejected: null, noRawProviderContentLeak: null, noNativePicker: true,
-      noQuickLook: true, noNetwork: true, noSubmit: true, cleanupConfirmed: true,
-    },
-    usage: { stateFirst: true, usedGetState: true, usedGetElements: true, usedNativeInput: false, usedNativePointer: false, usedScreenshot: false, openedSystemSettings: false, mutatedTcc: false, installedAgents: false, triggeredSecurityPrompt: false, networkAccessed: false, systemPasteboardMutated: false },
-    steps: [{ name: "declare-required-receipt", status: "fail", output: { reason: "missing_agent_chat_slash_mention_provider_visibility_receipt" } }],
-    failure: { code: "missing_agent_chat_slash_mention_provider_visibility_receipt", stepName: "declare-required-receipt", message: "Missing app-side Agent Chat slash/mention provider visibility receipts." },
-    warnings: ["file_linear:agent_chat_slash_mention_provider_visibility_receipts_missing"],
   };
 }
 

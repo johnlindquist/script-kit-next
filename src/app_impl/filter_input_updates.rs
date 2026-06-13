@@ -1037,22 +1037,6 @@ impl ScriptListApp {
                 );
                 true
             }
-            SpineListAction::OpenConversation { conversation_id } => {
-                tracing::info!(
-                    target: "script_kit::spine",
-                    event = "apply_spine_action_open_conversation",
-                    conversation_id = %conversation_id,
-                );
-                self.resume_agent_chat_conversation_from_history(conversation_id.as_ref(), "", cx);
-                true
-            }
-            SpineListAction::SubmitPromptPlan => {
-                tracing::info!(
-                    target: "script_kit::spine",
-                    event = "apply_spine_action_submit_prompt_plan",
-                );
-                self.try_submit_spine_prompt_plan_from_enter(cx)
-            }
             SpineListAction::Noop => false,
         }
     }
@@ -1146,11 +1130,11 @@ impl ScriptListApp {
         });
         self.suppress_filter_events = false;
 
-        // Reparse spine at the new cursor position and force tail projection
-        // before invalidation/reconciliation so list state sees the correct projection.
+        // Reparse spine at the new cursor position before
+        // invalidation/reconciliation so sigil list state sees the correct
+        // projection.
         if self.spine_enabled {
             self.set_spine_parse_from_filter_and_cursor(&text, cursor);
-            self.force_spine_tail_projection_after_trailing_space(&text, cursor);
             self.maybe_start_spine_file_subsearch_for_current_projection(cx);
         }
 
@@ -1159,31 +1143,6 @@ impl ScriptListApp {
         self.reconcile_script_list_after_filter_change("spine_segment_replace", cx);
 
         cx.notify();
-    }
-
-    /// If cursor is at end of text and the last char is whitespace and prompt
-    /// segments exist, force the spine projection to a synthetic empty-tail
-    /// FreeText projection so the tail-hint section appears.
-    fn force_spine_tail_projection_after_trailing_space(&mut self, raw: &str, cursor: usize) {
-        if cursor != raw.len() {
-            return;
-        }
-        if !raw.ends_with(char::is_whitespace) {
-            return;
-        }
-        let has_prompt_segments =
-            crate::spine::parse_has_prompt_builder_segments(&self.spine_parse);
-        if !has_prompt_segments {
-            return;
-        }
-        // Set projection to a synthetic tail FreeText.
-        self.spine_projection = Some(crate::spine::SpineCursorProjection {
-            active_segment_index: self.spine_parse.segments.len(),
-            active_segment_kind: crate::spine::SpineSegmentKind::FreeText,
-            active_query: String::new(),
-            is_tail: true,
-            has_prompt_segments: true,
-        });
     }
 
     /// Check if a byte range is valid for the given filter text.
