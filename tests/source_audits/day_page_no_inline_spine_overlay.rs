@@ -1,4 +1,4 @@
-//! Day/Today must not render its own inline Spine/Prompt Builder overlay.
+//! Day/Today must not render its own inline Spine overlay.
 //!
 //! `@` context in Day round-trips through the main menu/shared context surface;
 //! the Day editor itself is only an editor plus direct Cmd+Enter handoff.
@@ -38,16 +38,14 @@ fn day_page_render_does_not_mount_inline_spine_overlay() {
     let view = source("src/main_sections/day_page_view.rs");
     let render = function_body(&view, "fn render(");
 
-    for forbidden in [
-        "render_day_page_spine_panel",
-        "spine_panel",
-        "day-page-spine-list",
-    ] {
-        assert!(
-            !render.contains(forbidden),
-            "Day render must not mount inline Spine overlay path: {forbidden}"
-        );
-    }
+    assert!(
+        !render.contains("spine"),
+        "Day render must stay editor-only; Spine is direct handoff logic, not a mounted Day overlay"
+    );
+    assert!(
+        render.contains("editor_input") && render.contains("day_switcher_panel"),
+        "Day render should only compose the shared editor plus the day switcher overlay"
+    );
 }
 
 #[test]
@@ -56,14 +54,15 @@ fn day_page_keyboard_does_not_drive_spine_rows() {
     let handle_key = function_body(&view, "pub(crate) fn handle_key_parts(");
 
     for forbidden in [
-        "day_page_spine_model",
-        "move_day_page_spine_selection",
-        "accept_day_page_spine_selection",
-        "reset_day_page_spine_navigation",
+        "SpineList",
+        "selected_index",
+        "hovered_index",
+        "accept_",
+        "move_",
     ] {
         assert!(
             !handle_key.contains(forbidden),
-            "Day key handling must not drive inline Spine rows: {forbidden}"
+            "Day key handling must not drive inline Spine row/navigation state: {forbidden}"
         );
     }
     assert!(
@@ -77,64 +76,44 @@ fn day_page_spine_adapter_exposes_no_overlay_rows() {
     let day_spine = source("src/main_sections/day_page_spine.rs");
 
     for forbidden in [
-        "render_day_page_spine_panel",
-        "day_page_spine_model",
-        "day_page_spine_input",
-        "build_day_page_spine_rows",
-        "selected_day_page_spine_row",
-        "move_day_page_spine_selection",
-        "accept_day_page_spine_selection",
-        "reset_day_page_spine_navigation",
-        "day-page-spine-list",
-        "day_page_spine_row",
+        "impl Render",
+        "IntoElement",
+        "GroupedListItem",
+        "SpineListRow",
+        "selected_index",
+        "hovered_index",
+        "MouseButton",
+        "on_mouse_down",
     ] {
         assert!(
             !day_spine.contains(forbidden),
-            "Day spine adapter must not expose inline overlay machinery: {forbidden}"
+            "Day spine helper must not expose inline overlay/list machinery: {forbidden}"
         );
     }
 }
 
 #[test]
-fn shared_spine_list_cannot_build_prompt_builder_tail_overlay() {
+fn free_text_spine_projection_does_not_own_a_list() {
     let list = source("src/spine/list.rs");
     let input_projection = source("src/spine/input_projection.rs");
     let notes_spine = source("src/components/notes_editor/spine.rs");
 
-    for forbidden in [
-        "Prompt Builder",
-        "Ready to send",
-        "Press Cmd+Enter to send",
-        "SubmitPromptPlan",
-        "projection_is_prompt_builder_tail",
-        "build_prompt_builder_tail_section",
-        "force_spine_tail_projection_after_trailing_space",
-        "catalog_history",
-        "RecentPrompt",
-        "OpenConversation",
-    ] {
-        assert!(
-            !list.contains(forbidden),
-            "Shared Spine list must not be able to build deprecated prompt-builder tail overlay: {forbidden}"
-        );
-        assert!(
-            !input_projection.contains(forbidden),
-            "Spine projection must not preserve deprecated prompt-builder tail ownership: {forbidden}"
-        );
-        assert!(
-            !notes_spine.contains(forbidden),
-            "Notes editor Spine must not preserve deprecated prompt-builder tail ownership: {forbidden}"
-        );
-    }
+    assert!(
+        list.contains("SpineSegmentKind::FreeText => Vec::new()"),
+        "Shared Spine list must not build rows for free-text tails"
+    );
 
     let owns_list = function_body(&input_projection, "fn projection_owns_prompt_builder_list(");
     assert!(
-        !owns_list.contains("parse_has_prompt_builder_segments"),
-        "Shared Spine ownership must not let free-text tails open a list"
+        owns_list.contains("SpineSegmentKind::FreeText") && owns_list.contains("return false"),
+        "Shared Spine ownership must reject free-text projections explicitly"
     );
+
+    let notes_owns_list = function_body(&notes_spine, "fn spine_projection_owns_editor_list(");
     assert!(
-        owns_list.contains("SpineSegmentKind::FreeText"),
-        "Shared Spine ownership should still reject FreeText projections explicitly"
+        notes_owns_list.contains("SpineSegmentKind::ContextMention")
+            && notes_owns_list.contains("return false"),
+        "Notes editor Spine keeps context mentions on the shared main-menu path"
     );
 }
 
@@ -165,7 +144,7 @@ fn day_page_footer_cannot_open_generic_agent_chat_popup() {
     );
     assert!(
         !footer.contains("FooterAction::Ai"),
-        "Day footer must not expose the generic Agent footer button; stale clicks opened the Prompt Builder panel"
+        "Day footer must not expose the generic Agent footer button; stale clicks opened the deleted inline assistant panel"
     );
 
     let ui_window = source("src/app_impl/ui_window.rs");
