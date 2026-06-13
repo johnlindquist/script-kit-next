@@ -72,6 +72,7 @@ pub fn read_brain_resource(uri: &str) -> Result<(String, String), String> {
                 .unwrap_or(serde_json::Value::Null)
         };
         let body = serde_json::json!({
+            "schemaVersion": 1,
             "docs": docs,
             "docsBySource": docs_by_source,
             "embedded": embedded,
@@ -85,6 +86,14 @@ pub fn read_brain_resource(uri: &str) -> Result<(String, String), String> {
             "lastModelDownloadAttempt": meta_ts("embed_model_download_attempt"),
             "ftsVersion": store::meta_get("fts_version").ok().flatten(),
             "dbSizeBytes": store::db_size_bytes(),
+            "canonicalRoots": {
+                "brain": "~/.scriptkit/brain",
+                "days": "~/.scriptkit/brain/days",
+                "fragments": "~/.scriptkit/brain/fragments",
+                "notes": "~/.scriptkit/brain/notes",
+                "trash": "~/.scriptkit/brain/trash",
+            },
+            "indexStore": "~/.scriptkit/db/brain.sqlite",
             "store": "~/.scriptkit/db/brain.sqlite",
         });
         return Ok(("application/json".to_string(), body.to_string()));

@@ -563,14 +563,58 @@ fn prune_ages_out_old_journals_but_keeps_fresh_data() {
 #[test]
 fn brain_status_resource_reports_health() {
     let _db = init_test_db();
+    let tmp = tempfile::TempDir::new().expect("tempdir");
+    let substrate = test_substrate(&tmp.path().join("brain"));
+    let now = chrono::Utc.with_ymd_and_hms(2026, 6, 13, 8, 0, 0).unwrap();
+
+    substrate
+        .append_to_day(
+            now,
+            DayEntry::Capture {
+                text: "private status day body".to_string(),
+            },
+        )
+        .expect("append status day page");
+    let long = (0..250)
+        .map(|index| format!("statusfragment{index}"))
+        .collect::<Vec<_>>()
+        .join(" ");
+    substrate
+        .write_fragment(now, "Status Fixture", "scriptkit://status/fragment", &long)
+        .expect("write status fragment");
+    let note_id = NoteId::new();
+    substrate
+        .write_document(
+            &substrate.paths().note_file("status-note"),
+            &BrainFrontmatter::new(note_id, now, now),
+            "# Status Note\n\nprivate status note body",
+        )
+        .expect("write status note");
+    sync_notes_with_substrate(&substrate).expect("sync status notes");
+    sync_day_pages_with_substrate(&substrate).expect("sync status day pages");
+    sync_fragments_with_substrate(&substrate).expect("sync status fragments");
+    store::meta_set("last_index_cycle", "1780000000").expect("set index heartbeat");
+
     let (mime, body) = super::resources::read_brain_resource("kit://brain").unwrap();
     assert_eq!(mime, "application/json");
     let value: serde_json::Value = serde_json::from_str(&body).unwrap();
-    assert!(value.get("docsBySource").is_some(), "per-source counts");
+    assert_eq!(value["schemaVersion"], 1);
+    assert_eq!(value["docs"], 3, "status fixtures indexed");
+    assert_eq!(value["docsBySource"]["day_page"], 1);
+    assert_eq!(value["docsBySource"]["fragment"], 1);
+    assert_eq!(value["docsBySource"]["note"], 1);
     assert!(value.get("embedHelperFound").is_some(), "helper presence");
-    assert!(value.get("lastIndexCycle").is_some(), "indexer heartbeat");
+    assert_eq!(value["lastIndexCycle"], 1780000000, "indexer heartbeat");
     assert_eq!(value["ftsVersion"], "2", "fts migration recorded");
     assert!(value["dbSizeBytes"].as_u64().unwrap_or(0) > 0, "db on disk");
+    assert_eq!(value["canonicalRoots"]["brain"], "~/.scriptkit/brain");
+    assert_eq!(value["indexStore"], "~/.scriptkit/db/brain.sqlite");
+    assert!(
+        !body.contains("private status day body")
+            && !body.contains("private status note body")
+            && !body.contains("statusfragment42"),
+        "status resource should report counts/health, not dump memory content"
+    );
 }
 
 #[test]
