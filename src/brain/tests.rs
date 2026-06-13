@@ -1,11 +1,12 @@
 //! Brain behavior tests. All run against the fresh-per-process temp sqlite
-//! that `store::brain_db_path()` resolves under cfg(test) (tests share one DB
-//! and use distinct source_ids). The path must NOT be re-pointed here via
-//! `SCRIPT_KIT_TEST_BRAIN_DB_PATH`: `store::BRAIN_DB` is a process-global
-//! `OnceLock`, and brain-adjacent tests elsewhere in the suite (input-history
-//! selection signals, launcher grouping, MCP resources) can bind it before
-//! this module's setup runs — a per-module env var would then disagree with
-//! the already-bound connection.
+//! that `store::brain_db_path()` resolves under cfg(test). The path must NOT
+//! be re-pointed here via `SCRIPT_KIT_TEST_BRAIN_DB_PATH`: `store::BRAIN_DB` is
+//! a process-global `OnceLock`, and brain-adjacent tests elsewhere in the
+//! suite (input-history selection signals, launcher grouping, MCP resources)
+//! can bind it before this module's setup runs — a per-module env var would
+//! then disagree with the already-bound connection. Each brain test holds a
+//! module-local mutex guard and clears mutable rows so the default parallel
+//! runner cannot leave stale docs or orphan embedding rows for sibling tests.
 
 use chrono::TimeZone as _;
 
@@ -21,11 +22,17 @@ use super::substrate::{BrainFrontmatter, BrainSubstrate, DayEntry};
 use super::telegram;
 use crate::notes::NoteId;
 
-fn init_test_db() {
+fn init_test_db() -> std::sync::MutexGuard<'static, ()> {
+    static TEST_DB_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    let guard = TEST_DB_LOCK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
     static INIT: std::sync::Once = std::sync::Once::new();
     INIT.call_once(|| {
         store::init_brain_db().expect("init test brain db");
     });
+    store::reset_for_test().expect("reset test brain db");
+    guard
 }
 
 fn doc(id: i64, title: &str, content: &str) -> BrainDoc {
@@ -41,7 +48,7 @@ fn doc(id: i64, title: &str, content: &str) -> BrainDoc {
 
 #[test]
 fn upsert_is_idempotent_and_updates_on_change() {
-    init_test_db();
+    let _db = init_test_db();
     let id1 = store::upsert_doc(DocSource::Note, "n-upsert", "Title", "body", 100).unwrap();
     let id2 = store::upsert_doc(DocSource::Note, "n-upsert", "Title", "body", 100).unwrap();
     assert_eq!(id1, id2, "same source_id must keep one row");
@@ -53,7 +60,7 @@ fn upsert_is_idempotent_and_updates_on_change() {
 
 #[test]
 fn fts_matches_natural_language_questions() {
-    init_test_db();
+    let _db = init_test_db();
     let id = store::upsert_doc(
         DocSource::Note,
         "n-nlq",
@@ -74,7 +81,7 @@ fn fts_matches_natural_language_questions() {
 /// marker and defer real distillation a full interval.
 #[test]
 fn curator_first_run_on_fresh_db_only_stamps_marker() {
-    init_test_db();
+    let _db = init_test_db();
     assert!(
         store::meta_get("curator_last_run").unwrap().is_none(),
         "fresh db must start without a curator marker"
@@ -93,7 +100,7 @@ fn curator_first_run_on_fresh_db_only_stamps_marker() {
 /// `brain_search` must collapse them to one hit and let distinct memories in.
 #[test]
 fn brain_search_dedupes_identical_content_across_sources() {
-    init_test_db();
+    let _db = init_test_db();
     let dup = "We agreed to upgrade the dedupletron cluster to 1.31 next sprint.";
     store::upsert_doc(
         DocSource::Note,
@@ -141,7 +148,7 @@ fn brain_search_dedupes_identical_content_across_sources() {
 /// for exactly the short tool names users recall most.
 #[test]
 fn fts_matches_short_keywords() {
-    init_test_db();
+    let _db = init_test_db();
     let id = store::upsert_doc(
         DocSource::Note,
         "n-short",
@@ -158,7 +165,7 @@ fn fts_matches_short_keywords() {
 
 #[test]
 fn emoji_only_query_matches_via_substring_fallback() {
-    init_test_db();
+    let _db = init_test_db();
     let id = store::upsert_doc(
         DocSource::Note,
         "n-emoji",
@@ -230,7 +237,7 @@ fn inbox_stable_merge_from_empty_takes_fresh_order() {
 
 #[test]
 fn fts_finds_doc_by_content_and_respects_deletion() {
-    init_test_db();
+    let _db = init_test_db();
     let id = store::upsert_doc(
         DocSource::Note,
         "n-fts",
@@ -248,7 +255,7 @@ fn fts_finds_doc_by_content_and_respects_deletion() {
 
 #[test]
 fn embedding_roundtrip_and_staleness() {
-    init_test_db();
+    let _db = init_test_db();
     let id = store::upsert_doc(DocSource::Note, "n-embed", "T", "v1", 100).unwrap();
     let pending = store::docs_needing_embedding("model-a", 50).unwrap();
     assert!(
@@ -307,7 +314,7 @@ fn cosine_dedupes_chunks_keeping_best_per_doc() {
 
 #[test]
 fn chunked_embeddings_roundtrip_and_staleness() {
-    init_test_db();
+    let _db = init_test_db();
     let long_content = "alpha section about rust gpui internals. ".repeat(40);
     let id = store::upsert_doc(DocSource::Note, "n-chunked", "T", &long_content, 100).unwrap();
     let chunk_vecs = vec![(0usize, vec![1.0, 0.0]), (1800usize, vec![0.0, 1.0])];
@@ -357,7 +364,7 @@ fn signals_boost_matching_docs() {
 
 #[test]
 fn signal_recording_and_aggregation() {
-    init_test_db();
+    let _db = init_test_db();
     store::record_signal("script kit", 2, "ask").unwrap();
     store::record_signal("Script Kit", 1, "chat").unwrap();
     store::record_signal("", 5, "ask").unwrap(); // ignored
@@ -436,7 +443,7 @@ fn substantive_topic_gate_accepts_subjects_and_rejects_filler() {
 
 #[test]
 fn chat_turn_ingestion_is_idempotent_and_searchable() {
-    init_test_db();
+    let _db = init_test_db();
     super::ingest_chat_turn(
         "thread-x",
         0,
@@ -462,10 +469,9 @@ fn chat_turn_ingestion_is_idempotent_and_searchable() {
 
 #[test]
 fn retain_docs_forgets_deleted_sources() {
-    init_test_db();
-    // Uses the Clipboard source: tests share one DB and run in parallel, and
-    // retention is destructive within its source — Note docs belong to other
-    // tests.
+    let _db = init_test_db();
+    // Uses the Clipboard source to cover deletion sync without coupling this
+    // destructive path to the Note-heavy fixtures above.
     store::upsert_doc(
         DocSource::Clipboard,
         "clip-keep",
@@ -508,7 +514,7 @@ fn retain_docs_forgets_deleted_sources() {
 
 #[test]
 fn prune_ages_out_old_journals_but_keeps_fresh_data() {
-    init_test_db();
+    let _db = init_test_db();
     let now = chrono::Utc::now().timestamp();
     // An ancient daily journal (well past the 90-day window)...
     store::upsert_doc(
@@ -556,7 +562,7 @@ fn prune_ages_out_old_journals_but_keeps_fresh_data() {
 
 #[test]
 fn brain_status_resource_reports_health() {
-    init_test_db();
+    let _db = init_test_db();
     let (mime, body) = super::resources::read_brain_resource("kit://brain").unwrap();
     assert_eq!(mime, "application/json");
     let value: serde_json::Value = serde_json::from_str(&body).unwrap();
@@ -569,7 +575,7 @@ fn brain_status_resource_reports_health() {
 
 #[test]
 fn activity_journal_appends_newest_first_and_recalls() {
-    init_test_db();
+    let _db = init_test_db();
     store::append_activity("searched files for \"png\" and opened CleanShot.png").unwrap();
     store::append_activity("ran script kill-port").unwrap();
     let hits = store::fts_search("what was the last thing I searched for", 10).unwrap();
@@ -604,7 +610,7 @@ fn activity_journal_appends_newest_first_and_recalls() {
 
 #[test]
 fn recall_context_block_formats_and_caps() {
-    init_test_db();
+    let _db = init_test_db();
     store::upsert_doc(
         DocSource::Note,
         "n-recall",
@@ -625,7 +631,7 @@ fn recall_context_block_formats_and_caps() {
 
 #[test]
 fn inbox_insert_dedupes_resolves_and_orders() {
-    init_test_db();
+    let _db = init_test_db();
     let first = inbox::insert_inbox_item(
         InboxKind::Commitment,
         "Inbox-test ship the gizmo",
@@ -705,10 +711,10 @@ fn inbox_kind_roundtrips_and_labels() {
 
 #[test]
 fn prune_removes_only_old_resolved_inbox_items() {
-    init_test_db();
+    let _db = init_test_db();
     let now = chrono::Utc::now().timestamp();
-    // Tests share one DB and other tests may also run prune concurrently, so
-    // assert end states (rows gone/kept) rather than this call's counts.
+    // Assert end states (rows gone/kept) rather than coupling the test to the
+    // exact count returned by one prune call.
     inbox::insert_inbox_item(InboxKind::Drift, "Inbox-prune ancient resolved", "", "", "").unwrap();
     inbox::insert_inbox_item(InboxKind::Drift, "Inbox-prune fresh resolved", "", "", "").unwrap();
     inbox::insert_inbox_item(InboxKind::Drift, "Inbox-prune still open", "", "", "").unwrap();
@@ -750,7 +756,7 @@ fn prune_removes_only_old_resolved_inbox_items() {
 
 #[test]
 fn inbox_response_prompt_includes_detail_and_source_context() {
-    init_test_db();
+    let _db = init_test_db();
     let source_id = "thread-inbox-response-prompt#2";
     store::upsert_doc(
         DocSource::ChatTurn,
@@ -1040,13 +1046,28 @@ fn clear_brain_docs_for_rebuild_test(docs: &[(DocSource, &str)]) {
     }
 }
 
+fn orphan_chunk_embedding_count() -> i64 {
+    store::with_conn(|conn| {
+        conn.query_row(
+            "SELECT COUNT(*)
+             FROM brain_chunk_embeddings e
+             LEFT JOIN brain_docs d ON d.id = e.doc_id
+             WHERE d.id IS NULL",
+            [],
+            |row| row.get(0),
+        )
+        .map_err(Into::into)
+    })
+    .expect("count orphan chunk embeddings")
+}
+
 fn test_substrate(base: &std::path::Path) -> BrainSubstrate {
     BrainSubstrate::with_timezone(base, chrono_tz::UTC)
 }
 
 #[test]
 fn file_sources_sync_day_page_fragment_and_forget_trashed_note() {
-    init_test_db();
+    let _db = init_test_db();
     let tmp = tempfile::TempDir::new().expect("tempdir");
     let substrate = test_substrate(&tmp.path().join("brain"));
     let now = chrono::Utc.with_ymd_and_hms(2026, 6, 11, 10, 0, 0).unwrap();
@@ -1117,7 +1138,7 @@ fn file_sources_sync_day_page_fragment_and_forget_trashed_note() {
 
 #[test]
 fn file_sources_rebuild_restores_doc_parity() {
-    init_test_db();
+    let _db = init_test_db();
     let tmp = tempfile::TempDir::new().expect("tempdir");
     let substrate = test_substrate(&tmp.path().join("brain"));
     let now = chrono::Utc
@@ -1201,7 +1222,7 @@ fn file_sources_rebuild_restores_doc_parity() {
 
 #[test]
 fn capture_stores_sync_into_brain_and_respect_deletion() {
-    init_test_db();
+    let _db = init_test_db();
     let tmp = tempfile::TempDir::new().expect("tempdir");
 
     // Link + snippet through their real stores (same writers the `;` capture
@@ -1240,7 +1261,7 @@ fn capture_stores_sync_into_brain_and_respect_deletion() {
 /// `indexer::embed_pending_with` without the helper subprocess.
 #[test]
 fn embed_cycle_chunks_long_docs_and_clears_pending() {
-    init_test_db();
+    let _db = init_test_db();
     let model = "model-embed-cycle";
     let long_content = "## Section\n\nlong day page text about embedding cycles. ".repeat(160); // ~8.6 KB
     let long_id = store::upsert_doc(
@@ -1277,6 +1298,11 @@ fn embed_cycle_chunks_long_docs_and_clears_pending() {
         "long doc must store multiple chunks: {long_chunks}"
     );
     assert_eq!(short_chunks, 1, "short doc stays single-chunk");
+    assert_eq!(
+        orphan_chunk_embedding_count(),
+        0,
+        "embedding cycle must not leave rows without matching brain_docs"
+    );
     assert!(
         calls.iter().sum::<usize>() >= long_chunks + short_chunks,
         "all chunks rode the embed batches: {calls:?}"

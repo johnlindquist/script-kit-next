@@ -416,6 +416,28 @@ pub(crate) fn with_conn<T>(f: impl FnOnce(&Connection) -> Result<T>) -> Result<T
     f(&conn)
 }
 
+/// Reset mutable brain rows between unit tests while preserving the process
+/// global connection and schema. Brain tests share `BRAIN_DB`, so per-test
+/// isolation has to clear derived rows instead of trying to rebind the
+/// `OnceLock` to a different sqlite file.
+#[cfg(test)]
+pub(crate) fn reset_for_test() -> Result<()> {
+    with_conn(|conn| {
+        conn.execute_batch(
+            "DELETE FROM brain_chunk_embeddings;
+             DELETE FROM brain_inbox;
+             DELETE FROM brain_signals;
+             DELETE FROM brain_docs;
+             DELETE FROM brain_meta;
+             DELETE FROM sqlite_sequence
+                WHERE name IN ('brain_docs', 'brain_signals', 'brain_inbox');",
+        )
+        .context("reset brain test rows")?;
+        migrate_fts_tokenizer(conn)?;
+        Ok(())
+    })
+}
+
 /// Short-lived shape fix: the first chunked schema keyed rows on
 /// (doc_id, chunk_index) only, so two models' rows collided. Recreate with
 /// model_id in the key; vectors re-embed lazily over the next cycles.
