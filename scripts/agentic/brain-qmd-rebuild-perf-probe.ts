@@ -43,6 +43,12 @@ type DriverPass = {
   appLog: string;
 };
 
+type ProbeCheck = {
+  name: string;
+  pass: boolean;
+  detail?: unknown;
+};
+
 const binary =
   process.env.PROBE_BINARY ??
   process.argv[2] ??
@@ -540,24 +546,101 @@ try {
   const derivedProof = receipt.derivedIndexProof as Json;
   const rebuildProof = receipt.rebuildFromFilesProof as Json;
   const forgetProof = receipt.forgetProof as Json;
+  const fixtureProof = receipt.canonicalFixtureProof as Json;
+  const preIndexProof = receipt.preIndexProof as Json;
   const protectedAfter = {
     dev: protectedDiff("dev.sh"),
     pi: protectedDiff("scripts/agentic/ensure-pi-sidecar.sh"),
   };
   receipt.protectedDirtyFilesUnchanged =
     protectedBefore.dev === protectedAfter.dev && protectedBefore.pi === protectedAfter.pi;
-  const failures: string[] = [];
-  if (!derivedProof.allUniqueTokensFound) failures.push("derived index missed fixture tokens");
-  if (!derivedProof.contentMatchesCanonical) failures.push("derived content mismatched canonical markdown");
-  if (!rebuildProof.dbDeletedBetweenPasses) failures.push("derived DB was not deleted between passes");
-  if (!rebuildProof.rebuiltSourceCountsMatch) failures.push("rebuilt source counts did not match initial pass");
-  if (!rebuildProof.rebuiltRowsMatchInitial) failures.push("rebuilt row fingerprints did not match initial pass");
-  if (!rebuildProof.rebuiltContentMatchesCanonical) failures.push("rebuilt content mismatched canonical markdown");
-  if (!forgetProof.staleDerivedRowsRemoved) failures.push("deleted canonical files were not forgotten");
-  if (!forgetProof.remainingRowsPreserved) failures.push("remaining canonical rows were lost during forget sync");
-  if (responsiveness.getStateP95Ms > budgets.getStateP95Ms) failures.push("getState p95 exceeded budget");
-  if (responsiveness.getElementsP95Ms > budgets.getElementsP95Ms) failures.push("getElements p95 exceeded budget");
-  if (!receipt.protectedDirtyFilesUnchanged) failures.push("protected dirty files changed during probe");
+
+  const checks: ProbeCheck[] = [];
+  const addCheck = (name: string, pass: boolean, detail?: unknown) => {
+    checks.push(detail === undefined ? { name, pass } : { name, pass, detail });
+  };
+  addCheck("canonical_fixtures_written", fixtureProof.notesWritten === noteCount &&
+    fixtureProof.dayPagesWritten === 2 &&
+    fixtureProof.fragmentsWritten === fragmentCount, {
+    notesWritten: fixtureProof.notesWritten,
+    dayPagesWritten: fixtureProof.dayPagesWritten,
+    fragmentsWritten: fixtureProof.fragmentsWritten,
+  });
+  addCheck(
+    "pre_index_empty",
+    preIndexProof.brainDbExistedBeforeLaunch === false &&
+      preIndexProof.preWriteDerivedRows === 0,
+    preIndexProof,
+  );
+  addCheck(
+    "initial_index_all_tokens_found",
+    derivedProof.allUniqueTokensFound === true,
+    {
+      missing: derivedProof.missing,
+      sourceCounts: derivedProof.sourceCounts,
+    },
+  );
+  addCheck(
+    "initial_index_content_matches_canonical",
+    derivedProof.contentMatchesCanonical === true,
+    { mismatched: derivedProof.mismatched },
+  );
+  addCheck(
+    "derived_db_deleted_between_passes",
+    rebuildProof.dbDeletedBetweenPasses === true,
+  );
+  addCheck(
+    "rebuild_matches_initial_fingerprints",
+    rebuildProof.rebuiltSourceCountsMatch === true &&
+      rebuildProof.rebuiltRowsMatchInitial === true,
+    {
+      rebuiltSourceCountsMatch: rebuildProof.rebuiltSourceCountsMatch,
+      rebuiltRowsMatchInitial: rebuildProof.rebuiltRowsMatchInitial,
+    },
+  );
+  addCheck(
+    "rebuild_content_matches_canonical",
+    rebuildProof.rebuiltContentMatchesCanonical === true &&
+      rebuildProof.rebuiltAllUniqueTokensFound === true,
+    {
+      rebuiltContentMatchesCanonical: rebuildProof.rebuiltContentMatchesCanonical,
+      rebuiltAllUniqueTokensFound: rebuildProof.rebuiltAllUniqueTokensFound,
+    },
+  );
+  addCheck(
+    "deleted_canonical_files_forgotten",
+    forgetProof.staleDerivedRowsRemoved === true,
+    {
+      deletedCanonicalFiles: forgetProof.deletedCanonicalFiles,
+      stale: forgetProof.stale,
+    },
+  );
+  addCheck(
+    "remaining_rows_preserved_after_forget",
+    forgetProof.remainingRowsPreserved === true,
+    { missingRemaining: forgetProof.missingRemaining },
+  );
+  addCheck(
+    "devtools_responsive_under_budget",
+    Number(responsiveness.getStateP95Ms) <= budgets.getStateP95Ms &&
+      Number(responsiveness.getElementsP95Ms) <= budgets.getElementsP95Ms,
+    {
+      getStateP95Ms: responsiveness.getStateP95Ms,
+      getStateP95BudgetMs: budgets.getStateP95Ms,
+      getElementsP95Ms: responsiveness.getElementsP95Ms,
+      getElementsP95BudgetMs: budgets.getElementsP95Ms,
+    },
+  );
+  addCheck(
+    "protected_dirty_files_unchanged",
+    receipt.protectedDirtyFilesUnchanged === true,
+  );
+  addCheck("screenshot_not_used", receipt.screenshotProof === "not-used-semantic-devtools-only", {
+    screenshotProof: receipt.screenshotProof,
+  });
+
+  receipt.checks = checks;
+  const failures = checks.filter((check) => !check.pass).map((check) => check.name);
   receipt.failures = failures;
   receipt.pass = failures.length === 0;
   receipt.classification = failures.length === 0 ? "completed" : "failed";
