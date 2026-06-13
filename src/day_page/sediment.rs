@@ -8,6 +8,7 @@ use std::path::{Path, PathBuf};
 use chrono::{DateTime, Utc};
 use chrono_tz::Tz;
 
+use crate::ai::message_parts::AiContextPart;
 use crate::brain::substrate::BrainFrontmatter;
 
 /// Back affordance when viewing a fragment inline on the Day Page surface.
@@ -197,10 +198,22 @@ fn normalize_day_page_markdown_reference_line(line: &str) -> String {
 }
 
 fn next_markdown_reference_start(text: &str) -> Option<usize> {
-    ["https://", "http://", "../fragments/"]
-        .into_iter()
-        .filter_map(|needle| text.find(needle))
-        .min()
+    [
+        "https://",
+        "http://",
+        "../fragments/",
+        "@file:",
+        "@project:",
+        "@notes:",
+        "@scripts:",
+        "@clipboard:",
+        "@history:",
+        "@browser-history:",
+        "@skill:",
+    ]
+    .into_iter()
+    .filter_map(|needle| text.find(needle))
+    .min()
 }
 
 fn raw_reference_end(line: &str, start: usize) -> usize {
@@ -251,11 +264,242 @@ fn markdown_link_for_raw_reference(token: &str) -> Option<String> {
     if token.starts_with("../fragments/") && token.ends_with(".md") {
         return Some(format!("[Open fragment]({token})"));
     }
+    if let Some((prefix, value)) = raw_context_reference_parts(token) {
+        let label = markdown_link_label(&value.replace('-', " "));
+        return Some(format!(
+            "[{label}](scriptkit://spine/{}/{})",
+            prefix,
+            encode_url_component(&value)
+        ));
+    }
     None
 }
 
 fn markdown_link_label(label: &str) -> String {
     label.replace('[', "\\[").replace(']', "\\]")
+}
+
+fn raw_context_reference_parts(token: &str) -> Option<(&str, String)> {
+    let token = token.trim();
+    let body = token.strip_prefix('@')?;
+    let (prefix, value) = body.split_once(':')?;
+    if !matches!(
+        prefix,
+        "file"
+            | "project"
+            | "notes"
+            | "scripts"
+            | "clipboard"
+            | "history"
+            | "browser-history"
+            | "skill"
+    ) {
+        return None;
+    }
+    let value = value.trim();
+    if value.is_empty() {
+        return None;
+    }
+    Some((prefix, value.to_string()))
+}
+
+/// Convert an accepted context part into persisted Day Page markdown.
+///
+/// Day pages are markdown documents first. Launcher context tokens such as
+/// `@file:README.md` are useful editing affordances, but they should not leak
+/// into the saved brain file when the selected row already has a stable
+/// markdown target.
+pub fn day_page_markdown_reference_for_context_part(
+    token: &str,
+    part: Option<&AiContextPart>,
+) -> Option<String> {
+    let part = part.cloned().or_else(|| {
+        crate::ai::context_contract::ContextAttachmentKind::from_mention_line(token)
+            .map(|kind| kind.part())
+    })?;
+    let (label, href) = match part {
+        AiContextPart::FilePath { path, label } | AiContextPart::SkillFile { path, label, .. } => {
+            (label, file_href(&path))
+        }
+        AiContextPart::ResourceUri { uri, label } => (label, uri),
+        AiContextPart::TextBlock { label, source, .. } => {
+            if !source.contains(':') || source.contains(char::is_whitespace) {
+                return None;
+            }
+            (label, source)
+        }
+        AiContextPart::FocusedTarget { target, label } => {
+            if let Some(path) = target
+                .metadata
+                .as_ref()
+                .and_then(|metadata| metadata.get("path"))
+                .and_then(|value| value.as_str())
+            {
+                (label, file_href(path))
+            } else {
+                (
+                    label,
+                    format!("kit://focused-target/{}", target.semantic_id),
+                )
+            }
+        }
+        AiContextPart::AmbientContext { label } => (
+            label.clone(),
+            format!("kit://context?label={}", encode_url_component(&label)),
+        ),
+    };
+    let label = markdown_link_label(label.trim());
+    if label.is_empty() || href.trim().is_empty() {
+        return None;
+    }
+    Some(format!("[{label}]({})", markdown_link_destination(&href)))
+}
+
+/// Extract context parts from markdown links in a Day Page line.
+///
+/// This is the reverse of `day_page_markdown_reference_for_context_part` for
+/// Cmd+Enter handoff: readable markdown file/resource links should still stage
+/// real Agent Chat context.
+pub fn context_parts_from_day_page_markdown_links(markdown: &str) -> Vec<AiContextPart> {
+    let mut parts = Vec::new();
+    for (label, href) in markdown_links(markdown) {
+        let Some(part) = context_part_from_markdown_link(&label, &href) else {
+            continue;
+        };
+        if !parts.contains(&part) {
+            parts.push(part);
+        }
+    }
+    parts
+}
+
+fn context_part_from_markdown_link(label: &str, href: &str) -> Option<AiContextPart> {
+    let label = label.trim().to_string();
+    let href = href.trim();
+    if label.is_empty() || href.is_empty() {
+        return None;
+    }
+    if let Some(path) = href.strip_prefix("file://") {
+        let path = decode_url_component(path);
+        return Some(AiContextPart::FilePath { path, label });
+    }
+    if href.starts_with("kit://") {
+        return Some(AiContextPart::ResourceUri {
+            uri: href.to_string(),
+            label,
+        });
+    }
+    if href.starts_with("http://") || href.starts_with("https://") {
+        return Some(AiContextPart::TextBlock {
+            label,
+            source: href.to_string(),
+            text: href.to_string(),
+            mime_type: Some("text/uri-list".to_string()),
+        });
+    }
+    None
+}
+
+fn markdown_links(markdown: &str) -> Vec<(String, String)> {
+    let mut links = Vec::new();
+    let bytes = markdown.as_bytes();
+    let mut index = 0usize;
+    while index < bytes.len() {
+        if bytes[index] != b'[' {
+            index += 1;
+            continue;
+        }
+        let Some(label_end) = find_unescaped_byte(markdown, index + 1, b']') else {
+            break;
+        };
+        if !markdown[label_end..].starts_with("](") {
+            index = label_end + 1;
+            continue;
+        }
+        let href_start = label_end + 2;
+        let Some(href_end) = find_unescaped_byte(markdown, href_start, b')') else {
+            break;
+        };
+        let label = markdown[index + 1..label_end]
+            .replace("\\[", "[")
+            .replace("\\]", "]");
+        let href = markdown[href_start..href_end].to_string();
+        links.push((label, href));
+        index = href_end + 1;
+    }
+    links
+}
+
+fn find_unescaped_byte(text: &str, start: usize, needle: u8) -> Option<usize> {
+    let bytes = text.as_bytes();
+    let mut index = start;
+    while index < bytes.len() {
+        if bytes[index] == needle {
+            let mut slash_count = 0usize;
+            let mut cursor = index;
+            while cursor > 0 && bytes[cursor - 1] == b'\\' {
+                slash_count += 1;
+                cursor -= 1;
+            }
+            if slash_count % 2 == 0 {
+                return Some(index);
+            }
+        }
+        index += 1;
+    }
+    None
+}
+
+fn file_href(path: &str) -> String {
+    format!("file://{}", encode_url_path(path))
+}
+
+fn markdown_link_destination(href: &str) -> String {
+    href.replace(')', "%29")
+}
+
+fn encode_url_path(path: &str) -> String {
+    path.chars()
+        .map(|ch| match ch {
+            ' ' => "%20".to_string(),
+            ')' => "%29".to_string(),
+            '(' => "%28".to_string(),
+            '%' => "%25".to_string(),
+            _ => ch.to_string(),
+        })
+        .collect()
+}
+
+fn encode_url_component(value: &str) -> String {
+    value
+        .chars()
+        .map(|ch| match ch {
+            'A'..='Z' | 'a'..='z' | '0'..='9' | '-' | '_' | '.' | '~' => ch.to_string(),
+            ' ' => "%20".to_string(),
+            _ => format!("%{:02X}", ch as u32),
+        })
+        .collect()
+}
+
+fn decode_url_component(value: &str) -> String {
+    let bytes = value.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut index = 0usize;
+    while index < bytes.len() {
+        if bytes[index] == b'%' && index + 2 < bytes.len() {
+            if let Ok(hex) = std::str::from_utf8(&bytes[index + 1..index + 3]) {
+                if let Ok(byte) = u8::from_str_radix(hex, 16) {
+                    out.push(byte);
+                    index += 3;
+                    continue;
+                }
+            }
+        }
+        out.push(bytes[index]);
+        index += 1;
+    }
+    String::from_utf8(out)
+        .unwrap_or_else(|error| String::from_utf8_lossy(error.as_bytes()).to_string())
 }
 
 fn parse_fragment_card_lines(
@@ -533,6 +777,57 @@ mod tests {
         assert!(normalized
             .contains("[eggo-expression-grid.wzrrd.sh](https://eggo-expression-grid.wzrrd.sh/)"));
         assert!(normalized.contains("[eggo-brand.wzrrd.sh](https://eggo-brand.wzrrd.sh/) now"));
+    }
+
+    #[test]
+    fn normalizes_completed_typed_url_after_trailing_whitespace() {
+        let content = "See https://eggo-brand.wzrrd.sh/ \nnext";
+
+        let normalized = normalize_day_page_markdown_references(content);
+
+        assert!(normalized.contains("See [eggo-brand.wzrrd.sh](https://eggo-brand.wzrrd.sh/) "));
+    }
+
+    #[test]
+    fn context_file_part_persists_as_markdown_link() {
+        let part = AiContextPart::FilePath {
+            path: "/Users/me/Screen Flow.md".to_string(),
+            label: "Screen Flow.md".to_string(),
+        };
+
+        let reference =
+            day_page_markdown_reference_for_context_part("@file:Screen-Flow.md", Some(&part))
+                .expect("file context should become a markdown link");
+
+        assert_eq!(
+            reference,
+            "[Screen Flow.md](file:///Users/me/Screen%20Flow.md)"
+        );
+    }
+
+    #[test]
+    fn normalizes_raw_context_references_to_markdown_links() {
+        let normalized = normalize_day_page_markdown_references("@file:screenflow\n@notes:daily");
+
+        assert_eq!(
+            normalized,
+            "[screenflow](scriptkit://spine/file/screenflow)\n[daily](scriptkit://spine/notes/daily)"
+        );
+    }
+
+    #[test]
+    fn markdown_file_links_round_trip_to_context_parts() {
+        let parts = context_parts_from_day_page_markdown_links(
+            "Review [Screen Flow.md](file:///Users/me/Screen%20Flow.md)",
+        );
+
+        assert_eq!(
+            parts,
+            vec![AiContextPart::FilePath {
+                path: "/Users/me/Screen Flow.md".to_string(),
+                label: "Screen Flow.md".to_string(),
+            }]
+        );
     }
 
     #[test]

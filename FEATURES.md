@@ -184,14 +184,14 @@ the matrix only through a future QA lock-in selection.
 - Pass evidence: Receipts show composer text, guarded submit dispatch, Agent Chat with Pi Backend/chat state transition, and chat harness/source contracts pass.
 - Fail evidence: Submit blocked without clear gate, wrong target, no state transition, transcript unavailable, or contracts fail.
 
-### Agent Chat with Pi Backend context picker accepts @ items with receipts
+### Agent Chat with Pi Backend context selector accepts @ items with receipts
 
-- Stable anchor: `agent-chat-with-pi-backend-context-picker-accepts-items-with-receipts`
-- Choice id: `agent_chat-context-picker-acceptance-receipts`
-- Surface: Agent Chat / Context Picker
+- Stable anchor: `agent-chat-with-pi-backend-context-selector-accepts-items-with-receipts`
+- Choice id: `agent_chat-context-selector-acceptance-receipts`
+- Surface: Agent Chat / Context Selector
 - Status: Active QA lock-in candidate
-- User contract: Agent Chat state and test probe receipts show picker open, selected item, acceptedViaKey, cursorAfter, contextChipCount, and final input layout after acceptance.
-- Regression risk: Picker keyboard routing and context insertion are easy to break during composer, popup, or context refactors.
+- User contract: Agent Chat state and test probe receipts show selector open, selected item, acceptedViaKey, cursorAfter, contextChipCount, and final input layout after acceptance.
+- Regression risk: Selector keyboard routing and context insertion are easy to break during composer or context refactors.
 - Proof commands:
   - `bash scripts/agentic/session.sh rpc core-qa '{"type":"resetAgentChatTestProbe","requestId":"core-qa-reset-probe","target":{"type":"main"}}' --expect agent_chatTestProbeResult --timeout 8000`
   - `bun scripts/devtools/act.ts set-input --text '@' --main --strict --surface AgentChat`
@@ -199,7 +199,7 @@ the matrix only through a future QA lock-in selection.
   - `bash scripts/agentic/session.sh rpc core-qa '{"type":"getAgentChatTestProbe","requestId":"core-qa-probe","tail":4,"target":{"type":"main"}}' --expect agent_chatTestProbeResult --timeout 8000`
   - `./scripts/agentic/agent-cargo.sh test --test agent_chat_mention_popup_registry_lifecycle_contract -- --nocapture`
 - Pass evidence: Probe receipt contains keyRoutes and acceptedItems with acceptedViaKey tab/enter, cursorAfter, and context state; popup lifecycle contract passes.
-- Fail evidence: Picker never opens, acceptedItems stays empty, cursor/chip count is wrong, event route is propagated incorrectly, or contract fails.
+- Fail evidence: Selector never opens, acceptedItems stays empty, cursor/chip count is wrong, event route is propagated incorrectly, or contract fails.
 
 ### Detached Agent Chat with Pi Backend targets, reattaches, and cleans up
 
@@ -497,17 +497,17 @@ the matrix only through a future QA lock-in selection.
 - Pass evidence: Inspect/protocol receipts expose focusedText state and action receipts; source contracts pass for prompt, actions, and protocol wiring.
 - Fail evidence: Session id missing, mutation targets wrong app, private text leaked, copy/replace receipt absent, or tests fail.
 
-### Context picker and Add to AI attach selected sources
+### Context selector and Add to AI attach selected sources
 
-- Stable anchor: `context-picker-and-add-to-ai-attach-selected-sources`
-- Choice id: `context-picker-add-to-ai-end-to-end`
-- Surface: Context Picker / Add to AI
+- Stable anchor: `context-selector-and-add-to-ai-attach-selected-sources`
+- Choice id: `context-selector-add-to-ai-end-to-end`
+- Surface: Context Selector / Add to AI
 - Status: Active QA lock-in candidate
 - User contract: Context part resolution produces source-specific attachments, composer state records chips, preflight blocks unavailable sources, and submission carries the expected context parts.
 - Regression risk: Context handoff connects many sources; drift can silently drop or mislabel what the user asked AI to use.
 - Proof commands:
   - `bun scripts/devtools/inspect.ts --session core-qa --start --show --main --surface AgentChat --limit 200`
-  - `./scripts/agentic/agent-cargo.sh test --test context_picker -- --nocapture`
+  - `./scripts/agentic/agent-cargo.sh test --test context_selector_portal_builtin_parity_contract -- --nocapture`
   - `./scripts/agentic/agent-cargo.sh test --test add_to_ai_flow -- --nocapture`
   - `./scripts/agentic/agent-cargo.sh test --test context_contract_end_to_end -- --nocapture`
   - `./scripts/agentic/agent-cargo.sh test --test context_part_submission_flow -- --nocapture`

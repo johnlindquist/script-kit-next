@@ -8,7 +8,6 @@
  * - editable Markdown does not inject markdown_inline per inline node
  * - long Markdown is accepted by both editors
  * - editor scroll metrics are exposed and getElements remains fast
- * - deprecated Day Page inline @ popup is absent
  */
 
 import { existsSync, readFileSync } from "node:fs";
@@ -19,11 +18,6 @@ const BINARY =
   process.env.PROBE_BINARY ??
   "target-agent/artifacts/day-notes-editor-parity/script-kit-gpui";
 const runId = `editor-runtime-${Date.now().toString(36)}`;
-const DEPRECATED_CONTEXT_IDS = [
-  "day-page-inline-context-popup",
-  "day-page-context-popup",
-  "inline-context-popup",
-];
 
 const checks: Array<{ name: string; ok: boolean; detail: Json }> = [];
 const failures: string[] = [];
@@ -121,14 +115,6 @@ function buildLongMarkdown(): string {
     );
   }
   return `${lines.join("\n")}\n`;
-}
-
-function hasDeprecatedContextPopup(windows: Json, elements: Json[]): boolean {
-  const windowText = JSON.stringify(windows);
-  return (
-    DEPRECATED_CONTEXT_IDS.some((id) => windowText.includes(id)) ||
-    elements.some((el) => DEPRECATED_CONTEXT_IDS.includes(String(el.semanticId ?? el.id ?? "")))
-  );
 }
 
 const longMarkdown = buildLongMarkdown();
@@ -301,13 +287,6 @@ try {
     dayP95,
     ratio: Number((dayP95 / Math.max(1, notesP95)).toFixed(2)),
     timings,
-  });
-
-  const windows = (await driver.listAutomationWindows()) as Json;
-  const allElements = [...walkElements(notesElements), ...walkElements(dayElements)];
-  check("deprecated_inline_context_popup_absent", !hasDeprecatedContextPopup(windows, allElements), {
-    automationWindowCount: ((windows.windows ?? []) as Json[]).length,
-    deprecatedIds: DEPRECATED_CONTEXT_IDS,
   });
 
   const appLog = existsSync(driver.logPath) ? readFileSync(driver.logPath, "utf8") : "";

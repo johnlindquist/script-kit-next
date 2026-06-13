@@ -486,6 +486,55 @@ impl ScriptListApp {
         )
     }
 
+    pub(crate) fn submit_day_page_markdown_line_with_context(
+        &mut self,
+        prompt: String,
+        parts: Vec<crate::ai::message_parts::AiContextPart>,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let prompt = prompt.trim().to_string();
+        if prompt.is_empty() && parts.is_empty() {
+            return false;
+        }
+        tracing::info!(
+            target: "script_kit::agent_chat",
+            event = "agent_chat_reused_entry_intent_with_host_context_submitted",
+            source = "day_page_markdown_reference_handoff",
+            intent_len = prompt.len(),
+            context_part_count = parts.len(),
+            alias_count = 0,
+            unknown_warning_count = 0,
+        );
+        self.embedded_agent_chat = None;
+        self.open_tab_ai_agent_chat_with_entry_intent_suppressing_focused_part(None, cx);
+
+        if let AppView::AgentChatView { entity } = &self.current_view {
+            let entity = entity.clone();
+            entity.update(cx, |chat, cx| {
+                if let Some(thread_entity) = chat.thread() {
+                    thread_entity.update(cx, |thread, cx| {
+                        thread.clear_messages(cx);
+                    });
+                }
+                if let Err(error) = chat.submit_reused_entry_intent_with_host_context(
+                    prompt,
+                    parts,
+                    "day_page_markdown_reference_handoff",
+                    cx,
+                ) {
+                    tracing::warn!(
+                        target: "script_kit::spine",
+                        event = "day_page_markdown_reference_agent_chat_submit_failed",
+                        error = %error,
+                    );
+                }
+            });
+        }
+
+        cx.notify();
+        true
+    }
+
     pub(crate) fn try_submit_spine_prompt_plan_from_parse(
         &mut self,
         parse: crate::spine::SpineParse,

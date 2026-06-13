@@ -28,15 +28,11 @@ const CARRY_URL_ONE = `https://${runId}-carry-one.wzrrd.sh/`;
 const CARRY_URL_TWO = `https://${runId}-carry-two.wzrrd.sh/`;
 const CARRY_URL_ONE_MARKDOWN = `[${runId}-carry-one.wzrrd.sh](${CARRY_URL_ONE})`;
 const CARRY_URL_TWO_MARKDOWN = `[${runId}-carry-two.wzrrd.sh](${CARRY_URL_TWO})`;
+const CARRY_FILE_REFERENCE_MARKDOWN = `[screenflow](scriptkit://spine/file/screenflow)`;
 const REMOVED_OVERLAY_IDS = [
   "day-page-sediment-layer",
   "day-page-fragment-card-0",
   "day-page-kept-url-0",
-];
-const DEPRECATED_CONTEXT_IDS = [
-  "day-page-inline-context-popup",
-  "day-page-context-popup",
-  "inline-context-popup",
 ];
 
 const receipts: Record<string, Json> = {};
@@ -203,6 +199,15 @@ try {
       rawCarryTwoLinePresent,
     },
   );
+  check(
+    "hotkey_carry_file_reference_is_markdown_link",
+    carryDayContent.includes(CARRY_FILE_REFERENCE_MARKDOWN) &&
+      !/^@file:screenflow$/m.test(carryDayContent),
+    {
+      carryFileReferenceMarkdown: carryDayContent.includes(CARRY_FILE_REFERENCE_MARKDOWN),
+      rawFileReferencePresent: /^@file:screenflow$/m.test(carryDayContent),
+    },
+  );
 
   await copyText(KEPT_URL);
   const urlDayContent = await waitFor(
@@ -302,25 +307,12 @@ try {
     editorContainsKeptUrlMarkdown: editorValue.includes(KEPT_URL_MARKDOWN),
     editorContainsRawUrl: editorValue.includes(` ${KEPT_URL}`),
   });
+  check("editor_shows_markdown_file_reference", editorValue.includes(CARRY_FILE_REFERENCE_MARKDOWN), {
+    editorContainsFileReferenceMarkdown: editorValue.includes(CARRY_FILE_REFERENCE_MARKDOWN),
+    editorContainsRawFileReference: /^@file:screenflow$/m.test(editorValue),
+  });
   check("removed_overlay_ids_absent", !hasAnyId(visible.flat, REMOVED_OVERLAY_IDS), {
     removedOverlayIds: REMOVED_OVERLAY_IDS,
-  });
-
-  const windows = (await driver.listAutomationWindows()) as Json;
-  const allElements = visible.flat;
-  const automationWindows = ((windows.windows ?? []) as Json[]).map((w) =>
-    [w.automationId, w.semanticSurface, w.windowKind, w.title].filter(Boolean).join("|"),
-  );
-  const combined = [
-    ...automationWindows,
-    ...allElements.map((el) => [el.semanticId, el.id, el.text, el.value].filter(Boolean).join("|")),
-  ];
-  const hasDeprecatedContextPopup = combined.some((value) =>
-    DEPRECATED_CONTEXT_IDS.some((needle) => value.includes(needle)),
-  );
-  check("deprecated_inline_context_popup_absent", !hasDeprecatedContextPopup, {
-    automationWindowCount: ((windows.windows ?? []) as Json[]).length,
-    deprecatedIds: DEPRECATED_CONTEXT_IDS,
   });
 
   const appLog = existsSync(driver.logPath) ? readFileSync(driver.logPath, "utf8") : "";

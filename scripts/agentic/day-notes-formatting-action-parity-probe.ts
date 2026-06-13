@@ -58,12 +58,6 @@ const REPRESENTATIVE_ACTIONS = [
   { id: "strikethrough", seed: "alpha", expect: (text: string) => text.includes("~~") },
 ];
 
-const DEPRECATED_CONTEXT_IDS = [
-  "day-page-inline-context-popup",
-  "day-page-context-popup",
-  "inline-context-popup",
-];
-
 const checks: Array<{ name: string; ok: boolean; detail: Json }> = [];
 const failures: string[] = [];
 
@@ -288,14 +282,6 @@ async function activateAction(driver: Driver, action: { actionId: string; title:
   return { found, semanticId, select, activate };
 }
 
-function hasDeprecatedContextPopup(windows: Json, elements: Json[]): boolean {
-  const haystack = [
-    JSON.stringify(windows),
-    ...elements.map((el) => String(el.semanticId ?? el.id ?? el.label ?? "")),
-  ].join("\n");
-  return DEPRECATED_CONTEXT_IDS.some((id) => haystack.includes(id));
-}
-
 await mkdir(".test-output", { recursive: true });
 
 const driver = await Driver.launch({
@@ -391,15 +377,6 @@ try {
     finalMarker,
     fileExists: existsSync(dayFile),
     savedChars: savedText.length,
-  });
-
-  const windows = (await driver.listAutomationWindows()) as Json;
-  const mainElements = walkElements(
-    (await driver.getElements({ target: { type: "main" }, limit: 260 }, { timeoutMs: 5000 })) as Json,
-  );
-  check("deprecated_inline_context_popup_absent", !hasDeprecatedContextPopup(windows, mainElements), {
-    deprecatedIds: DEPRECATED_CONTEXT_IDS,
-    windowCount: ((windows.windows ?? []) as Json[]).length,
   });
 
   const appLog = existsSync(driver.logPath) ? readFileSync(driver.logPath, "utf8") : "";

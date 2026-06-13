@@ -105,8 +105,15 @@ impl DayPageView {
         cx: &mut Context<Self>,
     ) {
         let content = self.notes_editor.read(cx).content(cx);
-        let spliced =
-            replace_segment_content(&content, line_range, segment_byte_range, token, true);
+        let visible_reference = markdown_reference_for_day_page_context_part(token, alias.as_ref())
+            .unwrap_or_else(|| token.to_string());
+        let spliced = replace_segment_content(
+            &content,
+            line_range,
+            segment_byte_range,
+            &visible_reference,
+            true,
+        );
         let (new_content, cursor) = match spliced {
             Some(done) => done,
             None => {
@@ -114,9 +121,9 @@ impl DayPageView {
                 // the end rather than dropping the accepted context.
                 let trimmed = content.trim_end();
                 let new_content = if trimmed.is_empty() {
-                    format!("{token} ")
+                    format!("{visible_reference} ")
                 } else {
-                    format!("{trimmed} {token} ")
+                    format!("{trimmed} {visible_reference} ")
                 };
                 let cursor = new_content.len();
                 (new_content, cursor)
@@ -133,7 +140,7 @@ impl DayPageView {
         self.refresh_fragment_open_targets(&new_content);
         if let Some(part) = alias {
             self.spine_runtime
-                .register_mention_alias(token.to_string(), part);
+                .register_mention_alias(visible_reference, part);
         }
         self.spine_runtime.clear_alias_cache();
         self.spine_runtime.dismissed_cache_key = None;

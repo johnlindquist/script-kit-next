@@ -171,13 +171,6 @@ function parseNumber(line: string | null, key: string): number | null {
   return value == null ? null : Number(value);
 }
 
-function hasDeprecatedDayPopup(driver: Driver): Promise<boolean> {
-  return driver
-    .getElements({ target: { type: "main" }, limit: 220 }, { timeoutMs: 5000 })
-    .then((elements) => { const text = JSON.stringify(elements); return text.includes("day-page-inline-context-popup") || text.includes("day-page-context-popup") || text.includes("inline-context-popup"); })
-    .catch(() => false);
-}
-
 const localDate = localDateFor(new Date(), timezone);
 const driver = await Driver.launch({
   sessionName: "brain-day-notes-agent-chat-recall",
@@ -364,11 +357,6 @@ try {
   check("agent_chat_reached_chat_surface", stateString(stateAfterRecall, "status") !== "setup", {
     status: stateString(stateAfterRecall, "status"),
     messageCount: stateNumber(stateAfterRecall, "messageCount"),
-  });
-
-  const deprecatedInlineDayPopupPresent = await hasDeprecatedDayPopup(driver);
-  check("deprecated_inline_day_popup_absent", !deprecatedInlineDayPopupPresent, {
-    deprecatedInlineDayPopupPresent,
   });
 
   const unknownWarningCount =

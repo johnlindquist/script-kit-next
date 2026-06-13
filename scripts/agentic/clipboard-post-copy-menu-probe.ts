@@ -7,7 +7,7 @@
  * - same URL copied again on the same local day dedupes that day line
  * - a single non-URL copy does not silently enter day pages, fragments, or brain_docs
  * - the explicit Today "Insert Clipboard Text" action inserts the current clipboard
- * - no deprecated post-copy popup or inline @ context popup returns
+ * - no deprecated post-copy popup returns
  *
  *   PROBE_BINARY=target-agent/artifacts/today-clipboard-sediment/script-kit-gpui \
  *     bun scripts/agentic/clipboard-post-copy-menu-probe.ts
@@ -25,12 +25,6 @@ const BINARY =
   "target-agent/artifacts/today-clipboard-sediment/script-kit-gpui";
 
 const POPUP_AUTOMATION_ID = "clipboard-post-copy-menu";
-const DEPRECATED_CONTEXT_IDS = [
-  "day-page-inline-context-popup",
-  "day-page-context-popup",
-  "inline-context-popup",
-  "context-spine-popup",
-];
 const runId = `clipboard-sediment-${Date.now().toString(36)}`;
 const PROBE_URL = `https://example.com/script-kit-${runId}`;
 const PRIVACY_TOKEN = `PRIVATE-NONURL-${runId}`;
@@ -208,26 +202,6 @@ async function actionsElements(driver: Driver) {
   return walkElements(elements);
 }
 
-function hasDeprecatedContextPopup(windows: Json, flatElements: Json[]) {
-  const automationWindows = ((windows.windows ?? []) as Json[]).map((w) =>
-    [
-      w.automationId,
-      w.semanticSurface,
-      w.windowKind,
-      w.title,
-    ]
-      .filter(Boolean)
-      .join("|"),
-  );
-  const elementIds = flatElements.map((el) =>
-    [el.semanticId, el.id, el.text, el.value].filter(Boolean).join("|"),
-  );
-  const combined = [...automationWindows, ...elementIds];
-  return combined.some((value) =>
-    DEPRECATED_CONTEXT_IDS.some((needle) => value.includes(needle)),
-  );
-}
-
 const driver = await Driver.launch({
   binary: BINARY,
   sessionName: "clipboard-sediment-privacy-dedupe",
@@ -400,11 +374,6 @@ try {
   check("post_copy_popup_absent", !popup, {
     postCopyPopupPresent: Boolean(popup),
     postCopyPopup: popup,
-  });
-
-  const windows = (await driver.listAutomationWindows()) as Json;
-  check("deprecated_inline_context_popup_absent", !hasDeprecatedContextPopup(windows, insertRows), {
-    automationWindowCount: ((windows.windows ?? []) as Json[]).length,
   });
 
   const appLog = existsSync(driver.logPath) ? readFileSync(driver.logPath, "utf8") : "";

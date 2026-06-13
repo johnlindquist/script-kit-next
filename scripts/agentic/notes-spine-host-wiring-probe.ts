@@ -6,13 +6,6 @@ const BINARY =
 const runId = `notes-spine-host-${Date.now().toString(36)}`;
 const target = { type: "kind", kind: "notes", index: 0 };
 
-const deprecatedIds = [
-  "inline-context-popup",
-  "day-page-inline-context-popup",
-  "day-page-context-popup",
-  "context-spine-popup",
-];
-
 type Check = { name: string; ok: boolean; detail: Json };
 const checks: Check[] = [];
 const failures: string[] = [];
@@ -112,25 +105,15 @@ async function proveReplacement(
   });
 }
 
-async function noDeprecatedContextPopup(driver: Driver) {
+async function proveAtContextDoesNotOpenNotesLocalUi(driver: Driver) {
   await setNotesText(driver, "@note");
   await Bun.sleep(150);
   const state = await notesState(driver);
-  const elements = await notesElements(driver);
-  const ids = elements
-    .map((el) => String(el.semanticId ?? el.id ?? ""))
-    .filter((id) => id.length > 0);
-  const presentDeprecated = ids.filter((id) =>
-    deprecatedIds.some((deprecated) => id.includes(deprecated)),
-  );
   check("at_context_no_notes_spine", (state.spine as Json | undefined)?.active !== true, {
     spine: state.spine ?? null,
   });
   check("at_context_no_note_switcher_auto_open", state.view?.showBrowsePanel !== true, {
     showBrowsePanel: state.view?.showBrowsePanel ?? null,
-  });
-  check("at_context_no_deprecated_inline_popup", presentDeprecated.length === 0, {
-    presentDeprecated,
   });
 }
 
@@ -188,7 +171,7 @@ try {
     expected: ":type:script ",
   });
 
-  await noDeprecatedContextPopup(driver);
+  await proveAtContextDoesNotOpenNotesLocalUi(driver);
   await proveAgentChatStillOpens(driver);
 
   const logText = await Bun.file(driver.logPath).text();

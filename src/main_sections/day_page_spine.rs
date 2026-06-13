@@ -739,11 +739,37 @@ impl DayPageView {
         }
 
         let parse = crate::spine::parse_spine(line);
-        if !spine_prompt_plan_can_submit(
+        let can_submit_spine = spine_prompt_plan_can_submit(
             &parse,
             self.spine_runtime.cwd_submit_anchor,
             &self.spine_runtime.mention_aliases,
-        ) {
+        );
+        let markdown_context_parts = day_page_context_parts_from_markdown_links(line);
+        if !markdown_context_parts.is_empty() && !can_submit_spine {
+            let Some(app) = self.app.upgrade() else {
+                return false;
+            };
+            let prompt = line.to_string();
+            let context_count = markdown_context_parts.len();
+            tracing::info!(
+                target: "script_kit::day_page",
+                event = "day_page_markdown_reference_handoff_started",
+                line_len = line.len(),
+                context_count,
+            );
+            window.defer(cx, move |_window, cx| {
+                app.update(cx, |app, cx| {
+                    app.submit_day_page_markdown_line_with_context(
+                        prompt,
+                        markdown_context_parts,
+                        cx,
+                    );
+                });
+            });
+            return true;
+        }
+
+        if !can_submit_spine {
             return false;
         }
 

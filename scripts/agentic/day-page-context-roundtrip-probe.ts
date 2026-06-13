@@ -2,7 +2,6 @@
 /**
  * Runtime proof for Day Page @context parity:
  * - typing @con in the Day Page editor swaps to the main menu context list
- * - no deprecated Day Page inline @ popup/list is used for @context
  * - accepting the main-menu row returns to the same Day Page line with @here
  * - Cmd+Enter submits that line to Agent Chat with a resolved context part
  */
@@ -158,7 +157,7 @@ try {
       String(el.semanticId ?? "").includes("what-i-m-looking-at") ||
       (typeof el.label === "string" && el.label.includes("What I")),
   );
-  const inlinePopupIds = menuFlat
+  const localDaySpineIds = menuFlat
     .map((el) => String(el.semanticId ?? el.id ?? ""))
     .filter((id) => id.includes("day-page-spine") );
   check("main_menu_context_row_visible", Boolean(contextRow), {
@@ -166,14 +165,14 @@ try {
     contextRow: contextRow ?? null,
     sampleIds: menuFlat.map((el) => el.semanticId ?? el.id).filter(Boolean).slice(0, 40),
   });
-  check("deprecated_inline_context_popup_absent", inlinePopupIds.length === 0, {
-    inlinePopupIds,
+  check("day_page_local_spine_not_rendered_in_main_menu", localDaySpineIds.length === 0, {
+    localDaySpineIds,
   });
 
   driver.simulateKey("enter");
   await Bun.sleep(900);
   const afterAccept = (await driver.getState({ timeoutMs: 5000 })) as Json;
-  const completedLine = `${prefix}@here `;
+  const completedLine = `${prefix}[What I’m Looking At](kit://context?profile=minimal) `;
   check("accept_returns_to_day_page", afterAccept.promptType === "dayPage", {
     promptType: afterAccept.promptType,
     inputValue: afterAccept.inputValue ?? null,
@@ -188,13 +187,12 @@ try {
   await Bun.sleep(3000);
   const afterSubmit = (await driver.getState({ timeoutMs: 5000 })) as Json;
   const appLog = await Bun.file(`${driver.sessionDir}/app.log`).text();
-  const startedLine = firstMatchingLog(appLog, "event=day_page_cmd_enter_handoff_started");
+  const startedLine = firstMatchingLog(appLog, "event=day_page_markdown_reference_handoff_started");
   const submitLine = firstMatchingLog(
     appLog,
-    "event=agent_chat_reused_entry_intent_with_host_context_submitted source=day_page_line_handoff",
+    "event=agent_chat_reused_entry_intent_with_host_context_submitted source=day_page_markdown_reference_handoff",
   );
-  const startedContextCount = Number(/context_token_count=(\d+)/.exec(startedLine ?? "")?.[1] ?? -1);
-  const startedAliasCount = Number(/alias_count=(\d+)/.exec(startedLine ?? "")?.[1] ?? -1);
+  const startedContextCount = Number(/context_count=(\d+)/.exec(startedLine ?? "")?.[1] ?? -1);
   const contextPartCount = Number(/context_part_count=(\d+)/.exec(submitLine ?? "")?.[1] ?? -1);
   const unknownWarningCount = Number(
     /unknown_warning_count=(\d+)/.exec(submitLine ?? "")?.[1] ?? -1,
@@ -203,9 +201,8 @@ try {
   check("cmd_enter_opens_agent_chat", afterSubmit.promptType === "agentChatChat", {
     promptType: afterSubmit.promptType,
   });
-  check("day_page_handoff_logged_context_token", startedContextCount > 0, {
+  check("day_page_handoff_logged_markdown_context", startedContextCount > 0, {
     startedContextCount,
-    startedAliasCount,
     startedLine,
   });
   check("agent_chat_received_context_part", contextPartCount > 0, {

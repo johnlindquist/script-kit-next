@@ -145,7 +145,7 @@ impl DayPageView {
         let previous_len = self.last_editor_content_len;
         let selection = self.notes_editor.read(cx).selection(cx);
         self.last_editor_content_len = content.len();
-        if content.len().saturating_sub(previous_len) > 1 {
+        if should_normalize_day_page_references_after_edit(&content, previous_len, selection.end) {
             let normalized = normalize_day_page_markdown_references(&content);
             if normalized != content {
                 let mut cursor = selection.end.min(content.len());
@@ -358,6 +358,28 @@ impl DayPageView {
             });
         });
     }
+}
+
+fn should_normalize_day_page_references_after_edit(
+    content: &str,
+    previous_len: usize,
+    cursor: usize,
+) -> bool {
+    if content.len() <= previous_len {
+        return false;
+    }
+    let growth = content.len().saturating_sub(previous_len);
+    if growth > 1 {
+        return true;
+    }
+    let mut cursor = cursor.min(content.len());
+    while cursor > 0 && !content.is_char_boundary(cursor) {
+        cursor -= 1;
+    }
+    content[..cursor]
+        .chars()
+        .next_back()
+        .is_some_and(char::is_whitespace)
 }
 
 impl Focusable for DayPageView {

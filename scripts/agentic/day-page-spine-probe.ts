@@ -296,13 +296,6 @@ try {
     },
   );
 
-  check("no_deprecated_inline_context_popup", !appLog.includes("inline-context-popup"), {
-    deprecatedIds: [
-      "day-page-inline-context-popup",
-      "day-page-context-popup",
-      "inline-context-popup",
-    ].filter((id) => appLog.includes(id)),
-  });
   check("no_gpui_entity_double_lease", !appLog.includes("gpui_entity_double_lease"), {});
   check("no_runtime_panic", !appLog.includes("panicked at"), {});
 

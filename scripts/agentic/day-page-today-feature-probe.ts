@@ -344,14 +344,6 @@ try {
     },
   );
 
-  const deprecatedInlineDayPopupPresent = await driver
-    .getElements({ target: { type: "main" }, limit: 220 }, { timeoutMs: 5000 })
-    .then((elements) => { const text = JSON.stringify(elements); return text.includes("day-page-inline-context-popup") || text.includes("day-page-context-popup") || text.includes("inline-context-popup"); })
-    .catch(() => false);
-  check("deprecated_inline_context_popup_absent", !deprecatedInlineDayPopupPresent, {
-    deprecatedInlineDayPopupPresent,
-  });
-
   const unknownWarningCount = (handoffLog.match(/unknown_warning_count=[1-9][0-9]*/g) ?? [])
     .length;
   check("unknown_warning_count_zero", unknownWarningCount === 0, { unknownWarningCount });

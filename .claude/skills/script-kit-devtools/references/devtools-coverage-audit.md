@@ -46,7 +46,7 @@ Build the DevTools surface around these scenarios before adding more recipes:
 5. Long labels, file paths, snippets, emoji, RTL text, or mixed grapheme content clip or overlap.
 6. Footer buttons, disabled actions, shortcut hints, and keycaps do not match action availability.
 7. Focus ring, selected row, hover row, or tab order becomes invisible or owned by the wrong surface.
-8. Popups, inline popovers, context pickers, and menus drift from anchors after filtering or resizing.
+8. Popups, inline popovers, context selectors, and menus drift from anchors after filtering or resizing.
 9. Empty/error/loading/retry states keep stale rows, stale errors, or unsafe actions.
 10. Screenshot proof disagrees with semantic state or captures the wrong window.
 
