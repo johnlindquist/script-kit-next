@@ -1463,45 +1463,6 @@ impl ScriptListApp {
         }
     }
 
-    pub(crate) fn open_tab_ai_agent_chat_with_mention_picker(
-        &mut self,
-        _window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        self.tab_ai_harness_script_list_trigger = Some('@');
-        tracing::info!(
-            target: "script_kit::tab_ai",
-            event = "agent_chat_open_from_script_list_trigger",
-            trigger = "@",
-            current_view = ?self.current_view,
-        );
-        self.open_tab_ai_agent_chat_with_entry_intent(None, cx);
-
-        let detached_opened =
-            crate::ai::agent_chat::ui::chat_window::open_detached_mention_picker(cx);
-        tracing::info!(
-            target: "script_kit::tab_ai",
-            event = "agent_chat_trigger_picker_open_attempt",
-            trigger = "@",
-            detached_opened,
-        );
-        if detached_opened {
-            return;
-        }
-
-        if let AppView::AgentChatView { entity } = &self.current_view {
-            tracing::info!(
-                target: "script_kit::tab_ai",
-                event = "agent_chat_spine_trigger_seeded_embedded",
-                trigger = "@",
-            );
-            entity.update(cx, |view, cx| {
-                view.set_input("@".to_string(), cx);
-                view.refresh_agent_chat_spine_from_composer(cx);
-            });
-        }
-    }
-
     fn schedule_embedded_agent_chat_picker_open(
         &self,
         window_handle: gpui::AnyWindowHandle,
@@ -1519,7 +1480,10 @@ impl ScriptListApp {
             let _ = window_handle.update(cx, |_root, window, cx| {
                 entity.update(cx, |view, cx| match trigger {
                     '/' => view.open_slash_picker_in_window(window, cx),
-                    '@' => view.open_mention_picker_in_window(window, cx),
+                    '@' => {
+                        view.set_input("@".to_string(), cx);
+                        view.refresh_agent_chat_spine_from_composer(cx);
+                    }
                     '|' => view.open_profile_trigger_picker_in_window(window, cx),
                     '.' | ';' | '>' => {
                         view.set_input(trigger.to_string(), cx);
@@ -6701,16 +6665,10 @@ mod tests {
     #[test]
     fn script_list_trigger_routes_stage_trigger_before_agent_chat_open_contract() {
         let source = include_str!("mod.rs");
-        for (signature, trigger) in [
-            (
-                "pub(crate) fn open_tab_ai_agent_chat_with_slash_picker(",
-                "Some('/')",
-            ),
-            (
-                "pub(crate) fn open_tab_ai_agent_chat_with_mention_picker(",
-                "Some('@')",
-            ),
-        ] {
+        for (signature, trigger) in [(
+            "pub(crate) fn open_tab_ai_agent_chat_with_slash_picker(",
+            "Some('/')",
+        )] {
             let body = tab_ai_contract_compact(&tab_ai_extract_fn_body(source, signature));
             let trigger_idx = body
                 .find(&tab_ai_contract_compact(&format!(
@@ -6732,10 +6690,7 @@ mod tests {
     #[test]
     fn script_list_trigger_routes_defer_embedded_picker_contract() {
         let source = include_str!("mod.rs");
-        for signature in [
-            "pub(crate) fn open_tab_ai_agent_chat_with_slash_picker(",
-            "pub(crate) fn open_tab_ai_agent_chat_with_mention_picker(",
-        ] {
+        for signature in ["pub(crate) fn open_tab_ai_agent_chat_with_slash_picker("] {
             let body = tab_ai_contract_compact(&tab_ai_extract_fn_body(source, signature));
             assert!(
                 body.contains(&tab_ai_contract_compact(

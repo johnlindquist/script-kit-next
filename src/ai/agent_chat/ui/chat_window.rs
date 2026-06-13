@@ -488,12 +488,6 @@ pub fn open_detached_slash_picker(cx: &mut App) -> bool {
     })
 }
 
-pub fn open_detached_mention_picker(cx: &mut App) -> bool {
-    open_picker_in_detached_chat_window(cx, |view, window, cx| {
-        view.open_mention_picker_in_window(window, cx);
-    })
-}
-
 pub fn submit_reused_entry_intent_in_detached_chat(
     intent: String,
     cx: &mut App,

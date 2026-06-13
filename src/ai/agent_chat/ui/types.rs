@@ -44,10 +44,10 @@ pub(crate) fn build_prompt_blocks(
 
 // ── Extracted Agent Chat view types ────────────────────────────────────────────
 
-/// Active @-composer session state for the Agent Chat inline context selector.
+/// Active slash/profile composer picker state for Agent Chat.
 #[derive(Debug, Clone)]
 pub(crate) struct AgentChatMentionSession {
-    /// Which trigger character opened this session (`@` or `/`).
+    /// Which trigger character opened this session (`/` or `|`).
     pub(crate) trigger: ContextSelectorTrigger,
     /// Character range of the trigger+query in the input text.
     pub(crate) trigger_range: std::ops::Range<usize>,

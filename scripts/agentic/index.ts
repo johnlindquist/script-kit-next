@@ -2222,10 +2222,10 @@ async function recipeAgentChatPickerAccept(
     )
   );
 
-  // 3. Type @ to open picker.
+  // 3. Type / to open the supported slash picker.
   //    For non-main targets (detached Agent Chat, popups), route through batch/GPUI first
   //    so the flow succeeds even when the human user types in another app.
-  const typeAtStep = await routedInputStep("type-at-trigger", "type", "@", session, {
+  const typeAtStep = await routedInputStep("type-slash-trigger", "type", "/", session, {
     target: opts.target,
     surface: opts.surface,
     inputMode: opts.inputMode,
@@ -2238,7 +2238,7 @@ async function recipeAgentChatPickerAccept(
       recipe: `agent_chat-${acceptKey}-accept`,
       status: "fail",
       steps,
-      summary: `Input failed at type-at-trigger (method: ${typeAtStep.inputMethod ?? "unknown"})`,
+      summary: `Input failed at type-slash-trigger (method: ${typeAtStep.inputMethod ?? "unknown"})`,
     };
   }
 

@@ -6,7 +6,7 @@
 //! [`crate::components::inline_dropdown`] (see `InlineDropdown`,
 //! `render_soft_compact_picker_row`, `inline_dropdown_visible_range_from_start`,
 //! `InlineDropdownColors`, `InlineDropdownEmptyState`, `InlineDropdownSynopsis`).
-//! Agent Chat's slash/@ mention popup consumes that renderer today.
+//! Agent Chat's slash/profile popups consume that renderer today.
 //!
 //! What this module adds is the neutral **data shape** that callers like
 //! the menu-syntax `:`, `;`, and `!` trigger pickers and cross-surface automation tooling

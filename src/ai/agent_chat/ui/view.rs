@@ -51,8 +51,8 @@ use crate::ai::context_selector::types::{
     ContextSelectorRow, ContextSelectorRowKind, ContextSelectorTrigger, SlashCommandPayload,
 };
 use crate::ai::context_selector::{
-    context_selector_rows, slash_command_empty_row, slash_command_loading_row,
-    slash_command_no_match_row, slash_command_rows_with_payloads,
+    slash_command_empty_row, slash_command_loading_row, slash_command_no_match_row,
+    slash_command_rows_with_payloads,
 };
 use crate::ai::message_parts::AiContextPart;
 use crate::list_item::{IconKind, ListItem, ListItemColors, TypeAccessory};
@@ -735,7 +735,7 @@ pub(crate) struct AgentChatView {
     cached_slash_commands: Vec<SlashCommandEntry>,
     /// Handle to the deferred slash command discovery task.
     _slash_discovery_task: Task<()>,
-    /// Active @-composer picker session (None = picker hidden).
+    /// Active slash/profile composer picker session (None = picker hidden).
     pub(crate) mention_session: Option<AgentChatMentionSession>,
     /// Surface-local Spine state for the Agent Chat composer. When this projection
     /// owns the conversation area, the transcript is replaced with the
@@ -7167,10 +7167,6 @@ impl AgentChatView {
         self.open_picker_trigger("/", cx);
     }
 
-    pub(crate) fn open_mention_picker(&mut self, cx: &mut Context<Self>) {
-        self.open_picker_trigger("@", cx);
-    }
-
     pub(crate) fn open_profile_trigger_picker(&mut self, cx: &mut Context<Self>) {
         self.open_picker_trigger(PROFILE_TRIGGER_STR, cx);
     }
@@ -8298,15 +8294,6 @@ impl AgentChatView {
     ) {
         self.cache_composer_parent_window(window, cx);
         self.open_slash_picker(cx);
-    }
-
-    pub(crate) fn open_mention_picker_in_window(
-        &mut self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        self.cache_composer_parent_window(window, cx);
-        self.open_mention_picker(cx);
     }
 
     pub(crate) fn open_profile_picker_in_window(
@@ -10428,7 +10415,7 @@ impl AgentChatView {
         btn.child(icon_char).into_any_element()
     }
 
-    // ── @-composer picker ──────────────────────────────────────────
+    // ── Composer picker ────────────────────────────────────────────
 
     /// Maximum visible rows in the composer picker.
     pub(super) const MENTION_PICKER_MAX_VISIBLE: usize = 8;
@@ -10542,11 +10529,16 @@ impl AgentChatView {
                     if self.dismissed_mention_trigger.as_ref() == Some(&active_trigger) {
                         active_dismissed_trigger = Some(active_trigger);
                         None
+                    } else if trigger == ContextSelectorTrigger::Mention {
+                        tracing::info!(
+                            target: "script_kit::tab_ai",
+                            event = "agent_chat_at_context_picker_suppressed",
+                            query = %query,
+                            "Agent Chat no longer opens a detached @ context picker; @ tokens stay inline/spine-owned"
+                        );
+                        None
                     } else {
                         let mut items = match trigger {
-                            ContextSelectorTrigger::Mention => {
-                                context_selector_rows(trigger, &query)
-                            }
                             ContextSelectorTrigger::Slash => {
                                 if self.cached_slash_commands.is_empty() {
                                     // Async discovery hasn't completed yet — show
@@ -10583,6 +10575,7 @@ impl AgentChatView {
                             ContextSelectorTrigger::Profile => {
                                 self.build_profile_picker_items(&query)
                             }
+                            ContextSelectorTrigger::Mention => unreachable!(),
                         };
 
                         // Filter out portal items the host does not support.
@@ -13032,7 +13025,7 @@ impl AgentChatView {
             return;
         }
 
-        // ── Unified picker intercept (@ mentions + / commands) ────
+        // ── Unified picker intercept (slash/profile commands) ─────
         if self.mention_session.is_some() {
             if crate::ui_foundation::is_key_up(key) {
                 let transition = reduce_agent_chat_composer_picker(

@@ -95,7 +95,7 @@ fn set_filter_text_immediate_delegates_to_subview_router_helper() {
 }
 
 #[test]
-fn set_filter_at_routes_script_list_to_agent_chat_mention_picker() {
+fn set_filter_at_stays_in_shared_spine_route() {
     let receiver_pos = FILTER_INPUT_UPDATES
         .find("fn set_filter_text_immediate(")
         .expect("set_filter_text_immediate receiver must exist");

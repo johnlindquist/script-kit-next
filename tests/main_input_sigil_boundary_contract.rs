@@ -35,7 +35,7 @@ fn set_filter_text_immediate_does_not_agent_chat_only_special_case_sigil_routing
 fn bare_at_stays_in_script_list_spine_route() {
     assert!(
         !FILTER_CORE.contains("AgentChatMentionPicker")
-            && !FILTER_CHANGE.contains("open_tab_ai_agent_chat_with_mention_picker"),
+            && !FILTER_CHANGE.contains(concat!("open_tab_ai_agent_chat_with_", "mention_picker")),
         "bare @ in ScriptList must stay in the shared Spine/main-list route, not open Agent Chat"
     );
     assert!(

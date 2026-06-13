@@ -322,7 +322,7 @@ mod tests {
 
     #[test]
     fn navigate_wraps_selection_and_updates_visible_start() {
-        let mut open = session(ContextSelectorTrigger::Mention, 10);
+        let mut open = session(ContextSelectorTrigger::Slash, 10);
         open.selected_index = 0;
         let transition = reduce_agent_chat_composer_picker(
             AgentChatComposerPickerState::Open(open),
@@ -338,7 +338,7 @@ mod tests {
 
     #[test]
     fn outside_dismiss_records_exact_trigger() {
-        let open = session(ContextSelectorTrigger::Mention, 1);
+        let open = session(ContextSelectorTrigger::Slash, 1);
         let transition = reduce_agent_chat_composer_picker(
             AgentChatComposerPickerState::Open(open),
             AgentChatComposerPickerEvent::Dismiss {
@@ -350,7 +350,7 @@ mod tests {
         assert!(matches!(
             transition.state,
             AgentChatComposerPickerState::Dismissed(AgentChatDismissedMentionTrigger {
-                trigger: ContextSelectorTrigger::Mention,
+                trigger: ContextSelectorTrigger::Slash,
                 cursor: 1,
                 ..
             })
@@ -439,7 +439,7 @@ mod tests {
     #[test]
     fn submit_started_closes_picker() {
         let transition = reduce_agent_chat_composer_picker(
-            AgentChatComposerPickerState::Open(session(ContextSelectorTrigger::Mention, 1)),
+            AgentChatComposerPickerState::Open(session(ContextSelectorTrigger::Slash, 1)),
             AgentChatComposerPickerEvent::SubmitStarted,
         );
 
@@ -474,7 +474,7 @@ mod tests {
     #[test]
     fn focused_inline_token_preview_closes_without_opening_empty_state() {
         let transition = reduce_agent_chat_composer_picker(
-            AgentChatComposerPickerState::Open(session(ContextSelectorTrigger::Mention, 1)),
+            AgentChatComposerPickerState::Open(session(ContextSelectorTrigger::Slash, 1)),
             AgentChatComposerPickerEvent::Refresh(AgentChatComposerPickerRefreshInput {
                 active_trigger: Some(slash_trigger("", 1)),
                 next_session: None,

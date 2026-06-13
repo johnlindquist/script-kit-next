@@ -280,7 +280,7 @@ impl ScriptListApp {
 
         // If reset bypasses the normal Agent Chat close button/Escape route, still
         // hide Agent Chat-owned popups before the view is dropped. This covers
-        // window hide/reset paths after launcher-triggered "/" or "@" opens.
+        // window hide/reset paths after launcher-triggered "/" opens.
         if let AppView::AgentChatView { entity } = &self.current_view {
             self.embedded_agent_chat = Some(entity.clone());
             entity.update(cx, |view, cx| {

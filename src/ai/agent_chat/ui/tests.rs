@@ -898,12 +898,12 @@ fn agent_chat_picker_parent_mouse_down_dismisses_slash_and_mention_session() {
             && AGENT_CHAT_VIEW_SOURCE.contains("self.mention_session.take()")
             && AGENT_CHAT_VIEW_SOURCE
                 .contains("self.refresh_composer_picker_state_after_parent_change(cx);"),
-        "AgentChatView must expose a shared picker dismiss helper for both slash and @ composer sessions"
+        "AgentChatView must expose a shared picker dismiss helper for slash/profile composer sessions"
     );
     assert!(
         render_body.contains(".on_any_mouse_down(cx.listener(|this, _event, _window, cx| {")
             && render_body.contains("this.dismiss_mention_picker(cx);"),
-        "Agent Chat chat root mouse-down should dismiss the shared slash/@ composer picker when clicking outside"
+        "Agent Chat chat root mouse-down should dismiss the shared slash/profile composer picker when clicking outside"
     );
 }
 
@@ -921,7 +921,7 @@ fn agent_chat_picker_outside_dismiss_suppresses_unchanged_trigger_reopen() {
             && dismiss.contains("reason: AgentChatComposerPickerDismissReason::Outside")
             && dismiss.contains("cursor,")
             && dismiss.contains("AgentChatComposerPickerState::Dismissed(trigger)"),
-        "outside-click dismiss must remember the exact active slash/@ trigger so unchanged composer text does not reopen the popup"
+        "outside-click dismiss must remember the exact active slash/profile trigger so unchanged composer text does not reopen the popup"
     );
 
     let refresh = agent_chat_source_between(
@@ -953,7 +953,7 @@ fn agent_chat_close_paths_close_slash_and_mention_session() {
         .expect("detached Cmd+W block must remove the window");
     assert!(
         detached_cmd_w_prepare < detached_cmd_w_remove,
-        "detached Agent Chat Cmd+W must close slash/@ composer sessions before removing the window"
+        "detached Agent Chat Cmd+W must close slash/profile composer sessions before removing the window"
     );
 
     let detached_close_helper = agent_chat_source_between(
@@ -969,7 +969,7 @@ fn agent_chat_close_paths_close_slash_and_mention_session() {
         .expect("close_chat_window must remove the window");
     assert!(
         detached_helper_prepare < detached_helper_remove,
-        "detached close_chat_window must close slash/@ composer sessions before removing the window"
+        "detached close_chat_window must close slash/profile composer sessions before removing the window"
     );
 
     let detached_titlebar_close = agent_chat_source_between(
@@ -980,7 +980,7 @@ fn agent_chat_close_paths_close_slash_and_mention_session() {
     assert!(
         detached_titlebar_close.contains("view_entity_slot_on_close")
             && detached_titlebar_close.contains("view.prepare_for_host_hide(cx);"),
-        "detached titlebar close must prepare the Agent Chat view so slash/@ composer sessions cannot outlive chat"
+        "detached titlebar close must prepare the Agent Chat view so slash/profile composer sessions cannot outlive chat"
     );
 }
 

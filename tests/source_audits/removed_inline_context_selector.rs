@@ -29,6 +29,16 @@ const FORBIDDEN_SNIPPETS: &[&str] = &[
     "menu_syntax_object_selector_popup",
     "inline context popup",
     "context picker popup",
+    "open_detached_mention_picker",
+    "open_tab_ai_agent_chat_with_mention_picker",
+    "open_mention_picker_in_window",
+    "fn open_mention_picker",
+    "open_mention_picker(cx)",
+    "ContextSelectorTrigger::Mention => context_selector_rows",
+    "Type @ to open picker",
+    "slash/@",
+    "@-composer picker",
+    "inline context selector",
 ];
 
 #[test]

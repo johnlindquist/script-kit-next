@@ -32,7 +32,7 @@ const CONTEXT_SELECTOR_SYNOPSIS_LINE_HEIGHT: f32 = 16.0;
 
 /// Render a single dense-monoline picker row.
 ///
-/// Shared by Agent Chat popups, inline context selectors, model selectors, and any
+/// Shared by Agent Chat popups, model selectors, presets dropdowns, and any
 /// future smart-input dropdown that wants the same launcher-aligned chrome.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn render_dense_monoline_picker_row(
