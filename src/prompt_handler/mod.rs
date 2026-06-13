@@ -10523,23 +10523,6 @@ impl ScriptListApp {
     ) -> anyhow::Result<String> {
         if let AppView::DayPage { entity } = &self.current_view {
             let entity = entity.clone();
-            if let Some(index) = semantic_id
-                .strip_prefix(script_kit_gpui::day_page::FRAGMENT_CARD_ID_PREFIX)
-                .and_then(|value| value.parse::<usize>().ok())
-            {
-                return entity.update(cx, |view, cx| {
-                    if view.fragment_open_targets.get(index).is_none() {
-                        anyhow::bail!(
-                            "No visible Day Page fragment card matched semantic ID '{semantic_id}'"
-                        );
-                    }
-                    if submit {
-                        view.open_fragment_at(index, window, cx);
-                    }
-                    Ok(semantic_id.to_string())
-                });
-            }
-
             if semantic_id == script_kit_gpui::day_page::FRAGMENT_BACK_ID {
                 return entity.update(cx, |view, cx| {
                     if !view.session.is_viewing_fragment() {

@@ -18,7 +18,7 @@ pub struct DayPageView {
     pub(crate) editor_state: Entity<InputState>,
     pub(crate) editor_subscription: Subscription,
     pub(crate) focus_handle: FocusHandle,
-    /// Resolved fragment paths aligned with parsed fragment card indices.
+    /// Resolved fragment paths aligned with parsed fragment reference indices.
     pub(crate) fragment_open_targets: Vec<PathBuf>,
     pub(crate) spine_runtime: NotesEditorSpineRuntime<crate::scripts::SearchResult>,
     /// Last debounced autosave write (Notes-parity SAVE_DEBOUNCE_MS throttle).

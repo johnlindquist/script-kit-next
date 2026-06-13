@@ -1,7 +1,7 @@
-//! Day Page sediment line parsing and fragment path resolution.
+//! Day Page markdown reference parsing and fragment path resolution.
 //!
-//! Fragment-reference and kept-URL lines stay plain markdown on disk; this module
-//! identifies them for presentation-only card/link rendering on the Day Page.
+//! Fragment-reference and kept-URL lines stay plain markdown on disk and in the
+//! editor. This module identifies them only for navigation/automation metadata.
 
 use std::path::{Path, PathBuf};
 
@@ -10,20 +10,8 @@ use chrono_tz::Tz;
 
 use crate::brain::substrate::BrainFrontmatter;
 
-/// Semantic id prefix for fragment excerpt cards (`day-page-fragment-card-{index}`).
-pub const FRAGMENT_CARD_ID_PREFIX: &str = "day-page-fragment-card-";
-
-/// Semantic id prefix for kept-URL rows (`day-page-kept-url-{index}`).
-pub const KEPT_URL_ID_PREFIX: &str = "day-page-kept-url-";
-
 /// Back affordance when viewing a fragment inline on the Day Page surface.
 pub const FRAGMENT_BACK_ID: &str = "day-page-fragment-back";
-
-/// Decoration layer wrapping sediment cards over the editor.
-pub const SEDIMENT_LAYER_ID: &str = "day-page-sediment-layer";
-
-/// Monospace line height used to align overlay cards with editor lines.
-pub const SEDIMENT_LINE_HEIGHT: f32 = 20.0;
 
 /// A parsed segment of today's day-page markdown.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -91,6 +79,21 @@ pub fn parse_day_page_segments(content: &str) -> Vec<DayPageSegment> {
 
     while line_index < lines.len() {
         let line = lines[line_index];
+        if let Some((timestamp, excerpt, relative_link)) = parse_fragment_markdown_link_line(line) {
+            flush_plain(&mut segments, &mut plain_buffer, &mut plain_start);
+            segments.push(DayPageSegment::FragmentRef {
+                timestamp,
+                excerpt,
+                relative_link,
+                start_line: line_index,
+                line_count: 1,
+                index: fragment_index,
+            });
+            fragment_index += 1;
+            line_index += 1;
+            continue;
+        }
+
         if let Some((timestamp, excerpt)) = parse_fragment_header_line(line) {
             flush_plain(&mut segments, &mut plain_buffer, &mut plain_start);
             if line_index + 1 < lines.len() {
@@ -138,13 +141,33 @@ pub fn parse_day_page_segments(content: &str) -> Vec<DayPageSegment> {
     segments
 }
 
+fn parse_fragment_markdown_link_line(line: &str) -> Option<(String, String, String)> {
+    let trimmed = line.trim_end();
+    let (timestamp, rest) = trimmed.split_once(' ')?;
+    if !is_timestamp(timestamp) {
+        return None;
+    }
+    let rest = rest.trim();
+    let label_start = rest.find('[')?;
+    let label_end = rest[label_start + 1..].find("](")? + label_start + 1;
+    let link_start = label_end + 2;
+    let link_end = rest[link_start..].find(')')? + link_start;
+    if link_end + 1 != rest.len() {
+        return None;
+    }
+    let excerpt = rest[label_start + 1..label_end].trim();
+    let relative_link = rest[link_start..link_end].trim();
+    if excerpt.is_empty() {
+        return None;
+    }
+    parse_fragment_link_line(relative_link)
+        .map(|link| (timestamp.to_string(), excerpt.to_string(), link))
+}
+
 fn parse_fragment_header_line(line: &str) -> Option<(String, String)> {
     let trimmed = line.trim_end();
     let (timestamp, rest) = trimmed.split_once(" > ")?;
-    if timestamp.len() != 5 || !timestamp.contains(':') {
-        return None;
-    }
-    if !timestamp.chars().all(|ch| ch.is_ascii_digit() || ch == ':') {
+    if !is_timestamp(timestamp) {
         return None;
     }
     let excerpt = rest.trim();
@@ -166,16 +189,19 @@ fn parse_fragment_link_line(line: &str) -> Option<String> {
 fn parse_kept_url_line(line: &str) -> Option<(String, String)> {
     let trimmed = line.trim_end();
     let (timestamp, url) = trimmed.split_once(' ')?;
-    if timestamp.len() != 5 || !timestamp.contains(':') {
-        return None;
-    }
-    if !timestamp.chars().all(|ch| ch.is_ascii_digit() || ch == ':') {
+    if !is_timestamp(timestamp) {
         return None;
     }
     if !is_single_token_http_url(url) {
         return None;
     }
     Some((timestamp.to_string(), url.to_string()))
+}
+
+fn is_timestamp(value: &str) -> bool {
+    value.len() == 5
+        && value.as_bytes().get(2) == Some(&b':')
+        && value.chars().all(|ch| ch.is_ascii_digit() || ch == ':')
 }
 
 fn is_single_token_http_url(text: &str) -> bool {
@@ -203,7 +229,7 @@ pub fn load_fragment_provenance(fragment_path: &Path) -> Option<FragmentProvenan
     })
 }
 
-/// Human-readable provenance hint for fragment cards.
+/// Human-readable provenance hint for fragment references.
 pub fn format_provenance_hint(provenance: &FragmentProvenance, tz: Tz) -> String {
     let time = provenance
         .created
@@ -223,14 +249,6 @@ fn format_source_label(source: Option<&str>) -> String {
     }
 }
 
-pub fn fragment_card_id(index: usize) -> String {
-    format!("{FRAGMENT_CARD_ID_PREFIX}{index}")
-}
-
-pub fn kept_url_id(index: usize) -> String {
-    format!("{KEPT_URL_ID_PREFIX}{index}")
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -240,8 +258,7 @@ mod tests {
     #[test]
     fn parse_fragment_and_kept_url_segments() {
         let content = "09:00 morning note\n\
-            09:15 > First words of the pasted article without cutting mid-word...\n\
-              ../fragments/2026-06-11-0942-clipboard.md\n\
+            09:15 [First words of the pasted article without cutting mid-word...](../fragments/2026-06-11-0942-clipboard.md)\n\
             09:20 https://example.com/docs\n\
             09:30 closing thought";
 
@@ -262,7 +279,7 @@ mod tests {
                 ..
             } => {
                 assert_eq!(index, &0);
-                assert_eq!(line_count, &2);
+                assert_eq!(line_count, &1);
                 assert!(excerpt.contains("First words"));
                 assert_eq!(relative_link, "../fragments/2026-06-11-0942-clipboard.md");
             }
@@ -280,6 +297,28 @@ mod tests {
         match &segments[3] {
             DayPageSegment::Plain { text, .. } => assert_eq!(text, "09:30 closing thought"),
             other => panic!("expected plain segment, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parses_legacy_two_line_fragment_reference_for_navigation() {
+        let content = "09:15 > First words of the pasted article without cutting mid-word...\n\
+              ../fragments/2026-06-11-0942-clipboard.md\n";
+
+        let segments = parse_day_page_segments(content);
+        assert_eq!(segments.len(), 1);
+        match &segments[0] {
+            DayPageSegment::FragmentRef {
+                excerpt,
+                relative_link,
+                line_count,
+                ..
+            } => {
+                assert_eq!(line_count, &2);
+                assert!(excerpt.contains("First words"));
+                assert_eq!(relative_link, "../fragments/2026-06-11-0942-clipboard.md");
+            }
+            other => panic!("expected fragment segment, got {other:?}"),
         }
     }
 

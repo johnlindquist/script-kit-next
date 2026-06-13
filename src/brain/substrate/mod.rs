@@ -607,8 +607,9 @@ mod tests {
 
         let contents =
             fs::read_to_string(substrate.paths().day_page(now.date_naive())).expect("read day");
-        assert!(contents.contains("> First words of the pasted article"));
-        assert!(contents.contains("../fragments/2026-06-11-0942-clipboard.md"));
+        assert!(contents.contains(
+            "09:42 [First words of the pasted article without cutting mid-word...](../fragments/2026-06-11-0942-clipboard.md)"
+        ));
         assert!(contents
             .contains("09:43 — Agent Chat: flaky clock test (scriptkit://agent-chat/thread-9)"));
     }

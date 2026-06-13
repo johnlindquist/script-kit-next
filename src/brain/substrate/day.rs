@@ -60,7 +60,7 @@ impl DayEntry {
             Self::KeptUrl { url } => format!("{timestamp} {url}"),
             Self::FragmentRef(reference) => {
                 format!(
-                    "{timestamp} > {}\n  {}",
+                    "{timestamp} [{}]({})",
                     reference.excerpt, reference.relative_link
                 )
             }

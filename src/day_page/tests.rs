@@ -1,22 +1,17 @@
-//! Day Page sediment rendering and fragment navigation tests.
+//! Day Page markdown reference and fragment navigation tests.
 
 use std::fs;
 
 use chrono::{DateTime, Utc};
 use chrono_tz::Tz;
 use gpui::{
-    div, prelude::*, App, Context, FocusHandle, Focusable, IntoElement, ParentElement, Render,
-    TestAppContext, VisualTestContext,
+    div, prelude::*, IntoElement, ParentElement, Render, TestAppContext, VisualTestContext,
 };
 
 use crate::brain::substrate::{BrainFrontmatter, BrainSubstrate, DayEntry, FragmentReference};
-use crate::components::unified_list_item::{TextContent, UnifiedListItem, UnifiedListItemColors};
 use crate::notes::NoteId;
 
-use super::{
-    fragment_card_id, parse_day_page_segments, DayPageDocumentSession, DayPageSegment,
-    FRAGMENT_BACK_ID, SEDIMENT_LAYER_ID,
-};
+use super::{parse_day_page_segments, DayPageDocumentSession, DayPageSegment, FRAGMENT_BACK_ID};
 
 fn utc(now: &str) -> DateTime<Utc> {
     DateTime::parse_from_rfc3339(now)
@@ -46,17 +41,22 @@ fn write_fragment(
 }
 
 #[test]
-fn fragment_line_parses_to_card_segment() {
-    let content = "09:15 > First words of the pasted article without cutting mid-word...\n\
-          ../fragments/2026-06-11-0942-clipboard.md\n";
+fn fragment_line_parses_to_markdown_reference_segment() {
+    let content = "09:15 [First words of the pasted article without cutting mid-word...](../fragments/2026-06-11-0942-clipboard.md)\n";
     let segments = parse_day_page_segments(content);
     assert_eq!(segments.len(), 1);
     match &segments[0] {
-        DayPageSegment::FragmentRef { index, excerpt, .. } => {
+        DayPageSegment::FragmentRef {
+            index,
+            excerpt,
+            line_count,
+            ..
+        } => {
             assert_eq!(*index, 0);
+            assert_eq!(*line_count, 1);
             assert!(excerpt.contains("First words"));
         }
-        other => panic!("expected fragment card segment, got {other:?}"),
+        other => panic!("expected fragment reference segment, got {other:?}"),
     }
 }
 
@@ -103,52 +103,29 @@ fn open_fragment_binds_editor_and_back_restores_day_page() {
     );
 }
 
-struct SedimentCardProbe {
-    card_id: String,
-    focus_handle: FocusHandle,
-}
-
-impl SedimentCardProbe {
-    fn new(card_id: impl Into<String>, cx: &mut Context<Self>) -> Self {
-        Self {
-            card_id: card_id.into(),
-            focus_handle: cx.focus_handle(),
-        }
-    }
-}
-
-impl Focusable for SedimentCardProbe {
-    fn focus_handle(&self, _cx: &App) -> FocusHandle {
-        self.focus_handle.clone()
-    }
-}
-
-impl Render for SedimentCardProbe {
-    fn render(&mut self, _: &mut gpui::Window, _cx: &mut Context<Self>) -> impl IntoElement {
-        let colors = UnifiedListItemColors::default();
-        let card = UnifiedListItem::new(
-            self.card_id.clone(),
-            TextContent::plain("First words of the pasted article without cutting mid-word..."),
-        )
-        .colors(colors);
-
-        div()
-            .id(SEDIMENT_LAYER_ID)
-            .debug_selector(|| self.card_id.clone())
-            .child(card)
-    }
-}
-
-/// Fragment line in today's file → card present via semantic id; covers devtools contract.
 #[test]
-fn fragment_card_semantic_id_is_rendered() {
-    let mut cx = TestAppContext::single();
-    let (_probe, cx) = cx.add_window_view(|_, cx| SedimentCardProbe::new(fragment_card_id(0), cx));
+fn fragment_reference_is_written_as_markdown_link() {
+    let (_dir, substrate) = test_substrate();
+    let now = utc("2026-06-11T09:42:00Z");
+    substrate
+        .append_to_day(
+            now,
+            DayEntry::FragmentRef(FragmentReference {
+                excerpt: "First words of the pasted article without cutting mid-word..."
+                    .to_string(),
+                relative_link: "../fragments/2026-06-11-0942-clipboard.md".to_string(),
+            }),
+        )
+        .expect("append fragment ref");
 
-    let bounds = cx.debug_bounds("day-page-fragment-card-0");
+    let contents =
+        fs::read_to_string(substrate.paths().day_page(now.date_naive())).expect("read day");
+    assert!(contents.contains(
+        "09:42 [First words of the pasted article without cutting mid-word...](../fragments/2026-06-11-0942-clipboard.md)"
+    ));
     assert!(
-        bounds.is_some(),
-        "fragment card semantic id day-page-fragment-card-0 should be present in the element tree"
+        !contents.contains("\n  ../fragments/"),
+        "fragment references should no longer render as a separate card/backing line"
     );
 }
 

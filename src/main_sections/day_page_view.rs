@@ -2,17 +2,11 @@
 
 use chrono::Utc;
 
-use crate::components::notes_editor::{
-    NotesEditorLayout, NotesEditorMarkdownConfig, NotesEditorSurfaceStyle,
-};
-use crate::components::unified_list_item::{
-    Density, ItemState, TextContent, TrailingContent, UnifiedListItem, UnifiedListItemColors,
-};
+use crate::components::notes_editor::{NotesEditorLayout, NotesEditorMarkdownConfig};
 use crate::footer_popup::{FooterAction, FooterButtonConfig};
 use script_kit_gpui::brain::{substrate::BrainSubstrate, wake_indexer};
 use script_kit_gpui::day_page::{
     parse_day_page_segments, resolve_fragment_path, DayPageBinding, DayPageSegment,
-    SEDIMENT_LAYER_ID, SEDIMENT_LINE_HEIGHT,
 };
 
 impl DayPageView {
@@ -385,21 +379,8 @@ impl Render for DayPageView {
 
         let columns = crate::components::main_view_chrome::main_view_content_columns(menu_def);
         let editor_input = self.notes_editor.read(cx).render_input(cx);
-        let content = self.notes_editor.read(cx).content(cx);
-        let segments = parse_day_page_segments(&content);
-        let has_sediment = segments.iter().any(|segment| {
-            matches!(
-                segment,
-                DayPageSegment::FragmentRef { .. } | DayPageSegment::KeptUrl { .. }
-            )
-        });
         let viewing_fragment = self.session.is_viewing_fragment();
-        let editor_metrics = crate::notes::window::style::adopted_metrics();
-        let list_colors = UnifiedListItemColors::from_theme(&app_state.theme);
-        let editor_surface = NotesEditorSurfaceStyle::from_theme(&app_state.theme);
-        let accent_color = app_state.theme.colors.accent.selected;
         let theme = app_state.theme.clone();
-        let editor_padding_y = editor_metrics.editor_padding_y;
         let spine_panel = self.render_day_page_spine_panel(cx);
         let day_switcher_panel = self.render_day_page_day_switcher_panel(cx);
 
@@ -470,111 +451,6 @@ impl Render for DayPageView {
             None
         };
 
-        let sediment_layer = if has_sediment && !viewing_fragment {
-            let day_path = self.session.path().cloned();
-            let tz = self.session.substrate().timezone();
-            let mut layer = div()
-                .id(SEDIMENT_LAYER_ID)
-                .absolute()
-                .inset_0()
-                .overflow_hidden();
-
-            for segment in segments {
-                match segment {
-                    DayPageSegment::FragmentRef {
-                        excerpt,
-                        relative_link,
-                        start_line,
-                        line_count,
-                        index,
-                        ..
-                    } => {
-                        let subtitle = day_path
-                            .as_ref()
-                            .and_then(|day| resolve_fragment_path(day, &relative_link))
-                            .and_then(|path| {
-                                script_kit_gpui::day_page::load_fragment_provenance(&path)
-                            })
-                            .map(|meta| {
-                                script_kit_gpui::day_page::format_provenance_hint(&meta, tz)
-                            })
-                            .unwrap_or_else(|| "Fragment".to_string());
-
-                        let card = UnifiedListItem::new(
-                            script_kit_gpui::day_page::fragment_card_id(index),
-                            TextContent::plain(excerpt),
-                        )
-                        .subtitle(TextContent::plain(subtitle))
-                        .trailing(TrailingContent::Chevron)
-                        .density(Density::Comfortable)
-                        .colors(list_colors)
-                        .state(ItemState {
-                            is_hovered: false,
-                            is_selected: false,
-                            is_disabled: false,
-                        })
-                        .with_direct_hover(true);
-
-                        let top = editor_padding_y + (start_line as f32) * SEDIMENT_LINE_HEIGHT;
-                        let height = (line_count as f32) * SEDIMENT_LINE_HEIGHT;
-                        let card_id = script_kit_gpui::day_page::fragment_card_id(index);
-
-                        layer = layer.child(
-                            div()
-                                .id(card_id.clone())
-                                .debug_selector(move || card_id.clone())
-                                .absolute()
-                                .left(px(0.))
-                                .right(px(0.))
-                                .top(px(top))
-                                .h(px(height))
-                                .bg(rgba(editor_surface.occlusion_rgba))
-                                .occlude()
-                                .cursor_pointer()
-                                .on_mouse_down(
-                                    gpui::MouseButton::Left,
-                                    cx.listener(move |this, _, window, cx| {
-                                        this.open_fragment_at(index, window, cx);
-                                    }),
-                                )
-                                .child(card),
-                        );
-                    }
-                    DayPageSegment::KeptUrl {
-                        url,
-                        start_line,
-                        index,
-                        ..
-                    } => {
-                        let accent = accent_color;
-                        let top = editor_padding_y + (start_line as f32) * SEDIMENT_LINE_HEIGHT;
-                        layer = layer.child(
-                            div()
-                                .id(script_kit_gpui::day_page::kept_url_id(index))
-                                .absolute()
-                                .left(px(0.))
-                                .right(px(0.))
-                                .top(px(top))
-                                .h(px(SEDIMENT_LINE_HEIGHT))
-                                .bg(rgba(editor_surface.occlusion_rgba))
-                                .occlude()
-                                .flex()
-                                .items_center()
-                                .px(px(12.))
-                                .text_sm()
-                                .text_color(rgb(accent))
-                                .child(url),
-                        );
-                    }
-                    DayPageSegment::Plain { .. } => {}
-                }
-            }
-
-            Some(layer.into_any_element())
-        } else {
-            None
-        };
-
         let editor_body = div()
             .id(DAY_PAGE_EDITOR_ID)
             .flex_1()
@@ -591,7 +467,6 @@ impl Render for DayPageView {
                     .flex_1()
                     .min_h(px(0.))
                     .child(editor_input)
-                    .when_some(sediment_layer, |parent, layer| parent.child(layer))
                     .when_some(spine_panel, |parent, panel| parent.child(panel))
                     .when_some(day_switcher_panel, |parent, panel| parent.child(panel)),
             );
