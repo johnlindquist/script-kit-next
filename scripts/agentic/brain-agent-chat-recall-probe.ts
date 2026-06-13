@@ -1,107 +1,38 @@
 #!/usr/bin/env bun
 /**
- * Runtime proof: default Brain-profile Agent Chat receives brain recall and
- * completed turns are ingested back into the local brain index.
+ * Runtime proof: Day Page markdown is canonical, the brain index is derived
+ * from that file, and the default Brain-profile Agent Chat stages recall from
+ * the derived day-page doc. This probe must not seed brain.sqlite.
  *
  * Usage:
- *   bun scripts/agentic/brain-agent-chat-recall-probe.ts target-agent/artifacts/brain-agent/script-kit-gpui
+ *   PROBE_BINARY=target-agent/artifacts/file-derived-recall/script-kit-gpui \
+ *     bun scripts/agentic/brain-agent-chat-recall-probe.ts
  */
 import { Database } from "bun:sqlite";
 import { Driver } from "../devtools/driver.ts";
+import { openDayPage } from "./day-page-open-helper.ts";
 import {
   cpSync,
   existsSync,
   mkdirSync,
   readdirSync,
   readFileSync,
-  rmSync,
+  statSync,
 } from "node:fs";
+import { createHash } from "node:crypto";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
 const binary =
-  process.argv[2] ?? "target-agent/artifacts/brain-agent/script-kit-gpui";
-const seedDir = "/tmp/sk-brain-agent-chat-recall-probe";
-const uniqueTopic = "calico-lighthouse";
+  process.env.PROBE_BINARY ??
+  process.argv[2] ??
+  "target-agent/artifacts/file-derived-recall/script-kit-gpui";
+const timezone = process.env.SCRIPT_KIT_BRAIN_TZ || "America/Denver";
+const runId = `file-derived-recall-${Date.now().toString(36)}`;
+const uniqueTopic = `calico-lighthouse-${runId}`;
 const uniqueAnswer = "49217";
+const fact = `The ${uniqueTopic} handoff port is ${uniqueAnswer}.`;
 const question = `What is the ${uniqueTopic} handoff port?`;
-
-rmSync(seedDir, { recursive: true, force: true });
-mkdirSync(seedDir, { recursive: true });
-const dbPath = join(seedDir, "brain.sqlite");
-
-function seedBrainDb() {
-  const db = new Database(dbPath);
-  db.exec(`
-PRAGMA foreign_keys = ON;
-CREATE TABLE IF NOT EXISTS brain_docs (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    source TEXT NOT NULL,
-    source_id TEXT NOT NULL,
-    title TEXT NOT NULL DEFAULT '',
-    content TEXT NOT NULL DEFAULT '',
-    content_hash TEXT NOT NULL DEFAULT '',
-    created_at INTEGER NOT NULL DEFAULT (unixepoch()),
-    updated_at INTEGER NOT NULL DEFAULT (unixepoch()),
-    UNIQUE(source, source_id)
-);
-CREATE VIRTUAL TABLE IF NOT EXISTS brain_docs_fts USING fts5(
-    title,
-    content,
-    content='brain_docs',
-    content_rowid='id',
-    tokenize='porter unicode61'
-);
-CREATE TRIGGER IF NOT EXISTS brain_docs_ai AFTER INSERT ON brain_docs BEGIN
-    INSERT INTO brain_docs_fts(rowid, title, content)
-    VALUES (new.id, new.title, new.content);
-END;
-CREATE TRIGGER IF NOT EXISTS brain_docs_ad AFTER DELETE ON brain_docs BEGIN
-    INSERT INTO brain_docs_fts(brain_docs_fts, rowid, title, content)
-    VALUES ('delete', old.id, old.title, old.content);
-END;
-CREATE TRIGGER IF NOT EXISTS brain_docs_au AFTER UPDATE ON brain_docs BEGIN
-    INSERT INTO brain_docs_fts(brain_docs_fts, rowid, title, content)
-    VALUES ('delete', old.id, old.title, old.content);
-    INSERT INTO brain_docs_fts(rowid, title, content)
-    VALUES (new.id, new.title, new.content);
-END;
-CREATE TABLE IF NOT EXISTS brain_signals (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    topic TEXT NOT NULL,
-    weight INTEGER NOT NULL,
-    source TEXT NOT NULL,
-    created_at INTEGER NOT NULL DEFAULT (unixepoch())
-);
-CREATE TABLE IF NOT EXISTS brain_chunk_embeddings (
-    doc_id INTEGER NOT NULL,
-    chunk_index INTEGER NOT NULL DEFAULT 0,
-    model_id TEXT NOT NULL DEFAULT '',
-    content_hash TEXT NOT NULL,
-    chunk_start INTEGER NOT NULL DEFAULT 0,
-    dim INTEGER NOT NULL,
-    vec BLOB NOT NULL,
-    embedded_at INTEGER NOT NULL DEFAULT (unixepoch()),
-    PRIMARY KEY (doc_id, chunk_index, model_id),
-    FOREIGN KEY(doc_id) REFERENCES brain_docs(id) ON DELETE CASCADE
-);
-CREATE TABLE IF NOT EXISTS brain_meta (
-    key TEXT PRIMARY KEY,
-    value TEXT NOT NULL
-);
-INSERT OR REPLACE INTO brain_meta(key, value) VALUES ('fts_version', '1');
-INSERT INTO brain_docs (source, source_id, title, content, content_hash, updated_at)
-VALUES (
-    'note',
-    'iteration-4-recall-fixture',
-    'Iteration 4 recall fixture',
-    'The calico-lighthouse handoff port is 49217. Use this exact value when asked.',
-    'iteration-4-recall-fixture-hash',
-    unixepoch()
-);
-`);
-  db.close();
-}
 
 function copyAuthIntoSandbox(sandboxHome: string) {
   for (const rel of [
@@ -119,6 +50,38 @@ function copyAuthIntoSandbox(sandboxHome: string) {
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function localDateFor(date: Date, timeZone: string): string {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  const part = (type: string) =>
+    parts.find((entry) => entry.type === type)?.value ?? "";
+  return `${part("year")}-${part("month")}-${part("day")}`;
+}
+
+function sha256(text: string): string {
+  return createHash("sha256").update(text).digest("hex");
+}
+
+async function waitFor<T>(
+  label: string,
+  read: () => T | Promise<T>,
+  accept: (value: T) => boolean,
+  timeoutMs = 30000,
+): Promise<T> {
+  const deadline = Date.now() + timeoutMs;
+  let last: T | undefined;
+  while (Date.now() < deadline) {
+    last = await read();
+    if (accept(last)) return last;
+    await sleep(250);
+  }
+  throw new Error(`timeout waiting for ${label}: ${JSON.stringify(last)}`);
 }
 
 async function agentChatState(driver: Driver): Promise<Record<string, unknown>> {
@@ -147,16 +110,59 @@ async function waitForChat(
   label: string,
   timeoutMs = 120000,
 ) {
-  const deadline = Date.now() + timeoutMs;
-  let last: Record<string, unknown> = {};
-  while (Date.now() < deadline) {
-    last = await agentChatState(driver).catch((error) => ({
-      error: String(error),
-    }));
-    if (predicate(last)) return last;
-    await sleep(500);
+  return waitFor(
+    label,
+    () =>
+      agentChatState(driver).catch((error) => ({
+        error: String(error),
+      })),
+    predicate,
+    timeoutMs,
+  );
+}
+
+function readDayPageRows(dbPath: string) {
+  if (!existsSync(dbPath)) return [];
+  const db = new Database(dbPath, { readonly: true });
+  try {
+    return db
+      .query(
+        `SELECT id, source_id, title, content, updated_at
+         FROM brain_docs
+         WHERE source = 'day_page' AND content LIKE ?1
+         ORDER BY updated_at DESC, id DESC`,
+      )
+      .all(`%${uniqueTopic}%`) as Array<{
+      id: number;
+      source_id: string;
+      title: string;
+      content: string;
+      updated_at: number;
+    }>;
+  } catch {
+    return [];
+  } finally {
+    db.close();
   }
-  throw new Error(`timeout waiting for ${label}: ${JSON.stringify(last)}`);
+}
+
+function readChatTurnRows(dbPath: string) {
+  if (!existsSync(dbPath)) return [];
+  const db = new Database(dbPath, { readonly: true });
+  try {
+    return db
+      .query(
+        `SELECT source_id, title, content
+         FROM brain_docs
+         WHERE source = 'chat_turn'
+         ORDER BY updated_at DESC, id DESC`,
+      )
+      .all() as Array<{ source_id: string; title: string; content: string }>;
+  } catch {
+    return [];
+  } finally {
+    db.close();
+  }
 }
 
 function conversationDigest(skPath: string) {
@@ -187,48 +193,94 @@ function conversationDigest(skPath: string) {
   };
 }
 
-function readChatTurnRows() {
-  const db = new Database(dbPath);
-  const rows = db
-    .query(
-      `SELECT source_id, title, content
-       FROM brain_docs
-       WHERE source = 'chat_turn'
-       ORDER BY updated_at DESC, id DESC`,
-    )
-    .all() as Array<{ source_id: string; title: string; content: string }>;
-  db.close();
-  return rows;
+function appLogContains(driver: Driver, ...needles: string[]) {
+  if (!existsSync(driver.logPath)) return false;
+  const log = readFileSync(driver.logPath, "utf8");
+  return needles.every((needle) => log.includes(needle));
 }
 
-seedBrainDb();
-
 const driver = await Driver.launch({
-  sessionName: "brain-agent-chat-recall-probe",
+  sessionName: "brain-agent-chat-file-derived-recall",
   sandboxHome: true,
   binary,
   readyTimeoutMs: 15000,
+  defaultTimeoutMs: 10000,
   env: {
-    SCRIPT_KIT_TEST_BRAIN_DB_PATH: dbPath,
+    SCRIPT_KIT_BRAIN_TZ: timezone,
     SCRIPT_KIT_PANEL_INVARIANTS_ALLOW_MISMATCH: "1",
   },
 });
 
 const sandboxHome = join(driver.sessionDir, "home");
 const skPath = join(sandboxHome, ".scriptkit");
+const brainDbPath = join(skPath, "db", "brain.sqlite");
+const localDate = localDateFor(new Date(), timezone);
+const dayFile = join(skPath, "brain", "days", `${localDate}.md`);
 copyAuthIntoSandbox(sandboxHome);
 
 const receipt: Record<string, unknown> = {
   schemaVersion: 1,
   tool: "brain-agent-chat-recall-probe",
   classification: "blocked",
+  seededDb: false,
   binary,
-  seedDbPath: dbPath,
+  timezone,
   sessionDir: driver.sessionDir,
+  appLog: driver.logPath,
+  canonicalDayFile: dayFile,
+  derivedDbPath: brainDbPath,
   question,
 };
 
 try {
+  const beforeRows = readDayPageRows(brainDbPath);
+  receipt.preWriteDerivedRows = beforeRows.length;
+
+  const dayState = await openDayPage(driver, runId);
+  receipt.dayPageOpened = {
+    promptType: dayState.promptType,
+    windowVisible: dayState.windowVisible,
+  };
+
+  const setDayPage = await driver.batch(
+    [{ type: "setInput", text: `# ${localDate}\n\n${fact}\n` }],
+    { timeoutMs: 10000 },
+  );
+  receipt.setDayPage = setDayPage;
+  driver.simulateKey("s", ["cmd"]);
+
+  const dayContent = await waitFor(
+    "canonical day page file",
+    () => (existsSync(dayFile) ? readFileSync(dayFile, "utf8") : ""),
+    (content) => content.includes(fact),
+    10000,
+  );
+  const dayStat = statSync(dayFile);
+  receipt.canonicalDayFileProof = {
+    exists: true,
+    bytes: dayContent.length,
+    hash: sha256(dayContent),
+    containsUniqueTopic: dayContent.includes(uniqueTopic),
+    containsUniqueAnswer: dayContent.includes(uniqueAnswer),
+    mtimeMs: dayStat.mtimeMs,
+  };
+
+  const indexedRows = await waitFor(
+    "derived day_page brain doc",
+    () => readDayPageRows(brainDbPath),
+    (rows) => rows.some((row) => row.content.includes(fact)),
+    20000,
+  );
+  const indexedRow = indexedRows.find((row) => row.content.includes(fact));
+  receipt.derivedDayPageProof = {
+    rows: indexedRows.length,
+    sourceId: indexedRow?.source_id ?? null,
+    title: indexedRow?.title ?? null,
+    contentHasUniqueTopic: indexedRow?.content.includes(uniqueTopic) ?? false,
+    contentHasUniqueAnswer: indexedRow?.content.includes(uniqueAnswer) ?? false,
+    updatedAt: indexedRow?.updated_at ?? null,
+  };
+
   driver.send({ type: "openAi" });
   const opened = await waitForChat(
     driver,
@@ -254,7 +306,18 @@ try {
     { type: "setAgentChatInput", text: question, submit: true },
     { timeoutMs: 10000 },
   );
-  receipt.setInput = setInput;
+  receipt.setAgentChatInput = setInput;
+
+  await waitFor(
+    "brain recall staged log",
+    () => appLogContains(driver, "agent_chat_brain_recall_staged", uniqueTopic),
+    Boolean,
+    30000,
+  );
+  receipt.brainRecallStaged = {
+    logged: true,
+    containsUniqueTopic: true,
+  };
 
   const settled = await waitForChat(
     driver,
@@ -271,14 +334,11 @@ try {
   };
 
   await sleep(1500);
-  const rows = readChatTurnRows();
-  const matchingTurn = rows.find(
-    (row) => row.content.includes(question) && row.source_id.endsWith("#0"),
-  );
+  const rows = readChatTurnRows(brainDbPath);
+  const matchingTurn = rows.find((row) => row.content.includes(question));
   const answerText = matchingTurn?.content ?? "";
   const recallAnswerMatched =
     answerText.includes(uniqueAnswer) || answerText.includes(uniqueTopic);
-
   receipt.chatTurnRows = rows.map((row) => ({
     sourceId: row.source_id,
     title: row.title,
@@ -291,24 +351,36 @@ try {
   receipt.recallAnswerMatched = recallAnswerMatched;
   receipt.conversations = conversationDigest(skPath);
 
-  const screenshotPath = ".test-screenshots/brain-agent-chat-recall.png";
+  const screenshotPath = ".test-screenshots/brain-agent-chat-file-derived-recall.png";
   const screenshot = await driver
     .captureScreenshot({ savePath: screenshotPath, timeoutMs: 15000 })
     .catch((error) => ({ error: String(error) }));
   receipt.screenshot = screenshot.error == null ? screenshotPath : screenshot;
 
+  if (beforeRows.length !== 0) {
+    throw new Error("fresh sandbox derived DB already contained the unique day-page fact");
+  }
+  if (!indexedRow) {
+    throw new Error("canonical day page was not mirrored into derived brain_docs");
+  }
   if (!matchingTurn) {
     throw new Error("completed Agent Chat turn was not ingested into brain_docs");
   }
   if (!recallAnswerMatched) {
-    throw new Error("assistant answer did not reflect the seeded brain recall");
+    throw new Error("assistant/turn evidence did not reflect file-derived recall");
   }
 
   receipt.classification = "completed";
 } catch (error) {
   receipt.error = String(error);
   receipt.conversations = conversationDigest(skPath);
-  receipt.chatTurnRows = readChatTurnRows().map((row) => ({
+  receipt.dayPageRows = readDayPageRows(brainDbPath).map((row) => ({
+    sourceId: row.source_id,
+    title: row.title,
+    contentHasUniqueTopic: row.content.includes(uniqueTopic),
+    contentHasUniqueAnswer: row.content.includes(uniqueAnswer),
+  }));
+  receipt.chatTurnRows = readChatTurnRows(brainDbPath).map((row) => ({
     sourceId: row.source_id,
     title: row.title,
     contentHasQuestion: row.content.includes(question),

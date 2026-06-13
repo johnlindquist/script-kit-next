@@ -682,6 +682,60 @@ fn recall_context_block_formats_and_caps() {
 }
 
 #[test]
+fn file_derived_day_page_recall_context_block() {
+    let _db = init_test_db();
+    let tmp = tempfile::TempDir::new().expect("tempdir");
+    let substrate = test_substrate(&tmp.path().join("brain"));
+    let now = chrono::Utc
+        .with_ymd_and_hms(2026, 6, 13, 16, 45, 0)
+        .unwrap();
+
+    substrate
+        .append_to_day(
+            now,
+            DayEntry::Capture {
+                text: "The calico-lighthouse handoff port is 49217.".to_string(),
+            },
+        )
+        .expect("append day page fact");
+    sync_day_pages_with_substrate(&substrate).expect("sync day page from file");
+
+    let block = super::recall_context_block("calico-lighthouse handoff port")
+        .expect("recall context")
+        .expect("day page recall block");
+    assert!(block.contains("[Day Page] Day Page 2026-06-13"));
+    assert!(block.contains("calico-lighthouse"));
+    assert!(block.contains("49217"));
+}
+
+#[test]
+fn brain_recall_resource_reads_file_derived_day_page() {
+    let _db = init_test_db();
+    let tmp = tempfile::TempDir::new().expect("tempdir");
+    let substrate = test_substrate(&tmp.path().join("brain"));
+    let now = chrono::Utc.with_ymd_and_hms(2026, 6, 14, 9, 15, 0).unwrap();
+
+    substrate
+        .append_to_day(
+            now,
+            DayEntry::Capture {
+                text: "The quartz-harbor rollback token is QH-8841.".to_string(),
+            },
+        )
+        .expect("append resource fact");
+    sync_day_pages_with_substrate(&substrate).expect("sync day page from file");
+
+    let (mime, body) = super::resources::read_brain_resource(
+        "kit://brain/recall?q=quartz-harbor%20rollback%20token",
+    )
+    .expect("brain recall resource");
+    assert_eq!(mime, "text/markdown");
+    assert!(body.contains("[Day Page] Day Page 2026-06-14"));
+    assert!(body.contains("quartz-harbor"));
+    assert!(body.contains("QH-8841"));
+}
+
+#[test]
 fn inbox_insert_dedupes_resolves_and_orders() {
     let _db = init_test_db();
     let first = inbox::insert_inbox_item(

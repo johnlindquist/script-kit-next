@@ -9,7 +9,7 @@ use crate::components::unified_list_item::{
     Density, ItemState, TextContent, TrailingContent, UnifiedListItem, UnifiedListItemColors,
 };
 use crate::footer_popup::{FooterAction, FooterButtonConfig};
-use script_kit_gpui::brain::substrate::BrainSubstrate;
+use script_kit_gpui::brain::{substrate::BrainSubstrate, wake_indexer};
 use script_kit_gpui::day_page::{
     parse_day_page_segments, resolve_fragment_path, DayPageBinding, DayPageSegment,
     SEDIMENT_LAYER_ID, SEDIMENT_LINE_HEIGHT,
@@ -253,7 +253,10 @@ impl DayPageView {
         let content = self.notes_editor.read(cx).content(cx);
         self.session.apply_editor_content(&content);
         match self.session.save_content(&content, Utc::now()) {
-            Ok(()) => true,
+            Ok(()) => {
+                wake_indexer();
+                true
+            }
             Err(error) => {
                 tracing::error!(error = %error, "Failed to save day page");
                 false
