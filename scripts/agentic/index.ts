@@ -241,7 +241,6 @@
 import { resolve } from "path";
 import {
   runAgentChatPortalRoundTripOriginStressScenario,
-  runAgentChatPromptPopupParityScenario,
   runActionsCapturedSubjectFrameStressScenario,
   runBrowserTabsCacheIdentityStressScenario,
   runClipboardHistoryPortalRangeStressScenario,
@@ -3225,25 +3224,6 @@ switch (recipe) {
     break;
   }
 
-  case "agent_chat-prompt-popup-parity": {
-    const proofBundle = await runAgentChatPromptPopupParityScenario({
-      session,
-      families: families ?? (family ? [family] : ["mention", "model-selector", "local-history"]),
-    });
-    result = {
-      schemaVersion: SCHEMA_VERSION,
-      recipe: "agent_chat-prompt-popup-parity",
-      status: proofBundle.status,
-      steps: proofBundle.steps as StepReceipt[],
-      summary:
-        proofBundle.status === "pass"
-          ? "Agent Chat PromptPopup families produced stable row-aware exact-target receipts"
-          : "Agent Chat PromptPopup parity failed; inspect proofBundle.popupCases",
-      proofBundle,
-    };
-    break;
-  }
-
   case "notes-agent_chat-delayed-action-origin-stress": {
     const proofBundle = await runNotesAgentChatDelayedActionOriginStressScenario({
       session,
@@ -4873,7 +4853,6 @@ switch (recipe) {
           { name: "agent_chat-tab-accept", description: "Compatibility alias for --key tab", flags: ["--session", "--vision", "--target-json", "--surface", "--json"] },
           { name: "agent_chat-detached-accept", description: "One-command detached Agent Chat proof: resolve, accept, identity check", flags: ["--session", "--kind", "--index", "--key", "--vision", "--json"] },
           { name: "agent_chat-detached-target-threading-stress", description: "Multi-window detached Agent Chat proof with exact target threading, native input, and strict capture identity", flags: ["--session", "--kind", "--index", "--min-targets", "--key", "--vision", "--json"] },
-          { name: "agent_chat-prompt-popup-parity", description: "State-first PromptPopup family parity proof for Agent Chat mention and local history", flags: ["--session", "--family", "--families", "--json"] },
           { name: "notes-agent_chat-delayed-action-origin-stress", description: "Fail-closed Notes Agent Chat delayed-action origin/generation stress receipt", flags: ["--session", "--drift", "--json"] },
           { name: "file-portal-origin-roundtrip", description: "Fail-closed Agent Chat portal origin/context-part round-trip receipt", flags: ["--session", "--origin", "--portal", "--selection", "--query", "--json"] },
           { name: "permission-privacy-preflight", description: "Read-only permission preflight that never opens System Settings or mutates OS permissions", flags: ["--session", "--kinds", "--json"] },
@@ -5110,8 +5089,6 @@ Recipes:
   agent_chat-detached-accept    One-command detached Agent Chat proof: resolve → accept → identity check
   agent_chat-detached-target-threading-stress
                          Multi-window detached Agent Chat proof with exact target threading
-  agent_chat-prompt-popup-parity
-                         State-first Agent Chat PromptPopup family parity proof
   notes-agent_chat-delayed-action-origin-stress
                          Fail-closed Notes Agent Chat delayed-action origin/generation stress
   file-portal-origin-roundtrip
@@ -5515,7 +5492,6 @@ Examples:
     --target-json '{"type":"kind","kind":"agentChatDetached","index":0}' --surface agent_chat --vision
   bun scripts/agentic/index.ts agent_chat-detached-accept --session default --kind agentChatDetached --index 0 --key enter --vision
   bun scripts/agentic/index.ts agent_chat-detached-target-threading-stress --session default --kind agentChatDetached --index 0 --min-targets 2 --key enter --vision --json
-  bun scripts/agentic/index.ts agent_chat-prompt-popup-parity --session default --families mention,model-selector,local-history --json
   bun scripts/agentic/index.ts notes-agent_chat-delayed-action-origin-stress --session default --drift generation --json
   bun scripts/agentic/index.ts file-portal-origin-roundtrip --session default --host agent_chat --portal file-search --json
   bun scripts/agentic/index.ts permission-privacy-preflight --session default --json

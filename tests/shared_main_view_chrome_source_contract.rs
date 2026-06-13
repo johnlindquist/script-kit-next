@@ -197,7 +197,7 @@ fn main_window_search_surfaces_use_shared_main_view_input_shell() {
     );
     assert!(
         !agent_chat.contains("action_label: Some(SharedString::from(\"Attach\"))"),
-        "Agent Chat @ picker rows must not show per-row Attach accessories"
+        "Agent Chat composer picker rows must not show per-row Attach accessories"
     );
     assert!(
         agent_chat.contains("FooterAction::Run if button.label == \"Attach\" => \"↵ Attach\""),

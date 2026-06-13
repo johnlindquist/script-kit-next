@@ -321,7 +321,7 @@ fn actions_dialog_collector_exposes_list_semantic_id() {
 fn actions_dialog_collector_uses_choice_format_for_actions() {
     let source = include_str!("../../src/windows/automation_surface_collector.rs");
     assert!(
-        source.contains("format!(\"choice:{}:{}\", filter_pos, action.id)"),
+        source.contains("format!(\"choice:{visual_index}:{}\", action.id)"),
         "Actions dialog collector must use choice:N:id format for individual actions"
     );
 }
@@ -333,28 +333,6 @@ fn actions_dialog_falls_back_to_panel_only_when_entity_unavailable() {
     assert!(
         source.contains("\"panel_only_actions_dialog\""),
         "Actions dialog must emit panel_only_actions_dialog when entity is unavailable"
-    );
-}
-
-// ---------------------------------------------------------------------------
-// Mention picker semantic IDs (source contract)
-// ---------------------------------------------------------------------------
-
-#[test]
-fn mention_picker_collector_exposes_panel_semantic_id() {
-    let source = include_str!("../../src/windows/automation_surface_collector.rs");
-    assert!(
-        source.contains("\"panel:mention-picker\""),
-        "Mention picker collector must expose panel:mention-picker"
-    );
-}
-
-#[test]
-fn mention_picker_collector_exposes_list_semantic_id() {
-    let source = include_str!("../../src/windows/automation_surface_collector.rs");
-    assert!(
-        source.contains("\"list:mention-items\""),
-        "Mention picker collector must expose list:mention-items"
     );
 }
 
@@ -391,14 +369,13 @@ fn confirm_dialog_collector_exposes_button_semantic_ids() {
 #[test]
 fn popup_surface_semantic_ids_do_not_collide() {
     let actions_ids = ["input:actions-search", "list:actions"];
-    let mention_ids = ["panel:mention-picker", "list:mention-items"];
     let confirm_ids = [
         "panel:confirm-dialog",
         "button:0:confirm",
         "button:1:cancel",
     ];
 
-    let all_sets: &[&[&str]] = &[&actions_ids, &mention_ids, &confirm_ids];
+    let all_sets: &[&[&str]] = &[&actions_ids, &confirm_ids];
     for (i, set_a) in all_sets.iter().enumerate() {
         for (j, set_b) in all_sets.iter().enumerate() {
             if i == j {

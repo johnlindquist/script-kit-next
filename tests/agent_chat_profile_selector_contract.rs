@@ -16,8 +16,6 @@ const FILTER_INPUT_UPDATES_SOURCE: &str = include_str!("../src/app_impl/filter_i
 const AGENT_CHAT_VIEW_SOURCE: &str = include_str!("../src/ai/agent_chat/ui/view.rs");
 const AGENT_CHAT_THREAD_SOURCE: &str = include_str!("../src/ai/agent_chat/ui/thread.rs");
 const AGENT_CHAT_MOD_SOURCE: &str = include_str!("../src/ai/agent_chat/ui/mod.rs");
-const AGENT_CHAT_PICKER_POPUP_SOURCE: &str =
-    include_str!("../src/ai/agent_chat/ui/picker_popup.rs");
 const CHAT_WINDOW_SOURCE: &str = include_str!("../src/ai/agent_chat/ui/chat_window.rs");
 const PROMPT_HANDLER_SOURCE: &str = include_str!("../src/prompt_handler/mod.rs");
 const CONTEXT_SELECTOR_TYPES_SOURCE: &str = include_str!("../src/ai/context_selector/types.rs");
@@ -597,22 +595,6 @@ fn pipe_trigger_selects_agent_chat_profiles_without_context_attachment() {
     assert!(accept_body.contains("self.select_profile_from_popup(&profile_id, cx);"));
 }
 
-#[test]
-fn composer_profile_trigger_rows_use_list_item_icon_and_selected_chrome() {
-    let row_body = fn_body(AGENT_CHAT_PICKER_POPUP_SOURCE, "fn render_picker_row(");
-    assert!(row_body.contains("crate::list_item::ListItem::new"));
-    assert!(row_body.contains("crate::list_item::ListItemColors::from_theme"));
-    assert!(row_body.contains(".selected(is_selected)"));
-    assert!(row_body.contains(".main_menu_theme("));
-    assert!(row_body.contains(".semantic_id(format!(\"choice:{idx}:{}\", item.id))"));
-    assert!(AGENT_CHAT_PICKER_POPUP_SOURCE.contains("footer_icon_path_or_profile"));
-    assert!(AGENT_CHAT_PICKER_POPUP_SOURCE.contains("FOOTER_PROFILE_ICON_TOKEN"));
-    assert!(!row_body.contains(".border_l(gpui::px(2.0))"));
-    assert!(!row_body.contains("selected_row_bg"));
-    assert!(!row_body.contains("hover_row_bg"));
-}
-
-#[test]
 fn config_profile_icon_name_flows_to_footer_marker() {
     assert!(CONFIG_TYPES_SOURCE.contains("pub icon_name: Option<String>"));
     assert!(PROFILES_SOURCE.contains("pub icon_name: Option<String>"));

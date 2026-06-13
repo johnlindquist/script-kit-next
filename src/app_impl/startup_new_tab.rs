@@ -187,7 +187,7 @@
                             // qualifiers like `source:`, close-after-apply for bare
                             // qualifiers or capture targets). Runs BEFORE the Agent Chat
                             // plain-Tab routing branch so menu-syntax keyboard stays
-                            // consistent with the Agent Chat slash / @ pickers.
+                            // consistent with the Agent Chat slash / @ composer pickers.
                             if matches!(this.current_view, AppView::ScriptList)
                                 && this.menu_syntax_object_selector_owns_main_keyboard()
                             {
@@ -342,7 +342,7 @@
                 // embedded main-window host when the picker is open, and to
                 // the menu-syntax trigger popup when it is open on
                 // ScriptList (Accept the selected qualifier / capture
-                // target — same behavior as the Agent Chat / and @ pickers).
+                // target — same behavior as the Agent Chat composer picker).
                 if is_plain_enter {
                     if let Some(app) = app_entity.upgrade() {
                         app.update(cx, |this, cx| {

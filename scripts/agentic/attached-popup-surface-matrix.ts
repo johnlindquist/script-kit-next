@@ -12,14 +12,10 @@ import { type JsonObject, type MatrixAutomationTarget } from "./filterable-surfa
 export type AttachedPopupKind = "ActionsDialog" | "PromptPopup";
 
 export type AttachedPopupHostFixture =
-  | {
-      kind: "filterable-main";
-      caseId: string;
-    }
-  | {
-      kind: "agent_chat-chat";
-      trigger: "slash";
-    };
+  {
+    kind: "filterable-main";
+    caseId: string;
+  };
 
 export interface AttachedPopupSurfaceEntry {
   id: string;
@@ -43,12 +39,6 @@ export interface AttachedPopupSurfaceEntry {
 const ACTIONS_DIALOG_TARGET: MatrixAutomationTarget = {
   type: "kind",
   kind: "actionsDialog",
-  index: 0,
-};
-
-const PROMPT_POPUP_TARGET: MatrixAutomationTarget = {
-  type: "kind",
-  kind: "promptPopup",
   index: 0,
 };
 
@@ -118,24 +108,6 @@ export const ATTACHED_POPUP_SURFACE_MATRIX: AttachedPopupSurfaceEntry[] = [
     targetIndex: 0,
     target: ACTIONS_DIALOG_TARGET,
     hostFixture: { kind: "filterable-main", caseId: "app-launcher-visible-rows" },
-    expectedPopupCaptureStrategy: "parent_capture_with_crop",
-    safeInteractions: {
-      filter: false,
-      selectFirstVisibleChoice: false,
-      submit: false,
-    },
-  },
-  {
-    id: "prompt-popup-on-agent_chat-chat-slash",
-    surfaceClass: "attachedPopup",
-    viewName: "prompt-popup-on-agent_chat-chat-slash",
-    imageLibraryName: "prompt-popup-on-agent_chat-chat-slash.png",
-    windowKind: "PromptPopup",
-    targetKind: "promptPopup",
-    targetIndex: 0,
-    target: PROMPT_POPUP_TARGET,
-    expectedAutomationWindowId: "agent_chat-mention-popup",
-    hostFixture: { kind: "agent_chat-chat", trigger: "slash" },
     expectedPopupCaptureStrategy: "parent_capture_with_crop",
     safeInteractions: {
       filter: false,

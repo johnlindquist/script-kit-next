@@ -84,7 +84,6 @@ export interface HardScenarioReceipt {
   schemaVersion: 2;
   scenario:
     | "detached-agent_chat-target-threading-stress"
-    | "agent_chat-prompt-popup-parity"
     | "notes-agent_chat-delayed-action-origin-stress"
     | "file-portal-origin-roundtrip"
     | "permission-privacy-preflight"
@@ -1418,152 +1417,6 @@ export async function runDetachedAgentChatTargetThreadingStressScenario(opts: {
     captureTarget: captureTarget ?? null,
     steps,
     warnings: [],
-  };
-}
-
-export async function runAgentChatPromptPopupParityScenario(opts: {
-  session: string;
-  families: string[];
-}): Promise<HardScenarioReceipt> {
-  const scenario = "agent_chat-prompt-popup-parity";
-  const popupMap: Record<string, { id: string; triggerText: string }> = {
-    mention: { id: "agent_chat-mention-popup", triggerText: "@" },
-    "local-history": { id: "agent_chat-history-popup", triggerText: "" },
-  };
-  const popupCases: Array<Record<string, unknown>> = [];
-  const steps: Array<Record<string, unknown>> = [];
-  const warnings: string[] = [];
-
-  for (const family of opts.families) {
-    const expected = popupMap[family];
-    if (!expected) {
-      popupCases.push({
-        family,
-        status: "fail",
-        failure: {
-          code: "wrong_popup_family",
-          stepName: "family-parse",
-          message: `Unknown popup family ${family}`,
-        },
-      });
-      continue;
-    }
-
-    const setInput = await runTargetThreadTool(
-      [
-        "bash",
-        "scripts/agentic/session.sh",
-        "send",
-        opts.session,
-        JSON.stringify({
-          type: "setAgentChatInput",
-          text: expected.triggerText,
-          requestId: `popup-parity-${family}-set-input`,
-        }),
-        "--await-parse",
-      ],
-      `popup-parity-trigger:${family}`,
-    );
-    steps.push({
-      name: `trigger-${family}`,
-      status: setInput.exitCode === 0 ? "pass" : "fail",
-      output: setInput.stdout ? JSON.parse(setInput.stdout) : { stderr: setInput.stderr },
-    });
-
-    let identity: TargetThreadIdentity;
-    try {
-      identity = await promoteExactTarget({
-        session: opts.session,
-        kind: "promptPopup",
-        index: 0,
-        expected: { popupId: expected.id },
-      });
-    } catch (error) {
-      const failure = failureFromError(error, "target_resolution_failed", `promote-${family}`);
-      popupCases.push({ family, expectedPopupId: expected.id, status: "fail", failure });
-      continue;
-    }
-
-    const visible = await targetedRpc({
-      session: opts.session,
-      identity,
-      requestId: `popup-parity-${family}-visible`,
-      command: {
-        type: "waitFor",
-        condition: { type: "windowVisible" },
-        timeout: 3000,
-        pollInterval: 25,
-      },
-      expect: "waitForResult",
-      timeout: 5000,
-      stepName: `wait-visible-${family}`,
-    });
-    const elements = await targetedRpc({
-      session: opts.session,
-      identity,
-      requestId: `popup-parity-${family}-elements`,
-      command: { type: "getElements", limit: 200 },
-      expect: "elementsResult",
-      timeout: 5000,
-      stepName: `get-elements-${family}`,
-    });
-    const elementOutput = elements.output as Record<string, unknown>;
-    const rows = Array.isArray(elementOutput.elements) ? elementOutput.elements : [];
-    const rowAware = rows.length > 0;
-    if (!rowAware) warnings.push(`${family}:popup_rows_missing`);
-
-    const stable = await assertTargetStable({
-      session: opts.session,
-      identity,
-      stepName: `final-${family}`,
-    });
-
-    popupCases.push({
-      family,
-      expectedPopupId: expected.id,
-      trigger: { method: "protocol", command: "setAgentChatInput", text: expected.triggerText },
-      targetThread: {
-        stable: stable.ok,
-        initial: identity,
-        final: stable.ok ? stable.identity : undefined,
-        driftFailures: stable.ok ? [] : [stable.failure],
-      },
-      visibleWait: visible.output,
-      inspection: {
-        windowKind: identity.windowKind,
-        popupFamily: identity.popupFamily ?? family,
-        popupId: identity.popupId ?? identity.automationWindowId,
-      },
-      elements: {
-        type: "elementsResult",
-        rowAware,
-        rowCount: rows.length,
-        rows,
-      },
-      rowAction: {
-        mode: "inspect",
-        status: rowAware ? "pass" : "fail",
-      },
-      status: stable.ok && rowAware && visible.status === "pass" ? "pass" : "fail",
-    });
-  }
-
-  const allPass = popupCases.every((popupCase) => popupCase.status === "pass");
-  return {
-    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
-    scenario,
-    status: allPass ? "pass" : "fail",
-    popupCases,
-    usage: {
-      stateFirst: true,
-      usedGetElements: true,
-      usedWaitFor: true,
-      usedNativeInput: false,
-      usedScreenshot: false,
-      usedFixedSleepMs: 0,
-    },
-    steps,
-    warnings,
   };
 }
 
@@ -11645,7 +11498,6 @@ if (import.meta.main) {
     "prompt-popup-exact-id",
     "detached-agent_chat-exact-id",
     "detached-agent_chat-target-threading-stress",
-    "agent_chat-prompt-popup-parity",
     "notes-agent_chat-delayed-action-origin-stress",
     "file-portal-origin-roundtrip",
     "permission-privacy-preflight",
@@ -11707,13 +11559,6 @@ if (import.meta.main) {
         key,
         vision,
       });
-      process.stdout.write(JSON.stringify(bundle, null, 2) + "\n");
-      process.exit(bundle.status === "pass" ? 0 : 1);
-      break;
-    }
-
-    case "agent_chat-prompt-popup-parity": {
-      const bundle = await runAgentChatPromptPopupParityScenario({ session, families });
       process.stdout.write(JSON.stringify(bundle, null, 2) + "\n");
       process.exit(bundle.status === "pass" ? 0 : 1);
       break;

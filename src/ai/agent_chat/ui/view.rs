@@ -37,8 +37,8 @@ use super::thread::{
     AgentChatThreadMessageRole, AgentChatThreadStatus,
 };
 use super::types::{
-    AgentChatDismissedMentionTrigger, AgentChatFocusedMentionPreview,
-    AgentChatMentionPopupParentWindow, AgentChatMentionSession, AgentChatPendingPortalSession,
+    AgentChatComposerParentWindow, AgentChatDismissedMentionTrigger,
+    AgentChatFocusedMentionPreview, AgentChatMentionSession, AgentChatPendingPortalSession,
 };
 use super::ui_variant::{AgentChatComposerPlacement, AgentChatUiVariant};
 use super::{
@@ -735,7 +735,7 @@ pub(crate) struct AgentChatView {
     cached_slash_commands: Vec<SlashCommandEntry>,
     /// Handle to the deferred slash command discovery task.
     _slash_discovery_task: Task<()>,
-    /// Active @-mention picker session (None = picker hidden).
+    /// Active @-composer picker session (None = picker hidden).
     pub(crate) mention_session: Option<AgentChatMentionSession>,
     /// Surface-local Spine state for the Agent Chat composer. When this projection
     /// owns the conversation area, the transcript is replaced with the
@@ -744,8 +744,8 @@ pub(crate) struct AgentChatView {
         crate::ai::agent_chat::ui::composer_state::AgentChatComposerSpineState,
     /// Exact active trigger dismissed by pointer/escape while the input text remains unchanged.
     dismissed_mention_trigger: Option<AgentChatDismissedMentionTrigger>,
-    /// Cached parent window metadata for the detached picker popup.
-    mention_popup_parent_window: Option<AgentChatMentionPopupParentWindow>,
+    /// Cached parent window metadata for toolbar-triggered popups.
+    composer_parent_window: Option<AgentChatComposerParentWindow>,
     /// Canonical inline tokens that currently own their attached context part.
     ///
     /// This preserves non-inline chip attachments during mention sync while
@@ -845,7 +845,7 @@ pub(crate) struct AgentChatView {
     ///
     /// Defaults to all kinds. Notes-hosted Agent Chat narrows this to only
     /// `AgentChatHistory` because it cannot own file-search or clipboard views.
-    /// Items for disallowed kinds are filtered from the mention picker and
+    /// Items for disallowed kinds are filtered from the composer picker and
     /// rejected at the portal-open dispatch as defense-in-depth.
     allowed_portal_kinds: Vec<crate::ai::context_selector::types::ContextPortalKind>,
     _footer_action_task: Option<gpui::Task<()>>,
@@ -1050,30 +1050,21 @@ impl AgentChatView {
         }
     }
 
-    fn cache_popup_parent_window(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    fn cache_composer_parent_window(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let display = window.display(cx);
-        let parent = AgentChatMentionPopupParentWindow {
+        let parent = AgentChatComposerParentWindow {
             handle: window.window_handle(),
             bounds: window.bounds(),
             display_id: display.as_ref().map(|display| display.id()),
             display_bounds: display.as_ref().map(|display| display.visible_bounds()),
         };
-        self.mention_popup_parent_window = Some(parent);
-    }
-
-    /// True when the composer still has a live `@`/`/` trigger that owns the
-    /// detached mention popup window. The popup's `Render` impl uses this as
-    /// its owner-liveness invariant: if it returns false, the popup self-prunes
-    /// on the next frame.
-    pub(crate) fn has_active_mention_session(&self) -> bool {
-        self.mention_session.is_some()
+        self.composer_parent_window = Some(parent);
     }
 
     fn sync_agent_chat_popup_windows_from_cached_parent(&mut self, cx: &mut Context<Self>) {
         if self.is_setup_mode() {
             self.mention_session = None;
             self.history_menu = None;
-            crate::ai::agent_chat::ui::picker_popup::close_mention_popup_window(cx);
             crate::ai::agent_chat::ui::history_popup::close_history_popup_window(cx);
             tracing::info!(
                 target: "script_kit::tab_ai",
@@ -1082,7 +1073,6 @@ impl AgentChatView {
             return;
         }
 
-        self.sync_mention_popup_window_from_cached_parent(cx);
         self.sync_history_popup_window_from_cached_parent(cx);
     }
 
@@ -1140,34 +1130,6 @@ impl AgentChatView {
                 .then_with(|| a.label.to_string().cmp(&b.label.to_string()))
         });
         items
-    }
-
-    fn mention_popup_snapshot(
-        &self,
-        cx: &App,
-    ) -> Option<(
-        crate::ai::agent_chat::ui::picker_popup::AgentChatMentionPopupSnapshot,
-        f32,
-        f32,
-    )> {
-        let session = self.mention_session.as_ref()?.clone();
-        let parent = self.mention_popup_parent_window?;
-        let input_text = self.live_thread().read(cx).input.text().to_string();
-        let window_width = parent.bounds.size.width.as_f32();
-        let (left, top, width) =
-            self.mention_picker_anchor_for_session(&session, &input_text, window_width, cx);
-
-        Some((
-            crate::ai::agent_chat::ui::picker_popup::AgentChatMentionPopupSnapshot {
-                trigger: session.trigger,
-                selected_index: session.selected_index,
-                visible_start: session.visible_start,
-                items: session.items,
-                width,
-            },
-            left,
-            top,
-        ))
     }
 
     pub(crate) fn set_on_toggle_actions(
@@ -3488,7 +3450,7 @@ impl AgentChatView {
 
     /// Restrict portal kinds this Agent Chat surface can open.
     ///
-    /// Items for disallowed kinds are filtered from the mention picker and
+    /// Items for disallowed kinds are filtered from the composer picker and
     /// rejected at the portal-open dispatch. Call before wiring host callbacks.
     pub(crate) fn set_allowed_portal_kinds(
         &mut self,
@@ -3845,7 +3807,7 @@ impl AgentChatView {
 
     fn trigger_toggle_actions_from_parent(
         &mut self,
-        parent: AgentChatMentionPopupParentWindow,
+        parent: AgentChatComposerParentWindow,
         cx: &mut Context<Self>,
     ) {
         if let Some(callback) = self.on_toggle_actions.clone() {
@@ -4039,30 +4001,11 @@ impl AgentChatView {
         }
     }
 
-    pub(super) fn sync_mention_popup_window_from_cached_parent(&mut self, cx: &mut Context<Self>) {
-        let Some(parent) = self.mention_popup_parent_window else {
-            crate::ai::agent_chat::ui::picker_popup::close_mention_popup_window(cx);
-            return;
-        };
-
-        let source_view = cx.entity().downgrade();
-        if let Some((snapshot, left, top)) = self.mention_popup_snapshot(cx) {
-            let _ = crate::ai::agent_chat::ui::picker_popup::sync_mention_popup_window(
-                cx,
-                crate::ai::agent_chat::ui::picker_popup::AgentChatMentionPopupRequest {
-                    parent_window_handle: parent.handle,
-                    parent_bounds: parent.bounds,
-                    display_id: parent.display_id,
-                    display_bounds: parent.display_bounds,
-                    source_view,
-                    snapshot,
-                    left,
-                    top,
-                },
-            );
-        } else {
-            crate::ai::agent_chat::ui::picker_popup::close_mention_popup_window(cx);
-        }
+    pub(super) fn refresh_composer_picker_state_after_parent_change(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) {
+        cx.notify();
     }
 
     /// Convert recent history entries into neutral hits (score 0, Title field).
@@ -4117,7 +4060,7 @@ impl AgentChatView {
     }
 
     pub(super) fn sync_history_popup_window_from_cached_parent(&mut self, cx: &mut Context<Self>) {
-        let Some(parent) = self.mention_popup_parent_window else {
+        let Some(parent) = self.composer_parent_window else {
             crate::ai::agent_chat::ui::history_popup::close_history_popup_window(cx);
             return;
         };
@@ -4502,7 +4445,7 @@ impl AgentChatView {
                 .find(|d| d.id() == id)
                 .map(|d| d.visible_bounds())
         });
-        self.mention_popup_parent_window = Some(AgentChatMentionPopupParentWindow {
+        self.composer_parent_window = Some(AgentChatComposerParentWindow {
             handle: parent_handle,
             bounds: parent_bounds,
             display_id,
@@ -4562,7 +4505,7 @@ impl AgentChatView {
     }
 
     pub(crate) fn toggle_history_popup(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.cache_popup_parent_window(window, cx);
+        self.cache_composer_parent_window(window, cx);
         self.toggle_history_popup_from_cached_parent(cx);
     }
 
@@ -4664,7 +4607,6 @@ impl AgentChatView {
             clear_slash_input,
         } = transition;
 
-        let next_picker_open = matches!(&state, AgentChatComposerPickerState::Open(_));
         match state {
             AgentChatComposerPickerState::Closed => {
                 self.mention_session.take();
@@ -4678,13 +4620,6 @@ impl AgentChatView {
                 self.mention_session.take();
                 self.dismissed_mention_trigger = Some(trigger);
             }
-        }
-
-        // Canonical close: never depend on every reducer path remembering
-        // `sync_popup`. If the logical picker state is not Open, the detached
-        // window must go away on this turn.
-        if !next_picker_open {
-            crate::ai::agent_chat::ui::picker_popup::close_mention_popup_window(cx);
         }
 
         if clear_last_accepted_item {
@@ -4794,7 +4729,7 @@ impl AgentChatView {
 
     /// Prime the slash command picker to show `/{slash_name}` on first open.
     ///
-    /// Sets the input text to `/{slash_name}` and triggers a mention session
+    /// Sets the input text to `/{slash_name}` and triggers a composer session
     /// refresh so the picker row for that skill is pre-selected.
     pub(crate) fn prime_slash_entry(&mut self, slash_name: &str, cx: &mut Context<Self>) {
         let prefill = format!("/{slash_name}");
@@ -5527,7 +5462,7 @@ impl AgentChatView {
             mention_session: None,
             composer_spine: Default::default(),
             dismissed_mention_trigger: None,
-            mention_popup_parent_window: None,
+            composer_parent_window: None,
             inline_owned_context_tokens: HashSet::new(),
             typed_mention_aliases: std::collections::HashMap::new(),
             pasted_text_tokens: Vec::new(),
@@ -5612,7 +5547,7 @@ impl AgentChatView {
             mention_session: None,
             composer_spine: Default::default(),
             dismissed_mention_trigger: None,
-            mention_popup_parent_window: None,
+            composer_parent_window: None,
             inline_owned_context_tokens: HashSet::new(),
             typed_mention_aliases: std::collections::HashMap::new(),
             pasted_text_tokens: Vec::new(),
@@ -6554,7 +6489,7 @@ impl AgentChatView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.cache_popup_parent_window(window, cx);
+        self.cache_composer_parent_window(window, cx);
         self.set_input(value, cx);
     }
 
@@ -6773,7 +6708,7 @@ impl AgentChatView {
             return Err("Agent Chat is in setup mode".to_string());
         }
 
-        self.sync_mention_popup_window_from_cached_parent(cx);
+        self.refresh_composer_picker_state_after_parent_change(cx);
         self.typed_mention_aliases.clear();
         self.inline_owned_context_tokens.clear();
         self.pasted_text_tokens.clear();
@@ -7128,7 +7063,7 @@ impl AgentChatView {
             return Err("Agent Chat is in setup mode".to_string());
         }
 
-        self.sync_mention_popup_window_from_cached_parent(cx);
+        self.refresh_composer_picker_state_after_parent_change(cx);
         self.clear_composer_picker(AgentChatComposerPickerDismissReason::SubmitStarted, cx);
         self.history_menu = None;
         self.attach_menu_open = false;
@@ -7209,7 +7144,6 @@ impl AgentChatView {
         if self.is_setup_mode() {
             self.mention_session = None;
             self.dismissed_mention_trigger = None;
-            crate::ai::agent_chat::ui::picker_popup::close_mention_popup_window(cx);
             tracing::info!(
                 target: "script_kit::tab_ai",
                 event = "agent_chat_picker_trigger_ignored_setup_mode",
@@ -7280,7 +7214,6 @@ impl AgentChatView {
         if owns {
             self.mention_session = None;
             self.dismissed_mention_trigger = None;
-            crate::ai::agent_chat::ui::picker_popup::close_mention_popup_window(cx);
         }
         cx.notify();
     }
@@ -8004,7 +7937,6 @@ impl AgentChatView {
         self.composer_spine.clear();
         self.mention_session = None;
         self.dismissed_mention_trigger = None;
-        crate::ai::agent_chat::ui::picker_popup::close_mention_popup_window(cx);
         cx.notify();
     }
 
@@ -8364,7 +8296,7 @@ impl AgentChatView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.cache_popup_parent_window(window, cx);
+        self.cache_composer_parent_window(window, cx);
         self.open_slash_picker(cx);
     }
 
@@ -8373,7 +8305,7 @@ impl AgentChatView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.cache_popup_parent_window(window, cx);
+        self.cache_composer_parent_window(window, cx);
         self.open_mention_picker(cx);
     }
 
@@ -8390,7 +8322,7 @@ impl AgentChatView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.cache_popup_parent_window(window, cx);
+        self.cache_composer_parent_window(window, cx);
         self.open_profile_trigger_picker(cx);
     }
 
@@ -10496,9 +10428,9 @@ impl AgentChatView {
         btn.child(icon_char).into_any_element()
     }
 
-    // ── @-mention picker ──────────────────────────────────────────
+    // ── @-composer picker ──────────────────────────────────────────
 
-    /// Maximum visible rows in the mention picker.
+    /// Maximum visible rows in the composer picker.
     pub(super) const MENTION_PICKER_MAX_VISIBLE: usize = 8;
 
     /// Detect an active `@query` from the input text and cursor position.
@@ -10549,14 +10481,13 @@ impl AgentChatView {
         is_cmd_period || is_cmd_shift_o
     }
 
-    /// Re-derive the mention session from current input state.
+    /// Re-derive the composer session from current input state.
     ///
     /// Called after every input mutation and cursor movement.
     pub(super) fn refresh_mention_session(&mut self, cx: &mut Context<Self>) {
         if self.agent_chat_spine_owns_list() {
             self.mention_session = None;
             self.dismissed_mention_trigger = None;
-            crate::ai::agent_chat::ui::picker_popup::close_mention_popup_window(cx);
             cx.notify();
             return;
         }
@@ -10564,7 +10495,6 @@ impl AgentChatView {
         if self.is_setup_mode() {
             let had_picker = self.mention_session.take().is_some()
                 || self.dismissed_mention_trigger.take().is_some();
-            crate::ai::agent_chat::ui::picker_popup::close_mention_popup_window(cx);
             if had_picker {
                 tracing::info!(
                     target: "script_kit::tab_ai",
@@ -10808,7 +10738,7 @@ impl AgentChatView {
             self.refresh_mention_session(cx);
         }
         self.sync_inline_mentions(cx);
-        self.sync_mention_popup_window_from_cached_parent(cx);
+        self.refresh_composer_picker_state_after_parent_change(cx);
     }
 
     /// Accept the currently selected picker row.
@@ -11079,7 +11009,7 @@ impl AgentChatView {
                         });
                     }
                 }
-                self.sync_mention_popup_window_from_cached_parent(cx);
+                self.refresh_composer_picker_state_after_parent_change(cx);
                 cx.notify();
                 return;
             }
@@ -11103,7 +11033,7 @@ impl AgentChatView {
                     cx.notify();
                 });
                 self.select_profile_from_popup(&profile_id, cx);
-                self.sync_mention_popup_window_from_cached_parent(cx);
+                self.refresh_composer_picker_state_after_parent_change(cx);
                 cx.notify();
                 return;
             }
@@ -11140,7 +11070,7 @@ impl AgentChatView {
                 if !self.agent_chat_spine_owns_list() {
                     self.refresh_mention_session(cx);
                 }
-                self.sync_mention_popup_window_from_cached_parent(cx);
+                self.refresh_composer_picker_state_after_parent_change(cx);
                 return;
             }
             ContextSelectorRowKind::BuiltIn(kind) => {
@@ -11388,7 +11318,7 @@ impl AgentChatView {
             );
             cx.notify();
         }
-        self.sync_mention_popup_window_from_cached_parent(cx);
+        self.refresh_composer_picker_state_after_parent_change(cx);
     }
 
     /// Check whether accepting a picker item should claim inline ownership
@@ -11614,7 +11544,7 @@ impl AgentChatView {
         )
     }
 
-    /// Returns `(left, top, width)` for the mention picker, anchored to the
+    /// Returns `(left, top, width)` for the composer picker, anchored to the
     /// trigger character position in the Agent Chat composer, including wrapping.
     fn mention_picker_anchor_for_session(
         &self,
@@ -11728,11 +11658,11 @@ impl AgentChatView {
 
         cx.subscribe(&toolbar, |this, _toolbar, event, cx| match event {
             AgentChatToolbarEvent::ToggleProfileSelector(parent) => {
-                this.mention_popup_parent_window = Some(*parent);
+                this.composer_parent_window = Some(*parent);
                 this.open_profile_trigger_picker(cx);
             }
             AgentChatToolbarEvent::ToggleModelSelector(parent) => {
-                this.mention_popup_parent_window = Some(*parent);
+                this.composer_parent_window = Some(*parent);
                 this.sync_agent_chat_popup_windows_from_cached_parent(cx);
                 this.trigger_toggle_actions_from_parent(*parent, cx);
                 cx.notify();
@@ -12051,7 +11981,7 @@ impl AgentChatView {
             cx.notify();
         });
 
-        self.sync_mention_popup_window_from_cached_parent(cx);
+        self.refresh_composer_picker_state_after_parent_change(cx);
 
         tracing::info!(
             target: "script_kit::tab_ai",
@@ -13693,7 +13623,7 @@ impl Render for AgentChatView {
                 .relative()
                 .track_focus(&self.focus_handle)
                 .on_key_down(cx.listener(|this, event: &gpui::KeyDownEvent, window, cx| {
-                    this.cache_popup_parent_window(window, cx);
+                    this.cache_composer_parent_window(window, cx);
                     this.handle_key_down(event, window, cx);
                 }))
                 .on_any_mouse_down(cx.listener(|this, _event, _window, cx| {
@@ -13722,7 +13652,7 @@ impl Render for AgentChatView {
             .on_key_down(cx.listener(|this, event: &gpui::KeyDownEvent, window, cx| {
                 let key = event.keystroke.key.as_str();
                 let modifiers = &event.keystroke.modifiers;
-                this.cache_popup_parent_window(window, cx);
+                this.cache_composer_parent_window(window, cx);
 
                 // Cmd+W in detached window: close the window directly.
                 // In the main panel, Cmd+W is handled by the interceptor.

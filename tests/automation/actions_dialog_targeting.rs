@@ -372,11 +372,11 @@ fn actions_dialog_fallback_preserves_panel_only_warning() {
 
 #[test]
 fn prompt_popup_collector_tries_known_popup_types() {
-    // The PromptPopup collector must try mention, history, and confirm.
+    // The PromptPopup collector must try history, and confirm.
     let source = include_str!("../../src/windows/automation_surface_collector.rs");
     assert!(
         source.contains("collect_mention_picker_snapshot"),
-        "PromptPopup collector must try mention picker"
+        "PromptPopup collector must try composer picker"
     );
     assert!(
         source.contains("collect_history_popup_snapshot"),
@@ -413,10 +413,10 @@ fn confirm_popup_collector_has_button_elements() {
 #[test]
 fn mention_picker_collector_uses_item_id_in_semantic_ids() {
     let source = include_str!("../../src/windows/automation_surface_collector.rs");
-    // Mention picker uses item.id for semantic IDs
+    // Composer picker uses item.id for semantic IDs
     assert!(
         source.contains("format!(\"choice:{}:{}\", idx, item.id)"),
-        "Mention picker must use item.id in choice semantic IDs"
+        "Composer picker must use item.id in choice semantic IDs"
     );
 }
 

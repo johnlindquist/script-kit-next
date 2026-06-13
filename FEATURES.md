@@ -197,8 +197,7 @@ the matrix only through a future QA lock-in selection.
   - `bun scripts/devtools/act.ts set-input --text '@' --main --strict --surface AgentChat`
   - `bun scripts/devtools/act.ts key --key Tab --main --strict --surface AgentChat`
   - `bash scripts/agentic/session.sh rpc core-qa '{"type":"getAgentChatTestProbe","requestId":"core-qa-probe","tail":4,"target":{"type":"main"}}' --expect agent_chatTestProbeResult --timeout 8000`
-  - `./scripts/agentic/agent-cargo.sh test --test agent_chat_mention_popup_registry_lifecycle_contract -- --nocapture`
-- Pass evidence: Probe receipt contains keyRoutes and acceptedItems with acceptedViaKey tab/enter, cursorAfter, and context state; popup lifecycle contract passes.
+- Pass evidence: Probe receipt contains keyRoutes and acceptedItems with acceptedViaKey tab/enter, cursorAfter, and context state.
 - Fail evidence: Selector never opens, acceptedItems stays empty, cursor/chip count is wrong, event route is propagated incorrectly, or contract fails.
 
 ### Detached Agent Chat with Pi Backend targets, reattaches, and cleans up

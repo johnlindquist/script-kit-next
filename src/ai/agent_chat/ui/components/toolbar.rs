@@ -4,12 +4,12 @@ use gpui::{
 };
 
 use super::super::thread::AgentChatThreadStatus;
-use super::super::types::AgentChatMentionPopupParentWindow;
+use super::super::types::AgentChatComposerParentWindow;
 use crate::theme;
 
 pub enum AgentChatToolbarEvent {
-    ToggleProfileSelector(AgentChatMentionPopupParentWindow),
-    ToggleModelSelector(AgentChatMentionPopupParentWindow),
+    ToggleProfileSelector(AgentChatComposerParentWindow),
+    ToggleModelSelector(AgentChatComposerParentWindow),
     ExportThread,
     ClearThread,
     OpenHistory,
@@ -83,7 +83,7 @@ impl Render for AgentChatToolbar {
                     .gap(px(8.0))
                     .cursor_pointer()
                     .on_click(cx.listener(|_view, _event, window, cx| {
-                        let parent = toolbar_popup_parent_window(window, cx);
+                        let parent = toolbar_parent_window(window, cx);
                         cx.emit(AgentChatToolbarEvent::ToggleProfileSelector(parent));
                     }))
                     .child(
@@ -101,7 +101,7 @@ impl Render for AgentChatToolbar {
                     .gap(px(8.0))
                     .cursor_pointer()
                     .on_click(cx.listener(|_view, _event, window, cx| {
-                        let parent = toolbar_popup_parent_window(window, cx);
+                        let parent = toolbar_parent_window(window, cx);
                         cx.emit(AgentChatToolbarEvent::ToggleModelSelector(parent));
                     }))
                     .child(
@@ -122,12 +122,9 @@ impl Render for AgentChatToolbar {
     }
 }
 
-fn toolbar_popup_parent_window(
-    window: &mut Window,
-    cx: &mut App,
-) -> AgentChatMentionPopupParentWindow {
+fn toolbar_parent_window(window: &mut Window, cx: &mut App) -> AgentChatComposerParentWindow {
     let display = window.display(cx);
-    AgentChatMentionPopupParentWindow {
+    AgentChatComposerParentWindow {
         handle: window.window_handle(),
         bounds: window.bounds(),
         display_id: display.as_ref().map(|display| display.id()),

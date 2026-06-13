@@ -1518,7 +1518,7 @@ impl ScriptListApp {
                             // close-after-apply for bare qualifiers or capture
                             // targets). Runs BEFORE the Agent Chat plain-Tab routing
                             // branch so menu-syntax keyboard stays consistent
-                            // with the Agent Chat slash / @ pickers.
+                            // with the Agent Chat slash / @ composer pickers.
                             if matches!(this.current_view, AppView::ScriptList)
                                 && this.menu_syntax_object_selector_owns_main_keyboard()
                             {
@@ -1741,7 +1741,7 @@ impl ScriptListApp {
                             }
                             // Menu-syntax trigger popup owns Enter when it is
                             // visible on ScriptList — Accept the selected row
-                            // the same way the Agent Chat / and @ pickers do.
+                            // the same way the Agent Chat composer picker does.
                             if matches!(this.current_view, AppView::ScriptList)
                                 && this.menu_syntax_object_selector_owns_main_keyboard()
                             {

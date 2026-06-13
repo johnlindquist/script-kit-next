@@ -113,7 +113,7 @@ impl NotesApp {
     /// Switch from embedded Agent Chat back to the Notes editor surface.
     ///
     /// Calls `prepare_for_host_hide()` on the cached Agent Chat view so popups
-    /// and mention sessions are properly closed, then returns focus to
+    /// and composer sessions are properly closed, then returns focus to
     /// the editor.
     pub(super) fn switch_to_notes_surface(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.close_embedded_agent_chat_via_host("switch_to_notes_surface", Some(window), cx);

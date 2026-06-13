@@ -44,7 +44,7 @@ pub(crate) fn build_prompt_blocks(
 
 // ── Extracted Agent Chat view types ────────────────────────────────────────────
 
-/// Active @-mention session state for the Agent Chat inline context selector.
+/// Active @-composer session state for the Agent Chat inline context selector.
 #[derive(Debug, Clone)]
 pub(crate) struct AgentChatMentionSession {
     /// Which trigger character opened this session (`@` or `/`).
@@ -70,7 +70,7 @@ pub(crate) struct AgentChatDismissedMentionTrigger {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub(crate) struct AgentChatMentionPopupParentWindow {
+pub(crate) struct AgentChatComposerParentWindow {
     pub(crate) handle: gpui::AnyWindowHandle,
     pub(crate) bounds: gpui::Bounds<gpui::Pixels>,
     pub(crate) display_id: Option<gpui::DisplayId>,

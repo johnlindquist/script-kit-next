@@ -151,7 +151,7 @@ impl ScriptListApp {
     /// 2. Resets state to the default script list
     /// 3. Hides the window
     /// Clear owner-bound popup state and force-close detached popup windows owned
-    /// by the main launcher (Agent Chat `@` mention picker and Agent Chat history).
+    /// by the main launcher (Agent Chat `@` composer picker and Agent Chat history).
     /// Detached windows cache a `WeakEntity` of the owner view but
     /// rely on the owner to explicitly close them on lifecycle / surface
     /// transitions. Whenever we hide the main window, return to ScriptList, or
@@ -163,7 +163,6 @@ impl ScriptListApp {
         cx: &mut Context<Self>,
     ) {
         self.menu_syntax_trigger_popup_state = Default::default();
-        crate::ai::agent_chat::ui::picker_popup::close_mention_popup_window(cx);
         crate::ai::agent_chat::ui::history_popup::close_history_popup_window(cx);
         tracing::info!(
             target: "script_kit::popup_owner",

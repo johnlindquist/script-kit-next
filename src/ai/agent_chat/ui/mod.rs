@@ -31,7 +31,6 @@ pub(crate) mod hosted;
 pub(crate) mod kitchen_sink_fixture;
 pub(crate) mod labels;
 pub(crate) mod permission_broker;
-pub(crate) mod picker_popup;
 pub(crate) mod popup_registry;
 pub(crate) mod popup_window;
 pub(crate) mod portal_contract;

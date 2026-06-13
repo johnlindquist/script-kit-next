@@ -38,7 +38,7 @@
 //!    the only audit-visible signal of the host swap.
 //!
 //! 5. `AgentChatView::prepare_for_host_hide` clears ephemeral popup state
-//!    (attach menu, permission options, mention session, history menu,
+//!    (attach menu, permission options, composer session, history menu,
 //!    setup agent picker) but does NOT clear
 //!    `pending_portal_session`. This matches
 //!    `removed-docs transitions#Host hide keeps

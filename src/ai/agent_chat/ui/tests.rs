@@ -376,7 +376,6 @@ const HANDLE_ACTION_SOURCE: &str = include_str!("../../../app_actions/handle_act
 const REGISTRIES_STATE_SOURCE: &str = include_str!("../../../app_impl/registries_state.rs");
 const AGENT_CHAT_MOD_SOURCE: &str = include_str!("mod.rs");
 const AGENT_CHAT_HISTORY_POPUP_SOURCE: &str = include_str!("history_popup.rs");
-const AGENT_CHAT_PICKER_POPUP_SOURCE: &str = include_str!("picker_popup.rs");
 const AGENT_CHAT_POPUP_WINDOW_SOURCE: &str = include_str!("popup_window.rs");
 const AGENT_CHAT_ACTIONS_SOURCE: &str = include_str!("../../../actions/builders/script_context.rs");
 const AGENT_CHAT_WINDOW_SOURCE: &str = include_str!("chat_window.rs");
@@ -789,14 +788,6 @@ fn agent_chat_and_pty_views_coexist_in_app_view() {
 }
 
 #[test]
-fn agent_chat_picker_popup_module_is_registered() {
-    assert!(
-        AGENT_CHAT_MOD_SOURCE.contains("pub(crate) mod picker_popup;"),
-        "Agent Chat module should register the detached picker popup module"
-    );
-}
-
-#[test]
 fn agent_chat_model_selector_module_is_actions_only() {
     assert!(
         !AGENT_CHAT_MOD_SOURCE.contains("pub(crate) mod model_selector_popup;"),
@@ -813,21 +804,6 @@ fn agent_chat_history_popup_module_is_registered() {
     assert!(
         AGENT_CHAT_MOD_SOURCE.contains("pub(crate) mod history_popup;"),
         "Agent Chat module should register the detached history popup module"
-    );
-}
-
-#[test]
-fn agent_chat_picker_migration_uses_popup_window_instead_of_inline_layer() {
-    assert!(
-        !AGENT_CHAT_VIEW_SOURCE.contains("agent_chat-mention-picker-layer"),
-        "Agent Chat chat view should no longer render the mention picker inline"
-    );
-    assert!(
-        AGENT_CHAT_PICKER_POPUP_SOURCE.contains("AgentChatMentionPopupWindow")
-            && AGENT_CHAT_PICKER_POPUP_SOURCE.contains("super::popup_window::popup_window_options")
-            && AGENT_CHAT_PICKER_POPUP_SOURCE
-                .contains("super::popup_window::configure_popup_window"),
-        "Agent Chat picker migration should render through a popup window entity"
     );
 }
 
@@ -874,229 +850,6 @@ fn agent_chat_history_migration_uses_popup_window_instead_of_inline_layer() {
 }
 
 #[test]
-fn agent_chat_picker_popup_row_rendering_uses_shared_list_item_chrome() {
-    assert!(
-        AGENT_CHAT_PICKER_POPUP_SOURCE.contains("crate::components::inline_dropdown")
-            && AGENT_CHAT_PICKER_POPUP_SOURCE.contains("crate::list_item::ListItem::new")
-            && AGENT_CHAT_PICKER_POPUP_SOURCE
-                .contains("crate::list_item::ListItemColors::from_theme")
-            && !AGENT_CHAT_PICKER_POPUP_SOURCE.contains("render_soft_compact_picker_row")
-            && !AGENT_CHAT_PICKER_POPUP_SOURCE.contains("render_dense_monoline_picker_row"),
-        "Agent Chat slash/@ picker popup should keep the shared dropdown shell while rows use main-list ListItem chrome"
-    );
-    assert!(
-        AGENT_CHAT_POPUP_WINDOW_SOURCE
-            .contains("crate::components::inline_dropdown::CONTEXT_SELECTOR_ROW_HEIGHT")
-            && !AGENT_CHAT_POPUP_WINDOW_SOURCE
-                .contains("crate::ai::context_selector_row::CONTEXT_SELECTOR_ROW_HEIGHT"),
-        "Agent Chat popup facade should derive dense picker height from the shared inline-dropdown row contract"
-    );
-}
-
-#[test]
-fn agent_chat_cmd_p_routes_to_dedicated_history_command() {
-    // Cmd+P should trigger the host callback, not the inline popup toggle
-    assert!(
-        AGENT_CHAT_VIEW_SOURCE.contains("self.trigger_open_history_command(window, cx);"),
-        "Cmd+P in Agent Chat should route through the dedicated history command callback"
-    );
-    assert!(
-        AGENT_CHAT_VIEW_SOURCE.contains("agent_chat_history_shortcut_routed_to_command"),
-        "Cmd+P should emit a structured tracing event when routing to the history command"
-    );
-    // The view should expose the callback setter
-    assert!(
-        AGENT_CHAT_VIEW_SOURCE.contains("pub(crate) fn set_on_open_history_command"),
-        "AgentChatView must expose set_on_open_history_command for hosts to wire up"
-    );
-    // The old inline history picker intercept block should be removed
-    assert!(
-        !AGENT_CHAT_VIEW_SOURCE.contains("History picker intercept"),
-        "the old inline history picker intercept block should be removed from the key handler"
-    );
-}
-
-#[test]
-fn agent_chat_footer_actions_hint_uses_shared_clickable_toggle_path() {
-    assert!(
-        AGENT_CHAT_VIEW_SOURCE.contains("render_hint_icons_clickable"),
-        "Agent Chat footer should use the shared clickable hint-strip renderer so footer buttons behave like the main menu"
-    );
-    assert!(
-        AGENT_CHAT_VIEW_SOURCE.contains("FooterAction::Actions => \"⌘K Actions\"")
-            && AGENT_CHAT_VIEW_SOURCE
-                .contains("FooterAction::Actions => self.trigger_toggle_actions(window, cx),"),
-        "Agent Chat footer Actions hint must route through the shared clickable footer renderer"
-    );
-    assert!(
-        TAB_AI_MODE_SOURCE.contains("fn wire_embedded_agent_chat_footer_callbacks")
-            && TAB_AI_MODE_SOURCE.contains("app.toggle_actions(cx, window);")
-            && TAB_AI_MODE_SOURCE
-                .contains("app.close_tab_ai_harness_terminal_with_window(window, cx);")
-            && TAB_AI_MODE_SOURCE.contains("view.set_on_open_history_command")
-            && TAB_AI_MODE_SOURCE.contains("app.open_agent_chat_history_main_list(window, cx);")
-            && TAB_AI_MODE_SOURCE.contains("view.set_on_paste_response_requested")
-            && TAB_AI_MODE_SOURCE
-                .contains("app.paste_latest_agent_chat_response_to_frontmost(None, cx);"),
-        "embedded Agent Chat hosts must wire footer clicks to the existing actions, close, history popup, and paste-response paths"
-    );
-    assert!(
-        AGENT_CHAT_WINDOW_SOURCE.contains("view.set_on_toggle_actions")
-            && AGENT_CHAT_WINDOW_SOURCE.contains("toggle_detached_actions(cx);")
-            && AGENT_CHAT_WINDOW_SOURCE.contains("close_chat_window(cx);"),
-        "detached Agent Chat hosts must wire footer clicks to the detached actions toggle and close paths"
-    );
-}
-
-#[test]
-fn agent_chat_footer_primary_action_tracks_composer_response_and_streaming_state() {
-    assert!(
-        AGENT_CHAT_VIEW_SOURCE.contains("fn footer_buttons_for_thread")
-            && AGENT_CHAT_VIEW_SOURCE.contains("FooterAction::PasteResponse")
-            && AGENT_CHAT_VIEW_SOURCE.contains("label: \"Paste Response\"")
-            && AGENT_CHAT_VIEW_SOURCE.contains("label: \"Send\"")
-            && AGENT_CHAT_VIEW_SOURCE.contains("label: \"Stop\""),
-        "Agent Chat footer state must expose Send, Paste Response, and Stop as child-owned footer button specs"
-    );
-    assert!(
-        AGENT_CHAT_VIEW_SOURCE.contains("thread.input.text().is_empty()")
-            && AGENT_CHAT_VIEW_SOURCE.contains("Self::has_pastable_assistant_response(thread)")
-            && AGENT_CHAT_VIEW_SOURCE.contains("AgentChatThreadStatus::Streaming =>"),
-        "Agent Chat footer labels must be driven by raw composer emptiness, assistant response presence, and streaming state"
-    );
-    assert!(
-        AGENT_CHAT_VIEW_SOURCE.contains("Self::has_pastable_assistant_response(thread)")
-            && AGENT_CHAT_VIEW_SOURCE
-                .contains("self.trigger_paste_response_requested(window, cx);")
-            && AGENT_CHAT_VIEW_SOURCE.contains("caused_submit: false"),
-        "Enter on an empty composer after an assistant response must route to Paste Response instead of empty-submit"
-    );
-}
-
-#[test]
-fn native_agent_chat_footer_uses_child_snapshot_and_explicit_footer_actions() {
-    assert!(
-        UI_WINDOW_SOURCE.contains("self.agent_chat_footer_snapshot.as_ref()")
-            && UI_WINDOW_SOURCE
-                .contains("FooterButtonConfig::new(button.action, button.key, button.label)")
-            && UI_WINDOW_SOURCE.contains("FooterAction::Stop")
-            && UI_WINDOW_SOURCE.contains("FooterAction::PasteResponse"),
-        "native Agent Chat footer must render from the child Agent Chat footer snapshot and dispatch explicit Stop/PasteResponse actions"
-    );
-    assert!(
-        UI_WINDOW_SOURCE.contains("paste_latest_agent_chat_response_to_frontmost")
-            && UI_WINDOW_SOURCE.contains("crate::platform::defer_hide_main_window(cx)")
-            && UI_WINDOW_SOURCE.contains("injector.paste_text(&text)"),
-        "Paste Response must use the existing frontmost-app paste path instead of being a label-only no-op"
-    );
-}
-
-#[test]
-fn agent_chat_actions_dialog_preserves_route_backed_agent_actions() {
-    let agent_chat_dialog_start = ACTIONS_TOGGLE_SOURCE
-        .find("let is_agent_chat_actions_dialog = agent_chat_context.is_some();")
-        .expect("actions toggle must identify Agent Chat dialogs before construction");
-    let agent_chat_dialog_block = &ACTIONS_TOGGLE_SOURCE[agent_chat_dialog_start
-        ..(agent_chat_dialog_start + 3500).min(ACTIONS_TOGGLE_SOURCE.len())];
-
-    assert!(
-        agent_chat_dialog_block.contains("ActionsDialog::with_agent_chat("),
-        "Agent Chat actions must be constructed with the route-backed Agent Chat dialog"
-    );
-    assert!(
-        agent_chat_dialog_block.contains("if !is_agent_chat_actions_dialog")
-            && ACTIONS_TOGGLE_SOURCE.contains("dialog.set_menu_syntax_section")
-            && ACTIONS_TOGGLE_SOURCE.contains(".set_focused_scriptlet"),
-        "generic script/global action rebuild hooks must be gated away from Agent Chat actions"
-    );
-
-    let root_route_block_start = ACTIONS_TOGGLE_SOURCE
-        .find("ActionsDialog::with_agent_chat(")
-        .expect("Agent Chat dialog constructor call missing");
-    let rebuild_pos = ACTIONS_TOGGLE_SOURCE[root_route_block_start..]
-        .find("dialog.set_menu_syntax_section")
-        .map(|pos| root_route_block_start + pos)
-        .expect("shared menu syntax hook missing");
-    let guard_pos = ACTIONS_TOGGLE_SOURCE[root_route_block_start..rebuild_pos]
-        .rfind("if !is_agent_chat_actions_dialog")
-        .map(|pos| root_route_block_start + pos)
-        .expect("Agent Chat guard must appear before generic menu syntax rebuild");
-    assert!(
-        guard_pos < rebuild_pos,
-        "Agent Chat guard must prevent set_menu_syntax_section(None) from replacing Change Agent/Model with global actions"
-    );
-}
-
-#[test]
-fn agent_chat_footer_omits_global_cmd_enter_ai_button() {
-    let footer_start = UI_WINDOW_SOURCE
-        .find("fn agent_chat_footer_buttons")
-        .expect("native Agent Chat footer builder missing");
-    let footer_block =
-        &UI_WINDOW_SOURCE[footer_start..(footer_start + 900).min(UI_WINDOW_SOURCE.len())];
-    assert!(
-        !footer_block.contains("FooterAction::Ai"),
-        "native Agent Chat footer should not show the global Cmd+Enter AI button"
-    );
-
-    let external_footer_start = AGENT_CHAT_VIEW_SOURCE
-        .find("fn render_external_host_footer_from_snapshot")
-        .expect("external Agent Chat footer renderer missing");
-    let external_footer_block = &AGENT_CHAT_VIEW_SOURCE
-        [external_footer_start..(external_footer_start + 2600).min(AGENT_CHAT_VIEW_SOURCE.len())];
-    assert!(
-        !external_footer_block.contains("\"⌘↵ AI\""),
-        "external Agent Chat footer should not show the global Cmd+Enter AI hint"
-    );
-    assert!(
-        UI_WINDOW_SOURCE.contains("FooterAction::Actions")
-            && AGENT_CHAT_VIEW_SOURCE.contains("FooterAction::Actions => \"⌘K Actions\""),
-        "Agent Chat footers must keep the Actions affordance after removing the AI button"
-    );
-}
-
-#[test]
-fn agent_chat_embedded_cmd_k_uses_host_actions_callback() {
-    assert!(
-        AGENT_CHAT_VIEW_SOURCE.contains("event = \"agent_chat_cmd_k_route\"")
-            && AGENT_CHAT_VIEW_SOURCE.contains("embedded_host_callback")
-            && AGENT_CHAT_VIEW_SOURCE.contains("self.trigger_toggle_actions(window, cx);")
-            && AGENT_CHAT_VIEW_SOURCE.contains("cx.stop_propagation();"),
-        "Cmd+K inside focused embedded Agent Chat must open the host actions menu locally"
-    );
-    assert!(
-        !AGENT_CHAT_VIEW_SOURCE.contains("propagate_to_main_window"),
-        "embedded Agent Chat Cmd+K must not depend on bubbling to the launcher interceptor"
-    );
-}
-
-#[test]
-fn agent_chat_detached_cmd_k_keeps_detached_actions_path() {
-    let route_start = AGENT_CHAT_VIEW_SOURCE
-        .find("event = \"detached_actions_shortcut_pressed\"")
-        .expect("detached Cmd+K branch should emit route tracing");
-    let route_block =
-        &AGENT_CHAT_VIEW_SOURCE[route_start..(route_start + 900).min(AGENT_CHAT_VIEW_SOURCE.len())];
-    assert!(
-        AGENT_CHAT_VIEW_SOURCE.contains("detached_local")
-            && AGENT_CHAT_WINDOW_SOURCE.contains("toggle_detached_actions(cx);"),
-        "detached Agent Chat Cmd+K must keep using the detached actions window path through the installed detached host callback"
-    );
-    assert!(
-        route_block.contains("self.trigger_toggle_actions(window, cx);")
-            && !route_block.contains("toggle_detached_actions(cx);"),
-        "detached Agent Chat Cmd+K must defer through trigger_toggle_actions instead of synchronously calling toggle_detached_actions while AgentChatView is updating"
-    );
-    assert!(
-        AGENT_CHAT_VIEW_SOURCE.contains("fn spawn_footer_callback(")
-            && AGENT_CHAT_VIEW_SOURCE.contains(".timer(Duration::from_millis(1))")
-            && AGENT_CHAT_VIEW_SOURCE.contains("window_handle.update(cx, |_root, window, cx| {")
-            && AGENT_CHAT_VIEW_SOURCE.contains("callback(window, cx);"),
-        "Agent Chat footer callbacks must hop a timer tick before updating the host window so protocol simulateGpuiEvent cannot re-enter the app update stack"
-    );
-}
-
-#[test]
 fn agent_chat_show_history_action_opens_main_history_list() {
     assert!(
         !HANDLE_ACTION_SOURCE
@@ -1110,9 +863,9 @@ fn agent_chat_show_history_action_opens_main_history_list() {
 fn agent_chat_picker_refresh_and_navigation_sync_popup_window() {
     assert!(
         AGENT_CHAT_VIEW_SOURCE.contains("pub(super) fn refresh_mention_session")
-            && AGENT_CHAT_VIEW_SOURCE.contains("fn cache_popup_parent_window")
+            && AGENT_CHAT_VIEW_SOURCE.contains("fn cache_composer_parent_window")
             && AGENT_CHAT_VIEW_SOURCE
-                .contains("self.sync_mention_popup_window_from_cached_parent(cx);"),
+                .contains("self.refresh_composer_picker_state_after_parent_change(cx);"),
         "picker refresh should keep the detached popup window synchronized"
     );
 
@@ -1126,7 +879,7 @@ fn agent_chat_picker_refresh_and_navigation_sync_popup_window() {
     let keydown_block = &AGENT_CHAT_VIEW_SOURCE[keydown_block_start..keydown_block_end];
     assert!(
         keydown_block
-            .matches("self.sync_mention_popup_window_from_cached_parent(cx);")
+            .matches("self.refresh_composer_picker_state_after_parent_change(cx);")
             .count()
             >= 2,
         "picker navigation should resync the detached popup window"
@@ -1134,7 +887,7 @@ fn agent_chat_picker_refresh_and_navigation_sync_popup_window() {
 }
 
 #[test]
-fn agent_chat_picker_parent_mouse_down_dismisses_slash_and_mention_popup() {
+fn agent_chat_picker_parent_mouse_down_dismisses_slash_and_mention_session() {
     let render_body = agent_chat_source_between(
         AGENT_CHAT_VIEW_SOURCE,
         "impl Render for AgentChatView",
@@ -1144,13 +897,13 @@ fn agent_chat_picker_parent_mouse_down_dismisses_slash_and_mention_popup() {
         AGENT_CHAT_VIEW_SOURCE.contains("pub(crate) fn dismiss_mention_picker")
             && AGENT_CHAT_VIEW_SOURCE.contains("self.mention_session.take()")
             && AGENT_CHAT_VIEW_SOURCE
-                .contains("self.sync_mention_popup_window_from_cached_parent(cx);"),
-        "AgentChatView must expose a shared picker dismiss helper for both slash and @ mention sessions"
+                .contains("self.refresh_composer_picker_state_after_parent_change(cx);"),
+        "AgentChatView must expose a shared picker dismiss helper for both slash and @ composer sessions"
     );
     assert!(
         render_body.contains(".on_any_mouse_down(cx.listener(|this, _event, _window, cx| {")
             && render_body.contains("this.dismiss_mention_picker(cx);"),
-        "Agent Chat chat root mouse-down should dismiss the shared slash/@ picker when clicking outside the popup window"
+        "Agent Chat chat root mouse-down should dismiss the shared slash/@ composer picker when clicking outside"
     );
 }
 
@@ -1186,75 +939,7 @@ fn agent_chat_picker_outside_dismiss_suppresses_unchanged_trigger_reopen() {
 }
 
 #[test]
-fn agent_chat_picker_row_click_matches_actions_dialog_mouse_arming() {
-    assert!(
-        AGENT_CHAT_PICKER_POPUP_SOURCE.contains("mouse_armed_row: Option<(usize, String)>")
-            && AGENT_CHAT_PICKER_POPUP_SOURCE
-                .contains("fn should_submit_agent_chat_picker_row_click")
-            && AGENT_CHAT_PICKER_POPUP_SOURCE.contains("was_mouse_armed || click_count >= 2"),
-        "Agent Chat slash/@ picker rows must use actions-dialog-style mouse arming: first click focuses, second or double-click accepts"
-    );
-    assert!(
-        AGENT_CHAT_PICKER_POPUP_SOURCE.contains("fn handle_row_click")
-            && AGENT_CHAT_PICKER_POPUP_SOURCE
-                .contains("this.handle_row_click(idx, event, window, cx);")
-            && AGENT_CHAT_PICKER_POPUP_SOURCE.contains("self.select_item(index, cx);")
-            && AGENT_CHAT_PICKER_POPUP_SOURCE.contains("self.activate_item(index, cx);"),
-        "Agent Chat picker row clicks must route through a shared handler that selects before accepting"
-    );
-}
-
-#[test]
-fn agent_chat_picker_mouse_focus_does_not_recreate_popup_window() {
-    let select_item = agent_chat_source_between(
-        AGENT_CHAT_PICKER_POPUP_SOURCE,
-        "fn select_item",
-        "fn handle_row_click",
-    );
-    assert!(
-        !select_item.contains("sync_mention_popup_window_from_cached_parent"),
-        "first mouse click should update selection in the existing popup instead of resyncing/recreating the popup window"
-    );
-    assert!(
-        select_item.contains("self.snapshot.selected_index")
-            && select_item.contains("self.snapshot.visible_start = visible.start"),
-        "mouse focus should still update the popup's local selected row"
-    );
-}
-
-#[test]
-fn agent_chat_picker_mouse_submit_dismisses_popup_window() {
-    let click_handler = agent_chat_source_between(
-        AGENT_CHAT_PICKER_POPUP_SOURCE,
-        "fn handle_row_click",
-        "fn apply_hint",
-    );
-    let activate = click_handler
-        .find("self.activate_item(index, cx);")
-        .expect("mouse submit should activate the focused picker item");
-    let clear_slot = click_handler
-        .find("clear_mention_popup_window_slot();")
-        .expect("mouse submit should clear the popup slot");
-    let remove_window = click_handler
-        .find("window.remove_window();")
-        .expect("mouse submit should remove the popup window directly");
-    assert!(
-        activate < clear_slot && clear_slot < remove_window,
-        "double-click or second-click submit must dismiss the slash/@ picker popup after activation"
-    );
-    // Whitespace-normalized so rustfmt line wrapping cannot break the check.
-    let normalized: String = click_handler
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ");
-    assert!(
-        normalized.contains("is_actionable && should_submit_agent_chat_picker_row_click"),
-        "inert picker rows must not be dismissed as submitted actions"
-    );
-}
-
-#[test]
-fn agent_chat_close_paths_close_slash_and_mention_popup() {
+fn agent_chat_close_paths_close_slash_and_mention_session() {
     let detached_cmd_w_block = agent_chat_source_between(
         AGENT_CHAT_VIEW_SOURCE,
         "event = \"detached_agent_chat_cmd_w_close_requested\"",
@@ -1268,7 +953,7 @@ fn agent_chat_close_paths_close_slash_and_mention_popup() {
         .expect("detached Cmd+W block must remove the window");
     assert!(
         detached_cmd_w_prepare < detached_cmd_w_remove,
-        "detached Agent Chat Cmd+W must close slash/@ picker popups before removing the window"
+        "detached Agent Chat Cmd+W must close slash/@ composer sessions before removing the window"
     );
 
     let detached_close_helper = agent_chat_source_between(
@@ -1284,7 +969,7 @@ fn agent_chat_close_paths_close_slash_and_mention_popup() {
         .expect("close_chat_window must remove the window");
     assert!(
         detached_helper_prepare < detached_helper_remove,
-        "detached close_chat_window must close slash/@ picker popups before removing the window"
+        "detached close_chat_window must close slash/@ composer sessions before removing the window"
     );
 
     let detached_titlebar_close = agent_chat_source_between(
@@ -1295,7 +980,7 @@ fn agent_chat_close_paths_close_slash_and_mention_popup() {
     assert!(
         detached_titlebar_close.contains("view_entity_slot_on_close")
             && detached_titlebar_close.contains("view.prepare_for_host_hide(cx);"),
-        "detached titlebar close must prepare the Agent Chat view so slash/@ picker popups cannot outlive chat"
+        "detached titlebar close must prepare the Agent Chat view so slash/@ composer sessions cannot outlive chat"
     );
 }
 
@@ -1476,7 +1161,7 @@ fn agent_chat_view_exposes_escape_popup_dismiss_helper() {
             && AGENT_CHAT_VIEW_SOURCE.contains("self.history_menu.is_some()")
             && AGENT_CHAT_VIEW_SOURCE.contains("self.mention_session = None;")
             && AGENT_CHAT_VIEW_SOURCE
-                .contains("self.sync_mention_popup_window_from_cached_parent(cx);")
+                .contains("self.refresh_composer_picker_state_after_parent_change(cx);")
             && AGENT_CHAT_VIEW_SOURCE.contains("if self.attach_menu_open {")
             && AGENT_CHAT_VIEW_SOURCE.contains("|| self.attach_menu_open"),
         "Agent Chat view should expose a helper that dismisses the detached Agent Chat popups on Escape"
@@ -1791,7 +1476,7 @@ fn call_sites_pass_real_permission_active() {
 }
 
 // =========================================================================
-// Mention picker windowing — selected item always visible
+// Composer picker windowing — selected item always visible
 // =========================================================================
 
 /// Helper: call the private `mention_visible_range_for` and assert the
@@ -2975,79 +2660,6 @@ fn agent_chat_main_menu_skill_stage_matches_slash_selection_without_submit() {
 }
 
 const LIFECYCLE_RESET_SOURCE: &str = include_str!("../../../app_impl/lifecycle_reset.rs");
-
-#[test]
-fn at_inline_portal_window_cannot_outlive_owner() {
-    // Invariant: the Agent Chat `@` mention picker (a detached non-activating popup
-    // window) must never be visible after its owner Agent Chat view loses the
-    // trigger or after the main launcher abandons the Agent Chat surface.
-    //
-    // We enforce this with three independent guards. If any of them is
-    // removed, the screenshot bug (orphaned "Open full notes / Portal"
-    // popup floating next to a `ScriptList` main window) can reappear.
-
-    // 1. apply_composer_picker_transition closes the detached popup window
-    //    on every non-Open transition, even when the reducer forgot to
-    //    request sync_popup.
-    let composer_body = agent_chat_source_between(
-        AGENT_CHAT_VIEW_SOURCE,
-        "fn apply_composer_picker_transition",
-        "fn clear_composer_picker",
-    );
-    assert!(
-        composer_body.contains(
-            "let next_picker_open = matches!(&state, AgentChatComposerPickerState::Open(_));"
-        ) && composer_body
-            .contains("crate::ai::agent_chat::ui::picker_popup::close_mention_popup_window(cx);",),
-        "apply_composer_picker_transition must unconditionally close the detached @ popup whenever the picker state is not Open"
-    );
-
-    // 2. AgentChatMentionPopupWindow self-prunes on render when its WeakEntity
-    //    owner is dropped. It must not read AgentChatView during render because
-    //    opening the popup can render while the owner is still updating.
-    assert!(
-        AGENT_CHAT_PICKER_POPUP_SOURCE.contains("fn owner_is_live(&self) -> bool")
-            && AGENT_CHAT_PICKER_POPUP_SOURCE.contains("self.source_view.upgrade().is_some()")
-            && AGENT_CHAT_PICKER_POPUP_SOURCE.contains("if !self.owner_is_live()")
-            && !AGENT_CHAT_PICKER_POPUP_SOURCE
-                .contains(&["view.read(cx)", ".has_active_mention_session()"].concat()),
-        "AgentChatMentionPopupWindow::render must self-prune when its owner Agent Chat view is gone without reading the owner view during render"
-    );
-    assert!(
-        AGENT_CHAT_VIEW_SOURCE.contains("pub(crate) fn has_active_mention_session(&self) -> bool"),
-        "AgentChatView must expose `has_active_mention_session` so the detached popup can verify owner liveness"
-    );
-
-    // 3. Lifecycle reset paths centralize the close so it cannot be
-    //    skipped by individual surface transitions.
-    assert!(
-        LIFECYCLE_RESET_SOURCE.contains("pub(crate) fn close_floating_popups_for_owner_loss",)
-            && LIFECYCLE_RESET_SOURCE.contains(
-                "crate::ai::agent_chat::ui::picker_popup::close_mention_popup_window(cx);"
-            )
-            && LIFECYCLE_RESET_SOURCE
-                .contains("self.menu_syntax_trigger_popup_state = Default::default();",),
-        "lifecycle_reset must expose `close_floating_popups_for_owner_loss` that closes the Agent Chat @ picker and clears the main-owned menu-syntax trigger picker"
-    );
-    for caller in [
-        "close_and_reset_window",
-        "hide_main_window_preserving_state_for_focus_loss",
-    ] {
-        let start = LIFECYCLE_RESET_SOURCE
-            .find(caller)
-            .unwrap_or_else(|| panic!("missing lifecycle entry: {caller}"));
-        let body = &LIFECYCLE_RESET_SOURCE[start..LIFECYCLE_RESET_SOURCE.len().min(start + 1500)];
-        assert!(
-            body.contains("close_floating_popups_for_owner_loss"),
-            "{caller} must close detached popup windows before tearing down the owner surface"
-        );
-    }
-    assert!(
-        REGISTRIES_STATE_SOURCE
-            .contains("self.close_floating_popups_for_owner_loss(\"reset_to_script_list\", cx);",),
-        "reset_to_script_list must close detached popup windows so they cannot survive a return to the main script list"
-    );
-}
 
 #[test]
 fn agent_chat_transient_trigger_exit_on_empty_composer() {

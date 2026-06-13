@@ -51,7 +51,7 @@ pub(crate) struct AppChromeColors {
     /// Low-opacity card/field border matching form-field whisper chrome.
     pub whisper_border_rgba: u32,
     /// Dialog surface with vibrancy-aware opacity floor — use for all popup
-    /// windows (actions dialog, slash picker, mention picker) so they share
+    /// windows (actions dialog, slash picker, composer picker) so they share
     /// the same apparent background density.
     pub popup_surface_rgba: u32,
     /// Footer-matching ultra-low-opacity surface for inline dropdowns.

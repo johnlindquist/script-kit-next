@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 
 /**
- * DevTools proof: Agent Chat @file mention picker accepts a file row as @file:<basename.ext>.
+ * DevTools proof: Agent Chat @file composer picker accepts a file row as @file:<basename.ext>.
  *
  * Usage:
  *   bun scripts/devtools/agent_chat-mention.ts verify --session <name> [--start] [--file CLAUDE.md]

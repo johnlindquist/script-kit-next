@@ -515,7 +515,7 @@ enum AutomationReadTarget {
         info: crate::protocol::AutomationWindowInfo,
         entity: gpui::Entity<crate::actions::ActionsDialog>,
     },
-    /// Prompt popup (mention picker, history popup, or confirm dialog).
+    /// Prompt popup (composer picker, history popup, or confirm dialog).
     PromptPopup {
         info: crate::protocol::AutomationWindowInfo,
     },
@@ -823,11 +823,10 @@ fn resolve_automation_read_target(
             }
         }
         crate::protocol::AutomationWindowKind::PromptPopup => {
-            // PromptPopup is a union of mention picker, history popup, and confirm dialog.
+            // PromptPopup is a union of composer picker, history popup, and confirm dialog.
             // We verify at least one popup is open. The specific sub-type is detected at
             // batch-execution time since the popup could change between resolution and use.
-            let any_open = crate::ai::agent_chat::ui::picker_popup::is_mention_popup_window_open()
-                || crate::ai::agent_chat::ui::history_popup::is_history_popup_window_open()
+            let any_open = crate::ai::agent_chat::ui::history_popup::is_history_popup_window_open()
                 || crate::confirm::is_confirm_popup_window_open();
             if any_open {
                 tracing::info!(
@@ -7260,10 +7259,6 @@ impl ScriptListApp {
                                 protocol::BatchCommand::SelectByValue { value, submit: _ } => {
                                     let value = value.clone();
                                     let selected = this.update(cx, |_this, cx| {
-                                        // Try each popup sub-type in priority order
-                                        if let Some(v) = crate::ai::agent_chat::ui::picker_popup::batch_select_mention_item_by_value(&value, cx) {
-                                            return Some(v);
-                                        }
                                         if let Some(v) = crate::confirm::batch_select_confirm_button_by_value(&value, cx) {
                                             return Some(v);
                                         }
@@ -7311,9 +7306,6 @@ impl ScriptListApp {
                             protocol::BatchCommand::SelectBySemanticId { semantic_id, submit: _ } => {
                                 let semantic_id = semantic_id.clone();
                                 let selected = this.update(cx, |_this, cx| {
-                                        if let Some(v) = crate::ai::agent_chat::ui::picker_popup::batch_select_mention_item_by_semantic_id(&semantic_id, cx) {
-                                            return Some(v);
-                                        }
                                         if let Some(v) = crate::confirm::batch_select_confirm_button_by_semantic_id(&semantic_id, cx) {
                                             return Some(v);
                                         }

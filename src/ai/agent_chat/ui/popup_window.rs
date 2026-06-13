@@ -8,10 +8,10 @@
 //! This file remains as a thin compatibility facade: every `DENSE_PICKER_*`
 //! / `dense_picker_*` / `popup_*` name historically exposed by this module is
 //! re-exported from the shared implementation under the same Agent Chat-specific
-//! alias, so existing Agent Chat call sites in `picker_popup.rs`,
-//! `history_popup.rs`, `view.rs`, and the source-
-//! text audit tests in `src/ai/agent_chat/ui/tests.rs` all continue to compile without
-//! edits. Add the Agent Chat-flavored `dense_picker_height(item_count)` convenience
+//! alias, so existing Agent Chat call sites in `history_popup.rs`, `view.rs`,
+//! and the source-text audit tests in `src/ai/agent_chat/ui/tests.rs` all
+//! continue to compile without edits. Add the Agent Chat-flavored
+//! `dense_picker_height(item_count)` convenience
 //! on top so callers can keep passing a bare item count and get
 //! `CONTEXT_SELECTOR_ROW_HEIGHT` applied automatically.
 
