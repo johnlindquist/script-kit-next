@@ -135,6 +135,7 @@ pub(crate) fn open_or_focus_chat_with_input(
                 initial_input: Some(input),
                 initial_context_parts: Vec::new(),
                 display_name: pi_launch.profile.name.clone().into(),
+                profile_id: pi_launch.profile.id.clone(),
                 profile_display_name: Some(pi_launch.profile.name.clone().into()),
                 profile_icon_name: pi_launch.profile.icon_name.clone(),
                 selected_agent: None,

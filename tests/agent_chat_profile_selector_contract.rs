@@ -130,7 +130,7 @@ fn bare_pipe_stays_in_main_menu_search_for_profile_rows() {
 fn spine_profile_submission_persists_pi_profile_before_launch() {
     let body = fn_body(
         TAB_AI_MODE_SOURCE,
-        "pub(crate) fn try_submit_spine_prompt_plan_from_enter(",
+        "pub(crate) fn try_submit_spine_prompt_plan_from_parse_with_aliases(",
     );
     assert!(body.contains("persist_agent_chat_profile_selection"));
     assert!(body.contains("save_user_preferences(&prefs)"));

@@ -193,6 +193,8 @@ pub(crate) struct AgentChatThreadInit {
     pub initial_context_parts: Vec<crate::ai::message_parts::AiContextPart>,
     /// Display name for the agent (shown in toolbar, e.g. "Claude Code").
     pub display_name: SharedString,
+    /// Stable identifier for the selected Agent Chat profile.
+    pub profile_id: String,
     /// Display name for the selected Agent Chat profile (shown beside model).
     pub profile_display_name: Option<SharedString>,
     /// Icon name for the selected Agent Chat profile.
@@ -236,6 +238,15 @@ struct ResolvedPendingContext {
 struct PreparedTurnBlocks {
     blocks: Vec<ContentBlock>,
     receipt: Option<crate::ai::message_parts::ContextResolutionReceipt>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct CompletedChatTurnIngest {
+    thread_id: String,
+    turn_index: usize,
+    user_text: String,
+    assistant_text: String,
+    trace_label: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -368,6 +379,8 @@ pub(crate) struct AgentChatThread {
     selected_model_id: Option<String>,
     /// Display name for the selected model.
     selected_model_display_name: Option<SharedString>,
+    /// Stable identifier for the selected Agent Chat profile.
+    profile_id: String,
     /// Display name for the selected Agent Chat profile.
     profile_display_name: Option<SharedString>,
     /// Icon name for the selected Agent Chat profile.
@@ -399,6 +412,7 @@ impl AgentChatThread {
             ui_thread_id: init.ui_thread_id,
             cwd: init.cwd,
             display_name: init.display_name,
+            profile_id: init.profile_id,
             messages: Vec::new(),
             input: match init.initial_input {
                 Some(text) if !text.is_empty() => TextInputState::with_text(text),
@@ -1262,34 +1276,48 @@ impl AgentChatThread {
         self.prepare_turn_blocks_with_receipt(input).blocks
     }
 
+    fn should_stage_brain_recall(&self) -> bool {
+        self.profile_id == crate::ai::agent_chat::profiles::BUILTIN_BRAIN_PROFILE_ID
+    }
+
     /// Build the content blocks for a turn AND return the resolution receipt
     /// so callers can surface partial-failure feedback.
     fn prepare_turn_blocks_with_receipt(&mut self, input: &str) -> PreparedTurnBlocks {
+        self.prepare_turn_blocks_with_receipt_using(
+            input,
+            |query| crate::brain::recall_context_block(query).ok().flatten(),
+            crate::brain::record_ask_signals,
+        )
+    }
+
+    fn prepare_turn_blocks_with_receipt_using<R, S>(
+        &mut self,
+        input: &str,
+        recall_context: R,
+        record_ask_signals: S,
+    ) -> PreparedTurnBlocks
+    where
+        R: FnOnce(&str) -> Option<String>,
+        S: FnOnce(&str),
+    {
         let mut blocks = Vec::new();
 
-        // --- Brain recall: stage relevant local memory on every turn ---
+        // --- Brain recall: stage relevant local memory for the Brain profile ---
         // Lexical + attention-signal retrieval over the brain store (notes,
         // past chat turns). Milliseconds on sqlite; hard-capped output so it
         // can never crowd a prompt. Empty recall stages nothing.
-        //
-        // Skipped in unit-test builds: the brain caches one process-wide
-        // sqlite connection at first access, so test runs would otherwise
-        // read recall from (and write ask-signals into) the developer's real
-        // `~/.scriptkit/db/brain.sqlite`, making every turn-block count
-        // assertion nondeterministic. Brain recall behavior is covered by
-        // `crate::brain::tests` against `SCRIPT_KIT_TEST_BRAIN_DB_PATH`.
-        #[cfg(not(test))]
-        {
-            let brain_block = crate::brain::recall_context_block(input).ok().flatten();
+        if self.should_stage_brain_recall() {
+            let brain_block = recall_context(input);
             if let Some(recall) = brain_block {
                 tracing::info!(
                     target: "script_kit::brain",
                     event = "agent_chat_brain_recall_staged",
+                    profile_id = %self.profile_id,
                     chars = recall.len(),
                 );
                 blocks.push(ContentBlock::Text(TextContent::new(recall)));
             }
-            crate::brain::record_ask_signals(input);
+            record_ask_signals(input);
         }
 
         if let Some(turn) = self.take_pending_context_for_turn() {
@@ -1332,6 +1360,46 @@ impl AgentChatThread {
             blocks,
             receipt: None,
         }
+    }
+
+    fn completed_chat_turn_ingest(
+        &self,
+        history_trace_label: Option<String>,
+    ) -> Option<CompletedChatTurnIngest> {
+        let user_text = self
+            .messages
+            .iter()
+            .rev()
+            .find(|m| matches!(m.role, AgentChatThreadMessageRole::User))
+            .map(|m| m.body.to_string())?;
+        let assistant_text = self
+            .messages
+            .iter()
+            .rev()
+            .find(|m| matches!(m.role, AgentChatThreadMessageRole::Assistant))
+            .map(|m| m.body.to_string())
+            .unwrap_or_default();
+        let trace_label = history_trace_label.unwrap_or_else(|| {
+            self.messages
+                .iter()
+                .find(|m| matches!(m.role, AgentChatThreadMessageRole::User))
+                .map(|m| m.body.to_string())
+                .unwrap_or_default()
+        });
+        let turn_index = self
+            .messages
+            .iter()
+            .filter(|m| matches!(m.role, AgentChatThreadMessageRole::User))
+            .count()
+            .saturating_sub(1);
+
+        Some(CompletedChatTurnIngest {
+            thread_id: self.ui_thread_id.clone(),
+            turn_index,
+            user_text,
+            assistant_text,
+            trace_label,
+        })
     }
 
     /// Update `context_bootstrap_note` with a partial-failure summary when
@@ -1657,47 +1725,19 @@ impl AgentChatThread {
                 // The last user/assistant exchange is written into the brain
                 // store (hash-guarded, idempotent) on a background thread so
                 // future turns — in any thread — can recall it.
-                let last_user = self
-                    .messages
-                    .iter()
-                    .rev()
-                    .find(|m| matches!(m.role, AgentChatThreadMessageRole::User))
-                    .map(|m| m.body.to_string());
-                let last_assistant = self
-                    .messages
-                    .iter()
-                    .rev()
-                    .find(|m| matches!(m.role, AgentChatThreadMessageRole::Assistant))
-                    .map(|m| m.body.to_string());
-                if let Some(user_text) = last_user {
-                    let assistant_text = last_assistant.unwrap_or_default();
-                    let thread_id = self.ui_thread_id.clone();
-                    // Thread title when history has one; otherwise first user snippet.
-                    let trace_label = history_trace_label.unwrap_or_else(|| {
-                        self.messages
-                            .iter()
-                            .find(|m| matches!(m.role, AgentChatThreadMessageRole::User))
-                            .map(|m| m.body.to_string())
-                            .unwrap_or_default()
-                    });
-                    let turn_index = self
-                        .messages
-                        .iter()
-                        .filter(|m| matches!(m.role, AgentChatThreadMessageRole::User))
-                        .count()
-                        .saturating_sub(1);
+                if let Some(payload) = self.completed_chat_turn_ingest(history_trace_label) {
                     let _ = std::thread::Builder::new()
                         .name("script-kit-brain-ingest".to_string())
                         .spawn(move || {
                             crate::brain::day_trace::maybe_append_agent_chat_trace(
-                                &thread_id,
-                                &trace_label,
+                                &payload.thread_id,
+                                &payload.trace_label,
                             );
                             if let Err(error) = crate::brain::ingest_chat_turn(
-                                &thread_id,
-                                turn_index,
-                                &user_text,
-                                &assistant_text,
+                                &payload.thread_id,
+                                payload.turn_index,
+                                &payload.user_text,
+                                &payload.assistant_text,
                             ) {
                                 tracing::debug!(
                                     target: "script_kit::brain",
@@ -2235,10 +2275,12 @@ impl AgentChatThread {
 
     pub(crate) fn set_profile_display(
         &mut self,
+        profile_id: String,
         profile_display_name: SharedString,
         profile_icon_name: Option<String>,
         cx: &mut Context<Self>,
     ) {
+        self.profile_id = profile_id;
         self.profile_display_name = Some(profile_display_name);
         self.profile_icon_name = profile_icon_name;
         cx.notify();
@@ -3117,6 +3159,7 @@ impl AgentChatThread {
             ui_thread_id: "test-thread".to_string(),
             cwd: PathBuf::from("/tmp/test"),
             display_name: "Test Agent".into(),
+            profile_id: crate::ai::agent_chat::profiles::BUILTIN_GENERAL_PROFILE_ID.to_string(),
             messages: Vec::new(),
             input: match initial_input {
                 Some(text) if !text.is_empty() => TextInputState::with_text(text),
@@ -3450,6 +3493,18 @@ mod tests {
         pending_context_blocks: Vec<ContentBlock>,
         pending_context_consumed: bool,
     ) -> AgentChatThread {
+        test_thread_with_profile(
+            crate::ai::agent_chat::profiles::BUILTIN_GENERAL_PROFILE_ID,
+            pending_context_blocks,
+            pending_context_consumed,
+        )
+    }
+
+    fn test_thread_with_profile(
+        profile_id: &str,
+        pending_context_blocks: Vec<ContentBlock>,
+        pending_context_consumed: bool,
+    ) -> AgentChatThread {
         let (_perm_tx, perm_rx) = async_channel::bounded(1);
         // We create a dummy connection channel — tests that call prepare_turn_blocks
         // and append_chunk don't need a live connection.
@@ -3462,6 +3517,7 @@ mod tests {
             ui_thread_id: "test-thread".to_string(),
             cwd: PathBuf::from("."),
             display_name: "Test Agent".into(),
+            profile_id: profile_id.to_string(),
             messages: Vec::new(),
             input: TextInputState::new(),
             status: AgentChatThreadStatus::Idle,
@@ -3499,6 +3555,124 @@ mod tests {
             profile_display_name: None,
             profile_icon_name: None,
         }
+    }
+
+    fn block_text(block: &ContentBlock) -> &str {
+        match block {
+            ContentBlock::Text(text) => text.text.as_str(),
+            other => panic!("expected text block, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn brain_profile_prepends_recall_and_records_ask_signal() {
+        let mut thread = test_thread_with_profile(
+            crate::ai::agent_chat::profiles::BUILTIN_BRAIN_PROFILE_ID,
+            Vec::new(),
+            false,
+        );
+        let signal_calls = std::cell::Cell::new(0);
+
+        let prepared = thread.prepare_turn_blocks_with_receipt_using(
+            "What is the handoff port?",
+            |_| Some("Brain recall\n- [Note] The handoff port is 49217.".to_string()),
+            |_| signal_calls.set(signal_calls.get() + 1),
+        );
+
+        assert_eq!(signal_calls.get(), 1);
+        assert_eq!(prepared.blocks.len(), 2);
+        assert!(block_text(&prepared.blocks[0]).contains("Brain recall"));
+        assert_eq!(
+            block_text(&prepared.blocks[1]),
+            "--- USER REQUEST ---\nWhat is the handoff port?"
+        );
+    }
+
+    #[test]
+    fn non_brain_profile_does_not_call_recall_or_record_ask_signal() {
+        let mut thread = test_thread_with_profile(
+            crate::ai::agent_chat::profiles::BUILTIN_GENERAL_PROFILE_ID,
+            Vec::new(),
+            false,
+        );
+
+        let prepared = thread.prepare_turn_blocks_with_receipt_using(
+            "What is the handoff port?",
+            |_| panic!("non-Brain profile must not read brain recall"),
+            |_| panic!("non-Brain profile must not record brain ask signals"),
+        );
+
+        assert_eq!(prepared.blocks.len(), 1);
+        assert_eq!(block_text(&prepared.blocks[0]), "What is the handoff port?");
+    }
+
+    #[test]
+    fn brain_recall_sits_before_pending_context_and_user_request() {
+        let mut thread = test_thread_with_profile(
+            crate::ai::agent_chat::profiles::BUILTIN_BRAIN_PROFILE_ID,
+            vec![ContentBlock::Text(TextContent::new("staged context"))],
+            false,
+        );
+
+        let prepared = thread.prepare_turn_blocks_with_receipt_using(
+            "Summarize this",
+            |_| Some("Brain recall\n- [Day page] remembered context".to_string()),
+            |_| {},
+        );
+
+        assert_eq!(prepared.blocks.len(), 3);
+        assert!(block_text(&prepared.blocks[0]).starts_with("Brain recall"));
+        assert_eq!(block_text(&prepared.blocks[1]), "staged context");
+        assert_eq!(
+            block_text(&prepared.blocks[2]),
+            "--- USER REQUEST ---\nSummarize this"
+        );
+    }
+
+    #[test]
+    fn completed_turn_ingest_payload_uses_latest_turn_and_stable_index() {
+        let mut thread = test_thread(Vec::new(), false);
+        thread.push_message(AgentChatThreadMessageRole::User, "first ask");
+        thread.push_message(AgentChatThreadMessageRole::Assistant, "first answer");
+        thread.push_message(AgentChatThreadMessageRole::User, "second ask");
+        thread.push_message(AgentChatThreadMessageRole::Assistant, "second answer");
+
+        let payload = thread
+            .completed_chat_turn_ingest(Some("History Title".to_string()))
+            .expect("completed turn should produce ingest payload");
+
+        assert_eq!(payload.thread_id, "test-thread");
+        assert_eq!(payload.turn_index, 1);
+        assert_eq!(payload.user_text, "second ask");
+        assert_eq!(payload.assistant_text, "second answer");
+        assert_eq!(payload.trace_label, "History Title");
+
+        let fallback = thread
+            .completed_chat_turn_ingest(None)
+            .expect("completed turn should produce fallback ingest payload");
+        assert_eq!(fallback.trace_label, "first ask");
+    }
+
+    #[test]
+    fn completed_turn_ingest_payload_is_not_brain_profile_gated() {
+        let mut thread = test_thread_with_profile(
+            crate::ai::agent_chat::profiles::BUILTIN_GENERAL_PROFILE_ID,
+            Vec::new(),
+            false,
+        );
+        thread.push_message(AgentChatThreadMessageRole::User, "general profile ask");
+        thread.push_message(
+            AgentChatThreadMessageRole::Assistant,
+            "general profile answer",
+        );
+
+        let payload = thread
+            .completed_chat_turn_ingest(None)
+            .expect("all completed Agent Chat turns should become memory");
+
+        assert_eq!(payload.turn_index, 0);
+        assert_eq!(payload.user_text, "general profile ask");
+        assert_eq!(payload.assistant_text, "general profile answer");
     }
 
     #[test]

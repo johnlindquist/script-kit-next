@@ -857,6 +857,41 @@ pub fn generated_legacy_profile_id(name: &str) -> String {
 }
 
 #[cfg(test)]
+mod built_in_profile_tests {
+    use super::*;
+
+    #[test]
+    fn only_brain_profile_prompt_contract_mentions_brain_recall() {
+        let ctx = AgentChatProfileContext {
+            kit_path: std::path::PathBuf::from("/tmp/script-kit-profile-test"),
+        };
+        let brain = built_in_brain_profile(&ctx);
+        let general = built_in_general_profile(&ctx);
+        let script_kit = built_in_script_kit_profile(&ctx);
+        let text = built_in_text_profile(&ctx);
+
+        assert!(
+            brain
+                .append_system_prompt
+                .as_deref()
+                .is_some_and(|prompt| prompt.contains("Brain recall")),
+            "Brain profile must describe the recall block it receives"
+        );
+        for profile in [general, script_kit, text] {
+            assert!(
+                !profile
+                    .append_system_prompt
+                    .as_deref()
+                    .unwrap_or_default()
+                    .contains("Brain recall"),
+                "{} profile must not claim a Brain recall contract",
+                profile.name
+            );
+        }
+    }
+}
+
+#[cfg(test)]
 mod plugin_profile_cache_tests {
     use super::*;
     use std::path::Path;

@@ -221,6 +221,8 @@ impl ScriptListApp {
                     initial_input: instruction.clone(),
                     initial_context_parts: Vec::new(),
                     display_name: "Text".into(),
+                    profile_id: crate::ai::agent_chat::profiles::BUILTIN_TEXT_PROFILE_ID
+                        .to_string(),
                     profile_display_name: Some("Text".into()),
                     profile_icon_name: None,
                     selected_agent: None,

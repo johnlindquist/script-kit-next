@@ -698,6 +698,10 @@ pub(crate) fn embed_pending_with(
 /// Ingest one chat turn into the brain (called post-turn from Agent Chat).
 /// `thread_id` + `turn_index` form the stable identity; re-ingesting the same
 /// turn is a no-op thanks to hash guards.
+pub(crate) fn chat_turn_source_id(thread_id: &str, turn_index: usize) -> String {
+    format!("{thread_id}#{turn_index}")
+}
+
 pub fn ingest_chat_turn(
     thread_id: &str,
     turn_index: usize,
@@ -712,7 +716,7 @@ pub fn ingest_chat_turn(
     }
     let title: String = user_text.chars().take(80).collect();
     let content = format!("User: {user_text}\n\nAssistant: {assistant_text}");
-    let source_id = format!("{thread_id}#{turn_index}");
+    let source_id = chat_turn_source_id(thread_id, turn_index);
     let now = chrono::Utc::now().timestamp();
     store::upsert_doc(DocSource::ChatTurn, &source_id, &title, &content, now)?;
     // The user's own words are the strongest attention signal we have.

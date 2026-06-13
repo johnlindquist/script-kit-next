@@ -468,6 +468,14 @@ fn chat_turn_ingestion_is_idempotent_and_searchable() {
 }
 
 #[test]
+fn chat_turn_source_id_format_is_stable() {
+    assert_eq!(
+        super::indexer::chat_turn_source_id("thread-x", 2),
+        "thread-x#2"
+    );
+}
+
+#[test]
 fn retain_docs_forgets_deleted_sources() {
     let _db = init_test_db();
     // Uses the Clipboard source to cover deletion sync without coupling this

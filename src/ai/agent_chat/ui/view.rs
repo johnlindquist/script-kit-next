@@ -1207,6 +1207,7 @@ impl AgentChatView {
 
     pub(crate) fn set_profile_display(
         &mut self,
+        profile_id: String,
         profile_display_name: String,
         profile_icon_name: Option<String>,
         cx: &mut Context<Self>,
@@ -1221,7 +1222,12 @@ impl AgentChatView {
         }
 
         self.live_thread().update(cx, |thread, cx| {
-            thread.set_profile_display(profile_display_name.into(), profile_icon_name, cx);
+            thread.set_profile_display(
+                profile_id,
+                profile_display_name.into(),
+                profile_icon_name,
+                cx,
+            );
         });
         cx.notify();
     }

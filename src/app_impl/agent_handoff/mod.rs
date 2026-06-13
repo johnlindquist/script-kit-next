@@ -266,7 +266,12 @@ impl ScriptListApp {
             }
 
             entity.update(cx, |view, cx| {
-                view.set_profile_display(profile.name.clone(), profile.icon_name.clone(), cx);
+                view.set_profile_display(
+                    profile.id.clone(),
+                    profile.name.clone(),
+                    profile.icon_name.clone(),
+                    cx,
+                );
             });
             cx.notify();
             return;

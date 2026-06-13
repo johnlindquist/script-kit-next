@@ -55,6 +55,8 @@ impl ScriptListApp {
                     initial_input: Some("Fixture follow-up".to_string()),
                     initial_context_parts: Vec::new(),
                     display_name: "Agent Chat".into(),
+                    profile_id:
+                        crate::ai::agent_chat::profiles::BUILTIN_GENERAL_PROFILE_ID.to_string(),
                     profile_display_name: Some("Agent Chat".into()),
                     profile_icon_name: None,
                     selected_agent: None,
@@ -111,6 +113,8 @@ impl ScriptListApp {
                     initial_input: Some("Tweak this kitchen sink transcript.".to_string()),
                     initial_context_parts: Vec::new(),
                     display_name: fixture.title.into(),
+                    profile_id:
+                        crate::ai::agent_chat::profiles::BUILTIN_GENERAL_PROFILE_ID.to_string(),
                     profile_display_name: Some("Agent Chat Kitchen Sink".into()),
                     profile_icon_name: None,
                     selected_agent: None,
@@ -381,6 +385,7 @@ impl ScriptListApp {
                     initial_input: agent_chat_initial_input.clone(),
                     initial_context_parts: Vec::new(),
                     display_name: pi_launch.profile.name.clone().into(),
+                    profile_id: pi_launch.profile.id.clone(),
                     profile_display_name: Some(pi_launch.profile.name.clone().into()),
                     profile_icon_name: pi_launch.profile.icon_name.clone(),
                     selected_agent: None,
