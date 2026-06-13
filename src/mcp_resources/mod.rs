@@ -163,7 +163,7 @@ pub fn get_resource_definitions() -> Vec<McpResource> {
             uri: crate::brain::resources::BRAIN_RESOURCE_URI.to_string(),
             name: "Brain".to_string(),
             description: Some(
-                "Script Kit's local memory. kit://brain for status, kit://brain/recall?q=... for hybrid retrieval over notes and past conversations, kit://brain/signals for recent attention signals."
+                "Script Kit's local memory. kit://brain for status, kit://brain/recall?q=... for hybrid retrieval, add &format=json for source refs, kit://brain/doc?source=...&sourceId=... for one doc, kit://brain/docs?refs=... for batch doc reads, and kit://brain/signals for recent attention signals."
                     .to_string(),
             ),
             mime_type: "application/json".to_string(),
@@ -3644,6 +3644,19 @@ mod tests {
             );
             assert!(resource.description.is_some(), "Should have a description");
         }
+    }
+
+    #[test]
+    fn brain_resource_description_lists_provenance_reads() {
+        let resources = get_resource_definitions();
+        let brain = resources
+            .iter()
+            .find(|resource| resource.uri == "kit://brain")
+            .expect("brain resource definition");
+        let description = brain.description.as_deref().unwrap_or("");
+        assert!(description.contains("format=json"));
+        assert!(description.contains("kit://brain/doc"));
+        assert!(description.contains("kit://brain/docs"));
     }
 
     #[test]

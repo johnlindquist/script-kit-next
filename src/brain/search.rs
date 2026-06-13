@@ -5,9 +5,11 @@
 //! catches exact terms, semantic search catches meaning, RRF makes them
 //! agree, and signals tilt results toward what John currently cares about.
 
-use super::store::{self, BrainDoc};
+use super::store::{self, BrainDoc, DocSource};
 use anyhow::Result;
+use serde_json::json;
 use std::collections::HashMap;
+use std::fmt::Write as _;
 
 const RRF_K: f64 = 60.0;
 const SIGNAL_WINDOW: usize = 200;
@@ -17,6 +19,85 @@ const SIGNAL_BOOST: f64 = 0.05;
 pub struct BrainHit {
     pub doc: BrainDoc,
     pub score: f64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BrainHitSourceRef {
+    pub source: DocSource,
+    pub source_id: String,
+    pub citation_uri: String,
+    pub canonical_path: Option<String>,
+    pub line_start: Option<usize>,
+    pub line_end: Option<usize>,
+}
+
+fn encode_brain_uri_segment(value: &str) -> String {
+    let mut out = String::with_capacity(value.len());
+    for byte in value.bytes() {
+        match byte {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                out.push(byte as char);
+            }
+            _ => {
+                let _ = write!(&mut out, "%{byte:02X}");
+            }
+        }
+    }
+    out
+}
+
+pub fn source_ref_for_doc(doc: &BrainDoc) -> BrainHitSourceRef {
+    let canonical_path = match doc.source {
+        DocSource::DayPage => Some(format!("brain/days/{}.md", doc.source_id)),
+        DocSource::Fragment => Some(format!("brain/fragments/{}.md", doc.source_id)),
+        DocSource::Note => None,
+        DocSource::ChatTurn | DocSource::Clipboard | DocSource::Activity | DocSource::Capture => {
+            None
+        }
+    };
+    let (line_start, line_end) = excerpt_line_range(&doc.content, &excerpt_for_doc(&doc.content));
+    BrainHitSourceRef {
+        source: doc.source,
+        source_id: doc.source_id.clone(),
+        citation_uri: format!(
+            "brain://{}/{}",
+            doc.source.as_str(),
+            encode_brain_uri_segment(&doc.source_id)
+        ),
+        canonical_path,
+        line_start,
+        line_end,
+    }
+}
+
+pub fn excerpt_for_doc(content: &str) -> String {
+    let mut excerpt: String = content.chars().take(700).collect();
+    if content.chars().count() > 700 {
+        excerpt.push_str(" …");
+    }
+    excerpt
+}
+
+pub fn excerpt_line_range(content: &str, excerpt: &str) -> (Option<usize>, Option<usize>) {
+    if content.is_empty() || excerpt.is_empty() {
+        return (None, None);
+    }
+    let excerpt = excerpt.trim_end_matches(" …");
+    let Some(start_byte) = content.find(excerpt) else {
+        return (None, None);
+    };
+    let end_byte = start_byte + excerpt.len();
+    let line_start = content[..start_byte]
+        .bytes()
+        .filter(|byte| *byte == b'\n')
+        .count()
+        + 1;
+    let line_end = content[..end_byte]
+        .bytes()
+        .filter(|byte| *byte == b'\n')
+        .count()
+        + 1;
+    (Some(line_start), Some(line_end.max(line_start)))
 }
 
 /// Rank documents for `query`. `query_vec` is the embedded query (None =>
@@ -151,6 +232,10 @@ pub fn brain_search(
 /// Render hits as a compact markdown context block for agent prompts.
 /// Hard-capped so retrieval can never blow out a prompt.
 pub fn render_context_block(hits: &[BrainHit], max_chars: usize) -> String {
+    render_context_block_with_provenance(hits, max_chars)
+}
+
+pub fn render_context_block_with_provenance(hits: &[BrainHit], max_chars: usize) -> String {
     if hits.is_empty() {
         return String::new();
     }
@@ -164,14 +249,25 @@ pub fn render_context_block(hits: &[BrainHit], max_chars: usize) -> String {
         } else {
             hit.doc.title.trim()
         };
-        let mut excerpt: String = hit.doc.content.chars().take(700).collect();
-        if hit.doc.content.chars().count() > 700 {
-            excerpt.push_str(" …");
-        }
+        let excerpt = excerpt_for_doc(&hit.doc.content);
+        let source_ref = source_ref_for_doc(&hit.doc);
+        let line_text = match (source_ref.line_start, source_ref.line_end) {
+            (Some(start), Some(end)) => format!(" · lines: {start}-{end}"),
+            _ => String::new(),
+        };
+        let path_text = source_ref
+            .canonical_path
+            .as_ref()
+            .map(|path| format!(" · path: {path}"))
+            .unwrap_or_default();
         let entry = format!(
-            "### [{}] {}\n{}\n\n",
+            "### [{}] {}\nSource: {}{}{} · updated: {}\n{}\n\n",
             hit.doc.source.label(),
             title,
+            source_ref.citation_uri,
+            line_text,
+            path_text,
+            hit.doc.updated_at,
             excerpt.trim()
         );
         if out.len() + entry.len() > max_chars {
@@ -180,4 +276,29 @@ pub fn render_context_block(hits: &[BrainHit], max_chars: usize) -> String {
         out.push_str(&entry);
     }
     out
+}
+
+pub fn recall_hits_json(query: &str, hits: &[BrainHit]) -> serde_json::Value {
+    json!({
+        "schemaVersion": 1,
+        "query": query,
+        "hits": hits
+            .iter()
+            .map(|hit| {
+                let source_ref = source_ref_for_doc(&hit.doc);
+                json!({
+                    "source": hit.doc.source.as_str(),
+                    "sourceId": &hit.doc.source_id,
+                    "title": &hit.doc.title,
+                    "score": hit.score,
+                    "updatedAt": hit.doc.updated_at,
+                    "citationUri": source_ref.citation_uri,
+                    "canonicalPath": source_ref.canonical_path,
+                    "lineStart": source_ref.line_start,
+                    "lineEnd": source_ref.line_end,
+                    "excerpt": excerpt_for_doc(&hit.doc.content),
+                })
+            })
+            .collect::<Vec<_>>()
+    })
 }

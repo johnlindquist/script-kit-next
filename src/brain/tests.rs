@@ -783,6 +783,163 @@ fn brain_recall_resource_reads_file_derived_day_page() {
 }
 
 #[test]
+fn brain_recall_json_resource_reports_source_refs() {
+    let _db = init_test_db();
+    store::upsert_doc(
+        DocSource::Note,
+        "source-ref-note",
+        "Source ref note",
+        "The source-ref recall token is SR-49217.\nSecond line for range proof.",
+        100,
+    )
+    .unwrap();
+
+    let (mime, body) = super::resources::read_brain_resource(
+        "kit://brain/recall?q=source-ref%20SR-49217&format=json",
+    )
+    .expect("brain recall json resource");
+    assert_eq!(mime, "application/json");
+    let value: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(value["schemaVersion"], 1);
+    let hit = value["hits"]
+        .as_array()
+        .expect("hits array")
+        .iter()
+        .find(|hit| hit["sourceId"] == "source-ref-note")
+        .expect("source ref hit");
+    assert_eq!(hit["source"], "note");
+    assert_eq!(hit["citationUri"], "brain://note/source-ref-note");
+    assert!(hit["lineStart"].as_u64().unwrap_or_default() >= 1);
+    assert!(hit["lineEnd"].as_u64().unwrap_or_default() >= 1);
+    assert!(hit["excerpt"].as_str().unwrap().contains("SR-49217"));
+}
+
+#[test]
+fn brain_doc_resource_gets_by_source_id_and_line_range() {
+    let _db = init_test_db();
+    store::upsert_doc(
+        DocSource::DayPage,
+        "2026-06-15",
+        "Day Page 2026-06-15",
+        "line one\nline two has DOC-8841\nline three has DOC-8842\nline four",
+        200,
+    )
+    .unwrap();
+
+    let (mime, body) = super::resources::read_brain_resource(
+        "kit://brain/doc?source=day_page&sourceId=2026-06-15&lines=2-3&format=json",
+    )
+    .expect("brain doc json resource");
+    assert_eq!(mime, "application/json");
+    let value: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(value["schemaVersion"], 1);
+    assert_eq!(value["doc"]["source"], "day_page");
+    assert_eq!(value["doc"]["sourceId"], "2026-06-15");
+    assert_eq!(value["doc"]["citationUri"], "brain://day_page/2026-06-15");
+    assert_eq!(value["doc"]["canonicalPath"], "brain/days/2026-06-15.md");
+    assert_eq!(value["doc"]["lineStart"], 2);
+    assert_eq!(value["doc"]["lineEnd"], 3);
+    let content = value["doc"]["content"].as_str().unwrap();
+    assert!(!content.contains("line one"));
+    assert!(content.contains("DOC-8841"));
+    assert!(content.contains("DOC-8842"));
+    assert!(!content.contains("line four"));
+}
+
+#[test]
+fn brain_doc_resource_rejects_invalid_line_range_without_body_leak() {
+    let _db = init_test_db();
+    store::upsert_doc(
+        DocSource::DayPage,
+        "2026-06-16",
+        "Day Page 2026-06-16",
+        "private line one\nprivate line two SECRET-DOC-8843",
+        210,
+    )
+    .unwrap();
+
+    let error = super::resources::read_brain_resource(
+        "kit://brain/doc?source=day_page&sourceId=2026-06-16&lines=0-2&format=json",
+    )
+    .expect_err("invalid line range should fail closed");
+    assert!(error.contains("invalid kit://brain/doc lines parameter"));
+    assert!(!error.contains("SECRET-DOC-8843"));
+}
+
+#[test]
+fn brain_doc_resource_keeps_source_id_raw_but_encodes_citation_uri() {
+    let _db = init_test_db();
+    let source_id = "thread x#2/part";
+    store::upsert_doc(
+        DocSource::ChatTurn,
+        source_id,
+        "Thread source ref",
+        "chat turn body with encoded citation proof",
+        220,
+    )
+    .unwrap();
+
+    let (mime, body) = super::resources::read_brain_resource(
+        "kit://brain/doc?source=chat_turn&sourceId=thread%20x%232%2Fpart&format=json",
+    )
+    .expect("brain doc json resource");
+    assert_eq!(mime, "application/json");
+    let value: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(value["doc"]["sourceId"], source_id);
+    assert_eq!(
+        value["doc"]["citationUri"],
+        "brain://chat_turn/thread%20x%232%2Fpart"
+    );
+}
+
+#[test]
+fn brain_multi_get_resource_preserves_order_and_missing_receipts() {
+    let _db = init_test_db();
+    store::upsert_doc(DocSource::Note, "multi-a", "Multi A", "alpha token", 100).unwrap();
+    store::upsert_doc(DocSource::Fragment, "multi-b", "Multi B", "beta token", 200).unwrap();
+
+    let (mime, body) = super::resources::read_brain_resource(
+        "kit://brain/docs?refs=fragment:multi-b,note:multi-a,note:missing",
+    )
+    .expect("brain docs resource");
+    assert_eq!(mime, "application/json");
+    let value: serde_json::Value = serde_json::from_str(&body).unwrap();
+    let docs = value["docs"].as_array().expect("docs array");
+    assert_eq!(docs.len(), 3);
+    assert_eq!(docs[0]["ref"], "fragment:multi-b");
+    assert_eq!(docs[0]["found"], true);
+    assert_eq!(docs[0]["doc"]["source"], "fragment");
+    assert_eq!(docs[1]["ref"], "note:multi-a");
+    assert_eq!(docs[1]["found"], true);
+    assert_eq!(docs[1]["doc"]["source"], "note");
+    assert_eq!(docs[2]["ref"], "note:missing");
+    assert_eq!(docs[2]["found"], false);
+    assert_eq!(docs[2]["error"], "not_found");
+}
+
+#[test]
+fn brain_context_block_includes_source_refs_without_private_status_dump() {
+    let _db = init_test_db();
+    store::upsert_doc(
+        DocSource::Fragment,
+        "context-ref-fragment",
+        "Context ref fragment",
+        "The context-ref proof token is CR-2771.",
+        300,
+    )
+    .unwrap();
+
+    let block = super::recall_context_block("context-ref proof token")
+        .expect("recall context")
+        .expect("context block");
+    assert!(block.contains("Source: brain://fragment/context-ref-fragment"));
+    assert!(block.contains("path: brain/fragments/context-ref-fragment.md"));
+    assert!(block.contains("lines: 1-1"));
+    assert!(!block.contains("/Users/"));
+    assert!(!block.contains(".scriptkit/db/brain.sqlite"));
+}
+
+#[test]
 fn inbox_insert_dedupes_resolves_and_orders() {
     let _db = init_test_db();
     let first = inbox::insert_inbox_item(
