@@ -42,6 +42,7 @@ fn doc(id: i64, title: &str, content: &str) -> BrainDoc {
         source_id: id.to_string(),
         title: title.to_string(),
         content: content.to_string(),
+        canonical_path: None,
         updated_at: 0,
     }
 }
@@ -785,12 +786,13 @@ fn brain_recall_resource_reads_file_derived_day_page() {
 #[test]
 fn brain_recall_json_resource_reports_source_refs() {
     let _db = init_test_db();
-    store::upsert_doc(
+    store::upsert_doc_with_canonical_path(
         DocSource::Note,
         "source-ref-note",
         "Source ref note",
         "The source-ref recall token is SR-49217.\nSecond line for range proof.",
         100,
+        Some("brain/notes/source-ref-note.md"),
     )
     .unwrap();
 
@@ -809,9 +811,50 @@ fn brain_recall_json_resource_reports_source_refs() {
         .expect("source ref hit");
     assert_eq!(hit["source"], "note");
     assert_eq!(hit["citationUri"], "brain://note/source-ref-note");
+    assert_eq!(hit["canonicalPath"], "brain/notes/source-ref-note.md");
     assert!(hit["lineStart"].as_u64().unwrap_or_default() >= 1);
     assert!(hit["lineEnd"].as_u64().unwrap_or_default() >= 1);
     assert!(hit["excerpt"].as_str().unwrap().contains("SR-49217"));
+}
+
+#[test]
+fn brain_recall_json_resource_reports_file_derived_note_canonical_path() {
+    let _db = init_test_db();
+    let tmp = tempfile::TempDir::new().expect("tempdir");
+    let substrate = test_substrate(&tmp.path().join("brain"));
+    let now = chrono::Utc.with_ymd_and_hms(2026, 6, 17, 12, 0, 0).unwrap();
+    let note_id = NoteId::parse("11111111-1111-4111-8111-111111111111").unwrap();
+    let note_frontmatter = BrainFrontmatter::new(note_id, now, now);
+    substrate
+        .write_document(
+            &substrate.paths().note_file("provenance-note"),
+            &note_frontmatter,
+            "# Provenance note\n\nThe qmd note path token is NOTE-PATH-8841.\nSecond line.",
+        )
+        .expect("write canonical note");
+
+    sync_notes_with_substrate(&substrate).expect("sync canonical note");
+
+    let (mime, body) =
+        super::resources::read_brain_resource("kit://brain/recall?q=NOTE-PATH-8841&format=json")
+            .expect("brain recall json resource");
+    assert_eq!(mime, "application/json");
+    let value: serde_json::Value = serde_json::from_str(&body).unwrap();
+    let hit = value["hits"]
+        .as_array()
+        .expect("hits array")
+        .iter()
+        .find(|hit| hit["sourceId"] == note_id.to_string())
+        .expect("file-derived note hit");
+    assert_eq!(hit["source"], "note");
+    assert_eq!(hit["citationUri"], format!("brain://note/{note_id}"));
+    assert_eq!(hit["canonicalPath"], "brain/notes/provenance-note.md");
+    assert!(hit["lineStart"].as_u64().unwrap_or_default() >= 1);
+    assert!(hit["lineEnd"].as_u64().unwrap_or_default() >= 1);
+    assert!(hit["excerpt"].as_str().unwrap().contains("NOTE-PATH-8841"));
+    let metadata = serde_json::to_string(hit).unwrap();
+    assert!(!metadata.contains("/Users/"));
+    assert!(!metadata.contains(".scriptkit/db/brain.sqlite"));
 }
 
 #[test]
@@ -844,6 +887,35 @@ fn brain_doc_resource_gets_by_source_id_and_line_range() {
     assert!(content.contains("DOC-8841"));
     assert!(content.contains("DOC-8842"));
     assert!(!content.contains("line four"));
+
+    store::upsert_doc_with_canonical_path(
+        DocSource::Note,
+        "doc-note",
+        "Doc Note",
+        "note line one\nnote line two has DOC-NOTE-8841\nnote line three",
+        201,
+        Some("brain/notes/doc-note.md"),
+    )
+    .unwrap();
+    let (note_mime, note_body) = super::resources::read_brain_resource(
+        "kit://brain/doc?source=note&sourceId=doc-note&lines=2-2&format=json",
+    )
+    .expect("brain note doc json resource");
+    assert_eq!(note_mime, "application/json");
+    let note_value: serde_json::Value = serde_json::from_str(&note_body).unwrap();
+    assert_eq!(note_value["doc"]["source"], "note");
+    assert_eq!(note_value["doc"]["sourceId"], "doc-note");
+    assert_eq!(note_value["doc"]["citationUri"], "brain://note/doc-note");
+    assert_eq!(
+        note_value["doc"]["canonicalPath"],
+        "brain/notes/doc-note.md"
+    );
+    assert_eq!(note_value["doc"]["lineStart"], 2);
+    assert_eq!(note_value["doc"]["lineEnd"], 2);
+    let note_content = note_value["doc"]["content"].as_str().unwrap();
+    assert!(!note_content.contains("note line one"));
+    assert!(note_content.contains("DOC-NOTE-8841"));
+    assert!(!note_content.contains("note line three"));
 }
 
 #[test]
@@ -895,7 +967,15 @@ fn brain_doc_resource_keeps_source_id_raw_but_encodes_citation_uri() {
 #[test]
 fn brain_multi_get_resource_preserves_order_and_missing_receipts() {
     let _db = init_test_db();
-    store::upsert_doc(DocSource::Note, "multi-a", "Multi A", "alpha token", 100).unwrap();
+    store::upsert_doc_with_canonical_path(
+        DocSource::Note,
+        "multi-a",
+        "Multi A",
+        "alpha token",
+        100,
+        Some("brain/notes/multi-a.md"),
+    )
+    .unwrap();
     store::upsert_doc(DocSource::Fragment, "multi-b", "Multi B", "beta token", 200).unwrap();
 
     let (mime, body) = super::resources::read_brain_resource(
@@ -912,6 +992,7 @@ fn brain_multi_get_resource_preserves_order_and_missing_receipts() {
     assert_eq!(docs[1]["ref"], "note:multi-a");
     assert_eq!(docs[1]["found"], true);
     assert_eq!(docs[1]["doc"]["source"], "note");
+    assert_eq!(docs[1]["doc"]["canonicalPath"], "brain/notes/multi-a.md");
     assert_eq!(docs[2]["ref"], "note:missing");
     assert_eq!(docs[2]["found"], false);
     assert_eq!(docs[2]["error"], "not_found");
@@ -1333,6 +1414,7 @@ struct IndexedDocSnapshot {
     source_id: String,
     title: String,
     content: String,
+    canonical_path: Option<String>,
 }
 
 fn snapshot_doc(source: DocSource, source_id: &str) -> Option<IndexedDocSnapshot> {
@@ -1343,6 +1425,7 @@ fn snapshot_doc(source: DocSource, source_id: &str) -> Option<IndexedDocSnapshot
             source_id: doc.source_id,
             title: doc.title,
             content: doc.content,
+            canonical_path: doc.canonical_path,
         })
 }
 
@@ -1438,6 +1521,10 @@ fn file_sources_sync_day_page_fragment_and_forget_trashed_note() {
         .iter()
         .find(|doc| doc.content.contains("scriptkit://clipboard/entry-t7"))
         .expect("fragment doc indexed with provenance");
+    assert_eq!(
+        fragment_doc.canonical_path.as_deref(),
+        Some(format!("brain/fragments/{}.md", fragment_doc.source_id).as_str())
+    );
     assert!(fragment_doc
         .title
         .contains("scriptkit://clipboard/entry-t7"));
@@ -1446,6 +1533,10 @@ fn file_sources_sync_day_page_fragment_and_forget_trashed_note() {
         .expect("note lookup")
         .expect("note doc");
     assert!(note_doc.content.contains("brain indexer note body"));
+    assert_eq!(
+        note_doc.canonical_path.as_deref(),
+        Some("brain/notes/indexer-note.md")
+    );
 
     substrate.trash(&note_path).expect("trash note");
     sync_notes_with_substrate(&substrate).expect("re-sync notes after trash");
@@ -1527,6 +1618,18 @@ fn brain_rebuild_from_files_restores_day_fragment_and_note_sources() {
     assert!(before[2]
         .content
         .contains("parity body with [[Linked Note]]"));
+    assert_eq!(
+        before[0].canonical_path.as_deref(),
+        Some("brain/days/2026-06-12.md")
+    );
+    assert_eq!(
+        before[1].canonical_path.as_deref(),
+        Some(format!("brain/fragments/{fragment_source_id}.md").as_str())
+    );
+    assert_eq!(
+        before[2].canonical_path.as_deref(),
+        Some("brain/notes/rebuild-note.md")
+    );
     let before_doc_ids = [
         store::get_doc(DocSource::DayPage, &day_source_id)
             .unwrap()

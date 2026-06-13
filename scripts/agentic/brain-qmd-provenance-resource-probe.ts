@@ -19,6 +19,9 @@ const runId = `qmd-provenance-${Date.now().toString(36)}`;
 const dayOne = "2026-06-15";
 const dayTwo = "2026-06-16";
 const dayToken = `${runId}-day-token`;
+const noteId = "11111111-1111-4111-8111-111111111111";
+const noteSlug = "provenance-note";
+const noteToken = `${runId}-note-token`;
 const chatSourceId = "thread x#2/part";
 const encodedChatSourceId = "thread%20x%232%2Fpart";
 const expectedChatCitationUri = "brain://chat_turn/thread%20x%232%2Fpart";
@@ -128,6 +131,28 @@ function seedCanonicalDayPages(brainDir: string) {
   );
 }
 
+function seedCanonicalNotes(brainDir: string) {
+  const notesDir = join(brainDir, "notes");
+  mkdirSync(notesDir, { recursive: true });
+  writeFileSync(
+    join(notesDir, `${noteSlug}.md`),
+    [
+      "---",
+      `id: ${noteId}`,
+      "created: 2026-06-15T00:00:00Z",
+      "updated: 2026-06-15T00:00:00Z",
+      "---",
+      "",
+      "# Provenance Note",
+      "",
+      `The canonical note path token is ${noteToken}.`,
+      "Second note line for line-range proof.",
+      "",
+    ].join("\n"),
+    "utf8",
+  );
+}
+
 function seedChatTurnDoc(dbPath: string) {
   const db = new Database(dbPath);
   db.run(
@@ -194,6 +219,7 @@ try {
   const brainDir = join(skPath, "brain");
   const dbPath = join(skPath, "db", "brain.sqlite");
   const serverJsonPath = join(skPath, "server.json");
+  const blockedMetadataNeedles = [...blockedNeedles, sandboxHome];
 
   await waitFor(
     "MCP server.json",
@@ -203,6 +229,7 @@ try {
   );
 
   seedCanonicalDayPages(brainDir);
+  seedCanonicalNotes(brainDir);
 
   const resources = await listResources(serverJsonPath);
   const brain = resources.find((resource) => resource.uri === "kit://brain");
@@ -246,6 +273,48 @@ try {
     recallDetail,
   );
 
+  const noteRecallUri = `kit://brain/recall?q=${encodeURIComponent(noteToken)}&format=json`;
+  const noteRecallResource = await readResource(serverJsonPath, noteRecallUri);
+  const noteRecallJson = parseJsonResource(noteRecallResource);
+  const noteHit = (noteRecallJson.hits ?? []).find((hit: Json) => hit.sourceId === noteId);
+  const expectedNoteCanonicalPath = `brain/notes/${noteSlug}.md`;
+  const noteRecallDetail = {
+    uri: noteRecallUri,
+    mimeType: noteRecallResource.mimeType,
+    source: noteHit?.source ?? null,
+    sourceId: noteHit?.sourceId ?? null,
+    citationUri: noteHit?.citationUri ?? null,
+    canonicalPath: noteHit?.canonicalPath ?? null,
+    hasLineRange: Number.isInteger(noteHit?.lineStart) && Number.isInteger(noteHit?.lineEnd),
+  };
+  check(
+    "recall_json_reports_note_canonical_path",
+    noteRecallResource.mimeType === "application/json" &&
+      noteRecallDetail.source === "note" &&
+      noteRecallDetail.sourceId === noteId &&
+      noteRecallDetail.citationUri === `brain://note/${noteId}` &&
+      noteRecallDetail.canonicalPath === expectedNoteCanonicalPath &&
+      noteRecallDetail.hasLineRange,
+    noteRecallDetail,
+  );
+
+  const noteContextResource = await readResource(
+    serverJsonPath,
+    `kit://brain/recall?q=${encodeURIComponent(noteToken)}`,
+  );
+  check(
+    "context_block_includes_note_path",
+    noteContextResource.text.includes(`Source: brain://note/${noteId}`) &&
+      noteContextResource.text.includes(`path: ${expectedNoteCanonicalPath}`) &&
+      noteContextResource.text.includes(noteToken),
+    {
+      mimeType: noteContextResource.mimeType,
+      hasSource: noteContextResource.text.includes(`Source: brain://note/${noteId}`),
+      hasPath: noteContextResource.text.includes(`path: ${expectedNoteCanonicalPath}`),
+      hasToken: noteContextResource.text.includes(noteToken),
+    },
+  );
+
   const docUri = `kit://brain/doc?source=day_page&sourceId=${dayOne}&lines=3-4&format=json`;
   const docResource = await readResource(serverJsonPath, docUri);
   const docJson = parseJsonResource(docResource);
@@ -269,6 +338,35 @@ try {
     docRangeDetail,
   );
 
+  const noteDocUri = `kit://brain/doc?source=note&sourceId=${noteId}&lines=3-4&format=json`;
+  const noteDocResource = await readResource(serverJsonPath, noteDocUri);
+  const noteDocJson = parseJsonResource(noteDocResource);
+  const noteDocContent = String(noteDocJson.doc?.content ?? "");
+  const noteDocDetail = {
+    uri: noteDocUri,
+    source: noteDocJson.doc?.source ?? null,
+    sourceId: noteDocJson.doc?.sourceId ?? null,
+    citationUri: noteDocJson.doc?.citationUri ?? null,
+    canonicalPath: noteDocJson.doc?.canonicalPath ?? null,
+    lineStart: noteDocJson.doc?.lineStart ?? null,
+    lineEnd: noteDocJson.doc?.lineEnd ?? null,
+    contentHasToken: noteDocContent.includes(noteToken),
+    excludedTitle: !noteDocContent.includes("# Provenance Note"),
+  };
+  check(
+    "doc_json_reports_note_canonical_path",
+    noteDocResource.mimeType === "application/json" &&
+      noteDocDetail.source === "note" &&
+      noteDocDetail.sourceId === noteId &&
+      noteDocDetail.citationUri === `brain://note/${noteId}` &&
+      noteDocDetail.canonicalPath === expectedNoteCanonicalPath &&
+      noteDocDetail.lineStart === 3 &&
+      noteDocDetail.lineEnd === 4 &&
+      noteDocDetail.contentHasToken &&
+      noteDocDetail.excludedTitle,
+    noteDocDetail,
+  );
+
   const invalidRange = await readResource(
     serverJsonPath,
     `kit://brain/doc?source=day_page&sourceId=${dayOne}&lines=0-2&format=json`,
@@ -279,23 +377,28 @@ try {
     leakedBody: invalidRange.text.includes(dayToken),
   });
 
-  const docsUri = `kit://brain/docs?refs=day_page:${dayTwo},day_page:${dayOne},day_page:missing`;
+  const docsUri = `kit://brain/docs?refs=day_page:${dayTwo},note:${noteId},day_page:${dayOne},day_page:missing`;
   const docsResource = await readResource(serverJsonPath, docsUri);
   const docsJson = parseJsonResource(docsResource);
   const docs = (docsJson.docs ?? []) as Json[];
   const docsDetail = {
     refs: docs.map((doc) => doc.ref),
     found: docs.map((doc) => doc.found),
-    missingError: docs[2]?.error ?? null,
+    noteCanonicalPath: docs[1]?.doc?.canonicalPath ?? null,
+    missingError: docs[3]?.error ?? null,
   };
   check(
     "multi_doc_preserves_order_and_missing_receipt",
     docsResource.mimeType === "application/json" &&
-      docsDetail.refs.join("|") === `day_page:${dayTwo}|day_page:${dayOne}|day_page:missing` &&
-      docsDetail.found.join("|") === "true|true|false" &&
+      docsDetail.refs.join("|") === `day_page:${dayTwo}|note:${noteId}|day_page:${dayOne}|day_page:missing` &&
+      docsDetail.found.join("|") === "true|true|true|false" &&
       docsDetail.missingError === "not_found",
     docsDetail,
   );
+  check("multi_get_reports_note_canonical_path", docsDetail.noteCanonicalPath === expectedNoteCanonicalPath, {
+    noteCanonicalPath: docsDetail.noteCanonicalPath,
+    expectedNoteCanonicalPath,
+  });
 
   seedChatTurnDoc(dbPath);
   const chatUri = `kit://brain/doc?source=chat_turn&sourceId=${encodedChatSourceId}&format=json`;
@@ -315,8 +418,13 @@ try {
 
   const metadataText = [
     recallResource.text,
+    noteRecallResource.text,
     JSON.stringify({
       ...docJson.doc,
+      content: undefined,
+    }),
+    JSON.stringify({
+      ...noteDocJson.doc,
       content: undefined,
     }),
     JSON.stringify({
@@ -337,9 +445,9 @@ try {
       content: undefined,
     }),
   ].join("\n");
-  check("no_private_storage_paths_in_metadata", containsAnyNeedle(metadataText, blockedNeedles).length === 0, {
-    blockedNeedles,
-    leakedNeedles: containsAnyNeedle(metadataText, blockedNeedles),
+  check("no_private_storage_paths_in_metadata", containsAnyNeedle(metadataText, blockedMetadataNeedles).length === 0, {
+    blockedNeedles: blockedMetadataNeedles,
+    leakedNeedles: containsAnyNeedle(metadataText, blockedMetadataNeedles),
   });
 
   check("runtime_log_has_no_panic", !/panicked|gpui_entity_double_lease/i.test(readFileSync(driver.logPath, "utf8")), {
@@ -364,8 +472,9 @@ try {
     appLog: driver.logPath,
     fixtures: {
       dayPages: [dayOne, dayTwo],
+      notes: [{ id: noteId, path: `brain/notes/${noteSlug}.md` }],
       chatTurnSourceId: chatSourceId,
-      tokens: [dayToken],
+      tokens: [dayToken, noteToken],
     },
     checks,
   };

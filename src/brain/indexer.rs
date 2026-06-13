@@ -441,6 +441,10 @@ fn sync_notes() -> Result<usize> {
     sync_notes_with_substrate(&brain_substrate())
 }
 
+fn canonical_brain_path(kind: &str, filename: &str) -> String {
+    format!("brain/{kind}/{filename}")
+}
+
 pub(crate) fn sync_notes_with_substrate(substrate: &BrainSubstrate) -> Result<usize> {
     let notes_dir = substrate.paths().notes_dir();
     let mut synced = 0usize;
@@ -473,7 +477,18 @@ pub(crate) fn sync_notes_with_substrate(substrate: &BrainSubstrate) -> Result<us
         let title = title_from_note_body(&body);
         let source_id = frontmatter.id.to_string();
         let updated_at = frontmatter.updated.timestamp();
-        store::upsert_doc(DocSource::Note, &source_id, &title, &body, updated_at)?;
+        let Some(filename) = path.file_name().and_then(|name| name.to_str()) else {
+            continue;
+        };
+        let canonical_path = canonical_brain_path("notes", filename);
+        store::upsert_doc_with_canonical_path(
+            DocSource::Note,
+            &source_id,
+            &title,
+            &body,
+            updated_at,
+            Some(&canonical_path),
+        )?;
         live_ids.push(source_id);
         synced += 1;
     }
@@ -513,7 +528,18 @@ pub(crate) fn sync_day_pages_with_substrate(substrate: &BrainSubstrate) -> Resul
         };
         let title = format!("Day Page {source_id}");
         let updated_at = file_mtime_timestamp(&path);
-        store::upsert_doc(DocSource::DayPage, &source_id, &title, &content, updated_at)?;
+        let Some(filename) = path.file_name().and_then(|name| name.to_str()) else {
+            continue;
+        };
+        let canonical_path = canonical_brain_path("days", filename);
+        store::upsert_doc_with_canonical_path(
+            DocSource::DayPage,
+            &source_id,
+            &title,
+            &content,
+            updated_at,
+            Some(&canonical_path),
+        )?;
         live_ids.push(source_id);
         synced += 1;
     }
@@ -570,12 +596,17 @@ pub(crate) fn sync_fragments_with_substrate(substrate: &BrainSubstrate) -> Resul
             content.push_str(&format!("\n\nProvenance: {source}"));
         }
         let updated_at = frontmatter.updated.timestamp();
-        store::upsert_doc(
+        let Some(filename) = path.file_name().and_then(|name| name.to_str()) else {
+            continue;
+        };
+        let canonical_path = canonical_brain_path("fragments", filename);
+        store::upsert_doc_with_canonical_path(
             DocSource::Fragment,
             &fragment_id,
             &title,
             &content,
             updated_at,
+            Some(&canonical_path),
         )?;
         live_ids.push(fragment_id);
         synced += 1;

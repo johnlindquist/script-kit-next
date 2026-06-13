@@ -16,7 +16,7 @@
 //!   milliseconds and avoids shipping a vector-extension dependency.
 
 use anyhow::{anyhow, Context as _, Result};
-use rusqlite::{params, Connection, OptionalExtension};
+use rusqlite::{params, Connection, OptionalExtension, Row};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, OnceLock};
 
@@ -197,6 +197,7 @@ pub struct BrainDoc {
     pub source_id: String,
     pub title: String,
     pub content: String,
+    pub canonical_path: Option<String>,
     pub updated_at: i64,
 }
 
@@ -251,6 +252,7 @@ fn ensure_brain_schema(conn: &Connection) -> Result<()> {
             source_id TEXT NOT NULL,
             title TEXT NOT NULL DEFAULT '',
             content TEXT NOT NULL DEFAULT '',
+            canonical_path TEXT,
             content_hash TEXT NOT NULL DEFAULT '',
             created_at INTEGER NOT NULL DEFAULT (unixepoch()),
             updated_at INTEGER NOT NULL DEFAULT (unixepoch()),
@@ -322,9 +324,25 @@ fn ensure_brain_schema(conn: &Connection) -> Result<()> {
             ON brain_inbox(resolved_at, created_at DESC);",
     )
     .context("ensure brain schema")?;
+    migrate_brain_docs_canonical_path(conn)?;
     migrate_chunk_embeddings_pk(conn)?;
     migrate_whole_doc_embeddings(conn)?;
     migrate_fts_tokenizer(conn)
+}
+
+fn migrate_brain_docs_canonical_path(conn: &Connection) -> Result<()> {
+    let exists: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM pragma_table_info('brain_docs') WHERE name = 'canonical_path'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap_or(0);
+    if exists == 0 {
+        conn.execute("ALTER TABLE brain_docs ADD COLUMN canonical_path TEXT", [])
+            .context("add brain_docs.canonical_path")?;
+    }
+    Ok(())
 }
 
 /// FTS schema version. v2 = porter stemming ("search" matches "searched").
@@ -534,6 +552,25 @@ pub(crate) fn content_hash(title: &str, content: &str) -> String {
     format!("{hash:016x}")
 }
 
+const BRAIN_DOC_SELECT_COLUMNS: &str =
+    "id, source, source_id, title, content, canonical_path, updated_at";
+
+fn brain_doc_from_row(row: &Row<'_>) -> rusqlite::Result<Option<BrainDoc>> {
+    let source: String = row.get(1)?;
+    let Some(source) = DocSource::parse(&source) else {
+        return Ok(None);
+    };
+    Ok(Some(BrainDoc {
+        id: row.get(0)?,
+        source,
+        source_id: row.get(2)?,
+        title: row.get(3)?,
+        content: row.get(4)?,
+        canonical_path: row.get(5)?,
+        updated_at: row.get(6)?,
+    }))
+}
+
 /// Insert or update a document. Returns the doc id. The embedding is
 /// invalidated automatically when content changes (hash mismatch leaves the
 /// stale row for the indexer to refresh).
@@ -544,20 +581,43 @@ pub fn upsert_doc(
     content: &str,
     updated_at: i64,
 ) -> Result<i64> {
+    upsert_doc_with_canonical_path(source, source_id, title, content, updated_at, None)
+}
+
+pub fn upsert_doc_with_canonical_path(
+    source: DocSource,
+    source_id: &str,
+    title: &str,
+    content: &str,
+    updated_at: i64,
+    canonical_path: Option<&str>,
+) -> Result<i64> {
     let db = get_db()?;
     let conn = db.lock().map_err(|_| anyhow!("brain db lock poisoned"))?;
     let hash = content_hash(title, content);
     conn.execute(
-        "INSERT INTO brain_docs (source, source_id, title, content, content_hash, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+        "INSERT INTO brain_docs (
+            source, source_id, title, content, canonical_path, content_hash, updated_at
+         )
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
          ON CONFLICT(source, source_id) DO UPDATE SET
             title = excluded.title,
             content = excluded.content,
+            canonical_path = excluded.canonical_path,
             content_hash = excluded.content_hash,
             updated_at = excluded.updated_at
          WHERE brain_docs.content_hash != excluded.content_hash
-            OR brain_docs.updated_at != excluded.updated_at",
-        params![source.as_str(), source_id, title, content, hash, updated_at],
+            OR brain_docs.updated_at != excluded.updated_at
+            OR COALESCE(brain_docs.canonical_path, '') != COALESCE(excluded.canonical_path, '')",
+        params![
+            source.as_str(),
+            source_id,
+            title,
+            content,
+            canonical_path,
+            hash,
+            updated_at
+        ],
     )
     .context("upsert brain doc")?;
     let id: i64 = conn
@@ -624,34 +684,16 @@ pub fn get_doc(source: DocSource, source_id: &str) -> Result<Option<BrainDoc>> {
     let db = get_db()?;
     let conn = db.lock().map_err(|_| anyhow!("brain db lock poisoned"))?;
     conn.query_row(
-        "SELECT id, source, source_id, title, content, updated_at
-         FROM brain_docs WHERE source = ?1 AND source_id = ?2",
+        &format!(
+            "SELECT {BRAIN_DOC_SELECT_COLUMNS}
+             FROM brain_docs WHERE source = ?1 AND source_id = ?2"
+        ),
         params![source.as_str(), source_id],
-        |row| {
-            Ok((
-                row.get::<_, i64>(0)?,
-                row.get::<_, String>(1)?,
-                row.get::<_, String>(2)?,
-                row.get::<_, String>(3)?,
-                row.get::<_, String>(4)?,
-                row.get::<_, i64>(5)?,
-            ))
-        },
+        brain_doc_from_row,
     )
     .optional()
     .context("get brain doc")
-    .map(|row| {
-        row.and_then(|(id, source, source_id, title, content, updated_at)| {
-            DocSource::parse(&source).map(|source| BrainDoc {
-                id,
-                source,
-                source_id,
-                title,
-                content,
-                updated_at,
-            })
-        })
-    })
+    .map(|row| row.flatten())
 }
 
 /// Remove a document (e.g. when its source note is deleted).
@@ -673,8 +715,13 @@ pub fn remove_doc(source: DocSource, source_id: &str) -> Result<()> {
 pub fn docs_needing_embedding(model_id: &str, limit: usize) -> Result<Vec<BrainDoc>> {
     let db = get_db()?;
     let conn = db.lock().map_err(|_| anyhow!("brain db lock poisoned"))?;
-    let mut stmt = conn.prepare(
-        "SELECT d.id, d.source, d.source_id, d.title, d.content, d.updated_at
+    let columns = BRAIN_DOC_SELECT_COLUMNS
+        .split(", ")
+        .map(|column| format!("d.{column}"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let mut stmt = conn.prepare(&format!(
+        "SELECT {columns}
          FROM brain_docs d
          WHERE NOT EXISTS (
             SELECT 1 FROM brain_chunk_embeddings e
@@ -684,32 +731,11 @@ pub fn docs_needing_embedding(model_id: &str, limit: usize) -> Result<Vec<BrainD
          )
          ORDER BY d.updated_at DESC
          LIMIT ?2",
-    )?;
+    ))?;
     let rows = stmt
-        .query_map(params![model_id, limit as i64], |row| {
-            Ok((
-                row.get::<_, i64>(0)?,
-                row.get::<_, String>(1)?,
-                row.get::<_, String>(2)?,
-                row.get::<_, String>(3)?,
-                row.get::<_, String>(4)?,
-                row.get::<_, i64>(5)?,
-            ))
-        })?
+        .query_map(params![model_id, limit as i64], brain_doc_from_row)?
         .collect::<std::result::Result<Vec<_>, _>>()?;
-    Ok(rows
-        .into_iter()
-        .filter_map(|(id, source, source_id, title, content, updated_at)| {
-            DocSource::parse(&source).map(|source| BrainDoc {
-                id,
-                source,
-                source_id,
-                title,
-                content,
-                updated_at,
-            })
-        })
-        .collect())
+    Ok(rows.into_iter().flatten().collect())
 }
 
 /// Single-vector convenience wrapper over [`store_chunk_embeddings`] — the
@@ -878,35 +904,14 @@ pub fn get_docs_by_ids(ids: &[i64]) -> Result<Vec<BrainDoc>> {
     let conn = db.lock().map_err(|_| anyhow!("brain db lock poisoned"))?;
     let placeholders = ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
     let sql = format!(
-        "SELECT id, source, source_id, title, content, updated_at
+        "SELECT {BRAIN_DOC_SELECT_COLUMNS}
          FROM brain_docs WHERE id IN ({placeholders})"
     );
     let mut stmt = conn.prepare(&sql)?;
     let rows = stmt
-        .query_map(rusqlite::params_from_iter(ids.iter()), |row| {
-            Ok((
-                row.get::<_, i64>(0)?,
-                row.get::<_, String>(1)?,
-                row.get::<_, String>(2)?,
-                row.get::<_, String>(3)?,
-                row.get::<_, String>(4)?,
-                row.get::<_, i64>(5)?,
-            ))
-        })?
+        .query_map(rusqlite::params_from_iter(ids.iter()), brain_doc_from_row)?
         .collect::<std::result::Result<Vec<_>, _>>()?;
-    Ok(rows
-        .into_iter()
-        .filter_map(|(id, source, source_id, title, content, updated_at)| {
-            DocSource::parse(&source).map(|source| BrainDoc {
-                id,
-                source,
-                source_id,
-                title,
-                content,
-                updated_at,
-            })
-        })
-        .collect())
+    Ok(rows.into_iter().flatten().collect())
 }
 
 /// Most recently updated docs across all sources, newest first. Backs the
@@ -915,35 +920,14 @@ pub fn get_docs_by_ids(ids: &[i64]) -> Result<Vec<BrainDoc>> {
 pub fn recent_docs(limit: usize) -> Result<Vec<BrainDoc>> {
     let db = get_db()?;
     let conn = db.lock().map_err(|_| anyhow!("brain db lock poisoned"))?;
-    let mut stmt = conn.prepare(
-        "SELECT id, source, source_id, title, content, updated_at
+    let mut stmt = conn.prepare(&format!(
+        "SELECT {BRAIN_DOC_SELECT_COLUMNS}
          FROM brain_docs ORDER BY updated_at DESC LIMIT ?1",
-    )?;
+    ))?;
     let rows = stmt
-        .query_map(params![limit as i64], |row| {
-            Ok((
-                row.get::<_, i64>(0)?,
-                row.get::<_, String>(1)?,
-                row.get::<_, String>(2)?,
-                row.get::<_, String>(3)?,
-                row.get::<_, String>(4)?,
-                row.get::<_, i64>(5)?,
-            ))
-        })?
+        .query_map(params![limit as i64], brain_doc_from_row)?
         .collect::<std::result::Result<Vec<_>, _>>()?;
-    Ok(rows
-        .into_iter()
-        .filter_map(|(id, source, source_id, title, content, updated_at)| {
-            DocSource::parse(&source).map(|source| BrainDoc {
-                id,
-                source,
-                source_id,
-                title,
-                content,
-                updated_at,
-            })
-        })
-        .collect())
+    Ok(rows.into_iter().flatten().collect())
 }
 
 /// Docs of one source updated at/after `since`, newest first. Evidence
@@ -955,36 +939,18 @@ pub fn recent_docs_for_source(
 ) -> Result<Vec<BrainDoc>> {
     let db = get_db()?;
     let conn = db.lock().map_err(|_| anyhow!("brain db lock poisoned"))?;
-    let mut stmt = conn.prepare(
-        "SELECT id, source, source_id, title, content, updated_at
+    let mut stmt = conn.prepare(&format!(
+        "SELECT {BRAIN_DOC_SELECT_COLUMNS}
          FROM brain_docs WHERE source = ?1 AND updated_at >= ?2
          ORDER BY updated_at DESC LIMIT ?3",
-    )?;
+    ))?;
     let rows = stmt
-        .query_map(params![source.as_str(), since, limit as i64], |row| {
-            Ok((
-                row.get::<_, i64>(0)?,
-                row.get::<_, String>(1)?,
-                row.get::<_, String>(2)?,
-                row.get::<_, String>(3)?,
-                row.get::<_, String>(4)?,
-                row.get::<_, i64>(5)?,
-            ))
-        })?
+        .query_map(
+            params![source.as_str(), since, limit as i64],
+            brain_doc_from_row,
+        )?
         .collect::<std::result::Result<Vec<_>, _>>()?;
-    Ok(rows
-        .into_iter()
-        .filter_map(|(id, source, source_id, title, content, updated_at)| {
-            DocSource::parse(&source).map(|source| BrainDoc {
-                id,
-                source,
-                source_id,
-                title,
-                content,
-                updated_at,
-            })
-        })
-        .collect())
+    Ok(rows.into_iter().flatten().collect())
 }
 
 /// Append an attention signal. Topics are free-form lowercase strings.

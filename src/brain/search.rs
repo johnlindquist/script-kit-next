@@ -47,14 +47,15 @@ fn encode_brain_uri_segment(value: &str) -> String {
 }
 
 pub fn source_ref_for_doc(doc: &BrainDoc) -> BrainHitSourceRef {
-    let canonical_path = match doc.source {
+    let canonical_path = doc.canonical_path.clone().or_else(|| match doc.source {
         DocSource::DayPage => Some(format!("brain/days/{}.md", doc.source_id)),
         DocSource::Fragment => Some(format!("brain/fragments/{}.md", doc.source_id)),
-        DocSource::Note => None,
-        DocSource::ChatTurn | DocSource::Clipboard | DocSource::Activity | DocSource::Capture => {
-            None
-        }
-    };
+        DocSource::Note
+        | DocSource::ChatTurn
+        | DocSource::Clipboard
+        | DocSource::Activity
+        | DocSource::Capture => None,
+    });
     let (line_start, line_end) = excerpt_line_range(&doc.content, &excerpt_for_doc(&doc.content));
     BrainHitSourceRef {
         source: doc.source,
