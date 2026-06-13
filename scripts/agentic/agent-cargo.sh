@@ -4,7 +4,7 @@
 # with the always-on `./dev.sh` cargo-watch loop.
 #
 # Usage:
-#   ./scripts/agentic/agent-cargo.sh test --lib context_picker
+#   ./scripts/agentic/agent-cargo.sh test --lib notes_editor::spine
 #   ./scripts/agentic/agent-cargo.sh check --lib
 #   SCRIPT_KIT_CARGO_TARGET_POOL=agent-debug ./scripts/agentic/agent-cargo.sh build --bin script-kit-gpui
 #   SCRIPT_KIT_AGENT_TARGET_MODE=exclusive SCRIPT_KIT_AGENT_ID=claude-a ./scripts/agentic/agent-cargo.sh check --lib

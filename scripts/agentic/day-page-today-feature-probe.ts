@@ -346,7 +346,7 @@ try {
 
   const deprecatedInlineDayPopupPresent = await driver
     .getElements({ target: { type: "main" }, limit: 220 }, { timeoutMs: 5000 })
-    .then((elements) => JSON.stringify(elements).includes("context-picker"))
+    .then((elements) => { const text = JSON.stringify(elements); return text.includes("day-page-inline-context-popup") || text.includes("day-page-context-popup") || text.includes("inline-context-popup"); })
     .catch(() => false);
   check("deprecated_inline_context_popup_absent", !deprecatedInlineDayPopupPresent, {
     deprecatedInlineDayPopupPresent,

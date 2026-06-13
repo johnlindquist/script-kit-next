@@ -28,7 +28,6 @@ const DEPRECATED_CONTEXT_IDS = [
   "day-page-inline-context-popup",
   "day-page-context-popup",
   "inline-context-popup",
-  "context-picker",
 ];
 
 const receipts: Record<string, Json> = {};

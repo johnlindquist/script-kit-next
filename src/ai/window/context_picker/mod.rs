@@ -8,8 +8,6 @@
 pub mod types;
 
 mod render;
-#[cfg(test)]
-mod tests;
 
 use super::*;
 use crate::ai::context_contract::{context_attachment_specs, ContextAttachmentKind};

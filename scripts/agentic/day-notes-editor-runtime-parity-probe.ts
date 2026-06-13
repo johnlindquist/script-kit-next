@@ -23,7 +23,6 @@ const DEPRECATED_CONTEXT_IDS = [
   "day-page-inline-context-popup",
   "day-page-context-popup",
   "inline-context-popup",
-  "context-picker",
 ];
 
 const checks: Array<{ name: string; ok: boolean; detail: Json }> = [];

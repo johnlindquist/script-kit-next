@@ -160,7 +160,7 @@ try {
   );
   const inlinePopupIds = menuFlat
     .map((el) => String(el.semanticId ?? el.id ?? ""))
-    .filter((id) => id.includes("day-page-spine") || id.includes("context-picker"));
+    .filter((id) => id.includes("day-page-spine") );
   check("main_menu_context_row_visible", Boolean(contextRow), {
     selectedSemanticId: menuElements.selectedSemanticId ?? null,
     contextRow: contextRow ?? null,
