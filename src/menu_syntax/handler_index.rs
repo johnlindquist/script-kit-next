@@ -193,7 +193,7 @@ fn reason_parts_for(
     if entry.score.user_authored > 0 {
         reasons.push("user-authored plugin".to_string());
     } else {
-        reasons.push("shipped main".to_string());
+        reasons.push("app-bundled plugin".to_string());
     }
     if !matched_accepts.is_empty() {
         reasons.push(format!("accepts matched: {}", matched_accepts.join(", ")));
@@ -253,12 +253,16 @@ fn score_spec(
     })
 }
 
-/// A script is "user-authored" when it lives in a plugin other than the
-/// shipped `main` plugin. Shipped capture examples under
-/// `scripts/examples/menu-syntax/` load with `plugin_id == "main"`, so they
-/// sort below a user's own handlers for the same target.
+/// A script is "user-authored" when it is not one of the app-bundled plugin
+/// packages. Bundled examples remain discoverable handlers, but must fall
+/// through to app-owned capture for canonical local targets.
+fn script_is_app_bundled(script: &Script) -> bool {
+    let plugin_id = script.plugin_id.trim();
+    plugin_id.eq_ignore_ascii_case("main") || plugin_id.eq_ignore_ascii_case("examples")
+}
+
 fn script_is_user_authored(script: &Script) -> bool {
-    !script.plugin_id.eq_ignore_ascii_case("main")
+    !script_is_app_bundled(script)
 }
 
 /// Public predicate for launcher execution routing. App-owned capture targets
@@ -439,6 +443,69 @@ mod tests {
         let inv = invocation("todo", "x");
         let ranked = rank_handlers_for_target(&[shipped, user.clone()], &inv);
         assert_eq!(ranked[0].script.name, "User Todo");
+    }
+
+    #[test]
+    fn bundled_examples_capture_handlers_are_not_user_authored() {
+        let examples = script_with_menu_syntax(
+            "Todo App",
+            "examples",
+            json!([{ "family": "capture.v1", "targets": ["todo"], "defaultHandler": false }]),
+        );
+        let inv = invocation("todo", "buy milk");
+
+        let ranked = rank_handlers_for_target(&[examples], &inv);
+
+        assert_eq!(ranked.len(), 1);
+        assert_eq!(ranked[0].script.plugin_id, "examples");
+        assert_eq!(ranked[0].score.user_authored, 0);
+        assert!(!ranked_handler_is_user_authored(&ranked[0]));
+    }
+
+    #[test]
+    fn true_user_capture_handler_still_outranks_bundled_examples() {
+        let examples = script_with_menu_syntax(
+            "Todo App",
+            "examples",
+            json!([{ "family": "capture.v1", "targets": ["todo"], "defaultHandler": false }]),
+        );
+        let user = script_with_menu_syntax(
+            "User Todo",
+            "my-plugin",
+            json!([{ "family": "capture.v1", "targets": ["todo"], "defaultHandler": false }]),
+        );
+        let inv = invocation("todo", "buy milk");
+
+        let ranked = rank_handlers_for_target(&[examples, user], &inv);
+
+        assert_eq!(ranked[0].script.name, "User Todo");
+        assert!(ranked_handler_is_user_authored(&ranked[0]));
+        let examples_entry = ranked
+            .iter()
+            .find(|entry| entry.script.plugin_id == "examples")
+            .expect("examples handler should still be ranked as a handler");
+        assert_eq!(examples_entry.score.user_authored, 0);
+        assert!(!ranked_handler_is_user_authored(examples_entry));
+    }
+
+    #[test]
+    fn ranking_explanation_labels_examples_as_app_bundled() {
+        let examples = script_with_menu_syntax(
+            "Todo App",
+            "examples",
+            json!([{ "family": "capture.v1", "targets": ["todo"], "defaultHandler": false }]),
+        );
+        let inv = invocation("todo", "buy milk");
+
+        let explanation = explain_capture_handler_ranking(&[examples], &inv);
+        let winner = explanation.winner.expect("winner");
+
+        assert!(winner
+            .reason_parts
+            .contains(&"app-bundled plugin".to_string()));
+        assert!(!winner
+            .reason_parts
+            .contains(&"user-authored plugin".to_string()));
     }
 
     #[test]
