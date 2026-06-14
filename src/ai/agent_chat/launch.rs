@@ -17,8 +17,6 @@ use crate::config::{AgentChatBackend, AiPreferences};
 
 static WARM_SESSION_MANAGER: OnceLock<AgentChatWarmSessionManager> = OnceLock::new();
 
-pub(crate) const INLINE_AGENT_PI_APPEND_SYSTEM_PROMPT: &str = "You are Cue, Script Kit's inline text-editing assistant. You receive focused-field text through the user's prompt and must return only the requested text output. Do not describe system prompts, capture mechanics, tools, sessions, files, or Script Kit internals.";
-
 #[derive(Debug, Clone)]
 pub(crate) struct PiAgentChatLaunch {
     pub profile: ResolvedAgentChatProfile,
@@ -140,15 +138,6 @@ pub(crate) fn resolve_selected_pi_launch_with_cwd_override(
     PiAgentChatLaunch::from_profile_with_cwd_override(profile, cwd_override)
 }
 
-pub(crate) fn resolve_inline_agent_pi_launch(
-    ai: &AiPreferences,
-    ctx: &AgentChatProfileContext,
-) -> Result<PiAgentChatLaunch> {
-    let base = resolve_effective_profile(ai, ctx);
-    let inline_profile = inline_agent_pi_profile(base, ctx);
-    PiAgentChatLaunch::from_profile(inline_profile)
-}
-
 pub(crate) fn resolve_focused_text_pi_launch(
     ai: &AiPreferences,
     ctx: &AgentChatProfileContext,
@@ -178,29 +167,6 @@ fn pi_model_selection_id(profile: &ResolvedAgentChatProfile) -> Option<String> {
 fn ensure_pi_cwd(cwd: &PathBuf) -> Result<()> {
     std::fs::create_dir_all(cwd)
         .with_context(|| format!("Failed to prepare Pi Agent Chat cwd {}", cwd.display()))
-}
-
-fn inline_agent_pi_profile(
-    mut profile: ResolvedAgentChatProfile,
-    ctx: &AgentChatProfileContext,
-) -> ResolvedAgentChatProfile {
-    profile.id = format!("inline-agent:{}", profile.id);
-    profile.name = format!("Inline Agent ({})", profile.name);
-    profile.backend = AgentChatBackend::Pi;
-    profile.agent = None;
-    profile.cwd = Some(ctx.kit_path.join("agent-chat").join("inline-agent"));
-    profile.tools = Some(Vec::new());
-    profile.disable_extensions = Some(true);
-    profile.disable_skills = Some(true);
-    profile.disable_prompt_templates = Some(true);
-    profile.disable_context_files = Some(true);
-    profile.hide_cwd_in_prompt = Some(true);
-    profile.session_dir = None;
-    profile.no_session = Some(true);
-    profile.session_durability = None;
-    profile.system_prompt = None;
-    profile.append_system_prompt = Some(INLINE_AGENT_PI_APPEND_SYSTEM_PROMPT.to_string());
-    profile
 }
 
 #[cfg(test)]

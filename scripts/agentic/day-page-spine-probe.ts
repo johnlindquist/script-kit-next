@@ -64,6 +64,25 @@ function promptBuilderTextInElements(elements: Json): Json[] {
   });
 }
 
+function forbiddenPopupWindows(windowsResult: Json): Json[] {
+  const windows = Array.isArray(windowsResult.windows) ? (windowsResult.windows as Json[]) : [];
+  return windows.filter((entry) => {
+    const id = typeof entry.id === "string" ? entry.id : "";
+    const kind = typeof entry.kind === "string" ? entry.kind : "";
+    const title = typeof entry.title === "string" ? entry.title : "";
+    const semanticSurface =
+      typeof entry.semanticSurface === "string" ? entry.semanticSurface : "";
+    const haystack = `${id} ${kind} ${title} ${semanticSurface}`.toLowerCase();
+    return (
+      haystack.includes("inline-agent") ||
+      haystack.includes("inlineagent") ||
+      haystack.includes("prompt builder") ||
+      haystack.includes("ready to send") ||
+      kind.toLowerCase() === "miniai"
+    );
+  });
+}
+
 async function setDayPageInput(driver: Driver, text: string, label: string) {
   const batch = (await driver.batch(
     [
@@ -88,13 +107,19 @@ async function assertNoDayOverlay(driver: Driver, label: string) {
     { target: { type: "main" }, limit: 260 },
     { timeoutMs: 5000 },
   )) as Json;
+  const windows = (await driver.listAutomationWindows({ timeoutMs: 5000 })) as Json;
   const rows = spineRowsInDayElements(elements);
   const promptBuilderText = promptBuilderTextInElements(elements);
+  const forbiddenWindows = forbiddenPopupWindows(windows);
   check(`no_day_spine_rows_${label}`, rows.length === 0, {
     rows: rows.slice(0, 12),
   });
   check(`no_prompt_builder_text_${label}`, promptBuilderText.length === 0, {
     promptBuilderText: promptBuilderText.slice(0, 12),
+  });
+  check(`no_forbidden_popup_windows_${label}`, forbiddenWindows.length === 0, {
+    forbiddenWindows,
+    windows: Array.isArray(windows.windows) ? windows.windows : [],
   });
   check(`still_day_page_${label}`, state.promptType === "dayPage", {
     promptType: state.promptType,
@@ -125,6 +150,8 @@ const samples = [
   ["markdown_link", "[release notes](https://example.com/release-notes)"],
 ] as const;
 
+const contextSamples = [["context_file", "@file"]] as const;
+
 const driver = await Driver.launch({
   binary: BINARY,
   sandboxHome: true,
@@ -146,6 +173,50 @@ try {
     await Bun.sleep(75);
     await assertNoDayOverlay(driver, `${label}_after_enter`);
   }
+
+  for (const [label, text] of contextSamples) {
+    await setDayPageInput(driver, text, label);
+    const windows = (await driver.listAutomationWindows({ timeoutMs: 5000 })) as Json;
+    const forbiddenWindows = forbiddenPopupWindows(windows);
+    check(`no_forbidden_popup_windows_${label}_context_round_trip`, forbiddenWindows.length === 0, {
+      forbiddenWindows,
+      windows: Array.isArray(windows.windows) ? windows.windows : [],
+    });
+    const elements = (await driver.getElements(
+      { target: { type: "main" }, limit: 300 },
+      { timeoutMs: 5000 },
+    )) as Json;
+    const promptBuilderText = promptBuilderTextInElements(elements);
+    check(`no_prompt_builder_text_${label}_context_round_trip`, promptBuilderText.length === 0, {
+      promptBuilderText: promptBuilderText.slice(0, 12),
+    });
+  }
+
+  await driver.batch([{ type: "setInput", text: "" }], { timeoutMs: 5000 });
+  await Bun.sleep(100);
+  driver.simulateKey("@");
+  await Bun.sleep(50);
+  driver.simulateKey("f");
+  await Bun.sleep(250);
+  const typedContextState = (await driver.getState({ timeoutMs: 5000 })) as Json;
+  const typedContextWindows = (await driver.listAutomationWindows({ timeoutMs: 5000 })) as Json;
+  const typedForbiddenWindows = forbiddenPopupWindows(typedContextWindows);
+  check("typed_context_no_forbidden_popup_windows", typedForbiddenWindows.length === 0, {
+    promptType: typedContextState.promptType,
+    inputValue: typedContextState.inputValue,
+    forbiddenWindows: typedForbiddenWindows,
+    windows: Array.isArray(typedContextWindows.windows) ? typedContextWindows.windows : [],
+  });
+  const typedContextElements = (await driver.getElements(
+    { target: { type: "main" }, limit: 300 },
+    { timeoutMs: 5000 },
+  )) as Json;
+  const typedPromptBuilderText = promptBuilderTextInElements(typedContextElements);
+  check("typed_context_no_prompt_builder_text", typedPromptBuilderText.length === 0, {
+    promptType: typedContextState.promptType,
+    inputValue: typedContextState.inputValue,
+    promptBuilderText: typedPromptBuilderText.slice(0, 12),
+  });
 
 } catch (error) {
   check("probe_exception", false, {

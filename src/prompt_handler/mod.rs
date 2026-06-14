@@ -371,10 +371,6 @@ enum GetStateTargetResolution {
         resolved: crate::protocol::AutomationWindowInfo,
         entity: gpui::Entity<crate::actions::ActionsDialog>,
     },
-    InlineAgent {
-        resolved: crate::protocol::AutomationWindowInfo,
-        state: serde_json::Value,
-    },
     UnsupportedNonMain {
         resolved: crate::protocol::AutomationWindowInfo,
     },
@@ -426,21 +422,6 @@ fn resolve_get_state_target(
                     None => GetStateTargetResolution::ResolutionFailed {
                         error: format!(
                             "getState resolved ActionsDialog target {} but no live dialog entity is available",
-                            resolved.id
-                        ),
-                    },
-                }
-            }
-            Ok(resolved)
-                if resolved.kind == crate::protocol::AutomationWindowKind::MiniAi
-                    && resolved.id
-                        == crate::inline_agent::window::INLINE_AGENT_WINDOW_AUTOMATION_ID =>
-            {
-                match crate::inline_agent::window::inline_agent_automation_state() {
-                    Some(state) => GetStateTargetResolution::InlineAgent { resolved, state },
-                    None => GetStateTargetResolution::ResolutionFailed {
-                        error: format!(
-                            "getState resolved inline-agent target {} but no live Inline Agent snapshot is available",
                             resolved.id
                         ),
                     },
@@ -3422,43 +3403,6 @@ impl ScriptListApp {
                                 None,
                                 None,
                                 Some(actions_state),
-                                None,
-                                None,
-                                None,
-                                None,
-                                None,
-                                None,
-                                None,
-                                None,
-                            ));
-                        }
-                        return;
-                    }
-                    GetStateTargetResolution::InlineAgent { resolved, state } => {
-                        if let Some(ref sender) = self.response_sender {
-                            let _ = sender.try_send(Message::state_result(
-                                request_id.clone(),
-                                "inlineAgent".to_string(),
-                                Some(format!("target:{:?}:{}", resolved.kind, resolved.id)),
-                                None,
-                                None,
-                                None,
-                                None,
-                                None,
-                                String::new(),
-                                0,
-                                0,
-                                -1,
-                                None,
-                                resolved.focused,
-                                resolved.visible,
-                                None,
-                                Some(state),
-                                None,
-                                None,
-                                None,
-                                None,
-                                None,
                                 None,
                                 None,
                                 None,

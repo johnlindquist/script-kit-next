@@ -6,8 +6,7 @@ const AGENT_CHAT_VIEW: &str = include_str!("../../src/ai/agent_chat/ui/view.rs")
 const AGENT_CHAT_TRANSCRIPT: &str =
     include_str!("../../src/ai/agent_chat/ui/components/transcript.rs");
 const AGENT_CHAT_UI_VARIANT: &str = include_str!("../../src/ai/agent_chat/ui/ui_variant.rs");
-const AGENT_CHAT_LAUNCH: &str =
-    include_str!("../../src/app_impl/agent_handoff/agent_chat_launch.rs");
+const AGENT_CHAT_PI_LAUNCH: &str = include_str!("../../src/ai/agent_chat/launch.rs");
 const FOOTER_POPUP: &str = include_str!("../../src/footer_popup.rs");
 const STDIN_COMMANDS: &str = include_str!("../../src/stdin_commands/mod.rs");
 const RUNTIME_STDIN: &str = include_str!("../../src/main_entry/runtime_stdin.rs");
@@ -28,7 +27,6 @@ const PROTOCOL_GENERAL_CONSTRUCTORS: &str =
     include_str!("../../src/protocol/message/constructors/general.rs");
 const PROTOCOL_PROMPT_CONSTRUCTORS: &str =
     include_str!("../../src/protocol/message/constructors/prompts.rs");
-const INLINE_AGENT_MOD: &str = include_str!("../../src/inline_agent/mod.rs");
 const PROMPT_HANDLER: &str = include_str!("../../src/prompt_handler/mod.rs");
 
 fn source_between<'a>(source: &'a str, start_marker: &str, end_marker: &str) -> &'a str {
@@ -115,14 +113,14 @@ fn agent_chat_view_can_stage_focused_text_as_host_owned_context() {
 #[test]
 fn focused_text_mini_uses_pi_text_profile_not_agent_chat_backend_fallback() {
     for required in [
-        "request.ui_variant == crate::ai::agent_chat::ui::ui_variant::AgentChatUiVariant::FocusedTextMini",
         "resolve_focused_text_pi_launch",
-        "focused_text_mini",
-        "\"Pi Text profile is unavailable\"",
+        "selected_profile_id: Some(BUILTIN_TEXT_PROFILE_ID.to_string())",
+        "AgentChatBackend::Pi",
+        "PiAgentChatLaunch::from_profile(resolve_effective_profile(&text_ai, ctx))",
     ] {
         assert!(
-            AGENT_CHAT_LAUNCH.contains(required),
-            "missing focused-text Pi launch contract: {required}"
+            AGENT_CHAT_PI_LAUNCH.contains(required),
+            "missing focused-text Pi launch resolver contract: {required}"
         );
     }
 }
@@ -431,14 +429,12 @@ fn focused_text_mini_uses_targeted_animated_resize_without_global_resize_animati
 }
 
 #[test]
-fn focused_text_agent_chat_stdin_verbs_alias_old_inline_fixture_verbs() {
+fn focused_text_agent_chat_stdin_verbs_use_explicit_focused_text_names() {
     for required in [
         "OpenFocusedTextAgentChatWithMockData",
         "OpenFocusedTextAgentChatWithPiData",
         "\"openFocusedTextAgentChatWithMockData\"",
         "\"openFocusedTextAgentChatWithPiData\"",
-        "OpenInlineAgentWithMockData",
-        "OpenInlineAgentWithPiData",
     ] {
         assert!(
             STDIN_COMMANDS.contains(required),
@@ -448,9 +444,7 @@ fn focused_text_agent_chat_stdin_verbs_alias_old_inline_fixture_verbs() {
 
     for required in [
         "ExternalCommand::OpenFocusedTextAgentChatWithMockData",
-        "ExternalCommand::OpenInlineAgentWithMockData",
         "ExternalCommand::OpenFocusedTextAgentChatWithPiData",
-        "ExternalCommand::OpenInlineAgentWithPiData",
         "open_focused_text_agent_chat_fixture",
         "focused_text_mock_fixture",
         "focused_text_pi_fixture",
@@ -462,21 +456,10 @@ fn focused_text_agent_chat_stdin_verbs_alias_old_inline_fixture_verbs() {
     }
     assert!(!RUNTIME_STDIN.contains("open_inline_agent_mock_fixture"));
     assert!(!RUNTIME_STDIN.contains("open_inline_agent_pi_fixture"));
-}
-
-#[test]
-fn legacy_inline_agent_window_launch_is_not_public_product_api() {
-    for forbidden in [
-        "launch_inline_agent_from_focused_text",
-        "sync_inline_agent_overlay_window",
-        "open_inline_agent_mock_fixture",
-        "open_inline_agent_pi_fixture",
-    ] {
-        assert!(
-            !INLINE_AGENT_MOD.contains(forbidden),
-            "legacy inline-agent window function must not be re-exported as product API: {forbidden}"
-        );
-    }
+    assert!(!STDIN_COMMANDS.contains("OpenInlineAgentWithMockData"));
+    assert!(!STDIN_COMMANDS.contains("OpenInlineAgentWithPiData"));
+    assert!(!RUNTIME_STDIN.contains("ExternalCommand::OpenInlineAgentWithMockData"));
+    assert!(!RUNTIME_STDIN.contains("ExternalCommand::OpenInlineAgentWithPiData"));
 }
 
 #[test]

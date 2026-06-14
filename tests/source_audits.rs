@@ -263,9 +263,6 @@ mod timestamp_formatting_contract;
 #[path = "source_audits/theme_chooser_single_select_controls.rs"]
 mod theme_chooser_single_select_controls;
 
-#[path = "source_audits/inline_agent_overlay.rs"]
-mod inline_agent_overlay;
-
 #[path = "source_audits/focused_text_capture_ax_wired.rs"]
 mod focused_text_capture_ax_wired;
 
@@ -286,15 +283,6 @@ mod focused_text_agent_chat_submission;
 
 #[path = "source_audits/inline_ai_double_command_trigger_wired.rs"]
 mod inline_ai_double_command_trigger_wired;
-
-#[path = "source_audits/inline_agent_trigger_wired.rs"]
-mod inline_agent_trigger_wired;
-
-#[path = "source_audits/inline_agent_provider_ownership.rs"]
-mod inline_agent_provider_ownership;
-
-#[path = "source_audits/inline_agent_provider_privacy.rs"]
-mod inline_agent_provider_privacy;
 
 #[path = "source_audits/stdin_focused_text_protocol_wired.rs"]
 mod stdin_focused_text_protocol_wired;

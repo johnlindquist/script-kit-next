@@ -43,7 +43,6 @@ pub mod form_prompt;
 pub mod formatting;
 pub mod hotkeys;
 pub mod icons;
-pub mod inline_agent;
 pub mod list_item;
 pub mod logging;
 pub mod menu_syntax;

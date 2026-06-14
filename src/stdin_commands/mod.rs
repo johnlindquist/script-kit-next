@@ -509,25 +509,6 @@ pub enum ExternalCommand {
         #[serde(default, rename = "requestId")]
         request_id: Option<ExternalCommandRequestId>,
     },
-    /// Open the Inline Agent overlay with fixture focused text and optional mock turn.
-    OpenInlineAgentWithMockData {
-        #[serde(default)]
-        text: Option<String>,
-        #[serde(default)]
-        instruction: Option<String>,
-        #[serde(default, rename = "requestId")]
-        request_id: Option<ExternalCommandRequestId>,
-    },
-    /// Open the Inline Agent overlay with fixture focused text and optional real Pi turn.
-    /// This command is gated by SCRIPT_KIT_INLINE_AGENT_REAL_PI_FIXTURE=1.
-    OpenInlineAgentWithPiData {
-        #[serde(default)]
-        text: Option<String>,
-        #[serde(default)]
-        instruction: Option<String>,
-        #[serde(default, rename = "requestId")]
-        request_id: Option<ExternalCommandRequestId>,
-    },
     /// Show the AI command bar (Cmd+K menu) for testing the refactored ActionsDialog
     ShowAiCommandBar,
     /// Simulate a key press in the AI window (for testing command bar navigation)
@@ -828,8 +809,6 @@ impl ExternalCommand {
             | Self::GetConfigFingerprint { request_id, .. }
             | Self::OpenFocusedTextAgentChatWithMockData { request_id, .. }
             | Self::OpenFocusedTextAgentChatWithPiData { request_id, .. }
-            | Self::OpenInlineAgentWithMockData { request_id, .. }
-            | Self::OpenInlineAgentWithPiData { request_id, .. }
             | Self::OpenCreationFeedback { request_id, .. }
             | Self::OpenConfirmPrompt { request_id, .. }
             | Self::OpenAgentChatDetachedFixture { request_id, .. }
@@ -868,8 +847,6 @@ impl ExternalCommand {
                 "openFocusedTextAgentChatFromFocusedFieldWithMockData"
             }
             Self::OpenFocusedTextAgentChatWithPiData { .. } => "openFocusedTextAgentChatWithPiData",
-            Self::OpenInlineAgentWithMockData { .. } => "openInlineAgentWithMockData",
-            Self::OpenInlineAgentWithPiData { .. } => "openInlineAgentWithPiData",
             Self::ShowAiCommandBar => "showAiCommandBar",
             Self::SimulateAiKey { .. } => "simulateAiKey",
             Self::CaptureWindow { .. } => "captureWindow",
@@ -921,8 +898,6 @@ pub const EXTERNAL_COMMAND_VERBS: &[&str] = &[
     "openFocusedTextAgentChatWithMockData",
     "openFocusedTextAgentChatFromFocusedFieldWithMockData",
     "openFocusedTextAgentChatWithPiData",
-    "openInlineAgentWithMockData",
-    "openInlineAgentWithPiData",
     "showAiCommandBar",
     "simulateAiKey",
     "captureWindow",
@@ -1409,16 +1384,6 @@ mod tests {
                 request_id: None,
             },
             ExternalCommand::OpenFocusedTextAgentChatWithPiData {
-                text: None,
-                instruction: None,
-                request_id: None,
-            },
-            ExternalCommand::OpenInlineAgentWithMockData {
-                text: None,
-                instruction: None,
-                request_id: None,
-            },
-            ExternalCommand::OpenInlineAgentWithPiData {
                 text: None,
                 instruction: None,
                 request_id: None,
@@ -2163,23 +2128,6 @@ mod tests {
     }
 
     #[test]
-    fn test_external_command_open_inline_agent_with_mock_data_deserialization() -> anyhow::Result<()>
-    {
-        let json = r#"{"type":"openInlineAgentWithMockData","text":"Hello world","instruction":"Translate"}"#;
-        let cmd: ExternalCommand = serde_json::from_str(json)?;
-        match cmd {
-            ExternalCommand::OpenInlineAgentWithMockData {
-                text, instruction, ..
-            } => {
-                assert_eq!(text.as_deref(), Some("Hello world"));
-                assert_eq!(instruction.as_deref(), Some("Translate"));
-            }
-            other => panic!("Expected OpenInlineAgentWithMockData, got {other:?}"),
-        }
-        Ok(())
-    }
-
-    #[test]
     fn test_external_command_open_focused_text_agent_chat_with_mock_data_deserialization(
     ) -> anyhow::Result<()> {
         let json = r#"{"type":"openFocusedTextAgentChatWithMockData","text":"Hello world","instruction":"Translate","requestId":"ft-mock"}"#;
@@ -2215,26 +2163,6 @@ mod tests {
                 assert_eq!(request_id.as_deref(), Some("ft-pi"));
             }
             other => panic!("Expected OpenFocusedTextAgentChatWithPiData, got {other:?}"),
-        }
-        Ok(())
-    }
-
-    #[test]
-    fn test_external_command_open_inline_agent_with_pi_data_deserialization() -> anyhow::Result<()>
-    {
-        let json = r#"{"type":"openInlineAgentWithPiData","text":"Hello world","instruction":"Translate","requestId":"ia-pi"}"#;
-        let cmd: ExternalCommand = serde_json::from_str(json)?;
-        match cmd {
-            ExternalCommand::OpenInlineAgentWithPiData {
-                text,
-                instruction,
-                request_id,
-            } => {
-                assert_eq!(text.as_deref(), Some("Hello world"));
-                assert_eq!(instruction.as_deref(), Some("Translate"));
-                assert_eq!(request_id.as_ref().map(|id| id.as_str()), Some("ia-pi"));
-            }
-            other => panic!("Expected OpenInlineAgentWithPiData, got {other:?}"),
         }
         Ok(())
     }

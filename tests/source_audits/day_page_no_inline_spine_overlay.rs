@@ -228,6 +228,11 @@ fn day_page_footer_cannot_open_generic_agent_chat_popup() {
             && ai_arm.contains("main_window_footer_ai_ignored_day_page"),
         "stale Day footer AI events must be ignored before the generic Agent Chat open path"
     );
+    assert!(
+        ai_arm.contains("self.day_page_context_return.is_some()")
+            && ai_arm.contains("main_window_footer_ai_ignored_day_page_context_return"),
+        "stale AI footer events during the Day @ context main-menu round trip must not open Agent Chat"
+    );
 
     let agent_model_arm = dispatcher
         .split("crate::footer_popup::FooterAction::AgentModel =>")
@@ -237,5 +242,11 @@ fn day_page_footer_cannot_open_generic_agent_chat_popup() {
         agent_model_arm.contains("AppView::DayPage { .. }")
             && agent_model_arm.contains("main_window_footer_agent_model_ignored_day_page"),
         "stale Day footer Agent/Model events must be ignored before profile/model picker paths"
+    );
+    assert!(
+        agent_model_arm.contains("self.day_page_context_return.is_some()")
+            && agent_model_arm
+                .contains("main_window_footer_agent_model_ignored_day_page_context_return"),
+        "stale Agent/Model footer events during the Day @ context main-menu round trip must not open profile/model picker paths"
     );
 }

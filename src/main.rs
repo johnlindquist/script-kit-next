@@ -97,7 +97,6 @@ mod hotkeys;
 #[allow(dead_code)] // Symbols used by hint_strip for SVG keyboard glyph icons
 mod icons;
 #[allow(unused_imports)]
-mod inline_agent;
 #[cfg(test)]
 mod keyboard_routing_tests;
 mod list_item;

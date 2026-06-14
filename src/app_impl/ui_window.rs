@@ -299,6 +299,12 @@ impl ScriptListApp {
                     entity.update(cx, |chat, cx| {
                         chat.open_profile_trigger_picker_in_window(window, cx);
                     });
+                } else if self.day_page_context_return.is_some() {
+                    tracing::info!(
+                        target: "script_kit::footer_popup",
+                        event = "main_window_footer_ai_ignored_day_page_context_return",
+                        "Ignored stale Agent footer action while Day Page @ context round trip is active"
+                    );
                 } else if matches!(self.current_view, AppView::DayPage { .. }) {
                     tracing::info!(
                         target: "script_kit::footer_popup",
@@ -468,6 +474,14 @@ impl ScriptListApp {
                     entity.update(cx, |chat, cx| {
                         chat.open_profile_trigger_picker_in_window(window, cx);
                     });
+                    return;
+                }
+                if self.day_page_context_return.is_some() {
+                    tracing::info!(
+                        target: "script_kit::footer_popup",
+                        event = "main_window_footer_agent_model_ignored_day_page_context_return",
+                        "Ignored stale Agent/Model footer action while Day Page @ context round trip is active"
+                    );
                     return;
                 }
                 if matches!(self.current_view, AppView::DayPage { .. }) {

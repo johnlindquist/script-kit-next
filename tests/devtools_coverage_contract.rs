@@ -221,7 +221,6 @@ fn coverage_pins_focused_text_mini_agent_chat_and_missing_runtime_proof() {
         "getElements(target main) focused-text Replace, Append, Copy, Expand, Stop, Retry semantic action ids",
         "openFocusedTextAgentChatWithMockData stdin fixture for mock focused text and deterministic Agent Chat output",
         "openFocusedTextAgentChatWithPiData stdin fixture for real warm Pi Text-profile stream proof",
-        "openInlineAgentWithMockData and openInlineAgentWithPiData compatibility aliases to focused-text Agent Chat",
         "TextEdit capture/replace/append receipts",
         "native double-Command trigger delivery proof",
         "src/app_impl/agent_handoff/focused_text_entry.rs",

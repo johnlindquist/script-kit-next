@@ -2721,8 +2721,7 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                 );
                                 view.open_tab_ai_agent_chat_with_entry_intent(None, ctx);
                             }
-                            ExternalCommand::OpenFocusedTextAgentChatWithMockData { text, instruction, request_id }
-                            | ExternalCommand::OpenInlineAgentWithMockData { text, instruction, request_id } => {
+                            ExternalCommand::OpenFocusedTextAgentChatWithMockData { text, instruction, request_id } => {
                                 logging::log("STDIN", "Opening focused-text Agent Chat mock fixture");
                                 let text_length = text.as_ref().map(|value| value.len()).unwrap_or("Hello world".len());
                                 let instruction_length = instruction
@@ -2812,8 +2811,7 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                     }
                                 }
                             }
-                            ExternalCommand::OpenFocusedTextAgentChatWithPiData { text, instruction, request_id }
-                            | ExternalCommand::OpenInlineAgentWithPiData { text, instruction, request_id } => {
+                            ExternalCommand::OpenFocusedTextAgentChatWithPiData { text, instruction, request_id } => {
                                 logging::log("STDIN", "Opening focused-text Agent Chat real Pi fixture");
                                 let text_length = text.as_ref().map(|value| value.len()).unwrap_or("Hello world".len());
                                 let instruction_length = instruction

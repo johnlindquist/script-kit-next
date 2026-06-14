@@ -34,19 +34,6 @@ impl ScriptListApp {
 
         // Handle key based on current view
         let key_lower = key.to_lowercase();
-        if key_lower == "escape" {
-            if let Some(target_val) = target {
-                if crate::windows::resolve_automation_window(Some(target_val)).is_ok_and(|info| {
-                    info.id == crate::inline_agent::INLINE_AGENT_WINDOW_AUTOMATION_ID
-                        && matches!(info.kind, crate::protocol::AutomationWindowKind::MiniAi)
-                }) {
-                    crate::inline_agent::close_inline_agent_overlay_window(ctx);
-                    logging::log("STDIN", "SimulateKey: Escape - close Inline Agent target");
-                    return;
-                }
-            }
-        }
-
         let simulate_key_target_is_notes = target.map_or_else(
             || {
                 crate::windows::focused_automation_window().is_some_and(|info| {
