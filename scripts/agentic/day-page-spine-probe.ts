@@ -8,15 +8,19 @@
  */
 import { Driver, type Json } from "../devtools/driver";
 import { openDayPage } from "./day-page-open-helper";
+import { mkdirSync, writeFileSync } from "node:fs";
 
-const BINARY =
-  process.env.PROBE_BINARY ??
-  process.env.SCRIPT_KIT_GPUI_BINARY ??
-  "target-agent/artifacts/day-page-no-spine/script-kit-gpui";
+const BINARY = process.env.PROBE_BINARY ?? process.env.SCRIPT_KIT_GPUI_BINARY;
+if (!BINARY) {
+  throw new Error(
+    "day-page-spine-probe requires PROBE_BINARY or SCRIPT_KIT_GPUI_BINARY so it cannot run a stale artifact",
+  );
+}
 
 const receipts: Record<string, Json> = {};
 const failures: string[] = [];
 const runId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+const OUT_PATH = ".test-output/day-page-no-spine-probe.json";
 
 function check(name: string, ok: boolean, detail: Json = {}) {
   receipts[name] = { ok, ...detail };
@@ -49,6 +53,17 @@ function spineRowsInDayElements(elements: Json): Json[] {
   });
 }
 
+function promptBuilderTextInElements(elements: Json): Json[] {
+  return walkElements(elements).filter((el) => {
+    const text = typeof el.text === "string" ? el.text : "";
+    const title = typeof el.title === "string" ? el.title : "";
+    const value = typeof el.value === "string" ? el.value : "";
+    const label = typeof el.label === "string" ? el.label : "";
+    const haystack = `${text} ${title} ${value} ${label}`.toLowerCase();
+    return haystack.includes("prompt builder") || haystack.includes("ready to send");
+  });
+}
+
 async function setDayPageInput(driver: Driver, text: string, label: string) {
   const batch = (await driver.batch(
     [
@@ -74,8 +89,12 @@ async function assertNoDayOverlay(driver: Driver, label: string) {
     { timeoutMs: 5000 },
   )) as Json;
   const rows = spineRowsInDayElements(elements);
+  const promptBuilderText = promptBuilderTextInElements(elements);
   check(`no_day_spine_rows_${label}`, rows.length === 0, {
     rows: rows.slice(0, 12),
+  });
+  check(`no_prompt_builder_text_${label}`, promptBuilderText.length === 0, {
+    promptBuilderText: promptBuilderText.slice(0, 12),
   });
   check(`still_day_page_${label}`, state.promptType === "dayPage", {
     promptType: state.promptType,
@@ -145,5 +164,7 @@ const result = {
   receipts,
 };
 
+mkdirSync(".test-output", { recursive: true });
+writeFileSync(OUT_PATH, JSON.stringify(result, null, 2));
 console.log(JSON.stringify(result, null, 2));
 process.exit(failures.length === 0 ? 0 : 1);

@@ -228,4 +228,14 @@ fn day_page_footer_cannot_open_generic_agent_chat_popup() {
             && ai_arm.contains("main_window_footer_ai_ignored_day_page"),
         "stale Day footer AI events must be ignored before the generic Agent Chat open path"
     );
+
+    let agent_model_arm = dispatcher
+        .split("crate::footer_popup::FooterAction::AgentModel =>")
+        .nth(1)
+        .expect("FooterAction::AgentModel arm should exist");
+    assert!(
+        agent_model_arm.contains("AppView::DayPage { .. }")
+            && agent_model_arm.contains("main_window_footer_agent_model_ignored_day_page"),
+        "stale Day footer Agent/Model events must be ignored before profile/model picker paths"
+    );
 }

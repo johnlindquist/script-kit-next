@@ -470,6 +470,14 @@ impl ScriptListApp {
                     });
                     return;
                 }
+                if matches!(self.current_view, AppView::DayPage { .. }) {
+                    tracing::info!(
+                        target: "script_kit::footer_popup",
+                        event = "main_window_footer_agent_model_ignored_day_page",
+                        "Ignored stale Day Page Agent/Model footer action"
+                    );
+                    return;
+                }
                 if !matches!(self.current_view, AppView::ScriptList) {
                     self.current_view = AppView::ScriptList;
                 }
