@@ -739,6 +739,27 @@ impl NotesApp {
                 "Auto-resize: adjusting window height"
             );
 
+            let transition = NotesAutosizeTransition {
+                generation: self.autosize_generation,
+                cause: "editor-input",
+                before_height: old_height,
+                after_height: clamped_height,
+                before_width: old_width,
+                after_width: old_width,
+                line_count,
+                desired_height: total_height,
+                clamped_height,
+                applied: true,
+                skipped_reason: None,
+                recorded_at: Instant::now(),
+            };
+            self.last_autosize_transition = Some(transition);
+
+            // Record the app-owned target before resizing. `window.resize`
+            // can cause another render pass while AppKit is still between the
+            // old and new bounds; `detect_manual_resize` treats either bound
+            // as app-owned while this fresh transition is active.
+            self.last_window_height = clamped_height;
             window.resize(new_size);
             crate::windows::upsert_automation_window(crate::protocol::AutomationWindowInfo {
                 id: "notes".to_string(),
@@ -757,24 +778,25 @@ impl NotesApp {
                 parent_kind: None,
                 pid: Some(std::process::id()),
             });
-            self.last_window_height = clamped_height;
             applied = true;
         }
 
-        self.last_autosize_transition = Some(NotesAutosizeTransition {
-            generation: self.autosize_generation,
-            cause: "editor-input",
-            before_height: old_height,
-            after_height: if applied { clamped_height } else { old_height },
-            before_width: old_width,
-            after_width: old_width,
-            line_count,
-            desired_height: total_height,
-            clamped_height,
-            applied,
-            skipped_reason,
-            recorded_at: Instant::now(),
-        });
+        if !applied {
+            self.last_autosize_transition = Some(NotesAutosizeTransition {
+                generation: self.autosize_generation,
+                cause: "editor-input",
+                before_height: old_height,
+                after_height: old_height,
+                before_width: old_width,
+                after_width: old_width,
+                line_count,
+                desired_height: total_height,
+                clamped_height,
+                applied,
+                skipped_reason,
+                recorded_at: Instant::now(),
+            });
+        }
     }
 
     /// Enable auto-sizing (called from actions panel)
@@ -860,6 +882,28 @@ impl NotesApp {
         }
 
         let current_height: f32 = window.bounds().size.height.into();
+        let recent_app_resize = self
+            .last_autosize_transition
+            .as_ref()
+            .and_then(|transition| {
+                if !transition.applied
+                    || transition.cause != "editor-input"
+                    || transition.recorded_at.elapsed() > Duration::from_millis(750)
+                {
+                    return None;
+                }
+                Some((transition.before_height, transition.after_height))
+            });
+        if let Some((before_height, after_height)) = recent_app_resize {
+            if (current_height - before_height).abs() <= MANUAL_RESIZE_THRESHOLD
+                || (current_height - after_height).abs() <= MANUAL_RESIZE_THRESHOLD
+            {
+                if (current_height - after_height).abs() <= MANUAL_RESIZE_THRESHOLD {
+                    self.last_window_height = after_height;
+                }
+                return;
+            }
+        }
 
         // If height differs significantly from what we set, user resized manually
         if (current_height - self.last_window_height).abs() > MANUAL_RESIZE_THRESHOLD {

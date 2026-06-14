@@ -54,20 +54,11 @@ impl NotesEditor {
 
     pub fn render_input_state(input_state: &Entity<InputState>, cx: &App) -> AnyElement {
         let editor = Input::new(input_state)
-            .flex_1()
-            .min_h(px(0.))
             .h_full()
             .appearance(false)
             .font_family(cx.theme().mono_font_family.clone())
             .text_size(cx.theme().mono_font_size);
 
-        div()
-            .flex()
-            .flex_col()
-            .flex_1()
-            .min_h(px(0.))
-            .h_full()
-            .child(editor)
-            .into_any_element()
+        div().h_full().child(editor).into_any_element()
     }
 }

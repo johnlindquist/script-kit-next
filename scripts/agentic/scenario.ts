@@ -6915,6 +6915,14 @@ function semanticNode(elements: Record<string, unknown> | null, semanticId: stri
   ) ?? null;
 }
 
+function notesEditorClientHeight(elements: Record<string, unknown> | null): number | null {
+  const editor = semanticNode(elements, "input:notes-editor");
+  const style = asRecord(editor?.style);
+  const runtime = asRecord(style.editorRuntime);
+  const metrics = asRecord(runtime.editorScrollMetrics);
+  return numberField(metrics, "clientHeight");
+}
+
 export async function runNotesWindowResizeStressScenario(opts: {
   session: string;
   shortLineCount?: number;
@@ -6989,6 +6997,9 @@ export async function runNotesWindowResizeStressScenario(opts: {
     const beforeHeight = numberField(beforeBounds, "height");
     const afterGrowHeight = numberField(afterGrowBounds, "height");
     const afterShrinkHeight = numberField(afterShrinkBounds, "height");
+    const beforeEditorClientHeight = notesEditorClientHeight(beforeElements);
+    const afterGrowEditorClientHeight = notesEditorClientHeight(afterGrowElements);
+    const afterShrinkEditorClientHeight = notesEditorClientHeight(afterShrinkElements);
     const beforeWidth = numberField(beforeBounds, "width");
     const afterGrowWidth = numberField(afterGrowBounds, "width");
     const afterShrinkWidth = numberField(afterShrinkBounds, "width");
@@ -6996,6 +7007,13 @@ export async function runNotesWindowResizeStressScenario(opts: {
     const shrinkDeltaPx = afterGrowHeight != null && afterShrinkHeight != null ? afterGrowHeight - afterShrinkHeight : null;
     const heightGrewForTallContent = growDeltaPx != null && growDeltaPx > 0;
     const heightShrankForShortContent = shrinkDeltaPx != null && shrinkDeltaPx > 0;
+    const editorViewportUsable = beforeEditorClientHeight != null
+      && afterGrowEditorClientHeight != null
+      && afterShrinkEditorClientHeight != null
+      && beforeEditorClientHeight >= 100
+      && afterGrowEditorClientHeight > beforeEditorClientHeight
+      && afterShrinkEditorClientHeight >= 100
+      && afterShrinkEditorClientHeight < afterGrowEditorClientHeight;
     const widthStable = beforeWidth != null
       && afterGrowWidth != null
       && afterShrinkWidth != null
@@ -7009,6 +7027,7 @@ export async function runNotesWindowResizeStressScenario(opts: {
       && shrinkBatchSucceeded
       && heightGrewForTallContent
       && heightShrankForShortContent
+      && editorViewportUsable
       && widthStable
       ? "pass"
       : "fail";
@@ -7043,6 +7062,9 @@ export async function runNotesWindowResizeStressScenario(opts: {
         beforeHeight,
         afterGrowHeight,
         afterShrinkHeight,
+        beforeEditorClientHeight,
+        afterGrowEditorClientHeight,
+        afterShrinkEditorClientHeight,
         growDeltaPx,
         shrinkDeltaPx,
         beforeWidth,
@@ -7050,6 +7072,7 @@ export async function runNotesWindowResizeStressScenario(opts: {
         afterShrinkWidth,
         heightGrewForTallContent,
         heightShrankForShortContent,
+        editorViewportUsable,
         widthStable,
         notesWindowVisible,
         cleanupConfirmed: stopReceipt != null || startReceipt.resumed === true,
@@ -7079,6 +7102,10 @@ export async function runNotesWindowResizeStressScenario(opts: {
           shrinkDeltaPx,
           heightGrewForTallContent,
           heightShrankForShortContent,
+          beforeEditorClientHeight,
+          afterGrowEditorClientHeight,
+          afterShrinkEditorClientHeight,
+          editorViewportUsable,
           widthStable,
           sandboxNotesStore: true,
         },
