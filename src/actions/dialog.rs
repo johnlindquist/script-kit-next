@@ -5020,7 +5020,8 @@ mod tests {
         }
 
         let focused_script = Some(focused_script());
-        let normal_actions = ActionsDialog::build_actions(&focused_script, &None, &None, &None);
+        let normal_actions =
+            ActionsDialog::build_actions(&focused_script, &None, &None, &None, false);
         assert!(
             normal_actions
                 .iter()
@@ -5030,7 +5031,7 @@ mod tests {
 
         let replace_section = Some(power_syntax_section(SectionMode::Replace));
         let replace_actions =
-            ActionsDialog::build_actions(&focused_script, &None, &replace_section, &None);
+            ActionsDialog::build_actions(&focused_script, &None, &replace_section, &None, false);
         assert_eq!(replace_actions.len(), 1);
         assert_eq!(replace_actions[0].id, "menu_syntax:capture.cancel");
         assert!(
@@ -5042,7 +5043,7 @@ mod tests {
 
         let prepend_section = Some(power_syntax_section(SectionMode::Prepend));
         let prepend_actions =
-            ActionsDialog::build_actions(&focused_script, &None, &prepend_section, &None);
+            ActionsDialog::build_actions(&focused_script, &None, &prepend_section, &None, false);
         assert_eq!(prepend_actions[0].id, "menu_syntax:capture.cancel");
         assert_eq!(&prepend_actions[1..], normal_actions.as_slice());
         assert!(
