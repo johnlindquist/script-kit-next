@@ -1,0 +1,117 @@
+[0m
+> build · glm-5.2
+[0m
+[0m→ [0mSkill "wzrrd-publish"
+[0m
+[0m$ [0mls README.md CLAUDE.md 2>/dev/null && echo "---GLOSSARY---" && ls GLOSSARY.md 2>/dev/null
+CLAUDE.md
+README.md
+---GLOSSARY---
+GLOSSARY.md
+[0m
+[0m✱ [0mGrep "accent|background|foreground|muted|border|surface|radius|--[a-z-]+:\s*#"[90m in src · 0 matches[0m
+[0m
+[0m$ [0mhead -60 README.md; echo "===CLAUDE==="; head -40 CLAUDE.md
+# Script Kit GPUI
+
+A complete rewrite of [Script Kit](https://scriptkit.com) using the [GPUI](https://gpui.rs) framework from Zed. This version combines the SDK and app into a single repository for a streamlined development experience.
+
+## Project Goals
+
+### Complete Rewrite with GPUI
+
+Script Kit GPUI is built from the ground up using Zed's GPUI framework, delivering:
+
+- **Blazing Fast Performance** - Native Rust performance with GPU-accelerated rendering
+- **Sub-Second Compilation** - Hot reload development with cargo-watch rebuilds in 2-5 seconds
+- **Single Repository** - SDK and app live together, making contributions and customizations straightforward
+- **Bun Runtime** - Scripts execute via Bun for fast startup and modern JavaScript/TypeScript support
+
+### Simplified SDK Philosophy
+
+This rewrite takes a **focused approach** to the SDK:
+
+- **Prompts Are the Core** - The SDK focuses on the prompt APIs (`arg`, `div`, `editor`, `term`, `fields`, `form`, `drop`, `hotkey`, etc.)
+- **Bring Your Own Libraries** - Utilities and helpers are no longer bundled; install what you need via `bun add`
+- **Full Control** - You manage your own dependencies, versions, and tooling
+- **Lighter Weight** - The SDK stays small and focused on UI primitives
+
+### Not Backwards Compatible
+
+> **Important**: This is NOT a drop-in replacement for previous Script Kit versions.
+
+What's preserved:
+- Core prompt APIs (`arg`, `div`, `editor`, `fields`, `form`, `drop`, `hotkey`, `path`, `term`, `chat`, `mic`, `webcam`)
+- Choice/option structure and props
+- Basic script metadata format
+
+What's changed:
+- No bundled utilities (file helpers, clipboard wrappers, etc.)
+- No `kit` global with hundreds of helpers
+- Scripts must explicitly import dependencies via Bun
+- Configuration is TypeScript-based (`~/.scriptkit/config.ts`)
+
+## Quick Start
+
+New to Script Kit GPUI? Start with the user guides:
+
+- [Getting Started](docs/guides/getting-started.md)
+- [Feature Tour](docs/guides/feature-tour.md)
+- [Main Menu Input](docs/guides/main-menu-input.md)
+- [SDK Scripting](docs/guides/sdk-scripting.md)
+- [MCP and Agent Context](docs/guides/mcp-and-agent-context.md)
+- [Dictation](docs/guides/dictation.md)
+- [Computer Use](docs/guides/computer-use.md)
+
+### Prerequisites
+
+- **macOS** (Linux/Windows support planned)
+- **Rust** (1.70+) - Install from https://rustup.rs
+- **Bun** - Install from https://bun.sh
+- **cargo-watch** (optional, for hot reload):
+  ```bash
+  cargo install cargo-watch
+  ```
+===CLAUDE===
+For a map of main UI surfaces to code implementation, see [GLOSSARY.md]
+
+# Before Starting Work
+
+- Inspect the relevant source, tests, and repo-local skills before editing.
+- Prefer current code and generated artifacts over stale notes or memory.
+- Keep edits narrowly scoped and verify them with the smallest check that can fail for the changed behavior.
+- Keep tool-facing root docs in place: `README.md`, `CLAUDE.md`, `AGENTS.md`, and `.impeccable.md`.
+
+## Oracle / Packx Bundle Context
+
+For Oracle review or `oracle-packx` work in this repository, include the repo process context in the bundle or prompt unless the user explicitly excludes it: `AGENTS.md`, the owning `.agents/skills/<skill>/SKILL.md`, and relevant source, tests, generated contracts, and verification notes.
+
+If a `packx` preview with include globs unexpectedly matches `0` files in this repository, rebuild the bundle from an explicit path list instead of widening blindly. A reliable workaround is:
+
+```bash
+rg --files <scope> | rg '<owners-or-patterns>' > /tmp/script-kit-gpui-packx-files.txt
+xargs packx --preview --no-interactive -x "**/CLAUDE.md" < /tmp/script-kit-gpui-packx-files.txt
+xargs packx --limit 900k --strip-comments --minify -f markdown --no-interactive --stdout -x "**/CLAUDE.md" < /tmp/script-kit-gpui-packx-files.txt > ~/.oracle/bundles/<slug>.txt
+```
+
+Use this when directory/include-glob matching undercounts relevant files; keep `CLAUDE.md` excluded and verify the preview count plus final non-empty bundle before consulting Oracle.
+
+## UI Consistency and Shared Component Contract
+
+When touching app UI, treat shared components and theme/chrome tokens as the source of truth. Do not build one-off UI when an existing component, shell, list item, input, footer, popup, or token can be reused or extended.
+
+Before adding or changing UI:
+
+1. Start with `GLOSSARY.md` to identify the owning surface and nearby implementation files.
+2. Inspect the current surface, related tests, and the shared component entry points before editing.
+3. Check `src/components/mod.rs` and the relevant component modules before creating any new UI helper.
+4. Prefer extending the shared component library over adding surface-local render helpers.
+5. If a new reusable primitive is needed, add it under `src/components/**` or the appropriate theme/chrome/design layer and use it from the surface. Do not bury reusable UI in one prompt, built-in, Agent Chat, or main-window renderer.
+
+Shared UI entry points to check first:
+
+- Inputs/search/menu fields: `src/components/text_input.rs`, `src/components/text_input/**`, `src/components/inline_prompt_input.rs`, `src/components/inline_dropdown/**`, `src/components/inline_picker.rs`, and `src/components/inline_popup_window.rs`.
+- List rows and sections: `src/components/unified_list_item/**`; preserve existing `crate::list_item` usage where that is the current surface contract, but do not invent a third row system.
+- Prompt shells and prompt chrome: `src/components/prompt_layout_shell.rs`, `src/components/prompt_container.rs`, `src/components/prompt_footer.rs`, and `src/components/minimal_prompt_shell.rs`.
+[0m
+[0m✱ [0mGrep "(0x[0-9a-fA-F]{6}|rgba?\(|hsla?\(|accent.*:|#?[0-9a-fA-F]{6})"[90m in src/theme · 100 matches[0m

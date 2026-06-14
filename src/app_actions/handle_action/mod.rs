@@ -1679,6 +1679,76 @@ impl ScriptListApp {
                     DispatchOutcome::not_handled()
                 }
             }
+            "agent_chat_append_last_response_to_today" => {
+                let entity = entity.clone();
+                let last_response = {
+                    let view = entity.read(cx);
+                    view.thread().and_then(|thread| {
+                        thread
+                            .read(cx)
+                            .messages
+                            .iter()
+                            .rev()
+                            .find(|msg| {
+                                matches!(
+                                    msg.role,
+                                    crate::ai::agent_chat::ui::thread::AgentChatThreadMessageRole::Assistant
+                                )
+                            })
+                            .map(|msg| msg.body.to_string())
+                    })
+                };
+                let Some(last_response) = last_response.filter(|text| !text.trim().is_empty())
+                else {
+                    let mut outcome = DispatchOutcome::success();
+                    outcome.user_message =
+                        Some("No Agent Chat response to append to Today".to_string());
+                    return outcome;
+                };
+
+                let Some(AppView::DayPage { entity: day_page }) =
+                    self.tab_ai_harness_return_view.clone()
+                else {
+                    tracing::warn!(
+                        target: "script_kit::day_page",
+                        event = "agent_chat_append_to_today_blocked",
+                        reason = "return_origin_not_day_page",
+                    );
+                    return DispatchOutcome::not_handled();
+                };
+
+                match day_page.update(cx, |view, _cx| {
+                    view.append_agent_chat_response_to_today_file(&last_response)
+                }) {
+                    Ok(()) => {
+                        tracing::info!(
+                            target: "script_kit::day_page",
+                            event = "agent_chat_append_to_today_succeeded",
+                            char_count = last_response.chars().count(),
+                        );
+                        self.clear_actions_popup_state();
+                        if crate::actions::is_actions_window_open() {
+                            crate::actions::close_actions_window(cx);
+                        }
+                        self.close_tab_ai_harness_terminal(cx);
+                        let mut outcome = DispatchOutcome::success();
+                        outcome.user_message =
+                            Some("Appended last Agent Chat response to Today".to_string());
+                        outcome
+                    }
+                    Err(error) => {
+                        tracing::warn!(
+                            target: "script_kit::day_page",
+                            event = "agent_chat_append_to_today_failed",
+                            error = %error,
+                        );
+                        DispatchOutcome::error(
+                            crate::action_helpers::ERROR_ACTION_FAILED,
+                            format!("Failed to append to Today: {error}"),
+                        )
+                    }
+                }
+            }
             "agent_chat_new_conversation" | "agent_chat_clear_conversation" => {
                 let Some(session_action) =
                     AgentChatConversationSessionHandlerAction::from_action_id(action_id)

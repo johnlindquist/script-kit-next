@@ -1,0 +1,83 @@
+{
+  "schemaVersion": 1,
+  "parseOk": true,
+  "parseError": null,
+  "rawReportSha256": "165219e0ed2217ea9f1f547b32739a2efb82c60ad8c707c27ec449220a7c121e",
+  "scores": {
+    "codex-gpt-5.5-high": {
+      "correctness": 8,
+      "task_fit": 9,
+      "evidence": 8,
+      "specificity": 9,
+      "constraint_following": 9,
+      "novelty": 8,
+      "risk_awareness": 8,
+      "cost_complexity": 8,
+      "rationale": "Strong owner mapping and correct root cause around block markdown vs inline markdown; minor overclaim that dotted capture names are a required fix."
+    },
+    "claude-sonnet-high": {
+      "correctness": 0,
+      "task_fit": 0,
+      "evidence": 0,
+      "specificity": 0,
+      "constraint_following": 1,
+      "novelty": 0,
+      "risk_awareness": 0,
+      "cost_complexity": 0,
+      "rationale": "Timed out with no usable output."
+    },
+    "agy-gemini-flash-high": {
+      "correctness": 0,
+      "task_fit": 0,
+      "evidence": 0,
+      "specificity": 0,
+      "constraint_following": 0,
+      "novelty": 0,
+      "risk_awareness": 0,
+      "cost_complexity": 0,
+      "rationale": "Returned a generic greeting instead of the requested artifact."
+    },
+    "opencode-glm-5.2-high": {
+      "correctness": 0,
+      "task_fit": 0,
+      "evidence": 0,
+      "specificity": 0,
+      "constraint_following": 1,
+      "novelty": 0,
+      "risk_awareness": 0,
+      "cost_complexity": 0,
+      "rationale": "Provided only an investigation preface in the supplied output."
+    }
+  },
+  "consensus": [
+    "P0 1 layout clipping is likely fixed by the shared NotesEditor render path and should be guarded with geometry proof.",
+    "P0 2 remains because block markdown highlighting is active but inline markdown link captures are not applied.",
+    "The final fix must preserve disabled markdown_inline injection for performance and keep Day and Notes on the shared NotesEditor path."
+  ],
+  "contradictions": [
+    "Codex suggests bare link capture names are required, but current style resolution falls back from dotted capture names; missing inline parsing is better supported as the root cause.",
+    "Only one panel provided a substantive technical answer, so agreement claims are weak."
+  ],
+  "unsupported_claims": [
+    "Changing @link_uri.markup to @link_uri alone will fix Day links.",
+    "markdownInlineRegistered true proves inline link styling is applied to editable text."
+  ],
+  "unique_insights": [
+    "Add a visible-range supplemental markdown_inline pass inside SyntaxHighlighter::styles instead of restoring markdown_inline injection.",
+    "Expose structured highlight samples in runtime metadata so the Day/Notes probe can assert styled link_text and link_uri without screenshot sampling."
+  ],
+  "failure_notes": [
+    "claude-sonnet-high timed out, removing the skeptic perspective.",
+    "agy-gemini-flash-high and opencode-glm-5.2-high did not provide usable artifacts, so the panel has low diversity.",
+    "Panel provider failed or timed out: claude-sonnet-high"
+  ],
+  "confidence": "medium",
+  "escalation_needed": true,
+  "synthesis_instructions": [
+    "Use the Codex answer as the primary base, but correct its capture-name overclaim.",
+    "Implement the remaining fix in the shared highlighter path, not in Day-specific rendering.",
+    "Do not re-enable markdown_inline injection.",
+    "Prove the fix with exact highlighter byte-range assertions and runtime parity metadata for Notes and Day."
+  ],
+  "digest": "08359a69cc031d41a3d96e235a5d4c4cc976d9d3167f376d7da73519cde814d5"
+}

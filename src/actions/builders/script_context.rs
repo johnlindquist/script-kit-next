@@ -956,6 +956,14 @@ pub fn get_agent_chat_actions() -> Vec<Action> {
         .with_shortcut("\u{21e7}\u{2318}S")
         .with_icon(IconName::File)
         .with_section("Response"),
+        Action::new(
+            "agent_chat_append_last_response_to_today",
+            "Append Last Response to Today",
+            Some("Write the latest assistant response back to Today's brain".to_string()),
+            ActionCategory::ScriptContext,
+        )
+        .with_icon(IconName::File)
+        .with_section("Response"),
         // ── Code ─────────────────────────────────────────────
         Action::new(
             "agent_chat_copy_all_code",
@@ -1502,6 +1510,9 @@ pub(crate) fn get_agent_chat_model_picker_actions(
 pub(crate) enum AgentChatActionsDialogHost {
     /// Shared Agent Chat surface in the main Script Kit panel — all actions available.
     Shared,
+    /// Shared main-panel Agent Chat opened from the Day Page. Same as shared,
+    /// plus the Day-return action that writes the last assistant reply back to Today.
+    DayPage,
     /// Notes-hosted Agent Chat surface — subset that works inside the Notes window.
     /// `agent_chat_close` returns to the Notes editor rather than closing a window.
     /// `agent_chat_save_as_note` saves the embedded transcript as a new canonical note.
@@ -1532,9 +1543,15 @@ fn agent_chat_host_action_plan(
     action_id: &str,
 ) -> AgentChatHostActionPlan {
     match host {
-        AgentChatActionsDialogHost::Shared => {
+        AgentChatActionsDialogHost::Shared | AgentChatActionsDialogHost::DayPage => {
             if action_id == "agent_chat_close" {
                 AgentChatHostActionPlan::IncludeWithoutShortcut
+            } else if action_id == "agent_chat_append_last_response_to_today" {
+                if matches!(host, AgentChatActionsDialogHost::DayPage) {
+                    AgentChatHostActionPlan::IncludeWithShortcut
+                } else {
+                    AgentChatHostActionPlan::Exclude
+                }
             } else {
                 AgentChatHostActionPlan::IncludeWithShortcut
             }
@@ -1613,6 +1630,7 @@ fn filter_agent_chat_actions_for_host(
 ) -> Vec<Action> {
     let host_label = match host {
         AgentChatActionsDialogHost::Shared => "shared",
+        AgentChatActionsDialogHost::DayPage => "day_page",
         AgentChatActionsDialogHost::Notes => "notes",
         AgentChatActionsDialogHost::Detached => "detached",
     };
@@ -1651,6 +1669,7 @@ pub(crate) fn get_agent_chat_root_route_for_host(
 ) -> crate::actions::ActionsDialogRoute {
     let host_label = match host {
         AgentChatActionsDialogHost::Shared => "shared",
+        AgentChatActionsDialogHost::DayPage => "day_page",
         AgentChatActionsDialogHost::Notes => "notes",
         AgentChatActionsDialogHost::Detached => "detached",
     };
@@ -2397,6 +2416,22 @@ mod tests {
         );
         assert_eq!(
             agent_chat_host_action_plan(
+                AgentChatActionsDialogHost::Shared,
+                "agent_chat_append_last_response_to_today"
+            ),
+            AgentChatHostActionPlan::Exclude,
+            "normal shared Agent Chat should not show the Day Page return action"
+        );
+        assert_eq!(
+            agent_chat_host_action_plan(
+                AgentChatActionsDialogHost::DayPage,
+                "agent_chat_append_last_response_to_today"
+            ),
+            AgentChatHostActionPlan::IncludeWithShortcut,
+            "Day-launched Agent Chat should expose the return-to-Today action"
+        );
+        assert_eq!(
+            agent_chat_host_action_plan(
                 AgentChatActionsDialogHost::Detached,
                 "agent_chat_show_history"
             ),
@@ -2405,6 +2440,7 @@ mod tests {
 
         for host in [
             AgentChatActionsDialogHost::Shared,
+            AgentChatActionsDialogHost::DayPage,
             AgentChatActionsDialogHost::Notes,
             AgentChatActionsDialogHost::Detached,
         ] {

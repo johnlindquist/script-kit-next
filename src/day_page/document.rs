@@ -279,6 +279,17 @@ impl DayPageDocumentSession {
         io::atomic_append_line(&path, line)?;
         Ok(())
     }
+
+    /// Append to the currently bound day file without mutating the in-memory
+    /// editor session. Hosts use this for external writers that should be
+    /// picked up by `maybe_refresh_from_disk` after the editor surface returns.
+    pub fn append_external_line_to_bound_file(&self, line: &str) -> Result<()> {
+        let path = self
+            .path
+            .clone()
+            .with_context(|| "external append without bind")?;
+        io::atomic_append_line(&path, line)
+    }
 }
 
 #[cfg(test)]
@@ -357,6 +368,28 @@ mod tests {
             .expect("refresh")
             .expect("should refresh");
         assert!(refreshed.contains("buy milk"));
+    }
+
+    #[test]
+    fn external_append_targets_bound_day_not_wall_clock_today() {
+        let (_dir, mut session) = test_session();
+        let bound_day = utc("2026-06-11T09:42:00Z");
+        let later_day = utc("2026-06-12T09:42:00Z");
+        session.bind_today(bound_day).expect("bind");
+        let bound_path = session.path().expect("bound path").clone();
+        let later_path = session.substrate().paths().day_page(later_day.date_naive());
+
+        session
+            .append_external_line_to_bound_file("09:43 Agent Chat\n\nkeep this")
+            .expect("append to bound day");
+
+        assert!(fs::read_to_string(&bound_path)
+            .expect("read bound day")
+            .contains("keep this"));
+        assert!(
+            !later_path.exists(),
+            "external append must not choose a new path from wall-clock today"
+        );
     }
 
     #[test]

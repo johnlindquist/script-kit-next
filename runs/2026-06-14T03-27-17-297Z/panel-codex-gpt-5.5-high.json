@@ -1,0 +1,33 @@
+{
+  "id": "codex-gpt-5.5-high",
+  "label": "Codex gpt-5.5 high",
+  "panelRole": "architect",
+  "command": "codex",
+  "args": [
+    "exec",
+    "--skip-git-repo-check",
+    "--ephemeral",
+    "-C",
+    "/Users/johnlindquist/dev/script-kit-gpui",
+    "-s",
+    "read-only",
+    "-m",
+    "gpt-5.5",
+    "-c",
+    "model_reasoning_effort=\"high\"",
+    "-"
+  ],
+  "env": {},
+  "preflight": null,
+  "ok": true,
+  "exitCode": 0,
+  "signal": null,
+  "timedOut": false,
+  "startedAt": "2026-06-14T03:27:17.299Z",
+  "endedAt": "2026-06-14T03:31:16.327Z",
+  "durationMs": 239028,
+  "stdinChars": 2762,
+  "stdinSha256": "ed40165ae7ef0befebb21b2ca2c56e0b40adee3c6c81b7b39bf5a05441198230",
+  "stdoutChars": 5300,
+  "stderrChars": 2183034
+}

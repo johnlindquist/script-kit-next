@@ -1,15 +1,14 @@
 /**
- * Runtime proof: day pages are discoverable in the Notes Cmd+P switcher and
- * picking one hands off to the MAIN window's Day Page surface.
+ * Runtime proof: Notes Cmd+P stays in the Notes/windowed experience and never
+ * exposes or opens the main-window Day Page surface, even when sandbox day
+ * files exist.
  *
- * Contract under test (src/notes/day_page_rows.rs + window/panels.rs +
- * ScriptListApp::open_day_page_in_main_window_hook):
- *   1. Cmd+P in Notes lists `daypage_YYYY-MM-DD` rows in a "Day Pages"
- *      section, read-through from `~/.scriptkit/brain/days/*.md` (sandboxed
- *      here), newest first.
- *   2. Narrowing to a day row and pressing Enter closes the switcher and
- *      opens that exact day — not today — in the main window's Day Page
- *      (promptType "dayPage", editor showing the seeded file content).
+ * Contract under test:
+ *   1. Cmd+P in Notes opens the note switcher.
+ *   2. The switcher contains no `daypage_YYYY-MM-DD` rows and no "Day Pages"
+ *      section for files under `~/.scriptkit/brain/days/*.md`.
+ *   3. The main window remains outside promptType "dayPage" after the Notes
+ *      switcher user path.
  *
  * Protocol-only (simulateGpuiEvent), so the proof runs hidden-window safe.
  * Pass criteria in the printed report: every `checks[*].pass` is true.
@@ -44,7 +43,7 @@ function check(name: string, pass: boolean, detail?: Json) {
 const driver = await Driver.launch({
   binary: BINARY,
   sandboxHome: true,
-  sessionName: "notes-day-page-switcher",
+  sessionName: "notes-day-page-switcher-no-day",
   env: { SCRIPT_KIT_PANEL_INVARIANTS_ALLOW_MISMATCH: "1" },
 });
 
@@ -63,8 +62,8 @@ function gpuiKey(
 }
 
 try {
-  // Seed two day files in the sandbox brain. A fixed PAST date proves the
-  // pick binds that day rather than falling back to today.
+  // Seed two day files in the sandbox brain. Notes Cmd+P should ignore both;
+  // day-page browsing belongs to the main-window Day Page switcher.
   const daysDir = join(driver.sessionDir, "home", ".scriptkit", "brain", "days");
   mkdirSync(daysDir, { recursive: true });
   const seededDate = "2026-06-01";
@@ -81,7 +80,7 @@ try {
   driver.send({ type: "openNotes", requestId: "probe-open-notes" });
   await Bun.sleep(2000);
 
-  // --- 1. Cmd+P opens the switcher and lists day page rows ---
+  // --- 1. Cmd+P opens the switcher and does not list day page rows ---
   await gpuiKey("notes", "p", ["cmd"]);
   await Bun.sleep(900);
 
@@ -105,7 +104,7 @@ try {
       String(el.semanticId ?? el.id ?? "").includes("daypage_") ||
       /^\d{4}-\d{2}-\d{2} · |^Today · /.test(String(el.label ?? "")),
   );
-  check("switcher_lists_day_page_rows", dayRows.length >= 2, {
+  check("switcher_has_no_day_page_rows", dayRows.length === 0, {
     dayRowCount: dayRows.length,
     sample: dayRows.slice(0, 3).map((el) => ({
       id: el.semanticId ?? el.id,
@@ -117,53 +116,31 @@ try {
     })),
   });
 
-  // --- 2. Select the seeded PAST day deterministically and accept ---
-  // (Fuzzy filter text like "06-01" also subsequence-matches "2026-06-12",
-  // so target the row by semantic id instead of racing the ranking.)
-  const pastRow = dayRows.find((el) =>
-    String(el.semanticId ?? el.id ?? "").includes(`daypage_${seededDate}`),
+  check(
+    "seeded_past_day_absent",
+    !nodes.some((el) =>
+      JSON.stringify({
+        id: el.semanticId ?? el.id,
+        label: el.label,
+        value: el.value,
+      }).includes(seededDate),
+    ),
+    { seededDate },
   );
-  const pastRowId = String(pastRow?.semanticId ?? pastRow?.id ?? "");
-  check("seeded_past_day_row_present", pastRowId.length > 0, { pastRowId });
-  await driver.request(
-    {
-      type: "batch",
-      target: { type: "kind", kind: "actionsDialog" },
-      commands: [{ type: "selectBySemanticId", semanticId: pastRowId }],
-    },
-    { expect: "batchResult", timeoutMs: 5000 },
-  );
-  await Bun.sleep(300);
-  await gpuiKey("actionsDialog", "enter");
-  await Bun.sleep(1500);
 
   const mainState = (await driver.getState({ timeoutMs: 5000 })) as Json;
-  check("main_window_shows_day_page", mainState.promptType === "dayPage", {
+  check("main_window_not_day_page", mainState.promptType !== "dayPage", {
     promptType: mainState.promptType,
-  });
-
-  const mainElements = (await driver.getElements(
-    { target: { type: "main" } },
-    { timeoutMs: 5000 },
-  )) as Json;
-  const editor = walkElements(mainElements).find(
-    (el) =>
-      el.semanticId === "input:day-page-editor" || el.id === "day-page-editor",
-  );
-  const editorValue = String(editor?.value ?? "");
-  check("day_page_editor_shows_seeded_day", editorValue.includes(seededLine), {
-    editorValuePrefix: editorValue.slice(0, 60),
   });
 
   const log = await Bun.file(`${driver.sessionDir}/app.log`).text();
   check(
-    "handoff_event_logged_opened",
-    log.includes("notes_note_switcher_day_page_handoff") &&
-      /notes_note_switcher_day_page_handoff.*opened=true/.test(log),
+    "no_notes_day_page_handoff_logged",
+    !log.includes("notes_note_switcher_day_page_handoff"),
     {
       browsePanelLogLines: log
         .split("\n")
-        .filter((line) => /open_browse_panel|day_page_handoff/i.test(line))
+        .filter((line) => /open_browse_panel|day_page/i.test(line))
         .slice(-5),
     },
   );

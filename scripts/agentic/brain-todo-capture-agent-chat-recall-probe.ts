@@ -4,7 +4,7 @@
  * recall/resources, and Agent Chat recall staging alongside a related Note.
  */
 import { Database } from "bun:sqlite";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import {
   cpSync,
   existsSync,
@@ -12,10 +12,11 @@ import {
   readdirSync,
   readFileSync,
   statSync,
+  writeFileSync,
 } from "node:fs";
 import { createServer } from "node:net";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { Driver, type Json } from "../devtools/driver";
 import { openDayPage } from "./day-page-open-helper";
 
@@ -39,12 +40,16 @@ const runId = `brain-todo-${Date.now().toString(36)}`;
 const todoToken = `TODO-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
 const noteToken = `NOTE-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
 const topic = `amber-task-${runId}`;
+const agentOnlyTopic = `unprimed-qmd-${runId}`;
+const agentOnlyTodoToken = `AGENT-DAY-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
+const agentOnlyNoteToken = `AGENT-NOTE-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
+const agentOnlyFragmentToken = `AGENT-FRAG-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
 const todoBody = `qmd todo parity ${topic} ${todoToken}`;
 const todoInput = `;todo ${todoBody} #brain due:${dueDate}`;
 const expectedTaskTail = `${todoBody} #brain due:${dueDate}`;
 const todoComposerInput = `todo; ${expectedTaskTail}`;
 const noteFact = `Related note for ${topic} carries ${noteToken}.`;
-const question = `Which todo and note tokens are stored for ${topic}?`;
+const agentOnlyQuestion = `Which qmd Day, Note, and Fragment tokens are stored for ${agentOnlyTopic}?`;
 const outPath = ".test-output/brain-todo-capture-agent-chat-recall-probe.json";
 
 const checks: Check[] = [];
@@ -120,6 +125,68 @@ async function findFreePort(): Promise<number> {
 
 function readJson(path: string): Json {
   return JSON.parse(readFileSync(path, "utf8")) as Json;
+}
+
+function writeFile(path: string, content: string) {
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, content, "utf8");
+}
+
+function isoNow() {
+  return new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
+}
+
+function seedCanonicalDayTask(dayFile: string) {
+  const line = `23:58 - [ ] qmd unprimed day fact ${agentOnlyTopic} ${agentOnlyTodoToken}`;
+  const existing = existsSync(dayFile) ? readFileSync(dayFile, "utf8") : "";
+  const prefix = existing.endsWith("\n") || existing.length === 0 ? "" : "\n";
+  writeFile(dayFile, `${existing}${prefix}${line}\n`);
+  return { line };
+}
+
+function seedCanonicalNote(notesDir: string) {
+  const id = randomUUID();
+  const slug = `${runId}-agent-only-note`;
+  const created = isoNow();
+  const body = [
+    `# ${agentOnlyTopic} note`,
+    "",
+    `QMD unprimed note fact ${agentOnlyTopic} ${agentOnlyNoteToken}.`,
+    "",
+  ].join("\n");
+  const raw = [
+    "---",
+    `id: ${id}`,
+    `created: ${created}`,
+    `updated: ${created}`,
+    `source: scriptkit://agent-chat-proof/${slug}`,
+    "---",
+    "",
+    body,
+  ].join("\n");
+  const path = join(notesDir, `${slug}.md`);
+  writeFile(path, raw);
+  return { id, slug, path, body };
+}
+
+function seedCanonicalFragment(brainBase: string) {
+  const id = randomUUID();
+  const fragmentId = `${runId}-agent-only-fragment`;
+  const created = isoNow();
+  const body = `QMD unprimed fragment fact ${agentOnlyTopic} ${agentOnlyFragmentToken}.\n`;
+  const raw = [
+    "---",
+    `id: ${id}`,
+    `created: ${created}`,
+    `updated: ${created}`,
+    `source: scriptkit://agent-chat-proof/${fragmentId}`,
+    "---",
+    "",
+    body,
+  ].join("\n");
+  const path = join(brainBase, "fragments", `${fragmentId}.md`);
+  writeFile(path, raw);
+  return { id, fragmentId, path, body };
 }
 
 async function mcp(serverJsonPath: string, method: string, params: Json): Promise<Json> {
@@ -213,6 +280,10 @@ function latestLine(log: string, needle: string): string | null {
     .split("\n")
     .filter((line) => line.includes(needle))
     .at(-1) ?? null;
+}
+
+function logAfter(log: string, offset: number) {
+  return log.slice(Math.min(offset, log.length));
 }
 
 function parseNumber(line: string | null, key: string): number | null {
@@ -449,6 +520,30 @@ try {
     leakedNeedles: containsAnyNeedle(metadataText, blockedMetadataNeedles),
   });
 
+  const agentDay = seedCanonicalDayTask(dayFile);
+  const agentNote = seedCanonicalNote(notesDir);
+  const agentFragment = seedCanonicalFragment(brainBase);
+  check("agent_only_canonical_day_task_seeded", existsSync(dayFile) && readFileSync(dayFile, "utf8").includes(agentOnlyTodoToken), {
+    canonicalDayFile: dayFile,
+    line: agentDay.line,
+  });
+  check("agent_only_canonical_note_seeded", existsSync(agentNote.path), {
+    canonicalNoteFile: agentNote.path,
+    sourceId: agentNote.id,
+  });
+  check("agent_only_canonical_fragment_seeded", existsSync(agentFragment.path), {
+    canonicalFragmentFile: agentFragment.path,
+    sourceId: agentFragment.fragmentId,
+  });
+  const preSubmitRows = readRows(brainDbPath, agentOnlyTopic);
+  check("agent_only_tokens_not_preprimed_in_brain_db", preSubmitRows.length === 0, {
+    rows: preSubmitRows.map((row) => ({
+      source: row.source,
+      sourceId: row.source_id,
+      title: row.title,
+    })),
+  });
+
   driver.send({ type: "openAi", requestId: `${runId}-open-ai` });
   const opened = await waitFor(
     "Agent Chat open",
@@ -461,22 +556,26 @@ try {
     uiVariant: opened.uiVariant ?? opened.ui_variant,
     messageCount: stateNumber(opened, "messageCount"),
   });
+  const appLogBeforeSubmit = existsSync(driver.logPath) ? readFileSync(driver.logPath, "utf8") : "";
+  const appLogSubmitOffset = appLogBeforeSubmit.length;
   const submit = await driver.request(
-    { type: "setAgentChatInput", text: question, submit: true },
+    { type: "setAgentChatInput", text: agentOnlyQuestion, submit: true },
     { timeoutMs: 10_000 },
   );
   check("submitted_agent_chat_question", (submit as Json).type !== "error", { submit });
 
   const rows = await waitFor(
-    "derived todo and note rows",
-    () => readRows(brainDbPath, topic),
+    "derived agent-only day note and fragment rows",
+    () => readRows(brainDbPath, agentOnlyTopic),
     (values) =>
-      values.some((row) => row.source === "day_page" && row.content.includes(todoToken)) &&
-      values.some((row) => row.source === "note" && row.content.includes(noteToken)),
+      values.some((row) => row.source === "day_page" && row.content.includes(agentOnlyTodoToken)) &&
+      values.some((row) => row.source === "note" && row.content.includes(agentOnlyNoteToken)) &&
+      values.some((row) => row.source === "fragment" && row.content.includes(agentOnlyFragmentToken)),
     20_000,
   );
-  const dayRow = rows.find((row) => row.source === "day_page" && row.content.includes(todoToken));
-  const noteRow = rows.find((row) => row.source === "note" && row.content.includes(noteToken));
+  const dayRow = rows.find((row) => row.source === "day_page" && row.content.includes(agentOnlyTodoToken));
+  const noteRow = rows.find((row) => row.source === "note" && row.content.includes(agentOnlyNoteToken));
+  const fragmentRow = rows.find((row) => row.source === "fragment" && row.content.includes(agentOnlyFragmentToken));
   check("brain_docs_contain_day_todo", Boolean(dayRow), {
     sourceId: dayRow?.source_id ?? null,
     title: dayRow?.title ?? null,
@@ -485,10 +584,14 @@ try {
     sourceId: noteRow?.source_id ?? null,
     title: noteRow?.title ?? null,
   });
+  check("brain_docs_contain_fragment_fact", Boolean(fragmentRow), {
+    sourceId: fragmentRow?.source_id ?? null,
+    title: fragmentRow?.title ?? null,
+  });
 
   const appLog = await waitFor(
-    "brain recall logs",
-    () => (existsSync(driver!.logPath) ? readFileSync(driver!.logPath, "utf8") : ""),
+    "post-submit brain recall logs",
+    () => (existsSync(driver!.logPath) ? logAfter(readFileSync(driver!.logPath, "utf8"), appLogSubmitOffset) : ""),
     (log) =>
       log.includes("event=brain_recall_file_sources_synced") &&
       log.includes("event=brain_recall_context_built") &&
@@ -505,6 +608,8 @@ try {
     dayRow == null ? "" : `day_page:${dayRow.source_id}:${sha16(dayRow.content)}`;
   const noteFingerprint =
     noteRow == null ? "" : `note:${noteRow.source_id}:${sha16(noteRow.content)}`;
+  const fragmentFingerprint =
+    fragmentRow == null ? "" : `fragment:${fragmentRow.source_id}:${sha16(fragmentRow.content)}`;
   check("recall_file_sources_synced", recallSyncElapsedMs != null && failedSourcesEmpty, {
     syncLine,
     recallSyncElapsedMs,
@@ -515,12 +620,19 @@ try {
   check("recall_sources_include_note", builtLine?.includes("note") === true, {
     builtLine,
   });
+  check("recall_sources_include_fragment", builtLine?.includes("fragment") === true, {
+    builtLine,
+  });
   check("final_user_content_has_day_todo", builtLine?.includes(dayFingerprint) === true, {
     dayFingerprint,
     builtLine,
   });
   check("final_user_content_has_note_fact", builtLine?.includes(noteFingerprint) === true, {
     noteFingerprint,
+    builtLine,
+  });
+  check("final_user_content_has_fragment_fact", builtLine?.includes(fragmentFingerprint) === true, {
+    fragmentFingerprint,
     builtLine,
   });
   check("agent_chat_brain_recall_staged", Boolean(stagedLine), { stagedLine });

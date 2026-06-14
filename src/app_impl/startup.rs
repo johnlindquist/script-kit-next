@@ -252,11 +252,6 @@ impl ScriptListApp {
         crate::ai::agent_chat::ui::chat_window::register_reattach_into_main_hook(
             Self::reattach_detached_chat_hook,
         );
-        // Same dual-compile constraint for Notes: its Cmd+P switcher lists
-        // day pages, but the main window owns the Day Page surface.
-        crate::notes::day_page_rows::register_open_day_page_in_main_hook(
-            Self::open_day_page_in_main_window_hook,
-        );
         // PERF: Parallelize script + scriptlet loading to reduce startup wall time.
         let load_start = std::time::Instant::now();
         let (script_report, scriptlets, scripts_elapsed, scriptlets_elapsed) = std::thread::scope(

@@ -42,13 +42,12 @@ pub(crate) use builders::{
     AGENT_CHAT_SHOW_RECEIPT_HISTORY_ACTION_ID,
 };
 pub use builders::{
-    get_ai_command_bar_actions, get_day_page_switcher_actions, get_new_chat_actions,
-    get_note_switcher_actions, get_notes_command_bar_actions,
+    get_ai_command_bar_actions, get_new_chat_actions, get_note_switcher_actions,
+    get_notes_command_bar_actions,
 };
 pub use builders::{
-    to_deeplink_name, ChatModelInfo, ChatPromptInfo, ClipboardEntryInfo, DayPageSwitcherInfo,
-    FileSearchDirectoryInfo, FileSearchSortMode, NewChatModelInfo, NewChatPresetInfo,
-    NoteSwitcherNoteInfo, NotesInfo,
+    to_deeplink_name, ChatModelInfo, ChatPromptInfo, ClipboardEntryInfo, FileSearchDirectoryInfo,
+    FileSearchSortMode, NewChatModelInfo, NewChatPresetInfo, NoteSwitcherNoteInfo, NotesInfo,
 };
 pub use command_bar::{CommandBar, CommandBarConfig};
 #[allow(unused_imports)] // Used by the binary target through include!()-ed app_impl code.

@@ -17,7 +17,6 @@ set -e
 # --- Signal cleanup: one Ctrl+C must stop cargo-watch and all helper children ---
 SCRIPT_KIT_DEV_CACHE_PID=""
 SCRIPT_KIT_DEV_WATCHDOG_PID=""
-SCRIPT_KIT_DEV_PI_SIDECAR_PID=""
 DEV_SH_CLEANED_UP=0
 DEV_SH_EXIT_CODE=0
 dev_sh_cleanup() {
@@ -35,11 +34,6 @@ dev_sh_cleanup() {
     if [ -n "${SCRIPT_KIT_DEV_WATCHDOG_PID:-}" ]; then
         kill "$SCRIPT_KIT_DEV_WATCHDOG_PID" 2>/dev/null || true
         wait "$SCRIPT_KIT_DEV_WATCHDOG_PID" 2>/dev/null || true
-    fi
-
-    if [ -n "${SCRIPT_KIT_DEV_PI_SIDECAR_PID:-}" ]; then
-        kill "$SCRIPT_KIT_DEV_PI_SIDECAR_PID" 2>/dev/null || true
-        wait "$SCRIPT_KIT_DEV_PI_SIDECAR_PID" 2>/dev/null || true
     fi
 
     # Stop cargo-watch, dev-cycle, and any in-flight cargo build.
@@ -164,12 +158,11 @@ fi
 
 # --- Pi sidecar availability ---------------------------------------------------
 # Dev runs execute the bare target binary, so the bundled Contents/MacOS/pi
-# never resolves. Make sure a Pi binary exists for Agent Chat (cmd+enter):
-# fast no-op when one already resolves, otherwise build the repo-local sidecar
-# in the background (concurrent with the first cargo build).
+# never resolves. Make sure the repo-local Pi sidecar exists for Agent Chat
+# (cmd+enter) before launching the app; otherwise the first session can start
+# with Pi unavailable while the sidecar is still building in the background.
 if [ "${SCRIPT_KIT_DEV_ENSURE_PI_SIDECAR:-1}" = "1" ]; then
-    bash scripts/agentic/ensure-pi-sidecar.sh &
-    SCRIPT_KIT_DEV_PI_SIDECAR_PID=$!
+    bash scripts/agentic/ensure-pi-sidecar.sh
 fi
 
 # --- Crash watchdog -----------------------------------------------------------

@@ -277,14 +277,6 @@ impl DayPageView {
         self.session.is_dirty()
     }
 
-    pub fn primary_action_label(&self) -> String {
-        if self.session.is_dirty() {
-            "Save".to_string()
-        } else {
-            "Saved".to_string()
-        }
-    }
-
     pub(crate) fn automation_input_value(&self, cx: &App) -> String {
         self.notes_editor.read(cx).content(cx)
     }
@@ -673,25 +665,13 @@ impl DayPageView {
 
 pub(crate) fn day_page_footer_buttons(
     app: &ScriptListApp,
-    cx: Option<&gpui::App>,
+    _cx: Option<&gpui::App>,
 ) -> Vec<FooterButtonConfig> {
     let footer_disabled = crate::confirm::is_confirm_window_open();
     let actions_open = app.show_actions_popup || crate::actions::is_actions_window_open();
     let enabled = !footer_disabled;
 
-    let primary_label = match (&app.current_view, cx) {
-        (AppView::DayPage { entity }, Some(cx)) => entity.read(cx).primary_action_label(),
-        _ => "Save".to_string(),
-    };
-
-    let save_enabled = enabled
-        && match (&app.current_view, cx) {
-            (AppView::DayPage { entity }, Some(cx)) => entity.read(cx).is_dirty(),
-            _ => false,
-        };
-
     vec![
-        FooterButtonConfig::new(FooterAction::Run, "⌘S", primary_label).enabled(save_enabled),
         FooterButtonConfig::new(FooterAction::Actions, "⌘K", "Actions")
             .selected(actions_open)
             .enabled(enabled),
@@ -701,44 +681,6 @@ pub(crate) fn day_page_footer_buttons(
 impl ScriptListApp {
     pub(crate) fn show_day_page_view(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.show_day_page_view_with_substrate(None, window, cx);
-    }
-
-    /// Binary-side body for the Notes Cmd+P "open day page" handoff.
-    /// Registered with
-    /// `notes::day_page_rows::register_open_day_page_in_main_hook` at startup
-    /// because the dual-compiled Notes code cannot name `ScriptListApp`.
-    pub(crate) fn open_day_page_in_main_window_hook(
-        date: chrono::NaiveDate,
-        cx: &mut gpui::App,
-    ) -> bool {
-        let Some(handle) = crate::get_main_window_handle() else {
-            return false;
-        };
-        handle
-            .update(cx, |any_view, window, cx| {
-                let Ok(root) = any_view.downcast::<gpui_component::Root>() else {
-                    return false;
-                };
-                let inner = root.read(cx).view().clone();
-                let Ok(app) = inner.downcast::<ScriptListApp>() else {
-                    return false;
-                };
-                app.update(cx, |app, cx| {
-                    app.dispatch_window_event(
-                        crate::window_orchestrator::WindowEvent::ShowMain {
-                            activate_app: false,
-                        },
-                        cx,
-                    );
-                    app.show_day_page_view(window, cx);
-                    if let AppView::DayPage { entity } = &app.current_view {
-                        let entity = entity.clone();
-                        entity.update(cx, |view, cx| view.bind_day(date, window, cx));
-                    }
-                });
-                true
-            })
-            .unwrap_or(false)
     }
 
     pub(crate) fn show_day_page_view_with_substrate(
@@ -784,16 +726,4 @@ impl ScriptListApp {
         cx.notify();
     }
 
-    pub(crate) fn dispatch_day_page_save_with_footer(
-        &mut self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> bool {
-        if let AppView::DayPage { entity } = &self.current_view {
-            let entity = entity.clone();
-            entity.update(cx, |view, cx| view.save_and_sync_footer(window, cx))
-        } else {
-            false
-        }
-    }
 }

@@ -7,6 +7,8 @@
 // rendered disabled.
 
 pub(crate) const DAY_PAGE_ACTIONS_SECTION_TITLE: &str = "Today";
+pub(crate) const DAY_PAGE_ASK_AGENT_CHAT_ACTION_ID: &str = "day_page:ask_agent_chat";
+pub(crate) const DAY_PAGE_AGENT_CHAT_CONTEXT_SOURCE: &str = "day_page_today";
 
 fn day_page_editor_action_id(toolbar_id: &str) -> String {
     format!("day_page:format_{}", toolbar_id.replace('-', "_"))
@@ -75,6 +77,23 @@ pub(crate) fn day_page_host_actions_section(
         .with_section(DAY_PAGE_ACTIONS_SECTION_TITLE),
     );
 
+    let viewing_today = view
+        .session
+        .bound_date()
+        .is_some_and(|date| date == view.local_today());
+    if !view.session.is_viewing_fragment() && viewing_today {
+        actions.push(
+            Action::new(
+                DAY_PAGE_ASK_AGENT_CHAT_ACTION_ID,
+                "Ask Agent Chat About Today",
+                Some("Attach Today's brain to Agent Chat and start a question".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut("cmd+enter")
+            .with_section(DAY_PAGE_ACTIONS_SECTION_TITLE),
+        );
+    }
+
     let clipboard_text = cx
         .read_from_clipboard()
         .and_then(|item| item.text().map(|text| text.to_string()))
@@ -109,6 +128,87 @@ pub(crate) fn day_page_host_actions_section(
 }
 
 impl DayPageView {
+    fn today_agent_chat_context_part(&self, cx: &App) -> crate::ai::message_parts::AiContextPart {
+        let content = self.notes_editor.read(cx).content(cx);
+        let date_label = self
+            .session
+            .bound_date()
+            .map(|date| date.to_string())
+            .unwrap_or_else(|| "Today".to_string());
+        let source = self
+            .session
+            .path()
+            .map(|path| path.display().to_string())
+            .unwrap_or_else(|| format!("brain://days/{date_label}"));
+
+        crate::ai::message_parts::AiContextPart::TextBlock {
+            label: format!("Today's brain - {date_label}"),
+            source,
+            text: if content.trim().is_empty() {
+                "(Today's brain is empty.)".to_string()
+            } else {
+                content
+            },
+            mime_type: Some("text/markdown".to_string()),
+        }
+    }
+
+    pub(crate) fn open_agent_chat_about_today(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.save(cx);
+        let part = self.today_agent_chat_context_part(cx);
+        let Some(app) = self.app.upgrade() else {
+            return;
+        };
+
+        window.defer(cx, move |_window, cx| {
+            app.update(cx, |app, cx| {
+                if app.has_day_page_context_round_trip_pending() {
+                    tracing::warn!(
+                        target: "script_kit::day_page",
+                        event = "day_page_agent_chat_open_blocked",
+                        reason = "context_round_trip_pending",
+                    );
+                    return;
+                }
+                app.clear_actions_popup_state();
+                if crate::actions::is_actions_window_open() {
+                    crate::actions::close_actions_window(cx);
+                }
+                app.open_tab_ai_agent_chat_with_context_part(
+                    part,
+                    DAY_PAGE_AGENT_CHAT_CONTEXT_SOURCE,
+                    cx,
+                );
+                if let AppView::AgentChatView { entity } = &app.current_view {
+                    let entity = entity.clone();
+                    entity.update(cx, |chat, cx| {
+                        chat.set_input("Ask about Today's brain: ".to_string(), cx);
+                    });
+                }
+            });
+        });
+    }
+
+    pub(crate) fn append_agent_chat_response_to_today_file(
+        &mut self,
+        response: &str,
+    ) -> anyhow::Result<()> {
+        let response = response.trim();
+        if response.is_empty() {
+            anyhow::bail!("empty Agent Chat response");
+        }
+        let local = Utc::now().with_timezone(&self.session.substrate().timezone());
+        let timestamp = local.format("%H:%M").to_string();
+        self.session
+            .append_external_line_to_bound_file(&format!("{timestamp} Agent Chat\n\n{response}"))?;
+        script_kit_gpui::brain::wake_indexer();
+        Ok(())
+    }
+
     pub(crate) fn insert_clipboard_text(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let Some(text) = cx
             .read_from_clipboard()
@@ -170,6 +270,10 @@ impl ScriptListApp {
             }
             "day_page:open_past_day" => {
                 entity.update(cx, |view, cx| view.open_day_switcher(window, cx));
+                true
+            }
+            DAY_PAGE_ASK_AGENT_CHAT_ACTION_ID => {
+                entity.update(cx, |view, cx| view.open_agent_chat_about_today(window, cx));
                 true
             }
             "day_page:back_to_today" => {

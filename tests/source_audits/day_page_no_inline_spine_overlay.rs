@@ -254,8 +254,8 @@ fn day_page_footer_cannot_open_generic_agent_chat_popup() {
     let footer = function_body(&view, "pub(crate) fn day_page_footer_buttons(");
 
     assert!(
-        footer.contains("FooterAction::Run") && footer.contains("FooterAction::Actions"),
-        "Day footer should keep Save/Actions affordances"
+        !footer.contains("FooterAction::Run") && footer.contains("FooterAction::Actions"),
+        "Day footer should expose Actions only; day pages autosave and should not show a Save button"
     );
     assert!(
         !footer.contains("FooterAction::Ai"),

@@ -63,7 +63,7 @@ Cross-surface behavior must stay predictable:
 
 All agent-driven cargo invocations MUST go through `./scripts/agentic/agent-cargo.sh`, which defaults to the bounded shared `CARGO_TARGET_DIR=target-agent/pools/agent-debug` pool with a visible lock. Examples:
 
-- `./scripts/agentic/agent-cargo.sh test --lib context_picker`
+- `./scripts/agentic/agent-cargo.sh test --lib notes_editor::spine`
 - `./scripts/agentic/agent-cargo.sh check --lib`
 - `./scripts/agentic/agent-cargo.sh build --bin script-kit-gpui`
 

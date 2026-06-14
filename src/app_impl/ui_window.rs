@@ -234,10 +234,7 @@ impl ScriptListApp {
 
         match action {
             crate::footer_popup::FooterAction::Run => {
-                if matches!(self.current_view, AppView::DayPage { .. }) {
-                    self.dispatch_day_page_save_with_footer(window, cx);
-                    return;
-                } else if let AppView::AgentChatView { entity } = &self.current_view {
+                if let AppView::AgentChatView { entity } = &self.current_view {
                     let entity = entity.clone();
                     entity.update(cx, |chat, cx| {
                         chat.submit_with_expanded_tokens(cx);

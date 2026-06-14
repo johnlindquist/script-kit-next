@@ -90,7 +90,8 @@ impl ScriptListApp {
         self.tab_ai_harness_return_focus_target = Some(self.tab_ai_return_focus_target());
         self.enter_embedded_agent_chat_surface(view_entity, cx);
         self.request_focus(FocusTarget::ChatPrompt, cx);
-        script_kit_gpui::request_show_main_window();
+        script_kit_gpui::set_main_window_visible(true);
+        script_kit_gpui::mark_window_shown();
         cx.notify();
     }
 

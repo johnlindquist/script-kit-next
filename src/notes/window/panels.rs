@@ -305,31 +305,16 @@ impl NotesApp {
     ) {
         debug!(action_id, "Executing note switcher action");
 
-        // Handle day page selection (action_id format: "daypage_YYYY-MM-DD").
-        // Day pages are owned by the main window's Day Page surface, so the
-        // pick hands off instead of opening a Notes buffer (which would
-        // create a second save path for the same file). Deferred because the
-        // handoff updates the MAIN window while we are inside the Notes
-        // window's update.
+        // Day pages belong to the main window's Day Page surface. Notes is the
+        // windowed/default notes experience, so stale day-page rows from older
+        // popup state must not cross over into the quick Day Page surface.
         if let Some(date_str) = action_id.strip_prefix("daypage_") {
-            let parsed = chrono::NaiveDate::parse_from_str(date_str, "%Y-%m-%d");
             self.close_browse_panel(window, cx);
-            match parsed {
-                Ok(date) => {
-                    cx.defer(move |cx| {
-                        let opened = crate::notes::day_page_rows::open_day_page_in_main(date, cx);
-                        tracing::info!(
-                            target: "script_kit::notes",
-                            event = "notes_note_switcher_day_page_handoff",
-                            date = %date,
-                            opened,
-                        );
-                    });
-                }
-                Err(_) => {
-                    tracing::warn!(action_id, "Invalid day page action id");
-                }
-            }
+            tracing::info!(
+                target: "script_kit::notes",
+                event = "notes_note_switcher_day_page_action_ignored",
+                date = %date_str,
+            );
             return;
         }
 
@@ -374,7 +359,7 @@ impl NotesApp {
     /// Uses CommandBar for consistent theming with the Cmd+K actions dialog
     pub(super) fn open_browse_panel(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         // Update note switcher actions based on current notes
-        let mut note_switcher_actions = get_note_switcher_actions(
+        let note_switcher_actions = get_note_switcher_actions(
             &self
                 .notes
                 .iter()
@@ -394,29 +379,10 @@ impl NotesApp {
                 .collect::<Vec<_>>(),
         );
 
-        // Day pages ride along after the note rows — read-through from
-        // `brain/days/*.md`, never copied into the notes database.
-        let day_page_rows = crate::notes::day_page_rows::load_day_page_switcher_rows(
-            &crate::notes::notes_brain_days_dir(),
-            chrono::Local::now().date_naive(),
-            crate::notes::day_page_rows::DAY_PAGE_SWITCHER_ROW_LIMIT,
-        );
-        note_switcher_actions.extend(crate::actions::get_day_page_switcher_actions(
-            &day_page_rows
-                .iter()
-                .map(|row| crate::actions::DayPageSwitcherInfo {
-                    date: row.date.format("%Y-%m-%d").to_string(),
-                    title: row.title.clone(),
-                    preview: row.preview.clone(),
-                })
-                .collect::<Vec<_>>(),
-        ));
-
         // Log what actions we're setting
         info!(
-            "Notes open_browse_panel: setting {} note actions ({} day pages)",
+            "Notes open_browse_panel: setting {} note actions",
             note_switcher_actions.len(),
-            day_page_rows.len(),
         );
 
         self.note_switcher.set_actions(note_switcher_actions, cx);

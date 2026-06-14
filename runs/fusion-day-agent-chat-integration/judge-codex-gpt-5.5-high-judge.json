@@ -1,0 +1,33 @@
+{
+  "id": "codex-gpt-5.5-high-judge",
+  "label": "Codex gpt-5.5 high judge",
+  "panelRole": null,
+  "command": "codex",
+  "args": [
+    "exec",
+    "--skip-git-repo-check",
+    "--ephemeral",
+    "-C",
+    "/Users/johnlindquist/dev/script-kit-gpui",
+    "-s",
+    "read-only",
+    "-m",
+    "gpt-5.5",
+    "-c",
+    "model_reasoning_effort=\"high\"",
+    "-"
+  ],
+  "env": {},
+  "preflight": null,
+  "ok": true,
+  "exitCode": 0,
+  "signal": null,
+  "timedOut": false,
+  "startedAt": "2026-06-14T07:33:17.508Z",
+  "endedAt": "2026-06-14T07:35:18.016Z",
+  "durationMs": 120508,
+  "stdinChars": 50442,
+  "stdinSha256": "c7373c9ff869cfe2dce818a8817e14bb01ca72401113847c6972727895292a26",
+  "stdoutChars": 12797,
+  "stderrChars": 153393
+}

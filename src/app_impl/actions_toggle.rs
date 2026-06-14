@@ -989,6 +989,15 @@ impl ScriptListApp {
             let theme_arc = std::sync::Arc::clone(&self.theme);
             let is_mini = matches!(self.main_window_mode, MainWindowMode::Mini);
             let is_agent_chat_actions_dialog = agent_chat_context.is_some();
+            let agent_chat_actions_host = if self
+                .tab_ai_harness_return_view
+                .as_ref()
+                .is_some_and(|view| matches!(view, AppView::DayPage { .. }))
+            {
+                crate::actions::AgentChatActionsDialogHost::DayPage
+            } else {
+                crate::actions::AgentChatActionsDialogHost::Shared
+            };
             // Create the dialog entity
             let dialog = cx.new(|cx| {
                 let focus_handle = cx.focus_handle();
@@ -1003,7 +1012,7 @@ impl ScriptListApp {
                 )) = agent_chat_context
                 {
                     // Agent Chat chat view: use route-based dialog with drill-down model/profile pickers
-                    ActionsDialog::with_agent_chat(
+                    ActionsDialog::with_agent_chat_for_host(
                         focus_handle,
                         std::sync::Arc::new(|_action_id| {}),
                         crate::actions::AgentChatActionsDialogContext {
@@ -1016,6 +1025,7 @@ impl ScriptListApp {
                             fork_points,
                         },
                         std::sync::Arc::clone(&theme_arc),
+                        agent_chat_actions_host,
                     )
                 } else {
                     ActionsDialog::with_script(

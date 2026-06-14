@@ -1,0 +1,345 @@
+• The user wants me to act as an edge-case-tester panel for a specific task in the script-kit-gpui codebase. I need to:
+  1. Focus on boundary cases, regressions, weird inputs, operational failure modes, and test coverage gaps
+  2. Return answer with specific headings
+  3. Advise on narrowly implementing: prevent Notes window's Cmd+P command/action picker from opening 'day' view, even if it selects a day note
+  4. Identify likely owner files, implementation seam, and focused verification using script-kit-devtools
+
+  I should explore the codebase to understand the structure related to notes, command picker, 'day' view, etc. Since this requires more than 3 searches, I should use an explore agent. But first let me check if there are AGENTS.md files and relevant docs.
+
+  Let me launch explore agents to investigate:
+  1. Notes window / day note implementation
+  2. Command/action picker (Cmd+P)
+  3. script-kit-devtools verification approach
+
+  Actually, since I need to provide focused actionable advice as an edge-case-tester, I should explore the codebase myself or use explore agents. Let me use parallel explore agents.Interesting - the two explore agents gave slightly conflicting information. The first said daypage_ actions are explicitly ignored in panels.rs and the cross-window handoff is not wired. The second said panels.rs routes daypage_YYYY-MM-DD to open_day_page_in_main via a hook in day_page_rows.rs.
+
+  I need to resolve this contradiction by reading the actual files. Let me check the current state of:
+  1. src/notes/window/panels.rs
+  2. src/notes/day_page_rows.rs
+  3. src/actions/builders/notes.rs
+  4. src/notes/window/keyboard.rs
+
+  Also need to understand script-kit-devtools verification approach. Let me read the relevant files and the skill file.Now I have the key finding: panels.rs already has the guard at lines 311-319 that ignores daypage_ actions in the Notes window. The comment says: "Day pages belong to the main window's Day Page surface. Notes is the windowed/default notes experience, so stale day-page rows from older popup state must not cross over into the quick Day Page surface."
+
+  So the implementation already exists! But the user's request suggests they want to "prevent the Notes window's Cmd+P command/action picker from ever opening the 'day' view, even if it selects a day note." This is already done in the current code.
+
+  But wait - the first explore agent said the cross-window handoff is not wired and the daypage_rows.rs module is not present. The second agent said it routes via day_page_rows.rs. The truth is: panels.rs has the guard, and day_page_rows.rs doesn't exist. So the day pages are simply ignored.
+
+  However, the user is asking to advise on implementing this. Maybe they don't realize it's already implemented? Or maybe there's a subtle issue: the day page rows still appear in the picker, they just do nothing when selected. The user said "prevent ... from ever opening the 'day' view, even if it selects a day note." The current code prevents opening but still shows day rows. Maybe the user wants the day rows not shown at all in the Notes window's Cmd+P picker?
+
+  Let me re-read the request: "prevent the Notes window's Cmd+P command/action picker from ever opening the 'day' view, even if it selects a day note. Context: 'day' is intended as a quick ephemeral way to edit the day note from the main window with the same behavior/experience as the notes window. The Notes window is the default/windowed experience. They should not cross over."
+
+  This could mean:
+  1. Remove day page rows from the Notes Cmd+P picker entirely (so you can't even select a day note)
+  2. Keep the rows but ensure selection doesn't open day view (already implemented)
+
+  The phrase "from ever opening the 'day' view, even if it selects a day note" suggests they want to ensure no crossover happens. The current code does this by ignoring the action. But maybe the user wants a more robust/foolproof implementation, or they want the rows removed from the picker.
+
+  Also, I need to check if there are tests for this. Let me search for tests related to this.
+
+  Let me also check if day_page_rows.rs ever existed or if the code references it. The first explore agent mentioned `src/notes/day_page_rows.rs` is "not present" but also mentioned `open_day_page_in_main_hook` in day_page_view.rs. Let me verify.
+
+  Actually, I need to be careful. The user is asking me to act as an edge-case-tester panel. I should provide findings about the current state, potential failure modes, and recommendations.
+
+  Key questions for edge-case-tester:
+  1. Is the guard already in place? Yes, in panels.rs.
+  2. What are the boundary cases?
+     - Day rows still visible in picker (user can select, nothing happens - confusing UX)
+     - Multiple day page action formats (daypage_ prefix)
+     - Keyboard selection vs mouse click
+     - Stale popup state / reopens
+     - If the guard is removed or bypassed in future refactors
+     - The guard only checks prefix, doesn't validate date format
+     - If action_id has weird encoding/case
+  3. What are test coverage gaps?
+     - No unit test asserting daypage_ actions are ignored
+     - No test that day rows don't appear in Notes switcher
+     - No integration test via protocol/DevTools
+
+  Let me also check the action builder for day pages to understand where rows come from.Important findings:
+  1. `src/notes/day_page_rows.rs` does NOT exist (confirmed by Read error and Grep)
+  2. The guard in panels.rs is the only thing preventing crossover
+  3. There's also keyboard.rs line 493 that calls execute_note_switcher_action - need to check that path
+  4. The action builder `get_note_switcher_actions` only takes notes - so where do daypage rows come from? The second explore agent mentioned `get_day_page_switcher_actions` but I haven't found it. It might not exist anymore or might be in a different file.
+
+  Wait, the second explore agent said the note switcher uses `get_note_switcher_actions + get_day_page_switcher_actions` but the actual open_browse_panel in panels.rs only calls `get_note_switcher_actions`. So either the day page rows were already removed, or they're added elsewhere. Let me check open_browse_panel more carefully and search for where day page actions might be appended.
+
+  Actually, let me re-read open_browse_panel - it only calls get_note_switcher_actions on the notes list. So currently the Notes Cmd+P picker does NOT show day page rows at all! And the guard in execute_note_switcher_action is just defensive for stale/leftover state.
+
+  But wait, the user said "even if it selects a day note" - implying day notes might appear. Maybe there's a scenario where day notes appear. Let me check the note_switcher initialization in init.rs and the actions builder more thoroughly.
+
+  Actually, maybe the day page rows were removed from the picker but the guard remains. Or maybe there's another path. Let me search for day pages in the notes action builder and window init.Interesting! The note_switcher in init.rs is initialized with `note_switcher_actions` (line 166). Let me find where that variable is defined - probably earlier in init.rs. And the Grep for daypage in notes/builders returned nothing, so the daypage rows are NOT currently built into the Notes switcher at all.
+
+  Wait, line 166 says `note_switcher_actions` - let me find that variable. It's probably defined around line 100-130.Confirmed: the note switcher is initialized with only note actions from `get_note_switcher_actions`, no day pages. And `open_browse_panel` also only uses note actions. So currently day pages don't appear in the Notes Cmd+P picker at all.
+
+  The guard in `execute_note_switcher_action` (panels.rs lines 311-319) is defensive, likely for stale state or future additions.
+
+  Now I need to understand the user's actual request better. They want to "prevent the Notes window's Cmd+P command/action picker from ever opening the 'day' view, even if it selects a day note." 
+
+  Given current code already:
+  1. Doesn't include day pages in the Notes Cmd+P picker
+  2. Has a defensive guard in execute_note_switcher_action that ignores daypage_ actions
+
+  The edge-case-tester question is: is this sufficient? What are the gaps?
+
+  Potential issues:
+  1. The guard only checks `strip_prefix("daypage_")` - it's case-sensitive. If someone creates a `Daypage_` or `DAYPAGE_` action id, it won't be caught. But action IDs are generated by code, so this is unlikely. Still, a more robust check might use `starts_with("daypage_")` which is the same as strip_prefix. Actually strip_prefix is fine.
+
+  2. The guard logs and returns but doesn't show user feedback. If a day row somehow appears and user selects it, nothing happens - confusing UX. But since rows don't appear, this is moot.
+
+  3. No tests exist to verify the guard. If someone refactors and removes it, there's no regression test.
+
+  4. There's also `keyboard.rs` line 493 calling `execute_note_switcher_action` for Enter key. The guard covers this path too.
+
+  5. There's a potential issue with `replace_active_note_mention_with_note` - the guard comes BEFORE the note mention replacement check. If someone has a daypage_ action id in a mention portal context, it would be ignored rather than replaced. But that's correct behavior - day pages shouldn't be inserted as note mentions either.
+
+  6. The comment in panels.rs says "stale day-page rows from older popup state" - implying day rows might exist in some cached state. Need to ensure open_browse_panel clears any cached actions before setting new ones. Looking at open_browse_panel, it calls `self.note_switcher.set_actions(...)` which replaces actions. So that's fine.
+
+  7. What about `CommandBar` having cached/stale actions from initialization? The initial note_switcher_actions has no day pages. open_browse_panel resets. So fine.
+
+  8. What if someone uses `devtools.act` or protocol to send a `daypage_` action to the Notes window? The guard catches it.
+
+  9. The action builder `get_note_switcher_actions` is public and used in many tests. If someone modifies it to include day pages, the guard would catch. But ideally the builder itself shouldn't mix day pages.
+
+  10. Edge case: empty notes list produces `no_notes` action. Not relevant.
+
+  11. Edge case: user types "day" in the switcher filter - this only filters existing rows, so if no day rows, no issue.
+
+  12. Edge case: what if a note's UUID happens to start with "daypage_"? Unlikely since UUIDs are hex. But `note_{uuid}` vs `daypage_{date}` are distinct prefixes.
+
+  13. Operational failure: if `close_browse_panel` panics or fails, the guard returns early after calling close_browse_panel. The browse panel is closed and nothing else happens. Good.
+
+  14. Operational failure: what if action_id is empty string? strip_prefix returns None, falls through to unknown action, closes panel. Fine.
+
+  15. Operational failure: malformed date string in daypage_ action - guard doesn't validate, just logs the raw string. Fine, since it doesn't open anything.
+
+  Now, the user's request might be that they want to make SURE this never happens. As an edge-case-tester, I should recommend:
+  1. Keep the guard in panels.rs (it's already there)
+  2. Add a unit/integration test that exercises execute_note_switcher_action with daypage_ prefix and asserts no navigation
+  3. Possibly add a test that get_note_switcher_actions / open_browse_panel never emits daypage_ rows
+  4. Use script-kit-devtools to verify via protocol that selecting a daypage action in Notes window does nothing / doesn't open main window day view
+
+  But wait - I should also check if there are existing tests for notes window panels or the guard. Let me search.Good findings. There's a source audit test at `src/notes/window/tests.rs` that checks for `open_browse_panel` in cmd+p branch. And `tests/notes_recent_menu_height_contract.rs` checks that Notes Cmd+P uses `notes_recent_style()`. 
+
+  Now I need to check if there's a test specifically for the daypage guard. The Grep for daypage in tests didn't show any. So there's a coverage gap.
+
+  Let me also look at `src/notes/window/tests.rs` around line 513 to see what it tests.Now I have enough context. Let me also check if there are tests for the actions builder that I could model a test after. And I should check what script-kit-devtools commands would verify this.
+
+  The user wants me to return with these headings:
+  ## Role Findings
+  ## Evidence And Assumptions
+  ## Failure Modes
+  ## Recommendation
+  ## Self Score
+
+  As edge-case-tester, I should be focused on boundary cases, regressions, weird inputs, operational failure modes, and test coverage gaps.
+
+  Key role findings:
+  1. The guard already exists in src/notes/window/panels.rs:311-319, ignoring daypage_ actions in Notes window Cmd+P.
+  2. Day page rows are currently NOT included in the Notes Cmd+P picker (open_browse_panel only calls get_note_switcher_actions on notes).
+  3. No test currently covers the daypage_ guard or the absence of day rows in Notes switcher.
+  4. The guard is only prefix-based and is case-sensitive.
+  5. The guard handles both activation callback path (mouse click / Enter in popup) and direct keyboard Enter path.
+  6. There's no user feedback when a daypage action is ignored (silent).
+
+  Evidence:
+  - panels.rs lines 311-319 show the guard
+  - init.rs lines 110-127 show note_switcher_actions only from notes
+  - open_browse_panel lines 362-388 only uses get_note_switcher_actions
+  - keyboard.rs lines 491-496 calls execute_note_switcher_action on Enter
+  - No daypage references in actions/builders/notes.rs or notes/ except the guard and comments
+
+  Failure modes:
+  1. Future refactor removes the guard; no test catches it.
+  2. Future feature adds day rows back to Notes switcher but forgets to keep/strengthen guard.
+  3. Action ID collision/mismatch: if a day action uses different prefix (e.g., "day_", "today_"), guard misses it.
+  4. Case-sensitivity: "Daypage_" not caught (unlikely but possible if IDs become dynamic).
+  5. User confusion: if day row appears, selecting it silently does nothing.
+  6. Protocol automation: a malicious/stale protocol command could send daypage_ action; guard catches but no feedback.
+  7. Mention portal path: if a daypage action is triggered while a @note mention portal is open, the guard prevents insertion, which is correct, but could confuse if user expected note insertion.
+
+  Recommendation:
+  1. Keep the existing guard in panels.rs as the primary seam.
+  2. Add a focused unit test in src/notes/window/tests.rs (or a new test file) that calls execute_note_switcher_action with "daypage_2024-01-01" and asserts:
+     - selected_note_id unchanged
+     - no navigation to day view
+     - browse panel closed
+     - event logged
+  3. Add a source-audit or unit test asserting open_browse_panel / get_note_switcher_actions never emits daypage_ prefixed actions (or if it does, they're filtered).
+  4. Consider adding user feedback (toast/action_feedback) when a daypage action is ignored, but this is a UX call.
+  5. For script-kit-devtools verification:
+     - Use `bun scripts/devtools/notes.ts inspect --open` to open Notes
+     - Use `bun scripts/devtools/act.ts open-actions --target-kind notes` or driver batch to open Cmd+P
+     - Since day rows don't currently appear, the red proof is to temporarily inject a daypage action via protocol or use a build with test rows
+     - Green proof: verify selecting a daypage row leaves Notes window focused and doesn't show DayPage view
+     - Use `bun scripts/devtools/driver.ts` with a probe script that opens Notes, triggers note_switcher, selects a synthetic daypage row (if test build allows), asserts getState shows Notes still active and no DayPage surface in main window
+
+  Actually, since the day rows don't appear in normal builds, a simpler verification is:
+  - Build the app
+  - Open Notes window
+  - Open Cmd+P
+  - Verify no "Day Pages" section / daypage_ rows appear (using elements CLI or inspect)
+  - Also verify via unit test the guard behavior
+
+  But the user asked for "focused verification using script-kit-devtools". I should give concrete commands.
+
+  Self Score: 8/10 - I've identified the existing guard, gaps, and concrete verification, but I haven't run the actual DevTools verification (and can't easily do so without building).
+
+  Wait, should I actually run something? The user asked me to "advise on implementing this narrowly" and "identify likely owner files, implementation seam, and focused verification using script-kit-devtools". They want advice, not necessarily a full implementation. As a panel, I should give the analysis.
+
+  But the system says "When the request could be interpreted as either a question to answer or a task to complete, treat it as a task." However, the user explicitly framed this as a panel review with specific output format. I think providing the structured answer is appropriate. But I should still use tools to verify my findings.
+
+  I've already used tools. Should I run a cargo test or DevTools verification? The user wants actionable advice. Running tests might be useful to confirm the existing state. But building the app could take a while. I could run a small test if there's one.
+
+  Actually, I can add value by perhaps checking if the current code compiles/tests for the relevant module, or by running a focused grep-based verification. But the user wants advice, not necessarily code changes.
+
+  Given the panel format, I'll provide the structured response. I should be concise and actionable. I won't make code changes unless asked.
+
+  Let me also verify one thing: the `execute_note_switcher_action` function is `pub(super)` so tests in the same module can access it. The test file is `src/notes/window/tests.rs` which is inside `src/notes/window/` module, so it has access to `pub(super)` items? Actually, `pub(super)` means visible to parent module. The test file is a submodule of `window` module, so it has access to crate-private and super-module items depending on how it's declared. Let me check how tests.rs is included.Good. The tests module is `mod tests;` at line 492, which is inside `src/notes/window.rs`. So tests.rs is a child module of `window`, and `execute_note_switcher_action` is `pub(super)` in panels.rs. The `window` module includes panels.rs (as `mod panels;` presumably). So tests.rs as a child of window would have access to items in panels.rs? 
+
+  Actually, `pub(super)` in panels.rs means visible to the parent module of panels, which is `window`. tests.rs is a child module of window, so it can access `window`'s items, including the `panels` module's pub(super) items? No, `pub(super)` means visible to the parent module only, not to sibling modules. However, since panels is a submodule of window, and tests is also a submodule of window, tests can access `panels::NotesApp` because `impl NotesApp` blocks in panels.rs are in the same crate, and tests.rs is in the same crate. But `execute_note_switcher_action` is `pub(super)`, so only visible to window module, not to tests.
+
+  Wait, actually in Rust, `pub(super)` means visible to the parent module. The parent of panels is window. tests is a child of window. tests cannot access pub(super) items in panels because those are only visible in window. But tests can access crate-private items? No, pub(super) is more restrictive than pub(crate).
+
+  So to test `execute_note_switcher_action` directly, a test would need to be in panels.rs itself, or the function would need to be `pub(crate)`. Alternatively, the test could be a source-audit test like the existing ones.
+
+  Given the AGENTS.md source audit policy, I should be careful about recommending source-audit tests. It says "Source-audit tests are decision locks, not behavior coverage. They are a scarce resource — do NOT mint one per feature pass." And "Pruning rule: when a source audit fails on legitimate refactors (no behavior change) for the third time, do not patch the string again — rewrite it structurally, move it up the ladder, or delete it."
+
+  So a better approach is a unit test. To make execute_note_switcher_action testable, we could either:
+  1. Add the test inside panels.rs (in a `#[cfg(test)] mod tests` block at the bottom)
+  2. Make the function `pub(crate)` temporarily for testing (not ideal)
+  3. Test via the public keyboard path (harder)
+  4. Use DevTools/runtime proof
+
+  Given this is a gpui app, unit tests with Window/Context are complex. The existing tests in src/notes/window/tests.rs are mostly source-audit style. There might not be a good way to unit test execute_note_switcher_action without gpui context.
+
+  Actually, the function signature is:
+  ```rust
+  pub(super) fn execute_note_switcher_action(
+      &mut self,
+      action_id: &str,
+      window: &mut Window,
+      cx: &mut Context<Self>,
+  )
+  ```
+
+  It requires a real Window and Context. Testing this would require a gpui test harness. There might be gpui::test examples in the codebase. Let me check.
+
+  Actually, maybe the simplest test is a source-audit test that asserts the guard exists. But per policy, source audits are last resort. A better "higher rung" might be a lint or behavior test. But behavior test needs gpui context.
+
+  Alternatively, a DevTools probe script is the runtime proof (rung 4), which is appropriate here since the behavior is UI/window-specific.
+
+  So my recommendation should be:
+  1. Keep existing guard
+  2. Add a focused runtime proof via script-kit-devtools driver that:
+     - Opens Notes window
+     - Opens note switcher
+     - Verifies no Day Pages rows
+     - (Optionally) uses a test build or protocol injection to simulate a daypage_ selection and verify it doesn't navigate
+
+  But since day rows don't currently appear, the most practical verification is to confirm they're absent and the guard is present.
+
+  Actually, I realize I should check if there's a way to add a unit test using the existing test infrastructure. Let me search for gpui::test usage in notes tests or similar.No gpui::test in notes or actions. So the existing tests are mostly source-audit style. This makes sense.
+
+  Given the source audit policy, I should recommend either:
+  1. A source-audit test specifically for the guard (acceptable because it's a genuinely load-bearing architectural invariant that no higher rung can express - we can't easily test window navigation behavior in unit tests)
+  2. A DevTools runtime proof as the primary verification, with maybe a lightweight source-audit as backup
+
+  Actually, the policy says "NEVER assert exact occurrence counts of formatted source lines" and "Scope assertions with a function_body-style structural helper". So if I recommend a source audit, it should use a structural helper.
+
+  But as an edge-case-tester panel, I don't need to write the test myself. I should identify the gap and recommend the verification approach.
+
+  Let me now also think about other potential seams:
+  - Could we filter day rows at the builder level (get_note_switcher_actions) so they never appear? Since get_note_switcher_actions only takes notes, this isn't currently needed. But if day rows were added, they'd be built separately.
+  - Could we add a filter in open_browse_panel to strip any daypage_ actions before setting? Since none are generated, not needed.
+  - The existing guard in execute_note_switcher_action is the right seam because it's the last line of defense.
+
+  Now, what about the user's mention of "even if it selects a day note"? This implies they're worried about a scenario where a day note appears in the picker. Since it currently doesn't, maybe the user's concern is about a future state or they observed it in a branch. As edge-case-tester, I should note that the current code already prevents opening, but the rows themselves are not currently in the picker.
+
+  Actually, wait. Let me re-read the second explore agent's summary. It said: "Cmd+P note switcher... Day Pages — action IDs like daypage_YYYY-MM-DD, section 'Day Pages', built from ~/.scriptkit/brain/days/*.md read-through". But my Grep found no `get_day_page_switcher_actions` or daypage references in builders/notes.rs. This is a contradiction. 
+
+  Maybe the day page switcher is in a different file now, or was removed. Let me search more broadly.Confirmed: there are no day page rows being built anywhere in the current src tree. The only daypage_ reference is the guard in panels.rs. So the second explore agent was wrong (possibly stale memory or hallucination). The first explore agent was more accurate: daypage_ actions are ignored, and the cross-window handoff module doesn't exist.
+
+  This is an important finding: the guard is currently dead code in terms of normal operation, but it's a safety net. It's like a "fail-safe" for stale state or future changes.
+
+  Now I should finalize my panel answer. But before that, let me also check the script-kit-devtools driver and notes CLI to give concrete verification commands. I already read the SKILL.md. Let me also check if there are example driver scripts I can reference.
+
+  Actually, I have enough to provide a good answer. Let me structure it according to the requested headings.
+
+  One more thing: I should verify whether the user's premise is correct. They said "prevent the Notes window's Cmd+P command/action picker from ever opening the 'day' view, even if it selects a day note." Since the current code already does this, my role findings should state that. But I should also identify that this is currently a "silent ignore" which has UX implications.
+
+  Also, I want to double-check: is there any path where a day note could appear as a regular note? The storage layer has a days_dir but notes are stored in notes_dir. If a user manually put a day file in notes_dir, it would appear as a note but with a regular note_ uuid action. It wouldn't trigger the daypage_ guard. But that's not the same as "selecting a day note" - the user probably means the day page surface.
+
+  Edge case: what if a note title is "day" or contains "day"? The filter would match it but the action id would still be note_{uuid}, so selecting it opens the note in Notes window. That's fine and expected.
+
+  OK, I'll write the panel response now.
+
+  Actually, one more check: the user asked to "advise on implementing this narrowly". So even though it's already implemented, I should give advice on ensuring it's robust. Maybe they want to know if the current implementation is sufficient or if they should do more.
+
+  Let me think about what "narrowly" means here. It means minimal, focused change. The current guard is already narrow. My recommendation should be to add a test and possibly user feedback, but keep the seam as-is.
+
+  Also, I should mention the script-kit-devtools verification commands concretely. The skill says to use `bun scripts/devtools/notes.ts inspect --open` and `bun scripts/devtools/act.ts`. For a red/green proof, I'd need to:
+  1. Before any change (or to prove current behavior): verify daypage rows absent and guard present
+  2. Simulate selecting a daypage row
+
+  Since day rows don't appear, the verification could be:
+  - Run `bun scripts/devtools/notes.ts inspect --open` to capture baseline
+  - Use `bun scripts/devtools/elements.ts snapshot --target-kind notes` after opening Cmd+P to verify no daypage rows
+  - For the guard itself, the unit/source test is the practical check
+
+  I think the most actionable verification is:
+  1. Add a source-audit test or unit test (as a regression lock)
+  2. Run the existing test suite for notes window: `./scripts/agentic/agent-cargo.sh test --lib notes::window::tests`
+  3. Use DevTools to open Notes, hit Cmd+P, and verify the switcher only contains note_ actions / no daypage_ section
+
+  Let me also check if `bun scripts/devtools/notes.ts` has a way to trigger the switcher. The skill mentions "command bar route/action/filter state". So `notes.ts inspect` might capture this. But to actually open the switcher, I'd use `act.ts key` or driver.
+
+  Actually, I should give a driver script example. Let me check if there's a driver script for notes.I see that notes.ts has an `openActions` flag (for Cmd+K actions), but not specifically for Cmd+P note switcher. The act.ts and actions.ts have more. But there might not be a direct CLI for opening the note switcher (Cmd+P). The driver with `simulateKey` would work.
+
+  Actually, looking at the coverage.ts line 29 "Cmd+P" and line 335, Cmd+P might be covered. But for note switcher specifically, I'd use `simulateKey` with "cmd+p".
+
+  Let me check the driver.ts for simulateKey API.The driver has simulateKey(key, modifiers). To open the note switcher, I'd use `driver.simulateKey("p", ["cmd"])`. Then I can use `getElements` or `getState` to inspect.
+
+  But for the specific task (verifying daypage_ doesn't open day view), I need to:
+  1. Open Notes
+  2. Open note switcher
+  3. Either find a daypage row (currently none) or inject one
+  4. Select it and verify main window doesn't switch to DayPage
+
+  Since daypage rows don't exist, the verification is somewhat limited. But I can verify the negative: no daypage rows in the switcher.
+
+  For a stronger test, I could modify the code temporarily to include a daypage row, but that's not a normal verification.
+
+  Actually, the user asked for "focused verification using script-kit-devtools" - they probably want to know the commands to run. I'll provide:
+  - `bun scripts/devtools/notes.ts inspect --open` for baseline
+  - A small driver script to open Notes, simulate Cmd+P, and snapshot elements to assert no daypage rows
+  - `./scripts/agentic/agent-cargo.sh test --lib notes::window::tests` for regression tests
+
+  OK I have enough. Let me write the panel response. I should be concise and use the requested headings.
+
+  Let me also decide on the self-score. I'll give 8/10 because I identified the existing guard, the gaps, and concrete verification, but I didn't run the actual DevTools verification or add a test.
+
+  Wait, the user is asking me to "advise on implementing this narrowly". Maybe I should also provide a code snippet for the recommended test? As a panel, probably not - but it would make it more actionable.
+
+  Actually, I think the most actionable recommendation is:
+  1. The seam is already correct: `src/notes/window/panels.rs::execute_note_switcher_action` guard
+  2. Add a regression test. Since direct unit testing is hard, use a source-audit style test or a DevTools driver script.
+  3. Run existing tests.
+
+  I'll give a concrete source-audit test snippet that follows the project's style but note the source audit policy. Or better, recommend a lightweight runtime proof as the primary verification and mention that a source-audit regression lock is optional.
+
+  Hmm, the AGENTS.md source audit policy says "do NOT mint one per feature pass" and "last resort". So I should not lead with source-audit. I should lead with DevTools runtime proof.
+
+  But a runtime proof for this specific behavior is tricky because day rows don't appear. I can still verify:
+  - Notes window Cmd+P switcher has no "Day Pages" section and no daypage_ semantic IDs
+  - The guard code is present (could be checked via source audit, but that's the last resort)
+
+  I think the right answer is:
+  - Primary verification: DevTools driver script that opens Notes, triggers Cmd+P, snapshots elements, and asserts no daypage rows + no Day Pages section
+  - Regression lock: a source-audit test asserting `execute_note_switcher_action` contains the daypage_ guard (acknowledging it's a last-resort architectural invariant because no higher rung can express cross-window navigation prevention)
+
+  Actually, I can phrase it as "Given the project already relies on source-audit tests for similar structural invariants (e.g., `src/notes/window/tests.rs` checks keyboard branches), a focused structural test for the guard is proportionate." That respects the policy.
+
+  Let me now write the response.
+
+To resume this session: kimi -r session_e7d92ac9-78ec-4158-bfa4-320392c1475e

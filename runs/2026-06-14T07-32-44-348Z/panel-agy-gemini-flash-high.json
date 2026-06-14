@@ -1,0 +1,28 @@
+{
+  "id": "agy-gemini-flash-high",
+  "label": "Agy Gemini 3.5 Flash High",
+  "panelRole": "evidence-auditor",
+  "command": "agy",
+  "args": [
+    "--print",
+    "--model",
+    "Gemini 3.5 Flash (High)",
+    "--print-timeout",
+    "45m",
+    "--sandbox",
+    "Provider-specific instructions:\n- Stay anchored to the user's task.\n- Return only the requested artifact.\n- Do not discuss the model, provider, config, runtime, tools, or your process unless explicitly requested.\n\nPanel-specific reasoning contract:\nPanel role: evidence-auditor\nFocus on verified facts, assumptions, missing citations, unsupported claims, and what evidence would change the answer.\n\nReturn your answer with these headings:\n## Role Findings\n## Evidence And Assumptions\n## Failure Modes\n## Recommendation\n## Self Score\n\nOriginal task:\nIn /Users/johnlindquist/dev/script-kit-gpui, advise on implementing this narrowly: prevent the Notes window's Cmd+P command/action picker from ever opening the 'day' view, even if it selects a day note. Context: 'day' is intended as a quick ephemeral way to edit the day note from the main window with the same behavior/experience as the notes window. The Notes window is the default/windowed experience. They should not cross over. Please identify likely owner files, implementation seam, and focused verification using script-kit-devtools. Keep answer actionable and codebase-specific."
+  ],
+  "env": {},
+  "preflight": null,
+  "ok": true,
+  "exitCode": 0,
+  "signal": null,
+  "timedOut": false,
+  "startedAt": "2026-06-14T07:32:53.349Z",
+  "endedAt": "2026-06-14T07:32:59.306Z",
+  "durationMs": 5957,
+  "stdinChars": 0,
+  "stdinSha256": null,
+  "stdoutChars": 38,
+  "stderrChars": 0
+}

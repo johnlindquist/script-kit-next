@@ -1,0 +1,105 @@
+• The user wants me to act as a panel with the role "edge-case-tester" to review the task of building a landing-page brief for a wzrrd-publish static site for Script Kit GPUI. I need to focus on boundary cases, regressions, weird inputs, operational failure modes, and test coverage gaps.
+
+  The request asks for a specific output format with headings:
+  ## Role Findings
+  ## Evidence And Assumptions
+  ## Failure Modes
+  ## Recommendation
+  ## Self Score
+
+  I should NOT actually build the landing page brief. I should act as the edge-case-tester panel reviewing the original task and provide findings about what could go wrong, what assumptions are being made, boundary cases, etc.
+
+  This is a reasoning task, not a file modification task. I should respond directly in text. Since the user wants the panel-specific reasoning contract applied, I need to think through:
+
+  1. Boundary cases in the brief/plan
+  2. Regressions or things that could go wrong
+  3. Weird inputs or edge scenarios
+  4. Operational failure modes
+  5. Test coverage gaps
+  6. Evidence and assumptions
+  7. Recommendations
+
+  Let me think carefully about this.
+
+  The original task is to build a concrete landing-page brief for a wzrrd-publish static site. The deliverable includes:
+  1. Exact hero copy, CTA labels, and subcopy
+  2. Section order and layout direction
+  3. 3-5 interactive Svelte components with data structures and behavior
+  4. Competitive positioning copy
+  5. Trust/anti-positioning copy
+  6. Visual direction
+  7. Complete list of page content blocks and microcopy
+  8. Implementation notes for SvelteKit/mdsvex, route count
+
+  Constraints:
+  - No stock imagery, external fonts, heavy assets
+  - No generic SaaS hero
+  - Native command surface/workbench feel
+  - Good enough to publish today
+
+  From an edge-case-tester perspective:
+
+  Role Findings:
+  - The brief generator is being asked to produce exact copy without audience segmentation - this is risky because "developers" is broad
+  - Interactive components on a static marketing page can fail if JS is disabled, slow connections, or SSR/hydration mismatches
+  - "Publish today" pressure creates corner-cutting on accessibility, performance, responsive design
+  - The positioning has many anti-positioning constraints that could make messaging muddled if not carefully balanced
+  - No stock imagery/fonts means all visual identity must come from CSS/SVG - limited design vocabulary
+
+  Evidence And Assumptions:
+  - Assumes wzrrd.sh supports SvelteKit static adapter with client-side components
+  - Assumes target audience is familiar with Raycast/Alfred/Script Kit old
+  - Assumes macOS-first positioning won't alienate cross-platform developers who might be interested
+  - Assumes "proof-oriented" Agent execution can be communicated in marketing copy without live demos
+  - Assumes single-page is sufficient; might be wrong for SEO/content marketing
+  - Assumes Bun-powered is a selling point (it is for this audience)
+
+  Failure Modes:
+  1. Copy failures: "exact hero copy" produced without A/B testing or user research could convert poorly; claims like "native programmable desktop workbench" might be too abstract; "proof-oriented agent execution" could confuse users
+  2. Interactive component failures: 
+     - Terminal/command-line demo component: syntax errors, overflow on mobile, animation performance, dark/light mode mismatch
+     - Script showcase component: if using client-side data, could be empty on first load
+     - Agent chat mock component: fake messages could feel deceptive if not clearly labeled as simulated
+  3. Technical failures:
+     - SvelteKit static build with client components could produce hydration errors
+     - mdsvex markdown rendering might escape Svelte component slots unexpectedly
+     - Route count decision (single-page) might hurt sharing/linking to specific sections
+     - No external fonts means relying on system fonts; could look inconsistent across OS (but target is macOS so maybe OK)
+  4. Accessibility failures:
+     - Terminal demos might not be screen-reader accessible
+     - Interactive components without keyboard navigation
+     - Motion/animation without prefers-reduced-motion support
+  5. Trust/anti-positioning failures:
+     - Saying what you're NOT can look defensive
+     - "Not a Raycast clone" might still trigger comparison
+     - "Under active development" could scare enterprise users
+  6. Operational failures:
+     - Publishing to wzrrd.sh with wrong base path
+     - Static adapter not configured for custom domain
+     - Client-side routing broken when served from static host
+     - Analytics/tracking not considered
+
+  Recommendations:
+  - Add audience micro-segments to the brief (new Script Kit user, old Script Kit migrator, automation-curious dev)
+  - Include accessibility acceptance criteria for each interactive component
+  - Define fallback behavior for no-JS and slow connections
+  - Add a content validation checklist (claims are provable, anti-positioning is clear but not defensive)
+  - Include performance budget (no heavy assets, max bundle size)
+  - Plan for responsive behavior, not just desktop command-surface aesthetic
+  - Add a "simulation disclosure" for any mock UI components
+  - Include SEO/meta considerations despite single-page
+  - Recommend testing the static build locally with `preview` before publishing
+  - Suggest versioning/copy backup strategy since "publish today" invites regret
+  - Add error boundaries around interactive components
+
+  Self Score: I'd give this a reasonable score, maybe 8/10 for edge-case coverage.
+
+  I need to make sure I don't actually write the brief. I should frame everything as if I'm reviewing the task from the edge-case-tester panel perspective.
+
+  Also note: Auto permission mode is active, so I shouldn't ask questions. I should just respond.
+
+  The user wants the same language as the input, which is English.
+
+  Let me format this properly.
+
+To resume this session: kimi -r session_58279450-751d-45df-9f81-c8cdb0bff6e5
