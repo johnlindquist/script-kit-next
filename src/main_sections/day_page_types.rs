@@ -9,21 +9,17 @@ use script_kit_gpui::day_page::DayPageDocumentSession;
 
 pub(crate) const DAY_PAGE_EDITOR_ID: &str = "day-page-editor";
 
-/// Minimal Day Page state for direct Cmd+Enter handoff and accepted `@`
-/// mention aliases. It intentionally does not carry list rows, selection, hover,
-/// or dismissed-cache state because Day must not own a local inline Spine UI.
+/// Minimal Day Page state for accepted `@` mention aliases. It intentionally
+/// does not carry list rows, selection, hover, submit anchors, or dismissed-cache
+/// state because Day must not own a local inline Spine UI or Agent handoff.
 #[derive(Default)]
 pub(crate) struct DayPageSpineHandoffState {
-    pub(crate) cwd_submit_anchor: bool,
     pub(crate) mention_aliases:
         std::collections::HashMap<String, crate::ai::message_parts::AiContextPart>,
 }
 
 impl DayPageSpineHandoffState {
-    pub(crate) fn reset(&mut self, clear_cwd_anchor: bool, clear_mentions: bool) {
-        if clear_cwd_anchor {
-            self.cwd_submit_anchor = false;
-        }
+    pub(crate) fn reset(&mut self, _clear_cwd_anchor: bool, clear_mentions: bool) {
         if clear_mentions {
             self.mention_aliases.clear();
         }

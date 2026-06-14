@@ -52,6 +52,7 @@ fn day_page_render_does_not_mount_inline_spine_overlay() {
 #[test]
 fn day_page_keyboard_does_not_drive_spine_rows() {
     let view = source("src/main_sections/day_page_view.rs");
+    let types = source("src/main_sections/day_page_types.rs");
     let handle_key = function_body(&view, "pub(crate) fn handle_key_parts(");
 
     for forbidden in [
@@ -69,6 +70,11 @@ fn day_page_keyboard_does_not_drive_spine_rows() {
     assert!(
         !handle_key.contains("submit_day_page_spine_prompt_from_current_line"),
         "Day Cmd+Enter must not open Agent Chat/prompt-builder surfaces"
+    );
+    let deprecated_submit_anchor = concat!("cwd_", "submit_", "anchor");
+    assert!(
+        !types.contains(deprecated_submit_anchor),
+        "Day spine state must not keep submit anchors for deprecated prompt-builder handoff"
     );
 }
 
@@ -152,6 +158,7 @@ fn day_page_header_context_chips_are_inert() {
 #[test]
 fn day_page_actions_do_not_offer_agent_handoff() {
     let actions = source("src/main_sections/day_page_actions.rs");
+    let agent_handoff = source("src/app_impl/agent_handoff/mod.rs");
     let dialog = source("src/actions/dialog.rs");
     let actions_toggle = source("src/app_impl/actions_toggle.rs");
 
@@ -164,6 +171,18 @@ fn day_page_actions_do_not_offer_agent_handoff() {
         assert!(
             !actions.contains(forbidden),
             "Day actions must not expose Agent handoff path: {forbidden}"
+        );
+    }
+
+    for forbidden in [
+        concat!("submit_", "day_page_", "spine_prompt_plan_", "with_aliases"),
+        concat!("submit_", "day_page_", "markdown_line_", "with_context"),
+        concat!("day_page_", "markdown_reference_", "handoff"),
+        concat!("day_page_", "line_", "handoff"),
+    ] {
+        assert!(
+            !agent_handoff.contains(forbidden),
+            "Agent handoff must not retain deprecated Day prompt-builder handoff path: {forbidden}"
         );
     }
 

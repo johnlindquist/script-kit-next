@@ -3,7 +3,7 @@
  * Runtime proof for Day Page @context parity:
  * - typing @con in the Day Page editor swaps to the main menu context list
  * - accepting the main-menu row returns to the same Day Page line with @here
- * - Cmd+Enter submits that line to Agent Chat with a resolved context part
+ * - Cmd+Enter does not open the deprecated Day prompt-builder/Agent handoff
  */
 import { Driver, type Json } from "../devtools/driver";
 import { openDayPage } from "./day-page-open-helper";
@@ -77,6 +77,24 @@ function firstMatchingLog(log: string, needle: string): string | null {
   return log.split("\n").find((line) => line.includes(needle)) ?? null;
 }
 
+const deprecatedMarkdownHandoffEvent = ["day_page", "markdown_reference", "handoff"].join("_");
+const deprecatedLineHandoffSource = ["day_page", "line", "handoff"].join("_");
+
+function localOverlayIds(elements: Json): string[] {
+  return walkElements(elements)
+    .map((el) => String(el.semanticId ?? el.id ?? ""))
+    .filter((id) => {
+      const lower = id.toLowerCase();
+      return (
+        lower.includes("day-page-spine") ||
+        lower.includes("day-spine") ||
+        lower.includes("ready-to-send") ||
+        lower.includes("prompt-builder") ||
+        lower === "prompt-compiler"
+      );
+    });
+}
+
 const driver = await Driver.launch({
   binary: BINARY,
   sandboxHome: true,
@@ -84,24 +102,6 @@ const driver = await Driver.launch({
   defaultTimeoutMs: 8000,
   env: { SCRIPT_KIT_PANEL_INVARIANTS_ALLOW_MISMATCH: "1" },
 });
-
-// Seed only the auth/config files needed for Agent Chat submission in the
-// isolated sandbox. Missing files are reported by the Agent Chat assertions.
-const sandboxHome = `${driver.sessionDir}/home`;
-const realHome = process.env.HOME ?? "";
-for (const rel of [
-  ".codex/auth.json",
-  ".pi/agent/auth.json",
-  ".pi/agent/settings.json",
-]) {
-  const src = `${realHome}/${rel}`;
-  const dest = `${sandboxHome}/${rel}`;
-  try {
-    await Bun.$`mkdir -p ${dest.slice(0, dest.lastIndexOf("/"))} && cp ${src} ${dest}`.quiet();
-  } catch {
-    // The submit step will fail honestly if auth is unavailable.
-  }
-}
 
 try {
   const initial = await openDayPage(driver, runId);
@@ -183,36 +183,48 @@ try {
     expected: completedLine,
   });
 
-  driver.simulateKey("enter", ["cmd"]);
-  await Bun.sleep(3000);
-  const afterSubmit = (await driver.getState({ timeoutMs: 5000 })) as Json;
-  const appLog = await Bun.file(`${driver.sessionDir}/app.log`).text();
-  const startedLine = firstMatchingLog(appLog, "event=day_page_markdown_reference_handoff_started");
-  const submitLine = firstMatchingLog(
-    appLog,
-    "event=agent_chat_reused_entry_intent_with_host_context_submitted source=day_page_markdown_reference_handoff",
-  );
-  const startedContextCount = Number(/context_count=(\d+)/.exec(startedLine ?? "")?.[1] ?? -1);
-  const contextPartCount = Number(/context_part_count=(\d+)/.exec(submitLine ?? "")?.[1] ?? -1);
-  const unknownWarningCount = Number(
-    /unknown_warning_count=(\d+)/.exec(submitLine ?? "")?.[1] ?? -1,
-  );
+  const afterAcceptElements = (await driver.getElements(
+    { target: { type: "main" }, limit: 220 },
+    { timeoutMs: 5000 },
+  )) as Json;
+  check("day_page_has_no_local_prompt_builder_after_context_accept", localOverlayIds(afterAcceptElements).length === 0, {
+    localOverlayIds: localOverlayIds(afterAcceptElements),
+  });
 
-  check("cmd_enter_opens_agent_chat", afterSubmit.promptType === "agentChatChat", {
+  driver.simulateKey("enter", ["cmd"]);
+  await Bun.sleep(900);
+  const afterSubmit = (await driver.getState({ timeoutMs: 5000 })) as Json;
+  const afterSubmitText = await editorText(driver);
+  const afterSubmitElements = (await driver.getElements(
+    { target: { type: "main" }, limit: 220 },
+    { timeoutMs: 5000 },
+  )) as Json;
+  const appLog = await Bun.file(`${driver.sessionDir}/app.log`).text();
+  const deprecatedStartedLine = firstMatchingLog(appLog, `event=${deprecatedMarkdownHandoffEvent}_started`);
+  const deprecatedSubmitLine = firstMatchingLog(appLog, deprecatedMarkdownHandoffEvent);
+  const deprecatedLineHandoff = firstMatchingLog(appLog, deprecatedLineHandoffSource);
+  const promptCompilerIds = localOverlayIds(afterSubmitElements);
+  const footerButtons = Array.isArray(afterSubmit.activeFooter?.buttons)
+    ? (afterSubmit.activeFooter.buttons as Json[])
+    : [];
+
+  check("cmd_enter_stays_on_day_page", afterSubmit.promptType === "dayPage", {
     promptType: afterSubmit.promptType,
   });
-  check("day_page_handoff_logged_markdown_context", startedContextCount > 0, {
-    startedContextCount,
-    startedLine,
+  check("cmd_enter_keeps_day_page_line_unchanged", afterSubmitText === completedLine, {
+    afterSubmitText,
+    expected: completedLine,
   });
-  check("agent_chat_received_context_part", contextPartCount > 0, {
-    contextPartCount,
-    unknownWarningCount,
-    submitLine,
+  check("cmd_enter_does_not_render_prompt_builder", promptCompilerIds.length === 0, {
+    localOverlayIds: promptCompilerIds,
   });
-  check("agent_chat_no_unknown_context_warnings", unknownWarningCount === 0, {
-    unknownWarningCount,
-    submitLine,
+  check("cmd_enter_does_not_emit_deprecated_day_handoff_logs", !deprecatedStartedLine && !deprecatedSubmitLine && !deprecatedLineHandoff, {
+    deprecatedStartedLine,
+    deprecatedSubmitLine,
+    deprecatedLineHandoff,
+  });
+  check("day_footer_has_no_agent_button", footerButtons.every((button) => button.action !== "ai"), {
+    footerButtons,
   });
 
   const pass = failures.length === 0;
