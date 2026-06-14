@@ -10,7 +10,7 @@
  * - editor scroll metrics are exposed and getElements remains fast
  */
 
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { Driver, type Json } from "../devtools/driver";
 import { openDayPage } from "./day-page-open-helper";
 
@@ -18,6 +18,7 @@ const BINARY =
   process.env.PROBE_BINARY ??
   "target-agent/artifacts/day-notes-editor-parity/script-kit-gpui";
 const runId = `editor-runtime-${Date.now().toString(36)}`;
+const OUT_PATH = ".test-output/day-notes-preview-renderer-parity-probe.json";
 
 const checks: Array<{ name: string; ok: boolean; detail: Json }> = [];
 const failures: string[] = [];
@@ -42,6 +43,25 @@ function walkElements(node: unknown, out: Json[] = []): Json[] {
 
 function findSemantic(elements: Json, semanticId: string): Json | null {
   return walkElements(elements).find((el) => el.semanticId === semanticId) ?? null;
+}
+
+function ids(elements: Json): string[] {
+  return walkElements(elements)
+    .map((el) => String(el.semanticId ?? el.id ?? ""))
+    .filter(Boolean);
+}
+
+function localOverlayIds(elements: Json): string[] {
+  return ids(elements).filter((id) => {
+    const lower = id.toLowerCase();
+    return (
+      lower.includes("day-page-spine") ||
+      lower.includes("day-spine") ||
+      lower.includes("ready-to-send") ||
+      lower.includes("prompt-builder") ||
+      lower === "notes-spine-list"
+    );
+  });
 }
 
 function editorRuntime(editor: Json | null): Json | null {
@@ -71,8 +91,13 @@ async function timedGetElements(
   return result;
 }
 
-async function gpuiKey(driver: Driver, key: string, target?: Json): Promise<Json> {
-  const event: Json = { type: "keyDown", key, modifiers: [] };
+async function gpuiKey(
+  driver: Driver,
+  key: string,
+  target?: Json,
+  modifiers: string[] = [],
+): Promise<Json> {
+  const event: Json = { type: "keyDown", key, modifiers };
   const payload: Json = {
     type: "simulateGpuiEvent",
     requestId: `${runId}-${key}-${Math.random().toString(36).slice(2)}`,
@@ -80,6 +105,14 @@ async function gpuiKey(driver: Driver, key: string, target?: Json): Promise<Json
   };
   if (target) payload.target = target;
   return driver.request(payload, { expect: "simulateGpuiEventResult", timeoutMs: 5000 });
+}
+
+async function notesState(driver: Driver): Promise<Json> {
+  const result = (await driver.request(
+    { type: "getState", target: { type: "kind", kind: "notes", index: 0 } },
+    { expect: "stateResult", timeoutMs: 5000 },
+  )) as Json;
+  return (result.notes ?? result) as Json;
 }
 
 function buildLongMarkdown(): string {
@@ -180,6 +213,36 @@ try {
     { before: notesScrollBefore, after: notesScrollAfter },
   );
 
+  await gpuiKey(driver, "p", { type: "kind", kind: "notes", index: 0 }, ["cmd", "shift"]);
+  await Bun.sleep(250);
+  const previewState = await notesState(driver);
+  const previewAnchor = (previewState.previewAnchor ?? {}) as Json;
+  check(
+    "notes_preview_enabled",
+    previewState.view?.previewEnabled === true || previewAnchor.previewEnabled === true,
+    { view: previewState.view ?? null, previewAnchor },
+  );
+  check("notes_preview_anchor_available", previewAnchor.available === true, { previewAnchor });
+  check("notes_preview_uses_shared_owner", previewAnchor.owner === "components.notes_editor", {
+    owner: previewAnchor.owner ?? null,
+    previewAnchor,
+  });
+  check(
+    "notes_preview_uses_shared_render_path",
+    previewAnchor.renderPath === "components.notes_editor.render_preview",
+    { renderPath: previewAnchor.renderPath ?? null, previewAnchor },
+  );
+  check(
+    "notes_preview_scroll_metrics_available",
+    previewAnchor.scrollMetricsAvailable === true && previewAnchor.scroll?.available === true,
+    { previewAnchor },
+  );
+  check(
+    "notes_preview_scroll_can_scroll_y",
+    Number(previewAnchor.scroll?.maxScrollTop ?? 0) > 0 || previewAnchor.scroll?.canScrollY === true,
+    { scroll: previewAnchor.scroll ?? null },
+  );
+
   const dayState = await openDayPage(driver, runId);
   check("opened_day_page", dayState.promptType === "dayPage", {
     promptType: dayState.promptType ?? null,
@@ -194,6 +257,9 @@ try {
   let dayElements = await timedGetElements(driver, "dayGetElementsMs", {
     target: { type: "main" },
     limit: 200,
+  });
+  check("day_no_local_preview_or_spine_overlay", localOverlayIds(dayElements).length === 0, {
+    localOverlayIds: localOverlayIds(dayElements),
   });
   const dayEditor = findSemantic(dayElements, "input:day-page-editor");
   const dayRuntime = editorRuntime(dayEditor);
@@ -294,46 +360,44 @@ try {
   check("unknown_warning_count_zero", unknownWarningCount === 0, { unknownWarningCount });
 
   const pass = failures.length === 0;
-  console.log(
-    JSON.stringify(
-      {
-        schemaVersion: 1,
-        tool: "day-notes-editor-runtime-parity-probe",
-        classification: "completed",
-        pass,
-        failures,
-        screenshotProof: "not-used-semantic-devtools-only",
-        protectedDirtyFiles: ["dev.sh", "scripts/agentic/ensure-pi-sidecar.sh"],
-        checks,
-        timings,
-        sessionDir: driver.sessionDir,
-      },
-      null,
-      2,
-    ),
-  );
+  const receipt = {
+    schemaVersion: 1,
+    tool: "day-notes-preview-renderer-parity-probe",
+    classification: pass ? "completed" : "failed",
+    pass,
+    failures,
+    binary: BINARY,
+    screenshotProof: "not-used-semantic-devtools-only",
+    protectedDirtyFiles: ["CLAUDE.md", "dev.sh", "scripts/agentic/ensure-pi-sidecar.sh"],
+    checks,
+    timings,
+    sessionDir: driver.sessionDir,
+    appLog: driver.logPath,
+  };
+  mkdirSync(".test-output", { recursive: true });
+  await Bun.write(OUT_PATH, `${JSON.stringify(receipt, null, 2)}\n`);
+  console.log(JSON.stringify(receipt, null, 2));
   if (!pass) process.exitCode = 1;
 } catch (error) {
   const message = error instanceof Error ? error.message : String(error);
   check("probe_completed_without_exception", false, { error: message });
-  console.log(
-    JSON.stringify(
-      {
-        schemaVersion: 1,
-        tool: "day-notes-editor-runtime-parity-probe",
-        classification: "failed",
-        pass: false,
-        failures,
-        screenshotProof: "not-used-semantic-devtools-only",
-        protectedDirtyFiles: ["dev.sh", "scripts/agentic/ensure-pi-sidecar.sh"],
-        checks,
-        timings,
-        sessionDir: driver.sessionDir,
-      },
-      null,
-      2,
-    ),
-  );
+  const receipt = {
+    schemaVersion: 1,
+    tool: "day-notes-preview-renderer-parity-probe",
+    classification: "failed",
+    pass: false,
+    failures,
+    binary: BINARY,
+    screenshotProof: "not-used-semantic-devtools-only",
+    protectedDirtyFiles: ["CLAUDE.md", "dev.sh", "scripts/agentic/ensure-pi-sidecar.sh"],
+    checks,
+    timings,
+    sessionDir: driver.sessionDir,
+    appLog: driver.logPath,
+  };
+  mkdirSync(".test-output", { recursive: true });
+  await Bun.write(OUT_PATH, `${JSON.stringify(receipt, null, 2)}\n`);
+  console.log(JSON.stringify(receipt, null, 2));
   process.exitCode = 1;
 } finally {
   await driver.close();

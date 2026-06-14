@@ -6,8 +6,8 @@
 use anyhow::Result;
 use gpui::{
     div, prelude::*, px, rgba, size, AnyElement, App, Context, CursorStyle, Entity, FocusHandle,
-    Focusable, IntoElement, KeyDownEvent, MouseMoveEvent, ParentElement, Render, ScrollHandle,
-    Styled, Subscription, Window, WindowBounds, WindowOptions,
+    Focusable, IntoElement, KeyDownEvent, MouseMoveEvent, ParentElement, Render, Styled,
+    Subscription, Window, WindowBounds, WindowOptions,
 };
 
 #[cfg(target_os = "macos")]
@@ -18,7 +18,6 @@ use gpui_component::{
     button::{Button, ButtonVariants},
     input::{Input, InputEvent, InputState, Search},
     kbd::Kbd,
-    scroll::ScrollableElement,
     theme::ActiveTheme,
     tooltip::Tooltip,
     IconName, Root, Sizable, WindowExt as _,
@@ -361,8 +360,6 @@ pub struct NotesApp {
     autosize_generation: u64,
     /// Last auto-resize decision for before/after resize comparison proof.
     last_autosize_transition: Option<NotesAutosizeTransition>,
-    /// Scroll handle for the markdown preview, used by DevTools scroll anchors.
-    preview_scroll_handle: ScrollHandle,
     /// Focus handle for keyboard navigation
     focus_handle: FocusHandle,
 

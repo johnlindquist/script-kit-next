@@ -2,6 +2,7 @@
 
 pub const NOTES_EDITOR_STYLE_OWNER: &str = "components.notes_editor";
 pub const NOTES_EDITOR_INPUT_RENDER_PATH: &str = "components.notes_editor.render_input_state";
+pub const NOTES_EDITOR_PREVIEW_RENDER_PATH: &str = "components.notes_editor.render_preview";
 pub const NOTES_EDITOR_OCCLUSION_ALPHA: u32 = 0xFF;
 
 /// Layout padding for the editor body and preview surfaces.
@@ -120,5 +121,13 @@ mod tests {
     #[test]
     fn notes_editor_surface_occlusion_is_solid_theme_background() {
         assert_eq!(notes_editor_occlusion_rgba(0x112233), 0x112233ff);
+    }
+
+    #[test]
+    fn notes_editor_preview_render_path_is_component_owned() {
+        assert_eq!(
+            NOTES_EDITOR_PREVIEW_RENDER_PATH,
+            "components.notes_editor.render_preview"
+        );
     }
 }

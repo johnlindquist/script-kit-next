@@ -97,8 +97,7 @@ impl NotesApp {
         }
 
         if is_preview {
-            let content = self.editor_state.read(cx).value().to_string();
-            let metrics = style::adopted_metrics();
+            let content = self.notes_editor.read(cx).content(cx);
             let entity = cx.entity().downgrade();
             let on_toggle_task: markdown::TaskToggleHandler =
                 std::rc::Rc::new(move |marker_range, checked, window, cx| {
@@ -108,21 +107,10 @@ impl NotesApp {
                         });
                     }
                 });
-            return div()
-                .id("notes-markdown-preview")
-                .flex_1()
-                .min_h(px(0.))
-                .track_scroll(&self.preview_scroll_handle)
-                .overflow_y_scroll()
-                .vertical_scrollbar(&self.preview_scroll_handle)
-                .px(px(metrics.editor_padding_x))
-                .py(px(metrics.editor_padding_y))
-                .child(markdown::render_markdown_preview_interactive(
-                    &content,
-                    cx.theme(),
-                    on_toggle_task,
-                ))
-                .into_any_element();
+            return self
+                .notes_editor
+                .read(cx)
+                .render_preview(&content, on_toggle_task, cx.theme());
         }
 
         // Ghost text renders through the editor's native inline-completion

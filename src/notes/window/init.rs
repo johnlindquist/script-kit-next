@@ -149,7 +149,6 @@ impl NotesApp {
             last_window_height: initial_height, // Track for manual resize detection
             autosize_generation: 0,
             last_autosize_transition: None,
-            preview_scroll_handle: ScrollHandle::new(),
             focus_handle,
             _subscriptions: vec![editor_sub, search_sub],
             // Initialize CommandBar with notes-specific actions

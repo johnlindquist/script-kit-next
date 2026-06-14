@@ -19,5 +19,5 @@ pub use toolbar::{
 };
 pub use types::{
     NotesEditorConfig, NotesEditorInputSizing, NotesEditorLayout, NotesEditorMarkdownConfig,
-    NotesEditorSurfaceStyle, NOTES_EDITOR_STYLE_OWNER,
+    NotesEditorSurfaceStyle, NOTES_EDITOR_PREVIEW_RENDER_PATH, NOTES_EDITOR_STYLE_OWNER,
 };

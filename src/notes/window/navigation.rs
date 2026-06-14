@@ -1,6 +1,7 @@
 use itertools::Itertools;
 
 use super::*;
+use gpui::ScrollHandle;
 
 impl NotesApp {
     pub(super) fn devtools_text_fingerprint(value: &str) -> String {
@@ -329,12 +330,16 @@ impl NotesApp {
         &self,
         editor_text: &str,
         selection: &std::ops::Range<usize>,
+        cx: &gpui::App,
     ) -> serde_json::Value {
         let anchor = Self::automation_line_anchor(editor_text, selection);
-        let scroll_metrics = Self::automation_scroll_handle_metrics(
-            &self.preview_scroll_handle,
-            "runtime.notes.preview.ScrollHandle",
-        );
+        let scroll_metrics = {
+            let editor = self.notes_editor.read(cx);
+            Self::automation_scroll_handle_metrics(
+                editor.preview_scroll_handle(),
+                "runtime.components.notes_editor.preview.ScrollHandle",
+            )
+        };
         let preview_available = self.preview_enabled;
 
         serde_json::json!({
@@ -343,6 +348,9 @@ impl NotesApp {
             "redacted": true,
             "available": preview_available,
             "previewEnabled": self.preview_enabled,
+            "owner": crate::components::notes_editor::NOTES_EDITOR_STYLE_OWNER,
+            "renderPath": crate::components::notes_editor::NOTES_EDITOR_PREVIEW_RENDER_PATH,
+            "scrollSource": "runtime.components.notes_editor.preview.ScrollHandle",
             "anchor": if preview_available { anchor } else { serde_json::Value::Null },
             "scrollMetricsAvailable": preview_available,
             "scrollTopAvailable": preview_available,
@@ -464,7 +472,7 @@ impl NotesApp {
                 &selection,
                 editor.automation_scroll_metrics(),
             ),
-            "previewAnchor": self.automation_preview_anchor(&editor_text, &selection),
+            "previewAnchor": self.automation_preview_anchor(&editor_text, &selection, cx),
             "view": {
                 "viewMode": format!("{:?}", self.view_mode),
                 "surfaceMode": format!("{:?}", self.surface_mode),
