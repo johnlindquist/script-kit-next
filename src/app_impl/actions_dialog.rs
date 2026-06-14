@@ -252,6 +252,19 @@ impl ScriptListApp {
             return;
         }
 
+        if matches!(self.current_view, AppView::DayPage { .. })
+            && crate::ai::agent_prompt_handoff::is_prompt_action_id(&action_id)
+        {
+            tracing::info!(
+                target: "script_kit::tab_ai",
+                event = "day_page_prompt_action_blocked",
+                action_id = %action_id,
+                host = ?host,
+                "Blocked stale prompt handoff action while Day Page owns the editor"
+            );
+            return;
+        }
+
         match host {
             ActionsDialogHost::MainList => {
                 // Agent & Model picker (Shift+Tab): persist the selected model
@@ -1338,6 +1351,16 @@ impl ScriptListApp {
         // actions window's Cmd+Enter handler. The slot is only populated
         // when a secondary surface explicitly requested the handoff.
         if let Some(target) = crate::ai::take_pending_explicit_agent_chat_target() {
+            if matches!(self.current_view, AppView::DayPage { .. }) {
+                tracing::info!(
+                    target: "script_kit::tab_ai",
+                    event = "day_page_pending_agent_chat_target_dropped",
+                    item_source = %target.source,
+                    semantic_id = %target.semantic_id,
+                    "Dropped pending Agent Chat target while Day Page owns the editor"
+                );
+                return;
+            }
             tracing::info!(
                 target: "script_kit::tab_ai",
                 event = "tab_ai_pending_agent_chat_target_picked_up",

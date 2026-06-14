@@ -157,11 +157,9 @@ try {
       (v) => typeof v === "string" && (v.includes("Save Today") || v.includes("day_page:save")),
     ),
   );
-  const hasSendLine = dialogFlat.some((el) =>
+  const hasDeprecatedAgentRow = dialogFlat.some((el) =>
     [el.semanticId, el.id, el.text, el.value].some(
-      (v) =>
-        typeof v === "string" &&
-        (v.includes("Send Line to Agent Chat") || v.includes("day_page:handoff_line")),
+      (v) => typeof v === "string" && /day_page:.*handoff|agent chat/i.test(v),
     ),
   );
   const hasPromptHandoffRows = dialogFlat.some((el) =>
@@ -174,11 +172,11 @@ try {
           v.includes("Send Prompt")),
     ),
   );
-  check("today_actions_rows_visible", hasOpenPastDay && hasSaveToday && !hasSendLine && !hasPromptHandoffRows, {
+  check("today_actions_rows_visible", hasOpenPastDay && hasSaveToday && !hasDeprecatedAgentRow && !hasPromptHandoffRows, {
     dialogIds,
     hasOpenPastDay,
     hasSaveToday,
-    hasSendLine,
+    hasDeprecatedAgentRow,
     hasPromptHandoffRows,
   });
 

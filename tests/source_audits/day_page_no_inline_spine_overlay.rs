@@ -100,6 +100,18 @@ fn day_page_spine_adapter_exposes_no_overlay_rows() {
 }
 
 #[test]
+fn day_page_cannot_delegate_to_main_list_spine_projection() {
+    let filter_input_core = source("src/app_impl/filter_input_core.rs");
+    let owns_main_list = function_body(&filter_input_core, "fn spine_projection_owns_main_list(");
+
+    assert!(
+        owns_main_list.contains("AppView::DayPage { .. }")
+            && owns_main_list.contains("return false"),
+        "Day must not let the shared main-list Spine projection render prompt-builder rows"
+    );
+}
+
+#[test]
 fn free_text_spine_projection_does_not_own_a_list() {
     let list = source("src/spine/list.rs");
     let input_projection = source("src/spine/input_projection.rs");
@@ -161,12 +173,14 @@ fn day_page_actions_do_not_offer_agent_handoff() {
     let agent_handoff = source("src/app_impl/agent_handoff/mod.rs");
     let dialog = source("src/actions/dialog.rs");
     let actions_toggle = source("src/app_impl/actions_toggle.rs");
+    let actions_dialog = source("src/app_impl/actions_dialog.rs");
+    let ai_mod = source("src/ai/mod.rs");
 
     for forbidden in [
-        "day_page:handoff_line",
-        "Send Line to Agent Chat",
-        "handoff_current_line_to_agent_chat",
-        "day_page_handoff_plain_line",
+        concat!("day_page:", "handoff_line"),
+        concat!("Send Line", " to Agent Chat"),
+        concat!("handoff_current_", "line_to_agent_chat"),
+        concat!("day_page_", "handoff_plain_line"),
     ] {
         assert!(
             !actions.contains(forbidden),
@@ -198,12 +212,39 @@ fn day_page_actions_do_not_offer_agent_handoff() {
         "Day-hosted Actions dialog must suppress generic prompt handoff rows"
     );
 
-    let actions_dialog = source("src/app_impl/actions_dialog.rs");
     let routing = function_body(&actions_dialog, "fn route_key_to_actions_dialog(");
     assert!(
         routing.contains("tab_ai_actions_dialog_cmd_enter_ignored_day_page")
             && routing.contains("matches!(self.current_view, AppView::DayPage { .. })"),
         "Day-hosted Actions Cmd+Enter must not route into Agent Chat/prompt-builder target handoff"
+    );
+
+    let execute_action = function_body(&actions_dialog, "fn execute_action_for_actions_host(");
+    assert!(
+        execute_action.contains("AppView::DayPage { .. }")
+            && execute_action.contains("is_prompt_action_id(&action_id)")
+            && execute_action.contains("day_page_prompt_action_blocked"),
+        "Day-hosted Actions execution must block stale prompt-action/prompt-target ids, not only hide rows"
+    );
+
+    let close_actions = function_body(&actions_dialog, "fn close_actions_popup(");
+    assert!(
+        close_actions.contains("take_pending_explicit_agent_chat_target()")
+            && close_actions.contains("AppView::DayPage { .. }")
+            && close_actions.contains("day_page_pending_agent_chat_target_dropped"),
+        "closing Actions from Day must drop pending explicit Agent Chat targets instead of opening prompt-builder handoff UI"
+    );
+
+    let global_cmd_enter = function_body(&agent_handoff, "fn supports_global_cmd_enter_ai_entry(");
+    assert!(
+        !global_cmd_enter.contains("AppView::DayPage"),
+        "global Cmd+Enter AI entry must continue to exclude Day Page"
+    );
+
+    assert!(
+        !ai_mod.contains(concat!("inline", "_agent"))
+            && !std::path::Path::new(concat!("src/ai/", "inline", "_agent")).exists(),
+        "deleted inline assistant module/directory must not return"
     );
 }
 

@@ -212,6 +212,9 @@ impl ScriptListApp {
         if !self.spine_enabled {
             return false;
         }
+        if matches!(self.current_view, AppView::DayPage { .. }) {
+            return false;
+        }
         match &self.spine_projection {
             Some(proj) => {
                 // Committed postfix captures (`todo; …`) are owned by the

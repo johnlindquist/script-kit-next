@@ -81,6 +81,89 @@ function forbiddenPopupWindows(windowsResult: Json): Json[] {
   });
 }
 
+function isActionsWindow(win: Json): boolean {
+  return (
+    win.id === "actions-dialog" ||
+    win.automationId === "actions-dialog" ||
+    win.kind === "ActionsDialog" ||
+    win.windowKind === "ActionsDialog" ||
+    win.semanticSurface === "actionsDialog"
+  );
+}
+
+async function actionsWindowRegistered(driver: Driver): Promise<boolean> {
+  const windows = (await driver.listAutomationWindows({ timeoutMs: 3000 })) as Json;
+  return ((windows.windows ?? []) as Json[]).some(isActionsWindow);
+}
+
+async function actionsDialogState(driver: Driver): Promise<Json> {
+  if (!(await actionsWindowRegistered(driver).catch(() => false))) {
+    const state = (await driver.getState({ timeoutMs: 5000 })) as Json;
+    return (state.actionsDialog ?? {}) as Json;
+  }
+  const state = (await driver.request(
+    { type: "getState", target: { type: "kind", kind: "actionsDialog" }, summaryOnly: true },
+    { expect: "stateResult", timeoutMs: 5000 },
+  )) as Json;
+  return (state.actionsDialog ?? {}) as Json;
+}
+
+function visibleActions(dialog: Json): Json[] {
+  const rows = dialog.visibleActions;
+  if (Array.isArray(rows)) return rows as Json[];
+  const sample = (dialog.actions as Json | undefined)?.visibleSample;
+  return Array.isArray(sample) ? (sample as Json[]) : [];
+}
+
+function rowActionId(row: Json): string {
+  return String(row.id ?? row.actionId ?? row.value ?? "");
+}
+
+function rowText(row: Json): string {
+  return [
+    row.id,
+    row.actionId,
+    row.value,
+    row.title,
+    row.label,
+    row.description,
+    row.section,
+  ]
+    .map((value) => (typeof value === "string" ? value : ""))
+    .join(" ")
+    .toLowerCase();
+}
+
+async function assertDayActionsDialogNoPromptBuilder(driver: Driver, label: string) {
+  driver.simulateKey("k", ["cmd"]);
+  await Bun.sleep(350);
+  const dialog = await actionsDialogState(driver);
+  const rows = visibleActions(dialog);
+  const promptRows = rows.filter((row) => {
+    const actionId = rowActionId(row);
+    const text = rowText(row);
+    return (
+      actionId.startsWith("prompt-action/") ||
+      actionId.startsWith("prompt-target/") ||
+      text.includes("prompt builder") ||
+      text.includes("ready to send") ||
+      text.includes("spine:tail")
+    );
+  });
+  check(`day_actions_no_prompt_builder_rows_${label}`, promptRows.length === 0, {
+    dialog,
+    promptRows,
+    sampleRows: rows.slice(0, 20),
+  });
+  driver.simulateKey("escape");
+  await Bun.sleep(250);
+  const state = (await driver.getState({ timeoutMs: 5000 })) as Json;
+  check(`day_actions_escape_returns_day_page_${label}`, state.promptType === "dayPage", {
+    promptType: state.promptType,
+    inputValue: state.inputValue,
+  });
+}
+
 async function setDayPageInput(driver: Driver, text: string, label: string) {
   const batch = (await driver.batch(
     [
@@ -186,6 +269,7 @@ try {
   check("opened_day_page", dayState.promptType === "dayPage", {
     promptType: dayState.promptType,
   });
+  await assertDayActionsDialogNoPromptBuilder(driver, "initial");
 
   for (const [label, text] of samples) {
     await setDayPageInput(driver, text, label);
@@ -195,6 +279,7 @@ try {
     await driver.simulateKey("enter");
     await Bun.sleep(75);
     await assertNoDayOverlay(driver, `${label}_after_enter`);
+    await assertDayActionsDialogNoPromptBuilder(driver, `${label}_after_enter`);
   }
 
   for (const [label, text] of contextSamples) {
