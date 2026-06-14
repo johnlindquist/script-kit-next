@@ -63,6 +63,7 @@ pub fn markdown_editor_runtime_info() -> ElementEditorRuntimeInfo {
             MARKDOWN_INLINE_HIGHLIGHTS_QUERY,
         ),
         editor_scroll_metrics: None,
+        markdown_link_highlight_ranges: None,
     }
 }
 

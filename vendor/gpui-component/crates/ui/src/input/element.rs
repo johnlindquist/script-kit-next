@@ -519,6 +519,62 @@ impl TextElement {
         }
     }
 
+    fn custom_colored_highlight_styles(
+        &self,
+        visible_byte_range: Range<usize>,
+        cx: &mut App,
+    ) -> Option<Vec<(Range<usize>, HighlightStyle)>> {
+        let state = self.state.read(cx);
+        if state.highlight_ranges.is_empty() || visible_byte_range.is_empty() {
+            return None;
+        }
+
+        let mut ranges: Vec<(Range<usize>, Hsla)> = state
+            .highlight_ranges
+            .iter()
+            .filter_map(|(range, color)| {
+                let start = range.start.max(visible_byte_range.start);
+                let end = range.end.min(visible_byte_range.end);
+                if start < end
+                    && state.text.is_char_boundary(start)
+                    && state.text.is_char_boundary(end)
+                {
+                    Some((start..end, *color))
+                } else {
+                    None
+                }
+            })
+            .collect();
+        if ranges.is_empty() {
+            return None;
+        }
+        ranges.sort_by(|(a, _), (b, _)| a.start.cmp(&b.start).then(a.end.cmp(&b.end)));
+
+        let mut styles = Vec::new();
+        let mut cursor = visible_byte_range.start;
+        for (range, color) in ranges {
+            let start = range.start.max(cursor);
+            let end = range.end.min(visible_byte_range.end);
+            if start >= end {
+                continue;
+            }
+            styles.push((
+                start..end,
+                HighlightStyle {
+                    color: Some(color),
+                    ..HighlightStyle::default()
+                },
+            ));
+            cursor = end;
+        }
+
+        if styles.is_empty() {
+            None
+        } else {
+            Some(styles)
+        }
+    }
+
     fn layout_selections(
         &self,
         last_layout: &LastLayout,
@@ -821,6 +877,8 @@ impl TextElement {
         cx: &mut App,
     ) -> Option<Vec<(Range<usize>, HighlightStyle)>> {
         let custom_styles = self.custom_highlight_styles(visible_byte_range.clone(), cx);
+        let custom_colored_styles =
+            self.custom_colored_highlight_styles(visible_byte_range.clone(), cx);
         let state = self.state.read(cx);
         let text = &state.text;
         let is_multi_line = state.mode.is_multi_line();
@@ -866,6 +924,9 @@ impl TextElement {
 
         // Combine marker styles
         styles = gpui::combine_highlights(diagnostic_styles, styles).collect();
+        if let Some(custom_colored_styles) = custom_colored_styles {
+            styles = gpui::combine_highlights(styles, custom_colored_styles).collect();
+        }
 
         Some(styles)
     }

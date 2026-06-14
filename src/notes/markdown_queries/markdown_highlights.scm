@@ -27,11 +27,11 @@
 
 [
   (link_destination)
-] @text.uri
+] @link_uri.markup
 
 [
   (link_label)
-] @text.reference
+] @link_text.markup
 
 [
   (list_marker_plus)

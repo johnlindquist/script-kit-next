@@ -140,6 +140,8 @@ impl DayPageView {
     }
 
     fn on_editor_change(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.notes_editor
+            .update(cx, |editor, cx| editor.sync_markdown_link_highlights(cx));
         let previous = self.session.disk_content().to_string();
         let mut content = self.notes_editor.read(cx).content(cx);
         let previous_len = self.last_editor_content_len;

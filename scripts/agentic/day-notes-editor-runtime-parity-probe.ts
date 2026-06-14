@@ -74,6 +74,11 @@ function scrollMetrics(runtime: Json | null): Json | null {
   return metrics && typeof metrics === "object" ? (metrics as Json) : null;
 }
 
+function markdownLinkHighlightRanges(runtime: Json | null): Json | null {
+  const ranges = runtime?.markdownLinkHighlightRanges;
+  return ranges && typeof ranges === "object" ? (ranges as Json) : null;
+}
+
 function p95(values: number[]): number {
   if (values.length === 0) return Number.POSITIVE_INFINITY;
   const sorted = [...values].sort((a, b) => a - b);
@@ -196,8 +201,15 @@ try {
     actualChars: typeof notesEditor?.value === "string" ? notesEditor.value.length : null,
   });
   check("notes_scroll_metrics_available", notesScrollBefore?.available === true, { scroll: notesScrollBefore });
+  check("notes_editor_viewport_not_collapsed", Number(notesScrollBefore?.clientHeight ?? 0) >= 100, {
+    scroll: notesScrollBefore,
+  });
   check("notes_scroll_can_scroll_y", Number(notesScrollBefore?.maxScrollTop ?? 0) > 0 || notesScrollBefore?.canScrollY === true, {
     scroll: notesScrollBefore,
+  });
+  const notesLinkHighlights = markdownLinkHighlightRanges(notesRuntime);
+  check("notes_markdown_link_highlight_ranges_present", Number(notesLinkHighlights?.count ?? 0) > 0, {
+    ranges: notesLinkHighlights,
   });
 
   await gpuiKey(driver, "pageup", { type: "kind", kind: "notes", index: 0 });
@@ -271,8 +283,15 @@ try {
     actualChars: typeof dayEditor?.value === "string" ? dayEditor.value.length : null,
   });
   check("day_scroll_metrics_available", dayScrollBefore?.available === true, { scroll: dayScrollBefore });
+  check("day_editor_viewport_not_collapsed", Number(dayScrollBefore?.clientHeight ?? 0) >= 100, {
+    scroll: dayScrollBefore,
+  });
   check("day_scroll_can_scroll_y", Number(dayScrollBefore?.maxScrollTop ?? 0) > 0 || dayScrollBefore?.canScrollY === true, {
     scroll: dayScrollBefore,
+  });
+  const dayLinkHighlights = markdownLinkHighlightRanges(dayRuntime);
+  check("day_markdown_link_highlight_ranges_present", Number(dayLinkHighlights?.count ?? 0) > 0, {
+    ranges: dayLinkHighlights,
   });
 
   await gpuiKey(driver, "pageup", { type: "main" });
@@ -297,7 +316,7 @@ try {
   check(
     "shared_render_path_matches",
     notesStyle?.inputRenderPath === dayStyle?.inputRenderPath &&
-      dayStyle?.inputRenderPath === "components.notes_editor.render_input_state",
+      dayStyle?.inputRenderPath === "components.notes_editor.render_input",
     { notes: notesStyle?.inputRenderPath ?? null, day: dayStyle?.inputRenderPath ?? null },
   );
   check("syntax_language_matches", notesRuntime?.language === "markdown" && dayRuntime?.language === "markdown", {

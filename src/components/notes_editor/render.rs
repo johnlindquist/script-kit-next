@@ -38,16 +38,36 @@ impl NotesEditor {
 
     /// Render the editable markdown input surface.
     pub fn render_input(&self, cx: &App) -> AnyElement {
-        Self::render_input_state(&self.input_state, cx)
+        let layout = self.layout;
+
+        div()
+            .flex()
+            .flex_col()
+            .flex_1()
+            .min_h(px(0.))
+            .h_full()
+            .px(px(layout.padding_x))
+            .py(px(layout.padding_y))
+            .child(Self::render_input_state(&self.input_state, cx))
+            .into_any_element()
     }
 
     pub fn render_input_state(input_state: &Entity<InputState>, cx: &App) -> AnyElement {
         let editor = Input::new(input_state)
+            .flex_1()
+            .min_h(px(0.))
             .h_full()
             .appearance(false)
             .font_family(cx.theme().mono_font_family.clone())
             .text_size(cx.theme().mono_font_size);
 
-        div().h_full().child(editor).into_any_element()
+        div()
+            .flex()
+            .flex_col()
+            .flex_1()
+            .min_h(px(0.))
+            .h_full()
+            .child(editor)
+            .into_any_element()
     }
 }

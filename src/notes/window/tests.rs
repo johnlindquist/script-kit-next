@@ -278,13 +278,18 @@ fn test_notes_keyboard_backtick_accepts_full_ghost_without_swallowing_plain_back
 fn test_notes_ghost_renders_via_native_inline_completion_not_overlay() {
     const RENDER_BODY: &str = include_str!("render_editor_body.rs");
     assert!(
-        RENDER_BODY.contains("NotesEditor::render_input_state(&self.editor_state"),
-        "Notes editor body must render through the shared NotesEditor input path"
+        RENDER_BODY.contains("self.notes_editor.read(cx).render_input(cx)"),
+        "Notes editor body must render through the entity-owned shared NotesEditor input path"
     );
     const SHARED_EDITOR_RENDER: &str = include_str!("../../components/notes_editor/render.rs");
     assert!(
         SHARED_EDITOR_RENDER.contains("Input::new(input_state)"),
         "Shared NotesEditor input path must render the shared Input"
+    );
+    assert!(
+        SHARED_EDITOR_RENDER.contains("px(px(layout.padding_x))")
+            && SHARED_EDITOR_RENDER.contains("py(px(layout.padding_y))"),
+        "Shared NotesEditor input path must own editable padding so Notes and Day cannot drift"
     );
     for forbidden in ["notes-ghost-autocomplete", "render_notes_ghost_overlay"] {
         assert!(

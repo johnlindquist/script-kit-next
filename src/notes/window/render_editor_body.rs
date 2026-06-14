@@ -119,15 +119,13 @@ impl NotesApp {
         // not reintroduce an absolutely positioned overlay here: hand-derived
         // padding/advance/line-height math drifts from the Input's real
         // metrics and renders the ghost offset from the text.
-        let input = crate::components::notes_editor::NotesEditor::render_input_state(
-            &self.editor_state,
-            cx,
-        );
+        let input = self.notes_editor.read(cx).render_input(cx);
         let spine_panel = self.render_notes_spine_panel(cx);
         div()
             .relative()
             .flex_1()
             .min_h(px(0.))
+            .h_full()
             .child(input)
             .when_some(spine_panel, |d, panel| d.child(panel))
             .into_any_element()

@@ -101,7 +101,7 @@ fn test_elements_result_serializes_editor_runtime_metadata() {
     let mut editor = ElementInfo::input("notes-editor", Some("# Heading"), true);
     editor.style = Some(ElementStyleInfo {
         owner: "components.notes_editor".to_string(),
-        input_render_path: Some("components.notes_editor.render_input_state".to_string()),
+        input_render_path: Some("components.notes_editor.render_input".to_string()),
         editor_runtime: Some(ElementEditorRuntimeInfo {
             owner: "components.notes_editor".to_string(),
             language: "markdown".to_string(),
@@ -118,6 +118,14 @@ fn test_elements_result_serializes_editor_runtime_metadata() {
                 "scrollHeight": 1200,
                 "clientHeight": 400,
                 "canScrollY": true,
+            })),
+            markdown_link_highlight_ranges: Some(serde_json::json!({
+                "count": 1,
+                "ranges": [{
+                    "range": [0, 9],
+                    "text": "# Heading",
+                    "role": "markdownLink"
+                }],
             })),
         }),
         surface_background_rgb: Some(0x112233),
@@ -146,6 +154,7 @@ fn test_elements_result_serializes_editor_runtime_metadata() {
     );
     assert_eq!(runtime["inlineMarkdownInjectionDisabled"], true);
     assert_eq!(runtime["editorScrollMetrics"]["canScrollY"], true);
+    assert_eq!(runtime["markdownLinkHighlightRanges"]["count"], 1);
 }
 
 #[test]

@@ -1,7 +1,7 @@
 //! Host-facing configuration for the shared markdown notes editor.
 
 pub const NOTES_EDITOR_STYLE_OWNER: &str = "components.notes_editor";
-pub const NOTES_EDITOR_INPUT_RENDER_PATH: &str = "components.notes_editor.render_input_state";
+pub const NOTES_EDITOR_INPUT_RENDER_PATH: &str = "components.notes_editor.render_input";
 pub const NOTES_EDITOR_PREVIEW_RENDER_PATH: &str = "components.notes_editor.render_preview";
 pub const NOTES_EDITOR_OCCLUSION_ALPHA: u32 = 0xFF;
 

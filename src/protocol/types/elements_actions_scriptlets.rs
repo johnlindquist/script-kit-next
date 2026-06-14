@@ -71,6 +71,8 @@ pub struct ElementEditorRuntimeInfo {
     pub inline_highlight_query_fingerprint: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub editor_scroll_metrics: Option<serde_json::Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub markdown_link_highlight_ranges: Option<serde_json::Value>,
 }
 
 /// Information about a UI element returned by getElements

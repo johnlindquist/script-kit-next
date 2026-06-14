@@ -286,6 +286,8 @@ impl NotesApp {
 
     /// Handle editor content changes with auto-resize
     pub(crate) fn on_editor_change(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.notes_editor
+            .update(cx, |editor, cx| editor.sync_markdown_link_highlights(cx));
         let content = self.editor_state.read(cx).value();
         let content_string = content.to_string();
         self.spine_runtime.clear_transient_cache();

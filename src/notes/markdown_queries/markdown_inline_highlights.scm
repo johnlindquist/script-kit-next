@@ -10,10 +10,10 @@
 [
   (link_destination)
   (uri_autolink)
-] @link_uri
+] @link_uri.markup
 
 [
   (link_label)
   (link_text)
   (image_description)
-] @link_text
+] @link_text.markup
