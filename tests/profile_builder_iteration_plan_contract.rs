@@ -234,9 +234,7 @@ fn iteration_plan_uses_main_menu_search_devtools_not_actions_popup() {
 fn devtools_allows_scoped_main_menu_profile_switch_submit() {
     assert!(DEVTOOLS_ACT_SOURCE.contains("submitIntent !== \"profile-switch\""));
     assert!(DEVTOOLS_ACT_SOURCE.contains("selected?.kind === \"profile\""));
-    assert!(DEVTOOLS_ACT_SOURCE.contains("selected?.kind === \"hint\""));
-    assert!(DEVTOOLS_ACT_SOURCE.contains("choice:0:ready-to-send"));
-    assert!(DEVTOOLS_ACT_SOURCE.contains("\\|plugin:[a-z0-9-]+"));
+    assert!(!DEVTOOLS_ACT_SOURCE.contains("choice:0:ready-to-send"));
     assert!(DEVTOOLS_ACT_SOURCE.contains("selected?.sourceName === \"Spine\""));
     assert!(DEVTOOLS_ACT_SOURCE.contains("allowedBy: \"submitIntent:profile-switch\""));
 }
