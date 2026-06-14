@@ -21,6 +21,52 @@ xargs packx --limit 900k --strip-comments --minify -f markdown --no-interactive 
 
 Use this when directory/include-glob matching undercounts relevant files; keep `CLAUDE.md` excluded and verify the preview count plus final non-empty bundle before consulting Oracle.
 
+## Project Imps Routing
+
+Project imps live under `.agents/imps/` and are feature-bound Codex specialists
+for this repository. They use `gpt-5.5` with `medium` reasoning and keep local
+self-improvement lesson overlays under `.agents/imps/lessons/local/`.
+
+For non-trivial work touching an owned surface, attempt the matching project
+imp before editing. Codex remains responsible for source inspection, patch
+review, preserving unrelated dirty work, and final verification.
+
+Use:
+
+```bash
+cd .agents/imps
+bun imps/project-imp --which "<task prompt>"
+bun imps/project-imp "<task prompt>"
+```
+
+Routing rules:
+
+- Use `imp-sk-scout` when ownership is unclear.
+- Agent Chat, `@file`, `@context`, attachments, portal, or Pi handoff -> `imp-sk-agent-chat`.
+- Day Page, Today, brain, fragments, spine, or Notes parity -> `imp-sk-brain`.
+- Clipboard history, sediment, post-copy, copy-to-brain, or no-popup capture -> `imp-sk-clipboard`.
+- Shared UI, components, list rows, inputs, prompt shells, chrome, or theme tokens -> `imp-sk-components`.
+- Script List, main window, mini/full view, launcher selection -> `imp-sk-launcher`.
+- Actions menu, command palette, trigger picker, confirm popup -> `imp-sk-actions`.
+- Hotkeys, gestures, tap/hold/double-tap, focus restoration -> `imp-sk-hotkeys`.
+- Script prompt renderers and protocol-to-renderer contracts -> `imp-sk-prompts`.
+- Built-in utility surfaces -> `imp-sk-builtins`.
+- Terminal prompt, PTY, command bar, terminal theme -> `imp-sk-terminal`.
+- Script execution, menu cache, metadata, scheduler -> `imp-sk-execution`.
+- macOS platform, windows, tray/menu bar, icons, permissions, startup, Pi sidecar -> `imp-sk-platform`.
+- MCP server, resources, script tools, schema compatibility -> `imp-sk-mcp`.
+- Repo process docs, `.agents/**`, probes, source audits, `dev.sh`, cargo wrappers -> `imp-sk-devex`.
+
+Project imps are advisory specialists, not blockers. If an imp is unavailable,
+too slow, or the task is trivial, continue normally and mention the skipped imp
+in the final answer. Do not fan out broadly by default; use the primary owner
+imp plus one relevant cross-cutting imp when needed.
+
+Local lesson overlays are not repo policy. Only reviewed promoted lessons,
+regression tests/probes, or `AGENTS.md` updates affect general routing. Lessons
+may guide future imp runs, but never override user instructions, dirty-work
+preservation, or this file.
+
 ## UI Consistency and Shared Component Contract
 
 When touching app UI, treat shared components and theme/chrome tokens as the source of truth. Do not build one-off UI when an existing component, shell, list item, input, footer, popup, or token can be reused or extended.

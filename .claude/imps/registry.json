@@ -1,0 +1,177 @@
+{
+  "version": 1,
+  "model": "gpt-5.5",
+  "reasoningEffort": "medium",
+  "lessonDefaults": {
+    "ageDays": 30,
+    "maxLessonsPerTurn": 3,
+    "maxLessonBytes": 24000
+  },
+  "imps": [
+    {
+      "name": "imp-sk-scout",
+      "phase": "seed",
+      "permission": "read-only",
+      "summary": "Read-only intake specialist for owner discovery, routing, and required context.",
+      "ownerGlobs": ["AGENTS.md", "GLOSSARY.md", "src/**", "tests/**", "scripts/agentic/**"],
+      "allowedEditGlobs": [],
+      "triggers": ["who owns", "find owner", "route this", "feature map", "where is", "which imp"],
+      "gates": ["rg-based owner report", "git status --short", "no file writes"],
+      "selfImprovesOn": ["misrouted owner", "missed shared component path", "forgot dirty tree inspection"]
+    },
+    {
+      "name": "imp-sk-devex",
+      "phase": "seed",
+      "permission": "workspace-write",
+      "summary": "Repo process docs, project-imps bootstrap, agent-cargo usage, dev probes, source-audit ratchets.",
+      "ownerGlobs": ["AGENTS.md", "GLOSSARY.md", ".agents/**", "dev.sh", "scripts/agentic/**", "tests/source_audit_*"],
+      "allowedEditGlobs": ["AGENTS.md", "GLOSSARY.md", ".agents/**", "dev.sh", "scripts/agentic/**", "tests/source_audit_*"],
+      "triggers": ["AGENTS", "GLOSSARY", "dev.sh", "agent-cargo", "probe", "source audit", "project imp", "verification"],
+      "gates": ["bash -n changed shell scripts", "bun build changed probe scripts", "./scripts/agentic/agent-cargo.sh fmt --check when Rust paths change"],
+      "selfImprovesOn": ["bare cargo regression", "over-broad source audit", "stale AGENTS routing", "probe command rot"]
+    },
+    {
+      "name": "imp-sk-launcher",
+      "phase": "phase-1",
+      "permission": "workspace-write",
+      "summary": "Script list, main window, mini/full view, selection behavior, and shared main-window chrome.",
+      "ownerGlobs": ["src/main_sections/**", "src/render_script_list/**", "src/app_layout/**", "src/components/main_view_chrome.rs"],
+      "allowedEditGlobs": ["src/main_sections/**", "src/render_script_list/**", "src/app_layout/**", "src/components/main_view_chrome.rs", "tests/**/*main*"],
+      "triggers": ["launcher", "script list", "mini view", "expanded view", "main window"],
+      "gates": ["./scripts/agentic/agent-cargo.sh check --lib", "focused main-window runtime probe", "git diff --check"],
+      "selfImprovesOn": ["wrong owner file", "bare cargo use", "missed dirty-state preservation", "runtime probe flake"]
+    },
+    {
+      "name": "imp-sk-components",
+      "phase": "phase-1",
+      "permission": "workspace-write",
+      "summary": "Shared UI primitives, prompt shells, rows, forms, buttons, toasts, theme, chrome, and design tokens.",
+      "ownerGlobs": ["src/components/**", "src/theme/**", "src/ui/chrome/tokens.rs", "src/designs/**", "src/list_item/**"],
+      "allowedEditGlobs": ["src/components/**", "src/theme/**", "src/ui/chrome/tokens.rs", "src/designs/**", "src/list_item/**", "tests/**/*component*"],
+      "triggers": ["component", "theme", "token", "button", "text input", "list row", "chrome", "shared UI"],
+      "gates": ["./scripts/agentic/agent-cargo.sh check --lib", "visual/runtime proof for changed shared surfaces", "source audit only for load-bearing invariants"],
+      "selfImprovesOn": ["hardcoded visual values", "duplicate local UI helper", "source-audit false positive", "missed reuse candidate"]
+    },
+    {
+      "name": "imp-sk-agent-chat",
+      "phase": "phase-1",
+      "permission": "workspace-write",
+      "summary": "Agent Chat portal, AI context picker, file attachment parity, context mentions, and Pi handoff.",
+      "ownerGlobs": ["src/ai/agent_chat/**", "src/ai/window/**", "src/ai/context_mentions/**", "src/render_prompts/other.rs", "src/prompts/chat/**"],
+      "allowedEditGlobs": ["src/ai/**", "src/render_prompts/other.rs", "src/prompts/chat/**", "scripts/agentic/**/*agent*chat*", "tests/**/*agent*chat*"],
+      "triggers": ["agent chat", "@file", "@context", "attachment", "portal", "AI chat", "Pi handoff"],
+      "gates": ["./scripts/agentic/agent-cargo.sh test --lib ai", "relevant portal/context unit test", "partial runtime proof when submit/attach flows are safety-limited"],
+      "selfImprovesOn": ["alias resolution order", "portal route mismatch", "blocked submit proof fallback", "context token regression"]
+    },
+    {
+      "name": "imp-sk-brain",
+      "phase": "phase-1",
+      "permission": "workspace-write",
+      "summary": "Day Page, Today behavior, brain markdown substrate, fragments, notes parity, and spine flows.",
+      "ownerGlobs": ["src/main_sections/day_page_*", "src/day_page/**", "src/brain/**", "src/notes/**", "src/components/notes_editor/**", ".notes/today-requirements.md"],
+      "allowedEditGlobs": ["src/main_sections/day_page_*", "src/day_page/**", "src/brain/**", "src/notes/**", "src/components/notes_editor/**", "scripts/agentic/**/*day*", "tests/**/*day*", "tests/**/*notes*"],
+      "triggers": ["day page", "today", "notes parity", "brain", "fragment", "spine", "sediment"],
+      "gates": ["./scripts/agentic/agent-cargo.sh test --lib notes_editor::spine", "focused Day Page or brain substrate tests", "runtime probe for hotkey/toggle-visible changes"],
+      "selfImprovesOn": ["stale alias leak", "notes parity miss", "wrong hotkey path", "auto-attach assumption drift"]
+    },
+    {
+      "name": "imp-sk-clipboard",
+      "phase": "phase-1",
+      "permission": "workspace-write",
+      "summary": "Clipboard history, quiet sediment rules, post-copy tracker, and no-popup brain capture contracts.",
+      "ownerGlobs": ["src/clipboard_history/**", "src/render_builtins/clipboard.rs", "src/day_page/sediment.rs", "tests/clipboard_sediment_no_popup_contract.rs"],
+      "allowedEditGlobs": ["src/clipboard_history/**", "src/render_builtins/clipboard.rs", "src/day_page/sediment.rs", "tests/*clipboard*", "scripts/agentic/*clipboard*"],
+      "triggers": ["clipboard", "sediment", "post-copy", "copy to brain", "kept URL", "no popup"],
+      "gates": ["./scripts/agentic/agent-cargo.sh test --test clipboard_sediment_no_popup_contract", "focused sediment unit tests", "source contract only for popup-free invariant"],
+      "selfImprovesOn": ["popup path regression", "URL dedupe miss", "sediment tier rule error", "dead machinery left behind"]
+    },
+    {
+      "name": "imp-sk-prompts",
+      "phase": "phase-1",
+      "permission": "workspace-write",
+      "summary": "SDK prompt renderers and protocol-to-renderer contracts.",
+      "ownerGlobs": ["src/render_prompts/**", "src/prompts/**", "src/prompt_handler/**", "src/protocol/**"],
+      "allowedEditGlobs": ["src/render_prompts/**", "src/prompts/**", "src/prompt_handler/**", "src/protocol/**", "tests/**/*prompt*"],
+      "triggers": ["arg prompt", "editor prompt", "form prompt", "select prompt", "div prompt", "prompt renderer", "terminal prompt"],
+      "gates": ["./scripts/agentic/agent-cargo.sh check --lib", "prompt-specific unit test or smoke fixture", "runtime proof for changed visible prompt behavior"],
+      "selfImprovesOn": ["protocol field mismatch", "local shell divergence", "shared component bypass", "missing prompt fixture"]
+    },
+    {
+      "name": "imp-sk-actions",
+      "phase": "phase-1",
+      "permission": "workspace-write",
+      "summary": "Actions menu, trigger picker, confirm popup, action builders, and keyboard affordances.",
+      "ownerGlobs": ["src/actions/**", "src/app_actions/**", "src/action_helpers/**", "src/system_actions/**", "src/app_impl/menu_syntax_trigger_picker*.rs", "src/confirm/**"],
+      "allowedEditGlobs": ["src/actions/**", "src/app_actions/**", "src/action_helpers/**", "src/system_actions/**", "src/app_impl/menu_syntax_trigger_picker*.rs", "src/confirm/**", "tests/**/*action*"],
+      "triggers": ["actions menu", "command palette", "cmd+k", "action builder", "shortcut action", "trigger picker", "confirm popup"],
+      "gates": ["./scripts/agentic/agent-cargo.sh test --lib actions", "focused source/runtime proof for popup geometry", "git diff --check"],
+      "selfImprovesOn": ["theme route not consumed live", "shortcut convention mismatch", "actions/list row divergence"]
+    },
+    {
+      "name": "imp-sk-hotkeys",
+      "phase": "phase-1",
+      "permission": "workspace-write",
+      "summary": "Hotkey gesture classification, main-hotkey routing, focus restoration, and low-latency surface morphs.",
+      "ownerGlobs": ["src/hotkeys/**", "src/main_sections/gesture_routing.rs", "src/focus_coordinator/**", "src/keyboard_monitor/**"],
+      "allowedEditGlobs": ["src/hotkeys/**", "src/main_sections/gesture_routing.rs", "src/focus_coordinator/**", "src/keyboard_monitor/**", "tests/**/*gesture*", "tests/**/*hotkey*"],
+      "triggers": ["hotkey", "tap", "hold", "double tap", "focus", "keyboard monitor", "gesture"],
+      "gates": ["./scripts/agentic/agent-cargo.sh test --lib hotkeys", "latency/runtime probe for changed routing paths", "no behavior-only source audit unless higher rungs fail"],
+      "selfImprovesOn": ["latency path confusion", "tap vs hold regression", "query transfer break", "focus restoration blind spot"]
+    },
+    {
+      "name": "imp-sk-builtins",
+      "phase": "phase-2",
+      "permission": "workspace-write",
+      "summary": "Launcher-accessible built-in utility surfaces and search/list workflows.",
+      "ownerGlobs": ["src/render_builtins/**", "src/file_search/**", "src/app_launcher/**", "src/process_manager/**", "src/window_switcher/**", "src/permissions_wizard.rs"],
+      "allowedEditGlobs": ["src/render_builtins/**", "src/file_search/**", "src/app_launcher/**", "src/process_manager/**", "src/window_switcher/**", "src/permissions_wizard.rs", "tests/**/*builtin*"],
+      "triggers": ["file search", "app launcher", "emoji picker", "process manager", "window switcher", "permissions wizard"],
+      "gates": ["./scripts/agentic/agent-cargo.sh check --lib", "builtin-specific smoke test", "runtime proof for permission or external-app workflows"],
+      "selfImprovesOn": ["wrong builtin owner", "external dependency assumption", "permission status probe miss"]
+    },
+    {
+      "name": "imp-sk-terminal",
+      "phase": "phase-2",
+      "permission": "workspace-write",
+      "summary": "Terminal prompt rendering, PTY lifecycle, command bar UI, and terminal theme adaptation.",
+      "ownerGlobs": ["src/term_prompt/**", "src/terminal/**", "src/render_prompts/term.rs"],
+      "allowedEditGlobs": ["src/term_prompt/**", "src/terminal/**", "src/render_prompts/term.rs", "tests/**/*term*"],
+      "triggers": ["terminal prompt", "pty", "alacritty", "command bar", "terminal theme"],
+      "gates": ["./scripts/agentic/agent-cargo.sh check --lib", "PTY lifecycle test where possible", "runtime proof for terminal-visible changes"],
+      "selfImprovesOn": ["PTY lifecycle leak", "theme adapter mismatch", "interactive command hang", "runtime proof gap"]
+    },
+    {
+      "name": "imp-sk-execution",
+      "phase": "phase-2",
+      "permission": "workspace-write",
+      "summary": "Script discovery, metadata parsing, menu cache refreshes, scheduler, and execution lifecycle.",
+      "ownerGlobs": ["src/execute_script/**", "src/executor/**", "src/menu_cache/**", "src/menu_executor/**", "src/metadata_parser/**", "src/scheduler/**", "src/scripts/**"],
+      "allowedEditGlobs": ["src/execute_script/**", "src/executor/**", "src/menu_cache/**", "src/menu_executor/**", "src/metadata_parser/**", "src/scheduler/**", "src/scripts/**", "tests/**/*executor*", "tests/**/*script*"],
+      "triggers": ["execute script", "menu cache", "metadata", "scheduler", "script discovery", "keyword"],
+      "gates": ["./scripts/agentic/agent-cargo.sh test --lib executor", "script fixture test", "smoke run when execution behavior changes"],
+      "selfImprovesOn": ["cache invalidation miss", "fixture path error", "keyword routing regression", "blocking watcher interaction"]
+    },
+    {
+      "name": "imp-sk-platform",
+      "phase": "phase-2",
+      "permission": "workspace-write",
+      "summary": "macOS platform integration, app/window orchestration, icons, tray/menu bar, permissions, and startup/Pi sidecar.",
+      "ownerGlobs": ["src/platform/**", "src/window_manager/**", "src/window_orchestrator/**", "src/window_state/**", "src/tray/**", "src/icons/**", "src/menu_bar/**", "src/ai/agent_chat/pi/**", "dev.sh", "scripts/agentic/ensure-pi-sidecar.sh"],
+      "allowedEditGlobs": ["src/platform/**", "src/window_manager/**", "src/window_orchestrator/**", "src/window_state/**", "src/tray/**", "src/icons/**", "src/menu_bar/**", "src/ai/agent_chat/pi/**", "dev.sh", "scripts/agentic/ensure-pi-sidecar.sh", "tests/**/*window*"],
+      "triggers": ["macOS", "permission", "window manager", "tray", "icon", "menu bar", "TCC", "Pi sidecar", "dev startup"],
+      "gates": ["./scripts/agentic/agent-cargo.sh check --lib", "bash -n dev.sh scripts/agentic/ensure-pi-sidecar.sh", "./target/pi-sidecar/pi --help when Pi path changes"],
+      "selfImprovesOn": ["IconServices fallback misuse", "permission probe stale state", "window state fixture gap", "Pi artifact miss"]
+    },
+    {
+      "name": "imp-sk-mcp",
+      "phase": "phase-2",
+      "permission": "workspace-write",
+      "summary": "MCP server, protocol handling, resources, script tools, schema compatibility, and tests.",
+      "ownerGlobs": ["src/mcp_server/**", "src/mcp_protocol/**", "src/mcp_resources/**", "src/mcp_script_tools/**", "tests/mcp/**"],
+      "allowedEditGlobs": ["src/mcp_server/**", "src/mcp_protocol/**", "src/mcp_resources/**", "src/mcp_script_tools/**", "tests/mcp/**"],
+      "triggers": ["MCP", "mcp server", "resource", "tool schema", "script tool"],
+      "gates": ["./scripts/agentic/agent-cargo.sh test --test mcp", "MCP fixture or schema validation", "compatibility receipt for protocol changes"],
+      "selfImprovesOn": ["schema drift", "tool contract mismatch", "fixture too broad", "missing protocol receipt"]
+    }
+  ]
+}

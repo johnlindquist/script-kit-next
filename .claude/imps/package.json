@@ -1,0 +1,36 @@
+{
+  "name": "script-kit-project-imps",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "project-imp": "./imps/project-imp",
+    "project-imps": "./imps/project-imps",
+    "imp-sk-scout": "./imps/imp-sk-scout",
+    "imp-sk-devex": "./imps/imp-sk-devex",
+    "imp-sk-launcher": "./imps/imp-sk-launcher",
+    "imp-sk-components": "./imps/imp-sk-components",
+    "imp-sk-agent-chat": "./imps/imp-sk-agent-chat",
+    "imp-sk-brain": "./imps/imp-sk-brain",
+    "imp-sk-clipboard": "./imps/imp-sk-clipboard",
+    "imp-sk-prompts": "./imps/imp-sk-prompts",
+    "imp-sk-actions": "./imps/imp-sk-actions",
+    "imp-sk-hotkeys": "./imps/imp-sk-hotkeys",
+    "imp-sk-builtins": "./imps/imp-sk-builtins",
+    "imp-sk-terminal": "./imps/imp-sk-terminal",
+    "imp-sk-execution": "./imps/imp-sk-execution",
+    "imp-sk-platform": "./imps/imp-sk-platform",
+    "imp-sk-mcp": "./imps/imp-sk-mcp"
+  },
+  "scripts": {
+    "list": "bun imps/project-imps list",
+    "which": "bun imps/project-imp --which",
+    "check": "rm -rf /tmp/script-kit-project-imps-check && mkdir -p /tmp/script-kit-project-imps-check && bun build --target bun bin/project-imp.ts --outdir /tmp/script-kit-project-imps-check/router && bun build --target bun bin/project-imps.ts --outdir /tmp/script-kit-project-imps-check/fleet && bun build --target bun imps/imp-sk-scout --outdir /tmp/script-kit-project-imps-check/scout && bun build --target bun imps/imp-sk-agent-chat --outdir /tmp/script-kit-project-imps-check/agent-chat"
+  },
+  "dependencies": {
+    "@openai/codex-sdk": "^0.134.0"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5"
+  }
+}

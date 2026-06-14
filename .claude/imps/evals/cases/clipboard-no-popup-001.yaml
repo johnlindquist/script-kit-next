@@ -1,0 +1,14 @@
+id: clipboard-no-popup-001
+imp: imp-sk-clipboard
+task: "Change clipboard-to-brain tracking without reintroducing popup UI."
+ownerGlobsExpected:
+  - "src/clipboard_history/**"
+  - "src/day_page/sediment.rs"
+requiredPreflight:
+  - "git status --short"
+requiredGates:
+  - "tests/clipboard_sediment_no_popup_contract.rs"
+forbidden:
+  - "revive tap_window popup path"
+  - "use bare cargo instead of ./scripts/agentic/agent-cargo.sh"
+successMetric: "No popup machinery returns; brain or Day Page storage remains verified."
