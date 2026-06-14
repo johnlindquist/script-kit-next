@@ -547,7 +547,9 @@ impl NotesApp {
     }
 
     fn automation_notes_spine_state(&self, cx: &gpui::App) -> serde_json::Value {
-        let current_key = self.notes_spine_input(cx).map(|(key, _, _, _)| key);
+        let contract =
+            crate::components::notes_editor::spine::NotesEditorHostSpineContract::notes();
+        let current_key = self.notes_spine_input(cx).map(|input| input.key);
         let active = current_key
             .as_deref()
             .is_some_and(|key| self.spine_runtime.dismissed_cache_key.as_deref() != Some(key));
@@ -592,6 +594,11 @@ impl NotesApp {
             "schemaVersion": 1,
             "source": "runtime.notes.spine",
             "redacted": true,
+            "owner": "components.notes_editor",
+            "contractSurface": contract.surface,
+            "renderPath": contract.local_overlay_render_path(),
+            "overlayElementId": contract.local_overlay_id(),
+            "contextMentionsLocalOverlay": false,
             "active": active,
             "cacheKeyPresent": !self.spine_runtime.cache_key.is_empty(),
             "cacheMatchesInput": cache_matches,

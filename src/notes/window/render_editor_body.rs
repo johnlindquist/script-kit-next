@@ -1,13 +1,5 @@
 use super::*;
 
-fn notes_supports_spine_action(action: &crate::spine::SpineListAction) -> bool {
-    matches!(
-        action,
-        crate::spine::SpineListAction::InsertSegmentText { .. }
-            | crate::spine::SpineListAction::ResolveSegment { .. }
-    )
-}
-
 impl NotesApp {
     pub(super) fn render_editor_body(
         &mut self,
@@ -168,92 +160,32 @@ impl NotesApp {
     pub(super) fn notes_spine_input(
         &self,
         cx: &gpui::App,
-    ) -> Option<(
-        String,
-        std::ops::Range<usize>,
-        crate::spine::SpineParse,
-        crate::spine::SpineCursorProjection,
-    )> {
+    ) -> Option<crate::components::notes_editor::spine::NotesEditorSpineInput> {
         if !self.notes_spine_surface_allows_editor_list() {
             return None;
         }
         let content = self.notes_editor.read(cx).content(cx);
         let selection = self.notes_editor.read(cx).selection(cx);
-        let cursor = crate::components::notes_editor::spine::clamp_to_char_boundary(
+        crate::components::notes_editor::spine::local_spine_input_for_contract(
+            crate::components::notes_editor::spine::NotesEditorHostSpineContract::notes(),
             &content,
-            selection.end.min(content.len()),
-        );
-        let line_range =
-            crate::components::notes_editor::spine::current_line_range(&content, cursor);
-        let line = &content[line_range.clone()];
-        let line_cursor = cursor.saturating_sub(line_range.start);
-        let parse = crate::spine::parse_spine(line);
-        let projection = crate::spine::project_cursor(&parse, line_cursor);
-        if !crate::components::notes_editor::spine::spine_projection_owns_editor_list(
-            &parse,
-            &projection,
-        ) {
-            return None;
-        }
-        if matches!(
-            projection.active_segment_kind,
-            crate::spine::SpineSegmentKind::ContextMention { .. }
-                | crate::spine::SpineSegmentKind::ProjectCwd { .. }
-        ) {
-            return None;
-        }
-
-        let key = format!(
-            "{}\u{1f}cursor={}\u{1f}active={:?}",
-            line, line_cursor, projection.active_segment_kind
-        );
-        Some((key, line_range, parse, projection))
+            selection,
+        )
     }
 
     pub(super) fn notes_spine_model(
         &mut self,
         cx: &gpui::App,
     ) -> Option<crate::components::notes_editor::spine::NotesEditorSpineModel> {
-        let (key, line_range, parse, projection) = self.notes_spine_input(cx)?;
-        if self.spine_runtime.dismissed_cache_key.as_deref() == Some(key.as_str()) {
-            return None;
-        }
-
-        if self.spine_runtime.cache_key == key {
-            self.spine_runtime.coerce_selection_for_cached_rows();
-            return Some(
-                crate::components::notes_editor::spine::NotesEditorSpineModel {
-                    line_range,
-                    parse,
-                    projection,
-                    grouped: self.spine_runtime.grouped_cache.clone(),
-                    flat: self.spine_runtime.flat_cache.clone(),
-                },
-            );
-        }
-
-        let rows = self.build_notes_spine_rows(&parse, &projection)?;
-        if rows.flat.is_empty() {
-            return None;
-        }
-        let grouped = rows.grouped;
-        let flat = rows.flat;
-        self.spine_runtime
-            .replace_cached_rows(key, grouped.clone(), flat.clone(), rows.aliases);
-
-        Some(
-            crate::components::notes_editor::spine::NotesEditorSpineModel {
-                line_range,
-                parse,
-                projection,
-                grouped,
-                flat,
-            },
+        let input = self.notes_spine_input(cx)?;
+        crate::components::notes_editor::spine::spine_model_for_runtime(
+            &mut self.spine_runtime,
+            input,
+            Self::build_notes_spine_rows,
         )
     }
 
     fn build_notes_spine_rows(
-        &self,
         parse: &crate::spine::SpineParse,
         projection: &crate::spine::SpineCursorProjection,
     ) -> Option<crate::components::notes_editor::spine::NotesEditorSpineRows> {
@@ -272,103 +204,22 @@ impl NotesApp {
         );
         let rows = crate::components::notes_editor::spine::push_spine_sections_as_grouped(
             sections,
-            notes_supports_spine_action,
+            crate::components::notes_editor::spine::notes_editor_supports_insert_resolve_action,
         );
         (!rows.flat.is_empty()).then_some(rows)
     }
 
     fn render_notes_spine_panel(&mut self, cx: &mut Context<Self>) -> Option<AnyElement> {
         let model = self.notes_spine_model(cx)?;
-        let theme = crate::theme::get_cached_theme();
-        let item_colors = crate::list_item::ListItemColors::from_theme(&theme);
-        let main_menu_theme = crate::designs::current_main_menu_theme();
-        let editor_surface =
-            crate::components::notes_editor::NotesEditorSurfaceStyle::from_theme(&theme);
-        let selected =
-            crate::list_item::coerce_selection(&model.grouped, self.spine_runtime.selected_index);
-
-        let mut rows = div().flex().flex_col().w_full();
-        for (ix, grouped_item) in model.grouped.iter().enumerate() {
-            match grouped_item {
-                crate::list_item::GroupedListItem::SectionHeader(label, icon) => {
-                    rows = rows.child(
-                        div()
-                            .h(px(
-                                crate::list_item::effective_section_header_height_for_theme(
-                                    main_menu_theme,
-                                ),
-                            ))
-                            .child(crate::list_item::render_section_header(
-                                label,
-                                icon.as_deref(),
-                                item_colors,
-                                ix == 0,
-                            )),
-                    );
-                }
-                crate::list_item::GroupedListItem::Status(status) => {
-                    rows = rows.child(
-                        div()
-                            .h(px(
-                                crate::list_item::effective_source_status_row_height_for_theme(
-                                    main_menu_theme,
-                                ),
-                            ))
-                            .px_4()
-                            .flex()
-                            .items_center()
-                            .text_sm()
-                            .text_color(gpui::rgb(item_colors.text_secondary))
-                            .child(status.label.clone()),
-                    );
-                }
-                crate::list_item::GroupedListItem::Item(flat_idx) => {
-                    let Some(row) = model.flat.get(*flat_idx) else {
-                        continue;
-                    };
-                    let is_selected = selected == Some(ix);
-                    let click_handler = cx.listener(
-                        move |this: &mut NotesApp, _event: &gpui::MouseDownEvent, _window, cx| {
-                            this.spine_runtime.selected_index = ix;
-                            cx.notify();
-                        },
-                    );
-                    rows = rows.child(
-                        div()
-                            .h(px(crate::list_item::effective_list_item_height_for_theme(
-                                main_menu_theme,
-                            )))
-                            .on_mouse_down(gpui::MouseButton::Left, click_handler)
-                            .child(
-                                crate::list_item::ListItem::new(row.title.to_string(), item_colors)
-                                    .index(ix)
-                                    .selected(is_selected)
-                                    .hovered(false)
-                                    .main_menu_theme(main_menu_theme)
-                                    .semantic_id(row.id.to_string())
-                                    .description_opt(row.subtitle.as_ref().map(|s| s.to_string()))
-                                    .icon_kind_opt(None)
-                                    .type_accessory(crate::list_item::TypeAccessory {
-                                        label: row.kind.type_accessory_info().0,
-                                        icon_name: row.kind.type_accessory_info().1,
-                                    })
-                                    .source_hint_opt(row.meta.as_ref().map(|m| m.to_string())),
-                            ),
-                    );
-                }
-            }
-        }
-
-        Some(
-            div()
-                .id("notes-spine-list")
-                .absolute()
-                .inset_0()
-                .bg(rgba(editor_surface.occlusion_rgba))
-                .occlude()
-                .overflow_y_scroll()
-                .child(rows)
-                .into_any_element(),
+        crate::components::notes_editor::spine::render_spine_overlay(
+            crate::components::notes_editor::spine::NotesEditorHostSpineContract::notes(),
+            &model,
+            self.spine_runtime.selected_index,
+            cx,
+            |this: &mut NotesApp, ix, _window, cx| {
+                this.spine_runtime.selected_index = ix;
+                cx.notify();
+            },
         )
     }
 
@@ -413,7 +264,7 @@ impl NotesApp {
     }
 
     pub(super) fn reset_notes_spine_navigation(&mut self, cx: &mut Context<Self>) {
-        let key = self.notes_spine_input(cx).map(|(key, _, _, _)| key);
+        let key = self.notes_spine_input(cx).map(|input| input.key);
         self.spine_runtime.dismiss_current_key(key);
         cx.notify();
     }

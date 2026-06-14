@@ -1,8 +1,6 @@
 // Day Page Agent Chat handoff helpers.
 
-use crate::components::notes_editor::spine::{
-    clamp_to_char_boundary, current_line_range, mention_atomic_delete_fixup,
-};
+use crate::components::notes_editor::spine::mention_atomic_delete_fixup;
 
 impl DayPageView {
     pub(crate) fn collect_day_page_elements(

@@ -6,6 +6,69 @@
 use std::{collections::HashMap, ops::Range};
 
 use crate::ai::message_parts::AiContextPart;
+use gpui::{
+    div, prelude::*, px, rgba, AnyElement, Context, IntoElement, ParentElement, Styled, Window,
+};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum NotesEditorLocalSpineOverlay {
+    Disabled,
+    Overlay {
+        element_id: &'static str,
+        render_path: &'static str,
+    },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum NotesEditorContextMentionBehavior {
+    Ignore,
+    MainMenuRoundTrip,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct NotesEditorHostSpineContract {
+    pub(crate) surface: &'static str,
+    pub(crate) local_overlay: NotesEditorLocalSpineOverlay,
+    pub(crate) context_mentions: NotesEditorContextMentionBehavior,
+    pub(crate) project_cwd_local_list: bool,
+}
+
+impl NotesEditorHostSpineContract {
+    pub(crate) const fn notes() -> Self {
+        Self {
+            surface: "notes",
+            local_overlay: NotesEditorLocalSpineOverlay::Overlay {
+                element_id: "notes-spine-list",
+                render_path: "components.notes_editor.spine.render_spine_overlay",
+            },
+            context_mentions: NotesEditorContextMentionBehavior::Ignore,
+            project_cwd_local_list: false,
+        }
+    }
+
+    pub(crate) const fn day_page() -> Self {
+        Self {
+            surface: "day_page",
+            local_overlay: NotesEditorLocalSpineOverlay::Disabled,
+            context_mentions: NotesEditorContextMentionBehavior::MainMenuRoundTrip,
+            project_cwd_local_list: false,
+        }
+    }
+
+    pub(crate) const fn local_overlay_id(self) -> Option<&'static str> {
+        match self.local_overlay {
+            NotesEditorLocalSpineOverlay::Disabled => None,
+            NotesEditorLocalSpineOverlay::Overlay { element_id, .. } => Some(element_id),
+        }
+    }
+
+    pub(crate) const fn local_overlay_render_path(self) -> Option<&'static str> {
+        match self.local_overlay {
+            NotesEditorLocalSpineOverlay::Disabled => None,
+            NotesEditorLocalSpineOverlay::Overlay { render_path, .. } => Some(render_path),
+        }
+    }
+}
 
 pub(crate) struct NotesEditorSpineRows {
     pub(crate) grouped: Vec<crate::list_item::GroupedListItem>,
@@ -32,6 +95,30 @@ pub(crate) struct NotesEditorSpineModel {
     pub(crate) projection: crate::spine::SpineCursorProjection,
     pub(crate) grouped: Vec<crate::list_item::GroupedListItem>,
     pub(crate) flat: Vec<crate::spine::SpineListRow>,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct NotesEditorLineContext {
+    pub(crate) line_range: Range<usize>,
+    pub(crate) line: String,
+    pub(crate) cursor_in_line: usize,
+    pub(crate) parse: crate::spine::SpineParse,
+    pub(crate) projection: crate::spine::SpineCursorProjection,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct NotesEditorSpineInput {
+    pub(crate) key: String,
+    pub(crate) line_range: Range<usize>,
+    pub(crate) parse: crate::spine::SpineParse,
+    pub(crate) projection: crate::spine::SpineCursorProjection,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct NotesEditorContextRoundTripRequest {
+    pub(crate) line_range: Range<usize>,
+    pub(crate) segment_byte_range: Range<usize>,
+    pub(crate) segment_text: String,
 }
 
 impl NotesEditorSpineModel {
@@ -147,6 +234,103 @@ pub(crate) fn current_line_range(content: &str, cursor: usize) -> Range<usize> {
         .find('\n')
         .map_or(content.len(), |idx| cursor + idx);
     start..end
+}
+
+pub(crate) fn notes_editor_line_context(
+    content: &str,
+    selection: Range<usize>,
+) -> Option<NotesEditorLineContext> {
+    let cursor = clamp_to_char_boundary(content, selection.end.min(content.len()));
+    let line_range = current_line_range(content, cursor);
+    let line = content.get(line_range.clone())?.to_string();
+    let cursor_in_line = cursor.saturating_sub(line_range.start);
+    let parse = crate::spine::parse_spine(&line);
+    let projection = crate::spine::project_cursor(&parse, cursor_in_line);
+    Some(NotesEditorLineContext {
+        line_range,
+        line,
+        cursor_in_line,
+        parse,
+        projection,
+    })
+}
+
+pub(crate) fn local_spine_input_for_contract(
+    contract: NotesEditorHostSpineContract,
+    content: &str,
+    selection: Range<usize>,
+) -> Option<NotesEditorSpineInput> {
+    if matches!(
+        contract.local_overlay,
+        NotesEditorLocalSpineOverlay::Disabled
+    ) {
+        return None;
+    }
+    let ctx = notes_editor_line_context(content, selection)?;
+    if !spine_projection_owns_editor_list(&ctx.parse, &ctx.projection) {
+        return None;
+    }
+    if matches!(
+        ctx.projection.active_segment_kind,
+        crate::spine::SpineSegmentKind::ContextMention { .. }
+    ) {
+        return None;
+    }
+    if matches!(
+        ctx.projection.active_segment_kind,
+        crate::spine::SpineSegmentKind::ProjectCwd { .. }
+    ) && !contract.project_cwd_local_list
+    {
+        return None;
+    }
+    let key = format!(
+        "{}\u{1f}cursor={}\u{1f}active={:?}",
+        ctx.line, ctx.cursor_in_line, ctx.projection.active_segment_kind
+    );
+    Some(NotesEditorSpineInput {
+        key,
+        line_range: ctx.line_range,
+        parse: ctx.parse,
+        projection: ctx.projection,
+    })
+}
+
+pub(crate) fn context_round_trip_request_for_contract(
+    contract: NotesEditorHostSpineContract,
+    previous_len: usize,
+    content: &str,
+    selection: Range<usize>,
+) -> Option<NotesEditorContextRoundTripRequest> {
+    if contract.context_mentions != NotesEditorContextMentionBehavior::MainMenuRoundTrip {
+        return None;
+    }
+    if content.len() <= previous_len {
+        return None;
+    }
+    let ctx = notes_editor_line_context(content, selection)?;
+    if ctx.line.trim().is_empty() {
+        return None;
+    }
+    let segment = ctx
+        .parse
+        .segments
+        .get(ctx.projection.active_segment_index)?;
+    if !matches!(
+        segment.kind,
+        crate::spine::SpineSegmentKind::ContextMention { .. }
+    ) {
+        return None;
+    }
+    if ctx.cursor_in_line < segment.byte_range.start || ctx.cursor_in_line > segment.byte_range.end
+    {
+        return None;
+    }
+    let segment_text = ctx.line.get(segment.byte_range.clone())?.to_string();
+    Some(NotesEditorContextRoundTripRequest {
+        line_range: ctx.line_range,
+        segment_byte_range: segment.byte_range.clone(),
+        segment_text,
+    })
 }
 
 pub(crate) fn clamp_to_char_boundary(text: &str, mut pos: usize) -> usize {
@@ -271,6 +455,163 @@ pub(crate) fn push_spine_sections_as_grouped(
     NotesEditorSpineRows::new(grouped, flat)
 }
 
+pub(crate) fn notes_editor_supports_insert_resolve_action(
+    action: &crate::spine::SpineListAction,
+) -> bool {
+    matches!(
+        action,
+        crate::spine::SpineListAction::InsertSegmentText { .. }
+            | crate::spine::SpineListAction::ResolveSegment { .. }
+    )
+}
+
+pub(crate) fn spine_model_for_runtime(
+    runtime: &mut NotesEditorSpineRuntime<crate::spine::SpineListRow>,
+    input: NotesEditorSpineInput,
+    build_rows: impl FnOnce(
+        &crate::spine::SpineParse,
+        &crate::spine::SpineCursorProjection,
+    ) -> Option<NotesEditorSpineRows>,
+) -> Option<NotesEditorSpineModel> {
+    if runtime.dismissed_cache_key.as_deref() == Some(input.key.as_str()) {
+        return None;
+    }
+
+    if runtime.cache_key == input.key {
+        runtime.coerce_selection_for_cached_rows();
+        return Some(NotesEditorSpineModel {
+            line_range: input.line_range,
+            parse: input.parse,
+            projection: input.projection,
+            grouped: runtime.grouped_cache.clone(),
+            flat: runtime.flat_cache.clone(),
+        });
+    }
+
+    let rows = build_rows(&input.parse, &input.projection)?;
+    if rows.flat.is_empty() {
+        return None;
+    }
+    let grouped = rows.grouped;
+    let flat = rows.flat;
+    runtime.replace_cached_rows(input.key, grouped.clone(), flat.clone(), rows.aliases);
+
+    Some(NotesEditorSpineModel {
+        line_range: input.line_range,
+        parse: input.parse,
+        projection: input.projection,
+        grouped,
+        flat,
+    })
+}
+
+pub(crate) fn render_spine_overlay<T, F>(
+    contract: NotesEditorHostSpineContract,
+    model: &NotesEditorSpineModel,
+    selected_index: usize,
+    cx: &mut Context<T>,
+    on_select_index: F,
+) -> Option<AnyElement>
+where
+    T: 'static,
+    F: Fn(&mut T, usize, &mut Window, &mut Context<T>) + Clone + 'static,
+{
+    let NotesEditorLocalSpineOverlay::Overlay { element_id, .. } = contract.local_overlay else {
+        return None;
+    };
+
+    let theme = crate::theme::get_cached_theme();
+    let item_colors = crate::list_item::ListItemColors::from_theme(&theme);
+    let main_menu_theme = crate::designs::current_main_menu_theme();
+    let editor_surface =
+        crate::components::notes_editor::NotesEditorSurfaceStyle::from_theme(&theme);
+    let selected = crate::list_item::coerce_selection(&model.grouped, selected_index);
+
+    let mut rows = div().flex().flex_col().w_full();
+    for (ix, grouped_item) in model.grouped.iter().enumerate() {
+        match grouped_item {
+            crate::list_item::GroupedListItem::SectionHeader(label, icon) => {
+                rows = rows.child(
+                    div()
+                        .h(px(
+                            crate::list_item::effective_section_header_height_for_theme(
+                                main_menu_theme,
+                            ),
+                        ))
+                        .child(crate::list_item::render_section_header(
+                            label,
+                            icon.as_deref(),
+                            item_colors,
+                            ix == 0,
+                        )),
+                );
+            }
+            crate::list_item::GroupedListItem::Status(status) => {
+                rows = rows.child(
+                    div()
+                        .h(px(
+                            crate::list_item::effective_source_status_row_height_for_theme(
+                                main_menu_theme,
+                            ),
+                        ))
+                        .px_4()
+                        .flex()
+                        .items_center()
+                        .text_sm()
+                        .text_color(gpui::rgb(item_colors.text_secondary))
+                        .child(status.label.clone()),
+                );
+            }
+            crate::list_item::GroupedListItem::Item(flat_idx) => {
+                let Some(row) = model.flat.get(*flat_idx) else {
+                    continue;
+                };
+                let is_selected = selected == Some(ix);
+                let on_select_index = on_select_index.clone();
+                let click_handler = cx.listener(
+                    move |this: &mut T, _event: &gpui::MouseDownEvent, window, cx| {
+                        on_select_index(this, ix, window, cx);
+                    },
+                );
+                rows = rows.child(
+                    div()
+                        .h(px(crate::list_item::effective_list_item_height_for_theme(
+                            main_menu_theme,
+                        )))
+                        .on_mouse_down(gpui::MouseButton::Left, click_handler)
+                        .child(
+                            crate::list_item::ListItem::new(row.title.to_string(), item_colors)
+                                .index(ix)
+                                .selected(is_selected)
+                                .hovered(false)
+                                .main_menu_theme(main_menu_theme)
+                                .semantic_id(row.id.to_string())
+                                .description_opt(row.subtitle.as_ref().map(|s| s.to_string()))
+                                .icon_kind_opt(None)
+                                .type_accessory(crate::list_item::TypeAccessory {
+                                    label: row.kind.type_accessory_info().0,
+                                    icon_name: row.kind.type_accessory_info().1,
+                                })
+                                .source_hint_opt(row.meta.as_ref().map(|m| m.to_string())),
+                        ),
+                );
+            }
+        }
+    }
+
+    Some(
+        div()
+            .id(element_id)
+            .absolute()
+            .inset_0()
+            .bg(rgba(editor_surface.occlusion_rgba))
+            .occlude()
+            .overflow_y_scroll()
+            .child(rows)
+            .into_any_element(),
+    )
+}
+
 fn single_char_deletion_index(previous: &str, next: &str) -> Option<usize> {
     let previous_chars: Vec<char> = previous.chars().collect();
     let next_chars: Vec<char> = next.chars().collect();
@@ -372,6 +713,103 @@ mod tests {
         let cursor = "above\n".len();
         let range = current_line_range(content, cursor);
         assert_eq!(&content[range], "");
+    }
+
+    #[test]
+    fn notes_contract_allows_local_insert_resolve_overlay_for_capture_segments() {
+        let content = "make ;todo";
+        let selection = content.len()..content.len();
+
+        let input = local_spine_input_for_contract(
+            NotesEditorHostSpineContract::notes(),
+            content,
+            selection,
+        );
+
+        assert!(
+            input.is_some(),
+            "Notes should keep local insert/resolve spine suggestions"
+        );
+    }
+
+    #[test]
+    fn notes_contract_does_not_open_local_overlay_for_context_mentions() {
+        let content = "ask @file:readme";
+        let selection = content.len()..content.len();
+
+        let input = local_spine_input_for_contract(
+            NotesEditorHostSpineContract::notes(),
+            content,
+            selection,
+        );
+
+        assert!(
+            input.is_none(),
+            "Context mentions must not become a Notes local overlay"
+        );
+    }
+
+    #[test]
+    fn day_contract_disables_all_local_spine_overlay_inputs() {
+        let content = "make ;todo";
+        let selection = content.len()..content.len();
+
+        let input = local_spine_input_for_contract(
+            NotesEditorHostSpineContract::day_page(),
+            content,
+            selection,
+        );
+
+        assert!(
+            input.is_none(),
+            "Day must never render a local spine overlay"
+        );
+    }
+
+    #[test]
+    fn day_contract_starts_round_trip_only_for_new_context_mention_edits() {
+        let content = "ask @file:readme";
+        let selection = content.len()..content.len();
+
+        let request = context_round_trip_request_for_contract(
+            NotesEditorHostSpineContract::day_page(),
+            content.len() - 1,
+            content,
+            selection.clone(),
+        );
+        assert!(
+            request.is_some(),
+            "Day should round-trip context mentions through the main menu"
+        );
+
+        let no_growth = context_round_trip_request_for_contract(
+            NotesEditorHostSpineContract::day_page(),
+            content.len(),
+            content,
+            selection,
+        );
+        assert!(
+            no_growth.is_none(),
+            "Round trip should not retrigger without editor growth"
+        );
+    }
+
+    #[test]
+    fn notes_contract_never_uses_main_menu_round_trip() {
+        let content = "ask @file:readme";
+        let selection = content.len()..content.len();
+
+        let request = context_round_trip_request_for_contract(
+            NotesEditorHostSpineContract::notes(),
+            content.len() - 1,
+            content,
+            selection,
+        );
+
+        assert!(
+            request.is_none(),
+            "Notes local editor contract must not hijack Day's round-trip"
+        );
     }
 
     #[test]

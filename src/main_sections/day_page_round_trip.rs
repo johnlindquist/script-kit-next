@@ -14,7 +14,9 @@
 
 use std::ops::Range;
 
-use crate::components::notes_editor::spine::replace_segment_content;
+use crate::components::notes_editor::spine::{
+    context_round_trip_request_for_contract, replace_segment_content, NotesEditorHostSpineContract,
+};
 
 pub(crate) struct DayPageContextReturn {
     pub entity: Entity<DayPageView>,
@@ -36,38 +38,13 @@ impl DayPageView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> bool {
-        if content.len() <= previous_len {
-            return false;
-        }
         let selection = self.notes_editor.read(cx).selection(cx);
-        let cursor = clamp_to_char_boundary(content, selection.end.min(content.len()));
-        let line_range = current_line_range(content, cursor);
-        let Some(line) = content.get(line_range.clone()) else {
-            return false;
-        };
-        if line.trim().is_empty() {
-            return false;
-        }
-        let parse = crate::spine::parse_spine(line);
-        let cursor_in_line = cursor.saturating_sub(line_range.start);
-        let projection = crate::spine::project_cursor(&parse, cursor_in_line);
-        let Some(segment) = parse.segments.get(projection.active_segment_index) else {
-            return false;
-        };
-        if !matches!(
-            segment.kind,
-            crate::spine::SpineSegmentKind::ContextMention { .. }
-        ) {
-            return false;
-        }
-        // `project_cursor` defaults to the last segment when the cursor sits
-        // past the trailing space; only a cursor INSIDE the mention swaps, so
-        // a completed `@selection ` doesn't bounce back to the launcher.
-        if cursor_in_line < segment.byte_range.start || cursor_in_line > segment.byte_range.end {
-            return false;
-        }
-        let segment_byte_range = segment.byte_range.clone();
-        let Some(segment_text) = line.get(segment_byte_range.clone()).map(str::to_string) else {
+        let Some(request) = context_round_trip_request_for_contract(
+            NotesEditorHostSpineContract::day_page(),
+            previous_len,
+            content,
+            selection,
+        ) else {
             return false;
         };
 
@@ -81,15 +58,15 @@ impl DayPageView {
         tracing::info!(
             target: "script_kit::day_page",
             event = "day_page_context_round_trip_started",
-            segment_text = %segment_text,
+            segment_text = %request.segment_text,
         );
         window.defer(cx, move |window, cx| {
             app.update(cx, |app, cx| {
                 app.begin_day_page_context_round_trip(
                     entity,
-                    line_range,
-                    segment_byte_range,
-                    segment_text,
+                    request.line_range,
+                    request.segment_byte_range,
+                    request.segment_text,
                     window,
                     cx,
                 );
