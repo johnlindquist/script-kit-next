@@ -1,4 +1,4 @@
-//! Tab-AI mode: Agent Chat entry, context staging, inline agent launch, and AI-surface transitions.
+//! Tab-AI mode: Agent Chat entry, context staging, focused-text launch, and AI-surface transitions.
 
 use super::*;
 

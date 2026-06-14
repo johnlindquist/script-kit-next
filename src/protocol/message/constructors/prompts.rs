@@ -135,7 +135,7 @@ impl Message {
             | Message::CaptureFocusedText { request_id, .. }
             | Message::ReplaceFocusedText { request_id, .. }
             | Message::AppendFocusedText { request_id, .. }
-            | Message::CopyInlineAgentOutput { request_id, .. }
+            | Message::CopyFocusedTextOutput { request_id, .. }
             | Message::CheckAccessibility { request_id, .. }
             | Message::RequestAccessibility { request_id, .. }
             | Message::SelectedText { request_id, .. }
@@ -159,7 +159,7 @@ impl Message {
             // File search
             | Message::FileSearch { request_id, .. }
             | Message::FileSearchResult { request_id, .. }
-            | Message::InlineAgentFixtureOpenResult { request_id, .. }
+            | Message::FocusedTextAgentChatFixtureOpenResult { request_id, .. }
             | Message::ExternalCommandResult { request_id, .. }
             | Message::TriggerActionResult { request_id, .. }
             // Screenshot capture

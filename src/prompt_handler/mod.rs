@@ -2226,29 +2226,29 @@ impl ScriptListApp {
                     );
                 }
             }
-            Message::CopyInlineAgentOutput { text, request_id } => {
+            Message::CopyFocusedTextOutput { text, request_id } => {
                 let text_len = text.len();
                 let response = match crate::platform::accessibility::copy_text_output(&text) {
                     Ok(_) => {
                         tracing::info!(
                             category = "STDIN",
-                            event_type = "copy_inline_agent_output_result",
+                            event_type = "copy_focused_text_output_result",
                             request_id = %request_id,
                             text_len,
                             success = true,
-                            "copyInlineAgentOutput receipt"
+                            "copyFocusedTextOutput receipt"
                         );
                         Message::focused_text_mutation_response("copy".to_string(), request_id)
                     }
                     Err(e) => {
                         tracing::warn!(
                             category = "STDIN",
-                            event_type = "copy_inline_agent_output_result",
+                            event_type = "copy_focused_text_output_result",
                             request_id = %request_id,
                             text_len,
                             success = false,
                             error = %e,
-                            "copyInlineAgentOutput failed"
+                            "copyFocusedTextOutput failed"
                         );
                         Message::focused_text_mutation_error(
                             "copy".to_string(),
@@ -2262,7 +2262,7 @@ impl ScriptListApp {
                 } else {
                     tracing::warn!(
                         category = "STDIN",
-                        "No response sender available for copyInlineAgentOutput"
+                        "No response sender available for copyFocusedTextOutput"
                     );
                 }
             }

@@ -197,6 +197,14 @@ fn day_page_actions_do_not_offer_agent_handoff() {
             && actions_toggle.contains("dialog.set_suppress_prompt_handoff_actions(true)"),
         "Day-hosted Actions dialog must suppress generic prompt handoff rows"
     );
+
+    let actions_dialog = source("src/app_impl/actions_dialog.rs");
+    let routing = function_body(&actions_dialog, "fn route_key_to_actions_dialog(");
+    assert!(
+        routing.contains("tab_ai_actions_dialog_cmd_enter_ignored_day_page")
+            && routing.contains("matches!(self.current_view, AppView::DayPage { .. })"),
+        "Day-hosted Actions Cmd+Enter must not route into Agent Chat/prompt-builder target handoff"
+    );
 }
 
 #[test]

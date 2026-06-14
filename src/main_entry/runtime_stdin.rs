@@ -616,7 +616,7 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                 if let Some(rid) = request_id {
                                     if let Some(ref sender) = view.response_sender {
                                         let _ = sender.try_send(
-                                            crate::protocol::Message::inline_agent_fixture_open_result(
+                                            crate::protocol::Message::focused_text_agent_chat_fixture_open_result(
                                                 rid.to_string(),
                                                 "mock".to_string(),
                                                 ok,
@@ -668,7 +668,7 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                 if let Some(rid) = request_id {
                                     if let Some(ref sender) = view.response_sender {
                                         let _ = sender.try_send(
-                                            crate::protocol::Message::inline_agent_fixture_open_result(
+                                            crate::protocol::Message::focused_text_agent_chat_fixture_open_result(
                                                 rid.to_string(),
                                                 "live-mock".to_string(),
                                                 ok,
@@ -721,7 +721,7 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                 if let Some(rid) = request_id {
                                     if let Some(ref sender) = view.response_sender {
                                         let _ = sender.try_send(
-                                            crate::protocol::Message::inline_agent_fixture_open_result(
+                                            crate::protocol::Message::focused_text_agent_chat_fixture_open_result(
                                                 rid.to_string(),
                                                 "pi".to_string(),
                                                 ok,

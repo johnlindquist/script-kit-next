@@ -200,9 +200,12 @@ fn state_result_serializes_all_fields() {
     assert_eq!(json["selectedValue"], "alpha");
     assert_eq!(json["isFocused"], true);
     assert_eq!(json["windowVisible"], true);
-    assert_eq!(json["inlineAgent"]["phase"], "thinking");
-    assert_eq!(json["inlineAgent"]["output"]["latestCompleteChars"], 0);
-    assert_eq!(json["inlineAgent"]["actions"]["stopEnabled"], true);
+    assert_eq!(json["focusedTextAgentChat"]["phase"], "thinking");
+    assert_eq!(
+        json["focusedTextAgentChat"]["output"]["latestCompleteChars"],
+        0
+    );
+    assert_eq!(json["focusedTextAgentChat"]["actions"]["stopEnabled"], true);
     assert_eq!(json["filterInputDecorations"]["text"], "alpha");
     assert!(json["filterInputDecorations"]["chips"]
         .as_array()

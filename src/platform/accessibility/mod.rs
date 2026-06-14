@@ -1,4 +1,4 @@
-//! Focused text accessibility boundary for the inline agent.
+//! Focused text accessibility boundary for Agent Chat.
 //!
 //! This module owns macOS truth for whole focused-field capture and mutation.
 //! UI and AI code exchange session IDs and DTOs with this boundary, never raw

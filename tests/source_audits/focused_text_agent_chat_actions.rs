@@ -52,10 +52,6 @@ fn focused_text_action_ids_route_through_agent_chat_view_dispatcher() {
         ACTIONS_DIALOG.contains("ActionsDialogHost::AgentChat"),
         "TriggerAction host=agentChatChat must continue to route through shared actions"
     );
-    assert!(
-        !HANDLE_ACTION.contains("crate::inline_agent::"),
-        "focused-text Agent Chat action routing must not call the legacy inline-agent window"
-    );
 }
 
 #[test]

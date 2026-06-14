@@ -29,7 +29,7 @@ fn capture_api_returns_whole_field_snapshot_not_selected_text() {
     assert!(FOCUSED_TEXT.contains("selected_range_utf16"));
     assert!(
         !FOCUSED_TEXT.contains("get_selected_text("),
-        "inline agent capture must not fake whole-field capture with selected-text APIs"
+        "focused-text Agent Chat capture must not fake whole-field capture with selected-text APIs"
     );
 }
 
@@ -119,6 +119,6 @@ fn native_capture_rejects_secure_fields_and_omits_title_content() {
     assert!(FOCUSED_TEXT.contains("title: None"));
     assert!(
         !AX.contains("AXTitle"),
-        "capture should not pull target title text into inline-agent snapshots"
+        "capture should not pull target title text into focused-text Agent Chat snapshots"
     );
 }

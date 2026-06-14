@@ -28,7 +28,7 @@ pub fn capture_general_pasteboard_snapshot() -> Result<PasteboardSnapshot> {
 
     #[cfg(not(target_os = "macos"))]
     {
-        bail!("inline-agent pasteboard snapshots require macOS");
+        bail!("focused-text Agent Chat pasteboard snapshots require macOS");
     }
 }
 
@@ -41,31 +41,36 @@ pub fn restore_general_pasteboard_snapshot(snapshot: &PasteboardSnapshot) -> Res
     #[cfg(not(target_os = "macos"))]
     {
         let _ = snapshot;
-        bail!("inline-agent pasteboard snapshots require macOS");
+        bail!("focused-text Agent Chat pasteboard snapshots require macOS");
     }
 }
 
 pub fn paste_plain_text_preserving_clipboard(text: &str) -> Result<()> {
     let snapshot = capture_general_pasteboard_snapshot()
-        .context("Failed to snapshot clipboard before inline-agent paste fallback")?;
-    write_plain_text_to_pasteboard(text).context("Failed to write inline-agent paste fallback")?;
-    let temporary_change_count = general_pasteboard_change_count()
-        .context("Failed to read clipboard change count after inline-agent paste write")?;
+        .context("Failed to snapshot clipboard before focused-text Agent Chat paste fallback")?;
+    write_plain_text_to_pasteboard(text)
+        .context("Failed to write focused-text Agent Chat paste fallback")?;
+    let temporary_change_count = general_pasteboard_change_count().context(
+        "Failed to read clipboard change count after focused-text Agent Chat paste write",
+    )?;
 
     crate::selected_text::simulate_paste_with_cg()
-        .context("Failed to simulate inline-agent paste")?;
+        .context("Failed to simulate focused-text Agent Chat paste")?;
 
     let restore_result = match general_pasteboard_change_count() {
         Ok(current_change_count) if current_change_count == temporary_change_count => {
             restore_general_pasteboard_snapshot(&snapshot)
         }
         Ok(_) => {
-            bail!("Clipboard changed during inline-agent paste fallback; skipped restore")
+            bail!(
+                "Clipboard changed during focused-text Agent Chat paste fallback; skipped restore"
+            )
         }
         Err(e) => Err(e).context("Failed to read clipboard change count before restore"),
     };
 
-    restore_result.context("Failed to restore clipboard after inline-agent paste fallback")
+    restore_result
+        .context("Failed to restore clipboard after focused-text Agent Chat paste fallback")
 }
 
 pub fn copy_all_plain_text_preserving_clipboard() -> Result<String> {
@@ -317,27 +322,29 @@ pub fn write_plain_text_to_pasteboard(text: &str) -> Result<()> {
             let _: i64 = msg_send![pasteboard, clearContents];
             let ns_text = NSString::alloc(nil).init_str(text);
             if ns_text == nil {
-                bail!("Failed to create NSString for inline-agent output");
+                bail!("Failed to create NSString for focused-text Agent Chat output");
             }
 
             let objects: id = NSArray::arrayWithObjects(nil, &[ns_text]);
             if objects == nil {
                 let _: () = msg_send![ns_text, release];
-                bail!("Failed to create NSArray for inline-agent output");
+                bail!("Failed to create NSArray for focused-text Agent Chat output");
             }
 
             let did_write: bool = msg_send![pasteboard, writeObjects: objects];
             let _: () = msg_send![ns_text, release];
 
             if !did_write {
-                bail!("NSPasteboard.writeObjects returned false for inline-agent output");
+                bail!(
+                    "NSPasteboard.writeObjects returned false for focused-text Agent Chat output"
+                );
             }
         }
     }
 
     #[cfg(not(target_os = "macos"))]
     {
-        bail!("inline-agent clipboard writes require macOS");
+        bail!("focused-text Agent Chat clipboard writes require macOS");
     }
 
     Ok(())
@@ -387,5 +394,5 @@ pub fn general_pasteboard_change_count() -> Result<i64> {
     }
 
     #[cfg(not(target_os = "macos"))]
-    bail!("inline-agent pasteboard change counts require macOS");
+    bail!("focused-text Agent Chat pasteboard change counts require macOS");
 }

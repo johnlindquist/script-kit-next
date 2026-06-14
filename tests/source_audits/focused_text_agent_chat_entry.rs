@@ -67,7 +67,6 @@ fn inline_ai_hotkeys_capture_before_opening_focused_text_agent_chat() {
             capture < open,
             "focused text must be captured before opening Agent Chat"
         );
-        assert!(!source[channel..].contains("launch_inline_agent_from_focused_text"));
     }
 }
 
@@ -454,12 +453,6 @@ fn focused_text_agent_chat_stdin_verbs_use_explicit_focused_text_names() {
             "missing focused-text stdin dispatch contract: {required}"
         );
     }
-    assert!(!RUNTIME_STDIN.contains("open_inline_agent_mock_fixture"));
-    assert!(!RUNTIME_STDIN.contains("open_inline_agent_pi_fixture"));
-    assert!(!STDIN_COMMANDS.contains("OpenInlineAgentWithMockData"));
-    assert!(!STDIN_COMMANDS.contains("OpenInlineAgentWithPiData"));
-    assert!(!RUNTIME_STDIN.contains("ExternalCommand::OpenInlineAgentWithMockData"));
-    assert!(!RUNTIME_STDIN.contains("ExternalCommand::OpenInlineAgentWithPiData"));
 }
 
 #[test]

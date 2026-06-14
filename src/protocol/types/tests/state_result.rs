@@ -180,7 +180,7 @@ fn test_state_result_representative_with_optional_fields() {
             "isFocused": true,
             "windowVisible": true,
             "miniAi": { "visible": true, "mode": "draft" },
-            "inlineAgent": { "attached": true, "targetId": "agent_chat-chat" },
+            "focusedTextAgentChat": { "attached": true, "targetId": "agent_chat-chat" },
             "filterInputDecorations": [{ "start": 0, "end": 3, "kind": "token" }],
             "mainWindowPreflight": {
                 "selectedSemanticId": "choice:1:application",

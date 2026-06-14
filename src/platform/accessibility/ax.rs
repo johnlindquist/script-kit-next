@@ -1,6 +1,6 @@
 //! Low-level AX access belongs here.
 //!
-//! The initial inline-agent contracts keep raw AX handles out of DTOs. Native
+//! Focused-text contracts keep raw AX handles out of DTOs. Native
 //! handle storage will live in a short-lived process-local registry owned by
 //! this module.
 
@@ -589,7 +589,8 @@ fn refocus_registered_target_for_paste(
 ) -> Result<(), super::FocusedTextError> {
     let Some(pid) = target.app_process_id else {
         return Err(super::FocusedTextError::Platform(
-            "inline-agent paste fallback refused without captured target app pid".to_string(),
+            "focused-text Agent Chat paste fallback refused without captured target app pid"
+                .to_string(),
         ));
     };
 
@@ -664,7 +665,7 @@ fn verify_registered_target_is_focused_for_paste(
         Ok(())
     } else {
         Err(super::FocusedTextError::Platform(
-            "inline-agent paste fallback refused because captured target is not focused"
+            "focused-text Agent Chat paste fallback refused because captured target is not focused"
                 .to_string(),
         ))
     }

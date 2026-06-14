@@ -74,10 +74,10 @@ macro_rules! protocol_message_variants_system_control {
         window_visible: bool,
     },
 
-    /// Redacted acknowledgement that an Inline Agent fixture open command
-    /// executed.
-    #[serde(rename = "inlineAgentFixtureOpenResult")]
-    InlineAgentFixtureOpenResult {
+    /// Redacted acknowledgement that a focused-text Agent Chat fixture open
+    /// command executed.
+    #[serde(rename = "focusedTextAgentChatFixtureOpenResult")]
+    FocusedTextAgentChatFixtureOpenResult {
         #[serde(rename = "requestId")]
         request_id: String,
         /// Fixture mode: "mock" or "pi".
@@ -179,14 +179,14 @@ macro_rules! protocol_message_variants_system_control {
         request_id: String,
     },
 
-    /// Capture the whole currently focused text field for inline-agent editing.
+    /// Capture the whole currently focused text field for Agent Chat editing.
     #[serde(rename = "captureFocusedText")]
     CaptureFocusedText {
         #[serde(rename = "requestId")]
         request_id: String,
     },
 
-    /// Replace the focused text session with inline-agent output.
+    /// Replace the focused text session with Agent Chat output.
     #[serde(rename = "replaceFocusedText")]
     ReplaceFocusedText {
         #[serde(rename = "sessionId")]
@@ -196,7 +196,7 @@ macro_rules! protocol_message_variants_system_control {
         request_id: String,
     },
 
-    /// Append inline-agent output to the focused text session.
+    /// Append Agent Chat output to the focused text session.
     #[serde(rename = "appendFocusedText")]
     AppendFocusedText {
         #[serde(rename = "sessionId")]
@@ -206,9 +206,9 @@ macro_rules! protocol_message_variants_system_control {
         request_id: String,
     },
 
-    /// Copy inline-agent output without mutating the focused text session.
-    #[serde(rename = "copyInlineAgentOutput")]
-    CopyInlineAgentOutput {
+    /// Copy focused-text Agent Chat output without mutating the focused text session.
+    #[serde(rename = "copyFocusedTextOutput")]
+    CopyFocusedTextOutput {
         text: String,
         #[serde(rename = "requestId")]
         request_id: String,

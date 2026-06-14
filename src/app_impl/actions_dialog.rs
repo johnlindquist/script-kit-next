@@ -914,6 +914,8 @@ impl ScriptListApp {
         }
 
         // Cmd+Enter: send selected action to Agent Chat Chat as a canonical target chip.
+        // Day/Today is editor-owned; its @ context route must stay on the
+        // main-menu round trip instead of reopening prompt-builder handoff UI.
         // Must precede the generic Enter branch to avoid being swallowed.
         if modifiers.platform
             && !modifiers.shift
@@ -921,6 +923,15 @@ impl ScriptListApp {
             && !modifiers.alt
             && is_key_enter(key)
         {
+            if matches!(self.current_view, AppView::DayPage { .. }) {
+                tracing::info!(
+                    target: "script_kit::tab_ai",
+                    event = "tab_ai_actions_dialog_cmd_enter_ignored_day_page",
+                    host = ?host,
+                    "Ignored Actions Cmd+Enter handoff while Day Page owns the editor"
+                );
+                return ActionsRoute::Handled;
+            }
             if let Some(action) = dialog.read(cx).get_selected_action().cloned() {
                 let host_label = format!("{:?}", host);
                 let target = crate::ai::build_action_target_for_ai(&action, &host_label);

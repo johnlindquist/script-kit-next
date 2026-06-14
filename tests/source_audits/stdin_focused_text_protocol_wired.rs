@@ -9,7 +9,7 @@ fn focused_text_protocol_declares_capture_and_mutation_verbs() {
         "captureFocusedText",
         "replaceFocusedText",
         "appendFocusedText",
-        "copyInlineAgentOutput",
+        "copyFocusedTextOutput",
         "focusedTextSnapshot",
         "focusedTextMutation",
     ] {
@@ -26,7 +26,7 @@ fn focused_text_protocol_has_typed_constructors() {
         "capture_focused_text",
         "replace_focused_text",
         "append_focused_text",
-        "copy_inline_agent_output",
+        "copy_focused_text_output",
         "focused_text_snapshot_response",
         "focused_text_snapshot_error",
         "focused_text_mutation_response",
@@ -45,7 +45,7 @@ fn focused_text_protocol_verbs_are_dispatched_with_typed_responses() {
         "Message::CaptureFocusedText { request_id } =>",
         "Message::ReplaceFocusedText",
         "Message::AppendFocusedText",
-        "Message::CopyInlineAgentOutput",
+        "Message::CopyFocusedTextOutput",
     ] {
         assert!(PROMPT_HANDLER.contains(arm), "missing dispatcher arm {arm}");
     }
@@ -68,7 +68,7 @@ fn focused_text_dispatcher_does_not_log_captured_text_or_output() {
         "capture_focused_text_result",
         "replace_focused_text_result",
         "append_focused_text_result",
-        "copy_inline_agent_output_result",
+        "copy_focused_text_output_result",
     ] {
         let start = PROMPT_HANDLER
             .find(event)

@@ -25,7 +25,7 @@ const EXPECTED_STATE_RESULT_FIELDS: &[&str] = &[
     "is_focused",
     "window_visible",
     "mini_ai",
-    "inline_agent",
+    "focused_text_agent_chat",
     "filter_input_decorations",
     "menu_syntax_main_hint",
     "capture_history_picker",

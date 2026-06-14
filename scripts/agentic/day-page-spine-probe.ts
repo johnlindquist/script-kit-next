@@ -74,8 +74,6 @@ function forbiddenPopupWindows(windowsResult: Json): Json[] {
       typeof entry.semanticSurface === "string" ? entry.semanticSurface : "";
     const haystack = `${id} ${kind} ${title} ${semanticSurface}`.toLowerCase();
     return (
-      haystack.includes("inline-agent") ||
-      haystack.includes("inlineagent") ||
       haystack.includes("prompt builder") ||
       haystack.includes("ready to send") ||
       kind.toLowerCase() === "miniai"
@@ -140,6 +138,29 @@ async function assertNoDayOverlay(driver: Driver, label: string) {
   });
 }
 
+async function protocolClickMainWindow(driver: Driver, x: number, y: number, label: string) {
+  const down = (await driver.request(
+    {
+      type: "simulateGpuiEvent",
+      target: { type: "main" },
+      event: { type: "mouseDown", x, y, button: "left" },
+      requestId: `${runId}-${label}-down`,
+    },
+    { timeoutMs: 5000 },
+  )) as Json;
+  const up = (await driver.request(
+    {
+      type: "simulateGpuiEvent",
+      target: { type: "main" },
+      event: { type: "mouseUp", x, y, button: "left" },
+      requestId: `${runId}-${label}-up`,
+    },
+    { timeoutMs: 5000 },
+  )) as Json;
+  check(`protocol_click_${label}`, down.success === true && up.success === true, { down, up });
+  await Bun.sleep(150);
+}
+
 const samples = [
   ["slash_rewrite", "/rew"],
   ["style_professional", ".pro"],
@@ -169,6 +190,8 @@ try {
   for (const [label, text] of samples) {
     await setDayPageInput(driver, text, label);
     await assertNoDayOverlay(driver, label);
+    await protocolClickMainWindow(driver, 96, 72, `${label}_editor_click`);
+    await assertNoDayOverlay(driver, `${label}_after_editor_click`);
     await driver.simulateKey("enter");
     await Bun.sleep(75);
     await assertNoDayOverlay(driver, `${label}_after_enter`);
@@ -198,6 +221,7 @@ try {
   await Bun.sleep(50);
   driver.simulateKey("f");
   await Bun.sleep(250);
+  await protocolClickMainWindow(driver, 96, 72, "typed_context_editor_click");
   const typedContextState = (await driver.getState({ timeoutMs: 5000 })) as Json;
   const typedContextWindows = (await driver.listAutomationWindows({ timeoutMs: 5000 })) as Json;
   const typedForbiddenWindows = forbiddenPopupWindows(typedContextWindows);

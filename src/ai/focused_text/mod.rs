@@ -1,4 +1,4 @@
-//! Focused-text Agent Chat primitives shared by the legacy Inline Agent path
+//! Focused-text Agent Chat primitives shared by text-capture entry paths
 //! and the main-window focused-text mini Agent Chat migration.
 
 pub mod platform_bridge;

@@ -30,7 +30,7 @@ fn clipboard_paste_fallback_restores_only_when_change_count_still_matches() {
     assert!(CLIPBOARD.contains("simulate_paste_with_cg()"));
     assert!(CLIPBOARD.contains("current_change_count == temporary_change_count"));
     assert!(CLIPBOARD.contains("restore_general_pasteboard_snapshot(&snapshot)"));
-    assert!(CLIPBOARD.contains("Clipboard changed during inline-agent paste fallback"));
+    assert!(CLIPBOARD.contains("Clipboard changed during focused-text Agent Chat paste fallback"));
 }
 
 #[test]

@@ -143,15 +143,15 @@ macro_rules! protocol_message_variants_query_ops {
         /// Inline Mini AI state snapshot for handoff, draft, and close telemetry proofs.
         #[serde(rename = "miniAi", default, skip_serializing_if = "Option::is_none")]
         mini_ai: Option<serde_json::Value>,
-        /// Redacted Inline Agent overlay state for target-scoped DevTools receipts.
+        /// Redacted focused-text Agent Chat state for target-scoped DevTools receipts.
         /// Never exposes captured field text, user instructions, prompt bodies,
         /// assistant output, or clipboard content.
         #[serde(
-            rename = "inlineAgent",
+            rename = "focusedTextAgentChat",
             default,
             skip_serializing_if = "Option::is_none"
         )]
-        inline_agent: Option<serde_json::Value>,
+        focused_text_agent_chat: Option<serde_json::Value>,
         /// Rendered filter input decoration ranges from the live input state.
         #[serde(
             rename = "filterInputDecorations",

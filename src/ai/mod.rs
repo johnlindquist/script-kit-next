@@ -38,7 +38,6 @@ pub(crate) mod current_app_automation_memory;
 pub(crate) mod explicit_target_handoff;
 pub mod focused_text;
 pub(crate) mod harness;
-pub mod inline_agent;
 pub(crate) mod local_llm;
 pub mod message_parts;
 pub(crate) mod model;

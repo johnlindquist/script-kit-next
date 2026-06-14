@@ -390,7 +390,7 @@ impl Message {
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub fn inline_agent_fixture_open_result(
+    pub fn focused_text_agent_chat_fixture_open_result(
         request_id: String,
         mode: String,
         ok: bool,
@@ -400,7 +400,7 @@ impl Message {
         error_code: Option<String>,
         error_message: Option<String>,
     ) -> Self {
-        Message::InlineAgentFixtureOpenResult {
+        Message::FocusedTextAgentChatFixtureOpenResult {
             request_id,
             mode,
             ok,
@@ -510,9 +510,9 @@ impl Message {
         }
     }
 
-    /// Create a copy-only inline-agent output request.
-    pub fn copy_inline_agent_output(text: String, request_id: String) -> Self {
-        Message::CopyInlineAgentOutput { text, request_id }
+    /// Create a copy-only focused-text Agent Chat output request.
+    pub fn copy_focused_text_output(text: String, request_id: String) -> Self {
+        Message::CopyFocusedTextOutput { text, request_id }
     }
 
     /// Create a check accessibility request
