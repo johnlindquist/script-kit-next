@@ -508,8 +508,8 @@ impl Render for DayPageView {
                     .when_some(day_switcher_panel, |parent, panel| parent.child(panel)),
             );
 
-        let context_zone = app.update(cx, |app, cx| {
-            app.render_clickable_main_view_context_zone(menu_def, cx)
+        let context_zone = app.update(cx, |app, _cx| {
+            app.render_inert_main_view_context_zone(menu_def)
         });
 
         let main = div()
@@ -636,12 +636,6 @@ impl DayPageView {
                 });
             }
             return;
-        }
-
-        if exact_cmd && key == "enter" {
-            if self.submit_day_page_spine_prompt_from_current_line(window, cx) {
-                return;
-            }
         }
 
         if exact_cmd && key == "s" {

@@ -1,7 +1,8 @@
 //! Day/Today must not render its own inline Spine overlay.
 //!
 //! `@` context in Day round-trips through the main menu/shared context surface;
-//! the Day editor itself is only an editor plus direct Cmd+Enter handoff.
+//! the Day editor itself must not expose a Day-local prompt-builder or Agent
+//! handoff surface.
 
 use std::fs;
 
@@ -66,8 +67,8 @@ fn day_page_keyboard_does_not_drive_spine_rows() {
         );
     }
     assert!(
-        handle_key.contains("submit_day_page_spine_prompt_from_current_line"),
-        "Day may keep direct Cmd+Enter handoff without rendering a row overlay"
+        !handle_key.contains("submit_day_page_spine_prompt_from_current_line"),
+        "Day Cmd+Enter must not open Agent Chat/prompt-builder surfaces"
     );
 }
 
@@ -131,6 +132,52 @@ fn day_page_context_round_trip_still_uses_main_menu() {
             "Day @ context must keep main-menu round trip path: {required}"
         );
     }
+}
+
+#[test]
+fn day_page_header_context_chips_are_inert() {
+    let view = source("src/main_sections/day_page_view.rs");
+    let render = function_body(&view, "fn render(");
+
+    assert!(
+        render.contains("render_inert_main_view_context_zone"),
+        "Day header context labels should display state without clickable CWD/Agent chip exits"
+    );
+    assert!(
+        !render.contains("render_clickable_main_view_context_zone"),
+        "Day must not mount clickable header chips that can leave Day for prompt-builder surfaces"
+    );
+}
+
+#[test]
+fn day_page_actions_do_not_offer_agent_handoff() {
+    let actions = source("src/main_sections/day_page_actions.rs");
+    let dialog = source("src/actions/dialog.rs");
+    let actions_toggle = source("src/app_impl/actions_toggle.rs");
+
+    for forbidden in [
+        "day_page:handoff_line",
+        "Send Line to Agent Chat",
+        "handoff_current_line_to_agent_chat",
+        "day_page_handoff_plain_line",
+    ] {
+        assert!(
+            !actions.contains(forbidden),
+            "Day actions must not expose Agent handoff path: {forbidden}"
+        );
+    }
+
+    assert!(
+        dialog.contains("suppress_prompt_handoff_actions")
+            && dialog.contains("!action.id.starts_with(\"prompt-action/\")")
+            && dialog.contains("!action.id.starts_with(\"prompt-target/\")"),
+        "ActionsDialog must be able to suppress generic prompt export/target handoff rows"
+    );
+    assert!(
+        actions_toggle.contains("if on_day_page")
+            && actions_toggle.contains("dialog.set_suppress_prompt_handoff_actions(true)"),
+        "Day-hosted Actions dialog must suppress generic prompt handoff rows"
+    );
 }
 
 #[test]

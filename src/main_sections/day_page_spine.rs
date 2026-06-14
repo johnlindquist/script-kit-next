@@ -2,7 +2,6 @@
 
 use crate::components::notes_editor::spine::{
     clamp_to_char_boundary, current_line_range, mention_atomic_delete_fixup,
-    spine_prompt_plan_can_submit,
 };
 
 impl DayPageView {
@@ -102,78 +101,6 @@ impl DayPageView {
 
         let total_count = elements.len();
         (elements.into_iter().take(limit).collect(), total_count)
-    }
-
-    fn submit_day_page_spine_prompt_from_current_line(
-        &mut self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> bool {
-        let content = self.notes_editor.read(cx).content(cx);
-        let selection = self.notes_editor.read(cx).selection(cx);
-        let cursor = clamp_to_char_boundary(&content, selection.end.min(content.len()));
-        let line_range = current_line_range(&content, cursor);
-        let line = &content[line_range];
-        if line.trim().is_empty() {
-            return false;
-        }
-
-        let parse = crate::spine::parse_spine(line);
-        let can_submit_spine = spine_prompt_plan_can_submit(
-            &parse,
-            self.spine_handoff.cwd_submit_anchor,
-            &self.spine_handoff.mention_aliases,
-        );
-        let markdown_context_parts = day_page_context_parts_from_markdown_links(line);
-        if !markdown_context_parts.is_empty() && !can_submit_spine {
-            let Some(app) = self.app.upgrade() else {
-                return false;
-            };
-            let prompt = line.to_string();
-            let context_count = markdown_context_parts.len();
-            tracing::info!(
-                target: "script_kit::day_page",
-                event = "day_page_markdown_reference_handoff_started",
-                line_len = line.len(),
-                context_count,
-            );
-            window.defer(cx, move |_window, cx| {
-                app.update(cx, |app, cx| {
-                    app.submit_day_page_markdown_line_with_context(
-                        prompt,
-                        markdown_context_parts,
-                        cx,
-                    );
-                });
-            });
-            return true;
-        }
-
-        if !can_submit_spine {
-            return false;
-        }
-
-        let Some(app) = self.app.upgrade() else {
-            return false;
-        };
-        let mention_aliases = self.spine_handoff.mention_aliases.clone();
-        let alias_count = mention_aliases.len();
-        let context_token_count = crate::ai::context_mentions::inline_token_spans(line).len();
-        tracing::info!(
-            target: "script_kit::day_page",
-            event = "day_page_cmd_enter_handoff_started",
-            line_len = line.len(),
-            alias_count,
-            context_token_count,
-            cwd_anchor = self.spine_handoff.cwd_submit_anchor,
-        );
-
-        window.defer(cx, move |_window, cx| {
-            app.update(cx, |app, cx| {
-                app.submit_day_page_spine_prompt_plan_with_aliases(parse, mention_aliases, cx);
-            });
-        });
-        true
     }
 
 }

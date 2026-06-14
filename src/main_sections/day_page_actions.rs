@@ -91,19 +91,6 @@ pub(crate) fn day_page_host_actions_section(
         );
     }
 
-    if !view.current_line_text(cx).trim().is_empty() {
-        actions.push(
-            Action::new(
-                "day_page:handoff_line",
-                "Send Line to Agent Chat",
-                Some("Hand off the current line plus accepted context".to_string()),
-                ActionCategory::ScriptContext,
-            )
-            .with_shortcut("cmd+enter")
-            .with_section(DAY_PAGE_ACTIONS_SECTION_TITLE),
-        );
-    }
-
     for item in crate::components::notes_editor::NOTES_EDITOR_TOOLBAR_ACTIONS {
         let toolbar_id = item.spec.id;
         actions.push(
@@ -122,15 +109,6 @@ pub(crate) fn day_page_host_actions_section(
 }
 
 impl DayPageView {
-    /// Current line under the cursor (used for Agent Chat handoff gating).
-    pub(crate) fn current_line_text(&self, cx: &App) -> String {
-        let content = self.notes_editor.read(cx).content(cx);
-        let selection = self.notes_editor.read(cx).selection(cx);
-        let cursor = clamp_to_char_boundary(&content, selection.end.min(content.len()));
-        let line_range = current_line_range(&content, cursor);
-        content[line_range].to_string()
-    }
-
     pub(crate) fn insert_clipboard_text(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let Some(text) = cx
             .read_from_clipboard()
@@ -169,56 +147,9 @@ impl DayPageView {
         true
     }
 
-    /// Explicit Agent Chat handoff for the current line. Falls back to a plain
-    /// prompt submission when the line carries no spine sigils/mentions.
-    pub(crate) fn handoff_current_line_to_agent_chat(
-        &mut self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        if self.submit_day_page_spine_prompt_from_current_line(window, cx) {
-            return;
-        }
-        let line = self.current_line_text(cx).trim().to_string();
-        if line.is_empty() {
-            return;
-        }
-        let Some(app) = self.app.upgrade() else {
-            return;
-        };
-        window.defer(cx, move |_window, cx| {
-            app.update(cx, |app, cx| {
-                app.day_page_handoff_plain_line(line, cx);
-            });
-        });
-    }
 }
 
 impl ScriptListApp {
-    /// Hand a plain prose line (no sigils) from the Day Page to Agent Chat.
-    pub(crate) fn day_page_handoff_plain_line(&mut self, prompt: String, cx: &mut Context<Self>) {
-        self.embedded_agent_chat = None;
-        self.open_tab_ai_agent_chat_with_entry_intent_suppressing_focused_part(None, cx);
-        if let AppView::AgentChatView { entity } = &self.current_view {
-            let entity = entity.clone();
-            entity.update(cx, |chat, cx| {
-                if let Err(error) = chat.submit_reused_entry_intent_with_host_context(
-                    prompt,
-                    Vec::new(),
-                    "day_page_line_handoff",
-                    cx,
-                ) {
-                    tracing::warn!(
-                        target: "script_kit::day_page",
-                        event = "day_page_line_handoff_failed",
-                        error = %error,
-                    );
-                }
-            });
-        }
-        cx.notify();
-    }
-
     /// Execute a `day_page:*` actions-dialog row. Returns true when handled.
     pub(crate) fn execute_day_page_action(
         &mut self,
@@ -247,12 +178,6 @@ impl ScriptListApp {
             }
             "day_page:insert_clipboard" => {
                 entity.update(cx, |view, cx| view.insert_clipboard_text(window, cx));
-                true
-            }
-            "day_page:handoff_line" => {
-                entity.update(cx, |view, cx| {
-                    view.handoff_current_line_to_agent_chat(window, cx)
-                });
                 true
             }
             _ => day_page_toolbar_id_from_action_id(action_id)

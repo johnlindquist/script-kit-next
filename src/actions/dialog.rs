@@ -781,6 +781,9 @@ pub struct ActionsDialog {
     /// Rendered above script/global rows; rows are full `Action` values so the
     /// host controls ids, shortcuts, and section titles.
     pub host_section: Option<Vec<Action>>,
+    /// Host-specific guard for surfaces that show editable text but must not
+    /// expose generic prompt export/target handoff rows.
+    suppress_prompt_handoff_actions: bool,
     /// List state for variable-height list (section headers 22px, items 36px)
     pub list_state: ListState,
     /// Grouped items for list rendering (includes section headers)
@@ -1154,6 +1157,7 @@ impl ActionsDialog {
             focused_scriptlet,
             menu_syntax_section: None,
             host_section: None,
+            suppress_prompt_handoff_actions: false,
             list_state,
             grouped_items,
             theme,
@@ -1441,7 +1445,7 @@ impl ActionsDialog {
         theme: Arc<theme::Theme>,
         design_variant: DesignVariant,
     ) -> Self {
-        let actions = Self::build_actions(&focused_script, &None, &None, &None);
+        let actions = Self::build_actions(&focused_script, &None, &None, &None, false);
         let config = ActionsDialogConfig::default();
 
         logging::log(
@@ -2886,6 +2890,7 @@ impl ActionsDialog {
                 &self.focused_scriptlet,
                 &self.menu_syntax_section,
                 &self.host_section,
+                self.suppress_prompt_handoff_actions,
             );
             self.reset_filter_to_all();
             self.search_text.clear();
@@ -2940,6 +2945,7 @@ impl ActionsDialog {
         focused_scriptlet: &Option<Scriptlet>,
         menu_syntax_section: &Option<PowerSyntaxActionSection>,
         host_section: &Option<Vec<Action>>,
+        suppress_prompt_handoff_actions: bool,
     ) -> Vec<Action> {
         if let Some(section) = menu_syntax_section {
             let mut power_syntax_actions = power_syntax_section_to_actions(section);
@@ -2947,8 +2953,13 @@ impl ActionsDialog {
                 return power_syntax_actions;
             }
 
-            let mut actions =
-                Self::build_actions(focused_script, focused_scriptlet, &None, host_section);
+            let mut actions = Self::build_actions(
+                focused_script,
+                focused_scriptlet,
+                &None,
+                host_section,
+                suppress_prompt_handoff_actions,
+            );
             power_syntax_actions.append(&mut actions);
             return power_syntax_actions;
         }
@@ -2975,8 +2986,16 @@ impl ActionsDialog {
             }
         }
 
-        // Add global actions
-        actions.extend(get_global_actions());
+        // Add global actions. Day/Today owns its local Actions section but
+        // must not expose generic prompt export/target handoff rows that turn
+        // editor content into the deprecated prompt-builder flow.
+        let mut global_actions = get_global_actions();
+        if suppress_prompt_handoff_actions {
+            global_actions.retain(|action| {
+                !action.id.starts_with("prompt-action/") && !action.id.starts_with("prompt-target/")
+            });
+        }
+        actions.extend(global_actions);
 
         actions
     }
@@ -2990,6 +3009,7 @@ impl ActionsDialog {
             &self.focused_scriptlet,
             &self.menu_syntax_section,
             &self.host_section,
+            self.suppress_prompt_handoff_actions,
         );
         self.refilter();
     }
@@ -3010,6 +3030,7 @@ impl ActionsDialog {
             &self.focused_scriptlet,
             &self.menu_syntax_section,
             &self.host_section,
+            self.suppress_prompt_handoff_actions,
         );
         self.refilter();
 
@@ -3036,6 +3057,21 @@ impl ActionsDialog {
             &self.focused_scriptlet,
             &self.menu_syntax_section,
             &self.host_section,
+            self.suppress_prompt_handoff_actions,
+        );
+        self.refilter();
+    }
+
+    /// Suppress generic prompt export/target rows for hosts like Day Page that
+    /// should not provide any path into prompt-builder handoff surfaces.
+    pub fn set_suppress_prompt_handoff_actions(&mut self, suppress: bool) {
+        self.suppress_prompt_handoff_actions = suppress;
+        self.actions = Self::build_actions(
+            &self.focused_script,
+            &self.focused_scriptlet,
+            &self.menu_syntax_section,
+            &self.host_section,
+            self.suppress_prompt_handoff_actions,
         );
         self.refilter();
     }
@@ -3049,6 +3085,7 @@ impl ActionsDialog {
             &self.focused_scriptlet,
             &self.menu_syntax_section,
             &self.host_section,
+            self.suppress_prompt_handoff_actions,
         );
         self.refilter();
     }
