@@ -1,0 +1,28 @@
+{
+  "id": "agy-gemini-flash-high",
+  "label": "Agy Gemini 3.5 Flash High",
+  "panelRole": "evidence-auditor",
+  "command": "agy",
+  "args": [
+    "--print",
+    "--model",
+    "Gemini 3.5 Flash (High)",
+    "--print-timeout",
+    "45m",
+    "--sandbox",
+    "Provider-specific instructions:\n- Stay anchored to the user's task.\n- Return only the requested artifact.\n- Do not discuss the model, provider, config, runtime, tools, or your process unless explicitly requested.\n\nPanel-specific reasoning contract:\nPanel role: evidence-auditor\nFocus on verified facts, assumptions, missing citations, unsupported claims, and what evidence would change the answer.\n\nReturn your answer with these headings:\n## Role Findings\n## Evidence And Assumptions\n## Failure Modes\n## Recommendation\n## Self Score\n\nOriginal task:\n--input -"
+  ],
+  "env": {},
+  "preflight": null,
+  "ok": true,
+  "exitCode": 0,
+  "signal": null,
+  "timedOut": false,
+  "startedAt": "2026-06-15T04:15:54.073Z",
+  "endedAt": "2026-06-15T04:16:06.822Z",
+  "durationMs": 12749,
+  "stdinChars": 0,
+  "stdinSha256": null,
+  "stdoutChars": 1080,
+  "stderrChars": 0
+}

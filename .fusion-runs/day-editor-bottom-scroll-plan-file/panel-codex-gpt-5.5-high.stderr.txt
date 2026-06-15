@@ -1,0 +1,2808 @@
+OpenAI Codex v0.139.0
+--------
+workdir: /Users/johnlindquist/dev/script-kit-gpui
+model: gpt-5.5
+provider: openai
+approval: never
+sandbox: read-only
+reasoning effort: high
+reasoning summaries: none
+session id: 019ec980-943a-77f2-bf92-7481ee894152
+--------
+user
+Panel-specific reasoning contract:
+Panel role: architect
+Focus on the complete design, tradeoffs, implementation shape, and how the pieces fit together.
+
+Return your answer with these headings:
+## Role Findings
+## Evidence And Assumptions
+## Failure Modes
+## Recommendation
+## Self Score
+
+Original task:
+We are in /Users/johnlindquist/dev/script-kit-gpui.
+
+Task: Plan the minimal code change to make the Day Page editor auto-focus and auto-scroll/reveal to the bottom/end of the editor when the day view opens/reopens, when Day Page content is loaded/rebound, and when focus returns after Day Page popups/actions close. Then identify the smallest tests/probes to prove it.
+
+User-visible bug: Day view should land at the bottom of the editor, focused, like a journal/today surface. Existing focus fixes for Cmd+P/actions are committed separately. Now implement bottom focus/scroll behavior.
+
+Relevant repo process:
+- AGENTS.md says inspect current source/tests before editing, use shared components, prefer runtime proof for focus/window behavior, cargo through ./scripts/agentic/agent-cargo.sh.
+- Notes and Day Page are separate surfaces. Do not change Notes window behavior unless shared helper is safe and only Day invokes the new behavior.
+- Day Page uses autosave as truth.
+
+Observed current source:
+- src/main_sections/day_page_view.rs owns DayPageView.
+- DayPageView::new creates a shared NotesEditor via NotesEditor::new_markdown_pair(... "input:day-page-editor" ...).
+- DayPageView::apply_loaded_content_to_editor currently calls editor.load_value_with_cursor_at_end(content, window, cx).
+- DayPageView::focus_editor currently calls editor.focus(window, cx).
+- DayPageView::set_input and append_main_hotkey_carry set value with cursor at end. append then focuses.
+- src/components/notes_editor/component.rs: NotesEditor::focus only focuses InputState. load_value_with_cursor_at_end and set_value_with_cursor_at_end set selection to value.len().
+- vendor/gpui-component/crates/ui/src/input/state.rs: InputState::set_selection calls scroll_to(end, None, cx) and focus. InputState::scroll_to returns early if last_layout or last_bounds are not populated, so first mount/rebind may need a post-layout repeat.
+- NotesEditor has markdown_runtime_info_with_scroll exposing InputState::automation_scroll_metrics for DevTools proof.
+- Existing probes: scripts/agentic/day-notes-editor-runtime-parity-probe.ts checks day editor scroll metrics after long typing; scripts/agentic/day-cmdp-focus-probe.ts opens Day Page via comma special action and verifies focus after popups.
+
+Candidate implementation already under consideration:
+- Add NotesEditor::focus_with_cursor_at_end(window, cx), which reads state.value().len() and calls state.set_selection(cursor, cursor, window, cx).
+- Make DayPageView::focus_editor call that helper immediately, then use window.defer with cx.entity().downgrade() to call the same helper again after layout.
+- Keep the deferred repeat Day-owned, not a change to Notes window focus behavior.
+
+Need from Fusion:
+1. Confirm or correct the implementation plan.
+2. Explain how to ensure scroll happens after GPUI layout/render timing.
+3. Identify any better shared editor helper name/API.
+4. Smallest Rust test(s) or source-level checks if useful.
+5. DevTools probe design with assertions against focusedSemanticId and editor_scroll_metrics.
+6. Risks and edge cases: empty files, short files, switching past/today/fragment, popup Escape restoring Day Page focus, and not disturbing Notes window behavior.
+hook: UserPromptSubmit
+hook: UserPromptSubmit
+hook: UserPromptSubmit
+hook: UserPromptSubmit Completed
+hook: UserPromptSubmit Completed
+hook: UserPromptSubmit Completed
+codex
+I’ll ground this in the current repo shape before giving the architecture recommendation. I’m going to check the Day Page owner, editor helper surface, and existing probes/tests, then keep the answer focused on the minimal change.
+exec
+/bin/zsh -lc 'rg -n "Day Page|day page|NotesEditor|focus_with|load_value_with_cursor_at_end|set_value_with_cursor_at_end|automation_scroll_metrics|day-cmdp-focus|day-notes-editor-runtime-parity" /Users/johnlindquist/.codex/memories/MEMORY.md' in /Users/johnlindquist/dev/script-kit-gpui
+ succeeded in 0ms:
+1:# Task Group: Script Kit GPUI Day Page, Notes, clipboard, and startup contracts
+2:scope: Use this for `script-kit-gpui` work on Day Page and Notes boundaries, Day-origin Agent Chat flows, popup-free clipboard capture, and startup helpers that must be proven in the running app.
+3:applies_to: cwd=/Users/johnlindquist/dev/script-kit-gpui; reuse_rule=safe for similar Day Page, Notes, clipboard-history, or startup-helper work in this checkout, but re-check current DevTools probes, helper scripts, and dirty-tree scope before reuse.
+5:## Task 1: Add a Day Page -> Agent Chat -> Today round trip for "Today's brain", success
+13:- day page, agent chat, today, brain, script-kit-devtools, return origin, append-back, openAiWithMockData, external append, DayPageDocumentSession
+15:## Task 2: Prevent Notes Cmd+P from opening Day Page, success
+26:## Task 3: Remove the Day Page footer Save button because Day autosaves, success
+30:- rollout_summaries/2026-06-14T05-10-27-E4R1-fusion_high_notes_day_page_refactor_and_day_footer_save_remo.md (cwd=/Users/johnlindquist/dev/script-kit-gpui, rollout_path=/Users/johnlindquist/.codex/sessions/2026/06/13/rollout-2026-06-13T23-10-27-019ec489-d1e7-7971-8daf-bdb8c417dd87.jsonl, updated_at=2026-06-14T07:33:08+00:00, thread_id=019ec489-d1e7-7971-8daf-bdb8c417dd87, Day Page footer now advertises `Actions` only and no manual Save button)
+34:- day page footer, autosave, FooterAction::Run, FooterAction::Actions, day_page_footer_buttons, source_audits, cmd+s
+59:- when the user said `Use $script-kit-devtools to verify` or `Implement and verify with $script-kit-devtools` -> treat runtime proof as the acceptance bar for Day Page and Notes behavior, not optional follow-up [Task 1][Task 2]
+60:- when the user said `prevent the notes window's cmd+p from every opening the "day" view` and clarified the Day view is just a quick today surface -> treat Notes and Day Page as separate experiences and avoid cross-surface handoff by default [Task 2]
+61:- when the user said `Remove the "Save" button from the footer of the "day" view. It autosaves` -> assume Day Page autosave is the source of truth and avoid advertising a manual Save footer action [Task 3]
+67:- The Day Page round trip works best by reusing the existing Agent Chat return-origin plumbing: launch normal Agent Chat with Today context, then expose a Day-only append-back action that writes the latest assistant response into the bound day file [Task 1]
+71:- `src/main_sections/day_page_switcher.rs` already owns main-window Day Page day navigation, so keeping Notes Cmd+P Notes-only is cleaner than trying to make day pages behave like notes [Task 2]
+73:- `src/main_sections/day_page_view.rs` owns Day Page footer buttons; removing the Save affordance also made the Day Page-specific `FooterAction::Run` branch in `src/app_impl/ui_window.rs` obsolete [Task 3]
+85:- Symptom: Day Page Save removal leaves warnings or stale audits behind. Cause: only the UI affordance was removed and unused branches/tests were left intact. Fix: update source-audit expectations and remove the obsolete Day Page `FooterAction::Run` dispatch branch in the same slice [Task 3]
+
+hook: PostToolUse
+exec
+/bin/zsh -lc "sed -n '1,220p' GLOSSARY.md" in /Users/johnlindquist/dev/script-kit-gpui
+ succeeded in 0ms:
+# Script Kit GPUI UI Glossary & Code Map
+
+This document defines the main user-facing UI surfaces and components in Script Kit GPUI and maps them to their respective locations in the source code.
+
+---
+
+## 1. Core Windows & Presentation Modes
+
+| UI Element | Description | Key Structs / Entities | Main Source File |
+| :--- | :--- | :--- | :--- |
+| **Script List** | The default launcher list view showing all scripts, recent items, and favorites when no prompts are active. | `ScriptListApp` | [render_impl.rs](file:///Users/johnlindquist/dev/script-kit-gpui/src/main_sections/render_impl.rs) & [app_state.rs](file:///Users/johnlindquist/dev/script-kit-gpui/src/main_sections/app_state.rs) |
+| **Expanded View** | Main window presentation mode (`MainWindowMode::Full`) that expands the list area to show preview details or prompt shells. | `MainWindowMode` | [app_view_state.rs](file:///Users/johnlindquist/dev/script-kit-gpui/src/main_sections/app_view_state.rs#L1361) |
+| **Mini View** | Main window presentation mode (`MainWindowMode::Mini`) that uses a single-column layout for quick selection. | `MainWindowMode` | [app_view_state.rs](file:///Users/johnlindquist/dev/script-kit-gpui/src/main_sections/app_view_state.rs#L1361) |
+| **Notes Window** | Floating, persistent overlay editor panel for creating and browsing notes. Cmd+P uses the shared Notes search container and can open regular notes or day notes inside the Notes editor. | `NotesApp` | [window.rs](file:///Users/johnlindquist/dev/script-kit-gpui/src/notes/window.rs#L246) |
+| **Dictation Window** | overlay micro panel indicating recording status, device options, and audio waveforms during voice capture. | `DictationOverlay` | [window.rs](file:///Users/johnlindquist/dev/script-kit-gpui/src/dictation/window.rs#L503) |
+| **Main Input** | The top search text box where users type filter queries. | `gpui_input_state` (`TextInputState`) | [text_input.rs](file:///Users/johnlindquist/dev/script-kit-gpui/src/components/text_input.rs) & [common.rs](file:///Users/johnlindquist/dev/script-kit-gpui/src/render_builtins/common.rs#L50) |
+| **Footer** | Native hints strip anchored at the bottom of the window displaying active shortcuts and streaming status. | `MainWindowFooterConfig` | [footer_popup.rs](file:///Users/johnlindquist/dev/script-kit-gpui/src/footer_popup.rs) |
+
+---
+
+## 2. Popups & Dialogs
+
+| UI Element | Description | Key Structs / Entities | Main Source File |
+| :--- | :--- | :--- | :--- |
+| **Actions Menu** | Searchable, categorised contextual operations menu shown as a popover overlay (Cmd+K). | `ActionsDialog` | [dialog.rs](file:///Users/johnlindquist/dev/script-kit-gpui/src/actions/dialog.rs#L520) & [window.rs](file:///Users/johnlindquist/dev/script-kit-gpui/src/actions/window.rs) |
+| **Trigger Picker** | Main-list picker rows suggesting capture targets and handlers when prefix characters are typed (e.g. `;`, `+`, `:`). | `MenuSyntaxTriggerPickerState` | [menu_syntax_trigger_picker_main_list.rs](file:///Users/johnlindquist/dev/script-kit-gpui/src/app_impl/menu_syntax_trigger_picker_main_list.rs) & [menu_syntax_trigger_picker.rs](file:///Users/johnlindquist/dev/script-kit-gpui/src/app_impl/menu_syntax_trigger_picker.rs) |
+| **Confirm Popup** | Dialog box overlay with customizable buttons (e.g. Yes/No/Cancel). | `ConfirmPopup` | [confirm/mod.rs](file:///Users/johnlindquist/dev/script-kit-gpui/src/confirm/mod.rs) |
+
+---
+
+## 3. Interactive Script Prompts
+
+These represent the interactive surfaces that scripts spawn when calling methods from the SDK (e.g., `arg()`, `div()`, `editor()`).
+
+| UI Element | Description | Key Structs / Entities | Main Source File |
+| :--- | :--- | :--- | :--- |
+| **Arg Prompt** | Simple input fields prompting for single arguments. | `ArgPrompt` / `render_arg_prompt` | [render.rs](file:///Users/johnlindquist/dev/script-kit-gpui/src/render_prompts/arg/render.rs) & [arg.rs](file:///Users/johnlindquist/dev/script-kit-gpui/src/render_prompts/arg.rs) |
+| **Chat Prompt** | AI agent chat surface (Agent Chat Portal) supporting streaming and prompt-specific layouts. | `ChatPrompt` / `render_chat_prompt` | [other.rs](file:///Users/johnlindquist/dev/script-kit-gpui/src/render_prompts/other.rs#L441) |
+| **Editor Prompt** | Rich multi-line text editor interface. | `EditorPrompt` / `render_editor_prompt` | [editor.rs](file:///Users/johnlindquist/dev/script-kit-gpui/src/render_prompts/editor.rs) |
+| **Form Prompt** | Prompts containing multiple custom input fields. | `FormPrompt` / `render_form_prompt` | [form.rs](file:///Users/johnlindquist/dev/script-kit-gpui/src/render_prompts/form.rs) |
+| **Select Prompt** | Dropdown menu allowing search and selection from a list of options. | `SelectPrompt` / `render_select_prompt` | [other.rs](file:///Users/johnlindquist/dev/script-kit-gpui/src/render_prompts/other.rs) |
+| **Div Prompt** | Custom HTML-like rendering surface controlled by the script. | `DivPrompt` / `render_div_prompt` | [div.rs](file:///Users/johnlindquist/dev/script-kit-gpui/src/render_prompts/div.rs) |
+| **Terminal Prompt** | Embedded terminal shell/PTY widget running executions. | `TermPrompt` / `render_term_prompt` | [term.rs](file:///Users/johnlindquist/dev/script-kit-gpui/src/render_prompts/term.rs) & [term_prompt/mod.rs](file:///Users/johnlindquist/dev/script-kit-gpui/src/term_prompt/mod.rs) |
+
+---
+
+## 4. Built-in Surfaces
+
+Searchable utility lists available directly from the launcher.
+
+| UI Element | Description | Key Structs / Entities | Main Source File |
+| :--- | :--- | :--- | :--- |
+| **Clipboard History** | Searchable history of clipboard entries. | `ClipboardHistoryView` | [clipboard.rs](file:///Users/johnlindquist/dev/script-kit-gpui/src/render_builtins/clipboard.rs) & [clipboard_history/mod.rs](file:///Users/johnlindquist/dev/script-kit-gpui/src/clipboard_history/mod.rs) |
+| **Emoji Picker** | Panel for searching and inserting emojis. | `EmojiPickerView` | [emoji_picker.rs](file:///Users/johnlindquist/dev/script-kit-gpui/src/render_builtins/emoji_picker.rs) |
+| **Process Manager** | Search tool to view and kill system processes. | `ProcessManager` | [process_manager.rs](file:///Users/johnlindquist/dev/script-kit-gpui/src/render_builtins/process_manager.rs) |
+| **Window Switcher** | Switch focus between active application windows. | `WindowSwitcher` | [window_switcher.rs](file:///Users/johnlindquist/dev/script-kit-gpui/src/render_builtins/window_switcher.rs) |
+| **App Launcher** | Search and launch installed local applications. | `AppLauncher` | [app_launcher.rs](file:///Users/johnlindquist/dev/script-kit-gpui/src/render_builtins/app_launcher.rs) |
+| **Notes Browse** | List and search local Markdown notes. | `NotesBrowseView` | [notes_browse.rs](file:///Users/johnlindquist/dev/script-kit-gpui/src/notes_browse.rs) |
+| **File Search** | Browse files on the local filesystem. | `FileSearchView` | [file_search.rs](file:///Users/johnlindquist/dev/script-kit-gpui/src/render_builtins/file_search.rs) |
+| **Permissions Wizard** | Guided grant flow for the macOS permissions Script Kit needs (Accessibility, Screen Recording, Event Synthesizing, Input Monitoring, Microphone) with live TCC status cards. Opens on fresh installs and via "Set Up Permissions". | `PermissionsWizardView` | [permissions_wizard.rs](file:///Users/johnlindquist/dev/script-kit-gpui/src/render_builtins/permissions_wizard.rs) & [permissions_wizard.rs](file:///Users/johnlindquist/dev/script-kit-gpui/src/permissions_wizard.rs) |
+
+---
+
+## 5. Memory Layer (Script Kit Brain)
+
+| UI Element | Description | Key Structs / Entities | Main Source File |
+| :--- | :--- | :--- | :--- |
+| **Day Page** | Today's diary surface inside the main launcher window — same window frame as Script List, hosts the shared notes editor and defaults to `brain/days/<today>.md`. Cmd+P uses the same Notes search container/result language as the Notes Window, but selections open locally in the Day Page editor unless the explicit "Open in Notes Window" action is run. | `DayPageView`, `AppView::DayPage` | [day_page_view.rs](file:///Users/johnlindquist/dev/script-kit-gpui/src/main_sections/day_page_view.rs) & [day_page_types.rs](file:///Users/johnlindquist/dev/script-kit-gpui/src/main_sections/day_page_types.rs) |
+| **Script Kit Brain substrate** | Canonical markdown memory under `~/.scriptkit/brain/{days,fragments,notes,trash}` — day-page append API, fragment writer, atomic writes, trash/restore. SQLite indexes are derived only. | `BrainSubstrate`, `DayEntry` | [substrate/mod.rs](file:///Users/johnlindquist/dev/script-kit-gpui/src/brain/substrate/mod.rs) |
+| **Gesture classifier** | Pure state machine classifying main-hotkey key-down/key-up into tap, hold, double-tap, and key-down instant show. Wired into main-window surface morphs. | `GestureClassifier`, `GestureEvent` | [gesture.rs](file:///Users/johnlindquist/dev/script-kit-gpui/src/hotkeys/gesture.rs) & [gesture_routing.rs](file:///Users/johnlindquist/dev/script-kit-gpui/src/main_sections/gesture_routing.rs) |
+| **Fragment** | Long captures (>200 words) stored as `brain/fragments/<date>-<HHMM>-<source-slug>.md` with provenance frontmatter; the day page references them via excerpt + relative link. | `BrainSubstrate::write_fragment` | [fragment.rs](file:///Users/johnlindquist/dev/script-kit-gpui/src/brain/substrate/fragment.rs) |
+| **Sediment** | Clipboard auto-keep: URLs land on today's day page; non-URLs promote on re-copy (`copy_count ≥ 2`). Day Page renders kept-URL links and fragment excerpt cards. | `ClipboardSedimentTier`, `DayPageSegment` | [sediment.rs (clipboard)](file:///Users/johnlindquist/dev/script-kit-gpui/src/clipboard_history/sediment.rs) & [sediment.rs (day page)](file:///Users/johnlindquist/dev/script-kit-gpui/src/day_page/sediment.rs) |
+| **Post-copy tracker** | Clipboard copies flow through sediment rules without opening popup UI. URLs auto-keep to the Day Page and non-URLs promote on re-copy. | `process_text_sediment` | [sediment.rs](file:///Users/johnlindquist/dev/script-kit-gpui/src/clipboard_history/sediment.rs) |
+
+---
+
+hook: PostToolUse
+exec
+/bin/zsh -lc 'rg -n "DayPageView|focus_editor|apply_loaded_content_to_editor|load_value_with_cursor_at_end|set_input|append_main_hotkey_carry|focus_with_cursor|markdown_runtime_info_with_scroll|automation_scroll_metrics|focusedSemanticId|editor_scroll_metrics" src scripts tests vendor/gpui-component/crates/ui/src/input/state.rs' in /Users/johnlindquist/dev/script-kit-gpui
+ succeeded in 0ms:
+vendor/gpui-component/crates/ui/src/input/state.rs:384:    pub fn automation_scroll_metrics(&self) -> serde_json::Value {
+vendor/gpui-component/crates/ui/src/input/state.rs:2038:    pub(super) fn set_input_bounds(&mut self, new_bounds: Bounds<Pixels>, cx: &mut Context<Self>) {
+tests/actions_dialog_batch_setinput_resize_parity_contract.rs:26://! `handle_batch_set_input<T>(target_kind: BatchTarget, text: &str,
+tests/tx_trace_wait_for_runtime_contract.rs:21:    fn set_input(&mut self, _text: &str) -> anyhow::Result<()> {
+scripts/kit-sdk.ts:8611:  focusedSemanticId?: string;
+scripts/kit-sdk.ts:8719:  focusedSemanticId?: string;
+scripts/kit-sdk.ts:8837:          focusedSemanticId: result.focusedSemanticId,
+tests/notes_devtools_state_contract.rs:512:fn notes_state_exposes_editor_scroll_metrics_and_preview_mount_command() {
+tests/notes_devtools_state_contract.rs:514:        "pub fn automation_scroll_metrics(&self)",
+tests/notes_devtools_state_contract.rs:541:        "editor.automation_scroll_metrics()",
+tests/devtools_inspect_contract.rs:156:        "focusedSemanticId",
+tests/devtools_inspect_contract.rs:190:        "focusedSemanticId",
+tests/devtools_inspect_contract.rs:308:        "focusedSemanticId",
+tests/notes_transaction_contract.rs:119:fn notes_batch_emits_set_input_log() {
+tests/notes_transaction_contract.rs:122:        source.contains("transaction_notes_set_input"),
+tests/notes_transaction_contract.rs:123:        "Notes batch setInput should emit transaction_notes_set_input log"
+src/app_actions/handle_action/mod.rs:475:            Self::SetInputSubmit => "set_input_submit",
+src/app_actions/handle_action/mod.rs:476:            Self::SetInput => "set_input",
+src/app_actions/handle_action/mod.rs:477:            Self::SetInputWithImageSubmit => "set_input_with_image_submit",
+src/app_actions/handle_action/mod.rs:478:            Self::SetInputWithImage => "set_input_with_image",
+src/app_actions/handle_action/mod.rs:538:                Ok("set_input")
+src/app_actions/handle_action/mod.rs:546:                Ok("set_input_with_image")
+src/app_actions/handle_action/mod.rs:570:                chat.set_input(text, cx);
+src/app_actions/handle_action/mod.rs:579:                Ok("set_input")
+src/app_actions/handle_action/mod.rs:615:                        thread.set_input(text, cx);
+src/app_actions/handle_action/mod.rs:623:                Ok("set_input_with_image")
+src/app_actions/handle_action/mod.rs:1905:                                thread.set_input(text, cx);
+tests/collect_elements_browser_history_arm_contract.rs:42:         callers reading `focusedSemanticId` don't drift."
+tests/collect_elements_browser_history_arm_contract.rs:48:         semanticId stable for `focusedSemanticId` / \
+tests/collect_elements_design_gallery_arm_contract.rs:43:         reading `focusedSemanticId` don't drift."
+tests/collect_elements_design_gallery_arm_contract.rs:49:         semanticId stable for `focusedSemanticId` / \
+tests/transaction_trace_contract.rs:32:    fn set_input(&mut self, text: &str) -> Result<()> {
+tests/sdk_ui_automation/fixtures/ui_automation_probe.ts:46:    focusedSemanticId: elements.focusedSemanticId,
+tests/sdk_automation_runtime/mod.rs:67:    fn set_input(&mut self, text: &str) -> anyhow::Result<()> {
+tests/sdk_automation_runtime/mod.rs:485:fn batch_set_input_then_wait_succeeds() {
+tests/sdk_automation_runtime/mod.rs:707:fn detached_agent_chat_transaction_provider_emits_set_input_log() {
+tests/sdk_automation_runtime/mod.rs:710:        source.contains("transaction_detached_agent_chat_set_input"),
+tests/sdk_automation_runtime/mod.rs:711:        "DetachedAgentChatTransactionProvider::set_input must emit structured log"
+tests/agent_chat_onboarding.rs:55:        AGENT_CHAT_VIEW_SOURCE.contains("event = \"agent_chat_set_input_ignored_setup_mode\""),
+tests/tx_trace_replay_idempotency_contract.rs:13:    set_input_calls: usize,
+tests/tx_trace_replay_idempotency_contract.rs:21:    fn set_input(&mut self, text: &str) -> anyhow::Result<()> {
+tests/tx_trace_replay_idempotency_contract.rs:22:        self.set_input_calls += 1;
+tests/tx_trace_replay_idempotency_contract.rs:78:    assert_eq!(provider.set_input_calls, 1);
+tests/tx_trace_replay_idempotency_contract.rs:90:        provider.set_input_calls, 1,
+tests/quick_terminal_contracts.rs:271:fn quick_terminal_set_input_writes_to_pty_for_runtime_proof() {
+scripts/agentic/day-editor-bottom-focus-probe.ts:103:  check("opened_day_page_focused_editor", elements.focusedSemanticId === "input:day-page-editor", {
+scripts/agentic/day-editor-bottom-focus-probe.ts:104:    focusedSemanticId: elements.focusedSemanticId ?? null,
+scripts/agentic/day-editor-bottom-focus-probe.ts:125:  check("actions_escape_refocuses_day_editor", elements.focusedSemanticId === "input:day-page-editor", {
+scripts/agentic/day-editor-bottom-focus-probe.ts:126:    focusedSemanticId: elements.focusedSemanticId ?? null,
+scripts/agentic/day-editor-bottom-focus-probe.ts:138:  check("reopened_day_page_refocuses_editor", elements.focusedSemanticId === "input:day-page-editor", {
+scripts/agentic/day-editor-bottom-focus-probe.ts:139:    focusedSemanticId: elements.focusedSemanticId ?? null,
+scripts/agentic/automation-window.ts:183:  focusedSemanticId?: string | null;
+scripts/agentic/day-page-cursor-parity-probe.ts:63:    focusedSemanticId: elements.focusedSemanticId ?? null,
+scripts/agentic/day-page-cursor-parity-probe.ts:95:    focusedSemanticId: receipt.focusedSemanticId,
+scripts/agentic/notes-spine-host-wiring-probe.ts:91:  check(`${spec.name}.set_input`, setResult.success === true, { setResult });
+scripts/devtools/elements.ts:224:    focusedSemanticId: elements.focusedSemanticId ?? null,
+scripts/agentic/scenario.ts:7309:    const popupFocusedSemanticId = String(popupElements?.focusedSemanticId ?? popupState?.focusedSemanticId ?? "");
+scripts/agentic/scenario.ts:7396:          focusedSemanticId: popupFocusedSemanticId,
+scripts/agentic/scenario.ts:7560:      focusedSemanticId: null,
+scripts/agentic/scenario.ts:8981:      selectedSemanticId: null, focusedSemanticId: null, hoverSemanticId: null,
+scripts/agentic/scenario.ts:9554:      focusStep: null, inputMode: null, focusGeneration: null, focusedSemanticId: null, focusOwner: null,
+scripts/agentic/day-page-local-day-boundary-probe.ts:78:      focusedSemanticId: (elements as Json).focusedSemanticId ?? null,
+scripts/agentic/day-cmdp-focus-probe.ts:54:  return (elements.focusedSemanticId as string | undefined) ?? null;
+scripts/agentic/day-notes-editor-runtime-parity-probe.ts:198:  check("notes_editor_present", Boolean(notesEditor), { focusedSemanticId: notesElements.focusedSemanticId ?? null });
+scripts/agentic/day-notes-editor-runtime-parity-probe.ts:280:  check("day_editor_present", Boolean(dayEditor), { focusedSemanticId: dayElements.focusedSemanticId ?? null });
+scripts/agentic/day-page-style-parity-probe.ts:100:    focusedSemanticId: notesElements.focusedSemanticId ?? null,
+scripts/agentic/day-page-style-parity-probe.ts:122:    focusedSemanticId: dayElements.focusedSemanticId ?? null,
+scripts/devtools/actions.ts:1191:      focusedSemanticId: elementsAfter.focusedSemanticId ?? null,
+tests/tab_ai_input_coverage.rs:214:    assert_eq!(json["focusedSemanticId"], "editor-language");
+tests/tab_ai_input_coverage.rs:958:    assert_eq!(json["ui"]["focusedSemanticId"], "input:filter");
+tests/tab_ai_input_coverage.rs:996:    assert!(json["ui"].get("focusedSemanticId").is_none());
+tests/tab_ai_prompt.rs:110:    assert!(json.contains("focusedSemanticId"));
+tests/tab_ai_prompt.rs:166:    assert!(!json.contains("focusedSemanticId"));
+scripts/devtools/notes.ts:448:    editorFocused: focus.focusedSemanticId === "input:notes-editor" || editor?.focused === true,
+scripts/devtools/notes.ts:449:    focusedSemanticId: focus.focusedSemanticId ?? elements.focusedSemanticId ?? null,
+tests/detached_agent_chat_transaction_contract.rs:41:fn detached_agent_chat_batch_emits_set_input_log() {
+tests/detached_agent_chat_transaction_contract.rs:44:        source.contains("transaction_detached_agent_chat_set_input"),
+tests/detached_agent_chat_transaction_contract.rs:45:        "detached Agent Chat batch setInput should emit transaction_detached_agent_chat_set_input log"
+tests/detached_agent_chat_transaction_contract.rs:130:        source.contains("fn set_input(&mut self, text: &str)"),
+tests/detached_agent_chat_transaction_contract.rs:131:        "provider must implement set_input()"
+tests/detached_agent_chat_transaction_contract.rs:165:fn actions_dialog_batch_emits_set_input_log() {
+tests/detached_agent_chat_transaction_contract.rs:168:        source.contains("transaction_actions_dialog_set_input"),
+tests/detached_agent_chat_transaction_contract.rs:169:        "ActionsDialog batch setInput should emit transaction_actions_dialog_set_input log"
+tests/detached_agent_chat_transaction_contract.rs:229:        source.contains("transaction_actions_dialog_set_input"),
+tests/detached_agent_chat_transaction_contract.rs:230:        "ActionsDialog provider must emit set_input log"
+tests/tab_ai_context.rs:72:        "focusedSemanticId",
+tests/tab_ai_context.rs:161:        !json.contains("focusedSemanticId"),
+scripts/devtools/act.ts:519:    focusChanged: before.focusedSemanticId !== after.focusedSemanticId,
+tests/mini_ai_snapshot_contract.rs:53:            && UI_WINDOW.contains("prompt.set_input(text, cx)"),
+tests/mini_ai_snapshot_contract.rs:57:        PROMPT_HANDLER.contains("prompt.set_input(text.to_string(), cx)"),
+tests/automation/notes_window_targeting.rs:354:        source.contains("transaction_notes_set_input"),
+tests/automation/actions_dialog_targeting.rs:883:    assert_eq!(json["focusedSemanticId"], "button:0:confirm");
+src/app_impl/ui_window.rs:2027:                entity.update(cx, |prompt, cx| prompt.set_input(text, cx));
+src/app_impl/ui_window.rs:2031:                entity.update(cx, |prompt, cx| prompt.set_input(text, cx));
+src/app_impl/ui_window.rs:2035:                entity.update(cx, |prompt, cx| prompt.set_input(text, cx));
+src/app_impl/ui_window.rs:2039:                entity.update(cx, |prompt, cx| prompt.set_input(text, cx));
+src/app_impl/ui_window.rs:2043:                entity.update(cx, |prompt, cx| prompt.set_input(text, cx));
+src/app_impl/ui_window.rs:2047:                entity.update(cx, |view, cx| view.set_input(text, cx));
+src/app_impl/ui_window.rs:2051:                entity.update(cx, |prompt, cx| prompt.set_input(text, cx));
+tests/collect_elements_browser_tabs_arm_contract.rs:45:         reading `focusedSemanticId` don't drift."
+tests/collect_elements_browser_tabs_arm_contract.rs:51:         semanticId stable for `focusedSemanticId` / \
+src/app_impl/agent_handoff/mod.rs:1407:                        view.set_input("@".to_string(), cx);
+src/app_impl/agent_handoff/mod.rs:1412:                        view.set_input(trigger.to_string(), cx);
+src/app_impl/agent_handoff/mod.rs:1752:                thread.set_input(submission_text, cx);
+tests/sdk_automation_contracts/mod.rs:58:    fn set_input(&mut self, text: &str) -> anyhow::Result<()> {
+tests/sdk_automation_contracts/mod.rs:1023:fn actions_dialog_transaction_provider_emits_set_input_log() {
+tests/sdk_automation_contracts/mod.rs:1026:        source.contains("transaction_actions_dialog_set_input"),
+tests/sdk_automation_contracts/mod.rs:1027:        "ActionsDialogTransactionProvider::set_input must emit structured log"
+tests/source_audits/fields_prompt_contract.rs:86:        handler.contains("prompt.set_input(text.to_string(), cx)"),
+tests/source_audits/menu_syntax_handler_form_contract.rs:649:fn batch_set_input_uses_window_aware_immediate_filter_writer() {
+tests/source_audits/menu_syntax_handler_form_contract.rs:653:            && prompt.contains("app.set_input_text_in_window(&text, window, cx);")
+tests/source_audits/menu_syntax_handler_form_contract.rs:654:            && prompt.contains("fn set_input_text_in_window(")
+tests/source_audits/menu_syntax_handler_form_contract.rs:662:    let set_input = prompt[main_batch..]
+tests/source_audits/menu_syntax_handler_form_contract.rs:666:    let select_by_value = prompt[set_input..]
+tests/source_audits/menu_syntax_handler_form_contract.rs:668:        .map(|idx| set_input + idx)
+tests/source_audits/menu_syntax_handler_form_contract.rs:670:    let set_input_arm = &prompt[set_input..select_by_value];
+tests/source_audits/menu_syntax_handler_form_contract.rs:672:        set_input_arm.contains("set_main_window_input_text_for_batch(")
+tests/source_audits/menu_syntax_handler_form_contract.rs:673:            && !set_input_arm.contains("set_input_text(text, cx)"),
+scripts/devtools/surface.ts:163:    focusedSemanticId: runtimeValue(snapshot, "focusedSemanticId"),
+scripts/devtools/surface.ts:175:      runtimeValue(snapshot, "focusedSemanticId") == null ? "focusedSemanticId" : "",
+scripts/devtools/focus.ts:104:function focusedNode(nodes: JsonObject[], focusedSemanticId: unknown) {
+scripts/devtools/focus.ts:105:  const id = String(focusedSemanticId ?? "");
+scripts/devtools/focus.ts:162:  const focusedSemanticId = elements.focusedSemanticId ?? null;
+scripts/devtools/focus.ts:164:  const focused = focusedNode(nodes, focusedSemanticId);
+scripts/devtools/focus.ts:178:    focusedSemanticId,
+scripts/devtools/focus.ts:198:      !focused ? "focusedSemanticId" : "",
+scripts/devtools/focus.ts:206:      focusedSemanticId == null ? "focused semantic id missing" : "",
+scripts/devtools/schema.ts:123:      "runtime.focusedSemanticId",
+scripts/devtools/schema.ts:142:      "focusedSemanticId",
+scripts/devtools/schema.ts:197:      "focusedSemanticId",
+scripts/devtools/schema.ts:205:    failClosedWhen: ["target identity is not strict", "focusedSemanticId is missing for focusable surfaces", "state/elements disagree about focus owner"],
+src/main_entry/runtime_stdin.rs:920:                                            chat.set_input_in_window(text.clone(), window, cx);
+src/form_prompt.rs:338:    pub fn set_input(&mut self, text: String, cx: &mut Context<Self>) {
+src/main_entry/runtime_stdin_match_tail.rs:462:                                            chat.set_input_in_window(text.clone(), window, cx);
+src/windows/automation_transaction_provider.rs:60:    fn set_input(&mut self, text: &str) -> Result<()> {
+src/windows/automation_transaction_provider.rs:67:                thread.set_input(&text, cx);
+src/windows/automation_transaction_provider.rs:71:                event = "transaction_detached_agent_chat_set_input",
+src/windows/automation_transaction_provider.rs:73:                "detached Agent Chat set_input"
+src/windows/automation_transaction_provider.rs:158:    fn set_input(&mut self, text: &str) -> Result<()> {
+src/windows/automation_transaction_provider.rs:164:                event = "transaction_actions_dialog_set_input",
+src/windows/automation_transaction_provider.rs:166:                "ActionsDialog set_input"
+src/main_entry/app_run_setup.rs:3036:                                            chat.set_input_in_window(text.clone(), window, cx);
+src/app_impl/theme_focus.rs:310:                    entity.update(cx, |view, cx| view.focus_editor(window, cx));
+src/prompt_handler/mod.rs:26:                app.set_input_text_in_window(&text, window, cx);
+src/prompt_handler/mod.rs:40:        app.set_input_text(&text, cx);
+src/prompt_handler/mod.rs:2512:                thread.set_input(composer_text.clone(), cx);
+src/prompt_handler/mod.rs:6129:                                            // Route through `AgentChatView::set_input` so mention
+src/prompt_handler/mod.rs:6132:                                            view.set_input(text, cx);
+src/prompt_handler/mod.rs:6135:                                                event = "transaction_detached_agent_chat_set_input",
+src/prompt_handler/mod.rs:6137:                                                "detached Agent Chat set_input"
+src/prompt_handler/mod.rs:6498:                                                    chat.set_input_in_window(
+src/prompt_handler/mod.rs:6514:                                            event = "transaction_notes_set_input",
+src/prompt_handler/mod.rs:6516:                                            "Notes set_input"
+src/prompt_handler/mod.rs:6888:                                                event = "transaction_actions_dialog_set_input",
+src/prompt_handler/mod.rs:6890:                                                "ActionsDialog set_input"
+src/prompt_handler/mod.rs:10289:    fn set_input_text_in_window(
+src/prompt_handler/mod.rs:10308:                    view.set_input(text.to_string(), window, cx);
+src/prompt_handler/mod.rs:10312:            _ => self.set_input_text(text, cx),
+src/prompt_handler/mod.rs:10317:    fn set_input_text(&mut self, text: &str, cx: &mut Context<Self>) {
+src/prompt_handler/mod.rs:10335:                entity.update(cx, |view, cx| view.set_input(text.to_string(), cx));
+src/prompt_handler/mod.rs:10340:                entity.update(cx, |prompt, cx| prompt.set_input(text.to_string(), cx));
+src/prompt_handler/mod.rs:10345:                entity.update(cx, |prompt, cx| prompt.set_input(text.to_string(), cx));
+src/prompt_handler/mod.rs:10350:                entity.update(cx, |prompt, cx| prompt.set_input(text.to_string(), cx));
+src/prompts/select/prompt.rs:186:    pub fn set_input(&mut self, text: String, cx: &mut Context<Self>) {
+src/protocol/transaction_executor.rs:33:    fn set_input(&mut self, text: &str) -> Result<()>;
+src/protocol/transaction_executor.rs:613:                let success = match provider.set_input(text) {
+src/app_impl/filter_input_updates.rs:230:                chat.set_input(text.clone(), cx);
+src/main_sections/day_page_switcher.rs:90:impl DayPageView {
+src/main_sections/day_page_switcher.rs:178:                            view.focus_editor(window, cx);
+src/main_sections/day_page_switcher.rs:217:                self.focus_editor(window, cx);
+src/main_sections/day_page_switcher.rs:226:            self.focus_editor(window, cx);
+src/main_sections/day_page_switcher.rs:248:            self.apply_loaded_content_to_editor(window, cx);
+src/main_sections/day_page_switcher.rs:249:            self.focus_editor(window, cx);
+src/main_sections/day_page_switcher.rs:257:        self.focus_editor(window, cx);
+src/main_sections/day_page_switcher.rs:277:        self.apply_loaded_content_to_editor(window, cx);
+src/main_sections/day_page_switcher.rs:297:        self.focus_editor(window, cx);
+src/main_sections/day_page_switcher.rs:428:                move |this: &mut DayPageView, _event: &gpui::MouseDownEvent, window, cx| {
+src/main_sections/app_view_state.rs:329:        entity: Entity<DayPageView>,
+src/prompts/naming/prompt.rs:131:    pub fn set_input(&mut self, text: String, cx: &mut Context<Self>) {
+src/protocol/message/constructors/final_sections.rs:74:    pub fn set_input(text: String) -> Self {
+src/components/notes_editor/spine.rs:911:    fn set_input_prune_boundary_uses_inline_token_spans_not_substrings() {
+src/main_sections/day_page_types.rs:1:// Day Page view entity (included before AppView so the enum can hold Entity<DayPageView>).
+src/main_sections/day_page_types.rs:45:pub struct DayPageView {
+src/main_sections/day_page_view.rs:13:impl DayPageView {
+src/main_sections/day_page_view.rs:33:        // `subscribe_in` already runs the handler with this DayPageView leased
+src/main_sections/day_page_view.rs:85:        self.apply_loaded_content_to_editor(window, cx);
+src/main_sections/day_page_view.rs:88:    fn apply_loaded_content_to_editor(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+src/main_sections/day_page_view.rs:96:            editor.load_value_with_cursor_at_end(content, window, cx);
+src/main_sections/day_page_view.rs:131:        self.apply_loaded_content_to_editor(window, cx);
+src/main_sections/day_page_view.rs:132:        self.focus_editor(window, cx);
+src/main_sections/day_page_view.rs:142:        self.apply_loaded_content_to_editor(window, cx);
+src/main_sections/day_page_view.rs:143:        self.focus_editor(window, cx);
+src/main_sections/day_page_view.rs:289:    pub fn focus_editor(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+src/main_sections/day_page_view.rs:290:        self.focus_editor_at_end(window, cx);
+src/main_sections/day_page_view.rs:297:                view.focus_editor_at_end(window, cx);
+src/main_sections/day_page_view.rs:302:    fn focus_editor_at_end(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+src/main_sections/day_page_view.rs:304:            editor.focus_with_cursor_at_end(window, cx);
+src/main_sections/day_page_view.rs:308:    pub fn set_input(&mut self, text: String, window: &mut Window, cx: &mut Context<Self>) {
+src/main_sections/day_page_view.rs:319:    pub(crate) fn append_main_hotkey_carry(
+src/main_sections/day_page_view.rs:345:        self.focus_editor(window, cx);
+src/main_sections/day_page_view.rs:361:        // DayPageView back (`is_dirty` for the footer save button).
+src/main_sections/day_page_view.rs:395:impl Focusable for DayPageView {
+src/main_sections/day_page_view.rs:401:impl Render for DayPageView {
+src/main_sections/day_page_view.rs:406:        let app = self.app.upgrade().expect("DayPageView app entity dropped");
+src/main_sections/day_page_view.rs:494:                            this.focus_editor(window, cx);
+src/main_sections/day_page_view.rs:520:                            this.focus_editor(window, cx);
+src/main_sections/day_page_view.rs:615:impl DayPageView {
+src/main_sections/day_page_view.rs:665:                self.focus_editor(window, cx);
+src/main_sections/day_page_view.rs:759:            let day_page = cx.new(|cx| DayPageView::new(app_entity, substrate, window, cx));
+src/main_sections/day_page_view.rs:764:        entity.update(cx, |view, cx| view.focus_editor(window, cx));
+src/components/notes_editor/component.rs:94:    pub fn focus_with_cursor_at_end(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+src/components/notes_editor/component.rs:122:    pub fn load_value_with_cursor_at_end(
+src/components/notes_editor/component.rs:143:        self.load_value_with_cursor_at_end(text, window, cx);
+src/components/notes_editor/component.rs:196:    pub fn markdown_runtime_info_with_scroll(
+src/components/notes_editor/component.rs:201:        info.editor_scroll_metrics =
+src/components/notes_editor/component.rs:202:            Some(self.read_input(cx, |state| state.automation_scroll_metrics()));
+src/main_sections/gesture_routing.rs:247:                view.append_main_hotkey_carry(carry, window, cx);
+src/protocol/message/variants/query_ops.rs:284:        #[serde(rename = "focusedSemanticId", default, skip_serializing_if = "Option::is_none")]
+src/prompts/env/prompt.rs:215:    pub fn set_input(&mut self, text: String, cx: &mut Context<Self>) {
+src/main_sections/day_page_actions.rs:35:    view: &DayPageView,
+src/main_sections/day_page_actions.rs:133:impl DayPageView {
+src/main_sections/day_page_actions.rs:192:                        chat.set_input("Ask about Today's brain: ".to_string(), cx);
+src/main_sections/day_page_spine.rs:5:impl DayPageView {
+src/main_sections/day_page_spine.rs:29:                    .markdown_runtime_info_with_scroll(cx),
+src/main_sections/day_page_round_trip.rs:10:// The held `Entity<DayPageView>` keeps the editor session alive across the
+src/main_sections/day_page_round_trip.rs:22:    pub entity: Entity<DayPageView>,
+src/main_sections/day_page_round_trip.rs:29:impl DayPageView {
+src/main_sections/day_page_round_trip.rs:135:        entity: Entity<DayPageView>,
+src/main_sections/day_page_round_trip.rs:243:        entity: Entity<DayPageView>,
+src/main_sections/day_page_round_trip.rs:253:        entity.update(cx, |view, cx| view.focus_editor(window, cx));
+src/prompts/template/prompt.rs:359:    pub fn set_input(&mut self, text: String, cx: &mut Context<Self>) {
+src/prompts/path/prompt.rs:357:    pub fn set_input(&mut self, text: String, cx: &mut Context<Self>) {
+src/render_builtins/agent_chat_history.rs:514:                    chat_view.set_input(fallback_input, cx);
+src/render_builtins/agent_chat_history.rs:529:                    chat_view.set_input(first_message.to_string(), cx);
+src/protocol/types/tests/get_elements.rs:115:            editor_scroll_metrics: Some(serde_json::json!({
+src/protocol/types/tests/get_elements.rs:552:        json.contains(r#""focusedSemanticId":"input:filter""#),
+src/protocol/types/tests/get_elements.rs:553:        "Missing focusedSemanticId: {json}"
+src/protocol/types/tests/batch.rs:8:fn batch_command_set_input_round_trips() {
+src/protocol/types/elements_actions_scriptlets.rs:73:    pub editor_scroll_metrics: Option<serde_json::Value>,
+src/prompts/chat/prompt.rs:164:    pub fn set_input(&mut self, text: String, cx: &mut Context<Self>) {
+src/ai/tab_context.rs:3022:        assert!(!json.contains("focusedSemanticId"));
+src/ai/tab_context.rs:3099:        assert!(json.contains("focusedSemanticId"));
+src/ai/tab_context.rs:4370:        assert!(json.contains("focusedSemanticId"));
+src/ai/tab_context.rs:4398:        assert!(!json.contains("focusedSemanticId"));
+src/app_layout/build_layout_info.rs:2575:            "focusedSemanticId": if self.menu_syntax_form_input_active {
+src/ai/window/types.rs:856:            Self::SetInput { submit: true, .. } => "set_input_submit",
+src/ai/window/types.rs:857:            Self::SetInput { submit: false, .. } => "set_input",
+src/ai/window/types.rs:858:            Self::SetInputWithImage { submit: true, .. } => "set_input_with_image_submit",
+src/ai/window/types.rs:859:            Self::SetInputWithImage { submit: false, .. } => "set_input_with_image",
+src/ai/agent_chat/ui/view.rs:6455:    pub(crate) fn set_input(&mut self, value: String, cx: &mut Context<Self>) {
+src/ai/agent_chat/ui/view.rs:6459:                event = "agent_chat_set_input_ignored_setup_mode",
+src/ai/agent_chat/ui/view.rs:6466:            .update(cx, |thread, cx| thread.set_input(value, cx));
+src/ai/agent_chat/ui/view.rs:6473:    pub(crate) fn set_input_in_window(
+src/ai/agent_chat/ui/view.rs:6480:        self.set_input(value, cx);
+src/ai/agent_chat/ui/view.rs:7023:            thread.set_input(intent, cx);
+src/ai/agent_chat/ui/view.rs:7146:        self.set_input(trigger.to_string(), cx);
+src/ai/agent_chat/ui/view.rs:11829:            self.set_input(followup.to_string(), cx);
+src/actions/builders/notes.rs:603:    fn test_get_new_chat_actions_returns_empty_when_preset_input_is_invalid() {
+src/notes/markdown_highlighting.rs:65:        editor_scroll_metrics: None,
+src/notes/window/notes.rs:288:        focus_editor_after_select: bool,
+src/notes/window/notes.rs:329:        if focus_editor_after_select {
+src/notes/window/notes.rs:496:    pub(super) fn focus_editor(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+src/notes/window/tests.rs:314:fn test_notes_automation_set_input_places_cursor_at_end_for_ghost_prefix() {
+src/ai/window/window_api.rs:603:        "set_input",
+src/ai/window/window_api.rs:625:        "set_input_with_image",
+src/notes/window/window_ops.rs:1310:            .markdown_runtime_info_with_scroll(cx),
+src/notes/window/navigation.rs:268:        editor_scroll_metrics: serde_json::Value,
+src/notes/window/navigation.rs:271:        let scroll_metrics_available = editor_scroll_metrics
+src/notes/window/navigation.rs:286:            "scroll": editor_scroll_metrics,
+src/notes/window/navigation.rs:473:                editor.automation_scroll_metrics(),
+src/ai/agent_chat/ui/mod.rs:99:                chat.set_input(input, cx);
+src/notes/window/agent_chat_host.rs:1020:                        thread.set_input(text, cx);
+src/ai/agent_chat/ui/thread.rs:608:    pub(crate) fn set_input(&mut self, value: impl Into<String>, cx: &mut Context<Self>) {
+src/ai/agent_chat/ui/chat_window.rs:1443:                            thread.set_input(text, cx);
+
+hook: PostToolUse
+hook: PostToolUse Completed
+hook: PostToolUse Completed
+hook: PostToolUse Completed
+codex
+The current tree already appears to contain the proposed helper and a dedicated `day-editor-bottom-focus-probe.ts`, so I’m checking whether the plan matches what is now in source rather than treating the prompt as hypothetical. That will shape the recommendation toward either “this is the right minimal patch” or “tighten these remaining gaps.”
+exec
+/bin/zsh -lc "sed -n '1,380p' src/main_sections/day_page_view.rs" in /Users/johnlindquist/dev/script-kit-gpui
+exec
+/bin/zsh -lc "sed -n '1,230p' src/components/notes_editor/component.rs" in /Users/johnlindquist/dev/script-kit-gpui
+ succeeded in 0ms:
+use gpui::{App, AppContext, Context, Entity, FocusHandle, Focusable, Hsla, ScrollHandle, Window};
+use gpui_component::input::InputState;
+use gpui_component::theme::ActiveTheme;
+use std::ops::Range;
+
+use crate::notes::markdown_highlighting::register_markdown_highlighter;
+
+use super::types::{
+    NotesEditorConfig, NotesEditorInputSizing, NotesEditorLayout, NotesEditorMarkdownConfig,
+};
+
+/// Shared markdown editor used by the Notes window and future Day Page surface.
+///
+/// Owns markdown editing, formatting entry points, code highlighting registration,
+/// preview rendering, and editor focus. The host binds document content, wires
+/// save/change callbacks, and supplies chrome-specific empty states.
+pub struct NotesEditor {
+    pub(crate) input_state: Entity<InputState>,
+    pub(crate) preview_scroll_handle: ScrollHandle,
+    pub(crate) layout: NotesEditorLayout,
+    last_markdown_link_highlight_text: String,
+    last_markdown_link_highlight_ranges: Vec<(Range<usize>, Hsla, String)>,
+}
+
+impl NotesEditor {
+    pub fn new_markdown_pair<T>(
+        window: &mut Window,
+        cx: &mut Context<T>,
+        config: NotesEditorMarkdownConfig,
+    ) -> (Entity<InputState>, Entity<Self>)
+    where
+        T: 'static,
+    {
+        register_markdown_highlighter();
+
+        let editor_config = config.editor;
+        let placeholder = editor_config.placeholder.clone();
+        let initial_content = editor_config.initial_content.clone();
+        let sizing = config.sizing;
+        let input_state = cx.new(|cx| {
+            let state = InputState::new(window, cx)
+                .code_editor("markdown")
+                .code_editor_dynamic_bottom_margin(false)
+                .line_number(false)
+                .searchable(true)
+                .placeholder(placeholder)
+                .default_value(initial_content);
+            match sizing {
+                NotesEditorInputSizing::Rows(rows) => state.rows(rows),
+                NotesEditorInputSizing::AutoGrow { min_rows, max_rows } => {
+                    state.auto_grow(min_rows, max_rows)
+                }
+            }
+        });
+        let notes_editor = cx.new(|_| NotesEditor::new(input_state.clone(), editor_config));
+        notes_editor.update(cx, |editor, cx| editor.sync_markdown_link_highlights(cx));
+        (input_state, notes_editor)
+    }
+
+    pub fn new(input_state: Entity<InputState>, config: NotesEditorConfig) -> Self {
+        register_markdown_highlighter();
+
+        Self {
+            input_state,
+            preview_scroll_handle: ScrollHandle::new(),
+            layout: config.layout,
+            last_markdown_link_highlight_text: String::new(),
+            last_markdown_link_highlight_ranges: Vec::new(),
+        }
+    }
+
+    pub fn input_state(&self) -> Entity<InputState> {
+        self.input_state.clone()
+    }
+
+    pub fn preview_scroll_handle(&self) -> &ScrollHandle {
+        &self.preview_scroll_handle
+    }
+
+    pub fn layout(&self) -> NotesEditorLayout {
+        self.layout
+    }
+
+    pub fn set_layout(&mut self, layout: NotesEditorLayout) {
+        self.layout = layout;
+    }
+
+    pub fn focus(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.input_state.update(cx, |state, cx| {
+            state.focus(window, cx);
+        });
+    }
+
+    pub fn focus_with_cursor_at_end(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.input_state.update(cx, |state, cx| {
+            let cursor = state.value().len();
+            state.set_selection(cursor, cursor, window, cx);
+        });
+    }
+
+    pub fn focus_handle(&self, cx: &App) -> FocusHandle {
+        self.input_state.read(cx).focus_handle(cx)
+    }
+
+    pub fn is_focused(&self, window: &Window, cx: &App) -> bool {
+        self.focus_handle(cx).is_focused(window)
+    }
+
+    pub fn set_value(
+        &mut self,
+        value: impl Into<String>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let value = value.into();
+        self.input_state.update(cx, |state, cx| {
+            state.set_value(value, window, cx);
+        });
+        self.sync_markdown_link_highlights(cx);
+    }
+
+    pub fn load_value_with_cursor_at_end(
+        &mut self,
+        value: impl Into<String>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let value = value.into();
+        let cursor = value.len();
+        self.input_state.update(cx, |state, cx| {
+            state.set_value(value, window, cx);
+            state.set_selection(cursor, cursor, window, cx);
+        });
+        self.sync_markdown_link_highlights(cx);
+    }
+
+    pub fn set_value_with_cursor_at_end(
+        &mut self,
+        text: String,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.load_value_with_cursor_at_end(text, window, cx);
+    }
+
+    pub fn set_selection(
+        &mut self,
+        start: usize,
+        end: usize,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.input_state.update(cx, |state, cx| {
+            state.set_selection(start, end, window, cx);
+        });
+    }
+
+    pub fn content(&self, cx: &App) -> String {
+        self.input_state.read(cx).value().to_string()
+    }
+
+    pub fn selection(&self, cx: &App) -> std::ops::Range<usize> {
+        self.input_state.read(cx).selection()
+    }
+
+    pub fn soft_wrapped_lines_len(&self, cx: &App) -> usize {
+        self.input_state.read(cx).soft_wrapped_lines_len()
+    }
+
+    pub fn has_inline_completion(&self, cx: &App) -> bool {
+        self.input_state.read(cx).has_inline_completion()
+    }
+
+    pub fn sync_inline_completion(&mut self, suffix: Option<String>, cx: &mut Context<Self>) {
+        self.input_state.update(cx, |state, cx| match suffix {
+            Some(suffix) => state.set_inline_completion_text(suffix, cx),
+            None => {
+                if state.has_inline_completion() {
+                    state.clear_inline_completion(cx);
+                }
+            }
+        });
+    }
+
+    pub fn read_input<F, R>(&self, cx: &App, f: F) -> R
+    where
+        F: FnOnce(&InputState) -> R,
+    {
+        f(self.input_state.read(cx))
+    }
+
+    pub fn markdown_runtime_info(&self) -> crate::protocol::ElementEditorRuntimeInfo {
+        crate::notes::markdown_highlighting::markdown_editor_runtime_info()
+    }
+
+    pub fn markdown_runtime_info_with_scroll(
+        &self,
+        cx: &App,
+    ) -> crate::protocol::ElementEditorRuntimeInfo {
+        let mut info = self.markdown_runtime_info();
+        info.editor_scroll_metrics =
+            Some(self.read_input(cx, |state| state.automation_scroll_metrics()));
+        info.markdown_link_highlight_ranges = Some(self.markdown_link_highlight_runtime_info(cx));
+        info
+    }
+
+    fn markdown_link_highlight_runtime_info(&self, cx: &App) -> serde_json::Value {
+        self.read_input(cx, |state| {
+            let text = state.value();
+            let roles = state.highlight_range_roles();
+            let ranges = state
+                .highlight_ranges()
+                .iter()
+                .enumerate()
+                .filter_map(|(index, (range, _color))| {
+                    let text = text.get(range.clone())?;
+                    Some(serde_json::json!({
+                        "range": [range.start, range.end],
+                        "text": text,
+                        "role": roles
+                            .get(index)
+                            .cloned()
+                            .unwrap_or_else(|| "markdownLink".to_string()),
+                    }))
+                })
+                .collect::<Vec<_>>();
+            serde_json::json!({
+                "count": ranges.len(),
+                "ranges": ranges,
+            })
+
+ succeeded in 0ms:
+// Day Page surface entry, render host, and footer helpers.
+
+use chrono::Utc;
+
+use crate::components::notes_editor::{NotesEditorLayout, NotesEditorMarkdownConfig};
+use crate::footer_popup::{FooterAction, FooterButtonConfig};
+use script_kit_gpui::day_page::normalize_day_page_markdown_references;
+use script_kit_gpui::brain::{substrate::BrainSubstrate, wake_indexer};
+use script_kit_gpui::day_page::{
+    parse_day_page_segments, resolve_fragment_path, DayPageBinding, DayPageSegment,
+};
+
+impl DayPageView {
+    pub fn new(
+        app: Entity<ScriptListApp>,
+        substrate: BrainSubstrate,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Self {
+        let metrics = crate::notes::window::style::adopted_metrics();
+        let (editor_state, notes_editor) = NotesEditor::new_markdown_pair(
+            window,
+            cx,
+            NotesEditorMarkdownConfig::new("")
+                .placeholder("Today...")
+                .layout(NotesEditorLayout::new(
+                    metrics.editor_padding_x,
+                    metrics.editor_padding_y,
+                ))
+                .rows(20),
+        );
+
+        // `subscribe_in` already runs the handler with this DayPageView leased
+        // (`this` is `&mut Self`); re-leasing via `entity.update` here would
+        // double-lease and panic the moment the editor emits a Change.
+        let editor_subscription = cx.subscribe_in(
+            &editor_state,
+            window,
+            |this, _, event: &InputEvent, window, cx| {
+                if !matches!(event, InputEvent::Change) {
+                    return;
+                }
+                this.on_editor_change(window, cx);
+            },
+        );
+
+        Self {
+            app: app.downgrade(),
+            session: DayPageDocumentSession::new(substrate),
+            notes_editor,
+            editor_state,
+            editor_subscription,
+            focus_handle: cx.focus_handle(),
+            fragment_open_targets: Vec::new(),
+            spine_handoff: Default::default(),
+            last_autosave: None,
+            autosave_flush_scheduled: false,
+            day_switcher: None,
+            note_switcher: crate::actions::CommandBar::new(
+                Vec::new(),
+                crate::actions::CommandBarConfig::notes_recent_style(),
+                std::sync::Arc::new(crate::theme::get_cached_theme()),
+            ),
+            last_editor_content_len: 0,
+        }
+    }
+
+    pub fn rebind_substrate(
+        &mut self,
+        substrate: BrainSubstrate,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> anyhow::Result<()> {
+        self.session = DayPageDocumentSession::new(substrate);
+        self.bind_today(window, cx);
+        Ok(())
+    }
+
+    pub fn bind_today(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let now = Utc::now();
+        if let Err(error) = self.session.bind_today(now) {
+            tracing::error!(error = %error, "Failed to bind today's day page");
+            return;
+        }
+        self.apply_loaded_content_to_editor(window, cx);
+    }
+
+    fn apply_loaded_content_to_editor(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let content = self.session.disk_content().to_string();
+        self.reset_day_page_spine_handoff_state(true, true);
+        self.refresh_fragment_open_targets(&content);
+        // Loads are not typing: pre-set the length so the Change event this
+        // emits cannot read as growth and auto-swap to the main menu.
+        self.last_editor_content_len = content.len();
+        self.notes_editor.update(cx, |editor, cx| {
+            editor.load_value_with_cursor_at_end(content, window, cx);
+        });
+        self.sync_footer(window, cx);
+    }
+
+    fn refresh_fragment_open_targets(&mut self, content: &str) {
+        let Some(day_path) = self.session.path().cloned() else {
+            self.fragment_open_targets.clear();
+            return;
+        };
+        if self.session.is_viewing_fragment() {
+            self.fragment_open_targets.clear();
+            return;
+        }
+
+        self.fragment_open_targets = parse_day_page_segments(content)
+            .into_iter()
+            .filter_map(|segment| match segment {
+                DayPageSegment::FragmentRef { relative_link, .. } => {
+                    resolve_fragment_path(&day_path, &relative_link)
+                }
+                _ => None,
+            })
+            .collect();
+    }
+
+    pub fn open_fragment_at(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(fragment_path) = self.fragment_open_targets.get(index).cloned() else {
+            return;
+        };
+        let now = Utc::now();
+        if let Err(error) = self.session.bind_fragment(fragment_path, now) {
+            tracing::error!(error = %error, "Failed to open fragment from day page");
+            return;
+        }
+        self.apply_loaded_content_to_editor(window, cx);
+        self.focus_editor(window, cx);
+        cx.notify();
+    }
+
+    pub fn return_to_day_page(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let now = Utc::now();
+        if let Err(error) = self.session.return_to_day(now) {
+            tracing::error!(error = %error, "Failed to return to day page from fragment");
+            return;
+        }
+        self.apply_loaded_content_to_editor(window, cx);
+        self.focus_editor(window, cx);
+        cx.notify();
+    }
+
+    fn on_editor_change(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.notes_editor
+            .update(cx, |editor, cx| editor.sync_markdown_link_highlights(cx));
+        let previous = self.session.disk_content().to_string();
+        let mut content = self.notes_editor.read(cx).content(cx);
+        let previous_len = self.last_editor_content_len;
+        let selection = self.notes_editor.read(cx).selection(cx);
+        self.last_editor_content_len = content.len();
+        if should_normalize_day_page_references_after_edit(&content, previous_len, selection.end) {
+            let normalized = normalize_day_page_markdown_references(&content);
+            if normalized != content {
+                let mut cursor = selection.end.min(content.len());
+                while cursor > 0 && !content.is_char_boundary(cursor) {
+                    cursor -= 1;
+                }
+                let normalized_cursor =
+                    normalize_day_page_markdown_references(&content[..cursor]).len();
+                self.last_editor_content_len = normalized.len();
+                self.notes_editor.update(cx, |editor, cx| {
+                    editor.set_value(normalized.clone(), window, cx);
+                    editor.set_selection(normalized_cursor, normalized_cursor, window, cx);
+                });
+                content = normalized;
+            }
+        }
+        if let Some((fixed, cursor)) =
+            mention_atomic_delete_fixup(&previous, &content, &self.spine_handoff.mention_aliases)
+        {
+            self.notes_editor.update(cx, |editor, cx| {
+                editor.set_value(fixed.clone(), window, cx);
+                editor.set_selection(cursor, cursor, window, cx);
+            });
+            self.last_editor_content_len = fixed.len();
+            self.session.apply_editor_content(&fixed);
+            self.refresh_fragment_open_targets(&fixed);
+            self.spine_handoff.prune_mention_aliases_for_content(&fixed);
+            self.poll_external_disk_changes(window, cx);
+            self.schedule_autosave_flush(cx);
+            self.sync_footer(window, cx);
+            cx.notify();
+            return;
+        }
+        self.session.apply_editor_content(&content);
+        self.refresh_fragment_open_targets(&content);
+        self.spine_handoff.prune_mention_aliases_for_content(&content);
+        self.poll_external_disk_changes(window, cx);
+        self.schedule_autosave_flush(cx);
+        self.sync_footer(window, cx);
+        self.maybe_begin_day_page_context_round_trip_from_edit(previous_len, &content, window, cx);
+        cx.notify();
+    }
+
+    /// Notes-parity autosave: same debounce interval as the Notes window
+    /// (`NotesApp::SAVE_DEBOUNCE_MS`), driven from render side effects the
+    /// same way `NotesApp::process_render_side_effects` drives
+    /// `save_current_note`. A trailing flush timer (scheduled in
+    /// `on_editor_change`) guarantees the final keystroke also lands on disk
+    /// so the footer dirty state always converges to the real disk state.
+    const SAVE_DEBOUNCE_MS: u64 = 300;
+
+    fn maybe_autosave(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if !self.session.is_dirty() {
+            return;
+        }
+        let due = self.last_autosave.map_or(true, |at| {
+            at.elapsed() >= std::time::Duration::from_millis(Self::SAVE_DEBOUNCE_MS)
+        });
+        if !due {
+            return;
+        }
+        self.last_autosave = Some(std::time::Instant::now());
+        if self.save(cx) {
+            tracing::debug!(
+                target: "script_kit::day_page",
+                event = "day_page_autosaved",
+            );
+        }
+        self.sync_footer(window, cx);
+    }
+
+    fn schedule_autosave_flush(&mut self, cx: &mut Context<Self>) {
+        if self.autosave_flush_scheduled {
+            return;
+        }
+        self.autosave_flush_scheduled = true;
+        let flush_delay = std::time::Duration::from_millis(Self::SAVE_DEBOUNCE_MS + 50);
+        cx.spawn(async move |this, cx| {
+            cx.background_executor().timer(flush_delay).await;
+            this.update(cx, |this, cx| {
+                this.autosave_flush_scheduled = false;
+                // Render side effects run the actual save; notify forces a
+                // render even when no further input arrives.
+                cx.notify();
+            })
+            .ok();
+        })
+        .detach();
+    }
+
+    pub fn poll_external_disk_changes(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if let Ok(Some(content)) = self.session.maybe_refresh_from_disk() {
+            self.reset_day_page_spine_handoff_state(true, true);
+            self.refresh_fragment_open_targets(&content);
+            // External refresh is not typing: keep the growth detector quiet.
+            self.last_editor_content_len = content.len();
+            self.notes_editor.update(cx, |editor, cx| {
+                editor.set_value(content, window, cx);
+            });
+            cx.notify();
+        }
+    }
+
+    pub fn save(&mut self, cx: &mut Context<Self>) -> bool {
+        let content = self.notes_editor.read(cx).content(cx);
+        self.session.apply_editor_content(&content);
+        match self.session.save_content(&content, Utc::now()) {
+            Ok(()) => {
+                wake_indexer();
+                true
+            }
+            Err(error) => {
+                tracing::error!(error = %error, "Failed to save day page");
+                false
+            }
+        }
+    }
+
+    pub fn save_and_sync_footer(&mut self, window: &mut Window, cx: &mut Context<Self>) -> bool {
+        let saved = self.save(cx);
+        self.sync_footer(window, cx);
+        cx.notify();
+        saved
+    }
+
+    pub fn is_dirty(&self) -> bool {
+        self.session.is_dirty()
+    }
+
+    pub(crate) fn automation_input_value(&self, cx: &App) -> String {
+        self.notes_editor.read(cx).content(cx)
+    }
+
+    pub fn focus_editor(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.focus_editor_at_end(window, cx);
+        let day_page = cx.entity().downgrade();
+        window.defer(cx, move |window, cx| {
+            let Some(day_page) = day_page.upgrade() else {
+                return;
+            };
+            day_page.update(cx, |view, cx| {
+                view.focus_editor_at_end(window, cx);
+            });
+        });
+    }
+
+    fn focus_editor_at_end(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.notes_editor.update(cx, |editor, cx| {
+            editor.focus_with_cursor_at_end(window, cx);
+        });
+    }
+
+    pub fn set_input(&mut self, text: String, window: &mut Window, cx: &mut Context<Self>) {
+        self.notes_editor.update(cx, |editor, cx| {
+            editor.set_value_with_cursor_at_end(text.clone(), window, cx);
+        });
+        self.session.apply_editor_content(&text);
+        self.refresh_fragment_open_targets(&text);
+        self.reset_day_page_spine_handoff_state(false, true);
+        self.sync_footer(window, cx);
+        cx.notify();
+    }
+
+    pub(crate) fn append_main_hotkey_carry(
+        &mut self,
+        text: String,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let text = normalize_day_page_markdown_references(text.trim());
+        if text.is_empty() {
+            return;
+        }
+
+        let mut content = self.notes_editor.read(cx).content(cx);
+        if !content.is_empty() && !content.ends_with('\n') {
+            content.push('\n');
+        }
+        content.push_str(&text);
+
+        self.last_editor_content_len = content.len();
+        self.notes_editor.update(cx, |editor, cx| {
+            editor.set_value_with_cursor_at_end(content.clone(), window, cx);
+        });
+        self.session.apply_editor_content(&content);
+        self.refresh_fragment_open_targets(&content);
+        self.reset_day_page_spine_handoff_state(false, true);
+        self.schedule_autosave_flush(cx);
+        self.sync_footer(window, cx);
+        self.focus_editor(window, cx);
+        cx.notify();
+    }
+
+    fn reset_day_page_spine_handoff_state(&mut self, clear_cwd_anchor: bool, clear_mentions: bool) {
+        self.spine_handoff.reset(clear_cwd_anchor, clear_mentions);
+    }
+
+    fn sync_footer(&self, window: &mut Window, cx: &mut Context<Self>) {
+        // Deferred on purpose: several callers run while the ScriptListApp
+        // lease is already held (e.g. `show_day_page_view` → `bind_today`
+        // inside `app_entity.update`, including the hotkey gesture path).
+        // A synchronous `app.update` here double-leases ScriptListApp and
+        // panics ("cannot update ... while it is already being updated").
+        // `window.defer` (not `cx.defer_in`) — the deferred closure must hold
+        // NO entity lease, because `sync_main_footer_popup` reads this
+        // DayPageView back (`is_dirty` for the footer save button).
+        let Some(app) = self.app.upgrade() else {
+            return;
+        };
+        window.defer(cx, move |window, cx| {
+            app.update(cx, |app, cx| {
+                app.sync_main_footer_popup(window, cx);
+            });
+        });
+    }
+}
+
+fn should_normalize_day_page_references_after_edit(
+    content: &str,
+    previous_len: usize,
+    cursor: usize,
+) -> bool {
+    if content.len() <= previous_len {
+        return false;
+    }
+
+hook: PostToolUse
+hook: PostToolUse
+exec
+/bin/zsh -lc "sed -n '1,340p' src/main_sections/day_page_switcher.rs" in /Users/johnlindquist/dev/script-kit-gpui
+exec
+/bin/zsh -lc "sed -n '1,190p' scripts/agentic/day-editor-bottom-focus-probe.ts" in /Users/johnlindquist/dev/script-kit-gpui
+ succeeded in 0ms:
+#!/usr/bin/env bun
+import { mkdirSync, writeFileSync } from "node:fs";
+import { dirname } from "node:path";
+import { Driver, type Json } from "../devtools/driver";
+
+const binary =
+  process.env.PROBE_BINARY ??
+  "target-agent/artifacts/day-editor-bottom-scroll/script-kit-gpui";
+
+const receipt: Record<string, Json> = {};
+const failures: string[] = [];
+
+function check(name: string, ok: boolean, detail: Json = {}) {
+  receipt[name] = { ok, ...detail };
+  if (!ok) failures.push(name);
+}
+
+function walk(node: unknown, out: Json[] = []): Json[] {
+  if (!node || typeof node !== "object") return out;
+  if (Array.isArray(node)) {
+    for (const child of node) walk(child, out);
+    return out;
+  }
+  const json = node as Json;
+  if (typeof json.semanticId === "string" || typeof json.id === "string") out.push(json);
+  for (const value of Object.values(json)) walk(value, out);
+  return out;
+}
+
+function findSemantic(elements: Json, semanticId: string): Json | null {
+  return walk(elements).find((el) => el.semanticId === semanticId) ?? null;
+}
+
+function editorRuntime(editor: Json | null): Json | null {
+  const runtime = editor?.style?.editorRuntime;
+  return runtime && typeof runtime === "object" ? (runtime as Json) : null;
+}
+
+function scrollMetrics(editor: Json | null): Json | null {
+  const metrics = editorRuntime(editor)?.editorScrollMetrics;
+  return metrics && typeof metrics === "object" ? (metrics as Json) : null;
+}
+
+function isAtBottom(metrics: Json | null): boolean {
+  const scrollTop = Number(metrics?.scrollTop ?? -1);
+  const liveScrollTop = Number(metrics?.liveScrollTop ?? scrollTop);
+  const maxScrollTop = Number(metrics?.maxScrollTop ?? -1);
+  return maxScrollTop >= 0 && Math.max(scrollTop, liveScrollTop) >= maxScrollTop - 6;
+}
+
+async function mainElements(driver: Driver): Promise<Json> {
+  return (await driver.getElements(
+    { target: { type: "main" }, limit: 160 },
+    { timeoutMs: 5000 },
+  )) as Json;
+}
+
+async function openDayWithComma(driver: Driver) {
+  await driver.batch([{ type: "setInput", text: "," }], { timeoutMs: 5000 });
+  await Bun.sleep(200);
+  driver.simulateKey("enter");
+  await driver.waitForState({ windowVisible: true, promptType: "dayPage" }, { timeoutMs: 8000 });
+  await Bun.sleep(600);
+}
+
+function longDayText(): string {
+  const lines = ["# Bottom focus probe", ""];
+  for (let i = 1; i <= 140; i += 1) {
+    lines.push(`- probe line ${i.toString().padStart(3, "0")} should overflow the Day editor`);
+  }
+  lines.push("", "final probe line");
+  return `${lines.join("\n")}\n`;
+}
+
+function todayLocalDate(): string {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, "0");
+  const d = String(now.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+const driver = await Driver.launch({
+  binary,
+  sandboxHome: true,
+  sessionName: "day-editor-bottom-focus",
+  defaultTimeoutMs: 9000,
+  env: {
+    SCRIPT_KIT_PANEL_INVARIANTS_ALLOW_MISMATCH: "1",
+    SCRIPT_KIT_BRAIN_TZ: "America/Denver",
+  },
+});
+
+try {
+  const daysFile = `${driver.sessionDir}/home/.scriptkit/brain/days/${todayLocalDate()}.md`;
+  mkdirSync(dirname(daysFile), { recursive: true });
+  writeFileSync(daysFile, longDayText());
+
+  await openDayWithComma(driver);
+  let elements = await mainElements(driver);
+  let editor = findSemantic(elements, "input:day-page-editor");
+  let metrics = scrollMetrics(editor);
+  check("opened_day_page_focused_editor", elements.focusedSemanticId === "input:day-page-editor", {
+    focusedSemanticId: elements.focusedSemanticId ?? null,
+  });
+  check("opened_day_page_loaded_long_content", String(editor?.value ?? "").includes("final probe line"), {
+    valueLength: typeof editor?.value === "string" ? editor.value.length : null,
+  });
+  check("opened_day_page_scrolls_to_bottom", isAtBottom(metrics), { metrics });
+
+  driver.simulateKey("pageup");
+  await Bun.sleep(300);
+  elements = await mainElements(driver);
+  const pageUpMetrics = scrollMetrics(findSemantic(elements, "input:day-page-editor"));
+  check("pageup_moves_away_from_bottom", !isAtBottom(pageUpMetrics), { metrics: pageUpMetrics });
+
+  driver.simulateKey("k", ["cmd"]);
+  await Bun.sleep(600);
+  driver.simulateKey("escape");
+  await driver.waitForState({ promptType: "dayPage" }, { timeoutMs: 5000 });
+  await Bun.sleep(700);
+  elements = await mainElements(driver);
+  editor = findSemantic(elements, "input:day-page-editor");
+  metrics = scrollMetrics(editor);
+  check("actions_escape_refocuses_day_editor", elements.focusedSemanticId === "input:day-page-editor", {
+    focusedSemanticId: elements.focusedSemanticId ?? null,
+  });
+  check("actions_escape_scrolls_back_to_bottom", isAtBottom(metrics), { metrics });
+
+  driver.simulateKey("pageup");
+  await Bun.sleep(250);
+  driver.simulateKey("escape");
+  await Bun.sleep(500);
+  await openDayWithComma(driver);
+  elements = await mainElements(driver);
+  editor = findSemantic(elements, "input:day-page-editor");
+  metrics = scrollMetrics(editor);
+  check("reopened_day_page_refocuses_editor", elements.focusedSemanticId === "input:day-page-editor", {
+    focusedSemanticId: elements.focusedSemanticId ?? null,
+  });
+  check("reopened_day_page_scrolls_to_bottom", isAtBottom(metrics), { metrics });
+} finally {
+  await driver.close();
+}
+
+const output = {
+  pass: failures.length === 0,
+  failures,
+  binary,
+  sessionDir: driver.sessionDir,
+  appLog: driver.logPath,
+  receipt,
+};
+
+console.log(JSON.stringify(output, null, 2));
+if (failures.length) process.exit(1);
+
+ succeeded in 0ms:
+// Day Page past-day switcher (Cmd+P): find and swap to past days.
+//
+// The switcher lists `brain/days/YYYY-MM-DD.md` files newest-first with a
+// first-line preview, filters on typed query text, and rebinds the Day Page
+// document session to the chosen date. While open, focus moves from the
+// editor to the Day Page root focus handle so typed characters filter the
+// switcher instead of editing the document.
+
+#[derive(Debug, Clone)]
+pub(crate) struct DaySwitcherEntry {
+    pub date: chrono::NaiveDate,
+    pub preview: String,
+}
+
+#[derive(Debug, Clone, Default)]
+pub(crate) struct DaySwitcherState {
+    pub query: String,
+    pub selected: usize,
+    pub entries: Vec<DaySwitcherEntry>,
+}
+
+pub(crate) const DAY_SWITCHER_LIST_ID: &str = "day-page-day-switcher";
+
+pub(crate) fn load_day_switcher_entries(substrate: &BrainSubstrate) -> Vec<DaySwitcherEntry> {
+    let days_dir = substrate.paths().days_dir();
+    let mut entries = Vec::new();
+    let Ok(read_dir) = std::fs::read_dir(&days_dir) else {
+        return entries;
+    };
+    for entry in read_dir.flatten() {
+        let path = entry.path();
+        if path.extension().and_then(|ext| ext.to_str()) != Some("md") {
+            continue;
+        }
+        let Some(stem) = path.file_stem().and_then(|stem| stem.to_str()) else {
+            continue;
+        };
+        let Ok(date) = chrono::NaiveDate::parse_from_str(stem, "%Y-%m-%d") else {
+            continue;
+        };
+        let preview = std::fs::read_to_string(&path)
+            .ok()
+            .and_then(|content| {
+                content
+                    .lines()
+                    .map(str::trim)
+                    .find(|line| !line.is_empty())
+                    .map(|line| line.chars().take(80).collect::<String>())
+            })
+            .unwrap_or_default();
+        entries.push(DaySwitcherEntry { date, preview });
+    }
+    entries.sort_by(|a, b| b.date.cmp(&a.date));
+    entries
+}
+
+pub(crate) fn day_switcher_entry_label(date: chrono::NaiveDate, today: chrono::NaiveDate) -> String {
+    let formatted = date.format("%Y-%m-%d · %A").to_string();
+    if date == today {
+        format!("Today · {formatted}")
+    } else {
+        formatted
+    }
+}
+
+pub(crate) fn day_switcher_semantic_id(date: chrono::NaiveDate) -> String {
+    format!("day-switcher-{date}")
+}
+
+pub(crate) fn filtered_day_switcher_indices(
+    state: &DaySwitcherState,
+    today: chrono::NaiveDate,
+) -> Vec<usize> {
+    let query = state.query.trim().to_lowercase();
+    state
+        .entries
+        .iter()
+        .enumerate()
+        .filter(|(_, entry)| {
+            if query.is_empty() {
+                return true;
+            }
+            let label = day_switcher_entry_label(entry.date, today).to_lowercase();
+            label.contains(&query) || entry.preview.to_lowercase().contains(&query)
+        })
+        .map(|(index, _)| index)
+        .collect()
+}
+
+impl DayPageView {
+    fn local_today(&self) -> chrono::NaiveDate {
+        Utc::now()
+            .with_timezone(&self.session.substrate().timezone())
+            .date_naive()
+    }
+
+    pub(crate) fn is_day_switcher_open(&self) -> bool {
+        self.note_switcher.is_open()
+    }
+
+    pub(crate) fn toggle_day_switcher(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.note_switcher.is_open() {
+            self.close_day_switcher(window, cx);
+        } else {
+            self.open_note_switcher(window, cx);
+        }
+    }
+
+    pub(crate) fn open_day_switcher(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.open_note_switcher(window, cx);
+    }
+
+    pub(crate) fn open_note_switcher(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let notes = crate::notes::get_all_notes().unwrap_or_else(|error| {
+            tracing::warn!(
+                target: "script_kit::day_page",
+                error = %error,
+                "day_page_note_switcher_notes_load_failed"
+            );
+            Vec::new()
+        });
+        let mut rows = notes
+            .iter()
+            .map(|note| crate::actions::NoteSwitcherNoteInfo {
+                id: note.id.as_str().to_string(),
+                title: if note.title.trim().is_empty() {
+                    "Untitled Note".to_string()
+                } else {
+                    note.title.clone()
+                },
+                char_count: note.char_count(),
+                is_current: self
+                    .session
+                    .viewing_note_id()
+                    .is_some_and(|id| id == note.id.as_str()),
+                is_pinned: note.is_pinned,
+                preview: note.preview(),
+                relative_time: crate::formatting::format_relative_time_short_dt(note.updated_at),
+            })
+            .collect::<Vec<_>>();
+        let day_entries = crate::notes::day_switcher::load_day_note_switcher_entries(
+            &self.session.substrate().paths().days_dir(),
+        );
+        rows.extend(crate::notes::day_switcher::day_note_switcher_infos(
+            &day_entries,
+            self.session.bound_date(),
+        ));
+        let actions = crate::actions::get_note_switcher_actions(&rows);
+        self.note_switcher.set_actions(actions, cx);
+        self.note_switcher.open_centered(window, cx);
+        self.wire_note_switcher_activation(window, cx);
+        if let Some(dialog) = self.note_switcher.dialog() {
+            dialog.update(cx, |dialog, cx| {
+                dialog.set_context_title(None);
+                cx.notify();
+            });
+        }
+    }
+
+    fn wire_note_switcher_activation(&mut self, window: &Window, cx: &mut Context<Self>) {
+        let Some(dialog) = self.note_switcher.dialog().cloned() else {
+            return;
+        };
+        let resize_dialog = dialog.clone();
+        let day_page = cx.entity().downgrade();
+        let day_window = window.window_handle();
+        let on_close_day_page = day_page.clone();
+        dialog.update(cx, |dialog, _cx| {
+            dialog.set_on_close(std::sync::Arc::new(move |cx| {
+                let day_page = on_close_day_page.clone();
+                cx.defer(move |cx| {
+                    let _ = day_window.update(cx, |_root, window, cx| {
+                        let Some(day_page) = day_page.upgrade() else {
+                            return;
+                        };
+                        day_page.update(cx, |view, cx| {
+                            view.note_switcher.mark_closed_externally();
+                            view.focus_editor(window, cx);
+                        });
+                    });
+                });
+            }));
+            dialog.set_on_activation(std::sync::Arc::new(move |activation, _window, cx| {
+                match activation {
+                    crate::actions::ActionsDialogActivation::Executed { action_id, .. } => {
+                        let day_page = day_page.clone();
+                        cx.defer(move |cx| {
+                            let _ = day_window.update(cx, |_root, window, cx| {
+                                let Some(day_page) = day_page.upgrade() else {
+                                    return;
+                                };
+                                day_page.update(cx, |view, cx| {
+                                    view.execute_note_switcher_action(&action_id, window, cx);
+                                });
+                            });
+                        });
+                    }
+                    crate::actions::ActionsDialogActivation::DrillDownPushed { .. } => {
+                        crate::actions::resize_actions_window(cx, &resize_dialog);
+                    }
+                    crate::actions::ActionsDialogActivation::NoSelection => {}
+                }
+            }));
+        });
+    }
+
+    fn execute_note_switcher_action(
+        &mut self,
+        action_id: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.note_switcher.close(cx);
+        if let Some(date) = action_id.strip_prefix("daypage_") {
+            if let Ok(date) = chrono::NaiveDate::parse_from_str(date, "%Y-%m-%d") {
+                self.bind_day(date, window, cx);
+                self.focus_editor(window, cx);
+            }
+            return;
+        }
+        let Some(note_id_text) = action_id.strip_prefix("note_") else {
+            return;
+        };
+        if let Some(date) = crate::notes::day_switcher::parse_day_note_action_id(note_id_text) {
+            self.bind_day(date, window, cx);
+            self.focus_editor(window, cx);
+            return;
+        }
+        if let Some(note_id) = crate::notes::NoteId::parse(note_id_text) {
+            let Ok(Some(note)) = crate::notes::get_note(note_id) else {
+                return;
+            };
+            let path = crate::notes::note_file_path(note.id).ok().flatten();
+            if let Err(error) = self.session.bind_note_content(
+                note.id.as_str().to_string(),
+                note.title.clone(),
+                note.content.clone(),
+                path,
+                Utc::now(),
+            ) {
+                tracing::error!(
+                    target: "script_kit::day_page",
+                    error = %error,
+                    "day_page_note_switcher_bind_note_failed"
+                );
+                return;
+            }
+            self.apply_loaded_content_to_editor(window, cx);
+            self.focus_editor(window, cx);
+            cx.notify();
+        }
+    }
+
+    pub(crate) fn close_day_switcher(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.day_switcher = None;
+        self.note_switcher.close(cx);
+        self.focus_editor(window, cx);
+        cx.notify();
+    }
+
+    /// Rebind the Day Page session to an arbitrary existing day.
+    pub(crate) fn bind_day(
+        &mut self,
+        date: chrono::NaiveDate,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if let Err(error) = self.session.bind_date(date, Utc::now()) {
+            tracing::error!(
+                target: "script_kit::day_page",
+                event = "day_page_bind_day_failed",
+                date = %date,
+                error = %error,
+            );
+            return;
+        }
+        self.apply_loaded_content_to_editor(window, cx);
+        cx.notify();
+    }
+
+    fn accept_day_switcher_selection(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let today = self.local_today();
+        let Some(state) = self.day_switcher.as_ref() else {
+            return;
+        };
+        let filtered = filtered_day_switcher_indices(state, today);
+        let Some(entry_index) = filtered.get(state.selected.min(filtered.len().saturating_sub(1)))
+        else {
+            return;
+        };
+        let Some(entry) = state.entries.get(*entry_index) else {
+            return;
+        };
+        let date = entry.date;
+        self.close_day_switcher(window, cx);
+        self.bind_day(date, window, cx);
+        self.focus_editor(window, cx);
+        tracing::info!(
+            target: "script_kit::day_page",
+            event = "day_page_switched_day",
+            date = %date,
+        );
+    }
+
+    /// Handle a key while the switcher is open. Returns true when consumed.
+    pub(crate) fn handle_day_switcher_key(
+        &mut self,
+        key: &str,
+        cmd: bool,
+        shift: bool,
+        alt: bool,
+        control: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        if !self.note_switcher.is_open() {
+            return false;
+        }
+        let exact_plain = !cmd && !shift && !alt && !control;
+        if exact_plain && crate::ui_foundation::is_key_escape(key) {
+            self.close_day_switcher(window, cx);
+            return true;
+        }
+        if cmd && !shift && !alt && !control && key == "p" {
+            self.close_day_switcher(window, cx);
+            return true;
+        }
+        if exact_plain && matches!(key, "down" | "arrowdown" | "up" | "arrowup") {
+            if matches!(key, "down" | "arrowdown") {
+                self.note_switcher.select_next(cx);
+            } else {
+                self.note_switcher.select_prev(cx);
+            }
+            return true;
+        }
+        if exact_plain && key == "enter" {
+            if let Some(action_id) = self.note_switcher.execute_selected_action(cx) {
+                self.execute_note_switcher_action(&action_id, window, cx);
+            }
+            return true;
+
+hook: PostToolUse
+hook: PostToolUse
+exec
+/bin/zsh -lc "sed -n '360,430p' vendor/gpui-component/crates/ui/src/input/state.rs && sed -n '2030,2075p' vendor/gpui-component/crates/ui/src/input/state.rs" in /Users/johnlindquist/dev/script-kit-gpui
+ succeeded in 0ms:
+    pub inline_completion_visible_without_focus: bool,
+
+    /// When true, Tab/Shift+Tab actions are propagated instead of inserting indent.
+    /// This is useful for snippet/template navigation where Tab moves between tabstops.
+    pub tab_navigation_mode: bool,
+
+    /// When true, single-space text insertion is treated as Tab navigation.
+    /// Some native macOS paths deliver Tab to single-line text inputs as a
+    /// replacement-space text edit instead of an input action.
+    pub tab_navigation_space_as_tab: bool,
+
+    /// When true in multiline mode, plain Enter emits `PressEnter` without
+    /// inserting a newline (chat-composer behavior). Shift+Enter (secondary)
+    /// still inserts a newline. Has no effect in single-line mode.
+    pub(super) submit_on_enter: bool,
+}
+
+impl EventEmitter<InputEvent> for InputState {}
+
+impl InputState {
+    /// Runtime scroll metrics for automation/devtools receipts.
+    ///
+    /// Offsets are reported in CSS-like positive scrollTop/scrollLeft units
+    /// even though GPUI stores scroll offsets as negative content translations.
+    pub fn automation_scroll_metrics(&self) -> serde_json::Value {
+        let live_offset = self.scroll_handle.offset();
+        let effective_offset = self.deferred_scroll_offset.unwrap_or(live_offset);
+        let viewport = self.input_bounds.size;
+        let content = self.scroll_size;
+        let max_scroll_top = (content.height - viewport.height).max(px(0.)).as_f32();
+        let max_scroll_left = (content.width - viewport.width).max(px(0.)).as_f32();
+        let scroll_top = (-effective_offset.y.as_f32()).clamp(0.0, max_scroll_top);
+        let scroll_left = (-effective_offset.x.as_f32()).clamp(0.0, max_scroll_left);
+
+        serde_json::json!({
+            "schemaVersion": 1,
+            "source": "gpui_component.input.InputState",
+            "available": true,
+            "offsetUnit": "logicalPx",
+            "scrollTop": scroll_top,
+            "scrollLeft": scroll_left,
+            "liveScrollTop": (-live_offset.y.as_f32()).clamp(0.0, max_scroll_top),
+            "liveScrollLeft": (-live_offset.x.as_f32()).clamp(0.0, max_scroll_left),
+            "hasDeferredScrollOffset": self.deferred_scroll_offset.is_some(),
+            "scrollHeight": content.height.as_f32(),
+            "scrollWidth": content.width.as_f32(),
+            "clientHeight": viewport.height.as_f32(),
+            "clientWidth": viewport.width.as_f32(),
+            "maxScrollTop": max_scroll_top,
+            "maxScrollLeft": max_scroll_left,
+            "canScrollY": max_scroll_top > 0.0,
+            "canScrollX": max_scroll_left > 0.0,
+        })
+    }
+
+    /// Create a Input state with default [`InputMode::SingleLine`] mode.
+    ///
+    /// See also: [`Self::multi_line`], [`Self::auto_grow`] to set other mode.
+    pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
+        let focus_handle = cx.focus_handle().tab_stop(true);
+        let blink_cursor = cx.new(|_| BlinkCursor::new());
+        let history = History::new().group_interval(std::time::Duration::from_secs(1));
+
+        let _subscriptions = vec![
+            // Observe the blink cursor to repaint the view when it changes.
+            cx.observe(&blink_cursor, |_, _, cx| cx.notify()),
+            // Blink the cursor when the window is active, pause when it's not.
+            cx.observe_window_activation(window, |input, window, cx| {
+                if window.is_window_active() {
+                    let focus_handle = input.focus_handle.clone();
+                    if focus_handle.is_focused(window) {
+    ) {
+        self.mask_pattern = pattern.into();
+        if let Some(placeholder) = self.mask_pattern.placeholder() {
+            self.placeholder = placeholder.into();
+        }
+        cx.notify();
+    }
+
+    pub(super) fn set_input_bounds(&mut self, new_bounds: Bounds<Pixels>, cx: &mut Context<Self>) {
+        let wrap_width_changed = self.input_bounds.size.width != new_bounds.size.width;
+        self.input_bounds = new_bounds;
+
+        // Update text_wrapper wrap_width if changed.
+        if let Some(last_layout) = self.last_layout.as_ref() {
+            if wrap_width_changed {
+                let wrap_width = if !self.soft_wrap {
+                    // None to disable wrapping (will use Pixels::MAX)
+                    None
+                } else {
+                    last_layout.wrap_width
+                };
+
+                self.text_wrapper.set_wrap_width(wrap_width, cx);
+                self.mode.update_auto_grow(&self.text_wrapper);
+                cx.notify();
+            }
+        }
+    }
+
+    pub(super) fn selected_text(&self) -> RopeSlice<'_> {
+        let range_utf16 = self.range_to_utf16(&self.selected_range.into());
+        let range = self.range_from_utf16(&range_utf16);
+        self.text.slice(range)
+    }
+
+    pub(crate) fn range_to_bounds(&self, range: &Range<usize>) -> Option<Bounds<Pixels>> {
+        let Some(last_layout) = self.last_layout.as_ref() else {
+            return None;
+        };
+
+        let Some(last_bounds) = self.last_bounds else {
+            return None;
+        };
+
+        let (_, _, start_pos) = self.line_and_position_for_offset(range.start);
+        let (_, _, end_pos) = self.line_and_position_for_offset(range.end);
+
+hook: PostToolUse
+hook: PostToolUse Completed
+hook: PostToolUse Completed
+hook: PostToolUse Completed
+hook: PostToolUse Completed
+hook: PostToolUse Completed
+exec
+/bin/zsh -lc "sed -n '490,555p' tests/notes_devtools_state_contract.rs" in /Users/johnlindquist/dev/script-kit-gpui
+ succeeded in 0ms:
+            "Notes state must expose autosize DevTools receipt field: {needle}"
+        );
+    }
+
+    for needle in [
+        "devtools.notes.resizeCompare",
+        "SCRIPT_KIT_TEST_NOTES_DB_PATH",
+        "blocked-by-real-data-risk",
+        "blocked-by-unsafe-operation",
+        "height grew after tall content",
+        "height shrank after short content",
+        "autosize generation advanced",
+        "raw note content redacted",
+    ] {
+        assert!(
+            DEVTOOLS_NOTES.contains(needle) || DEVTOOLS_SCHEMA.contains(needle),
+            "Notes resize compare CLI/schema must pin autosize proof behavior: {needle}"
+        );
+    }
+}
+
+#[test]
+fn notes_state_exposes_editor_scroll_metrics_and_preview_mount_command() {
+    for needle in [
+        "pub fn automation_scroll_metrics(&self)",
+        "\"scrollTop\"",
+        "\"scrollHeight\"",
+        "\"clientHeight\"",
+        "\"hasDeferredScrollOffset\"",
+        "\"canScrollY\"",
+    ] {
+        assert!(
+            include_str!("../vendor/gpui-component/crates/ui/src/input/state.rs").contains(needle),
+            "InputState must expose real scroll metrics for Notes DevTools: {needle}"
+        );
+    }
+
+    for needle in [
+        "preview_scroll_handle: ScrollHandle",
+        "preview_scroll_handle: ScrollHandle::new()",
+        ".track_scroll(&self.preview_scroll_handle)",
+    ] {
+        assert!(
+            NOTES_WINDOW.contains(needle)
+                || include_str!("../src/notes/window/init.rs").contains(needle)
+                || include_str!("../src/notes/window/render_editor_body.rs").contains(needle),
+            "Notes preview must own a runtime scroll handle for DevTools: {needle}"
+        );
+    }
+
+    for needle in [
+        "editor.automation_scroll_metrics()",
+        "automation_scroll_handle_metrics",
+        "\"editorAnchor\"",
+        "\"previewAnchor\"",
+        "\"scrollMetricsAvailable\"",
+        "\"scrollTopAvailable\"",
+        "\"scrollHeightAvailable\"",
+        "\"clientHeightAvailable\"",
+    ] {
+        assert!(
+            NOTES_NAVIGATION.contains(needle),
+            "Notes automation state must expose scroll anchor fields: {needle}"
+        );
+    }
+
+
+hook: PostToolUse
+exec
+/bin/zsh -lc "rg -n \"fn scroll_to|pub fn scroll_to|set_selection\\(\" vendor/gpui-component/crates/ui/src/input/state.rs src/components/notes_editor/component.rs src/main_sections/day_page_view.rs tests/notes_devtools_state_contract.rs" in /Users/johnlindquist/dev/script-kit-gpui
+ succeeded in 0ms:
+src/components/notes_editor/component.rs:97:            state.set_selection(cursor, cursor, window, cx);
+src/components/notes_editor/component.rs:132:            state.set_selection(cursor, cursor, window, cx);
+src/components/notes_editor/component.rs:146:    pub fn set_selection(
+src/components/notes_editor/component.rs:154:            state.set_selection(start, end, window, cx);
+src/main_sections/day_page_view.rs:167:                    editor.set_selection(normalized_cursor, normalized_cursor, window, cx);
+src/main_sections/day_page_view.rs:177:                editor.set_selection(cursor, cursor, window, cx);
+vendor/gpui-component/crates/ui/src/input/state.rs:1011:    pub fn set_selection(
+vendor/gpui-component/crates/ui/src/input/state.rs:1560:    pub(crate) fn scroll_to(
+
+hook: PostToolUse
+hook: PostToolUse Completed
+hook: PostToolUse Completed
+exec
+/bin/zsh -lc 'git status --short' in /Users/johnlindquist/dev/script-kit-gpui
+ succeeded in 0ms:
+git: warning: confstr() failed with code 5: couldn't get path of DARWIN_USER_TEMP_DIR; using /tmp instead
+ M .claude/imps/README.md
+ M .claude/imps/bin/project-imp.ts
+ M .claude/imps/lib/appserver.ts
+ M .claude/imps/lib/imp.ts
+ M FEATURES.md
+ M GLOSSARY.md
+ M docs/adr/0004-clipboard-sediment.md
+ D scripts/agentic/clipboard-post-copy-menu-probe.ts
+ M scripts/agentic/day-page-perf-probe.ts
+ M scripts/agentic/day-page-today-feature-probe.ts
+ M scripts/agentic/notes-day-page-switcher-probe.ts
+ M scripts/config-cli.ts
+ M scripts/config-schema.ts
+ M src/actions/builders.rs
+ M src/actions/builders/notes.rs
+ M src/actions/mod.rs
+ M src/app_impl/startup_new_actions.rs
+ M src/brain/indexer.rs
+ M src/brain/substrate/day.rs
+ M src/brain/substrate/mod.rs
+ M src/clipboard_history/database.rs
+ M src/clipboard_history/db_worker/db_impl.rs
+ M src/clipboard_history/mod.rs
+ M src/clipboard_history/monitor.rs
+ D src/clipboard_history/post_copy.rs
+ M src/clipboard_history/sediment.rs
+ M src/components/notes_editor/component.rs
+ M src/config/config_tests/mod.rs
+ M src/config/loader.rs
+ M src/config/types.rs
+ M src/day_page/document.rs
+ M src/day_page/sediment.rs
+ M src/main_entry/app_run_setup.rs
+ M src/main_entry/preflight.rs
+ M src/main_sections/day_page_actions.rs
+ M src/main_sections/day_page_switcher.rs
+ M src/main_sections/day_page_types.rs
+ M src/main_sections/day_page_view.rs
+ M src/notes/mod.rs
+ M src/notes/storage.rs
+ M src/notes/window.rs
+ M src/notes/window/init.rs
+ M src/notes/window/notes.rs
+ M src/notes/window/panels.rs
+ M src/notes/window/window_ops.rs
+ M src/script_creation/mod.rs
+ M tests/clipboard_sediment_no_popup_contract.rs
+?? .fusion-runs/
+?? scripts/agentic/clipboard-deeplink-brain-probe.ts
+?? scripts/agentic/clipboard-sediment-no-popup-probe.ts
+?? scripts/agentic/day-editor-bottom-focus-probe.ts
+?? src/clipboard_history/uri.rs
+?? src/notes/day_switcher.rs
+
+hook: PostToolUse
+hook: PostToolUse Completed
+exec
+/bin/zsh -lc "sed -n '995,1045p' vendor/gpui-component/crates/ui/src/input/state.rs" in /Users/johnlindquist/dev/script-kit-gpui
+exec
+/bin/zsh -lc "sed -n '1548,1598p' vendor/gpui-component/crates/ui/src/input/state.rs" in /Users/johnlindquist/dev/script-kit-gpui
+ succeeded in 0ms:
+            px(0.)
+        } else {
+            offset.y.clamp(safe_y_range.start, safe_y_range.end)
+        };
+        offset.x = offset.x.clamp(safe_x_range.start, safe_x_range.end);
+        self.scroll_handle.set_offset(offset);
+        cx.notify();
+    }
+
+    /// Scroll to make the given offset visible.
+    ///
+    /// If `direction` is Some, will keep edges at the same side.
+    pub(crate) fn scroll_to(
+        &mut self,
+        offset: usize,
+        direction: Option<MoveDirection>,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(last_layout) = self.last_layout.as_ref() else {
+            return;
+        };
+        let Some(bounds) = self.last_bounds.as_ref() else {
+            return;
+        };
+
+        let mut scroll_offset = self.scroll_handle.offset();
+        let was_offset = scroll_offset;
+        let line_height = last_layout.line_height;
+
+        let point = self.text.offset_to_point(offset);
+
+        let row = point.row;
+
+        let mut row_offset_y = px(0.);
+        for (ix, wrap_line) in self.text_wrapper.lines.iter().enumerate() {
+            if ix == row {
+                break;
+            }
+
+            row_offset_y += wrap_line.height(line_height);
+        }
+
+        // Apart from left alignment, just leave enough space for the cursor size on the right side.
+        let safety_margin = if last_layout.text_align == TextAlign::Left {
+            RIGHT_MARGIN
+        } else {
+            CURSOR_WIDTH
+        };
+        if let Some(line) = last_layout
+            .lines
+            .get(row.saturating_sub(last_layout.visible_range.start))
+
+ succeeded in 0ms:
+        self.update_preferred_column();
+        self.focus(window, cx);
+    }
+
+    /// Focus the input field.
+    pub fn focus(&self, window: &mut Window, cx: &mut Context<Self>) {
+        self.focus_handle.focus(window, cx);
+        self.blink_cursor.update(cx, |cursor, cx| {
+            cursor.start(cx);
+        });
+    }
+
+    /// Set the selection range using byte offsets.
+    ///
+    /// Selects text from `start` to `end` and positions the cursor at `end`.
+    /// The offsets are clamped to valid bounds within the text.
+    pub fn set_selection(
+        &mut self,
+        start: usize,
+        end: usize,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let start = start.min(self.text.len());
+        let end = end.min(self.text.len());
+        self.selected_range = (start..end).into();
+        self.selection_reversed = false;
+        self.scroll_to(end, None, cx);
+        self.focus(window, cx);
+        cx.notify();
+    }
+
+    /// Get the current selection as a byte offset range.
+    pub fn selection(&self) -> std::ops::Range<usize> {
+        self.selected_range.start..self.selected_range.end
+    }
+
+    pub(super) fn select_left(&mut self, _: &SelectLeft, _: &mut Window, cx: &mut Context<Self>) {
+        self.select_to(self.previous_boundary(self.cursor()), cx);
+    }
+
+    pub(super) fn select_right(&mut self, _: &SelectRight, _: &mut Window, cx: &mut Context<Self>) {
+        self.select_to(self.next_boundary(self.cursor()), cx);
+    }
+
+    pub(super) fn select_up(&mut self, _: &SelectUp, _: &mut Window, cx: &mut Context<Self>) {
+        if self.mode.is_single_line() {
+            return;
+        }
+        let offset = self.start_of_line().saturating_sub(1);
+        self.select_to(self.previous_boundary(offset), cx);
+
+hook: PostToolUse
+hook: PostToolUse
+exec
+/bin/zsh -lc "sed -n '250,330p' src/app_impl/theme_focus.rs && sed -n '735,775p' src/main_sections/day_page_view.rs && sed -n '230,270p' src/main_sections/gesture_routing.rs && sed -n '235,265p' src/main_sections/day_page_round_trip.rs" in /Users/johnlindquist/dev/script-kit-gpui
+ succeeded in 0ms:
+        // Sync pending target to pending_focus
+        if let Some(request) = self.focus_coordinator.peek_pending() {
+            self.pending_focus = Some(match request.target {
+                focus_coordinator::FocusTarget::MainFilter => FocusTarget::MainFilter,
+                focus_coordinator::FocusTarget::ActionsDialog => FocusTarget::ActionsDialog,
+                focus_coordinator::FocusTarget::ArgPrompt => FocusTarget::AppRoot, // ArgPrompt uses AppRoot
+                focus_coordinator::FocusTarget::PathPrompt => FocusTarget::PathPrompt,
+                focus_coordinator::FocusTarget::FormPrompt => FocusTarget::FormPrompt,
+                focus_coordinator::FocusTarget::EditorPrompt => FocusTarget::EditorPrompt,
+                focus_coordinator::FocusTarget::SelectPrompt => FocusTarget::SelectPrompt,
+                focus_coordinator::FocusTarget::EnvPrompt => FocusTarget::EnvPrompt,
+                focus_coordinator::FocusTarget::DropPrompt => FocusTarget::DropPrompt,
+                focus_coordinator::FocusTarget::TemplatePrompt => FocusTarget::TemplatePrompt,
+                focus_coordinator::FocusTarget::TermPrompt => FocusTarget::TermPrompt,
+                focus_coordinator::FocusTarget::ChatPrompt => FocusTarget::ChatPrompt,
+                focus_coordinator::FocusTarget::AgentChat => FocusTarget::AgentChat,
+                focus_coordinator::FocusTarget::DivPrompt => FocusTarget::AppRoot, // DivPrompt uses AppRoot
+                focus_coordinator::FocusTarget::ScratchPad => FocusTarget::EditorPrompt,
+                focus_coordinator::FocusTarget::QuickTerminal => FocusTarget::TermPrompt,
+            });
+        }
+    }
+
+    /// Apply pending focus if set. Called at the start of render() when window
+    /// is focused. This applies focus exactly once, then clears pending_focus.
+    ///
+    /// Returns true if focus was applied (for logging/debugging).
+    pub(crate) fn apply_pending_focus(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let Some(target) = self.pending_focus.take() else {
+            return false;
+        };
+
+        // Also consume the coordinator's pending request to keep current_cursor_owner
+        // in sync. This is critical for push_overlay/pop_overlay's infer_current_request()
+        // to know what was focused before the overlay opened.
+        self.focus_coordinator.take_pending();
+
+        debug!(target: "FOCUS", focus_target = ?target, "Applying pending focus");
+        match target {
+            FocusTarget::MainFilter => {
+                let input_state = self.gpui_input_state.clone();
+                input_state.update(cx, |state, cx| {
+                    state.focus(window, cx);
+                });
+                self.focused_input = FocusedInput::MainFilter;
+            }
+            FocusTarget::ActionsDialog => {
+                if let Some(ref dialog) = self.actions_dialog {
+                    let fh = dialog.read(cx).focus_handle.clone();
+                    window.focus(&fh, cx);
+                    self.focused_input = FocusedInput::ActionsSearch;
+                }
+            }
+            FocusTarget::EditorPrompt => {
+                if let AppView::DayPage { entity, .. } = &self.current_view {
+                    let entity = entity.clone();
+                    entity.update(cx, |view, cx| view.focus_editor(window, cx));
+                    self.focused_input = FocusedInput::None;
+                } else {
+                    let entity = match &self.current_view {
+                        AppView::EditorPrompt { entity, .. } => Some(entity),
+                        AppView::ScratchPadView { entity, .. } => Some(entity),
+                        _ => None,
+                    };
+                    if let Some(entity) = entity {
+                        let fh = entity.read(cx).focus_handle(cx);
+                        window.focus(&fh, cx);
+                        // EditorPrompt has its own cursor management
+                        self.focused_input = FocusedInput::None;
+                    }
+                }
+            }
+            FocusTarget::PathPrompt => {
+                if let AppView::PathPrompt { focus_handle, .. } = &self.current_view {
+                    let fh = focus_handle.clone();
+                    window.focus(&fh, cx);
+                    // PathPrompt has its own cursor management
+        let substrate = substrate.unwrap_or_else(BrainSubstrate::default_kit);
+        let app_entity = cx.entity();
+
+        // A pending Today → main-menu context round trip holds the live Day
+        // Page entity; re-entering Today resumes it (and abandons the search)
+        // instead of binding a fresh view.
+        if let Some(pending) = self.day_page_context_return.take() {
+            self.restore_day_page_view_after_round_trip(pending.entity, window, cx);
+            return;
+        }
+
+        let entity = if let AppView::DayPage { entity } = &self.current_view {
+            let entity = entity.clone();
+            entity.update(cx, |view, cx| {
+                if let Err(error) = view.rebind_substrate(substrate, window, cx) {
+                    tracing::error!(
+                        target: "script_kit::day_page",
+                        event = "day_page_rebind_failed",
+                        error = %error,
+                    );
+                }
+            });
+            entity
+        } else {
+            let day_page = cx.new(|cx| DayPageView::new(app_entity, substrate, window, cx));
+            day_page.update(cx, |view, cx| view.bind_today(window, cx));
+            day_page
+        };
+
+        entity.update(cx, |view, cx| view.focus_editor(window, cx));
+        self.current_view = AppView::DayPage { entity };
+        self.focused_input = FocusedInput::None;
+        self.rekey_main_automation_surface_from_current_view();
+        self.sync_main_footer_popup(window, cx);
+        cx.notify();
+    }
+
+}
+        cx: &mut Context<Self>,
+    ) {
+        let carry = self.filter_text.clone();
+        if self.day_page_context_return.is_some() {
+            self.set_filter_text_immediate(String::new(), window, cx);
+            self.show_day_page_view(window, cx);
+            return;
+        }
+
+        self.set_filter_text_immediate(String::new(), window, cx);
+        self.show_day_page_view(window, cx);
+        if carry.trim().is_empty() {
+            return;
+        }
+        if let AppView::DayPage { entity } = &self.current_view {
+            let entity = entity.clone();
+            entity.update(cx, |view, cx| {
+                view.append_main_hotkey_carry(carry, window, cx);
+            });
+        }
+    }
+
+    fn return_to_script_list_from_day_page_tap(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.reset_to_script_list(cx);
+        self.set_filter_text_immediate(String::new(), window, cx);
+        self.request_script_list_main_filter_focus(cx);
+        self.rekey_main_automation_surface_from_current_view();
+        self.sync_main_footer_popup(window, cx);
+        cx.notify();
+    }
+}
+                    app.try_cancel_day_page_context_round_trip(window, cx);
+                });
+            });
+        });
+    }
+
+    fn restore_day_page_view_after_round_trip(
+        &mut self,
+        entity: Entity<DayPageView>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.set_filter_text_immediate(String::new(), window, cx);
+        self.current_view = AppView::DayPage {
+            entity: entity.clone(),
+        };
+        self.focused_input = FocusedInput::None;
+        self.rekey_main_automation_surface_from_current_view();
+        entity.update(cx, |view, cx| view.focus_editor(window, cx));
+        self.sync_main_footer_popup(window, cx);
+        cx.notify();
+    }
+}
+
+hook: PostToolUse
+hook: PostToolUse Completed
+hook: PostToolUse Completed
+hook: PostToolUse Completed
+exec
+/bin/zsh -lc "nl -ba src/components/notes_editor/component.rs | sed -n '80,150p'" in /Users/johnlindquist/dev/script-kit-gpui
+exec
+/bin/zsh -lc "nl -ba src/main_sections/day_page_view.rs | sed -n '80,150p;285,350p;750,768p'" in /Users/johnlindquist/dev/script-kit-gpui
+ succeeded in 0ms:
+    80	    pub fn layout(&self) -> NotesEditorLayout {
+    81	        self.layout
+    82	    }
+    83	
+    84	    pub fn set_layout(&mut self, layout: NotesEditorLayout) {
+    85	        self.layout = layout;
+    86	    }
+    87	
+    88	    pub fn focus(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    89	        self.input_state.update(cx, |state, cx| {
+    90	            state.focus(window, cx);
+    91	        });
+    92	    }
+    93	
+    94	    pub fn focus_with_cursor_at_end(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    95	        self.input_state.update(cx, |state, cx| {
+    96	            let cursor = state.value().len();
+    97	            state.set_selection(cursor, cursor, window, cx);
+    98	        });
+    99	    }
+   100	
+   101	    pub fn focus_handle(&self, cx: &App) -> FocusHandle {
+   102	        self.input_state.read(cx).focus_handle(cx)
+   103	    }
+   104	
+   105	    pub fn is_focused(&self, window: &Window, cx: &App) -> bool {
+   106	        self.focus_handle(cx).is_focused(window)
+   107	    }
+   108	
+   109	    pub fn set_value(
+   110	        &mut self,
+   111	        value: impl Into<String>,
+   112	        window: &mut Window,
+   113	        cx: &mut Context<Self>,
+   114	    ) {
+   115	        let value = value.into();
+   116	        self.input_state.update(cx, |state, cx| {
+   117	            state.set_value(value, window, cx);
+   118	        });
+   119	        self.sync_markdown_link_highlights(cx);
+   120	    }
+   121	
+   122	    pub fn load_value_with_cursor_at_end(
+   123	        &mut self,
+   124	        value: impl Into<String>,
+   125	        window: &mut Window,
+   126	        cx: &mut Context<Self>,
+   127	    ) {
+   128	        let value = value.into();
+   129	        let cursor = value.len();
+   130	        self.input_state.update(cx, |state, cx| {
+   131	            state.set_value(value, window, cx);
+   132	            state.set_selection(cursor, cursor, window, cx);
+   133	        });
+   134	        self.sync_markdown_link_highlights(cx);
+   135	    }
+   136	
+   137	    pub fn set_value_with_cursor_at_end(
+   138	        &mut self,
+   139	        text: String,
+   140	        window: &mut Window,
+   141	        cx: &mut Context<Self>,
+   142	    ) {
+   143	        self.load_value_with_cursor_at_end(text, window, cx);
+   144	    }
+   145	
+   146	    pub fn set_selection(
+   147	        &mut self,
+   148	        start: usize,
+   149	        end: usize,
+   150	        window: &mut Window,
+
+ succeeded in 0ms:
+    80	        let now = Utc::now();
+    81	        if let Err(error) = self.session.bind_today(now) {
+    82	            tracing::error!(error = %error, "Failed to bind today's day page");
+    83	            return;
+    84	        }
+    85	        self.apply_loaded_content_to_editor(window, cx);
+    86	    }
+    87	
+    88	    fn apply_loaded_content_to_editor(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    89	        let content = self.session.disk_content().to_string();
+    90	        self.reset_day_page_spine_handoff_state(true, true);
+    91	        self.refresh_fragment_open_targets(&content);
+    92	        // Loads are not typing: pre-set the length so the Change event this
+    93	        // emits cannot read as growth and auto-swap to the main menu.
+    94	        self.last_editor_content_len = content.len();
+    95	        self.notes_editor.update(cx, |editor, cx| {
+    96	            editor.load_value_with_cursor_at_end(content, window, cx);
+    97	        });
+    98	        self.sync_footer(window, cx);
+    99	    }
+   100	
+   101	    fn refresh_fragment_open_targets(&mut self, content: &str) {
+   102	        let Some(day_path) = self.session.path().cloned() else {
+   103	            self.fragment_open_targets.clear();
+   104	            return;
+   105	        };
+   106	        if self.session.is_viewing_fragment() {
+   107	            self.fragment_open_targets.clear();
+   108	            return;
+   109	        }
+   110	
+   111	        self.fragment_open_targets = parse_day_page_segments(content)
+   112	            .into_iter()
+   113	            .filter_map(|segment| match segment {
+   114	                DayPageSegment::FragmentRef { relative_link, .. } => {
+   115	                    resolve_fragment_path(&day_path, &relative_link)
+   116	                }
+   117	                _ => None,
+   118	            })
+   119	            .collect();
+   120	    }
+   121	
+   122	    pub fn open_fragment_at(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {
+   123	        let Some(fragment_path) = self.fragment_open_targets.get(index).cloned() else {
+   124	            return;
+   125	        };
+   126	        let now = Utc::now();
+   127	        if let Err(error) = self.session.bind_fragment(fragment_path, now) {
+   128	            tracing::error!(error = %error, "Failed to open fragment from day page");
+   129	            return;
+   130	        }
+   131	        self.apply_loaded_content_to_editor(window, cx);
+   132	        self.focus_editor(window, cx);
+   133	        cx.notify();
+   134	    }
+   135	
+   136	    pub fn return_to_day_page(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+   137	        let now = Utc::now();
+   138	        if let Err(error) = self.session.return_to_day(now) {
+   139	            tracing::error!(error = %error, "Failed to return to day page from fragment");
+   140	            return;
+   141	        }
+   142	        self.apply_loaded_content_to_editor(window, cx);
+   143	        self.focus_editor(window, cx);
+   144	        cx.notify();
+   145	    }
+   146	
+   147	    fn on_editor_change(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+   148	        self.notes_editor
+   149	            .update(cx, |editor, cx| editor.sync_markdown_link_highlights(cx));
+   150	        let previous = self.session.disk_content().to_string();
+   285	    pub(crate) fn automation_input_value(&self, cx: &App) -> String {
+   286	        self.notes_editor.read(cx).content(cx)
+   287	    }
+   288	
+   289	    pub fn focus_editor(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+   290	        self.focus_editor_at_end(window, cx);
+   291	        let day_page = cx.entity().downgrade();
+   292	        window.defer(cx, move |window, cx| {
+   293	            let Some(day_page) = day_page.upgrade() else {
+   294	                return;
+   295	            };
+   296	            day_page.update(cx, |view, cx| {
+   297	                view.focus_editor_at_end(window, cx);
+   298	            });
+   299	        });
+   300	    }
+   301	
+   302	    fn focus_editor_at_end(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+   303	        self.notes_editor.update(cx, |editor, cx| {
+   304	            editor.focus_with_cursor_at_end(window, cx);
+   305	        });
+   306	    }
+   307	
+   308	    pub fn set_input(&mut self, text: String, window: &mut Window, cx: &mut Context<Self>) {
+   309	        self.notes_editor.update(cx, |editor, cx| {
+   310	            editor.set_value_with_cursor_at_end(text.clone(), window, cx);
+   311	        });
+   312	        self.session.apply_editor_content(&text);
+   313	        self.refresh_fragment_open_targets(&text);
+   314	        self.reset_day_page_spine_handoff_state(false, true);
+   315	        self.sync_footer(window, cx);
+   316	        cx.notify();
+   317	    }
+   318	
+   319	    pub(crate) fn append_main_hotkey_carry(
+   320	        &mut self,
+   321	        text: String,
+   322	        window: &mut Window,
+   323	        cx: &mut Context<Self>,
+   324	    ) {
+   325	        let text = normalize_day_page_markdown_references(text.trim());
+   326	        if text.is_empty() {
+   327	            return;
+   328	        }
+   329	
+   330	        let mut content = self.notes_editor.read(cx).content(cx);
+   331	        if !content.is_empty() && !content.ends_with('\n') {
+   332	            content.push('\n');
+   333	        }
+   334	        content.push_str(&text);
+   335	
+   336	        self.last_editor_content_len = content.len();
+   337	        self.notes_editor.update(cx, |editor, cx| {
+   338	            editor.set_value_with_cursor_at_end(content.clone(), window, cx);
+   339	        });
+   340	        self.session.apply_editor_content(&content);
+   341	        self.refresh_fragment_open_targets(&content);
+   342	        self.reset_day_page_spine_handoff_state(false, true);
+   343	        self.schedule_autosave_flush(cx);
+   344	        self.sync_footer(window, cx);
+   345	        self.focus_editor(window, cx);
+   346	        cx.notify();
+   347	    }
+   348	
+   349	    fn reset_day_page_spine_handoff_state(&mut self, clear_cwd_anchor: bool, clear_mentions: bool) {
+   350	        self.spine_handoff.reset(clear_cwd_anchor, clear_mentions);
+   750	                    tracing::error!(
+   751	                        target: "script_kit::day_page",
+   752	                        event = "day_page_rebind_failed",
+   753	                        error = %error,
+   754	                    );
+   755	                }
+   756	            });
+   757	            entity
+   758	        } else {
+   759	            let day_page = cx.new(|cx| DayPageView::new(app_entity, substrate, window, cx));
+   760	            day_page.update(cx, |view, cx| view.bind_today(window, cx));
+   761	            day_page
+   762	        };
+   763	
+   764	        entity.update(cx, |view, cx| view.focus_editor(window, cx));
+   765	        self.current_view = AppView::DayPage { entity };
+   766	        self.focused_input = FocusedInput::None;
+   767	        self.rekey_main_automation_surface_from_current_view();
+   768	        self.sync_main_footer_popup(window, cx);
+
+hook: PostToolUse
+hook: PostToolUse
+exec
+/bin/zsh -lc "nl -ba src/main_sections/day_page_switcher.rs | sed -n '160,260p'" in /Users/johnlindquist/dev/script-kit-gpui
+ succeeded in 0ms:
+   160	    fn wire_note_switcher_activation(&mut self, window: &Window, cx: &mut Context<Self>) {
+   161	        let Some(dialog) = self.note_switcher.dialog().cloned() else {
+   162	            return;
+   163	        };
+   164	        let resize_dialog = dialog.clone();
+   165	        let day_page = cx.entity().downgrade();
+   166	        let day_window = window.window_handle();
+   167	        let on_close_day_page = day_page.clone();
+   168	        dialog.update(cx, |dialog, _cx| {
+   169	            dialog.set_on_close(std::sync::Arc::new(move |cx| {
+   170	                let day_page = on_close_day_page.clone();
+   171	                cx.defer(move |cx| {
+   172	                    let _ = day_window.update(cx, |_root, window, cx| {
+   173	                        let Some(day_page) = day_page.upgrade() else {
+   174	                            return;
+   175	                        };
+   176	                        day_page.update(cx, |view, cx| {
+   177	                            view.note_switcher.mark_closed_externally();
+   178	                            view.focus_editor(window, cx);
+   179	                        });
+   180	                    });
+   181	                });
+   182	            }));
+   183	            dialog.set_on_activation(std::sync::Arc::new(move |activation, _window, cx| {
+   184	                match activation {
+   185	                    crate::actions::ActionsDialogActivation::Executed { action_id, .. } => {
+   186	                        let day_page = day_page.clone();
+   187	                        cx.defer(move |cx| {
+   188	                            let _ = day_window.update(cx, |_root, window, cx| {
+   189	                                let Some(day_page) = day_page.upgrade() else {
+   190	                                    return;
+   191	                                };
+   192	                                day_page.update(cx, |view, cx| {
+   193	                                    view.execute_note_switcher_action(&action_id, window, cx);
+   194	                                });
+   195	                            });
+   196	                        });
+   197	                    }
+   198	                    crate::actions::ActionsDialogActivation::DrillDownPushed { .. } => {
+   199	                        crate::actions::resize_actions_window(cx, &resize_dialog);
+   200	                    }
+   201	                    crate::actions::ActionsDialogActivation::NoSelection => {}
+   202	                }
+   203	            }));
+   204	        });
+   205	    }
+   206	
+   207	    fn execute_note_switcher_action(
+   208	        &mut self,
+   209	        action_id: &str,
+   210	        window: &mut Window,
+   211	        cx: &mut Context<Self>,
+   212	    ) {
+   213	        self.note_switcher.close(cx);
+   214	        if let Some(date) = action_id.strip_prefix("daypage_") {
+   215	            if let Ok(date) = chrono::NaiveDate::parse_from_str(date, "%Y-%m-%d") {
+   216	                self.bind_day(date, window, cx);
+   217	                self.focus_editor(window, cx);
+   218	            }
+   219	            return;
+   220	        }
+   221	        let Some(note_id_text) = action_id.strip_prefix("note_") else {
+   222	            return;
+   223	        };
+   224	        if let Some(date) = crate::notes::day_switcher::parse_day_note_action_id(note_id_text) {
+   225	            self.bind_day(date, window, cx);
+   226	            self.focus_editor(window, cx);
+   227	            return;
+   228	        }
+   229	        if let Some(note_id) = crate::notes::NoteId::parse(note_id_text) {
+   230	            let Ok(Some(note)) = crate::notes::get_note(note_id) else {
+   231	                return;
+   232	            };
+   233	            let path = crate::notes::note_file_path(note.id).ok().flatten();
+   234	            if let Err(error) = self.session.bind_note_content(
+   235	                note.id.as_str().to_string(),
+   236	                note.title.clone(),
+   237	                note.content.clone(),
+   238	                path,
+   239	                Utc::now(),
+   240	            ) {
+   241	                tracing::error!(
+   242	                    target: "script_kit::day_page",
+   243	                    error = %error,
+   244	                    "day_page_note_switcher_bind_note_failed"
+   245	                );
+   246	                return;
+   247	            }
+   248	            self.apply_loaded_content_to_editor(window, cx);
+   249	            self.focus_editor(window, cx);
+   250	            cx.notify();
+   251	        }
+   252	    }
+   253	
+   254	    pub(crate) fn close_day_switcher(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+   255	        self.day_switcher = None;
+   256	        self.note_switcher.close(cx);
+   257	        self.focus_editor(window, cx);
+   258	        cx.notify();
+   259	    }
+   260	
+
+hook: PostToolUse
+exec
+/bin/zsh -lc "nl -ba vendor/gpui-component/crates/ui/src/input/state.rs | sed -n '1008,1026p;1558,1568p'" in /Users/johnlindquist/dev/script-kit-gpui
+exec
+/bin/zsh -lc "nl -ba scripts/agentic/day-editor-bottom-focus-probe.ts | sed -n '1,155p'" in /Users/johnlindquist/dev/script-kit-gpui
+ succeeded in 0ms:
+     1	#!/usr/bin/env bun
+     2	import { mkdirSync, writeFileSync } from "node:fs";
+     3	import { dirname } from "node:path";
+     4	import { Driver, type Json } from "../devtools/driver";
+     5	
+     6	const binary =
+     7	  process.env.PROBE_BINARY ??
+     8	  "target-agent/artifacts/day-editor-bottom-scroll/script-kit-gpui";
+     9	
+    10	const receipt: Record<string, Json> = {};
+    11	const failures: string[] = [];
+    12	
+    13	function check(name: string, ok: boolean, detail: Json = {}) {
+    14	  receipt[name] = { ok, ...detail };
+    15	  if (!ok) failures.push(name);
+    16	}
+    17	
+    18	function walk(node: unknown, out: Json[] = []): Json[] {
+    19	  if (!node || typeof node !== "object") return out;
+    20	  if (Array.isArray(node)) {
+    21	    for (const child of node) walk(child, out);
+    22	    return out;
+    23	  }
+    24	  const json = node as Json;
+    25	  if (typeof json.semanticId === "string" || typeof json.id === "string") out.push(json);
+    26	  for (const value of Object.values(json)) walk(value, out);
+    27	  return out;
+    28	}
+    29	
+    30	function findSemantic(elements: Json, semanticId: string): Json | null {
+    31	  return walk(elements).find((el) => el.semanticId === semanticId) ?? null;
+    32	}
+    33	
+    34	function editorRuntime(editor: Json | null): Json | null {
+    35	  const runtime = editor?.style?.editorRuntime;
+    36	  return runtime && typeof runtime === "object" ? (runtime as Json) : null;
+    37	}
+    38	
+    39	function scrollMetrics(editor: Json | null): Json | null {
+    40	  const metrics = editorRuntime(editor)?.editorScrollMetrics;
+    41	  return metrics && typeof metrics === "object" ? (metrics as Json) : null;
+    42	}
+    43	
+    44	function isAtBottom(metrics: Json | null): boolean {
+    45	  const scrollTop = Number(metrics?.scrollTop ?? -1);
+    46	  const liveScrollTop = Number(metrics?.liveScrollTop ?? scrollTop);
+    47	  const maxScrollTop = Number(metrics?.maxScrollTop ?? -1);
+    48	  return maxScrollTop >= 0 && Math.max(scrollTop, liveScrollTop) >= maxScrollTop - 6;
+    49	}
+    50	
+    51	async function mainElements(driver: Driver): Promise<Json> {
+    52	  return (await driver.getElements(
+    53	    { target: { type: "main" }, limit: 160 },
+    54	    { timeoutMs: 5000 },
+    55	  )) as Json;
+    56	}
+    57	
+    58	async function openDayWithComma(driver: Driver) {
+    59	  await driver.batch([{ type: "setInput", text: "," }], { timeoutMs: 5000 });
+    60	  await Bun.sleep(200);
+    61	  driver.simulateKey("enter");
+    62	  await driver.waitForState({ windowVisible: true, promptType: "dayPage" }, { timeoutMs: 8000 });
+    63	  await Bun.sleep(600);
+    64	}
+    65	
+    66	function longDayText(): string {
+    67	  const lines = ["# Bottom focus probe", ""];
+    68	  for (let i = 1; i <= 140; i += 1) {
+    69	    lines.push(`- probe line ${i.toString().padStart(3, "0")} should overflow the Day editor`);
+    70	  }
+    71	  lines.push("", "final probe line");
+    72	  return `${lines.join("\n")}\n`;
+    73	}
+    74	
+    75	function todayLocalDate(): string {
+    76	  const now = new Date();
+    77	  const y = now.getFullYear();
+    78	  const m = String(now.getMonth() + 1).padStart(2, "0");
+    79	  const d = String(now.getDate()).padStart(2, "0");
+    80	  return `${y}-${m}-${d}`;
+    81	}
+    82	
+    83	const driver = await Driver.launch({
+    84	  binary,
+    85	  sandboxHome: true,
+    86	  sessionName: "day-editor-bottom-focus",
+    87	  defaultTimeoutMs: 9000,
+    88	  env: {
+    89	    SCRIPT_KIT_PANEL_INVARIANTS_ALLOW_MISMATCH: "1",
+    90	    SCRIPT_KIT_BRAIN_TZ: "America/Denver",
+    91	  },
+    92	});
+    93	
+    94	try {
+    95	  const daysFile = `${driver.sessionDir}/home/.scriptkit/brain/days/${todayLocalDate()}.md`;
+    96	  mkdirSync(dirname(daysFile), { recursive: true });
+    97	  writeFileSync(daysFile, longDayText());
+    98	
+    99	  await openDayWithComma(driver);
+   100	  let elements = await mainElements(driver);
+   101	  let editor = findSemantic(elements, "input:day-page-editor");
+   102	  let metrics = scrollMetrics(editor);
+   103	  check("opened_day_page_focused_editor", elements.focusedSemanticId === "input:day-page-editor", {
+   104	    focusedSemanticId: elements.focusedSemanticId ?? null,
+   105	  });
+   106	  check("opened_day_page_loaded_long_content", String(editor?.value ?? "").includes("final probe line"), {
+   107	    valueLength: typeof editor?.value === "string" ? editor.value.length : null,
+   108	  });
+   109	  check("opened_day_page_scrolls_to_bottom", isAtBottom(metrics), { metrics });
+   110	
+   111	  driver.simulateKey("pageup");
+   112	  await Bun.sleep(300);
+   113	  elements = await mainElements(driver);
+   114	  const pageUpMetrics = scrollMetrics(findSemantic(elements, "input:day-page-editor"));
+   115	  check("pageup_moves_away_from_bottom", !isAtBottom(pageUpMetrics), { metrics: pageUpMetrics });
+   116	
+   117	  driver.simulateKey("k", ["cmd"]);
+   118	  await Bun.sleep(600);
+   119	  driver.simulateKey("escape");
+   120	  await driver.waitForState({ promptType: "dayPage" }, { timeoutMs: 5000 });
+   121	  await Bun.sleep(700);
+   122	  elements = await mainElements(driver);
+   123	  editor = findSemantic(elements, "input:day-page-editor");
+   124	  metrics = scrollMetrics(editor);
+   125	  check("actions_escape_refocuses_day_editor", elements.focusedSemanticId === "input:day-page-editor", {
+   126	    focusedSemanticId: elements.focusedSemanticId ?? null,
+   127	  });
+   128	  check("actions_escape_scrolls_back_to_bottom", isAtBottom(metrics), { metrics });
+   129	
+   130	  driver.simulateKey("pageup");
+   131	  await Bun.sleep(250);
+   132	  driver.simulateKey("escape");
+   133	  await Bun.sleep(500);
+   134	  await openDayWithComma(driver);
+   135	  elements = await mainElements(driver);
+   136	  editor = findSemantic(elements, "input:day-page-editor");
+   137	  metrics = scrollMetrics(editor);
+   138	  check("reopened_day_page_refocuses_editor", elements.focusedSemanticId === "input:day-page-editor", {
+   139	    focusedSemanticId: elements.focusedSemanticId ?? null,
+   140	  });
+   141	  check("reopened_day_page_scrolls_to_bottom", isAtBottom(metrics), { metrics });
+   142	} finally {
+   143	  await driver.close();
+   144	}
+   145	
+   146	const output = {
+   147	  pass: failures.length === 0,
+   148	  failures,
+   149	  binary,
+   150	  sessionDir: driver.sessionDir,
+   151	  appLog: driver.logPath,
+   152	  receipt,
+   153	};
+   154	
+   155	console.log(JSON.stringify(output, null, 2));
+
+ succeeded in 0ms:
+  1008	    ///
+  1009	    /// Selects text from `start` to `end` and positions the cursor at `end`.
+  1010	    /// The offsets are clamped to valid bounds within the text.
+  1011	    pub fn set_selection(
+  1012	        &mut self,
+  1013	        start: usize,
+  1014	        end: usize,
+  1015	        window: &mut Window,
+  1016	        cx: &mut Context<Self>,
+  1017	    ) {
+  1018	        let start = start.min(self.text.len());
+  1019	        let end = end.min(self.text.len());
+  1020	        self.selected_range = (start..end).into();
+  1021	        self.selection_reversed = false;
+  1022	        self.scroll_to(end, None, cx);
+  1023	        self.focus(window, cx);
+  1024	        cx.notify();
+  1025	    }
+  1026	
+  1558	    ///
+  1559	    /// If `direction` is Some, will keep edges at the same side.
+  1560	    pub(crate) fn scroll_to(
+  1561	        &mut self,
+  1562	        offset: usize,
+  1563	        direction: Option<MoveDirection>,
+  1564	        cx: &mut Context<Self>,
+  1565	    ) {
+  1566	        let Some(last_layout) = self.last_layout.as_ref() else {
+  1567	            return;
+  1568	        };
+
+hook: PostToolUse
+hook: PostToolUse
+exec
+/bin/zsh -lc "nl -ba /Users/johnlindquist/.codex/memories/MEMORY.md | sed -n '55,74p'" in /Users/johnlindquist/dev/script-kit-gpui
+ succeeded in 0ms:
+    55	
+    56	## User preferences
+    57	
+    58	- when the user asked to `integrate our "day" mode with agent chat so people can quickly ask a questions about "Today's brain", discuss it, then bring that info back into the "Today" and implement it` -> preserve the full Day -> chat -> append-back round trip instead of stopping at a one-way chat launch [Task 1]
+    59	- when the user said `Use $script-kit-devtools to verify` or `Implement and verify with $script-kit-devtools` -> treat runtime proof as the acceptance bar for Day Page and Notes behavior, not optional follow-up [Task 1][Task 2]
+    60	- when the user said `prevent the notes window's cmd+p from every opening the "day" view` and clarified the Day view is just a quick today surface -> treat Notes and Day Page as separate experiences and avoid cross-surface handoff by default [Task 2]
+    61	- when the user said `Remove the "Save" button from the footer of the "day" view. It autosaves` -> assume Day Page autosave is the source of truth and avoid advertising a manual Save footer action [Task 3]
+    62	- when the user said `please make sure the feature where we track the copy to add to the brain doesn't use the popup anymore` and asked if the old component was removed too -> default clipboard-to-brain work to no-popup behavior and delete dead feature-owned popup machinery instead of leaving it dormant [Task 4]
+    63	- when the user said `I thought our ./dev.sh script was supposed to ensure it` -> treat startup helpers as readiness gates that must leave the expected repo-local artifact on disk before launch, not as background best-effort work [Task 5]
+    64	
+    65	## Reusable knowledge
+    66	
+    67	- The Day Page round trip works best by reusing the existing Agent Chat return-origin plumbing: launch normal Agent Chat with Today context, then expose a Day-only append-back action that writes the latest assistant response into the bound day file [Task 1]
+    68	- `DayPageDocumentSession` now has an external append helper that targets the currently bound day file instead of wall-clock today, which matters for return-to-Today flows [Task 1]
+    69	- `openAiWithMockData` is a provider-free runtime proof path, but it must keep the embedded Agent Chat surface active; treat it as a stdin command to send and then poll for state rather than as a request/response call [Task 1]
+    70	- The Notes Cmd+P seam lives in `src/notes/window/panels.rs`; the durable no-crossover fix is to stop injecting `daypage_` rows in `open_browse_panel` and fail closed in `execute_note_switcher_action` if a stale `daypage_` id appears [Task 2]
+    71	- `src/main_sections/day_page_switcher.rs` already owns main-window Day Page day navigation, so keeping Notes Cmd+P Notes-only is cleaner than trying to make day pages behave like notes [Task 2]
+    72	- `fusion-high` can fail before panel work with `auth.login_required`; `fusion-high --list-providers` plus `--only` on the remaining providers is the useful recovery path when one provider is not logged in [Task 2]
+    73	- `src/main_sections/day_page_view.rs` owns Day Page footer buttons; removing the Save affordance also made the Day Page-specific `FooterAction::Run` branch in `src/app_impl/ui_window.rs` obsolete [Task 3]
+    74	- Clipboard-to-brain storage still lives in `src/clipboard_history/sediment.rs`; the removed piece was the feature-owned popup path, while startup now calls `clipboard_history::install_post_copy_tracker(cx)` [Task 4]
+
+hook: PostToolUse
+hook: PostToolUse Completed
+hook: PostToolUse Completed
+hook: PostToolUse Completed
+hook: PostToolUse Completed
+hook: PostToolUse Completed
+hook: PostToolUse Completed
+codex
+I found one important nuance: `InputState::set_selection` is the right primitive because it both focuses and calls `scroll_to`, but `scroll_to` is a no-op until layout/bounds exist. That makes the Day-owned deferred repeat the core of the design, not just a belt-and-suspenders retry.
+exec
+/bin/zsh -lc "nl -ba /Users/johnlindquist/.codex/memories/MEMORY.md | sed -n '13,32p'" in /Users/johnlindquist/dev/script-kit-gpui
+ succeeded in 0ms:
+    13	- day page, agent chat, today, brain, script-kit-devtools, return origin, append-back, openAiWithMockData, external append, DayPageDocumentSession
+    14	
+    15	## Task 2: Prevent Notes Cmd+P from opening Day Page, success
+    16	
+    17	### rollout_summary_files
+    18	
+    19	- rollout_summaries/2026-06-14T07-30-12-WKva-notes_cmdp_no_daypage_cross_over.md (cwd=/Users/johnlindquist/dev/script-kit-gpui, rollout_path=/Users/johnlindquist/.codex/sessions/2026/06/14/rollout-2026-06-14T01-30-12-019ec509-c475-7180-b11d-bc9f45883b54.jsonl, updated_at=2026-06-14T07:43:46+00:00, thread_id=019ec509-c475-7180-b11d-bc9f45883b54, Notes switcher no longer offers or routes `daypage_` rows)
+    20	- rollout_summaries/2026-06-14T05-10-27-E4R1-fusion_high_notes_day_page_refactor_and_day_footer_save_remo.md (cwd=/Users/johnlindquist/dev/script-kit-gpui, rollout_path=/Users/johnlindquist/.codex/sessions/2026/06/13/rollout-2026-06-13T23-10-27-019ec489-d1e7-7971-8daf-bdb8c417dd87.jsonl, updated_at=2026-06-14T07:33:08+00:00, thread_id=019ec489-d1e7-7971-8daf-bdb8c417dd87, `fusion-high` design pass grounded the eventual no-crossover implementation)
+    21	
+    22	### keywords
+    23	
+    24	- notes cmd+p, daypage_, open_browse_panel, execute_note_switcher_action, notes_note_switcher_day_page_action_ignored, notes-day-page-switcher-probe, fusion-high, auth.login_required
+    25	
+    26	## Task 3: Remove the Day Page footer Save button because Day autosaves, success
+    27	
+    28	### rollout_summary_files
+    29	
+    30	- rollout_summaries/2026-06-14T05-10-27-E4R1-fusion_high_notes_day_page_refactor_and_day_footer_save_remo.md (cwd=/Users/johnlindquist/dev/script-kit-gpui, rollout_path=/Users/johnlindquist/.codex/sessions/2026/06/13/rollout-2026-06-13T23-10-27-019ec489-d1e7-7971-8daf-bdb8c417dd87.jsonl, updated_at=2026-06-14T07:33:08+00:00, thread_id=019ec489-d1e7-7971-8daf-bdb8c417dd87, Day Page footer now advertises `Actions` only and no manual Save button)
+    31	
+    32	### keywords
+
+hook: PostToolUse
+hook: PostToolUse Completed
+codex
+## Role Findings
+
+The candidate plan is the right minimal shape: keep the new capability as a shared `NotesEditor` primitive, but make the retry policy Day-owned.
+
+Use `NotesEditor::focus_with_cursor_at_end` to call `InputState::set_selection(value.len(), value.len(), window, cx)`. That is the correct primitive because `set_selection` both focuses and asks the input to reveal the cursor.
+
+Then make [DayPageView::focus_editor](/Users/johnlindquist/dev/script-kit-gpui/src/main_sections/day_page_view.rs:289) call it immediately and once again via `window.defer`. The immediate call covers already-laid-out reopen/popup cases. The deferred call covers first mount/rebind, where input layout and bounds may not exist yet.
+
+Do not change Notes window focus behavior. The helper is safe because it is inert until invoked, and only Day Page should switch from `focus()` to `focus_with_cursor_at_end()`.
+
+## Evidence And Assumptions
+
+`InputState::set_selection` sets the byte selection, calls `scroll_to(end, None, cx)`, focuses, then notifies at [state.rs](/Users/johnlindquist/dev/script-kit-gpui/vendor/gpui-component/crates/ui/src/input/state.rs:1011).
+
+`scroll_to` returns early without `last_layout` and `last_bounds` at [state.rs](/Users/johnlindquist/dev/script-kit-gpui/vendor/gpui-component/crates/ui/src/input/state.rs:1560), so a post-layout repeat is required for reliable first-open behavior.
+
+Current Day Page load paths already place content cursor at end via [apply_loaded_content_to_editor](/Users/johnlindquist/dev/script-kit-gpui/src/main_sections/day_page_view.rs:88), and main Day open/reopen calls `focus_editor` at [day_page_view.rs](/Users/johnlindquist/dev/script-kit-gpui/src/main_sections/day_page_view.rs:764). Popup close and Day switcher actions also return through `focus_editor` in [day_page_switcher.rs](/Users/johnlindquist/dev/script-kit-gpui/src/main_sections/day_page_switcher.rs:169).
+
+The best helper name is `focus_with_cursor_at_end`. I would not call it `scroll_to_bottom`, because the behavior is cursor-driven and relies on editor selection semantics.
+
+## Failure Modes
+
+Empty and short files should pass naturally: cursor `0` or content length reveals no scrollable overflow, but focus still lands on `input:day-page-editor`.
+
+Long files are the real case: assert `focusedSemanticId === "input:day-page-editor"` and `editorScrollMetrics.maxScrollTop > 0`, then `scrollTop/liveScrollTop >= maxScrollTop - tolerance`.
+
+Past day, note, and fragment rebinding should all be covered by callers that run `apply_loaded_content_to_editor` followed by `focus_editor`. If any bind path only loads and not focuses, fix that caller rather than broadening Notes behavior.
+
+Popup Escape is important because user may manually page up, open actions, Escape, and expect Day Page to resume at the journal insertion point. The deferred focus should intentionally pull back to bottom.
+
+Risk: external disk refresh currently uses `set_value`, not cursor-at-end. I would not auto-focus there unless the user-visible intent is “external refresh steals focus and bottom-scrolls.” That is different from open/reopen/rebind.
+
+## Recommendation
+
+Implement exactly this minimal patch:
+
+1. Add `NotesEditor::focus_with_cursor_at_end`.
+2. Change only `DayPageView::focus_editor` to call a private `focus_editor_at_end` immediately and again with `window.defer`.
+3. Keep `load_value_with_cursor_at_end` unchanged.
+4. Ensure every Day Page open/reopen/rebind/popup-close path calls `focus_editor` after content binding.
+
+Smallest proof:
+
+```bash
+SCRIPT_KIT_AGENT_ARTIFACT_NAME=day-editor-bottom-scroll ./scripts/agentic/agent-cargo.sh build --bin script-kit-gpui
+PROBE_BINARY=target-agent/artifacts/day-editor-bottom-scroll/script-kit-gpui bun scripts/agentic/day-editor-bottom-focus-probe.ts
+```
+
+The probe should seed a long today file, open Day Page, assert focus and bottom scroll, page up, open/close actions, assert focus and bottom scroll again, then reopen Day Page and assert the same.
+
+I would avoid a new source-audit test unless this behavior is expected to regress silently in CI without runtime probes. A compile check plus the DevTools probe is the right verification level for focus/render timing.
+
+## Self Score
+
+8/10. The design is minimal and matches GPUI timing constraints. Remaining uncertainty is whether one `window.defer` is always post-layout on every path; the proposed probe is the right way to prove that and should be the acceptance gate.
+
+
+hook: Stop
+hook: Stop
+hook: Stop Completed
+hook: Stop Completed
+tokens used
+119,314

@@ -1,0 +1,28 @@
+{
+  "id": "agy-gemini-flash-high",
+  "label": "Agy Gemini 3.5 Flash High",
+  "panelRole": "evidence-auditor",
+  "command": "agy",
+  "args": [
+    "--print",
+    "--model",
+    "Gemini 3.5 Flash (High)",
+    "--print-timeout",
+    "45m",
+    "--sandbox",
+    "Provider-specific instructions:\n- Stay anchored to the user's task.\n- Return only the requested artifact.\n- Do not discuss the model, provider, config, runtime, tools, or your process unless explicitly requested.\n\nPanel-specific reasoning contract:\nPanel role: evidence-auditor\nFocus on verified facts, assumptions, missing citations, unsupported claims, and what evidence would change the answer.\n\nReturn your answer with these headings:\n## Role Findings\n## Evidence And Assumptions\n## Failure Modes\n## Recommendation\n## Self Score\n\nOriginal task:\nWe are in /Users/johnlindquist/dev/script-kit-gpui.\n\nTask: Plan the minimal code change to make the Day Page editor auto-focus and auto-scroll/reveal to the bottom/end of the editor when the day view opens/reopens, when Day Page content is loaded/rebound, and when focus returns after Day Page popups/actions close. Then identify the smallest tests/probes to prove it.\n\nUser-visible bug: Day view should land at the bottom of the editor, focused, like a journal/today surface. Existing focus fixes for Cmd+P/actions are committed separately. Now implement bottom focus/scroll behavior.\n\nRelevant repo process:\n- AGENTS.md says inspect current source/tests before editing, use shared components, prefer runtime proof for focus/window behavior, cargo through ./scripts/agentic/agent-cargo.sh.\n- Notes and Day Page are separate surfaces. Do not change Notes window behavior unless shared helper is safe and only Day invokes the new behavior.\n- Day Page uses autosave as truth.\n\nObserved current source:\n- src/main_sections/day_page_view.rs owns DayPageView.\n- DayPageView::new creates a shared NotesEditor via NotesEditor::new_markdown_pair(... \"input:day-page-editor\" ...).\n- DayPageView::apply_loaded_content_to_editor currently calls editor.load_value_with_cursor_at_end(content, window, cx).\n- DayPageView::focus_editor currently calls editor.focus(window, cx).\n- DayPageView::set_input and append_main_hotkey_carry set value with cursor at end. append then focuses.\n- src/components/notes_editor/component.rs: NotesEditor::focus only focuses InputState. load_value_with_cursor_at_end and set_value_with_cursor_at_end set selection to value.len().\n- vendor/gpui-component/crates/ui/src/input/state.rs: InputState::set_selection calls scroll_to(end, None, cx) and focus. InputState::scroll_to returns early if last_layout or last_bounds are not populated, so first mount/rebind may need a post-layout repeat.\n- NotesEditor has markdown_runtime_info_with_scroll exposing InputState::automation_scroll_metrics for DevTools proof.\n- Existing probes: scripts/agentic/day-notes-editor-runtime-parity-probe.ts checks day editor scroll metrics after long typing; scripts/agentic/day-cmdp-focus-probe.ts opens Day Page via comma special action and verifies focus after popups.\n\nCandidate implementation already under consideration:\n- Add NotesEditor::focus_with_cursor_at_end(window, cx), which reads state.value().len() and calls state.set_selection(cursor, cursor, window, cx).\n- Make DayPageView::focus_editor call that helper immediately, then use window.defer with cx.entity().downgrade() to call the same helper again after layout.\n- Keep the deferred repeat Day-owned, not a change to Notes window focus behavior.\n\nNeed from Fusion:\n1. Confirm or correct the implementation plan.\n2. Explain how to ensure scroll happens after GPUI layout/render timing.\n3. Identify any better shared editor helper name/API.\n4. Smallest Rust test(s) or source-level checks if useful.\n5. DevTools probe design with assertions against focusedSemanticId and editor_scroll_metrics.\n6. Risks and edge cases: empty files, short files, switching past/today/fragment, popup Escape restoring Day Page focus, and not disturbing Notes window behavior."
+  ],
+  "env": {},
+  "preflight": null,
+  "ok": true,
+  "exitCode": 0,
+  "signal": null,
+  "timedOut": false,
+  "startedAt": "2026-06-15T04:18:27.413Z",
+  "endedAt": "2026-06-15T04:18:37.097Z",
+  "durationMs": 9684,
+  "stdinChars": 0,
+  "stdinSha256": null,
+  "stdoutChars": 130,
+  "stderrChars": 0
+}

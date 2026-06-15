@@ -1,0 +1,32 @@
+{
+  "id": "opencode-glm-5.2-high",
+  "label": "OpenCode GLM-5.2 high",
+  "panelRole": "pragmatist",
+  "command": "opencode",
+  "args": [
+    "--pure",
+    "run",
+    "-m",
+    "zai-coding-plan/glm-5.2",
+    "--variant",
+    "high",
+    "--dir",
+    "/Users/johnlindquist/dev/script-kit-gpui",
+    "--format",
+    "default",
+    "Panel-specific reasoning contract:\nPanel role: pragmatist\nFocus on the smallest implementation that fully satisfies the task, avoids unnecessary scope, and can be verified cheaply.\n\nReturn your answer with these headings:\n## Role Findings\n## Evidence And Assumptions\n## Failure Modes\n## Recommendation\n## Self Score\n\nOriginal task:\n--input -"
+  ],
+  "env": {},
+  "preflight": null,
+  "ok": true,
+  "exitCode": 0,
+  "signal": null,
+  "timedOut": false,
+  "startedAt": "2026-06-15T04:15:54.083Z",
+  "endedAt": "2026-06-15T04:16:19.185Z",
+  "durationMs": 25102,
+  "stdinChars": 0,
+  "stdinSha256": null,
+  "stdoutChars": 1560,
+  "stderrChars": 28
+}

@@ -1,0 +1,2176 @@
+OpenAI Codex v0.139.0
+--------
+workdir: /Users/johnlindquist/dev/script-kit-gpui
+model: gpt-5.5
+provider: openai
+approval: never
+sandbox: read-only
+reasoning effort: high
+reasoning summaries: none
+session id: 019ec919-090a-7f43-a297-c3504c3ce1d1
+--------
+user
+Panel-specific reasoning contract:
+Panel role: architect
+Focus on the complete design, tradeoffs, implementation shape, and how the pieces fit together.
+
+Return your answer with these headings:
+## Role Findings
+## Evidence And Assumptions
+## Failure Modes
+## Recommendation
+## Self Score
+
+Original task:
+# Context
+
+We are in /Users/johnlindquist/dev/script-kit-gpui. The repo has advisory "project imps" under `.agents/imps`: small feature-bound Codex specialists that the main agent can call before editing an owned surface. `AGENTS.md` says they are advisory, not blockers — continue normally if unavailable or too slow.
+
+The imp harness is in `.agents/imps/lib/*.ts` and the router is `.agents/imps/bin/project-imp.ts`. Observed behavior:
+
+- `cd .agents/imps && bun imps/project-imp --which "<task>"` returns the selected imp (e.g. `imp-sk-components`) quickly.
+- Actually running the selected imp sometimes appears to time out / not return in time during a Codex task, so the main agent continues without it.
+- The prior run did not leave useful receipts under `.agents/imps/receipts/`.
+
+## Relevant source facts
+
+- `.agents/imps/bin/project-imp.ts` uses Node `spawnSync(command, [prompt], { cwd: repoRoot, stdio: "inherit", env: process.env })` and does not set its own timeout.
+- Each imp executable delegates to `runImp(makeProjectImpConfig("imp-sk-..."))` in `.agents/imps/lib/isolated.ts`.
+- `.agents/imps/lib/isolated.ts` warm path auto-starts/reuses a background app-server imp unless `--no-warm` is passed. It falls back to a cold in-process SDK run if warm routing fails.
+- `.agents/imps/lib/appserver.ts` has `awaitResponse(id, timeoutMs = 60000)` for JSON-RPC handshake / `thread/start`, and `runTurn` hard-codes `setTimeout(..., 120000)` that rejects with `turn timeout`.
+- `.agents/imps/lib/project-config.ts` starts threads with config including `model_reasoning_effort`, disables skills/apps/environment/collab/permissions instructions, sets `project_doc_max_bytes: 0`, disables memories/MCP/web_search, and turns off features (plugins, hooks unless self-improve, memories, apps, image_generation, tool_search, tool_suggest).
+- `.agents/imps/lib/codex-runtime.ts` writes an isolated `config.toml` only when self-improve is enabled: `bypass_hook_trust = true`, `[features] hooks = true`, and a `hooks.json` with a Stop hook `timeout: 10`.
+- `.agents/imps/lib/isolated.ts` interactive flags include `--dangerously-bypass-approvals-and-sandbox`, `-c model_reasoning_effort=...`, `-c sandbox_mode=...`, `-c approval_policy="never"`.
+
+## Questions
+
+1. What are the most likely timeout causes here? Consider both harness-side (spawnSync, app-server warm start, JSON-RPC handshake, hard-coded turn timeout, model reasoning effort, self-improve hooks) and Codex-side (tool-call timeouts, turn limits, model/provider behavior, warm vs cold path).
+2. What concrete repo changes should we make to avoid imp timeouts while preserving imp usefulness and keeping the main Codex unblocked? Do not make imps blockers. Prefer repo-local fixes with small verification.
+3. Are there Codex TOML / `-c` configuration keys related to tool-call timeouts, turn timeouts, hooks, app-server, or model/tool behavior that should be added to the imp isolated config or thread/start config? If you know exact key names, give them. If not, say which local command/doc source to inspect to verify. We already see `startup_timeout_sec` and `tool_timeout_sec` in the Codex binary strings; clarify what they control and where they belong.
+4. Should we increase the hardcoded 120s turn timeout, add env-configurable timeouts, force `--no-warm`, change reasoning effort, add quiet/structured short-response prompts, run imps asynchronously, add receipts, or use a bounded advisory wrapper from the main agent? Evaluate each option against the constraint that imps must remain advisory and not block the main agent.
+5. Propose a small implementation plan with verification commands.
+
+## Constraints
+
+- Do not recommend narrowing Fusion providers; full panel is expected.
+- Do not make imps blockers. `AGENTS.md` says continue if unavailable/too slow.
+- Prefer repo-local fixes with small verification.
+- Preserve dirty work. Avoid unrelated refactors.
+
+Please answer as an independent panel member with the role **edge-case-tester**: focus on boundary cases, regressions, weird inputs, operational failure modes, and test coverage gaps. Return findings under these headings:
+
+## Role Findings
+## Evidence And Assumptions
+## Failure Modes
+## Recommendation
+## Self Score
+hook: UserPromptSubmit
+hook: UserPromptSubmit
+hook: UserPromptSubmit
+hook: UserPromptSubmit Completed
+hook: UserPromptSubmit Completed
+hook: UserPromptSubmit Completed
+codex
+I’ll verify the current imp harness shape and local Codex config hints from the repo/binary before answering, so the recommendations are grounded in what is actually present rather than only the prompt summary.
+exec
+/bin/zsh -lc 'rg -n "project imps|advisory|not blockers|continue normally|too slow|unavailable|Project Imps" AGENTS.md' in /Users/johnlindquist/dev/script-kit-gpui
+ succeeded in 0ms:
+24:## Project Imps Routing
+60:Project imps are advisory specialists, not blockers. If an imp is unavailable,
+61:too slow, or the task is trivial, continue normally and mention the skipped imp
+
+hook: PostToolUse
+exec
+/bin/zsh -lc 'rg -n "spawnSync|awaitResponse|turn timeout|setTimeout|tool_timeout_sec|startup_timeout_sec|model_reasoning_effort|runTurn|--no-warm|receipts" .agents/imps AGENTS.md' in /Users/johnlindquist/dev/script-kit-gpui
+ succeeded in 0ms:
+.agents/imps/lib/self-improve.ts:12:  receiptsPath?: string;
+.agents/imps/lib/self-improve.ts:23:  /** `receipt` records debug receipts without changing the prompt overlay. */
+.agents/imps/lib/self-improve.ts:34:  receiptsPath?: string;
+.agents/imps/lib/self-improve.ts:94:  const receiptsPath = config.selfImprove?.receiptsPath || `${lessonsPath}.debug.jsonl`;
+.agents/imps/lib/self-improve.ts:133:    receiptsPath,
+.agents/imps/lib/self-improve.ts:460:  if (!shouldWrite || !resolved.receiptsPath) return;
+.agents/imps/lib/self-improve.ts:462:    mkdirSync(dirname(resolved.receiptsPath), { recursive: true });
+.agents/imps/lib/self-improve.ts:463:    appendFileSync(resolved.receiptsPath, JSON.stringify({ at: new Date().toISOString(), profile: resolved.name, ...obj }) + "\n");
+.agents/imps/lib/project-config.ts:91:      receiptsPath: join(impsRoot, "receipts", `${imp.name}.jsonl`),
+.agents/imps/lib/appserver.ts:78:    await this.awaitResponse(initId);
+.agents/imps/lib/appserver.ts:110:  private awaitResponse(id: number, timeoutMs = 60000): Promise<any> {
+.agents/imps/lib/appserver.ts:112:      const t = setTimeout(() => {
+.agents/imps/lib/appserver.ts:142:        model_reasoning_effort: this.config.reasoningEffort || "low",
+.agents/imps/lib/appserver.ts:164:    const res = await this.awaitResponse(id);
+.agents/imps/lib/appserver.ts:173:  async runTurn(prompt: string, handlers: TurnHandlers, opts?: { cwd?: string; effort?: string }): Promise<string> {
+.agents/imps/lib/appserver.ts:180:      const t = setTimeout(() => {
+.agents/imps/lib/appserver.ts:183:        reject(new Error(`turn timeout\nstderr:\n${this.stderrTail}`));
+.agents/imps/lib/isolated.ts:51:      model_reasoning_effort: config.reasoningEffort || "low",
+.agents/imps/lib/isolated.ts:120:    "-c", `model_reasoning_effort="${config.reasoningEffort || "low"}"`,
+.agents/imps/lib/isolated.ts:144:  const noWarm = args.includes("--no-warm");
+.agents/imps/lib/isolated.ts:148:  const flags = ["-q", "--quiet", "-i", "--interactive", "--help", "-h", "--serve", "--daemon", "--no-warm"];
+.agents/imps/lib/isolated.ts:235:  ${config.name} --no-warm <prompt>  Opt out: force a cold in-process run (no warm imp)
+.agents/imps/lib/isolated.ts:241:through it for ~2x lower latency. Use --no-warm to bypass it for a one-off run.`);
+.agents/imps/lib/isolated.ts:316:  // load + WebSocket prewarm (paid once at imp start). Opt out with --no-warm.
+.agents/imps/lib/self-improve-stop.ts:40:      receiptsPath: `${lessonsPath}.debug.jsonl`,
+.agents/imps/lib/imp.ts:161:        setTimeout(shutdown, 50);
+.agents/imps/lib/imp.ts:176:          const finalText = await client.runTurn(
+.agents/imps/lib/imp.ts:239:    const timer = setTimeout(() => done(false), timeoutMs);
+.agents/imps/lib/imp.ts:254:    setTimeout(done, 2000);
+.agents/imps/lib/imp.ts:276:    await new Promise((r) => setTimeout(r, 100));
+.agents/imps/lib/imp.ts:282:    await new Promise((r) => setTimeout(r, 200));
+.agents/imps/lib/imp.ts:336:    await new Promise((r) => setTimeout(r, 150));
+.agents/imps/README.md:27:Local lessons live under `lessons/local/` and receipts under `receipts/`; both
+.agents/imps/bin/project-imp.ts:2:import { spawnSync } from "child_process";
+.agents/imps/bin/project-imp.ts:36:const result = spawnSync(command, [prompt], {
+
+hook: PostToolUse
+exec
+/bin/zsh -lc 'rg -n "script-kit-gpui|imp|project-imp|Codex TOML|tool_timeout_sec|startup_timeout_sec" /Users/johnlindquist/.codex/memories/MEMORY.md' in /Users/johnlindquist/dev/script-kit-gpui
+ succeeded in 0ms:
+2:scope: Use this for `script-kit-gpui` work on Day Page and Notes boundaries, Day-origin Agent Chat flows, popup-free clipboard capture, and startup helpers that must be proven in the running app.
+3:applies_to: cwd=/Users/johnlindquist/dev/script-kit-gpui; reuse_rule=safe for similar Day Page, Notes, clipboard-history, or startup-helper work in this checkout, but re-check current DevTools probes, helper scripts, and dirty-tree scope before reuse.
+9:- rollout_summaries/2026-06-14T07-27-32-5sxU-day_page_agent_chat_today_brain_return.md (cwd=/Users/johnlindquist/dev/script-kit-gpui, rollout_path=/Users/johnlindquist/.codex/sessions/2026/06/14/rollout-2026-06-14T01-27-32-019ec507-533d-7a71-8423-b8bdc2b8814e.jsonl, updated_at=2026-06-14T07:57:41+00:00, thread_id=019ec507-533d-7a71-8423-b8bdc2b8814e, Day can open Agent Chat with Today context and append the latest assistant response back into the bound day file)
+19:- rollout_summaries/2026-06-14T07-30-12-WKva-notes_cmdp_no_daypage_cross_over.md (cwd=/Users/johnlindquist/dev/script-kit-gpui, rollout_path=/Users/johnlindquist/.codex/sessions/2026/06/14/rollout-2026-06-14T01-30-12-019ec509-c475-7180-b11d-bc9f45883b54.jsonl, updated_at=2026-06-14T07:43:46+00:00, thread_id=019ec509-c475-7180-b11d-bc9f45883b54, Notes switcher no longer offers or routes `daypage_` rows)
+20:- rollout_summaries/2026-06-14T05-10-27-E4R1-fusion_high_notes_day_page_refactor_and_day_footer_save_remo.md (cwd=/Users/johnlindquist/dev/script-kit-gpui, rollout_path=/Users/johnlindquist/.codex/sessions/2026/06/13/rollout-2026-06-13T23-10-27-019ec489-d1e7-7971-8daf-bdb8c417dd87.jsonl, updated_at=2026-06-14T07:33:08+00:00, thread_id=019ec489-d1e7-7971-8daf-bdb8c417dd87, `fusion-high` design pass grounded the eventual no-crossover implementation)
+30:- rollout_summaries/2026-06-14T05-10-27-E4R1-fusion_high_notes_day_page_refactor_and_day_footer_save_remo.md (cwd=/Users/johnlindquist/dev/script-kit-gpui, rollout_path=/Users/johnlindquist/.codex/sessions/2026/06/13/rollout-2026-06-13T23-10-27-019ec489-d1e7-7971-8daf-bdb8c417dd87.jsonl, updated_at=2026-06-14T07:33:08+00:00, thread_id=019ec489-d1e7-7971-8daf-bdb8c417dd87, Day Page footer now advertises `Actions` only and no manual Save button)
+40:- rollout_summaries/2026-06-13T06-12-04-SZ8s-remove_post_copy_clipboard_popup.md (cwd=/Users/johnlindquist/dev/script-kit-gpui, rollout_path=/Users/johnlindquist/.codex/sessions/2026/06/13/rollout-2026-06-13T00-12-04-019ebf9b-e158-7b72-a951-9adb52b09420.jsonl, updated_at=2026-06-13T07:18:26+00:00, thread_id=019ebf9b-e158-7b72-a951-9adb52b09420, popup path removed and no-popup regression guard added)
+50:- rollout_summaries/2026-06-13T07-18-31-PrME-pi_backend_sidecar_ensure_dev_sh.md (cwd=/Users/johnlindquist/dev/script-kit-gpui, rollout_path=/Users/johnlindquist/.codex/sessions/2026/06/13/rollout-2026-06-13T01-18-31-019ebfd8-b589-73c0-9484-48cc4d5ae60c.jsonl, updated_at=2026-06-13T07:21:32+00:00, thread_id=019ebfd8-b589-73c0-9484-48cc4d5ae60c, ensure step now installs the repo-local Pi sidecar synchronously)
+58:- when the user asked to `integrate our "day" mode with agent chat so people can quickly ask a questions about "Today's brain", discuss it, then bring that info back into the "Today" and implement it` -> preserve the full Day -> chat -> append-back round trip instead of stopping at a one-way chat launch [Task 1]
+73:- `src/main_sections/day_page_view.rs` owns Day Page footer buttons; removing the Save affordance also made the Day Page-specific `FooterAction::Run` branch in `src/app_impl/ui_window.rs` obsolete [Task 3]
+90:scope: Use this for local skill-authoring work where Fusion recommendations drive the implementation and the final acceptance bar is the real Codex skill loader, not only a template validator.
+101:- fusion-high, codex-gpt-5.5-high, skill-creator, init_skill.py, quick_validate.py, goal-improver, web-choices, SKILL.md, agents/openai.yaml
+115:- when the user said `Ask fusion-high to: 1. Create a fusion skill 2. Create a skill that combines goal-improver and web-choices into a "goal-choices" then implement its recommendations` -> treat Fusion output as an implementation source and keep the resulting skills thin instead of over-designing them [Task 1]
+122:- `goal-choices` should orchestrate `goal-improver` plus `web-choices` and stay thin; `web-choices` already owns the compiled Svelte/mdsvex HITL app and build contract [Task 1]
+131:# Task Group: Packx roadmap implementation and verification
+132:scope: Use this for `pack` / `packx` feature work where the user wants an ordered roadmap implemented in milestones with commits, tests, evals, and explicit machine-readable output contracts.
+139:- rollout_summaries/2026-06-14T04-02-11-RLlu-packx_roadmap_implementation_and_verification.md (cwd=/Users/johnlindquist/dev/pack, rollout_path=/Users/johnlindquist/.codex/sessions/2026/06/13/rollout-2026-06-13T22-02-11-019ec44b-5372-7e33-9936-cba12b0a0748.jsonl, updated_at=2026-06-14T07:59:36+00:00, thread_id=019ec44b-5372-7e33-9936-cba12b0a0748, JSONL parity through explicit pack status landed as a committed sequence with final build, tests, and retrieval eval)
+147:- when the user asked to `implement each, in order, committing and verifying along the way` -> default roadmap work to incremental milestones with tests and commits after each slice instead of one large refactor [Task 1]
+201:- when the user said `I want to build our own version of fusion using the codex, claude, and agy clis` -> default similar asks to a practical multi-CLI orchestrator implementation rather than a conceptual discussion [Task 1]
+220:- Symptom: a settings-validation answer overstates certainty. Cause: local observations and docs snippets were mixed together before the citation pass finished. Fix: present a table of setting -> source -> implication and label unfinished verification as incomplete [Task 2]
+275:- Symptom: a workflow doc erases the real path that led to the current implementation. Cause: it collapsed the original compositor work and the later single-video path into one generic recipe. Fix: keep the workflows split and preserve the Oracle decision loop with a TL;DR at the top [Task 1]
+277:- Symptom: Oracle browser guidance is unavailable or times out during subtitle work. Cause: the consult path is flaky, not the workflow itself. Fix: proceed from already-captured guidance plus local verification when the implementation path is already clear [Task 2]
+281:scope: Use this for host-level disk-pressure work tied to `script-kit-gpui` app-icon extraction and for reusable verification of whether IconServices is the real culprit.
+282:applies_to: cwd=/Users/johnlindquist with repo work in /Users/johnlindquist/dev/script-kit-gpui; reuse_rule=safe for similar IconServices or disk-pressure investigations on this machine, but treat absolute disk sizes and live cache state as time-sensitive.
+301:- The default `script-kit-gpui` app-icon path now resolves the declared `.icns` resource directly from the app bundle; the only remaining `iconForFile` usage is the explicit fallback behind `SCRIPT_KIT_ENABLE_ICON_SERVICES_FALLBACK=1` [Task 1]
+
+hook: PostToolUse
+hook: PostToolUse Completed
+hook: PostToolUse Completed
+hook: PostToolUse Completed
+codex
+The repo search matches the prompt: the warm server has separate handshake and turn deadlines, while the router itself uses a blocking `spawnSync` with inherited stdio. I’m checking exact call sites and Codex’s local config surface next, especially the timeout keys you mentioned.
+exec
+/bin/zsh -lc "nl -ba .agents/imps/lib/appserver.ts | sed -n '1,240p'" in /Users/johnlindquist/dev/script-kit-gpui
+exec
+/bin/zsh -lc "nl -ba .agents/imps/bin/project-imp.ts | sed -n '1,120p'" in /Users/johnlindquist/dev/script-kit-gpui
+ succeeded in 0ms:
+     1	/**
+     2	 * Warm app-server client.
+     3	 *
+     4	 * Launches ONE persistent `codex app-server` process (NDJSON JSON-RPC over stdio)
+     5	 * and holds it alive. The expensive setup — process spawn, auth/config load,
+     6	 * WebSocket connection + prewarm — is paid once at launch. Each user prompt is a
+     7	 * fresh `thread/start` + `turn/start` on the already-warm process, so time-to-first
+     8	 * activity is ~1ms and a short answer streams back in ~2s instead of ~5.4s cold.
+     9	 *
+    10	 * Wire protocol verified against codex-rs:
+    11	 *   - newline-delimited JSON, jsonrpc 2.0 (app-server-transport/src/transport/stdio.rs)
+    12	 *   - methods: initialize, thread/start, turn/start (app-server-protocol common.rs)
+    13	 *   - notifications: item/started, item/completed, item/agentMessage/delta,
+    14	 *     item/reasoning/textDelta, item/commandExecution/outputDelta, turn/completed
+    15	 */
+    16	
+    17	import { spawn, type ChildProcess } from "child_process";
+    18	import { rmSync } from "fs";
+    19	import type { ImpConfig } from "./isolated.ts";
+    20	import { applyLessonOverlay, prepareIsolatedCodexHome } from "./codex-runtime.ts";
+    21	import { createSelfImproveObserver } from "./self-improve.ts";
+    22	
+    23	export interface TurnHandlers {
+    24	  /** Raw app-server notification (method + params). */
+    25	  onNotification?: (method: string, params: any) => void;
+    26	}
+    27	
+    28	export class AppServerClient {
+    29	  private child!: ChildProcess;
+    30	  private isolatedHome: string;
+    31	  private rbuf = "";
+    32	  private handlers = new Set<(msg: any) => void>();
+    33	  private nextId = 1;
+    34	  private stderrTail = "";
+    35	  private config: ImpConfig;
+    36	  private model: string;
+    37	  private ready = false;
+    38	  private hooksEnabled = false;
+    39	
+    40	  constructor(config: ImpConfig) {
+    41	    // Fold accumulated self-improvement lessons into developerInstructions once,
+    42	    // at imp start. Hot-reload restarts this imp when the overlay changes.
+    43	    this.config = applyLessonOverlay(config);
+    44	    this.model = this.config.model || process.env.CODEX_IMP_MODEL || process.env.CODEX_PROFILE_MODEL || "gpt-5.3-codex-spark";
+    45	    this.isolatedHome = `/tmp/codex-appserver-${this.config.name}-${process.pid}`;
+    46	  }
+    47	
+    48	  /** Spawn the app-server and complete the initialize handshake. */
+    49	  async start(): Promise<void> {
+    50	    const realHome = process.env.HOME!;
+    51	    // Symlinks auth, and (when self-improvement is enabled) writes the hook config.
+    52	    const runtime = prepareIsolatedCodexHome(this.config, this.isolatedHome, realHome);
+    53	    this.hooksEnabled = runtime.hooksEnabled;
+    54	
+    55	    this.child = spawn("codex", ["app-server"], {
+    56	      env: {
+    57	        PATH: process.env.PATH || "/usr/local/bin:/usr/bin:/bin",
+    58	        HOME: realHome,
+    59	        CODEX_HOME: this.isolatedHome,
+    60	        ...this.config.extraEnv,
+    61	        ...runtime.extraEnv,
+    62	      },
+    63	      stdio: ["pipe", "pipe", "pipe"],
+    64	    });
+    65	    this.child.stderr!.on("data", (c) => {
+    66	      this.stderrTail = (this.stderrTail + c.toString()).slice(-4000);
+    67	    });
+    68	    this.child.stdout!.on("data", (chunk) => this.onData(chunk));
+    69	    this.child.on("exit", (code) => {
+    70	      this.ready = false;
+    71	      for (const h of [...this.handlers]) h({ __exit: code });
+    72	    });
+    73	
+    74	    const initId = this.send("initialize", {
+    75	      clientInfo: { name: `codex-imp-${this.config.name}`, version: "0.3.0" },
+    76	      capabilities: { experimentalApi: true },
+    77	    });
+    78	    await this.awaitResponse(initId);
+    79	    this.notify("initialized");
+    80	    this.ready = true;
+    81	  }
+    82	
+    83	  isReady(): boolean {
+    84	    return this.ready;
+    85	  }
+    86	
+    87	  private onData(chunk: Buffer) {
+    88	    this.rbuf += chunk.toString("utf8");
+    89	    let nl: number;
+    90	    while ((nl = this.rbuf.indexOf("\n")) !== -1) {
+    91	      const line = this.rbuf.slice(0, nl);
+    92	      this.rbuf = this.rbuf.slice(nl + 1);
+    93	      if (!line.trim()) continue;
+    94	      let msg: any;
+    95	      try { msg = JSON.parse(line); } catch { continue; }
+    96	      for (const h of [...this.handlers]) h(msg);
+    97	    }
+    98	  }
+    99	
+   100	  private send(method: string, params?: unknown): number {
+   101	    const id = this.nextId++;
+   102	    this.child.stdin!.write(JSON.stringify({ jsonrpc: "2.0", id, method, params }) + "\n");
+   103	    return id;
+   104	  }
+   105	
+   106	  private notify(method: string, params?: unknown) {
+   107	    this.child.stdin!.write(JSON.stringify({ jsonrpc: "2.0", method, params }) + "\n");
+   108	  }
+   109	
+   110	  private awaitResponse(id: number, timeoutMs = 60000): Promise<any> {
+   111	    return new Promise((resolve, reject) => {
+   112	      const t = setTimeout(() => {
+   113	        this.handlers.delete(h);
+   114	        reject(new Error(`timeout waiting for id ${id}\nstderr:\n${this.stderrTail}`));
+   115	      }, timeoutMs);
+   116	      const h = (msg: any) => {
+   117	        if (msg.__exit !== undefined) {
+   118	          clearTimeout(t); this.handlers.delete(h);
+   119	          reject(new Error(`app-server exited (code ${msg.__exit})\nstderr:\n${this.stderrTail}`));
+   120	          return;
+   121	        }
+   122	        if (msg.id === id && (msg.result !== undefined || msg.error !== undefined)) {
+   123	          clearTimeout(t); this.handlers.delete(h);
+   124	          if (msg.error) reject(new Error(`rpc error id ${id}: ${JSON.stringify(msg.error)}`));
+   125	          else resolve(msg.result);
+   126	        }
+   127	      };
+   128	      this.handlers.add(h);
+   129	    });
+   130	  }
+   131	
+   132	  /** Start a fresh thread carrying this profile's isolation config. Returns thread id. */
+   133	  private async startThread(): Promise<string> {
+   134	    const id = this.send("thread/start", {
+   135	      model: this.model,
+   136	      sandbox: this.config.sandboxMode || "danger-full-access",
+   137	      approvalPolicy: "never",
+   138	      baseInstructions: this.config.baseInstructions,
+   139	      developerInstructions: this.config.developerInstructions,
+   140	      ephemeral: true,
+   141	      config: {
+   142	        model_reasoning_effort: this.config.reasoningEffort || "low",
+   143	        show_raw_agent_reasoning: true,
+   144	        skills: { include_instructions: false },
+   145	        include_apps_instructions: false,
+   146	        include_environment_context: false,
+   147	        include_collaboration_mode_instructions: false,
+   148	        include_permissions_instructions: false,
+   149	        project_doc_max_bytes: 0,
+   150	        memories: { use_memories: false },
+   151	        mcp_servers: {},
+   152	        web_search: "disabled",
+   153	        // Non-interactive isolated imps own a throwaway CODEX_HOME, so user
+   154	        // hooks can't be approved via a TUI — bypass trust to let them run.
+   155	        // Passed here (not just config.toml) because thread/start config does
+   156	        // not inherit the on-disk bypass flag.
+   157	        bypass_hook_trust: this.hooksEnabled,
+   158	        features: {
+   159	          plugins: false, hooks: this.hooksEnabled, memories: false, apps: false,
+   160	          image_generation: false, tool_search: false, tool_suggest: false,
+   161	        },
+   162	      },
+   163	    });
+   164	    const res = await this.awaitResponse(id);
+   165	    return res.thread?.id || res.thread_id || res.threadId;
+   166	  }
+   167	
+   168	  /**
+   169	   * Run one prompt on a FRESH thread (stateless, isolated per invocation).
+   170	   * Streams notifications via handlers.onNotification. Resolves with the final
+   171	   * agent message text on turn/completed.
+   172	   */
+   173	  async runTurn(prompt: string, handlers: TurnHandlers, opts?: { cwd?: string; effort?: string }): Promise<string> {
+   174	    if (!this.ready) throw new Error("app-server not ready");
+   175	    const threadId = await this.startThread();
+   176	    const observer = createSelfImproveObserver(this.config);
+   177	
+   178	    return new Promise<string>((resolve, reject) => {
+   179	      let finalText = "";
+   180	      const t = setTimeout(() => {
+   181	        this.handlers.delete(h);
+   182	        observer.finish({ status: "timeout", transport: "app-server" });
+   183	        reject(new Error(`turn timeout\nstderr:\n${this.stderrTail}`));
+   184	      }, 120000);
+   185	      const h = (msg: any) => {
+   186	        if (msg.__exit !== undefined) {
+   187	          clearTimeout(t); this.handlers.delete(h);
+   188	          observer.finish({ status: "app-server-exit", transport: "app-server", code: msg.__exit });
+   189	          reject(new Error(`app-server exited mid-turn (code ${msg.__exit})\nstderr:\n${this.stderrTail}`));
+   190	          return;
+   191	        }
+   192	        if (!msg.method) return;
+   193	        observer.onAppServerNotification(msg.method, msg.params);
+   194	        handlers.onNotification?.(msg.method, msg.params);
+   195	        if (msg.method === "item/agentMessage/delta") {
+   196	          finalText += msg.params?.delta ?? "";
+   197	        } else if (msg.method === "item/completed" && msg.params?.item?.type === "agentMessage") {
+   198	          // Authoritative full text (covers non-streamed/low-effort paths)
+   199	          if (msg.params.item.text) finalText = msg.params.item.text;
+   200	        } else if (msg.method === "turn/completed") {
+   201	          clearTimeout(t); this.handlers.delete(h);
+   202	          observer.finish({ status: "completed", transport: "app-server" });
+   203	          resolve(finalText);
+   204	        }
+   205	      };
+   206	      this.handlers.add(h);
+   207	      this.send("turn/start", {
+   208	        threadId,
+   209	        input: [{ type: "text", text: prompt, text_elements: [] }],
+   210	        cwd: opts?.cwd || process.cwd(),
+   211	        effort: opts?.effort || this.config.reasoningEffort || "low",
+   212	      });
+   213	    });
+   214	  }
+   215	
+   216	  close() {
+   217	    try { this.child?.kill("SIGTERM"); } catch {}
+   218	    try { rmSync(this.isolatedHome, { recursive: true, force: true }); } catch {}
+   219	  }
+   220	}
+
+ succeeded in 0ms:
+     1	#!/usr/bin/env bun
+     2	import { spawnSync } from "child_process";
+     3	import { basename, join } from "path";
+     4	import { allImps, impsRoot, routePrompt } from "../lib/project-config.ts";
+     5	
+     6	const args = process.argv.slice(2);
+     7	const which = args.includes("--which");
+     8	const list = args.includes("--list") || args.includes("-l");
+     9	const prompt = args.filter((arg) => arg !== "--which" && arg !== "--list" && arg !== "-l").join(" ");
+    10	
+    11	if (list) {
+    12	  for (const imp of allImps()) {
+    13	    console.log(`${imp.name}\t${imp.phase}\t${imp.permission}\t${imp.summary}`);
+    14	  }
+    15	  process.exit(0);
+    16	}
+    17	
+    18	if (!prompt) {
+    19	  console.error("Usage: project-imp [--which] <task prompt>");
+    20	  process.exit(1);
+    21	}
+    22	
+    23	const routed = routePrompt(prompt);
+    24	
+    25	if (which) {
+    26	  console.log(routed.map((imp) => imp.name).join("\n"));
+    27	  process.exit(0);
+    28	}
+    29	
+    30	const [primary, ...secondary] = routed;
+    31	if (secondary.length) {
+    32	  console.error(`project-imp: primary ${primary.name}; also consider ${secondary.map((imp) => imp.name).join(", ")}`);
+    33	}
+    34	
+    35	const command = join(impsRoot, "imps", primary.name);
+    36	const result = spawnSync(command, [prompt], {
+    37	  cwd: join(impsRoot, "..", ".."),
+    38	  stdio: "inherit",
+    39	  env: process.env,
+    40	});
+    41	
+    42	if (result.error) {
+    43	  console.error(`${basename(command)}: ${result.error.message}`);
+    44	  process.exit(1);
+    45	}
+    46	process.exit(result.status ?? 0);
+
+hook: PostToolUse
+hook: PostToolUse
+exec
+/bin/zsh -lc "nl -ba .agents/imps/lib/isolated.ts | sed -n '1,380p'" in /Users/johnlindquist/dev/script-kit-gpui
+ succeeded in 0ms:
+     1	/**
+     2	 * Shared helper for creating fully isolated Codex SDK agents.
+     3	 *
+     4	 * Default mode is streaming (shows all events as they happen).
+     5	 * Use --quiet for buffered one-shot output.
+     6	 */
+     7	
+     8	import { Codex, type CodexOptions, type ThreadOptions } from "@openai/codex-sdk";
+     9	import { rmSync, unlinkSync, writeFileSync } from "fs";
+    10	import { spawn } from "child_process";
+    11	import { ensureWarmImp, runViaWarmImp, serveImp } from "./imp.ts";
+    12	import {
+    13	  applyLessonOverlay,
+    14	  prepareIsolatedCodexHome,
+    15	  type SelfImproveConfig,
+    16	} from "./codex-runtime.ts";
+    17	import { createSelfImproveObserver } from "./self-improve.ts";
+    18	
+    19	export interface ImpConfig {
+    20	  name: string;
+    21	  model?: string;
+    22	  reasoningEffort?: string;
+    23	  baseInstructions: string;
+    24	  developerInstructions: string;
+    25	  sandboxMode?: "read-only" | "workspace-write" | "danger-full-access";
+    26	  extraEnv?: Record<string, string>;
+    27	  /** Opt in to the Stop-hook self-improvement loop (see lib/codex-runtime.ts). */
+    28	  selfImprove?: SelfImproveConfig;
+    29	}
+    30	
+    31	export function createIsolatedCodex(rawConfig: ImpConfig) {
+    32	  const config = applyLessonOverlay(rawConfig);
+    33	  const realHome = process.env.HOME!;
+    34	  const isolatedHome = `/tmp/codex-imp-${config.name}-${process.pid}`;
+    35	  // Symlinks auth, and (when self-improvement is enabled) writes the hook config.
+    36	  const runtime = prepareIsolatedCodexHome(config, isolatedHome, realHome);
+    37	
+    38	  const model = config.model || process.env.CODEX_IMP_MODEL || process.env.CODEX_PROFILE_MODEL || "gpt-5.3-codex-spark";
+    39	
+    40	  const codex = new Codex({
+    41	    env: {
+    42	      PATH: process.env.PATH || "/usr/local/bin:/usr/bin:/bin",
+    43	      HOME: realHome,
+    44	      CODEX_HOME: isolatedHome,
+    45	      ...config.extraEnv,
+    46	      ...runtime.extraEnv,
+    47	    },
+    48	    config: {
+    49	      base_instructions: config.baseInstructions,
+    50	      developer_instructions: config.developerInstructions,
+    51	      model_reasoning_effort: config.reasoningEffort || "low",
+    52	      show_raw_agent_reasoning: true,
+    53	
+    54	      skills: { include_instructions: false },
+    55	      include_apps_instructions: false,
+    56	      include_environment_context: false,
+    57	      include_collaboration_mode_instructions: false,
+    58	      include_permissions_instructions: false,
+    59	
+    60	      project_doc_max_bytes: 0,
+    61	      memories: { use_memories: false },
+    62	      mcp_servers: {},
+    63	      web_search: "disabled",
+    64	
+    65	      // See appserver.ts: bypass hook trust so user hooks run non-interactively.
+    66	      bypass_hook_trust: runtime.hooksEnabled,
+    67	
+    68	      features: {
+    69	        plugins: false,
+    70	        hooks: runtime.hooksEnabled,
+    71	        memories: false,
+    72	        apps: false,
+    73	        image_generation: false,
+    74	        tool_search: false,
+    75	        tool_suggest: false,
+    76	      },
+    77	    },
+    78	  });
+    79	
+    80	  const startThread = (overrides?: Partial<ThreadOptions>) =>
+    81	    codex.startThread({
+    82	      workingDirectory: process.cwd(),
+    83	      skipGitRepoCheck: true,
+    84	      sandboxMode: config.sandboxMode || "danger-full-access",
+    85	      approvalPolicy: "never",
+    86	      ...overrides,
+    87	    });
+    88	
+    89	  const cleanup = () => {
+    90	    try {
+    91	      rmSync(isolatedHome, { recursive: true, force: true });
+    92	    } catch {}
+    93	  };
+    94	
+    95	  return { codex, startThread, cleanup, model, isolatedHome };
+    96	}
+    97	
+    98	function buildInteractiveFlags(config: ImpConfig, hooksOn = false): string[] {
+    99	  const model = config.model || process.env.CODEX_IMP_MODEL || process.env.CODEX_PROFILE_MODEL || "gpt-5.3-codex-spark";
+   100	  return [
+   101	    "--dangerously-bypass-approvals-and-sandbox",
+   102	    "--disable", "plugins",
+   103	    ...(hooksOn
+   104	      ? ["-c", "features.hooks=true", "-c", "bypass_hook_trust=true"]
+   105	      : ["--disable", "hooks"]),
+   106	    "--disable", "memories",
+   107	    "--disable", "apps",
+   108	    "--disable", "image_generation",
+   109	    "--disable", "tool_search",
+   110	    "--disable", "tool_suggest",
+   111	    "-c", "skills.include_instructions=false",
+   112	    "-c", "include_apps_instructions=false",
+   113	    "-c", "include_environment_context=false",
+   114	    "-c", "include_collaboration_mode_instructions=false",
+   115	    "-c", "include_permissions_instructions=false",
+   116	    "-c", "project_doc_max_bytes=0",
+   117	    "-c", "memories.use_memories=false",
+   118	    "-c", "mcp_servers={}",
+   119	    "-c", 'web_search="disabled"',
+   120	    "-c", `model_reasoning_effort="${config.reasoningEffort || "low"}"`,
+   121	    "-m", model,
+   122	  ];
+   123	}
+   124	
+   125	function tomlEscape(s: string): string {
+   126	  return s.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+   127	}
+   128	
+   129	/** Prompt suffix pointing the imp at piped-stdin data saved to a temp file. */
+   130	export function stdinPromptSuffix(stdinFilePath: string): string {
+   131	  return `
+   132	
+   133	[piped input] Data was piped to this command on stdin and saved to the file: ${stdinFilePath}
+   134	Treat that file as the input for this task. Read it with the narrowest command (head, sed -n, jq, rg). Do not ask the user to provide the data again.`;
+   135	}
+   136	
+   137	export function parseArgs(argv: string[]) {
+   138	  const args = argv.slice(2);
+   139	  const interactive = args.includes("-i") || args.includes("--interactive");
+   140	  const quiet = args.includes("-q") || args.includes("--quiet");
+   141	  const help = args.includes("--help") || args.includes("-h");
+   142	  // --daemon is a back-compat alias from before the imp rename.
+   143	  const serve = args.includes("--serve") || args.includes("--daemon");
+   144	  const noWarm = args.includes("--no-warm");
+   145	  // --effort <none|minimal|low|medium|high|xhigh>: per-turn reasoning override (warm imp path)
+   146	  const effortIdx = args.findIndex((a) => a === "--effort");
+   147	  const effort = effortIdx !== -1 ? args[effortIdx + 1] : undefined;
+   148	  const flags = ["-q", "--quiet", "-i", "--interactive", "--help", "-h", "--serve", "--daemon", "--no-warm"];
+   149	  // Drop the value following --effort only when --effort is actually present
+   150	  // (effortIdx === -1 would otherwise make effortIdx+1 === 0 and strip the first prompt word).
+   151	  const effortValueIdx = effortIdx !== -1 ? effortIdx + 1 : -1;
+   152	  const prompt = args
+   153	    .filter((a, i) => !flags.includes(a) && a !== "--effort" && i !== effortValueIdx)
+   154	    .join(" ");
+   155	  return { interactive, quiet, help, serve, noWarm, effort, prompt, noArgs: args.length === 0 };
+   156	}
+   157	
+   158	// Renders streaming app-server JSON-RPC notifications (warm imp path).
+   159	// Answer tokens stream to stdout; reasoning/commands/output go to stderr.
+   160	function renderAppServerNotif(method: string, params: any) {
+   161	  switch (method) {
+   162	    case "item/agentMessage/delta":
+   163	      process.stdout.write(params?.delta ?? "");
+   164	      break;
+   165	    case "item/reasoning/textDelta":
+   166	    case "item/reasoning/summaryTextDelta":
+   167	      process.stderr.write(`\x1b[2;3m${params?.delta ?? ""}\x1b[0m`);
+   168	      break;
+   169	    case "item/started":
+   170	      if (params?.item?.type === "commandExecution") {
+   171	        process.stderr.write(`\x1b[2m$ ${params.item.command}\x1b[0m\n`);
+   172	      }
+   173	      break;
+   174	    case "item/commandExecution/outputDelta":
+   175	      if (params?.delta) process.stderr.write(`\x1b[2m${params.delta}\x1b[0m`);
+   176	      break;
+   177	    case "item/completed":
+   178	      if (params?.item?.type === "commandExecution" && params.item.exitCode && params.item.exitCode !== 0) {
+   179	        process.stderr.write(`\x1b[31m→ exit ${params.item.exitCode}\x1b[0m\n`);
+   180	      }
+   181	      break;
+   182	    case "turn/plan/updated":
+   183	      if (Array.isArray(params?.plan)) {
+   184	        for (const step of params.plan) {
+   185	          const mark = step.status === "completed" ? "✓" : "○";
+   186	          process.stderr.write(`\x1b[2m  ${mark} ${step.step ?? step.text ?? ""}\x1b[0m\n`);
+   187	        }
+   188	      }
+   189	      break;
+   190	  }
+   191	}
+   192	
+   193	function renderEvent(event: any) {
+   194	  if (event.type === "item.started") {
+   195	    const item = event.item;
+   196	    if (item.type === "command_execution") {
+   197	      process.stderr.write(`\x1b[2m$ ${item.command}\x1b[0m\n`);
+   198	    }
+   199	  } else if (event.type === "item.completed") {
+   200	    const item = event.item;
+   201	    if (item.type === "agent_message") {
+   202	      console.log(item.text);
+   203	    } else if (item.type === "command_execution") {
+   204	      if (item.aggregated_output) {
+   205	        process.stderr.write(`\x1b[2m${item.aggregated_output}\x1b[0m`);
+   206	        if (!item.aggregated_output.endsWith("\n")) process.stderr.write("\n");
+   207	      }
+   208	      if (item.exit_code !== 0) {
+   209	        process.stderr.write(`\x1b[31m→ exit ${item.exit_code}\x1b[0m\n`);
+   210	      }
+   211	    } else if (item.type === "reasoning" && item.text) {
+   212	      process.stderr.write(`\x1b[2;3m${item.text}\x1b[0m\n`);
+   213	    } else if (item.type === "todo_list") {
+   214	      for (const todo of item.items) {
+   215	        const mark = todo.completed ? "✓" : "○";
+   216	        process.stderr.write(`\x1b[2m  ${mark} ${todo.text}\x1b[0m\n`);
+   217	      }
+   218	    }
+   219	  }
+   220	}
+   221	
+   222	export async function runImp(rawConfig: ImpConfig) {
+   223	  // Fold any accumulated self-improvement lessons into developerInstructions
+   224	  // before anything reads them (interactive + cold paths). Idempotent.
+   225	  const config = applyLessonOverlay(rawConfig);
+   226	  const { interactive, quiet, help, serve, noWarm, effort, prompt, noArgs } = parseArgs(process.argv);
+   227	
+   228	  if (help || noArgs) {
+   229	    console.log(`${config.name} — isolated codex imp (spark)
+   230	
+   231	Usage:
+   232	  ${config.name} <prompt>            Run with streaming (auto-warms the imp for instant responses)
+   233	  ${config.name} -q <prompt>         Quiet mode (buffered, final answer only)
+   234	  ${config.name} -i [prompt]         Interactive codex TUI in this terminal
+   235	  ${config.name} --no-warm <prompt>  Opt out: force a cold in-process run (no warm imp)
+   236	  ${config.name} --serve             Run the warm imp server in the foreground (for supervisors)
+   237	  ${config.name} --effort <level>    Reasoning effort: none|minimal|low|medium|high|xhigh (warm imp)
+   238	  ${config.name} --help              Show this help
+   239	
+   240	By default the first call auto-starts a background warm imp and every call routes
+   241	through it for ~2x lower latency. Use --no-warm to bypass it for a one-off run.`);
+   242	    process.exit(0);
+   243	  }
+   244	
+   245	  if (serve) {
+   246	    await serveImp(config);
+   247	    return;
+   248	  }
+   249	
+   250	  if (interactive) {
+   251	    // Launch the codex interactive TUI right here in the current terminal.
+   252	    // No cmux, no surfaces — the profile knows nothing about any terminal manager.
+   253	    const realHome = process.env.HOME!;
+   254	    const isolatedHome = `/tmp/codex-imp-${config.name}-${process.pid}-interactive`;
+   255	    const runtime = prepareIsolatedCodexHome(config, isolatedHome, realHome);
+   256	    const flags = buildInteractiveFlags(config, runtime.hooksEnabled);
+   257	    const args = [
+   258	      ...flags,
+   259	      "-c", `developer_instructions="${tomlEscape(config.developerInstructions)}"`,
+   260	      ...(prompt ? [prompt] : []),
+   261	    ];
+   262	    const cleanupInteractive = () => {
+   263	      try {
+   264	        rmSync(isolatedHome, { recursive: true, force: true });
+   265	      } catch {}
+   266	    };
+   267	    const child = spawn("codex", args, {
+   268	      stdio: "inherit",
+   269	      cwd: process.cwd(),
+   270	      env: {
+   271	        ...process.env,
+   272	        HOME: realHome,
+   273	        CODEX_HOME: isolatedHome,
+   274	        ...config.extraEnv,
+   275	        ...runtime.extraEnv,
+   276	      },
+   277	    });
+   278	    child.on("exit", (code, signal) => {
+   279	      cleanupInteractive();
+   280	      process.exit(signal ? 1 : code ?? 0);
+   281	    });
+   282	    child.on("error", (e) => {
+   283	      cleanupInteractive();
+   284	      console.error(`${config.name}: failed to launch codex: ${e.message}`);
+   285	      process.exit(1);
+   286	    });
+   287	    return;
+   288	  }
+   289	
+   290	  if (!prompt) {
+   291	    console.error(`${config.name}: no prompt provided (use -i for interactive mode)`);
+   292	    process.exit(1);
+   293	  }
+   294	
+   295	  // Piped stdin becomes a temp file the imp can read with shell commands, so
+   296	  // `cat data.json | imp-jq "count users"` just works. TTY stdin is ignored;
+   297	  // an open-but-empty pipe yields "" and is also ignored.
+   298	  let effectivePrompt = prompt;
+   299	  let stdinFile: string | undefined;
+   300	  if (!process.stdin.isTTY) {
+   301	    const data = await Bun.stdin.text();
+   302	    if (data.trim()) {
+   303	      stdinFile = `/tmp/codex-imp-stdin-${config.name}-${process.pid}`;
+   304	      writeFileSync(stdinFile, data);
+   305	      effectivePrompt = prompt + stdinPromptSuffix(stdinFile);
+   306	    }
+   307	  }
+   308	  const cleanupStdin = () => {
+   309	    if (stdinFile) { try { unlinkSync(stdinFile); } catch {} }
+   310	  };
+   311	
+   312	  const ac = new AbortController();
+   313	
+   314	  // Warm by default: auto-start (and reuse) a background imp so every call
+   315	  // routes through the persistent app-server — skips process spawn + auth/config
+   316	  // load + WebSocket prewarm (paid once at imp start). Opt out with --no-warm.
+   317	  // If the imp can't be brought up, fall through to a cold in-process run.
+   318	  if (!noWarm && (await ensureWarmImp(config))) {
+   319	    const onSignal = () => { ac.abort(); cleanupStdin(); process.exit(130); };
+   320	    process.on("SIGINT", onSignal);
+   321	    process.on("SIGTERM", onSignal);
+   322	    let streamedAnswer = false;
+   323	    let routed = true;
+   324	    try {
+   325	      await runViaWarmImp(
+   326	        config.name,
+   327	        { prompt: effectivePrompt, quiet, cwd: process.cwd(), effort },
+   328	        {
+   329	          onNotification: (method, params) => {
+   330	            if (method === "item/agentMessage/delta") streamedAnswer = true;
+   331	            renderAppServerNotif(method, params);
+   332	          },
+   333	          onFinal: (text) => {
+   334	            // In streaming mode the answer already printed via deltas; just close the line.
+   335	            if (streamedAnswer) process.stdout.write("\n");
+   336	            else if (text) console.log(text);
+   337	          },
+   338	          onError: (message) => { process.stderr.write(`\x1b[31mimp error: ${message}\x1b[0m\n`); },
+   339	        },
+   340	        ac.signal,
+   341	      );
+   342	    } catch {
+   343	      // Imp died or the connection dropped mid-flight — fall back to cold.
+   344	      routed = false;
+   345	    } finally {
+   346	      process.off("SIGINT", onSignal);
+   347	      process.off("SIGTERM", onSignal);
+   348	    }
+   349	    if (routed) {
+   350	      cleanupStdin();
+   351	      return;
+   352	    }
+   353	  }
+   354	
+   355	  const { startThread, cleanup } = createIsolatedCodex(config);
+   356	  const onSignal = () => { ac.abort(); cleanupStdin(); cleanup(); process.exit(130); };
+   357	  process.on("SIGINT", onSignal);
+   358	  process.on("SIGTERM", onSignal);
+   359	
+   360	  const thread = startThread();
+   361	  const observer = createSelfImproveObserver(config);
+   362	
+   363	  try {
+   364	    if (quiet) {
+   365	      const turn = await thread.run(effectivePrompt, { signal: ac.signal });
+   366	      if (turn.finalResponse) console.log(turn.finalResponse);
+   367	      observer.finish({ status: "completed", transport: "sdk-quiet" });
+   368	    } else {
+   369	      const { events } = await thread.runStreamed(effectivePrompt, { signal: ac.signal });
+   370	      for await (const event of events) {
+   371	        observer.onSdkEvent(event);
+   372	        renderEvent(event);
+   373	      }
+   374	      observer.finish({ status: "completed", transport: "sdk-stream" });
+   375	    }
+   376	  } finally {
+   377	    process.off("SIGINT", onSignal);
+   378	    process.off("SIGTERM", onSignal);
+   379	    cleanupStdin();
+   380	    cleanup();
+
+hook: PostToolUse
+exec
+/bin/zsh -lc "nl -ba .agents/imps/lib/project-config.ts | sed -n '1,180p'" in /Users/johnlindquist/dev/script-kit-gpui
+ succeeded in 0ms:
+     1	import { readFileSync } from "fs";
+     2	import { basename, dirname, join } from "path";
+     3	import { fileURLToPath } from "url";
+     4	import type { ImpConfig } from "./isolated.ts";
+     5	
+     6	export interface ProjectImpEntry {
+     7	  name: string;
+     8	  phase: string;
+     9	  permission: "read-only" | "workspace-write";
+    10	  summary: string;
+    11	  ownerGlobs: string[];
+    12	  allowedEditGlobs: string[];
+    13	  triggers: string[];
+    14	  gates: string[];
+    15	  selfImprovesOn: string[];
+    16	}
+    17	
+    18	interface Registry {
+    19	  version: number;
+    20	  model: string;
+    21	  reasoningEffort: string;
+    22	  lessonDefaults: {
+    23	    ageDays: number;
+    24	    maxLessonsPerTurn: number;
+    25	    maxLessonBytes: number;
+    26	  };
+    27	  imps: ProjectImpEntry[];
+    28	}
+    29	
+    30	const here = dirname(fileURLToPath(import.meta.url));
+    31	export const impsRoot = join(here, "..");
+    32	export const repoRoot = join(impsRoot, "..", "..");
+    33	export const registryPath = join(impsRoot, "registry.json");
+    34	
+    35	export function loadRegistry(): Registry {
+    36	  return JSON.parse(readFileSync(registryPath, "utf8")) as Registry;
+    37	}
+    38	
+    39	export function findImp(name: string): ProjectImpEntry {
+    40	  const registry = loadRegistry();
+    41	  const entry = registry.imps.find((imp) => imp.name === name);
+    42	  if (!entry) {
+    43	    throw new Error(`Unknown project imp ${name}. Run project-imps list.`);
+    44	  }
+    45	  return entry;
+    46	}
+    47	
+    48	export function allImps(): ProjectImpEntry[] {
+    49	  return loadRegistry().imps;
+    50	}
+    51	
+    52	export function routePrompt(prompt: string): ProjectImpEntry[] {
+    53	  const needle = prompt.toLowerCase();
+    54	  const scored = allImps()
+    55	    .map((imp) => {
+    56	      const triggerHits = imp.triggers.filter((trigger) => needle.includes(trigger.toLowerCase())).length;
+    57	      const pathHits = imp.ownerGlobs.filter((glob) => needle.includes(glob.replace(/\*\*/g, "").replace(/\*/g, "").toLowerCase())).length;
+    58	      const nameHit = needle.includes(imp.name.replace(/^imp-sk-/, "").replace(/-/g, " ")) ? 2 : 0;
+    59	      return { imp, score: triggerHits * 3 + pathHits * 2 + nameHit };
+    60	    })
+    61	    .filter((item) => item.score > 0)
+    62	    .sort((a, b) => b.score - a.score);
+    63	
+    64	  if (scored.length === 0) return [findImp("imp-sk-scout")];
+    65	  const primary = scored[0].imp;
+    66	  const secondary = scored.find((item) => item.imp.name === "imp-sk-components" || item.imp.name === "imp-sk-devex")?.imp;
+    67	  return secondary && secondary.name !== primary.name ? [primary, secondary] : [primary];
+    68	}
+    69	
+    70	function bullets(items: string[]): string {
+    71	  return items.map((item) => `- ${item}`).join("\n");
+    72	}
+    73	
+    74	function codeBullets(items: string[]): string {
+    75	  return items.map((item) => `- \`${item}\``).join("\n");
+    76	}
+    77	
+    78	export function makeProjectImpConfig(name = basename(process.argv[1])): ImpConfig {
+    79	  const registry = loadRegistry();
+    80	  const imp = findImp(name);
+    81	  const sandboxMode = imp.permission === "read-only" ? "read-only" : "workspace-write";
+    82	
+    83	  return {
+    84	    name: imp.name,
+    85	    model: registry.model,
+    86	    reasoningEffort: registry.reasoningEffort,
+    87	    sandboxMode,
+    88	    selfImprove: {
+    89	      enabled: true,
+    90	      lessonsPath: join(impsRoot, "lessons", "local", `${imp.name}.lessons.md`),
+    91	      receiptsPath: join(impsRoot, "receipts", `${imp.name}.jsonl`),
+    92	      maxLessonAgeDays: registry.lessonDefaults.ageDays,
+    93	      maxLessonsPerTurn: registry.lessonDefaults.maxLessonsPerTurn,
+    94	      maxLessonBytes: registry.lessonDefaults.maxLessonBytes,
+    95	    },
+    96	    extraEnv: {
+    97	      SCRIPT_KIT_PROJECT_IMP: imp.name,
+    98	      SCRIPT_KIT_PROJECT_IMPS_ROOT: impsRoot,
+    99	      SCRIPT_KIT_PROJECT_IMPS_REGISTRY: registryPath,
+   100	    },
+   101	    baseInstructions: `You are ${imp.name}, a Script Kit GPUI project imp. Every task is about the local repository at ${repoRoot}. First step: inspect current repository state with shell commands; never answer from memory alone.`,
+   102	    developerInstructions: `You are ${imp.name}, a feature-bound project imp for /Users/johnlindquist/dev/script-kit-gpui.
+   103	
+   104	## Role
+   105	${imp.summary}
+   106	
+   107	## Model Contract
+   108	This project imp is intended to run on ${registry.model} with ${registry.reasoningEffort} reasoning effort. If the runtime reports that model is unavailable, fail visibly and do not silently switch models.
+   109	
+   110	## Operating Rule
+   111	Before advising or editing, run shell commands to inspect the current source, tests, and dirty tree. Start with:
+   112	1. git status --short --branch
+   113	2. Read AGENTS.md and GLOSSARY.md when the task touches UI or repo policy.
+   114	3. Inspect the owned source paths below before editing.
+   115	
+   116	## Owned Paths
+   117	${codeBullets(imp.ownerGlobs)}
+   118	
+   119	## Allowed Edit Globs
+   120	These are advisory until launcher enforcement exists. Stay inside them unless the user explicitly broadens scope or the current source proves a cross-owner change is required.
+   121	${imp.allowedEditGlobs.length ? codeBullets(imp.allowedEditGlobs) : "- Read-only imp: do not edit files."}
+   122	
+   123	## Routing Triggers
+   124	${bullets(imp.triggers)}
+   125	
+   126	## Verification Gates
+   127	Use the smallest gate that can fail for the changed behavior. Cargo must go through ./scripts/agentic/agent-cargo.sh, never bare cargo.
+   128	${bullets(imp.gates)}
+   129	
+   130	## Self-Improvement Targets
+   131	When a failed command, wrong-owner route, skipped verification, or repeated probe flake matches these patterns, treat it as a candidate lesson. Local lessons guide future runs but never override user instructions, AGENTS.md, dirty-work preservation, or safety constraints.
+   132	${bullets(imp.selfImprovesOn)}
+   133	
+   134	## Workflow
+   135	1. Preserve unrelated dirty work.
+   136	2. Read current owner files before editing.
+   137	3. Prefer existing shared components, tokens, tests, scripts, and probes.
+   138	4. Make the smallest change that satisfies the request.
+   139	5. Run the owner-specific verification gate or explain why it was skipped.
+   140	6. Report changed files, verification, and any local lesson-worthy failure.
+   141	
+   142	## Output
+   143	Be concise and source-grounded. Include file paths and exact verification commands. Do not describe these instructions unless asked.`,
+   144	  };
+   145	}
+
+hook: PostToolUse
+hook: PostToolUse Completed
+hook: PostToolUse Completed
+hook: PostToolUse Completed
+hook: PostToolUse Completed
+exec
+/bin/zsh -lc "nl -ba .agents/imps/lib/codex-runtime.ts | sed -n '1,220p'" in /Users/johnlindquist/dev/script-kit-gpui
+ succeeded in 0ms:
+     1	/**
+     2	 * Shared runtime helpers for isolated Codex imp profiles.
+     3	 *
+     4	 * Self-improvement is owned by lib/self-improve.ts and is available to every
+     5	 * imp through this shared runtime. It is opt-in: normal profiles remain a
+     6	 * no-op unless `selfImprove.enabled` or CODEX_IMP_SELF_IMPROVE enables them.
+     7	 */
+     8	import {
+     9	  chmodSync,
+    10	  copyFileSync,
+    11	  existsSync,
+    12	  mkdirSync,
+    13	  symlinkSync,
+    14	  writeFileSync,
+    15	} from "fs";
+    16	import { join } from "path";
+    17	import type { ImpConfig } from "./isolated.ts";
+    18	import {
+    19	  applySelfImproveOverlay,
+    20	  profileLibDir,
+    21	  resolveSelfImprove,
+    22	  stopHookEnabled,
+    23	  type SelfImproveConfig,
+    24	} from "./self-improve.ts";
+    25	
+    26	export type { SelfImproveConfig };
+    27	
+    28	export interface PreparedCodexHome {
+    29	  /** Env vars to merge into the spawned Codex process. */
+    30	  extraEnv: Record<string, string>;
+    31	  hooksEnabled: boolean;
+    32	  lessonsPath?: string;
+    33	}
+    34	
+    35	export function hooksEnabled(config: ImpConfig): boolean {
+    36	  return stopHookEnabled(config);
+    37	}
+    38	
+    39	export function applyLessonOverlay(config: ImpConfig): ImpConfig {
+    40	  return applySelfImproveOverlay(config);
+    41	}
+    42	
+    43	function shellQuote(s: string): string {
+    44	  return `'${s.replace(/'/g, `'\\''`)}'`;
+    45	}
+    46	
+    47	export function prepareIsolatedCodexHome(
+    48	  config: ImpConfig,
+    49	  isolatedHome: string,
+    50	  realHome = process.env.HOME!,
+    51	): PreparedCodexHome {
+    52	  mkdirSync(isolatedHome, { recursive: true });
+    53	
+    54	  const authSrc = `${realHome}/.codex/auth.json`;
+    55	  const authDst = `${isolatedHome}/auth.json`;
+    56	  if (existsSync(authSrc) && !existsSync(authDst)) {
+    57	    symlinkSync(authSrc, authDst);
+    58	  }
+    59	
+    60	  const resolved = resolveSelfImprove(config);
+    61	  if (!resolved.enabled) {
+    62	    return { extraEnv: {}, hooksEnabled: false };
+    63	  }
+    64	
+    65	  const extraEnv = { ...resolved.extraEnv };
+    66	  if (!resolved.stopHook) {
+    67	    return { extraEnv, hooksEnabled: false, lessonsPath: resolved.lessonsPath };
+    68	  }
+    69	
+    70	  const hooksDir = join(isolatedHome, "hooks");
+    71	  mkdirSync(hooksDir, { recursive: true });
+    72	  const handlerSrc = join(profileLibDir(resolved.selfPath), "self-improve-stop.ts");
+    73	  const handlerDst = join(hooksDir, "self-improve-stop.ts");
+    74	  copyFileSync(handlerSrc, handlerDst);
+    75	  chmodSync(handlerDst, 0o755);
+    76	
+    77	  writeFileSync(
+    78	    join(isolatedHome, "config.toml"),
+    79	    ["# Generated by codex-imps for this self-improving profile.", "bypass_hook_trust = true", "", "[features]", "hooks = true", ""].join("\n"),
+    80	    "utf8",
+    81	  );
+    82	
+    83	  writeFileSync(
+    84	    join(isolatedHome, "hooks.json"),
+    85	    JSON.stringify(
+    86	      {
+    87	        hooks: {
+    88	          Stop: [
+    89	            {
+    90	              hooks: [
+    91	                {
+    92	                  type: "command",
+    93	                  command: `bun ${shellQuote(handlerDst)}`,
+    94	                  timeout: 10,
+    95	                  statusMessage: "self-improve: scan turn for failures",
+    96	                },
+    97	              ],
+    98	            },
+    99	          ],
+   100	        },
+   101	      },
+   102	      null,
+   103	      2,
+   104	    ) + "\n",
+   105	    "utf8",
+   106	  );
+   107	
+   108	  return { extraEnv, hooksEnabled: true, lessonsPath: resolved.lessonsPath };
+   109	}
+
+hook: PostToolUse
+exec
+/bin/zsh -lc "nl -ba .agents/imps/lib/imp.ts | sed -n '1,380p'" in /Users/johnlindquist/dev/script-kit-gpui
+ succeeded in 0ms:
+     1	/**
+     2	 * Warm imp: holds ONE persistent `codex app-server` process alive (via
+     3	 * AppServerClient) so each invocation skips process spawn + auth/config load +
+     4	 * WebSocket connect/prewarm. Measured: ~2s for a short answer vs ~5.4s cold,
+     5	 * with the first protocol frame back in ~1ms.
+     6	 *
+     7	 * Protocol: newline-delimited JSON over a Unix socket at
+     8	 *   /tmp/codex-imp-{name}.sock
+     9	 *
+    10	 * Client -> Imp (one line):
+    11	 *   { "prompt": "...", "quiet": false, "cwd": "/abs/path", "effort": "low" }
+    12	 *
+    13	 * Imp -> Client (many lines, then close):
+    14	 *   { "type": "notif", "method": "...", "params": {...} }   (streaming, non-quiet)
+    15	 *   { "type": "final", "text": "..." }                      (always, on completion)
+    16	 *   { "type": "error", "message": "..." }
+    17	 *   { "type": "done" }
+    18	 */
+    19	
+    20	import { createServer, createConnection, type Socket } from "net";
+    21	import { existsSync, unlinkSync, readFileSync, readdirSync, writeFileSync, realpathSync } from "fs";
+    22	import { join, dirname } from "path";
+    23	import { createHash } from "crypto";
+    24	import { spawn } from "child_process";
+    25	import type { ImpConfig } from "./isolated.ts";
+    26	import { AppServerClient } from "./appserver.ts";
+    27	import { selfImproveFingerprintParts } from "./self-improve.ts";
+    28	
+    29	export function socketPath(name: string): string {
+    30	  return `/tmp/codex-imp-${name}.sock`;
+    31	}
+    32	
+    33	/** Sidecar file recording the running imp's pid + source fingerprint. */
+    34	export function metaPath(name: string): string {
+    35	  return `/tmp/codex-imp-${name}.meta.json`;
+    36	}
+    37	
+    38	/**
+    39	 * Fingerprint the imp's own source: the executable that defines the profile
+    40	 * (its instructions, model, env) plus every lib/*.ts module it loads at startup.
+    41	 * A change to any of these means a long-lived warm imp is now running stale
+    42	 * code, so the next prompt must restart it. We hash file *contents* (not just
+    43	 * mtime) so edits are caught even when timestamps are preserved (git checkout,
+    44	 * tarball extraction, etc.).
+    45	 */
+    46	export function sourceFingerprint(config?: ImpConfig): string {
+    47	  const files: string[] = [];
+    48	  let exe: string;
+    49	  try {
+    50	    exe = realpathSync(process.argv[1]);
+    51	  } catch {
+    52	    exe = process.argv[1];
+    53	  }
+    54	  files.push(exe);
+    55	  // lib/ sits next to the imps/ dir: <repo>/imps/imp-X -> <repo>/lib/*.ts
+    56	  const libDir = join(dirname(exe), "..", "lib");
+    57	  try {
+    58	    for (const f of readdirSync(libDir)) {
+    59	      if (f.endsWith(".ts")) files.push(join(libDir, f));
+    60	    }
+    61	  } catch {}
+    62	  const hash = createHash("sha256");
+    63	  for (const part of config ? selfImproveFingerprintParts(config) : []) {
+    64	    hash.update(part);
+    65	    hash.update("\0");
+    66	    if (part.startsWith("path:")) files.push(part.slice("path:".length));
+    67	  }
+    68	  files.sort();
+    69	  for (const f of files) {
+    70	    try {
+    71	      hash.update(f);
+    72	      hash.update("\0");
+    73	      hash.update(readFileSync(f));
+    74	      hash.update("\0");
+    75	    } catch {}
+    76	  }
+    77	  return hash.digest("hex");
+    78	}
+    79	
+    80	export interface ImpMeta {
+    81	  pid?: number;
+    82	  fp?: string;
+    83	  startedAt?: number;
+    84	  idleMinutes?: number;
+    85	}
+    86	
+    87	export function readMeta(name: string): ImpMeta | null {
+    88	  try {
+    89	    return JSON.parse(readFileSync(metaPath(name), "utf8"));
+    90	  } catch {
+    91	    return null;
+    92	  }
+    93	}
+    94	
+    95	export async function serveImp(config: ImpConfig): Promise<void> {
+    96	  const sock = socketPath(config.name);
+    97	  if (existsSync(sock)) {
+    98	    // Probe — if no one's listening, remove stale socket
+    99	    try {
+   100	      await new Promise<void>((resolve, reject) => {
+   101	        const probe = createConnection(sock);
+   102	        probe.once("connect", () => { probe.end(); reject(new Error("alive")); });
+   103	        probe.once("error", () => resolve());
+   104	      });
+   105	      unlinkSync(sock);
+   106	    } catch {
+   107	      console.error(`${config.name} warm imp already running at ${sock}`);
+   108	      process.exit(1);
+   109	    }
+   110	  }
+   111	
+   112	  const client = new AppServerClient(config);
+   113	  await client.start();
+   114	  console.error(`${config.name} warm imp ready at ${sock} (pid ${process.pid}, app-server warm)`);
+   115	
+   116	  // Idle shutdown: a warm imp nobody is talking to exits on its own, so the
+   117	  // fleet doesn't accumulate resident app-server processes. The next call
+   118	  // auto-respawns it (ensureWarmImp) — costs one warm-up, never a failure.
+   119	  // CODEX_IMP_IDLE_MINUTES=0 disables; default 30.
+   120	  const idleMinutes = Number(process.env.CODEX_IMP_IDLE_MINUTES ?? "30");
+   121	  const idleMs = Number.isFinite(idleMinutes) && idleMinutes > 0 ? idleMinutes * 60_000 : 0;
+   122	  let lastActivity = Date.now();
+   123	  let activeTurns = 0;
+   124	  if (idleMs > 0) {
+   125	    setInterval(() => {
+   126	      if (activeTurns === 0 && Date.now() - lastActivity > idleMs) {
+   127	        console.error(`${config.name} warm imp idle for ${idleMinutes}m — shutting down`);
+   128	        shutdown();
+   129	      }
+   130	    }, 30_000).unref?.();
+   131	  }
+   132	
+   133	  // Requests are serialized: one warm app-server, one turn at a time.
+   134	  let chain: Promise<void> = Promise.resolve();
+   135	
+   136	  const server = createServer((socket: Socket) => {
+   137	    let buf = "";
+   138	    socket.on("data", (chunk) => {
+   139	      buf += chunk.toString("utf8");
+   140	      const nl = buf.indexOf("\n");
+   141	      if (nl === -1) return;
+   142	      const line = buf.slice(0, nl);
+   143	      buf = buf.slice(nl + 1);
+   144	
+   145	      let req: { prompt?: string; quiet?: boolean; cwd?: string; effort?: string; ctl?: string };
+   146	      try {
+   147	        req = JSON.parse(line);
+   148	      } catch (e: any) {
+   149	        socket.write(JSON.stringify({ type: "error", message: `bad json: ${e.message}` }) + "\n");
+   150	        socket.end();
+   151	        return;
+   152	      }
+   153	
+   154	      const send = (obj: unknown) => socket.write(JSON.stringify(obj) + "\n");
+   155	
+   156	      // Control message: graceful stop (used to restart a stale imp when we
+   157	      // don't have its pid). Ack, flush, then shut down.
+   158	      if (req.ctl === "stop") {
+   159	        send({ type: "done" });
+   160	        socket.end();
+   161	        setTimeout(shutdown, 50);
+   162	        return;
+   163	      }
+   164	
+   165	      if (typeof req.prompt !== "string") {
+   166	        send({ type: "error", message: "missing prompt" });
+   167	        socket.end();
+   168	        return;
+   169	      }
+   170	      const prompt = req.prompt;
+   171	
+   172	      lastActivity = Date.now();
+   173	      activeTurns++;
+   174	      chain = chain.then(async () => {
+   175	        try {
+   176	          const finalText = await client.runTurn(
+   177	            prompt,
+   178	            {
+   179	              onNotification: (method, params) => {
+   180	                if (!req.quiet) send({ type: "notif", method, params });
+   181	              },
+   182	            },
+   183	            { cwd: req.cwd, effort: req.effort },
+   184	          );
+   185	          send({ type: "final", text: finalText });
+   186	          send({ type: "done" });
+   187	        } catch (e: any) {
+   188	          send({ type: "error", message: e.message || String(e) });
+   189	        } finally {
+   190	          activeTurns--;
+   191	          lastActivity = Date.now();
+   192	          socket.end();
+   193	        }
+   194	      });
+   195	    });
+   196	    socket.on("error", () => {});
+   197	  });
+   198	
+   199	  server.listen(sock, () => {
+   200	    // Record pid + the source fingerprint this imp was started with, so a
+   201	    // freshly-launched client can detect when the on-disk source has changed
+   202	    // and restart us. Written once the socket is accepting connections.
+   203	    try {
+   204	      writeFileSync(
+   205	        metaPath(config.name),
+   206	        JSON.stringify({ pid: process.pid, fp: sourceFingerprint(config), startedAt: Date.now(), idleMinutes }),
+   207	      );
+   208	    } catch {}
+   209	  });
+   210	
+   211	  const shutdown = () => {
+   212	    server.close();
+   213	    try { unlinkSync(sock); } catch {}
+   214	    try { unlinkSync(metaPath(config.name)); } catch {}
+   215	    client.close();
+   216	    process.exit(0);
+   217	  };
+   218	  process.on("SIGINT", shutdown);
+   219	  process.on("SIGTERM", shutdown);
+   220	
+   221	  await new Promise(() => {}); // wait forever
+   222	}
+   223	
+   224	export interface ClientEventHandlers {
+   225	  onNotification?: (method: string, params: any) => void;
+   226	  onFinal?: (text: string) => void;
+   227	  onError?: (message: string) => void;
+   228	}
+   229	
+   230	export function clientAvailable(name: string): boolean {
+   231	  return existsSync(socketPath(name));
+   232	}
+   233	
+   234	/** Try to open the imp socket; resolves true only if a live listener accepts. */
+   235	export function tryConnect(sock: string, timeoutMs: number): Promise<boolean> {
+   236	  return new Promise((resolve) => {
+   237	    const socket = createConnection(sock);
+   238	    const done = (ok: boolean) => { clearTimeout(timer); socket.destroy(); resolve(ok); };
+   239	    const timer = setTimeout(() => done(false), timeoutMs);
+   240	    socket.once("connect", () => done(true));
+   241	    socket.once("error", () => done(false));
+   242	  });
+   243	}
+   244	
+   245	/** Ask a running imp to stop via its socket (no pid needed). Resolves once closed. */
+   246	function sendStop(sock: string): Promise<void> {
+   247	  return new Promise((resolve) => {
+   248	    const s = createConnection(sock);
+   249	    const done = () => { try { s.destroy(); } catch {} resolve(); };
+   250	    s.once("connect", () => { try { s.write(JSON.stringify({ ctl: "stop" }) + "\n"); } catch { done(); } });
+   251	    s.once("end", done);
+   252	    s.once("close", done);
+   253	    s.once("error", done);
+   254	    setTimeout(done, 2000);
+   255	  });
+   256	}
+   257	
+   258	/**
+   259	 * Stop a running imp and wait until its socket stops accepting connections.
+   260	 * Prefers a pid-targeted SIGTERM (works regardless of imp busyness); falls
+   261	 * back to a socket control message when the pid is unknown (e.g. an imp
+   262	 * started by an older build with no meta file). Escalates to SIGKILL if needed,
+   263	 * then clears any stale socket/meta so a fresh imp can start clean.
+   264	 */
+   265	export async function stopWarmImp(name: string, pid?: number): Promise<void> {
+   266	  const sock = socketPath(name);
+   267	  if (pid) {
+   268	    try { process.kill(pid, "SIGTERM"); } catch {}
+   269	  } else {
+   270	    await sendStop(sock);
+   271	  }
+   272	
+   273	  const deadline = Date.now() + 5000;
+   274	  while (Date.now() < deadline) {
+   275	    if (!existsSync(sock) || !(await tryConnect(sock, 300))) break;
+   276	    await new Promise((r) => setTimeout(r, 100));
+   277	  }
+   278	
+   279	  // Still alive? Force it down.
+   280	  if (pid && existsSync(sock) && (await tryConnect(sock, 300))) {
+   281	    try { process.kill(pid, "SIGKILL"); } catch {}
+   282	    await new Promise((r) => setTimeout(r, 200));
+   283	  }
+   284	
+   285	  try { if (existsSync(sock)) unlinkSync(sock); } catch {}
+   286	  try { unlinkSync(metaPath(name)); } catch {}
+   287	}
+   288	
+   289	/**
+   290	 * Ensure a warm imp is running and reachable for this profile, auto-starting
+   291	 * one in the background if needed. This makes warm mode the DEFAULT: the first
+   292	 * call pays the startup cost once, then every later call routes through the
+   293	 * persistent app-server for instant responses. Returns true if a live imp is
+   294	 * reachable, false if startup failed (caller should fall back to a cold run).
+   295	 *
+   296	 * Hot reload: this runs in a freshly-launched client process, so it always sees
+   297	 * the current on-disk source. If a warm imp is running stale code (its
+   298	 * recorded fingerprint no longer matches the source on disk), we stop it and
+   299	 * spawn a fresh one — so editing an imp's instructions/model, or any lib/*.ts,
+   300	 * takes effect on the very next prompt.
+   301	 */
+   302	export async function ensureWarmImp(config: ImpConfig, readyTimeoutMs = 30000): Promise<boolean> {
+   303	  const sock = socketPath(config.name);
+   304	  const current = sourceFingerprint(config);
+   305	
+   306	  // Already warm and accepting connections?
+   307	  if (existsSync(sock) && (await tryConnect(sock, 500))) {
+   308	    const meta = readMeta(config.name);
+   309	    if (meta && meta.fp === current) return true; // up-to-date warm imp — reuse it
+   310	    // Source changed since this imp started (or it predates fingerprinting).
+   311	    // Restart so the next prompt runs the edited code.
+   312	    await stopWarmImp(config.name, meta?.pid);
+   313	    // fall through to spawn a fresh imp
+   314	  }
+   315	
+   316	  // Spawn a detached background imp: re-run THIS executable with --serve.
+   317	  // It cleans up any stale socket on start, then listens once the app-server is warm.
+   318	  // cwd is pinned to HOME, NOT the caller's cwd: the server outlives the caller, and
+   319	  // a deleted cwd (e.g. a temp dir) makes codex fail to load configuration on every
+   320	  // later turn. Per-request cwd is passed explicitly with each prompt.
+   321	  try {
+   322	    const child = spawn(process.argv[0], [process.argv[1], "--serve"], {
+   323	      detached: true,
+   324	      stdio: "ignore",
+   325	      cwd: process.env.HOME || "/",
+   326	    });
+   327	    child.unref();
+   328	  } catch {
+   329	    return false;
+   330	  }
+   331	
+   332	  // Poll until the imp accepts connections (= app-server warm) or we give up.
+   333	  const deadline = Date.now() + readyTimeoutMs;
+   334	  while (Date.now() < deadline) {
+   335	    if (await tryConnect(sock, 500)) return true;
+   336	    await new Promise((r) => setTimeout(r, 150));
+   337	  }
+   338	  return false;
+   339	}
+   340	
+   341	export async function runViaWarmImp(
+   342	  name: string,
+   343	  req: { prompt: string; quiet: boolean; cwd: string; effort?: string },
+   344	  handlers: ClientEventHandlers,
+   345	  signal?: AbortSignal,
+   346	): Promise<void> {
+   347	  const sock = socketPath(name);
+   348	  await new Promise<void>((resolve, reject) => {
+   349	    const socket = createConnection(sock);
+   350	    let buf = "";
+   351	
+   352	    const onAbort = () => { socket.destroy(); reject(new Error("aborted")); };
+   353	    if (signal) signal.addEventListener("abort", onAbort);
+   354	
+   355	    socket.once("connect", () => {
+   356	      socket.write(JSON.stringify(req) + "\n");
+   357	    });
+   358	    socket.on("data", (chunk) => {
+   359	      buf += chunk.toString("utf8");
+   360	      let nl;
+   361	      while ((nl = buf.indexOf("\n")) !== -1) {
+   362	        const line = buf.slice(0, nl);
+   363	        buf = buf.slice(nl + 1);
+   364	        if (!line) continue;
+   365	        let msg: any;
+   366	        try { msg = JSON.parse(line); } catch { continue; }
+   367	        if (msg.type === "notif") handlers.onNotification?.(msg.method, msg.params);
+   368	        else if (msg.type === "final") handlers.onFinal?.(msg.text);
+   369	        else if (msg.type === "error") handlers.onError?.(msg.message);
+   370	      }
+   371	    });
+   372	    socket.once("end", () => {
+   373	      if (signal) signal.removeEventListener("abort", onAbort);
+   374	      resolve();
+   375	    });
+   376	    socket.once("error", (e) => {
+   377	      if (signal) signal.removeEventListener("abort", onAbort);
+   378	      reject(e);
+   379	    });
+   380	  });
+
+hook: PostToolUse
+exec
+/bin/zsh -lc "nl -ba .agents/imps/registry.json | sed -n '1,80p'" in /Users/johnlindquist/dev/script-kit-gpui
+ succeeded in 0ms:
+     1	{
+     2	  "version": 1,
+     3	  "model": "gpt-5.5",
+     4	  "reasoningEffort": "medium",
+     5	  "lessonDefaults": {
+     6	    "ageDays": 30,
+     7	    "maxLessonsPerTurn": 3,
+     8	    "maxLessonBytes": 24000
+     9	  },
+    10	  "imps": [
+    11	    {
+    12	      "name": "imp-sk-scout",
+    13	      "phase": "seed",
+    14	      "permission": "read-only",
+    15	      "summary": "Read-only intake specialist for owner discovery, routing, and required context.",
+    16	      "ownerGlobs": ["AGENTS.md", "GLOSSARY.md", "src/**", "tests/**", "scripts/agentic/**"],
+    17	      "allowedEditGlobs": [],
+    18	      "triggers": ["who owns", "find owner", "route this", "feature map", "where is", "which imp"],
+    19	      "gates": ["rg-based owner report", "git status --short", "no file writes"],
+    20	      "selfImprovesOn": ["misrouted owner", "missed shared component path", "forgot dirty tree inspection"]
+    21	    },
+    22	    {
+    23	      "name": "imp-sk-devex",
+    24	      "phase": "seed",
+    25	      "permission": "workspace-write",
+    26	      "summary": "Repo process docs, project-imps bootstrap, agent-cargo usage, dev probes, source-audit ratchets.",
+    27	      "ownerGlobs": ["AGENTS.md", "GLOSSARY.md", ".agents/**", "dev.sh", "scripts/agentic/**", "tests/source_audit_*"],
+    28	      "allowedEditGlobs": ["AGENTS.md", "GLOSSARY.md", ".agents/**", "dev.sh", "scripts/agentic/**", "tests/source_audit_*"],
+    29	      "triggers": ["AGENTS", "GLOSSARY", "dev.sh", "agent-cargo", "probe", "source audit", "project imp", "verification"],
+    30	      "gates": ["bash -n changed shell scripts", "bun build changed probe scripts", "./scripts/agentic/agent-cargo.sh fmt --check when Rust paths change"],
+    31	      "selfImprovesOn": ["bare cargo regression", "over-broad source audit", "stale AGENTS routing", "probe command rot"]
+    32	    },
+    33	    {
+    34	      "name": "imp-sk-launcher",
+    35	      "phase": "phase-1",
+    36	      "permission": "workspace-write",
+    37	      "summary": "Script list, main window, mini/full view, selection behavior, and shared main-window chrome.",
+    38	      "ownerGlobs": ["src/main_sections/**", "src/render_script_list/**", "src/app_layout/**", "src/components/main_view_chrome.rs"],
+    39	      "allowedEditGlobs": ["src/main_sections/**", "src/render_script_list/**", "src/app_layout/**", "src/components/main_view_chrome.rs", "tests/**/*main*"],
+    40	      "triggers": ["launcher", "script list", "mini view", "expanded view", "main window"],
+    41	      "gates": ["./scripts/agentic/agent-cargo.sh check --lib", "focused main-window runtime probe", "git diff --check"],
+    42	      "selfImprovesOn": ["wrong owner file", "bare cargo use", "missed dirty-state preservation", "runtime probe flake"]
+    43	    },
+    44	    {
+    45	      "name": "imp-sk-components",
+    46	      "phase": "phase-1",
+    47	      "permission": "workspace-write",
+    48	      "summary": "Shared UI primitives, prompt shells, rows, forms, buttons, toasts, theme, chrome, and design tokens.",
+    49	      "ownerGlobs": ["src/components/**", "src/theme/**", "src/ui/chrome/tokens.rs", "src/designs/**", "src/list_item/**"],
+    50	      "allowedEditGlobs": ["src/components/**", "src/theme/**", "src/ui/chrome/tokens.rs", "src/designs/**", "src/list_item/**", "tests/**/*component*"],
+    51	      "triggers": ["component", "theme", "token", "button", "text input", "list row", "chrome", "shared UI"],
+    52	      "gates": ["./scripts/agentic/agent-cargo.sh check --lib", "visual/runtime proof for changed shared surfaces", "source audit only for load-bearing invariants"],
+    53	      "selfImprovesOn": ["hardcoded visual values", "duplicate local UI helper", "source-audit false positive", "missed reuse candidate"]
+    54	    },
+    55	    {
+    56	      "name": "imp-sk-agent-chat",
+    57	      "phase": "phase-1",
+    58	      "permission": "workspace-write",
+    59	      "summary": "Agent Chat portal, AI context picker, file attachment parity, context mentions, and Pi handoff.",
+    60	      "ownerGlobs": ["src/ai/agent_chat/**", "src/ai/window/**", "src/ai/context_mentions/**", "src/render_prompts/other.rs", "src/prompts/chat/**"],
+    61	      "allowedEditGlobs": ["src/ai/**", "src/render_prompts/other.rs", "src/prompts/chat/**", "scripts/agentic/**/*agent*chat*", "tests/**/*agent*chat*"],
+    62	      "triggers": ["agent chat", "@file", "@context", "attachment", "portal", "AI chat", "Pi handoff"],
+    63	      "gates": ["./scripts/agentic/agent-cargo.sh test --lib ai", "relevant portal/context unit test", "partial runtime proof when submit/attach flows are safety-limited"],
+    64	      "selfImprovesOn": ["alias resolution order", "portal route mismatch", "blocked submit proof fallback", "context token regression"]
+    65	    },
+    66	    {
+    67	      "name": "imp-sk-brain",
+    68	      "phase": "phase-1",
+    69	      "permission": "workspace-write",
+    70	      "summary": "Day Page, Today behavior, brain markdown substrate, fragments, notes parity, and spine flows.",
+    71	      "ownerGlobs": ["src/main_sections/day_page_*", "src/day_page/**", "src/brain/**", "src/notes/**", "src/components/notes_editor/**", ".notes/today-requirements.md"],
+    72	      "allowedEditGlobs": ["src/main_sections/day_page_*", "src/day_page/**", "src/brain/**", "src/notes/**", "src/components/notes_editor/**", "scripts/agentic/**/*day*", "tests/**/*day*", "tests/**/*notes*"],
+    73	      "triggers": ["day page", "today", "notes parity", "brain", "fragment", "spine", "sediment"],
+    74	      "gates": ["./scripts/agentic/agent-cargo.sh test --lib notes_editor::spine", "focused Day Page or brain substrate tests", "runtime probe for hotkey/toggle-visible changes"],
+    75	      "selfImprovesOn": ["stale alias leak", "notes parity miss", "wrong hotkey path", "auto-attach assumption drift"]
+    76	    },
+    77	    {
+    78	      "name": "imp-sk-clipboard",
+    79	      "phase": "phase-1",
+    80	      "permission": "workspace-write",
+
+hook: PostToolUse
+hook: PostToolUse Completed
+hook: PostToolUse Completed
+exec
+/bin/zsh -lc "command -v codex && codex --help | sed -n '1,220p'" in /Users/johnlindquist/dev/script-kit-gpui
+ succeeded in 0ms:
+/Users/johnlindquist/.npm-global/bin/codex
+WARNING: proceeding, even though we could not create PATH aliases: Operation not permitted (os error 1)
+Codex CLI
+
+If no subcommand is specified, options will be forwarded to the interactive CLI.
+
+Usage: codex [OPTIONS] [PROMPT]
+       codex [OPTIONS] <COMMAND> [ARGS]
+
+Commands:
+  exec            Run Codex non-interactively [aliases: e]
+  review          Run a code review non-interactively
+  login           Manage login
+  logout          Remove stored authentication credentials
+  mcp             Manage external MCP servers for Codex
+  plugin          Manage Codex plugins
+  mcp-server      Start Codex as an MCP server (stdio)
+  app-server      [experimental] Run the app server or related tooling
+  remote-control  [experimental] Manage the app-server daemon with remote control enabled
+  app             Launch the Codex desktop app (opens the app installer if missing)
+  completion      Generate shell completion scripts
+  update          Update Codex to the latest version
+  doctor          Diagnose local Codex installation, config, auth, and runtime health
+  sandbox         Run commands within a Codex-provided sandbox
+  debug           Debugging tools
+  apply           Apply the latest diff produced by Codex agent as a `git apply` to your local
+                  working tree [aliases: a]
+  resume          Resume a previous interactive session (picker by default; use --last to continue
+                  the most recent)
+  archive         Archive a saved session by id or session name
+  unarchive       Unarchive a saved session by id or session name
+  fork            Fork a previous interactive session (picker by default; use --last to fork the
+                  most recent)
+  cloud           [EXPERIMENTAL] Browse tasks from Codex Cloud and apply changes locally
+  exec-server     [EXPERIMENTAL] Run the standalone exec-server service
+  features        Inspect feature flags
+  help            Print this message or the help of the given subcommand(s)
+
+Arguments:
+  [PROMPT]
+          Optional user prompt to start the session
+
+Options:
+  -c, --config <key=value>
+          Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`.
+          Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed
+          as TOML. If it fails to parse as TOML, the raw string is used as a literal.
+          
+          Examples: - `-c model="o3"` - `-c 'sandbox_permissions=["disk-full-read-access"]'` - `-c
+          shell_environment_policy.inherit=all`
+
+      --enable <FEATURE>
+          Enable a feature (repeatable). Equivalent to `-c features.<name>=true`
+
+      --disable <FEATURE>
+          Disable a feature (repeatable). Equivalent to `-c features.<name>=false`
+
+      --remote <ADDR>
+          Connect the TUI to a remote app server endpoint.
+          
+          Accepted forms: `ws://host:port`, `wss://host:port`, `unix://`, or `unix://PATH`.
+
+      --remote-auth-token-env <ENV_VAR>
+          Name of the environment variable containing the bearer token to send to a remote app
+          server websocket
+
+      --strict-config
+          Error out when config.toml contains fields that are not recognized by this version of
+          Codex
+
+  -i, --image <FILE>...
+          Optional image(s) to attach to the initial prompt
+
+  -m, --model <MODEL>
+          Model the agent should use
+
+      --oss
+          Use open-source provider
+
+      --local-provider <OSS_PROVIDER>
+          Specify which local provider to use (lmstudio or ollama). If not specified with --oss,
+          will use config default or show selection
+
+  -p, --profile <CONFIG_PROFILE_V2>
+          Layer $CODEX_HOME/<name>.config.toml on top of the base user config
+
+  -s, --sandbox <SANDBOX_MODE>
+          Select the sandbox policy to use when executing model-generated shell commands
+          
+          [possible values: read-only, workspace-write, danger-full-access]
+
+      --dangerously-bypass-approvals-and-sandbox
+          Skip all confirmation prompts and execute commands without sandboxing. EXTREMELY
+          DANGEROUS. Intended solely for running in environments that are externally sandboxed
+
+      --dangerously-bypass-hook-trust
+          Run enabled hooks without requiring persisted hook trust for this invocation. DANGEROUS.
+          Intended only for automation that already vets hook sources
+
+  -C, --cd <DIR>
+          Tell the agent to use the specified directory as its working root
+
+      --add-dir <DIR>
+          Additional directories that should be writable alongside the primary workspace
+
+  -a, --ask-for-approval <APPROVAL_POLICY>
+          Configure when the model requires human approval before executing a command
+
+          Possible values:
+          - untrusted:  Only run "trusted" commands (e.g. ls, cat, sed) without asking for user
+            approval. Will escalate to the user if the model proposes a command that is not in the
+            "trusted" set
+          - on-failure: DEPRECATED: Run all commands without asking for user approval. Only asks for
+            approval if a command fails to execute, in which case it will escalate to the user to
+            ask for un-sandboxed execution. Prefer `on-request` for interactive runs or `never` for
+            non-interactive runs
+          - on-request: The model decides when to ask the user for approval
+          - never:      Never ask for user approval Execution failures are immediately returned to
+            the model
+
+      --search
+          Enable live web search. When enabled, the native Responses `web_search` tool is available
+          to the model (no per‑call approval)
+
+      --no-alt-screen
+          Disable alternate screen mode
+          
+          Runs the TUI in inline mode, preserving terminal scrollback history.
+
+  -h, --help
+          Print help (see a summary with '-h')
+
+  -V, --version
+          Print version
+
+hook: PostToolUse
+hook: PostToolUse Completed
+hook: PostToolUse Completed
+codex
+The local help confirms `-c key=value` is the supported config injection path but does not document those timeout keys directly. I’m doing one binary/config search pass so I can separate exact keys from “verify in Codex source/help” instead of guessing.
+exec
+/bin/zsh -lc "codex features | sed -n '1,220p'" in /Users/johnlindquist/dev/script-kit-gpui
+exec
+/bin/zsh -lc "codex app-server --help | sed -n '1,220p'" in /Users/johnlindquist/dev/script-kit-gpui
+ succeeded in 0ms:
+WARNING: proceeding, even though we could not create PATH aliases: Operation not permitted (os error 1)
+Inspect feature flags
+
+Usage: codex features [OPTIONS] <COMMAND>
+
+Commands:
+  list     List known features with their stage and effective state
+  enable   Enable a feature in config.toml
+  disable  Disable a feature in config.toml
+  help     Print this message or the help of the given subcommand(s)
+
+Options:
+  -c, --config <key=value>  Override a configuration value that would otherwise be loaded from
+                            `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override
+                            nested values. The `value` portion is parsed as TOML. If it fails to
+                            parse as TOML, the raw string is used as a literal
+      --enable <FEATURE>    Enable a feature (repeatable). Equivalent to `-c features.<name>=true`
+      --disable <FEATURE>   Disable a feature (repeatable). Equivalent to `-c features.<name>=false`
+  -h, --help                Print help (see more with '--help')
+
+ succeeded in 0ms:
+WARNING: proceeding, even though we could not create PATH aliases: Operation not permitted (os error 1)
+[experimental] Run the app server or related tooling
+
+Usage: codex app-server [OPTIONS] [COMMAND]
+
+Commands:
+  daemon                Manage the local app-server daemon
+  proxy                 Proxy stdio bytes to the running app-server control socket
+  generate-ts           [experimental] Generate TypeScript bindings for the app server protocol
+  generate-json-schema  [experimental] Generate JSON Schema for the app server protocol
+  help                  Print this message or the help of the given subcommand(s)
+
+Options:
+  -c, --config <key=value>
+          Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`.
+          Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed
+          as TOML. If it fails to parse as TOML, the raw string is used as a literal.
+          
+          Examples: - `-c model="o3"` - `-c 'sandbox_permissions=["disk-full-read-access"]'` - `-c
+          shell_environment_policy.inherit=all`
+
+      --enable <FEATURE>
+          Enable a feature (repeatable). Equivalent to `-c features.<name>=true`
+
+      --disable <FEATURE>
+          Disable a feature (repeatable). Equivalent to `-c features.<name>=false`
+
+      --strict-config
+          Error out when config.toml contains fields that are not recognized by this version of
+          Codex
+
+      --listen <URL>
+          Transport endpoint URL. Supported values: `stdio://` (default), `unix://`, `unix://PATH`,
+          `ws://IP:PORT`, `off`
+          
+          [default: stdio://]
+
+      --stdio
+          Use stdio as the transport (equivalent to `--listen stdio://`)
+
+      --analytics-default-enabled
+          Controls whether analytics are enabled by default.
+          
+          Analytics are disabled by default for app-server. Users have to explicitly opt in via the
+          `analytics` section in the config.toml file.
+          
+          However, for first-party use cases like the VSCode IDE extension, we default analytics to
+          be enabled by default by setting this flag. Users can still opt out by setting this in
+          their config.toml:
+          
+          ```toml [analytics] enabled = false ```
+          
+          See https://developers.openai.com/codex/config-advanced/#metrics for more details.
+
+      --ws-auth <MODE>
+          Websocket auth mode for non-loopback listeners
+          
+          [possible values: capability-token, signed-bearer-token]
+
+      --ws-token-file <PATH>
+          Absolute path to the capability-token file
+
+      --ws-token-sha256 <HEX>
+          Hex-encoded SHA-256 digest of the capability token
+
+      --ws-shared-secret-file <PATH>
+          Absolute path to the shared secret file for signed JWT bearer tokens
+
+      --ws-issuer <ISSUER>
+          Expected issuer for signed JWT bearer tokens
+
+      --ws-audience <AUDIENCE>
+          Expected audience for signed JWT bearer tokens
+
+      --ws-max-clock-skew-seconds <SECONDS>
+          Maximum clock skew when validating signed JWT bearer tokens
+
+  -h, --help
+          Print help (see a summary with '-h')
+
+hook: PostToolUse
+hook: PostToolUse
+exec
+/bin/zsh -lc 'rg -n "startup_timeout_sec|tool_timeout_sec|timeout_sec|model_reasoning_effort|bypass_hook_trust|hooks" ~/.codex/config.toml ~/.codex/*.toml 2>/dev/null' in /Users/johnlindquist/dev/script-kit-gpui
+ succeeded in 0ms:
+/Users/johnlindquist/.codex/config.toml:2:model_reasoning_effort = "medium"
+/Users/johnlindquist/.codex/config.toml:17:hooks = true
+/Users/johnlindquist/.codex/config.toml:23:plugin_hooks = true
+/Users/johnlindquist/.codex/config.toml:516:tool_timeout_sec = 900
+/Users/johnlindquist/.codex/config.toml:532:startup_timeout_sec = 120
+/Users/johnlindquist/.codex/config.toml:611:[hooks]
+/Users/johnlindquist/.codex/config.toml:613:  { hooks = [ { type = "command", command = "/Users/johnlindquist/.codex/hooks/bm-auto.zsh", timeout = 5, statusMessage = "Tracking conversation in Basic Memory" } ] }
+/Users/johnlindquist/.codex/config.toml:616:  { matcher = "*", hooks = [ { type = "command", command = "/Users/johnlindquist/.codex/hooks/bm-auto.zsh", timeout = 5, statusMessage = "Logging tool use to Basic Memory" } ] }
+/Users/johnlindquist/.codex/config.toml:619:  { hooks = [ { type = "command", command = "/Users/johnlindquist/.codex/hooks/bm-auto.zsh", timeout = 5, statusMessage = "Logging assistant reply to Basic Memory" } ] }
+/Users/johnlindquist/.codex/config.toml:622:[hooks.state]
+/Users/johnlindquist/.codex/config.toml:624:[hooks.state."/Users/johnlindquist/.codex/config.toml:post_tool_use:0:0"]
+/Users/johnlindquist/.codex/config.toml:627:[hooks.state."/Users/johnlindquist/.codex/config.toml:stop:0:0"]
+/Users/johnlindquist/.codex/config.toml:630:[hooks.state."/Users/johnlindquist/.codex/config.toml:user_prompt_submit:0:0"]
+/Users/johnlindquist/.codex/config.toml:633:[hooks.state."/Users/johnlindquist/dev/script-kit-gpui/.codex/hooks.json:pre_tool_use:0:0"]
+/Users/johnlindquist/.codex/config.toml:637:[hooks.state."/Users/johnlindquist/dev/script-kit-gpui/.codex/hooks.json:stop:0:0"]
+/Users/johnlindquist/.codex/config.toml:640:[hooks.state."cmux-autotab-naming@cmux-autotab-naming:hooks/hooks.json:user_prompt_submit:0:0"]
+/Users/johnlindquist/.codex/config.toml:643:[hooks.state."codex-hook-session-id@local-test-marketplace:hooks/hooks.json:stop:0:0"]
+/Users/johnlindquist/.codex/config.toml:647:[hooks.state."codex-hook-session-id@local-test-marketplace:hooks/hooks.json:user_prompt_submit:0:0"]
+/Users/johnlindquist/.codex/config.toml:651:[hooks.state."grill-me-autopilot@grill-me-plugin:hooks/hooks.json:stop:0:0"]
+/Users/johnlindquist/.codex/config.toml:654:[hooks.state."grill-me-autopilot@grill-me-plugin:hooks/hooks.json:user_prompt_submit:0:0"]
+/Users/johnlindquist/.codex/config.toml:657:[hooks.state."plugin-better-tools@plugin-better-tools:hooks/hooks.json:pre_tool_use:0:0"]
+/Users/johnlindquist/.codex/config.toml:660:[hooks.state."toolsmith@better-plugins:hooks/hooks.json:pre_tool_use:0:0"]
+/Users/johnlindquist/.codex/config.toml:663:[hooks.state."toolsmith@better-plugins:hooks/hooks.json:user_prompt_submit:0:0"]
+/Users/johnlindquist/.codex/config.toml:666:[hooks.state."human-view@better-plugins:hooks/hooks.json:post_tool_use:0:0"]
+/Users/johnlindquist/.codex/config.toml:669:[hooks.state."human-view@better-plugins:hooks/hooks.json:user_prompt_submit:0:0"]
+/Users/johnlindquist/.codex/config.toml:672:[hooks.state."human-view@better-plugins:hooks/hooks.json:stop:0:0"]
+/Users/johnlindquist/.codex/config.toml:2:model_reasoning_effort = "medium"
+/Users/johnlindquist/.codex/config.toml:17:hooks = true
+/Users/johnlindquist/.codex/config.toml:23:plugin_hooks = true
+/Users/johnlindquist/.codex/config.toml:516:tool_timeout_sec = 900
+/Users/johnlindquist/.codex/config.toml:532:startup_timeout_sec = 120
+/Users/johnlindquist/.codex/config.toml:611:[hooks]
+/Users/johnlindquist/.codex/config.toml:613:  { hooks = [ { type = "command", command = "/Users/johnlindquist/.codex/hooks/bm-auto.zsh", timeout = 5, statusMessage = "Tracking conversation in Basic Memory" } ] }
+/Users/johnlindquist/.codex/config.toml:616:  { matcher = "*", hooks = [ { type = "command", command = "/Users/johnlindquist/.codex/hooks/bm-auto.zsh", timeout = 5, statusMessage = "Logging tool use to Basic Memory" } ] }
+/Users/johnlindquist/.codex/config.toml:619:  { hooks = [ { type = "command", command = "/Users/johnlindquist/.codex/hooks/bm-auto.zsh", timeout = 5, statusMessage = "Logging assistant reply to Basic Memory" } ] }
+/Users/johnlindquist/.codex/config.toml:622:[hooks.state]
+/Users/johnlindquist/.codex/config.toml:624:[hooks.state."/Users/johnlindquist/.codex/config.toml:post_tool_use:0:0"]
+/Users/johnlindquist/.codex/config.toml:627:[hooks.state."/Users/johnlindquist/.codex/config.toml:stop:0:0"]
+/Users/johnlindquist/.codex/config.toml:630:[hooks.state."/Users/johnlindquist/.codex/config.toml:user_prompt_submit:0:0"]
+/Users/johnlindquist/.codex/config.toml:633:[hooks.state."/Users/johnlindquist/dev/script-kit-gpui/.codex/hooks.json:pre_tool_use:0:0"]
+/Users/johnlindquist/.codex/config.toml:637:[hooks.state."/Users/johnlindquist/dev/script-kit-gpui/.codex/hooks.json:stop:0:0"]
+/Users/johnlindquist/.codex/config.toml:640:[hooks.state."cmux-autotab-naming@cmux-autotab-naming:hooks/hooks.json:user_prompt_submit:0:0"]
+/Users/johnlindquist/.codex/config.toml:643:[hooks.state."codex-hook-session-id@local-test-marketplace:hooks/hooks.json:stop:0:0"]
+/Users/johnlindquist/.codex/config.toml:647:[hooks.state."codex-hook-session-id@local-test-marketplace:hooks/hooks.json:user_prompt_submit:0:0"]
+/Users/johnlindquist/.codex/config.toml:651:[hooks.state."grill-me-autopilot@grill-me-plugin:hooks/hooks.json:stop:0:0"]
+/Users/johnlindquist/.codex/config.toml:654:[hooks.state."grill-me-autopilot@grill-me-plugin:hooks/hooks.json:user_prompt_submit:0:0"]
+/Users/johnlindquist/.codex/config.toml:657:[hooks.state."plugin-better-tools@plugin-better-tools:hooks/hooks.json:pre_tool_use:0:0"]
+/Users/johnlindquist/.codex/config.toml:660:[hooks.state."toolsmith@better-plugins:hooks/hooks.json:pre_tool_use:0:0"]
+/Users/johnlindquist/.codex/config.toml:663:[hooks.state."toolsmith@better-plugins:hooks/hooks.json:user_prompt_submit:0:0"]
+/Users/johnlindquist/.codex/config.toml:666:[hooks.state."human-view@better-plugins:hooks/hooks.json:post_tool_use:0:0"]
+/Users/johnlindquist/.codex/config.toml:669:[hooks.state."human-view@better-plugins:hooks/hooks.json:user_prompt_submit:0:0"]
+/Users/johnlindquist/.codex/config.toml:672:[hooks.state."human-view@better-plugins:hooks/hooks.json:stop:0:0"]
+
+hook: PostToolUse
+exec
+/bin/zsh -lc 'strings $(command -v codex) | rg -n "startup_timeout_sec|tool_timeout_sec|timeout_sec|turn timeout|app-server|model_reasoning_effort|project_doc_max_bytes" | head -80' in /Users/johnlindquist/dev/script-kit-gpui
+hook: PostToolUse Completed
+hook: PostToolUse Completed
+hook: PostToolUse Completed
+hook: PostToolUse
+hook: PostToolUse Completed
+ succeeded in 683ms:
+strings: error: couldn't create cache file '/tmp/xcrun_db-y7W2N3aR' (errno=Operation not permitted)
+strings: error: couldn't create cache file '/tmp/xcrun_db-22mIPHKy' (errno=Operation not permitted)
+
+codex
+The timeout keys are present in the user’s Codex config, but local `codex --help` does not explain them. I’ll avoid claiming unsupported semantics beyond their likely CLI-level meaning unless a local debug command exposes a schema.
+exec
+/bin/zsh -lc "sed -n '500,540p' ~/.codex/config.toml" in /Users/johnlindquist/dev/script-kit-gpui
+ succeeded in 0ms:
+
+[plugins."human-view@better-plugins"]
+enabled = false
+
+[plugins."browser@openai-bundled"]
+enabled = true
+
+[plugins."chrome@openai-bundled"]
+enabled = true
+
+[plugins."pdf@openai-primary-runtime"]
+enabled = true
+
+[mcp_servers.oracle]
+command = "node"
+args = ["/Users/johnlindquist/dev/oracle/dist/bin/oracle-mcp.js"]
+tool_timeout_sec = 900
+
+[mcp_servers.oracle.env]
+CHATGPT_DEVTOOLS_TRACE = "1"
+ORACLE_DEBUG_COOKIES = "1"
+ORACLE_ENGINE = "browser"
+
+[mcp_servers.oracle.tools.consult]
+approval_mode = "approve"
+
+[mcp_servers.oracle.tools.sessions]
+approval_mode = "approve"
+
+[mcp_servers.node_repl]
+args = []
+command = "/Applications/Codex.app/Contents/Resources/cua_node/bin/node_repl"
+startup_timeout_sec = 120
+
+[mcp_servers.node_repl.env]
+NODE_REPL_NATIVE_PIPE_CONNECT_TIMEOUT_MS = "1000"
+NODE_REPL_NODE_MODULE_DIRS = "/Applications/Codex.app/Contents/Resources/cua_node/lib/node_modules"
+NODE_REPL_NODE_PATH = "/Applications/Codex.app/Contents/Resources/cua_node/bin/node"
+NODE_REPL_TRUSTED_CODE_PATHS = "/Users/johnlindquist/.codex"
+CODEX_HOME = "/Users/johnlindquist/.codex"
+NODE_REPL_TRUSTED_BROWSER_CLIENT_SHA256S = "27dca86fd6b571c49414a4b78e46b57bcf683a46cd1319799c11fbb6cfae3110"
+
+hook: PostToolUse
+exec
+/bin/zsh -lc 'ls -la .agents/imps/receipts 2>/dev/null && for f in .agents/imps/receipts/*.jsonl; do [ -e "$f" ] || continue; printf '"'%s\\t' \""'$f"; wc -l < "$f"; tail -3 "$f"; done' in /Users/johnlindquist/dev/script-kit-gpui
+ exited 1 in 0ms:
+total 0
+drwxr-xr-x   2 johnlindquist  staff   64 Jun 14 08:34 .
+drwxr-xr-x  14 johnlindquist  staff  448 Jun 14 08:37 ..
+zsh:1: no matches found: .agents/imps/receipts/*.jsonl
+
+hook: PostToolUse
+exec
+/bin/zsh -lc "codex debug --help | sed -n '1,240p'" in /Users/johnlindquist/dev/script-kit-gpui
+ succeeded in 0ms:
+WARNING: proceeding, even though we could not create PATH aliases: Operation not permitted (os error 1)
+Debugging tools
+
+Usage: codex debug [OPTIONS] <COMMAND>
+
+Commands:
+  models        Render the raw model catalog as JSON
+  app-server    Tooling: helps debug the app server
+  prompt-input  Render the model-visible prompt input list as JSON
+  help          Print this message or the help of the given subcommand(s)
+
+Options:
+  -c, --config <key=value>
+          Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`.
+          Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed
+          as TOML. If it fails to parse as TOML, the raw string is used as a literal.
+          
+          Examples: - `-c model="o3"` - `-c 'sandbox_permissions=["disk-full-read-access"]'` - `-c
+          shell_environment_policy.inherit=all`
+
+      --enable <FEATURE>
+          Enable a feature (repeatable). Equivalent to `-c features.<name>=true`
+
+      --disable <FEATURE>
+          Disable a feature (repeatable). Equivalent to `-c features.<name>=false`
+
+  -h, --help
+          Print help (see a summary with '-h')
+
+hook: PostToolUse
+hook: PostToolUse Completed
+exec
+/bin/zsh -lc "codex features list | sed -n '1,220p'" in /Users/johnlindquist/dev/script-kit-gpui
+ succeeded in 0ms:
+WARNING: proceeding, even though we could not create PATH aliases: Operation not permitted (os error 1)
+apply_patch_freeform                 removed            false
+apply_patch_streaming_events         under development  false
+apps                                 stable             false
+apps_mcp_path_override               under development  false
+artifact                             under development  false
+auth_elicitation                     under development  false
+browser_use                          stable             true
+browser_use_external                 stable             true
+child_agents_md                      under development  false
+chronicle                            under development  false
+code_mode                            under development  false
+code_mode_only                       under development  false
+codex_git_commit                     removed            false
+collaboration_modes                  removed            true
+computer_use                         stable             true
+default_mode_request_user_input      under development  false
+elevated_windows_sandbox             removed            false
+enable_fanout                        under development  false
+enable_mcp_apps                      under development  false
+enable_request_compression           stable             true
+exec_permission_approvals            under development  false
+experimental_windows_sandbox         removed            false
+external_migration                   experimental       false
+fast_mode                            stable             true
+goals                                stable             true
+guardian_approval                    stable             true
+hooks                                stable             true
+image_detail_original                removed            false
+image_generation                     stable             true
+imagegenext                          under development  false
+in_app_browser                       stable             true
+js_repl                              removed            false
+js_repl_tools_only                   removed            false
+local_thread_store_compression       under development  false
+memories                             experimental       true
+mentions_v2                          under development  false
+multi_agent                          stable             true
+multi_agent_v2                       under development  false
+network_proxy                        experimental       false
+non_prefixed_mcp_tool_names          under development  false
+personality                          stable             true
+plugin_hooks                         removed            false
+plugin_sharing                       stable             true
+plugins                              stable             true
+prevent_idle_sleep                   experimental       false
+realtime_conversation                under development  false
+remote_compaction_v2                 under development  false
+remote_control                       removed            false
+remote_models                        removed            false
+remote_plugin                        under development  false
+request_permissions_tool             under development  false
+request_rule                         removed            false
+responses_websockets                 removed            true
+responses_websockets_v2              removed            false
+runtime_metrics                      under development  false
+search_tool                          removed            false
+shell_snapshot                       stable             true
+shell_tool                           stable             true
+shell_zsh_fork                       under development  false
+skill_env_var_dependency_prompt      removed            false
+skill_mcp_dependency_install         stable             true
+sqlite                               removed            true
+standalone_web_search                under development  false
+steer                                removed            true
+terminal_resize_reflow               experimental       true
+terminal_visualization_instructions  under development  false
+tool_call_mcp_elicitation            stable             true
+tool_search                          removed            false
+tool_search_always_defer_mcp_tools   under development  false
+tool_suggest                         stable             true
+tui_app_server                       removed            true
+unavailable_dummy_tools              removed            false
+undo                                 removed            false
+unified_exec                         stable             true
+unified_exec_zsh_fork                under development  false
+use_legacy_landlock                  deprecated         false
+use_linux_sandbox_bwrap              removed            false
+web_search_cached                    deprecated         false
+web_search_request                   deprecated         false
+workspace_dependencies               stable             true
+workspace_owner_usage_nudge          removed            false
+
+hook: PostToolUse
+hook: PostToolUse Completed
+hook: PostToolUse Completed
+hook: PostToolUse Completed
+codex
+I have enough current-source evidence now. No files were changed; I’ll answer as the edge-case tester and call out where a proposed fix needs validation rather than treating undocumented Codex keys as settled behavior.
+exec
+/bin/zsh -lc "nl -ba /Users/johnlindquist/.codex/memories/MEMORY.md | sed -n '1,12p'" in /Users/johnlindquist/dev/script-kit-gpui
+ succeeded in 0ms:
+     1	# Task Group: Script Kit GPUI Day Page, Notes, clipboard, and startup contracts
+     2	scope: Use this for `script-kit-gpui` work on Day Page and Notes boundaries, Day-origin Agent Chat flows, popup-free clipboard capture, and startup helpers that must be proven in the running app.
+     3	applies_to: cwd=/Users/johnlindquist/dev/script-kit-gpui; reuse_rule=safe for similar Day Page, Notes, clipboard-history, or startup-helper work in this checkout, but re-check current DevTools probes, helper scripts, and dirty-tree scope before reuse.
+     4	
+     5	## Task 1: Add a Day Page -> Agent Chat -> Today round trip for "Today's brain", success
+     6	
+     7	### rollout_summary_files
+     8	
+     9	- rollout_summaries/2026-06-14T07-27-32-5sxU-day_page_agent_chat_today_brain_return.md (cwd=/Users/johnlindquist/dev/script-kit-gpui, rollout_path=/Users/johnlindquist/.codex/sessions/2026/06/14/rollout-2026-06-14T01-27-32-019ec507-533d-7a71-8423-b8bdc2b8814e.jsonl, updated_at=2026-06-14T07:57:41+00:00, thread_id=019ec507-533d-7a71-8423-b8bdc2b8814e, Day can open Agent Chat with Today context and append the latest assistant response back into the bound day file)
+    10	
+    11	### keywords
+    12	
+
+hook: PostToolUse
+hook: PostToolUse Completed
+codex
+## Role Findings
+
+As edge-case tester: the biggest risk is not one timeout, but stacked unbounded waits. `project-imp.ts` blocks on `spawnSync` with no timeout, warm startup can spend 30s before falling back, app-server RPC waits can spend 60s, warm turns have a 120s timeout, and cold SDK fallback has no local deadline. If the main Codex tool call has its own timeout, it can kill the whole attempt before the imp harness writes a useful receipt.
+
+Most likely causes:
+
+- Outer tool timeout: `spawnSync(..., stdio: "inherit")` means the main agent waits until the imp exits.
+- Warm startup failure: `ensureWarmImp(..., 30000)` plus app-server `initialize` can miss the caller’s patience window.
+- Warm turn timeout: `runTurn` hard-codes 120s, likely tight for `gpt-5.5` + `medium` + mandated repo inspection.
+- Cold fallback hang: if warm path fails, SDK quiet/stream path has no repo-local timeout.
+- Queueing: warm server serializes turns; one slow turn delays later callers.
+- Self-improve hooks: Stop hook is only 10s, but still adds tail latency and can hide “model finished but process not done” cases.
+- Receipts gap: receipts appear tied to self-improve observer events, not harness lifecycle events, so startup/connect/spawn/cold-fallback failures can leave no useful record.
+
+## Evidence And Assumptions
+
+Current source supports the above:
+
+- [project-imp.ts](/Users/johnlindquist/dev/script-kit-gpui/.agents/imps/bin/project-imp.ts:36) uses blocking `spawnSync` without a timeout.
+- [imp.ts](/Users/johnlindquist/dev/script-kit-gpui/.agents/imps/lib/imp.ts:302) defaults warm readiness to 30s.
+- [appserver.ts](/Users/johnlindquist/dev/script-kit-gpui/.agents/imps/lib/appserver.ts:110) defaults JSON-RPC response waits to 60s.
+- [appserver.ts](/Users/johnlindquist/dev/script-kit-gpui/.agents/imps/lib/appserver.ts:180) hard-codes the warm turn timeout to 120s.
+- [isolated.ts](/Users/johnlindquist/dev/script-kit-gpui/.agents/imps/lib/isolated.ts:355) cold fallback starts after warm failure and has no equivalent bounded timer.
+- [registry.json](/Users/johnlindquist/dev/script-kit-gpui/.agents/imps/registry.json:3) sets `gpt-5.5` with `medium` reasoning.
+- Receipts directory currently exists but is empty.
+
+`startup_timeout_sec` and `tool_timeout_sec` were found in the user config under `[mcp_servers.*]`, so I would treat them as MCP server startup/tool-call settings, not app-server turn settings. They belong in MCP server config blocks such as `[mcp_servers.node_repl]`, not in imp `thread/start` config unless Codex schema confirms otherwise.
+
+## Failure Modes
+
+Increasing only the 120s turn timeout can make main Codex more likely to hit its own tool timeout with no better receipt.
+
+Forcing `--no-warm` avoids warm socket/app-server bugs, but makes every imp pay cold startup and still lacks a cold timeout.
+
+Lowering reasoning effort improves latency, but may reduce advisory quality. Better default: keep registry effort configurable and allow bounded wrapper overrides like `--effort low` for advisory preflight.
+
+Async imps are useful only if they produce a discoverable receipt. Fire-and-forget without receipt state creates silent failures.
+
+Hooks should stay disabled except self-improve. Even self-improve hook failures need lifecycle receipt entries so hook stalls are distinguishable from model stalls.
+
+## Recommendation
+
+Implement a bounded advisory wrapper around `project-imp` and make timeouts env-configurable.
+
+Concrete repo changes:
+
+1. Add router flags/env:
+   - `CODEX_IMP_ADVISORY_TIMEOUT_MS`, default maybe `45000`.
+   - `CODEX_IMP_WARM_READY_TIMEOUT_MS`, default `10000` or `15000`.
+   - `CODEX_IMP_RPC_TIMEOUT_MS`, default `30000`.
+   - `CODEX_IMP_TURN_TIMEOUT_MS`, default `90000` for advisory mode, maybe `180000` for direct imp CLI.
+   - `CODEX_IMP_COLD_TIMEOUT_MS`, default bounded too.
+
+2. Change `project-imp.ts` from unbounded `spawnSync` to `spawnSync(..., { timeout })`, or use async `spawn` plus timer so it can write a receipt before killing.
+
+3. Add harness lifecycle receipts independent of self-improve:
+   - routed imp
+   - started warm/cold
+   - warm startup timeout
+   - turn timeout
+   - outer advisory timeout
+   - exit code/signal/duration
+   Put these in `.agents/imps/receipts/project-imp.jsonl` or per-imp files.
+
+4. Keep warm default, but fail fast to cold or fail advisory within the wrapper budget. Do not make imps blockers.
+
+5. Add a prompt suffix for advisory calls: “return concise source-grounded findings, no edits, stop after owner files and verification suggestions.” This preserves usefulness while reducing exploratory drift.
+
+6. Do not add `startup_timeout_sec` / `tool_timeout_sec` to imp thread config until verified against Codex schema/source. Use `codex app-server generate-json-schema`, `codex app-server --help`, `codex debug app-server --help`, and `--strict-config` smoke tests to confirm accepted keys.
+
+Verification commands:
+
+```bash
+cd .agents/imps
+bun imps/project-imp --which "shared UI button timeout smoke"
+CODEX_IMP_ADVISORY_TIMEOUT_MS=1000 bun imps/project-imp "shared UI button timeout smoke"
+ls -la receipts && tail -20 receipts/*.jsonl
+CODEX_IMP_WARM_READY_TIMEOUT_MS=1 bun imps/imp-sk-devex -q "Say one sentence about AGENTS.md"
+```
+
+Then run the smallest TS check available for changed imp files, for example:
+
+```bash
+bun --check lib/appserver.ts lib/imp.ts lib/isolated.ts bin/project-imp.ts
+```
+
+## Self Score
+
+8/10. The timeout architecture is clear from local source, but exact Codex config-key semantics need Codex schema/source verification before adding non-MCP timeout keys to imp config.
+
+
+hook: Stop
+hook: Stop
+hook: Stop Completed
+hook: Stop Completed
+tokens used
+57,527

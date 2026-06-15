@@ -1,0 +1,97 @@
+{
+  "schemaVersion": 1,
+  "parseOk": true,
+  "parseError": null,
+  "rawReportSha256": "7634f10dd15ce7f9f2e09bbf6b6e728e72fa967d9a61a02e31cadb8d8ca44262",
+  "claims": [
+    {
+      "claim": "Use kit://clipboard-history?id=<entry_id> as the canonical persisted URI.",
+      "source": "consensus",
+      "verdict": "survived",
+      "evidence_status": "cited",
+      "counterargument": "The URI is resource-shaped and already parsed, but the plan must not imply it is a UI deeplink or image-capable resolver without additional routing/resolution work.",
+      "synthesis_instruction": "may_assert"
+    },
+    {
+      "claim": "Existing clipboard rows have stable IDs.",
+      "source": "consensus",
+      "verdict": "weakened",
+      "evidence_status": "cited",
+      "counterargument": "IDs are stable only while the row exists; add_entry reuses an existing row by content_hash, but a deleted row followed by identical recopy gets a new UUID, leaving old brain links dead.",
+      "synthesis_instruction": "label_as_hypothesis"
+    },
+    {
+      "claim": "Retention can be solved by changing prune_old_entries to preserve brain_kept rows.",
+      "source": "unsupported_claims",
+      "verdict": "refuted",
+      "evidence_status": "cited",
+      "counterargument": "There are multiple deletion paths beyond prune_old_entries, including db_worker prune_impl, clear_unpinned_history, clear_history or clear_impl, remove_entry, and oversized text trimming.",
+      "synthesis_instruction": "drop"
+    },
+    {
+      "claim": "Forward-only migration is enough.",
+      "source": "consensus",
+      "verdict": "weakened",
+      "evidence_status": "unverified",
+      "counterargument": "Forward-only only protects new writes; if the user means no raw values anywhere in brain markdown or brain storage, existing raw day lines, fragments, and indexed clipboard docs remain violations.",
+      "synthesis_instruction": "label_as_hypothesis"
+    },
+    {
+      "claim": "Add DayEntry::ClipboardRef and persist generic Clipboard entry labels only.",
+      "source": "consensus",
+      "verdict": "survived",
+      "evidence_status": "cited",
+      "counterargument": "The model change is necessary but incomplete unless undo/reject line removal, parser/rendering, and source-label formatting all learn the new line and URI shape.",
+      "synthesis_instruction": "may_assert"
+    },
+    {
+      "claim": "Stop creating clipboard-origin fragments for long recopy content.",
+      "source": "consensus",
+      "verdict": "survived",
+      "evidence_status": "cited",
+      "counterargument": "This is required for new production writes, but legacy fragments still need read compatibility and optional later migration because they may already contain raw bodies.",
+      "synthesis_instruction": "may_assert"
+    },
+    {
+      "claim": "Brain search can preserve clipboard searchability by duplicating clipboard content into brain storage.",
+      "source": "unsupported_claims",
+      "verdict": "refuted",
+      "evidence_status": "cited",
+      "counterargument": "Duplicating raw clipboard content into brain_docs conflicts with strict no-raw-values if brain storage is in scope; search should use clipboard history as a separate provider or accept reduced brain searchability.",
+      "synthesis_instruction": "drop"
+    },
+    {
+      "claim": "Smallest milestone can include all clipboard content types.",
+      "source": "synthesis_instructions",
+      "verdict": "weakened",
+      "evidence_status": "cited",
+      "counterargument": "Image clipboard entries are blob-backed and the current single-entry resource path returns text/plain content; text-only should be the first milestone unless image resource resolution is implemented.",
+      "synthesis_instruction": "label_as_hypothesis"
+    }
+  ],
+  "missed_constraints": [
+    "Retention must enumerate automatic delete paths separately from explicit destructive user actions.",
+    "Day Page undo/reject must remove ClipboardRef lines by URI or entry id, not by raw text.",
+    "Day Page source labels must map kit://clipboard-history to a generic Clipboard label.",
+    "No raw clipboard values means no URL labels, previews, excerpts, fragment bodies, or generated labels derived from clipboard content in brain markdown.",
+    "Cargo verification must use ./scripts/agentic/agent-cargo.sh.",
+    "Do not revive post-copy popup UI."
+  ],
+  "synthesis_must_include": [
+    "Canonical persisted format should be exactly kit://clipboard-history?id=<entry_id> with no extra preview or label query params.",
+    "scriptkit://clipboard/<id> should remain legacy provenance compatibility, not the new canonical persisted markdown URI.",
+    "Retention policy should protect brain_kept rows in prune_old_entries, db_worker prune_impl, clear_unpinned_history, and oversized text trimming; explicit remove and clear-all need warning or documented destructive semantics.",
+    "Forward-only migration must be described as new-write-only unless an opt-in raw-content migration is added.",
+    "Brain indexer raw clipboard duplication is a scope decision that must be resolved explicitly.",
+    "Smallest shippable milestone should be text-only ClipboardRef persistence, generic rendering, undo support, and retention protection."
+  ],
+  "synthesis_must_avoid": [
+    "Do not claim stable clipboard IDs survive deletion and recopy.",
+    "Do not claim prune_old_entries alone prevents dead links.",
+    "Do not preserve searchability by copying raw clipboard content into brain markdown or brain_docs without acknowledging the privacy contract violation.",
+    "Do not use scriptkit://clipboard/<id> as the canonical new persisted URI.",
+    "Do not add source-audit tests where behavior tests can cover the invariant.",
+    "Do not include raw URL labels, text previews, excerpts, or note bodies derived from clipboard content."
+  ],
+  "digest": "63c7465117b648acbb00654b9b9de17bbc1f5e7bc19cdc4fc6f454a35e42ba08"
+}

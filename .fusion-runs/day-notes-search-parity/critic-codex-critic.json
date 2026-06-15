@@ -1,0 +1,29 @@
+{
+  "id": "codex-critic",
+  "label": "Codex Critic",
+  "panelRole": null,
+  "command": "codex",
+  "args": [
+    "exec",
+    "--skip-git-repo-check",
+    "--ephemeral",
+    "-C",
+    "/Users/johnlindquist/dev/script-kit-gpui",
+    "-s",
+    "read-only",
+    "-"
+  ],
+  "env": {},
+  "preflight": null,
+  "ok": true,
+  "exitCode": 0,
+  "signal": null,
+  "timedOut": false,
+  "startedAt": "2026-06-15T01:20:14.397Z",
+  "endedAt": "2026-06-15T01:21:27.090Z",
+  "durationMs": 72693,
+  "stdinChars": 44564,
+  "stdinSha256": "5c921d614244d5c1953cee3fc0b03fd2f3705b20912e091364c6244ce06d7349",
+  "stdoutChars": 6768,
+  "stderrChars": 236567
+}

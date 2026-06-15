@@ -1,0 +1,22 @@
+[0m
+> build · glm-5.2
+[0m
+[0m→ [0mRead src/main_sections/day_page_switcher.rs
+[0m→ [0mRead src/notes/window/panels.rs[90m [limit=200][0m
+[0m→ [0mRead src/app_impl/actions_dialog.rs[90m [limit=120][0m
+[0m✱ [0mGrep "handle_day_switcher_key|is_day_switcher_open|open_note_switcher|close_day_switcher"[90m in src/main_sections/day_page_view.rs · 14 matches[0m
+[0m✱ [0mGrep "pub fn (handle_char|handle_backspace|handle_paste|select_next|select_prev|execute_selected_action|mark_closed_externally|is_open)|fn command_bar_key_intent|pub fn open_centered|pub fn close"[90m in src/actions/command_bar.rs · 19 matches[0m
+[0m✱ [0mGrep "close_actions_popup|request_focus_restore_for_actions_host|DayPage"[90m in src/app_impl/actions_dialog.rs · 96 matches[0m
+[0m→ [0mRead src/main_sections/day_page_view.rs[90m [offset=600, limit=110][0m
+[0m→ [0mRead src/actions/command_bar.rs[90m [offset=80, limit=220][0m
+[0m→ [0mRead src/app_impl/actions_dialog.rs[90m [offset=1180, limit=210][0m
+[0m✱ [0mGrep "day_switcher|note_switcher|focus_handle|focus_editor|fn new"[90m in src/main_sections/day_page_view.rs · 100 matches[0m
+[0m✱ [0mGrep "day_switcher|render_day_page_day_switcher_panel|note_switcher"[90m in src/main_sections · 69 matches[0m
+[0m→ [0mRead src/actions/command_bar.rs[90m [limit=160, offset=810][0m
+[0m✱ [0mGrep "note_switcher|is_browse_open|handle_key|browse_open|mark_closed_externally"[90m in src/notes/window · 83 matches[0m
+[0m✱ [0mGrep "command_bar_key_intent|CommandBarKeyIntent|fn handle_key_down|on_key_down|KeyDownEvent"[90m in src/actions · 69 matches[0m
+[0m→ [0mRead src/main_sections/day_page_view.rs[90m [limit=90, offset=560][0m
+[0m→ [0mRead src/actions/window.rs[90m [limit=75, offset=925][0m
+[0m→ [0mRead src/notes/window/keyboard.rs[90m [limit=130, offset=455][0m
+[0m→ [0mRead src/app_impl/actions_dialog.rs[90m [limit=60, offset=1340][0m
+[0m✱ [0mGrep "close_actions|focus_editor|on_close|Escape|escape|MainList"[90m in src/main_sections/day_page_actions.rs · 100 matches[0m

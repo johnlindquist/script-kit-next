@@ -1,0 +1,29 @@
+{
+  "id": "codex",
+  "label": "Codex",
+  "panelRole": "architect",
+  "command": "codex",
+  "args": [
+    "exec",
+    "--skip-git-repo-check",
+    "--ephemeral",
+    "-C",
+    "/Users/johnlindquist/dev/script-kit-gpui",
+    "-s",
+    "read-only",
+    "-"
+  ],
+  "env": {},
+  "preflight": null,
+  "ok": true,
+  "exitCode": 0,
+  "signal": null,
+  "timedOut": false,
+  "startedAt": "2026-06-15T01:15:07.554Z",
+  "endedAt": "2026-06-15T01:16:32.793Z",
+  "durationMs": 85239,
+  "stdinChars": 3609,
+  "stdinSha256": "9ceabb94d45fb83b3bfe5be098837673c15926d11df86bdc4bfffd0121b78e5a",
+  "stdoutChars": 6802,
+  "stderrChars": 385839
+}

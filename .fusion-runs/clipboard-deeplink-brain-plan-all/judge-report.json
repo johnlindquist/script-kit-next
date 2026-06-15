@@ -1,0 +1,94 @@
+{
+  "schemaVersion": 1,
+  "parseOk": true,
+  "parseError": null,
+  "rawReportSha256": "43d76b6ac9bbaa48f01a4f34a232ae6141eea8d54f2cffe87fa7737c4cad9bc7",
+  "scores": {
+    "codex-gpt-5.5-high": {
+      "correctness": 8,
+      "task_fit": 9,
+      "evidence": 8,
+      "specificity": 8,
+      "constraint_following": 9,
+      "novelty": 7,
+      "risk_awareness": 8,
+      "cost_complexity": 8,
+      "rationale": "Strong architecture plan grounded in provided source evidence, with useful brain indexer and search tradeoff callouts; missed several delete-path and edge-case details."
+    },
+    "claude-opus-4.8-high": {
+      "correctness": 1,
+      "task_fit": 1,
+      "evidence": 1,
+      "specificity": 1,
+      "constraint_following": 1,
+      "novelty": 1,
+      "risk_awareness": 2,
+      "cost_complexity": 1,
+      "rationale": "Did not return the requested artifact; only began describing intended inspections."
+    },
+    "agy-gemini-flash-high": {
+      "correctness": 1,
+      "task_fit": 1,
+      "evidence": 1,
+      "specificity": 1,
+      "constraint_following": 1,
+      "novelty": 1,
+      "risk_awareness": 1,
+      "cost_complexity": 1,
+      "rationale": "Returned no usable analysis."
+    },
+    "opencode-glm-5.2-high": {
+      "correctness": 9,
+      "task_fit": 9,
+      "evidence": 9,
+      "specificity": 9,
+      "constraint_following": 9,
+      "novelty": 9,
+      "risk_awareness": 10,
+      "cost_complexity": 8,
+      "rationale": "Excellent edge-case critique with concrete source-path risks around deletion, undo, labels, images, and oversized trimming."
+    }
+  },
+  "consensus": [
+    "Use kit://clipboard-history?id=<entry_id> as the canonical persisted URI.",
+    "Do not use scriptkit://clipboard/<id> for new brain markdown; keep it for legacy or provenance compatibility.",
+    "Persist generic Clipboard entry labels only, with no raw URL labels, previews, excerpts, or fragment bodies.",
+    "Add a DayEntry::ClipboardRef-like model and update clipboard sediment writers.",
+    "Retention must protect clipboard rows referenced from brain markdown.",
+    "Initial migration should be forward-only."
+  ],
+  "contradictions": [
+    "Codex focused mainly on prune and clear behavior, while GLM identified multiple delete paths; GLM is better supported and final synthesis should enumerate all deletion paths.",
+    "Codex included annotate_clipboard_entry as a target, while GLM says it is test-gated; prioritize production writers but update test-gated code if it asserts the old contract.",
+    "Codex raised raw brain index duplication, while GLM did not; include it as a requirement-interpretation checkpoint."
+  ],
+  "unsupported_claims": [
+    "Any claim that scriptkit://clipboard/<id> should become the canonical persisted deeplink lacks support from current resource infrastructure.",
+    "Any plan that changing prune_old_entries alone prevents dead links is unsupported.",
+    "Any plan that preserves search by duplicating clipboard content into brain storage conflicts with the strict no-raw-values requirement unless explicitly scoped outside brain markdown."
+  ],
+  "unique_insights": [
+    "Pinned clipboard content may be duplicated into brain_docs via brain indexing.",
+    "Image clipboard entries need an explicit skip-or-image-resource policy.",
+    "Day Page source label formatting may leak the literal kit URI without a specific branch.",
+    "Undo/reject logic must learn the new ClipboardRef line shape.",
+    "Oversized text trimming can delete the long clipboard rows most likely to be brain-linked.",
+    "Deleted and recopied identical content may receive a new ID, leaving old deeplinks dead."
+  ],
+  "failure_notes": [
+    "claude-opus-4.8-high failed to return the requested artifact, reducing skeptic coverage.",
+    "agy-gemini-flash-high failed to return the requested artifact, reducing evidence-auditor coverage.",
+    "Confidence remains medium because two other outputs were strong and the prompt included concrete source evidence."
+  ],
+  "confidence": "medium",
+  "escalation_needed": true,
+  "synthesis_instructions": [
+    "Base the final plan on kit://clipboard-history?id=<entry_id> with generic labels only.",
+    "Include all automatic delete paths in the retention plan, not only prune_old_entries.",
+    "Require a DayEntry::ClipboardRef model, sediment writer changes, undo support, and Day Page generic rendering.",
+    "Call out brain indexer raw duplication as an explicit scope decision.",
+    "Make the smallest milestone text-only unless image resource resolution is verified.",
+    "Use behavior tests and ./scripts/agentic/agent-cargo.sh for verification; do not add source-audit tests unless unavoidable."
+  ],
+  "digest": "7c67dced532c2340dc73654921c418cef13086c21832fea22dfd5758b2104e40"
+}

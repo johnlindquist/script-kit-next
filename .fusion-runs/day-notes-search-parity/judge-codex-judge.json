@@ -1,0 +1,29 @@
+{
+  "id": "codex-judge",
+  "label": "Codex Judge",
+  "panelRole": null,
+  "command": "codex",
+  "args": [
+    "exec",
+    "--skip-git-repo-check",
+    "--ephemeral",
+    "-C",
+    "/Users/johnlindquist/dev/script-kit-gpui",
+    "-s",
+    "read-only",
+    "-"
+  ],
+  "env": {},
+  "preflight": null,
+  "ok": true,
+  "exitCode": 0,
+  "signal": null,
+  "timedOut": false,
+  "startedAt": "2026-06-15T01:19:11.408Z",
+  "endedAt": "2026-06-15T01:20:14.393Z",
+  "durationMs": 62985,
+  "stdinChars": 41137,
+  "stdinSha256": "000b5753b9b2a36306dcd50dd2a6395e01a16a8aaf372d2292b34993ec1692d4",
+  "stdoutChars": 9620,
+  "stderrChars": 75008
+}

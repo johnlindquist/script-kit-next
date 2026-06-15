@@ -1,0 +1,2 @@
+error: failed to run prompt: auth.login_required: OAuth provider "managed:kimi-code" requires login before it can be used.
+See log: /Users/johnlindquist/.kimi-code/logs/kimi-code.log

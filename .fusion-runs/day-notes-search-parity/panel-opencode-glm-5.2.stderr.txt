@@ -1,0 +1,22 @@
+[0m
+> build · glm-5.2
+[0m
+[0m→ [0mRead src/main_sections/day_page_switcher.rs
+[0m→ [0mRead src/main_sections/day_page_actions.rs
+[0m→ [0mRead src/notes/window/panels.rs
+[0m✱ [0mGrep "NoteSwitcherNoteInfo"[90m 100 matches[0m
+[0m✱ [0mGrep "open_past_day|open_day_switcher|toggle_day_switcher"[90m 81 matches[0m
+[0m✱ [0mGrep "fn get_note_switcher_actions"[90m 10 matches[0m
+[0m✱ [0mGrep "daypage_|day_page.*switcher.*notes|no-crossover|crossover"[90m 100 matches[0m
+[0m→ [0mRead scripts/agentic/notes-day-page-switcher-probe.ts
+[0m→ [0mRead src/actions/builders/notes.rs[90m [offset=820, limit=120][0m
+[0m✱ [0mGrep "bind_today|bind_date|fn bind_day|bound_date|fn select_note"[90m in src · 47 matches[0m
+[0m✱ [0mGrep "no-crossover|Notes-only|Notes Cmd\+P|day notes|Day Notes|shared.*switcher|shared.*search"[90m 100 matches[0m
+[0m→ [0mRead src/main_sections/day_page_view.rs[90m [limit=60, offset=620][0m
+[0m→ [0mRead src/notes/window/notes.rs[90m [limit=120, offset=280][0m
+[0m✱ [0mGlob "src/notes/day_page_rows.rs"[90m 0 matches[0m
+[0m✱ [0mGrep "pub struct NoteSwitcherNoteInfo|struct NoteSwitcherNoteInfo"[90m 3 matches[0m
+[0m→ [0mRead src/actions/builders/notes.rs[90m [limit=45, offset=755][0m
+[0m✱ [0mGrep "note_switcher: CommandBar|command_bar: CommandBar|CommandBar::new|day_switcher:"[90m in src · 11 matches[0m
+[0m✱ [0mGrep "never_contain_day_page|day_page_section_or_ids|no_day_page|daypage_"[90m in src · 1 match[0m
+[0m✱ [0mGrep "day_page_rows|DayPageSwitcherInfo|get_day_page_switcher_actions|open_day_page_in_main"[90m in src · 0 matches[0m
