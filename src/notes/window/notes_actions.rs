@@ -305,14 +305,34 @@ impl NotesApp {
             "notes",
             run_deeplink_confirm_options(&command_id, &raw_href),
             move |_window, cx| {
-                if let Some(entity) = weak_notes_for_confirm.upgrade() {
-                    entity.update(cx, |this, cx| {
+                let execution_result =
+                    super::execute_notes_run_command_deeplink(&command_id_for_confirm, cx);
+                match &execution_result {
+                    Ok(needs_main_window) => {
                         tracing::info!(
                             event = "notes_deeplink_run_confirmed",
                             command_id = %command_id_for_confirm,
+                            needs_main_window = *needs_main_window,
                             "notes_deeplink_run_confirmed",
                         );
-                        this.show_action_feedback("Run link confirmed", false);
+                    }
+                    Err(error) => {
+                        tracing::warn!(
+                            event = "notes_deeplink_run_execute_failed",
+                            command_id = %command_id_for_confirm,
+                            error = %error,
+                            "notes_deeplink_run_execute_failed",
+                        );
+                    }
+                }
+                let feedback = if execution_result.is_ok() {
+                    ("Run link submitted", false)
+                } else {
+                    ("Could not run link", true)
+                };
+                if let Some(entity) = weak_notes_for_confirm.upgrade() {
+                    entity.update(cx, |this, cx| {
+                        this.show_action_feedback(feedback.0, feedback.1);
                         cx.notify();
                     });
                 }

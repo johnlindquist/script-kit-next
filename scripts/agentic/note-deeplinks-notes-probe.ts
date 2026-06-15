@@ -5,7 +5,7 @@
  * - Cmd+. on a run deeplink opens a confirm popup instead of silently executing
  */
 import { join, resolve } from "node:path";
-import { mkdir } from "node:fs/promises";
+import { mkdir, readFile } from "node:fs/promises";
 import { Driver, type Json } from "../devtools/driver";
 
 const PROJECT_ROOT = resolve(import.meta.dir, "../..");
@@ -22,6 +22,10 @@ const receipt: Obj = {
   pass: false,
   failures: [] as string[],
 };
+const runExecReceiptPath = join(
+  process.env.TMPDIR ?? "/tmp",
+  `notes-run-exec-${Date.now()}.jsonl`,
+);
 
 function asObj(value: unknown): Obj {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -100,6 +104,19 @@ async function escape(driver: Driver) {
   await Bun.sleep(100);
 }
 
+async function enter(driver: Driver) {
+  legacyTargetedKey(driver, "enter");
+  await Bun.sleep(100);
+}
+
+async function readReceipt(path: string): Promise<string> {
+  try {
+    return await readFile(path, "utf8");
+  } catch {
+    return "";
+  }
+}
+
 async function confirmWindows(driver: Driver): Promise<Obj[]> {
   const res = asObj(await driver.listAutomationWindows({ timeoutMs: 8000 }));
   const windows = (res.windows as Json[] | undefined) ?? [];
@@ -125,7 +142,10 @@ const driver = await Driver.launch({
   sessionName: "note-deeplinks-notes",
   sandboxHome: true,
   defaultTimeoutMs: 8000,
-  env: { SCRIPT_KIT_PANEL_INVARIANTS_ALLOW_MISMATCH: "1" },
+  env: {
+    SCRIPT_KIT_PANEL_INVARIANTS_ALLOW_MISMATCH: "1",
+    SCRIPT_KIT_TEST_NOTES_RUN_EXEC_RECEIPT: runExecReceiptPath,
+  },
 });
 
 try {
@@ -170,6 +190,42 @@ try {
   const runClose = await closeConfirmWithEscape(driver, "run");
   check("escape_closes_run_confirm", runClose.closed, {
     confirmWindows: runClose.confirmWindows,
+  });
+  const afterCancelReceipt = await readReceipt(runExecReceiptPath);
+  check("run_link_escape_did_not_execute", afterCancelReceipt.trim() === "", {
+    receipt: afterCancelReceipt,
+  });
+
+  const safeRunLink = "scriptkit://commands/builtin/refresh-scripts";
+  const safeRunSeed = await setNotesInput(driver, safeRunLink);
+  check("safe_run_link_seeded", safeRunSeed.success === true, { batch: safeRunSeed });
+  await cmdDot(driver);
+  const safeConfirmOpened = await pollUntil("safe-run-confirm-open", async () => {
+    const windows = await confirmWindows(driver);
+    return windows.length > 0;
+  });
+  check("cmd_dot_on_safe_run_link_opens_confirm", safeConfirmOpened, {
+    confirmWindows: await confirmWindows(driver),
+  });
+  const beforeConfirmReceipt = await readReceipt(runExecReceiptPath);
+  check("safe_run_link_not_executed_before_confirm", beforeConfirmReceipt.trim() === "", {
+    receipt: beforeConfirmReceipt,
+  });
+  await enter(driver);
+  const safeRunExecuted = await pollUntil("safe-run-executed-after-confirm", async () => {
+    const receiptText = await readReceipt(runExecReceiptPath);
+    return receiptText.includes('"commandId":"builtin/refresh-scripts"');
+  });
+  const afterConfirmReceipt = await readReceipt(runExecReceiptPath);
+  check("safe_run_link_executes_after_confirm", safeRunExecuted, {
+    receipt: afterConfirmReceipt,
+  });
+  const safeConfirmClosed = await pollUntil("safe-run-confirm-closed", async () => {
+    const windows = await confirmWindows(driver);
+    return windows.length === 0;
+  });
+  check("safe_run_confirm_closes_cleanly", safeConfirmClosed, {
+    confirmWindows: await confirmWindows(driver),
   });
 
   const missingParent = join(driver.sessionDir, "existing-parent");

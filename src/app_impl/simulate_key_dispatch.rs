@@ -97,13 +97,21 @@ impl ScriptListApp {
             && !_has_alt
             && !_has_ctrl
             && simulate_key_target_is_notes
-            && (key_lower == "escape" || key_lower == "esc")
+            && (key_lower == "escape"
+                || key_lower == "esc"
+                || key_lower == "enter"
+                || key_lower == "return")
             && crate::confirm::is_confirm_window_open()
         {
-            let handled = crate::confirm::route_key_to_confirm_popup("escape", ctx);
+            let confirm_key = if key_lower == "enter" || key_lower == "return" {
+                "enter"
+            } else {
+                "escape"
+            };
+            let handled = crate::confirm::route_key_to_confirm_popup(confirm_key, ctx);
             logging::log(
                 "STDIN",
-                &format!("SimulateKey: {key} - Notes confirm popup cancel handled={handled}"),
+                &format!("SimulateKey: {key} - Notes confirm popup handled={handled}"),
             );
             if handled {
                 return;

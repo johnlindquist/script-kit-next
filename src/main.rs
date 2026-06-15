@@ -401,7 +401,64 @@ include!("render_prompts/micro.rs");
 // Script list render method
 include!("render_script_list/mod.rs");
 
+fn execute_notes_run_command_from_main(
+    command_id: &str,
+    cx: &mut gpui::App,
+) -> Result<bool, String> {
+    let Some(handle) = crate::get_main_window_handle() else {
+        tracing::warn!(
+            event = "notes_run_command_main_window_unavailable",
+            command_id = %command_id,
+        );
+        return Err("Main window handle is unavailable".to_string());
+    };
+
+    handle
+        .update(cx, |any_view, _window, cx| -> Result<bool, String> {
+            let root = any_view
+                .downcast::<gpui_component::Root>()
+                .map_err(|_| "Main window root is not gpui_component::Root".to_string())?;
+            let inner = root.read(cx).view().clone();
+            let app = inner
+                .downcast::<ScriptListApp>()
+                .map_err(|_| "Main window root view is not ScriptListApp".to_string())?;
+            app.update(cx, |app, cx| {
+                #[cfg(debug_assertions)]
+                if let Some(path) = std::env::var_os("SCRIPT_KIT_TEST_NOTES_RUN_EXEC_RECEIPT") {
+                    return write_notes_run_exec_probe_receipt(path, command_id).map(|()| false);
+                }
+
+                Ok(app.execute_by_command_id_or_path(command_id, cx))
+            })
+        })
+        .map_err(|error| format!("Failed to update main window: {error}"))?
+}
+
+#[cfg(debug_assertions)]
+fn write_notes_run_exec_probe_receipt(
+    path: std::ffi::OsString,
+    command_id: &str,
+) -> Result<(), String> {
+    use std::io::Write;
+
+    let mut file = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&path)
+        .map_err(|error| format!("Failed to open Notes run receipt: {error}"))?;
+    writeln!(
+        file,
+        "{}",
+        serde_json::json!({
+            "source": "notesRunDeeplink",
+            "commandId": command_id,
+        })
+    )
+    .map_err(|error| format!("Failed to write Notes run receipt: {error}"))
+}
+
 fn main() {
+    crate::notes::register_notes_run_command_executor(execute_notes_run_command_from_main);
     include!("main_entry/app_run_setup.rs");
 }
 #[cfg(test)]

@@ -53,6 +53,30 @@ static NOTES_WINDOW: std::sync::OnceLock<std::sync::Mutex<Option<gpui::WindowHan
 static NOTES_APP_ENTITY: std::sync::OnceLock<std::sync::Mutex<Option<Entity<NotesApp>>>> =
     std::sync::OnceLock::new();
 
+pub type NotesRunCommandExecutor = fn(command_id: &str, cx: &mut App) -> Result<bool, String>;
+
+static NOTES_RUN_COMMAND_EXECUTOR: std::sync::OnceLock<NotesRunCommandExecutor> =
+    std::sync::OnceLock::new();
+
+pub fn register_notes_run_command_executor(executor: NotesRunCommandExecutor) {
+    if NOTES_RUN_COMMAND_EXECUTOR.set(executor).is_err() {
+        tracing::warn!(
+            event = "notes_run_command_executor_already_registered",
+            "Notes run command executor was already registered"
+        );
+    }
+}
+
+pub(crate) fn execute_notes_run_command_deeplink(
+    command_id: &str,
+    cx: &mut App,
+) -> Result<bool, String> {
+    let Some(executor) = NOTES_RUN_COMMAND_EXECUTOR.get().copied() else {
+        return Err("No Notes run command executor is registered".to_string());
+    };
+    executor(command_id, cx)
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum NotesCloseBehavior {
     RestoreLauncher,
