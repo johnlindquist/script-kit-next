@@ -97,6 +97,15 @@ async function closeConfirmWithEscape(driver: Driver, label: string) {
   };
 }
 
+async function clickDayPageEditorFirstLine(driver: Driver) {
+  const results = await driver.simulateGpuiClick(72, 104, {
+    target: { type: "kind", kind: "main" },
+    timeoutMs: 8000,
+  });
+  await Bun.sleep(150);
+  return results.map(asObj);
+}
+
 const driver = await Driver.launch({
   binary: BINARY,
   sessionName: "note-deeplinks-day-page",
@@ -135,6 +144,61 @@ try {
     "escape_closes_spine_modal_and_returns_day_page",
     spineClose.closed && spineClose.state.promptType === "dayPage",
     spineClose,
+  );
+
+  const mousePlainSeed = asObj(await setDayPageInput(driver, "mouse plain text"));
+  check("mouse_plain_text_seeded", mousePlainSeed.success === true, { batch: mousePlainSeed });
+  const mousePlainClick = await clickDayPageEditorFirstLine(driver);
+  check("mouse_plain_text_click_dispatches", mousePlainClick.every((result) => result.success), {
+    click: mousePlainClick,
+  });
+  await Bun.sleep(200);
+  const mousePlainState = await getStateSummary(driver);
+  check("mouse_plain_text_click_stays_on_day_page", mousePlainState.promptType === "dayPage", {
+    state: mousePlainState,
+    confirmWindows: await confirmWindows(driver),
+  });
+
+  const mouseRunLink = "scriptkit://run/nonexistent-day-page-mouse-proof-script";
+  const mouseRunSeed = asObj(await setDayPageInput(driver, mouseRunLink));
+  check("mouse_run_link_seeded", mouseRunSeed.success === true, { batch: mouseRunSeed });
+  const mouseRunClick = await clickDayPageEditorFirstLine(driver);
+  check("mouse_run_link_click_dispatches", mouseRunClick.every((result) => result.success), {
+    click: mouseRunClick,
+  });
+  const mouseRunConfirm = await waitForPromptType(
+    driver,
+    "confirmPrompt",
+    "mouse-run-confirm-open",
+  );
+  check("mouse_run_link_opens_confirm", mouseRunConfirm.opened, mouseRunConfirm);
+  const mouseRunClose = await closeConfirmWithEscape(driver, "mouse-run");
+  check(
+    "escape_closes_mouse_run_confirm_and_returns_day_page",
+    mouseRunClose.closed && mouseRunClose.state.promptType === "dayPage",
+    mouseRunClose,
+  );
+
+  const mouseUnknownSpineLink = "scriptkit://spine/not-a-source/value";
+  const mouseUnknownSeed = asObj(await setDayPageInput(driver, mouseUnknownSpineLink));
+  check("mouse_unknown_spine_link_seeded", mouseUnknownSeed.success === true, {
+    batch: mouseUnknownSeed,
+  });
+  const mouseUnknownClick = await clickDayPageEditorFirstLine(driver);
+  check("mouse_unknown_spine_click_dispatches", mouseUnknownClick.every((result) => result.success), {
+    click: mouseUnknownClick,
+  });
+  const mouseUnknownModal = await waitForPromptType(
+    driver,
+    "confirmPrompt",
+    "mouse-unknown-spine-modal-open",
+  );
+  check("mouse_unknown_spine_opens_context_modal", mouseUnknownModal.opened, mouseUnknownModal);
+  const mouseUnknownClose = await closeConfirmWithEscape(driver, "mouse-unknown-spine");
+  check(
+    "escape_closes_mouse_unknown_spine_modal_and_returns_day_page",
+    mouseUnknownClose.closed && mouseUnknownClose.state.promptType === "dayPage",
+    mouseUnknownClose,
   );
 
   receipt.sessionDir = driver.sessionDir;

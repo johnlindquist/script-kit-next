@@ -109,6 +109,15 @@ async function enter(driver: Driver) {
   await Bun.sleep(100);
 }
 
+async function clickNotesEditorFirstLine(driver: Driver) {
+  const results = await driver.simulateGpuiClick(32, 64, {
+    target: { type: "kind", kind: "notes" },
+    timeoutMs: 8000,
+  });
+  await Bun.sleep(150);
+  return results.map(asObj);
+}
+
 async function readReceipt(path: string): Promise<string> {
   try {
     return await readFile(path, "utf8");
@@ -245,6 +254,68 @@ try {
   const missingClose = await closeConfirmWithEscape(driver, "missing-file");
   check("escape_closes_missing_file_modal", missingClose.closed, {
     confirmWindows: missingClose.confirmWindows,
+    view: await notesView(driver),
+  });
+
+  const mousePlain = await setNotesInput(driver, "mouse plain text");
+  check("mouse_plain_text_seeded", mousePlain.success === true, { batch: mousePlain });
+  const mousePlainClick = await clickNotesEditorFirstLine(driver);
+  check("mouse_plain_text_click_dispatches", mousePlainClick.every((result) => result.success), {
+    click: mousePlainClick,
+  });
+  await Bun.sleep(200);
+  check("mouse_plain_text_click_does_not_open_modal", (await confirmWindows(driver)).length === 0, {
+    confirmWindows: await confirmWindows(driver),
+    view: await notesView(driver),
+  });
+
+  const mouseRunLink = "scriptkit://run/nonexistent-mouse-proof-script";
+  const mouseRunSeed = await setNotesInput(driver, mouseRunLink);
+  check("mouse_run_link_seeded", mouseRunSeed.success === true, { batch: mouseRunSeed });
+  const beforeMouseRunReceipt = await readReceipt(runExecReceiptPath);
+  const mouseRunClick = await clickNotesEditorFirstLine(driver);
+  check("mouse_run_link_click_dispatches", mouseRunClick.every((result) => result.success), {
+    click: mouseRunClick,
+  });
+  const mouseRunConfirmOpened = await pollUntil("mouse-run-confirm-open", async () => {
+    const windows = await confirmWindows(driver);
+    return windows.some((window) => String(window.title) === "Run Script Kit command?");
+  });
+  check("mouse_run_link_opens_confirm", mouseRunConfirmOpened, {
+    confirmWindows: await confirmWindows(driver),
+  });
+  const afterMouseRunReceipt = await readReceipt(runExecReceiptPath);
+  check("mouse_run_link_not_executed_before_confirm", afterMouseRunReceipt === beforeMouseRunReceipt, {
+    before: beforeMouseRunReceipt,
+    after: afterMouseRunReceipt,
+  });
+  const mouseRunClose = await closeConfirmWithEscape(driver, "mouse-run");
+  check("escape_closes_mouse_run_confirm", mouseRunClose.closed, {
+    confirmWindows: mouseRunClose.confirmWindows,
+    view: await notesView(driver),
+  });
+
+  const mouseMissingParent = join(driver.sessionDir, "mouse-existing-parent");
+  await mkdir(mouseMissingParent, { recursive: true });
+  const mouseMissingFile = join(mouseMissingParent, "missing-mouse-deeplink-target.txt");
+  const mouseMissingSeed = await setNotesInput(driver, mouseMissingFile);
+  check("mouse_missing_file_link_seeded", mouseMissingSeed.success === true, {
+    batch: mouseMissingSeed,
+  });
+  const mouseMissingClick = await clickNotesEditorFirstLine(driver);
+  check("mouse_missing_file_click_dispatches", mouseMissingClick.every((result) => result.success), {
+    click: mouseMissingClick,
+  });
+  const mouseMissingModalOpened = await pollUntil("mouse-missing-file-modal-open", async () => {
+    const windows = await confirmWindows(driver);
+    return windows.some((window) => String(window.title) === "Can't open this link");
+  });
+  check("mouse_missing_file_opens_helpful_modal", mouseMissingModalOpened, {
+    confirmWindows: await confirmWindows(driver),
+  });
+  const mouseMissingClose = await closeConfirmWithEscape(driver, "mouse-missing-file");
+  check("escape_closes_mouse_missing_file_modal", mouseMissingClose.closed, {
+    confirmWindows: mouseMissingClose.confirmWindows,
     view: await notesView(driver),
   });
 

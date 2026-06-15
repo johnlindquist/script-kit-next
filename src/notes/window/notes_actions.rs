@@ -68,6 +68,30 @@ impl NotesApp {
         true
     }
 
+    pub(super) fn activate_deeplink_from_mouse_up(
+        &mut self,
+        event: gpui::MouseUpEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let notes = cx.entity().downgrade();
+        window.defer(cx, move |window, cx| {
+            let Some(notes) = notes.upgrade() else {
+                return;
+            };
+            notes.update(cx, |this, cx| {
+                let selection = this.notes_editor.read(cx).selection(cx);
+                if !crate::components::notes_editor::should_activate_deeplink_from_mouse_up(
+                    &event, selection,
+                ) {
+                    return;
+                }
+
+                this.activate_deeplink_under_cursor(window, cx);
+            });
+        });
+    }
+
     fn handle_deeplink_activation(
         &mut self,
         activation: Activation,

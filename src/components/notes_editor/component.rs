@@ -289,6 +289,19 @@ impl NotesEditor {
     }
 }
 
+pub(crate) fn should_activate_deeplink_from_mouse_up(
+    event: &gpui::MouseUpEvent,
+    selection: Range<usize>,
+) -> bool {
+    event.button == gpui::MouseButton::Left
+        && event.click_count == 1
+        && !event.modifiers.platform
+        && !event.modifiers.shift
+        && !event.modifiers.control
+        && !event.modifiers.alt
+        && selection.is_empty()
+}
+
 fn markdown_link_highlight_ranges(text: &str, accent: Hsla) -> Vec<(Range<usize>, Hsla, String)> {
     let mut ranges = Vec::new();
     for line in markdown_non_code_lines(text) {
@@ -676,7 +689,10 @@ fn ranges_overlap(a: &Range<usize>, b: &Range<usize>) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{activation_href_at_cursor_in_text, markdown_link_highlight_ranges};
+    use super::{
+        activation_href_at_cursor_in_text, markdown_link_highlight_ranges,
+        should_activate_deeplink_from_mouse_up,
+    };
     use gpui::rgb;
 
     fn highlighted_texts(input: &str) -> Vec<String> {
@@ -791,5 +807,44 @@ mod tests {
     #[test]
     fn activation_href_returns_none_for_plain_text() {
         assert_eq!(activation_href_at_cursor_in_text("plain text", 3), None);
+    }
+
+    #[test]
+    fn mouse_deeplink_activation_requires_plain_collapsed_left_click() {
+        let plain_click = gpui::MouseUpEvent {
+            button: gpui::MouseButton::Left,
+            click_count: 1,
+            ..Default::default()
+        };
+        assert!(should_activate_deeplink_from_mouse_up(&plain_click, 4..4));
+
+        let right_click = gpui::MouseUpEvent {
+            button: gpui::MouseButton::Right,
+            click_count: 1,
+            ..Default::default()
+        };
+        assert!(!should_activate_deeplink_from_mouse_up(&right_click, 4..4));
+
+        let double_click = gpui::MouseUpEvent {
+            button: gpui::MouseButton::Left,
+            click_count: 2,
+            ..Default::default()
+        };
+        assert!(!should_activate_deeplink_from_mouse_up(&double_click, 4..4));
+
+        let shifted_click = gpui::MouseUpEvent {
+            button: gpui::MouseButton::Left,
+            click_count: 1,
+            modifiers: gpui::Modifiers {
+                shift: true,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        assert!(!should_activate_deeplink_from_mouse_up(
+            &shifted_click,
+            4..4
+        ));
+        assert!(!should_activate_deeplink_from_mouse_up(&plain_click, 4..8));
     }
 }

@@ -304,6 +304,42 @@ export class Driver {
     this.send({ type: "simulateKey", key, modifiers });
   }
 
+  simulateGpuiEvent(
+    event: Json,
+    opts: { target?: Json; timeoutMs?: number } = {},
+  ): Promise<Json> {
+    const command: Json = { type: "simulateGpuiEvent", event };
+    if (opts.target !== undefined) command.target = opts.target;
+    return this.request(command, {
+      expect: "simulateGpuiEventResult",
+      timeoutMs: opts.timeoutMs ?? this.defaultTimeoutMs,
+    });
+  }
+
+  async simulateGpuiClick(
+    x: number,
+    y: number,
+    opts: { target?: Json; button?: string; timeoutMs?: number } = {},
+  ): Promise<Json[]> {
+    const eventTarget = opts.target;
+    const timeoutMs = opts.timeoutMs;
+    const button = opts.button ?? "left";
+    const common = { button, x, y };
+    const move = await this.simulateGpuiEvent(
+      { type: "mouseMove", x, y },
+      { target: eventTarget, timeoutMs },
+    );
+    const down = await this.simulateGpuiEvent(
+      { type: "mouseDown", ...common },
+      { target: eventTarget, timeoutMs },
+    );
+    const up = await this.simulateGpuiEvent(
+      { type: "mouseUp", ...common },
+      { target: eventTarget, timeoutMs },
+    );
+    return [move, down, up];
+  }
+
   waitFor(
     condition: Json | string,
     opts: { timeoutMs?: number; pollIntervalMs?: number } = {},

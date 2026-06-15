@@ -120,6 +120,18 @@ impl NotesApp {
         // padding/advance/line-height math drifts from the Input's real
         // metrics and renders the ghost offset from the text.
         let input = self.notes_editor.read(cx).render_input(cx);
+        let input = div()
+            .relative()
+            .flex_1()
+            .min_h(px(0.))
+            .h_full()
+            .on_mouse_up(
+                gpui::MouseButton::Left,
+                cx.listener(|this, event: &gpui::MouseUpEvent, window, cx| {
+                    this.activate_deeplink_from_mouse_up(event.clone(), window, cx);
+                }),
+            )
+            .child(input);
         let spine_panel = self.render_notes_spine_panel(cx);
         div()
             .relative()

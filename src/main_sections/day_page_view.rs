@@ -482,6 +482,18 @@ impl Render for DayPageView {
 
         let columns = crate::components::main_view_chrome::main_view_content_columns(menu_def);
         let editor_input = self.notes_editor.read(cx).render_input(cx);
+        let editor_input = div()
+            .relative()
+            .flex_1()
+            .min_h(px(0.))
+            .h_full()
+            .on_mouse_up(
+                gpui::MouseButton::Left,
+                cx.listener(|this, event: &gpui::MouseUpEvent, window, cx| {
+                    this.activate_deeplink_from_mouse_up(event.clone(), window, cx);
+                }),
+            )
+            .child(editor_input);
         let viewing_fragment = self.session.is_viewing_fragment();
         let theme = app_state.theme.clone();
 
@@ -765,13 +777,42 @@ impl DayPageView {
         }
     }
 
-    fn activate_deeplink_under_cursor(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    fn activate_deeplink_under_cursor(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
         let href = self.notes_editor.read(cx).activation_href_at_cursor(cx);
         let Some(href) = href else {
-            return;
+            return false;
         };
         let activation = resolve_activation(&href, ActivationSurface::DayPage);
         self.handle_deeplink_activation(activation, window, cx);
+        true
+    }
+
+    fn activate_deeplink_from_mouse_up(
+        &mut self,
+        event: gpui::MouseUpEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let day_page = cx.entity().downgrade();
+        window.defer(cx, move |window, cx| {
+            let Some(day_page) = day_page.upgrade() else {
+                return;
+            };
+            day_page.update(cx, |this, cx| {
+                let selection = this.notes_editor.read(cx).selection(cx);
+                if !crate::components::notes_editor::should_activate_deeplink_from_mouse_up(
+                    &event, selection,
+                ) {
+                    return;
+                }
+
+                this.activate_deeplink_under_cursor(window, cx);
+            });
+        });
     }
 
     fn handle_deeplink_activation(
