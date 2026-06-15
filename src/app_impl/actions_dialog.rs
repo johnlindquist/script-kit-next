@@ -848,9 +848,13 @@ impl ScriptListApp {
             return ActionsRoute::NotHandled;
         }
 
-        // Defensive: if UI says it's open but dialog is None, don't leak keys
+        // A main-window CommandBar hosted by a child surface (Day Page Cmd+P)
+        // uses the shared detached actions window without storing its dialog
+        // in ScriptListApp.actions_dialog. Let that popup/window or the child
+        // view handle keys instead of swallowing them through the stale
+        // shared-actions route.
         let Some(ref dialog) = self.actions_dialog else {
-            return ActionsRoute::Handled;
+            return ActionsRoute::NotHandled;
         };
 
         // Use allocation-free key helpers from ui_foundation
@@ -1200,6 +1204,9 @@ impl ScriptListApp {
             ActionsDialogHost::TermPrompt => FocusRequest::term_prompt(),
             ActionsDialogHost::WebcamPrompt => FocusRequest::div_prompt(),
             ActionsDialogHost::AgentChat => FocusRequest::agent_chat(),
+            ActionsDialogHost::MainList if matches!(self.current_view, AppView::DayPage { .. }) => {
+                FocusRequest::editor_prompt()
+            }
             ActionsDialogHost::MainList
             | ActionsDialogHost::FileSearch
             | ActionsDialogHost::ClipboardHistory
@@ -1562,6 +1569,39 @@ mod close_actions_popup_regression_tests {
                 expected
             );
         }
+    }
+
+    #[test]
+    fn day_page_command_bar_keys_are_not_swallowed_by_missing_shared_dialog() {
+        let source = fs::read_to_string("src/app_impl/actions_dialog.rs")
+            .expect("Failed to read src/app_impl/actions_dialog.rs");
+        let helper_start = source
+            .find("fn route_key_to_actions_dialog")
+            .expect("route_key_to_actions_dialog function not found");
+        let helper_fn = &source[helper_start..];
+
+        assert!(
+            helper_fn.contains("let Some(ref dialog) = self.actions_dialog else")
+                && helper_fn.contains("return ActionsRoute::NotHandled;"),
+            "route_key_to_actions_dialog must not swallow keys when a child CommandBar owns the detached actions window"
+        );
+    }
+
+    #[test]
+    fn day_page_mainlist_actions_restore_editor_focus() {
+        let source = fs::read_to_string("src/app_impl/actions_dialog.rs")
+            .expect("Failed to read src/app_impl/actions_dialog.rs");
+        let helper_start = source
+            .find("fn request_focus_restore_for_actions_host")
+            .expect("request_focus_restore_for_actions_host function not found");
+        let helper_fn = &source[helper_start..];
+
+        assert!(
+            helper_fn.contains(
+                "ActionsDialogHost::MainList if matches!(self.current_view, AppView::DayPage { .. })"
+            ) && helper_fn.contains("FocusRequest::editor_prompt()"),
+            "Day Page Cmd+K close must restore focus to the Day editor, not the main filter"
+        );
     }
 }
 
