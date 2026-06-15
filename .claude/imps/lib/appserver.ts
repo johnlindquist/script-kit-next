@@ -25,6 +25,13 @@ export interface TurnHandlers {
   onNotification?: (method: string, params: any) => void;
 }
 
+function envMs(name: string, fallback: number): number {
+  const raw = process.env[name];
+  if (!raw) return fallback;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
 export class AppServerClient {
   private child!: ChildProcess;
   private isolatedHome: string;
@@ -107,7 +114,10 @@ export class AppServerClient {
     this.child.stdin!.write(JSON.stringify({ jsonrpc: "2.0", method, params }) + "\n");
   }
 
-  private awaitResponse(id: number, timeoutMs = 60000): Promise<any> {
+  private awaitResponse(
+    id: number,
+    timeoutMs = envMs("SCRIPT_KIT_IMP_START_TIMEOUT_MS", 60_000),
+  ): Promise<any> {
     return new Promise((resolve, reject) => {
       const t = setTimeout(() => {
         this.handlers.delete(h);
@@ -181,7 +191,7 @@ export class AppServerClient {
         this.handlers.delete(h);
         observer.finish({ status: "timeout", transport: "app-server" });
         reject(new Error(`turn timeout\nstderr:\n${this.stderrTail}`));
-      }, 120000);
+      }, envMs("SCRIPT_KIT_IMP_TURN_TIMEOUT_MS", 120_000));
       const h = (msg: any) => {
         if (msg.__exit !== undefined) {
           clearTimeout(t); this.handlers.delete(h);

@@ -26,6 +26,13 @@ import type { ImpConfig } from "./isolated.ts";
 import { AppServerClient } from "./appserver.ts";
 import { selfImproveFingerprintParts } from "./self-improve.ts";
 
+function envMs(name: string, fallback: number): number {
+  const raw = process.env[name];
+  if (!raw) return fallback;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
 export function socketPath(name: string): string {
   return `/tmp/codex-imp-${name}.sock`;
 }
@@ -299,7 +306,10 @@ export async function stopWarmImp(name: string, pid?: number): Promise<void> {
  * spawn a fresh one — so editing an imp's instructions/model, or any lib/*.ts,
  * takes effect on the very next prompt.
  */
-export async function ensureWarmImp(config: ImpConfig, readyTimeoutMs = 30000): Promise<boolean> {
+export async function ensureWarmImp(
+  config: ImpConfig,
+  readyTimeoutMs = envMs("SCRIPT_KIT_IMP_READY_TIMEOUT_MS", 30_000),
+): Promise<boolean> {
   const sock = socketPath(config.name);
   const current = sourceFingerprint(config);
 
