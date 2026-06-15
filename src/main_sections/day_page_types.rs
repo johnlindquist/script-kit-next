@@ -41,6 +41,29 @@ impl DayPageSpineHandoffState {
     }
 }
 
+#[derive(Debug, Clone)]
+pub(crate) struct DayPageKitResourcePreviewState {
+    pub(crate) title: String,
+    pub(crate) uri: String,
+    pub(crate) mime_type: String,
+    pub(crate) text: String,
+    pub(crate) truncated: bool,
+}
+
+impl From<crate::notes::deeplink_activation::KitResourcePreview>
+    for DayPageKitResourcePreviewState
+{
+    fn from(preview: crate::notes::deeplink_activation::KitResourcePreview) -> Self {
+        Self {
+            title: preview.title,
+            uri: preview.uri,
+            mime_type: preview.mime_type,
+            text: preview.text,
+            truncated: preview.truncated,
+        }
+    }
+}
+
 /// Host for today's day page inside the main launcher window.
 pub struct DayPageView {
     pub(crate) app: WeakEntity<ScriptListApp>,
@@ -64,4 +87,6 @@ pub struct DayPageView {
     /// main-menu swap only triggers on growth so deleting inside an existing
     /// mention never re-opens the search (day_page_round_trip.rs).
     pub(crate) last_editor_content_len: usize,
+    /// Read-only preview opened from a `kit://` resource link in Day Page markdown.
+    pub(crate) kit_resource_preview: Option<DayPageKitResourcePreviewState>,
 }

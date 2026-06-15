@@ -473,6 +473,7 @@ impl NotesApp {
                 editor.automation_scroll_metrics(),
             ),
             "previewAnchor": self.automation_preview_anchor(&editor_text, &selection, cx),
+            "kitResourcePreview": self.automation_kit_resource_preview_state(),
             "view": {
                 "viewMode": format!("{:?}", self.view_mode),
                 "surfaceMode": format!("{:?}", self.surface_mode),
@@ -552,6 +553,27 @@ impl NotesApp {
                 "historyForward": self.history_forward.len(),
             },
         })
+    }
+
+    fn automation_kit_resource_preview_state(&self) -> serde_json::Value {
+        match self.kit_resource_preview.as_ref() {
+            Some(preview) => serde_json::json!({
+                "schemaVersion": 1,
+                "active": true,
+                "redacted": true,
+                "title": preview.title,
+                "uri": preview.uri,
+                "mimeType": preview.mime_type,
+                "readOnly": true,
+                "truncated": preview.truncated,
+                "textLength": preview.text.chars().count(),
+            }),
+            None => serde_json::json!({
+                "schemaVersion": 1,
+                "active": false,
+                "redacted": true,
+            }),
+        }
     }
 
     fn automation_notes_spine_state(&self, cx: &gpui::App) -> serde_json::Value {

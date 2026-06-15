@@ -65,11 +65,28 @@ function stateSummary(state: Obj): Obj {
     promptType: state.promptType,
     windowVisible: state.windowVisible,
     inputValue: state.inputValue,
+    dayPage: state.dayPage,
   };
 }
 
+async function getState(driver: Driver): Promise<Obj> {
+  return asObj(await driver.getState({ timeoutMs: 8000 }));
+}
+
 async function getStateSummary(driver: Driver): Promise<Obj> {
-  return stateSummary(asObj(await driver.getState({ timeoutMs: 8000 })));
+  return stateSummary(await getState(driver));
+}
+
+async function dayPageKitResourcePreview(driver: Driver): Promise<Obj> {
+  return asObj(asObj((await getState(driver)).dayPage).kitResourcePreview);
+}
+
+async function dayPageElementsText(driver: Driver): Promise<string> {
+  const elements = await driver.getElements(
+    { target: { type: "kind", kind: "main" } },
+    { timeoutMs: 8000 },
+  );
+  return JSON.stringify(elements);
 }
 
 async function waitForPromptType(driver: Driver, promptType: string, label: string) {
@@ -146,6 +163,54 @@ try {
     spineClose,
   );
 
+  const kitPreviewSeed = asObj(await setDayPageInput(driver, "[scripts](kit://scripts)"));
+  check("kit_scripts_link_seeded", kitPreviewSeed.success === true, { batch: kitPreviewSeed });
+  await driver.simulateKey(".", ["cmd"]);
+  const kitPreviewOpened = await pollUntil("kit-scripts-preview-open", async () => {
+    const preview = await dayPageKitResourcePreview(driver);
+    return (
+      preview.active === true &&
+      preview.uri === "kit://scripts" &&
+      preview.readOnly === true
+    );
+  });
+  const kitPreviewState = await dayPageKitResourcePreview(driver);
+  check("kit_scripts_cmd_dot_opens_read_only_preview", kitPreviewOpened, {
+    preview: kitPreviewState,
+    state: await getStateSummary(driver),
+    confirmWindows: await confirmWindows(driver),
+  });
+  await driver.simulateKey("escape");
+  const kitPreviewClosed = await pollUntil("kit-scripts-preview-closed", async () => {
+    const preview = await dayPageKitResourcePreview(driver);
+    return preview.active === false;
+  });
+  check("escape_closes_kit_scripts_preview_and_returns_day_page", kitPreviewClosed, {
+    state: await getStateSummary(driver),
+    preview: await dayPageKitResourcePreview(driver),
+  });
+
+  const unsupportedKitSeed = asObj(await setDayPageInput(driver, "[context](kit://context)"));
+  check("unsupported_kit_context_seeded", unsupportedKitSeed.success === true, {
+    batch: unsupportedKitSeed,
+  });
+  await driver.simulateKey(".", ["cmd"]);
+  const unsupportedModal = await waitForPromptType(
+    driver,
+    "confirmPrompt",
+    "unsupported-kit-context-modal-open",
+  );
+  check("unsupported_kit_context_opens_helpful_modal", unsupportedModal.opened, {
+    ...unsupportedModal,
+    elements: await dayPageElementsText(driver),
+  });
+  const unsupportedClose = await closeConfirmWithEscape(driver, "unsupported-kit-context");
+  check(
+    "escape_closes_unsupported_kit_context_modal_and_returns_day_page",
+    unsupportedClose.closed && unsupportedClose.state.promptType === "dayPage",
+    unsupportedClose,
+  );
+
   const mousePlainSeed = asObj(await setDayPageInput(driver, "mouse plain text"));
   check("mouse_plain_text_seeded", mousePlainSeed.success === true, { batch: mousePlainSeed });
   const mousePlainClick = await clickDayPageEditorFirstLine(driver);
@@ -200,6 +265,34 @@ try {
     mouseUnknownClose.closed && mouseUnknownClose.state.promptType === "dayPage",
     mouseUnknownClose,
   );
+
+  const mouseKitSeed = asObj(await setDayPageInput(driver, "[scripts](kit://scripts)"));
+  check("mouse_kit_scripts_link_seeded", mouseKitSeed.success === true, { batch: mouseKitSeed });
+  const mouseKitClick = await clickDayPageEditorFirstLine(driver);
+  check("mouse_kit_scripts_click_dispatches", mouseKitClick.every((result) => result.success), {
+    click: mouseKitClick,
+  });
+  const mouseKitPreviewOpened = await pollUntil("mouse-kit-scripts-preview-open", async () => {
+    const preview = await dayPageKitResourcePreview(driver);
+    return (
+      preview.active === true &&
+      preview.uri === "kit://scripts" &&
+      preview.readOnly === true
+    );
+  });
+  check("mouse_kit_scripts_opens_read_only_preview", mouseKitPreviewOpened, {
+    preview: await dayPageKitResourcePreview(driver),
+    state: await getStateSummary(driver),
+  });
+  await driver.simulateKey("escape");
+  const mouseKitPreviewClosed = await pollUntil("mouse-kit-scripts-preview-closed", async () => {
+    const preview = await dayPageKitResourcePreview(driver);
+    return preview.active === false;
+  });
+  check("escape_closes_mouse_kit_scripts_preview", mouseKitPreviewClosed, {
+    state: await getStateSummary(driver),
+    preview: await dayPageKitResourcePreview(driver),
+  });
 
   receipt.sessionDir = driver.sessionDir;
   receipt.pass = receipt.failures.length === 0;

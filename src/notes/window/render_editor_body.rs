@@ -8,6 +8,10 @@ impl NotesApp {
         is_preview: bool,
         cx: &mut Context<Self>,
     ) -> AnyElement {
+        if self.kit_resource_preview.is_some() {
+            return self.render_kit_resource_preview(cx);
+        }
+
         let no_notes = self.get_visible_notes().is_empty();
 
         if no_notes && !has_selection && is_trash {
@@ -150,6 +154,7 @@ impl NotesApp {
             && self.view_mode != NotesViewMode::Trash
             && self.surface_mode == NotesSurfaceMode::Notes
             && !self.preview_enabled
+            && self.kit_resource_preview.is_none()
             && !self.show_search
             && !self.command_bar.is_open()
             && !self.note_switcher.is_open()

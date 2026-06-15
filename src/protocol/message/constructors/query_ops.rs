@@ -109,6 +109,7 @@ impl Message {
         drop_state: Option<serde_json::Value>,
         path_state: Option<serde_json::Value>,
         notes_state: Option<serde_json::Value>,
+        day_page_state: Option<serde_json::Value>,
         dictation_state: Option<serde_json::Value>,
         ghost_prediction: Option<serde_json::Value>,
     ) -> Self {
@@ -141,6 +142,7 @@ impl Message {
             drop_state,
             path_state,
             notes_state,
+            day_page_state,
             dictation_state,
             ghost_prediction,
         }

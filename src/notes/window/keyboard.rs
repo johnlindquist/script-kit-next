@@ -89,6 +89,10 @@ impl NotesApp {
             self.reset_notes_spine_navigation(cx);
             return ("dismissNotesSpine", true);
         }
+        if self.kit_resource_preview.is_some() {
+            self.close_kit_resource_preview(window, cx);
+            return ("closeKitResourcePreview", true);
+        }
         if self.dismiss_notes_ghost(cx) {
             return ("dismissNotesGhost", true);
         }

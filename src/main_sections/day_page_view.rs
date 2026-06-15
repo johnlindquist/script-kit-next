@@ -14,6 +14,9 @@ use script_kit_gpui::day_page::{
     parse_day_page_segments, resolve_fragment_path, DayPageBinding, DayPageSegment,
 };
 
+const DAY_PAGE_KIT_PREVIEW_MUTED_OPACITY: f32 = 0.72;
+const DAY_PAGE_KIT_PREVIEW_BORDER_OPACITY: f32 = 0.2;
+
 impl DayPageView {
     pub fn new(
         app: Entity<ScriptListApp>,
@@ -66,6 +69,7 @@ impl DayPageView {
                 std::sync::Arc::new(crate::theme::get_cached_theme()),
             ),
             last_editor_content_len: 0,
+            kit_resource_preview: None,
         }
     }
 
@@ -92,6 +96,7 @@ impl DayPageView {
     fn apply_loaded_content_to_editor(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let content = self.session.disk_content().to_string();
         self.reset_day_page_spine_handoff_state(true, true);
+        self.kit_resource_preview = None;
         self.refresh_fragment_open_targets(&content);
         // Loads are not typing: pre-set the length so the Change event this
         // emits cannot read as growth and auto-swap to the main menu.
@@ -293,6 +298,35 @@ impl DayPageView {
         self.notes_editor.read(cx).content(cx)
     }
 
+    pub(crate) fn automation_state(&self, cx: &App) -> serde_json::Value {
+        let input = self.automation_input_value(cx);
+        let kit_resource_preview = match self.kit_resource_preview.as_ref() {
+            Some(preview) => serde_json::json!({
+                "schemaVersion": 1,
+                "active": true,
+                "redacted": true,
+                "title": preview.title,
+                "uri": preview.uri,
+                "mimeType": preview.mime_type,
+                "readOnly": true,
+                "truncated": preview.truncated,
+                "textLength": preview.text.chars().count(),
+            }),
+            None => serde_json::json!({
+                "schemaVersion": 1,
+                "active": false,
+                "redacted": true,
+            }),
+        };
+
+        serde_json::json!({
+            "schemaVersion": 1,
+            "redacted": true,
+            "inputLength": input.chars().count(),
+            "kitResourcePreview": kit_resource_preview,
+        })
+    }
+
     pub fn focus_editor(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.focus_editor_at_end(window, cx);
         self.defer_editor_bottom_scroll(window, cx);
@@ -358,6 +392,7 @@ impl DayPageView {
     }
 
     pub fn set_input(&mut self, text: String, window: &mut Window, cx: &mut Context<Self>) {
+        self.kit_resource_preview = None;
         self.notes_editor.update(cx, |editor, cx| {
             editor.set_value_with_cursor_at_end(text.clone(), window, cx);
         });
@@ -591,6 +626,17 @@ impl Render for DayPageView {
             None
         };
 
+        let editor_content = if self.kit_resource_preview.is_some() {
+            self.render_kit_resource_preview(cx)
+        } else {
+            div()
+                .relative()
+                .flex_1()
+                .min_h(px(0.))
+                .child(editor_input)
+                .into_any_element()
+        };
+
         let editor_body = div()
             .id(DAY_PAGE_EDITOR_ID)
             .flex_1()
@@ -601,7 +647,7 @@ impl Render for DayPageView {
             .flex()
             .flex_col()
             .when_some(back_bar, |parent, bar| parent.child(bar))
-            .child(div().relative().flex_1().min_h(px(0.)).child(editor_input));
+            .child(editor_content);
 
         let context_zone = app.update(cx, |app, _cx| {
             app.render_inert_main_view_context_zone(menu_def)
@@ -672,6 +718,133 @@ impl Render for DayPageView {
 }
 
 impl DayPageView {
+    fn render_kit_resource_preview(&self, cx: &mut Context<Self>) -> AnyElement {
+        let Some(preview) = self.kit_resource_preview.as_ref() else {
+            return div().into_any_element();
+        };
+
+        let title = preview.title.clone();
+        let uri = preview.uri.clone();
+        let copy_uri = uri.clone();
+        let mime_type = preview.mime_type.clone();
+        let text = preview.text.clone();
+        let truncated = preview.truncated;
+
+        div()
+            .id("day-page-kit-resource-preview")
+            .flex_1()
+            .min_h(px(0.))
+            .flex()
+            .flex_col()
+            .gap_3()
+            .py_2()
+            .child(
+                div()
+                    .flex()
+                    .items_start()
+                    .justify_between()
+                    .gap_3()
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w(px(0.))
+                            .flex()
+                            .flex_col()
+                            .gap_1()
+                            .child(
+                                div()
+                                    .id("day-page-kit-resource-preview-title")
+                                    .text_sm()
+                                    .font_weight(FontWeight::SEMIBOLD)
+                                    .child(title),
+                            )
+                            .child(
+                                div()
+                                    .id("day-page-kit-resource-preview-uri")
+                                    .text_xs()
+                                    .text_color(cx.theme().muted_foreground)
+                                    .child(uri),
+                            )
+                            .child(
+                                div()
+                                    .id("day-page-kit-resource-preview-meta")
+                                    .text_xs()
+                                    .text_color(
+                                        cx.theme()
+                                            .muted_foreground
+                                            .opacity(DAY_PAGE_KIT_PREVIEW_MUTED_OPACITY),
+                                    )
+                                    .child(format!(
+                                        "{mime_type} · read-only{}",
+                                        if truncated { " · truncated" } else { "" }
+                                    )),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap_2()
+                            .child(
+                                div()
+                                    .id("day-page-kit-resource-preview-copy-uri")
+                                    .text_xs()
+                                    .text_color(cx.theme().accent)
+                                    .cursor_pointer()
+                                    .hover(|s| s.text_color(cx.theme().foreground))
+                                    .on_click(cx.listener(move |_this, _, _window, cx| {
+                                        cx.write_to_clipboard(gpui::ClipboardItem::new_string(
+                                            copy_uri.clone(),
+                                        ));
+                                    }))
+                                    .child("Copy URI"),
+                            )
+                            .child(
+                                div()
+                                    .id("day-page-kit-resource-preview-close")
+                                    .text_xs()
+                                    .text_color(cx.theme().muted_foreground)
+                                    .cursor_pointer()
+                                    .hover(|s| s.text_color(cx.theme().foreground))
+                                    .on_click(cx.listener(|this, _, window, cx| {
+                                        this.close_kit_resource_preview(window, cx);
+                                    }))
+                                    .child("Close"),
+                            ),
+                    ),
+            )
+            .child(
+                div()
+                    .id("day-page-kit-resource-preview-body")
+                    .flex_1()
+                    .min_h(px(0.))
+                    .overflow_y_scroll()
+                    .rounded(px(6.))
+                    .border_1()
+                    .border_color(
+                        cx.theme()
+                            .border
+                            .opacity(DAY_PAGE_KIT_PREVIEW_BORDER_OPACITY),
+                    )
+                    .p_3()
+                    .text_xs()
+                    .font_family(FONT_MONO)
+                    .text_color(cx.theme().foreground)
+                    .child(text),
+            )
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(
+                        cx.theme()
+                            .muted_foreground
+                            .opacity(DAY_PAGE_KIT_PREVIEW_MUTED_OPACITY),
+                    )
+                    .child("Esc to return"),
+            )
+            .into_any_element()
+    }
+
     fn handle_key_down(
         &mut self,
         event: &gpui::KeyDownEvent,
@@ -708,6 +881,14 @@ impl DayPageView {
             && crate::confirm::is_confirm_window_open()
         {
             crate::confirm::route_key_to_confirm_popup("escape", cx);
+            return;
+        }
+
+        if exact_plain
+            && crate::ui_foundation::is_key_escape(&key)
+            && self.kit_resource_preview.is_some()
+        {
+            self.close_kit_resource_preview(window, cx);
             return;
         }
 
@@ -852,14 +1033,45 @@ impl DayPageView {
                 self.open_scoped_search_deeplink(source, query, window, cx);
             }
             Activation::KitResourcePreview { uri, .. } => {
-                self.open_deeplink_info_dialog(
-                    "Preview Script Kit resource",
-                    format!("{uri}\n\nResource preview will be wired in the kit:// preview slice."),
-                    uri,
-                    window,
-                    cx,
-                );
+                self.open_kit_resource_preview(uri, window, cx);
             }
+        }
+    }
+
+    fn open_kit_resource_preview(
+        &mut self,
+        uri: String,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        match crate::notes::deeplink_activation::read_cheap_kit_resource_preview(&uri) {
+            Ok(preview) => {
+                tracing::info!(
+                    event = "day_page_deeplink_kit_resource_preview_opened",
+                    uri = %preview.uri,
+                    mime_type = %preview.mime_type,
+                    truncated = preview.truncated,
+                );
+                self.kit_resource_preview = Some(preview.into());
+                self.focus_handle.focus(window, cx);
+                self.sync_footer(window, cx);
+                cx.notify();
+            }
+            Err(error) => self.open_deeplink_info_dialog(
+                "Can't open this link",
+                format!("{uri}\n\n{error}"),
+                uri,
+                window,
+                cx,
+            ),
+        }
+    }
+
+    fn close_kit_resource_preview(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.kit_resource_preview.take().is_some() {
+            self.focus_editor(window, cx);
+            self.sync_footer(window, cx);
+            cx.notify();
         }
     }
 

@@ -37,6 +37,7 @@ fn test_state_result_empty_state_omits_optional_fields() {
         None,
         None,
         None,
+        None,
     );
     let actual = to_json(response);
     assert_eq!(
@@ -74,6 +75,7 @@ fn test_state_result_minimal_state_shape() {
         None,
         true,
         true,
+        None,
         None,
         None,
         None,
@@ -155,6 +157,7 @@ fn test_state_result_representative_with_optional_fields() {
         })),
         Some(json!({ "loading": false, "selected": "README.md" })),
         Some(json!({ "visible": true, "lineCount": 4 })),
+        None,
         Some(json!({ "recording": false, "device": "default" })),
         None,
     );

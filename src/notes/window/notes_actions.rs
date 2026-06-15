@@ -130,14 +130,55 @@ impl NotesApp {
                 self.open_scoped_search_deeplink(source, query, window, cx);
             }
             Activation::KitResourcePreview { uri, .. } => {
-                self.open_deeplink_info_dialog(
-                    "Preview Script Kit resource",
-                    format!("{uri}\n\nResource preview will be wired in the kit:// preview slice."),
-                    uri,
-                    window,
-                    cx,
-                );
+                self.open_kit_resource_preview(uri, window, cx);
             }
+        }
+    }
+
+    fn open_kit_resource_preview(
+        &mut self,
+        uri: String,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        match crate::notes::deeplink_activation::read_cheap_kit_resource_preview(&uri) {
+            Ok(preview) => {
+                tracing::info!(
+                    event = "notes_deeplink_kit_resource_preview_opened",
+                    uri = %preview.uri,
+                    mime_type = %preview.mime_type,
+                    truncated = preview.truncated,
+                );
+                self.kit_resource_preview = Some(preview.into());
+                self.preview_enabled = false;
+                self.show_search = false;
+                self.command_bar.close_app(cx);
+                self.note_switcher.close_app(cx);
+                self.focus_handle.focus(window, cx);
+                self.show_action_feedback("Opened read-only resource preview", false);
+                cx.notify();
+            }
+            Err(error) => self.open_deeplink_error_dialog(
+                "Can't open this link",
+                format!("{uri}\n\n{error}"),
+                uri,
+                window,
+                cx,
+            ),
+        }
+    }
+
+    pub(super) fn close_kit_resource_preview(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.kit_resource_preview.take().is_some() {
+            self.editor_state.update(cx, |state, cx| {
+                state.focus(window, cx);
+            });
+            self.show_action_feedback("Closed resource preview", false);
+            cx.notify();
         }
     }
 

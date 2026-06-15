@@ -3372,6 +3372,7 @@ impl ScriptListApp {
                                 Some(notes_state),
                                 None,
                                 None,
+                                None,
                             ));
                         }
                         return;
@@ -3403,6 +3404,7 @@ impl ScriptListApp {
                                 None,
                                 None,
                                 Some(actions_state),
+                                None,
                                 None,
                                 None,
                                 None,
@@ -3448,6 +3450,7 @@ impl ScriptListApp {
                                 None,
                                 None,
                                 None,
+                                None,
                             ));
                         }
                         return;
@@ -3470,6 +3473,7 @@ impl ScriptListApp {
                                 None,
                                 false,
                                 false,
+                                None,
                                 None,
                                 None,
                                 None,
@@ -4701,6 +4705,10 @@ impl ScriptListApp {
                     _ => None,
                 };
                 let dictation_state = Some(crate::dictation::automation_state());
+                let day_page_state = match &self.current_view {
+                    AppView::DayPage { entity } => Some(entity.read(cx).automation_state(cx)),
+                    _ => None,
+                };
 
                 // Create the response
                 let response = Message::state_result(
@@ -4732,6 +4740,7 @@ impl ScriptListApp {
                     drop_state,
                     path_state,
                     None,
+                    day_page_state,
                     dictation_state,
                     self.ghost_prediction.as_ref().map(|p| {
                         serde_json::json!({

@@ -1,12 +1,129 @@
 use super::*;
 
 use crate::components::notes_editor::{NotesEditorToolbarAction, NOTES_EDITOR_TOOLBAR_ACTIONS};
+use crate::list_item::FONT_MONO;
 use crate::ui_foundation::{compact_action_row, log_ui_action, UiActionSpec, UiSurface};
+use gpui::FontWeight;
 
 /// Opacity for toolbar section borders — matches Notes window token.
 const OPACITY_SECTION_BORDER: f32 = 0.2;
 
 impl NotesApp {
+    pub(super) fn render_kit_resource_preview(&self, cx: &mut Context<Self>) -> AnyElement {
+        let Some(preview) = self.kit_resource_preview.as_ref() else {
+            return div().into_any_element();
+        };
+
+        let title = preview.title.clone();
+        let uri = preview.uri.clone();
+        let copy_uri = uri.clone();
+        let mime_type = preview.mime_type.clone();
+        let text = preview.text.clone();
+        let truncated = preview.truncated;
+
+        div()
+            .id("notes-kit-resource-preview")
+            .flex_1()
+            .min_h(px(0.))
+            .flex()
+            .flex_col()
+            .gap_3()
+            .p_3()
+            .child(
+                div()
+                    .flex()
+                    .items_start()
+                    .justify_between()
+                    .gap_3()
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w(px(0.))
+                            .flex()
+                            .flex_col()
+                            .gap_1()
+                            .child(
+                                div()
+                                    .id("notes-kit-resource-preview-title")
+                                    .text_sm()
+                                    .font_weight(FontWeight::SEMIBOLD)
+                                    .child(title),
+                            )
+                            .child(
+                                div()
+                                    .id("notes-kit-resource-preview-uri")
+                                    .text_xs()
+                                    .text_color(cx.theme().muted_foreground)
+                                    .child(uri),
+                            )
+                            .child(
+                                div()
+                                    .id("notes-kit-resource-preview-meta")
+                                    .text_xs()
+                                    .text_color(cx.theme().muted_foreground.opacity(OPACITY_MUTED))
+                                    .child(format!(
+                                        "{mime_type} · read-only{}",
+                                        if truncated { " · truncated" } else { "" }
+                                    )),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap_2()
+                            .child(
+                                div()
+                                    .id("notes-kit-resource-preview-copy-uri")
+                                    .text_xs()
+                                    .text_color(cx.theme().accent)
+                                    .cursor_pointer()
+                                    .hover(|s| s.text_color(cx.theme().foreground))
+                                    .on_click(cx.listener(move |_this, _, _window, cx| {
+                                        cx.write_to_clipboard(gpui::ClipboardItem::new_string(
+                                            copy_uri.clone(),
+                                        ));
+                                    }))
+                                    .child("Copy URI"),
+                            )
+                            .child(
+                                div()
+                                    .id("notes-kit-resource-preview-close")
+                                    .text_xs()
+                                    .text_color(cx.theme().muted_foreground)
+                                    .cursor_pointer()
+                                    .hover(|s| s.text_color(cx.theme().foreground))
+                                    .on_click(cx.listener(|this, _, window, cx| {
+                                        this.close_kit_resource_preview(window, cx);
+                                    }))
+                                    .child("Close"),
+                            ),
+                    ),
+            )
+            .child(
+                div()
+                    .id("notes-kit-resource-preview-body")
+                    .flex_1()
+                    .min_h(px(0.))
+                    .overflow_y_scroll()
+                    .rounded(px(6.))
+                    .border_1()
+                    .border_color(cx.theme().border.opacity(OPACITY_SECTION_BORDER))
+                    .p_3()
+                    .text_xs()
+                    .font_family(FONT_MONO)
+                    .text_color(cx.theme().foreground)
+                    .child(text),
+            )
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(cx.theme().muted_foreground.opacity(OPACITY_MUTED))
+                    .child("Esc to return"),
+            )
+            .into_any_element()
+    }
+
     fn render_toolbar_button(
         &self,
         item: NotesEditorToolbarAction,

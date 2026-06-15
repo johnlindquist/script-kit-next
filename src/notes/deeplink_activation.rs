@@ -60,6 +60,15 @@ pub(crate) enum ActivationErrorReason {
     },
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct KitResourcePreview {
+    pub uri: String,
+    pub title: String,
+    pub mime_type: String,
+    pub text: String,
+    pub truncated: bool,
+}
+
 pub(crate) fn resolve_activation(href: &str, surface: ActivationSurface) -> Activation {
     let raw_href = href.trim();
     if raw_href.is_empty() {
@@ -114,6 +123,64 @@ pub(crate) fn resolve_activation(href: &str, surface: ActivationSurface) -> Acti
         .map(|(scheme, _)| scheme.to_string())
         .unwrap_or_else(|| "none".to_string());
     error(raw_href, ActivationErrorReason::UnknownScheme { scheme })
+}
+
+pub(crate) fn read_cheap_kit_resource_preview(uri: &str) -> Result<KitResourcePreview, String> {
+    if !is_cheap_text_kit_resource_uri(uri) {
+        return Err(format!(
+            "Resource preview supports kit://notes, kit://scripts, and kit://clipboard-history in this slice: {uri}"
+        ));
+    }
+
+    let scripts = if uri == "kit://scripts" {
+        crate::scripts::read_scripts()
+    } else {
+        Vec::new()
+    };
+    let scriptlets = Vec::new();
+    let resource = crate::mcp_resources::read_resource(uri, &scripts, &scriptlets, None)?;
+    if !resource.mime_type.starts_with("text/") && resource.mime_type != "application/json" {
+        return Err(format!(
+            "Resource is not a cheap text preview: {} ({})",
+            resource.uri, resource.mime_type
+        ));
+    }
+
+    const MAX_PREVIEW_CHARS: usize = 120_000;
+    let mut text: String = resource.text.chars().take(MAX_PREVIEW_CHARS).collect();
+    let truncated = resource.text.chars().count() > MAX_PREVIEW_CHARS;
+    if truncated {
+        text.push_str("\n\n[… resource preview truncated …]");
+    }
+
+    Ok(KitResourcePreview {
+        title: kit_resource_preview_title(&resource.uri),
+        uri: resource.uri,
+        mime_type: resource.mime_type,
+        text,
+        truncated,
+    })
+}
+
+fn is_cheap_text_kit_resource_uri(uri: &str) -> bool {
+    uri == "kit://notes"
+        || uri.starts_with("kit://notes?")
+        || uri.starts_with("kit://notes/")
+        || uri == "kit://scripts"
+        || uri == "kit://clipboard-history"
+        || uri.starts_with("kit://clipboard-history?")
+}
+
+fn kit_resource_preview_title(uri: &str) -> String {
+    if uri.starts_with("kit://notes") {
+        "Notes resource preview".to_string()
+    } else if uri == "kit://scripts" {
+        "Scripts resource preview".to_string()
+    } else if uri.starts_with("kit://clipboard-history") {
+        "Clipboard history resource preview".to_string()
+    } else {
+        "Script Kit resource preview".to_string()
+    }
 }
 
 pub(crate) fn run_deeplink_confirm_options(
@@ -411,6 +478,31 @@ mod tests {
                 allow_agent_chat_action: true,
             }
         );
+    }
+
+    #[test]
+    fn cheap_text_resource_preview_allowlist_is_narrow() {
+        assert!(is_cheap_text_kit_resource_uri("kit://notes"));
+        assert!(is_cheap_text_kit_resource_uri("kit://notes?limit=1"));
+        assert!(is_cheap_text_kit_resource_uri("kit://scripts"));
+        assert!(is_cheap_text_kit_resource_uri("kit://clipboard-history"));
+        assert!(is_cheap_text_kit_resource_uri(
+            "kit://clipboard-history?limit=1"
+        ));
+        assert!(is_cheap_text_kit_resource_uri(
+            "kit://clipboard-history?id=abc"
+        ));
+        assert!(!is_cheap_text_kit_resource_uri("kit://context"));
+        assert!(!is_cheap_text_kit_resource_uri("kit://git-diff"));
+    }
+
+    #[test]
+    fn unsupported_kit_resource_preview_errors_before_read() {
+        let error = read_cheap_kit_resource_preview("kit://context").expect_err("unsupported");
+        assert!(error.contains("kit://notes"));
+        assert!(error.contains("kit://scripts"));
+        assert!(error.contains("kit://clipboard-history"));
+        assert!(error.contains("kit://context"));
     }
 
     #[test]

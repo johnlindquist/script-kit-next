@@ -307,6 +307,27 @@ struct NotesGhostLlmCacheEntry {
     inserted_at: Instant,
 }
 
+#[derive(Debug, Clone)]
+pub(super) struct NotesKitResourcePreviewState {
+    title: String,
+    uri: String,
+    mime_type: String,
+    text: String,
+    truncated: bool,
+}
+
+impl From<crate::notes::deeplink_activation::KitResourcePreview> for NotesKitResourcePreviewState {
+    fn from(preview: crate::notes::deeplink_activation::KitResourcePreview) -> Self {
+        Self {
+            title: preview.title,
+            uri: preview.uri,
+            mime_type: preview.mime_type,
+            text: preview.text,
+            truncated: preview.truncated,
+        }
+    }
+}
+
 /// Sort mode for the notes list
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum NotesSortMode {
@@ -485,6 +506,8 @@ pub struct NotesApp {
     /// Active inline mention replacement session for note-local `@note`
     /// reopen/replace flows via the note switcher.
     mention_portal_edit: Option<NotesMentionPortalEditSession>,
+    /// Read-only preview opened from a `kit://` resource link in note markdown.
+    kit_resource_preview: Option<NotesKitResourcePreviewState>,
 }
 
 mod agent_chat_host;

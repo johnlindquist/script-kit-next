@@ -64,6 +64,18 @@ async function notesView(driver: Driver): Promise<Obj> {
   return asObj((await notesState(driver)).view);
 }
 
+async function notesKitResourcePreview(driver: Driver): Promise<Obj> {
+  return asObj((await notesState(driver)).kitResourcePreview);
+}
+
+async function notesElementsText(driver: Driver): Promise<string> {
+  const elements = await driver.getElements(
+    { target: { type: "kind", kind: "notes" } },
+    { timeoutMs: 8000 },
+  );
+  return JSON.stringify(elements);
+}
+
 async function openNotes(driver: Driver) {
   driver.send({ type: "openNotes" });
   return pollUntil("notes-open", async () => {
@@ -257,6 +269,56 @@ try {
     view: await notesView(driver),
   });
 
+  const kitPreviewLink = "[scripts](kit://scripts)";
+  const kitPreviewSeed = await setNotesInput(driver, kitPreviewLink);
+  check("kit_scripts_link_seeded", kitPreviewSeed.success === true, { batch: kitPreviewSeed });
+  await cmdDot(driver);
+  const kitPreviewOpened = await pollUntil("kit-scripts-preview-open", async () => {
+    const preview = await notesKitResourcePreview(driver);
+    return (
+      preview.active === true &&
+      preview.uri === "kit://scripts" &&
+      preview.readOnly === true
+    );
+  });
+  const kitPreviewState = await notesKitResourcePreview(driver);
+  check("kit_scripts_cmd_dot_opens_read_only_preview", kitPreviewOpened, {
+    preview: kitPreviewState,
+    confirmWindows: await confirmWindows(driver),
+  });
+  await escape(driver);
+  const kitPreviewClosed = await pollUntil("kit-scripts-preview-closed", async () => {
+    const preview = await notesKitResourcePreview(driver);
+    return preview.active === false;
+  });
+  check("escape_closes_kit_scripts_preview", kitPreviewClosed, {
+    view: await notesView(driver),
+    preview: await notesKitResourcePreview(driver),
+  });
+
+  const unsupportedKitSeed = await setNotesInput(driver, "[context](kit://context)");
+  check("unsupported_kit_context_seeded", unsupportedKitSeed.success === true, {
+    batch: unsupportedKitSeed,
+  });
+  await cmdDot(driver);
+  const unsupportedModalOpened = await pollUntil("unsupported-kit-context-modal-open", async () => {
+    const windows = await confirmWindows(driver);
+    const text = await notesElementsText(driver);
+    return (
+      windows.some((window) => String(window.title) === "Can't open this link") &&
+      text.includes("kit://context")
+    );
+  });
+  check("unsupported_kit_context_opens_helpful_modal", unsupportedModalOpened, {
+    confirmWindows: await confirmWindows(driver),
+    elements: await notesElementsText(driver),
+  });
+  const unsupportedClose = await closeConfirmWithEscape(driver, "unsupported-kit-context");
+  check("escape_closes_unsupported_kit_context_modal", unsupportedClose.closed, {
+    confirmWindows: unsupportedClose.confirmWindows,
+    view: await notesView(driver),
+  });
+
   const mousePlain = await setNotesInput(driver, "mouse plain text");
   check("mouse_plain_text_seeded", mousePlain.success === true, { batch: mousePlain });
   const mousePlainClick = await clickNotesEditorFirstLine(driver);
@@ -317,6 +379,33 @@ try {
   check("escape_closes_mouse_missing_file_modal", mouseMissingClose.closed, {
     confirmWindows: mouseMissingClose.confirmWindows,
     view: await notesView(driver),
+  });
+
+  const mouseKitSeed = await setNotesInput(driver, "[scripts](kit://scripts)");
+  check("mouse_kit_scripts_link_seeded", mouseKitSeed.success === true, { batch: mouseKitSeed });
+  const mouseKitClick = await clickNotesEditorFirstLine(driver);
+  check("mouse_kit_scripts_click_dispatches", mouseKitClick.every((result) => result.success), {
+    click: mouseKitClick,
+  });
+  const mouseKitPreviewOpened = await pollUntil("mouse-kit-scripts-preview-open", async () => {
+    const preview = await notesKitResourcePreview(driver);
+    return (
+      preview.active === true &&
+      preview.uri === "kit://scripts" &&
+      preview.readOnly === true
+    );
+  });
+  check("mouse_kit_scripts_opens_read_only_preview", mouseKitPreviewOpened, {
+    preview: await notesKitResourcePreview(driver),
+  });
+  await escape(driver);
+  const mouseKitPreviewClosed = await pollUntil("mouse-kit-scripts-preview-closed", async () => {
+    const preview = await notesKitResourcePreview(driver);
+    return preview.active === false;
+  });
+  check("escape_closes_mouse_kit_scripts_preview", mouseKitPreviewClosed, {
+    view: await notesView(driver),
+    preview: await notesKitResourcePreview(driver),
   });
 
   receipt.sessionDir = driver.sessionDir;
