@@ -5,13 +5,13 @@ use chrono::Utc;
 use crate::components::notes_editor::{NotesEditorLayout, NotesEditorMarkdownConfig};
 use crate::footer_popup::{FooterAction, FooterButtonConfig};
 use crate::notes::deeplink_activation::{
-    Activation, ActivationErrorReason, ActivationSurface, resolve_activation,
-    run_deeplink_confirm_options,
+    resolve_activation, run_deeplink_confirm_options, Activation, ActivationErrorReason,
+    ActivationSurface,
 };
 use script_kit_gpui::brain::{substrate::BrainSubstrate, wake_indexer};
 use script_kit_gpui::day_page::normalize_day_page_markdown_references;
 use script_kit_gpui::day_page::{
-    DayPageBinding, DayPageSegment, parse_day_page_segments, resolve_fragment_path,
+    parse_day_page_segments, resolve_fragment_path, DayPageBinding, DayPageSegment,
 };
 
 impl DayPageView {
@@ -808,16 +808,7 @@ impl DayPageView {
                 self.open_note_deeplink(note_id, window, cx);
             }
             Activation::ScopedSearch { source, query } => {
-                let context_link = format!("@{}:{query}", source.prefix());
-                self.open_deeplink_info_dialog(
-                    "Open context search",
-                    format!(
-                        "{context_link}\n\nScoped context search will be wired in the spine routing slice."
-                    ),
-                    context_link,
-                    window,
-                    cx,
-                );
+                self.open_scoped_search_deeplink(source, query, window, cx);
             }
             Activation::KitResourcePreview { uri, .. } => {
                 self.open_deeplink_info_dialog(
@@ -926,6 +917,45 @@ impl DayPageView {
         }
     }
 
+    fn open_scoped_search_deeplink(
+        &mut self,
+        source: crate::spine::catalog_subsearch::ContextSubsearchSource,
+        query: String,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let context_link = format!("@{}:{query}", source.prefix());
+        if matches!(
+            source,
+            crate::spine::catalog_subsearch::ContextSubsearchSource::File
+                | crate::spine::catalog_subsearch::ContextSubsearchSource::Project
+        ) {
+            let path = PathBuf::from(query.trim());
+            if path.exists() {
+                self.open_file_deeplink(path, context_link, window, cx);
+                return;
+            }
+        }
+
+        if source == crate::spine::catalog_subsearch::ContextSubsearchSource::BrowserHistory
+            && (query.starts_with("http://") || query.starts_with("https://"))
+        {
+            self.open_external_deeplink_url(query, window, cx);
+            return;
+        }
+
+        self.open_deeplink_info_dialog(
+            "Open context search",
+            format!(
+                "{context_link}\n\nUse this scoped context token to search {} for matching context. Exact file/project paths and exact browser URLs open directly.",
+                source.search_hint_noun()
+            ),
+            context_link,
+            window,
+            cx,
+        );
+    }
+
     fn open_run_deeplink_confirm(
         &mut self,
         command_id: String,
@@ -949,17 +979,28 @@ impl DayPageView {
 
         let command_id_for_confirm = command_id.clone();
         let command_id_for_cancel = command_id.clone();
+        let app = self.app.clone();
         let (sender, receiver) = async_channel::bounded::<bool>(1);
         self.open_deferred_confirm_prompt(
             run_deeplink_confirm_options(&command_id, &raw_href),
             sender,
             cx,
         );
-        cx.spawn(async move |_this, _cx| {
+        cx.spawn(async move |_this, cx| {
             if receiver.recv().await.unwrap_or(false) {
+                let executed = cx.update(|cx| {
+                    app.upgrade()
+                        .map(|app| {
+                            app.update(cx, |app, cx| {
+                                app.execute_by_command_id_or_path(&command_id_for_confirm, cx)
+                            })
+                        })
+                        .unwrap_or(false)
+                });
                 tracing::info!(
                     event = "day_page_deeplink_run_confirmed",
                     command_id = %command_id_for_confirm,
+                    executed,
                     "day_page_deeplink_run_confirmed",
                 );
             } else {

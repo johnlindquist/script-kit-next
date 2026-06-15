@@ -103,16 +103,7 @@ impl NotesApp {
                 self.open_note_deeplink(note_id, window, cx);
             }
             Activation::ScopedSearch { source, query } => {
-                let context_link = format!("@{}:{query}", source.prefix());
-                self.open_deeplink_info_dialog(
-                    "Open context search",
-                    format!(
-                        "{context_link}\n\nScoped context search will be wired in the next deeplink executor slice."
-                    ),
-                    context_link,
-                    window,
-                    cx,
-                );
+                self.open_scoped_search_deeplink(source, query, window, cx);
             }
             Activation::KitResourcePreview { uri, .. } => {
                 self.open_deeplink_info_dialog(
@@ -254,6 +245,45 @@ impl NotesApp {
                 cx,
             ),
         }
+    }
+
+    fn open_scoped_search_deeplink(
+        &mut self,
+        source: crate::spine::catalog_subsearch::ContextSubsearchSource,
+        query: String,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let context_link = format!("@{}:{query}", source.prefix());
+        if matches!(
+            source,
+            crate::spine::catalog_subsearch::ContextSubsearchSource::File
+                | crate::spine::catalog_subsearch::ContextSubsearchSource::Project
+        ) {
+            let path = PathBuf::from(query.trim());
+            if path.exists() {
+                self.open_file_deeplink(path, context_link, window, cx);
+                return;
+            }
+        }
+
+        if source == crate::spine::catalog_subsearch::ContextSubsearchSource::BrowserHistory
+            && (query.starts_with("http://") || query.starts_with("https://"))
+        {
+            self.open_external_deeplink_url(query, window, cx);
+            return;
+        }
+
+        self.open_deeplink_info_dialog(
+            "Open context search",
+            format!(
+                "{context_link}\n\nUse this scoped context token to search {} for matching context. Exact file/project paths and exact browser URLs open directly.",
+                source.search_hint_noun()
+            ),
+            context_link,
+            window,
+            cx,
+        );
     }
 
     fn open_run_deeplink_confirm(
