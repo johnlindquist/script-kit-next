@@ -53,6 +53,20 @@ pub(crate) fn day_page_host_actions_section(
         );
     }
 
+    if view.session.is_viewing_note()
+        || (!view.session.is_viewing_fragment() && view.session.bound_date().is_some())
+    {
+        actions.push(
+            Action::new(
+                "day_page:open_in_notes_window",
+                "Open in Notes Window",
+                Some("Move this note from the Day Page surface to the Notes window".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_section(DAY_PAGE_ACTIONS_SECTION_TITLE),
+        );
+    }
+
     if view.is_dirty() {
         actions.push(
             Action::new(
@@ -65,17 +79,6 @@ pub(crate) fn day_page_host_actions_section(
             .with_section(DAY_PAGE_ACTIONS_SECTION_TITLE),
         );
     }
-
-    actions.push(
-        Action::new(
-            "day_page:open_past_day",
-            "Open Past Day…",
-            Some("Search and swap to a previous day page".to_string()),
-            ActionCategory::ScriptContext,
-        )
-        .with_shortcut("cmd+p")
-        .with_section(DAY_PAGE_ACTIONS_SECTION_TITLE),
-    );
 
     let viewing_today = view
         .session
@@ -269,8 +272,45 @@ impl ScriptListApp {
                 true
             }
             "day_page:open_past_day" => {
-                entity.update(cx, |view, cx| view.open_day_switcher(window, cx));
+                let window_handle = window.window_handle();
+                window.defer(cx, move |_window, cx| {
+                    cx.defer(move |cx| {
+                        let _ = window_handle.update(cx, |_root, window, cx| {
+                            entity.update(cx, |view, cx| view.open_note_switcher(window, cx));
+                        });
+                    });
+                });
                 true
+            }
+            "day_page:open_in_notes_window" => {
+                let (note_id, day_date) = {
+                    let view = entity.read(cx);
+                    (
+                        view.session.viewing_note_id().map(str::to_string),
+                        view.session.bound_date(),
+                    )
+                };
+                if let Some(note_id) = note_id.and_then(|id| crate::notes::NoteId::parse(&id)) {
+                    if let Err(error) = crate::notes::open_note_in_notes_window(cx, note_id) {
+                        tracing::warn!(
+                            target: "script_kit::day_page",
+                            error = %error,
+                            "day_page_open_in_notes_window_failed"
+                        );
+                    }
+                    true
+                } else if let Some(date) = day_date {
+                    if let Err(error) = crate::notes::open_day_note_in_notes_window(cx, date) {
+                        tracing::warn!(
+                            target: "script_kit::day_page",
+                            error = %error,
+                            "day_page_open_day_in_notes_window_failed"
+                        );
+                    }
+                    true
+                } else {
+                    false
+                }
             }
             DAY_PAGE_ASK_AGENT_CHAT_ACTION_ID => {
                 entity.update(cx, |view, cx| view.open_agent_chat_about_today(window, cx));

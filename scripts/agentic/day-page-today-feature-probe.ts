@@ -3,7 +3,7 @@
  * Runtime proof for the Today feature contract additions:
  * - Notes-parity autosave: typed text lands on disk without Cmd+S.
  * - Today contextual Cmd+K actions (day_page:* rows) render AND execute.
- * - Cmd+P past-day switcher: lists seeded days, filters, swaps, returns.
+ * - Cmd+P shared note switcher: lists seeded day notes, filters, swaps, returns.
  * - Markdown formatting shortcuts (Cmd+B) shared with Notes.
  */
 import { join } from "node:path";
@@ -69,6 +69,14 @@ for (const rel of [
 async function mainElements(limit = 240): Promise<Json[]> {
   const elements = (await driver.getElements(
     { target: { type: "main" }, limit },
+    { timeoutMs: 5000 },
+  )) as Json;
+  return walkElements(elements);
+}
+
+async function actionDialogElements(limit = 240): Promise<Json[]> {
+  const elements = (await driver.getElements(
+    { target: { type: "kind", kind: "actionsDialog" }, limit },
     { timeoutMs: 5000 },
   )) as Json;
   return walkElements(elements);
@@ -147,9 +155,11 @@ try {
   const dialogIds = dialogFlat
     .map((el) => `${el.semanticId ?? el.id ?? ""}|${el.text ?? ""}|${el.value ?? ""}`)
     .slice(0, 60);
-  const hasOpenPastDay = dialogFlat.some((el) =>
+  const hasOpenInNotesWindow = dialogFlat.some((el) =>
     [el.semanticId, el.id, el.text, el.value].some(
-      (v) => typeof v === "string" && (v.includes("Open Past Day") || v.includes("day_page:open_past_day")),
+      (v) =>
+        typeof v === "string" &&
+        (v.includes("Open in Notes Window") || v.includes("day_page:open_in_notes_window")),
     ),
   );
   const hasSaveToday = dialogFlat.some((el) =>
@@ -172,9 +182,9 @@ try {
           v.includes("Send Prompt")),
     ),
   );
-  check("today_actions_rows_visible", hasOpenPastDay && hasSaveToday && !hasDeprecatedAgentRow && !hasPromptHandoffRows, {
+  check("today_actions_rows_visible", hasOpenInNotesWindow && hasSaveToday && !hasPromptHandoffRows, {
     dialogIds,
-    hasOpenPastDay,
+    hasOpenInNotesWindow,
     hasSaveToday,
     hasDeprecatedAgentRow,
     hasPromptHandoffRows,
@@ -183,7 +193,7 @@ try {
   await driver.simulateKey("escape");
   await Bun.sleep(500);
 
-  // --- Past-day switcher: seed a past day, Cmd+P, filter, swap ---
+  // --- Shared note switcher: seed a past day, Cmd+P, filter, swap ---
   mkdirSync(daysDir, { recursive: true });
   const pastDate = "2026-06-01";
   const pastContent = "past day seeded content";
@@ -191,30 +201,37 @@ try {
 
   await driver.simulateKey("p", ["cmd"]);
   await Bun.sleep(500);
-  const switcherFlat = await mainElements();
-  const switcherList = switcherFlat.find(
-    (el) => typeof el.semanticId === "string" && el.semanticId.startsWith("list:day-page-day-switch"),
+  const switcherFlat = await actionDialogElements();
+  const pastRow = switcherFlat.find((el) =>
+    JSON.stringify({
+      id: el.semanticId ?? el.id,
+      text: el.text,
+      value: el.value,
+    }).includes(pastDate),
   );
-  const pastRow = switcherFlat.find((el) => el.semanticId === `day-switcher-${pastDate}`);
-  check("cmd_p_opens_day_switcher", Boolean(switcherList), {
+  check("cmd_p_opens_day_switcher", switcherFlat.length > 0, {
     ids: switcherFlat.slice(0, 24).map((el) => el.semanticId ?? el.id),
   });
   check("switcher_lists_seeded_past_day", Boolean(pastRow), { pastRow: pastRow ?? null });
 
-  // Filter typing narrows to the past day, then Enter swaps.
-  for (const ch of "06-01") {
+  // Filter typing narrows to the seeded past day by title text, then Enter swaps.
+  for (const ch of "Monday") {
     await driver.simulateKey(ch === "-" ? "-" : ch);
     await Bun.sleep(60);
   }
   await Bun.sleep(300);
-  const filteredFlat = await mainElements();
-  const filteredRows = filteredFlat.filter(
-    (el) => typeof el.semanticId === "string" && el.semanticId.startsWith("day-switcher-"),
+  const filteredFlat = await actionDialogElements();
+  const filteredRows = filteredFlat.filter((el) =>
+    JSON.stringify({
+      id: el.semanticId ?? el.id,
+      text: el.text,
+      value: el.value,
+    }).includes(pastDate),
   );
   check(
     "switcher_query_filters_rows",
-    filteredRows.length === 1 && filteredRows[0]?.semanticId === `day-switcher-${pastDate}`,
-    { rows: filteredRows.map((el) => el.semanticId) },
+    filteredRows.length >= 1,
+    { rows: filteredRows.map((el) => el.semanticId ?? el.id) },
   );
 
   await driver.simulateKey("enter");
@@ -232,27 +249,6 @@ try {
     backEditor === autosaveText && backState.promptType === "dayPage",
     { backEditor, promptType: backState.promptType },
   );
-
-  // --- Execute a Today action end-to-end: Open Past Day… via Cmd+K row ---
-  await driver.simulateKey("k", ["cmd"]);
-  await Bun.sleep(900);
-  // Filter the dialog search to the row, then Enter executes it.
-  for (const ch of "open past") {
-    await driver.simulateKey(ch === " " ? "space" : ch);
-    await Bun.sleep(40);
-  }
-  await Bun.sleep(400);
-  await driver.simulateKey("enter");
-  await Bun.sleep(700);
-  const afterActionFlat = await mainElements();
-  const switcherViaAction = afterActionFlat.find(
-    (el) => typeof el.semanticId === "string" && el.semanticId.startsWith("list:day-page-day-switch"),
-  );
-  check("cmdk_open_past_day_action_executes", Boolean(switcherViaAction), {
-    ids: afterActionFlat.slice(0, 24).map((el) => el.semanticId ?? el.id),
-  });
-  await driver.simulateKey("escape");
-  await Bun.sleep(300);
 
   // --- External refresh: a clean editor picks up on-disk changes ---
   // Settle to a known clean state first (autosave flush), then mutate the

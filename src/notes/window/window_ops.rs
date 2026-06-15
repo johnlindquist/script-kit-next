@@ -206,6 +206,76 @@ pub fn open_note_in_notes_window(cx: &mut App, note_id: NoteId) -> Result<()> {
     Err(anyhow::anyhow!("Notes window is unavailable"))
 }
 
+pub fn open_day_note_in_notes_window(cx: &mut App, date: chrono::NaiveDate) -> Result<()> {
+    storage::init_notes_db()?;
+    let path = storage::notes_brain_days_dir().join(format!("{date}.md"));
+    if !path.exists() {
+        anyhow::bail!("Day note not found");
+    }
+
+    let existing_handle = {
+        let slot = NOTES_WINDOW.get_or_init(|| std::sync::Mutex::new(None));
+        slot.lock().ok().and_then(|g| *g)
+    };
+
+    let existing_app = {
+        let slot = NOTES_APP_ENTITY.get_or_init(|| std::sync::Mutex::new(None));
+        slot.lock().ok().and_then(|g| g.clone())
+    };
+
+    if let (Some(handle), Some(notes_app)) = (existing_handle, existing_app.clone()) {
+        if crate::is_main_window_visible() {
+            crate::set_main_window_visible(false);
+            crate::platform::defer_hide_main_window(cx);
+        }
+
+        let result = update_notes_window_detached(handle, cx, |window, cx| {
+            window.activate_window();
+            notes_app.update(cx, |app, cx| {
+                app.select_day_note(date, window, cx);
+            });
+        });
+
+        match result {
+            Ok(()) => return Ok(()),
+            Err(_) => {
+                let slot = NOTES_WINDOW.get_or_init(|| std::sync::Mutex::new(None));
+                if let Ok(mut g) = slot.lock() {
+                    *g = None;
+                }
+                let slot = NOTES_APP_ENTITY.get_or_init(|| std::sync::Mutex::new(None));
+                if let Ok(mut g) = slot.lock() {
+                    *g = None;
+                }
+            }
+        }
+    }
+
+    open_notes_window_with_close_behavior(cx, NotesCloseBehavior::LeaveLauncherHidden)?;
+
+    let handle = {
+        let slot = NOTES_WINDOW.get_or_init(|| std::sync::Mutex::new(None));
+        slot.lock().ok().and_then(|g| *g)
+    };
+    let notes_app = {
+        let slot = NOTES_APP_ENTITY.get_or_init(|| std::sync::Mutex::new(None));
+        slot.lock().ok().and_then(|g| g.clone())
+    };
+
+    if let (Some(handle), Some(notes_app)) = (handle, notes_app) {
+        let result = update_notes_window_detached(handle, cx, |window, cx| {
+            window.activate_window();
+            notes_app.update(cx, |app, cx| {
+                app.select_day_note(date, window, cx);
+            });
+        });
+
+        return result.map_err(|error| anyhow::anyhow!("Failed to update Notes window: {error}"));
+    }
+
+    Err(anyhow::anyhow!("Notes window is unavailable"))
+}
+
 pub fn apply_mcp_notes_mutation_on_main_thread(
     request: NotesMutationRequest,
     cx: &mut App,

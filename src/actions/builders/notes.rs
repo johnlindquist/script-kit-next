@@ -902,3 +902,11 @@ pub fn get_note_switcher_actions(notes: &[NoteSwitcherNoteInfo]) -> Vec<Action> 
 
     actions
 }
+
+/// Get actions for day-page rows included in the shared Notes switcher.
+pub fn get_day_note_switcher_actions(days_dir: &std::path::Path) -> Vec<Action> {
+    let entries = crate::notes::day_switcher::load_day_note_switcher_entries(days_dir);
+    get_note_switcher_actions(&crate::notes::day_switcher::day_note_switcher_infos(
+        &entries, None,
+    ))
+}

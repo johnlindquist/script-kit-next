@@ -91,6 +91,28 @@ impl NotesEditor {
         });
     }
 
+    pub(crate) fn focus_with_cursor_at_end(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.input_state.update(cx, |state, cx| {
+            let cursor = state.value().len();
+            state.set_selection(cursor, cursor, window, cx);
+            // `set_selection`'s scroll_to is a no-op until the element has
+            // painted (last_layout/last_bounds are None on the load/mount
+            // frame), so the Day Page would land at the top on open/reopen.
+            // This vendor flag is consumed during the next paint
+            // (element.rs: scroll_to_bottom_after_layout) to force the scroll
+            // offset to the bottom once layout commits.
+            state.scroll_to_bottom_after_layout(cx);
+            state.scroll_to_bottom(cx);
+        });
+    }
+
+    pub(crate) fn scroll_to_bottom(&mut self, cx: &mut Context<Self>) {
+        self.input_state.update(cx, |state, cx| {
+            state.scroll_to_bottom_after_layout(cx);
+            state.scroll_to_bottom(cx);
+        });
+    }
+
     pub fn focus_handle(&self, cx: &App) -> FocusHandle {
         self.input_state.read(cx).focus_handle(cx)
     }
@@ -123,6 +145,8 @@ impl NotesEditor {
         self.input_state.update(cx, |state, cx| {
             state.set_value(value, window, cx);
             state.set_selection(cursor, cursor, window, cx);
+            state.scroll_to_bottom_after_layout(cx);
+            state.scroll_to_bottom(cx);
         });
         self.sync_markdown_link_highlights(cx);
     }

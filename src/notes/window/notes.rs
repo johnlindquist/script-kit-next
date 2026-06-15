@@ -291,6 +291,7 @@ impl NotesApp {
     ) {
         // Save any unsaved changes to the current note before switching
         self.save_current_note();
+        self.active_day_binding = None;
 
         // Push current note onto history stack (unless navigating back/forward)
         if !self.navigating_history {
@@ -333,6 +334,61 @@ impl NotesApp {
         }
 
         self.recompute_notes_ghost(cx);
+        cx.notify();
+    }
+
+    pub(super) fn select_day_note(
+        &mut self,
+        date: chrono::NaiveDate,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.has_unsaved_changes && !self.save_current_note() {
+            tracing::warn!(
+                target: "script_kit::notes",
+                event = "notes_day_note_select_blocked",
+                date = %date,
+                reason = "save_current_note_failed",
+            );
+            return;
+        }
+
+        let path = storage::notes_brain_days_dir().join(format!("{date}.md"));
+        let content = match std::fs::read_to_string(&path) {
+            Ok(content) => content,
+            Err(error) => {
+                tracing::error!(
+                    target: "script_kit::notes",
+                    event = "notes_day_note_read_failed",
+                    date = %date,
+                    path = %path.display(),
+                    error = %error,
+                );
+                return;
+            }
+        };
+
+        self.view_mode = NotesViewMode::AllNotes;
+        self.selected_note_id = None;
+        self.active_day_binding = Some(NotesDayBinding {
+            date,
+            path,
+            content: content.clone(),
+        });
+        self.has_unsaved_changes = false;
+        self.history_forward.clear();
+        self.editor_state.update(cx, |state, cx| {
+            state.set_value(&content, window, cx);
+            let content_len = content.len();
+            state.set_selection(content_len, content_len, window, cx);
+            state.focus(window, cx);
+        });
+        self.recompute_notes_ghost(cx);
+        tracing::info!(
+            target: "script_kit::notes",
+            event = "notes_day_note_selected",
+            date = %date,
+        );
         cx.notify();
     }
 

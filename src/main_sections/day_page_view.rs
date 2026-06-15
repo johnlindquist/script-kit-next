@@ -56,6 +56,11 @@ impl DayPageView {
             last_autosave: None,
             autosave_flush_scheduled: false,
             day_switcher: None,
+            note_switcher: crate::actions::CommandBar::new(
+                Vec::new(),
+                crate::actions::CommandBarConfig::notes_recent_style(),
+                std::sync::Arc::new(crate::theme::get_cached_theme()),
+            ),
             last_editor_content_len: 0,
         }
     }
@@ -91,6 +96,8 @@ impl DayPageView {
             editor.load_value_with_cursor_at_end(content, window, cx);
         });
         self.sync_footer(window, cx);
+        self.defer_editor_bottom_scroll(window, cx);
+        self.schedule_editor_bottom_scroll_retries(cx);
     }
 
     fn refresh_fragment_open_targets(&mut self, content: &str) {
@@ -282,9 +289,67 @@ impl DayPageView {
     }
 
     pub fn focus_editor(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.notes_editor.update(cx, |editor, cx| {
-            editor.focus(window, cx);
+        self.focus_editor_at_end(window, cx);
+        self.defer_editor_bottom_scroll(window, cx);
+        self.schedule_editor_bottom_scroll_retries(cx);
+        let day_page = cx.entity().downgrade();
+        window.defer(cx, move |window, cx| {
+            let Some(day_page) = day_page.upgrade() else {
+                return;
+            };
+            day_page.update(cx, |view, cx| {
+                view.focus_editor_at_end(window, cx);
+            });
         });
+    }
+
+    fn focus_editor_at_end(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.notes_editor.update(cx, |editor, cx| {
+            editor.focus_with_cursor_at_end(window, cx);
+        });
+    }
+
+    fn defer_editor_bottom_scroll(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let day_page = cx.entity().downgrade();
+        window.defer(cx, move |window, cx| {
+            let Some(day_page) = day_page.upgrade() else {
+                return;
+            };
+            day_page.update(cx, |view, cx| {
+                view.notes_editor.update(cx, |editor, cx| {
+                    editor.scroll_to_bottom(cx);
+                });
+                let day_page = cx.entity().downgrade();
+                window.defer(cx, move |_window, cx| {
+                    let Some(day_page) = day_page.upgrade() else {
+                        return;
+                    };
+                    day_page.update(cx, |view, cx| {
+                        view.notes_editor.update(cx, |editor, cx| {
+                            editor.scroll_to_bottom(cx);
+                        });
+                    });
+                });
+            });
+        });
+    }
+
+    fn schedule_editor_bottom_scroll_retries(&mut self, cx: &mut Context<Self>) {
+        cx.spawn(async move |this, cx| {
+            for delay_ms in [50_u64, 150, 350, 800] {
+                cx.background_executor()
+                    .timer(std::time::Duration::from_millis(delay_ms))
+                    .await;
+                this.update(cx, |view, cx| {
+                    view.notes_editor.update(cx, |editor, cx| {
+                        editor.scroll_to_bottom(cx);
+                    });
+                    cx.notify();
+                })
+                .ok();
+            }
+        })
+        .detach();
     }
 
     pub fn set_input(&mut self, text: String, window: &mut Window, cx: &mut Context<Self>) {
@@ -414,7 +479,6 @@ impl Render for DayPageView {
         let editor_input = self.notes_editor.read(cx).render_input(cx);
         let viewing_fragment = self.session.is_viewing_fragment();
         let theme = app_state.theme.clone();
-        let day_switcher_panel = self.render_day_page_day_switcher_panel(cx);
 
         let local_today = Utc::now()
             .with_timezone(&self.session.substrate().timezone())
@@ -433,6 +497,7 @@ impl Render for DayPageView {
                     format!("Today · {return_day_date}")
                 }
                 DayPageBinding::Day => "Today".to_string(),
+                DayPageBinding::Note { title, .. } => title.clone(),
             };
             Some(
                 div()
@@ -479,6 +544,32 @@ impl Render for DayPageView {
                     .child("←")
                     .child(label),
             )
+        } else if self.session.is_viewing_note() {
+            let label = self
+                .session
+                .viewing_note_title()
+                .map(|title| format!("Back to Today · viewing {title}"))
+                .unwrap_or_else(|| "Back to Today".to_string());
+            Some(
+                div()
+                    .id("day-page-note-back")
+                    .w_full()
+                    .flex()
+                    .items_center()
+                    .gap(px(8.))
+                    .pb(px(6.))
+                    .text_sm()
+                    .cursor_pointer()
+                    .on_mouse_down(
+                        gpui::MouseButton::Left,
+                        cx.listener(|this, _, window, cx| {
+                            this.return_to_day_page(window, cx);
+                            this.focus_editor(window, cx);
+                        }),
+                    )
+                    .child("←")
+                    .child(label),
+            )
         } else {
             None
         };
@@ -498,8 +589,7 @@ impl Render for DayPageView {
                     .relative()
                     .flex_1()
                     .min_h(px(0.))
-                    .child(editor_input)
-                    .when_some(day_switcher_panel, |parent, panel| parent.child(panel)),
+                    .child(editor_input),
             );
 
         let context_zone = app.update(cx, |app, _cx| {
@@ -561,7 +651,7 @@ impl Render for DayPageView {
                 divider,
                 main,
                 footer: Some(
-                    crate::components::prompt_layout_shell::render_native_main_window_footer_hover_blocker(),
+                    crate::components::prompt_layout_shell::render_native_main_window_footer_spacer(),
                 ),
                 overlays: Vec::new(),
             },
@@ -608,7 +698,7 @@ impl DayPageView {
         }
 
         if exact_plain && crate::ui_foundation::is_key_escape(&key) {
-            if self.session.is_viewing_fragment() {
+            if self.session.is_viewing_fragment() || self.session.is_viewing_note() {
                 self.return_to_day_page(window, cx);
                 return;
             }
@@ -638,7 +728,7 @@ impl DayPageView {
         }
 
         if exact_cmd && key == "p" {
-            self.toggle_day_switcher(window, cx);
+            self.open_note_switcher(window, cx);
             return;
         }
 

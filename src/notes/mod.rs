@@ -35,6 +35,7 @@
 
 mod actions_panel;
 pub(crate) mod code_highlight;
+pub(crate) mod day_switcher;
 pub(crate) mod ghost;
 pub(crate) mod ghost_llm;
 pub(crate) mod markdown;
@@ -56,10 +57,10 @@ pub(crate) use storage::{
     count_active_notes_with_tag, delete_note_cart_item, delete_note_cart_items,
     delete_note_permanently, get_all_notes, get_deleted_notes, get_note, get_note_aliases,
     get_note_backlink_count, get_note_backlinks, get_note_outbound_link_count, get_note_tags,
-    init_notes_db, list_note_cart_items, list_note_cart_items_deduped, notes_brain_days_dir,
-    root_notes_query_is_eligible, save_note, save_note_cart_item, search_notes,
-    search_root_notes_meta, search_root_notes_meta_cached, search_root_notes_meta_direct,
-    NoteBacklinkSummary, RootNoteSearchHit, RootNotesSectionOptions,
+    init_notes_db, list_note_cart_items, list_note_cart_items_deduped, note_file_path,
+    notes_brain_days_dir, root_notes_query_is_eligible, save_note, save_note_cart_item,
+    search_notes, search_root_notes_meta, search_root_notes_meta_cached,
+    search_root_notes_meta_direct, NoteBacklinkSummary, RootNoteSearchHit, RootNotesSectionOptions,
 };
 
 /// Tag that promotes a note to a standing agent instruction.
@@ -90,8 +91,8 @@ pub use window::{
     close_notes_embedded_agent_chat, close_notes_window, get_notes_app_entity_and_handle,
     get_notes_editor_runtime_info, get_notes_editor_text, handle_notes_editor_key_for_automation,
     handle_notes_ghost_key_for_automation, inject_text_into_notes, is_notes_window,
-    is_notes_window_open, open_note_in_notes_window, open_notes_search, open_notes_window,
-    open_notes_window_without_launcher_restore, quick_capture, save_note_with_content,
-    save_note_with_content_and_source, toggle_notes_popup_for_automation, NotesApp,
-    NotesSurfaceMode,
+    is_notes_window_open, open_day_note_in_notes_window, open_note_in_notes_window,
+    open_notes_search, open_notes_window, open_notes_window_without_launcher_restore,
+    quick_capture, save_note_with_content, save_note_with_content_and_source,
+    toggle_notes_popup_for_automation, NotesApp, NotesSurfaceMode,
 };

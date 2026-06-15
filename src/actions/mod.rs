@@ -42,8 +42,8 @@ pub(crate) use builders::{
     AGENT_CHAT_SHOW_RECEIPT_HISTORY_ACTION_ID,
 };
 pub use builders::{
-    get_ai_command_bar_actions, get_new_chat_actions, get_note_switcher_actions,
-    get_notes_command_bar_actions,
+    get_ai_command_bar_actions, get_day_note_switcher_actions, get_new_chat_actions,
+    get_note_switcher_actions, get_notes_command_bar_actions,
 };
 pub use builders::{
     to_deeplink_name, ChatModelInfo, ChatPromptInfo, ClipboardEntryInfo, FileSearchDirectoryInfo,

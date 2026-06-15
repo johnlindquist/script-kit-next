@@ -189,6 +189,15 @@ pub(crate) fn notes_brain_days_dir() -> PathBuf {
     get_notes_brain_base_path().join("days")
 }
 
+pub(crate) fn note_file_path(id: NoteId) -> Result<Option<PathBuf>> {
+    let db = get_db()?;
+    let conn = db.lock().map_err(db_lock_err)?;
+    let slug = lookup_note_slug(&conn, id)?;
+    Ok(slug
+        .map(|slug| notes_substrate().map(|substrate| substrate.paths().note_file(&slug)))
+        .transpose()?)
+}
+
 fn notes_substrate() -> Result<Arc<BrainSubstrate>> {
     Ok(NOTES_SUBSTRATE
         .get_or_init(|| Arc::new(BrainSubstrate::new(get_notes_brain_base_path())))

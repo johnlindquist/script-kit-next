@@ -47,7 +47,10 @@ pub use file_path::{
     get_file_context_actions, get_file_search_directory_actions, get_path_context_actions,
     FileSearchDirectoryInfo, FileSearchSortMode,
 };
-pub use notes::{get_new_chat_actions, get_note_switcher_actions, get_notes_command_bar_actions};
+pub use notes::{
+    get_day_note_switcher_actions, get_new_chat_actions, get_note_switcher_actions,
+    get_notes_command_bar_actions,
+};
 pub(crate) use script_context::{
     agent_chat_fork_edit_entry_from_action, agent_chat_receipt_history_request_id_from_action,
     agent_chat_switch_model_id_from_action, agent_chat_switch_profile_id_from_action,

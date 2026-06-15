@@ -313,6 +313,9 @@ pub struct InputState {
     pub(crate) scroll_handle: ScrollHandle,
     /// The deferred scroll offset to apply on next layout.
     pub(crate) deferred_scroll_offset: Option<Point<Pixels>>,
+    /// Whether the next layout pass should scroll to the bottom after it knows
+    /// the final scroll size and input bounds.
+    pub(crate) scroll_to_bottom_after_layout: bool,
     /// The size of the scrollable content.
     pub(crate) scroll_size: gpui::Size<Pixels>,
     pub(crate) code_editor_dynamic_bottom_margin: bool,
@@ -470,6 +473,7 @@ impl InputState {
             scroll_handle: ScrollHandle::new(),
             scroll_size: gpui::size(px(0.), px(0.)),
             deferred_scroll_offset: None,
+            scroll_to_bottom_after_layout: false,
             code_editor_dynamic_bottom_margin: true,
             preferred_column: None,
             placeholder: SharedString::default(),
@@ -1022,6 +1026,23 @@ impl InputState {
         self.scroll_to(end, None, cx);
         self.focus(window, cx);
         cx.notify();
+    }
+
+    /// Request a bottom scroll on the next layout pass, when content and viewport
+    /// dimensions are known. This is useful for hosts that focus a multiline
+    /// editor before its first paint.
+    pub fn scroll_to_bottom_after_layout(&mut self, cx: &mut Context<Self>) {
+        self.scroll_to_bottom_after_layout = true;
+        cx.notify();
+    }
+
+    /// Scroll to the bottom using the latest committed content and viewport
+    /// metrics. Hosts can call this after layout has populated `scroll_size`
+    /// and `input_bounds`.
+    pub fn scroll_to_bottom(&mut self, cx: &mut Context<Self>) {
+        let mut offset = self.scroll_handle.offset();
+        offset.y = -(self.scroll_size.height - self.input_bounds.size.height).max(px(0.));
+        self.update_scroll_offset(Some(offset), cx);
     }
 
     /// Get the current selection as a byte offset range.

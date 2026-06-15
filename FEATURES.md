@@ -41,10 +41,11 @@ the matrix only through a future QA lock-in selection.
 - Stable anchor: `day-page-opens-in-main-launcher-window`
 - Surface: Day Page / Main Launcher
 - Status: Active (Brain Time T9), pending QA lock-in selection
-- User contract: Tap-while-open toggles Script List ↔ Day Page in the same main window (no resize, no window swap). Today's `brain/days/YYYY-MM-DD.md` binds on entry; the shared notes editor (`day-page-editor`) persists edits through the brain substrate. Esc dismisses the main window.
+- User contract: Tap-while-open toggles Script List ↔ Day Page in the same main window (no resize, no window swap). Today's `brain/days/YYYY-MM-DD.md` binds on entry; the shared notes editor (`day-page-editor`) persists edits through the brain substrate. Cmd+P uses the same Notes search container/result language as the Notes Window, with selected rows opening in the current host editor by default. Esc dismisses the main window.
 - Regression risk: Gesture routing or `AppView` morph refactors can break in-place toggle, day rollover binding, or editor save semantics.
 - Proof commands:
   - `./scripts/agentic/agent-cargo.sh test --lib day_page`
+  - `bun scripts/agentic/notes-day-page-switcher-probe.ts`
   - `bun scripts/devtools/inspect.ts --session brain-time --start --show --main --surface DayPage --limit 200`
 - Pass evidence: Day-page unit tests pass; DevTools inspect shows `day-page-editor` and stable main-window bounds across launcher ↔ Day Page toggle.
 - Fail evidence: Wrong view after toggle, missing editor semantic id, day file not created, or unit tests fail.
@@ -81,13 +82,13 @@ the matrix only through a future QA lock-in selection.
 - Stable anchor: `clipboard-sediment-no-popup`
 - Surface: Clipboard History / Day Page
 - Status: Active (Brain Time T4/T10/T12/T14), pending QA lock-in selection
-- User contract: Secrets are rejected before storage. URLs auto-keep to today's day page. Non-URLs promote on re-copy. Copy tracking must not open a post-copy popup; auto-keeps may whisper "Kept". Day Page renders fragment excerpt cards and kept-URL links.
-- Regression risk: Monitor ordering, sediment tiers, or post-copy popup regressions can leak secrets, skip keeps, or reintroduce surprise UI.
+- User contract: Secrets are rejected before storage. URLs auto-keep to today's day page. Non-URLs promote on re-copy. Copy tracking must not open a post-copy popup or HUD. Day Page renders fragment excerpt cards and kept-URL links.
+- Regression risk: Monitor ordering, sediment tiers, or post-copy UI regressions can leak secrets, skip keeps, or reintroduce surprise UI.
 - Proof commands:
   - `./scripts/agentic/agent-cargo.sh test --lib clipboard_history`
-  - `bun scripts/agentic/clipboard-post-copy-menu-probe.ts` (runtime no-popup receipt when available)
-- Pass evidence: Rejection and sediment unit tests pass; runtime probe shows brain insertion with no post-copy popup target.
-- Fail evidence: Rejected content stored, duplicate URL lines same day, copied content opens a post-copy popup, or tests fail.
+  - `bun scripts/agentic/clipboard-sediment-no-popup-probe.ts` (runtime no-popup receipt when available)
+- Pass evidence: Rejection and sediment unit tests pass; runtime probe shows brain insertion with no post-copy UI target.
+- Fail evidence: Rejected content stored, duplicate URL lines same day, copied content opens post-copy UI, or tests fail.
 
 ## Feature Matrix
 

@@ -71,6 +71,40 @@ fn main_window_actions_key_intent(
 }
 
 impl ScriptListApp {
+    fn route_day_page_note_switcher_key(
+        &mut self,
+        key: &str,
+        key_char: Option<&str>,
+        modifiers: &gpui::Modifiers,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let AppView::DayPage { entity } = &self.current_view else {
+            return false;
+        };
+        if !entity.read(cx).is_day_switcher_open() {
+            return false;
+        }
+
+        if crate::actions::route_key_to_detached_actions_window(key, key_char, modifiers, cx) {
+            return true;
+        }
+
+        let entity = entity.clone();
+        let key_lower = key.to_ascii_lowercase();
+        entity.update(cx, |view, cx| {
+            view.handle_day_switcher_key(
+                &key_lower,
+                modifiers.platform,
+                modifiers.shift,
+                modifiers.alt,
+                modifiers.control,
+                window,
+                cx,
+            )
+        })
+    }
+
     fn handle_main_window_global_key_intent(
         &mut self,
         intent: MainWindowGlobalKeyIntent,
@@ -1850,6 +1884,7 @@ impl ScriptListApp {
                 }
 
                 let key = event.keystroke.key.as_str();
+                let key_char = event.keystroke.key_char.as_deref();
                 let is_up = crate::ui_foundation::is_key_up(key);
                 let is_down = crate::ui_foundation::is_key_down(key);
                 let is_left = crate::ui_foundation::is_key_left(key);
@@ -1929,6 +1964,17 @@ impl ScriptListApp {
                 if (is_up || is_down) && no_direction_modifiers {
                     if let Some(app) = app_entity.upgrade() {
                         app.update(cx, |this, cx| {
+                            if this.route_day_page_note_switcher_key(
+                                key,
+                                key_char,
+                                &event.keystroke.modifiers,
+                                window,
+                                cx,
+                            ) {
+                                cx.stop_propagation();
+                                return;
+                            }
+
                             // Universal: Route arrow keys to actions dialog when picker is active
                             // This ensures ALL views (ChatPrompt, ArgPrompt, etc.) route
                             // arrows to the dialog, not just the few views with explicit cases below.
@@ -2865,6 +2911,17 @@ impl ScriptListApp {
                         }
                         // Route shared actions-dialog keys first; local actions
                         // key intents run only after the dialog declines the key.
+                        if this.route_day_page_note_switcher_key(
+                            key,
+                            key_char,
+                            &event.keystroke.modifiers,
+                            window,
+                            cx,
+                        ) {
+                            cx.stop_propagation();
+                            return;
+                        }
+
                         let host = this.current_actions_host();
 
                         // Arrow keys are handled by arrow_interceptor to avoid double-processing

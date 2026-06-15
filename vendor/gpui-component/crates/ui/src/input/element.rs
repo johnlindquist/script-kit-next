@@ -1638,7 +1638,16 @@ impl Element for TextElement {
             state.set_input_bounds(input_bounds, cx);
             state.last_selected_range = Some(selected_range);
             state.scroll_size = prepaint.scroll_size;
-            state.update_scroll_offset(Some(prepaint.cursor_scroll_offset), cx);
+            let scroll_offset = if state.scroll_to_bottom_after_layout {
+                state.scroll_to_bottom_after_layout = false;
+                point(
+                    prepaint.cursor_scroll_offset.x,
+                    -(prepaint.scroll_size.height - input_bounds.size.height).max(px(0.)),
+                )
+            } else {
+                prepaint.cursor_scroll_offset
+            };
+            state.update_scroll_offset(Some(scroll_offset), cx);
             state.deferred_scroll_offset = None;
 
             cx.notify();

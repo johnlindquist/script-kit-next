@@ -54,6 +54,17 @@ async function mainFocus(driver: Driver): Promise<string | null> {
   return (elements.focusedSemanticId as string | undefined) ?? null;
 }
 
+async function dayEditorText(driver: Driver): Promise<string | null> {
+  const elements = (await driver.getElements(
+    { target: { type: "main" }, limit: 160 },
+    { timeoutMs: 3000 },
+  )) as Json;
+  const editor = walk(elements).find(
+    (node) => node.semanticId === "input:day-page-editor" || node.id === "day-page-editor",
+  );
+  return typeof editor?.value === "string" ? editor.value : null;
+}
+
 const driver = await Driver.launch({
   binary,
   sandboxHome: true,
@@ -121,36 +132,41 @@ try {
     selectedActionId: switcherAfterType?.selectedActionId ?? null,
     rowIdsAfterType: rowIdsAfterType.slice(0, 30),
   });
+  const editorAfterSwitcherType = await dayEditorText(driver);
+  check("cmd_p_typing_does_not_mutate_day_editor", editorAfterSwitcherType === seedText, {
+    editorAfterSwitcherType,
+    seedText,
+  });
 
-  const selectedBeforeDown = switcherAfterType?.selectedActionId ?? null;
-  const selectedRowBeforeDown = selectedActionRow(rowsAfterType);
-  driver.simulateKey("down");
-  await Bun.sleep(250);
-  const switcherAfterDown = await actionsState(driver);
-  const rowsAfterDown = await actionRows(driver);
-  const selectedRowAfterDown = selectedActionRow(rowsAfterDown);
-  const selectedBeforeUp = selectedRowAfterDown?.semanticId ?? selectedRowAfterDown?.id ?? null;
+  const selectedBeforeUp = switcherAfterType?.selectedActionId ?? null;
+  const selectedRowBeforeUp = selectedActionRow(rowsAfterType);
   driver.simulateKey("up");
   await Bun.sleep(250);
+  const switcherAfterUp = await actionsState(driver);
   const rowsAfterUp = await actionRows(driver);
   const selectedRowAfterUp = selectedActionRow(rowsAfterUp);
+  const selectedBeforeDown = selectedRowAfterUp?.semanticId ?? selectedRowAfterUp?.id ?? null;
+  driver.simulateKey("down");
+  await Bun.sleep(250);
+  const rowsAfterDown = await actionRows(driver);
+  const selectedRowAfterDown = selectedActionRow(rowsAfterDown);
   check(
     "cmd_p_arrows_move_switcher_selection",
-    switcherAfterDown !== null &&
-      selectedRowBeforeDown !== null &&
-      selectedRowAfterDown !== null &&
+    switcherAfterUp !== null &&
+      selectedRowBeforeUp !== null &&
       selectedRowAfterUp !== null &&
-      (selectedRowAfterDown.semanticId ?? selectedRowAfterDown.id) !==
-        (selectedRowBeforeDown.semanticId ?? selectedRowBeforeDown.id) &&
-      (selectedRowAfterUp.semanticId ?? selectedRowAfterUp.id) ===
-        (selectedRowBeforeDown.semanticId ?? selectedRowBeforeDown.id),
+      selectedRowAfterDown !== null &&
+      (selectedRowAfterUp.semanticId ?? selectedRowAfterUp.id) !==
+        (selectedRowBeforeUp.semanticId ?? selectedRowBeforeUp.id) &&
+      (selectedRowAfterDown.semanticId ?? selectedRowAfterDown.id) ===
+        (selectedRowBeforeUp.semanticId ?? selectedRowBeforeUp.id),
     {
-    selectedBeforeDown,
-      selectedRowBeforeDown: selectedRowBeforeDown?.semanticId ?? selectedRowBeforeDown?.id ?? null,
-      selectedAfterDown: switcherAfterDown?.selectedActionId ?? null,
-      selectedRowAfterDown: selectedRowAfterDown?.semanticId ?? selectedRowAfterDown?.id ?? null,
       selectedBeforeUp,
+      selectedRowBeforeUp: selectedRowBeforeUp?.semanticId ?? selectedRowBeforeUp?.id ?? null,
+      selectedAfterUp: switcherAfterUp?.selectedActionId ?? null,
       selectedRowAfterUp: selectedRowAfterUp?.semanticId ?? selectedRowAfterUp?.id ?? null,
+      selectedBeforeDown,
+      selectedRowAfterDown: selectedRowAfterDown?.semanticId ?? selectedRowAfterDown?.id ?? null,
     },
   );
 

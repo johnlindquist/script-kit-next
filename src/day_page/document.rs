@@ -23,6 +23,12 @@ use crate::brain::substrate::{io, BrainSubstrate};
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DayPageBinding {
     Day,
+    Note {
+        note_id: String,
+        title: String,
+        return_day_path: PathBuf,
+        return_day_date: NaiveDate,
+    },
     Fragment {
         fragment_path: PathBuf,
         return_day_path: PathBuf,
@@ -61,6 +67,24 @@ impl DayPageDocumentSession {
 
     pub fn is_viewing_fragment(&self) -> bool {
         matches!(self.binding, DayPageBinding::Fragment { .. })
+    }
+
+    pub fn is_viewing_note(&self) -> bool {
+        matches!(self.binding, DayPageBinding::Note { .. })
+    }
+
+    pub fn viewing_note_id(&self) -> Option<&str> {
+        match &self.binding {
+            DayPageBinding::Note { note_id, .. } => Some(note_id.as_str()),
+            _ => None,
+        }
+    }
+
+    pub fn viewing_note_title(&self) -> Option<&str> {
+        match &self.binding {
+            DayPageBinding::Note { title, .. } => Some(title.as_str()),
+            _ => None,
+        }
     }
 
     pub fn substrate(&self) -> &BrainSubstrate {
@@ -159,10 +183,60 @@ impl DayPageDocumentSession {
         Ok(content)
     }
 
+    /// Bind the editor to a regular Notes document while keeping the Day Page
+    /// surface local to the main window.
+    pub fn bind_note_content(
+        &mut self,
+        note_id: String,
+        title: String,
+        content: String,
+        path: Option<PathBuf>,
+        now: DateTime<Utc>,
+    ) -> Result<String> {
+        let day_path = self
+            .path
+            .clone()
+            .with_context(|| "note open without day bind")?;
+        let day_date = self
+            .bound_date
+            .with_context(|| "note open without day date")?;
+
+        if self.dirty {
+            self.save(now)?;
+        }
+
+        let mtime = path
+            .as_ref()
+            .and_then(|path| fs::metadata(path).and_then(|meta| meta.modified()).ok());
+
+        self.path = path;
+        self.bound_date = None;
+        self.binding = DayPageBinding::Note {
+            note_id,
+            title: if title.trim().is_empty() {
+                "Untitled Note".to_string()
+            } else {
+                title
+            },
+            return_day_path: day_path,
+            return_day_date: day_date,
+        };
+        self.dirty = false;
+        self.disk_content = content.clone();
+        self.last_mtime = mtime;
+
+        Ok(content)
+    }
+
     /// Return from an inline fragment view back to the bound day page.
     pub fn return_to_day(&mut self, now: DateTime<Utc>) -> Result<String> {
         let (return_day_path, return_day_date) = match &self.binding {
             DayPageBinding::Fragment {
+                return_day_path,
+                return_day_date,
+                ..
+            }
+            | DayPageBinding::Note {
                 return_day_path,
                 return_day_date,
                 ..
@@ -204,6 +278,15 @@ impl DayPageDocumentSession {
             .path
             .clone()
             .with_context(|| "day page save without bind")?;
+
+        if let DayPageBinding::Note { .. } = &self.binding {
+            io::atomic_write(&path, content)
+                .with_context(|| format!("writing note from day page {}", path.display()))?;
+            self.dirty = false;
+            self.disk_content = content.to_string();
+            self.last_mtime = fs::metadata(&path).and_then(|meta| meta.modified()).ok();
+            return Ok(());
+        }
 
         io::atomic_write(&path, content)
             .with_context(|| format!("writing day page {}", path.display()))?;

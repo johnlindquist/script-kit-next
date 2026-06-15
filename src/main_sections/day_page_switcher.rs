@@ -95,32 +95,165 @@ impl DayPageView {
     }
 
     pub(crate) fn is_day_switcher_open(&self) -> bool {
-        self.day_switcher.is_some()
+        self.note_switcher.is_open()
     }
 
     pub(crate) fn toggle_day_switcher(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.day_switcher.is_some() {
+        if self.note_switcher.is_open() {
             self.close_day_switcher(window, cx);
         } else {
-            self.open_day_switcher(window, cx);
+            self.open_note_switcher(window, cx);
         }
     }
 
     pub(crate) fn open_day_switcher(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let entries = load_day_switcher_entries(self.session.substrate());
-        self.day_switcher = Some(DaySwitcherState {
-            query: String::new(),
-            selected: 0,
-            entries,
+        self.open_note_switcher(window, cx);
+    }
+
+    pub(crate) fn open_note_switcher(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let notes = crate::notes::get_all_notes().unwrap_or_else(|error| {
+            tracing::warn!(
+                target: "script_kit::day_page",
+                error = %error,
+                "day_page_note_switcher_notes_load_failed"
+            );
+            Vec::new()
         });
-        // Route typed characters to the Day Page root handler instead of the
-        // editor while the switcher owns input.
-        window.focus(&self.focus_handle, cx);
-        cx.notify();
+        let mut rows = notes
+            .iter()
+            .map(|note| crate::actions::NoteSwitcherNoteInfo {
+                id: note.id.as_str().to_string(),
+                title: if note.title.trim().is_empty() {
+                    "Untitled Note".to_string()
+                } else {
+                    note.title.clone()
+                },
+                char_count: note.char_count(),
+                is_current: self
+                    .session
+                    .viewing_note_id()
+                    .is_some_and(|id| id == note.id.as_str()),
+                is_pinned: note.is_pinned,
+                preview: note.preview(),
+                relative_time: crate::formatting::format_relative_time_short_dt(note.updated_at),
+            })
+            .collect::<Vec<_>>();
+        let day_entries = crate::notes::day_switcher::load_day_note_switcher_entries(
+            &self.session.substrate().paths().days_dir(),
+        );
+        rows.extend(crate::notes::day_switcher::day_note_switcher_infos(
+            &day_entries,
+            self.session.bound_date(),
+        ));
+        let actions = crate::actions::get_note_switcher_actions(&rows);
+        self.note_switcher.set_actions(actions, cx);
+        self.note_switcher.open_centered(window, cx);
+        self.wire_note_switcher_activation(window, cx);
+        if let Some(dialog) = self.note_switcher.dialog() {
+            dialog.update(cx, |dialog, cx| {
+                dialog.set_context_title(None);
+                cx.notify();
+            });
+        }
+    }
+
+    fn wire_note_switcher_activation(&mut self, window: &Window, cx: &mut Context<Self>) {
+        let Some(dialog) = self.note_switcher.dialog().cloned() else {
+            return;
+        };
+        let resize_dialog = dialog.clone();
+        let day_page = cx.entity().downgrade();
+        let day_window = window.window_handle();
+        let on_close_day_page = day_page.clone();
+        dialog.update(cx, |dialog, _cx| {
+            dialog.set_on_close(std::sync::Arc::new(move |cx| {
+                let day_page = on_close_day_page.clone();
+                cx.defer(move |cx| {
+                    let _ = day_window.update(cx, |_root, window, cx| {
+                        let Some(day_page) = day_page.upgrade() else {
+                            return;
+                        };
+                        day_page.update(cx, |view, cx| {
+                            view.note_switcher.mark_closed_externally();
+                            view.focus_editor(window, cx);
+                        });
+                    });
+                });
+            }));
+            dialog.set_on_activation(std::sync::Arc::new(move |activation, _window, cx| {
+                match activation {
+                    crate::actions::ActionsDialogActivation::Executed { action_id, .. } => {
+                        let day_page = day_page.clone();
+                        cx.defer(move |cx| {
+                            let _ = day_window.update(cx, |_root, window, cx| {
+                                let Some(day_page) = day_page.upgrade() else {
+                                    return;
+                                };
+                                day_page.update(cx, |view, cx| {
+                                    view.execute_note_switcher_action(&action_id, window, cx);
+                                });
+                            });
+                        });
+                    }
+                    crate::actions::ActionsDialogActivation::DrillDownPushed { .. } => {
+                        crate::actions::resize_actions_window(cx, &resize_dialog);
+                    }
+                    crate::actions::ActionsDialogActivation::NoSelection => {}
+                }
+            }));
+        });
+    }
+
+    fn execute_note_switcher_action(
+        &mut self,
+        action_id: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.note_switcher.close(cx);
+        if let Some(date) = action_id.strip_prefix("daypage_") {
+            if let Ok(date) = chrono::NaiveDate::parse_from_str(date, "%Y-%m-%d") {
+                self.bind_day(date, window, cx);
+                self.focus_editor(window, cx);
+            }
+            return;
+        }
+        let Some(note_id_text) = action_id.strip_prefix("note_") else {
+            return;
+        };
+        if let Some(date) = crate::notes::day_switcher::parse_day_note_action_id(note_id_text) {
+            self.bind_day(date, window, cx);
+            self.focus_editor(window, cx);
+            return;
+        }
+        if let Some(note_id) = crate::notes::NoteId::parse(note_id_text) {
+            let Ok(Some(note)) = crate::notes::get_note(note_id) else {
+                return;
+            };
+            let path = crate::notes::note_file_path(note.id).ok().flatten();
+            if let Err(error) = self.session.bind_note_content(
+                note.id.as_str().to_string(),
+                note.title.clone(),
+                note.content.clone(),
+                path,
+                Utc::now(),
+            ) {
+                tracing::error!(
+                    target: "script_kit::day_page",
+                    error = %error,
+                    "day_page_note_switcher_bind_note_failed"
+                );
+                return;
+            }
+            self.apply_loaded_content_to_editor(window, cx);
+            self.focus_editor(window, cx);
+            cx.notify();
+        }
     }
 
     pub(crate) fn close_day_switcher(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.day_switcher = None;
+        self.note_switcher.close(cx);
         self.focus_editor(window, cx);
         cx.notify();
     }
@@ -180,7 +313,7 @@ impl DayPageView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> bool {
-        if self.day_switcher.is_none() {
+        if !self.note_switcher.is_open() {
             return false;
         }
         let exact_plain = !cmd && !shift && !alt && !control;
@@ -192,30 +325,30 @@ impl DayPageView {
             self.close_day_switcher(window, cx);
             return true;
         }
-        let today = self.local_today();
         if exact_plain && matches!(key, "down" | "arrowdown" | "up" | "arrowup") {
-            let delta: isize = if matches!(key, "down" | "arrowdown") { 1 } else { -1 };
-            if let Some(state) = self.day_switcher.as_mut() {
-                let filtered_len = filtered_day_switcher_indices(state, today).len();
-                if filtered_len > 0 {
-                    let current = state.selected.min(filtered_len - 1) as isize;
-                    state.selected =
-                        (current + delta).rem_euclid(filtered_len as isize) as usize;
-                }
+            if matches!(key, "down" | "arrowdown") {
+                self.note_switcher.select_next(cx);
+            } else {
+                self.note_switcher.select_prev(cx);
             }
-            cx.notify();
             return true;
         }
         if exact_plain && key == "enter" {
-            self.accept_day_switcher_selection(window, cx);
+            if let Some(action_id) = self.note_switcher.execute_selected_action(cx) {
+                self.execute_note_switcher_action(&action_id, window, cx);
+            }
             return true;
         }
         if exact_plain && key == "backspace" {
-            if let Some(state) = self.day_switcher.as_mut() {
-                state.query.pop();
-                state.selected = 0;
-            }
-            cx.notify();
+            self.note_switcher.handle_backspace(cx);
+            return true;
+        }
+        if alt && !cmd && !shift && !control && key == "backspace" {
+            self.note_switcher.handle_backspace_word(cx);
+            return true;
+        }
+        if cmd && !shift && !alt && !control && key == "v" {
+            self.note_switcher.handle_paste(cx);
             return true;
         }
         if !cmd && !control && !alt {
@@ -227,11 +360,7 @@ impl DayPageView {
                 None
             };
             if let Some(ch) = ch {
-                if let Some(state) = self.day_switcher.as_mut() {
-                    state.query.push(ch);
-                    state.selected = 0;
-                }
-                cx.notify();
+                self.note_switcher.handle_char(ch, cx);
                 return true;
             }
         }

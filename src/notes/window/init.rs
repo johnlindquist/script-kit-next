@@ -107,7 +107,7 @@ impl NotesApp {
         );
 
         // Pre-compute note switcher actions before moving notes into struct
-        let note_switcher_actions = get_note_switcher_actions(
+        let mut note_switcher_actions = get_note_switcher_actions(
             &notes
                 .iter()
                 .map(|n| NoteSwitcherNoteInfo {
@@ -125,6 +125,9 @@ impl NotesApp {
                 })
                 .collect::<Vec<_>>(),
         );
+        note_switcher_actions.extend(get_day_note_switcher_actions(
+            &crate::notes::notes_brain_days_dir(),
+        ));
 
         Self {
             notes,
@@ -167,6 +170,7 @@ impl NotesApp {
                 CommandBarConfig::notes_recent_style(),
                 std::sync::Arc::new(theme::get_cached_theme()),
             ),
+            active_day_binding: None,
             has_unsaved_changes: false,
             last_save_time: None,
             last_persisted_bounds: None,
@@ -246,6 +250,23 @@ impl NotesApp {
             return true;
         }
 
+        if let Some(day) = &self.active_day_binding {
+            if let Err(e) = std::fs::write(&day.path, &day.content) {
+                tracing::error!(
+                    error = %e,
+                    date = %day.date,
+                    path = %day.path.display(),
+                    "Failed to save day note from Notes window"
+                );
+                return false;
+            }
+            debug!(date = %day.date, "Day note saved from Notes window");
+            self.has_unsaved_changes = false;
+            self.last_save_time = Some(Instant::now());
+            self.last_save_confirmed = Some(Instant::now());
+            return true;
+        }
+
         let Some(id) = self.selected_note_id else {
             return true;
         };
@@ -294,6 +315,19 @@ impl NotesApp {
 
         // Auto-create a note if user is typing with no note selected
         // This prevents data loss when users start typing immediately
+        if let Some(day) = self.active_day_binding.as_mut() {
+            day.content = content_string.clone();
+            self.has_unsaved_changes = true;
+            let new_line_count = self.editor_display_line_count(&content_string, cx);
+            if new_line_count != self.last_line_count {
+                self.last_line_count = new_line_count;
+                self.update_window_height(window, new_line_count, cx);
+            }
+            self.recompute_notes_ghost(cx);
+            cx.notify();
+            return;
+        }
+
         if self.selected_note_id.is_none() && !content_string.is_empty() {
             info!("Auto-creating note from unselected editor content");
             let note = Note::with_content(content_string.clone());

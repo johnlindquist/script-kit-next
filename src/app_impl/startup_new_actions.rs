@@ -507,6 +507,13 @@
                                         );
                                     }
 
+                                    if action_id.starts_with("day_page:")
+                                        && this.execute_day_page_action(&action_id, window, cx)
+                                    {
+                                        cx.stop_propagation();
+                                        return;
+                                    }
+
                                     // Use handle_action instead of trigger_action_by_name
                                     // handle_action supports both built-in actions (open_file, quick_look, etc.)
                                     // and SDK actions

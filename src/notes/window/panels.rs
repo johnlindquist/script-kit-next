@@ -305,21 +305,22 @@ impl NotesApp {
     ) {
         debug!(action_id, "Executing note switcher action");
 
-        // Day pages belong to the main window's Day Page surface. Notes is the
-        // windowed/default notes experience, so stale day-page rows from older
-        // popup state must not cross over into the quick Day Page surface.
         if let Some(date_str) = action_id.strip_prefix("daypage_") {
             self.close_browse_panel(window, cx);
-            tracing::info!(
-                target: "script_kit::notes",
-                event = "notes_note_switcher_day_page_action_ignored",
-                date = %date_str,
-            );
+            if let Ok(date) = chrono::NaiveDate::parse_from_str(date_str, "%Y-%m-%d") {
+                self.select_day_note(date, window, cx);
+            }
             return;
         }
 
         // Handle note selection (action_id format: "note_{uuid}")
         if let Some(note_id_str) = action_id.strip_prefix("note_") {
+            if let Some(date) = crate::notes::day_switcher::parse_day_note_action_id(note_id_str) {
+                self.close_browse_panel(window, cx);
+                self.select_day_note(date, window, cx);
+                return;
+            }
+
             // Find the note by ID string
             if let Some(note) = self.notes.iter().find(|n| n.id.as_str() == note_id_str) {
                 let note_id = note.id;
@@ -359,25 +360,31 @@ impl NotesApp {
     /// Uses CommandBar for consistent theming with the Cmd+K actions dialog
     pub(super) fn open_browse_panel(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         // Update note switcher actions based on current notes
-        let note_switcher_actions = get_note_switcher_actions(
-            &self
-                .notes
-                .iter()
-                .map(|n| NoteSwitcherNoteInfo {
-                    id: n.id.as_str().to_string(),
-                    title: if n.title.is_empty() {
-                        "Untitled Note".to_string()
-                    } else {
-                        n.title.clone()
-                    },
-                    char_count: n.char_count(),
-                    is_current: Some(n.id) == self.selected_note_id,
-                    is_pinned: n.is_pinned,
-                    preview: Self::note_switcher_preview(n),
-                    relative_time: Self::format_relative_time(n.updated_at),
-                })
-                .collect::<Vec<_>>(),
+        let mut rows = self
+            .notes
+            .iter()
+            .map(|n| NoteSwitcherNoteInfo {
+                id: n.id.as_str().to_string(),
+                title: if n.title.is_empty() {
+                    "Untitled Note".to_string()
+                } else {
+                    n.title.clone()
+                },
+                char_count: n.char_count(),
+                is_current: Some(n.id) == self.selected_note_id,
+                is_pinned: n.is_pinned,
+                preview: Self::note_switcher_preview(n),
+                relative_time: Self::format_relative_time(n.updated_at),
+            })
+            .collect::<Vec<_>>();
+        let day_entries = crate::notes::day_switcher::load_day_note_switcher_entries(
+            &crate::notes::notes_brain_days_dir(),
         );
+        rows.extend(crate::notes::day_switcher::day_note_switcher_infos(
+            &day_entries,
+            self.active_day_binding.as_ref().map(|binding| binding.date),
+        ));
+        let note_switcher_actions = get_note_switcher_actions(&rows);
 
         // Log what actions we're setting
         info!(

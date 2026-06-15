@@ -10,6 +10,7 @@ use gpui::{
     Subscription, Window, WindowBounds, WindowOptions,
 };
 
+use chrono::NaiveDate;
 #[cfg(target_os = "macos")]
 use cocoa::appkit::NSApp;
 #[cfg(target_os = "macos")]
@@ -25,13 +26,14 @@ use gpui_component::{
 #[cfg(target_os = "macos")]
 use objc::{msg_send, sel, sel_impl};
 use std::ops::Range;
+use std::path::PathBuf;
 use std::time::{Duration, Instant};
 use tracing::{debug, info};
 
 // Use the unified ActionsDialog/CommandBar system
 use crate::actions::{
-    get_note_switcher_actions, get_notes_command_bar_actions, CommandBar, CommandBarConfig,
-    NoteSwitcherNoteInfo, NotesInfo,
+    get_day_note_switcher_actions, get_note_switcher_actions, get_notes_command_bar_actions,
+    CommandBar, CommandBarConfig, NoteSwitcherNoteInfo, NotesInfo,
 };
 use crate::confirm;
 use crate::theme;
@@ -59,6 +61,13 @@ pub(crate) enum NotesCloseBehavior {
 
 static NOTES_CLOSE_BEHAVIOR: std::sync::OnceLock<std::sync::Mutex<NotesCloseBehavior>> =
     std::sync::OnceLock::new();
+
+#[derive(Debug, Clone)]
+struct NotesDayBinding {
+    date: NaiveDate,
+    path: PathBuf,
+    content: String,
+}
 
 // NOTE: Theme watching is now centralized in crate::theme::service
 // The per-window NOTES_THEME_WATCHER_RUNNING flag has been removed
@@ -374,6 +383,9 @@ pub struct NotesApp {
     /// Opens in a separate vibrancy window for proper macOS blur effect
     note_switcher: CommandBar,
 
+    /// File-backed day note currently open in the Notes editor.
+    active_day_binding: Option<NotesDayBinding>,
+
     /// Debounce: Whether the current note has unsaved changes
     has_unsaved_changes: bool,
 
@@ -482,10 +494,10 @@ pub use window_ops::{
     accept_notes_ghost_for_automation, apply_mcp_notes_mutation_on_main_thread, close_notes_window,
     get_notes_app_entity_and_handle, get_notes_editor_runtime_info, get_notes_editor_text,
     handle_notes_editor_key_for_automation, handle_notes_ghost_key_for_automation,
-    inject_text_into_notes, is_notes_window, is_notes_window_open, open_note_in_notes_window,
-    open_notes_search, open_notes_window, open_notes_window_without_launcher_restore,
-    quick_capture, save_note_with_content, save_note_with_content_and_source,
-    toggle_notes_popup_for_automation,
+    inject_text_into_notes, is_notes_window, is_notes_window_open, open_day_note_in_notes_window,
+    open_note_in_notes_window, open_notes_search, open_notes_window,
+    open_notes_window_without_launcher_restore, quick_capture, save_note_with_content,
+    save_note_with_content_and_source, toggle_notes_popup_for_automation,
 };
 
 #[cfg(test)]

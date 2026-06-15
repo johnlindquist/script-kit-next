@@ -175,7 +175,7 @@ try {
       [el.semanticId, el.id, el.text, el.value].some(
         (v) =>
           typeof v === "string" &&
-          (v.includes("day_page") || v.includes("Open Past Day")),
+          (v.includes("day_page") || v.includes("Open Note")),
       ),
     );
     if (hasTodayRow) {
