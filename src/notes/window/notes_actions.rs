@@ -1,4 +1,6 @@
 use super::*;
+use std::path::PathBuf;
+
 use crate::notes::deeplink_activation::{
     resolve_activation, run_deeplink_confirm_options, Activation, ActivationErrorReason,
     ActivationSurface,
@@ -92,34 +94,13 @@ impl NotesApp {
                 );
             }
             Activation::OpenExternalUrl { href } => {
-                self.open_deeplink_info_dialog(
-                    "Open web link",
-                    format!("{href}\n\nOpening web links will be wired in the next deeplink executor slice."),
-                    href,
-                    window,
-                    cx,
-                );
+                self.open_external_deeplink_url(href, window, cx);
             }
-            Activation::OpenFile { raw_href, .. } => {
-                self.open_deeplink_info_dialog(
-                    "Open file",
-                    format!("{raw_href}\n\nOpening files through Finder will be wired in the next deeplink executor slice."),
-                    raw_href,
-                    window,
-                    cx,
-                );
+            Activation::OpenFile { path, raw_href } => {
+                self.open_file_deeplink(path, raw_href, window, cx);
             }
             Activation::OpenNote { note_id } => {
-                self.open_deeplink_info_dialog(
-                    "Open note",
-                    format!(
-                        "scriptkit://notes/{}\n\nOpening notes will be wired in the next deeplink executor slice.",
-                        note_id.as_str()
-                    ),
-                    format!("scriptkit://notes/{}", note_id.as_str()),
-                    window,
-                    cx,
-                );
+                self.open_note_deeplink(note_id, window, cx);
             }
             Activation::ScopedSearch { source, query } => {
                 let context_link = format!("@{}:{query}", source.prefix());
@@ -142,6 +123,136 @@ impl NotesApp {
                     cx,
                 );
             }
+        }
+    }
+
+    fn open_external_deeplink_url(
+        &mut self,
+        href: String,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        match open::that(&href) {
+            Ok(()) => {
+                tracing::info!(event = "notes_deeplink_url_opened", href = %href);
+                self.show_action_feedback("Opened link", false);
+                cx.notify();
+            }
+            Err(error) => self.open_deeplink_error_dialog(
+                "Can't open this link",
+                format!("{href}\n\nFailed to open URL: {error}"),
+                href,
+                window,
+                cx,
+            ),
+        }
+    }
+
+    fn open_file_deeplink(
+        &mut self,
+        path: PathBuf,
+        raw_href: String,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let path_display = path.to_string_lossy().to_string();
+        if !path.exists() {
+            self.open_missing_file_deeplink_dialog(path, raw_href, window, cx);
+            return;
+        }
+
+        match crate::file_search::open_file(&path_display) {
+            Ok(()) => {
+                tracing::info!(
+                    event = "notes_deeplink_file_opened",
+                    path = %path_display,
+                    raw_href = %raw_href,
+                );
+                self.show_action_feedback("Opened file", false);
+                cx.notify();
+            }
+            Err(error) => self.open_deeplink_error_dialog(
+                "Can't open this link",
+                format!("{raw_href}\n\nFailed to open file:\n{path_display}\n\n{error}"),
+                raw_href,
+                window,
+                cx,
+            ),
+        }
+    }
+
+    fn open_missing_file_deeplink_dialog(
+        &mut self,
+        path: PathBuf,
+        raw_href: String,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let path_display = path.to_string_lossy().to_string();
+        let parent = path
+            .parent()
+            .filter(|parent| parent.exists())
+            .map(|parent| parent.to_path_buf());
+        let Some(parent) = parent else {
+            self.open_deeplink_error_dialog(
+                "Can't open this link",
+                format!("{raw_href}\n\nFile does not exist:\n{path_display}"),
+                raw_href,
+                window,
+                cx,
+            );
+            return;
+        };
+
+        let parent_display = parent.to_string_lossy().to_string();
+        self.request_focus_surface(NotesFocusSurface::Dialog, window, cx);
+        crate::confirm::open_parent_confirm_dialog_for_automation_parent(
+            window,
+            cx,
+            "notes",
+            crate::confirm::ParentConfirmOptions {
+                title: "Can't open this link".into(),
+                body: format!(
+                    "{raw_href}\n\nFile does not exist:\n{path_display}\n\nParent folder exists:\n{parent_display}"
+                )
+                .into(),
+                confirm_text: "Reveal parent".into(),
+                cancel_text: "Dismiss".into(),
+                confirm_variant: gpui_component::button::ButtonVariant::Primary,
+                width: gpui::px(crate::confirm::PARENT_CONFIRM_DIALOG_WIDTH_PX),
+            },
+            move |_window, cx| {
+                if let Err(error) = crate::file_search::reveal_in_finder(&parent_display) {
+                    tracing::warn!(
+                        event = "notes_deeplink_reveal_parent_failed",
+                        parent = %parent_display,
+                        %error
+                    );
+                    cx.write_to_clipboard(gpui::ClipboardItem::new_string(raw_href.clone()));
+                }
+            },
+            |_window, _cx| {},
+        );
+    }
+
+    fn open_note_deeplink(&mut self, note_id: NoteId, window: &mut Window, cx: &mut Context<Self>) {
+        match crate::notes::open_note_in_notes_window(cx, note_id) {
+            Ok(()) => {
+                tracing::info!(event = "notes_deeplink_note_opened", note_id = %note_id);
+                self.show_action_feedback("Opened note", false);
+                cx.notify();
+            }
+            Err(error) => self.open_deeplink_error_dialog(
+                "Can't open this link",
+                format!(
+                    "scriptkit://notes/{}\n\nCould not open note: {}",
+                    note_id.as_str(),
+                    error
+                ),
+                format!("scriptkit://notes/{}", note_id.as_str()),
+                window,
+                cx,
+            ),
         }
     }
 
@@ -220,6 +331,17 @@ impl NotesApp {
             },
             |_window, _cx| {},
         );
+    }
+
+    fn open_deeplink_error_dialog(
+        &mut self,
+        title: &'static str,
+        body: String,
+        copy_link: String,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.open_deeplink_info_dialog(title, body, copy_link, window, cx);
     }
 
     /// Cycle sort mode: Updated → Created → Alphabetical → Updated

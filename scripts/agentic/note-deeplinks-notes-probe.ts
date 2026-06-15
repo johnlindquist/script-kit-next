@@ -5,6 +5,7 @@
  * - Cmd+. on a run deeplink opens a confirm popup instead of silently executing
  */
 import { join, resolve } from "node:path";
+import { mkdir } from "node:fs/promises";
 import { Driver, type Json } from "../devtools/driver";
 
 const PROJECT_ROOT = resolve(import.meta.dir, "../..");
@@ -107,6 +108,18 @@ async function confirmWindows(driver: Driver): Promise<Obj[]> {
     .filter((window) => String(window.semanticSurface) === "confirmDialog");
 }
 
+async function closeConfirmWithEscape(driver: Driver, label: string) {
+  await escape(driver).catch(() => legacyTargetedKey(driver, "escape"));
+  const closed = await pollUntil(`${label}-confirm-closed`, async () => {
+    const windows = await confirmWindows(driver);
+    return windows.length === 0;
+  });
+  return {
+    closed,
+    confirmWindows: await confirmWindows(driver),
+  };
+}
+
 const driver = await Driver.launch({
   binary: BINARY,
   sessionName: "note-deeplinks-notes",
@@ -154,13 +167,29 @@ try {
     view: await notesView(driver),
   });
 
-  await escape(driver).catch(() => legacyTargetedKey(driver, "escape"));
-  const confirmClosed = await pollUntil("run-confirm-closed", async () => {
-    const windows = await confirmWindows(driver);
-    return windows.length === 0;
+  const runClose = await closeConfirmWithEscape(driver, "run");
+  check("escape_closes_run_confirm", runClose.closed, {
+    confirmWindows: runClose.confirmWindows,
   });
-  check("escape_closes_run_confirm", confirmClosed, {
-    confirmWindows: await confirmWindows(driver),
+
+  const missingParent = join(driver.sessionDir, "existing-parent");
+  await mkdir(missingParent, { recursive: true });
+  const missingFile = join(missingParent, "missing-deeplink-target.txt");
+  const missingSeed = await setNotesInput(driver, missingFile);
+  check("missing_file_link_seeded", missingSeed.success === true, { batch: missingSeed });
+  await cmdDot(driver);
+  const missingModalOpened = await pollUntil("missing-file-modal-open", async () => {
+    const windows = await confirmWindows(driver);
+    return windows.some((window) => String(window.title) === "Can't open this link");
+  });
+  const missingModalSnapshot = await confirmWindows(driver);
+  check("missing_file_opens_helpful_modal", missingModalOpened, {
+    confirmWindows: missingModalSnapshot,
+  });
+  const missingClose = await closeConfirmWithEscape(driver, "missing-file");
+  check("escape_closes_missing_file_modal", missingClose.closed, {
+    confirmWindows: missingClose.confirmWindows,
+    view: await notesView(driver),
   });
 
   receipt.sessionDir = driver.sessionDir;
