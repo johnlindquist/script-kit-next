@@ -36,6 +36,7 @@
 mod actions_panel;
 pub(crate) mod code_highlight;
 pub(crate) mod day_switcher;
+pub(crate) mod deeplink_activation;
 pub(crate) mod ghost;
 pub(crate) mod ghost_llm;
 pub(crate) mod markdown;

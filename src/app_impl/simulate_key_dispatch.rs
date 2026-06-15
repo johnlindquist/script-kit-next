@@ -131,12 +131,14 @@ impl ScriptListApp {
                 && !has_shift
                 && !_has_alt
                 && !_has_ctrl
-                && key_lower == "enter")
+                && (key_lower == "enter" || key_lower == "."))
                 || (!has_cmd
                     && !_has_alt
                     && !_has_ctrl
                     && (key_lower == "enter"
                         || key_lower == "return"
+                        || key_lower == "escape"
+                        || key_lower == "esc"
                         || key_lower == "tab"
                         || key_lower == "up"
                         || key_lower == "arrowup"
@@ -496,7 +498,10 @@ impl ScriptListApp {
                                         window,
                                         ctx,
                                     ) {
-                                        logging::log("STDIN", "SimulateKey: Enter - accept menu-syntax object selector");
+                                        logging::log(
+                                            "STDIN",
+                                            "SimulateKey: Enter - accept menu-syntax object selector",
+                                        );
                                         return;
                                     }
                                 }
@@ -521,7 +526,10 @@ impl ScriptListApp {
                                 view.execute_selected(ctx);
                             }
                             "escape" => {
-                                logging::log("STDIN", "SimulateKey: Escape - close menu-syntax picker, clear filter, go back, or hide");
+                                logging::log(
+                                    "STDIN",
+                                    "SimulateKey: Escape - close menu-syntax picker, clear filter, go back, or hide",
+                                );
                                 if view.menu_syntax_object_selector_owns_main_keyboard() {
                                     if view.apply_menu_syntax_object_selector_intent(
                                         crate::menu_syntax::InlinePickerKeyIntent::Close,
@@ -694,9 +702,9 @@ impl ScriptListApp {
                                             );
                                         } else {
                                             logging::log(
-                                            "STDIN",
-                                            "SimulateKey: Enter (cwd-pick) - selection is a file, ignoring",
-                                        );
+                                                "STDIN",
+                                                "SimulateKey: Enter (cwd-pick) - selection is a file, ignoring",
+                                            );
                                         }
                                         return;
                                     }
@@ -767,9 +775,9 @@ impl ScriptListApp {
                                     );
                                 } else {
                                     logging::log(
-                                    "STDIN",
-                                    "SimulateKey: Tab in FileSearchView - no selected directory",
-                                );
+                                        "STDIN",
+                                        "SimulateKey: Tab in FileSearchView - no selected directory",
+                                    );
                                 }
                             }
                             "escape" => {
@@ -1184,7 +1192,13 @@ impl ScriptListApp {
                                     window.focus(&view.focus_handle, ctx);
                                 }
                                 _ => {
-                                    logging::log("STDIN", &format!("SimulateKey: Unhandled key '{}' in ArgPrompt actions dialog", key_lower));
+                                    logging::log(
+                                        "STDIN",
+                                        &format!(
+                                            "SimulateKey: Unhandled key '{}' in ArgPrompt actions dialog",
+                                            key_lower
+                                        ),
+                                    );
                                 }
                             }
                         }
@@ -1632,7 +1646,13 @@ impl ScriptListApp {
                                             );
                                             dialog.update(ctx, |d, cx| d.handle_char(ch, cx));
                                         } else {
-                                            logging::log("STDIN", &format!("SimulateKey: Unhandled key '{}' in ChatPrompt actions dialog", key_lower));
+                                            logging::log(
+                                                "STDIN",
+                                                &format!(
+                                                    "SimulateKey: Unhandled key '{}' in ChatPrompt actions dialog",
+                                                    key_lower
+                                                ),
+                                            );
                                         }
                                     }
                                 }
@@ -1895,7 +1915,10 @@ impl ScriptListApp {
                             );
                             view.close_agent_chat_main_window_state_first(ctx);
                         } else if view.opened_from_main_menu {
-                            logging::log("STDIN", "SimulateKey: Escape - return to main menu from Agent Chat (opened from main menu)");
+                            logging::log(
+                                "STDIN",
+                                "SimulateKey: Escape - return to main menu from Agent Chat (opened from main menu)",
+                            );
                             view.close_tab_ai_harness_terminal_with_window(window, ctx);
                         } else {
                             logging::log(
@@ -2091,9 +2114,9 @@ impl ScriptListApp {
                         logging::log(
                             "STDIN",
                             &format!(
-                            "SimulateKey: Cmd+K - generic actions toggle (fallback for view={})",
-                            view_name
-                        ),
+                                "SimulateKey: Cmd+K - generic actions toggle (fallback for view={})",
+                                view_name
+                            ),
                         );
                         view.toggle_actions(ctx, window);
                     } else {
@@ -2112,12 +2135,12 @@ impl ScriptListApp {
                             "simulateKey has no dispatcher arm for the current view; keystroke dropped"
                         );
                         logging::log(
-                        "STDIN",
-                        &format!(
-                            "SimulateKey: UNHANDLED_VIEW view={} key='{}' modifiers={:?} code=unhandled_view — no arm in dispatcher",
-                            view_name, key_lower, modifiers
-                        ),
-                    );
+                            "STDIN",
+                            &format!(
+                                "SimulateKey: UNHANDLED_VIEW view={} key='{}' modifiers={:?} code=unhandled_view — no arm in dispatcher",
+                                view_name, key_lower, modifiers
+                            ),
+                        );
                     }
                 }
             }

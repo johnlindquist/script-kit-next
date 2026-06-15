@@ -1,4 +1,8 @@
 use super::*;
+use crate::notes::deeplink_activation::{
+    resolve_activation, run_deeplink_confirm_options, Activation, ActivationErrorReason,
+    ActivationSurface,
+};
 
 impl NotesApp {
     const SELECTED_NOTE_NOT_FOUND_FEEDBACK: &'static str = "Selected note could not be found";
@@ -45,6 +49,177 @@ impl NotesApp {
         }
 
         Self::resolve_selected_note(Some(selected_note_id), &self.notes)
+    }
+
+    pub(super) fn activate_deeplink_under_cursor(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let href = self.notes_editor.read(cx).activation_href_at_cursor(cx);
+        let Some(href) = href else {
+            return false;
+        };
+
+        let activation = resolve_activation(&href, ActivationSurface::NotesWindow);
+        self.handle_deeplink_activation(activation, window, cx);
+        true
+    }
+
+    fn handle_deeplink_activation(
+        &mut self,
+        activation: Activation,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        match activation {
+            Activation::ConfirmBeforeRun {
+                command_id,
+                raw_href,
+            } => self.open_run_deeplink_confirm(command_id, raw_href, window, cx),
+            Activation::Error(error) => {
+                let body = format!(
+                    "{}\n\n{}",
+                    error.raw_href,
+                    activation_error_message(&error.reason)
+                );
+                self.open_deeplink_info_dialog(
+                    "Can't open this link",
+                    body,
+                    error.raw_href,
+                    window,
+                    cx,
+                );
+            }
+            Activation::OpenExternalUrl { href } => {
+                self.open_deeplink_info_dialog(
+                    "Open web link",
+                    format!("{href}\n\nOpening web links will be wired in the next deeplink executor slice."),
+                    href,
+                    window,
+                    cx,
+                );
+            }
+            Activation::OpenFile { raw_href, .. } => {
+                self.open_deeplink_info_dialog(
+                    "Open file",
+                    format!("{raw_href}\n\nOpening files through Finder will be wired in the next deeplink executor slice."),
+                    raw_href,
+                    window,
+                    cx,
+                );
+            }
+            Activation::OpenNote { note_id } => {
+                self.open_deeplink_info_dialog(
+                    "Open note",
+                    format!(
+                        "scriptkit://notes/{}\n\nOpening notes will be wired in the next deeplink executor slice.",
+                        note_id.as_str()
+                    ),
+                    format!("scriptkit://notes/{}", note_id.as_str()),
+                    window,
+                    cx,
+                );
+            }
+            Activation::ScopedSearch { source, query } => {
+                let context_link = format!("@{}:{query}", source.prefix());
+                self.open_deeplink_info_dialog(
+                    "Open context search",
+                    format!(
+                        "{context_link}\n\nScoped context search will be wired in the next deeplink executor slice."
+                    ),
+                    context_link,
+                    window,
+                    cx,
+                );
+            }
+            Activation::KitResourcePreview { uri, .. } => {
+                self.open_deeplink_info_dialog(
+                    "Preview Script Kit resource",
+                    format!("{uri}\n\nResource preview will be wired in the kit:// preview slice."),
+                    uri,
+                    window,
+                    cx,
+                );
+            }
+        }
+    }
+
+    fn open_run_deeplink_confirm(
+        &mut self,
+        command_id: String,
+        raw_href: String,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.request_focus_surface(NotesFocusSurface::Dialog, window, cx);
+        let weak_notes = cx.entity().downgrade();
+        let weak_notes_for_confirm = weak_notes.clone();
+        let weak_notes_for_cancel = weak_notes.clone();
+        let command_id_for_confirm = command_id.clone();
+        let command_id_for_cancel = command_id.clone();
+        crate::confirm::open_parent_confirm_dialog_for_automation_parent(
+            window,
+            cx,
+            "notes",
+            run_deeplink_confirm_options(&command_id, &raw_href),
+            move |_window, cx| {
+                if let Some(entity) = weak_notes_for_confirm.upgrade() {
+                    entity.update(cx, |this, cx| {
+                        tracing::info!(
+                            event = "notes_deeplink_run_confirmed",
+                            command_id = %command_id_for_confirm,
+                            "notes_deeplink_run_confirmed",
+                        );
+                        this.show_action_feedback("Run link confirmed", false);
+                        cx.notify();
+                    });
+                }
+            },
+            {
+                move |_window, cx| {
+                    tracing::info!(
+                        event = "notes_deeplink_run_cancelled",
+                        command_id = %command_id_for_cancel,
+                        "notes_deeplink_run_cancelled",
+                    );
+                    if let Some(entity) = weak_notes_for_cancel.upgrade() {
+                        entity.update(cx, |this, cx| {
+                            this.show_action_feedback("Run link cancelled", false);
+                            cx.notify();
+                        });
+                    }
+                }
+            },
+        );
+    }
+
+    fn open_deeplink_info_dialog(
+        &mut self,
+        title: &'static str,
+        body: String,
+        copy_link: String,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.request_focus_surface(NotesFocusSurface::Dialog, window, cx);
+        crate::confirm::open_parent_confirm_dialog_for_automation_parent(
+            window,
+            cx,
+            "notes",
+            crate::confirm::ParentConfirmOptions {
+                title: title.into(),
+                body: body.into(),
+                confirm_text: "Copy link".into(),
+                cancel_text: "Dismiss".into(),
+                confirm_variant: gpui_component::button::ButtonVariant::Primary,
+                width: gpui::px(crate::confirm::PARENT_CONFIRM_DIALOG_WIDTH_PX),
+            },
+            move |_window, cx| {
+                cx.write_to_clipboard(gpui::ClipboardItem::new_string(copy_link.clone()));
+            },
+            |_window, _cx| {},
+        );
     }
 
     /// Cycle sort mode: Updated → Created → Alphabetical → Updated
@@ -284,5 +459,22 @@ impl NotesApp {
         self.notes.insert(0, duplicate.clone());
         self.show_action_feedback("Duplicated", false);
         self.select_note(duplicate.id, window, cx);
+    }
+}
+
+fn activation_error_message(reason: &ActivationErrorReason) -> String {
+    match reason {
+        ActivationErrorReason::EmptyHref => "The link is empty.".to_string(),
+        ActivationErrorReason::UnknownScheme { scheme } => {
+            format!("`{scheme}` is not a supported link scheme.")
+        }
+        ActivationErrorReason::UnknownSpinePrefix { prefix, supported } => format!(
+            "`{prefix}` is not a supported context type. Supported types: {}.",
+            supported.join(", ")
+        ),
+        ActivationErrorReason::EmptySpineValue { prefix } => {
+            format!("`{prefix}` context links need a value to search or open.")
+        }
+        ActivationErrorReason::MalformedUri { message } => message.clone(),
     }
 }

@@ -9,6 +9,23 @@ use super::types::{
     NotesEditorConfig, NotesEditorInputSizing, NotesEditorLayout, NotesEditorMarkdownConfig,
 };
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct MarkdownLinkTarget {
+    pub(crate) href_range: Range<usize>,
+    pub(crate) full_range: Range<usize>,
+    pub(crate) href: String,
+    pub(crate) role: MarkdownLinkTargetRole,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum MarkdownLinkTargetRole {
+    InlineMarkdown,
+    ReferenceDefinition,
+    Autolink,
+    BareUri,
+    LocalPath,
+}
+
 /// Shared markdown editor used by the Notes window and future Day Page surface.
 ///
 /// Owns markdown editing, formatting entry points, code highlighting registration,
@@ -210,6 +227,12 @@ impl NotesEditor {
         crate::notes::markdown_highlighting::markdown_editor_runtime_info()
     }
 
+    pub(crate) fn activation_href_at_cursor(&self, cx: &App) -> Option<String> {
+        self.read_input(cx, |state| {
+            activation_href_at_cursor_in_text(&state.value(), state.selection().start)
+        })
+    }
+
     pub fn markdown_runtime_info_with_scroll(
         &self,
         cx: &App,
@@ -278,6 +301,32 @@ fn markdown_link_highlight_ranges(text: &str, accent: Hsla) -> Vec<(Range<usize>
     ranges
 }
 
+pub(crate) fn activation_href_at_cursor_in_text(text: &str, cursor: usize) -> Option<String> {
+    markdown_link_targets(text)
+        .into_iter()
+        .filter(|target| cursor >= target.full_range.start && cursor <= target.full_range.end)
+        .min_by_key(|target| target.full_range.end - target.full_range.start)
+        .map(|target| target.href)
+}
+
+pub(crate) fn markdown_link_targets(text: &str) -> Vec<MarkdownLinkTarget> {
+    let mut targets = Vec::new();
+    for line in markdown_non_code_lines(text) {
+        collect_reference_definition_targets(text, line.clone(), &mut targets);
+        collect_inline_markdown_link_targets(text, line.clone(), &mut targets);
+        collect_autolinks_bare_urls_and_paths(text, line, &mut targets);
+    }
+    targets.sort_by(|a, b| {
+        a.full_range
+            .start
+            .cmp(&b.full_range.start)
+            .then(a.full_range.end.cmp(&b.full_range.end))
+            .then(a.href_range.start.cmp(&b.href_range.start))
+    });
+    targets.dedup_by(|a, b| a.full_range == b.full_range && a.href_range == b.href_range);
+    targets
+}
+
 fn markdown_non_code_lines(text: &str) -> Vec<Range<usize>> {
     let mut ranges = Vec::new();
     let mut in_fence = false;
@@ -299,6 +348,119 @@ fn markdown_non_code_lines(text: &str) -> Vec<Range<usize>> {
         ranges.push(offset..text.len());
     }
     ranges
+}
+
+fn collect_inline_markdown_link_targets(
+    text: &str,
+    line: Range<usize>,
+    targets: &mut Vec<MarkdownLinkTarget>,
+) {
+    let bytes = text.as_bytes();
+    let mut index = line.start;
+    while index < line.end {
+        if bytes[index] != b'[' || index > 0 && bytes[index - 1] == b'!' {
+            index += 1;
+            continue;
+        }
+        let Some(label_close) = find_unescaped_byte(text, index + 1, line.end, b']') else {
+            break;
+        };
+        if bytes.get(label_close + 1).copied() == Some(b'(') {
+            if let Some(dest_end) = find_markdown_destination_end(text, label_close + 2, line.end) {
+                let dest = trim_ascii_range(text, label_close + 2..dest_end);
+                if dest.start < dest.end {
+                    targets.push(MarkdownLinkTarget {
+                        href_range: dest.clone(),
+                        full_range: index..dest_end + 1,
+                        href: text[dest].to_string(),
+                        role: MarkdownLinkTargetRole::InlineMarkdown,
+                    });
+                }
+                index = dest_end + 1;
+                continue;
+            }
+        }
+        index = label_close + 1;
+    }
+}
+
+fn collect_reference_definition_targets(
+    text: &str,
+    line: Range<usize>,
+    targets: &mut Vec<MarkdownLinkTarget>,
+) {
+    let line_text = &text[line.clone()];
+    let trimmed_start = line.start + line_text.len() - line_text.trim_start().len();
+    if text.as_bytes().get(trimmed_start) != Some(&b'[') {
+        return;
+    }
+    let Some(label_close) = find_unescaped_byte(text, trimmed_start + 1, line.end, b']') else {
+        return;
+    };
+    if text.as_bytes().get(label_close + 1) != Some(&b':') {
+        return;
+    }
+    let dest = trim_ascii_range(text, label_close + 2..line.end);
+    if dest.start < dest.end {
+        targets.push(MarkdownLinkTarget {
+            href_range: dest.clone(),
+            full_range: trimmed_start..dest.end,
+            href: text[dest].to_string(),
+            role: MarkdownLinkTargetRole::ReferenceDefinition,
+        });
+    }
+}
+
+fn collect_autolinks_bare_urls_and_paths(
+    text: &str,
+    line: Range<usize>,
+    targets: &mut Vec<MarkdownLinkTarget>,
+) {
+    let bytes = text.as_bytes();
+    let mut index = line.start;
+    while index < line.end {
+        if bytes[index] == b'<' {
+            if let Some(close) = find_unescaped_byte(text, index + 1, line.end, b'>') {
+                let inner = index + 1..close;
+                if is_supported_bare_uri(&text[inner.clone()]) {
+                    targets.push(MarkdownLinkTarget {
+                        href_range: inner.clone(),
+                        full_range: index..close + 1,
+                        href: text[inner].to_string(),
+                        role: MarkdownLinkTargetRole::Autolink,
+                    });
+                }
+                index = close + 1;
+                continue;
+            }
+        }
+        if starts_url_at(text, index) || starts_local_path_at(text, index, line.start) {
+            let mut end = index;
+            while end < line.end && !text.as_bytes()[end].is_ascii_whitespace() {
+                end += 1;
+            }
+            let range = trim_url_trailing_punctuation(text, index..end);
+            if range.start < range.end
+                && !targets
+                    .iter()
+                    .any(|target| ranges_overlap(&target.full_range, &range))
+            {
+                targets.push(MarkdownLinkTarget {
+                    href_range: range.clone(),
+                    full_range: range.clone(),
+                    href: text[range.clone()].to_string(),
+                    role: if starts_local_path_at(text, range.start, line.start) {
+                        MarkdownLinkTargetRole::LocalPath
+                    } else {
+                        MarkdownLinkTargetRole::BareUri
+                    },
+                });
+            }
+            index = end;
+            continue;
+        }
+        index += 1;
+    }
 }
 
 fn collect_inline_markdown_links(
@@ -396,6 +558,7 @@ fn collect_autolinks_and_bare_urls(
                 if text[inner.clone()].starts_with("http://")
                     || text[inner.clone()].starts_with("https://")
                     || text[inner.clone()].starts_with("scriptkit://")
+                    || text[inner.clone()].starts_with("kit://")
                     || text[inner.clone()].starts_with("file:")
                 {
                     ranges.push((inner, accent, "markdownLinkUri".to_string()));
@@ -429,7 +592,28 @@ fn starts_url_at(text: &str, index: usize) -> bool {
     bytes.starts_with(b"http://")
         || bytes.starts_with(b"https://")
         || bytes.starts_with(b"scriptkit://")
+        || bytes.starts_with(b"kit://")
         || bytes.starts_with(b"file:")
+}
+
+fn starts_local_path_at(text: &str, index: usize, line_start: usize) -> bool {
+    let bytes = text.as_bytes();
+    let starts_path = bytes[index..].starts_with(b"/") || bytes[index..].starts_with(b"~/");
+    if !starts_path {
+        return false;
+    }
+    if index > line_start && !bytes[index - 1].is_ascii_whitespace() {
+        return false;
+    }
+    true
+}
+
+fn is_supported_bare_uri(value: &str) -> bool {
+    value.starts_with("http://")
+        || value.starts_with("https://")
+        || value.starts_with("scriptkit://")
+        || value.starts_with("kit://")
+        || value.starts_with("file:")
 }
 
 fn find_unescaped_byte(text: &str, start: usize, end: usize, needle: u8) -> Option<usize> {
@@ -492,7 +676,7 @@ fn ranges_overlap(a: &Range<usize>, b: &Range<usize>) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::markdown_link_highlight_ranges;
+    use super::{activation_href_at_cursor_in_text, markdown_link_highlight_ranges};
     use gpui::rgb;
 
     fn highlighted_texts(input: &str) -> Vec<String> {
@@ -551,5 +735,61 @@ mod tests {
                 "markdownLinkUri:https://scriptkit.com/guide",
             ]
         );
+    }
+
+    #[test]
+    fn activation_href_finds_inline_markdown_from_label_or_destination() {
+        let input = "Open [Project Brief](scriptkit://spine/file/project-brief) today";
+        let label_cursor = input.find("Project").unwrap();
+        let href_cursor = input.find("spine/file").unwrap();
+        assert_eq!(
+            activation_href_at_cursor_in_text(input, label_cursor),
+            Some("scriptkit://spine/file/project-brief".to_string())
+        );
+        assert_eq!(
+            activation_href_at_cursor_in_text(input, href_cursor),
+            Some("scriptkit://spine/file/project-brief".to_string())
+        );
+    }
+
+    #[test]
+    fn activation_href_finds_scriptkit_bare_uri_at_end_boundary() {
+        let input = "scriptkit://run/example-script";
+        assert_eq!(
+            activation_href_at_cursor_in_text(input, input.len()),
+            Some("scriptkit://run/example-script".to_string())
+        );
+    }
+
+    #[test]
+    fn activation_href_finds_kit_resource_uri() {
+        let input = "Review kit://scripts now";
+        assert_eq!(
+            activation_href_at_cursor_in_text(input, input.find("scripts").unwrap()),
+            Some("kit://scripts".to_string())
+        );
+    }
+
+    #[test]
+    fn activation_href_finds_local_paths() {
+        let input = "Open ~/dev/script-kit-gpui/src/main.rs";
+        assert_eq!(
+            activation_href_at_cursor_in_text(input, input.find("main.rs").unwrap()),
+            Some("~/dev/script-kit-gpui/src/main.rs".to_string())
+        );
+    }
+
+    #[test]
+    fn activation_href_ignores_code_fence_links() {
+        let input = "```md\nscriptkit://run/nope\n```\nplain";
+        assert_eq!(
+            activation_href_at_cursor_in_text(input, input.find("run/nope").unwrap()),
+            None
+        );
+    }
+
+    #[test]
+    fn activation_href_returns_none_for_plain_text() {
+        assert_eq!(activation_href_at_cursor_in_text("plain text", 3), None);
     }
 }

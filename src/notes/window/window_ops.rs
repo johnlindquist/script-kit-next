@@ -1390,7 +1390,16 @@ pub fn handle_notes_editor_key_for_automation(
             let mut action = "unsupportedNotesEditorKey";
             let mut handled = false;
 
-            if !platform && !control && !alt {
+            if !platform
+                && !shift
+                && !control
+                && !alt
+                && crate::ui_foundation::is_key_escape(&key)
+                && crate::confirm::is_confirm_window_open()
+            {
+                action = "cancelNotesParentConfirm";
+                handled = crate::confirm::route_key_to_confirm_popup("escape", cx);
+            } else if !platform && !control && !alt {
                 if crate::ui_foundation::is_key_up(&key) {
                     action = "moveNotesSpineSelectionUp";
                     handled = app.move_notes_spine_selection(-1, cx);
@@ -1413,6 +1422,12 @@ pub fn handle_notes_editor_key_for_automation(
                 action = "openNotesAgentChatFromCmdEnter";
                 handled =
                     app.open_selected_note_cart_in_embedded_agent_chat("NotesWindowCmdEnter", cx);
+            } else if platform && !shift && !control && !alt && key == "." {
+                action = "activateNotesDeeplinkOrFocusMode";
+                if !app.activate_deeplink_under_cursor(window, cx) {
+                    app.toggle_focus_mode(cx);
+                }
+                handled = true;
             }
 
             serde_json::json!({

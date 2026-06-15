@@ -836,6 +836,10 @@ impl NotesApp {
                 "." => {
                     if modifiers.shift {
                         self.toggle_blockquote(window, cx);
+                    } else if self.activate_deeplink_under_cursor(window, cx) {
+                        // Handled by deeplink activation. If no link is under
+                        // the cursor, preserve the long-standing focus-mode
+                        // binding below.
                     } else {
                         self.toggle_focus_mode(cx);
                     }
