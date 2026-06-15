@@ -400,7 +400,7 @@ pub fn add_entry(content: &str, content_type: ContentType) -> Result<String> {
     Ok(id)
 }
 
-/// Prune entries older than retention period (except pinned entries)
+/// Prune entries older than retention period (except pinned or brain-kept entries)
 ///
 /// Returns the number of entries deleted.
 pub fn prune_old_entries() -> Result<usize> {
@@ -414,7 +414,7 @@ pub fn prune_old_entries() -> Result<usize> {
 
     let deleted = conn
         .execute(
-            "DELETE FROM history WHERE pinned = 0 AND timestamp < ?",
+            "DELETE FROM history WHERE pinned = 0 AND brain_kept = 0 AND timestamp < ?",
             params![cutoff_timestamp],
         )
         .context("Failed to prune old entries")?;
@@ -444,7 +444,7 @@ pub fn trim_oversize_text_entries() -> Result<usize> {
     let max_len_db = i64::try_from(max_len).unwrap_or(i64::MAX);
     let deleted = conn
         .execute(
-            "DELETE FROM history WHERE content_type = 'text' AND length(CAST(content AS BLOB)) > ?",
+            "DELETE FROM history WHERE brain_kept = 0 AND content_type = 'text' AND length(CAST(content AS BLOB)) > ?",
             params![max_len_db],
         )
         .context("Failed to trim oversized text entries")?;
@@ -788,8 +788,8 @@ pub fn clear_history() -> Result<()> {
     Ok(())
 }
 
-/// Clear all unpinned clipboard history entries
-/// Keeps pinned entries intact
+/// Clear all unpinned clipboard history entries.
+/// Keeps pinned and brain-kept entries intact.
 #[allow(dead_code)]
 pub fn clear_unpinned_history() -> Result<()> {
     use super::blob_store::{delete_blob, is_blob_content};
@@ -800,13 +800,16 @@ pub fn clear_unpinned_history() -> Result<()> {
     // Collect blob references from unpinned entries before deleting
     let blob_contents: Vec<String> = {
         let mut stmt =
-            conn.prepare("SELECT content FROM history WHERE pinned = 0 AND content LIKE 'blob:%'")?;
+            conn.prepare("SELECT content FROM history WHERE pinned = 0 AND brain_kept = 0 AND content LIKE 'blob:%'")?;
         let rows = stmt.query_map([], |row| row.get(0))?;
         rows.filter_map(|r| r.ok()).collect()
     };
 
     let deleted = conn
-        .execute("DELETE FROM history WHERE pinned = 0", [])
+        .execute(
+            "DELETE FROM history WHERE pinned = 0 AND brain_kept = 0",
+            [],
+        )
         .context("Failed to clear unpinned history")?;
 
     info!(
@@ -980,6 +983,23 @@ pub fn init_test_clipboard_db(path: &std::path::Path) -> Result<()> {
 mod tests {
     use super::*;
     use std::path::PathBuf;
+    use std::sync::{Mutex, OnceLock};
+
+    static TEST_DB_MUTEX: OnceLock<Mutex<()>> = OnceLock::new();
+
+    fn test_db_lock() -> std::sync::MutexGuard<'static, ()> {
+        TEST_DB_MUTEX
+            .get_or_init(|| Mutex::new(()))
+            .lock()
+            .unwrap_or_else(|error| error.into_inner())
+    }
+
+    fn reset_test_db() {
+        set_test_db_path(None);
+        if let Ok(mut guard) = TEST_DB_CONNECTION.lock() {
+            *guard = None;
+        }
+    }
 
     #[test]
     fn test_db_path_format() {
@@ -993,13 +1013,15 @@ mod tests {
 
     #[test]
     fn test_db_path_with_override() {
+        let _guard = test_db_lock();
+        reset_test_db();
         let temp_path = PathBuf::from("/tmp/test-clipboard.db");
         set_test_db_path(Some(temp_path.clone()));
 
         let retrieved = get_test_db_path();
         assert_eq!(retrieved, Some(temp_path));
 
-        set_test_db_path(None);
+        reset_test_db();
     }
 
     #[test]
@@ -1081,5 +1103,27 @@ mod tests {
             parse_optional_dimension(Some(i64::from(u32::MAX) + 1)),
             None
         );
+    }
+
+    #[test]
+    fn clear_unpinned_history_preserves_brain_kept_rows() {
+        let _guard = test_db_lock();
+        let dir = tempfile::tempdir().expect("tempdir");
+        let db_path = dir.path().join("clipboard.sqlite");
+        init_test_clipboard_db(&db_path).expect("test db");
+
+        let free_id = add_entry("discard me", ContentType::Text).expect("free add");
+        let brain_id = add_entry("brain kept", ContentType::Text).expect("brain add");
+        let pinned_id = add_entry("pinned", ContentType::Text).expect("pinned add");
+        mark_brain_kept(&brain_id, 1, None).expect("mark brain kept");
+        pin_entry(&pinned_id).expect("pin");
+
+        clear_unpinned_history().expect("clear unpinned");
+
+        assert!(get_entry_by_id(&free_id).is_none());
+        assert!(get_entry_by_id(&brain_id).is_some());
+        assert!(get_entry_by_id(&pinned_id).is_some());
+
+        reset_test_db();
     }
 }

@@ -35,6 +35,12 @@ pub enum DayPageSegment {
         start_line: usize,
         index: usize,
     },
+    ClipboardRef {
+        timestamp: String,
+        entry_id: String,
+        start_line: usize,
+        index: usize,
+    },
 }
 
 impl DayPageSegment {
@@ -42,7 +48,8 @@ impl DayPageSegment {
         match self {
             Self::Plain { start_line, .. }
             | Self::FragmentRef { start_line, .. }
-            | Self::KeptUrl { start_line, .. } => *start_line,
+            | Self::KeptUrl { start_line, .. }
+            | Self::ClipboardRef { start_line, .. } => *start_line,
         }
     }
 }
@@ -62,6 +69,7 @@ pub fn parse_day_page_segments(content: &str) -> Vec<DayPageSegment> {
     let mut plain_start: Option<usize> = None;
     let mut fragment_index = 0usize;
     let mut url_index = 0usize;
+    let mut clipboard_ref_index = 0usize;
     let mut line_index = 0usize;
 
     let flush_plain = |segments: &mut Vec<DayPageSegment>,
@@ -141,6 +149,19 @@ pub fn parse_day_page_segments(content: &str) -> Vec<DayPageSegment> {
                 index: url_index,
             });
             url_index += 1;
+            line_index += 1;
+            continue;
+        }
+
+        if let Some((timestamp, entry_id)) = parse_clipboard_ref_line(line) {
+            flush_plain(&mut segments, &mut plain_buffer, &mut plain_start);
+            segments.push(DayPageSegment::ClipboardRef {
+                timestamp,
+                entry_id,
+                start_line: line_index,
+                index: clipboard_ref_index,
+            });
+            clipboard_ref_index += 1;
             line_index += 1;
             continue;
         }
@@ -586,6 +607,17 @@ fn parse_kept_url_line(line: &str) -> Option<(String, String)> {
     Some((timestamp.to_string(), url.to_string()))
 }
 
+fn parse_clipboard_ref_line(line: &str) -> Option<(String, String)> {
+    let trimmed = line.trim_end();
+    let (timestamp, rest) = trimmed.split_once(' ')?;
+    if !is_timestamp(timestamp) {
+        return None;
+    }
+    let (_label, uri) = parse_markdown_link(rest.trim())?;
+    crate::clipboard_history::parse_entry_resource_uri(&uri)
+        .map(|entry_id| (timestamp.to_string(), entry_id))
+}
+
 fn parse_markdown_link(text: &str) -> Option<(String, String)> {
     let label_start = text.find('[')?;
     if label_start != 0 {
@@ -648,6 +680,7 @@ pub fn format_provenance_hint(provenance: &FragmentProvenance, tz: Tz) -> String
 
 fn format_source_label(source: Option<&str>) -> String {
     match source {
+        Some(uri) if uri.starts_with("kit://clipboard-history") => "Clipboard".to_string(),
         Some(uri) if uri.starts_with("scriptkit://clipboard/") => "Clipboard".to_string(),
         Some(uri) if uri.starts_with("scriptkit://agent-chat/") => "Agent Chat".to_string(),
         Some(uri) if uri.starts_with("scriptkit://") => "Script Kit".to_string(),
@@ -742,6 +775,27 @@ mod tests {
                 assert_eq!(url, "https://example.com/docs");
             }
             other => panic!("expected kept url segment, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parses_clipboard_history_refs_without_raw_values() {
+        let content = "09:20 [Clipboard entry](kit://clipboard-history?id=entry-1)\n";
+
+        let segments = parse_day_page_segments(content);
+        assert_eq!(segments.len(), 1);
+        match &segments[0] {
+            DayPageSegment::ClipboardRef {
+                entry_id,
+                timestamp,
+                index,
+                ..
+            } => {
+                assert_eq!(timestamp, "09:20");
+                assert_eq!(entry_id, "entry-1");
+                assert_eq!(index, &0);
+            }
+            other => panic!("expected clipboard ref segment, got {other:?}"),
         }
     }
 

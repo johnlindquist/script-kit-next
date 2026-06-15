@@ -423,21 +423,6 @@
  * }
  * ```
  *
- * FIELD: clipboardHistoryPostCopyMenu
- * TYPE: ClipboardHistoryPostCopyMenuConfig (optional)
- * PURPOSE: Deprecated no-op retained for existing config files. Copied content
- *          no longer opens a post-copy popup.
- * DEFAULT: { enabled: false, tapWindowMs: 2500, triggerModifiers: ["meta"] }
- *
- * STRUCTURE:
- * ```typescript
- * clipboardHistoryPostCopyMenu: {
- *   enabled?: boolean,           // deprecated no-op, default false
- *   tapWindowMs?: number,        // deprecated no-op
- *   triggerModifiers?: string[], // deprecated no-op
- * }
- * ```
- *
  * ═══════════════════════════════════════════════════════════════════════════
  * CATEGORY 4: PROCESS LIMITS (OPTIONAL)
  * ═══════════════════════════════════════════════════════════════════════════

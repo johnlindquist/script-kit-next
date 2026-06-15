@@ -7,10 +7,10 @@
  * - same URL copied again on the same local day dedupes that day line
  * - a single non-URL copy does not silently enter day pages, fragments, or brain_docs
  * - the explicit Today "Insert Clipboard Text" action inserts the current clipboard
- * - no deprecated post-copy popup returns
+ * - no deprecated post-copy UI returns
  *
  *   PROBE_BINARY=target-agent/artifacts/today-clipboard-sediment/script-kit-gpui \
- *     bun scripts/agentic/clipboard-post-copy-menu-probe.ts
+ *     bun scripts/agentic/clipboard-sediment-no-popup-probe.ts
  */
 
 import { Database } from "bun:sqlite";
@@ -24,7 +24,7 @@ const BINARY =
   process.env.PROBE_BINARY ??
   "target-agent/artifacts/today-clipboard-sediment/script-kit-gpui";
 
-const POPUP_AUTOMATION_ID = "clipboard-post-copy-menu";
+const REMOVED_POST_COPY_AUTOMATION_ID = "clipboard-post-copy-menu";
 const runId = `clipboard-sediment-${Date.now().toString(36)}`;
 const PROBE_URL = `https://example.com/script-kit-${runId}`;
 const PRIVACY_TOKEN = `PRIVATE-NONURL-${runId}`;
@@ -74,11 +74,11 @@ function walkElements(node: unknown, out: Json[] = []): Json[] {
   return out;
 }
 
-async function findPostCopyPopup(driver: Driver) {
+async function findRemovedPostCopyUi(driver: Driver) {
   const windows = await driver.listAutomationWindows();
   const list = (windows.windows ?? []) as Array<Record<string, any>>;
   return (
-    list.find((w) => w.automationId === POPUP_AUTOMATION_ID) ??
+    list.find((w) => w.automationId === REMOVED_POST_COPY_AUTOMATION_ID) ??
     list.find((w) => w.semanticSurface === "clipboardPostCopyMenu") ??
     null
   );
@@ -370,10 +370,10 @@ try {
     },
   );
 
-  const popup = await findPostCopyPopup(driver);
-  check("post_copy_popup_absent", !popup, {
-    postCopyPopupPresent: Boolean(popup),
-    postCopyPopup: popup,
+  const removedPostCopyUi = await findRemovedPostCopyUi(driver);
+  check("post_copy_ui_absent", !removedPostCopyUi, {
+    postCopyUiPresent: Boolean(removedPostCopyUi),
+    postCopyUi: removedPostCopyUi,
   });
 
   const appLog = existsSync(driver.logPath) ? readFileSync(driver.logPath, "utf8") : "";

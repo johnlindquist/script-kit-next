@@ -330,8 +330,8 @@ mod tests {
         substrate
             .append_to_day(
                 base + chrono::Duration::minutes(8),
-                DayEntry::KeptUrl {
-                    url: "https://example.com".to_string(),
+                DayEntry::ClipboardRef {
+                    entry_id: "clip-1".to_string(),
                 },
             )
             .expect("third append");
@@ -343,7 +343,10 @@ mod tests {
         assert_eq!(lines.len(), 3);
         assert_eq!(lines[0], "09:42 first capture");
         assert_eq!(lines[1], "09:45 - [ ] buy milk #errand due:2026-06-12");
-        assert_eq!(lines[2], "09:50 [example.com](https://example.com)");
+        assert_eq!(
+            lines[2],
+            "09:50 [Clipboard entry](kit://clipboard-history?id=clip-1)"
+        );
     }
 
     #[test]

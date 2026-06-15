@@ -4,8 +4,8 @@
 //! The clipboard monitor cannot observe paste events. Promotion therefore fires
 //! when the same text is *copied* again: each deduped re-copy bumps
 //! [`copy_count`] at a new timestamp (see `add_entry`). When `copy_count ≥ 2`
-//! for a non-URL entry that is not yet brain-kept, content is promoted to the
-//! day page (fragment vs inline line by the 200-word threshold).
+//! for a non-URL entry that is not yet brain-kept, a clipboard-history deeplink
+//! is promoted to the day page.
 //!
 //! ## URL dedup
 //! The same URL copied repeatedly within one calendar day keeps a single
@@ -118,15 +118,11 @@ pub fn process_text_sediment(entry_id: &str, text: &str, now: DateTime<Utc>) {
         SedimentDecision::KeepUrl { skip_day_line } => {
             if let Err(error) = keep_url(entry_id, text, now, skip_day_line, &today) {
                 warn!(entry_id = %entry_id, error = %error, "URL sediment keep failed");
-            } else if should_whisper_kept_hud(text, false) {
-                super::post_copy::request_kept_hud_whisper();
             }
         }
         SedimentDecision::PromoteReCopy => {
             if let Err(error) = promote_recopy(entry_id, text, now) {
                 warn!(entry_id = %entry_id, error = %error, "re-copy promotion failed");
-            } else if should_whisper_kept_hud(text, false) {
-                super::post_copy::request_kept_hud_whisper();
             }
         }
     }
@@ -143,8 +139,8 @@ fn keep_url(
     if !skip_day_line {
         substrate.append_to_day(
             now,
-            DayEntry::KeptUrl {
-                url: url.trim().to_string(),
+            DayEntry::ClipboardRef {
+                entry_id: entry_id.to_string(),
             },
         )?;
     }
@@ -163,14 +159,6 @@ fn keep_url(
     Ok(())
 }
 
-/// Whether a quiet HUD "Kept" whisper should fire for this auto-keep (ADR 0004).
-pub fn should_whisper_kept_hud(text: &str, content_is_image: bool) -> bool {
-    if content_is_image {
-        return true;
-    }
-    is_single_token_http_url(text) || crate::brain::substrate::word_count(text) >= 2
-}
-
 /// Promote a clipboard entry to brain with an optional post-copy why (T12).
 #[cfg(test)]
 pub fn annotate_clipboard_entry(
@@ -178,34 +166,24 @@ pub fn annotate_clipboard_entry(
     why: &str,
     now: DateTime<Utc>,
 ) -> anyhow::Result<()> {
-    let text = get_entry_content(entry_id)
+    let _text = get_entry_content(entry_id)
         .filter(|content| !content.trim().is_empty())
         .ok_or_else(|| anyhow::anyhow!("clipboard entry not found: {entry_id}"))?;
 
     let substrate = sediment_substrate();
-    let source_uri = format!("scriptkit://clipboard/{entry_id}");
-    let source_label = "clipboard";
     let trimmed_why = why.trim();
-    let body = if trimmed_why.is_empty() {
-        text.trim().to_string()
-    } else {
-        format!("{}\n\nWhy: {}", text.trim(), trimmed_why)
-    };
-
-    if let Some(fragment_ref) = substrate.write_fragment_with_why(
+    substrate.append_to_day(
         now,
-        source_label,
-        &source_uri,
-        &body,
-        Some(trimmed_why).filter(|value| !value.is_empty()),
-    )? {
-        substrate.append_to_day(now, DayEntry::FragmentRef(fragment_ref))?;
-    } else {
-        substrate.append_to_day(now, DayEntry::Capture { text: body })?;
+        DayEntry::ClipboardRef {
+            entry_id: entry_id.to_string(),
+        },
+    )?;
+    if !trimmed_why.is_empty() {
+        tracing::debug!(entry_id = %entry_id, "clipboard annotation why is not persisted with raw-free refs");
     }
 
     mark_brain_kept(entry_id, ClipboardSedimentTier::Sediment.as_i64(), None)?;
-    store::record_sediment_signals(&text);
+    store::record_sediment_signals(&crate::clipboard_history::entry_resource_uri(entry_id));
     debug!(entry_id = %entry_id, "clipboard entry annotated to brain");
     Ok(())
 }
@@ -233,19 +211,12 @@ fn reject_clipboard_entry_at(entry_id: &str, now: DateTime<Utc>) -> anyhow::Resu
 
 fn promote_recopy(entry_id: &str, text: &str, now: DateTime<Utc>) -> anyhow::Result<()> {
     let substrate = sediment_substrate();
-    let source_uri = format!("scriptkit://clipboard/{entry_id}");
-    let source_label = "clipboard";
-
-    if let Some(fragment_ref) = substrate.write_fragment(now, source_label, &source_uri, text)? {
-        substrate.append_to_day(now, DayEntry::FragmentRef(fragment_ref))?;
-    } else {
-        substrate.append_to_day(
-            now,
-            DayEntry::Capture {
-                text: text.trim().to_string(),
-            },
-        )?;
-    }
+    substrate.append_to_day(
+        now,
+        DayEntry::ClipboardRef {
+            entry_id: entry_id.to_string(),
+        },
+    )?;
 
     mark_brain_kept(entry_id, ClipboardSedimentTier::Sediment.as_i64(), None)?;
     store::record_sediment_signals(text);
@@ -298,6 +269,13 @@ mod tests {
 
     fn count_substr(haystack: &str, needle: &str) -> usize {
         haystack.match_indices(needle).count()
+    }
+
+    fn clipboard_ref(entry_id: &str) -> String {
+        format!(
+            "[Clipboard entry]({})",
+            crate::clipboard_history::entry_resource_uri(entry_id)
+        )
     }
 
     #[test]
@@ -370,14 +348,6 @@ mod tests {
     }
 
     #[test]
-    fn should_whisper_kept_hud_for_urls_and_multi_word_text_only() {
-        assert!(should_whisper_kept_hud("https://example.com", false));
-        assert!(should_whisper_kept_hud("meeting notes tomorrow", false));
-        assert!(!should_whisper_kept_hud("token", false));
-        assert!(should_whisper_kept_hud("", true));
-    }
-
-    #[test]
     fn annotate_and_reject_clipboard_entry_round_trip() {
         let _guard = test_lock();
         let (_dir, db_path, substrate) = unique_temp_paths("annotate-reject");
@@ -392,8 +362,9 @@ mod tests {
         let state = get_entry_sediment_state(&entry_id).expect("state");
         assert!(state.brain_kept);
         let day_page = read_today_day_page(&substrate, now);
-        assert!(day_page.contains(text));
-        assert!(day_page.contains("Why: needed for the auth doc"));
+        assert!(day_page.contains(&clipboard_ref(&entry_id)));
+        assert!(!day_page.contains(text));
+        assert!(!day_page.contains("Why: needed for the auth doc"));
 
         reject_clipboard_entry_at(&entry_id, now).expect("reject");
         assert!(get_entry_sediment_state(&entry_id).is_none());
@@ -425,15 +396,19 @@ mod tests {
         );
         assert_eq!(url_state.kept_url_day.as_deref(), Some(today));
         let day_after_url = read_today_day_page(&substrate, now);
-        assert!(day_after_url.contains(url));
-        assert_eq!(count_substr(&day_after_url, url), 1);
+        assert!(day_after_url.contains(&clipboard_ref(&url_id)));
+        assert!(!day_after_url.contains(url));
+        assert_eq!(count_substr(&day_after_url, &clipboard_ref(&url_id)), 1);
 
         // Second copy same URL same day → no duplicate day line
         let url_id_again = add_entry(url, ContentType::Text).expect("url re-add");
         assert_eq!(url_id_again, url_id);
         process_text_sediment(&url_id_again, url, now + chrono::Duration::minutes(2));
         let day_after_repeat_url = read_today_day_page(&substrate, now);
-        assert_eq!(count_substr(&day_after_repeat_url, url), 1);
+        assert_eq!(
+            count_substr(&day_after_repeat_url, &clipboard_ref(&url_id)),
+            1
+        );
         let repeat_state = get_entry_sediment_state(&url_id).expect("repeat state");
         assert!(repeat_state.copy_count >= 2);
 
@@ -453,9 +428,10 @@ mod tests {
         let short_promoted = get_entry_sediment_state(&short_id).expect("promoted state");
         assert!(short_promoted.brain_kept);
         let day_after_promote = read_today_day_page(&substrate, now);
-        assert!(day_after_promote.contains(short));
+        assert!(day_after_promote.contains(&clipboard_ref(&short_id)));
+        assert!(!day_after_promote.contains(short));
 
-        // Re-copy long text → fragment + excerpt reference line
+        // Re-copy long text → same raw-free clipboard ref, no fragment body.
         let long_body: String = (0..250)
             .map(|i| format!("word{i}"))
             .collect::<Vec<_>>()
@@ -467,8 +443,13 @@ mod tests {
         process_text_sediment(&long_id_2, &long_body, now + chrono::Duration::minutes(7));
         assert!(get_entry_sediment_state(&long_id).unwrap().brain_kept);
         let day_after_long = read_today_day_page(&substrate, now);
-        assert!(day_after_long.contains('>'));
-        assert!(day_after_long.contains("../fragments/"));
+        assert!(day_after_long.contains(&clipboard_ref(&long_id)));
+        assert!(!day_after_long.contains("word249"));
+        assert!(!day_after_long.contains("../fragments/"));
+        assert!(
+            !substrate.paths().fragments_dir().exists(),
+            "clipboard sediment must not create raw clipboard fragments"
+        );
 
         clear_test_sediment_substrate();
         let _ = get_connection();

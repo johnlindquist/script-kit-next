@@ -281,7 +281,6 @@ fn capture_clipboard_content(
                         TextCaptureOutcome::Stored(entry_id) => {
                             debug!(entry_id = %entry_id, "Added text entry to history");
                             process_text_sediment(&entry_id, &text, chrono::Utc::now());
-                            super::post_copy::notify_text_copy_stored(&entry_id);
                             *last_text_hash = Some(text_hash);
                         }
                         TextCaptureOutcome::Rejected(reason) => {
@@ -316,7 +315,6 @@ fn capture_clipboard_content(
                             "Updated timestamp for existing text entry"
                         );
                         process_text_sediment(&entry_id, &text, chrono::Utc::now());
-                        super::post_copy::notify_text_copy_stored(&entry_id);
                     }
                     TextCaptureOutcome::Rejected(reason) => {
                         debug!(reason = ?reason, "Rejected repeated text clipboard capture");

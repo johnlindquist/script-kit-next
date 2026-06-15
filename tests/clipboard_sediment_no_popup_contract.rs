@@ -5,38 +5,51 @@ fn read_source(path: &str) -> String {
 }
 
 /// Clipboard sediment may track copied content for brain storage, but that path
-/// must not resurrect the removed post-copy popup. The tracker may bridge the
-/// quiet "Kept" HUD only; annotate/reject popup behavior must not be
-/// reintroduced by satisfying stale quick-menu tests.
+/// must not resurrect the removed post-copy popup/HUD feature. This guard exists
+/// because stale config/docs previously made the deleted UI look supported.
 #[test]
-fn post_copy_tracker_does_not_own_popup_ui() {
-    let post_copy = read_source("src/clipboard_history/post_copy.rs");
-
-    for forbidden in [
-        "open_window",
-        "register_attached_popup",
-        "inline_popup_window_options",
-        "CGEventTap",
-        "OpenQuickMenu",
-        "PostCopyQuickMenuWindow",
-        "WindowHandle",
-    ] {
-        assert!(
-            !post_copy.contains(forbidden),
-            "post-copy tracker must stay popup-free; found `{forbidden}`"
-        );
-    }
-
+fn clipboard_sediment_has_no_post_copy_ui_path() {
     assert!(
-        post_copy.contains("pub fn install_post_copy_tracker("),
-        "post-copy lane should install only the tracker/HUD bridge"
-    );
-    assert!(
-        post_copy.contains("pub fn notify_text_copy_stored(_entry_id: &str) {}"),
-        "copy-stored notification should remain a UI-free no-op; sediment owns brain writes"
+        !Path::new("src/clipboard_history/post_copy.rs").exists(),
+        "post-copy UI hooks must not come back for clipboard sediment"
     );
     assert!(
         !Path::new("src/clipboard_history/tap_window.rs").exists(),
         "the removed tap-window state machine must not come back for copy tracking"
     );
+
+    let clipboard_mod = read_source("src/clipboard_history/mod.rs");
+    let config_types = read_source("src/config/types.rs");
+    let config_loader = read_source("src/config/loader.rs");
+    let preflight = read_source("src/main_entry/preflight.rs");
+    let app_run_setup = read_source("src/main_entry/app_run_setup.rs");
+    let config_cli = read_source("scripts/config-cli.ts");
+    let config_schema = read_source("scripts/config-schema.ts");
+
+    for (label, source) in [
+        ("clipboard module", clipboard_mod.as_str()),
+        ("config types", config_types.as_str()),
+        ("config loader", config_loader.as_str()),
+        ("preflight", preflight.as_str()),
+        ("app run setup", app_run_setup.as_str()),
+        ("config CLI", config_cli.as_str()),
+        ("config schema", config_schema.as_str()),
+    ] {
+        for forbidden in [
+            "clipboardHistoryPostCopyMenu",
+            "ClipboardHistoryPostCopyMenuConfig",
+            "PostCopyMenuConfig",
+            "configure_post_copy_menu",
+            "install_post_copy_tracker",
+            "register_kept_hud_whisper",
+            "request_kept_hud_whisper",
+            "notify_text_copy_stored",
+            "clipboardPostCopyMenu",
+        ] {
+            assert!(
+                !source.contains(forbidden),
+                "{label} must not expose removed post-copy UI/config path; found `{forbidden}`"
+            );
+        }
+    }
 }

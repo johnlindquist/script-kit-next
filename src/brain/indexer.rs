@@ -206,23 +206,12 @@ fn sync_pinned_clipboard() -> Result<usize> {
     let mut promoted = 0usize;
     let mut pinned_ids = Vec::new();
     for entry in entries.iter().filter(|entry| entry.pinned) {
-        let text = match entry.content_type {
-            crate::clipboard_history::ContentType::Text => entry.content.clone(),
-            _ => entry.ocr_text.clone().unwrap_or_default(),
-        };
-        let text = text.trim();
-        if text.is_empty() {
-            continue;
-        }
-        let title: String = format!(
-            "Pinned clipboard: {}",
-            text.chars().take(60).collect::<String>()
-        );
+        let (title, body) = pinned_clipboard_doc(entry);
         store::upsert_doc(
             DocSource::Clipboard,
             &entry.id,
             &title,
-            text,
+            &body,
             entry.timestamp,
         )?;
         pinned_ids.push(entry.id.clone());
@@ -231,6 +220,13 @@ fn sync_pinned_clipboard() -> Result<usize> {
     // Unpinning is the user revoking the "this matters" signal — forget it.
     let _ = store::retain_docs(DocSource::Clipboard, &pinned_ids)?;
     Ok(promoted)
+}
+
+fn pinned_clipboard_doc(entry: &crate::clipboard_history::ClipboardEntry) -> (String, String) {
+    (
+        "Pinned clipboard entry".to_string(),
+        crate::clipboard_history::entry_resource_uri(&entry.id),
+    )
 }
 
 /// Browser attention: hosts the user visited repeatedly in the last day
@@ -975,4 +971,32 @@ pub(crate) fn extract_topics(text: &str) -> Vec<String> {
     }
     topics.truncate(8);
     topics
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn pinned_clipboard_doc_is_deeplink_only() {
+        let entry = crate::clipboard_history::ClipboardEntry {
+            id: "clip-raw-free".to_string(),
+            content: "raw secret copied text".to_string(),
+            content_type: crate::clipboard_history::ContentType::Text,
+            timestamp: 123,
+            pinned: true,
+            ocr_text: Some("raw image ocr".to_string()),
+            source_app_name: None,
+            source_app_bundle_id: None,
+        };
+
+        let (title, body) = pinned_clipboard_doc(&entry);
+
+        assert_eq!(title, "Pinned clipboard entry");
+        assert_eq!(body, "kit://clipboard-history?id=clip-raw-free".to_string());
+        assert!(!title.contains("raw secret"));
+        assert!(!body.contains("raw secret"));
+        assert!(!title.contains("raw image"));
+        assert!(!body.contains("raw image"));
+    }
 }

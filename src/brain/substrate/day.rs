@@ -14,6 +14,7 @@ use super::FragmentReference;
 
 const FRAGMENT_CARD_TITLE: &str = "Fragment";
 const FRAGMENT_CARD_LINK_LABEL: &str = "Open fragment";
+const CLIPBOARD_REF_LABEL: &str = "Clipboard entry";
 
 /// A single append-only entry for today's day page.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -28,6 +29,8 @@ pub enum DayEntry {
     },
     /// Auto-kept URL from clipboard sediment.
     KeptUrl { url: String },
+    /// Reference to a clipboard history row; persisted without raw clipboard text.
+    ClipboardRef { entry_id: String },
     /// Reference to a long-capture fragment (excerpt + relative link).
     FragmentRef(FragmentReference),
     /// Agent Chat thread trace (one line per thread per day).
@@ -63,6 +66,10 @@ impl DayEntry {
             Self::KeptUrl { url } => {
                 let label = markdown_url_label(url);
                 format!("{timestamp} [{label}]({url})")
+            }
+            Self::ClipboardRef { entry_id } => {
+                let uri = crate::clipboard_history::entry_resource_uri(entry_id);
+                format!("{timestamp} [{CLIPBOARD_REF_LABEL}]({uri})")
             }
             Self::FragmentRef(reference) => format_fragment_reference_card(timestamp, reference),
             Self::Trace {
@@ -105,16 +112,19 @@ pub fn undo_clipboard_sediment_lines(
     }
 
     let source_uri = format!("scriptkit://clipboard/{entry_id}");
+    let resource_uri = crate::clipboard_history::entry_resource_uri(entry_id);
     let trimmed = text.trim();
 
     if let Some(day) = kept_url_day {
         if let Ok(date) = NaiveDate::parse_from_str(day, "%Y-%m-%d") {
             remove_kept_url_line(paths, date, trimmed)?;
+            remove_clipboard_ref_line(paths, date, &resource_uri)?;
         }
     }
 
     if brain_kept {
         let (today, _) = local_day_and_time(now, tz);
+        remove_clipboard_ref_line(paths, today, &resource_uri)?;
         remove_capture_line(paths, today, trimmed)?;
         remove_fragment_reference_for_source(paths, today, &source_uri)?;
         trash_fragment_for_source(paths, &source_uri)?;
@@ -131,6 +141,15 @@ fn remove_kept_url_line(paths: &BrainPaths, date: NaiveDate, url: &str) -> Resul
 fn remove_capture_line(paths: &BrainPaths, date: NaiveDate, text: &str) -> Result<()> {
     let path = paths.day_page(date);
     filter_day_page_lines(&path, |line| !line_contains_token(line, text))
+}
+
+fn remove_clipboard_ref_line(
+    paths: &BrainPaths,
+    date: NaiveDate,
+    resource_uri: &str,
+) -> Result<()> {
+    let path = paths.day_page(date);
+    filter_day_page_lines(&path, |line| !line_contains_token(line, resource_uri))
 }
 
 fn remove_fragment_reference_for_source(

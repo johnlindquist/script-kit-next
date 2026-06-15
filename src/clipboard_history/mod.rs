@@ -34,12 +34,12 @@ mod monitor;
 pub mod ocr;
 mod open_with;
 pub mod paste_sequential;
-mod post_copy;
 mod quick_look;
 mod rejection;
 mod sediment;
 mod temp_file;
 mod types;
+mod uri;
 
 // Re-export public API
 // These exports form the public API of the clipboard_history module.
@@ -103,12 +103,6 @@ pub use rejection::{
     configure_secret_rejection, rejection_count, RejectionReason, SecretRejectionConfig,
 };
 
-// Post-copy clipboard tracking
-pub use post_copy::{
-    configure_post_copy_menu, install_post_copy_tracker, register_kept_hud_whisper,
-    PostCopyMenuConfig,
-};
-
 // Monitor/Init
 #[allow(unused_imports)]
 pub use monitor::{init_clipboard_history, stop_clipboard_monitoring};
@@ -121,6 +115,8 @@ pub use ocr::{enqueue_ocr, start_ocr_worker, stop_ocr_worker};
 pub use clipboard::copy_entry_to_clipboard;
 #[allow(unused_imports)]
 pub use clipboard::ClipboardWriteError;
+#[allow(unused_imports)]
+pub use uri::{entry_resource_uri, parse_entry_resource_uri};
 
 // Sequential paste state machine
 pub use paste_sequential::{

@@ -454,17 +454,6 @@ app.run(move |cx: &mut App| {
             );
         }
 
-        clipboard_history::register_kept_hud_whisper(|cx| {
-            hud_manager::show_hud("Kept".to_string(), Some(1200), cx);
-        });
-        if let Err(e) = clipboard_history::install_post_copy_tracker(cx) {
-            tracing::warn!(
-                target: "script_kit::clipboard_post_copy",
-                %e,
-                "failed to install post-copy tracker"
-            );
-        }
-
         // Register bundled JetBrains Mono font
         // This makes "JetBrains Mono" available as a font family for the editor
         register_bundled_fonts(cx);

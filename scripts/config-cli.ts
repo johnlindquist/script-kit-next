@@ -273,12 +273,6 @@ interface ClipboardHistorySecretRejectionConfig {
   extraSecretPatterns?: string[];
 }
 
-interface ClipboardHistoryPostCopyMenuConfig {
-  enabled?: boolean;
-  tapWindowMs?: number;
-  triggerModifiers?: KeyModifier[];
-}
-
 interface Config {
   hotkey: HotkeyConfig;
   bun_path?: string;
@@ -290,7 +284,6 @@ interface Config {
   builtIns?: BuiltInConfig;
   clipboardHistoryMaxTextLength?: number;
   clipboardHistorySecretRejection?: ClipboardHistorySecretRejectionConfig;
-  clipboardHistoryPostCopyMenu?: ClipboardHistoryPostCopyMenuConfig;
   processLimits?: ProcessLimits;
   suggested?: SuggestedConfig;
   notesHotkey?: HotkeyConfig;
@@ -528,24 +521,6 @@ const CONFIG_SCHEMA: ConfigOption[] = [
     default: [],
     description:
       "Additional regex patterns for secret-shaped clipboard text rejected before storage (conservative built-in defaults always apply)"
-  },
-  {
-    key: "clipboardHistoryPostCopyMenu.enabled",
-    type: "boolean",
-    default: false,
-    description: "Deprecated no-op; copied content no longer opens a post-copy popup"
-  },
-  {
-    key: "clipboardHistoryPostCopyMenu.tapWindowMs",
-    type: "number",
-    default: 2500,
-    description: "Deprecated no-op retained for existing config files"
-  },
-  {
-    key: "clipboardHistoryPostCopyMenu.triggerModifiers",
-    type: "string[]",
-    default: ["meta"],
-    description: "Deprecated no-op retained for existing config files"
   },
   {
     key: "processLimits.maxMemoryMb",

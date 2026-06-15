@@ -59,39 +59,6 @@ pub struct ClipboardHistorySecretRejectionConfig {
     pub extra_secret_patterns: Vec<String>,
 }
 
-/// Deprecated post-copy popup settings.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(default, rename_all = "camelCase")]
-pub struct ClipboardHistoryPostCopyMenuConfig {
-    /// Deprecated no-op; copied content no longer opens a post-copy popup.
-    #[serde(default)]
-    pub enabled: bool,
-    /// Deprecated no-op retained for existing config files.
-    #[serde(default = "default_post_copy_tap_window_ms")]
-    pub tap_window_ms: u64,
-    /// Deprecated no-op retained for existing config files.
-    #[serde(default = "default_post_copy_trigger_modifiers")]
-    pub trigger_modifiers: Vec<String>,
-}
-
-fn default_post_copy_tap_window_ms() -> u64 {
-    2500
-}
-
-fn default_post_copy_trigger_modifiers() -> Vec<String> {
-    vec!["meta".to_string()]
-}
-
-impl Default for ClipboardHistoryPostCopyMenuConfig {
-    fn default() -> Self {
-        Self {
-            enabled: false,
-            tap_window_ms: default_post_copy_tap_window_ms(),
-            trigger_modifiers: default_post_copy_trigger_modifiers(),
-        }
-    }
-}
-
 // ============================================
 // UNIFIED SEARCH CONFIG
 // ============================================
@@ -1710,13 +1677,6 @@ pub struct Config {
         rename = "clipboardHistorySecretRejection"
     )]
     pub clipboard_history_secret_rejection: Option<ClipboardHistorySecretRejectionConfig>,
-    /// Deprecated post-copy popup settings retained for config compatibility.
-    #[serde(
-        default,
-        skip_serializing_if = "Option::is_none",
-        rename = "clipboardHistoryPostCopyMenu"
-    )]
-    pub clipboard_history_post_copy_menu: Option<ClipboardHistoryPostCopyMenuConfig>,
     /// Suggested section configuration (frecency-based ranking)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub suggested: Option<SuggestedConfig>,
@@ -1886,7 +1846,6 @@ impl Default for Config {
             process_limits: None,     // Will use ProcessLimits::default() via getter
             clipboard_history_max_text_length: None, // Will use default via getter
             clipboard_history_secret_rejection: None, // Will use default via getter
-            clipboard_history_post_copy_menu: None, // Will use default via getter
             suggested: None,          // Will use SuggestedConfig::default() via getter
             unified_search: None,     // Will use UnifiedSearchConfig::default() via getter
             notes_hotkey: None,       // Will use HotkeyConfig::default_notes_hotkey() via getter
@@ -1983,13 +1942,6 @@ impl Config {
     /// Returns clipboard secret-rejection extensions, or defaults if not configured.
     pub fn get_clipboard_history_secret_rejection(&self) -> ClipboardHistorySecretRejectionConfig {
         self.clipboard_history_secret_rejection
-            .clone()
-            .unwrap_or_default()
-    }
-
-    /// Returns deprecated post-copy popup settings, or defaults if not configured.
-    pub fn get_clipboard_history_post_copy_menu(&self) -> ClipboardHistoryPostCopyMenuConfig {
-        self.clipboard_history_post_copy_menu
             .clone()
             .unwrap_or_default()
     }

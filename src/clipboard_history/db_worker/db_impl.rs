@@ -194,7 +194,7 @@ pub fn clear_impl(conn: &Connection) -> Result<()> {
 pub fn prune_impl(conn: &Connection, cutoff_timestamp_ms: i64) -> Result<usize> {
     let deleted = conn
         .execute(
-            "DELETE FROM history WHERE pinned = 0 AND timestamp < ?",
+            "DELETE FROM history WHERE pinned = 0 AND brain_kept = 0 AND timestamp < ?",
             params![cutoff_timestamp_ms],
         )
         .context("Failed to prune old entries")?;
@@ -211,7 +211,7 @@ pub fn trim_oversized_impl(conn: &Connection, max_len: usize) -> Result<usize> {
     let max_len_db = i64::try_from(max_len).unwrap_or(i64::MAX);
     let deleted = conn
         .execute(
-            "DELETE FROM history WHERE content_type = 'text' AND length(CAST(content AS BLOB)) > ?",
+            "DELETE FROM history WHERE brain_kept = 0 AND content_type = 'text' AND length(CAST(content AS BLOB)) > ?",
             params![max_len_db],
         )
         .context("Failed to trim oversized text entries")?;
@@ -255,18 +255,18 @@ pub fn checkpoint_impl(conn: &Connection) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::get_meta_impl;
+    use super::{get_meta_impl, prune_impl, trim_oversized_impl};
     use rusqlite::{params, Connection};
 
-    #[test]
-    fn test_get_meta_impl_drops_invalid_image_dimensions() {
-        let conn = Connection::open_in_memory().expect("in-memory db");
+    fn create_history_table(conn: &Connection) {
         conn.execute(
             "CREATE TABLE history (
                 id TEXT PRIMARY KEY,
+                content TEXT NOT NULL DEFAULT '',
                 content_type TEXT NOT NULL,
                 timestamp INTEGER NOT NULL,
                 pinned INTEGER NOT NULL,
+                brain_kept INTEGER NOT NULL DEFAULT 0,
                 text_preview TEXT,
                 image_width INTEGER,
                 image_height INTEGER,
@@ -276,6 +276,12 @@ mod tests {
             [],
         )
         .expect("create history table");
+    }
+
+    #[test]
+    fn test_get_meta_impl_drops_invalid_image_dimensions() {
+        let conn = Connection::open_in_memory().expect("in-memory db");
+        create_history_table(&conn);
 
         conn.execute(
             "INSERT INTO history (id, content_type, timestamp, pinned, text_preview, image_width, image_height, byte_size, ocr_text)
@@ -298,5 +304,57 @@ mod tests {
         assert_eq!(entries.len(), 1);
         assert_eq!(entries[0].image_width, None);
         assert_eq!(entries[0].image_height, None);
+    }
+
+    #[test]
+    fn prune_impl_preserves_brain_kept_rows() {
+        let conn = Connection::open_in_memory().expect("in-memory db");
+        create_history_table(&conn);
+        conn.execute(
+            "INSERT INTO history (id, content, content_type, timestamp, pinned, brain_kept) VALUES
+                ('old-free', 'discard', 'text', 1, 0, 0),
+                ('old-brain', 'keep', 'text', 1, 0, 1),
+                ('old-pinned', 'pin', 'text', 1, 1, 0)",
+            [],
+        )
+        .expect("insert rows");
+
+        let deleted = prune_impl(&conn, 10).expect("prune");
+
+        assert_eq!(deleted, 1);
+        let remaining: Vec<String> = conn
+            .prepare("SELECT id FROM history ORDER BY id")
+            .expect("prepare")
+            .query_map([], |row| row.get(0))
+            .expect("query")
+            .filter_map(Result::ok)
+            .collect();
+        assert_eq!(remaining, vec!["old-brain", "old-pinned"]);
+    }
+
+    #[test]
+    fn trim_oversized_impl_preserves_brain_kept_rows() {
+        let conn = Connection::open_in_memory().expect("in-memory db");
+        create_history_table(&conn);
+        conn.execute(
+            "INSERT INTO history (id, content, content_type, timestamp, pinned, brain_kept) VALUES
+                ('large-free', 'abcdef', 'text', 1, 0, 0),
+                ('large-brain', 'abcdef', 'text', 1, 0, 1),
+                ('small-free', 'abc', 'text', 1, 0, 0)",
+            [],
+        )
+        .expect("insert rows");
+
+        let deleted = trim_oversized_impl(&conn, 3).expect("trim");
+
+        assert_eq!(deleted, 1);
+        let remaining: Vec<String> = conn
+            .prepare("SELECT id FROM history ORDER BY id")
+            .expect("prepare")
+            .query_map([], |row| row.get(0))
+            .expect("query")
+            .filter_map(Result::ok)
+            .collect();
+        assert_eq!(remaining, vec!["large-brain", "small-free"]);
     }
 }
