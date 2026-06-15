@@ -4,10 +4,14 @@ use chrono::Utc;
 
 use crate::components::notes_editor::{NotesEditorLayout, NotesEditorMarkdownConfig};
 use crate::footer_popup::{FooterAction, FooterButtonConfig};
-use script_kit_gpui::day_page::normalize_day_page_markdown_references;
+use crate::notes::deeplink_activation::{
+    Activation, ActivationErrorReason, ActivationSurface, resolve_activation,
+    run_deeplink_confirm_options,
+};
 use script_kit_gpui::brain::{substrate::BrainSubstrate, wake_indexer};
+use script_kit_gpui::day_page::normalize_day_page_markdown_references;
 use script_kit_gpui::day_page::{
-    parse_day_page_segments, resolve_fragment_path, DayPageBinding, DayPageSegment,
+    DayPageBinding, DayPageSegment, parse_day_page_segments, resolve_fragment_path,
 };
 
 impl DayPageView {
@@ -190,7 +194,8 @@ impl DayPageView {
         }
         self.session.apply_editor_content(&content);
         self.refresh_fragment_open_targets(&content);
-        self.spine_handoff.prune_mention_aliases_for_content(&content);
+        self.spine_handoff
+            .prune_mention_aliases_for_content(&content);
         self.poll_external_disk_changes(window, cx);
         self.schedule_autosave_flush(cx);
         self.sync_footer(window, cx);
@@ -584,13 +589,7 @@ impl Render for DayPageView {
             .flex()
             .flex_col()
             .when_some(back_bar, |parent, bar| parent.child(bar))
-            .child(
-                div()
-                    .relative()
-                    .flex_1()
-                    .min_h(px(0.))
-                    .child(editor_input),
-            );
+            .child(div().relative().flex_1().min_h(px(0.)).child(editor_input));
 
         let context_zone = app.update(cx, |app, _cx| {
             app.render_inert_main_view_context_zone(menu_def)
@@ -651,7 +650,8 @@ impl Render for DayPageView {
                 divider,
                 main,
                 footer: Some(
-                    crate::components::prompt_layout_shell::render_native_main_window_footer_spacer(),
+                    crate::components::prompt_layout_shell::render_native_main_window_footer_spacer(
+                    ),
                 ),
                 overlays: Vec::new(),
             },
@@ -690,6 +690,14 @@ impl DayPageView {
     ) {
         let exact_plain = !cmd && !shift && !alt && !control;
         let exact_cmd = cmd && !shift && !alt && !control;
+
+        if exact_plain
+            && crate::ui_foundation::is_key_escape(&key)
+            && crate::confirm::is_confirm_window_open()
+        {
+            crate::confirm::route_key_to_confirm_popup("escape", cx);
+            return;
+        }
 
         if self.is_day_switcher_open() {
             if self.handle_day_switcher_key(key, cmd, shift, alt, control, window, cx) {
@@ -732,6 +740,11 @@ impl DayPageView {
             return;
         }
 
+        if exact_cmd && key == "." {
+            self.activate_deeplink_under_cursor(window, cx);
+            return;
+        }
+
         // Markdown formatting shortcuts — same bindings as the Notes window
         // (`src/notes/window/keyboard.rs`), routed through the shared
         // NotesEditor toolbar action executor.
@@ -750,6 +763,290 @@ impl DayPageView {
         if cmd && shift && !alt && !control && key == "x" {
             self.run_shared_markdown_toolbar_action("strikethrough", window, cx);
         }
+    }
+
+    fn activate_deeplink_under_cursor(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let href = self.notes_editor.read(cx).activation_href_at_cursor(cx);
+        let Some(href) = href else {
+            return;
+        };
+        let activation = resolve_activation(&href, ActivationSurface::DayPage);
+        self.handle_deeplink_activation(activation, window, cx);
+    }
+
+    fn handle_deeplink_activation(
+        &mut self,
+        activation: Activation,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        match activation {
+            Activation::ConfirmBeforeRun {
+                command_id,
+                raw_href,
+            } => self.open_run_deeplink_confirm(command_id, raw_href, window, cx),
+            Activation::Error(error) => {
+                self.open_deeplink_info_dialog(
+                    "Can't open this link",
+                    format!(
+                        "{}\n\n{}",
+                        error.raw_href,
+                        day_page_activation_error_message(&error.reason)
+                    ),
+                    error.raw_href,
+                    window,
+                    cx,
+                );
+            }
+            Activation::OpenExternalUrl { href } => {
+                self.open_external_deeplink_url(href, window, cx);
+            }
+            Activation::OpenFile { path, raw_href } => {
+                self.open_file_deeplink(path, raw_href, window, cx);
+            }
+            Activation::OpenNote { note_id } => {
+                self.open_note_deeplink(note_id, window, cx);
+            }
+            Activation::ScopedSearch { source, query } => {
+                let context_link = format!("@{}:{query}", source.prefix());
+                self.open_deeplink_info_dialog(
+                    "Open context search",
+                    format!(
+                        "{context_link}\n\nScoped context search will be wired in the spine routing slice."
+                    ),
+                    context_link,
+                    window,
+                    cx,
+                );
+            }
+            Activation::KitResourcePreview { uri, .. } => {
+                self.open_deeplink_info_dialog(
+                    "Preview Script Kit resource",
+                    format!("{uri}\n\nResource preview will be wired in the kit:// preview slice."),
+                    uri,
+                    window,
+                    cx,
+                );
+            }
+        }
+    }
+
+    fn open_external_deeplink_url(
+        &mut self,
+        href: String,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        match open::that(&href) {
+            Ok(()) => {
+                tracing::info!(event = "day_page_deeplink_url_opened", href = %href);
+                self.sync_footer(window, cx);
+            }
+            Err(error) => self.open_deeplink_info_dialog(
+                "Can't open this link",
+                format!("{href}\n\nFailed to open URL: {error}"),
+                href,
+                window,
+                cx,
+            ),
+        }
+    }
+
+    fn open_file_deeplink(
+        &mut self,
+        path: PathBuf,
+        raw_href: String,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let path_display = path.to_string_lossy().to_string();
+        if !path.exists() {
+            self.open_missing_file_deeplink_dialog(path, raw_href, window, cx);
+            return;
+        }
+
+        match crate::file_search::open_file(&path_display) {
+            Ok(()) => {
+                tracing::info!(
+                    event = "day_page_deeplink_file_opened",
+                    path = %path_display,
+                    raw_href = %raw_href,
+                );
+                self.sync_footer(window, cx);
+            }
+            Err(error) => self.open_deeplink_info_dialog(
+                "Can't open this link",
+                format!("{raw_href}\n\nFailed to open file:\n{path_display}\n\n{error}"),
+                raw_href,
+                window,
+                cx,
+            ),
+        }
+    }
+
+    fn open_missing_file_deeplink_dialog(
+        &mut self,
+        path: PathBuf,
+        raw_href: String,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let path_display = path.to_string_lossy().to_string();
+        self.open_deeplink_info_dialog(
+            "Can't open this link",
+            format!("{raw_href}\n\nFile does not exist:\n{path_display}"),
+            raw_href,
+            window,
+            cx,
+        );
+    }
+
+    fn open_note_deeplink(
+        &mut self,
+        note_id: crate::notes::NoteId,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        match crate::notes::open_note_in_notes_window(cx, note_id) {
+            Ok(()) => {
+                tracing::info!(event = "day_page_deeplink_note_opened", note_id = %note_id);
+                self.sync_footer(window, cx);
+            }
+            Err(error) => self.open_deeplink_info_dialog(
+                "Can't open this link",
+                format!(
+                    "scriptkit://notes/{}\n\nCould not open note: {}",
+                    note_id.as_str(),
+                    error
+                ),
+                format!("scriptkit://notes/{}", note_id.as_str()),
+                window,
+                cx,
+            ),
+        }
+    }
+
+    fn open_run_deeplink_confirm(
+        &mut self,
+        command_id: String,
+        raw_href: String,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.app.upgrade().is_none() {
+            self.open_deeplink_info_dialog(
+                "Can't open this link",
+                format!(
+                    "{}\n\nCould not attach the confirmation prompt to the Day Page.",
+                    raw_href
+                ),
+                raw_href,
+                window,
+                cx,
+            );
+            return;
+        }
+
+        let command_id_for_confirm = command_id.clone();
+        let command_id_for_cancel = command_id.clone();
+        let (sender, receiver) = async_channel::bounded::<bool>(1);
+        self.open_deferred_confirm_prompt(
+            run_deeplink_confirm_options(&command_id, &raw_href),
+            sender,
+            cx,
+        );
+        cx.spawn(async move |_this, _cx| {
+            if receiver.recv().await.unwrap_or(false) {
+                tracing::info!(
+                    event = "day_page_deeplink_run_confirmed",
+                    command_id = %command_id_for_confirm,
+                    "day_page_deeplink_run_confirmed",
+                );
+            } else {
+                tracing::info!(
+                    event = "day_page_deeplink_run_cancelled",
+                    command_id = %command_id_for_cancel,
+                    "day_page_deeplink_run_cancelled",
+                );
+            }
+        })
+        .detach();
+    }
+
+    fn open_deeplink_info_dialog(
+        &mut self,
+        title: &'static str,
+        body: String,
+        copy_link: String,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.app.upgrade().is_none() {
+            tracing::warn!(event = "day_page_deeplink_modal_unavailable", title);
+            self.sync_footer(window, cx);
+            return;
+        }
+
+        let (sender, receiver) = async_channel::bounded::<bool>(1);
+        self.open_deferred_confirm_prompt(
+            crate::confirm::ParentConfirmOptions {
+                title: title.into(),
+                body: body.into(),
+                confirm_text: "Copy link".into(),
+                cancel_text: "Dismiss".into(),
+                confirm_variant: gpui_component::button::ButtonVariant::Primary,
+                width: gpui::px(crate::confirm::PARENT_CONFIRM_DIALOG_WIDTH_PX),
+            },
+            sender,
+            cx,
+        );
+        cx.spawn(async move |_this, cx| {
+            if receiver.recv().await.unwrap_or(false) {
+                cx.update(|cx| {
+                    cx.write_to_clipboard(gpui::ClipboardItem::new_string(copy_link.clone()));
+                });
+            }
+        })
+        .detach();
+    }
+
+    fn open_deferred_confirm_prompt(
+        &self,
+        options: crate::confirm::ParentConfirmOptions,
+        sender: async_channel::Sender<bool>,
+        cx: &mut Context<Self>,
+    ) {
+        let app = self.app.clone();
+        cx.spawn(async move |_this, cx| {
+            cx.background_executor()
+                .timer(std::time::Duration::from_millis(1))
+                .await;
+            cx.update(|cx| {
+                if let Some(app) = app.upgrade() {
+                    app.update(cx, |app, cx| {
+                        app.open_confirm_prompt(options, sender, cx);
+                    });
+                }
+            });
+        })
+        .detach();
+    }
+}
+
+fn day_page_activation_error_message(reason: &ActivationErrorReason) -> String {
+    match reason {
+        ActivationErrorReason::EmptyHref => "The link is empty.".to_string(),
+        ActivationErrorReason::UnknownScheme { scheme } => {
+            format!("`{scheme}` is not a supported link scheme.")
+        }
+        ActivationErrorReason::UnknownSpinePrefix { prefix, supported } => format!(
+            "`{prefix}` is not a supported context type. Supported types: {}.",
+            supported.join(", ")
+        ),
+        ActivationErrorReason::EmptySpineValue { prefix } => {
+            format!("`{prefix}` context links need a value to search or open.")
+        }
+        ActivationErrorReason::MalformedUri { message } => message.clone(),
     }
 }
 
@@ -815,5 +1112,4 @@ impl ScriptListApp {
         self.sync_main_footer_popup(window, cx);
         cx.notify();
     }
-
 }
