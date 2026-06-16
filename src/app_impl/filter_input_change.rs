@@ -49,9 +49,9 @@ impl ScriptListApp {
                 }
             }
             ScriptListSpecialEntry::DayPage => {
-                // A bare `,` is a launch trigger, not content: clear it before
+                // A bare space is a launch trigger, not content: clear it before
                 // the swap so the Day Page editor starts clean and ScriptList
-                // has no stray comma on return.
+                // has no stray space on return.
                 self.set_filter_text_immediate(String::new(), window, cx);
                 self.show_day_page_view(window, cx);
             }
