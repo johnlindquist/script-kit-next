@@ -441,7 +441,7 @@ fn decide_release(
     let sha256 = match validate_manifest_for_artifact(manifest, release, asset) {
         Ok(sha256) => sha256,
         Err(reason) => {
-            return release_not_ready(release_version, raw_tag, release_page_url, reason)
+            return release_not_ready(release_version, raw_tag, release_page_url, reason);
         }
     };
 

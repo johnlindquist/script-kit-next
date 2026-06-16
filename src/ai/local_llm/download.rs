@@ -19,8 +19,7 @@ use std::io::{Read as _, Write as _};
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-const MODEL_URL: &str =
-    "https://huggingface.co/google/gemma-4-E2B-it-qat-q4_0-gguf/resolve/main/gemma-4-E2B_q4_0-it.gguf";
+const MODEL_URL: &str = "https://huggingface.co/google/gemma-4-E2B-it-qat-q4_0-gguf/resolve/main/gemma-4-E2B_q4_0-it.gguf";
 const MODEL_FILE: &str = super::model_locator::PREFERRED_GHOST_MODEL;
 const MODEL_SIZE: u64 = 3_349_514_112;
 const ATTEMPT_MARKER: &str = ".download-attempt";

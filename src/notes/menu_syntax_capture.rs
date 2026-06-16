@@ -48,7 +48,7 @@ pub(crate) fn apply_menu_syntax_todo_capture(
             return Err(format!(
                 "Unsupported todo operation: {}",
                 operation.as_str()
-            ))
+            ));
         }
     };
 
@@ -115,7 +115,7 @@ pub(crate) fn apply_menu_syntax_todo_capture_with_substrate(
             return Err(format!(
                 "Unsupported todo operation: {}",
                 operation.as_str()
-            ))
+            ));
         }
     };
 
