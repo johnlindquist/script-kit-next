@@ -182,12 +182,13 @@ fn state_result_serializes_all_fields() {
             "dirtyState": { "hasUnsavedChanges": false },
             "redacted": true,
         })),
+        None, // day_page_state
         Some(serde_json::json!({
             "isRecording": false,
             "phase": "idle",
             "passive": true,
         })),
-        None,
+        None, // ghost_prediction
     );
     let json = serde_json::to_value(&msg).expect("serialize stateResult");
     assert_eq!(json["type"], "stateResult");
@@ -243,6 +244,7 @@ fn state_result_round_trips() {
         None,
         false,
         true,
+        None,
         None,
         None,
         None,
