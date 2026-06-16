@@ -36,6 +36,7 @@ pub struct NotesEditor {
     pub(crate) preview_scroll_handle: ScrollHandle,
     pub(crate) layout: NotesEditorLayout,
     last_markdown_link_highlight_text: String,
+    last_markdown_link_highlight_selection: Range<usize>,
     last_markdown_link_highlight_ranges: Vec<(Range<usize>, Hsla, String)>,
 }
 
@@ -82,6 +83,7 @@ impl NotesEditor {
             preview_scroll_handle: ScrollHandle::new(),
             layout: config.layout,
             last_markdown_link_highlight_text: String::new(),
+            last_markdown_link_highlight_selection: 0..0,
             last_markdown_link_highlight_ranges: Vec::new(),
         }
     }
@@ -272,13 +274,18 @@ impl NotesEditor {
     }
 
     pub fn sync_markdown_link_highlights(&mut self, cx: &mut Context<Self>) {
-        let text = self.input_state.read(cx).value().to_string();
-        if text == self.last_markdown_link_highlight_text {
+        let (text, selection) = {
+            let state = self.input_state.read(cx);
+            (state.value().to_string(), state.selection())
+        };
+        if text == self.last_markdown_link_highlight_text
+            && selection == self.last_markdown_link_highlight_selection
+        {
             return;
         }
 
         let accent = cx.theme().accent;
-        let ranges = markdown_link_highlight_ranges(&text, accent);
+        let ranges = markdown_link_highlight_ranges(&text, accent, selection.clone());
         if ranges != self.last_markdown_link_highlight_ranges {
             self.input_state.update(cx, |state, _cx| {
                 state.set_highlight_ranges_with_roles(ranges.clone());
@@ -286,6 +293,7 @@ impl NotesEditor {
             self.last_markdown_link_highlight_ranges = ranges;
         }
         self.last_markdown_link_highlight_text = text;
+        self.last_markdown_link_highlight_selection = selection;
     }
 }
 
@@ -302,16 +310,61 @@ pub(crate) fn should_activate_deeplink_from_mouse_up(
         && selection.is_empty()
 }
 
-fn markdown_link_highlight_ranges(text: &str, accent: Hsla) -> Vec<(Range<usize>, Hsla, String)> {
+const MARKDOWN_LINK_DESTINATION_COMPACT_OPACITY: f32 = 0.45;
+
+fn markdown_link_highlight_ranges(
+    text: &str,
+    accent: Hsla,
+    selection: Range<usize>,
+) -> Vec<(Range<usize>, Hsla, String)> {
+    let targets = markdown_link_targets(text);
     let mut ranges = Vec::new();
     for line in markdown_non_code_lines(text) {
-        collect_reference_definition_destination(text, line.clone(), accent, &mut ranges);
-        collect_inline_markdown_links(text, line.clone(), accent, &mut ranges);
-        collect_autolinks_and_bare_urls(text, line, accent, &mut ranges);
+        collect_reference_definition_destination(
+            text,
+            line.clone(),
+            accent,
+            selection.clone(),
+            &targets,
+            &mut ranges,
+        );
+        collect_inline_markdown_links(
+            text,
+            line.clone(),
+            accent,
+            selection.clone(),
+            &targets,
+            &mut ranges,
+        );
+        collect_autolinks_and_bare_urls(
+            text,
+            line,
+            accent,
+            selection.clone(),
+            &targets,
+            &mut ranges,
+        );
     }
     ranges.sort_by(|(a, _, _), (b, _, _)| a.start.cmp(&b.start).then(a.end.cmp(&b.end)));
     ranges.dedup_by(|(a, _, ar), (b, _, br)| a == b && ar == br);
     ranges
+}
+
+fn markdown_link_destination_color(
+    accent: Hsla,
+    selection: &Range<usize>,
+    targets: &[MarkdownLinkTarget],
+    range: &Range<usize>,
+) -> Hsla {
+    let active = targets.iter().any(|target| {
+        ranges_overlap_or_touch(&target.full_range, selection)
+            && ranges_overlap_or_touch(&target.href_range, range)
+    });
+    if active {
+        accent
+    } else {
+        accent.opacity(MARKDOWN_LINK_DESTINATION_COMPACT_OPACITY)
+    }
 }
 
 pub(crate) fn activation_href_at_cursor_in_text(text: &str, cursor: usize) -> Option<String> {
@@ -480,6 +533,8 @@ fn collect_inline_markdown_links(
     text: &str,
     line: Range<usize>,
     accent: Hsla,
+    selection: Range<usize>,
+    targets: &[MarkdownLinkTarget],
     ranges: &mut Vec<(Range<usize>, Hsla, String)>,
 ) {
     let bytes = text.as_bytes();
@@ -503,7 +558,9 @@ fn collect_inline_markdown_links(
                     }
                     let dest = trim_ascii_range(text, label_close + 2..dest_end);
                     if dest.start < dest.end {
-                        ranges.push((dest, accent, "markdownLinkUri".to_string()));
+                        let color =
+                            markdown_link_destination_color(accent, &selection, targets, &dest);
+                        ranges.push((dest, color, "markdownLinkUri".to_string()));
                     }
                     index = dest_end + 1;
                     continue;
@@ -533,6 +590,8 @@ fn collect_reference_definition_destination(
     text: &str,
     line: Range<usize>,
     accent: Hsla,
+    selection: Range<usize>,
+    targets: &[MarkdownLinkTarget],
     ranges: &mut Vec<(Range<usize>, Hsla, String)>,
 ) {
     let line_text = &text[line.clone()];
@@ -552,7 +611,8 @@ fn collect_reference_definition_destination(
     }
     let dest = trim_ascii_range(text, label_close + 2..line.end);
     if dest.start < dest.end {
-        ranges.push((dest, accent, "markdownLinkUri".to_string()));
+        let color = markdown_link_destination_color(accent, &selection, targets, &dest);
+        ranges.push((dest, color, "markdownLinkUri".to_string()));
     }
 }
 
@@ -560,6 +620,8 @@ fn collect_autolinks_and_bare_urls(
     text: &str,
     line: Range<usize>,
     accent: Hsla,
+    selection: Range<usize>,
+    targets: &[MarkdownLinkTarget],
     ranges: &mut Vec<(Range<usize>, Hsla, String)>,
 ) {
     let bytes = text.as_bytes();
@@ -574,7 +636,9 @@ fn collect_autolinks_and_bare_urls(
                     || text[inner.clone()].starts_with("kit://")
                     || text[inner.clone()].starts_with("file:")
                 {
-                    ranges.push((inner, accent, "markdownLinkUri".to_string()));
+                    let color =
+                        markdown_link_destination_color(accent, &selection, targets, &inner);
+                    ranges.push((inner, color, "markdownLinkUri".to_string()));
                 }
                 index = close + 1;
                 continue;
@@ -591,7 +655,8 @@ fn collect_autolinks_and_bare_urls(
                     .iter()
                     .any(|(range, _, _)| ranges_overlap(range, &url))
             {
-                ranges.push((url, accent, "markdownLinkUri".to_string()));
+                let color = markdown_link_destination_color(accent, &selection, targets, &url);
+                ranges.push((url, color, "markdownLinkUri".to_string()));
             }
             index = end;
             continue;
@@ -687,19 +752,37 @@ fn ranges_overlap(a: &Range<usize>, b: &Range<usize>) -> bool {
     a.start < b.end && b.start < a.end
 }
 
+fn ranges_overlap_or_touch(a: &Range<usize>, b: &Range<usize>) -> bool {
+    a.start <= b.end && b.start <= a.end
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
         activation_href_at_cursor_in_text, markdown_link_highlight_ranges,
-        should_activate_deeplink_from_mouse_up,
+        should_activate_deeplink_from_mouse_up, MARKDOWN_LINK_DESTINATION_COMPACT_OPACITY,
     };
     use gpui::rgb;
+    use std::ops::Range;
 
     fn highlighted_texts(input: &str) -> Vec<String> {
-        markdown_link_highlight_ranges(input, rgb(0xffcc00).into())
+        markdown_link_highlight_ranges(input, rgb(0xffcc00).into(), 0..0)
             .into_iter()
             .map(|(range, _, role)| format!("{role}:{}", &input[range]))
             .collect()
+    }
+
+    fn highlight_for_role(
+        input: &str,
+        role: &str,
+        selection: Range<usize>,
+    ) -> (String, gpui::Hsla) {
+        markdown_link_highlight_ranges(input, rgb(0xffcc00).into(), selection)
+            .into_iter()
+            .find_map(|(range, color, candidate_role)| {
+                (candidate_role == role).then(|| (input[range].to_string(), color))
+            })
+            .expect("expected highlight role")
     }
 
     #[test]
@@ -712,6 +795,46 @@ mod tests {
                 "markdownLinkUri:scriptkit://spine/file/screenflow",
                 "markdownLinkUri:https://example.com/path",
             ]
+        );
+    }
+
+    #[test]
+    fn markdown_link_destinations_are_muted_until_focused() {
+        let input = "Open [Clipboard entry](kit://clipboard-history?id=clip-1) today";
+        let href_cursor = input.find("clipboard-history").unwrap();
+        let label_cursor = input.find("Clipboard").unwrap();
+
+        let (muted_text, muted_color) = highlight_for_role(input, "markdownLinkUri", 0..0);
+        assert_eq!(muted_text, "kit://clipboard-history?id=clip-1");
+        assert_eq!(muted_color.a, MARKDOWN_LINK_DESTINATION_COMPACT_OPACITY);
+
+        let (href_text, href_color) =
+            highlight_for_role(input, "markdownLinkUri", href_cursor..href_cursor);
+        assert_eq!(href_text, "kit://clipboard-history?id=clip-1");
+        assert_eq!(href_color.a, 1.0);
+
+        let (label_text, label_color) =
+            highlight_for_role(input, "markdownLinkUri", label_cursor..label_cursor);
+        assert_eq!(label_text, "kit://clipboard-history?id=clip-1");
+        assert_eq!(label_color.a, 1.0);
+    }
+
+    #[test]
+    fn bare_kit_deeplinks_dim_and_reveal_without_changing_activation() {
+        let input = "Review kit://clipboard-history?id=clip-2 now";
+        let href_cursor = input.find("clipboard-history").unwrap();
+
+        let (muted_text, muted_color) = highlight_for_role(input, "markdownLinkUri", 0..0);
+        assert_eq!(muted_text, "kit://clipboard-history?id=clip-2");
+        assert_eq!(muted_color.a, MARKDOWN_LINK_DESTINATION_COMPACT_OPACITY);
+
+        let (focused_text, focused_color) =
+            highlight_for_role(input, "markdownLinkUri", href_cursor..href_cursor);
+        assert_eq!(focused_text, "kit://clipboard-history?id=clip-2");
+        assert_eq!(focused_color.a, 1.0);
+        assert_eq!(
+            activation_href_at_cursor_in_text(input, href_cursor),
+            Some("kit://clipboard-history?id=clip-2".to_string())
         );
     }
 

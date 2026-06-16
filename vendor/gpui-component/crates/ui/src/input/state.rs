@@ -94,6 +94,7 @@ actions!(
 #[derive(Clone)]
 pub enum InputEvent {
     Change,
+    SelectionChange,
     PressEnter { secondary: bool },
     PressTab { secondary: bool },
     Focus,
@@ -1025,6 +1026,7 @@ impl InputState {
         self.selection_reversed = false;
         self.scroll_to(end, None, cx);
         self.focus(window, cx);
+        cx.emit(InputEvent::SelectionChange);
         cx.notify();
     }
 
@@ -1880,6 +1882,7 @@ impl InputState {
         if self.selected_range.is_empty() {
             self.update_preferred_column();
         }
+        cx.emit(InputEvent::SelectionChange);
         cx.notify()
     }
 
@@ -1887,6 +1890,7 @@ impl InputState {
     pub fn unselect(&mut self, _: &mut Window, cx: &mut Context<Self>) {
         let offset = self.cursor();
         self.selected_range = (offset..offset).into();
+        cx.emit(InputEvent::SelectionChange);
         cx.notify()
     }
 

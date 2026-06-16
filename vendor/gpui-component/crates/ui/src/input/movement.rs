@@ -52,6 +52,7 @@ impl InputState {
         self.update_preferred_column();
         self.hide_context_menu(cx);
         self.clear_inline_completion(cx);
+        cx.emit(crate::input::InputEvent::SelectionChange);
         cx.notify()
     }
 

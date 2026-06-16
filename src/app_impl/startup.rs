@@ -823,6 +823,7 @@ impl ScriptListApp {
                         }
                     }
                 }
+                InputEvent::SelectionChange => {}
             }
         });
 

@@ -68,10 +68,13 @@ impl NotesApp {
 
         // Subscribe to editor changes - passes window for auto-resize
         let editor_sub = cx.subscribe_in(&editor_state, window, {
-            move |this, _, ev: &InputEvent, window, cx| {
-                if matches!(ev, InputEvent::Change) {
-                    this.on_editor_change(window, cx);
+            move |this, _, ev: &InputEvent, window, cx| match ev {
+                InputEvent::Change => this.on_editor_change(window, cx),
+                InputEvent::SelectionChange => {
+                    this.notes_editor
+                        .update(cx, |editor, cx| editor.sync_markdown_link_highlights(cx));
                 }
+                _ => {}
             }
         });
 

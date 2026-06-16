@@ -43,11 +43,13 @@ impl DayPageView {
         let editor_subscription = cx.subscribe_in(
             &editor_state,
             window,
-            |this, _, event: &InputEvent, window, cx| {
-                if !matches!(event, InputEvent::Change) {
-                    return;
+            |this, _, event: &InputEvent, window, cx| match event {
+                InputEvent::Change => this.on_editor_change(window, cx),
+                InputEvent::SelectionChange => {
+                    this.notes_editor
+                        .update(cx, |editor, cx| editor.sync_markdown_link_highlights(cx));
                 }
-                this.on_editor_change(window, cx);
+                _ => {}
             },
         );
 

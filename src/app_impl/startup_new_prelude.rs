@@ -317,5 +317,6 @@
                         }
                     }
                 }
+                InputEvent::SelectionChange => {}
             }
         });
