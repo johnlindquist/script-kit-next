@@ -5,7 +5,7 @@
 use std::{
     rc::Rc,
     sync::{Mutex, OnceLock},
-    time::{Duration, Instant},
+    time::Duration,
 };
 
 use gpui::{
@@ -26,7 +26,7 @@ use crate::{
         FooterActionSlot, FooterHintActionButtonFrameSpec, FooterHintButtonLayoutOverrides,
         FooterHintContentJustify,
     },
-    components::overlay_modal::{OverlayAnimation, MODAL_PADDING},
+    components::overlay_modal::MODAL_PADDING,
     dev_style_tool::{
         ConfirmModalKnobId, CONFIRM_MODAL_ACTIONS_BUTTON_HEIGHT_KNOB_ID,
         CONFIRM_MODAL_ACTIONS_BUTTON_RADIUS_KNOB_ID,
@@ -1149,22 +1149,6 @@ pub(crate) struct ConfirmPopupWindow {
     lifecycle_task: Option<Task<()>>,
     did_request_focus: bool,
     resolved: bool,
-    overlay_animation_started_at: Instant,
-    overlay_animation_tick_scheduled: bool,
-}
-
-impl OverlayAnimation for ConfirmPopupWindow {
-    fn overlay_animation_started_at(&self) -> Instant {
-        self.overlay_animation_started_at
-    }
-
-    fn overlay_animation_tick_scheduled(&self) -> bool {
-        self.overlay_animation_tick_scheduled
-    }
-
-    fn set_overlay_animation_tick_scheduled(&mut self, scheduled: bool) {
-        self.overlay_animation_tick_scheduled = scheduled;
-    }
 }
 
 impl ConfirmPopupWindow {
@@ -1196,8 +1180,6 @@ impl ConfirmPopupWindow {
             lifecycle_task: None,
             did_request_focus: false,
             resolved: false,
-            overlay_animation_started_at: Instant::now(),
-            overlay_animation_tick_scheduled: false,
         }
     }
 
@@ -1360,8 +1342,6 @@ impl Render for ConfirmPopupWindow {
 
         self.ensure_lifecycle_task(cx);
         self.focused_button = get_confirm_focused_button();
-        let overlay_appear = self.overlay_appear_style();
-        self.schedule_overlay_animation_tick_if_needed(overlay_appear.complete, cx);
 
         if !self.did_request_focus {
             self.did_request_focus = true;
@@ -1544,8 +1524,8 @@ impl Render for ConfirmPopupWindow {
                     background: Some(panel_bg),
                     border: border_color,
                     radius: CONFIRM_MODAL_RADIUS,
-                    offset_y: overlay_appear.modal_offset_y,
-                    opacity: overlay_appear.modal_opacity,
+                    offset_y: 0.0,
+                    opacity: 1.0,
                 },
                 vec![stack.into_any_element()],
             ))
