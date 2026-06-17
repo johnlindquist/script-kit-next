@@ -3369,6 +3369,7 @@ impl ScriptListApp {
                                 None,
                                 None,
                                 None,
+                                None,
                                 Some(notes_state),
                                 None,
                                 None,
@@ -3397,6 +3398,7 @@ impl ScriptListApp {
                                 None,
                                 resolved.focused,
                                 resolved.visible,
+                                None,
                                 None,
                                 None,
                                 None,
@@ -3451,6 +3453,7 @@ impl ScriptListApp {
                                 None,
                                 None,
                                 None,
+                                None,
                             ));
                         }
                         return;
@@ -3473,6 +3476,7 @@ impl ScriptListApp {
                                 None,
                                 false,
                                 false,
+                                None,
                                 None,
                                 None,
                                 None,
@@ -4626,6 +4630,16 @@ impl ScriptListApp {
                 } else {
                     None
                 };
+                let filter_input_diagnostics = if script_list_active {
+                    Some(serde_json::json!({
+                        "canonicalFilterText": self.filter_text,
+                        "computedFilterText": self.computed_filter_text,
+                        "rawVisualInputValue": self.gpui_input_state.read(cx).value().to_string(),
+                        "pendingFilterSync": self.pending_filter_sync,
+                    }))
+                } else {
+                    None
+                };
                 let main_list_scroll = if script_list_active {
                     Some(self.main_list_scroll_receipt())
                 } else {
@@ -4730,6 +4744,7 @@ impl ScriptListApp {
                     Some(self.mini_ai_state_snapshot(cx)),
                     None,
                     filter_input_decorations,
+                    filter_input_diagnostics,
                     menu_syntax_main_hint,
                     capture_history_picker,
                     main_window_preflight,

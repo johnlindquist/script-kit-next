@@ -38,6 +38,7 @@ fn test_state_result_empty_state_omits_optional_fields() {
         None,
         None,
         None,
+        None,
     );
     let actual = to_json(response);
     assert_eq!(
@@ -75,6 +76,7 @@ fn test_state_result_minimal_state_shape() {
         None,
         true,
         true,
+        None,
         None,
         None,
         None,
@@ -135,6 +137,12 @@ fn test_state_result_representative_with_optional_fields() {
         Some(json!({ "visible": true, "mode": "draft" })),
         Some(json!({ "attached": true, "targetId": "agent_chat-chat" })),
         Some(json!([{ "start": 0, "end": 3, "kind": "token" }])),
+        Some(json!({
+            "canonicalFilterText": "app",
+            "computedFilterText": "app",
+            "rawVisualInputValue": "app",
+            "pendingFilterSync": false
+        })),
         None,
         None,
         Some(json!({
@@ -185,6 +193,12 @@ fn test_state_result_representative_with_optional_fields() {
             "miniAi": { "visible": true, "mode": "draft" },
             "focusedTextAgentChat": { "attached": true, "targetId": "agent_chat-chat" },
             "filterInputDecorations": [{ "start": 0, "end": 3, "kind": "token" }],
+            "filterInputDiagnostics": {
+                "canonicalFilterText": "app",
+                "computedFilterText": "app",
+                "rawVisualInputValue": "app",
+                "pendingFilterSync": false
+            },
             "mainWindowPreflight": {
                 "selectedSemanticId": "choice:1:application",
                 "willSubmit": true

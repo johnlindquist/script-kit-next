@@ -159,6 +159,14 @@ macro_rules! protocol_message_variants_query_ops {
             skip_serializing_if = "Option::is_none"
         )]
         filter_input_decorations: Option<serde_json::Value>,
+        /// ScriptList filter pipeline diagnostic for stale canonical/visual
+        /// input proofs. Omitted outside ScriptList.
+        #[serde(
+            rename = "filterInputDiagnostics",
+            default,
+            skip_serializing_if = "Option::is_none"
+        )]
+        filter_input_diagnostics: Option<serde_json::Value>,
         /// Grammar-aware read-only hint shown in the main menu surface
         /// when Power Syntax owns input or a structured query is empty.
         #[serde(

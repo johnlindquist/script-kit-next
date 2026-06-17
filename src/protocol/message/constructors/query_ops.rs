@@ -97,6 +97,7 @@ impl Message {
         mini_ai: Option<serde_json::Value>,
         focused_text_agent_chat: Option<serde_json::Value>,
         filter_input_decorations: Option<serde_json::Value>,
+        filter_input_diagnostics: Option<serde_json::Value>,
         menu_syntax_main_hint: Option<crate::menu_syntax::MenuSyntaxMainHintSnapshot>,
         capture_history_picker: Option<
             crate::menu_syntax::capture_history_picker::HistoryPickerSnapshot,
@@ -132,6 +133,7 @@ impl Message {
             mini_ai,
             focused_text_agent_chat,
             filter_input_decorations,
+            filter_input_diagnostics,
             menu_syntax_main_hint,
             capture_history_picker,
             main_window_preflight,

@@ -1784,7 +1784,7 @@ impl ScriptListApp {
                         //      only, leave filter text untouched. Second Escape
                         //      then falls through to the normal clear-filter
                         //      branch below.
-                        //   2. filter non-empty → clear filter.
+                        //   2. visible filter non-empty → clear filter.
                         //   3. launcher-origin surface → go back to the main launcher.
                         //   4. filter empty → hide main window.
                         if this.menu_syntax_object_selector_owns_main_keyboard() {
@@ -1805,12 +1805,16 @@ impl ScriptListApp {
                                 return;
                             }
                         }
-                        // Clear filter first if there's text, otherwise close window
-                        if !this.filter_text.is_empty() {
+                        // Clear visible text first. Hidden stale canonical
+                        // state is reconciled before close/go-back so an empty
+                        // input does not require a no-op extra Escape.
+                        if this.script_list_escape_should_clear_visible_filter(cx) {
                             this.clear_filter(window, cx);
                         } else if this.opened_from_main_menu {
+                            this.clear_hidden_script_list_filter_before_escape_close(window, cx);
                             this.go_back_or_close(window, cx);
                         } else {
+                            this.clear_hidden_script_list_filter_before_escape_close(window, cx);
                             // Filter is empty - close window
                             this.close_and_reset_window(cx);
                         }

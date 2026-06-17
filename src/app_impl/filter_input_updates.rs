@@ -623,6 +623,50 @@ impl ScriptListApp {
         self.set_filter_text_immediate(String::new(), window, cx);
     }
 
+    pub(crate) fn script_list_escape_should_clear_visible_filter(&self, cx: &App) -> bool {
+        if !matches!(self.current_view, AppView::ScriptList) {
+            return false;
+        }
+
+        if !self.gpui_input_state.read(cx).value().is_empty() {
+            return true;
+        }
+
+        // Multiline menu-syntax forms render canonical text through a compact
+        // single-line view instead of the raw GPUI input state.
+        !self.filter_text.is_empty()
+            && self
+                .filter_text
+                .chars()
+                .any(|character| matches!(character, '\n' | '\r'))
+            && (self
+                .menu_syntax_mode
+                .capture_composer_owns_input_for(&self.filter_text)
+                || self.menu_syntax_mode.command_owns_input_for(&self.filter_text)
+                || self.menu_syntax_capture_form_owns_input_for(&self.filter_text))
+    }
+
+    pub(crate) fn clear_hidden_script_list_filter_before_escape_close(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if !matches!(self.current_view, AppView::ScriptList) {
+            return;
+        }
+        if self.script_list_escape_should_clear_visible_filter(cx) {
+            return;
+        }
+        if self.filter_text.is_empty()
+            && self.computed_filter_text.is_empty()
+            && !self.pending_filter_sync
+        {
+            return;
+        }
+
+        self.set_filter_text_immediate(String::new(), window, cx);
+    }
+
     // ── Spine row acceptance ────────────────────────────────────────────
 
     /// Accept the currently selected Spine projection row (Enter / click).

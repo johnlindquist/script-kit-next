@@ -573,14 +573,20 @@ impl ScriptListApp {
                                         return;
                                     }
                                 }
-                                if !view.filter_text.is_empty() {
+                                if view.script_list_escape_should_clear_visible_filter(ctx) {
                                     view.clear_filter(window, ctx);
                                 } else if view.opened_from_main_menu {
+                                    view.clear_hidden_script_list_filter_before_escape_close(
+                                        window, ctx,
+                                    );
                                     // Mini main window or other opened-from-menu view:
                                     // delegate to go_back_or_close which restores Full
                                     // mode and resizes the window back to full width.
                                     view.go_back_or_close(window, ctx);
                                 } else {
+                                    view.clear_hidden_script_list_filter_before_escape_close(
+                                        window, ctx,
+                                    );
                                     // Save window position for the current display BEFORE hiding
                                     if let Some((x, y, width, height)) =
                                         platform::get_main_window_bounds()
