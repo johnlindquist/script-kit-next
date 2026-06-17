@@ -330,7 +330,8 @@ fn consume_main_state_restore_after_focus_loss() -> bool {
 
 pub use script_kit_gpui::{
     agentic_protocol_bus, emoji, emoji_usage, get_main_window_handle, is_main_window_visible,
-    set_main_window_handle, set_main_window_visible, terminal_history,
+    main_window_visibility_generation, set_main_window_handle, set_main_window_visible,
+    terminal_history,
 };
 // Oracle-Session `window-activation-invariants-guard` PR1 — the
 // `PANEL_CONFIGURED` one-shot lives at each crate root so

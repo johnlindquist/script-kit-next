@@ -192,9 +192,20 @@ pub fn clear_pending_ops() {
 fn schedule_flush(window: &mut Window, cx: &mut gpui::App) {
     // Only schedule once per effect cycle
     if !FLUSH_SCHEDULED.swap(true, Ordering::SeqCst) {
+        let scheduled_generation = crate::main_window_visibility_generation();
         logging::log("WINDOW_OPS", "Scheduling flush via Window::defer");
 
-        window.defer(cx, |window, cx| {
+        window.defer(cx, move |window, cx| {
+            if !crate::is_main_window_visible()
+                || crate::main_window_visibility_generation() != scheduled_generation
+            {
+                clear_pending_ops();
+                logging::log(
+                    "WINDOW_OPS",
+                    "Skipping stale deferred window ops after visibility changed",
+                );
+                return;
+            }
             flush_pending_ops();
             // Sync GPUI's internal viewport_size with the actual native window
             // content size. The direct NSWindow setFrame:display:animate: call

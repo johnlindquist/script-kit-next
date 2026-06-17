@@ -287,18 +287,40 @@ impl ScriptListApp {
         reason: &'static str,
         reset_mini_bounds_after_hidden_reset: bool,
     ) {
+        let scheduled_generation = script_kit_gpui::main_window_visibility_generation();
         cx.spawn(async move |this, cx| {
-            cx.background_executor()
-                .timer(std::time::Duration::from_millis(16))
-                .await;
             let _ = cx.update(|cx| {
-                this.update(cx, |app, cx| {
+                if script_kit_gpui::is_main_window_visible()
+                    || script_kit_gpui::main_window_visibility_generation()
+                        != scheduled_generation
+                {
+                    logging::log(
+                        "VISIBILITY",
+                        &format!(
+                            "Skipping stale hidden main window reset after {reason}"
+                        ),
+                    );
+                    return;
+                }
+                let _ = this.update(cx, |app, cx| {
+                    if script_kit_gpui::is_main_window_visible()
+                        || script_kit_gpui::main_window_visibility_generation()
+                            != scheduled_generation
+                    {
+                        logging::log(
+                            "VISIBILITY",
+                            &format!(
+                                "Skipping stale hidden main window reset inside app update after {reason}"
+                            ),
+                        );
+                        return;
+                    }
                     let hidden_reset_is_mini =
                         app.reset_hidden_main_window_to_script_list(cx, reason);
                     if reset_mini_bounds_after_hidden_reset || hidden_reset_is_mini {
                         crate::window_resize::resize_to_mini_main_window_sync();
                     }
-                })
+                });
             });
         })
         .detach();

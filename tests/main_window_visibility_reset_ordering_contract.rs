@@ -138,6 +138,42 @@ fn hide_helper_defers_script_list_reset_until_after_native_hide() {
 }
 
 #[test]
+fn hidden_reset_runs_next_turn_without_timer_and_skips_stale_visibility() {
+    let body = function_body(
+        LIFECYCLE_RESET,
+        "pub(crate) fn defer_reset_to_script_list_after_main_window_hidden",
+    );
+    let scheduled_generation = body
+        .find("let scheduled_generation = script_kit_gpui::main_window_visibility_generation();")
+        .expect("hidden reset must snapshot the hide generation when scheduled");
+    let spawn = body
+        .find("cx.spawn(async move |this, cx|")
+        .expect("hidden reset must run on the next foreground turn");
+    let stale_visible = body
+        .find("script_kit_gpui::is_main_window_visible()")
+        .expect("hidden reset must not mutate a re-shown main window");
+    let generation_check = body
+        .find("!= scheduled_generation")
+        .expect("hidden reset must skip stale work after a newer visibility transition");
+    let reset = body
+        .find("app.reset_hidden_main_window_to_script_list(cx, reason)")
+        .expect("hidden reset must still reset the hidden main window");
+
+    assert!(
+        scheduled_generation < spawn,
+        "hidden reset must capture the hide generation before deferring"
+    );
+    assert!(
+        stale_visible < reset && generation_check < reset,
+        "hidden reset must prove it is still hidden/current before resetting"
+    );
+    assert!(
+        !body.contains("timer(") && !body.contains("Duration::from_millis(16)"),
+        "hidden reset must not wait on an arbitrary 16ms timer; it should prepare the hidden window as soon as the hide turn has been queued"
+    );
+}
+
+#[test]
 fn show_path_prepares_script_list_before_visible_true() {
     let body = function_body(WINDOW_VISIBILITY, "fn show_main_window_helper");
     let reset = body

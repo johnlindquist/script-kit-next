@@ -365,7 +365,7 @@ mod actions_button_visibility_tests;
 // Shared window visibility state
 // Used to track main window visibility across the app
 // Notes/AI windows use this to decide whether to hide the app after closing
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Mutex, OnceLock};
 
 /// Global handle to the main GPUI window.
@@ -393,6 +393,7 @@ pub fn get_main_window_handle() -> Option<gpui::AnyWindowHandle> {
 /// - Used by hotkey toggle to show/hide main window
 /// - Used by Notes/AI to prevent main window from appearing when they close
 static MAIN_WINDOW_VISIBLE: AtomicBool = AtomicBool::new(false);
+static MAIN_WINDOW_VISIBILITY_GENERATION: AtomicU64 = AtomicU64::new(0);
 
 // Oracle-Session `window-activation-invariants-guard` PR1.
 // One-shot guard for the main NSPanel's floating-panel configuration. Only
@@ -412,9 +413,17 @@ pub fn is_main_window_visible() -> bool {
     MAIN_WINDOW_VISIBLE.load(Ordering::SeqCst)
 }
 
+/// Monotonic counter bumped whenever the logical main-window visibility changes.
+pub fn main_window_visibility_generation() -> u64 {
+    MAIN_WINDOW_VISIBILITY_GENERATION.load(Ordering::SeqCst)
+}
+
 /// Set the main window visibility state
 pub fn set_main_window_visible(visible: bool) {
-    MAIN_WINDOW_VISIBLE.store(visible, Ordering::SeqCst);
+    let previous = MAIN_WINDOW_VISIBLE.swap(visible, Ordering::SeqCst);
+    if previous != visible {
+        MAIN_WINDOW_VISIBILITY_GENERATION.fetch_add(1, Ordering::SeqCst);
+    }
 }
 
 /// Check if a script requested hiding the window
