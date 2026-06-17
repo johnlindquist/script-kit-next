@@ -90,7 +90,7 @@ fn actions_popup_state_mutators_own_open_and_close_field_writes() {
 fn canonical_actions_toggle_open_uses_state_mutator() {
     let begin_body = source_between(
         ACTIONS_TOGGLE,
-        "fn begin_actions_popup_window_open(&mut self",
+        "fn begin_actions_popup_window_open",
         "fn actions_dialog_host_for_current_view",
     );
     assert!(

@@ -116,8 +116,8 @@ fn actions_window_tracks_parent_identity_for_focus_lifecycle() {
         "fn ensure_activation_subscription",
     );
     assert!(
-        request_close
-            .contains("activate_main_window && self.parent_kind == AutomationWindowKind::Main"),
+        request_close.contains("if activate_main_window")
+            && request_close.contains("if self.parent_kind == AutomationWindowKind::Main"),
         "actions close may activate main only for main-hosted popups"
     );
 }

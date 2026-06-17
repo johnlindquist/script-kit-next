@@ -34,6 +34,16 @@ fn ensure_theme_initialized(cx: &mut App) {
     info!("Notes window theme synchronized with Script Kit");
 }
 
+fn hide_main_window_for_notes(cx: &mut App) {
+    if !crate::is_main_window_visible() {
+        return;
+    }
+
+    crate::set_main_window_visible(false);
+    crate::hotkeys::reset_main_gesture_classifier();
+    crate::platform::defer_hide_main_window(cx);
+}
+
 /// Calculate window bounds positioned in the top-right corner of the display containing the mouse.
 /// Default Notes window geometry, shared by first-open placement and the
 /// "Reset Window Position" action.
@@ -149,10 +159,7 @@ pub fn open_note_in_notes_window(cx: &mut App, note_id: NoteId) -> Result<()> {
     };
 
     if let (Some(handle), Some(notes_app)) = (existing_handle, existing_app.clone()) {
-        if crate::is_main_window_visible() {
-            crate::set_main_window_visible(false);
-            crate::platform::defer_hide_main_window(cx);
-        }
+        hide_main_window_for_notes(cx);
 
         let result = update_notes_window_detached(handle, cx, |window, cx| {
             window.activate_window();
@@ -224,10 +231,7 @@ pub fn open_day_note_in_notes_window(cx: &mut App, date: chrono::NaiveDate) -> R
     };
 
     if let (Some(handle), Some(notes_app)) = (existing_handle, existing_app.clone()) {
-        if crate::is_main_window_visible() {
-            crate::set_main_window_visible(false);
-            crate::platform::defer_hide_main_window(cx);
-        }
+        hide_main_window_for_notes(cx);
 
         let result = update_notes_window_detached(handle, cx, |window, cx| {
             window.activate_window();
@@ -655,8 +659,7 @@ fn open_notes_window_with_close_behavior(
             "PANEL",
             "Main window was visible - hiding it since Notes is opening",
         );
-        crate::set_main_window_visible(false);
-        crate::platform::defer_hide_main_window(cx);
+        hide_main_window_for_notes(cx);
     }
 
     // Create new window (toggle ON)
@@ -972,10 +975,7 @@ pub fn save_note_with_content_and_source(
 
     // If window exists, create note in the existing window
     if let (Some(handle), Some(notes_app)) = (existing_handle, existing_app.clone()) {
-        if crate::is_main_window_visible() {
-            crate::set_main_window_visible(false);
-            crate::platform::defer_hide_main_window(cx);
-        }
+        hide_main_window_for_notes(cx);
 
         let result = update_notes_window_detached(handle, cx, |window, cx| {
             window.activate_window();
@@ -1127,8 +1127,9 @@ pub(crate) fn restore_launcher_after_notes_close_if_needed(cx: &mut App) {
 ///
 /// Notes hides the main window on open (`set_main_window_visible(false)` +
 /// `defer_hide_main_window`). This function reverses that: it marks the main
-/// window visible, brings it to front, and makes it key so the user lands
-/// back on whatever launcher surface was active before Notes opened.
+/// window visible, syncs the main-hotkey gesture classifier, brings it to
+/// front, and makes it key so the user lands back on whatever launcher surface
+/// was active before Notes opened.
 ///
 /// The launcher surface is NOT reset — `current_view` and focus target are
 /// preserved across the Notes session, so the user returns to the exact
@@ -1146,6 +1147,7 @@ pub(crate) fn restore_launcher_after_notes_close(_cx: &mut App) {
     }
 
     crate::set_main_window_visible(true);
+    crate::hotkeys::sync_main_gesture_window_shown();
     crate::platform::show_main_window_without_activation();
 
     tracing::info!(

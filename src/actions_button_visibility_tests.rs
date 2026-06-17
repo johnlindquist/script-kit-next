@@ -258,7 +258,7 @@ mod tests {
             .find("fn standard_main_window_footer_buttons")
             .expect("standard_main_window_footer_buttons must exist");
         let standard_section =
-            &footer_content[standard_fn..footer_content.len().min(standard_fn + 1500)];
+            &footer_content[standard_fn..footer_content.len().min(standard_fn + 2500)];
         assert!(
             standard_section.contains("FooterAction::Ai") && standard_section.contains("\"Agent\""),
             "Agent button should be in the standard native footer buttons"

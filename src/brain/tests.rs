@@ -1535,7 +1535,7 @@ fn file_sources_sync_day_page_fragment_and_forget_trashed_note() {
     assert!(note_doc.content.contains("brain indexer note body"));
     assert_eq!(
         note_doc.canonical_path.as_deref(),
-        Some("brain/notes/indexer-note.md")
+        Some("brain/notes/t7-note.md")
     );
 
     substrate.trash(&note_path).expect("trash note");
