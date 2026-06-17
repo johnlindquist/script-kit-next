@@ -29,7 +29,7 @@ fn notes_cmd_shift_a_routes_through_existing_embedded_agent_chat_path() {
     assert!(
         source.contains("self.request_focus_surface(")
             && source.contains("focus::NotesFocusSurface::AgentChat")
-            && source.contains("open_selected_note_cart_in_embedded_agent_chat(\"NotesWindowCmdShiftA\"")
+            && source.contains("open_selected_note_cart_in_embedded_agent_chat")
             && source.contains("\"NotesWindowCmdShiftA\""),
         "Notes Cmd+Shift+A should reuse the embedded Agent Chat cart handoff path instead of duplicating AI routing"
     );
@@ -60,8 +60,8 @@ fn global_cmd_enter_uses_return_preserving_agent_chat_entry_helper() {
     let fn_body = &source[fn_start..];
 
     assert!(
-        fn_body
-            .contains("self.open_tab_ai_agent_chat_with_entry_intent_preserving_return(None, cx);"),
+        fn_body.contains("self.open_agent_chat_from_entry_request(")
+            && fn_body.contains("return_origin: Some(self.current_view.clone())"),
         "global Cmd+Enter must route through the return-preserving Agent Chat helper"
     );
 }

@@ -12,7 +12,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 static TEST_COUNTER: AtomicU32 = AtomicU32::new(20_000);
 fn prefix() -> String {
     let n = TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
-    format!("nt{n}")
+    format!("!nt{n}")
 }
 
 fn cleanup(prefix: &str, ids: &[&str]) {

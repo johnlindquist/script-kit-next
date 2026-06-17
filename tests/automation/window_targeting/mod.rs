@@ -15,7 +15,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 static TEST_COUNTER: AtomicU32 = AtomicU32::new(10_000);
 fn prefix() -> String {
     let n = TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
-    format!("wt{n}")
+    format!("!wt{n}")
 }
 
 fn make_info(prefix: &str, id: &str, kind: AutomationWindowKind) -> AutomationWindowInfo {
@@ -142,7 +142,7 @@ fn simulate_gpui_event_mouse_events_parse() {
 
 #[test]
 fn registry_resolves_each_kind_independently() {
-    let p = prefix();
+    let p = "!0_registry_resolves_each_kind_independently".to_string();
 
     let mut main = make_info(&p, "main", AutomationWindowKind::Main);
     main.focused = true;
@@ -198,6 +198,7 @@ fn registry_resolves_each_kind_independently() {
 
 #[test]
 fn focused_resolution_tracks_across_windows() {
+    let _lock = crate::acquire_automation_test_lock();
     let p = prefix();
 
     let mut main = make_info(&p, "main", AutomationWindowKind::Main);
@@ -324,6 +325,7 @@ fn simulate_gpui_event_constructor_includes_target() {
 
 #[test]
 fn window_bounds_survive_registry_round_trip() {
+    let _lock = crate::acquire_automation_test_lock();
     let p = prefix();
 
     let info = AutomationWindowInfo {

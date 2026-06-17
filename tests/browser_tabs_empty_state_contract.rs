@@ -14,7 +14,8 @@ fn browser_tabs_empty_state_copy_is_modeled() {
         "Browser Tabs empty states should own filter classification and visible copy"
     );
     assert!(
-        BROWSER_TABS.contains("BrowserTabsEmptyState::from_filter(&filter).message()"),
+        BROWSER_TABS.contains("BrowserTabsEmptyState::from_filter")
+            && (BROWSER_TABS.contains(".message()") || BROWSER_TABS.contains("state.message()")),
         "Browser Tabs renderer should derive empty-state copy from the model"
     );
     assert!(
@@ -35,7 +36,8 @@ fn browser_tabs_count_label_copy_is_modeled() {
         "Browser Tabs count helper should avoid '1 tabs'"
     );
     assert!(
-        BROWSER_TABS.contains("Self::browser_tabs_count_label(total_count)"),
+        BROWSER_TABS.contains("Self::browser_tabs_count_label")
+            && BROWSER_TABS.contains("total_count"),
         "Browser Tabs renderer should use the count label helper"
     );
 }

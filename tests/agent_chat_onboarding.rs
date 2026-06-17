@@ -159,8 +159,10 @@ fn tab_runtime_routes_pi_profiles_without_removing_agent_chat_entrypoint() {
         "Tab Agent Chat should keep the current Agent Chat entry point"
     );
     assert!(
-        AGENT_CHAT_LAUNCH_SOURCE.contains("resolve_effective_profile")
-            && AGENT_CHAT_LAUNCH_SOURCE.contains("PiAgentChatLaunch::from_profile")
+        (AGENT_CHAT_LAUNCH_SOURCE.contains("resolve_selected_pi_launch_with_cwd_override")
+            || AGENT_CHAT_LAUNCH_SOURCE.contains("resolve_effective_profile"))
+            && (AGENT_CHAT_LAUNCH_SOURCE.contains("resolve_focused_text_pi_launch")
+                || AGENT_CHAT_LAUNCH_SOURCE.contains("PiAgentChatLaunch::from_profile"))
             && AGENT_CHAT_LAUNCH_SOURCE.contains("open_tab_ai_pi_view_from_launch"),
         "Tab Agent Chat launch must route selected Pi profiles through the Pi launch helper"
     );
@@ -306,7 +308,7 @@ fn bundle_verifier_rejects_extra_macos_payloads() {
         "bundle verifier must not require a codex-agent_chat executable"
     );
     assert!(
-        VERIFY_MACOS_BUNDLE_SOURCE.contains("! -name 'script-kit-gpui' -print")
+        VERIFY_MACOS_BUNDLE_SOURCE.contains("! -name 'script-kit-gpui'")
             && !VERIFY_MACOS_BUNDLE_SOURCE.contains("! -name 'codex-agent_chat'"),
         "bundle verifier must allow only the main executable in Contents/MacOS"
     );

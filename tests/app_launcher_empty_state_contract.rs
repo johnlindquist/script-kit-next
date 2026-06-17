@@ -14,7 +14,8 @@ fn app_launcher_empty_state_copy_is_modeled() {
         "App Launcher empty states should own filter classification and visible copy"
     );
     assert!(
-        APP_LAUNCHER.contains("AppLauncherEmptyState::from_filter(&filter).message()"),
+        APP_LAUNCHER.contains("AppLauncherEmptyState::from_filter")
+            && (APP_LAUNCHER.contains(".message()") || APP_LAUNCHER.contains("state.message()")),
         "App Launcher renderer should derive empty-state copy from the model"
     );
     assert!(

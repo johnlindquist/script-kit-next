@@ -3,7 +3,6 @@ use super::*;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum AgentChatEntryOrigin {
     MainLauncher,
-    LauncherTab,
     FileSearch,
     ActionsDialog,
     PluginSkill { skill_id: String },

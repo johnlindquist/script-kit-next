@@ -23,23 +23,33 @@ fn compact(source: &str) -> String {
 
 #[test]
 fn main_menu_skill_launch_opens_agent_chat_without_entry_intent_submit() {
-    let body = compact(source_between(
+    let body = source_between(
         TAB_AI_MODE,
         "pub(crate) fn open_agent_chat_with_selected_skill(",
         "    pub(crate) fn open_tab_ai_agent_chat_with_slash_picker(",
-    ));
+    );
 
-    for required in [
-        "crate::ai::agent_chat::ui::build_skill_slash_command_text(&skill.skill_id)",
-        "crate::ai::agent_chat::ui::build_skill_context_part(&skill.title,owner,&skill.skill_id,&skill.path)",
-        "self.open_tab_ai_agent_chat_with_entry_intent_suppressing_focused_part(None,cx);",
-        "chat.stage_selected_plugin_skill_from_main_menu(skill,cx)",
-    ] {
-        assert!(
-            body.contains(&compact(required)),
-            "main-menu skill launch must stage slash-style skill selection: {required}"
-        );
-    }
+    assert!(
+        body.contains("build_skill_slash_command_text"),
+        "main-menu skill launch must build slash command text"
+    );
+    assert!(
+        body.contains("build_skill_context_part")
+            && body.contains("&skill.title")
+            && body.contains("owner")
+            && body.contains("&skill.skill_id")
+            && body.contains("&skill.path"),
+        "main-menu skill launch must build skill context part"
+    );
+    assert!(
+        body.contains("self.open_agent_chat_from_entry_request(")
+            && body.contains("AgentChatEntryOrigin::PluginSkill"),
+        "main-menu skill launch must dispatch PluginSkill entry request"
+    );
+    assert!(
+        body.contains("stage_selected_plugin_skill_from_main_menu"),
+        "main-menu skill launch must stage selected plugin skill on the view"
+    );
 
     assert!(
         !body.contains("build_staged_skill_prompt"),
@@ -62,7 +72,7 @@ fn agent_chat_stages_main_menu_skill_like_slash_selection_without_submit() {
     for required in [
         "build_skill_slash_command_text(&skill.skill_id)",
         "build_skill_context_part(&skill.title, owner, &skill.skill_id, &skill.path)",
-        "thread.replace_pending_context_parts(vec![part], \"main_menu_selected_skill\", cx);",
+        "thread.add_or_replace_skill_context(identity, part, cx);",
         "thread.input.set_text(command_text.clone());",
         "thread.input.set_cursor(cursor_after);",
         "thread.mark_context_bootstrap_ready(cx);",

@@ -58,7 +58,7 @@ fn reserved_actions_include_path_prompt_actions() {
         "select_file",
         "open_in_finder",
         "open_in_editor",
-        "open_in_terminal",
+        "open_in_quick_terminal",
         "move_to_trash",
     ] {
         assert!(

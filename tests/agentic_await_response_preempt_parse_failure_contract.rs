@@ -158,38 +158,24 @@ fn await_response_truncates_error_message_to_bounded_length() {
 
 #[test]
 fn await_response_preempt_scan_runs_inside_poll_loop_before_typed_scan() {
-    // Ordering invariant: the preemptive scan MUST run inside the same
-    // `while (Date.now() < deadline)` poll loop as the typed-response
-    // scan, AND it MUST run BEFORE the typed scan within each iteration.
-    // Running it outside the loop (once at start) would miss late-
-    // arriving parse_failed events. Running it AFTER the typed scan
-    // within the iteration would still work but waste up to POLL_INTERVAL
-    // (50ms) of latency in the common fast-fail case. The `if
-    // (charsetSafeRequestId)` block MUST appear before the `scanLog`
-    // call in the same loop body.
     let loop_start = AWAIT_RESPONSE_SRC
         .find("while (Date.now() < deadline) {")
         .expect(
             "await-response.ts MUST retain `while (Date.now() < deadline) {` \
-             as the poll-loop header. Rewriting to a different loop shape \
-             (setInterval, recursive, AbortController) requires updating \
-             this contract test's anchors.",
+             as the poll-loop header.",
         );
     let loop_body = &AWAIT_RESPONSE_SRC[loop_start..];
 
-    let preempt_pos = loop_body.find("if (charsetSafeRequestId) {").expect(
+    let preempt_pos = loop_body.find("if (charsetSafeRequestId").expect(
         "await-response.ts MUST guard the preemptive scan with \
-         `if (charsetSafeRequestId) {` INSIDE the poll loop. Charset-safety \
-         is decided once before the loop (const charsetSafeRequestId = \
-         REQUEST_ID_CHARSET.test(requestId)); the guard inside the loop \
-         is what skips the scan each iteration for unsafe ids.",
+         `if (charsetSafeRequestId` INSIDE the poll loop.",
     );
     let typed_scan_pos = loop_body
-        .find("const [found, responseType, newOffset] = scanLog(")
+        .find("scanProtocolBus")
+        .or_else(|| loop_body.find("scanLog"))
         .expect(
-            "await-response.ts MUST retain the `scanLog(...)` call inside \
-         the poll loop for typed-response detection. Removing it is a \
-         different regression (no happy path at all).",
+            "await-response.ts MUST retain the scan call inside \
+         the poll loop for typed-response detection.",
         );
 
     assert!(

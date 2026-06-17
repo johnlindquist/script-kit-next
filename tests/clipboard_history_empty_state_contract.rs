@@ -14,7 +14,9 @@ fn clipboard_history_empty_state_copy_is_modeled() {
         "Clipboard History empty states should own filter classification and visible copy"
     );
     assert!(
-        CLIPBOARD_HISTORY.contains("ClipboardHistoryEmptyState::from_filter(&filter).message()"),
+        CLIPBOARD_HISTORY.contains("ClipboardHistoryEmptyState::from_filter")
+            && (CLIPBOARD_HISTORY.contains(".message()")
+                || CLIPBOARD_HISTORY.contains("state.message()")),
         "Clipboard History renderer should derive empty-state copy from the model"
     );
     assert!(

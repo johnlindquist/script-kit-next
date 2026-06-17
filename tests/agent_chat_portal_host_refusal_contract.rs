@@ -35,7 +35,10 @@ fn portal_session_is_not_staged_before_host_decision() {
 fn detached_and_notes_hosts_advertise_history_only_and_cancel_refusals() {
     let detached = read("src/ai/agent_chat/ui/chat_window.rs");
     assert!(
-        detached.contains("view.set_allowed_portal_kinds(vec![PortalKind::AgentChatHistory])"),
+        detached
+            .contains("view.set_allowed_portal_kinds(vec![ContextPortalKind::AgentChatHistory])")
+            || detached
+                .contains("view.set_allowed_portal_kinds(vec![PortalKind::AgentChatHistory])"),
         "detached host must advertise only AgentChatHistory"
     );
     assert!(
@@ -44,6 +47,9 @@ fn detached_and_notes_hosts_advertise_history_only_and_cancel_refusals() {
     );
 
     let notes = read("src/notes/window/agent_chat_host.rs");
-    assert!(notes.contains("PortalKind::AgentChatHistory"));
+    assert!(
+        notes.contains("ContextPortalKind::AgentChatHistory")
+            || notes.contains("PortalKind::AgentChatHistory")
+    );
     assert!(notes.contains("cancel_pending_portal_session(kind, cx)"));
 }

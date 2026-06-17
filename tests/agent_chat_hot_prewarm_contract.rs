@@ -179,7 +179,7 @@ fn spine_profile_selection_starts_selected_profile_warm_session() {
         fs::read_to_string("src/app_impl/agent_handoff/mod.rs").expect("read tab ai source");
     let body = fn_body(
         &tab_ai,
-        "pub(crate) fn try_submit_spine_prompt_plan_from_enter(",
+        "pub(crate) fn try_submit_spine_prompt_plan_from_parse_with_aliases(",
     );
 
     assert!(

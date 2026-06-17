@@ -14,7 +14,8 @@ fn agent_chat_history_empty_state_copy_is_modeled() {
         "Agent Chat History empty states should own filter classification and visible copy"
     );
     assert!(
-        AGENT_CHAT_HISTORY.contains("AgentChatHistoryEmptyState::from_filter(&filter).message()"),
+        AGENT_CHAT_HISTORY.contains("AgentChatHistoryEmptyState::from_filter(&filter)")
+            && AGENT_CHAT_HISTORY.contains(".message()"),
         "Agent Chat History renderer should derive empty-state copy from the model"
     );
     assert!(

@@ -101,15 +101,24 @@ fn test_add_to_ai_flow_forwards_file_reference_to_ai_chat_window_when_file_attac
 #[test]
 fn test_ai_builtins_route_to_tab_ai_harness_after_upstream_hide() {
     let source = read_source("src/app_execute/builtin_execution.rs");
-    let ai_chat_branch = slice_from(&source, "builtins::BuiltInFeature::AiChat => {");
+    let ai_chat_feature_branch = slice_from(
+        &source,
+        "builtins::BuiltInFeature::AiChat | builtins::BuiltInFeature::AiChatVariant(",
+    );
+    assert!(
+        ai_chat_feature_branch.contains("self.execute_surface_open_builtin(open_action,"),
+        "AI chat feature branch should delegate to execute_surface_open_builtin"
+    );
+
+    let ai_chat_exec_branch = slice_from(&source, "SurfaceOpenBuiltinAction::AiChat(variant) => {");
+    assert!(
+        ai_chat_exec_branch.contains("self.open_tab_ai_agent_chat_with_entry_intent_variant("),
+        "AI chat builtin action execution should route to Agent Chat variant helper"
+    );
+
     let ai_command_branch = slice_from(
         &source,
         "builtins::BuiltInFeature::AiCommand(cmd_type) => {",
-    );
-
-    assert!(
-        ai_chat_branch.contains("self.open_tab_ai_agent_chat_with_entry_intent(None, cx);"),
-        "AI chat builtin should route to Agent Chat"
     );
     assert!(
         ai_command_branch.contains("open_tab_ai_chat_with_entry_intent(")

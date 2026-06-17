@@ -511,12 +511,11 @@ fn default_app_owned_sk_path() -> std::path::PathBuf {
 mod menu_syntax_builtin_execution_tests {
     use super::*;
     use crate::menu_syntax::capture::{CaptureParse, parse_capture};
-    use std::sync::{Mutex, OnceLock};
+    use std::sync::Mutex;
     use tempfile::TempDir;
 
     fn env_lock() -> &'static Mutex<()> {
-        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-        LOCK.get_or_init(|| Mutex::new(()))
+        crate::test_utils::SK_PATH_TEST_LOCK.get_or_init(|| Mutex::new(()))
     }
 
     fn invocation(input: &str) -> crate::menu_syntax::CaptureInvocation {

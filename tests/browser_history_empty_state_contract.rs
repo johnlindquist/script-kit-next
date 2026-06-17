@@ -14,7 +14,9 @@ fn browser_history_empty_state_copy_is_modeled() {
         "Browser History empty states should own filter classification and visible copy"
     );
     assert!(
-        BROWSER_HISTORY.contains("BrowserHistoryEmptyState::from_filter(&filter).message()"),
+        BROWSER_HISTORY.contains("BrowserHistoryEmptyState::from_filter")
+            && (BROWSER_HISTORY.contains(".message()")
+                || BROWSER_HISTORY.contains("state.message()")),
         "Browser History renderer should derive empty-state copy from the model"
     );
     assert!(

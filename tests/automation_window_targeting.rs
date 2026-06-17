@@ -8,3 +8,10 @@ mod notes_window_targeting;
 mod surface_proof_contract;
 #[path = "automation/window_targeting/mod.rs"]
 mod window_targeting;
+
+pub fn acquire_automation_test_lock() -> std::sync::MutexGuard<'static, ()> {
+    static LOCK: std::sync::OnceLock<std::sync::Mutex<()>> = std::sync::OnceLock::new();
+    LOCK.get_or_init(|| std::sync::Mutex::new(()))
+        .lock()
+        .unwrap()
+}

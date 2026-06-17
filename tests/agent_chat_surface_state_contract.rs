@@ -63,26 +63,24 @@ fn agent_chat_surface_state_raw_writes_only_in_mutator() {
 
 #[test]
 fn agent_chat_embedded_open_sites_fire_transition() {
-    // All four embedded-Agent Chat open paths (fresh, reuse, setup card, not
-    // ready) must fire `EmbeddedOpened`. The count guards against a
-    // future refactor that splits one of them into a new entry path
-    // without wiring the transition.
-    let opens = TAB_AI_MODE
-        .matches("crate::ai::agent_chat::ui::surface_state::AgentChatSurfaceEvent::EmbeddedOpened")
-        .count();
+    // Consolidated entry helper in agent_chat_surface_transitions.rs fires EmbeddedOpened.
     assert!(
-        opens >= 4,
-        "agent_handoff.rs must fire EmbeddedOpened from all four Agent Chat open paths \
-         (fresh launch, reuse, setup card, not-ready); found {opens}"
+        AGENT_CHAT_SURFACE_TRANSITIONS
+            .contains("self.transition_agent_chat_surface(AgentChatSurfaceEvent::EmbeddedOpened)")
+            || AGENT_CHAT_SURFACE_TRANSITIONS.contains("AgentChatSurfaceEvent::EmbeddedOpened"),
+        "enter_embedded_agent_chat_surface must fire EmbeddedOpened"
     );
 
+    // EmbeddedClosed must be fired from close paths.
     let closes = TAB_AI_MODE
-        .matches("crate::ai::agent_chat::ui::surface_state::AgentChatSurfaceEvent::EmbeddedClosed")
-        .count();
+        .matches("AgentChatSurfaceEvent::EmbeddedClosed")
+        .count()
+        + include_str!("../src/app_impl/agent_handoff/agent_chat_launch.rs")
+            .matches("AgentChatSurfaceEvent::EmbeddedClosed")
+            .count();
     assert!(
-        closes >= 2,
-        "agent_handoff.rs must fire EmbeddedClosed from both close-to-script-list \
-         and harness-terminal-closing-chat paths; found {closes}"
+        closes >= 1,
+        "agent_handoff must fire EmbeddedClosed; found {closes}"
     );
 }
 

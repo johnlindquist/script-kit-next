@@ -57,6 +57,11 @@ hello world
 
 #[test]
 fn test_read_scriptlets_keeps_first_scriptlet_when_file_starts_with_heading() {
+    let _lock = crate::test_utils::SK_PATH_TEST_LOCK
+        .get_or_init(|| std::sync::Mutex::new(()))
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
+
     use crate::setup::SK_PATH_ENV;
     use std::fs;
     use tempfile::TempDir;

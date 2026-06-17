@@ -26,11 +26,7 @@ fn assert_ordered(section: &str, before: &str, after: &str) {
 #[test]
 fn embedded_agent_chat_escape_routes_to_lifecycle_close_without_hiding_main() {
     for (name, source, end_marker) in [
-        (
-            "startup.rs",
-            STARTUP_SOURCE,
-            "// Handle Cmd+Shift+K for add_shortcut",
-        ),
+        ("startup.rs", STARTUP_SOURCE, "// Handle Cmd+- to decrease"),
         (
             "startup_new_actions.rs",
             STARTUP_NEW_ACTIONS_SOURCE,
@@ -103,7 +99,7 @@ fn embedded_agent_chat_cmd_w_closes_lifecycle_before_hiding_main() {
 fn focused_agent_chat_view_handles_escape_and_cmd_w_without_root_bubbling() {
     let escape_section = section_between(
         AGENT_CHAT_VIEW_SOURCE,
-        "Escape with no open dialogs cancels an active turn first",
+        "Escape with no open dialogs unwinds focused-text mini state",
         "Enter submits.",
     );
     assert!(
@@ -120,8 +116,7 @@ fn focused_agent_chat_view_handles_escape_and_cmd_w_without_root_bubbling() {
         "Cmd+. / Cmd+Shift+O",
     );
     assert!(
-        cmd_w_section.contains("!is_detached_host")
-            && cmd_w_section.contains("self.trigger_close_window_requested(window, cx)")
+        cmd_w_section.contains("self.trigger_close_window_requested(window, cx)")
             && cmd_w_section.contains("cx.stop_propagation()"),
         "focused embedded Agent Chat Cmd+W must call the host window-close callback directly"
     );
@@ -177,14 +172,15 @@ fn embedded_agent_chat_close_helper_tears_down_surface_and_registry() {
         "fn close_tab_ai_harness_terminal_impl",
         "pub(crate) fn close_tab_ai_harness_terminal_with_window",
     );
+    let transitions_source = include_str!("../src/app_impl/agent_chat_surface_transitions.rs");
     assert!(
         section.contains("closing_agent_chat")
             && section.contains("prepare_for_host_hide")
             && section.contains("embedded_agent_chat_return_origin_self_guarded")
             && section.contains("self.agent_chat_ready_script_path = None")
-            && section.contains("rekey_main_automation_surface_from_current_view")
-            && section.contains("ensure_embedded_ai_window(false)")
-            && section.contains("AgentChatSurfaceEvent::EmbeddedClosed"),
+            && transitions_source.contains("rekey_main_automation_surface_from_current_view")
+            && transitions_source.contains("ensure_embedded_ai_window(false)")
+            && transitions_source.contains("AgentChatSurfaceEvent::EmbeddedClosed"),
         "embedded Agent Chat close helper must preserve the view, restore origin, and tear down Agent Chat surface bookkeeping"
     );
     assert_ordered(
@@ -192,9 +188,14 @@ fn embedded_agent_chat_close_helper_tears_down_surface_and_registry() {
         "prepare_for_host_hide",
         "self.restore_current_view_with_focus(return_view, return_focus_target)",
     );
+
+    let exit_fn_start = transitions_source
+        .find("pub(crate) fn exit_embedded_agent_chat_surface")
+        .expect("exit fn must exist");
+    let exit_section = &transitions_source[exit_fn_start..];
     assert_ordered(
-        section,
-        "self.restore_current_view_with_focus(return_view, return_focus_target)",
+        exit_section,
+        "restore_current_view_with_focus",
         "rekey_main_automation_surface_from_current_view",
     );
 }
@@ -203,7 +204,7 @@ fn embedded_agent_chat_close_helper_tears_down_surface_and_registry() {
 fn detached_agent_chat_cmd_w_stays_on_detached_window_path() {
     let section = section_between(
         AGENT_CHAT_VIEW_SOURCE,
-        "let is_detached_host = crate::ai::agent_chat::ui::chat_window::is_chat_window(window)",
+        "// Cmd+W in detached window: close the window directly.",
         "this.handle_key_down(event, window, cx)",
     );
     assert!(

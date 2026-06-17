@@ -16,7 +16,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 static TEST_COUNTER: AtomicU32 = AtomicU32::new(30_000);
 fn prefix() -> String {
     let n = TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
-    format!("agent_chat{n}")
+    format!("!agent_chat{n}")
 }
 
 fn cleanup(prefix: &str, ids: &[&str]) {
@@ -620,10 +620,10 @@ fn agent_chat_detached_inspect_receipt_has_semantic_quality_field() {
 }
 
 #[test]
-fn inspect_receipt_schema_version_is_v3() {
+fn inspect_receipt_schema_version_is_v4() {
     assert_eq!(
-        AUTOMATION_INSPECT_SCHEMA_VERSION, 3,
-        "schema version must be 3 after adding semantic_quality"
+        AUTOMATION_INSPECT_SCHEMA_VERSION, 4,
+        "schema version must be 4 after schema bump"
     );
 }
 
@@ -675,7 +675,7 @@ fn agent_chat_detached_inspect_result_carries_semantic_quality() {
 
     // Snapshot fields are flattened into top-level JSON (serde flatten)
     assert_eq!(json["semanticQuality"], "panel_only");
-    assert_eq!(json["schemaVersion"], 3);
+    assert_eq!(json["schemaVersion"], 4);
 
     // Round-trip
     let back: Message = serde_json::from_value(json).expect("deserialize");

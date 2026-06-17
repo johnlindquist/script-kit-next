@@ -56,7 +56,6 @@ fn cmd_enter_origins_have_real_source_callers() {
     let notes = read("src/notes/window/keyboard.rs");
     for needle in [
         "AgentChatEntryOrigin::MainLauncher",
-        "AgentChatEntryOrigin::LauncherTab",
         "AgentChatEntryOrigin::FileSearch",
         "AgentChatEntryOrigin::ActionsDialog",
         "AgentChatEntryOrigin::PluginSkill",

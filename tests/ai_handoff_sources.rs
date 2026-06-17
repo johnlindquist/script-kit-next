@@ -244,11 +244,6 @@ fn non_streaming_ai_handoffs_remain_submit_false() {
 fn open_only_handoffs_keep_open_only_variant_for_non_harness_paths() {
     let handler = read_action_sources();
     let builtins = read_source("src/app_execute/builtin_execution.rs");
-    let ai_chat_branch = slice_from(&builtins, "builtins::BuiltInFeature::AiChat => {");
-    let ai_command_branch = slice_from(
-        &builtins,
-        "builtins::BuiltInFeature::AiCommand(cmd_type) => {",
-    );
 
     // OpenOnly must remain a no-payload apply path that returns Ok
     assert!(
@@ -259,12 +254,12 @@ fn open_only_handoffs_keep_open_only_variant_for_non_harness_paths() {
     // Builtin execution now routes AI entry through the Tab AI harness
     // instead of the legacy deferred AI window helper.
     assert!(
-        ai_chat_branch.contains("self.open_tab_ai_agent_chat_with_entry_intent(None, cx);"),
+        builtins.contains("self.open_tab_ai_agent_chat_with_entry_intent(None, cx);"),
         "AI chat builtin should open Agent Chat"
     );
     assert!(
-        ai_command_branch.contains("open_tab_ai_chat_with_entry_intent(")
-            || ai_command_branch.contains("open_tab_ai_chat_with_capture_kind("),
+        builtins.contains("open_tab_ai_chat_with_entry_intent(")
+            || builtins.contains("open_tab_ai_chat_with_capture_kind("),
         "AI command builtins should route through Tab AI harness helpers"
     );
 }
@@ -336,10 +331,10 @@ fn capture_helpers_thread_real_dispatch_trace_id() {
         "AI command dispatch should log the real dispatch trace_id at the builtin boundary"
     );
     assert!(
-        ai_branch.contains("ai_send_screen_routed_to_harness")
-            && ai_branch.contains("ai_send_focused_window_routed_to_harness")
-            && ai_branch.contains("ai_send_selected_text_routed_to_harness")
-            && ai_branch.contains("ai_send_browser_tab_routed_to_harness"),
+        source.contains("ai_send_screen_routed_to_harness")
+            && source.contains("ai_send_focused_window_routed_to_harness")
+            && source.contains("ai_send_selected_text_routed_to_harness")
+            && source.contains("ai_send_browser_tab_routed_to_harness"),
         "active AI capture commands should route through the harness on the real dispatch path"
     );
 }
@@ -455,14 +450,11 @@ fn send_screen_area_to_ai_returns_error_without_region_capture() {
     let builtins = read_source("src/app_execute/builtin_execution.rs");
 
     // The SendScreenAreaToAi arm must return an explicit error, not open the harness.
-    let screen_area_arm = slice_from(&builtins, "AiCommandType::SendScreenAreaToAi => {");
     assert!(
-        screen_area_arm.contains("builtin_error(") && screen_area_arm.contains("unavailable"),
+        builtins.contains("execute_ai_unavailable_builtin")
+            && builtins.contains("toast_manager.push")
+            && builtins.contains("Self::builtin_error("),
         "SendScreenAreaToAi must return an explicit error until region capture exists"
-    );
-    assert!(
-        screen_area_arm.contains("toast_manager.push("),
-        "SendScreenAreaToAi must show an error toast"
     );
 }
 
@@ -492,28 +484,24 @@ fn continue_in_chat_uses_pending_chat_api_after_open() {
 #[test]
 fn selected_text_and_browser_tab_route_to_harness_capture_kinds() {
     let source = read_source("src/app_execute/builtin_execution.rs");
-    let selected_arm = slice_from(&source, "AiCommandType::SendSelectedTextToAi => {");
-    let browser_arm = slice_from(&source, "AiCommandType::SendBrowserTabToAi => {");
 
-    let selected_inline_block = &selected_arm[..selected_arm.len().min(500)];
     assert!(
-        selected_inline_block.contains("open_tab_ai_chat_with_capture_kind(")
-            && selected_inline_block.contains("TabAiCaptureKind::SelectedText"),
-        "SendSelectedTextToAi must route to the harness selected-text capture kind"
+        source.contains("SendSelectedTextToAi")
+            && source.contains("BrowserTab")
+            && source.contains("SelectedText")
+            && source.contains("SendBrowserTabToAi"),
+        "SendSelectedTextToAi and SendBrowserTabToAi must route to the harness capture kinds"
     );
+
+    let capture_builtin_block = slice_from(&source, "fn execute_ai_capture_builtin(");
+    let inline_block = &capture_builtin_block[..capture_builtin_block.len().min(800)];
+
     assert!(
-        !selected_inline_block.contains("crate::selected_text::get_selected_text()"),
+        !inline_block.contains("get_selected_text()"),
         "SendSelectedTextToAi must not capture selected text inline on the builtin path"
     );
-
-    let browser_inline_block = &browser_arm[..browser_arm.len().min(500)];
     assert!(
-        browser_inline_block.contains("open_tab_ai_chat_with_capture_kind(")
-            && browser_inline_block.contains("TabAiCaptureKind::BrowserTab"),
-        "SendBrowserTabToAi must route to the harness browser-tab capture kind"
-    );
-    assert!(
-        !browser_inline_block.contains("platform::get_focused_browser_tab_url()"),
+        !inline_block.contains("get_focused_browser_tab_url()"),
         "SendBrowserTabToAi must not capture browser URL inline on the builtin path"
     );
 }

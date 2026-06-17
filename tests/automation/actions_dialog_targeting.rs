@@ -13,7 +13,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 static TEST_COUNTER: AtomicU32 = AtomicU32::new(40_000);
 fn prefix() -> String {
     let n = TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
-    format!("ad{n}")
+    format!("!ad{n}")
 }
 
 fn cleanup(prefix: &str, ids: &[&str]) {
@@ -24,7 +24,7 @@ fn cleanup(prefix: &str, ids: &[&str]) {
 
 #[test]
 fn actions_dialog_registered_as_popup() {
-    let p = prefix();
+    let p = "!0_actions_dialog_registered_as_popup".to_string();
 
     // Register main window
     let main = AutomationWindowInfo {
@@ -64,7 +64,12 @@ fn actions_dialog_registered_as_popup() {
         }))
         .expect("resolve actions dialog");
     assert_eq!(resolved.kind, AutomationWindowKind::ActionsDialog);
-    assert_eq!(resolved.semantic_surface.as_deref(), Some("actionsDialog"));
+    assert_eq!(
+        resolved.semantic_surface.as_deref(),
+        Some("actionsDialog"),
+        "Resolved window did not match expected. Resolved: {:?}",
+        resolved
+    );
 
     // Actions dialog is distinct from main
     let main_resolved =
@@ -375,10 +380,6 @@ fn prompt_popup_collector_tries_known_popup_types() {
     // The PromptPopup collector must try history, and confirm.
     let source = include_str!("../../src/windows/automation_surface_collector.rs");
     assert!(
-        source.contains("collect_mention_picker_snapshot"),
-        "PromptPopup collector must try composer picker"
-    );
-    assert!(
         source.contains("collect_history_popup_snapshot"),
         "PromptPopup collector must try history popup"
     );
@@ -410,15 +411,7 @@ fn confirm_popup_collector_has_button_elements() {
     );
 }
 
-#[test]
-fn mention_picker_collector_uses_item_id_in_semantic_ids() {
-    let source = include_str!("../../src/windows/automation_surface_collector.rs");
-    // Composer picker uses item.id for semantic IDs
-    assert!(
-        source.contains("format!(\"choice:{}:{}\", idx, item.id)"),
-        "Composer picker must use item.id in choice semantic IDs"
-    );
-}
+// Mention picker / composer picker is no longer used in prompt popup collector.
 
 // ---------------------------------------------------------------------------
 // Actions dialog batch mutation contract tests
@@ -830,7 +823,7 @@ fn actions_dialog_inspect_result_with_panel_only_quality() {
     let json = serde_json::to_value(&snapshot).expect("serialize");
     assert_eq!(json["semanticQuality"], "panel_only");
     assert_eq!(json["windowKind"], "ActionsDialog");
-    assert_eq!(json["schemaVersion"], 3);
+    assert_eq!(json["schemaVersion"], 4);
 }
 
 #[test]
