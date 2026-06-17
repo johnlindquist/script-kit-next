@@ -122,6 +122,262 @@ pub fn show_permission_dialog() -> Result<bool> {
 // Get Selected Text
 // ============================================================================
 
+#[cfg(target_os = "macos")]
+type AXUIElementRef = *const c_void;
+#[cfg(target_os = "macos")]
+type CFTypeRef = *const c_void;
+#[cfg(target_os = "macos")]
+type CFStringRef = *const c_void;
+
+#[cfg(target_os = "macos")]
+const K_AX_ERROR_SUCCESS: i32 = 0;
+#[cfg(target_os = "macos")]
+const K_CF_STRING_ENCODING_UTF8: u32 = 0x0800_0100;
+#[cfg(target_os = "macos")]
+const K_AX_VALUE_CF_RANGE_TYPE: i32 = 4;
+#[cfg(target_os = "macos")]
+const AX_FOCUSED_UI_ELEMENT: &str = "AXFocusedUIElement";
+#[cfg(target_os = "macos")]
+const AX_SELECTED_TEXT: &str = "AXSelectedText";
+#[cfg(target_os = "macos")]
+const AX_SELECTED_TEXT_RANGE: &str = "AXSelectedTextRange";
+#[cfg(target_os = "macos")]
+const AX_STRING_FOR_RANGE: &str = "AXStringForRange";
+
+#[cfg(target_os = "macos")]
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+struct CFRange {
+    location: isize,
+    length: isize,
+}
+
+#[cfg(target_os = "macos")]
+#[link(name = "ApplicationServices", kind = "framework")]
+extern "C" {
+    fn AXUIElementCreateSystemWide() -> AXUIElementRef;
+    fn AXUIElementCopyAttributeValue(
+        element: AXUIElementRef,
+        attribute: CFStringRef,
+        value: *mut CFTypeRef,
+    ) -> i32;
+    fn AXUIElementCopyParameterizedAttributeValue(
+        element: AXUIElementRef,
+        parameterized_attribute: CFStringRef,
+        parameter: CFTypeRef,
+        value: *mut CFTypeRef,
+    ) -> i32;
+    fn AXValueGetValue(value: CFTypeRef, the_type: i32, value_ptr: *mut c_void) -> bool;
+}
+
+#[cfg(target_os = "macos")]
+#[link(name = "CoreFoundation", kind = "framework")]
+extern "C" {
+    fn CFRelease(cf: CFTypeRef);
+    fn CFGetTypeID(cf: CFTypeRef) -> u64;
+    fn CFStringGetTypeID() -> u64;
+    fn CFStringCreateWithCString(
+        alloc: *const c_void,
+        c_str: *const i8,
+        encoding: u32,
+    ) -> CFStringRef;
+    fn CFStringGetCString(
+        string: CFStringRef,
+        buffer: *mut i8,
+        buffer_size: i64,
+        encoding: u32,
+    ) -> bool;
+    fn CFStringGetLength(string: CFStringRef) -> i64;
+}
+
+/// Read selected text using Accessibility attributes only.
+///
+/// Unlike `get_selected_text`, this helper must never fall back to clipboard
+/// simulation. It is for passive preview surfaces where posting Cmd+C would be
+/// surprising system input.
+#[instrument(skip_all)]
+#[cfg(target_os = "macos")]
+pub fn get_selected_text_ax_only() -> Result<Option<String>> {
+    if !has_accessibility_permission() {
+        bail!(
+            "Accessibility permission required. Enable in System Preferences > Privacy & Security > Accessibility"
+        );
+    }
+
+    let system = unsafe { AXUIElementCreateSystemWide() };
+    if system.is_null() {
+        bail!("AXUIElementCreateSystemWide returned null");
+    }
+
+    let focused = match ax_copy_attribute(system, AX_FOCUSED_UI_ELEMENT) {
+        Ok(value) => value as AXUIElementRef,
+        Err(error) => {
+            unsafe { CFRelease(system as CFTypeRef) };
+            return Err(error).context("AXFocusedUIElement unavailable");
+        }
+    };
+    unsafe { CFRelease(system as CFTypeRef) };
+
+    let selected_text = ax_selected_text_for_element(focused);
+    unsafe { CFRelease(focused as CFTypeRef) };
+    selected_text
+}
+
+#[cfg(target_os = "macos")]
+fn ax_selected_text_for_element(element: AXUIElementRef) -> Result<Option<String>> {
+    if element.is_null() {
+        return Ok(None);
+    }
+
+    if let Ok(value) = ax_copy_attribute(element, AX_SELECTED_TEXT) {
+        let text = cf_string_to_string_if_string(value);
+        unsafe { CFRelease(value) };
+        if let Some(text) = text.filter(|text| !text.trim().is_empty()) {
+            return Ok(Some(text));
+        }
+    }
+
+    let Some(range) = ax_selected_text_range(element)? else {
+        return Ok(None);
+    };
+    if range.length <= 0 {
+        return Ok(None);
+    }
+
+    ax_string_for_range(element, range).map(|text| text.filter(|text| !text.trim().is_empty()))
+}
+
+#[cfg(target_os = "macos")]
+fn ax_selected_text_range(element: AXUIElementRef) -> Result<Option<CFRange>> {
+    let value = match ax_copy_attribute(element, AX_SELECTED_TEXT_RANGE) {
+        Ok(value) => value,
+        Err(_) => return Ok(None),
+    };
+
+    let mut range = CFRange::default();
+    let ok = unsafe {
+        AXValueGetValue(
+            value,
+            K_AX_VALUE_CF_RANGE_TYPE,
+            &mut range as *mut CFRange as *mut c_void,
+        )
+    };
+    unsafe { CFRelease(value) };
+
+    if ok {
+        Ok(Some(range))
+    } else {
+        Ok(None)
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn ax_string_for_range(element: AXUIElementRef, range: CFRange) -> Result<Option<String>> {
+    let range_value = ax_value_create_cf_range(range)?;
+    let value = match ax_copy_parameterized_attribute(element, AX_STRING_FOR_RANGE, range_value) {
+        Ok(value) => value,
+        Err(_) => {
+            unsafe { CFRelease(range_value) };
+            return Ok(None);
+        }
+    };
+    unsafe { CFRelease(range_value) };
+
+    let text = cf_string_to_string_if_string(value);
+    unsafe { CFRelease(value) };
+    Ok(text)
+}
+
+#[cfg(target_os = "macos")]
+fn ax_value_create_cf_range(range: CFRange) -> Result<CFTypeRef> {
+    #[link(name = "ApplicationServices", kind = "framework")]
+    extern "C" {
+        fn AXValueCreate(the_type: i32, value_ptr: *const c_void) -> CFTypeRef;
+    }
+
+    let value = unsafe {
+        AXValueCreate(
+            K_AX_VALUE_CF_RANGE_TYPE,
+            &range as *const CFRange as *const c_void,
+        )
+    };
+    if value.is_null() {
+        bail!("AXValueCreate failed for selected text range");
+    }
+    Ok(value)
+}
+
+#[cfg(target_os = "macos")]
+fn ax_copy_attribute(element: AXUIElementRef, attribute: &str) -> Result<CFTypeRef> {
+    let attr = create_cf_string(attribute)?;
+    let mut value: CFTypeRef = std::ptr::null();
+    let result = unsafe { AXUIElementCopyAttributeValue(element, attr, &mut value) };
+    unsafe { CFRelease(attr as CFTypeRef) };
+    if result != K_AX_ERROR_SUCCESS || value.is_null() {
+        bail!("AX attribute {attribute} unavailable: error {result}");
+    }
+    Ok(value)
+}
+
+#[cfg(target_os = "macos")]
+fn ax_copy_parameterized_attribute(
+    element: AXUIElementRef,
+    attribute: &str,
+    parameter: CFTypeRef,
+) -> Result<CFTypeRef> {
+    let attr = create_cf_string(attribute)?;
+    let mut value: CFTypeRef = std::ptr::null();
+    let result =
+        unsafe { AXUIElementCopyParameterizedAttributeValue(element, attr, parameter, &mut value) };
+    unsafe { CFRelease(attr as CFTypeRef) };
+    if result != K_AX_ERROR_SUCCESS || value.is_null() {
+        bail!("AX parameterized attribute {attribute} unavailable: error {result}");
+    }
+    Ok(value)
+}
+
+#[cfg(target_os = "macos")]
+fn create_cf_string(s: &str) -> Result<CFStringRef> {
+    let c_string = std::ffi::CString::new(s)
+        .with_context(|| format!("CFString input contains interior NUL: {s:?}"))?;
+    let cf_string = unsafe {
+        CFStringCreateWithCString(
+            std::ptr::null(),
+            c_string.as_ptr(),
+            K_CF_STRING_ENCODING_UTF8,
+        )
+    };
+    if cf_string.is_null() {
+        bail!("CFStringCreateWithCString returned null for {s:?}");
+    }
+    Ok(cf_string)
+}
+
+#[cfg(target_os = "macos")]
+fn cf_string_to_string_if_string(value: CFTypeRef) -> Option<String> {
+    if unsafe { CFGetTypeID(value) } != unsafe { CFStringGetTypeID() } {
+        return None;
+    }
+    unsafe {
+        let length = CFStringGetLength(value as CFStringRef);
+        let buffer_size = length.saturating_mul(4).saturating_add(1).max(1);
+        let mut buffer = vec![0_i8; buffer_size as usize];
+        let ok = CFStringGetCString(
+            value as CFStringRef,
+            buffer.as_mut_ptr(),
+            buffer_size as i64,
+            K_CF_STRING_ENCODING_UTF8,
+        );
+        if !ok {
+            return None;
+        }
+        CStr::from_ptr(buffer.as_ptr())
+            .to_str()
+            .ok()
+            .map(str::to_string)
+    }
+}
+
 /// Get the currently selected text from the focused application.
 ///
 /// Uses the `get-selected-text` crate which implements:
@@ -705,6 +961,12 @@ pub fn show_permission_dialog() -> Result<bool> {
 pub fn get_selected_text() -> Result<String> {
     warn!("get_selected_text requested on unsupported platform");
     bail!("Selected text APIs are only supported on macOS")
+}
+
+#[cfg(not(target_os = "macos"))]
+#[instrument(skip_all)]
+pub fn get_selected_text_ax_only() -> Result<Option<String>> {
+    Ok(None)
 }
 
 #[cfg(not(target_os = "macos"))]

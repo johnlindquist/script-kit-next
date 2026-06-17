@@ -217,9 +217,25 @@ impl SpineLivePreviewCache {
                 (None, false, None)
             };
             let selection_text = if needs.selection_text {
-                crate::selected_text::get_selected_text()
-                    .ok()
-                    .filter(|t| !t.trim().is_empty())
+                match crate::selected_text::get_selected_text_ax_only() {
+                    Ok(selection) => {
+                        if selection.is_none() {
+                            tracing::debug!(
+                                target: "script_kit::spine",
+                                event = "spine_preview_selection_ax_only_empty"
+                            );
+                        }
+                        selection
+                    }
+                    Err(error) => {
+                        tracing::debug!(
+                            target: "script_kit::spine",
+                            event = "spine_preview_selection_ax_only_failed",
+                            error = %error
+                        );
+                        None
+                    }
+                }
             } else {
                 None
             };
