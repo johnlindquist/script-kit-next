@@ -34,6 +34,38 @@ impl ScriptListApp {
 
         // Handle key based on current view
         let key_lower = key.to_lowercase();
+        if crate::confirm::is_confirm_window_open()
+            && (key_lower == "escape"
+                || key_lower == "esc"
+                || key_lower == "enter"
+                || key_lower == "return"
+                || key_lower == "tab")
+        {
+            let mut gpui_modifiers = gpui::Modifiers::default();
+            gpui_modifiers.platform = has_cmd;
+            gpui_modifiers.shift = has_shift;
+            gpui_modifiers.alt = _has_alt;
+            gpui_modifiers.control = _has_ctrl;
+            let confirm_key = if key_lower == "return" {
+                "enter"
+            } else if key_lower == "esc" {
+                "escape"
+            } else {
+                key_lower.as_str()
+            };
+            let handled = crate::confirm::consume_main_window_key_while_confirm_open(
+                confirm_key,
+                &gpui_modifiers,
+                ctx,
+            );
+            logging::log(
+                "STDIN",
+                &format!("SimulateKey: {key} - confirm popup handled={handled}"),
+            );
+            if handled {
+                return;
+            }
+        }
         let simulate_key_target_is_notes = target.map_or_else(
             || {
                 crate::windows::focused_automation_window().is_some_and(|info| {

@@ -235,14 +235,13 @@ fn confirm_popup_native_background_matches_actions_popup_not_footer_flush_strip(
     );
 }
 
-/// Confirm popup must not become key during GPUI WindowOptions creation.
+/// Confirm popup must not become key during creation or native attach.
 ///
-/// The popup still becomes key later after AppKit attaches it as a child window,
-/// because live Enter/Tab/Escape handling is owned by the confirm popup window.
-/// This audit only locks out the pre-attach focus steal that can visually demote
-/// the parent window shadow.
+/// AppKit child-window ordering keeps the popup visually above the parent while
+/// the main window routes live Enter/Tab/Escape handling. Promoting the popup
+/// NSWindow to key after attach can drop it behind the main window.
 #[test]
-fn confirm_popup_does_not_take_key_focus_at_window_creation() {
+fn confirm_popup_does_not_promote_native_window_to_key() {
     let confirm = read("src/confirm/window.rs");
     let body = function_body(confirm.as_str(), "pub(crate) fn open_confirm_popup_window(");
     let options = body
@@ -261,9 +260,12 @@ fn confirm_popup_does_not_take_key_focus_at_window_creation() {
     );
     assert!(
         body.contains("addChildWindow:confirm_ns_window ordered:NS_WINDOW_ABOVE")
-            && body.contains("orderFrontRegardless")
-            && body.contains("makeKeyWindow"),
-        "confirm popup must keep post-attach AppKit promotion so live confirm keyboard handling still works"
+            && body.contains("orderFrontRegardless"),
+        "confirm popup must keep AppKit child attachment plus explicit front ordering"
+    );
+    assert!(
+        !body.contains("makeKeyWindow"),
+        "confirm popup must not call makeKeyWindow; main-window routing handles live confirm keys without native key promotion"
     );
 }
 

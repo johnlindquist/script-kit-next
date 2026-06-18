@@ -6,9 +6,9 @@ import { Driver, type Json } from "../devtools/driver";
 const repoRoot = resolve(import.meta.dir, "../..");
 const binary =
   process.env.SCRIPT_KIT_GPUI_BINARY ??
-  "target-agent/artifacts/confirm-shadow-focus/script-kit-gpui";
-const screenshotDir = join(repoRoot, ".test-screenshots", "confirm-shadow-focus");
-const sessionName = "confirm-shadow-focus-proof";
+  "target-agent/artifacts/confirm-shadow-layer/script-kit-gpui";
+const screenshotDir = join(repoRoot, ".test-screenshots", "confirm-shadow-layer");
+const sessionName = "confirm-shadow-layer-proof";
 
 function asArray(value: unknown): Json[] {
   return Array.isArray(value) ? (value as Json[]) : [];
@@ -150,20 +150,48 @@ async function main() {
       id: "confirm-popup",
     });
 
-    const cancelReceipt = await driver.request(
-      {
-        type: "batch",
-        target: { type: "id", id: "confirm-popup" },
-        commands: [{ type: "selectBySemanticId", semanticId: "button:1:cancel", submit: true }],
-        options: { stopOnError: true, rollbackOnError: false, timeout: 8_000 },
-      },
-      { expect: "batchResult", timeoutMs: 9_000 },
+    await Bun.sleep(1_000);
+    const delayedWindows = await driver.listAutomationWindows({ timeoutMs: 8_000 });
+    const delayedPopup = popupFromList(delayedWindows);
+    const delayedPopupElements = delayedPopup
+      ? await driver.getElements(
+          { target: { type: "id", id: "confirm-popup" }, limit: 40 },
+          { timeoutMs: 8_000 },
+        )
+      : null;
+    receipt.delayedOpen = {
+      focusedWindowId: delayedWindows.focusedWindowId ?? null,
+      popup: delayedPopup,
+      popupElements: delayedPopupElements
+        ? {
+            focusedSemanticId: delayedPopupElements.focusedSemanticId ?? null,
+            buttons: asArray(delayedPopupElements.elements).filter(
+              (element) => element.type === "button",
+            ),
+          }
+        : null,
+    };
+    receipt.screenshots.delayedScreen = await captureScreen("delayed-screen");
+    receipt.screenshots.delayedPopup = delayedPopup
+      ? await captureTarget(driver, "delayed-popup", { type: "id", id: "confirm-popup" })
+      : { exists: false, error: "confirm-popup missing after delayed visibility sample" };
+
+    driver.simulateKey("tab", []);
+    await Bun.sleep(150);
+    const tabElements = await driver.getElements(
+      { target: { type: "id", id: "confirm-popup" }, limit: 40 },
+      { timeoutMs: 8_000 },
     );
+    receipt.afterTab = {
+      focusedSemanticId: tabElements.focusedSemanticId ?? null,
+      buttons: asArray(tabElements.elements).filter((element) => element.type === "button"),
+    };
+
+    driver.simulateKey("escape", []);
     await Bun.sleep(250);
     const afterWindows = await driver.listAutomationWindows({ timeoutMs: 8_000 });
     const popupClosed = popupFromList(afterWindows) == null;
     receipt.after = {
-      cancelReceipt,
       focusedWindowId: afterWindows.focusedWindowId ?? null,
       popupClosed,
       windows: asArray(afterWindows.windows).map((window) => ({
@@ -179,25 +207,37 @@ async function main() {
 
     const mainStayedFocused = receipt.samples.every(
       (sample: Json) => sample.focusedWindowId === "main",
-    );
+    ) && receipt.delayedOpen.focusedWindowId === "main";
     const attachedToMain = popup.parentWindowId === "main";
     const popupIsConfirm = popup.semanticSurface === "confirmDialog";
-    const cancelClosed = popupClosed === true;
+    const popupStillVisibleAfterDelay =
+      delayedPopup?.visible === true && delayedPopup?.parentWindowId === "main";
+    const keyboardTabMovedFocus =
+      receipt.open.popupElements.focusedSemanticId !== receipt.afterTab.focusedSemanticId;
+    const keyboardEscapeClosed = popupClosed === true;
     const screenshotsExist = Object.values(receipt.screenshots).every(
       (shot) => Boolean((shot as Json).exists) && !(shot as Json).error,
     );
 
     receipt.status =
-      mainStayedFocused && attachedToMain && popupIsConfirm && cancelClosed && screenshotsExist
+      mainStayedFocused &&
+      attachedToMain &&
+      popupIsConfirm &&
+      popupStillVisibleAfterDelay &&
+      keyboardTabMovedFocus &&
+      keyboardEscapeClosed &&
+      screenshotsExist
         ? "pass"
         : "fail";
     receipt.assertions = {
       mainStayedFocused,
       attachedToMain,
       popupIsConfirm,
-      cancelClosed,
+      popupStillVisibleAfterDelay,
+      keyboardTabMovedFocus,
+      keyboardEscapeClosed,
       screenshotsExist,
-      shadowDemotionObserved: "not-observed-in-sampled-screenshots",
+      shadowDemotionObserved: "not-observed-in-delayed-sampled-screenshots",
     };
   } finally {
     await driver.close();

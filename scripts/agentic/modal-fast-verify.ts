@@ -165,7 +165,6 @@ const checks: Check[] = [
         "platform::configure_confirm_popup_window(confirm_ns_window, is_dark_vibrancy)",
         "addChildWindow:confirm_ns_window ordered:NS_WINDOW_ABOVE",
         "orderFrontRegardless",
-        "makeKeyWindow",
       ]).concat(
         requireContains(confirmOptions, ["focus: false"]),
         requireContains(confirmConfig, [
@@ -179,6 +178,7 @@ const checks: Check[] = [
         ]),
       ),
       requireAbsent(confirmOptions, ["focus: true"]).concat(
+        requireAbsent(confirm, ["makeKeyWindow"]),
         requireAbsent(confirmConfig, [
           "setHasShadow: false",
           "setCornerRadius: 0.0_f64",
@@ -188,7 +188,7 @@ const checks: Check[] = [
 
     return {
       windowKind: "WindowKind::PopUp",
-      windowFocus: "confirm opens focus:false before post-attach makeKeyWindow",
+      windowFocus: "confirm opens focus:false and avoids native makeKeyWindow promotion",
       nativeBackground: "confirm delegates to actions popup config",
       footerException: "footer owns no-shadow/no-corner flush strip",
     };
@@ -300,6 +300,8 @@ const checks: Check[] = [
 
     assertNoMissingOrForbidden(
       requireContains(keys, [
+        "SimulateKey: {key} - confirm popup handled={handled}",
+        "crate::confirm::consume_main_window_key_while_confirm_open(",
         "AppView::ConfirmPrompt { .. }",
         "SimulateKey: Escape - cancel ConfirmPrompt",
         "SimulateKey: Enter - confirm ConfirmPrompt",

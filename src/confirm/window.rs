@@ -725,8 +725,8 @@ pub(crate) fn open_confirm_popup_window(
             titlebar: None,
             window_background,
             // Keep the popup from becoming key before AppKit attaches it as a child.
-            // The deferred makeKeyWindow below is intentionally preserved because the
-            // confirm popup owns live Enter/Tab/Escape handling.
+            // Main-window confirm routing owns live Enter/Tab/Escape handling while
+            // AppKit keeps the attached popup visually above the parent.
             focus: false,
             show: true,
             kind: WindowKind::PopUp,
@@ -865,7 +865,7 @@ pub(crate) fn open_confirm_popup_window(
                             event = "configure_confirm_popup_applying",
                             ptr = format!("{:?}", confirm_ns_window),
                             is_dark_vibrancy,
-                            "Applying vibrancy + level + makeKey to confirm NSWindow"
+                            "Applying vibrancy + level to confirm NSWindow"
                         );
                         platform::configure_confirm_popup_window(confirm_ns_window, is_dark_vibrancy);
 
@@ -968,20 +968,13 @@ pub(crate) fn open_confirm_popup_window(
                             );
                         }
 
-                        // Always order front + make key regardless of parent attachment.
+                        // Always order front regardless of parent attachment.
                         // orderFrontRegardless is needed for the no-parent fallback and
                         // also ensures the child is visually ordered even if addChildWindow
-                        // doesn't immediately reorder on non-activating panels.
+                        // doesn't immediately reorder on non-activating panels. Do not make
+                        // this popup key: the main window routes confirm keys while AppKit
+                        // keeps the child popup above the parent.
                         let _: () = msg_send![confirm_ns_window, orderFrontRegardless];
-                        let _: () = msg_send![confirm_ns_window, makeKeyWindow];
-                        let is_key: bool = msg_send![confirm_ns_window, isKeyWindow];
-                        if !is_key {
-                            tracing::warn!(
-                                target: "script_kit::confirm",
-                                event = "confirm_window.make_key_failed",
-                                "makeKeyWindow did not make confirm popup the key window"
-                            );
-                        }
                     } else {
                         tracing::error!(
                             target: "script_kit::confirm",
