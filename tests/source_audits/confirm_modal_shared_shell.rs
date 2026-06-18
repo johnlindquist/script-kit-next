@@ -4,6 +4,30 @@ fn read(path: &str) -> String {
     fs::read_to_string(path).unwrap_or_else(|error| panic!("failed to read {path}: {error}"))
 }
 
+fn function_body(source: &str, signature: &str) -> String {
+    let start = source
+        .find(signature)
+        .unwrap_or_else(|| panic!("{signature} not found"));
+    let rest = &source[start..];
+    let open = rest.find('{').expect("function body open brace");
+    let mut depth = 0usize;
+
+    for (index, ch) in rest[open..].char_indices() {
+        match ch {
+            '{' => depth += 1,
+            '}' => {
+                depth -= 1;
+                if depth == 0 {
+                    return rest[open..open + index + 1].to_string();
+                }
+            }
+            _ => {}
+        }
+    }
+
+    panic!("unterminated function body for {signature}");
+}
+
 #[test]
 fn confirm_modal_shell_is_registered_as_shared_component() {
     let components_mod = read("src/components/mod.rs");
@@ -208,6 +232,38 @@ fn confirm_popup_native_background_matches_actions_popup_not_footer_flush_strip(
             && footer_config.contains("setHasShadow: false")
             && footer_config.contains("setCornerRadius: 0.0_f64"),
         "flush footer picker owns the no-shadow/no-corner exception instead of confirm popup"
+    );
+}
+
+/// Confirm popup must not become key during GPUI WindowOptions creation.
+///
+/// The popup still becomes key later after AppKit attaches it as a child window,
+/// because live Enter/Tab/Escape handling is owned by the confirm popup window.
+/// This audit only locks out the pre-attach focus steal that can visually demote
+/// the parent window shadow.
+#[test]
+fn confirm_popup_does_not_take_key_focus_at_window_creation() {
+    let confirm = read("src/confirm/window.rs");
+    let body = function_body(confirm.as_str(), "pub(crate) fn open_confirm_popup_window(");
+    let options = body
+        .split("let handle = cx.open_window(")
+        .nth(1)
+        .and_then(|tail| tail.split("move |_window, cx|").next())
+        .expect("confirm popup WindowOptions should be present");
+
+    assert!(
+        !options.contains("focus: true"),
+        "confirm popup must not open with focus: true; that can make the popup key before AppKit attaches it to the parent and visually demote the parent shadow"
+    );
+    assert!(
+        options.contains("focus: false"),
+        "confirm popup must explicitly open with focus: false"
+    );
+    assert!(
+        body.contains("addChildWindow:confirm_ns_window ordered:NS_WINDOW_ABOVE")
+            && body.contains("orderFrontRegardless")
+            && body.contains("makeKeyWindow"),
+        "confirm popup must keep post-attach AppKit promotion so live confirm keyboard handling still works"
     );
 }
 

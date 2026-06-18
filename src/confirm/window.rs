@@ -724,7 +724,10 @@ pub(crate) fn open_confirm_popup_window(
             window_bounds: Some(WindowBounds::Windowed(bounds)),
             titlebar: None,
             window_background,
-            focus: true,
+            // Keep the popup from becoming key before AppKit attaches it as a child.
+            // The deferred makeKeyWindow below is intentionally preserved because the
+            // confirm popup owns live Enter/Tab/Escape handling.
+            focus: false,
             show: true,
             kind: WindowKind::PopUp,
             display_id: parent_window.display_id,

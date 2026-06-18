@@ -143,6 +143,11 @@ const checks: Check[] = [
   runCheck("confirm-popup-window-kind-and-native-background", () => {
     const confirm = sources["src/confirm/window.rs"];
     const platform = sources["src/platform/secondary_window_config.rs"];
+    const confirmOptions = sliceBetween(
+      confirm,
+      "let handle = cx.open_window(",
+      "move |_window, cx|",
+    );
     const confirmConfig = sliceBetween(
       platform,
       "pub unsafe fn configure_confirm_popup_window(window: id, is_dark: bool)",
@@ -158,7 +163,11 @@ const checks: Check[] = [
       requireContains(confirm, [
         "WindowKind::PopUp",
         "platform::configure_confirm_popup_window(confirm_ns_window, is_dark_vibrancy)",
+        "addChildWindow:confirm_ns_window ordered:NS_WINDOW_ABOVE",
+        "orderFrontRegardless",
+        "makeKeyWindow",
       ]).concat(
+        requireContains(confirmOptions, ["focus: false"]),
         requireContains(confirmConfig, [
           "configure_actions_popup_window(window, is_dark)",
         ]),
@@ -169,14 +178,17 @@ const checks: Check[] = [
           "setCornerRadius: 0.0_f64",
         ]),
       ),
-      requireAbsent(confirmConfig, [
-        "setHasShadow: false",
-        "setCornerRadius: 0.0_f64",
-      ]),
+      requireAbsent(confirmOptions, ["focus: true"]).concat(
+        requireAbsent(confirmConfig, [
+          "setHasShadow: false",
+          "setCornerRadius: 0.0_f64",
+        ]),
+      ),
     );
 
     return {
       windowKind: "WindowKind::PopUp",
+      windowFocus: "confirm opens focus:false before post-attach makeKeyWindow",
       nativeBackground: "confirm delegates to actions popup config",
       footerException: "footer owns no-shadow/no-corner flush strip",
     };
@@ -191,21 +203,22 @@ const checks: Check[] = [
         "footer_button_height",
         "current_main_menu_footer_height",
         "current_main_menu_footer_metrics().item_gap_px",
-        "render_footer_hint_button_like",
-        "FooterHintButtonSpec",
+        "render_footer_hint_action_button_frame",
+        "FooterHintActionButtonFrameSpec",
+        "FooterHintButtonLayoutOverrides",
         "FooterActionSlot::Close",
         "FooterActionSlot::Run",
-        "themed_footer_button_hover_rgba",
-        "themed_footer_button_active_rgba",
+        "edge_padding_x_px",
+        "shrink_frame_to_content_px",
       ]).concat(
         requireContains(renderBlock, [
           "label: self.cancel_text.clone()",
           "key: \"Esc\".into()",
-          "slot_width_px: Some(cancel_slot_width)",
+          "slot_width_px: cancel_slot_width",
           "label: self.confirm_text.clone()",
           "key: \"↵\".into()",
-          "slot_width_px: Some(confirm_slot_width)",
-          "key_first: true",
+          "slot_width_px: confirm_slot_width",
+          "key_first: false",
           "FooterHintContentJustify::Center",
         ]),
       ),
