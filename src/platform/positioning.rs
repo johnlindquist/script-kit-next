@@ -5,6 +5,295 @@
 #[cfg(target_os = "macos")]
 use cocoa::foundation::{NSPoint, NSSize};
 
+pub fn main_window_geometry_trace_enabled() -> bool {
+    std::env::var("SCRIPT_KIT_MAIN_WINDOW_GEOM_TRACE")
+        .map(|value| {
+            let value = value.trim();
+            !value.is_empty() && value != "0" && !value.eq_ignore_ascii_case("false")
+        })
+        .unwrap_or(false)
+}
+
+#[cfg(target_os = "macos")]
+fn rect_summary(rect: NSRect) -> String {
+    format!(
+        "{:.1},{:.1},{:.1}x{:.1}",
+        rect.origin.x, rect.origin.y, rect.size.width, rect.size.height
+    )
+}
+
+#[cfg(target_os = "macos")]
+fn top_left_rect_summary(rect: NSRect, primary_height: f64) -> String {
+    format!(
+        "{:.1},{:.1},{:.1}x{:.1}",
+        rect.origin.x,
+        primary_height - rect.origin.y - rect.size.height,
+        rect.size.width,
+        rect.size.height
+    )
+}
+
+#[cfg(target_os = "macos")]
+unsafe fn ns_screen_number(screen: id) -> Option<u32> {
+    if screen == nil {
+        return None;
+    }
+    let device_description: id = msg_send![screen, deviceDescription];
+    if device_description == nil {
+        return None;
+    }
+    let key = CocoaNSString::alloc(nil).init_str("NSScreenNumber");
+    let number: id = msg_send![device_description, objectForKey:key];
+    if number == nil {
+        None
+    } else {
+        Some(msg_send![number, unsignedIntValue])
+    }
+}
+
+#[cfg(target_os = "macos")]
+unsafe fn screen_summary(screen: id, index: usize, primary_height: f64) -> String {
+    if screen == nil {
+        return format!("{index}:nil");
+    }
+    let frame: NSRect = msg_send![screen, frame];
+    let visible_frame: NSRect = msg_send![screen, visibleFrame];
+    let backing_scale: f64 = msg_send![screen, backingScaleFactor];
+    let screen_id = ns_screen_number(screen)
+        .map(|id| id.to_string())
+        .unwrap_or_else(|| "none".to_string());
+    format!(
+        "{index}:id={screen_id}:scale={backing_scale:.2}:frame_bl={}:frame_tl={}:visible_bl={}:visible_tl={}",
+        rect_summary(frame),
+        top_left_rect_summary(frame, primary_height),
+        rect_summary(visible_frame),
+        top_left_rect_summary(visible_frame, primary_height),
+    )
+}
+
+#[cfg(target_os = "macos")]
+unsafe fn all_screen_summaries(primary_height: f64) -> String {
+    let screens: id = msg_send![class!(NSScreen), screens];
+    if screens == nil {
+        return "screens=nil".to_string();
+    }
+    let count: usize = msg_send![screens, count];
+    let mut summaries = Vec::with_capacity(count);
+    for index in 0..count {
+        let screen: id = msg_send![screens, objectAtIndex:index];
+        summaries.push(screen_summary(screen, index, primary_height));
+    }
+    summaries.join("|")
+}
+
+#[cfg(target_os = "macos")]
+unsafe fn layer_summary(view: id) -> (String, String) {
+    if view == nil {
+        return ("content_view=nil".to_string(), "layer=nil".to_string());
+    }
+
+    let view_frame: NSRect = msg_send![view, frame];
+    let view_bounds: NSRect = msg_send![view, bounds];
+    let wants_layer: cocoa::base::BOOL = msg_send![view, wantsLayer];
+    let content_summary = format!(
+        "frame={}:bounds={}:wants_layer={}",
+        rect_summary(view_frame),
+        rect_summary(view_bounds),
+        wants_layer != cocoa::base::NO
+    );
+
+    let layer: id = msg_send![view, layer];
+    if layer == nil {
+        return (content_summary, "layer=nil".to_string());
+    }
+
+    let layer_bounds: NSRect = msg_send![layer, bounds];
+    let layer_frame: NSRect = msg_send![layer, frame];
+    let contents_scale: f64 = msg_send![layer, contentsScale];
+    (
+        content_summary,
+        format!(
+            "frame={}:bounds={}:contents_scale={contents_scale:.2}",
+            rect_summary(layer_frame),
+            rect_summary(layer_bounds),
+        ),
+    )
+}
+
+#[cfg(target_os = "macos")]
+unsafe fn sync_layer_tree_contents_scale(layer: id, backing_scale: f64) {
+    if layer == nil {
+        return;
+    }
+
+    let _: () = msg_send![layer, setContentsScale: backing_scale];
+    let _: () = msg_send![layer, setNeedsDisplay];
+
+    let sublayers: id = msg_send![layer, sublayers];
+    if sublayers == nil {
+        return;
+    }
+
+    let count: usize = msg_send![sublayers, count];
+    for index in 0..count {
+        let sublayer: id = msg_send![sublayers, objectAtIndex:index];
+        sync_layer_tree_contents_scale(sublayer, backing_scale);
+    }
+}
+
+#[cfg(target_os = "macos")]
+unsafe fn sync_view_layer_tree_contents_scale(view: id, backing_scale: f64) {
+    if view == nil {
+        return;
+    }
+
+    let layer: id = msg_send![view, layer];
+    sync_layer_tree_contents_scale(layer, backing_scale);
+    let _: () = msg_send![view, setNeedsDisplay: cocoa::base::YES];
+
+    let subviews: id = msg_send![view, subviews];
+    if subviews == nil {
+        return;
+    }
+
+    let count: usize = msg_send![subviews, count];
+    for index in 0..count {
+        let subview: id = msg_send![subviews, objectAtIndex:index];
+        sync_view_layer_tree_contents_scale(subview, backing_scale);
+    }
+}
+
+#[cfg(target_os = "macos")]
+unsafe fn sync_window_content_layer_scale(window: id) {
+    if window == nil {
+        return;
+    }
+
+    let backing_scale: f64 = msg_send![window, backingScaleFactor];
+    let content_view: id = msg_send![window, contentView];
+    sync_view_layer_tree_contents_scale(content_view, backing_scale);
+}
+
+#[cfg(target_os = "macos")]
+pub fn trace_main_window_native_geometry(
+    phase: &'static str,
+    cycle_id: u64,
+    target_bounds: Option<&Bounds<Pixels>>,
+    note: Option<&str>,
+) {
+    if !main_window_geometry_trace_enabled() {
+        return;
+    }
+    if require_main_thread("trace_main_window_native_geometry") {
+        return;
+    }
+
+    let primary_height = primary_screen_height().unwrap_or(0.0);
+    let target_summary = target_bounds
+        .map(|bounds| {
+            let x: f64 = bounds.origin.x.into();
+            let y: f64 = bounds.origin.y.into();
+            let width: f64 = bounds.size.width.into();
+            let height: f64 = bounds.size.height.into();
+            let flipped_y = primary_height - y - height;
+            format!("top_left={x:.1},{y:.1},{width:.1}x{height:.1}:flipped_y={flipped_y:.1}")
+        })
+        .unwrap_or_else(|| "none".to_string());
+    let note = note.unwrap_or("");
+
+    unsafe {
+        let screens = all_screen_summaries(primary_height);
+        let window = window_manager::get_main_window();
+        let Some(window) = window else {
+            tracing::info!(
+                event_type = "main_window_geometry",
+                layer = "native",
+                phase,
+                cycle_id,
+                primary_height,
+                target = %target_summary,
+                screens = %screens,
+                note,
+                "main window geometry native snapshot missing window"
+            );
+            logging::log(
+                "WINDOW_GEOM",
+                &format!("SK_GEOM cycle={cycle_id} phase={phase} native missing_window"),
+            );
+            return;
+        };
+
+        let frame: NSRect = msg_send![window, frame];
+        let content_layout_rect: NSRect = msg_send![window, contentLayoutRect];
+        let window_number: i64 = msg_send![window, windowNumber];
+        let is_visible: cocoa::base::BOOL = msg_send![window, isVisible];
+        let is_key: cocoa::base::BOOL = msg_send![window, isKeyWindow];
+        let is_main: cocoa::base::BOOL = msg_send![window, isMainWindow];
+        let backing_scale: f64 = msg_send![window, backingScaleFactor];
+        let level: i64 = msg_send![window, level];
+        let style_mask: u64 = msg_send![window, styleMask];
+        let collection_behavior: u64 = msg_send![window, collectionBehavior];
+        let occlusion_state: u64 = msg_send![window, occlusionState];
+        let alpha_value: f64 = msg_send![window, alphaValue];
+        let screen: id = msg_send![window, screen];
+        let screen_id = ns_screen_number(screen)
+            .map(|id| id.to_string())
+            .unwrap_or_else(|| "none".to_string());
+        let screen_scale = if screen == nil {
+            0.0
+        } else {
+            msg_send![screen, backingScaleFactor]
+        };
+        let content_view: id = msg_send![window, contentView];
+        let (content_view_summary, layer_summary) = layer_summary(content_view);
+
+        tracing::info!(
+            event_type = "main_window_geometry",
+            layer = "native",
+            phase,
+            cycle_id,
+            primary_height,
+            target = %target_summary,
+            screens = %screens,
+            window_number,
+            is_visible = is_visible != cocoa::base::NO,
+            is_key = is_key != cocoa::base::NO,
+            is_main = is_main != cocoa::base::NO,
+            frame_bl = %rect_summary(frame),
+            frame_tl = %top_left_rect_summary(frame, primary_height),
+            content_layout_rect = %rect_summary(content_layout_rect),
+            backing_scale,
+            screen_id = %screen_id,
+            screen_scale,
+            level,
+            style_mask,
+            collection_behavior,
+            occlusion_state,
+            alpha_value,
+            content_view = %content_view_summary,
+            layer_state = %layer_summary,
+            note,
+            "main window geometry native snapshot"
+        );
+        logging::log(
+            "WINDOW_GEOM",
+            &format!(
+                "SK_GEOM cycle={cycle_id} phase={phase} native window={window_number} screen={screen_id} scale={backing_scale:.2} frame_tl={}",
+                top_left_rect_summary(frame, primary_height),
+            ),
+        );
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn trace_main_window_native_geometry(
+    _phase: &'static str,
+    _cycle_id: u64,
+    _target_bounds: Option<&Bounds<Pixels>>,
+    _note: Option<&str>,
+) {
+}
+
 /// Move the application's main window to new bounds using WindowManager.
 /// This uses the registered main window instead of objectAtIndex:0, which
 /// avoids issues with tray icons and other system windows in the array.
@@ -74,6 +363,11 @@ pub fn move_first_window_to(x: f64, y: f64, width: f64, height: f64) {
 
         // Move the window
         let _: () = msg_send![window, setFrame:new_frame display:true animate:false];
+        // Moving a hidden GPUI-backed NSPanel between displays can update the
+        // NSWindow backing scale before the existing content layer tree follows.
+        // Sync it while still hidden so the first ordered-front frame is drawn
+        // at the destination display's scale.
+        sync_window_content_layer_scale(window);
 
         // NOTE: We no longer call makeKeyAndOrderFront here.
         // Window ordering/activation is handled by GPUI's cx.activate() and win.activate_window()
@@ -127,7 +421,13 @@ pub fn move_first_window_to_bounds(bounds: &Bounds<Pixels>) {
 /// This is used by the AI window mode toggle to restore full position+size when
 /// GPUI's `Window::resize()` only supports size changes.
 #[cfg(target_os = "macos")]
-pub fn move_window_by_view(ns_view: std::ptr::NonNull<std::ffi::c_void>, x: f64, y: f64, width: f64, height: f64) {
+pub fn move_window_by_view(
+    ns_view: std::ptr::NonNull<std::ffi::c_void>,
+    x: f64,
+    y: f64,
+    width: f64,
+    height: f64,
+) {
     if require_main_thread("move_window_by_view") {
         return;
     }
@@ -160,7 +460,13 @@ pub fn move_window_by_view(ns_view: std::ptr::NonNull<std::ffi::c_void>, x: f64,
 }
 
 #[cfg(not(target_os = "macos"))]
-pub fn move_window_by_view(_ns_view: std::ptr::NonNull<std::ffi::c_void>, _x: f64, _y: f64, _width: f64, _height: f64) {
+pub fn move_window_by_view(
+    _ns_view: std::ptr::NonNull<std::ffi::c_void>,
+    _x: f64,
+    _y: f64,
+    _width: f64,
+    _height: f64,
+) {
     // No-op on non-macOS platforms
 }
 
@@ -458,11 +764,8 @@ mod positioning_bounds_tests {
             },
         ];
 
-        let bounds = calculate_eye_line_bounds_for_snapshot(
-            window_size,
-            Some((1700.0, 200.0)),
-            &displays,
-        );
+        let bounds =
+            calculate_eye_line_bounds_for_snapshot(window_size, Some((1700.0, 200.0)), &displays);
 
         let x: f64 = bounds.origin.x.into();
         let y: f64 = bounds.origin.y.into();

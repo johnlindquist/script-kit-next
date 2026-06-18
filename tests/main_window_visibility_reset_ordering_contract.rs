@@ -6,6 +6,7 @@
 
 const LIFECYCLE_RESET: &str = include_str!("../src/app_impl/lifecycle_reset.rs");
 const WINDOW_VISIBILITY: &str = include_str!("../src/main_sections/window_visibility.rs");
+const POSITIONING: &str = include_str!("../src/platform/positioning.rs");
 const RENDER_IMPL: &str = include_str!("../src/main_sections/render_impl.rs");
 const RENDER_SCRIPT_LIST: &str = include_str!("../src/render_script_list/mod.rs");
 
@@ -193,6 +194,105 @@ fn show_path_prepares_script_list_before_visible_true() {
     assert!(
         visible < native_show,
         "visible=true still precedes the native reveal/focus phase"
+    );
+}
+
+#[test]
+fn show_path_clamps_saved_main_position_before_native_move() {
+    let body = function_body(WINDOW_VISIBILITY, "fn show_main_window_helper");
+    let saved_restore = body
+        .find("window_state::get_main_position_for_mouse_display")
+        .expect("show helper must restore saved per-display main positions");
+    let restored_bounds = body
+        .find("let restored_bounds = gpui::Bounds")
+        .expect("show helper must rebuild saved bounds with current show size");
+    let clamp = body
+        .find("clamp_restored_main_window_bounds_to_visible_area")
+        .expect("show helper must clamp restored saved bounds to the display visible area");
+    let native_move = body
+        .find("platform::move_first_window_to_bounds(&bounds);")
+        .expect("show helper must move native main window to computed bounds");
+
+    assert!(
+        saved_restore < restored_bounds && restored_bounds < clamp && clamp < native_move,
+        "saved main-window position must be resized and visible-area clamped before native move"
+    );
+
+    let clamp_body = function_body(
+        WINDOW_VISIBILITY,
+        "fn clamp_restored_main_window_bounds_to_visible_area",
+    );
+    assert!(
+        clamp_body.contains("platform::clamp_to_visible(bounds, &candidate.visible_area)"),
+        "saved main-window restores must use the selected display's visible area"
+    );
+}
+
+#[test]
+fn show_path_resyncs_gpui_bounds_after_native_show_move() {
+    let show_body = function_body(WINDOW_VISIBILITY, "fn show_main_window_helper");
+    let native_move = show_body
+        .find("platform::move_first_window_to_bounds(&bounds);")
+        .expect("show helper must move native window before reveal");
+    let pre_reveal_resync = show_body
+        .find("before_pre_reveal_bounds_changed")
+        .expect("show helper must mark GPUI bounds dirty while the moved window is still hidden");
+    let native_show = show_body
+        .find("platform::show_main_window_without_activation_with_geometry_trace")
+        .expect("show helper must perform native reveal");
+    let native_back = show_body
+        .find("platform::send_ai_window_to_back();")
+        .expect("show helper must complete native post-show window ordering");
+    let post_reveal_resync = show_body
+        .rfind("resync_main_window_gpui_bounds_after_native_show_move_for_trace")
+        .expect("show helper should keep a post-reveal GPUI bounds snapshot for verification");
+    let automation = show_body
+        .find("sync_main_automation_window(None, true, true);")
+        .expect("show helper must sync automation after focus restore");
+
+    assert!(
+        native_move < pre_reveal_resync && pre_reveal_resync < native_show,
+        "GPUI bounds must be marked dirty after the native move and before orderFront reveals the panel"
+    );
+    assert!(
+        native_show < native_back && native_back < post_reveal_resync && post_reveal_resync < automation,
+        "post-reveal GPUI bounds snapshot must remain after native show ordering and before automation sync"
+    );
+
+    let resync_body = function_body(
+        WINDOW_VISIBILITY,
+        "fn resync_main_window_gpui_bounds_after_native_show_move_with_phases",
+    );
+    assert!(
+        resync_body.contains("win.bounds_changed(cx);"),
+        "resync helper must force GPUI to reread platform bounds"
+    );
+}
+
+#[test]
+fn native_move_syncs_content_layer_scale_before_reveal() {
+    let move_body = function_body(POSITIONING, "pub fn move_first_window_to");
+    let set_frame = move_body
+        .find("setFrame:new_frame display:true animate:false")
+        .expect("native move must set the NSWindow frame");
+    let sync_scale = move_body
+        .find("sync_window_content_layer_scale(window);")
+        .expect("native move must sync content layer scale after moving displays");
+    let verify = move_body
+        .find("Window moved: actual=")
+        .expect("native move should log the verified final frame");
+
+    assert!(
+        set_frame < sync_scale && sync_scale < verify,
+        "content layer scale must be synced after the native move and before the moved window can be revealed"
+    );
+
+    let sync_body = function_body(POSITIONING, "unsafe fn sync_window_content_layer_scale");
+    assert!(
+        sync_body.contains("backingScaleFactor")
+            && sync_body.contains("contentView")
+            && sync_body.contains("sync_view_layer_tree_contents_scale"),
+        "scale sync must use the destination NSWindow backing scale and apply it to the content view tree"
     );
 }
 

@@ -5,6 +5,13 @@
 // scattered across hotkey handler, tray menu, stdin commands, and fallback.
 // All show/hide paths should use these helpers for consistency.
 
+static MAIN_WINDOW_GEOMETRY_TRACE_CYCLE: std::sync::atomic::AtomicU64 =
+    std::sync::atomic::AtomicU64::new(0);
+
+fn next_main_window_geometry_trace_cycle_id() -> u64 {
+    MAIN_WINDOW_GEOMETRY_TRACE_CYCLE.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1
+}
+
 fn automation_window_bounds_from_gpui(
     bounds: gpui::Bounds<gpui::Pixels>,
 ) -> crate::protocol::AutomationWindowBounds {
@@ -75,6 +82,150 @@ fn sync_main_automation_window(
     });
 }
 
+fn clamp_restored_main_window_bounds_to_visible_area(
+    bounds: gpui::Bounds<gpui::Pixels>,
+    display: &crate::windows::DisplayBounds,
+    visible_displays: &[platform::VisibleDisplayBounds],
+) -> gpui::Bounds<gpui::Pixels> {
+    let display_key = window_state::display_key(display);
+    visible_displays
+        .iter()
+        .find(|candidate| window_state::display_key(&candidate.frame) == display_key)
+        .map(|candidate| platform::clamp_to_visible(bounds, &candidate.visible_area))
+        .unwrap_or(bounds)
+}
+
+fn resync_main_window_gpui_bounds_after_native_show_move(window: WindowHandle<Root>, cx: &mut App) {
+    resync_main_window_gpui_bounds_after_native_show_move_for_trace(window, cx, None);
+}
+
+fn gpui_bounds_summary(bounds: gpui::Bounds<gpui::Pixels>) -> String {
+    let x: f64 = bounds.origin.x.into();
+    let y: f64 = bounds.origin.y.into();
+    let width: f64 = bounds.size.width.into();
+    let height: f64 = bounds.size.height.into();
+    format!("{x:.1},{y:.1},{width:.1}x{height:.1}")
+}
+
+fn gpui_size_summary(size: gpui::Size<gpui::Pixels>) -> String {
+    let width: f64 = size.width.into();
+    let height: f64 = size.height.into();
+    format!("{width:.1}x{height:.1}")
+}
+
+fn trace_main_window_gpui_geometry(
+    phase: &'static str,
+    cycle_id: u64,
+    window: &gpui::Window,
+    cx: &App,
+) {
+    if !platform::main_window_geometry_trace_enabled() {
+        return;
+    }
+    let bounds = window.bounds();
+    let viewport_size = window.viewport_size();
+    let display_id = window
+        .display(cx)
+        .map(|display| format!("{:?}", display.id()))
+        .unwrap_or_else(|| "none".to_string());
+    tracing::info!(
+        event_type = "main_window_geometry",
+        layer = "gpui",
+        phase,
+        cycle_id,
+        bounds = %gpui_bounds_summary(bounds),
+        viewport_size = %gpui_size_summary(viewport_size),
+        scale_factor = window.scale_factor(),
+        display_id = %display_id,
+        "main window geometry GPUI snapshot"
+    );
+    logging::log(
+        "WINDOW_GEOM",
+        &format!(
+            "SK_GEOM cycle={cycle_id} phase={phase} gpui display={display_id} scale={:.2} bounds={}",
+            window.scale_factor(),
+            gpui_bounds_summary(bounds),
+        ),
+    );
+}
+
+fn resync_main_window_gpui_bounds_after_native_show_move_for_trace(
+    window: WindowHandle<Root>,
+    cx: &mut App,
+    cycle_id: Option<u64>,
+) {
+    resync_main_window_gpui_bounds_after_native_show_move_with_phases(
+        window,
+        cx,
+        cycle_id,
+        "before_bounds_changed",
+        "after_bounds_changed",
+    );
+}
+
+fn resync_main_window_gpui_bounds_after_native_show_move_with_phases(
+    window: WindowHandle<Root>,
+    cx: &mut App,
+    cycle_id: Option<u64>,
+    before_phase: &'static str,
+    after_phase: &'static str,
+) {
+    if window
+        .update(cx, |_root, win, cx| {
+            if let Some(cycle_id) = cycle_id {
+                trace_main_window_gpui_geometry(before_phase, cycle_id, win, cx);
+            }
+            // `move_first_window_to_bounds` positions the native NSWindow
+            // directly. GPUI's cached viewport and display scale can otherwise
+            // remain on the previous display. Run this while the window is
+            // still hidden so the first visible frame cannot re-present the
+            // previous display's drawable before GPUI has been marked dirty.
+            win.bounds_changed(cx);
+            if let Some(cycle_id) = cycle_id {
+                trace_main_window_gpui_geometry(after_phase, cycle_id, win, cx);
+            }
+        })
+        .is_err()
+    {
+        logging::log(
+            "VISIBILITY",
+            "Could not resync GPUI bounds after native main-window show move",
+        );
+    }
+}
+
+fn trace_main_window_decision(
+    phase: &'static str,
+    cycle_id: u64,
+    route: &'static str,
+    bounds: Option<gpui::Bounds<gpui::Pixels>>,
+    detail: String,
+) {
+    if !platform::main_window_geometry_trace_enabled() {
+        return;
+    }
+    let bounds_summary = bounds
+        .map(gpui_bounds_summary)
+        .unwrap_or_else(|| "none".to_string());
+    tracing::info!(
+        event_type = "main_window_geometry",
+        layer = "decision",
+        phase,
+        cycle_id,
+        route,
+        bounds = %bounds_summary,
+        visibility_generation = script_kit_gpui::main_window_visibility_generation(),
+        detail = %detail,
+        "main window geometry decision"
+    );
+    logging::log(
+        "WINDOW_GEOM",
+        &format!(
+            "SK_GEOM cycle={cycle_id} phase={phase} decision route={route} bounds={bounds_summary} {detail}"
+        ),
+    );
+}
+
 /// Show the main window with proper positioning, panel configuration, and focus.
 ///
 /// This is the canonical way to show the main window. It:
@@ -96,6 +247,13 @@ fn show_main_window_helper(
     app_entity: Entity<ScriptListApp>,
     cx: &mut App,
 ) {
+    let geometry_cycle_id = next_main_window_geometry_trace_cycle_id();
+    platform::trace_main_window_native_geometry(
+        "show_helper_start",
+        geometry_cycle_id,
+        None,
+        Some("show_main_window_helper"),
+    );
     logging::bench_log("show_main_window_helper_start");
     logging::log("VISIBILITY", "show_main_window_helper called");
 
@@ -224,8 +382,12 @@ fn show_main_window_helper(
                     &format!(
                         "Restoring saved position for display {}: saved=({:.0}, {:.0}, {:.0}x{:.0}), target_width={:.0}, width_delta={:.1}",
                         window_state::display_key(&display),
-                        saved.x, saved.y, saved.width, saved.height,
-                        target_width, width_delta
+                        saved.x,
+                        saved.y,
+                        saved.width,
+                        saved.height,
+                        target_width,
+                        width_delta
                     ),
                 );
                 // Re-center horizontally when the target width differs from the saved width.
@@ -241,34 +403,127 @@ fn show_main_window_helper(
                         adjusted_x - saved.x
                     ),
                 );
-                // Use saved position but with current window height (may have changed)
-                gpui::Bounds {
+                // Use saved position with current window size, clamped to the
+                // selected display's visible area.
+                let restored_bounds = gpui::Bounds {
                     origin: gpui::point(px(adjusted_x as f32), px(saved.y as f32)),
                     size: window_size,
+                };
+                let clamped_bounds = clamp_restored_main_window_bounds_to_visible_area(
+                    restored_bounds,
+                    &display,
+                    &visible_displays,
+                );
+                trace_main_window_decision(
+                    "show_bounds_decided",
+                    geometry_cycle_id,
+                    "saved_position",
+                    Some(clamped_bounds),
+                    format!(
+                        "mouse={mouse_x:.1},{mouse_y:.1} display_key={} saved={:.1},{:.1},{:.1}x{:.1} restored={} clamped={}",
+                        window_state::display_key(&display),
+                        saved.x,
+                        saved.y,
+                        saved.width,
+                        saved.height,
+                        gpui_bounds_summary(restored_bounds),
+                        gpui_bounds_summary(clamped_bounds),
+                    ),
+                );
+                if clamped_bounds != restored_bounds {
+                    let before_x: f64 = restored_bounds.origin.x.into();
+                    let before_y: f64 = restored_bounds.origin.y.into();
+                    let before_width: f64 = restored_bounds.size.width.into();
+                    let before_height: f64 = restored_bounds.size.height.into();
+                    let after_x: f64 = clamped_bounds.origin.x.into();
+                    let after_y: f64 = clamped_bounds.origin.y.into();
+                    let after_width: f64 = clamped_bounds.size.width.into();
+                    let after_height: f64 = clamped_bounds.size.height.into();
+                    logging::log(
+                        "POSITION_TRACE",
+                        &format!(
+                            "Clamped saved main position: ({before_x:.0}, {before_y:.0}, {before_width:.0}x{before_height:.0}) -> ({after_x:.0}, {after_y:.0}, {after_width:.0}x{after_height:.0})",
+                        ),
+                    );
                 }
+                clamped_bounds
             } else {
                 logging::log(
                     "VISIBILITY",
                     "Saved position no longer visible, using eye-line",
                 );
-                platform::calculate_eye_line_bounds_for_snapshot(
+                let bounds = platform::calculate_eye_line_bounds_for_snapshot(
                     window_size,
                     mouse,
                     &visible_displays,
-                )
+                );
+                trace_main_window_decision(
+                    "show_bounds_decided",
+                    geometry_cycle_id,
+                    "saved_not_visible_eye_line",
+                    Some(bounds),
+                    format!("mouse={mouse_x:.1},{mouse_y:.1}"),
+                );
+                bounds
             }
         } else {
             logging::log(
                 "VISIBILITY",
                 "No saved position for this display, using eye-line",
             );
-            platform::calculate_eye_line_bounds_for_snapshot(window_size, mouse, &visible_displays)
+            let bounds = platform::calculate_eye_line_bounds_for_snapshot(
+                window_size,
+                mouse,
+                &visible_displays,
+            );
+            trace_main_window_decision(
+                "show_bounds_decided",
+                geometry_cycle_id,
+                "no_saved_eye_line",
+                Some(bounds),
+                format!("mouse={mouse_x:.1},{mouse_y:.1}"),
+            );
+            bounds
         }
     } else {
         logging::log("VISIBILITY", "Could not get mouse position, using eye-line");
-        platform::calculate_eye_line_bounds_for_snapshot(window_size, mouse, &visible_displays)
+        let bounds =
+            platform::calculate_eye_line_bounds_for_snapshot(window_size, mouse, &visible_displays);
+        trace_main_window_decision(
+            "show_bounds_decided",
+            geometry_cycle_id,
+            "no_mouse_eye_line",
+            Some(bounds),
+            "mouse=none".to_string(),
+        );
+        bounds
     };
+    platform::trace_main_window_native_geometry(
+        "before_set_frame",
+        geometry_cycle_id,
+        Some(&bounds),
+        Some("show_main_window_helper"),
+    );
     platform::move_first_window_to_bounds(&bounds);
+    platform::trace_main_window_native_geometry(
+        "after_set_frame",
+        geometry_cycle_id,
+        Some(&bounds),
+        Some("show_main_window_helper"),
+    );
+    resync_main_window_gpui_bounds_after_native_show_move_with_phases(
+        window,
+        cx,
+        Some(geometry_cycle_id),
+        "before_pre_reveal_bounds_changed",
+        "after_pre_reveal_bounds_changed",
+    );
+    platform::trace_main_window_native_geometry(
+        "after_pre_reveal_bounds_changed",
+        geometry_cycle_id,
+        None,
+        Some("show_main_window_helper"),
+    );
 
     // 7. Configure as floating panel (first time only).
     //    Oracle-Session `window-activation-invariants-guard` PR1: the helper
@@ -294,13 +549,36 @@ fn show_main_window_helper(
 
             // Platform calls — trigger macOS delegate callbacks.
             // Safe here: no AppCell borrow is active.
-            platform::show_main_window_without_activation();
+            if platform::main_window_geometry_trace_enabled() {
+                platform::show_main_window_without_activation_with_geometry_trace(
+                    geometry_cycle_id,
+                );
+            } else {
+                platform::show_main_window_without_activation();
+            }
             platform::send_ai_window_to_back();
+            platform::trace_main_window_native_geometry(
+                "after_send_ai_back",
+                geometry_cycle_id,
+                None,
+                None,
+            );
 
             logging::bench_log("window_activated");
 
             // GPUI state changes — no macOS callbacks, safe inside borrow.
             cx.update(move |cx: &mut gpui::App| {
+                resync_main_window_gpui_bounds_after_native_show_move_for_trace(
+                    window,
+                    cx,
+                    Some(geometry_cycle_id),
+                );
+                platform::trace_main_window_native_geometry(
+                    "after_bounds_changed",
+                    geometry_cycle_id,
+                    None,
+                    None,
+                );
                 app_entity.update(cx, |view, ctx| {
                     let agent_chat_focus_handle = match &view.current_view {
                         AppView::AgentChatView { entity } => {
@@ -336,6 +614,12 @@ fn show_main_window_helper(
                     view.maybe_show_tap_dismiss_retired_hint(ctx);
                     ctx.notify();
                 });
+                platform::trace_main_window_native_geometry(
+                    "after_focus_notify",
+                    geometry_cycle_id,
+                    None,
+                    None,
+                );
 
                 logging::log("VISIBILITY", "Main window shown and focused");
                 sync_main_automation_window(None, true, true);
@@ -358,6 +642,13 @@ fn show_main_window_helper(
 /// * `app_entity` - The ScriptListApp entity
 /// * `cx` - The application context
 fn hide_main_window_helper(app_entity: Entity<ScriptListApp>, cx: &mut App) {
+    let geometry_cycle_id = next_main_window_geometry_trace_cycle_id();
+    platform::trace_main_window_native_geometry(
+        "before_hide_save",
+        geometry_cycle_id,
+        None,
+        Some("hide_main_window_helper"),
+    );
     logging::log("VISIBILITY", "hide_main_window_helper called");
 
     // 1. Save window position for the current display BEFORE hiding
@@ -466,7 +757,11 @@ fn hide_main_window_helper(app_entity: Entity<ScriptListApp>, cx: &mut App) {
             secondary_windows_open
         ),
     );
-    platform::defer_hide_main_window(cx);
+    if platform::main_window_geometry_trace_enabled() {
+        platform::defer_hide_main_window_with_geometry_trace(cx, geometry_cycle_id);
+    } else {
+        platform::defer_hide_main_window(cx);
+    }
     app_entity.update(cx, |view, ctx| {
         view.defer_reset_to_script_list_after_main_window_hidden(
             ctx,
@@ -474,6 +769,12 @@ fn hide_main_window_helper(app_entity: Entity<ScriptListApp>, cx: &mut App) {
             reset_mini_bounds_after_hidden_reset,
         );
     });
+    platform::trace_main_window_native_geometry(
+        "after_hidden_reset_scheduled",
+        geometry_cycle_id,
+        None,
+        Some("hide_main_window_helper"),
+    );
 
     logging::log("VISIBILITY", "Main window hidden");
 }

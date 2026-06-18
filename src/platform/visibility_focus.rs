@@ -29,7 +29,7 @@ use cocoa::foundation::NSRect;
 ///
 /// No-op on non-macOS platforms.
 #[cfg(target_os = "macos")]
-fn hide_main_window() {
+fn hide_main_window_with_geometry_trace(cycle_id: Option<u64>) {
     if require_main_thread("hide_main_window") {
         return;
     }
@@ -48,12 +48,25 @@ fn hide_main_window() {
             }
         };
 
+        if let Some(cycle_id) = cycle_id {
+            trace_main_window_native_geometry("before_order_out", cycle_id, None, None);
+        }
+
         // orderOut: removes the window from the screen without affecting other windows
         // nil sender means the action is programmatic, not from a menu item
         let _: () = msg_send![window, orderOut:nil];
 
+        if let Some(cycle_id) = cycle_id {
+            trace_main_window_native_geometry("after_order_out", cycle_id, None, None);
+        }
+
         logging::log("PANEL", "Main window hidden via orderOut:");
     }
+}
+
+#[cfg(target_os = "macos")]
+fn hide_main_window() {
+    hide_main_window_with_geometry_trace(None);
 }
 
 #[cfg(not(target_os = "macos"))]
@@ -72,10 +85,7 @@ pub fn install_main_window_space_change_hide_observer() {
     }
 
     let Ok(mut observer_slot) = MAIN_SPACE_CHANGE_OBSERVER.lock() else {
-        logging::log(
-            "PANEL",
-            "Failed to lock main Space-change observer slot",
-        );
+        logging::log("PANEL", "Failed to lock main Space-change observer slot");
         return;
     };
     if observer_slot.is_some() {
@@ -85,7 +95,8 @@ pub fn install_main_window_space_change_hide_observer() {
     unsafe {
         let workspace: id = msg_send![class!(NSWorkspace), sharedWorkspace];
         let center: id = msg_send![workspace, notificationCenter];
-        let name = CocoaNSString::alloc(nil).init_str("NSWorkspaceActiveSpaceDidChangeNotification");
+        let name =
+            CocoaNSString::alloc(nil).init_str("NSWorkspaceActiveSpaceDidChangeNotification");
         let queue: id = msg_send![class!(NSOperationQueue), mainQueue];
         let block = block::ConcreteBlock::new(|_notification: id| {
             hide_main_window_for_active_space_change();
@@ -147,6 +158,16 @@ pub fn defer_hide_main_window(cx: &mut gpui::App) {
     .detach();
 }
 
+pub fn defer_hide_main_window_with_geometry_trace(cx: &mut gpui::App, cycle_id: u64) {
+    cx.spawn(async move |_cx: &mut gpui::AsyncApp| {
+        #[cfg(target_os = "macos")]
+        hide_main_window_with_geometry_trace(Some(cycle_id));
+        #[cfg(not(target_os = "macos"))]
+        hide_main_window();
+    })
+    .detach();
+}
+
 /// Show the main window WITHOUT activating the application.
 ///
 /// This is critical for floating panel behavior - the window should appear
@@ -164,7 +185,7 @@ pub fn defer_hide_main_window(cx: &mut gpui::App) {
 ///
 /// No-op on non-macOS platforms.
 #[cfg(target_os = "macos")]
-pub fn show_main_window_without_activation() {
+fn show_main_window_without_activation_impl(cycle_id: Option<u64>) {
     if require_main_thread("show_main_window_without_activation") {
         return;
     }
@@ -191,13 +212,25 @@ pub fn show_main_window_without_activation() {
             PanelInvariantPhase::PreShow,
         );
 
+        if let Some(cycle_id) = cycle_id {
+            trace_main_window_native_geometry("before_order_front", cycle_id, None, None);
+        }
+
         // orderFrontRegardless brings window to front without activating the app
         let _: () = msg_send![window, orderFrontRegardless];
+
+        if let Some(cycle_id) = cycle_id {
+            trace_main_window_native_geometry("after_order_front", cycle_id, None, None);
+        }
 
         // Make the window key so it can receive keyboard input
         // For NSPanel with NonactivatingPanel style (PopUp windows), this works
         // without activating the application
         let _: () = msg_send![window, makeKeyWindow];
+
+        if let Some(cycle_id) = cycle_id {
+            trace_main_window_native_geometry("after_make_key", cycle_id, None, None);
+        }
 
         let _ = assert_main_panel_invariants(
             "visibility_focus::show_main_window_without_activation/post_make_key",
@@ -211,12 +244,27 @@ pub fn show_main_window_without_activation() {
     }
 }
 
+#[cfg(target_os = "macos")]
+pub fn show_main_window_without_activation() {
+    show_main_window_without_activation_impl(None);
+}
+
+#[cfg(target_os = "macos")]
+pub fn show_main_window_without_activation_with_geometry_trace(cycle_id: u64) {
+    show_main_window_without_activation_impl(Some(cycle_id));
+}
+
 #[cfg(not(target_os = "macos"))]
 pub fn show_main_window_without_activation() {
     logging::log(
         "PANEL",
         "show_main_window_without_activation: Not implemented on this platform",
     );
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn show_main_window_without_activation_with_geometry_trace(_cycle_id: u64) {
+    show_main_window_without_activation();
 }
 
 /// Show the main window WITHOUT activating the app and WITHOUT making it key.
@@ -319,7 +367,10 @@ pub fn conceal_main_window() {
 
         let _: () = msg_send![window, orderOut:nil];
 
-        logging::log("PANEL", "Main window concealed via orderOut: (state preserved)");
+        logging::log(
+            "PANEL",
+            "Main window concealed via orderOut: (state preserved)",
+        );
     }
 }
 
