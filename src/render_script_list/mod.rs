@@ -749,6 +749,68 @@ fn render_spine_projection_row(
 }
 
 impl ScriptListApp {
+    fn should_preempt_empty_script_list_escape_close(
+        &self,
+        event: &gpui::KeyDownEvent,
+        cx: &gpui::App,
+    ) -> bool {
+        if !sk_is_key_escape(event.keystroke.key.as_str()) {
+            return false;
+        }
+
+        let modifiers = &event.keystroke.modifiers;
+        if modifiers.platform || modifiers.shift || modifiers.alt || modifiers.control {
+            return false;
+        }
+
+        if !self.can_preserve_hide_script_list_on_passive_focus_loss()
+            || self.opened_from_main_menu
+            || self.show_actions_popup
+            || crate::actions::is_actions_window_open()
+            || self.menu_syntax_object_selector_owns_main_keyboard()
+            || self.menu_syntax_trigger_picker_owns_main_keyboard()
+            || self.script_list_escape_should_clear_visible_filter(cx)
+        {
+            return false;
+        }
+
+        if !self.action_shortcuts.is_empty() {
+            let key_combo = shortcuts::keystroke_to_shortcut(
+                event.keystroke.key.as_str(),
+                &event.keystroke.modifiers,
+            );
+            if self.action_shortcuts.contains_key(&key_combo) {
+                return false;
+            }
+        }
+
+        true
+    }
+
+    fn preempt_empty_script_list_escape_close(
+        &mut self,
+        event: &gpui::KeyDownEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        if !self.should_preempt_empty_script_list_escape_close(event, cx) {
+            return false;
+        }
+
+        // The focused gpui_component input turns any keydown into a blink pause,
+        // which forces the caret visible and schedules a repaint. For the empty
+        // launcher Escape-close case, handle Escape in the capture phase so the
+        // input never sees the key and cannot draw a last visible caret frame
+        // before the safe deferred native hide runs.
+        logging::log(
+            "KEY",
+            "Capture Escape - close empty ScriptList before input cursor blink pause",
+        );
+        self.clear_hidden_script_list_filter_before_escape_close(window, cx);
+        self.close_and_reset_window(cx);
+        true
+    }
+
     fn render_script_list(&mut self, cx: &mut Context<Self>) -> AnyElement {
         let render_list_start = std::time::Instant::now();
         let filter_for_log = self.filter_text.clone();
@@ -1925,6 +1987,11 @@ impl ScriptListApp {
             .font_family(font_family)
             .key_context("script_list")
             .track_focus(&self.focus_handle)
+            .capture_key_down(cx.listener(|this, event: &gpui::KeyDownEvent, window, cx| {
+                if this.preempt_empty_script_list_escape_close(event, window, cx) {
+                    cx.stop_propagation();
+                }
+            }))
             // GPUI auto-transfers keyboard focus to this root's tracked handle on
             // any mouse down that no deeper focusable claimed (see
             // paint_mouse_listeners in vendor/gpui/src/elements/div.rs). Dragging
