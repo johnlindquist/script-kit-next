@@ -89,10 +89,10 @@ fn startup_forwarder_does_not_depend_on_process_substitution() {
 
     assert!(
         forwarder_block.contains("while [ -p \"$input_fifo\" ]; do")
-            && forwarder_block.contains("cat \"$input_fifo\"")
+            && forwarder_block.contains("IFS= read -r line <&3")
             && forwarder_block.contains("done > \"$pipe_path\""),
         "session.sh's background forwarder must own the primary pipe writer \
-         while repeatedly reopening the input FIFO. A process-substitution \
+         while reading the input FIFO. A process-substitution \
          reader can die as the start shell exits, closing the app stdin pipe \
          immediately after startup."
     );
@@ -164,7 +164,7 @@ fn start_sends_startup_keepalive_before_waiting_for_ready() {
          not send a JSON command immediately."
     );
 
-    let launch_marker = "nohup \"$BINARY\" < \"$pipe_path\" > \"$log_path\" 2>&1 &";
+    let launch_marker = "python3 \"${PROJECT_ROOT}/scripts/agentic/session-supervisor.py\"";
     let keepalive_marker = "if send_startup_keepalive \"$input_fifo\" \"$app_pid\"; then";
     let wait_marker =
         "if wait_for_ready_log \"$log_path\" \"$app_pid\" \"$READY_TIMEOUT_MS\"; then";

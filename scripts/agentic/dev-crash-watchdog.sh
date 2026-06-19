@@ -79,6 +79,38 @@ for s in syms:
 PY
 }
 
+exit_receipt_for_pid() {
+    local expected_pid="$1"
+    local receipt="${SESSION_DIR}/app-exit.json"
+    [ -f "$receipt" ] || return 1
+    RECEIPT="$receipt" EXPECTED_PID="$expected_pid" python3 - <<'PY'
+import json, os, sys
+try:
+    data = json.load(open(os.environ["RECEIPT"]))
+except Exception:
+    raise SystemExit(1)
+if str(data.get("pid")) != str(os.environ["EXPECTED_PID"]):
+    raise SystemExit(1)
+print(json.dumps(data, separators=(",", ":")))
+PY
+}
+
+exit_receipt_is_clean() {
+    RECEIPT_JSON="$1" python3 - <<'PY'
+import json, os
+data = json.loads(os.environ["RECEIPT_JSON"])
+raise SystemExit(0 if data.get("cleanExit") is True else 1)
+PY
+}
+
+exit_receipt_status() {
+    RECEIPT_JSON="$1" python3 - <<'PY'
+import json, os
+data = json.loads(os.environ["RECEIPT_JSON"])
+print(data.get("exitStatus", "unknown"))
+PY
+}
+
 relaunch() {
     if bash "$RELAUNCH_SCRIPT" "$SESSION_NAME" >/dev/null 2>&1; then
         echo "[watchdog] session '${SESSION_NAME}' relaunched" >&2
@@ -119,6 +151,14 @@ while true; do
     fi
     [ "$gave_up" = "1" ] && continue
 
+    receipt="$(exit_receipt_for_pid "$watched_pid" 2>/dev/null || true)"
+    if [ -n "$receipt" ] && exit_receipt_is_clean "$receipt"; then
+        echo "[watchdog] session '${SESSION_NAME}' app exited cleanly pid=${watched_pid}; not relaunching" >&2
+        watched_pid=""
+        crash_count=0
+        continue
+    fi
+
     # Abnormal death. macOS can take several seconds to write the .ips report.
     report=""
     for _ in 1 2 3 4 5 6; do
@@ -135,7 +175,13 @@ while true; do
         crash_bin_mtime="$current_bin"
     fi
 
-    lines=("APP CRASHED (pid ${watched_pid}, crash #${crash_count} for this binary)")
+    if [ -n "$report" ]; then
+        lines=("APP CRASHED (pid ${watched_pid}, crash #${crash_count} for this binary)")
+    elif [ -n "$receipt" ]; then
+        lines=("APP EXITED ABNORMALLY (pid ${watched_pid}, crash #${crash_count} for this binary, exit=$(exit_receipt_status "$receipt"))")
+    else
+        lines=("APP DIED WITHOUT EXIT RECEIPT (pid ${watched_pid}, crash #${crash_count} for this binary)")
+    fi
     if [ -n "$report" ]; then
         lines+=("report: ${report}")
         while IFS= read -r sig_line; do

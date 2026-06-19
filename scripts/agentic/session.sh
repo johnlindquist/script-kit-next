@@ -297,6 +297,7 @@ cmd_start() {
   local protocol_responses_path="${sdir}/protocol-responses.ndjson"
   local generation_path="${sdir}/generation"
   local lifecycle_path="${sdir}/lifecycle.ndjson"
+  local exit_receipt_path="${sdir}/app-exit.json"
   local keep_actions_window_open_requested=false
   if [ "${SCRIPT_KIT_AGENTIC_KEEP_ACTIONS_WINDOW_OPEN:-}" = "1" ]; then
     keep_actions_window_open_requested=true
@@ -381,8 +382,9 @@ cmd_start() {
   printf '%s\n' "$BINARY" > "${sdir}/binary"
   local pipe_path="${sdir}/pipe"
   local pid_path="${sdir}/pid"
+  local supervisor_pid_path="${sdir}/supervisor_pid"
 
-  rm -f "$pipe_path"
+  rm -f "$pipe_path" "$exit_receipt_path" "$supervisor_pid_path"
   mkfifo "$pipe_path"
 
   # Agents send commands by appending to the input FIFO via `session.sh send`.
@@ -429,12 +431,6 @@ cmd_start() {
   # write end, otherwise the shell can deadlock opening the read end.
   local session_generation
   session_generation="$(tr -d '\n' < "$generation_path")"
-  local launch_prefix=()
-  if command -v python3 >/dev/null 2>&1; then
-    launch_prefix=(python3 -c 'import os, sys; os.setsid(); os.execvpe(sys.argv[1], sys.argv[1:], os.environ)' "$BINARY")
-  else
-    launch_prefix=("$BINARY")
-  fi
   local keep_actions_window_open_env=0
   if [ "$keep_actions_window_open_requested" = true ]; then
     keep_actions_window_open_env=1
@@ -449,9 +445,43 @@ cmd_start() {
     SCRIPT_KIT_AGENTIC_PROTOCOL_RESPONSES_PATH="$protocol_responses_path" \
     SCRIPT_KIT_AGENTIC_SESSION_NAME="$name" \
     SCRIPT_KIT_AGENTIC_SESSION_GENERATION="$session_generation" \
-    "${launch_prefix[@]}" < "$pipe_path" > "$log_path" 2>&1 &
-  local app_pid=$!
-  echo "$app_pid" > "$pid_path"
+    python3 "${PROJECT_ROOT}/scripts/agentic/session-supervisor.py" \
+      --binary "$BINARY" \
+      --stdin-path "$pipe_path" \
+      --stdout-path "$log_path" \
+      --session-dir "$sdir" \
+      --session-name "$name" \
+      --generation "$session_generation" \
+      </dev/null >/dev/null 2>&1 &
+  local supervisor_pid=$!
+  echo "$supervisor_pid" > "$supervisor_pid_path"
+  local app_pid=""
+  local pid_wait_ms=0
+  while [ "$pid_wait_ms" -lt 3000 ]; do
+    if [ -s "$pid_path" ]; then
+      app_pid="$(cat "$pid_path" 2>/dev/null || true)"
+      if [ -n "$app_pid" ] && kill -0 "$app_pid" 2>/dev/null; then
+        break
+      fi
+    fi
+    if ! kill -0 "$supervisor_pid" 2>/dev/null; then
+      kill "$fwd_pid" 2>/dev/null || true
+      wait "$fwd_pid" 2>/dev/null || true
+      json_error "start_failed" "Session supervisor exited before writing app pid. Check ${log_path}"
+      rm -rf "${sdir}"
+      return 1
+    fi
+    sleep 0.025
+    pid_wait_ms=$((pid_wait_ms + 25))
+  done
+  if [ -z "$app_pid" ] || ! kill -0 "$app_pid" 2>/dev/null; then
+    kill "$supervisor_pid" 2>/dev/null || true
+    kill "$fwd_pid" 2>/dev/null || true
+    wait "$fwd_pid" 2>/dev/null || true
+    json_error "start_failed" "Session supervisor did not produce a live app pid. Check ${log_path}"
+    rm -rf "${sdir}"
+    return 1
+  fi
   local startup_keepalive=false
   if send_startup_keepalive "$input_fifo" "$app_pid"; then
     startup_keepalive=true
@@ -471,6 +501,7 @@ cmd_start() {
     ready_wait_ms="$READY_WAIT_MS_RESULT"
     ready_marker="$READY_MARKER_RESULT"
     if [ "$ready_status" -eq 2 ]; then
+      kill "$supervisor_pid" 2>/dev/null || true
       kill "$fwd_pid" 2>/dev/null || true
       wait "$fwd_pid" 2>/dev/null || true
       json_error "start_failed" "App process exited before readiness marker. Check ${log_path}"
@@ -482,6 +513,7 @@ cmd_start() {
 
   # Final liveness check
   if ! kill -0 "$app_pid" 2>/dev/null; then
+    kill "$supervisor_pid" 2>/dev/null || true
     kill "$fwd_pid" 2>/dev/null || true
     wait "$fwd_pid" 2>/dev/null || true
     json_error "start_failed" "App process exited immediately. Check ${log_path}"
@@ -1023,6 +1055,12 @@ cmd_stop() {
     fwd_pid="$(cat "${sdir}/fwd_pid")"
     kill "$fwd_pid" 2>/dev/null || true
     wait "$fwd_pid" 2>/dev/null || true
+  fi
+  if [ -f "${sdir}/supervisor_pid" ]; then
+    local supervisor_pid
+    supervisor_pid="$(cat "${sdir}/supervisor_pid")"
+    kill "$supervisor_pid" 2>/dev/null || true
+    wait "$supervisor_pid" 2>/dev/null || true
   fi
   cleanup_orphan_session_forwarders "${sdir}/pipe" "${sdir}/input"
 

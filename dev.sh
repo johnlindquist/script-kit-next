@@ -19,6 +19,47 @@ SCRIPT_KIT_DEV_CACHE_PID=""
 SCRIPT_KIT_DEV_WATCHDOG_PID=""
 DEV_SH_CLEANED_UP=0
 DEV_SH_EXIT_CODE=0
+SCRIPT_KIT_DEV_LOCK_DIR=""
+dev_sh_pid_alive() {
+    local pid="$1"
+    [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null
+}
+dev_sh_lock_key() {
+    local root="$1"
+    if command -v shasum >/dev/null 2>&1; then
+        printf '%s' "$root" | shasum -a 1 | awk '{print $1}'
+    else
+        printf '%s' "$root" | md5 -q
+    fi
+}
+dev_sh_acquire_lock() {
+    local lock_root="/tmp/sk-dev-launcher-locks"
+    local repo_root
+    repo_root="$(pwd -P)"
+    mkdir -p "$lock_root"
+    SCRIPT_KIT_DEV_LOCK_DIR="${lock_root}/$(dev_sh_lock_key "$repo_root").lock"
+
+    if mkdir "$SCRIPT_KIT_DEV_LOCK_DIR" 2>/dev/null; then
+        printf '%s\n' "$$" > "$SCRIPT_KIT_DEV_LOCK_DIR/pid"
+        printf '%s\n' "${SCRIPT_KIT_DEV_SESSION_NAME:-dev-watch}" > "$SCRIPT_KIT_DEV_LOCK_DIR/session"
+        printf '%s\n' "$repo_root" > "$SCRIPT_KIT_DEV_LOCK_DIR/root"
+        return 0
+    fi
+
+    local old_pid=""
+    old_pid="$(cat "$SCRIPT_KIT_DEV_LOCK_DIR/pid" 2>/dev/null || true)"
+    if dev_sh_pid_alive "$old_pid"; then
+        echo "[dev.sh] ERROR another ./dev.sh is already running for this repo: pid=${old_pid} session=$(cat "$SCRIPT_KIT_DEV_LOCK_DIR/session" 2>/dev/null || echo '?')" >&2
+        echo "[dev.sh] Stop it first, or set SCRIPT_KIT_DEV_ALLOW_MULTI=1 if you intentionally want multiple watchers." >&2
+        exit 2
+    fi
+
+    rm -rf "$SCRIPT_KIT_DEV_LOCK_DIR"
+    mkdir "$SCRIPT_KIT_DEV_LOCK_DIR"
+    printf '%s\n' "$$" > "$SCRIPT_KIT_DEV_LOCK_DIR/pid"
+    printf '%s\n' "${SCRIPT_KIT_DEV_SESSION_NAME:-dev-watch}" > "$SCRIPT_KIT_DEV_LOCK_DIR/session"
+    printf '%s\n' "$repo_root" > "$SCRIPT_KIT_DEV_LOCK_DIR/root"
+}
 dev_sh_cleanup() {
     if [ "$DEV_SH_CLEANED_UP" = "1" ]; then
         return 0
@@ -42,6 +83,12 @@ dev_sh_cleanup() {
     pkill -KILL -P "$$" 2>/dev/null || true
 
     rm -f "$SCRIPT_KIT_DEV_STAMP_FILE" 2>/dev/null || true
+
+    if [ -n "${SCRIPT_KIT_DEV_LOCK_DIR:-}" ] \
+        && [ -f "$SCRIPT_KIT_DEV_LOCK_DIR/pid" ] \
+        && [ "$(cat "$SCRIPT_KIT_DEV_LOCK_DIR/pid" 2>/dev/null || true)" = "$$" ]; then
+        rm -rf "$SCRIPT_KIT_DEV_LOCK_DIR" 2>/dev/null || true
+    fi
 
     if [ "$DEV_SH_EXIT_CODE" -ne 0 ]; then
         exit "$DEV_SH_EXIT_CODE"
@@ -85,6 +132,12 @@ export SCRIPT_KIT_DEV_SESSION_NAME="${SCRIPT_KIT_DEV_SESSION_NAME:-dev-watch}"
 SESSION_DIR_RAW="${SCRIPT_KIT_SESSION_DIR:-/tmp/sk-agentic-sessions}"
 mkdir -p "$SESSION_DIR_RAW"
 export SCRIPT_KIT_SESSION_DIR="$(cd "$SESSION_DIR_RAW" && pwd -P)"
+
+if [ "${SCRIPT_KIT_DEV_ALLOW_MULTI:-0}" != "1" ]; then
+    dev_sh_acquire_lock
+else
+    echo "[dev.sh] WARNING multiple ./dev.sh watchers allowed by SCRIPT_KIT_DEV_ALLOW_MULTI=1"
+fi
 
 # --- Launcher self-update stamp ---------------------------------------------
 # Record a digest of the launcher + helper scripts at start. dev-cycle.sh will
