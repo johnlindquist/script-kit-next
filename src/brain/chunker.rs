@@ -46,12 +46,21 @@ pub fn chunk_markdown_with(text: &str, target: usize, overlap: usize) -> Vec<Chu
     let mut chunks = Vec::new();
     let mut start = 0usize;
     while start < trimmed.len() && chunks.len() < MAX_CHUNKS_PER_DOC {
-        let hard_end = (start + target).min(trimmed.len());
+        start = floor_char_boundary(trimmed, start);
+        let hard_end = floor_char_boundary(trimmed, (start + target).min(trimmed.len()));
         let end = if hard_end == trimmed.len() {
             hard_end
         } else {
             best_break(trimmed, start, hard_end)
         };
+        if end <= start {
+            let next = next_char_boundary_after(trimmed, start);
+            if next <= start || next >= trimmed.len() {
+                break;
+            }
+            start = next;
+            continue;
+        }
         let piece = trimmed[start..end].trim_end();
         if !piece.is_empty() {
             chunks.push(Chunk {
@@ -64,8 +73,9 @@ pub fn chunk_markdown_with(text: &str, target: usize, overlap: usize) -> Vec<Chu
         }
         // Step back `overlap` bytes from the break so context spans the seam,
         // but always advance past the previous start to guarantee progress.
-        let next = end.saturating_sub(overlap).max(start + 1);
-        start = floor_char_boundary(trimmed, next);
+        let overlap_start = floor_char_boundary(trimmed, end.saturating_sub(overlap));
+        let min_next = next_char_boundary_after(trimmed, start);
+        start = overlap_start.max(min_next);
     }
     chunks
 }
@@ -75,6 +85,8 @@ pub fn chunk_markdown_with(text: &str, target: usize, overlap: usize) -> Vec<Chu
 /// space > hard cap. Only breaks in the back third are considered so chunks
 /// stay near the target size.
 fn best_break(text: &str, start: usize, hard_end: usize) -> usize {
+    let start = floor_char_boundary(text, start);
+    let hard_end = floor_char_boundary(text, hard_end);
     let window_start = start + (hard_end - start) * 2 / 3;
     let window = &text[..hard_end];
 
@@ -107,6 +119,18 @@ fn floor_char_boundary(text: &str, mut pos: usize) -> usize {
         pos -= 1;
     }
     pos
+}
+
+fn ceil_char_boundary(text: &str, mut pos: usize) -> usize {
+    pos = pos.min(text.len());
+    while pos < text.len() && !text.is_char_boundary(pos) {
+        pos += 1;
+    }
+    pos
+}
+
+fn next_char_boundary_after(text: &str, pos: usize) -> usize {
+    ceil_char_boundary(text, pos.saturating_add(1)).min(text.len())
 }
 
 #[cfg(test)]
@@ -178,6 +202,34 @@ mod chunker_tests {
         assert!(!chunks.is_empty());
         for chunk in &chunks {
             assert!(!chunk.text.is_empty());
+        }
+    }
+
+    #[test]
+    fn hard_end_inside_em_dash_never_panics() {
+        let doc = format!("{}—{}", "a".repeat(255), " tail ".repeat(500));
+        let chunks = chunk_markdown_with(&doc, 256, 32);
+
+        assert!(!chunks.is_empty());
+        assert_eq!(
+            chunks.last().unwrap().start + chunks.last().unwrap().text.len(),
+            doc.trim_end().len()
+        );
+        for chunk in &chunks {
+            assert!(doc.is_char_boundary(chunk.start));
+            assert!(doc.is_char_boundary(chunk.start + chunk.text.len()));
+        }
+    }
+
+    #[test]
+    fn overlap_start_inside_multibyte_still_advances() {
+        let doc = "alpha — beta ".repeat(500);
+        let chunks = chunk_markdown_with(&doc, 257, 129);
+
+        assert!(!chunks.is_empty());
+        for pair in chunks.windows(2) {
+            assert!(pair[1].start > pair[0].start, "chunks must advance");
+            assert!(doc.is_char_boundary(pair[1].start));
         }
     }
 
