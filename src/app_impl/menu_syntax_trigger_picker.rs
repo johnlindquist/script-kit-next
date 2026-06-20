@@ -925,18 +925,18 @@ mod tests {
     #[test]
     fn colon_query_highlights_qualifier_token() {
         // Bare `:` now lists only open-value qualifier heads (b3f83a991);
-        // concrete `type:script` rows appear once the head is being typed.
+        // concrete `type:script` rows appear only after the head is accepted.
         let snap = build_trigger_picker_snapshot(":type", &ctx()).expect("colon type snapshot");
         let row = snap
             .rows
             .iter()
-            .find(|row| row.token.as_deref() == Some("type:script"))
-            .expect("type script qualifier row");
+            .find(|row| row.token.as_deref() == Some("type:"))
+            .expect("type qualifier head row");
 
         let highlights = trigger_picker_row_highlight_indices(row, ":type");
 
-        assert_eq!(highlights.title, Vec::<usize>::new());
         assert_eq!(highlights.meta, vec![0, 1, 2, 3]);
+        assert_eq!(highlights.title, vec![0, 1, 2, 3]);
     }
 
     #[test]

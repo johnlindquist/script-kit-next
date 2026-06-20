@@ -1877,6 +1877,10 @@ impl ScriptListApp {
                             }
                         }
                         if this.menu_syntax_trigger_picker_owns_main_keyboard() {
+                            if this.menu_syntax_filter_only_escape_should_clear() {
+                                this.clear_filter(window, cx);
+                                return;
+                            }
                             if this.apply_menu_syntax_trigger_picker_intent(
                                 crate::menu_syntax::InlinePickerKeyIntent::Close,
                                 window,

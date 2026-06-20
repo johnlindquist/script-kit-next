@@ -2,6 +2,29 @@ use super::*;
 
 const FILTER_COMPUTE_DEFER: std::time::Duration = std::time::Duration::from_millis(16);
 
+pub(crate) fn menu_syntax_filter_only_escape_should_clear(
+    raw: &str,
+    mode: &crate::menu_syntax::MenuSyntaxMode,
+) -> bool {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return false;
+    }
+
+    if let Some(rest) = trimmed.strip_prefix(':') {
+        return !rest.chars().any(char::is_whitespace);
+    }
+
+    if crate::menu_syntax::active_filter_head_owns_main_list(trimmed) {
+        return true;
+    }
+
+    trimmed.split_whitespace().count() == 1
+        && mode.advanced_query_for(trimmed).is_some_and(|query| {
+            query.free_text.trim().is_empty() && query.has_predicates()
+        })
+}
+
 impl ScriptListApp {
     #[inline]
     fn filter_change_can_affect_window_size(&self) -> bool {
@@ -692,6 +715,10 @@ impl ScriptListApp {
                 || self.menu_syntax_capture_form_owns_input_for(&self.filter_text))
     }
 
+    pub(crate) fn menu_syntax_filter_only_escape_should_clear(&self) -> bool {
+        menu_syntax_filter_only_escape_should_clear(&self.filter_text, &self.menu_syntax_mode)
+    }
+
     pub(crate) fn clear_hidden_script_list_filter_before_escape_close(
         &mut self,
         window: &mut Window,
@@ -1297,6 +1324,39 @@ impl ScriptListApp {
             Some(crate::dev_style_tool::runtime_overrides::effective_main_input_placeholder());
         self.sync_filter_input_if_needed(window, cx);
         cx.notify();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::menu_syntax_filter_only_escape_should_clear;
+
+    fn should_clear(raw: &str) -> bool {
+        let mode = crate::menu_syntax::MenuSyntaxMode::from_input(raw);
+        menu_syntax_filter_only_escape_should_clear(raw, &mode)
+    }
+
+    #[test]
+    fn filter_only_escape_clears_head_picker_states() {
+        assert!(should_clear(":"));
+        assert!(should_clear(":t"));
+        assert!(should_clear(":ty"));
+        assert!(should_clear(":type:"));
+    }
+
+    #[test]
+    fn filter_only_escape_clears_qualifier_only_states() {
+        assert!(should_clear("type:"));
+        assert!(should_clear("type:s"));
+        assert!(should_clear("kind:"));
+        assert!(should_clear("type:script"));
+    }
+
+    #[test]
+    fn filter_only_escape_preserves_composed_queries() {
+        assert!(!should_clear("type:script git"));
+        assert!(!should_clear("plain search"));
+        assert!(!should_clear(""));
     }
 }
 

@@ -390,6 +390,9 @@ fn apply_advanced_query_token_insertion(raw_filter_text: &str, token: &str) -> S
         .unwrap_or(0);
     let active_abs = after_colon + active_start_in_tail;
     let prefix = &raw_filter_text[..active_abs];
+    if active_start_in_tail == 0 {
+        return format!("{}{token_body}", &raw_filter_text[..colon_idx]);
+    }
     format!("{prefix}{token_body}")
 }
 
@@ -530,6 +533,42 @@ mod tests {
     }
 
     #[test]
+    fn accept_advanced_head_from_partial_colon_replaces_with_bare_head_and_keeps_open() {
+        let snap = build_trigger_picker_snapshot(":ty", &ctx()).expect("partial colon snapshot");
+        let type_idx = snap
+            .rows
+            .iter()
+            .position(|r| r.token.as_deref() == Some("type:"))
+            .expect("type head row");
+        let outcome = apply_intent(InlinePickerKeyIntent::Accept, &snap, Some(type_idx), ":ty");
+        match outcome {
+            TriggerPickerIntentOutcome::ReplaceInput { text, keep_open } => {
+                assert_eq!(text, "type:");
+                assert!(keep_open, "Accept on advanced head should keep picker open");
+            }
+            other => panic!("expected ReplaceInput keep_open=true, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn accept_advanced_head_from_t_prefix_replaces_with_bare_head_and_keeps_open() {
+        let snap = build_trigger_picker_snapshot(":t", &ctx()).expect("partial colon snapshot");
+        let type_idx = snap
+            .rows
+            .iter()
+            .position(|r| r.token.as_deref() == Some("type:"))
+            .expect("type head row");
+        let outcome = apply_intent(InlinePickerKeyIntent::Accept, &snap, Some(type_idx), ":t");
+        match outcome {
+            TriggerPickerIntentOutcome::ReplaceInput { text, keep_open } => {
+                assert_eq!(text, "type:");
+                assert!(keep_open, "Accept on advanced head should keep picker open");
+            }
+            other => panic!("expected ReplaceInput keep_open=true, got {other:?}"),
+        }
+    }
+
+    #[test]
     fn apply_on_capture_target_commits_text_and_closes_picker() {
         let snap = build_trigger_picker_snapshot("+", &ctx()).expect("plus snapshot");
         let todo_idx = snap
@@ -603,7 +642,7 @@ mod tests {
         let source_idx = snap
             .rows
             .iter()
-            .position(|r| r.id == "qualifier:source:")
+            .position(|r| r.token.as_deref() == Some("source:"))
             .expect("source row");
         let outcome = apply_intent(
             InlinePickerKeyIntent::Apply,

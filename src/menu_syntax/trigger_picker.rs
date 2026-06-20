@@ -376,6 +376,9 @@ fn filtered_static_qualifier_rows(input: &str) -> Vec<TriggerPickerRow> {
     if let Some(rows) = has_field_value_rows_for_active_token(&active) {
         return rows;
     }
+    if input.trim_start().starts_with(':') && !active.contains(':') && !active.starts_with('#') {
+        return filtered_bare_colon_filter_head_rows(&active);
+    }
     let rows = static_qualifier_rows();
     if active.is_empty() {
         return rows;
@@ -786,6 +789,20 @@ fn bare_colon_filter_head_rows() -> Vec<TriggerPickerRow> {
                 keep_open: true,
             },
             enabled: true,
+        })
+        .collect()
+}
+
+fn filtered_bare_colon_filter_head_rows(active: &str) -> Vec<TriggerPickerRow> {
+    bare_colon_filter_head_rows()
+        .into_iter()
+        .filter(|row| {
+            let token = row
+                .token
+                .as_deref()
+                .unwrap_or_default()
+                .to_ascii_lowercase();
+            token.starts_with(active)
         })
         .collect()
 }
@@ -1929,7 +1946,7 @@ mod tests {
     #[test]
     fn partial_colon_narrows_qualifier_rows() {
         let ctx = ctx_empty();
-        let snap = build_trigger_picker_snapshot(":typ", &ctx).expect("snapshot");
+        let snap = build_trigger_picker_snapshot(":t", &ctx).expect("snapshot");
         let qualifier_tokens: Vec<&str> = snap
             .rows
             .iter()
@@ -1937,14 +1954,28 @@ mod tests {
             .filter_map(|row| row.token.as_deref())
             .collect();
 
-        assert!(
-            qualifier_tokens
-                .iter()
-                .all(|token| token.starts_with("type:")),
-            "partial :typ should narrow to type qualifiers, got {qualifier_tokens:?}"
+        assert_eq!(
+            qualifier_tokens,
+            vec!["type:", "tag:"],
+            "partial :t should show matching filter heads only"
         );
-        assert!(qualifier_tokens.contains(&"type:script"));
+        assert!(!qualifier_tokens.contains(&"tabs:"));
+        assert!(!qualifier_tokens.contains(&"type:script"));
         assert!(!qualifier_tokens.contains(&"shortcut:any"));
+    }
+
+    #[test]
+    fn partial_colon_ty_shows_type_head_only() {
+        let ctx = ctx_empty();
+        let snap = build_trigger_picker_snapshot(":ty", &ctx).expect("snapshot");
+        let qualifier_tokens: Vec<&str> = snap
+            .rows
+            .iter()
+            .filter(|row| row.kind == TriggerPickerRowKind::Qualifier)
+            .filter_map(|row| row.token.as_deref())
+            .collect();
+
+        assert_eq!(qualifier_tokens, vec!["type:"]);
     }
 
     #[test]
@@ -2030,6 +2061,19 @@ mod tests {
     }
 
     #[test]
+    fn bare_type_value_partial_scr_shows_script_and_scriptlet() {
+        let ctx = ctx_empty();
+        let snap = build_trigger_picker_snapshot("type:scr", &ctx).expect("snapshot");
+        let tokens: Vec<&str> = snap
+            .rows
+            .iter()
+            .filter_map(|row| row.token.as_deref())
+            .collect();
+
+        assert_eq!(tokens, vec!["type:script", "type:scriptlet"]);
+    }
+
+    #[test]
     fn colon_type_open_value_lists_type_rows_only() {
         let ctx = ctx_empty();
         let snap = build_trigger_picker_snapshot(":type:", &ctx).expect("snapshot");
@@ -2063,15 +2107,17 @@ mod tests {
             .collect();
 
         assert_eq!(
-            tokens
-                .iter()
-                .filter(|token| token.starts_with("type:"))
-                .count(),
-            8
-        );
-        assert!(
-            tokens.iter().all(|token| token.starts_with("type:")),
-            "open type: should stay in type values, got {tokens:?}"
+            tokens,
+            vec![
+                "type:script",
+                "type:scriptlet",
+                "type:skill",
+                "type:builtin",
+                "type:app",
+                "type:window",
+                "type:agent",
+                "type:issue",
+            ]
         );
     }
 
