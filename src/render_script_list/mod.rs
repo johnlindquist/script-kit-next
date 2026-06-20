@@ -970,6 +970,8 @@ impl ScriptListApp {
             && self.menu_syntax_trigger_picker_state.owns_main_list();
         let object_selector_owns_main_list_for_render = !handler_form_owns_input_for_render
             && self.menu_syntax_object_selector_state.owns_main_list();
+        let active_filter_head_owns_main_list_for_render = !handler_form_owns_input_for_render
+            && crate::menu_syntax::active_filter_head_owns_main_list(&filter_text_for_render);
         let spine_owns_main_list_for_render = self.spine_projection_owns_main_list()
             && self.spine_parse.input == filter_text_for_render;
         let menu_syntax_owns_main_list = popup_owns_main_list
@@ -981,7 +983,8 @@ impl ScriptListApp {
         // Keep guide cards available for bare/partial `:` refine entry, but
         // let completed advanced queries render their filtered results first.
         // Empty-state hint cards are handled by the item-count branch below.
-        let advanced_query_guide_hint = (!menu_syntax_owns_main_list)
+        let advanced_query_guide_hint =
+            (!menu_syntax_owns_main_list && !active_filter_head_owns_main_list_for_render)
             .then(|| self.menu_syntax_main_hint_snapshot(&filter_text_for_render, true))
             .flatten()
             .filter(|hint| {
@@ -998,6 +1001,21 @@ impl ScriptListApp {
             && !object_selector_owns_main_list_for_render
         {
             self.menu_syntax_main_hint_snapshot(&filter_text_for_render, false)
+                .map(|hint| {
+                    render_menu_syntax_main_hint(
+                        &hint,
+                        &self.menu_syntax_main_hint_scroll_handle,
+                        &self.theme,
+                        main_hint_list_tokens,
+                        self.current_design,
+                        &self.menu_syntax_form_inputs,
+                        self.menu_syntax_form_field_bounds.clone(),
+                        cx,
+                    )
+                })
+                .unwrap_or_else(|| div().w_full().h_full().into_any_element())
+        } else if active_filter_head_owns_main_list_for_render {
+            self.menu_syntax_main_hint_snapshot(&filter_text_for_render, true)
                 .map(|hint| {
                     render_menu_syntax_main_hint(
                         &hint,

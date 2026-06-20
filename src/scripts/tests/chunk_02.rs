@@ -45,6 +45,56 @@ fn test_parse_scriptlet_with_keyword() {
 }
 
 #[test]
+fn test_parse_scriptlet_ignores_commented_codefence_keyword_and_paste_block() {
+    let section = r#"## Execute Active Plan
+
+```metadata
+keyword: active,,
+```
+
+```paste
+active paste
+```
+
+<!--
+```metadata
+keyword: commented,,
+```
+
+```paste
+commented paste
+```
+-->"#;
+
+    let scriptlet = parse_scriptlet_section(section, None).unwrap();
+
+    assert_eq!(scriptlet.keyword, Some("active,,".to_string()));
+    assert_eq!(scriptlet.tool, "paste");
+    assert_eq!(scriptlet.code, "active paste");
+}
+
+#[test]
+fn test_parse_scriptlet_does_not_fallback_to_commented_codefence_keyword() {
+    let section = r#"## Execute Active Plan
+
+<!--
+```metadata
+keyword: commented,,
+```
+-->
+
+```paste
+active paste
+```"#;
+
+    let scriptlet = parse_scriptlet_section(section, None).unwrap();
+
+    assert_eq!(scriptlet.keyword, None);
+    assert_eq!(scriptlet.tool, "paste");
+    assert_eq!(scriptlet.code, "active paste");
+}
+
+#[test]
 fn test_extract_code_block_ts() {
     let text = "Some text\n```ts\nconst x = 1;\n```\nMore text";
     let result = extract_code_block(text);
@@ -77,6 +127,15 @@ fn test_extract_html_metadata_multiple() {
     let metadata = extract_html_comment_metadata(text);
     assert_eq!(metadata.get("shortcut"), Some(&"cmd k".to_string()));
     assert_eq!(metadata.get("keyword"), Some(&"foo,,".to_string()));
+    assert_eq!(metadata.get("description"), Some(&"Test".to_string()));
+}
+
+#[test]
+fn test_extract_html_metadata_ignores_commented_codefence_body() {
+    let text = "<!--\nshortcut: cmd k\n```metadata\nkeyword: ignored,,\n```\ndescription: Test\n-->";
+    let metadata = extract_html_comment_metadata(text);
+    assert_eq!(metadata.get("shortcut"), Some(&"cmd k".to_string()));
+    assert_eq!(metadata.get("keyword"), None);
     assert_eq!(metadata.get("description"), Some(&"Test".to_string()));
 }
 
@@ -293,4 +352,3 @@ fn test_search_result_type_label() {
     assert_eq!(script.type_label(), "Script");
     assert_eq!(scriptlet.type_label(), "Snippet");
 }
-

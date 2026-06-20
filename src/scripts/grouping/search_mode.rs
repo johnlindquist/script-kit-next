@@ -16,6 +16,7 @@ pub(super) fn build_search_mode_results(
     filter_text: &str,
     preferred_result_key: Option<&str>,
     launcher_context: Option<&crate::context_snapshot::launcher_context::LauncherContextSnapshot>,
+    suppress_fallbacks: bool,
 ) -> (Vec<GroupedListItem>, Vec<SearchResult>) {
     // Apply frecency boost: recently/frequently used items get a score bonus.
     // This is how modern launchers (Raycast, Alfred, Spotlight) work.
@@ -173,7 +174,11 @@ pub(super) fn build_search_mode_results(
     let has_other_results = !grouped.is_empty();
 
     // Collect fallback commands and append as "Use {query} with..." section
-    let fallbacks = collect_fallbacks(filter_text, scripts);
+    let fallbacks = if suppress_fallbacks {
+        Vec::new()
+    } else {
+        collect_fallbacks(filter_text, scripts)
+    };
     let fallback_count = fallbacks.len();
 
     if !fallbacks.is_empty() {
@@ -275,8 +280,15 @@ mod tests {
             ),
         ];
 
-        let (grouped, sorted_results) =
-            build_search_mode_results(results, &[], &FrecencyStore::new(), "position", None, None);
+        let (grouped, sorted_results) = build_search_mode_results(
+            results,
+            &[],
+            &FrecencyStore::new(),
+            "position",
+            None,
+            None,
+            false,
+        );
 
         let first_item = grouped
             .iter()
@@ -287,6 +299,37 @@ mod tests {
             .expect("at least one grouped result");
 
         assert_eq!(first_item.name(), "Reset Window Positions");
-        assert!(grouped.iter().any(|item| matches!(item, GroupedListItem::SectionHeader(label, None) if label == "Menu Bar Actions")));
+        assert!(grouped.iter().any(
+            |item| matches!(item, GroupedListItem::SectionHeader(label, None) if label == "Menu Bar Actions")
+        ));
+    }
+
+    #[test]
+    fn search_mode_can_suppress_terminal_fallback_section() {
+        let (grouped, flat) = build_search_mode_results(
+            Vec::new(),
+            &[],
+            &FrecencyStore::new(),
+            "deploy",
+            None,
+            None,
+            true,
+        );
+
+        assert!(
+            grouped.iter().all(|item| {
+                !matches!(
+                    item,
+                    GroupedListItem::SectionHeader(label, None)
+                        if label.starts_with("Use \"deploy\" with")
+                )
+            }),
+            "advanced filters own their empty result state and must not append terminal fallback headers"
+        );
+        assert!(
+            flat.iter()
+                .all(|result| !matches!(result, SearchResult::Fallback(_))),
+            "advanced filters must not append fallback rows"
+        );
     }
 }

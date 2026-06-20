@@ -188,6 +188,7 @@ pub(crate) fn get_grouped_results_with_input_history_and_query(
             filter_text,
             preferred_result_key,
             launcher_context,
+            advanced_query.is_some_and(|query| query.has_predicates()),
         );
     }
 

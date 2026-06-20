@@ -259,7 +259,7 @@ fn preflight_visible_results_expose_search_safety_roles() {
 }
 
 #[test]
-fn script_list_typing_does_not_notify_before_computed_query_catches_up() {
+fn script_list_typing_echoes_before_deferred_computed_query() {
     let source = fs::read_to_string("src/app_impl/filter_input_change.rs")
         .expect("read filter_input_change.rs");
     let updates = fs::read_to_string("src/app_impl/filter_input_updates.rs")
@@ -274,16 +274,27 @@ fn script_list_typing_does_not_notify_before_computed_query_catches_up() {
     let body = &source[body_start..body_end];
 
     let script_list_tail_start = body
-        .find("let previous_text = std::mem::replace(&mut self.filter_text, new_text.clone());")
+        .find("self.filter_text = new_text.clone();\n        self.sync_menu_syntax_form_inputs_from_filter(window, cx);")
         .expect("ScriptList free-text tail should update canonical filter");
     let script_list_tail = &body[script_list_tail_start..];
     let queue_index = script_list_tail
         .find("self.queue_filter_compute(new_text.clone(), cx);")
         .expect("ScriptList typing should queue computed filter update");
 
+    let notify_index = script_list_tail[..queue_index]
+        .find("cx.notify();")
+        .expect("ScriptList typing should notify after canonical filter_text changes so the typed glyph can paint before deferred search work");
+    let history_index = script_list_tail[..queue_index]
+        .find("self.input_history.reset_navigation();")
+        .expect("ScriptList typing should reset history after the echo notify");
     assert!(
-        !script_list_tail[..queue_index].contains("cx.notify();"),
-        "ScriptList typing must not render after filter_text changes but before queue_filter_compute installs the computed frame"
+        notify_index < history_index,
+        "ScriptList typing should schedule an immediate echo frame before slower per-query bookkeeping and coalesced compute"
+    );
+
+    assert!(
+        updates.contains("const FILTER_COMPUTE_DEFER: std::time::Duration = std::time::Duration::from_millis(16);"),
+        "ScriptList typing should give the input an echo-frame budget before running foreground filter compute"
     );
 
     let queue_body = updates
@@ -295,28 +306,37 @@ fn script_list_typing_does_not_notify_before_computed_query_catches_up() {
                 .next()
         })
         .expect("queue_filter_compute body should be present");
-    let computed_index = queue_body
+    assert!(
+        queue_body.contains("self.filter_coalescer.queue(value)")
+            && queue_body.contains("timer(FILTER_COMPUTE_DEFER)")
+            && queue_body.contains("app.filter_coalescer.take_latest()")
+            && queue_body.contains("app.apply_filter_compute_now(latest, cx);"),
+        "ScriptList typing should coalesce rapid input and apply only the latest computed query after an echo-frame defer"
+    );
+
+    let apply_body = updates
+        .split("fn apply_filter_compute_now(")
+        .nth(1)
+        .and_then(|section| section.split("pub(crate) fn queue_filter_compute(").next())
+        .expect("apply_filter_compute_now body should be present");
+    let computed_index = apply_body
         .find("self.computed_filter_text = value.clone();")
-        .expect("queue_filter_compute should synchronously install computed_filter_text");
-    let root_file_index = queue_body
+        .expect("apply_filter_compute_now should install computed_filter_text");
+    let root_file_index = apply_body
         .find("self.maybe_start_root_file_search(&value, cx);")
-        .expect("queue_filter_compute should start root file frame before reconcile");
-    let reconcile_index = queue_body
+        .expect("apply_filter_compute_now should start root file frame before reconcile");
+    let reconcile_index = apply_body
         .find("self.reconcile_script_list_after_filter_change(\"filter_immediate\", cx);")
-        .expect("queue_filter_compute should reconcile the list immediately");
-    let notify_index = queue_body
+        .expect("apply_filter_compute_now should reconcile the list");
+    let notify_index = apply_body
         .find("cx.notify();")
-        .expect("queue_filter_compute should notify after the stable frame is ready");
+        .expect("apply_filter_compute_now should notify after the stable frame is ready");
 
     assert!(
         computed_index < root_file_index
             && root_file_index < reconcile_index
             && reconcile_index < notify_index,
-        "ScriptList typing should install computed text, root file state, and grouped rows before notify"
-    );
-    assert!(
-        !queue_body.contains("timer(std::time::Duration::from_millis(8))"),
-        "ScriptList typing should not show a stale grouped frame while an async coalescer waits"
+        "The coalesced apply step should install computed text, root async-loading state, and grouped rows before notify"
     );
 }
 

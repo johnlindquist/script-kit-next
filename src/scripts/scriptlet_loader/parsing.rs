@@ -17,9 +17,21 @@ pub(crate) fn extract_html_comment_metadata(
         if let Some(end) = text.find("-->") {
             if start < end {
                 let comment_content = &text[start + 4..end];
-                // Parse key: value pairs
+                // Parse key: value pairs, but ignore fenced markdown that was
+                // commented out as an entire snippet block.
+                let mut comment_fence: Option<(char, usize)> = None;
                 for line in comment_content.lines() {
                     let trimmed = line.trim();
+                    if let Some((fence_char, fence_count)) = comment_fence {
+                        if is_comment_fence_close(trimmed, fence_char, fence_count) {
+                            comment_fence = None;
+                        }
+                        continue;
+                    }
+                    if let Some(fence) = detect_comment_fence_open(trimmed) {
+                        comment_fence = Some(fence);
+                        continue;
+                    }
                     if !trimmed.is_empty() {
                         // Handle format: "key: value"
                         if let Some(colon_pos) = trimmed.find(':') {
@@ -36,40 +48,106 @@ pub(crate) fn extract_html_comment_metadata(
     metadata
 }
 
+fn detect_comment_fence_open(line: &str) -> Option<(char, usize)> {
+    let backtick_count = line.chars().take_while(|&c| c == '`').count();
+    if backtick_count >= 3 {
+        return Some(('`', backtick_count));
+    }
+
+    let tilde_count = line.chars().take_while(|&c| c == '~').count();
+    if tilde_count >= 3 {
+        return Some(('~', tilde_count));
+    }
+
+    None
+}
+
+fn is_comment_fence_close(line: &str, fence_char: char, min_count: usize) -> bool {
+    let count = line.chars().take_while(|&c| c == fence_char).count();
+    if count < min_count {
+        return false;
+    }
+
+    line[count..].chars().all(|c| c.is_whitespace())
+}
+
 /// Extract code block from markdown text
 /// Looks for ```language ... ``` pattern and returns (language, code)
 /// Skips `metadata` and `schema` blocks which are used for configuration
 pub(crate) fn extract_code_block(text: &str) -> Option<(String, String)> {
-    let mut search_start = 0;
+    let lines: Vec<&str> = text.lines().collect();
+    let mut in_html_comment = false;
 
-    while let Some(fence_offset) = text[search_start..].find("```") {
-        let start = search_start + fence_offset;
-        let after_fence = &text[start + 3..];
+    let mut i = 0;
+    while i < lines.len() {
+        let visible_line = strip_html_comment_segments(lines[i], &mut in_html_comment);
+        let trimmed = visible_line.trim_start();
 
-        // Get the language specifier (rest of line)
-        if let Some(newline_pos) = after_fence.find('\n') {
-            let language = after_fence[..newline_pos].trim();
-            let code_start = start + 3 + newline_pos + 1;
+        if let Some((fence_count, language)) = detect_backtick_fence_open(trimmed) {
+            let mut code_lines = Vec::new();
+            i += 1;
 
-            // Find closing fence
-            if let Some(end_pos) = text[code_start..].find("```") {
-                // Skip metadata and schema blocks - these are config, not code
-                if language == "metadata" || language == "schema" {
-                    // Move past this block and continue searching
-                    search_start = code_start + end_pos + 3;
-                    continue;
+            while i < lines.len() {
+                if is_comment_fence_close(lines[i].trim_start(), '`', fence_count) {
+                    break;
                 }
-
-                let code = text[code_start..code_start + end_pos].trim().to_string();
-                return Some((language.to_owned(), code));
+                code_lines.push(lines[i]);
+                i += 1;
             }
+
+            if i >= lines.len() {
+                return None;
+            }
+
+            if language != "metadata" && language != "schema" {
+                return Some((language, code_lines.join("\n").trim().to_string()));
+            }
+
+            in_html_comment = false;
         }
 
-        // Couldn't parse this fence, move past it
-        search_start = start + 3;
+        i += 1;
     }
 
     None
+}
+
+fn strip_html_comment_segments(line: &str, in_html_comment: &mut bool) -> String {
+    let mut visible = String::new();
+    let mut rest = line;
+
+    loop {
+        if *in_html_comment {
+            if let Some(end) = rest.find("-->") {
+                rest = &rest[end + 3..];
+                *in_html_comment = false;
+            } else {
+                break;
+            }
+        } else if let Some(start) = rest.find("<!--") {
+            visible.push_str(&rest[..start]);
+            rest = &rest[start + 4..];
+            *in_html_comment = true;
+        } else {
+            visible.push_str(rest);
+            break;
+        }
+    }
+
+    visible
+}
+
+fn detect_backtick_fence_open(line: &str) -> Option<(usize, String)> {
+    let backtick_count = line.chars().take_while(|&c| c == '`').count();
+    if backtick_count < 3 {
+        return None;
+    }
+
+    let rest = &line[backtick_count..];
+    Some((
+        backtick_count,
+        rest.split_whitespace().next().unwrap_or("").to_string(),
+    ))
 }
 
 /// Convert a name to a command slug (lowercase, spaces/special chars to hyphens)

@@ -126,9 +126,11 @@ fn extract_all_codefence_blocks(content: &str) -> Vec<(String, String)> {
     let lines: Vec<&str> = content.lines().collect();
 
     let mut i = 0;
+    let mut in_html_comment = false;
     while i < lines.len() {
         let line = lines[i];
-        let trimmed = line.trim_start();
+        let visible_line = strip_html_comment_segments(line, &mut in_html_comment);
+        let trimmed = visible_line.trim_start();
 
         // Check for opening fence (``` or ~~~)
         if let Some((fence_char, fence_count, language)) = detect_fence_opening(trimmed) {
@@ -153,6 +155,35 @@ fn extract_all_codefence_blocks(content: &str) -> Vec<(String, String)> {
     }
 
     blocks
+}
+/// Return only the text outside HTML comments on this line.
+///
+/// This is intentionally used only while looking for top-level fence openers.
+/// Once a real fence is open, its content is preserved verbatim until the
+/// closing fence.
+fn strip_html_comment_segments(line: &str, in_html_comment: &mut bool) -> String {
+    let mut visible = String::new();
+    let mut rest = line;
+
+    loop {
+        if *in_html_comment {
+            if let Some(end) = rest.find("-->") {
+                rest = &rest[end + 3..];
+                *in_html_comment = false;
+            } else {
+                break;
+            }
+        } else if let Some(start) = rest.find("<!--") {
+            visible.push_str(&rest[..start]);
+            rest = &rest[start + 4..];
+            *in_html_comment = true;
+        } else {
+            visible.push_str(rest);
+            break;
+        }
+    }
+
+    visible
 }
 /// Detect opening fence, returns (fence_char, count, language)
 fn detect_fence_opening(line: &str) -> Option<(char, usize, String)> {
@@ -479,6 +510,63 @@ name: Test Script
         let metadata = result.metadata.unwrap();
         assert_eq!(metadata.keyword, Some("!testing".to_string()));
         assert_eq!(metadata.name, Some("Test Script".to_string()));
+    }
+    #[test]
+    fn test_codefences_inside_html_comments_are_ignored() {
+        let content = r#"
+```metadata
+keyword: active,,
+```
+
+```paste
+active paste
+```
+
+<!--
+```metadata
+keyword: commented,,
+```
+
+```paste
+commented paste
+```
+-->
+"#;
+        let result = parse_codefence_metadata(content);
+
+        assert!(result.errors.is_empty(), "Errors: {:?}", result.errors);
+        assert_eq!(
+            result.metadata.unwrap().keyword,
+            Some("active,,".to_string())
+        );
+        let code = result.code.unwrap();
+        assert_eq!(code.language, "paste");
+        assert_eq!(code.content, "active paste");
+    }
+    #[test]
+    fn test_comment_markers_inside_active_codefence_do_not_hide_later_metadata() {
+        let content = r#"
+```paste
+literal <!-- comment marker --> in paste body
+```
+
+```metadata
+keyword: active,,
+```
+"#;
+        let result = parse_codefence_metadata(content);
+
+        assert!(result.errors.is_empty(), "Errors: {:?}", result.errors);
+        assert_eq!(
+            result.metadata.unwrap().keyword,
+            Some("active,,".to_string())
+        );
+        let code = result.code.unwrap();
+        assert_eq!(code.language, "paste");
+        assert_eq!(
+            code.content,
+            "literal <!-- comment marker --> in paste body"
+        );
     }
     #[test]
     fn test_code_block_extracted_correctly() {

@@ -115,10 +115,11 @@ pub use link_scriptlet::{
 };
 #[allow(unused_imports)]
 pub use main_hint::{
-    build_menu_syntax_main_hint, MenuSyntaxCaptureValidationSnapshot,
-    MenuSyntaxCaptureValidationStatus, MenuSyntaxFragmentPreviewRow, MenuSyntaxMainHintChip,
-    MenuSyntaxMainHintContext, MenuSyntaxMainHintKind, MenuSyntaxMainHintRow,
-    MenuSyntaxMainHintSnapshot, MenuSyntaxMainHintTone,
+    active_filter_head_owns_main_list, build_menu_syntax_main_hint,
+    MenuSyntaxCaptureValidationSnapshot, MenuSyntaxCaptureValidationStatus,
+    MenuSyntaxFragmentPreviewRow, MenuSyntaxMainHintChip, MenuSyntaxMainHintContext,
+    MenuSyntaxMainHintKind, MenuSyntaxMainHintRow, MenuSyntaxMainHintSnapshot,
+    MenuSyntaxMainHintTone,
 };
 pub use mode::{
     free_text_for_search, input_span_role_name, input_spans_for_input_with_targets,

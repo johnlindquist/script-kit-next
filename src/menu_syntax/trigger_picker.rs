@@ -6,7 +6,8 @@ use std::sync::Arc;
 use super::mode::capture_body_boundary_has_started_with_targets;
 use super::parse::{parse, parse_with_capture_targets, MenuSyntaxParse};
 use super::payload::{
-    picker_visible_capture_targets, resolve_capture_target, IncompleteKind, KNOWN_CAPTURE_TARGETS,
+    picker_visible_capture_targets, resolve_capture_target, ArtifactKind, IncompleteKind,
+    KNOWN_CAPTURE_TARGETS,
 };
 use crate::scripts::{Script, Scriptlet};
 
@@ -211,6 +212,9 @@ pub fn build_trigger_picker_snapshot(
     if should_show_has_field_completion(input) {
         return non_empty_snapshot(build_advanced_query_snapshot(input, ctx));
     }
+    if should_show_type_value_completion(input) {
+        return non_empty_snapshot(build_advanced_query_snapshot(input, ctx));
+    }
 
     let parsed = if capture_targets.is_empty() {
         parse(input)
@@ -221,9 +225,10 @@ pub fn build_trigger_picker_snapshot(
     match parsed {
         MenuSyntaxParse::AdvancedQuery(_) if is_complete_has_field_query(input) => None,
         MenuSyntaxParse::AdvancedQuery(query) if query.is_source_filter_only() => None,
-        MenuSyntaxParse::AdvancedQuery(_) => {
+        MenuSyntaxParse::AdvancedQuery(_) if should_show_advanced_query_completion(input) => {
             non_empty_snapshot(build_advanced_query_snapshot(input, ctx))
         }
+        MenuSyntaxParse::AdvancedQuery(_) => None,
         MenuSyntaxParse::Capture(inv) => {
             Some(build_capture_snapshot(Some(inv.target.as_str()), ctx))
         }
@@ -387,13 +392,17 @@ fn is_exact_bare_colon(input: &str) -> bool {
 fn advanced_query_active_token(input: &str) -> String {
     let stripped = input.strip_prefix(':').unwrap_or(input);
     let active = stripped.split_whitespace().last().unwrap_or_default();
-    if active.to_ascii_lowercase().starts_with("has:") {
-        return active.to_ascii_lowercase();
+    let active_lc = active.to_ascii_lowercase();
+    if active_lc.starts_with("has:")
+        || active_lc.starts_with("type:")
+        || active_lc.starts_with("kind:")
+    {
+        return active_lc;
     }
-    if active.contains(':') && !active.ends_with(':') {
+    if active_lc.contains(':') && !active_lc.ends_with(':') {
         return String::new();
     }
-    active.to_ascii_lowercase()
+    active_lc
 }
 
 fn should_show_has_field_completion(input: &str) -> bool {
@@ -417,6 +426,41 @@ fn should_show_has_field_completion(input: &str) -> bool {
                         .iter()
                         .any(|alias| alias.to_ascii_lowercase().starts_with(value))
             })
+}
+
+fn should_show_type_value_completion(input: &str) -> bool {
+    let active = advanced_query_active_token(input);
+    active.starts_with("type:") || active.starts_with("kind:")
+}
+
+fn should_show_advanced_query_completion(input: &str) -> bool {
+    if is_exact_bare_colon(input) {
+        return true;
+    }
+
+    let active = advanced_query_active_token(input);
+    if active.is_empty() {
+        return false;
+    }
+    if active.contains(':') {
+        return true;
+    }
+
+    [
+        "type",
+        "kind",
+        "tag",
+        "shortcut",
+        "has",
+        "source",
+        "plugin",
+        "name",
+        "desc",
+        "description",
+        "alias",
+    ]
+    .iter()
+    .any(|head| head.starts_with(active.as_str()))
 }
 
 fn is_complete_has_field_query(input: &str) -> bool {
@@ -471,6 +515,15 @@ fn qualifier_row_matches_active_token(row: &TriggerPickerRow, active: &str) -> b
         .unwrap_or_default()
         .trim_start_matches(':')
         .to_ascii_lowercase();
+    let normalized_active = active
+        .strip_prefix("kind:")
+        .map(|value| format!("type:{value}"));
+    let active = normalized_active.as_deref().unwrap_or(active);
+    if let Some(value) = active.strip_prefix("type:") {
+        if ArtifactKind::parse(value).is_some() {
+            return token == active;
+        }
+    }
     let title = row.title.to_ascii_lowercase();
     token.starts_with(active)
         || title
@@ -1895,6 +1948,174 @@ mod tests {
     }
 
     #[test]
+    fn type_value_partial_narrows_to_type_rows_only() {
+        let ctx = ctx_empty();
+        let snap = build_trigger_picker_snapshot(":type:s", &ctx).expect("snapshot");
+        let tokens: Vec<&str> = snap
+            .rows
+            .iter()
+            .filter_map(|row| row.token.as_deref())
+            .collect();
+
+        assert!(
+            tokens.iter().all(|token| token.starts_with("type:s")),
+            "partial :type:s should only show matching type values, got {tokens:?}"
+        );
+        assert!(tokens.contains(&"type:script"));
+        assert!(tokens.contains(&"type:scriptlet"));
+        assert!(tokens.contains(&"type:skill"));
+        assert!(!tokens.iter().any(|token| token.starts_with("files:")));
+        assert!(!tokens.iter().any(|token| token.starts_with("todo:")));
+        assert!(!tokens.iter().any(|token| token.starts_with("-type:")));
+    }
+
+    #[test]
+    fn bare_type_value_partial_narrows_to_type_rows_only() {
+        let ctx = ctx_empty();
+        let snap = build_trigger_picker_snapshot("type:s", &ctx).expect("snapshot");
+        let tokens: Vec<&str> = snap
+            .rows
+            .iter()
+            .filter_map(|row| row.token.as_deref())
+            .collect();
+
+        assert!(
+            tokens.iter().all(|token| token.starts_with("type:s")),
+            "partial type:s should only show matching type values, got {tokens:?}"
+        );
+        assert!(tokens.contains(&"type:script"));
+        assert!(tokens.contains(&"type:scriptlet"));
+        assert!(tokens.contains(&"type:skill"));
+        assert!(!tokens.iter().any(|token| token.starts_with("files:")));
+        assert!(!tokens.iter().any(|token| token.starts_with("todo:")));
+        assert!(!tokens.iter().any(|token| token.starts_with("-type:")));
+    }
+
+    #[test]
+    fn type_value_partial_sc_narrows_further() {
+        let ctx = ctx_empty();
+        let snap = build_trigger_picker_snapshot(":type:sc", &ctx).expect("snapshot");
+        let tokens: Vec<&str> = snap
+            .rows
+            .iter()
+            .filter_map(|row| row.token.as_deref())
+            .collect();
+
+        assert!(
+            tokens.iter().all(|token| token.starts_with("type:sc")),
+            "partial :type:sc should only show matching type values, got {tokens:?}"
+        );
+        assert!(tokens.contains(&"type:script"));
+        assert!(tokens.contains(&"type:scriptlet"));
+        assert!(!tokens.contains(&"type:skill"));
+    }
+
+    #[test]
+    fn bare_type_value_partial_sc_narrows_further() {
+        let ctx = ctx_empty();
+        let snap = build_trigger_picker_snapshot("type:sc", &ctx).expect("snapshot");
+        let tokens: Vec<&str> = snap
+            .rows
+            .iter()
+            .filter_map(|row| row.token.as_deref())
+            .collect();
+
+        assert!(
+            tokens.iter().all(|token| token.starts_with("type:sc")),
+            "partial type:sc should only show matching type values, got {tokens:?}"
+        );
+        assert!(tokens.contains(&"type:script"));
+        assert!(tokens.contains(&"type:scriptlet"));
+        assert!(!tokens.contains(&"type:skill"));
+    }
+
+    #[test]
+    fn colon_type_open_value_lists_type_rows_only() {
+        let ctx = ctx_empty();
+        let snap = build_trigger_picker_snapshot(":type:", &ctx).expect("snapshot");
+        let tokens: Vec<&str> = snap
+            .rows
+            .iter()
+            .filter_map(|row| row.token.as_deref())
+            .collect();
+
+        assert_eq!(
+            tokens
+                .iter()
+                .filter(|token| token.starts_with("type:"))
+                .count(),
+            8
+        );
+        assert!(
+            tokens.iter().all(|token| token.starts_with("type:")),
+            "open :type: should stay in type values, got {tokens:?}"
+        );
+    }
+
+    #[test]
+    fn bare_type_open_value_lists_type_rows_only() {
+        let ctx = ctx_empty();
+        let snap = build_trigger_picker_snapshot("type:", &ctx).expect("snapshot");
+        let tokens: Vec<&str> = snap
+            .rows
+            .iter()
+            .filter_map(|row| row.token.as_deref())
+            .collect();
+
+        assert_eq!(
+            tokens
+                .iter()
+                .filter(|token| token.starts_with("type:"))
+                .count(),
+            8
+        );
+        assert!(
+            tokens.iter().all(|token| token.starts_with("type:")),
+            "open type: should stay in type values, got {tokens:?}"
+        );
+    }
+
+    #[test]
+    fn complete_type_value_shows_single_row_not_catalog() {
+        let ctx = ctx_empty();
+        let snap = build_trigger_picker_snapshot(":type:script", &ctx).expect("snapshot");
+        let tokens: Vec<&str> = snap
+            .rows
+            .iter()
+            .filter_map(|row| row.token.as_deref())
+            .collect();
+
+        assert_eq!(tokens, vec!["type:script"]);
+    }
+
+    #[test]
+    fn bare_complete_type_value_shows_single_row_not_catalog() {
+        let ctx = ctx_empty();
+        let snap = build_trigger_picker_snapshot("type:script", &ctx).expect("snapshot");
+        let tokens: Vec<&str> = snap
+            .rows
+            .iter()
+            .filter_map(|row| row.token.as_deref())
+            .collect();
+
+        assert_eq!(tokens, vec!["type:script"]);
+    }
+
+    #[test]
+    fn unknown_type_value_closes_picker() {
+        let ctx = ctx_empty();
+
+        assert!(build_trigger_picker_snapshot(":type:zzz", &ctx).is_none());
+    }
+
+    #[test]
+    fn bare_unknown_type_value_closes_picker() {
+        let ctx = ctx_empty();
+
+        assert!(build_trigger_picker_snapshot("type:zzz", &ctx).is_none());
+    }
+
+    #[test]
     fn trigger_picker_includes_hash_tag_filter_row() {
         let ctx = ctx_empty();
         let snap = build_trigger_picker_snapshot(":#", &ctx).expect("snapshot");
@@ -1989,6 +2210,23 @@ mod tests {
     }
 
     #[test]
+    fn complete_non_completable_predicates_do_not_open_catalog_popup() {
+        let ctx = ctx_empty();
+        for input in [
+            "shortcut:any",
+            "name:deploy",
+            "plugin:main",
+            "tag:work",
+            "type:script deploy",
+        ] {
+            assert!(
+                build_trigger_picker_snapshot(input, &ctx).is_none(),
+                "completed filter predicate {input:?} must not reopen the broad qualifier catalog"
+            );
+        }
+    }
+
+    #[test]
     fn colon_qualifier_with_open_value_keeps_popup_open() {
         let ctx = ctx_empty();
         let snap = build_trigger_picker_snapshot(":", &ctx).expect("snapshot");
@@ -2062,13 +2300,17 @@ mod tests {
     #[test]
     fn meta_path_is_not_flagged_as_typo() {
         let ctx = ctx_empty();
-        let snap = build_trigger_picker_snapshot(":meta.category:inbox", &ctx).expect("snapshot");
+        let snap = build_trigger_picker_snapshot(":meta.category:", &ctx).expect("snapshot");
         assert!(
             !snap
                 .rows
                 .iter()
                 .any(|r| r.kind == TriggerPickerRowKind::UnknownQualifierFix),
             "meta.<path> qualifiers must not fire typo suggestions"
+        );
+        assert!(
+            build_trigger_picker_snapshot(":meta.category:inbox", &ctx).is_none(),
+            "completed meta.<path>:value predicates must not reopen the broad qualifier catalog"
         );
     }
 

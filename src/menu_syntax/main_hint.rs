@@ -213,6 +213,9 @@ pub fn build_menu_syntax_main_hint(
                     active.as_ref(),
                 ));
             }
+            if snapshot.rows.iter().any(|row| row.enabled) {
+                return None;
+            }
             if let Some(active) = active.as_ref() {
                 if let Some(hint) = synthetic_active_head_empty_hint(ctx.raw_filter_text, active) {
                     return Some(hint);
@@ -1509,9 +1512,6 @@ fn synthetic_active_head_empty_hint(
         }
         ActiveHeadKind::ShortcutQualifier => {
             let value = active.value_partial.trim();
-            if value.is_empty() {
-                return None;
-            }
             let title = format!("No shortcut-backed scripts or scriptlets match `{value}`.");
             let primary_hint = "Remove `shortcut:any` to widen.".to_string();
             Some(finalize_hint(MenuSyntaxMainHintSnapshot {
@@ -1532,6 +1532,41 @@ fn synthetic_active_head_empty_hint(
                 secondary_hint: None,
                 example: Some("shortcut:any".to_string()),
                 examples: vec!["shortcut:any".to_string()],
+                warning: None,
+                active_head: raw_active_head,
+                active_head_value_partial: raw_active_partial,
+                accessibility_label: String::new(),
+            }))
+        }
+        ActiveHeadKind::TagQualifier | ActiveHeadKind::OtherQualifier => {
+            let filter = if active.value_partial.trim().is_empty() {
+                active.head.clone()
+            } else {
+                format!("{}{}", active.head, active.value_partial.trim())
+            };
+            let example = format!("{filter} shell");
+            Some(finalize_hint(MenuSyntaxMainHintSnapshot {
+                kind: MenuSyntaxMainHintKind::AdvancedQueryEmpty,
+                status_chips: Vec::new(),
+                capture_validation: None,
+                form: None,
+                unresolved_dates: Vec::new(),
+                menu_syntax_ai_proposal: None,
+                raw_filter_text: raw_filter_text.to_string(),
+                title: "No matching items match this filter.".to_string(),
+                subtitle: None,
+                mode_chip: Some(chip(": refine", MenuSyntaxMainHintTone::Accent)),
+                status_chip: Some(chip("no matches", MenuSyntaxMainHintTone::Muted)),
+                rows: vec![
+                    hint_row("Filter", &filter),
+                    hint_row("Scope", "matching items only"),
+                    hint_row("Recovery", &format!("Remove `{filter}` to widen results")),
+                ],
+                fragment_preview: None,
+                primary_hint: Some(format!("Remove `{filter}` to widen.")),
+                secondary_hint: None,
+                example: Some(example.clone()),
+                examples: vec![example],
                 warning: None,
                 active_head: raw_active_head,
                 active_head_value_partial: raw_active_partial,
@@ -2317,6 +2352,23 @@ pub fn active_head_is_source_filter(raw: &str) -> bool {
         .is_some_and(|active| matches!(active.kind, ActiveHeadKind::Source))
 }
 
+pub fn active_filter_head_owns_main_list(raw: &str) -> bool {
+    let Some(active) = active_head_context_for_filter(raw) else {
+        return false;
+    };
+    let value = active.value_partial.trim();
+    match active.kind {
+        ActiveHeadKind::Source | ActiveHeadKind::Capture | ActiveHeadKind::Command => false,
+        ActiveHeadKind::TypeQualifier => value.is_empty() || ArtifactKind::parse(value).is_none(),
+        ActiveHeadKind::Has => {
+            value.is_empty() || crate::menu_syntax::has_fields::lookup_has_field(value).is_none()
+        }
+        ActiveHeadKind::ShortcutQualifier
+        | ActiveHeadKind::TagQualifier
+        | ActiveHeadKind::OtherQualifier => value.is_empty(),
+    }
+}
+
 fn active_head_context_for_filter(raw: &str) -> Option<ActiveHeadContext> {
     let trimmed = raw.trim_start();
     if trimmed.is_empty() {
@@ -2391,6 +2443,18 @@ fn active_head_context_for_filter(raw: &str) -> Option<ActiveHeadContext> {
                 kind: ActiveHeadKind::Has,
             });
         }
+        for head in ["source", "plugin", "name", "desc", "description", "alias"] {
+            if let Some(value) = qualifier_value_partial(token, head) {
+                return Some(ActiveHeadContext {
+                    head: format!(":{head}:"),
+                    value_partial: value,
+                    kind: ActiveHeadKind::OtherQualifier,
+                });
+            }
+        }
+        if let Some(ctx) = meta_active_head_context(token, true) {
+            return Some(ctx);
+        }
         // Source heads after a leading colon, e.g. `:c:zzz` — treat as
         // an OtherQualifier for receipts but do not over-specialize copy.
         let lower_token = token.to_ascii_lowercase();
@@ -2417,6 +2481,12 @@ fn active_head_context_for_filter(raw: &str) -> Option<ActiveHeadContext> {
         ("tag", ActiveHeadKind::TagQualifier),
         ("shortcut", ActiveHeadKind::ShortcutQualifier),
         ("has", ActiveHeadKind::Has),
+        ("source", ActiveHeadKind::OtherQualifier),
+        ("plugin", ActiveHeadKind::OtherQualifier),
+        ("name", ActiveHeadKind::OtherQualifier),
+        ("desc", ActiveHeadKind::OtherQualifier),
+        ("description", ActiveHeadKind::OtherQualifier),
+        ("alias", ActiveHeadKind::OtherQualifier),
     ] {
         if let Some(value) = qualifier_value_partial(first_token, head) {
             return Some(ActiveHeadContext {
@@ -2425,6 +2495,9 @@ fn active_head_context_for_filter(raw: &str) -> Option<ActiveHeadContext> {
                 kind,
             });
         }
+    }
+    if let Some(ctx) = meta_active_head_context(first_token, false) {
+        return Some(ctx);
     }
 
     // Source heads (`c:`, `clipboard:`, etc.) used as the very first
@@ -2450,6 +2523,27 @@ fn active_head_context_for_filter(raw: &str) -> Option<ActiveHeadContext> {
         }
     }
 
+    None
+}
+
+fn meta_active_head_context(token: &str, leading_colon: bool) -> Option<ActiveHeadContext> {
+    let lower = token.to_ascii_lowercase();
+    if lower == "meta." || lower.starts_with("meta.") {
+        let (head, value) = match token.split_once(':') {
+            Some((head, value)) => (format!("{head}:"), value.to_string()),
+            None => (token.to_string(), String::new()),
+        };
+        let head = if leading_colon {
+            format!(":{head}")
+        } else {
+            head
+        };
+        return Some(ActiveHeadContext {
+            head,
+            value_partial: value,
+            kind: ActiveHeadKind::OtherQualifier,
+        });
+    }
     None
 }
 
@@ -4168,6 +4262,38 @@ mod tests {
         assert_eq!(ctx.head, ":tag:");
         assert_eq!(ctx.value_partial, "work");
 
+        let ctx = active_head_context_for_filter("meta.x:").expect("meta.x:");
+        assert_eq!(ctx.head, "meta.x:");
+        assert_eq!(ctx.value_partial, "");
+
+        let ctx = active_head_context_for_filter(":meta.x:value").expect(":meta.x:");
+        assert_eq!(ctx.head, ":meta.x:");
+        assert_eq!(ctx.value_partial, "value");
+
+        let ctx = active_head_context_for_filter("name:").expect("name:");
+        assert_eq!(ctx.head, "name:");
+        assert_eq!(ctx.value_partial, "");
+
+        let ctx = active_head_context_for_filter("desc:").expect("desc:");
+        assert_eq!(ctx.head, "desc:");
+        assert_eq!(ctx.value_partial, "");
+
+        let ctx = active_head_context_for_filter("description:").expect("description:");
+        assert_eq!(ctx.head, "description:");
+        assert_eq!(ctx.value_partial, "");
+
+        let ctx = active_head_context_for_filter("alias:").expect("alias:");
+        assert_eq!(ctx.head, "alias:");
+        assert_eq!(ctx.value_partial, "");
+
+        let ctx = active_head_context_for_filter("plugin:").expect("plugin:");
+        assert_eq!(ctx.head, "plugin:");
+        assert_eq!(ctx.value_partial, "");
+
+        let ctx = active_head_context_for_filter("source:").expect("source:");
+        assert_eq!(ctx.head, "source:");
+        assert_eq!(ctx.value_partial, "");
+
         let ctx = active_head_context_for_filter(";daily").expect(";");
         assert_eq!(ctx.head, ";");
         assert_eq!(ctx.value_partial, "daily");
@@ -4175,6 +4301,95 @@ mod tests {
         let ctx = active_head_context_for_filter("!ps").expect("!");
         assert_eq!(ctx.head, "!");
         assert_eq!(ctx.value_partial, "ps");
+    }
+
+    #[test]
+    fn active_filter_head_owns_unresolved_filter_heads() {
+        for raw in [
+            "type:",
+            "type:t",
+            "type:to",
+            "type:zzz",
+            ":type:s",
+            "has:",
+            "has:x",
+            "meta.",
+            "meta.x",
+            "meta.x:",
+            "name:",
+            "desc:",
+            "description:",
+            "alias:",
+            "plugin:",
+            "source:",
+        ] {
+            assert!(active_filter_head_owns_main_list(raw), "{raw}");
+        }
+    }
+
+    #[test]
+    fn active_filter_head_does_not_own_terminal_queries_or_source_heads() {
+        for raw in [
+            "type:script",
+            ":type:script",
+            "has:shortcut",
+            "shortcut:any",
+            "name:deploy",
+            "plugin:main",
+            "meta.x:value",
+            "c:",
+            "c:zzz",
+            "clipboard:zzz",
+            "files:report",
+            "f:",
+            ";todo",
+            ">deploy",
+            "png :f",
+            ":bro",
+            "plain search",
+        ] {
+            assert!(!active_filter_head_owns_main_list(raw), "{raw}");
+        }
+    }
+
+    #[test]
+    fn meta_path_open_value_gets_filter_owned_empty_hint() {
+        let hint = empty_hint_for("meta.x:");
+        assert_eq!(hint.kind, MenuSyntaxMainHintKind::AdvancedQueryEmpty);
+        assert_eq!(hint.active_head.as_deref(), Some("meta.x:"));
+        assert!(hint.rows.iter().any(|row| row.label == "Filter"));
+    }
+
+    #[test]
+    fn name_open_value_gets_filter_owned_empty_hint() {
+        let hint = empty_hint_for("name:");
+        assert_eq!(hint.kind, MenuSyntaxMainHintKind::AdvancedQueryEmpty);
+        assert_eq!(hint.active_head.as_deref(), Some("name:"));
+        assert!(hint.rows.iter().any(|row| row.label == "Filter"));
+    }
+
+    #[test]
+    fn type_value_picker_rows_suppress_empty_hint() {
+        let raw = "type:s";
+        let mode = MenuSyntaxMode::from_input(raw);
+        let snapshot =
+            build_trigger_picker_snapshot(raw, &TriggerPickerContext::default()).expect("snapshot");
+
+        let hint = build_menu_syntax_main_hint(MenuSyntaxMainHintContext {
+            raw_filter_text: raw,
+            mode: &mode,
+            picker_snapshot: Some(&snapshot),
+            picker_selected_row_id: None,
+            scripts: &[],
+            scriptlets: &[],
+            advanced_query_results_empty: true,
+            menu_syntax_ai_proposal: None,
+        });
+
+        assert!(
+            hint.is_none(),
+            "picker rows should own the main list instead of reporting an empty hint: {hint:?}"
+        );
     }
 
     /// Regression: multibyte first tokens used to abort the whole app with

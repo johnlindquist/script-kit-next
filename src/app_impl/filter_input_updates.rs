@@ -1,4 +1,7 @@
 use super::*;
+
+const FILTER_COMPUTE_DEFER: std::time::Duration = std::time::Duration::from_millis(16);
+
 impl ScriptListApp {
     #[inline]
     fn filter_change_can_affect_window_size(&self) -> bool {
@@ -116,11 +119,11 @@ impl ScriptListApp {
         self.refresh_ghost_with_input(cx);
     }
 
-    pub(crate) fn queue_filter_compute(&mut self, value: String, cx: &mut Context<Self>) {
+    fn apply_filter_compute_now(&mut self, value: String, cx: &mut Context<Self>) {
         if self.computed_filter_text == value {
             tracing::debug!(
                 target: "script_kit::filter",
-                event = "queue_filter_compute_exact_query_noop",
+                event = "apply_filter_compute_exact_query_noop",
                 filter_len = value.len(),
             );
             return;
@@ -140,6 +143,10 @@ impl ScriptListApp {
             };
             self.filter_coalescer.reset();
             self.computed_filter_text = value.clone();
+            if crate::menu_syntax::active_filter_head_owns_main_list(&value) {
+                self.main_menu_fallback_state.clear();
+                self.invalidate_grouped_cache();
+            }
             self.maybe_start_root_file_search(&value, cx);
             self.maybe_start_root_brain_semantic_search(&value, cx);
             self.refresh_root_brain_inbox_if_stale(false, cx);
@@ -171,6 +178,41 @@ impl ScriptListApp {
             }
             cx.notify();
         }
+    }
+
+    pub(crate) fn queue_filter_compute(&mut self, value: String, cx: &mut Context<Self>) {
+        if self.computed_filter_text == value {
+            tracing::debug!(
+                target: "script_kit::filter",
+                event = "queue_filter_compute_exact_query_noop",
+                filter_len = value.len(),
+            );
+            self.filter_coalescer.reset();
+            return;
+        }
+
+        let should_spawn = self.filter_coalescer.queue(value);
+        if !should_spawn {
+            tracing::debug!(
+                target: "script_kit::filter",
+                event = "queue_filter_compute_coalesced",
+            );
+            return;
+        }
+
+        cx.spawn(async move |this, cx| {
+            cx.background_executor().timer(FILTER_COMPUTE_DEFER).await;
+
+            let _ = cx.update(|cx| {
+                this.update(cx, |app, cx| {
+                    let Some(latest) = app.filter_coalescer.take_latest() else {
+                        return;
+                    };
+                    app.apply_filter_compute_now(latest, cx);
+                })
+            });
+        })
+        .detach();
     }
 
     /// Apply a filter text change synchronously, without coalescer delay.
@@ -385,6 +427,7 @@ impl ScriptListApp {
             || self.menu_syntax_trigger_picker_state.snapshot.is_some()
             || self.menu_syntax_object_selector_state.snapshot.is_some()
             || self.menu_syntax_capture_form_owns_input_for(&text)
+            || crate::menu_syntax::active_filter_head_owns_main_list(&text)
         {
             // Menu syntax owns the result list entirely — clear any stale
             // fallback items so pressing Enter routes to execute_selected,
@@ -415,6 +458,7 @@ impl ScriptListApp {
         if !handled_by_subview && !text.is_empty() {
             if !handler_form_owns_input
                 && !self.menu_syntax_mode.is_menu_syntax_for(&text)
+                && !crate::menu_syntax::active_filter_head_owns_main_list(&text)
                 && self.menu_syntax_trigger_picker_state.snapshot.is_none()
                 && self.menu_syntax_object_selector_state.snapshot.is_none()
             {
@@ -642,7 +686,9 @@ impl ScriptListApp {
             && (self
                 .menu_syntax_mode
                 .capture_composer_owns_input_for(&self.filter_text)
-                || self.menu_syntax_mode.command_owns_input_for(&self.filter_text)
+                || self
+                    .menu_syntax_mode
+                    .command_owns_input_for(&self.filter_text)
                 || self.menu_syntax_capture_form_owns_input_for(&self.filter_text))
     }
 

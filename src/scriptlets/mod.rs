@@ -607,10 +607,22 @@ pub fn parse_html_comment_metadata(text: &str) -> ScriptletMetadata {
         if let Some(end) = remaining[start..].find("-->") {
             let comment_content = &remaining[start + 4..start + end];
 
-            // Parse key: value pairs
+            // Parse key: value pairs, but ignore fenced markdown that was
+            // commented out as an entire snippet block.
+            let mut comment_fence: Option<(FenceType, usize)> = None;
             for line in comment_content.lines() {
                 let trimmed = line.trim();
                 if trimmed.is_empty() {
+                    continue;
+                }
+                if let Some((fence_type, fence_count)) = comment_fence {
+                    if is_matching_fence_end(trimmed, fence_type, fence_count) {
+                        comment_fence = None;
+                    }
+                    continue;
+                }
+                if let Some((fence_type, fence_count, _)) = detect_fence_start(trimmed) {
+                    comment_fence = Some((fence_type, fence_count));
                     continue;
                 }
 

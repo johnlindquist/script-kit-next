@@ -831,11 +831,15 @@ impl ScriptListApp {
                 &transition,
                 crate::menu_syntax_trigger_picker::TriggerPickerTransition::Close
             ) || capture_composer_owns_input
+                || crate::menu_syntax::active_filter_head_owns_main_list(&new_text)
             {
                 // Popup just closed or the capture composer now owns the
                 // input — rebuild the main list with the ownership gate.
                 self.invalidate_grouped_cache();
             }
+        }
+        if crate::menu_syntax::active_filter_head_owns_main_list(&new_text) {
+            self.main_menu_fallback_state.clear();
         }
 
         if new_text == self.filter_text {
@@ -844,6 +848,10 @@ impl ScriptListApp {
 
         self.filter_text = new_text.clone();
         self.sync_menu_syntax_form_inputs_from_filter(window, cx);
+        // Echo the canonical input immediately. The grouped list remains keyed
+        // off `computed_filter_text` until the coalesced compute below applies,
+        // so this does not publish a partially recomputed result frame.
+        cx.notify();
 
         // Reset input history navigation when user types (they're no longer navigating history)
         self.input_history.reset_navigation();

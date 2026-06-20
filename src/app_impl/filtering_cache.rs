@@ -954,6 +954,7 @@ impl ScriptListApp {
         // the popup.
         if self.menu_syntax_object_selector_state.owns_main_list()
             || self.menu_syntax_trigger_picker_state.owns_main_list()
+            || crate::menu_syntax::active_filter_head_owns_main_list(filter_text)
             || self
                 .menu_syntax_mode
                 .capture_composer_owns_input_for(filter_text)
@@ -989,6 +990,7 @@ impl ScriptListApp {
     pub(crate) fn get_filtered_results_cached(&mut self) -> &Vec<scripts::SearchResult> {
         if self.menu_syntax_object_selector_state.owns_main_list()
             || self.menu_syntax_trigger_picker_state.owns_main_list()
+            || crate::menu_syntax::active_filter_head_owns_main_list(&self.filter_text)
             || self
                 .menu_syntax_mode
                 .capture_composer_owns_input_for(&self.filter_text)
@@ -1131,6 +1133,8 @@ impl ScriptListApp {
             self.spine_projection_owns_main_list() && self.spine_parse.input == live_filter_text;
         let popup_owns_live_main_list = self.menu_syntax_object_selector_state.owns_main_list()
             || self.menu_syntax_trigger_picker_state.owns_main_list();
+        let active_filter_head_owns_live_main_list =
+            crate::menu_syntax::active_filter_head_owns_main_list(live_filter_text);
         let live_menu_syntax_owns_main_list = popup_owns_live_main_list
             || (!spine_owns_live_main_list
                 && (self
@@ -1138,8 +1142,29 @@ impl ScriptListApp {
                     .capture_composer_owns_input_for(live_filter_text)
                     || self
                         .menu_syntax_mode
-                        .command_owns_input_for(live_filter_text)));
+                        .command_owns_input_for(live_filter_text)
+                    || active_filter_head_owns_live_main_list));
         if live_menu_syntax_owns_main_list && live_filter_text != computed_filter_text {
+            if self.menu_syntax_trigger_picker_state.owns_main_list() {
+                if let Some(snapshot) = self.menu_syntax_trigger_picker_state.snapshot.as_ref() {
+                    let (grouped_items, flat_results) =
+                        build_menu_syntax_trigger_picker_main_list_results(snapshot);
+                    return (
+                        Arc::<[GroupedListItem]>::from(grouped_items),
+                        Arc::<[scripts::SearchResult]>::from(flat_results),
+                    );
+                }
+            }
+            if self.menu_syntax_object_selector_state.owns_main_list() {
+                if let Some(snapshot) = self.menu_syntax_object_selector_state.snapshot.as_ref() {
+                    let (grouped_items, flat_results) =
+                        build_menu_syntax_object_selector_main_list_results(snapshot);
+                    return (
+                        Arc::<[GroupedListItem]>::from(grouped_items),
+                        Arc::<[scripts::SearchResult]>::from(flat_results),
+                    );
+                }
+            }
             return (
                 Arc::<[GroupedListItem]>::from(Vec::new()),
                 Arc::<[scripts::SearchResult]>::from(Vec::new()),
@@ -1178,6 +1203,7 @@ impl ScriptListApp {
         // When a sigil segment owns the list, build rows from the Spine
         // model instead of running normal fuzzy/root grouping.
         if !popup_owns_live_main_list
+            && !active_filter_head_owns_live_main_list
             && self.spine_projection_owns_main_list()
             && self.spine_parse.input == live_filter_text
         {
@@ -1649,6 +1675,8 @@ impl ScriptListApp {
             self.spine_projection_owns_main_list() && self.spine_parse.input == raw_filter_text;
         let popup_owns_computed_main_list = self.menu_syntax_object_selector_state.owns_main_list()
             || self.menu_syntax_trigger_picker_state.owns_main_list();
+        let active_filter_head_owns_computed_main_list =
+            crate::menu_syntax::active_filter_head_owns_main_list(&raw_filter_text);
         let menu_syntax_owns_main_list = popup_owns_computed_main_list
             || (!spine_owns_for_computed
                 && (self
@@ -1656,7 +1684,8 @@ impl ScriptListApp {
                     .capture_composer_owns_input_for(&raw_filter_text)
                     || self
                         .menu_syntax_mode
-                        .command_owns_input_for(&raw_filter_text)));
+                        .command_owns_input_for(&raw_filter_text)
+                    || active_filter_head_owns_computed_main_list));
 
         let (grouped_items, flat_results) = if self
             .menu_syntax_object_selector_state
@@ -2428,6 +2457,7 @@ impl ScriptListApp {
         let structural_clear = !matches!(self.current_view, AppView::ScriptList)
             || self.show_actions_popup
             || self.menu_syntax_trigger_picker_state.owns_main_list()
+            || crate::menu_syntax::active_filter_head_owns_main_list(&self.filter_text)
             || self.menu_syntax_capture_form_owns_input()
             || self.inline_calculator.is_some();
 

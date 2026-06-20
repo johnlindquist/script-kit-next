@@ -31,6 +31,16 @@ fn test_parse_metadata_alias_with_other_fields() {
 }
 
 #[test]
+fn test_parse_metadata_ignores_commented_codefence_body() {
+    let metadata = parse_html_comment_metadata(
+        "<!--\nalias: search\n```metadata\nkeyword: ignored,,\n```\ndescription: Search the web\n-->",
+    );
+    assert_eq!(metadata.alias, Some("search".to_string()));
+    assert_eq!(metadata.keyword, None);
+    assert_eq!(metadata.description, Some("Search the web".to_string()));
+}
+
+#[test]
 fn test_parse_metadata_alias_empty_value() {
     // Empty alias value should not be stored
     let metadata = parse_html_comment_metadata("<!-- alias: -->");
@@ -315,4 +325,3 @@ fn test_parse_markdown_no_code_block() {
     let scriptlets = parse_markdown_as_scriptlets(markdown, None);
     assert!(scriptlets.is_empty());
 }
-
