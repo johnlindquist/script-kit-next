@@ -1238,11 +1238,20 @@ impl ScriptListApp {
                                                     if let Some(row_id) = this
                                                         .selected_menu_syntax_trigger_row_id_from_main_list()
                                                     {
+                                                        logging::log(
+                                                            "UI",
+                                                            &format!(
+                                                                "Menu-syntax trigger picker row click accepting row_id={} item={} click_count={}",
+                                                                row_id, ix, click_count
+                                                            ),
+                                                        );
                                                         this.accept_menu_syntax_trigger_picker_row(
                                                             &row_id,
                                                             Some(window),
                                                             cx,
                                                         );
+                                                        cx.stop_propagation();
+                                                        return;
                                                     }
                                                 } else {
                                                     logging::log(
@@ -2467,8 +2476,15 @@ mod render_script_list_click_contract_tests {
             "render_script_list should use the shared selected-row click helper"
         );
         assert!(
-            source.contains("let was_selected = this.selected_index == ix;"),
+            source.contains("let was_selected = this.selected_index == ix")
+                && source.contains("!this.spine_empty_subsearch_selection_suppressed()"),
             "render_script_list click handler should capture whether the row was already selected"
+        );
+        assert!(
+            source.contains("Menu-syntax trigger picker row click accepting")
+                && source.contains("this.accept_menu_syntax_trigger_picker_row")
+                && source.contains("cx.stop_propagation();"),
+            "menu-syntax trigger picker clicks must consume the click after accepting the picker row"
         );
         assert!(
             source.contains("this.execute_selected(cx);"),
