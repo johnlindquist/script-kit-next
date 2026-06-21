@@ -606,6 +606,11 @@ impl ScriptListApp {
         if !matches!(self.current_view, AppView::ScriptList) {
             return;
         }
+        if self.menu_syntax_trigger_picker_owns_main_keyboard()
+            || crate::menu_syntax::active_filter_head_owns_main_list(&self.filter_text)
+        {
+            return;
+        }
 
         // Memo: this runs on every render frame, but the displayed-shortcut
         // specs only depend on the focused row (and the append-only
@@ -700,6 +705,38 @@ impl ScriptListApp {
             return false;
         }
 
+        if self.menu_syntax_trigger_picker_owns_main_keyboard()
+            || crate::menu_syntax::active_filter_head_owns_main_list(&self.filter_text)
+        {
+            if canonical_shortcut == "enter" {
+                if !self.menu_syntax_trigger_picker_owns_main_keyboard() {
+                    let text = self.filter_text.clone();
+                    self.run_menu_syntax_trigger_picker_state_machine(&text, window, cx);
+                }
+                if self.menu_syntax_trigger_picker_owns_main_keyboard()
+                    && self.apply_menu_syntax_trigger_picker_intent(
+                        crate::menu_syntax::InlinePickerKeyIntent::Accept,
+                        window,
+                        cx,
+                    )
+                {
+                    logging::log(
+                        "KEY_ROUTE",
+                        "Displayed shortcut enter consumed by menu-syntax trigger picker",
+                    );
+                    return true;
+                }
+            }
+            logging::log(
+                "KEY_ROUTE",
+                &format!(
+                    "Displayed shortcut {} blocked: menu-syntax owns main list",
+                    canonical_shortcut
+                ),
+            );
+            return true;
+        }
+
         let (script_info, actions) = self.main_list_actions_for_shortcut_routing();
         let filtered_actions: Vec<usize> = (0..actions.len()).collect();
         let Some(action_id) = crate::actions::matching_action_id_for_canonical_shortcut(
@@ -771,6 +808,39 @@ impl ScriptListApp {
                 ),
             );
             return false;
+        }
+
+        if self.menu_syntax_trigger_picker_owns_main_keyboard()
+            || crate::menu_syntax::active_filter_head_owns_main_list(&self.filter_text)
+        {
+            let canonical_keystroke = crate::shortcuts::keystroke_to_shortcut(key, modifiers);
+            if canonical_keystroke == "enter" {
+                if !self.menu_syntax_trigger_picker_owns_main_keyboard() {
+                    let text = self.filter_text.clone();
+                    self.run_menu_syntax_trigger_picker_state_machine(&text, window, cx);
+                }
+                if self.menu_syntax_trigger_picker_owns_main_keyboard()
+                    && self.apply_menu_syntax_trigger_picker_intent(
+                        crate::menu_syntax::InlinePickerKeyIntent::Accept,
+                        window,
+                        cx,
+                    )
+                {
+                    logging::log(
+                        "KEY_ROUTE",
+                        "Shortcut route enter consumed by menu-syntax trigger picker",
+                    );
+                    return true;
+                }
+            }
+            logging::log(
+                "KEY_ROUTE",
+                &format!(
+                    "Shortcut route blocked key={}: menu-syntax owns main list",
+                    canonical_keystroke
+                ),
+            );
+            return true;
         }
 
         let (script_info, actions) = self.main_list_actions_for_shortcut_routing();

@@ -319,7 +319,8 @@ impl ScriptListApp {
         let Some(crate::scripts::SearchResult::SpineProjection(row)) = flat.get(*flat_index) else {
             return None;
         };
-        row.id
+        row
+            .id
             .as_ref()
             .strip_prefix("menu-syntax-trigger:")
             .map(str::to_string)

@@ -218,6 +218,15 @@ impl ScriptListApp {
             );
             return;
         }
+        if self.menu_syntax_trigger_picker_owns_main_keyboard()
+            || crate::menu_syntax::active_filter_head_owns_main_list(&self.filter_text)
+        {
+            logging::log(
+                "KEY",
+                "Ignoring execute_selected: menu-syntax owns main list",
+            );
+            return;
+        }
 
         if let Some(invocation) = self
             .menu_syntax_mode
