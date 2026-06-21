@@ -80,6 +80,8 @@ interface FocusResult {
   activated: boolean;
   frontmost: boolean;
   focused: boolean;
+  keyboardReady: boolean;
+  osFrontmostProcess: string | null;
   attempts: number;
   settleMs: number;
   windowId: number;
@@ -88,6 +90,8 @@ interface FocusResult {
 interface StatusResult {
   appRunning: boolean;
   frontmost: boolean;
+  keyboardReady: boolean;
+  osFrontmostProcess: string | null;
   visibleWindows: number;
   windows: WindowInfo[];
 }
@@ -195,6 +199,24 @@ async function runCommand(
     });
   }
   return stdout.trim();
+}
+
+async function currentFrontmostProcessName(): Promise<string | null> {
+  try {
+    const name = await runOsascript(
+      'tell application "System Events" to get name of first application process whose frontmost is true'
+    );
+    return name || null;
+  } catch (e: any) {
+    stderrLog("frontmost_process_check_failed", { error: e.message });
+    return null;
+  }
+}
+
+function isScriptKitFrontmostProcess(name: string | null): boolean {
+  return name
+    ? /^(script-kit-gpui|Script Kit|Script Kit GPUI)$/i.test(name)
+    : false;
 }
 
 // ---------------------------------------------------------------------------
@@ -440,6 +462,8 @@ async function focusWindow(
   let lastFrontmost = false;
   let lastFocused = false;
   let windowId = 0;
+  let osFrontmostProcess: string | null = null;
+  let keyboardReady = false;
 
   for (let attempt = 1; attempt <= retryCount; attempt++) {
     stderrLog("window_focus_attempt", { attempt, retryCount, titleSubstr });
@@ -456,9 +480,13 @@ async function focusWindow(
       lastFocused = preCheck.focused;
       const resolved = await resolveWindowId(titleSubstr);
       windowId = resolved.windowId;
+      osFrontmostProcess = await currentFrontmostProcessName();
+      keyboardReady = isScriptKitFrontmostProcess(osFrontmostProcess);
       stderrLog("window_focus_panel_already_visible", {
         attempt,
         windowId,
+        osFrontmostProcess,
+        keyboardReady,
       });
       break;
     }
@@ -496,6 +524,8 @@ end tell`);
     const state = await checkFrontmost();
     lastFrontmost = state.frontmost;
     lastFocused = state.focused;
+    osFrontmostProcess = await currentFrontmostProcessName();
+    keyboardReady = isScriptKitFrontmostProcess(osFrontmostProcess);
 
     // Resolve window ID
     const resolved = await resolveWindowId(titleSubstr);
@@ -506,6 +536,8 @@ end tell`);
       frontmost: lastFrontmost,
       focused: lastFocused,
       windowId,
+      osFrontmostProcess,
+      keyboardReady,
     });
 
     if (lastFrontmost) break;
@@ -515,6 +547,8 @@ end tell`);
     activated: true,
     frontmost: lastFrontmost,
     focused: lastFocused,
+    keyboardReady,
+    osFrontmostProcess,
     attempts: retryCount,
     settleMs,
     windowId,
@@ -587,9 +621,12 @@ async function listSurfaces(titleSubstr: string): Promise<ListResult> {
 
 async function getStatus(): Promise<StatusResult> {
   const findResult = await findWindows("");
+  const osFrontmostProcess = await currentFrontmostProcessName();
   return {
     appRunning: findResult.appRunning,
     frontmost: findResult.windows.some((w) => w.frontmost),
+    keyboardReady: isScriptKitFrontmostProcess(osFrontmostProcess),
+    osFrontmostProcess,
     visibleWindows: findResult.windows.filter((w) => w.visible).length,
     windows: findResult.windows,
   };

@@ -378,22 +378,26 @@ async function ensureFocusViaWindowTs(
 
   const frontmost = parsed?.data?.frontmost ?? false;
   const focused = parsed?.data?.focused ?? false;
+  const keyboardReady = parsed?.data?.keyboardReady ?? frontmost;
+  const osFrontmostProcess = parsed?.data?.osFrontmostProcess ?? null;
 
   stderrLog("focus_delegate_result", {
     exitCode,
     frontmost,
     focused,
+    keyboardReady,
+    osFrontmostProcess,
     windowId: parsed?.data?.windowId ?? 0,
   });
 
-  if (exitCode !== 0 && !frontmost) {
+  if (exitCode !== 0 && !keyboardReady) {
     // Non-fatal: we tried but may not be frontmost
     stderrLog("focus_delegate_warning", {
-      message: "window.ts focus did not confirm frontmost",
+      message: "window.ts focus did not confirm keyboard-ready frontmost process",
     });
   }
 
-  return { frontmost, focused };
+  return { frontmost: keyboardReady, focused };
 }
 
 // ---------------------------------------------------------------------------
