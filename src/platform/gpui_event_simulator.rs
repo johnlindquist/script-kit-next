@@ -92,7 +92,8 @@ fn rebase_mouse_event_to_dispatch_space(
     match event {
         SimulatedGpuiEvent::MouseMove { x, y }
         | SimulatedGpuiEvent::MouseDown { x, y, .. }
-        | SimulatedGpuiEvent::MouseUp { x, y, .. } => {
+        | SimulatedGpuiEvent::MouseUp { x, y, .. }
+        | SimulatedGpuiEvent::MouseClick { x, y, .. } => {
             tracing::info!(
                 target: "script_kit::automation",
                 window_id = %resolved.id,
@@ -122,6 +123,11 @@ fn rebase_mouse_event_to_dispatch_space(
             button: button.clone(),
         },
         SimulatedGpuiEvent::MouseUp { x, y, button } => SimulatedGpuiEvent::MouseUp {
+            x: x + offset_x,
+            y: y + offset_y,
+            button: button.clone(),
+        },
+        SimulatedGpuiEvent::MouseClick { x, y, button } => SimulatedGpuiEvent::MouseClick {
             x: x + offset_x,
             y: y + offset_y,
             button: button.clone(),
@@ -263,6 +269,29 @@ fn apply_simulated_event(
             window.dispatch_event(
                 gpui::PlatformInput::MouseUp(gpui::MouseUpEvent {
                     button: parse_mouse_button(button.as_deref()),
+                    position,
+                    modifiers: gpui::Modifiers::default(),
+                    click_count: 1,
+                }),
+                cx,
+            );
+        }
+        SimulatedGpuiEvent::MouseClick { x, y, button } => {
+            let position = gpui::point(gpui::px(*x as f32), gpui::px(*y as f32));
+            let button = parse_mouse_button(button.as_deref());
+            window.dispatch_event(
+                gpui::PlatformInput::MouseDown(gpui::MouseDownEvent {
+                    button,
+                    position,
+                    modifiers: gpui::Modifiers::default(),
+                    click_count: 1,
+                    first_mouse: false,
+                }),
+                cx,
+            );
+            window.dispatch_event(
+                gpui::PlatformInput::MouseUp(gpui::MouseUpEvent {
+                    button,
                     position,
                     modifiers: gpui::Modifiers::default(),
                     click_count: 1,
@@ -452,6 +481,7 @@ pub(crate) fn dispatch_gpui_event(
         SimulatedGpuiEvent::MouseMove { .. } => "mouseMove",
         SimulatedGpuiEvent::MouseDown { .. } => "mouseDown",
         SimulatedGpuiEvent::MouseUp { .. } => "mouseUp",
+        SimulatedGpuiEvent::MouseClick { .. } => "mouseClick",
     };
 
     tracing::info!(

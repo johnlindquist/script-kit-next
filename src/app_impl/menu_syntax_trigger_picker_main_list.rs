@@ -310,9 +310,16 @@ impl ScriptListApp {
     }
 
     pub(crate) fn selected_menu_syntax_trigger_row_id_from_main_list(&mut self) -> Option<String> {
+        self.menu_syntax_trigger_row_id_from_main_list_index(self.selected_index)
+    }
+
+    pub(crate) fn menu_syntax_trigger_row_id_from_main_list_index(
+        &mut self,
+        grouped_index: usize,
+    ) -> Option<String> {
         let (grouped, flat) = self.get_grouped_results_cached();
         let crate::list_item::GroupedListItem::Item(flat_index) =
-            grouped.get(self.selected_index)?
+            grouped.get(grouped_index)?
         else {
             return None;
         };

@@ -197,6 +197,19 @@ fn simulate_gpui_event_mouse_down_round_trip() {
 }
 
 #[test]
+fn simulate_gpui_event_mouse_click_round_trip() {
+    let event = SimulatedGpuiEvent::MouseClick {
+        x: 50.0,
+        y: 100.0,
+        button: Some("left".into()),
+    };
+    let json = serde_json::to_string(&event).expect("serialize");
+    assert!(json.contains(r#""type":"mouseClick"#));
+    let back: SimulatedGpuiEvent = serde_json::from_str(&json).expect("deserialize");
+    assert_eq!(back, event);
+}
+
+#[test]
 fn simulate_gpui_event_request_round_trip() {
     let json = r#"{
         "type": "simulateGpuiEvent",

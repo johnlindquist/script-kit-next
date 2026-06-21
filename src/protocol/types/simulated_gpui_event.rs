@@ -32,4 +32,16 @@ pub enum SimulatedGpuiEvent {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         button: Option<String>,
     },
+    /// Simulate a complete mouse click in a single GPUI update.
+    ///
+    /// GPUI synthesizes `ClickEvent` from state shared between mouse down
+    /// and mouse up, so this is the proof-grade primitive for `.on_click`
+    /// handlers. Separate `mouseDown`/`mouseUp` RPCs can re-render between
+    /// events and lose that pending state.
+    MouseClick {
+        x: f64,
+        y: f64,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        button: Option<String>,
+    },
 }

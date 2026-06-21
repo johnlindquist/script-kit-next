@@ -1123,6 +1123,10 @@ pub(crate) struct ScriptListApp {
     // Accumulates fractional deltas until they cross 1.0, then converts to item steps
     wheel_accum: f32,
     main_list_suppress_hover_until_mouse_move: bool,
+    /// Armed when a menu-syntax picker row accepts on mouse down. The same
+    /// physical click can finish after the list has re-rendered to normal
+    /// launcher rows; consume that trailing click so it cannot submit row 0.
+    menu_syntax_trigger_picker_suppress_next_launcher_click: bool,
     // Window focus tracking - for detecting focus lost and auto-dismissing prompts
     // When window loses focus while in a dismissable prompt, close and reset
     was_window_focused: bool,

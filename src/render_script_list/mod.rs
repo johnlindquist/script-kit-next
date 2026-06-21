@@ -1193,6 +1193,34 @@ impl ScriptListApp {
                                             }
                                         },
                                     );
+                                    let mouse_down_handler = cx.listener(
+                                        move |this: &mut ScriptListApp,
+                                              _event: &gpui::MouseDownEvent,
+                                              window,
+                                              cx| {
+                                            if this.menu_syntax_trigger_picker_owns_main_keyboard()
+                                            {
+                                                if let Some(row_id) = this
+                                                    .menu_syntax_trigger_row_id_from_main_list_index(ix)
+                                                {
+                                                    logging::log(
+                                                        "UI",
+                                                        &format!(
+                                                            "Menu-syntax trigger picker row mouse-down accepting row_id={} item={}",
+                                                            row_id, ix
+                                                        ),
+                                                    );
+                                                    this.accept_menu_syntax_trigger_picker_row(
+                                                        &row_id,
+                                                        Some(window),
+                                                        cx,
+                                                    );
+                                                    this.menu_syntax_trigger_picker_suppress_next_launcher_click = true;
+                                                    cx.stop_propagation();
+                                                }
+                                            }
+                                        },
+                                    );
 
                                     // Create click handler matching launcher click semantics
                                     let click_handler = cx.listener(
@@ -1200,6 +1228,18 @@ impl ScriptListApp {
                                               event: &gpui::ClickEvent,
                                               window,
                                               cx| {
+                                            if this.menu_syntax_trigger_picker_suppress_next_launcher_click {
+                                                logging::log(
+                                                    "UI",
+                                                    &format!(
+                                                        "Menu-syntax trigger picker consumed trailing launcher click item={}",
+                                                        ix
+                                                    ),
+                                                );
+                                                this.menu_syntax_trigger_picker_suppress_next_launcher_click = false;
+                                                cx.stop_propagation();
+                                                return;
+                                            }
                                             // While the empty colon mode renders unarmed, no row
                                             // reads as "already selected", so the first click
                                             // arms + selects instead of submitting the internal
@@ -1338,6 +1378,7 @@ impl ScriptListApp {
                                         ))
                                         .h(px(effective_list_item_height))
                                         .on_mouse_move(mouse_move_handler)
+                                        .on_mouse_down(gpui::MouseButton::Left, mouse_down_handler)
                                         .on_hover(hover_handler)
                                         .on_click(click_handler)
                                         .child(item_element)
@@ -2481,10 +2522,15 @@ mod render_script_list_click_contract_tests {
             "render_script_list click handler should capture whether the row was already selected"
         );
         assert!(
-            source.contains("Menu-syntax trigger picker row click accepting")
+            source.contains("Menu-syntax trigger picker row mouse-down accepting")
+                && source.contains("menu_syntax_trigger_row_id_from_main_list_index(ix)")
+                && source.contains(
+                    "this.menu_syntax_trigger_picker_suppress_next_launcher_click = true;"
+                )
+                && source.contains("Menu-syntax trigger picker consumed trailing launcher click")
                 && source.contains("this.accept_menu_syntax_trigger_picker_row")
                 && source.contains("cx.stop_propagation();"),
-            "menu-syntax trigger picker clicks must consume the click after accepting the picker row"
+            "menu-syntax trigger picker pointer selection must accept on mouse down and consume the trailing launcher click"
         );
         assert!(
             source.contains("this.execute_selected(cx);"),

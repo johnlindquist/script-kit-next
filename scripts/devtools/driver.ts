@@ -324,20 +324,15 @@ export class Driver {
     const eventTarget = opts.target;
     const timeoutMs = opts.timeoutMs;
     const button = opts.button ?? "left";
-    const common = { button, x, y };
     const move = await this.simulateGpuiEvent(
       { type: "mouseMove", x, y },
       { target: eventTarget, timeoutMs },
     );
-    const down = await this.simulateGpuiEvent(
-      { type: "mouseDown", ...common },
+    const click = await this.simulateGpuiEvent(
+      { type: "mouseClick", button, x, y },
       { target: eventTarget, timeoutMs },
     );
-    const up = await this.simulateGpuiEvent(
-      { type: "mouseUp", ...common },
-      { target: eventTarget, timeoutMs },
-    );
-    return [move, down, up];
+    return [move, click];
   }
 
   waitFor(

@@ -16,6 +16,8 @@ use script_kit_gpui::protocol::{
 use std::sync::atomic::{AtomicU32, Ordering};
 
 const GPUI_EVENT_SIMULATOR: &str = include_str!("../../src/platform/gpui_event_simulator.rs");
+const PROTOCOL_SIMULATED_GPUI_EVENT: &str =
+    include_str!("../../src/protocol/types/simulated_gpui_event.rs");
 
 static TEST_COUNTER: AtomicU32 = AtomicU32::new(50_000);
 fn prefix() -> String {
@@ -639,6 +641,23 @@ fn gpui_event_simulator_keeps_mouse_down_up_on_exact_actions_dialog_handle() {
         assert!(
             GPUI_EVENT_SIMULATOR.contains(needle),
             "exact ActionsDialog handle must keep mouse down/up before attached-surface rebasing: {needle}"
+        );
+    }
+}
+
+#[test]
+fn gpui_event_simulator_has_single_update_mouse_click_for_on_click_handlers() {
+    for needle in [
+        "SimulatedGpuiEvent::MouseClick { .. } => \"mouseClick\"",
+        "SimulatedGpuiEvent::MouseClick { x, y, button } =>",
+        "gpui::PlatformInput::MouseDown(gpui::MouseDownEvent",
+        "gpui::PlatformInput::MouseUp(gpui::MouseUpEvent",
+        "Separate `mouseDown`/`mouseUp` RPCs can re-render between",
+    ] {
+        assert!(
+            GPUI_EVENT_SIMULATOR.contains(needle)
+                || PROTOCOL_SIMULATED_GPUI_EVENT.contains(needle),
+            "simulateGpuiEvent must expose one-update mouseClick for proof-grade .on_click handling: {needle}"
         );
     }
 }
