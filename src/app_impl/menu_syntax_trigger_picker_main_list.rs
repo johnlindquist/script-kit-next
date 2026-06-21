@@ -157,18 +157,11 @@ impl ScriptListApp {
                 self.pending_filter_sync = true;
                 self.computed_filter_text = text.clone();
                 self.set_menu_syntax_mode_from_filter(&text);
-                self.invalidate_grouped_cache();
-                self.reconcile_script_list_after_filter_change(
-                    "menu_syntax_trigger_picker_replace",
-                    cx,
-                );
 
                 if keep_open {
                     // Re-run the picker state machine against the new filter
-                    // so the picker shows a snapshot matching the replaced
-                    // text (e.g. Tab on `;` -> replace filter with `;todo `
-                    // -> picker should now show todo's capture-handler rows,
-                    // not the bare target list).
+                    // before rebuilding grouped rows so the cache stores rows
+                    // for the next picker snapshot, not the stale one.
                     if let Some(window) = window {
                         self.run_menu_syntax_trigger_picker_state_machine(&text, window, cx);
                     }
@@ -187,6 +180,12 @@ impl ScriptListApp {
                     // changes (user types a body character or deletes).
                     self.menu_syntax_trigger_picker_suppressed_filter = Some(text.clone());
                 }
+
+                self.invalidate_grouped_cache();
+                self.reconcile_script_list_after_filter_change(
+                    "menu_syntax_trigger_picker_replace",
+                    cx,
+                );
                 cx.notify();
             }
             TriggerPickerIntentOutcome::Close => {
