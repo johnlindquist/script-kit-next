@@ -353,6 +353,18 @@ impl ScriptListApp {
 
             if let Some(result) = selected_result {
                 let submitted_value = result.launcher_command_name();
+                tracing::info!(
+                    target: "script_kit::submit",
+                    event = "launcher_execute_selected_resolved",
+                    filter_text = %self.filter_text,
+                    computed_filter_text = %self.computed_filter_text,
+                    selected_index = self.selected_index,
+                    flat_result_index = idx,
+                    submitted_value = %submitted_value,
+                    result_name = %result.name(),
+                    result_type = %result.type_label(),
+                    "launcher execute_selected resolved visible row"
+                );
                 self.record_submit_diagnostic(
                     "launcher",
                     "execute_selected",

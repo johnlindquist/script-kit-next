@@ -774,13 +774,14 @@ impl ScriptListApp {
                     logging::log(
                         "KEY",
                         &format!(
-                            "PressEnter event: visible={}, view={:?}, actions_popup={}, fallback_mode={}, selected_index={}, filter_len={}",
+                            "PressEnter event: visible={}, view={:?}, actions_popup={}, fallback_mode={}, selected_index={}, filter='{}', computed_filter='{}'",
                             script_kit_gpui::is_main_window_visible(),
                             std::mem::discriminant(&this.current_view),
                             this.show_actions_popup,
                             this.main_menu_fallback_state.is_active(),
                             this.selected_index,
-                            this.filter_text.len()
+                            this.filter_text,
+                            this.computed_filter_text
                         ),
                     );
 

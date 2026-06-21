@@ -224,6 +224,41 @@ async function runProcess(
   return { stdout: stdout.trim(), stderr: stderr.trim(), exitCode };
 }
 
+async function currentFrontmostProcessName(): Promise<string | null> {
+  const result = await runProcess(
+    [
+      "osascript",
+      "-e",
+      'tell application "System Events" to get name of first application process whose frontmost is true',
+    ],
+    "frontmost-process"
+  );
+  if (result.exitCode !== 0) return null;
+  return result.stdout || null;
+}
+
+async function assertScriptKitFrontmost(action: string): Promise<void> {
+  if (allowAnyFrontmost) return;
+  const frontmostProcess = await currentFrontmostProcessName();
+  const ok = frontmostProcess
+    ? /^(script-kit-gpui|Script Kit|Script Kit GPUI)$/i.test(frontmostProcess)
+    : false;
+  stderrLog("native_frontmost_check", {
+    action,
+    frontmostProcess,
+    required: "script-kit-gpui",
+    ok,
+  });
+  if (!ok) {
+    throw Object.assign(
+      new Error(
+        `Refusing OS-level ${action}: frontmost app is ${frontmostProcess ?? "unknown"}, not script-kit-gpui. Use --allow-any-frontmost only when intentionally targeting the current frontmost app.`
+      ),
+      { code: "SCRIPT_KIT_NOT_FRONTMOST" }
+    );
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Session-aware focus: show window via session.sh then verify with window.ts
 // ---------------------------------------------------------------------------
@@ -478,6 +513,7 @@ async function sendKey(
   modifiers: string[],
   focusEnforced: boolean
 ): Promise<KeyResult> {
+  await assertScriptKitFrontmost("key");
   const cliclick = findCliclick();
   const keyLower = key.toLowerCase();
 
@@ -588,6 +624,7 @@ async function sendKey(
 }
 
 async function sendType(text: string, focusEnforced: boolean): Promise<TypeResult> {
+  await assertScriptKitFrontmost("type");
   const cliclick = findCliclick();
 
   if (cliclick) {
@@ -957,6 +994,7 @@ const focusTitle = getStringArg(args, "--focus-title", DEFAULT_FOCUS_TITLE);
 const sessionName = getStringArg(args, "--session", "");
 const targetSurface = getStringArg(args, "--target", "");
 const forceNative = hasFlag(args, "--force-native") || hasFlag(args, "--no-gpui-dispatch");
+const allowAnyFrontmost = hasFlag(args, "--allow-any-frontmost");
 
 function emit(data: Envelope<any>) {
   console.log(JSON.stringify(data, null, 2));
@@ -1026,7 +1064,7 @@ try {
           errorEnvelope(
             "key",
             "MISSING_KEY",
-            "Usage: macos-input.ts key <keyname> [--modifiers cmd,shift] [--force-native] [--ensure-focus] [--session NAME] [--target SURFACE]"
+            "Usage: macos-input.ts key <keyname> [--modifiers cmd,shift] [--force-native] [--ensure-focus] [--session NAME] [--target SURFACE] [--allow-any-frontmost]"
           )
         );
         process.exit(1);
@@ -1055,7 +1093,7 @@ try {
           errorEnvelope(
             "type",
             "MISSING_TEXT",
-            "Usage: macos-input.ts type <text> [--ensure-focus] [--session NAME] [--target SURFACE]"
+            "Usage: macos-input.ts type <text> [--ensure-focus] [--session NAME] [--target SURFACE] [--allow-any-frontmost]"
           )
         );
         process.exit(1);
@@ -1155,8 +1193,8 @@ try {
           schemaVersion: 1,
           script: "macos-input",
           commands: [
-            { name: "key", description: "Send a keystroke", flags: ["--modifiers", "--force-native", "--no-gpui-dispatch", "--ensure-focus", "--session", "--target", "--json"] },
-            { name: "type", description: "Deliver text input", flags: ["--ensure-focus", "--session", "--target", "--json"] },
+            { name: "key", description: "Send a keystroke", flags: ["--modifiers", "--force-native", "--no-gpui-dispatch", "--ensure-focus", "--session", "--target", "--allow-any-frontmost", "--json"] },
+            { name: "type", description: "Deliver text input", flags: ["--ensure-focus", "--session", "--target", "--allow-any-frontmost", "--json"] },
             { name: "click", description: "Click at screen coordinates", flags: ["--ensure-focus", "--session", "--target", "--json"] },
             { name: "sequence", description: "Run a sequence of actions", flags: ["--ensure-focus", "--session", "--target", "--json"] },
             { name: "check", description: "Verify prerequisites", flags: ["--json"] },
@@ -1184,6 +1222,7 @@ Focus enforcement:
                                  Requires --ensure-focus. Resolves via window.ts list.
   --force-native                 For key input with --session, bypass GPUI dispatch and deliver OS-level input.
   --no-gpui-dispatch             Alias for --force-native.
+  --allow-any-frontmost          Allow OS-level key/type even when Script Kit is not macOS frontmost.
 
 Named keys: enter, tab, escape, space, delete, backspace,
             up, down, left, right, home, end, pageup, pagedown,
@@ -1200,6 +1239,7 @@ Output:
   Schema version ${SCHEMA_VERSION} JSON envelopes on stdout.
   Structured NDJSON diagnostics on stderr.
   Exit 0 = delivered, 1 = failed or missing prerequisites.
+  OS-level key/type fail closed unless macOS reports script-kit-gpui frontmost.
 
 Focus delegation:
   When --ensure-focus is set, focus is enforced via window.ts (retry 3, settle 200ms).
