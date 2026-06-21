@@ -1014,7 +1014,10 @@ impl ScriptListApp {
                     )
                 })
                 .unwrap_or_else(|| div().w_full().h_full().into_any_element())
-        } else if active_filter_head_owns_main_list_for_render {
+        } else if active_filter_head_owns_main_list_for_render
+            && !trigger_picker_owns_main_list_for_render
+            && !object_selector_owns_main_list_for_render
+        {
             self.menu_syntax_main_hint_snapshot(&filter_text_for_render, true)
                 .map(|hint| {
                     render_menu_syntax_main_hint(

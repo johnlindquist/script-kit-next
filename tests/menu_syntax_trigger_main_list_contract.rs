@@ -92,6 +92,27 @@ fn trigger_picker_render_falls_through_to_shared_main_list() {
     );
 }
 
+/// Committed filter heads such as `type:` still use trigger-picker rows for
+/// their values. The active-head hint branch must not intercept those rows
+/// before the shared list renderer can paint them.
+#[test]
+fn active_filter_head_render_branch_excludes_trigger_and_object_pickers() {
+    let active_head_branch = RENDER_SCRIPT_LIST
+        .split("} else if active_filter_head_owns_main_list_for_render")
+        .nth(1)
+        .and_then(|tail| {
+            tail.split("} else if let Some(hint) = advanced_query_guide_hint")
+                .next()
+        })
+        .expect("active filter head render branch");
+
+    assert!(
+        active_head_branch.contains("&& !trigger_picker_owns_main_list_for_render")
+            && active_head_branch.contains("&& !object_selector_owns_main_list_for_render"),
+        "active filter head hint rendering must not preempt trigger/object picker rows"
+    );
+}
+
 #[test]
 fn trigger_picker_arrows_are_not_popup_intents() {
     let arrow_block = STARTUP
