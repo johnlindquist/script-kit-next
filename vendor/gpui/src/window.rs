@@ -1794,10 +1794,31 @@ impl Window {
             return;
         };
 
+        let trace_interceptors = std::env::var_os("GPUI_KEYSTROKE_INTERCEPTOR_TRACE").is_some();
+        let mut propagation_stopped = !cx.propagate_event;
+        let mut interceptor_index = 0usize;
+
         cx.keystroke_interceptors
             .clone()
             .retain(&(), move |callback| {
-                (callback)(
+                let index = interceptor_index;
+                interceptor_index += 1;
+
+                if propagation_stopped || !cx.propagate_event {
+                    propagation_stopped = true;
+                    if trace_interceptors {
+                        log::info!(
+                            target: "script_kit::keyboard",
+                            "keystroke_interceptor_skipped_after_stop key={} interceptor_index={} context_depth={}",
+                            key_down_event.keystroke.key,
+                            index,
+                            context_stack.len(),
+                        );
+                    }
+                    return true;
+                }
+
+                let keep = (callback)(
                     &KeystrokeEvent {
                         keystroke: key_down_event.keystroke.clone(),
                         action: None,
@@ -1805,7 +1826,22 @@ impl Window {
                     },
                     self,
                     cx,
-                )
+                );
+
+                if !cx.propagate_event {
+                    propagation_stopped = true;
+                    if trace_interceptors {
+                        log::info!(
+                            target: "script_kit::keyboard",
+                            "keystroke_interceptor_stopped_propagation key={} interceptor_index={} context_depth={}",
+                            key_down_event.keystroke.key,
+                            index,
+                            context_stack.len(),
+                        );
+                    }
+                }
+
+                keep
             });
     }
 
