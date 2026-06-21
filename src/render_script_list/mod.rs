@@ -1249,6 +1249,7 @@ impl ScriptListApp {
                                             this.arm_spine_empty_subsearch_selection();
                                             // Always select the item on any click
                                             if !was_selected {
+                                                this.clear_menu_syntax_filter_accept_hint();
                                                 this.selected_index = ix;
                                                 cx.notify();
                                             }

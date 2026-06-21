@@ -32,6 +32,77 @@ impl crate::menu_syntax::CaptureHandlerScaffoldEffects for AppCaptureHandlerScaf
 }
 
 impl ScriptListApp {
+    fn menu_syntax_type_filter_accept_label(filter: &str) -> Option<&'static str> {
+        match filter.trim() {
+            "type:script" => Some("Showing Scripts"),
+            "type:scriptlet" => Some("Showing Scriptlets"),
+            "type:skill" => Some("Showing Skills"),
+            "type:builtin" => Some("Showing Built-ins"),
+            "type:app" => Some("Showing Apps"),
+            "type:window" => Some("Showing Windows"),
+            "type:agent" => Some("Showing Agents"),
+            "type:issue" => Some("Showing Script Issues"),
+            _ => None,
+        }
+    }
+
+    fn arm_menu_syntax_filter_accept_hint(&mut self, filter: &str) {
+        let Some(label) = Self::menu_syntax_type_filter_accept_label(filter) else {
+            self.clear_menu_syntax_filter_accept_hint();
+            return;
+        };
+
+        self.menu_syntax_filter_accept_hint_label = Some(label.to_string());
+        self.menu_syntax_filter_accept_hint_filter = Some(filter.to_string());
+        self.menu_syntax_filter_accept_hint_selected_index = Some(self.selected_index);
+        tracing::info!(
+            target: "script_kit::menu_syntax_popup",
+            event = "menu_syntax_filter_accept_hint_armed",
+            filter = %filter,
+            selected_index = self.selected_index,
+            label,
+            "menu-syntax filter accept hint armed"
+        );
+    }
+
+    pub(crate) fn clear_menu_syntax_filter_accept_hint(&mut self) {
+        self.menu_syntax_filter_accept_hint_label = None;
+        self.menu_syntax_filter_accept_hint_filter = None;
+        self.menu_syntax_filter_accept_hint_selected_index = None;
+    }
+
+    pub(crate) fn menu_syntax_filter_accept_primary_label(&self) -> Option<&str> {
+        if !matches!(self.current_view, crate::AppView::ScriptList) {
+            return None;
+        }
+
+        let label = self.menu_syntax_filter_accept_hint_label.as_deref()?;
+        let filter = self.menu_syntax_filter_accept_hint_filter.as_deref()?;
+        let selected_index = self.menu_syntax_filter_accept_hint_selected_index?;
+        (self.filter_text == filter && self.selected_index == selected_index).then_some(label)
+    }
+
+    pub(crate) fn should_consume_menu_syntax_filter_accept_enter(
+        &mut self,
+        route: &'static str,
+    ) -> bool {
+        let Some(label) = self.menu_syntax_filter_accept_primary_label().map(str::to_string) else {
+            return false;
+        };
+
+        tracing::info!(
+            target: "script_kit::menu_syntax_popup",
+            event = "menu_syntax_filter_accept_enter_consumed",
+            route,
+            filter = %self.filter_text,
+            computed_filter = %self.computed_filter_text,
+            selected_index = self.selected_index,
+            label,
+            "menu-syntax accepted filter consumed Enter before auto-selected row execution"
+        );
+        true
+    }
+
     pub(crate) fn menu_syntax_trigger_picker_owns_main_keyboard(&self) -> bool {
         matches!(self.current_view, crate::AppView::ScriptList)
             && self.menu_syntax_trigger_picker_state.owns_main_list()
@@ -191,6 +262,11 @@ impl ScriptListApp {
             TriggerPickerIntentOutcome::Ignored
             | TriggerPickerIntentOutcome::SelectionChanged { .. } => {}
             TriggerPickerIntentOutcome::ReplaceInput { text, keep_open } => {
+                let filter_accept_hint_filter = if keep_open {
+                    None
+                } else {
+                    Self::menu_syntax_type_filter_accept_label(&text).map(|_| text.clone())
+                };
                 // Stage the replacement — render() will reconcile the GPUI
                 // InputState on the next frame (needs `&mut Window`). The
                 // input history, fallback state, and grouped cache all key
@@ -229,6 +305,11 @@ impl ScriptListApp {
                     "menu_syntax_trigger_picker_replace",
                     cx,
                 );
+                if let Some(filter) = filter_accept_hint_filter {
+                    self.arm_menu_syntax_filter_accept_hint(&filter);
+                    self.invalidate_main_window_preflight();
+                    self.rebuild_main_window_preflight_if_needed();
+                }
                 cx.notify();
             }
             TriggerPickerIntentOutcome::Close => {

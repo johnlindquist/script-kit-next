@@ -1045,6 +1045,13 @@ pub(crate) struct ScriptListApp {
     /// popup can open again when the user keeps typing or deletes back
     /// to a partial trigger.
     menu_syntax_trigger_picker_suppressed_filter: Option<String>,
+    /// One-shot footer/Enter hint after accepting a menu-syntax filter
+    /// qualifier such as `type:script`. The list is filtered and a row is
+    /// selected for keyboard continuity, but Enter should not advertise or
+    /// perform that row's action until the user moves selection.
+    menu_syntax_filter_accept_hint_label: Option<String>,
+    menu_syntax_filter_accept_hint_filter: Option<String>,
+    menu_syntax_filter_accept_hint_selected_index: Option<usize>,
     // Scroll stabilization: track last scrolled-to index to avoid redundant scroll_to_item calls
     last_scrolled_index: Option<usize>,
     // Preview cache: avoid re-reading file and re-highlighting on every render

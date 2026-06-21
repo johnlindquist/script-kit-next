@@ -237,6 +237,9 @@
             main_list_suppress_hover_until_mouse_move: false,
             menu_syntax_trigger_picker_suppress_next_launcher_click: false,
             menu_syntax_trigger_picker_enter_guard: None,
+            menu_syntax_filter_accept_hint_label: None,
+            menu_syntax_filter_accept_hint_filter: None,
+            menu_syntax_filter_accept_hint_selected_index: None,
             // Window focus tracking - for detecting focus lost and auto-dismissing prompts
             was_window_focused: false,
             // Pin state - when true, window stays open on blur

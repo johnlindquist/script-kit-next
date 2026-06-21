@@ -159,6 +159,10 @@ impl ScriptListApp {
             return "Type to Search".to_string();
         }
 
+        if let Some(label) = self.menu_syntax_filter_accept_primary_label() {
+            return label.to_string();
+        }
+
         let Some(selected_index) = crate::list_item::coerce_selection(
             &self.main_menu_result_caches.grouped_items(),
             self.selected_index,

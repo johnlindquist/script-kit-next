@@ -6,6 +6,9 @@ const FILTERING_CACHE: &str = include_str!("../src/app_impl/filtering_cache.rs")
 const RENDER_SCRIPT_LIST: &str = include_str!("../src/render_script_list/mod.rs");
 const STARTUP: &str = include_str!("../src/app_impl/startup.rs");
 const SIMULATE_KEY: &str = include_str!("../src/app_impl/simulate_key_dispatch.rs");
+const UI_WINDOW: &str = include_str!("../src/app_impl/ui_window.rs");
+const SELECTION_FALLBACK: &str = include_str!("../src/app_impl/selection_fallback.rs");
+const APP_NAV_MOVEMENT: &str = include_str!("../src/app_navigation/impl_movement.rs");
 const PROMPT_HANDLER: &str = include_str!("../src/prompt_handler/mod.rs");
 const COLLECT_ELEMENTS: &str = include_str!("../src/app_layout/collect_elements.rs");
 
@@ -91,6 +94,60 @@ fn trigger_picker_enter_accept_arms_press_enter_echo_guard() {
             && STARTUP.find("this.should_consume_menu_syntax_trigger_picker_press_enter(")
                 < STARTUP.find("this.should_consume_script_list_enter_after_submit("),
         "ScriptList PressEnter must check the trigger-picker echo guard before launcher submit guards"
+    );
+}
+
+/// Accepting a type qualifier filters the main list while leaving the first
+/// script row selected. The footer must describe the committed filter rather
+/// than advertising that auto-selected row as immediately runnable.
+#[test]
+fn type_filter_accept_uses_temporary_showing_footer_label() {
+    for needle in [
+        "fn menu_syntax_type_filter_accept_label",
+        "\"type:script\" => Some(\"Showing Scripts\")",
+        "fn arm_menu_syntax_filter_accept_hint",
+        "event = \"menu_syntax_filter_accept_hint_armed\"",
+        "self.arm_menu_syntax_filter_accept_hint(&filter);",
+        "self.rebuild_main_window_preflight_if_needed();",
+    ] {
+        assert!(
+            TRIGGER_OWNER.contains(needle),
+            "trigger picker accept path must arm a temporary type-filter footer hint: {needle}"
+        );
+    }
+
+    assert!(
+        UI_WINDOW.contains("self.menu_syntax_filter_accept_primary_label()")
+            && UI_WINDOW.contains("return label.to_string();"),
+        "main-window footer label must route the accepted-filter hint through the shared primary label path"
+    );
+}
+
+/// While the accepted-filter hint is visible, Enter must not run the first
+/// filtered script row. Explicit navigation clears the hint and restores the
+/// normal Run Script label/behavior.
+#[test]
+fn type_filter_accept_hint_consumes_enter_until_selection_moves() {
+    assert!(
+        TRIGGER_OWNER.contains("fn should_consume_menu_syntax_filter_accept_enter")
+            && TRIGGER_OWNER.contains("event = \"menu_syntax_filter_accept_enter_consumed\""),
+        "trigger picker owner must expose/log Enter consumption for accepted-filter hint"
+    );
+    assert!(
+        SELECTION_FALLBACK
+            .contains("self.should_consume_menu_syntax_filter_accept_enter(\"execute_selected\")"),
+        "normal launcher execute path must consume Enter while accepted-filter hint is active"
+    );
+    assert!(
+        SIMULATE_KEY.contains(
+            "view.should_consume_menu_syntax_filter_accept_enter(\n                                    \"simulate_key_enter\","
+        ),
+        "simulateKey Enter path must consume the accepted-filter hint before execute_selected"
+    );
+    assert!(
+        APP_NAV_MOVEMENT.contains("self.clear_menu_syntax_filter_accept_hint();")
+            && RENDER_SCRIPT_LIST.contains("this.clear_menu_syntax_filter_accept_hint();"),
+        "keyboard and mouse selection movement must clear the accepted-filter hint"
     );
 }
 

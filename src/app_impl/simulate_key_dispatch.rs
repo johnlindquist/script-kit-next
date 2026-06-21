@@ -579,6 +579,15 @@ impl ScriptListApp {
                                     logging::log("STDIN", "SimulateKey: Enter - spine consumed");
                                     return;
                                 }
+                                if view.should_consume_menu_syntax_filter_accept_enter(
+                                    "simulate_key_enter",
+                                ) {
+                                    logging::log(
+                                        "STDIN",
+                                        "SimulateKey: Enter - accepted menu-syntax filter hint consumed",
+                                    );
+                                    return;
+                                }
                                 logging::log("STDIN", "SimulateKey: Enter - execute selected");
                                 view.execute_selected(ctx);
                             }

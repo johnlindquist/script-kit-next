@@ -12,6 +12,7 @@ impl ScriptListApp {
             return;
         }
 
+        self.clear_menu_syntax_filter_accept_hint();
         self.selected_index = ix;
         self.maybe_expand_root_file_source_chip_page(cx);
         self.rebuild_main_window_preflight_if_needed();

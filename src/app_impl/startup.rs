@@ -1082,6 +1082,9 @@ impl ScriptListApp {
                 crate::menu_syntax_trigger_picker::MenuSyntaxTriggerPickerState::default(),
             menu_syntax_object_selector_state:
                 crate::menu_syntax::MenuSyntaxObjectSelectorState::default(),
+            menu_syntax_filter_accept_hint_label: None,
+            menu_syntax_filter_accept_hint_filter: None,
+            menu_syntax_filter_accept_hint_selected_index: None,
             menu_syntax_form_focused_index: 0,
             menu_syntax_form_signature: None,
             menu_syntax_form_inputs: Vec::new(),

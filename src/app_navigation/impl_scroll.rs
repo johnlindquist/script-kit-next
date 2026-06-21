@@ -303,6 +303,7 @@ impl ScriptListApp {
             selected_after = target,
             scroll_top_item_ix = scroll_top.item_ix,
         );
+        self.clear_menu_syntax_filter_accept_hint();
         self.selected_index = target;
         self.last_scrolled_index = Some(target);
     }
@@ -734,6 +735,7 @@ impl ScriptListApp {
                     || self.last_scrolled_index.is_some();
 
                 self.selected_index = 0;
+                self.clear_menu_syntax_filter_accept_hint();
                 self.hovered_index = None;
                 self.last_scrolled_index = None;
 
@@ -754,11 +756,13 @@ impl ScriptListApp {
                 if valid_idx == 0 && !has_selectable {
                     // No selectable items (list is all headers) - reset to 0
                     if self.selected_index != 0 {
+                        self.clear_menu_syntax_filter_accept_hint();
                         self.selected_index = 0;
                         cx.notify();
                         return true;
                     }
                 } else if self.selected_index != valid_idx {
+                    self.clear_menu_syntax_filter_accept_hint();
                     self.selected_index = valid_idx;
                     cx.notify();
                     return true;

@@ -227,6 +227,13 @@ impl ScriptListApp {
             );
             return;
         }
+        if self.should_consume_menu_syntax_filter_accept_enter("execute_selected") {
+            logging::log(
+                "KEY",
+                "Ignoring execute_selected: accepted menu-syntax filter hint is active",
+            );
+            return;
+        }
 
         if let Some(invocation) = self
             .menu_syntax_mode
