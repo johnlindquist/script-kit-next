@@ -735,25 +735,33 @@ function isScopedProfileSearchSelect(
     && selectedSemanticId.startsWith("profile-search-row:");
 }
 
+function isMenuSyntaxTriggerPickerSelected(before: JsonObject) {
+  const selected = before.selectedNode as JsonObject | undefined;
+  return selected?.kind === "menuSyntaxTriggerPicker"
+    || selected?.source === "menuSyntaxTriggerPicker"
+    || selected?.role === "menu-syntax-trigger-row";
+}
+
+function isSelectSemanticActivation(args: Args) {
+  return args.actionKind === "select"
+    && args.allowSubmit
+    && args.semanticId.length > 0;
+}
+
 function isScopedMenuSyntaxTriggerAccept(
   args: Args,
   targetReceipt: JsonObject,
   before: JsonObject,
   selectedSemanticId: string | null,
 ) {
-  const selected = before.selectedNode as JsonObject | undefined;
-  return isPlainEnter(args)
+  return (isPlainEnter(args) || isSelectSemanticActivation(args))
     && args.allowSubmit
     && args.submitIntent === "menu-syntax-trigger-accept"
     && args.allowSubmitReason.trim().length > 0
     && isScriptListTargetReceipt(targetReceipt)
     && typeof selectedSemanticId === "string"
     && selectedSemanticId.startsWith("choice:")
-    && (
-      selected?.kind === "menuSyntaxTriggerPicker"
-      || selected?.source === "menuSyntaxTriggerPicker"
-      || selected?.role === "menu-syntax-trigger-row"
-    );
+    && isMenuSyntaxTriggerPickerSelected(before);
 }
 
 function isScopedMenuSyntaxObjectSelectorAccept(
@@ -970,7 +978,7 @@ async function submitPreflight(args: Args, targetReceipt: JsonObject, before: Js
     if (!isScopedMenuSyntaxTriggerAccept(args, targetReceipt, before, selectedSemanticId)) {
       return {
         state: "blocked-before-dispatch",
-        reason: "menu-syntax-trigger-accept requires plain Enter on main ScriptList with a selected menuSyntaxTriggerPicker row",
+        reason: "menu-syntax-trigger-accept requires plain Enter or selectBySemanticId on main ScriptList with a selected menuSyntaxTriggerPicker row",
         gateName: "menu-syntax-trigger-accept.target.required",
         selectedSemanticId: selectedSemanticId as string | null,
         requiredFlags: [

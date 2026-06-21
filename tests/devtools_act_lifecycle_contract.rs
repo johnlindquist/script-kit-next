@@ -256,3 +256,21 @@ fn act_reports_native_footer_activation_gap_without_native_escalation() {
         );
     }
 }
+
+#[test]
+fn act_allows_menu_syntax_trigger_accept_by_enter_or_select_semantic_id() {
+    for needle in [
+        "function isMenuSyntaxTriggerPickerSelected",
+        "function isSelectSemanticActivation",
+        "return (isPlainEnter(args) || isSelectSemanticActivation(args))",
+        "args.actionKind === \"select\"",
+        "args.semanticId.length > 0",
+        "menu-syntax-trigger-accept requires plain Enter or selectBySemanticId on main ScriptList with a selected menuSyntaxTriggerPicker row",
+        "allowedBy: \"submitIntent:menu-syntax-trigger-accept\"",
+    ] {
+        assert!(
+            ACT_TS.contains(needle),
+            "act.ts menu syntax trigger accept allowlist must include {needle}"
+        );
+    }
+}
