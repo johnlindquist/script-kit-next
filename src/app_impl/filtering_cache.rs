@@ -2064,7 +2064,9 @@ impl ScriptListApp {
             .into()
     }
 
-    /// P1: Invalidate grouped results cache (call when scripts/scriptlets/apps change)
+    /// P1: Invalidate grouped results cache (call when scripts/scriptlets/apps change).
+    /// Main-window preflight is row-cache-derived, so it must be invalidated
+    /// whenever grouped rows are invalidated.
     pub(crate) fn invalidate_grouped_cache(&mut self) {
         logging::log_debug("CACHE", "Grouped cache INVALIDATED");
         // Set grouped_cache_key to a sentinel that won't match computed_filter_text.
@@ -2072,6 +2074,7 @@ impl ScriptListApp {
         // forcing a recompute on the next get_grouped_results_cached() call.
         // DO NOT set computed_filter_text here - that would cause both to match (false cache HIT).
         self.main_menu_result_caches.invalidate_grouped_results();
+        self.invalidate_main_window_preflight();
     }
 
     /// Get the currently selected search result, correctly mapping from grouped index.

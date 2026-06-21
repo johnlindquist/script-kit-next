@@ -26,9 +26,21 @@ const expectedTypeValues = [
 mkdirSync(OUT_DIR, { recursive: true });
 
 function triggerTokens(elements: Json): string[] {
-  return ((elements.elements ?? []) as Json[])
-    .filter((element) => element.role === "menu-syntax-trigger-row")
+  return triggerRows(elements)
     .map((element) => String(element.value ?? element.text ?? ""));
+}
+
+function triggerRows(elements: Json): Json[] {
+  return ((elements.elements ?? []) as Json[])
+    .filter((element) => element.role === "menu-syntax-trigger-row");
+}
+
+function listSemanticIds(elements: Json): string[] {
+  return ((elements.elements ?? []) as Json[])
+    .filter((element) =>
+      String(element.semanticId ?? element.semantic_id ?? "").startsWith("list:"),
+    )
+    .map((element) => String(element.semanticId ?? element.semantic_id ?? ""));
 }
 
 function visibleResultKeys(state: Json): string[] {
@@ -44,6 +56,22 @@ function fallbackRowsVisible(state: Json): boolean {
 
 function equal(a: unknown, b: unknown): boolean {
   return JSON.stringify(a) === JSON.stringify(b);
+}
+
+function hasTriggerPickerList(result: Json): boolean {
+  return ((result.listSemanticIds ?? []) as string[]).includes(
+    "list:menu-syntax-trigger-picker",
+  );
+}
+
+function visibleKeysAreTriggerRows(result: Json): boolean {
+  const keys = (result.visibleResultKeys ?? []) as string[];
+  return keys.length > 0 && keys.every((key) => key.startsWith("menu-syntax-trigger:"));
+}
+
+function visibleKeysAreNormalRows(result: Json): boolean {
+  const keys = (result.visibleResultKeys ?? []) as string[];
+  return keys.length > 0 && keys.every((key) => !key.startsWith("menu-syntax-trigger:"));
 }
 
 async function show(driver: Driver) {
@@ -63,6 +91,7 @@ async function capture(driver: Driver, slug: string, input?: string): Promise<Js
   await show(driver);
   const state = await driver.getState({ timeoutMs: 8000 });
   const elements = await driver.getElements({}, { timeoutMs: 8000 });
+  const rows = triggerRows(elements);
   const screenshotPath = join(OUT_DIR, `${slug}.png`);
   await driver.captureScreenshot({ savePath: screenshotPath, timeoutMs: 10000 });
   return {
@@ -76,7 +105,13 @@ async function capture(driver: Driver, slug: string, input?: string): Promise<Js
     activeHead: state.menuSyntaxMainHint?.activeHead ?? null,
     activeHeadValuePartial:
       state.menuSyntaxMainHint?.activeHeadValuePartial ?? null,
-    tokens: triggerTokens(elements),
+    tokens: rows.map((element) => String(element.value ?? element.text ?? "")),
+    triggerRows: rows.map((element) => ({
+      semanticId: String(element.semanticId ?? element.semantic_id ?? ""),
+      text: String(element.text ?? ""),
+      value: String(element.value ?? ""),
+    })),
+    listSemanticIds: listSemanticIds(elements),
     fallbackRowsVisible: fallbackRowsVisible(state),
     visibleResultKeys: visibleResultKeys(state).slice(0, 12),
   };
@@ -126,11 +161,18 @@ try {
   checks.accept_type_from_colon_ty =
     results.accept_type_from_colon_ty.inputValue === "type:" &&
     equal(results.accept_type_from_colon_ty.tokens, expectedTypeValues) &&
+    results.accept_type_from_colon_ty.visibleChoiceCount === expectedTypeValues.length &&
+    hasTriggerPickerList(results.accept_type_from_colon_ty) &&
+    visibleKeysAreTriggerRows(results.accept_type_from_colon_ty) &&
     !results.accept_type_from_colon_ty.fallbackRowsVisible;
 
   results.type_direct = await capture(driver, "05-type-direct", "type:");
   checks.type_direct_values =
+    results.type_direct.inputValue === "type:" &&
     equal(results.type_direct.tokens, expectedTypeValues) &&
+    results.type_direct.visibleChoiceCount === expectedTypeValues.length &&
+    hasTriggerPickerList(results.type_direct) &&
+    visibleKeysAreTriggerRows(results.type_direct) &&
     !results.type_direct.fallbackRowsVisible;
 
   driver.simulateKey("enter");
@@ -142,7 +184,45 @@ try {
   );
   checks.type_enter_accepts_value =
     results.type_enter_accepts_value.inputValue === "type:script" &&
-    results.type_enter_accepts_value.tokens.length === 0;
+    results.type_enter_accepts_value.tokens.length === 0 &&
+    !hasTriggerPickerList(results.type_enter_accepts_value) &&
+    visibleKeysAreNormalRows(results.type_enter_accepts_value);
+
+  await driver.setFilterAndWait("type:", { timeoutMs: 8000 });
+  await Bun.sleep(120);
+  results.type_before_select_scripts_only = await capture(
+    driver,
+    "05c-before-select-scripts-only",
+  );
+  const scriptsOnlyRow = (results.type_before_select_scripts_only.triggerRows as Json[])
+    .find((row) =>
+      String(row.value ?? "") === "type:script" &&
+      String(row.text ?? "").toLowerCase() === "scripts only",
+    );
+  if (!scriptsOnlyRow) {
+    throw new Error(
+      `Scripts Only row missing from type: picker: ${JSON.stringify(results.type_before_select_scripts_only)}`,
+    );
+  }
+  await driver.batch(
+    [{
+      type: "selectBySemanticId",
+      semanticId: scriptsOnlyRow.semanticId,
+      submit: true,
+    }],
+    { timeoutMs: 8000, stopOnError: true },
+  );
+  await driver.waitForState({ inputValue: "type:script" }, { timeoutMs: 8000 });
+  await Bun.sleep(120);
+  results.type_select_scripts_only = await capture(
+    driver,
+    "05d-after-select-scripts-only",
+  );
+  checks.type_select_scripts_only =
+    results.type_select_scripts_only.inputValue === "type:script" &&
+    results.type_select_scripts_only.tokens.length === 0 &&
+    !hasTriggerPickerList(results.type_select_scripts_only) &&
+    visibleKeysAreNormalRows(results.type_select_scripts_only);
 
   results.type_s = await capture(driver, "06-type-s", "type:s");
   checks.type_s_values =

@@ -3988,42 +3988,6 @@ mod tests {
         .expect("empty hint")
     }
 
-    fn applied_hint_for(raw: &str) -> MenuSyntaxMainHintSnapshot {
-        let mode = MenuSyntaxMode::from_input(raw);
-        let snapshot =
-            build_trigger_picker_snapshot(raw, &TriggerPickerContext::default()).expect("snapshot");
-        build_menu_syntax_main_hint(MenuSyntaxMainHintContext {
-            raw_filter_text: raw,
-            mode: &mode,
-            picker_snapshot: Some(&snapshot),
-            picker_selected_row_id: None,
-            scripts: &[],
-            scriptlets: &[],
-            advanced_query_results_empty: false,
-            menu_syntax_ai_proposal: None,
-        })
-        .expect("applied hint")
-    }
-
-    #[test]
-    fn type_skill_applied_hint_has_non_empty_body_when_results_exist() {
-        // The colon filter picker closes once free search words follow the
-        // qualifier (b3f83a991), so the applied companion hint only exists
-        // for the popup-open state — the qualifier itself.
-        let hint = applied_hint_for(":type:skill");
-
-        assert_eq!(hint.kind, MenuSyntaxMainHintKind::AdvancedQueryGuide);
-        assert_eq!(hint.title, "Filtering to skills");
-        assert!(
-            !hint.rows.is_empty(),
-            "applied :type:skill hint body must not be empty: {hint:?}"
-        );
-        assert!(hint.rows.iter().any(|row| {
-            row.label == "Filters" && row.value.to_ascii_lowercase().contains("skill")
-        }));
-        assert!(hint.rows.iter().any(|row| row.label == "Recovery"));
-    }
-
     #[test]
     fn type_filter_zero_result_hint_has_rows_for_skill() {
         let hint = empty_hint_for(":type:skill review");
@@ -4046,21 +4010,6 @@ mod tests {
             .as_deref()
             .unwrap()
             .contains("Remove `type:skill`"));
-    }
-
-    #[test]
-    fn kind_alias_type_filter_hint_has_non_empty_body() {
-        // Popup-open state only — free words after the qualifier close the
-        // picker (b3f83a991), and the applied hint rides on the popup.
-        let hint = applied_hint_for(":kind:skill");
-
-        assert_eq!(hint.kind, MenuSyntaxMainHintKind::AdvancedQueryGuide);
-        assert_eq!(hint.title, "Filtering to skills");
-        assert_eq!(hint.active_head.as_deref(), Some(":kind:"));
-        assert!(
-            !hint.rows.is_empty(),
-            "applied :kind:skill hint body must not be empty: {hint:?}"
-        );
     }
 
     #[test]

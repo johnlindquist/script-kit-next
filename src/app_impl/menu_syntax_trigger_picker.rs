@@ -639,6 +639,33 @@ mod tests {
     }
 
     #[test]
+    fn complete_type_value_closes_open_trigger_picker() {
+        let context = ctx();
+        let state = MenuSyntaxTriggerPickerState {
+            snapshot: build_trigger_picker_snapshot("type:", &context),
+            selected_row_id: Some("qualifier:type:script".to_string()),
+            visible_start: 0,
+        };
+
+        assert_eq!(
+            plan_trigger_picker_transition(&state, "type:script", &context),
+            TriggerPickerTransition::Close
+        );
+        assert_eq!(
+            plan_trigger_picker_transition(&state, ":type:script", &context),
+            TriggerPickerTransition::Close
+        );
+        assert_eq!(
+            plan_trigger_picker_transition(
+                &MenuSyntaxTriggerPickerState::default(),
+                "type:script",
+                &context,
+            ),
+            TriggerPickerTransition::NoChange
+        );
+    }
+
+    #[test]
     fn source_filter_query_does_not_open_power_popup() {
         let state = MenuSyntaxTriggerPickerState::default();
         assert_eq!(

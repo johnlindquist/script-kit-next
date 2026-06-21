@@ -209,6 +209,9 @@ pub fn build_trigger_picker_snapshot(
         return Some(build_capture_picker_snapshot(filter.as_deref(), ctx));
     }
 
+    if is_complete_type_value_query(input) {
+        return None;
+    }
     if should_show_has_field_completion(input) {
         return non_empty_snapshot(build_advanced_query_snapshot(input, ctx));
     }
@@ -472,6 +475,14 @@ fn is_complete_has_field_query(input: &str) -> bool {
         return false;
     };
     crate::menu_syntax::has_fields::lookup_has_field(value).is_some()
+}
+
+fn is_complete_type_value_query(input: &str) -> bool {
+    let active = advanced_query_active_token(input);
+    let value = active
+        .strip_prefix("type:")
+        .or_else(|| active.strip_prefix("kind:"));
+    value.is_some_and(|value| !value.is_empty() && ArtifactKind::parse(value).is_some())
 }
 
 fn has_field_value_rows_for_active_token(active: &str) -> Option<Vec<TriggerPickerRow>> {
@@ -2122,29 +2133,21 @@ mod tests {
     }
 
     #[test]
-    fn complete_type_value_shows_single_row_not_catalog() {
+    fn complete_type_value_closes_picker() {
         let ctx = ctx_empty();
-        let snap = build_trigger_picker_snapshot(":type:script", &ctx).expect("snapshot");
-        let tokens: Vec<&str> = snap
-            .rows
-            .iter()
-            .filter_map(|row| row.token.as_deref())
-            .collect();
-
-        assert_eq!(tokens, vec!["type:script"]);
-    }
-
-    #[test]
-    fn bare_complete_type_value_shows_single_row_not_catalog() {
-        let ctx = ctx_empty();
-        let snap = build_trigger_picker_snapshot("type:script", &ctx).expect("snapshot");
-        let tokens: Vec<&str> = snap
-            .rows
-            .iter()
-            .filter_map(|row| row.token.as_deref())
-            .collect();
-
-        assert_eq!(tokens, vec!["type:script"]);
+        for input in [
+            ":type:script",
+            "type:script",
+            ":type:script ",
+            "type:script ",
+            ":kind:script",
+            "kind:script",
+        ] {
+            assert!(
+                build_trigger_picker_snapshot(input, &ctx).is_none(),
+                "complete type value {input:?} is a terminal filter predicate, not a picker state"
+            );
+        }
     }
 
     #[test]
@@ -2363,7 +2366,7 @@ mod tests {
     #[test]
     fn correct_qualifier_does_not_produce_fix_row() {
         let ctx = ctx_empty();
-        let snap = build_trigger_picker_snapshot(":type:script", &ctx).expect("snapshot");
+        let snap = build_trigger_picker_snapshot(":type:s", &ctx).expect("snapshot");
         assert!(
             !snap
                 .rows
