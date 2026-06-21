@@ -575,17 +575,29 @@ fn simulate_gpui_event_result_success_constructor() {
         "evt-1".into(),
         Some("exact_handle".into()),
         Some("win-42".into()),
+        true,
+        false,
+        Some("not_observed".into()),
     );
     let json = serde_json::to_string(&msg).expect("serialize");
     assert!(json.contains(r#""success":true"#));
     assert!(json.contains(r#""dispatchPath":"exact_handle""#));
     assert!(json.contains(r#""resolvedWindowId":"win-42""#));
+    assert!(json.contains(r#""dispatchCompleted":true"#));
+    assert!(json.contains(r#""dispatchScheduled":false"#));
+    assert!(json.contains(r#""activationProof":"not_observed""#));
 }
 
 #[test]
 fn simulate_gpui_event_result_success_omits_none_fields() {
-    let msg =
-        crate::protocol::Message::simulate_gpui_event_result_success("evt-2".into(), None, None);
+    let msg = crate::protocol::Message::simulate_gpui_event_result_success(
+        "evt-2".into(),
+        None,
+        None,
+        true,
+        false,
+        Some("not_observed".into()),
+    );
     let json = serde_json::to_string(&msg).expect("serialize");
     assert!(json.contains(r#""success":true"#));
     assert!(!json.contains("dispatchPath"));

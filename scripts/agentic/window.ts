@@ -267,6 +267,14 @@ function windowMatchesTitle(
   return title.includes(needle) || owner.includes(needle);
 }
 
+function isFooterOverlayRecord(w: QuartzWindowRecord): boolean {
+  const title = (w.title ?? "").toLowerCase();
+  return (
+    title.includes("footer overlay") ||
+    (w.bounds.height <= 80 && w.bounds.width >= 300)
+  );
+}
+
 /**
  * Call the Swift CGWindowList helper. Returns an empty list on any error
  * (logged to stderr). Prefers swift over python because macOS ships swift
@@ -317,9 +325,15 @@ async function resolveWindowId(titleSubstr: string): Promise<{ windowId: number;
     // the live visible panel when multiple app instances exist.
     const ranked = [...windows].sort((a, b) => {
       const aScore =
-        (a.onscreen ? 100 : 0) + (a.layer >= PANEL_FRONTMOST_LAYER_MIN ? 10 : 0);
+        (a.onscreen ? 100 : 0) +
+        (a.layer >= PANEL_FRONTMOST_LAYER_MIN ? 10 : 0) +
+        (isFooterOverlayRecord(a) ? -1000 : 0) +
+        a.bounds.height;
       const bScore =
-        (b.onscreen ? 100 : 0) + (b.layer >= PANEL_FRONTMOST_LAYER_MIN ? 10 : 0);
+        (b.onscreen ? 100 : 0) +
+        (b.layer >= PANEL_FRONTMOST_LAYER_MIN ? 10 : 0) +
+        (isFooterOverlayRecord(b) ? -1000 : 0) +
+        b.bounds.height;
       return bScore - aScore;
     });
     for (const w of ranked) {
@@ -561,10 +575,17 @@ end tell`);
  */
 function classifyWindow(w: WindowInfo): AutomationSurface {
   const titleLower = (w.title ?? "").toLowerCase();
+  const bounds = w.bounds;
+  const isFooterOverlay =
+    titleLower.includes("footer overlay") ||
+    (bounds !== null && bounds.height <= 80 && bounds.width >= 300);
   let surfaceId = "main";
   let kind = "popup";
 
-  if (titleLower.includes("agent_chat") || titleLower.includes("chat")) {
+  if (isFooterOverlay) {
+    surfaceId = "footer";
+    kind = "popup";
+  } else if (titleLower.includes("agent_chat") || titleLower.includes("chat")) {
     surfaceId = "agent_chat";
     kind = "panel";
   } else if (titleLower.includes("actions") || titleLower.includes("⌘k")) {
@@ -596,7 +617,21 @@ function classifyWindow(w: WindowInfo): AutomationSurface {
 
 async function listSurfaces(titleSubstr: string): Promise<ListResult> {
   const findResult = await findWindows(titleSubstr);
-  const surfaces = findResult.windows.map(classifyWindow);
+  const surfaces = findResult.windows
+    .map(classifyWindow)
+    .sort((a, b) => {
+      const score = (s: AutomationSurface) => {
+        let value = 0;
+        if (s.surfaceId === "main") value += 1000;
+        if (s.surfaceId === "footer") value -= 1000;
+        if (s.visible) value += 100;
+        if (s.frontmost) value += 10;
+        if (s.focused) value += 1;
+        value += s.bounds?.height ?? 0;
+        return value;
+      };
+      return score(b) - score(a);
+    });
 
   // Deduplicate by surfaceId — keep the first (frontmost) window per ID
   const seen = new Set<string>();
@@ -611,7 +646,9 @@ async function listSurfaces(titleSubstr: string): Promise<ListResult> {
     deduped.push(s);
   }
 
-  const focusedSurface = deduped.find((s) => s.focused || s.frontmost);
+  const focusedSurface =
+    deduped.find((s) => s.surfaceId === "main" && (s.focused || s.frontmost)) ??
+    deduped.find((s) => s.focused || s.frontmost);
   return {
     surfaces: deduped,
     appRunning: findResult.appRunning,

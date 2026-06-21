@@ -103,6 +103,13 @@ impl ScriptListApp {
         true
     }
 
+    pub(crate) fn should_consume_menu_syntax_filter_accept_submit(
+        &mut self,
+        route: &'static str,
+    ) -> bool {
+        self.should_consume_menu_syntax_filter_accept_enter(route)
+    }
+
     pub(crate) fn menu_syntax_trigger_picker_owns_main_keyboard(&self) -> bool {
         matches!(self.current_view, crate::AppView::ScriptList)
             && self.menu_syntax_trigger_picker_state.owns_main_list()
@@ -189,12 +196,40 @@ impl ScriptListApp {
             .as_ref()
             .cloned()
         else {
+            tracing::warn!(
+                target: "script_kit::menu_syntax_popup",
+                event = "menu_syntax_trigger_picker_accept_missing_snapshot",
+                row_id,
+                filter = %self.filter_text,
+                computed_filter = %self.computed_filter_text,
+                selected_index = self.selected_index,
+                "menu-syntax trigger picker accept missing snapshot"
+            );
             return false;
         };
         let Some(selected_index) = snapshot.rows.iter().position(|row| row.id == row_id) else {
+            tracing::warn!(
+                target: "script_kit::menu_syntax_popup",
+                event = "menu_syntax_trigger_picker_accept_missing_row",
+                row_id,
+                filter = %self.filter_text,
+                computed_filter = %self.computed_filter_text,
+                selected_index = self.selected_index,
+                "menu-syntax trigger picker accept missing row"
+            );
             return false;
         };
         let raw_filter_text = self.filter_text.clone();
+        tracing::info!(
+            target: "script_kit::menu_syntax_popup",
+            event = "menu_syntax_trigger_picker_accept_start",
+            row_id,
+            trigger_selected_index = selected_index,
+            filter = %self.filter_text,
+            computed_filter = %self.computed_filter_text,
+            selected_index = self.selected_index,
+            "menu-syntax trigger picker accept started"
+        );
         let outcome = crate::menu_syntax::apply_intent(
             crate::menu_syntax::InlinePickerKeyIntent::Accept,
             &snapshot,
@@ -210,7 +245,7 @@ impl ScriptListApp {
         );
 
         let has_window = window.is_some();
-        self.dispatch_menu_syntax_trigger_picker_outcome(outcome, window, cx);
+        self.dispatch_menu_syntax_trigger_picker_outcome(Some(row_id), outcome, window, cx);
         if keep_open && !has_window {
             let text = self.filter_text.clone();
             let picker_ctx = self.menu_syntax_trigger_picker_context(&text);
@@ -253,6 +288,7 @@ impl ScriptListApp {
 
     fn dispatch_menu_syntax_trigger_picker_outcome(
         &mut self,
+        row_id: Option<&str>,
         outcome: crate::menu_syntax::TriggerPickerIntentOutcome,
         window: Option<&mut Window>,
         cx: &mut Context<Self>,
@@ -262,6 +298,18 @@ impl ScriptListApp {
             TriggerPickerIntentOutcome::Ignored
             | TriggerPickerIntentOutcome::SelectionChanged { .. } => {}
             TriggerPickerIntentOutcome::ReplaceInput { text, keep_open } => {
+                tracing::info!(
+                    target: "script_kit::menu_syntax_popup",
+                    event = "menu_syntax_trigger_picker_accept_outcome",
+                    row_id = row_id.unwrap_or(""),
+                    outcome = "replace_input",
+                    replacement = %text,
+                    keep_open,
+                    filter_before = %self.filter_text,
+                    computed_before = %self.computed_filter_text,
+                    selected_index = self.selected_index,
+                    "menu-syntax trigger picker accept outcome"
+                );
                 let filter_accept_hint_filter = if keep_open {
                     None
                 } else {
@@ -668,7 +716,7 @@ impl ScriptListApp {
             }
             crate::menu_syntax::TriggerPickerIntentOutcome::Ignored => false,
             other => {
-                self.dispatch_menu_syntax_trigger_picker_outcome(other, Some(window), cx);
+                self.dispatch_menu_syntax_trigger_picker_outcome(None, other, Some(window), cx);
                 true
             }
         }

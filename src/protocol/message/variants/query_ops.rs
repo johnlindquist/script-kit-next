@@ -813,6 +813,19 @@ macro_rules! protocol_message_variants_query_ops {
             default
         )]
         resolved_window_id: Option<String>,
+        /// True when GPUI applied the event before this response was emitted.
+        #[serde(rename = "dispatchCompleted", default)]
+        dispatch_completed: bool,
+        /// True when GPUI scheduled dispatch for a later update.
+        #[serde(rename = "dispatchScheduled", default)]
+        dispatch_scheduled: bool,
+        /// Raw dispatch does not prove a specific UI handler fired.
+        #[serde(
+            rename = "activationProof",
+            skip_serializing_if = "Option::is_none",
+            default
+        )]
+        activation_proof: Option<String>,
     },
 
     // ============================================================

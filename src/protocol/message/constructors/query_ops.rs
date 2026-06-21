@@ -611,6 +611,9 @@ impl Message {
         request_id: String,
         dispatch_path: Option<String>,
         resolved_window_id: Option<String>,
+        dispatch_completed: bool,
+        dispatch_scheduled: bool,
+        activation_proof: Option<String>,
     ) -> Self {
         Message::SimulateGpuiEventResult {
             request_id,
@@ -619,6 +622,9 @@ impl Message {
             error: None,
             dispatch_path,
             resolved_window_id,
+            dispatch_completed,
+            dispatch_scheduled,
+            activation_proof,
         }
     }
 
@@ -639,6 +645,9 @@ impl Message {
             error: Some(error),
             dispatch_path,
             resolved_window_id,
+            dispatch_completed: false,
+            dispatch_scheduled: false,
+            activation_proof: None,
         }
     }
 

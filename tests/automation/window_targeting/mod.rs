@@ -229,7 +229,14 @@ fn focused_resolution_tracks_across_windows() {
 
 #[test]
 fn simulate_gpui_event_result_round_trip() {
-    let success = Message::simulate_gpui_event_result_success("res-1".into(), None, None);
+    let success = Message::simulate_gpui_event_result_success(
+        "res-1".into(),
+        None,
+        None,
+        true,
+        false,
+        Some("not_observed".into()),
+    );
     let json = serde_json::to_string(&success).expect("serialize");
     assert!(json.contains(r#""success":true"#));
 
@@ -411,9 +418,19 @@ fn error_codes_are_distinct_and_machine_parseable() {
     assert_eq!(json["errorCode"], "dispatch_failed");
 
     // Success has no errorCode
-    let success = Message::simulate_gpui_event_result_success("ok-1".into(), None, None);
+    let success = Message::simulate_gpui_event_result_success(
+        "ok-1".into(),
+        None,
+        None,
+        true,
+        false,
+        Some("not_observed".into()),
+    );
     let json = serde_json::to_value(&success).expect("serialize");
     assert!(json.get("errorCode").is_none());
+    assert_eq!(json["dispatchCompleted"], true);
+    assert_eq!(json["dispatchScheduled"], false);
+    assert_eq!(json["activationProof"], "not_observed");
 }
 
 #[test]

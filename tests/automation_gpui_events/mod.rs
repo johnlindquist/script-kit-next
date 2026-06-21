@@ -18,6 +18,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 const GPUI_EVENT_SIMULATOR: &str = include_str!("../../src/platform/gpui_event_simulator.rs");
 const PROTOCOL_SIMULATED_GPUI_EVENT: &str =
     include_str!("../../src/protocol/types/simulated_gpui_event.rs");
+const PROTOCOL_QUERY_OPS: &str = include_str!("../../src/protocol/message/variants/query_ops.rs");
 
 static TEST_COUNTER: AtomicU32 = AtomicU32::new(50_000);
 fn prefix() -> String {
@@ -1168,11 +1169,40 @@ fn success_result_includes_dispatch_path_exact_handle() {
         "dp-1".into(),
         Some("exact_handle".into()),
         Some("agent_chat-thread-42".into()),
+        true,
+        false,
+        Some("not_observed".into()),
     );
     let json = serde_json::to_value(&msg).expect("serialize");
     assert_eq!(json["success"], true);
     assert_eq!(json["dispatchPath"], "exact_handle");
     assert_eq!(json["resolvedWindowId"], "agent_chat-thread-42");
+    assert_eq!(json["dispatchCompleted"], true);
+    assert_eq!(json["dispatchScheduled"], false);
+    assert_eq!(json["activationProof"], "not_observed");
+}
+
+#[test]
+fn gpui_event_receipts_are_dispatch_not_activation_proof() {
+    for needle in [
+        "dispatch_completed: true",
+        "dispatch_scheduled: false",
+        "activation_proof: Some(\"not_observed\".to_string())",
+        "dispatch_completed: false",
+        "dispatch_scheduled: true",
+    ] {
+        assert!(
+            GPUI_EVENT_SIMULATOR.contains(needle),
+            "simulateGpuiEvent receipt must fail closed on handler activation proof: {needle}"
+        );
+    }
+
+    for needle in ["dispatchCompleted", "dispatchScheduled", "activationProof"] {
+        assert!(
+            PROTOCOL_QUERY_OPS.contains(needle),
+            "simulateGpuiEvent protocol must expose dispatch/activation fields: {needle}"
+        );
+    }
 }
 
 #[test]
@@ -1181,6 +1211,9 @@ fn success_result_includes_dispatch_path_window_role_fallback() {
         "dp-2".into(),
         Some("window_role_fallback".into()),
         Some("main-0".into()),
+        true,
+        false,
+        Some("not_observed".into()),
     );
     let json = serde_json::to_value(&msg).expect("serialize");
     assert_eq!(json["success"], true);
@@ -1210,6 +1243,9 @@ fn dispatch_path_round_trips_through_serde() {
         "rt-dp".into(),
         Some("exact_handle".into()),
         Some("win-99".into()),
+        true,
+        false,
+        Some("not_observed".into()),
     );
     let json = serde_json::to_string(&msg).expect("serialize");
     let back: script_kit_gpui::protocol::Message =
@@ -1218,10 +1254,16 @@ fn dispatch_path_round_trips_through_serde() {
         script_kit_gpui::protocol::Message::SimulateGpuiEventResult {
             dispatch_path,
             resolved_window_id,
+            dispatch_completed,
+            dispatch_scheduled,
+            activation_proof,
             ..
         } => {
             assert_eq!(dispatch_path.as_deref(), Some("exact_handle"));
             assert_eq!(resolved_window_id.as_deref(), Some("win-99"));
+            assert!(dispatch_completed);
+            assert!(!dispatch_scheduled);
+            assert_eq!(activation_proof.as_deref(), Some("not_observed"));
         }
         other => panic!("Expected SimulateGpuiEventResult, got: {:?}", other),
     }

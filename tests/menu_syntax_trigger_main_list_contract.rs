@@ -135,8 +135,8 @@ fn type_filter_accept_hint_consumes_enter_until_selection_moves() {
     );
     assert!(
         SELECTION_FALLBACK
-            .contains("self.should_consume_menu_syntax_filter_accept_enter(\"execute_selected\")"),
-        "normal launcher execute path must consume Enter while accepted-filter hint is active"
+            .contains("self.should_consume_menu_syntax_filter_accept_submit(\"execute_selected\")"),
+        "normal launcher execute path must consume submit while accepted-filter hint is active"
     );
     assert!(
         SIMULATE_KEY.contains(
@@ -149,6 +149,34 @@ fn type_filter_accept_hint_consumes_enter_until_selection_moves() {
             && RENDER_SCRIPT_LIST.contains("this.clear_menu_syntax_filter_accept_hint();"),
         "keyboard and mouse selection movement must clear the accepted-filter hint"
     );
+}
+
+#[test]
+fn trigger_picker_pointer_path_has_proof_grade_logs() {
+    for needle in [
+        "main_list_row_mouse_down_seen",
+        "Menu-syntax trigger picker row mouse-down accepting",
+        "main_list_row_click_seen",
+        "Menu-syntax trigger picker consumed trailing launcher click",
+    ] {
+        assert!(
+            RENDER_SCRIPT_LIST.contains(needle),
+            "trigger picker pointer path must log proof-grade row events: {needle}"
+        );
+    }
+
+    for needle in [
+        "menu_syntax_trigger_picker_accept_start",
+        "menu_syntax_trigger_picker_accept_missing_snapshot",
+        "menu_syntax_trigger_picker_accept_missing_row",
+        "menu_syntax_trigger_picker_accept_outcome",
+        "row_id = row_id.unwrap_or(\"\")",
+    ] {
+        assert!(
+            TRIGGER_OWNER.contains(needle),
+            "trigger picker accept path must log proof-grade accept events: {needle}"
+        );
+    }
 }
 
 #[test]

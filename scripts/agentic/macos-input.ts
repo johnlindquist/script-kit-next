@@ -1028,10 +1028,12 @@ if (ensureFocus && command !== "check" && command !== "help" && command !== "--h
   }
 
   focusEnforced = true;
-  if (!frontmost) {
+  const focusConfirmed = command === "click" ? focused : frontmost;
+  if (!focusConfirmed) {
     stderrLog("focus_enforcement_failed", {
       frontmost,
       focused,
+      focusConfirmed,
       focusTitle,
       sessionName: sessionName || undefined,
       targetSurface: targetSurface || undefined,

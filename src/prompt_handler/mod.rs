@@ -9586,6 +9586,9 @@ impl ScriptListApp {
                         request_id,
                         result.dispatch_path,
                         result.resolved_window_id,
+                        result.dispatch_completed,
+                        result.dispatch_scheduled,
+                        result.activation_proof,
                     )
                 } else {
                     Message::simulate_gpui_event_result_error(

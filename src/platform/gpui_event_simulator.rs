@@ -221,6 +221,12 @@ pub(crate) struct GpuiEventDispatchResult {
     pub dispatch_path: Option<String>,
     /// The resolved automation window ID, when available.
     pub resolved_window_id: Option<String>,
+    /// True when the event was applied before the protocol response returned.
+    pub dispatch_completed: bool,
+    /// True when the event was scheduled after the protocol response returned.
+    pub dispatch_scheduled: bool,
+    /// Raw event dispatch is not handler activation proof.
+    pub activation_proof: Option<String>,
 }
 
 /// Apply a [`SimulatedGpuiEvent`] to a live GPUI [`gpui::Window`] via the real input pipeline.
@@ -332,6 +338,9 @@ fn dispatch_with_any_handle(
                 error: None,
                 dispatch_path: Some(dispatch_path.to_string()),
                 resolved_window_id: Some(resolved_id.to_string()),
+                dispatch_completed: true,
+                dispatch_scheduled: false,
+                activation_proof: Some("not_observed".to_string()),
             }
         }
         Err(err) => {
@@ -349,6 +358,9 @@ fn dispatch_with_any_handle(
                 error: Some(msg),
                 dispatch_path: Some(dispatch_path.to_string()),
                 resolved_window_id: Some(resolved_id.to_string()),
+                dispatch_completed: false,
+                dispatch_scheduled: false,
+                activation_proof: None,
             }
         }
     }
@@ -423,6 +435,9 @@ fn dispatch_with_any_handle_deferred(
         error: None,
         dispatch_path: Some(deferred_path),
         resolved_window_id: Some(resolved_id.to_string()),
+        dispatch_completed: false,
+        dispatch_scheduled: true,
+        activation_proof: Some("not_observed".to_string()),
     }
 }
 
@@ -472,6 +487,9 @@ pub(crate) fn dispatch_gpui_event(
                 error: Some(err.to_string()),
                 dispatch_path: None,
                 resolved_window_id: None,
+                dispatch_completed: false,
+                dispatch_scheduled: false,
+                activation_proof: None,
             };
         }
     };
@@ -551,6 +569,9 @@ pub(crate) fn dispatch_gpui_event(
                 error: Some(msg),
                 dispatch_path: None,
                 resolved_window_id: Some(resolved.id.clone()),
+                dispatch_completed: false,
+                dispatch_scheduled: false,
+                activation_proof: None,
             };
         }
     };
@@ -633,6 +654,9 @@ pub(crate) fn dispatch_gpui_event(
                         error: None,
                         dispatch_path: Some("main_deferred".to_string()),
                         resolved_window_id: Some(resolved.id.clone()),
+                        dispatch_completed: false,
+                        dispatch_scheduled: true,
+                        activation_proof: Some("not_observed".to_string()),
                     };
                 }
             }
@@ -671,6 +695,9 @@ pub(crate) fn dispatch_gpui_event(
             error: Some(msg),
             dispatch_path: None,
             resolved_window_id: Some(resolved.id.clone()),
+            dispatch_completed: false,
+            dispatch_scheduled: false,
+            activation_proof: None,
         };
     }
 
@@ -703,6 +730,9 @@ pub(crate) fn dispatch_gpui_event(
                         error: Some(msg),
                         dispatch_path: None,
                         resolved_window_id: Some(resolved.id.clone()),
+                        dispatch_completed: false,
+                        dispatch_scheduled: false,
+                        activation_proof: None,
                     };
                 }
             }
@@ -758,6 +788,9 @@ pub(crate) fn dispatch_gpui_event(
                 error: Some(msg),
                 dispatch_path: None,
                 resolved_window_id: Some(resolved.id.clone()),
+                dispatch_completed: false,
+                dispatch_scheduled: false,
+                activation_proof: None,
             };
         }
     };

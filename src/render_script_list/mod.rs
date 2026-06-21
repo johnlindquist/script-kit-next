@@ -1195,14 +1195,30 @@ impl ScriptListApp {
                                     );
                                     let mouse_down_handler = cx.listener(
                                         move |this: &mut ScriptListApp,
-                                              _event: &gpui::MouseDownEvent,
+                                              event: &gpui::MouseDownEvent,
                                               window,
                                               cx| {
+                                            let trigger_owns = this
+                                                .menu_syntax_trigger_picker_owns_main_keyboard();
+                                            let row_id = this
+                                                .menu_syntax_trigger_row_id_from_main_list_index(ix);
+                                            logging::log(
+                                                "UI",
+                                                &format!(
+                                                    "main_list_row_mouse_down_seen ix={} x={:.1} y={:.1} trigger_owns={} row_id={:?} filter='{}' computed='{}' selected_index={}",
+                                                    ix,
+                                                    event.position.x.as_f32(),
+                                                    event.position.y.as_f32(),
+                                                    trigger_owns,
+                                                    row_id,
+                                                    this.filter_text,
+                                                    this.computed_filter_text,
+                                                    this.selected_index
+                                                ),
+                                            );
                                             if this.menu_syntax_trigger_picker_owns_main_keyboard()
                                             {
-                                                if let Some(row_id) = this
-                                                    .menu_syntax_trigger_row_id_from_main_list_index(ix)
-                                                {
+                                                if let Some(row_id) = row_id {
                                                     logging::log(
                                                         "UI",
                                                         &format!(
@@ -1228,7 +1244,20 @@ impl ScriptListApp {
                                               event: &gpui::ClickEvent,
                                               window,
                                               cx| {
+                                            let click_count = event.click_count();
                                             if this.menu_syntax_trigger_picker_suppress_next_launcher_click {
+                                                logging::log(
+                                                    "UI",
+                                                    &format!(
+                                                        "main_list_row_click_seen ix={} click_count={} suppress_next=true was_selected=false trigger_owns={} filter='{}' computed='{}' selected_index={}",
+                                                        ix,
+                                                        click_count,
+                                                        this.menu_syntax_trigger_picker_owns_main_keyboard(),
+                                                        this.filter_text,
+                                                        this.computed_filter_text,
+                                                        this.selected_index
+                                                    ),
+                                                );
                                                 logging::log(
                                                     "UI",
                                                     &format!(
@@ -1246,6 +1275,19 @@ impl ScriptListApp {
                                             // selection the user never saw.
                                             let was_selected = this.selected_index == ix
                                                 && !this.spine_empty_subsearch_selection_suppressed();
+                                            logging::log(
+                                                "UI",
+                                                &format!(
+                                                    "main_list_row_click_seen ix={} click_count={} suppress_next=false was_selected={} trigger_owns={} filter='{}' computed='{}' selected_index={}",
+                                                    ix,
+                                                    click_count,
+                                                    was_selected,
+                                                    this.menu_syntax_trigger_picker_owns_main_keyboard(),
+                                                    this.filter_text,
+                                                    this.computed_filter_text,
+                                                    this.selected_index
+                                                ),
+                                            );
                                             this.arm_spine_empty_subsearch_selection();
                                             // Always select the item on any click
                                             if !was_selected {
@@ -1254,7 +1296,6 @@ impl ScriptListApp {
                                                 cx.notify();
                                             }
 
-                                            let click_count = event.click_count();
                                             if crate::ui_foundation::should_submit_selected_row_click(
                                                 was_selected,
                                                 click_count,
