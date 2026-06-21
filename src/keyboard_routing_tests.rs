@@ -69,6 +69,31 @@ mod tests {
         );
     }
 
+    fn function_body<'a>(source: &'a str, signature: &str) -> &'a str {
+        let start = source
+            .find(signature)
+            .unwrap_or_else(|| panic!("{signature} function not found"));
+        let after_start = &source[start..];
+        let open_brace = after_start
+            .find('{')
+            .unwrap_or_else(|| panic!("{signature} function body not found"));
+        let body_start = start + open_brace;
+        let mut depth = 0usize;
+        for (offset, ch) in source[body_start..].char_indices() {
+            match ch {
+                '{' => depth += 1,
+                '}' => {
+                    depth -= 1;
+                    if depth == 0 {
+                        return &source[body_start..body_start + offset + 1];
+                    }
+                }
+                _ => {}
+            }
+        }
+        panic!("{signature} function body did not close")
+    }
+
     /// Verify that ScriptList arrow key handling checks for actions popup.
     ///
     /// This is a code audit test that ensures the fix for keyboard routing
@@ -195,6 +220,46 @@ mod tests {
         let section = &content[start..start + end];
 
         assert_main_window_visibility_guard_precedes_key_parse(section, "actions interceptor");
+    }
+
+    /// Menu-syntax result-list ownership must not steal normal input editing.
+    ///
+    /// The `type:` picker can leave the main list owned by menu syntax while
+    /// the search input remains focused. Enter may still accept the picker, but
+    /// bare printable keys, Backspace, and Escape must pass through to the
+    /// focused input / normal launcher handlers instead of being swallowed by
+    /// displayed action shortcut routing.
+    #[test]
+    fn test_menu_syntax_displayed_shortcuts_only_consume_enter() {
+        let source = fs::read_to_string("src/app_impl/actions_dialog.rs")
+            .expect("Failed to read src/app_impl/actions_dialog.rs");
+        let helper = function_body(&source, "fn menu_syntax_displayed_shortcut_should_consume");
+        assert!(
+            helper.contains("canonical_shortcut == \"enter\""),
+            "menu syntax displayed shortcut ownership should only consume Enter"
+        );
+
+        let raw_router = function_body(
+            &source,
+            "pub(crate) fn try_execute_main_list_action_shortcut_from_display",
+        );
+        assert!(
+            raw_router.contains("return false;"),
+            "raw displayed shortcut routing must pass through non-Enter keys while menu syntax owns the main list"
+        );
+        assert!(
+            raw_router.contains("input owns editing keys"),
+            "raw displayed shortcut routing should log the pass-through reason for live debugging"
+        );
+
+        let canonical_router = function_body(
+            &source,
+            "pub(crate) fn try_execute_main_list_action_shortcut_canonical",
+        );
+        assert!(
+            canonical_router.contains("return false;"),
+            "canonical displayed shortcut routing must pass through non-Enter keys while menu syntax owns the main list"
+        );
     }
 
     #[test]

@@ -10,6 +10,10 @@ pub(crate) enum ActionsSupport {
     None,
 }
 
+fn menu_syntax_displayed_shortcut_should_consume(canonical_shortcut: &str) -> bool {
+    canonical_shortcut == "enter"
+}
+
 impl ScriptListApp {
     fn is_builtin_list_actions_view(view: &AppView) -> bool {
         matches!(
@@ -708,7 +712,7 @@ impl ScriptListApp {
         if self.menu_syntax_trigger_picker_owns_main_keyboard()
             || crate::menu_syntax::active_filter_head_owns_main_list(&self.filter_text)
         {
-            if canonical_shortcut == "enter" {
+            if menu_syntax_displayed_shortcut_should_consume(canonical_shortcut) {
                 if !self.menu_syntax_trigger_picker_owns_main_keyboard() {
                     let text = self.filter_text.clone();
                     self.run_menu_syntax_trigger_picker_state_machine(&text, window, cx);
@@ -730,11 +734,11 @@ impl ScriptListApp {
             logging::log(
                 "KEY_ROUTE",
                 &format!(
-                    "Displayed shortcut {} blocked: menu-syntax owns main list",
+                    "Displayed shortcut {} passed through: menu-syntax owns main list but input owns editing keys",
                     canonical_shortcut
                 ),
             );
-            return true;
+            return false;
         }
 
         let (script_info, actions) = self.main_list_actions_for_shortcut_routing();
@@ -814,7 +818,7 @@ impl ScriptListApp {
             || crate::menu_syntax::active_filter_head_owns_main_list(&self.filter_text)
         {
             let canonical_keystroke = crate::shortcuts::keystroke_to_shortcut(key, modifiers);
-            if canonical_keystroke == "enter" {
+            if menu_syntax_displayed_shortcut_should_consume(&canonical_keystroke) {
                 if !self.menu_syntax_trigger_picker_owns_main_keyboard() {
                     let text = self.filter_text.clone();
                     self.run_menu_syntax_trigger_picker_state_machine(&text, window, cx);
@@ -836,11 +840,11 @@ impl ScriptListApp {
             logging::log(
                 "KEY_ROUTE",
                 &format!(
-                    "Shortcut route blocked key={}: menu-syntax owns main list",
+                    "Shortcut route passed through key={}: menu-syntax owns main list but input owns editing keys",
                     canonical_keystroke
                 ),
             );
-            return true;
+            return false;
         }
 
         let (script_info, actions) = self.main_list_actions_for_shortcut_routing();
@@ -1829,6 +1833,8 @@ mod actions_host_mapping_tests {
 mod actions_dialog_wiring_regression_tests {
     use std::fs;
 
+    use super::menu_syntax_displayed_shortcut_should_consume;
+
     #[test]
     fn render_script_list_routes_popup_keys_before_generic_cmd_shortcuts() {
         let source = fs::read_to_string("src/render_script_list/mod.rs")
@@ -1845,6 +1851,18 @@ mod actions_dialog_wiring_regression_tests {
             route_pos < cmd_pos,
             "render_script_list must route popup keys before generic Cmd shortcuts"
         );
+    }
+
+    #[test]
+    fn menu_syntax_displayed_shortcut_only_consumes_enter() {
+        assert!(menu_syntax_displayed_shortcut_should_consume("enter"));
+
+        for shortcut in ["s", "t", "backspace", "escape", "cmd-k"] {
+            assert!(
+                !menu_syntax_displayed_shortcut_should_consume(shortcut),
+                "menu-syntax main-list ownership must not swallow {shortcut}; the focused input or normal key handlers still own editing keys"
+            );
+        }
     }
 
     #[test]
