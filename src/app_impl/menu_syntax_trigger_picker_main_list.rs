@@ -43,6 +43,49 @@ impl ScriptListApp {
         self.menu_syntax_trigger_picker_state.selected_row_id = Some(row_id);
     }
 
+    pub(crate) fn arm_menu_syntax_trigger_picker_enter_guard(&mut self, route: &'static str) {
+        self.menu_syntax_trigger_picker_enter_guard = Some(std::time::Instant::now());
+        tracing::info!(
+            target: "script_kit::menu_syntax_popup",
+            event = "menu_syntax_trigger_picker_enter_guard_armed",
+            route,
+            filter = %self.filter_text,
+            computed_filter = %self.computed_filter_text,
+            selected_index = self.selected_index,
+            "menu-syntax trigger picker Enter guard armed"
+        );
+    }
+
+    pub(crate) fn should_consume_menu_syntax_trigger_picker_press_enter(
+        &mut self,
+        route: &'static str,
+    ) -> bool {
+        const ENTER_ECHO_GUARD_MS: u128 = 250;
+        let Some(armed_at) = self.menu_syntax_trigger_picker_enter_guard.take() else {
+            return false;
+        };
+
+        let age_ms = armed_at.elapsed().as_millis();
+        let consume = age_ms <= ENTER_ECHO_GUARD_MS;
+        tracing::info!(
+            target: "script_kit::menu_syntax_popup",
+            event = if consume {
+                "menu_syntax_trigger_picker_press_enter_consumed"
+            } else {
+                "menu_syntax_trigger_picker_press_enter_guard_expired"
+            },
+            route,
+            age_ms,
+            guard_ms = ENTER_ECHO_GUARD_MS,
+            filter = %self.filter_text,
+            computed_filter = %self.computed_filter_text,
+            selected_index = self.selected_index,
+            "menu-syntax trigger picker PressEnter guard checked"
+        );
+
+        consume
+    }
+
     /// Apply the Accept outcome for a clicked picker row. Mouse-click path
     /// only — keyboard goes through
     /// [`apply_menu_syntax_trigger_picker_intent`], which has access to

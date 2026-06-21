@@ -67,6 +67,33 @@ fn script_list_keyboard_routes_trigger_picker_by_main_state() {
     }
 }
 
+/// A real Enter can reach both the global key-down interceptor and the GPUI
+/// input's PressEnter callback. Accepting a trigger row must consume the
+/// follow-up PressEnter after the picker closes, or the first filtered script
+/// row can be submitted by the same physical key.
+#[test]
+fn trigger_picker_enter_accept_arms_press_enter_echo_guard() {
+    for needle in [
+        "fn arm_menu_syntax_trigger_picker_enter_guard",
+        "fn should_consume_menu_syntax_trigger_picker_press_enter",
+        "menu_syntax_trigger_picker_enter_guard_armed",
+        "menu_syntax_trigger_picker_press_enter_consumed",
+    ] {
+        assert!(
+            TRIGGER_OWNER.contains(needle),
+            "trigger picker owner must define/log Enter echo guard: {needle}"
+        );
+    }
+
+    assert!(
+        STARTUP.contains("this.arm_menu_syntax_trigger_picker_enter_guard(")
+            && STARTUP.contains("this.should_consume_menu_syntax_trigger_picker_press_enter(")
+            && STARTUP.find("this.should_consume_menu_syntax_trigger_picker_press_enter(")
+                < STARTUP.find("this.should_consume_script_list_enter_after_submit("),
+        "ScriptList PressEnter must check the trigger-picker echo guard before launcher submit guards"
+    );
+}
+
 #[test]
 fn trigger_picker_rows_are_cached_as_main_list_rows() {
     for needle in [

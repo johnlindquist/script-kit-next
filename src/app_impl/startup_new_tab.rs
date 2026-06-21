@@ -366,6 +366,9 @@
                                     window,
                                     cx,
                                 ) {
+                                    this.arm_menu_syntax_trigger_picker_enter_guard(
+                                        "global_plain_enter_script_list",
+                                    );
                                     cx.stop_propagation();
                                     return;
                                 }

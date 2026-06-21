@@ -289,6 +289,15 @@
                     }
                     if matches!(this.current_view, AppView::ScriptList) && !this.show_actions_popup
                     {
+                        if this.should_consume_menu_syntax_trigger_picker_press_enter(
+                            "input_press_enter_script_list",
+                        ) {
+                            logging::log(
+                                "KEY",
+                                "Ignoring PressEnter: menu-syntax trigger picker consumed same physical Enter",
+                            );
+                            return;
+                        }
                         if this.should_consume_script_list_enter_after_submit(
                             "input_press_enter_script_list",
                         ) {

@@ -792,6 +792,15 @@ impl ScriptListApp {
 
                     if matches!(this.current_view, AppView::ScriptList) && !this.show_actions_popup
                     {
+                        if this.should_consume_menu_syntax_trigger_picker_press_enter(
+                            "input_press_enter_script_list",
+                        ) {
+                            logging::log(
+                                "KEY",
+                                "Ignoring PressEnter: menu-syntax trigger picker consumed same physical Enter",
+                            );
+                            return;
+                        }
                         if this.should_consume_script_list_enter_after_submit(
                             "input_press_enter_script_list",
                         ) {
@@ -1147,6 +1156,7 @@ impl ScriptListApp {
             wheel_accum: 0.0,
             main_list_suppress_hover_until_mouse_move: false,
             menu_syntax_trigger_picker_suppress_next_launcher_click: false,
+            menu_syntax_trigger_picker_enter_guard: None,
             // Window focus tracking - for detecting focus lost and auto-dismissing prompts
             was_window_focused: false,
             // Pin state - when true, window stays open on blur
@@ -1794,6 +1804,9 @@ impl ScriptListApp {
                                     window,
                                     cx,
                                 ) {
+                                    this.arm_menu_syntax_trigger_picker_enter_guard(
+                                        "global_plain_enter_script_list",
+                                    );
                                     cx.stop_propagation();
                                     return;
                                 }

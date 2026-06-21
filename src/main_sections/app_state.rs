@@ -1127,6 +1127,11 @@ pub(crate) struct ScriptListApp {
     /// physical click can finish after the list has re-rendered to normal
     /// launcher rows; consume that trailing click so it cannot submit row 0.
     menu_syntax_trigger_picker_suppress_next_launcher_click: bool,
+    /// Armed when a menu-syntax trigger picker row accepts on the global
+    /// Enter key-down path. GPUI's input component can emit a follow-up
+    /// PressEnter for the same physical key after the picker has closed; this
+    /// consumes that echo so it cannot submit the first filtered launcher row.
+    menu_syntax_trigger_picker_enter_guard: Option<std::time::Instant>,
     // Window focus tracking - for detecting focus lost and auto-dismissing prompts
     // When window loses focus while in a dismissable prompt, close and reset
     was_window_focused: bool,
