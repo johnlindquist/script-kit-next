@@ -7,7 +7,7 @@
 use serde::{Deserialize, Serialize};
 
 /// Schema version for the Agent Chat state response envelope.
-pub const AGENT_CHAT_STATE_SCHEMA_VERSION: u32 = 3;
+pub const AGENT_CHAT_STATE_SCHEMA_VERSION: u32 = 4;
 
 /// Resolved automation target echoed back in Agent Chat state/probe responses.
 ///
@@ -117,6 +117,10 @@ pub struct AgentChatStateSnapshot {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub input_layout: Option<AgentChatInputLayoutMetrics>,
 
+    /// Runtime transcript scroll and scrollbar-thumb metrics.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub transcript_scroll: Option<AgentChatTranscriptScrollMetrics>,
+
     /// Redacted focused-text capture/apply state for the mini Agent Chat mode.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub focused_text: Option<AgentChatFocusedTextState>,
@@ -157,11 +161,32 @@ impl Default for AgentChatStateSnapshot {
             context_ready: true,
             has_pending_permission: false,
             input_layout: None,
+            transcript_scroll: None,
             focused_text: None,
             setup: None,
             warnings: Vec::new(),
         }
     }
+}
+
+/// Runtime scroll and scrollbar-thumb metrics for the Agent Chat transcript.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentChatTranscriptScrollMetrics {
+    pub row_count: usize,
+    pub scroll_top_item: usize,
+    pub scroll_top_offset_px: f32,
+    pub viewport_height_px: f32,
+    pub content_height_px: f32,
+    pub scroll_top_px: f32,
+    pub max_scroll_top_px: f32,
+    pub can_scroll_y: bool,
+    pub thumb_track_height_px: f32,
+    pub thumb_height_px: f32,
+    pub thumb_top_px: f32,
+    pub thumb_bottom_px: f32,
+    pub thumb_position_ratio: f32,
+    pub measurement_source: String,
 }
 
 /// Redacted focused-text mini Agent Chat state.
@@ -766,6 +791,38 @@ mod tests {
         assert_eq!(back, snap);
     }
 
+    #[test]
+    fn agent_chat_state_snapshot_with_transcript_scroll_metrics_round_trips() {
+        let snap = AgentChatStateSnapshot {
+            transcript_scroll: Some(AgentChatTranscriptScrollMetrics {
+                row_count: 160,
+                scroll_top_item: 80,
+                scroll_top_offset_px: 4.0,
+                viewport_height_px: 500.0,
+                content_height_px: 2000.0,
+                scroll_top_px: 750.0,
+                max_scroll_top_px: 1500.0,
+                can_scroll_y: true,
+                thumb_track_height_px: 500.0,
+                thumb_height_px: 125.0,
+                thumb_top_px: 187.5,
+                thumb_bottom_px: 312.5,
+                thumb_position_ratio: 0.5,
+                measurement_source: "listState".to_string(),
+            }),
+            ..Default::default()
+        };
+        let json = serde_json::to_value(&snap).expect("serialize with transcript scroll metrics");
+        assert_eq!(json["transcriptScroll"]["rowCount"], 160);
+        assert_eq!(json["transcriptScroll"]["scrollTopItem"], 80);
+        assert_eq!(json["transcriptScroll"]["thumbPositionRatio"], 0.5);
+        assert_eq!(json["transcriptScroll"]["measurementSource"], "listState");
+
+        let back: AgentChatStateSnapshot =
+            serde_json::from_value(json).expect("deserialize with transcript scroll metrics");
+        assert_eq!(back, snap);
+    }
+
     // ── AgentChatResolvedTarget serde ──────────────────────────────────
 
     #[test]
@@ -1017,6 +1074,7 @@ mod tests {
                 visible_end: 14,
                 cursor_in_window: 14,
             }),
+            transcript_scroll: None,
             focused_text: None,
             setup: None,
             warnings: Vec::new(),

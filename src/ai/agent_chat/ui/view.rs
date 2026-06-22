@@ -4919,7 +4919,7 @@ impl AgentChatView {
         }
 
         let thread = self.live_thread().read(cx);
-        self.build_agent_chat_live_state_snapshot(thread, setup_snapshot)
+        self.build_agent_chat_live_state_snapshot(thread, setup_snapshot, cx)
     }
 
     fn agent_chat_thread_status_label(status: AgentChatThreadStatus) -> &'static str {
@@ -4960,6 +4960,7 @@ impl AgentChatView {
         &self,
         thread: &AgentChatThread,
         setup_snapshot: Option<crate::protocol::AgentChatSetupSnapshot>,
+        cx: &App,
     ) -> crate::protocol::AgentChatStateSnapshot {
         let status_str = Self::agent_chat_thread_status_label(thread.status);
 
@@ -4983,6 +4984,10 @@ impl AgentChatView {
             .map(|phase| phase.as_automation_str().to_string());
         let input_layout =
             Self::build_agent_chat_input_layout_metrics(thread, &input_text, cursor_index);
+        let transcript_scroll = self
+            .transcript
+            .as_ref()
+            .map(|transcript| transcript.read(cx).scroll_metrics());
         let redact_focused_text_input =
             self.ui_variant == AgentChatUiVariant::FocusedTextMini && self.focused_text.is_some();
 
@@ -5012,6 +5017,7 @@ impl AgentChatView {
             context_ready,
             has_pending_permission: thread.pending_permission.is_some(),
             input_layout: Some(input_layout),
+            transcript_scroll,
             focused_text: self.focused_text_state_snapshot(thread),
             setup: Self::build_agent_chat_live_setup_snapshot(thread, setup_snapshot),
             warnings: Vec::new(),

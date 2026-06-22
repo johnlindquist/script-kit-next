@@ -31,8 +31,8 @@ pub use agent_chat_state::{
     AgentChatKeyRouteTelemetry, AgentChatLastInteractionTrace,
     AgentChatPickerItemAcceptedTelemetry, AgentChatPickerState, AgentChatResolvedTarget,
     AgentChatSetupActionKind, AgentChatSetupSnapshot, AgentChatSpineSnapshot,
-    AgentChatStateSnapshot, AgentChatTestProbeSnapshot, AgentChatWaitCondition,
-    AGENT_CHAT_STATE_SCHEMA_VERSION, AGENT_CHAT_TEST_PROBE_MAX_EVENTS,
+    AgentChatStateSnapshot, AgentChatTestProbeSnapshot, AgentChatTranscriptScrollMetrics,
+    AgentChatWaitCondition, AGENT_CHAT_STATE_SCHEMA_VERSION, AGENT_CHAT_TEST_PROBE_MAX_EVENTS,
     AGENT_CHAT_TEST_PROBE_SCHEMA_VERSION,
 };
 pub use ai::{AiChatInfo, AiContextPartInput, AiMessageInfo};

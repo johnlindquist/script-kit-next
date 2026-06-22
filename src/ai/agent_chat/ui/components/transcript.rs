@@ -99,7 +99,7 @@ pub struct AgentChatTranscript {
 impl AgentChatTranscript {
     pub fn new(messages: Vec<AgentChatThreadMessage>, cx: &mut Context<Self>) -> Self {
         let total = messages.len();
-        let list_state = ListState::new(total, ListAlignment::Bottom, px(200.0));
+        let list_state = ListState::new(total, ListAlignment::Bottom, px(200.0)).measure_all();
         list_state.set_follow_tail(true);
 
         let mut transcript = Self {
@@ -322,6 +322,7 @@ impl AgentChatTranscript {
     }
 
     pub fn scroll_to_reveal_item(&self, index: usize) {
+        self.list_state.set_follow_tail(false);
         self.list_state.scroll_to_reveal_item(index);
     }
 
@@ -330,11 +331,73 @@ impl AgentChatTranscript {
     }
 
     pub fn scroll_to(&self, offset: ListOffset) {
+        self.list_state.set_follow_tail(false);
         self.list_state.scroll_to(offset);
     }
 
     pub fn scroll_to_end(&self) {
-        self.list_state.scroll_to_end();
+        self.list_state.set_follow_tail(true);
+    }
+
+    pub(crate) fn scroll_metrics(&self) -> crate::protocol::AgentChatTranscriptScrollMetrics {
+        const GPUI_SCROLLBAR_MIN_THUMB_SIZE_PX: f32 = 48.0;
+
+        let logical = self.list_state.logical_scroll_top();
+        let viewport_height = self
+            .list_state
+            .viewport_bounds()
+            .size
+            .height
+            .as_f32()
+            .max(0.0);
+        let max_scroll_top = self
+            .list_state
+            .max_offset_for_scrollbar()
+            .y
+            .as_f32()
+            .max(0.0);
+        let scroll_offset = self.list_state.scroll_px_offset_for_scrollbar();
+        let scroll_top = (-scroll_offset.y.as_f32()).clamp(0.0, max_scroll_top);
+        let content_height = viewport_height + max_scroll_top;
+        let can_scroll_y = content_height > viewport_height && viewport_height > 0.0;
+
+        let (thumb_height, thumb_top, thumb_bottom, thumb_position_ratio) = if can_scroll_y {
+            let thumb_track_height = viewport_height;
+            let thumb_height = ((viewport_height / content_height) * thumb_track_height)
+                .max(GPUI_SCROLLBAR_MIN_THUMB_SIZE_PX)
+                .min(thumb_track_height);
+            let thumb_position_ratio = if max_scroll_top > 0.0 {
+                (scroll_top / max_scroll_top).clamp(0.0, 1.0)
+            } else {
+                0.0
+            };
+            let thumb_top = thumb_position_ratio * (thumb_track_height - thumb_height).max(0.0);
+            (
+                thumb_height,
+                thumb_top,
+                thumb_top + thumb_height,
+                thumb_position_ratio,
+            )
+        } else {
+            (viewport_height, 0.0, viewport_height, 0.0)
+        };
+
+        crate::protocol::AgentChatTranscriptScrollMetrics {
+            row_count: self.row_count(),
+            scroll_top_item: logical.item_ix,
+            scroll_top_offset_px: logical.offset_in_item.as_f32(),
+            viewport_height_px: viewport_height,
+            content_height_px: content_height,
+            scroll_top_px: scroll_top,
+            max_scroll_top_px: max_scroll_top,
+            can_scroll_y,
+            thumb_track_height_px: viewport_height,
+            thumb_height_px: thumb_height,
+            thumb_top_px: thumb_top,
+            thumb_bottom_px: thumb_bottom,
+            thumb_position_ratio,
+            measurement_source: "listState".to_string(),
+        }
     }
 
     fn transcript_text_style(
@@ -1273,7 +1336,7 @@ impl Render for AgentChatTranscript {
                 ))
                 .into_any()
             })
-            .with_sizing_behavior(ListSizingBehavior::Infer)
+            .with_sizing_behavior(ListSizingBehavior::Auto)
             .size_full()
             .into_any_element()
         };

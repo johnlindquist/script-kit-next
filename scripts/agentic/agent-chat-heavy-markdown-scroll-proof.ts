@@ -8,6 +8,7 @@ type Args = {
   messageCount: number;
   scrollCycles: number;
   receipt: string;
+  proveThumb: boolean;
 };
 
 const DEFAULT_RECEIPT = ".test-output/agent-chat-heavy-markdown-scroll-proof.json";
@@ -25,6 +26,7 @@ function parseArgs(): Args {
     messageCount: Number(get("--message-count", "160")),
     scrollCycles: Number(get("--scroll-cycles", "80")),
     receipt: get("--receipt", DEFAULT_RECEIPT),
+    proveThumb: args.includes("--prove-thumb"),
   };
 }
 
@@ -142,6 +144,118 @@ function fail(receipt: Json, name: string, detail: Json = {}) {
   receipt.failures.push({ name, ...detail });
 }
 
+function within(value: number, expected: number, tolerance: number): boolean {
+  return Math.abs(value - expected) <= tolerance;
+}
+
+function spread(values: number[]): number {
+  if (values.length === 0) return 0;
+  return Math.max(...values) - Math.min(...values);
+}
+
+async function sampleThumb(
+  driver: Driver,
+  label: string,
+  itemIx: number,
+  offsetPx = 0,
+): Promise<Json> {
+  const result = await driver.request(
+    { type: "setAgentChatTranscriptScroll", itemIx, offsetPx },
+    { expect: "externalCommandResult", timeoutMs: 5_000 },
+  );
+  await Bun.sleep(125);
+  const state = await driver.request(
+    { type: "getAgentChatState" },
+    { expect: "agent_chatStateResult", timeoutMs: 10_000 },
+  );
+  return {
+    label,
+    requestedItemIx: itemIx,
+    scrollCommandOk: result.ok !== false && result.success !== false,
+    metrics: state.transcriptScroll ?? null,
+  };
+}
+
+async function proveThumbGeometry(driver: Driver, rowCount: number): Promise<Json> {
+  const middle = Math.floor(rowCount / 2);
+  const requests = [
+    ["topWarmup", 0],
+    ["bottomWarmup", rowCount],
+    ["top", 0],
+    ["middle", middle],
+    ["bottom", rowCount],
+    ["topRepeat", 0],
+    ["bottomRepeat", rowCount],
+  ] as const;
+
+  const samples: Json[] = [];
+  for (const [label, itemIx] of requests) {
+    samples.push(await sampleThumb(driver, label, itemIx));
+  }
+
+  const measured = samples.filter((sample) => sample.metrics != null && sample.scrollCommandOk);
+  const required = ["top", "middle", "bottom", "topRepeat", "bottomRepeat"];
+  const byLabel = new Map(samples.map((sample) => [sample.label, sample]));
+  const requiredMetrics = required.map((label) => byLabel.get(label)?.metrics).filter(Boolean);
+  const metricsPresent = requiredMetrics.length === required.length;
+
+  const scrollTops = requiredMetrics.map((metrics) => metrics.scrollTopPx as number);
+  const thumbTops = requiredMetrics.map((metrics) => metrics.thumbTopPx as number);
+  const contentHeights = requiredMetrics.map((metrics) => metrics.contentHeightPx as number);
+  const maxScrollTops = requiredMetrics.map((metrics) => metrics.maxScrollTopPx as number);
+  const thumbHeights = requiredMetrics.map((metrics) => metrics.thumbHeightPx as number);
+
+  const top = byLabel.get("top")?.metrics ?? null;
+  const middleMetrics = byLabel.get("middle")?.metrics ?? null;
+  const bottom = byLabel.get("bottom")?.metrics ?? null;
+  const topRepeat = byLabel.get("topRepeat")?.metrics ?? null;
+  const bottomRepeat = byLabel.get("bottomRepeat")?.metrics ?? null;
+
+  const monotonicScrollTop =
+    metricsPresent && top.scrollTopPx <= middleMetrics.scrollTopPx && middleMetrics.scrollTopPx <= bottom.scrollTopPx;
+  const monotonicThumbTop =
+    metricsPresent && top.thumbTopPx <= middleMetrics.thumbTopPx && middleMetrics.thumbTopPx <= bottom.thumbTopPx;
+  const stableContentHeight = metricsPresent && spread(contentHeights) <= 2;
+  const stableMaxScrollTop = metricsPresent && spread(maxScrollTops) <= 2;
+  const stableThumbHeight = metricsPresent && spread(thumbHeights) <= 1;
+  const topAnchored = metricsPresent && top.thumbTopPx <= 2 && top.scrollTopPx <= 2;
+  const bottomAnchored =
+    metricsPresent &&
+    within(bottom.thumbBottomPx, bottom.thumbTrackHeightPx, 2) &&
+    within(bottom.scrollTopPx, bottom.maxScrollTopPx, 2);
+  const repeatedEndpointsStable =
+    metricsPresent &&
+    Math.abs(top.thumbTopPx - topRepeat.thumbTopPx) <= 2 &&
+    Math.abs(top.scrollTopPx - topRepeat.scrollTopPx) <= 2 &&
+    Math.abs(bottom.thumbBottomPx - bottomRepeat.thumbBottomPx) <= 2 &&
+    Math.abs(bottom.scrollTopPx - bottomRepeat.scrollTopPx) <= 2;
+  const thumbWithinTrack =
+    metricsPresent &&
+    requiredMetrics.every((metrics) => {
+      const track = metrics.thumbTrackHeightPx as number;
+      const height = metrics.thumbHeightPx as number;
+      const topPx = metrics.thumbTopPx as number;
+      const bottomPx = metrics.thumbBottomPx as number;
+      return topPx >= -1 && topPx <= track - height + 1 && bottomPx >= height - 1 && bottomPx <= track + 1;
+    });
+
+  return {
+    metricsPresent,
+    measuredSamples: measured.length,
+    canScrollY: metricsPresent && requiredMetrics.every((metrics) => metrics.canScrollY === true),
+    monotonicScrollTop,
+    monotonicThumbTop,
+    stableContentHeight,
+    stableMaxScrollTop,
+    stableThumbHeight,
+    topAnchored,
+    bottomAnchored,
+    repeatedEndpointsStable,
+    thumbWithinTrack,
+    samples,
+  };
+}
+
 const args = parseArgs();
 const receiptPath = resolve(args.receipt);
 mkdirSync(dirname(receiptPath), { recursive: true });
@@ -157,6 +271,9 @@ const receipt: Json = {
     messageCount: args.messageCount,
     assistantMarkdown: "heavy",
     heavyAssistantRowsExpected: Math.floor(args.messageCount / 2),
+  },
+  options: {
+    proveThumb: args.proveThumb,
   },
   failures: [],
 };
@@ -272,6 +389,9 @@ try {
     screenshots,
     screenshotsTargetMatched: screenshots.every((shot) => shot.ok && shot.width > 0 && shot.height > 0),
   };
+  if (args.proveThumb) {
+    receipt.thumbProof = await proveThumbGeometry(driver, args.messageCount);
+  }
   receipt.mitigation = {
     heavyPreviewRowsCollapsed: renderTrace.heavyPreviewCountMax,
     expandedHeavyMarkdownRows: renderTrace.expandedHeavyMarkdownCountMax,
@@ -289,6 +409,25 @@ try {
   }
   if (!receipt.visualProof.screenshotsTargetMatched) {
     fail(receipt, "screenshot_failed", { visualProof: receipt.visualProof });
+  }
+  if (args.proveThumb) {
+    const thumbProof = receipt.thumbProof ?? {};
+    const failedThumbChecks = [
+      "metricsPresent",
+      "canScrollY",
+      "monotonicScrollTop",
+      "monotonicThumbTop",
+      "stableContentHeight",
+      "stableMaxScrollTop",
+      "stableThumbHeight",
+      "topAnchored",
+      "bottomAnchored",
+      "repeatedEndpointsStable",
+      "thumbWithinTrack",
+    ].filter((key) => thumbProof[key] !== true);
+    if (failedThumbChecks.length > 0) {
+      fail(receipt, "thumb_proof_failed", { failedThumbChecks, thumbProof });
+    }
   }
 
   receipt.classification = receipt.failures.length === 0 ? "fixed" : "reproduced";
