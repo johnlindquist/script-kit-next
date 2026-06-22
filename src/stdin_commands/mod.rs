@@ -591,6 +591,19 @@ pub enum ExternalCommand {
         user_text: Option<String>,
         #[serde(default, rename = "assistantText")]
         assistant_text: Option<String>,
+        #[serde(default, rename = "messageCount")]
+        message_count: Option<usize>,
+        #[serde(default, rename = "requestId")]
+        request_id: Option<ExternalCommandRequestId>,
+    },
+    /// Scroll the active Agent Chat transcript to a logical list offset.
+    ///
+    /// DevTools-only proof primitive for transcript performance scenarios.
+    SetAgentChatTranscriptScroll {
+        #[serde(rename = "itemIx")]
+        item_ix: usize,
+        #[serde(default, rename = "offsetPx")]
+        offset_px: f32,
         #[serde(default, rename = "requestId")]
         request_id: Option<ExternalCommandRequestId>,
     },
@@ -799,6 +812,7 @@ impl ExternalCommand {
             | Self::GetAgentChatVariations { request_id, .. }
             | Self::AgentChatEscape { request_id, .. }
             | Self::SetAgentChatTestFixture { request_id, .. }
+            | Self::SetAgentChatTranscriptScroll { request_id, .. }
             | Self::GetAiWindowState { request_id, .. }
             | Self::ShowGrid { request_id, .. }
             | Self::ShowShortcutRecorder { request_id, .. }
@@ -858,6 +872,7 @@ impl ExternalCommand {
             Self::GetAgentChatVariations { .. } => "getAgentChatVariations",
             Self::AgentChatEscape { .. } => "agent_chatEscape",
             Self::SetAgentChatTestFixture { .. } => "setAgentChatTestFixture",
+            Self::SetAgentChatTranscriptScroll { .. } => "setAgentChatTranscriptScroll",
             Self::GetAiWindowState { .. } => "getAiWindowState",
             Self::ShowGrid { .. } => "showGrid",
             Self::HideGrid => "hideGrid",
@@ -909,6 +924,7 @@ pub const EXTERNAL_COMMAND_VERBS: &[&str] = &[
     "getAgentChatVariations",
     "agent_chatEscape",
     "setAgentChatTestFixture",
+    "setAgentChatTranscriptScroll",
     "getAiWindowState",
     "showGrid",
     "hideGrid",
@@ -1428,6 +1444,7 @@ mod tests {
                 phase: "awaitingFirstAssistantText".to_string(),
                 user_text: None,
                 assistant_text: None,
+                message_count: None,
                 request_id: None,
             },
             ExternalCommand::GetAiWindowState { request_id: None },
@@ -2227,11 +2244,13 @@ mod tests {
                 phase,
                 user_text,
                 assistant_text,
+                message_count,
                 ..
             } => {
                 assert_eq!(phase, "awaitingFirstAssistantText");
                 assert_eq!(user_text.as_deref(), Some("hello"));
                 assert!(assistant_text.is_none());
+                assert_eq!(message_count, None);
             }
             _ => panic!("Expected SetAgentChatTestFixture command"),
         }

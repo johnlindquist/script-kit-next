@@ -2646,6 +2646,7 @@ impl AgentChatThread {
         phase: &str,
         user_text: Option<String>,
         assistant_text: Option<String>,
+        message_count: Option<usize>,
         cx: &mut Context<Self>,
     ) -> Result<(), String> {
         let user_text = user_text.unwrap_or_else(|| "No-token activity fixture".to_string());
@@ -2671,28 +2672,54 @@ impl AgentChatThread {
         self.context_bootstrap_note = None;
         self.queued_submit_while_bootstrapping = false;
 
-        self.push_message(AgentChatThreadMessageRole::User, user_text.to_string());
-        match phase {
-            "awaitingFirstAssistantText" | "awaiting-first-assistant-text" | "awaiting" => {
-                self.set_status(AgentChatThreadStatus::Streaming);
-            }
-            "assistantText" | "assistant-text" | "text" => {
-                self.push_message(
-                    AgentChatThreadMessageRole::Assistant,
-                    assistant_text.unwrap_or_else(|| "Fixture assistant text.".to_string()),
+        if let Some(message_count) = message_count {
+            let message_count = message_count.clamp(1, 2_000);
+            let assistant_text = assistant_text
+                .as_deref()
+                .unwrap_or("Fixture assistant text with enough markdown to exercise layout.");
+            for index in 0..message_count {
+                let role = if index % 2 == 0 {
+                    AgentChatThreadMessageRole::User
+                } else {
+                    AgentChatThreadMessageRole::Assistant
+                };
+                let seed = if matches!(role, AgentChatThreadMessageRole::User) {
+                    user_text
+                } else {
+                    assistant_text
+                };
+                let body = format!(
+                    "{seed}\n\n### Fixture turn {turn}\n\n- row: {row}\n- purpose: rapid transcript scroll performance\n- repeated detail: alpha beta gamma delta epsilon zeta eta theta\n\n```text\nfixture block {row}\nline one with enough width to require text layout\nline two with stable markdown parsing\n```\n\nThis paragraph intentionally gives TextViewState markdown a non-trivial body while keeping the fixture deterministic.",
+                    turn = index / 2 + 1,
+                    row = index + 1,
                 );
-                self.set_status(AgentChatThreadStatus::Streaming);
+                self.push_message(role, body);
             }
-            "idle" => {
-                if let Some(text) = assistant_text {
-                    self.push_message(AgentChatThreadMessageRole::Assistant, text);
+            self.set_status(AgentChatThreadStatus::Idle);
+        } else {
+            self.push_message(AgentChatThreadMessageRole::User, user_text.to_string());
+            match phase {
+                "awaitingFirstAssistantText" | "awaiting-first-assistant-text" | "awaiting" => {
+                    self.set_status(AgentChatThreadStatus::Streaming);
                 }
-                self.set_status(AgentChatThreadStatus::Idle);
-            }
-            other => {
-                return Err(format!(
-                    "unknown setAgentChatTestFixture phase {other:?}; expected awaitingFirstAssistantText, assistantText, or idle"
-                ));
+                "assistantText" | "assistant-text" | "text" => {
+                    self.push_message(
+                        AgentChatThreadMessageRole::Assistant,
+                        assistant_text.unwrap_or_else(|| "Fixture assistant text.".to_string()),
+                    );
+                    self.set_status(AgentChatThreadStatus::Streaming);
+                }
+                "idle" => {
+                    if let Some(text) = assistant_text {
+                        self.push_message(AgentChatThreadMessageRole::Assistant, text);
+                    }
+                    self.set_status(AgentChatThreadStatus::Idle);
+                }
+                other => {
+                    return Err(format!(
+                        "unknown setAgentChatTestFixture phase {other:?}; expected awaitingFirstAssistantText, assistantText, or idle"
+                    ));
+                }
             }
         }
 
@@ -2700,6 +2727,7 @@ impl AgentChatThread {
             target: "script_kit::tab_ai",
             event = "agent_chat_test_fixture_applied",
             phase,
+            requested_message_count = message_count.unwrap_or(0),
             message_count = self.messages.len(),
             awaiting_first_assistant_text = self.awaiting_first_assistant_text(),
         );

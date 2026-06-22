@@ -23,12 +23,72 @@ pub enum AgentChatTranscriptEvent {
 
 impl gpui::EventEmitter<AgentChatTranscriptEvent> for AgentChatTranscript {}
 
+#[derive(Clone, Copy, Debug, Default)]
+struct HeavyMarkdownStats {
+    bytes: usize,
+    chars: usize,
+    lines: usize,
+    fence_markers: usize,
+    table_like_lines: usize,
+    blockquote_lines: usize,
+    list_like_lines: usize,
+}
+
+impl HeavyMarkdownStats {
+    fn from_text(text: &str) -> Self {
+        let mut stats = Self {
+            bytes: text.len(),
+            chars: text.chars().count(),
+            ..Self::default()
+        };
+
+        for line in text.lines() {
+            stats.lines += 1;
+            let trimmed = line.trim_start();
+            if trimmed.starts_with("```") || trimmed.starts_with("~~~") {
+                stats.fence_markers += 1;
+            }
+            if trimmed.starts_with('|') && trimmed.contains('|') {
+                stats.table_like_lines += 1;
+            }
+            if trimmed.starts_with('>') {
+                stats.blockquote_lines += 1;
+            }
+            if trimmed.starts_with("- ")
+                || trimmed.starts_with("* ")
+                || trimmed.starts_with("+ ")
+                || trimmed.starts_with("- [")
+                || trimmed.chars().next().is_some_and(|ch| ch.is_ascii_digit())
+                    && trimmed.contains(". ")
+            {
+                stats.list_like_lines += 1;
+            }
+        }
+
+        stats
+    }
+
+    fn is_scroll_heavy(self) -> bool {
+        self.bytes > 5_000
+            || self.lines > 60
+            || (self.bytes > 2_500
+                && (self.lines > 36
+                    || self.fence_markers >= 4
+                    || self.table_like_lines >= 3
+                    || self.blockquote_lines >= 6
+                    || self.list_like_lines >= 14))
+    }
+}
+
 pub struct AgentChatTranscript {
     list_state: ListState,
     messages: Vec<AgentChatThreadMessage>,
     collapsed_ids: HashSet<u64>,
+    expanded_heavy_markdown_ids: HashSet<u64>,
     message_views: HashMap<u64, gpui::Entity<TextViewState>>,
     message_texts: HashMap<u64, String>,
+    message_stats: HashMap<u64, HeavyMarkdownStats>,
+    message_previews: HashMap<u64, String>,
     ui_variant: AgentChatUiVariant,
     /// While a turn is streaming with no assistant text yet, render a
     /// synthetic "Thinking…" row at the tail so the wait is visible in the
@@ -37,20 +97,25 @@ pub struct AgentChatTranscript {
 }
 
 impl AgentChatTranscript {
-    pub fn new(messages: Vec<AgentChatThreadMessage>, _cx: &mut Context<Self>) -> Self {
+    pub fn new(messages: Vec<AgentChatThreadMessage>, cx: &mut Context<Self>) -> Self {
         let total = messages.len();
         let list_state = ListState::new(total, ListAlignment::Bottom, px(200.0));
         list_state.set_follow_tail(true);
 
-        Self {
+        let mut transcript = Self {
             list_state,
             messages,
             collapsed_ids: HashSet::new(),
+            expanded_heavy_markdown_ids: HashSet::new(),
             message_views: HashMap::new(),
             message_texts: HashMap::new(),
+            message_stats: HashMap::new(),
+            message_previews: HashMap::new(),
             ui_variant: AgentChatUiVariant::Standard,
             show_activity_row: false,
-        }
+        };
+        transcript.reconcile_message_views(cx);
+        transcript
     }
 
     fn row_count(&self) -> usize {
@@ -104,6 +169,73 @@ impl AgentChatTranscript {
         }
     }
 
+    fn should_use_heavy_markdown_preview(
+        msg: &AgentChatThreadMessage,
+        stats: HeavyMarkdownStats,
+    ) -> bool {
+        matches!(msg.role, AgentChatThreadMessageRole::Assistant)
+            && msg.tool_meta.is_none()
+            && stats.is_scroll_heavy()
+    }
+
+    fn heavy_markdown_preview_text(text: &str) -> String {
+        const MAX_LINES: usize = 28;
+        const MAX_CHARS: usize = 1_800;
+
+        let mut out = String::new();
+        for line in text.lines().take(MAX_LINES) {
+            if out.len() + line.len() + 1 > MAX_CHARS {
+                break;
+            }
+            out.push_str(line);
+            out.push('\n');
+        }
+
+        out.trim_end().to_string()
+    }
+
+    fn reconcile_message_views(&mut self, cx: &mut Context<Self>) {
+        for msg in &self.messages {
+            let display_text = Self::display_body(msg);
+            let stats = HeavyMarkdownStats::from_text(&display_text);
+            let use_preview = Self::should_use_heavy_markdown_preview(msg, stats);
+            let expanded = self.expanded_heavy_markdown_ids.contains(&msg.id);
+
+            self.message_stats.insert(msg.id, stats);
+            if use_preview {
+                self.message_previews
+                    .insert(msg.id, Self::heavy_markdown_preview_text(&display_text));
+            } else {
+                self.message_previews.remove(&msg.id);
+            }
+
+            if use_preview && !expanded {
+                self.message_views.remove(&msg.id);
+                self.message_texts.remove(&msg.id);
+                continue;
+            }
+
+            match self.message_views.entry(msg.id) {
+                std::collections::hash_map::Entry::Vacant(entry) => {
+                    entry.insert(cx.new(|cx| TextViewState::markdown(&display_text, cx)));
+                    self.message_texts.insert(msg.id, display_text);
+                }
+                std::collections::hash_map::Entry::Occupied(entry) => {
+                    let text_changed = self
+                        .message_texts
+                        .get(&msg.id)
+                        .is_none_or(|last_text| last_text != &display_text);
+                    if text_changed {
+                        entry.get().update(cx, |state, cx| {
+                            state.set_text(&display_text, cx);
+                        });
+                        self.message_texts.insert(msg.id, display_text);
+                    }
+                }
+            }
+        }
+    }
+
     pub fn set_messages(&mut self, messages: Vec<AgentChatThreadMessage>, cx: &mut Context<Self>) {
         if self.messages_match_current(&messages) {
             return;
@@ -119,8 +251,14 @@ impl AgentChatTranscript {
 
         // Clean up message inputs for deleted messages
         let active_ids: HashSet<u64> = self.messages.iter().map(|m| m.id).collect();
+        self.expanded_heavy_markdown_ids
+            .retain(|id| active_ids.contains(id));
         self.message_views.retain(|id, _| active_ids.contains(id));
         self.message_texts.retain(|id, _| active_ids.contains(id));
+        self.message_stats.retain(|id, _| active_ids.contains(id));
+        self.message_previews
+            .retain(|id, _| active_ids.contains(id));
+        self.reconcile_message_views(cx);
 
         cx.notify();
     }
@@ -141,6 +279,13 @@ impl AgentChatTranscript {
             self.collapsed_ids.insert(id);
         }
         cx.notify();
+    }
+
+    fn expand_heavy_markdown(&mut self, id: u64, cx: &mut Context<Self>) {
+        if self.expanded_heavy_markdown_ids.insert(id) {
+            self.reconcile_message_views(cx);
+            cx.notify();
+        }
     }
 
     /// Whether a collapsible message renders expanded by default, before any
@@ -258,10 +403,68 @@ impl AgentChatTranscript {
     ) -> TextView {
         TextView::new(text_view_state)
             .style(Self::transcript_text_style(theme, colors, style_def))
-            .selectable(true)
+            .selectable(crate::logging::agent_chat_markdown_selectable_enabled())
             .w_full()
             .text_size(px(style_def.markdown.body_font_size))
             .text_color(text_color)
+    }
+
+    fn render_heavy_markdown_preview(
+        msg: &AgentChatThreadMessage,
+        preview: &str,
+        stats: HeavyMarkdownStats,
+        colors: &PromptColors,
+        theme: &crate::theme::Theme,
+        style_def: &AgentChatStyleDef,
+        entity: &gpui::WeakEntity<AgentChatTranscript>,
+    ) -> gpui::AnyElement {
+        let message_id = msg.id;
+        let entity = entity.clone();
+
+        let mut preview_body = div()
+            .w_full()
+            .flex()
+            .flex_col()
+            .gap(px(2.0))
+            .text_size(px(style_def.markdown.body_font_size))
+            .text_color(rgb(colors.text_primary));
+
+        for line in preview.lines() {
+            preview_body = preview_body.child(div().w_full().child(line.to_string()));
+        }
+
+        div()
+            .id(SharedString::from(format!(
+                "agent_chat-heavy-markdown-preview-{message_id}"
+            )))
+            .w_full()
+            .px(px(style_def.assistant_message.padding_x))
+            .py(px(style_def.assistant_message.padding_y))
+            .rounded(px(style_def.assistant_message.radius))
+            .bg(rgba((theme.colors.text.primary << 8) | 0x08))
+            .border_l_2()
+            .border_color(rgba((theme.colors.accent.selected << 8) | 0x55))
+            .cursor_pointer()
+            .on_click(move |_event, _window, cx| {
+                if let Some(transcript) = entity.upgrade() {
+                    transcript.update(cx, |this, cx| {
+                        this.expand_heavy_markdown(message_id, cx);
+                    });
+                }
+            })
+            .child(preview_body)
+            .child(
+                div()
+                    .pt(px(6.0))
+                    .text_size(px((style_def.markdown.body_font_size - 1.0).max(10.0)))
+                    .opacity(0.62)
+                    .text_color(rgb(colors.accent_color))
+                    .child(format!(
+                        "Heavy markdown preview - {} lines, {} chars - show full markdown",
+                        stats.lines, stats.chars
+                    )),
+            )
+            .into_any_element()
     }
 
     /// Attach the expand/collapse click handler to a collapsible header.
@@ -888,6 +1091,8 @@ impl AgentChatTranscript {
 
 impl Render for AgentChatTranscript {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let render_started =
+            crate::logging::agent_chat_render_trace_enabled().then(std::time::Instant::now);
         let theme = theme::get_cached_theme();
         let colors = PromptColors::from_theme(&theme);
         let style_def = crate::dev_style_tool::runtime_overrides::effective_agent_chat_style();
@@ -912,27 +1117,19 @@ impl Render for AgentChatTranscript {
             (0..messages_snapshot.len()).collect()
         };
 
-        // Reconcile/sync TextViewState entities for each message
-        for msg in &messages_snapshot {
-            let display_text = Self::display_body(msg);
-            let text_view_state = self
-                .message_views
-                .entry(msg.id)
-                .or_insert_with(|| cx.new(|cx| TextViewState::markdown(&display_text, cx)));
-
-            // Update text buffer if it's changing (e.g. streaming assistant output)
-            let last_text = self.message_texts.get(&msg.id).cloned().unwrap_or_default();
-            if last_text != display_text {
-                text_view_state.update(cx, |state, cx| {
-                    state.set_text(&display_text, cx);
-                });
-                self.message_texts.insert(msg.id, display_text);
-            }
-        }
-
         let message_views_snapshot = self.message_views.clone();
+        let message_stats_snapshot = self.message_stats.clone();
+        let message_previews_snapshot = self.message_previews.clone();
+        let expanded_heavy_markdown_ids = self.expanded_heavy_markdown_ids.clone();
         let ui_variant = self.ui_variant;
         let entity = cx.entity().downgrade();
+        let scroll_top_item = self.list_state.logical_scroll_top().item_ix;
+        let row_count = self.row_count();
+        let message_count = self.messages.len();
+        let visible_index_count = visible_indices.len();
+        let markdown_view_count = message_views_snapshot.len();
+        let heavy_preview_count = self.message_previews.len();
+        let expanded_heavy_markdown_count = self.expanded_heavy_markdown_ids.len();
         let transcript_content = if focused_text_preview {
             let mut preview = div().size_full().flex().flex_col().overflow_hidden();
 
@@ -940,26 +1137,48 @@ impl Render for AgentChatTranscript {
                 let Some(msg) = messages_snapshot.get(message_ix) else {
                     continue;
                 };
-                let Some(text_view_state) = message_views_snapshot.get(&msg.id) else {
-                    continue;
-                };
 
                 let is_collapsed = Self::is_collapsed_for(msg, &collapsed_ids);
-                preview = preview.child(
-                    div()
-                        .w_full()
-                        .px(px(style_def.transcript.focused_preview_padding_x))
-                        .pb(px(style_def.transcript.focused_preview_padding_bottom))
-                        .child(Self::render_message(
-                            ui_variant,
-                            msg,
-                            &colors,
-                            is_collapsed,
-                            text_view_state,
-                            &style_def,
-                            &entity,
-                        )),
-                );
+                let stats = message_stats_snapshot
+                    .get(&msg.id)
+                    .copied()
+                    .unwrap_or_default();
+                let use_heavy_preview = Self::should_use_heavy_markdown_preview(msg, stats)
+                    && !expanded_heavy_markdown_ids.contains(&msg.id);
+                let mut row = div()
+                    .w_full()
+                    .px(px(style_def.transcript.focused_preview_padding_x))
+                    .pb(px(style_def.transcript.focused_preview_padding_bottom));
+
+                if use_heavy_preview {
+                    let preview_text = message_previews_snapshot
+                        .get(&msg.id)
+                        .map(String::as_str)
+                        .unwrap_or("");
+                    row = row.child(Self::render_heavy_markdown_preview(
+                        msg,
+                        preview_text,
+                        stats,
+                        &colors,
+                        &theme,
+                        &style_def,
+                        &entity,
+                    ));
+                } else if let Some(text_view_state) = message_views_snapshot.get(&msg.id) {
+                    row = row.child(Self::render_message(
+                        ui_variant,
+                        msg,
+                        &colors,
+                        is_collapsed,
+                        text_view_state,
+                        &style_def,
+                        &entity,
+                    ));
+                } else {
+                    continue;
+                }
+
+                preview = preview.child(row);
             }
 
             preview.into_any_element()
@@ -990,11 +1209,14 @@ impl Render for AgentChatTranscript {
                         AgentChatThreadMessageRole::User
                     );
 
-                let Some(text_view_state) = message_views_snapshot.get(&msg.id) else {
-                    return div().into_any();
-                };
+                let stats = message_stats_snapshot
+                    .get(&msg.id)
+                    .copied()
+                    .unwrap_or_default();
+                let use_heavy_preview = Self::should_use_heavy_markdown_preview(msg, stats)
+                    && !expanded_heavy_markdown_ids.contains(&msg.id);
 
-                div()
+                let row = div()
                     .w_full()
                     .px(px(style_def.transcript.row_padding_x))
                     .pb(px(style_def.transcript.row_padding_bottom))
@@ -1016,22 +1238,63 @@ impl Render for AgentChatTranscript {
                             AgentChatTranscriptPresentation::DenseLog
                         ),
                         |d| d.pb(px(style_def.transcript.dense_row_padding_bottom)),
-                    )
-                    .child(Self::render_message(
-                        ui_variant,
-                        msg,
-                        &colors,
-                        is_collapsed,
-                        text_view_state,
-                        &style_def,
-                        &entity,
-                    ))
-                    .into_any()
+                    );
+
+                if use_heavy_preview {
+                    let preview_text = message_previews_snapshot
+                        .get(&msg.id)
+                        .map(String::as_str)
+                        .unwrap_or("");
+                    return row
+                        .child(Self::render_heavy_markdown_preview(
+                            msg,
+                            preview_text,
+                            stats,
+                            &colors,
+                            &theme,
+                            &style_def,
+                            &entity,
+                        ))
+                        .into_any();
+                }
+
+                let Some(text_view_state) = message_views_snapshot.get(&msg.id) else {
+                    return div().into_any();
+                };
+
+                row.child(Self::render_message(
+                    ui_variant,
+                    msg,
+                    &colors,
+                    is_collapsed,
+                    text_view_state,
+                    &style_def,
+                    &entity,
+                ))
+                .into_any()
             })
+            .with_sizing_behavior(ListSizingBehavior::Infer)
             .size_full()
-            .with_sizing_behavior(ListSizingBehavior::Auto)
             .into_any_element()
         };
+
+        if let Some(render_started) = render_started {
+            let elapsed = render_started.elapsed();
+            tracing::info!(
+                target: "script_kit::agent_chat_render",
+                event = "agent_chat_transcript_render",
+                elapsed_ms = elapsed.as_secs_f64() * 1000.0,
+                message_count,
+                row_count,
+                visible_index_count,
+                markdown_view_count,
+                heavy_preview_count,
+                expanded_heavy_markdown_count,
+                focused_text_preview,
+                scroll_top_item,
+                "Agent Chat transcript render"
+            );
+        }
 
         div()
             .relative()

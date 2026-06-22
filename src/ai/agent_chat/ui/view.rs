@@ -6485,6 +6485,7 @@ impl AgentChatView {
         phase: &str,
         user_text: Option<String>,
         assistant_text: Option<String>,
+        message_count: Option<usize>,
         cx: &mut Context<Self>,
     ) -> Result<(), String> {
         let Some(thread) = self.thread() else {
@@ -6492,8 +6493,23 @@ impl AgentChatView {
         };
 
         thread.update(cx, |thread, cx| {
-            thread.apply_test_fixture(phase, user_text, assistant_text, cx)
+            thread.apply_test_fixture(phase, user_text, assistant_text, message_count, cx)
         })
+    }
+
+    pub(crate) fn scroll_test_transcript_to(
+        &mut self,
+        item_ix: usize,
+        offset_px: f32,
+        cx: &mut Context<Self>,
+    ) -> Result<(), String> {
+        let transcript = self.ensure_transcript(cx);
+        transcript.read(cx).scroll_to(gpui::ListOffset {
+            item_ix,
+            offset_in_item: px(offset_px),
+        });
+        cx.notify();
+        Ok(())
     }
 
     fn focused_text_previous_turns(

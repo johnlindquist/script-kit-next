@@ -1116,6 +1116,7 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                 ref phase,
                                 ref user_text,
                                 ref assistant_text,
+                                ref message_count,
                                 ref request_id,
                             } => {
                                 let request_id_value = request_id.clone();
@@ -1128,6 +1129,7 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                     phase = %phase,
                                     user_text_len = user_text.as_ref().map(|text| text.len()).unwrap_or(0),
                                     assistant_text_len = assistant_text.as_ref().map(|text| text.len()).unwrap_or(0),
+                                    message_count = message_count.unwrap_or(0),
                                     "STDIN Agent Chat command received"
                                 );
                                 let result = match &view.current_view {
@@ -1138,6 +1140,7 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                                 phase,
                                                 user_text.clone(),
                                                 assistant_text.clone(),
+                                                *message_count,
                                                 cx,
                                             )
                                         })
@@ -1179,6 +1182,38 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                             crate::protocol::Message::external_command_result(
                                                 rid.to_string(),
                                                 "setAgentChatTestFixture".to_string(),
+                                                result.is_ok(),
+                                                result
+                                                    .as_ref()
+                                                    .err()
+                                                    .map(|_| "agent_chat_inactive".to_string()),
+                                                result.as_ref().err().cloned(),
+                                            ),
+                                        );
+                                    }
+                                }
+                            }
+                            ExternalCommand::SetAgentChatTranscriptScroll {
+                                item_ix,
+                                offset_px,
+                                ref request_id,
+                            } => {
+                                let request_id_value = request_id.clone();
+                                let result = match &view.current_view {
+                                    AppView::AgentChatView { entity } => {
+                                        let entity = entity.clone();
+                                        entity.update(ctx, |chat, cx| {
+                                            chat.scroll_test_transcript_to(item_ix, offset_px, cx)
+                                        })
+                                    }
+                                    _ => Err("Agent Chat view is not active".to_string()),
+                                };
+                                if let Some(rid) = request_id_value {
+                                    if let Some(ref sender) = view.response_sender {
+                                        let _ = sender.try_send(
+                                            crate::protocol::Message::external_command_result(
+                                                rid.to_string(),
+                                                "setAgentChatTranscriptScroll".to_string(),
                                                 result.is_ok(),
                                                 result
                                                     .as_ref()

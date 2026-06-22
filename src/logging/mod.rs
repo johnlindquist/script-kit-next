@@ -63,6 +63,20 @@ pub fn filter_perf_trace_enabled() -> bool {
     *ENABLED.get_or_init(|| std::env::var_os("SCRIPT_KIT_FILTER_PERF_LOG").is_some())
 }
 
+pub fn agent_chat_render_trace_enabled() -> bool {
+    static ENABLED: OnceLock<bool> = OnceLock::new();
+    *ENABLED.get_or_init(|| std::env::var_os("SCRIPT_KIT_AGENT_CHAT_RENDER_TRACE").is_some())
+}
+
+pub fn agent_chat_markdown_selectable_enabled() -> bool {
+    static ENABLED: OnceLock<bool> = OnceLock::new();
+    *ENABLED.get_or_init(|| {
+        std::env::var("SCRIPT_KIT_AGENT_CHAT_MARKDOWN_SELECTABLE")
+            .map(|value| value != "0")
+            .unwrap_or(true)
+    })
+}
+
 pub fn preflight_deep_log_enabled() -> bool {
     static ENABLED: OnceLock<bool> = OnceLock::new();
     *ENABLED.get_or_init(|| std::env::var_os("SCRIPT_KIT_PREFLIGHT_DEEP_LOG").is_some())
