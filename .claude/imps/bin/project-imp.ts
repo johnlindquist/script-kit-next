@@ -32,7 +32,7 @@ const progressTimeoutMs = timeoutFrom(
   cliProgressTimeout ??
     process.env.SCRIPT_KIT_IMP_PROGRESS_TIMEOUT_MS ??
     process.env.SCRIPT_KIT_IMP_ADVISORY_TIMEOUT_MS,
-  120_000,
+  600_000,
 );
 const maxRuntimeMs = timeoutFrom(
   takeOption("--max-runtime-ms") ?? process.env.SCRIPT_KIT_IMP_MAX_RUNTIME_MS,

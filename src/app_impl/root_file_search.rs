@@ -130,6 +130,17 @@ impl ScriptListApp {
             return;
         }
 
+        let results_changed = root_file_result_fingerprint(&self.root_file_results)
+            != root_file_result_fingerprint(&results);
+        let loading_changed = self.root_file_search_loading != loading
+            || self.root_file_provider_loading != loading;
+        if !results_changed && !loading_changed {
+            if clear_cancel {
+                self.root_file_search_cancel = None;
+            }
+            return;
+        }
+
         let selection_before = if matches!(self.current_view, AppView::ScriptList) {
             Some(self.main_menu_selection_snapshot())
         } else {
@@ -150,7 +161,6 @@ impl ScriptListApp {
                 self.restore_main_menu_selection_from_snapshot(snapshot);
             }
             self.validate_selection_bounds(cx);
-            self.reveal_main_list_selection_above_footer("root_file_active_publish");
             self.schedule_main_list_selection_reveal_above_footer(
                 "root_file_active_publish_deferred",
                 cx,

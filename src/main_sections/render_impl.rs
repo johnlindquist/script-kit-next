@@ -9,6 +9,7 @@ impl Render for ScriptListApp {
         // Track render timing for filter perf analysis
         let render_start = std::time::Instant::now();
         let filter_snapshot = self.filter_text.clone();
+        self.log_current_view_transition_if_changed("render");
         if matches!(self.current_view, AppView::ScriptList)
             && self.computed_filter_text == filter_snapshot
             && self

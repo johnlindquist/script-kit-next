@@ -40,6 +40,40 @@ impl ScriptListApp {
         self.rekey_main_automation_surface_from_current_view()
     }
 
+    /// Log top-level launcher view transitions once per active variant.
+    ///
+    /// View assignment is intentionally spread across route owners. Sampling at
+    /// render time records the observable surface without logging hot-path
+    /// selection/filter churn.
+    pub(crate) fn log_current_view_transition_if_changed(&mut self, source: &'static str) {
+        let current_view = self.current_view.app_view_variant();
+        if self.last_logged_app_view_variant == Some(current_view) {
+            return;
+        }
+
+        let previous_view = self.last_logged_app_view_variant.unwrap_or("unknown");
+        self.last_logged_app_view_variant = Some(current_view);
+        let contract = self.current_view.surface_contract();
+        tracing::info!(
+            event_type = "main_view_transition",
+            source,
+            previous_view,
+            current_view,
+            surface_kind = ?self.current_view.surface_kind(),
+            native_footer_surface = ?self.current_view.native_footer_surface(),
+            surface_family = ?contract.vocabulary.family,
+            input_ownership = ?contract.vocabulary.input_ownership,
+            preview_role = ?contract.vocabulary.preview_role,
+            focus_policy = ?contract.focus_policy,
+            keyboard_policy = ?contract.keyboard_policy,
+            actions_policy = ?contract.actions_policy,
+            proof_policy = ?contract.proof_policy,
+            visual_policy = ?contract.visual_policy,
+            automation_semantic_surface = contract.automation_semantic_surface,
+            "Main view transition"
+        );
+    }
+
     /// Re-key the main window automation `semanticSurface` from the active
     /// `AppView` contract without replacing the whole automation window record.
     pub(crate) fn rekey_main_automation_surface_from_current_view(&self) -> bool {

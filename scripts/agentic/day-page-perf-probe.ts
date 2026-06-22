@@ -2,7 +2,8 @@
 /**
  * Machine-readable receipts for the Today feature performance budgets
  * (.notes/today-requirements.md):
- * - main ⇄ Today toggle: < 100ms (in-app waitFor elapsed after the hotkey tap)
+ * - main hotkey open/close: < 100ms (wall-clock including protocol overhead)
+ * - hold-from-closed Today entry: < 100ms after the hold threshold fires
  * - typing latency: < 16ms average per applied edit (in-app setInput elapsed)
  * - actions readiness: < 250ms from Cmd+K to day_page rows queryable
  *
@@ -45,9 +46,8 @@ async function gesture(driver: Driver, phase: "down" | "up", label: string) {
 }
 
 /**
- * Tap the main hotkey, then poll until the (promptType, windowVisible) tuple
- * changes. Returns wall-clock ms including protocol overhead (an upper bound
- * on the user-perceived toggle latency).
+ * Tap the main hotkey, then poll until visibility changes. Returns wall-clock
+ * ms including protocol overhead (an upper bound on user-perceived latency).
  */
 async function tapAndMeasure(driver: Driver, label: string) {
   const before = (await driver.getState({ timeoutMs: 5000 })) as Json;
@@ -73,6 +73,29 @@ async function tapAndMeasure(driver: Driver, label: string) {
   };
 }
 
+async function holdDayPageAndMeasure(driver: Driver, label: string) {
+  const wallStart = performance.now();
+  await gesture(driver, "down", `${label}-down`);
+  await Bun.sleep(260);
+  let after = (await driver.getState({ timeoutMs: 5000 })) as Json;
+  let wallMs = -1;
+  for (let attempt = 0; attempt < 100; attempt++) {
+    after = (await driver.getState({ timeoutMs: 2000 })) as Json;
+    if (after.windowVisible === true && after.promptType === "dayPage") {
+      wallMs = Math.round(performance.now() - wallStart - 250);
+      break;
+    }
+    await Bun.sleep(5);
+  }
+  await gesture(driver, "up", `${label}-up`);
+  await Bun.sleep(250);
+  return {
+    ok: wallMs >= 0,
+    wallMs,
+    to: `${after.promptType}|${after.windowVisible}`,
+  };
+}
+
 const driver = await Driver.launch({
   binary: BINARY,
   sandboxHome: true,
@@ -93,40 +116,46 @@ try {
     promptType: state.promptType,
   });
 
-  // --- Toggle budget: tap through the hotkey cycle (launcher → Today →
-  // hidden → shown → …) and assert every visible main ⇄ Today transition
-  // lands under 100ms wall-clock (which already includes protocol overhead).
+  // --- Toggle budget: tap through the normal hotkey cycle (shown → hidden →
+  // shown → …) and assert transitions land under 100ms wall-clock.
   const toggleSamples: Json[] = [];
   for (let i = 0; i < 8; i++) {
     const sample = await tapAndMeasure(driver, `toggle-${i}`);
     toggleSamples.push(sample);
     await Bun.sleep(250);
   }
-  const dayPageTransitions = toggleSamples.filter(
-    (s) =>
-      (s.to as string).startsWith("dayPage|true") ||
-      ((s.from as string).startsWith("dayPage|") && (s.to as string).startsWith("none|true")),
-  );
-  const toggleMax = Math.max(...dayPageTransitions.map((s) => s.wallMs as number));
+  const toggleMax = Math.max(...toggleSamples.map((s) => s.wallMs as number));
   check(
-    "toggle_budget_under_100ms",
-    toggleSamples.every((s) => s.ok) &&
-      dayPageTransitions.length > 0 &&
-      toggleMax >= 0 &&
-      toggleMax < 100,
+    "main_hotkey_open_close_budget_under_100ms",
+    toggleSamples.every((s) => s.ok) && toggleMax >= 0 && toggleMax < 100,
     { budgetMs: 100, maxWallMs: toggleMax, samples: toggleSamples },
   );
 
-  // End on the Day Page for the remaining measurements.
+  // End hidden, then hold from closed to enter Day Page for the remaining
+  // measurements.
   let settled = (await driver.getState({ timeoutMs: 5000 })) as Json;
-  for (let i = 0; i < 3 && settled.promptType !== "dayPage"; i++) {
-    await tapAndMeasure(driver, `settle-${i}`);
+  if (settled.windowVisible === true) {
+    await tapAndMeasure(driver, "settle-hidden");
     await Bun.sleep(250);
     settled = (await driver.getState({ timeoutMs: 5000 })) as Json;
   }
+  check("settled_hidden_before_day_page_hold", settled.windowVisible === false, {
+    promptType: settled.promptType,
+    windowVisible: settled.windowVisible,
+  });
+
+  const holdSample = await holdDayPageAndMeasure(driver, "hold-to-day-page");
+  settled = (await driver.getState({ timeoutMs: 5000 })) as Json;
   check("settled_on_day_page", settled.promptType === "dayPage", {
     promptType: settled.promptType,
   });
+  check(
+    "hold_day_page_budget_under_100ms_after_threshold",
+    holdSample.ok === true &&
+      (holdSample.wallMs as number) >= 0 &&
+      (holdSample.wallMs as number) < 100,
+    { budgetMs: 100, sample: holdSample },
+  );
 
   // --- Typing budget: avg in-app apply latency < 16ms across 20 edits ---
   const base = "perf typing latency sample text";

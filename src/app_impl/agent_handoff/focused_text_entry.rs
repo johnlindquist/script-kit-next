@@ -107,6 +107,7 @@ impl ScriptListApp {
                     "idle",
                     user_text,
                     Some("Fixture focused text output.".to_string()),
+                    None,
                     cx,
                 );
                 if let Err(error) = result {
@@ -176,6 +177,7 @@ impl ScriptListApp {
                     "idle",
                     user_text,
                     Some("Fixture focused text output.".to_string()),
+                    None,
                     cx,
                 );
                 if let Err(error) = result {

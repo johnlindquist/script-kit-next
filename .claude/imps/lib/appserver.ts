@@ -25,11 +25,14 @@ export interface TurnHandlers {
   onNotification?: (method: string, params: any) => void;
 }
 
-function envMs(name: string, fallback: number): number {
-  const raw = process.env[name];
-  if (!raw) return fallback;
-  const parsed = Number(raw);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+function envMs(names: string | string[], fallback: number): number {
+  for (const name of Array.isArray(names) ? names : [names]) {
+    const raw = process.env[name];
+    if (!raw) continue;
+    const parsed = Number(raw);
+    if (Number.isFinite(parsed) && parsed > 0) return parsed;
+  }
+  return fallback;
 }
 
 export class AppServerClient {
@@ -116,7 +119,7 @@ export class AppServerClient {
 
   private awaitResponse(
     id: number,
-    timeoutMs = envMs("SCRIPT_KIT_IMP_START_TIMEOUT_MS", 60_000),
+    timeoutMs = envMs(["SCRIPT_KIT_IMP_START_TIMEOUT_MS", "CODEX_IMP_START_TIMEOUT_MS"], 180_000),
   ): Promise<any> {
     return new Promise((resolve, reject) => {
       const t = setTimeout(() => {
@@ -191,7 +194,7 @@ export class AppServerClient {
         this.handlers.delete(h);
         observer.finish({ status: "timeout", transport: "app-server" });
         reject(new Error(`turn timeout\nstderr:\n${this.stderrTail}`));
-      }, envMs("SCRIPT_KIT_IMP_TURN_TIMEOUT_MS", 120_000));
+      }, envMs(["SCRIPT_KIT_IMP_TURN_TIMEOUT_MS", "CODEX_IMP_TURN_TIMEOUT_MS"], 1_800_000));
       const h = (msg: any) => {
         if (msg.__exit !== undefined) {
           clearTimeout(t); this.handlers.delete(h);

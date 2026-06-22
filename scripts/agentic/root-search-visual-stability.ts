@@ -6,7 +6,8 @@ import { join, resolve } from "node:path";
 type Json = Record<string, any>;
 
 const repoRoot = resolve(import.meta.dir, "../..");
-const binary = join(repoRoot, "target/debug/script-kit-gpui");
+const binary =
+  process.env.SCRIPT_KIT_GPUI_BINARY ?? join(repoRoot, "target/debug/script-kit-gpui");
 const windowScript = join(repoRoot, "scripts/agentic/window.ts");
 const macosInputScript = join(repoRoot, "scripts/agentic/macos-input.ts");
 
@@ -37,6 +38,7 @@ const outDir = resolve(
 const noFixture = hasFlag("--no-fixture");
 const warmProvider = hasFlag("--warm-provider");
 const expectVisibleFileResults = hasFlag("--expect-visible-file-results");
+const protocolInput = hasFlag("--protocol-input");
 
 const screenshotDir = join(outDir, "screens");
 mkdirSync(screenshotDir, { recursive: true });
@@ -592,13 +594,17 @@ async function main() {
       throw new Error(`invalid window id: ${JSON.stringify(window)}`);
     }
 
-    await runCommand(["bun", windowScript, "focus", "--json"], "window-focus");
+    if (!protocolInput) {
+      await runCommand(["bun", windowScript, "focus", "--json"], "window-focus");
+    }
     const stopAt = performance.now() + durationMs;
     const statePromise = sampleStates(proc, startedAt, stopAt);
     const capturePromise = captureFrames(windowId, startedAt, stopAt);
 
     await Bun.sleep(120);
-    const nativeInput = await typeQueryNative();
+    const nativeInput = protocolInput
+      ? { mode: "protocol", requestId: send(proc, { type: "setFilter", text: query }) }
+      : await typeQueryNative();
 
     const [stateSamples, frames] = await Promise.all([statePromise, capturePromise]);
     const stability = assertStable(stateSamples);

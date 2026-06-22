@@ -1,10 +1,9 @@
 /**
  * T8 gesture grammar runtime proof:
  * - key-down → main window visible (ShowImmediate), opening tap stays on launcher
- * - tap-while-open (down+up + double window) → Day Page surface
- * - launcher query carry-over into day-page editor; cleared and not restored
- * - tap-while-open on Day Page → back to launcher
- * - double-tap → Agent Chat view
+ * - tap-while-open (down+up + double window) → main window hidden
+ * - hold-from-closed → Day Page surface
+ * - tap-while-open on Day Page → main window hidden
  * - stable main window id across transitions
  *
  * Timing intent: the opening press is a TAP — key-up is sent ~30ms after
@@ -16,11 +15,11 @@
  *     bun scripts/agentic/main-hotkey-gesture-probe.ts
  */
 import { Driver } from "../devtools/driver";
-import { tapMainHotkey } from "./day-page-open-helper";
+import { openDayPage, tapMainHotkey } from "./day-page-open-helper";
 
 const BINARY =
   process.env.PROBE_BINARY ??
-  "target-agent/artifacts/today/script-kit-gpui";
+  "target-agent/artifacts/main-hotkey-open-close/script-kit-gpui";
 
 type Json = Record<string, unknown>;
 const receipts: Record<string, Json> = {};
@@ -54,42 +53,6 @@ async function listMainWindow(): Promise<Json | null> {
   )) as Json;
   const windows = (result.windows ?? []) as Json[];
   return windows.find((w) => w.id === "main") ?? null;
-}
-
-async function getEditorText(driver: Driver): Promise<string | null> {
-  const elements = (await driver.request(
-    { type: "getElements", target: { type: "main" } },
-    { timeoutMs: 5000 },
-  )) as Json;
-  const editor = walkElements(elements).find(
-    (el) => el.semanticId === "input:day-page-editor" || el.id === "day-page-editor",
-  );
-  return (editor?.value as string | undefined) ?? null;
-}
-
-function walkElements(node: unknown, out: Json[] = []): Json[] {
-  if (!node || typeof node !== "object") return out;
-  if (Array.isArray(node)) {
-    for (const item of node) walkElements(item, out);
-    return out;
-  }
-  const json = node as Json;
-  if (typeof json.semanticId === "string" || typeof json.id === "string") {
-    out.push(json);
-  }
-  for (const value of Object.values(json)) walkElements(value, out);
-  return out;
-}
-
-async function doubleTapHotkey(driver: Driver, label: string) {
-  await simulateMainHotkeyGesture(driver, "down", `${label}-d1-down`);
-  await Bun.sleep(30);
-  await simulateMainHotkeyGesture(driver, "up", `${label}-d1-up`);
-  await Bun.sleep(80);
-  await simulateMainHotkeyGesture(driver, "down", `${label}-d2-down`);
-  await Bun.sleep(30);
-  await simulateMainHotkeyGesture(driver, "up", `${label}-d2-up`);
-  await Bun.sleep(200);
 }
 
 let globalDriver: Driver | null = null;
@@ -127,49 +90,35 @@ try {
     promptType: stateAfterShow.promptType,
   });
 
-  await driver.setFilterAndWait("carry me to the page");
-  await tapMainHotkey(driver, runId, "toggle-to-day-page");
+  await driver.batch([{ type: "setInput", text: "" }], { timeoutMs: 5000 });
+  await Bun.sleep(120);
+  await tapMainHotkey(driver, runId, "close-main-from-launcher");
 
-  const stateAfterTap = (await driver.getState({ timeoutMs: 5000 })) as Json;
-  check("tap_opens_day_page_surface", stateAfterTap.promptType === "dayPage", {
-    promptType: stateAfterTap.promptType,
+  const stateAfterClose = (await driver.getState({ timeoutMs: 5000 })) as Json;
+  check("tap_while_open_hides_main", stateAfterClose.windowVisible === false, {
+    promptType: stateAfterClose.promptType,
+    windowVisible: stateAfterClose.windowVisible,
   });
 
-  const editorAfterCarry = await getEditorText(driver);
-  check(
-    "carry_over_in_editor",
-    editorAfterCarry?.includes("carry me to the page") === true,
-    { editorAfterCarry },
-  );
-
-  // Tap back to the launcher: query must NOT be restored.
-  await tapMainHotkey(driver, runId, "toggle-back-to-launcher");
-  const stateBack = (await driver.getState({ timeoutMs: 5000 })) as Json;
-  check("tap_back_returns_to_launcher", stateBack.promptType === "none", {
-    promptType: stateBack.promptType,
-  });
-  check("launcher_query_cleared", (stateBack.inputValue ?? "") === "", {
-    inputValue: stateBack.inputValue,
+  await openDayPage(driver, runId);
+  const stateAfterHold = (await driver.getState({ timeoutMs: 5000 })) as Json;
+  check("hold_from_closed_opens_day_page", stateAfterHold.promptType === "dayPage", {
+    promptType: stateAfterHold.promptType,
+    windowVisible: stateAfterHold.windowVisible,
   });
 
-  await doubleTapHotkey(driver, "agent-chat");
-  await Bun.sleep(600);
-  const stateAgent = (await driver.getState({ timeoutMs: 5000 })) as Json;
-  check(
-    "double_tap_agent_chat",
-    String(stateAgent.promptType ?? "")
-      .toLowerCase()
-      .includes("agentchat"),
-    {
-      promptType: stateAgent.promptType,
-    },
-  );
+  await tapMainHotkey(driver, runId, "close-main-from-day-page");
+  const stateAfterDayClose = (await driver.getState({ timeoutMs: 5000 })) as Json;
+  check("tap_from_day_page_hides_main", stateAfterDayClose.windowVisible === false, {
+    promptType: stateAfterDayClose.promptType,
+    windowVisible: stateAfterDayClose.windowVisible,
+  });
 
-  const afterAgent = await listMainWindow();
+  const afterClose = await listMainWindow();
   check(
     "stable_main_window_id",
-    windowIdAfterDown === "main" && afterAgent?.id === "main",
-    { windowIdAfterDown, afterAgentId: afterAgent?.id },
+    windowIdAfterDown === "main" && afterClose?.id === "main",
+    { windowIdAfterDown, afterCloseId: afterClose?.id },
   );
 
   console.log(

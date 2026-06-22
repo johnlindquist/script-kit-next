@@ -405,36 +405,6 @@ impl DayPageView {
         cx.notify();
     }
 
-    pub(crate) fn append_main_hotkey_carry(
-        &mut self,
-        text: String,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let text = normalize_day_page_markdown_references(text.trim());
-        if text.is_empty() {
-            return;
-        }
-
-        let mut content = self.notes_editor.read(cx).content(cx);
-        if !content.is_empty() && !content.ends_with('\n') {
-            content.push('\n');
-        }
-        content.push_str(&text);
-
-        self.last_editor_content_len = content.len();
-        self.notes_editor.update(cx, |editor, cx| {
-            editor.set_value_with_cursor_at_end(content.clone(), window, cx);
-        });
-        self.session.apply_editor_content(&content);
-        self.refresh_fragment_open_targets(&content);
-        self.reset_day_page_spine_handoff_state(false, true);
-        self.schedule_autosave_flush(cx);
-        self.sync_footer(window, cx);
-        self.focus_editor(window, cx);
-        cx.notify();
-    }
-
     fn reset_day_page_spine_handoff_state(&mut self, clear_cwd_anchor: bool, clear_mentions: bool) {
         self.spine_handoff.reset(clear_cwd_anchor, clear_mentions);
     }

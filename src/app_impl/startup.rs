@@ -1003,6 +1003,7 @@ impl ScriptListApp {
             last_scroll_time: None,
             builtin_wheel_owned_selected_index: None,
             current_view: AppView::ScriptList,
+            last_logged_app_view_variant: None,
             submit_diagnostics: SubmitDiagnosticsState::default(),
             main_window_mode: MainWindowMode::Mini,
             script_session: Arc::new(ParkingMutex::new(None)),

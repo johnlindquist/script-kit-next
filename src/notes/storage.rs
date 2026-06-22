@@ -1114,6 +1114,7 @@ pub fn save_note(note: &Note) -> Result<()> {
     }
 
     debug!(note_id = %note.id, title = %note.title, slug = %slug, "Note saved to brain file");
+    crate::dev_marker::log_marker_note_explanation_if_ready(&note.id, &note.content);
     invalidate_root_notes_search_cache();
     Ok(())
 }

@@ -1160,6 +1160,20 @@ app.run(move |cx: &mut App| {
             logging::log("HOTKEY", "Notes hotkey listener exiting (channel closed)");
         }).detach();
 
+        // Dev marker listener — only receives events when ./dev.sh opted in via
+        // SCRIPT_KIT_DEV_MARKER_HOTKEY=1.
+        cx.spawn(async move |cx: &mut gpui::AsyncApp| {
+            logging::log("HOTKEY", "Dev marker hotkey listener started (event-driven)");
+            while let Ok(hotkey_event) = hotkeys::dev_marker_hotkey_channel().1.recv().await {
+                let _guard = logging::set_correlation_id(hotkey_event.correlation_id.clone());
+                logging::log("HOTKEY", "Dev marker hotkey triggered");
+                let _ = cx.update(|cx: &mut gpui::App| {
+                    crate::dev_marker::handle_hotkey(cx);
+                });
+            }
+            logging::log("HOTKEY", "Dev marker hotkey listener exiting (channel closed)");
+        }).detach();
+
         // AI hotkey listener - event-driven via async_channel
         // Same pattern as Notes hotkey - works immediately on app launch
         let app_entity_for_ai_hotkey = app_entity.clone();

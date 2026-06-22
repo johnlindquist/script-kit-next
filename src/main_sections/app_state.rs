@@ -826,6 +826,7 @@ pub(crate) struct ScriptListApp {
     builtin_wheel_owned_selected_index: Option<usize>,
     // Interactive script state
     current_view: AppView,
+    last_logged_app_view_variant: Option<&'static str>,
     submit_diagnostics: SubmitDiagnosticsState,
     pub(crate) main_window_mode: MainWindowMode,
     script_session: SharedSession,
@@ -992,7 +993,8 @@ pub(crate) struct ScriptListApp {
     /// `plan_trigger_picker_transition` on every filter update and keeps this
     /// field in sync while the detached popup window renders from the snapshot
     /// plus selected row id.
-    menu_syntax_trigger_picker_state: crate::menu_syntax_trigger_picker::MenuSyntaxTriggerPickerState,
+    menu_syntax_trigger_picker_state:
+        crate::menu_syntax_trigger_picker::MenuSyntaxTriggerPickerState,
     menu_syntax_object_selector_state: crate::menu_syntax::MenuSyntaxObjectSelectorState,
     /// Focused field index for the grammar-derived handler form shown in
     /// capture composer mode. Tab/Shift-Tab mutate this instead of opening

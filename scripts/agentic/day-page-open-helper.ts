@@ -29,13 +29,10 @@ export async function openDayPage(driver: Driver, runId: string): Promise<Json> 
   if (state.windowVisible === true && state.promptType === "none") {
     await driver.batch([{ type: "setInput", text: "" }], { timeoutMs: 5000 });
     await Bun.sleep(120);
-    await tapMainHotkey(driver, runId, "tap-launcher-to-day-page");
-    await driver.waitForState(
-      { windowVisible: true, promptType: "dayPage" },
-      { timeoutMs: 8000 },
-    );
-    await Bun.sleep(250);
-    return (await driver.getState({ timeoutMs: 5000 })) as Json;
+    await tapMainHotkey(driver, runId, "hide-launcher-before-day-page-hold");
+    await driver.waitForState({ windowVisible: false }, { timeoutMs: 8000 });
+    await Bun.sleep(120);
+    state = (await driver.getState({ timeoutMs: 5000 })) as Json;
   }
 
   if (state.windowVisible === true) {
@@ -43,13 +40,9 @@ export async function openDayPage(driver: Driver, runId: string): Promise<Json> 
     await Bun.sleep(420);
     state = (await driver.getState({ timeoutMs: 5000 })) as Json;
     if (state.windowVisible === true && state.promptType === "none") {
-      await tapMainHotkey(driver, runId, "tap-launcher-to-day-page-after-escape");
-      await driver.waitForState(
-        { windowVisible: true, promptType: "dayPage" },
-        { timeoutMs: 8000 },
-      );
-      await Bun.sleep(250);
-      return (await driver.getState({ timeoutMs: 5000 })) as Json;
+      await tapMainHotkey(driver, runId, "hide-launcher-after-escape-before-day-page-hold");
+      await driver.waitForState({ windowVisible: false }, { timeoutMs: 8000 });
+      await Bun.sleep(120);
     }
   }
 

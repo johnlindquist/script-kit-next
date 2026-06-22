@@ -26,11 +26,14 @@ import type { ImpConfig } from "./isolated.ts";
 import { AppServerClient } from "./appserver.ts";
 import { selfImproveFingerprintParts } from "./self-improve.ts";
 
-function envMs(name: string, fallback: number): number {
-  const raw = process.env[name];
-  if (!raw) return fallback;
-  const parsed = Number(raw);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+function envMs(names: string | string[], fallback: number): number {
+  for (const name of Array.isArray(names) ? names : [names]) {
+    const raw = process.env[name];
+    if (!raw) continue;
+    const parsed = Number(raw);
+    if (Number.isFinite(parsed) && parsed > 0) return parsed;
+  }
+  return fallback;
 }
 
 export function socketPath(name: string): string {
@@ -308,7 +311,7 @@ export async function stopWarmImp(name: string, pid?: number): Promise<void> {
  */
 export async function ensureWarmImp(
   config: ImpConfig,
-  readyTimeoutMs = envMs("SCRIPT_KIT_IMP_READY_TIMEOUT_MS", 30_000),
+  readyTimeoutMs = envMs(["SCRIPT_KIT_IMP_READY_TIMEOUT_MS", "CODEX_IMP_READY_TIMEOUT_MS"], 120_000),
 ): Promise<boolean> {
   const sock = socketPath(config.name);
   const current = sourceFingerprint(config);

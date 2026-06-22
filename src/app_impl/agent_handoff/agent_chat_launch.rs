@@ -75,6 +75,7 @@ impl ScriptListApp {
                 "assistantText",
                 Some("Can you summarize this fixture?".to_string()),
                 Some("This is a deterministic Agent Chat fixture response.".to_string()),
+                None,
                 cx,
             );
         });

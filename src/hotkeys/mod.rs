@@ -44,6 +44,8 @@ pub enum HotkeyAction {
     Dictation,
     /// Inline AI focused-text editor
     InlineAiTextEdit,
+    /// Dev-only marker capture while launched from ./dev.sh.
+    DevMarker,
     /// Script shortcut - run the script at this path
     Script(String),
 }
@@ -83,6 +85,8 @@ struct HotkeyRoutes {
     dictation_id: Option<u32>,
     /// Current inline AI text-edit hotkey ID (for quick lookup)
     inline_ai_id: Option<u32>,
+    /// Current dev marker hotkey ID (for quick lookup)
+    dev_marker_id: Option<u32>,
 }
 impl HotkeyRoutes {
     fn new() -> Self {
@@ -95,6 +99,7 @@ impl HotkeyRoutes {
             logs_id: None,
             dictation_id: None,
             inline_ai_id: None,
+            dev_marker_id: None,
         }
     }
 
@@ -112,6 +117,7 @@ impl HotkeyRoutes {
             HotkeyAction::ToggleLogs => self.logs_id = Some(id),
             HotkeyAction::Dictation => self.dictation_id = Some(id),
             HotkeyAction::InlineAiTextEdit => self.inline_ai_id = Some(id),
+            HotkeyAction::DevMarker => self.dev_marker_id = Some(id),
             HotkeyAction::Script(path) => {
                 self.script_paths.insert(path.clone(), id);
             }
@@ -153,6 +159,11 @@ impl HotkeyRoutes {
                         self.inline_ai_id = None;
                     }
                 }
+                HotkeyAction::DevMarker => {
+                    if self.dev_marker_id == Some(id) {
+                        self.dev_marker_id = None;
+                    }
+                }
                 HotkeyAction::Script(path) => {
                     self.script_paths.remove(path);
                 }
@@ -178,6 +189,7 @@ impl HotkeyRoutes {
             HotkeyAction::ToggleLogs => self.logs_id?,
             HotkeyAction::Dictation => self.dictation_id?,
             HotkeyAction::InlineAiTextEdit => self.inline_ai_id?,
+            HotkeyAction::DevMarker => self.dev_marker_id?,
             HotkeyAction::Script(path) => *self.script_paths.get(path)?,
         };
         self.routes.get(&id)
@@ -192,6 +204,7 @@ fn hotkey_action_label(action: &HotkeyAction) -> String {
         HotkeyAction::ToggleLogs => "Logs".to_string(),
         HotkeyAction::Dictation => "Dictation".to_string(),
         HotkeyAction::InlineAiTextEdit => "Inline AI Text Edit".to_string(),
+        HotkeyAction::DevMarker => "Dev Marker".to_string(),
         HotkeyAction::Script(command_id) => command_id.clone(),
     }
 }
@@ -385,6 +398,7 @@ fn rebind_hotkey_transactional(
             HotkeyAction::ToggleLogs => routes_guard.logs_id,
             HotkeyAction::Dictation => routes_guard.dictation_id,
             HotkeyAction::InlineAiTextEdit => routes_guard.inline_ai_id,
+            HotkeyAction::DevMarker => routes_guard.dev_marker_id,
             HotkeyAction::Script(path) => routes_guard.get_script_id(path),
         }
     };
@@ -437,6 +451,7 @@ fn rebind_hotkey_transactional(
             HotkeyAction::ToggleLogs => routes_guard.logs_id,
             HotkeyAction::Dictation => routes_guard.dictation_id,
             HotkeyAction::InlineAiTextEdit => routes_guard.inline_ai_id,
+            HotkeyAction::DevMarker => routes_guard.dev_marker_id,
             HotkeyAction::Script(path) => routes_guard.get_script_id(path),
         };
         let old_entry = old_id.and_then(|id| routes_guard.remove_route(id));
@@ -1424,6 +1439,18 @@ pub(crate) fn logs_hotkey_channel() -> &'static (
 ) {
     &LOGS_HOTKEY_CHANNEL
 }
+// DEV_MARKER_HOTKEY_CHANNEL: Dev-only marker capture events.
+#[allow(dead_code)]
+static DEV_MARKER_HOTKEY_CHANNEL: LazyLock<(
+    async_channel::Sender<HotkeyEvent>,
+    async_channel::Receiver<HotkeyEvent>,
+)> = LazyLock::new(|| async_channel::bounded(10));
+pub(crate) fn dev_marker_hotkey_channel() -> &'static (
+    async_channel::Sender<HotkeyEvent>,
+    async_channel::Receiver<HotkeyEvent>,
+) {
+    &DEV_MARKER_HOTKEY_CHANNEL
+}
 /// Tracks whether the main hotkey was successfully registered
 /// Used by main.rs to detect if the app has an alternate entry point
 static MAIN_HOTKEY_REGISTERED: AtomicBool = AtomicBool::new(false);
@@ -1617,6 +1644,16 @@ pub(crate) fn start_hotkey_listener(config: config::Config) {
         }
         if let Some(logs_hotkey) = config.get_logs_hotkey() {
             register_builtin_hotkey(&manager_guard, HotkeyAction::ToggleLogs, &logs_hotkey);
+        }
+        if std::env::var("SCRIPT_KIT_DEV_MARKER_HOTKEY")
+            .map(|value| value == "1" || value.eq_ignore_ascii_case("true"))
+            .unwrap_or(false)
+        {
+            let dev_marker_hotkey = config::HotkeyConfig {
+                modifiers: vec!["ctrl".to_string()],
+                key: "KeyM".to_string(),
+            };
+            register_builtin_hotkey(&manager_guard, HotkeyAction::DevMarker, &dev_marker_hotkey);
         }
         if let Some(inline_ai_hotkey) = config.get_inline_ai_hotkey() {
             register_builtin_hotkey(
@@ -1887,6 +1924,23 @@ pub(crate) fn start_hotkey_listener(config: config::Config) {
                         {
                             logging::log("HOTKEY", "Dictation hotkey channel full/closed");
                         }
+                    }
+                    Some(HotkeyAction::DevMarker) => {
+                        let correlation_id = format!("hotkey:dev-marker:{}", Uuid::new_v4());
+                        let _guard = logging::set_correlation_id(correlation_id.clone());
+
+                        logging::log(
+                            "HOTKEY",
+                            "Dev marker hotkey pressed - dispatching marker capture",
+                        );
+                        if dev_marker_hotkey_channel()
+                            .0
+                            .try_send(HotkeyEvent { correlation_id })
+                            .is_err()
+                        {
+                            logging::log("HOTKEY", "Dev marker hotkey channel full/closed");
+                        }
+                        gcd::dispatch_to_main(|| {});
                     }
                     Some(HotkeyAction::Script(path)) => {
                         // Set correlation ID for this hotkey event

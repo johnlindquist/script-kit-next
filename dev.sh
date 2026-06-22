@@ -126,6 +126,7 @@ export SCRIPT_KIT_DEFER_SCHEDULER_STARTUP="${SCRIPT_KIT_DEFER_SCHEDULER_STARTUP:
 export SCRIPT_KIT_STARTUP_READY_LOG="${SCRIPT_KIT_STARTUP_READY_LOG:-1}"
 export SCRIPT_KIT_DISABLE_AGENT_CHAT_HOT_PREWARM="${SCRIPT_KIT_DISABLE_AGENT_CHAT_HOT_PREWARM:-0}"
 export SCRIPT_KIT_DISABLE_QUICK_TERMINAL_WARM_PTY="${SCRIPT_KIT_DISABLE_QUICK_TERMINAL_WARM_PTY:-1}"
+export SCRIPT_KIT_DEV_MARKER_HOTKEY="${SCRIPT_KIT_DEV_MARKER_HOTKEY:-1}"
 
 # Agentic session name: dev.sh launches through the reusable session contract.
 export SCRIPT_KIT_DEV_SESSION_NAME="${SCRIPT_KIT_DEV_SESSION_NAME:-dev-watch}"
@@ -251,6 +252,9 @@ echo "   Quick Terminal warm PTY: disabled"
 echo "   Cargo dev profile: debug=0 incremental=true codegen-units=256"
 echo "   Build target: script-kit-gpui only (skips smoke-test, vibrancy-poc, menu-syntax-doctor)"
 echo "   Session log: ~/.scriptkit/logs/latest-session.jsonl"
+if [ "$SCRIPT_KIT_DEV_MARKER_HOTKEY" = "1" ]; then
+    echo "   Dev marker: Ctrl+M writes one structured marker + screenshot path, then opens Notes for context"
+fi
 echo "   Clear screen between rebuilds: SCRIPT_KIT_DEV_CLEAR=${SCRIPT_KIT_DEV_CLEAR:-0} (set =1 to enable cargo-watch -c)"
 echo "   Crash watchdog: SCRIPT_KIT_DEV_CRASH_WATCHDOG=${SCRIPT_KIT_DEV_CRASH_WATCHDOG:-1} (banner + auto-relaunch on app crash)"
 echo ""

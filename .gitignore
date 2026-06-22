@@ -27,6 +27,8 @@ node_modules/
 session*.md
 oracle-questions.md
 artifacts/
+.artifacts/
+.herenow/
 .goals/
 oracle/
 .antigravitycli/

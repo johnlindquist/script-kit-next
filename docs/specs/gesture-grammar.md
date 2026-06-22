@@ -6,19 +6,20 @@ Status: implemented (T2/T8/T9/T11 in flight). Owning decision:
 
 ## Summary
 
-All memory-layer intent rides the existing main hotkey. The launcher opens on
-key-down in 100% of cases; hold and double-tap escalate the already-open
-window. Surfaces morph in place inside the main window. No new chords.
+The existing main hotkey keeps the launcher contract: tap opens or closes the
+main window. The launcher opens on key-down in 100% of cases; hold and
+double-tap can escalate the already-open window before the tap resolves.
+Surfaces morph in place inside the main window. No new chords.
 
 ## Gesture Table
 
 | Gesture | Window closed | Window open (launcher or Day Page) |
 | --- | --- | --- |
-| Tap | Launcher, visible on key-down | Toggle launcher ↔ Day Page |
+| Tap | Launcher, visible on key-down | Close main window |
 | Hold (≥ hold threshold) | Day Page | — (window already open; see Open Questions) |
 | Double-tap | Agent Chat | Agent Chat |
 | Cmd+Enter | — | Agent Chat (established convention, unchanged) |
-| Esc | — | Dismiss (the only dismiss) |
+| Esc | — | Dismiss |
 
 ## State Machine
 
@@ -35,13 +36,13 @@ CLOSED
                             dedicated dictation shortcut/window)
 
 LAUNCHER (open, steady)
-  ├─ tap ──► DAY_PAGE  (in-flight query text carries over as capture start)
+  ├─ tap ──► CLOSED
   ├─ double-tap ──► AGENT_CHAT
   ├─ Cmd+Enter ──► AGENT_CHAT
   └─ Esc ──► CLOSED
 
 DAY_PAGE (open, steady)
-  ├─ tap ──► LAUNCHER
+  ├─ tap ──► CLOSED
   ├─ double-tap / Cmd+Enter ──► AGENT_CHAT
   └─ Esc ──► CLOSED
 ```
@@ -67,17 +68,16 @@ Confirmed timings (`src/hotkeys/gesture.rs`, module-level constants):
    across launcher ↔ Day Page; the results list folds away and editor space
    expands beneath. The transformation must read as "the window grew a body,"
    not a screen change. Same window frame, same size as the main input window.
-4. **Query carry-over.** Toggling launcher → Day Page with text in the search
-   input moves that text into the Day Page as the start of a capture. Toggling
-   back does not resurrect it in the launcher (it now belongs to the page).
+4. **No tap carry-over.** Tapping while the launcher is open closes the main
+   window. It must not move search input into the Day Page; Day Page entry is
+   owned by hold-from-closed and explicit in-app triggers.
 5. **No dictation on hold.** Hold opens the Day Page and nothing else.
    Dictation is invoked exclusively through the dedicated dictation
    shortcut/window; the Day Page does not start, render, or manage dictation.
    (An earlier push-to-talk-on-hold design was implemented and deliberately
    removed.)
-6. **Tap-to-dismiss is retired.** Tap-while-open toggles surfaces; Esc is the
-   only dismiss. This is a deliberate habit break and should be called out in
-   release notes / first-run hints.
+6. **Tap-to-dismiss remains.** Tap-while-open closes the main window, matching
+   the established launcher hotkey convention. Esc remains a dismiss path too.
 7. **Shared editor entity.** The Day Page hosts the same editor entity as the
    Notes window. The editor body must be extracted from `NotesApp`
    (`src/notes/window/`) into a shared component (per the shared component
@@ -105,7 +105,7 @@ referenced by excerpt + link, per
 
 - **Hold while the window is already open:** still unanswered. Current behavior
   (T8): `HoldStart` while open is not wired — hold only opens the Day Page from
-  closed; tap-while-open toggles surfaces.
+  closed; tap-while-open closes the main window.
 - ~~Exact `HOLD_MS`/`DOUBLE_MS` values~~ — **answered:** `HOLD_MS = 250`,
   `DOUBLE_MS = 300` in `src/hotkeys/gesture.rs`, overridable for tests.
 - ~~Whether double-tap morphs to the in-window Chat Prompt or focuses the
@@ -125,5 +125,5 @@ Per repo policy, prefer behavior tests and runtime proof over source audits:
   before `HOLD_MS` elapses after key-down.
 - Morph-not-swap: window identity receipt (same window id across
   launcher → Day Page → Agent Chat transitions).
-- Carry-over: `getState` receipt showing query text present in the Day Page
-  editor after toggle.
+- Tap-while-open: runtime receipt showing the main window hides instead of
+  morphing to the Day Page.
