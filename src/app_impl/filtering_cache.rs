@@ -627,14 +627,24 @@ impl ScriptListApp {
         let allow_browser_history =
             source_filters.allows(crate::menu_syntax::RootUnifiedSourceFilter::BrowserHistory);
 
+        let passive_brain_search_text = (!explicit_brain)
+            .then(|| crate::brain::root_brain_passive_search_text(search_text, brain_options))
+            .flatten();
+        let effective_brain_search_text = if explicit_brain {
+            Some(search_text.trim().to_string())
+        } else {
+            passive_brain_search_text.clone()
+        };
         // Prefer the async hybrid (semantic) batch when it was computed for
         // exactly this query; the sync lexical pass below is the instant
         // first paint while semantic results are still in flight.
-        let brain_semantic_hits = crate::brain::semantic_root_brain_hits_for_query(
-            search_text,
-            self.root_brain_semantic_results.as_ref(),
-            &brain_options,
-        );
+        let brain_semantic_hits = effective_brain_search_text.as_deref().and_then(|brain_query| {
+            crate::brain::semantic_root_brain_hits_for_query(
+                brain_query,
+                self.root_brain_semantic_results.as_ref(),
+                &brain_options,
+            )
+        });
         let brain_hits = timed_root_passive_source("brain", search_text, explicit_brain, || {
             if advanced_query_active || !allow_brain {
                 Vec::new()
@@ -646,9 +656,17 @@ impl ScriptListApp {
                 // query "eligible" for a search that can only return nothing.
                 crate::brain::recent_root_brain_hits(brain_options.max_results)
             } else if crate::brain::root_brain_query_is_eligible(search_text, brain_options) {
-                brain_semantic_hits.unwrap_or_else(|| {
-                    crate::brain::search_root_brain_direct(search_text, &brain_options)
-                })
+                if explicit_brain {
+                    brain_semantic_hits.unwrap_or_else(|| {
+                        crate::brain::search_root_brain_direct(search_text, &brain_options)
+                    })
+                } else if let Some(brain_query) = passive_brain_search_text.as_deref() {
+                    brain_semantic_hits.unwrap_or_else(|| {
+                        crate::brain::search_root_brain_direct(brain_query, &brain_options)
+                    })
+                } else {
+                    Vec::new()
+                }
             } else {
                 Vec::new()
             }

@@ -100,6 +100,72 @@ pub fn root_brain_query_is_eligible(query: &str, options: RootBrainSectionOption
     options.enabled && !query.contains('\n') && query.len() >= options.min_query_chars
 }
 
+const PASSIVE_ROOT_BRAIN_STOPWORDS: &[&str] = &[
+    "a", "an", "and", "any", "anyway", "are", "as", "at", "be", "been", "being", "but", "by",
+    "did", "do", "does", "for", "from", "had", "has", "have", "having", "he", "her", "his", "how",
+    "i", "in", "is", "it", "me", "my", "of", "on", "or", "our", "she", "that", "the", "their",
+    "this", "to", "was", "we", "were", "what", "when", "where", "which", "who", "why", "with",
+    "you", "your",
+];
+
+fn passive_root_brain_stopword_or_prefix(term: &str) -> bool {
+    if PASSIVE_ROOT_BRAIN_STOPWORDS.contains(&term) {
+        return true;
+    }
+
+    term.chars().all(|ch| ch.is_ascii_alphabetic())
+        && PASSIVE_ROOT_BRAIN_STOPWORDS
+            .iter()
+            .any(|stopword| term.len() < stopword.len() && stopword.starts_with(term))
+}
+
+fn passive_root_brain_term_is_noise(term: &str) -> bool {
+    term.is_empty()
+        || term
+            .chars()
+            .all(|ch| ch.is_ascii_punctuation() || ch.is_whitespace())
+        || passive_root_brain_stopword_or_prefix(term)
+}
+
+fn passive_root_brain_meaningful_terms(query: &str) -> Vec<String> {
+    query
+        .split_whitespace()
+        .filter_map(|term| {
+            let term = term
+                .trim_matches(|ch: char| ch.is_ascii_punctuation())
+                .to_lowercase();
+            if passive_root_brain_term_is_noise(&term) {
+                None
+            } else {
+                Some(term)
+            }
+        })
+        .collect()
+}
+
+/// Passive root Brain rows should not fire for filler-only natural-language
+/// phrases like "What is this anyway?". Explicit `brain:` queries intentionally
+/// use `root_brain_query_is_eligible` directly and remain permissive.
+pub fn root_brain_passive_search_text(
+    query: &str,
+    options: RootBrainSectionOptions,
+) -> Option<String> {
+    if !root_brain_query_is_eligible(query, options) {
+        return None;
+    }
+    let terms = passive_root_brain_meaningful_terms(query);
+    if terms.is_empty() {
+        None
+    } else {
+        let search_text = terms.join(" ");
+        root_brain_query_is_eligible(&search_text, options).then_some(search_text)
+    }
+}
+
+pub fn root_brain_passive_query_is_eligible(query: &str, options: RootBrainSectionOptions) -> bool {
+    root_brain_passive_search_text(query, options).is_some()
+}
+
 /// Search the brain for passive root-launcher rows. Returns an empty list when
 /// the section is disabled, the query is too short, or the store errors —
 /// passive sources must never surface failures into the launcher.
@@ -319,6 +385,93 @@ mod tests {
                 ..options
             }
         ));
+    }
+
+    #[test]
+    fn passive_root_brain_search_text_filters_filler_only_questions() {
+        let options = RootBrainSectionOptions {
+            enabled: true,
+            max_results: 4,
+            min_query_chars: 3,
+        };
+
+        for query in [
+            "Why is t",
+            "Why is thi",
+            "Why is this o",
+            "Why is this on any",
+            "What is this anyway?",
+            "What is this anyw",
+            "What is this anywa",
+            "how do I",
+            "how do I fi",
+            "where is the",
+            "wher",
+            "which",
+            "whic",
+            "their",
+            "thei",
+            "having",
+            "havin",
+            "why is the",
+        ] {
+            assert!(
+                root_brain_query_is_eligible(query, options),
+                "raw eligibility should stay permissive for {query:?}"
+            );
+            assert_eq!(
+                root_brain_passive_search_text(query, options),
+                None,
+                "passive search text should reject filler query {query:?}"
+            );
+            assert!(
+                !root_brain_passive_query_is_eligible(query, options),
+                "passive query should reject filler query {query:?}"
+            );
+        }
+
+        for (query, expected) in [
+            ("Why is this script crashing", "script crashing"),
+            ("how do I fix rust ownership", "fix rust ownership"),
+            ("anywhere plans", "anywhere plans"),
+            ("brain works", "brain works"),
+            ("rust ownership", "rust ownership"),
+        ] {
+            assert_eq!(
+                root_brain_passive_search_text(query, options).as_deref(),
+                Some(expected),
+                "passive query should normalize {query:?}"
+            );
+            assert!(root_brain_passive_query_is_eligible(query, options));
+        }
+
+        assert_eq!(
+            root_brain_passive_search_text("🚀", options).as_deref(),
+            Some("🚀")
+        );
+        assert_eq!(
+            root_brain_passive_search_text("猫", options).as_deref(),
+            Some("猫")
+        );
+        assert!(root_brain_passive_query_is_eligible("🚀", options));
+        assert!(root_brain_passive_query_is_eligible("猫", options));
+
+        assert_eq!(
+            root_brain_passive_search_text("gpu", options).as_deref(),
+            Some("gpu")
+        );
+        let short_options = RootBrainSectionOptions {
+            min_query_chars: 2,
+            ..options
+        };
+        assert_eq!(
+            root_brain_passive_search_text("q2", short_options).as_deref(),
+            Some("q2")
+        );
+        assert_eq!(
+            root_brain_passive_search_text("ai", short_options).as_deref(),
+            Some("ai")
+        );
     }
 
     #[test]

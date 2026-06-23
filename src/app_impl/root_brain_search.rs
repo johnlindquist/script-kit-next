@@ -74,6 +74,13 @@ impl ScriptListApp {
 
         // Eligibility gates identical to the sync lexical pass, plus the
         // main-list ownership checks the root file search applies.
+        let explicit_brain =
+            source_filters.includes(crate::menu_syntax::RootUnifiedSourceFilter::Brain);
+        let effective_brain_query = if explicit_brain {
+            (!trimmed.is_empty()).then(|| trimmed.to_string())
+        } else {
+            crate::brain::root_brain_passive_search_text(trimmed, brain_options)
+        };
         let can_collect = matches!(self.current_view, AppView::ScriptList)
             && !self.menu_syntax_object_selector_state.owns_main_list()
             && !self.menu_syntax_trigger_picker_state.owns_main_list()
@@ -85,7 +92,7 @@ impl ScriptListApp {
             && !advanced_predicate_active
             && source_filters.allows(crate::menu_syntax::RootUnifiedSourceFilter::Brain)
             && brain_options.max_results > 0
-            && crate::brain::root_brain_query_is_eligible(trimmed, brain_options);
+            && effective_brain_query.is_some();
 
         if !eligible {
             tracing::debug!(
@@ -97,14 +104,17 @@ impl ScriptListApp {
                 max_results = brain_options.max_results,
                 query_eligible =
                     crate::brain::root_brain_query_is_eligible(trimmed, brain_options),
+                effective_query = effective_brain_query.as_deref().unwrap_or(""),
                 "brain semantic pass ineligible"
             );
             self.clear_root_brain_semantic_state(cx);
             return;
         }
+        let query_owned = effective_brain_query.expect("eligible brain query");
         tracing::debug!(
             target: "script_kit::brain",
-            query = %trimmed,
+            query = %query_owned,
+            raw_query = %trimmed,
             "brain semantic pass starting"
         );
 
@@ -112,15 +122,14 @@ impl ScriptListApp {
         if self
             .root_brain_search_request
             .as_ref()
-            .is_some_and(|(query, options)| query == trimmed && *options == brain_options)
+            .is_some_and(|(query, options)| query == &query_owned && *options == brain_options)
         {
             return;
         }
 
         self.root_brain_search_generation = self.root_brain_search_generation.wrapping_add(1);
         let generation = self.root_brain_search_generation;
-        self.root_brain_search_request = Some((trimmed.to_string(), brain_options));
-        let query_owned = trimmed.to_string();
+        self.root_brain_search_request = Some((query_owned.clone(), brain_options));
 
         cx.spawn(async move |this, cx| {
             cx.background_executor()
