@@ -138,6 +138,11 @@ pub fn free_text_for_search<'a>(mode: &'a MenuSyntaxMode, raw: &'a str) -> &'a s
     }
 }
 
+pub fn list_filter_query_is_terminal(query: &str) -> bool {
+    let raw = format!(":{query}");
+    matches!(parse(&raw), MenuSyntaxParse::AdvancedQuery(_))
+}
+
 pub fn capture_body_boundary_has_started(raw: &str) -> bool {
     capture_body_boundary_has_started_with_targets(raw, &[])
 }
@@ -797,6 +802,23 @@ mod tests {
             free_text_for_search(&mode, ":type:script git deploy"),
             "git deploy"
         );
+    }
+
+    #[test]
+    fn list_filter_terminal_queries_are_complete_advanced_queries() {
+        for query in ["type:script", "type:script git", "has:shortcut"] {
+            assert!(
+                list_filter_query_is_terminal(query),
+                "{query:?} should fall through to advanced-query filtered results"
+            );
+        }
+
+        for query in ["", "type:", "type:s", "type:zzz", "plain search"] {
+            assert!(
+                !list_filter_query_is_terminal(query),
+                "{query:?} should remain a list-filter picker query"
+            );
+        }
     }
 
     #[test]

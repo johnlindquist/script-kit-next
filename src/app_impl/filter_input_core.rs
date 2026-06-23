@@ -236,6 +236,13 @@ impl ScriptListApp {
                         return false;
                     }
                 }
+                if let crate::spine::SpineSegmentKind::ListFilter { query } =
+                    &proj.active_segment_kind
+                {
+                    if crate::menu_syntax::list_filter_query_is_terminal(query) {
+                        return false;
+                    }
+                }
                 !matches!(
                     proj.active_segment_kind,
                     crate::spine::SpineSegmentKind::FreeText
