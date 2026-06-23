@@ -6,8 +6,8 @@ use super::super::types::{
 };
 use super::{
     better_match_evidence, extract_scriptlet_display_path, low_tier_substring_match,
-    match_evidence, primary_text_match, NucleoCtx, TIER_ALIAS, TIER_DESCRIPTION, TIER_FILENAME,
-    TIER_KEYWORD,
+    match_evidence, primary_text_match, query_is_ascii_punctuation_only, NucleoCtx, TIER_ALIAS,
+    TIER_DESCRIPTION, TIER_FILENAME, TIER_KEYWORD,
 };
 
 /// Fuzzy search scriptlets by query string
@@ -34,6 +34,10 @@ pub fn fuzzy_search_scriptlets(scriptlets: &[Arc<Scriptlet>], query: &str) -> Ve
                 }
             })
             .collect();
+    }
+
+    if query_is_ascii_punctuation_only(query) {
+        return Vec::new();
     }
 
     let query_lower = query.to_lowercase();

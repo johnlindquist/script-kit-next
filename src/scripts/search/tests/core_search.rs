@@ -531,6 +531,39 @@ fn test_scriptlet_description_evidence_prevents_sparse_name_highlight() {
 }
 
 #[test]
+fn test_punctuation_only_query_does_not_match_scriptlet_metadata() {
+    let mut scriptlet = (*make_scriptlet("Format Text", Some("Normalize prose."))).clone();
+    scriptlet.file_path = Some("/Users/test/.kit/scriptlets/format-text.md".to_string());
+    scriptlet.keyword = Some("format.text".to_string());
+    scriptlet.alias = Some("fmt.".to_string());
+    scriptlet.shortcut = Some("cmd+.".to_string());
+    scriptlet.group = Some("utilities.tools".to_string());
+    scriptlet.tool = "bash.shell".to_string();
+    let scriptlets = vec![Arc::new(scriptlet)];
+
+    for query in [".", "...", ":", ";", "!"] {
+        assert!(
+            fuzzy_search_scriptlets(&scriptlets, query).is_empty(),
+            "query {query:?} should not produce scriptlet matches"
+        );
+    }
+}
+
+#[test]
+fn test_text_query_still_matches_scriptlet_metadata() {
+    let mut scriptlet = (*make_scriptlet("Format Text", Some("Normalize prose"))).clone();
+    scriptlet.file_path = Some("/Users/test/.kit/scriptlets/format-text.md".to_string());
+    scriptlet.keyword = Some("format-text".to_string());
+    scriptlet.alias = Some("fmt".to_string());
+    scriptlet.group = Some("utilities".to_string());
+    let scriptlets = vec![Arc::new(scriptlet)];
+
+    assert_eq!(fuzzy_search_scriptlets(&scriptlets, "normalize").len(), 1);
+    assert_eq!(fuzzy_search_scriptlets(&scriptlets, "format-text").len(), 1);
+    assert_eq!(fuzzy_search_scriptlets(&scriptlets, "utilities").len(), 1);
+}
+
+#[test]
 fn test_builtin_description_evidence_prevents_sparse_name_highlight() {
     let builtins = vec![make_builtin(
         "PeopleMessageService",

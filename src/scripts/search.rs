@@ -19,6 +19,11 @@ mod windows;
 
 pub(crate) mod ghost;
 
+pub(crate) fn query_is_ascii_punctuation_only(query: &str) -> bool {
+    let trimmed = query.trim();
+    !trimmed.is_empty() && trimmed.chars().all(|ch| ch.is_ascii_punctuation())
+}
+
 pub use apps::fuzzy_search_apps;
 pub use builtins::fuzzy_search_builtins;
 pub use highlight::compute_match_indices_for_result;
