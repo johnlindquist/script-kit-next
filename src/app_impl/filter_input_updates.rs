@@ -67,13 +67,17 @@ impl ScriptListApp {
             return;
         }
 
+        // Filter changes intentionally restart from the first selectable row.
+        self.get_grouped_results_cached();
+        self.selected_index = self
+            .main_menu_result_caches
+            .first_selectable_index()
+            .unwrap_or(0);
+
         // Keep GPUI's list model aligned with the newly computed grouped results.
         // Filter changes may replace every row while preserving the same count,
-        // so force measured item rebuilding instead of only syncing count.
+        // so force measured item rebuilding after the new selection is known.
         self.sync_list_state_for_filter_replacement();
-
-        // Filter changes intentionally restart from the first selectable row.
-        self.selected_index = 0;
         self.validate_selection_bounds(cx);
 
         // Clear last_scrolled_index so the reveal is never skipped —

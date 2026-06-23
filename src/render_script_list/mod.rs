@@ -748,6 +748,18 @@ fn render_spine_projection_row(
         .into_any_element()
 }
 
+fn selected_index_for_script_list_render(
+    grouped_items: &[GroupedListItem],
+    selected_index: usize,
+    selection_suppressed: bool,
+) -> usize {
+    if selection_suppressed {
+        usize::MAX
+    } else {
+        crate::list_item::coerce_selection(grouped_items, selected_index).unwrap_or(0)
+    }
+}
+
 impl ScriptListApp {
     fn should_preempt_empty_script_list_escape_close(
         &self,
@@ -861,14 +873,14 @@ impl ScriptListApp {
         let grouped_items = grouped_items.clone();
         let flat_results = flat_results.clone();
 
-        // Unarmed empty colon mode (`@clipboard:` recents before Down/click):
-        // render with NO selected row. usize::MAX can never equal a grouped
-        // index, so every row's `is_selected` comparison stays false.
-        let spine_selection_render_index = if self.spine_empty_subsearch_selection_suppressed() {
-            usize::MAX
-        } else {
-            self.selected_index
-        };
+        // Render with a pure, valid selectable snapshot so a newly replaced
+        // list cannot paint its first visible item as unfocused for one frame
+        // before event-side selection validation catches up.
+        let spine_selection_render_index = selected_index_for_script_list_render(
+            &grouped_items,
+            self.selected_index,
+            self.spine_empty_subsearch_selection_suppressed(),
+        );
 
         // --- Storybook live-spec override (read-only, no state mutation) ---
         // grouped_items / flat_results are Arc<[T]> from cache; when the storybook
@@ -1456,7 +1468,6 @@ impl ScriptListApp {
 
             // Capture item count for scroll handler logging
             let scroll_item_count = item_count;
-            self.sync_main_list_selection_to_visible_window("render");
 
             let scrollbar_overlay = {
                 let footer_overlay_height = main_list_footer_overlay_total_padding();

@@ -205,18 +205,21 @@ fn main_list_scroll_row_math_uses_current_theme_variant() {
 }
 
 #[test]
-fn main_list_render_reanchor_skips_pending_programmatic_reveal() {
-    let content = read("src/app_navigation/impl_scroll.rs");
-
-    let fn_start = content
-        .find("pub(crate) fn sync_main_list_selection_to_visible_window(")
-        .expect("sync_main_list_selection_to_visible_window function not found");
-    let fn_body = &content[fn_start..content.len().min(fn_start + 1400)];
+fn main_list_render_uses_pure_selection_snapshot() {
+    let content = read("src/render_script_list/mod.rs");
 
     assert!(
-        fn_body.contains("reason == \"render\"")
-            && fn_body.contains("self.last_scrolled_index.is_none()"),
-        "render-time reanchor must not snap selection while a programmatic reveal is pending"
+        content.contains("fn selected_index_for_script_list_render(")
+            && content
+                .contains("crate::list_item::coerce_selection(grouped_items, selected_index)")
+            && content.contains(
+                "let spine_selection_render_index = selected_index_for_script_list_render("
+            ),
+        "render must coerce selection through a pure snapshot before row closures are captured"
+    );
+    assert!(
+        !content.contains("sync_main_list_selection_to_visible_window(\"render\")"),
+        "render must not mutate selection after rows have already captured the selected index"
     );
 }
 
