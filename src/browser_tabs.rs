@@ -488,6 +488,12 @@ enum RootBrowserTabsLookupMode {
     RefreshThenCached,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum RootBrowserTabsFuzzyMode {
+    Permissive,
+    Compact,
+}
+
 fn search_root_browser_tabs_internal(
     query: &str,
     options: RootBrowserTabsSectionOptions,
@@ -523,7 +529,12 @@ fn search_root_browser_tabs_internal(
         .cloned()
         .collect::<Vec<_>>();
 
-    root_fuzzy_search_browser_tabs(&tabs, query, options.search_urls)
+    let fuzzy_mode = match mode {
+        RootBrowserTabsLookupMode::CachedOnly => RootBrowserTabsFuzzyMode::Compact,
+        RootBrowserTabsLookupMode::RefreshThenCached => RootBrowserTabsFuzzyMode::Permissive,
+    };
+
+    root_fuzzy_search_browser_tabs(&tabs, query, options.search_urls, fuzzy_mode)
         .into_iter()
         .take(options.max_results)
         .map(|tab_match| {
@@ -743,12 +754,14 @@ fn root_fuzzy_search_browser_tabs(
     tabs: &[BrowserTabInfo],
     query: &str,
     search_urls: bool,
+    mode: RootBrowserTabsFuzzyMode,
 ) -> Vec<BrowserTabMatch> {
     let _span = tracing::info_span!(
         "root_fuzzy_search_browser_tabs",
         tab_count = tabs.len(),
         query,
-        search_urls
+        search_urls,
+        mode = ?mode
     )
     .entered();
 
@@ -808,20 +821,36 @@ fn root_fuzzy_search_browser_tabs(
             }
 
             if let Some(ref mut n) = nucleo {
-                if let Some(nucleo_score) = n.score(&tab.title) {
+                if let Some(nucleo_score) = match mode {
+                    RootBrowserTabsFuzzyMode::Permissive => n.score(&tab.title),
+                    RootBrowserTabsFuzzyMode::Compact => n.compact_score(&tab.title, &query_lower),
+                } {
                     score += 110 + (nucleo_score / 20) as i32;
                 }
                 if !host.is_empty() {
-                    if let Some(nucleo_score) = n.score(host) {
+                    if let Some(nucleo_score) = match mode {
+                        RootBrowserTabsFuzzyMode::Permissive => n.score(host),
+                        RootBrowserTabsFuzzyMode::Compact => n.compact_score(host, &query_lower),
+                    } {
                         score += 70 + (nucleo_score / 28) as i32;
                     }
                 }
                 if search_urls {
-                    if let Some(nucleo_score) = n.score(&tab.url) {
+                    if let Some(nucleo_score) = match mode {
+                        RootBrowserTabsFuzzyMode::Permissive => n.score(&tab.url),
+                        RootBrowserTabsFuzzyMode::Compact => {
+                            n.compact_score(&tab.url, &query_lower)
+                        }
+                    } {
                         score += 55 + (nucleo_score / 35) as i32;
                     }
                 }
-                if let Some(nucleo_score) = n.score(&tab.browser_name) {
+                if let Some(nucleo_score) = match mode {
+                    RootBrowserTabsFuzzyMode::Permissive => n.score(&tab.browser_name),
+                    RootBrowserTabsFuzzyMode::Compact => {
+                        n.compact_score(&tab.browser_name, &query_lower)
+                    }
+                } {
                     score += 35 + (nucleo_score / 40) as i32;
                 }
             }
@@ -1230,6 +1259,45 @@ mod tests {
             "Build a Claude Managed Agent",
             "title hit should outrank URL-only hit"
         );
+    }
+
+    #[test]
+    fn root_browser_tabs_compact_mode_rejects_sparse_natural_language_url_match() {
+        let tabs = vec![BrowserTabInfo {
+            browser_name: "Google Chrome".into(),
+            browser_bundle_id: "com.google.Chrome".into(),
+            window_index: 1,
+            tab_index: 1,
+            title: "Delta".into(),
+            url: "https://delta.example.com/wxxxxhxxxxaxxxxtxxxxixxxsxxxxtxxxhxxxixxxsxxxxaxxxxnxxxxyxxxxwxxxxaxxxxy".into(),
+        }];
+
+        let permissive = root_fuzzy_search_browser_tabs(
+            &tabs,
+            "What is this anyway",
+            true,
+            RootBrowserTabsFuzzyMode::Permissive,
+        );
+        assert_eq!(
+            permissive.len(),
+            1,
+            "fixture must demonstrate the previous sparse fuzzy match"
+        );
+
+        let compact = root_fuzzy_search_browser_tabs(
+            &tabs,
+            "What is this anyway",
+            true,
+            RootBrowserTabsFuzzyMode::Compact,
+        );
+        assert!(
+            compact.is_empty(),
+            "implicit root tab search should reject sparse long-URL fuzzy matches"
+        );
+
+        let direct_title =
+            root_fuzzy_search_browser_tabs(&tabs, "delta", true, RootBrowserTabsFuzzyMode::Compact);
+        assert_eq!(direct_title.len(), 1);
     }
 
     #[test]
