@@ -1734,28 +1734,40 @@ fn append_root_file_section(
             )
         }
     };
+    let loaded_file_count = match mode {
+        crate::file_search::RootFileSectionMode::GlobalQuery => {
+            merge_root_global_file_results_with_recent(
+                root_file_results,
+                root_recent_file_results,
+                filter_text,
+                options.query_intent,
+            )
+            .len()
+        }
+        crate::file_search::RootFileSectionMode::DirectoryBrowse => root_file_results.len(),
+    };
+    let ui_state = RootFileSectionUiState::new(
+        filter_text,
+        mode,
+        options.query_intent,
+        root_file_search_loading,
+        root_file_search_loading,
+        options.source_chip_visible_limit.is_some(),
+        files.len(),
+        loaded_file_count,
+        root_recent_file_results.len(),
+        !suppress_handoff,
+    );
     let handoff = if suppress_handoff {
         None
     } else {
-        root_file_search_handoff_result(filter_text, mode)
+        root_file_search_handoff_result(filter_text, mode, options.query_intent, &ui_state)
     };
     let source_status = options.source_chip_visible_limit.map(|_| {
-        let loaded = match mode {
-            crate::file_search::RootFileSectionMode::GlobalQuery => {
-                merge_root_global_file_results_with_recent(
-                    root_file_results,
-                    root_recent_file_results,
-                    filter_text,
-                    options.query_intent,
-                )
-                .len()
-            }
-            crate::file_search::RootFileSectionMode::DirectoryBrowse => root_file_results.len(),
-        };
         source_chip_result_status(
             crate::menu_syntax::RootUnifiedSourceFilter::Files,
             files.len(),
-            loaded,
+            loaded_file_count,
             root_file_search_loading,
         )
     });
@@ -1774,8 +1786,9 @@ fn append_root_file_section(
     let insertion_index = root_file_section_insertion_index(grouped, flat_results, promote);
 
     let mut file_group = Vec::with_capacity(files.len() + 3);
+    ui_state.log_built();
     file_group.push(GroupedListItem::SectionHeader(
-        root_file_section_title(mode, root_file_search_loading).to_string(),
+        ui_state.section_label.clone(),
         None,
     ));
     for file_match in files {
@@ -2040,26 +2053,101 @@ fn merge_root_global_file_results_with_recent(
     merged
 }
 
-fn root_file_section_title(
+#[derive(Debug, Clone)]
+struct RootFileSectionUiState {
+    query: String,
     mode: crate::file_search::RootFileSectionMode,
-    loading: bool,
-) -> &'static str {
-    if !loading {
-        return "Files";
+    match_mode: Option<crate::file_search::RootFileInlineMatchMode>,
+    visible_loading: bool,
+    provider_loading: bool,
+    explicit_files_source: bool,
+    visible_file_count: usize,
+    loaded_file_count: usize,
+    recent_seed_count: usize,
+    handoff_visible: bool,
+    section_label: String,
+    handoff_subtitle: String,
+    source_status_label: Option<String>,
+}
+
+impl RootFileSectionUiState {
+    fn new(
+        query: &str,
+        mode: crate::file_search::RootFileSectionMode,
+        intent: crate::file_search::RootFileQueryIntent,
+        visible_loading: bool,
+        provider_loading: bool,
+        explicit_files_source: bool,
+        visible_file_count: usize,
+        loaded_file_count: usize,
+        recent_seed_count: usize,
+        handoff_visible: bool,
+    ) -> Self {
+        let query = query.trim().to_string();
+        let match_mode = crate::file_search::root_file_inline_match_mode_for_query(&query, intent);
+        let section_label = match_mode
+            .map(crate::file_search::RootFileInlineMatchMode::section_label)
+            .unwrap_or("Files")
+            .to_string();
+        let handoff_subtitle = match_mode
+            .map(crate::file_search::RootFileInlineMatchMode::handoff_subtitle)
+            .unwrap_or("Open full File Search")
+            .to_string();
+        let source_status_label = explicit_files_source.then(|| {
+            if visible_loading {
+                "Searching files...".to_string()
+            } else if loaded_file_count == 0 {
+                "No files found".to_string()
+            } else {
+                format!("Showing {visible_file_count} of {loaded_file_count} files")
+            }
+        });
+
+        Self {
+            query,
+            mode,
+            match_mode,
+            visible_loading,
+            provider_loading,
+            explicit_files_source,
+            visible_file_count,
+            loaded_file_count,
+            recent_seed_count,
+            handoff_visible,
+            section_label,
+            handoff_subtitle,
+            source_status_label,
+        }
     }
 
-    match mode {
-        crate::file_search::RootFileSectionMode::GlobalQuery => "Files · Searching...",
-        crate::file_search::RootFileSectionMode::DirectoryBrowse => "Files · Loading folder...",
+    fn log_built(&self) {
+        tracing::debug!(
+            event = "root_file_ui_state_built",
+            query = %self.query,
+            mode = ?self.mode,
+            match_mode = ?self.match_mode,
+            section_label = %self.section_label,
+            visible_loading = self.visible_loading,
+            provider_loading = self.provider_loading,
+            explicit_files_source = self.explicit_files_source,
+            visible_file_count = self.visible_file_count,
+            loaded_file_count = self.loaded_file_count,
+            recent_seed_count = self.recent_seed_count,
+            handoff_visible = self.handoff_visible,
+            source_status_label = ?self.source_status_label,
+        );
     }
 }
 
 fn root_file_search_handoff_result(
     filter_text: &str,
     mode: crate::file_search::RootFileSectionMode,
+    intent: crate::file_search::RootFileQueryIntent,
+    ui_state: &RootFileSectionUiState,
 ) -> Option<SearchResult> {
     let query = filter_text.trim();
-    if crate::file_search::root_file_section_mode_for_query(query) != Some(mode) {
+    if crate::file_search::root_file_section_mode_for_query_with_intent(query, intent) != Some(mode)
+    {
         return None;
     }
 
@@ -2070,14 +2158,14 @@ fn root_file_search_handoff_result(
     let (title, subtitle) = match mode {
         crate::file_search::RootFileSectionMode::GlobalQuery => (
             format!("Search Files for \"{query}\""),
-            "Open full File Search".to_string(),
+            ui_state.handoff_subtitle.clone(),
         ),
         crate::file_search::RootFileSectionMode::DirectoryBrowse => {
             let base = crate::file_search::root_directory_query_base(query)?;
             let label = crate::file_search::shorten_path(base.trim_end_matches('/'));
             (
                 format!("Open File Search in \"{label}\""),
-                "Browse the full folder".to_string(),
+                ui_state.handoff_subtitle.clone(),
             )
         }
     };
@@ -2471,6 +2559,30 @@ mod advanced_query_tests {
         }
     }
 
+    fn root_file_search_handoff_result_for_test(
+        query: &str,
+        mode: crate::file_search::RootFileSectionMode,
+    ) -> Option<SearchResult> {
+        let ui_state = RootFileSectionUiState::new(
+            query,
+            mode,
+            crate::file_search::RootFileQueryIntent::OrdinaryRoot,
+            false,
+            false,
+            false,
+            0,
+            0,
+            0,
+            true,
+        );
+        root_file_search_handoff_result(
+            query,
+            mode,
+            crate::file_search::RootFileQueryIntent::OrdinaryRoot,
+            &ui_state,
+        )
+    }
+
     fn builtin_result(name: &str) -> SearchResult {
         SearchResult::BuiltIn(BuiltInMatch {
             entry: BuiltInEntry {
@@ -2747,6 +2859,92 @@ mod advanced_query_tests {
                 SearchResult::File(file) if file.file.path == "/Users/example/Desktop/fix spelling.png"
             )),
             "Files section should point at the ranked root file row"
+        );
+    }
+
+    #[test]
+    fn root_file_match_mode_labels_and_handoff_metadata_stay_aligned() {
+        let frecency_store = FrecencyStore::new();
+        let root_files = vec![root_file(
+            "/Users/example/dev/node_modules/why-is-node-running/index.js",
+            "why-is-node-running",
+        )];
+
+        let (phrase_grouped, phrase_flat) =
+            get_grouped_results_with_validation_query_and_root_files(
+                &[],
+                &[],
+                &[],
+                &[],
+                &[],
+                &frecency_store,
+                "why i",
+                &SuggestedConfig::default(),
+                &[],
+                None,
+                None,
+                None,
+                None,
+                Some(crate::file_search::RootFileSectionMode::GlobalQuery),
+                true,
+                &[],
+                &[],
+            );
+        assert!(phrase_grouped.iter().any(|item| matches!(
+            item,
+            GroupedListItem::SectionHeader(label, None) if label == "Files · Phrase match"
+        )));
+        assert!(phrase_flat.iter().any(|result| matches!(
+            result,
+            SearchResult::Fallback(fallback)
+                if fallback.display_label() == "Search Files for \"why i\""
+                    && fallback.display_description()
+                        == "Open full File Search · preview matches typed phrase"
+        )));
+
+        let (word_grouped, word_flat) = get_grouped_results_with_validation_query_and_root_files(
+            &[],
+            &[],
+            &[],
+            &[],
+            &[],
+            &frecency_store,
+            "why is",
+            &SuggestedConfig::default(),
+            &[],
+            None,
+            None,
+            None,
+            None,
+            Some(crate::file_search::RootFileSectionMode::GlobalQuery),
+            true,
+            &root_files,
+            &[],
+        );
+        assert!(word_grouped.iter().any(|item| matches!(
+            item,
+            GroupedListItem::SectionHeader(label, None) if label == "Files · Word match"
+        )));
+        assert!(word_flat.iter().any(|result| matches!(
+            result,
+            SearchResult::Fallback(fallback)
+                if fallback.display_label() == "Search Files for \"why is\""
+                    && fallback.display_description()
+                        == "Open full File Search · preview matches filename words"
+        )));
+
+        let roles = grouped_result_roles(&word_grouped, &word_flat);
+        let first_root_file = roles
+            .iter()
+            .find_map(|(idx, role)| (*role == "rootFile").then_some(*idx))
+            .expect("root file row");
+        let first_handoff = roles
+            .iter()
+            .find_map(|(idx, role)| (*role == "fallback").then_some(*idx))
+            .expect("file handoff row");
+        assert!(
+            first_root_file < first_handoff,
+            "file rows should precede handoff rows"
         );
     }
 
@@ -3719,7 +3917,7 @@ mod advanced_query_tests {
         ];
         let mut flat = vec![
             builtin_result("Search Files"),
-            root_file_search_handoff_result(
+            root_file_search_handoff_result_for_test(
                 "search",
                 crate::file_search::RootFileSectionMode::GlobalQuery,
             )
@@ -3817,7 +4015,7 @@ mod advanced_query_tests {
         ];
         let mut flat = vec![
             builtin_result("Search Files"),
-            root_file_search_handoff_result(
+            root_file_search_handoff_result_for_test(
                 "search",
                 crate::file_search::RootFileSectionMode::GlobalQuery,
             )
@@ -3879,7 +4077,7 @@ mod advanced_query_tests {
         ];
         let mut flat = vec![
             builtin_result("Search Files"),
-            root_file_search_handoff_result(
+            root_file_search_handoff_result_for_test(
                 "search",
                 crate::file_search::RootFileSectionMode::GlobalQuery,
             )
@@ -4107,12 +4305,12 @@ mod advanced_query_tests {
                 file: root_file("/Users/example/Desktop/design.md", "design.md"),
                 score: 50,
             }),
-            root_file_search_handoff_result(
+            root_file_search_handoff_result_for_test(
                 "design",
                 crate::file_search::RootFileSectionMode::GlobalQuery,
             )
             .unwrap(),
-            root_file_search_handoff_result(
+            root_file_search_handoff_result_for_test(
                 "design",
                 crate::file_search::RootFileSectionMode::GlobalQuery,
             )
@@ -4173,8 +4371,8 @@ mod advanced_query_tests {
         assert!(
             grouped
                 .iter()
-                .any(|item| matches!(item, GroupedListItem::SectionHeader(label, None) if label == "Files · Searching...")),
-            "global root search should keep the loading Files header while recent seeds render"
+                .any(|item| matches!(item, GroupedListItem::SectionHeader(label, None) if label == "Files")),
+            "global root search should keep the stable Files header while recent seeds render"
         );
         assert!(
             flat.iter().any(|result| matches!(
@@ -4230,8 +4428,8 @@ mod advanced_query_tests {
         assert!(
             grouped
                 .iter()
-                .any(|item| matches!(item, GroupedListItem::SectionHeader(label, None) if label == "Files · Searching...")),
-            "the loading Files section should remain visible for the continuation row"
+                .any(|item| matches!(item, GroupedListItem::SectionHeader(label, None) if label == "Files")),
+            "the stable Files section should remain visible for the continuation row"
         );
         assert!(
             flat.iter().any(|result| matches!(
@@ -4273,9 +4471,9 @@ mod advanced_query_tests {
         assert!(
             grouped.iter().any(|item| matches!(
                 item,
-                GroupedListItem::SectionHeader(label, None) if label == "Files · Searching..."
+                GroupedListItem::SectionHeader(label, None) if label == "Files · Word match"
             )),
-            "directory-context recent seeds should render under the loading Files header"
+            "directory-context recent seeds should render under the stable Word match Files header"
         );
         assert!(
             flat.iter().any(|result| matches!(
@@ -4535,9 +4733,9 @@ mod advanced_query_tests {
         assert!(
             grouped.iter().any(|item| matches!(
                 item,
-                GroupedListItem::SectionHeader(label, None) if label == "Files · Searching..."
+                GroupedListItem::SectionHeader(label, None) if label == "Files"
             )),
-            "global root search should keep the loading Files header while camel-case recent seeds render"
+            "global root search should keep the stable Files header while camel-case recent seeds render"
         );
         assert!(
             flat.iter().any(|result| matches!(
@@ -4586,9 +4784,9 @@ mod advanced_query_tests {
         assert!(
             grouped.iter().any(|item| matches!(
                 item,
-                GroupedListItem::SectionHeader(label, None) if label == "Files · Searching..."
+                GroupedListItem::SectionHeader(label, None) if label == "Files · Word match"
             )),
-            "multi-word recent seeds should render in the loading Files section"
+            "multi-word recent seeds should render under the stable Word match Files header"
         );
         assert!(
             flat.iter().any(|result| matches!(
@@ -4687,9 +4885,9 @@ mod advanced_query_tests {
         assert!(
             grouped.iter().any(|item| matches!(
                 item,
-                GroupedListItem::SectionHeader(label, None) if label == "Files · Searching..."
+                GroupedListItem::SectionHeader(label, None) if label == "Files"
             )),
-            "short digit recent seeds should render in the loading Files section"
+            "short digit recent seeds should render under the stable Files header"
         );
         assert!(
             flat.iter().any(|result| matches!(

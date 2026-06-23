@@ -127,13 +127,19 @@ impl ScriptListApp {
         cx: &mut Context<Self>,
     ) {
         if self.root_file_search_generation != generation {
+            tracing::debug!(
+                event = "root_file_provider_stale_drop",
+                generation,
+                active_generation = self.root_file_search_generation,
+                query = %self.root_file_search_query,
+            );
             return;
         }
 
         let results_changed = root_file_result_fingerprint(&self.root_file_results)
             != root_file_result_fingerprint(&results);
-        let loading_changed = self.root_file_search_loading != loading
-            || self.root_file_provider_loading != loading;
+        let loading_changed =
+            self.root_file_search_loading != loading || self.root_file_provider_loading != loading;
         if !results_changed && !loading_changed {
             if clear_cancel {
                 self.root_file_search_cancel = None;
@@ -196,6 +202,12 @@ impl ScriptListApp {
         clear_cancel: bool,
     ) {
         if self.root_file_search_generation != generation {
+            tracing::debug!(
+                event = "root_file_provider_stale_drop",
+                generation,
+                active_generation = self.root_file_search_generation,
+                query = %self.root_file_search_query,
+            );
             return;
         }
 
@@ -473,6 +485,15 @@ impl ScriptListApp {
 
             let _ = cx.update(|cx| {
                 this.update(cx, |app, cx| {
+                    tracing::debug!(
+                        event = "root_file_provider_done",
+                        query = %app.root_file_search_query,
+                        generation,
+                        publish_active_results,
+                        result_count = batch.len(),
+                        cache_key = %request_cache_key,
+                        visible_frame_touched = publish_active_results,
+                    );
                     if publish_active_results {
                         app.apply_root_file_search_results_for_generation(
                             generation, batch, false, true, cx,
@@ -1048,9 +1069,8 @@ impl ScriptListApp {
                                     if !crate::file_search::is_noisy_recent_file_path(&result.path)
                                     {
                                         spotlight_hits += 1;
-                                        let _ = tx.send(
-                                            crate::file_search::SearchEvent::Result(result),
-                                        );
+                                        let _ = tx
+                                            .send(crate::file_search::SearchEvent::Result(result));
                                     }
                                 }
                             },

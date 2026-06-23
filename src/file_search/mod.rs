@@ -206,6 +206,48 @@ impl Default for RootFileSectionOptions {
     }
 }
 
+/// Deterministic display model for root-launcher inline Files previews.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RootFileInlineMatchMode {
+    /// A single eligible filename term; keep the compact historical label.
+    SingleTerm,
+    /// Multi-term query that remains phrase-style because at least one token is short.
+    Phrase,
+    /// Multi-term query that can use filename word matching in the provider.
+    FilenameWords,
+    /// Directory path syntax browsing a folder.
+    Directory,
+}
+
+impl RootFileInlineMatchMode {
+    pub fn section_label(self) -> &'static str {
+        match self {
+            Self::SingleTerm => "Files",
+            Self::Phrase => "Files · Phrase match",
+            Self::FilenameWords => "Files · Word match",
+            Self::Directory => "Files · Folder",
+        }
+    }
+
+    pub fn handoff_subtitle(self) -> &'static str {
+        match self {
+            Self::SingleTerm => "Open full File Search",
+            Self::Phrase => "Open full File Search · preview matches typed phrase",
+            Self::FilenameWords => "Open full File Search · preview matches filename words",
+            Self::Directory => "Browse the full folder",
+        }
+    }
+
+    pub fn receipt_name(self) -> &'static str {
+        match self {
+            Self::SingleTerm => "SingleTerm",
+            Self::Phrase => "Phrase",
+            Self::FilenameWords => "FilenameWords",
+            Self::Directory => "Directory",
+        }
+    }
+}
+
 /// Which source currently backs the root launcher's `Files` section.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RootFileSectionMode {
@@ -443,6 +485,32 @@ pub fn root_file_section_mode_for_query_with_intent(
     } else {
         None
     }
+}
+
+/// Return the stable match-mode affordance for root-launcher inline Files previews.
+pub fn root_file_inline_match_mode_for_query(
+    query: &str,
+    intent: RootFileQueryIntent,
+) -> Option<RootFileInlineMatchMode> {
+    let q = query.trim();
+    if looks_like_root_directory_browse_query(q) {
+        return Some(RootFileInlineMatchMode::Directory);
+    }
+    if looks_like_advanced_mdquery(q) || !root_file_global_query_is_eligible_for_intent(q, intent) {
+        return None;
+    }
+
+    let terms = root_file_query_terms(q);
+    if terms.len() == 1 {
+        return Some(RootFileInlineMatchMode::SingleTerm);
+    }
+    if terms.len() >= 2 && terms.iter().any(|term| term.chars().count() < 2) {
+        return Some(RootFileInlineMatchMode::Phrase);
+    }
+    if terms.len() >= 2 {
+        return Some(RootFileInlineMatchMode::FilenameWords);
+    }
+    None
 }
 // NOTE: escape_query() was removed because:
 // 1. It was unused dead code
@@ -1288,6 +1356,67 @@ mod tests {
     fn test_build_mdquery_trims_whitespace() {
         let query = build_mdquery("  hello  ");
         assert_eq!(query, r#"kMDItemFSName == "*hello*"c"#);
+    }
+
+    #[test]
+    fn root_file_inline_match_mode_is_deterministic_for_root_queries() {
+        use RootFileInlineMatchMode::*;
+
+        assert_eq!(
+            root_file_inline_match_mode_for_query("why i", RootFileQueryIntent::OrdinaryRoot),
+            Some(Phrase)
+        );
+        assert_eq!(
+            root_file_inline_match_mode_for_query("why is", RootFileQueryIntent::OrdinaryRoot),
+            Some(FilenameWords)
+        );
+        assert_eq!(
+            root_file_inline_match_mode_for_query("a b", RootFileQueryIntent::OrdinaryRoot),
+            Some(Phrase)
+        );
+        assert_eq!(
+            root_file_inline_match_mode_for_query("design", RootFileQueryIntent::OrdinaryRoot),
+            Some(SingleTerm)
+        );
+        assert_eq!(
+            root_file_inline_match_mode_for_query("~/dev/al", RootFileQueryIntent::OrdinaryRoot),
+            Some(Directory)
+        );
+        assert_eq!(
+            root_file_inline_match_mode_for_query(
+                "kMDItemFSName == 'notes.txt'",
+                RootFileQueryIntent::OrdinaryRoot
+            ),
+            None
+        );
+        assert_eq!(
+            root_file_inline_match_mode_for_query("ab", RootFileQueryIntent::OrdinaryRoot),
+            None,
+            "ordinary two-letter noise remains ineligible"
+        );
+        assert_eq!(
+            root_file_inline_match_mode_for_query(
+                "ab",
+                RootFileQueryIntent::ExplicitFilesSourceFilter
+            ),
+            Some(SingleTerm),
+            "explicit files source filter keeps relaxed short-query eligibility"
+        );
+    }
+
+    #[test]
+    fn root_file_inline_match_mode_stays_aligned_with_provider_query_shape() {
+        assert_eq!(root_file_provider_query_for_user_query("why i"), "why i");
+
+        let word_query = root_file_provider_query_for_user_query("why is");
+        assert!(
+            word_query.contains(r#"kMDItemFSName == "*why is*"c"#),
+            "word mode should retain the phrase provider branch"
+        );
+        assert!(
+            word_query.contains(r#"kMDItemFSName == "*why*"c && kMDItemFSName == "*is*"c"#),
+            "word mode should include the all-filename-terms provider branch"
+        );
     }
 
     #[test]

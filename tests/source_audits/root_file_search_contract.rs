@@ -161,10 +161,9 @@ mod tests {
                 && root_source.contains("self.restore_main_menu_selection_from_snapshot(snapshot)")
                 && root_source.contains("self.sync_list_state_for_filter_replacement();")
                 && root_source.contains("self.validate_selection_bounds(cx);")
-                && root_source
-                    .contains("self.reveal_main_list_selection_above_footer(\"root_file_active_publish\")")
-                && root_source.contains("schedule_main_list_selection_reveal_above_footer"),
-            "async root file publish path should rebuild rows, restore the previous key, validate bounds, then reveal the selected row above the footer after viewport measurement"
+                && root_source.contains("schedule_main_list_selection_reveal_above_footer(")
+                && root_source.contains("root_file_active_publish_deferred"),
+            "async root file publish path should rebuild rows, restore the previous key, validate bounds, then schedule the selected row reveal above the footer after viewport measurement"
         );
     }
 
@@ -487,7 +486,7 @@ mod tests {
             .expect("append_root_file_section source should be present");
 
         let section_offset = append_source
-            .find("root_file_section_title(mode, root_file_search_loading).to_string()")
+            .find("ui_state.section_label.clone()")
             .expect("Files section header should be inserted");
         let file_offset = append_source
             .find("flat_results.push(SearchResult::File(file_match));")
@@ -506,7 +505,7 @@ mod tests {
         assert!(
             append_source
                 .contains("let handoff = if suppress_handoff")
-                && append_source.contains("root_file_search_handoff_result(filter_text, mode)")
+                && append_source.contains("root_file_search_handoff_result(filter_text, mode, options.query_intent, &ui_state)")
                 && append_source.contains("files.is_empty() && handoff.is_none()"),
             "Files section should still appear with the handoff row when Spotlight returns zero file rows"
         );
@@ -860,30 +859,36 @@ mod tests {
     }
 
     #[test]
-    fn root_file_loading_state_reaches_files_section_header() {
+    fn root_file_match_mode_state_drives_files_section_header() {
+        let file_search_source =
+            fs::read_to_string("src/file_search/mod.rs").expect("read src/file_search/mod.rs");
         let grouping_source =
             fs::read_to_string("src/scripts/grouping.rs").expect("read src/scripts/grouping.rs");
         let filtering_source = fs::read_to_string("src/app_impl/filtering_cache.rs")
             .expect("read src/app_impl/filtering_cache.rs");
 
         assert!(
-            grouping_source.contains("root_file_search_loading: bool"),
-            "root grouping should accept the root file provider loading state"
+            file_search_source.contains("pub enum RootFileInlineMatchMode")
+                && file_search_source.contains("Files · Phrase match")
+                && file_search_source.contains("Files · Word match")
+                && file_search_source.contains("Files · Folder"),
+            "root file display labels should be modeled as deterministic match modes"
         );
         assert!(
-            grouping_source.contains("fn root_file_section_title(")
-                && grouping_source.contains("\"Files · Searching...\"")
-                && grouping_source.contains("\"Files · Loading folder...\""),
-            "root Files section should expose distinct loading copy for global and directory modes"
+            grouping_source.contains("struct RootFileSectionUiState")
+                && grouping_source.contains("root_file_inline_match_mode_for_query")
+                && grouping_source.contains("ui_state.section_label.clone()")
+                && grouping_source.contains("ui_state.handoff_subtitle.clone()"),
+            "root Files section header and handoff subtitle should share one derived UI state"
         );
         assert!(
-            grouping_source
-                .contains("root_file_section_title(mode, root_file_search_loading).to_string()"),
-            "root Files section header should be computed from mode and loading state"
+            !grouping_source.contains("Files · Searching...")
+                && !grouping_source.contains("Files · Loading folder..."),
+            "ordinary root Files headers should not expose provider lifecycle as match mode copy"
         );
         assert!(
             filtering_source.contains("self.root_file_search_loading"),
-            "filtering cache should pass root provider loading state into grouping"
+            "filtering cache should still pass visible loading state into grouping receipts/status"
         );
     }
 
@@ -895,7 +900,7 @@ mod tests {
         let helper = production
             .split("fn merge_root_global_file_results_with_recent(")
             .nth(1)
-            .and_then(|section| section.split("fn root_file_section_title(").next())
+            .and_then(|section| section.split("struct RootFileSectionUiState").next())
             .expect("recent merge helper should be present");
 
         for forbidden in [
@@ -931,7 +936,7 @@ mod tests {
         let helper = production
             .split("fn merge_root_global_file_results_with_recent(")
             .nth(1)
-            .and_then(|section| section.split("fn root_file_section_title(").next())
+            .and_then(|section| section.split("struct RootFileSectionUiState").next())
             .expect("recent merge helper should be present");
         let recent_seed_helper = file_search_production
             .split("pub fn root_file_recent_seed_matches_query(")
@@ -991,7 +996,7 @@ mod tests {
         let merge_helper = grouping_production
             .split("fn merge_root_global_file_results_with_recent(")
             .nth(1)
-            .and_then(|section| section.split("fn root_file_section_title(").next())
+            .and_then(|section| section.split("struct RootFileSectionUiState").next())
             .expect("recent/global merge helper should be present");
         assert!(
             merge_helper.contains("root_global_file_result_is_eligible(file)")
@@ -1039,7 +1044,7 @@ mod tests {
         let merge_helper = grouping_production
             .split("fn merge_root_global_file_results_with_recent(")
             .nth(1)
-            .and_then(|section| section.split("fn root_file_section_title(").next())
+            .and_then(|section| section.split("struct RootFileSectionUiState").next())
             .expect("recent/global merge helper should be present");
         assert!(
             merge_helper.contains("root_global_file_result_is_eligible(file)"),
@@ -1803,7 +1808,7 @@ mod tests {
         let merge_helper = production
             .split("fn merge_root_global_file_results_with_recent(")
             .nth(1)
-            .and_then(|section| section.split("fn root_file_section_title(").next())
+            .and_then(|section| section.split("struct RootFileSectionUiState").next())
             .expect("merge_root_global_file_results_with_recent source should be present");
 
         assert!(
