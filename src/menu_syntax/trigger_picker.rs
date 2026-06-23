@@ -209,7 +209,7 @@ pub fn build_trigger_picker_snapshot(
         return Some(build_capture_picker_snapshot(filter.as_deref(), ctx));
     }
 
-    if is_complete_type_value_query(input) {
+    if is_committed_complete_type_value_query(input) {
         return None;
     }
     if should_show_has_field_completion(input) {
@@ -477,7 +477,11 @@ fn is_complete_has_field_query(input: &str) -> bool {
     crate::menu_syntax::has_fields::lookup_has_field(value).is_some()
 }
 
-fn is_complete_type_value_query(input: &str) -> bool {
+fn is_committed_complete_type_value_query(input: &str) -> bool {
+    input.chars().last().is_some_and(char::is_whitespace) && active_type_value_is_complete(input)
+}
+
+fn active_type_value_is_complete(input: &str) -> bool {
     let active = advanced_query_active_token(input);
     let value = active
         .strip_prefix("type:")
@@ -533,11 +537,6 @@ fn qualifier_row_matches_active_token(row: &TriggerPickerRow, active: &str) -> b
         .strip_prefix("kind:")
         .map(|value| format!("type:{value}"));
     let active = normalized_active.as_deref().unwrap_or(active);
-    if let Some(value) = active.strip_prefix("type:") {
-        if ArtifactKind::parse(value).is_some() {
-            return token == active;
-        }
-    }
     let title = row.title.to_ascii_lowercase();
     token.starts_with(active)
         || title
@@ -2133,19 +2132,41 @@ mod tests {
     }
 
     #[test]
-    fn complete_type_value_closes_picker() {
+    fn exact_type_value_without_boundary_keeps_value_picker() {
+        let ctx = ctx_empty();
+        for input in [":type:script", "type:script", ":kind:script", "kind:script"] {
+            let snap = build_trigger_picker_snapshot(input, &ctx)
+                .unwrap_or_else(|| panic!("{input:?} should keep picker rows"));
+            let tokens: Vec<&str> = snap
+                .rows
+                .iter()
+                .filter_map(|row| row.token.as_deref())
+                .collect();
+            assert!(
+                tokens.contains(&"type:script"),
+                "{input:?} should include script row, got {tokens:?}"
+            );
+            assert!(
+                tokens.contains(&"type:scriptlet"),
+                "{input:?} should include scriptlet row, got {tokens:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn complete_type_value_after_boundary_is_terminal() {
         let ctx = ctx_empty();
         for input in [
-            ":type:script",
-            "type:script",
             ":type:script ",
             "type:script ",
-            ":kind:script",
-            "kind:script",
+            ":kind:script ",
+            "kind:script ",
+            ":type:script deploy",
+            "type:script deploy",
         ] {
             assert!(
                 build_trigger_picker_snapshot(input, &ctx).is_none(),
-                "complete type value {input:?} is a terminal filter predicate, not a picker state"
+                "complete type value {input:?} with boundary should be terminal"
             );
         }
     }

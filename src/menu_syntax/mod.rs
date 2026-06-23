@@ -123,7 +123,7 @@ pub use main_hint::{
 };
 pub use mode::{
     free_text_for_search, input_span_role_name, input_spans_for_input_with_targets,
-    list_filter_query_is_terminal, prefix_span_for_input, MenuSyntaxMode,
+    list_filter_segment_is_terminal, prefix_span_for_input, MenuSyntaxMode,
 };
 #[allow(unused_imports)]
 pub use object_selector::{

@@ -4,7 +4,8 @@ use super::capture::is_capture_target_registered;
 use super::fragments::MenuSyntaxFragmentRole;
 use super::parse::{parse, parse_with_capture_targets, MenuSyntaxParse};
 use super::payload::{
-    AdvancedQuery, ArgvInvocation, CaptureInvocation, IncompleteKind, IncompleteSyntax,
+    AdvancedQuery, ArgvInvocation, ArtifactKind, CaptureInvocation, IncompleteKind,
+    IncompleteSyntax,
 };
 
 /// Raw-guarded mode state for ScriptList power syntax.
@@ -138,9 +139,40 @@ pub fn free_text_for_search<'a>(mode: &'a MenuSyntaxMode, raw: &'a str) -> &'a s
     }
 }
 
-pub fn list_filter_query_is_terminal(query: &str) -> bool {
+pub fn list_filter_segment_is_terminal(
+    raw_input: &str,
+    segment_byte_range: Range<usize>,
+    query: &str,
+) -> bool {
     let raw = format!(":{query}");
     matches!(parse(&raw), MenuSyntaxParse::AdvancedQuery(_))
+        && !exact_type_value_without_boundary(raw_input, segment_byte_range, query)
+}
+
+fn exact_type_value_without_boundary(
+    raw_input: &str,
+    segment_byte_range: Range<usize>,
+    query: &str,
+) -> bool {
+    let has_boundary_after_segment = raw_input
+        .get(segment_byte_range.end..)
+        .and_then(|tail| tail.chars().next())
+        .is_some_and(char::is_whitespace);
+    if has_boundary_after_segment {
+        return false;
+    }
+
+    let token = query.trim();
+    if token != query || token.contains(char::is_whitespace) {
+        return false;
+    }
+    let Some(value) = token
+        .strip_prefix("type:")
+        .or_else(|| token.strip_prefix("kind:"))
+    else {
+        return false;
+    };
+    !value.is_empty() && ArtifactKind::parse(value).is_some()
 }
 
 pub fn capture_body_boundary_has_started(raw: &str) -> bool {
@@ -805,20 +837,32 @@ mod tests {
     }
 
     #[test]
-    fn list_filter_terminal_queries_are_complete_advanced_queries() {
-        for query in ["type:script", "type:script git", "has:shortcut"] {
-            assert!(
-                list_filter_query_is_terminal(query),
-                "{query:?} should fall through to advanced-query filtered results"
-            );
-        }
-
-        for query in ["", "type:", "type:s", "type:zzz", "plain search"] {
-            assert!(
-                !list_filter_query_is_terminal(query),
-                "{query:?} should remain a list-filter picker query"
-            );
-        }
+    fn list_filter_terminal_queries_require_boundary_for_exact_type_values() {
+        assert!(!list_filter_segment_is_terminal(
+            ":type:script",
+            0..":type:script".len(),
+            "type:script",
+        ));
+        assert!(list_filter_segment_is_terminal(
+            ":type:script ",
+            0..":type:script".len(),
+            "type:script",
+        ));
+        assert!(list_filter_segment_is_terminal(
+            ":type:script git",
+            0..":type:script git".len(),
+            "type:script git",
+        ));
+        assert!(list_filter_segment_is_terminal(
+            ":has:shortcut",
+            0..":has:shortcut".len(),
+            "has:shortcut",
+        ));
+        assert!(!list_filter_segment_is_terminal(
+            ":type:s",
+            0..":type:s".len(),
+            "type:s",
+        ));
     }
 
     #[test]

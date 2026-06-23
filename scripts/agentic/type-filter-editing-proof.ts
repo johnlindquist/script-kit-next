@@ -156,8 +156,11 @@ async function main() {
       { timeoutMs: 8_000 },
     );
     assert(selectResult.success === true, `select Scripts row failed: ${JSON.stringify(selectResult)}`);
-    const acceptedState = await waitForInput(driver, "type:script", 8_000);
-    assert(acceptedState.inputValue === "type:script", `expected type:script, got ${acceptedState.inputValue}`);
+    const acceptedState = await waitForInput(driver, "type:script ", 8_000);
+    assert(
+      acceptedState.inputValue === "type:script ",
+      `expected type:script with trailing boundary, got ${acceptedState.inputValue}`,
+    );
     const acceptedElements = await driver.getElements({ limit: 120 }, { timeoutMs: 8_000 });
     assert(
       !(acceptedElements.elements ?? []).some(
@@ -190,7 +193,7 @@ async function main() {
     const beforeKeysOffset = readFileSync(driver.logPath, "utf8").length;
 
     const sResult = await gpuiKey(driver, "s", "s");
-    const afterSState = await waitForInput(driver, "type:scripts", 2_000);
+    const afterSState = await waitForInput(driver, "type:script s", 2_000);
     const afterSSlice = logSlice(driver.logPath, beforeKeysOffset);
     assert(
       !afterSSlice.includes("Shortcut route blocked key=s: menu-syntax owns main list"),
@@ -199,25 +202,25 @@ async function main() {
     assert(
       afterSSlice.includes("Shortcut route passed through key=s")
         || afterSSlice.includes("Displayed shortcut s passed through")
-        || afterSState.inputValue === "type:scripts",
+        || afterSState.inputValue === "type:script s",
       `missing pass-through evidence for s; input=${afterSState.inputValue}; logs=\n${afterSSlice}`,
     );
     assert(
-      afterSState.inputValue === "type:scripts",
-      `GPUI text key should append after type:script; got ${afterSState.inputValue}; logs=\n${afterSSlice}`,
+      afterSState.inputValue === "type:script s",
+      `GPUI text key should append after type:script boundary; got ${afterSState.inputValue}; logs=\n${afterSSlice}`,
     );
 
     const backspaceOffset = readFileSync(driver.logPath, "utf8").length;
     const backspaceResult = await gpuiKey(driver, "backspace");
-    const afterBackspaceState = await waitForInput(driver, "type:script", 2_000);
+    const afterBackspaceState = await waitForInput(driver, "type:script ", 2_000);
     const afterBackspaceSlice = logSlice(driver.logPath, backspaceOffset);
     assert(
       !afterBackspaceSlice.includes("Shortcut route blocked key=backspace: menu-syntax owns main list"),
       `backspace was still blocked by shortcut routing:\n${afterBackspaceSlice}`,
     );
     assert(
-      afterBackspaceState.inputValue === "type:script",
-      `Backspace should edit the input after type:scripts; got ${afterBackspaceState.inputValue}; logs=\n${afterBackspaceSlice}`,
+      afterBackspaceState.inputValue === "type:script ",
+      `Backspace should edit the input after type:script s; got ${afterBackspaceState.inputValue}; logs=\n${afterBackspaceSlice}`,
     );
 
     receipt.checks.editingKeys = {

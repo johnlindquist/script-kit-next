@@ -1,3 +1,4 @@
+use super::payload::ArtifactKind;
 use super::trigger_picker::{
     TriggerPickerAction, TriggerPickerMode, TriggerPickerRowKind, TriggerPickerSnapshot,
 };
@@ -254,7 +255,10 @@ fn resolve_row_action(
 
     match &row.action {
         TriggerPickerAction::InsertToken { token, keep_open } => {
-            let text = apply_token_insertion(raw_filter_text, token);
+            let mut text = apply_token_insertion(raw_filter_text, token);
+            if !*keep_open && token_commits_type_filter(token) {
+                ensure_single_trailing_space(&mut text);
+            }
             TriggerPickerIntentOutcome::ReplaceInput {
                 text,
                 keep_open: *keep_open,
@@ -364,6 +368,24 @@ fn apply_capture_target_token_insertion(trimmed: &str, token: &str) -> Option<St
     } else {
         Some(format!("{token}{body}"))
     }
+}
+
+fn token_commits_type_filter(token: &str) -> bool {
+    let token = token.trim();
+    let Some(value) = token
+        .strip_prefix("type:")
+        .or_else(|| token.strip_prefix("kind:"))
+    else {
+        return false;
+    };
+    !value.is_empty() && ArtifactKind::parse(value).is_some()
+}
+
+fn ensure_single_trailing_space(text: &mut String) {
+    while text.ends_with(char::is_whitespace) {
+        text.pop();
+    }
+    text.push(' ');
 }
 
 fn token_is_root_source_head(token: &str) -> bool {
@@ -701,6 +723,35 @@ mod tests {
                     assert!(
                         !keep_open,
                         "Accept on concrete has:shortcut must close the picker"
+                    );
+                }
+                other => panic!("expected ReplaceInput for {input}, got {other:?}"),
+            }
+        }
+    }
+
+    #[test]
+    fn accept_type_value_completion_commits_with_trailing_space() {
+        for input in ["type:scr", ":type:scr", "type:script", ":type:script"] {
+            let snap = build_trigger_picker_snapshot(input, &ctx()).expect("type snapshot");
+            let script_idx = snap
+                .rows
+                .iter()
+                .position(|r| r.id == "qualifier:type:script")
+                .expect("type:script row");
+            let outcome = apply_intent(
+                InlinePickerKeyIntent::Accept,
+                &snap,
+                Some(script_idx),
+                input,
+            );
+
+            match outcome {
+                TriggerPickerIntentOutcome::ReplaceInput { text, keep_open } => {
+                    assert_eq!(text, "type:script ");
+                    assert!(
+                        !keep_open,
+                        "Accept on concrete type:script must close the picker"
                     );
                 }
                 other => panic!("expected ReplaceInput for {input}, got {other:?}"),

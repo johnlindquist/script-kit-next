@@ -639,7 +639,7 @@ mod tests {
     }
 
     #[test]
-    fn complete_type_value_closes_open_trigger_picker() {
+    fn exact_type_value_keeps_open_trigger_picker() {
         let context = ctx();
         let state = MenuSyntaxTriggerPickerState {
             snapshot: build_trigger_picker_snapshot("type:", &context),
@@ -647,22 +647,56 @@ mod tests {
             visible_start: 0,
         };
 
-        assert_eq!(
-            plan_trigger_picker_transition(&state, "type:script", &context),
-            TriggerPickerTransition::Close
-        );
-        assert_eq!(
-            plan_trigger_picker_transition(&state, ":type:script", &context),
-            TriggerPickerTransition::Close
-        );
-        assert_eq!(
-            plan_trigger_picker_transition(
-                &MenuSyntaxTriggerPickerState::default(),
-                "type:script",
-                &context,
-            ),
-            TriggerPickerTransition::NoChange
-        );
+        for input in ["type:script", ":type:script"] {
+            match plan_trigger_picker_transition(&state, input, &context) {
+                TriggerPickerTransition::Open { snapshot, .. }
+                | TriggerPickerTransition::Update { snapshot, .. } => {
+                    let tokens: Vec<&str> = snapshot
+                        .rows
+                        .iter()
+                        .filter_map(|row| row.token.as_deref())
+                        .collect();
+                    assert!(tokens.contains(&"type:script"));
+                    assert!(tokens.contains(&"type:scriptlet"));
+                }
+                other => panic!("expected picker rows for {input:?}, got {other:?}"),
+            }
+        }
+
+        match plan_trigger_picker_transition(
+            &MenuSyntaxTriggerPickerState::default(),
+            "type:script",
+            &context,
+        ) {
+            TriggerPickerTransition::Open { snapshot, .. } => {
+                let tokens: Vec<&str> = snapshot
+                    .rows
+                    .iter()
+                    .filter_map(|row| row.token.as_deref())
+                    .collect();
+                assert!(tokens.contains(&"type:script"));
+                assert!(tokens.contains(&"type:scriptlet"));
+            }
+            other => panic!("expected closed picker to open for exact type value, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn type_value_boundary_closes_open_trigger_picker() {
+        let context = ctx();
+        let state = MenuSyntaxTriggerPickerState {
+            snapshot: build_trigger_picker_snapshot("type:", &context),
+            selected_row_id: Some("qualifier:type:script".to_string()),
+            visible_start: 0,
+        };
+
+        for input in ["type:script ", ":type:script "] {
+            assert_eq!(
+                plan_trigger_picker_transition(&state, input, &context),
+                TriggerPickerTransition::Close,
+                "{input:?} should commit the type filter after a boundary"
+            );
+        }
     }
 
     #[test]

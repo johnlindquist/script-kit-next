@@ -239,7 +239,18 @@ impl ScriptListApp {
                 if let crate::spine::SpineSegmentKind::ListFilter { query } =
                     &proj.active_segment_kind
                 {
-                    if crate::menu_syntax::list_filter_query_is_terminal(query) {
+                    if self
+                        .spine_parse
+                        .segments
+                        .get(proj.active_segment_index)
+                        .is_some_and(|segment| {
+                            crate::menu_syntax::list_filter_segment_is_terminal(
+                                &self.spine_parse.input,
+                                segment.byte_range.clone(),
+                                query,
+                            )
+                        })
+                    {
                         return false;
                     }
                 }
