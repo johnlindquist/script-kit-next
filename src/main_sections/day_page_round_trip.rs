@@ -19,14 +19,64 @@ use crate::components::notes_editor::spine::{
 };
 
 pub(crate) struct DayPageContextReturn {
+    pub id: String,
     pub entity: Entity<DayPageView>,
     /// Byte range of the active line within the day content at hand-off.
     pub line_range: Range<usize>,
     /// Active `@context` segment byte range relative to the line text.
     pub segment_byte_range: Range<usize>,
+    pub segment_chars: usize,
+    pub segment_hash: String,
+}
+
+fn day_page_context_round_trip_fingerprint(value: &str) -> String {
+    use sha2::{Digest, Sha256};
+
+    format!("sha256:{:x}", Sha256::digest(value.as_bytes()))
+}
+
+fn day_page_context_round_trip_receipt(
+    id: &str,
+    status: &str,
+    line_range: &Range<usize>,
+    segment_byte_range: &Range<usize>,
+    segment_chars: usize,
+    segment_hash: &str,
+    token: Option<&str>,
+    visible_reference: Option<&str>,
+    has_alias: Option<bool>,
+) -> serde_json::Value {
+    serde_json::json!({
+        "schemaVersion": 1,
+        "receiptKind": "dayPage.contextRoundTrip",
+        "redacted": true,
+        "id": id,
+        "status": status,
+        "lineRange": {
+            "start": line_range.start,
+            "end": line_range.end,
+            "unit": "utf8ByteOffset",
+        },
+        "segmentRange": {
+            "start": segment_byte_range.start,
+            "end": segment_byte_range.end,
+            "unit": "utf8ByteOffset",
+        },
+        "segmentChars": segment_chars,
+        "segmentHash": segment_hash,
+        "tokenChars": token.map(|token| token.chars().count()),
+        "tokenHash": token.map(day_page_context_round_trip_fingerprint),
+        "visibleReferenceChars": visible_reference.map(|reference| reference.chars().count()),
+        "visibleReferenceHash": visible_reference.map(day_page_context_round_trip_fingerprint),
+        "hasAlias": has_alias,
+    })
 }
 
 impl DayPageView {
+    pub(crate) fn record_context_round_trip_receipt(&mut self, receipt: serde_json::Value) {
+        self.last_context_round_trip_receipt = Some(receipt);
+    }
+
     /// Auto-trigger: typing into ANY `@` mention on the active line swaps to
     /// the real main menu (the exact launcher selection UX) — the Day Page
     /// renders no `@` selector of its own. Called from `on_editor_change`;
@@ -55,14 +105,38 @@ impl DayPageView {
             return false;
         };
         let entity = cx.entity();
+        let id = format!(
+            "{}:{}:{}:{}",
+            chrono::Utc::now().timestamp_millis(),
+            request.line_range.start,
+            request.segment_byte_range.start,
+            day_page_context_round_trip_fingerprint(&request.segment_text)
+                .trim_start_matches("sha256:")
+                .chars()
+                .take(12)
+                .collect::<String>()
+        );
+        let receipt = day_page_context_round_trip_receipt(
+            &id,
+            "pending",
+            &request.line_range,
+            &request.segment_byte_range,
+            request.segment_text.chars().count(),
+            &day_page_context_round_trip_fingerprint(&request.segment_text),
+            None,
+            None,
+            None,
+        );
+        self.record_context_round_trip_receipt(receipt.clone());
         tracing::info!(
             target: "script_kit::day_page",
-            event = "day_page_context_round_trip_started",
-            segment_text = %request.segment_text,
+            event = "day_page_context_round_trip_receipt",
+            receipt = %receipt,
         );
         window.defer(cx, move |window, cx| {
             app.update(cx, |app, cx| {
                 app.begin_day_page_context_round_trip(
+                    id,
                     entity,
                     request.line_range,
                     request.segment_byte_range,
@@ -123,6 +197,8 @@ impl DayPageView {
             self.spine_handoff
                 .register_mention_alias(visible_reference, part);
         }
+        self.spine_handoff
+            .sync_with_markdown_references(&new_content);
         self.schedule_autosave_flush(cx);
         self.sync_footer(window, cx);
         cx.notify();
@@ -132,6 +208,7 @@ impl DayPageView {
 impl ScriptListApp {
     pub(crate) fn begin_day_page_context_round_trip(
         &mut self,
+        id: String,
         entity: Entity<DayPageView>,
         line_range: Range<usize>,
         segment_byte_range: Range<usize>,
@@ -140,9 +217,12 @@ impl ScriptListApp {
         cx: &mut Context<Self>,
     ) {
         self.day_page_context_return = Some(DayPageContextReturn {
+            id,
             entity,
             line_range,
             segment_byte_range,
+            segment_chars: segment_text.chars().count(),
+            segment_hash: day_page_context_round_trip_fingerprint(&segment_text),
         });
         self.reset_to_script_list(cx);
         self.set_filter_text_immediate(segment_text, window, cx);
@@ -180,7 +260,21 @@ impl ScriptListApp {
         }
         let alias = alias.or_else(|| self.spine_mention_aliases.get(token).cloned());
         let has_alias = alias.is_some();
+        let visible_reference = markdown_reference_for_day_page_context_part(token, alias.as_ref())
+            .unwrap_or_else(|| token.to_string());
+        let receipt = day_page_context_round_trip_receipt(
+            &pending.id,
+            "completed",
+            &pending.line_range,
+            &pending.segment_byte_range,
+            pending.segment_chars,
+            &pending.segment_hash,
+            Some(token),
+            Some(&visible_reference),
+            Some(has_alias),
+        );
         let entity = pending.entity.clone();
+        let completed_receipt = receipt.clone();
         entity.update(cx, |view, cx| {
             view.complete_context_round_trip(
                 pending.line_range,
@@ -190,13 +284,13 @@ impl ScriptListApp {
                 window,
                 cx,
             );
+            view.record_context_round_trip_receipt(completed_receipt);
         });
         self.restore_day_page_view_after_round_trip(entity, window, cx);
         tracing::info!(
             target: "script_kit::day_page",
-            event = "day_page_context_round_trip_completed",
-            token = %token,
-            has_alias,
+            event = "day_page_context_round_trip_receipt",
+            receipt = %receipt,
         );
         true
     }
@@ -215,10 +309,27 @@ impl ScriptListApp {
         let Some(pending) = self.day_page_context_return.take() else {
             return false;
         };
+        let receipt = day_page_context_round_trip_receipt(
+            &pending.id,
+            "cancelled",
+            &pending.line_range,
+            &pending.segment_byte_range,
+            pending.segment_chars,
+            &pending.segment_hash,
+            None,
+            None,
+            None,
+        );
+        let entity = pending.entity.clone();
+        let cancelled_receipt = receipt.clone();
+        entity.update(cx, |view, _cx| {
+            view.record_context_round_trip_receipt(cancelled_receipt);
+        });
         self.restore_day_page_view_after_round_trip(pending.entity, window, cx);
         tracing::info!(
             target: "script_kit::day_page",
-            event = "day_page_context_round_trip_cancelled",
+            event = "day_page_context_round_trip_receipt",
+            receipt = %receipt,
         );
         true
     }

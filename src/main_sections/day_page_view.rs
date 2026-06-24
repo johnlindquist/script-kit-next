@@ -135,6 +135,7 @@ impl DayPageView {
             kit_resource_preview: None,
             read_mode: false,
             last_agent_chat_handoff_receipt: None,
+            last_context_round_trip_receipt: None,
         }
     }
 
@@ -164,6 +165,7 @@ impl DayPageView {
         self.kit_resource_preview = None;
         self.read_mode = false;
         self.refresh_fragment_open_targets(&content);
+        self.spine_handoff.sync_with_markdown_references(&content);
         // Loads are not typing: pre-set the length so the Change event this
         // emits cannot read as growth and auto-swap to the main menu.
         self.last_editor_content_len = content.len();
@@ -248,6 +250,13 @@ impl DayPageView {
         }
         if let Some((fixed, cursor)) =
             mention_atomic_delete_fixup(&previous, &content, &self.spine_handoff.mention_aliases)
+                .or_else(|| {
+                    day_page_context_reference_atomic_delete_fixup(
+                        &previous,
+                        &content,
+                        &self.spine_handoff.mention_aliases,
+                    )
+                })
         {
             self.notes_editor.update(cx, |editor, cx| {
                 editor.set_value(fixed.clone(), window, cx);
@@ -256,7 +265,7 @@ impl DayPageView {
             self.last_editor_content_len = fixed.len();
             self.session.apply_editor_content(&fixed);
             self.refresh_fragment_open_targets(&fixed);
-            self.spine_handoff.prune_mention_aliases_for_content(&fixed);
+            self.spine_handoff.sync_with_markdown_references(&fixed);
             self.poll_external_disk_changes(window, cx);
             self.schedule_autosave_flush(cx);
             self.sync_footer(window, cx);
@@ -265,8 +274,7 @@ impl DayPageView {
         }
         self.session.apply_editor_content(&content);
         self.refresh_fragment_open_targets(&content);
-        self.spine_handoff
-            .prune_mention_aliases_for_content(&content);
+        self.spine_handoff.sync_with_markdown_references(&content);
         self.poll_external_disk_changes(window, cx);
         self.schedule_autosave_flush(cx);
         self.sync_footer(window, cx);
@@ -413,6 +421,8 @@ impl DayPageView {
             },
             "previewAnchor": preview_anchor,
             "taskStats": task_stats,
+            "contextReferenceLedger": self.spine_handoff.ledger_state(&input),
+            "lastContextRoundTripReceipt": self.last_context_round_trip_receipt.clone(),
             "kitResourcePreview": kit_resource_preview,
             "lastAgentChatHandoffReceipt": self.last_agent_chat_handoff_receipt.clone(),
         })
@@ -529,6 +539,7 @@ impl DayPageView {
         self.session.apply_editor_content(&text);
         self.refresh_fragment_open_targets(&text);
         self.reset_day_page_spine_handoff_state(false, true);
+        self.spine_handoff.sync_with_markdown_references(&text);
         self.sync_footer(window, cx);
         cx.notify();
     }
@@ -1110,8 +1121,7 @@ impl DayPageView {
             self.last_editor_content_len = content.len();
             self.session.apply_editor_content(&content);
             self.refresh_fragment_open_targets(&content);
-            self.spine_handoff
-                .prune_mention_aliases_for_content(&content);
+            self.spine_handoff.sync_with_markdown_references(&content);
             self.schedule_autosave_flush(cx);
             self.sync_footer(window, cx);
             tracing::info!(

@@ -27,7 +27,10 @@ fn markdown_reference_for_day_page_context_part(
             {
                 (label, file_href_for_day_page_markdown(path))
             } else {
-                (label, format!("kit://focused-target/{}", target.semantic_id))
+                (
+                    label,
+                    format!("kit://focused-target/{}", target.semantic_id),
+                )
             }
         }
         crate::ai::message_parts::AiContextPart::AmbientContext { label } => (
@@ -38,17 +41,11 @@ fn markdown_reference_for_day_page_context_part(
             ),
         ),
     };
-    let label = label
-        .trim()
-        .replace('[', "\\[")
-        .replace(']', "\\]");
+    let label = label.trim().replace('[', "\\[").replace(']', "\\]");
     if label.is_empty() || href.trim().is_empty() {
         return None;
     }
-    Some(format!(
-        "[{label}]({})",
-        href.replace(')', "%29")
-    ))
+    Some(format!("[{label}]({})", href.replace(')', "%29")))
 }
 
 fn day_page_context_parts_from_markdown_links(
@@ -64,6 +61,56 @@ fn day_page_context_parts_from_markdown_links(
         }
     }
     parts
+}
+
+struct DayPageMarkdownContextReference {
+    token: String,
+    range: std::ops::Range<usize>,
+    part: crate::ai::message_parts::AiContextPart,
+}
+
+fn day_page_context_reference_aliases_from_markdown(
+    markdown: &str,
+) -> std::collections::HashMap<String, crate::ai::message_parts::AiContextPart> {
+    day_page_context_reference_spans(markdown)
+        .into_iter()
+        .map(|reference| (reference.token, reference.part))
+        .collect()
+}
+
+fn day_page_context_reference_spans(markdown: &str) -> Vec<DayPageMarkdownContextReference> {
+    let mut references = Vec::new();
+    for (label, href, range) in day_page_markdown_link_spans(markdown) {
+        let Some(part) = day_page_context_part_from_markdown_link(&label, &href) else {
+            continue;
+        };
+        references.push(DayPageMarkdownContextReference {
+            token: markdown[range.clone()].to_string(),
+            range,
+            part,
+        });
+    }
+    references
+}
+
+fn day_page_context_reference_atomic_delete_fixup(
+    previous: &str,
+    next: &str,
+    mention_aliases: &std::collections::HashMap<String, crate::ai::message_parts::AiContextPart>,
+) -> Option<(String, usize)> {
+    let (deleted_start, _) = single_deleted_char_byte_range(previous, next)?;
+    for reference in day_page_context_reference_spans(previous) {
+        if deleted_start >= reference.range.start
+            && deleted_start < reference.range.end
+            && mention_aliases.contains_key(&reference.token)
+        {
+            let mut fixed = String::with_capacity(previous.len() - reference.range.len());
+            fixed.push_str(&previous[..reference.range.start]);
+            fixed.push_str(&previous[reference.range.end..]);
+            return Some((fixed, reference.range.start));
+        }
+    }
+    None
 }
 
 fn day_page_context_part_from_markdown_link(
@@ -99,6 +146,13 @@ fn day_page_context_part_from_markdown_link(
 }
 
 fn day_page_markdown_links(markdown: &str) -> Vec<(String, String)> {
+    day_page_markdown_link_spans(markdown)
+        .into_iter()
+        .map(|(label, href, _)| (label, href))
+        .collect()
+}
+
+fn day_page_markdown_link_spans(markdown: &str) -> Vec<(String, String, std::ops::Range<usize>)> {
     let mut links = Vec::new();
     let bytes = markdown.as_bytes();
     let mut index = 0usize;
@@ -125,6 +179,7 @@ fn day_page_markdown_links(markdown: &str) -> Vec<(String, String)> {
                 .replace("\\[", "[")
                 .replace("\\]", "]"),
             markdown[href_start..href_end].to_string(),
+            index..href_end + 1,
         ));
         index = href_end + 1;
     }
@@ -149,6 +204,27 @@ fn find_unescaped_day_page_markdown_byte(text: &str, start: usize, needle: u8) -
         index += 1;
     }
     None
+}
+
+fn single_deleted_char_byte_range(previous: &str, next: &str) -> Option<(usize, usize)> {
+    let previous_chars = previous.chars().count();
+    if previous_chars != next.chars().count() + 1 {
+        return None;
+    }
+    let mut prefix = 0usize;
+    let mut previous_iter = previous.chars();
+    let mut next_iter = next.chars();
+    loop {
+        match (previous_iter.next(), next_iter.next()) {
+            (Some(left), Some(right)) if left == right => prefix += left.len_utf8(),
+            _ => break,
+        }
+    }
+    while prefix > 0 && !previous.is_char_boundary(prefix) {
+        prefix -= 1;
+    }
+    let deleted = previous[prefix..].chars().next()?;
+    Some((prefix, prefix + deleted.len_utf8()))
 }
 
 fn file_href_for_day_page_markdown(path: &str) -> String {
@@ -195,6 +271,6 @@ fn decode_day_page_markdown_url_component(value: &str) -> String {
         out.push(bytes[index]);
         index += 1;
     }
-String::from_utf8(out)
+    String::from_utf8(out)
         .unwrap_or_else(|error| String::from_utf8_lossy(&error.into_bytes()).to_string())
 }

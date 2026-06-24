@@ -44,7 +44,11 @@ function gpuiKey(
   const event: Json = { type: "keyDown", key, modifiers };
   if (text !== undefined) event.text = text;
   return driver.request(
-    { type: "simulateGpuiEvent", target: { type: "kind", kind: "main" }, event },
+    {
+      type: "simulateGpuiEvent",
+      target: { type: "kind", kind: "main" },
+      event,
+    },
     { expect: "simulateGpuiEventResult", timeoutMs: 5000 },
   );
 }
@@ -68,7 +72,8 @@ async function editorText(driver: Driver): Promise<string | null> {
     { timeoutMs: 5000 },
   )) as Json;
   const editor = walkElements(elements).find(
-    (el) => el.semanticId === "input:day-page-editor" || el.id === "day-page-editor",
+    (el) =>
+      el.semanticId === "input:day-page-editor" || el.id === "day-page-editor",
   );
   return (editor?.value as string | undefined) ?? null;
 }
@@ -77,7 +82,27 @@ function firstMatchingLog(log: string, needle: string): string | null {
   return log.split("\n").find((line) => line.includes(needle)) ?? null;
 }
 
-const deprecatedMarkdownHandoffEvent = ["day_page", "markdown_reference", "handoff"].join("_");
+function contextReceiptLines(log: string, status?: string): string[] {
+  return log
+    .split("\n")
+    .filter(
+      (line) =>
+        line.includes("day_page_context_round_trip_receipt") &&
+        line.includes('"receiptKind":"dayPage.contextRoundTrip"') &&
+        line.includes('"redacted":true') &&
+        (status === undefined || line.includes(`"status":"${status}"`)),
+    );
+}
+
+async function appLogText(driver: Driver): Promise<string> {
+  return await Bun.file(`${driver.sessionDir}/app.log`).text();
+}
+
+const deprecatedMarkdownHandoffEvent = [
+  "day_page",
+  "markdown_reference",
+  "handoff",
+].join("_");
 const deprecatedLineHandoffSource = ["day_page", "line", "handoff"].join("_");
 
 function localOverlayIds(elements: Json): string[] {
@@ -159,15 +184,22 @@ try {
   );
   const localDaySpineIds = menuFlat
     .map((el) => String(el.semanticId ?? el.id ?? ""))
-    .filter((id) => id.includes("day-page-spine") );
+    .filter((id) => id.includes("day-page-spine"));
   check("main_menu_context_row_visible", Boolean(contextRow), {
     selectedSemanticId: menuElements.selectedSemanticId ?? null,
     contextRow: contextRow ?? null,
-    sampleIds: menuFlat.map((el) => el.semanticId ?? el.id).filter(Boolean).slice(0, 40),
+    sampleIds: menuFlat
+      .map((el) => el.semanticId ?? el.id)
+      .filter(Boolean)
+      .slice(0, 40),
   });
-  check("day_page_local_spine_not_rendered_in_main_menu", localDaySpineIds.length === 0, {
-    localDaySpineIds,
-  });
+  check(
+    "day_page_local_spine_not_rendered_in_main_menu",
+    localDaySpineIds.length === 0,
+    {
+      localDaySpineIds,
+    },
+  );
 
   driver.simulateKey("enter");
   await Bun.sleep(900);
@@ -178,18 +210,133 @@ try {
     inputValue: afterAccept.inputValue ?? null,
   });
   const afterAcceptText = await editorText(driver);
-  check("accepted_context_spliced_into_original_line", afterAcceptText === completedLine, {
-    afterAcceptText,
-    expected: completedLine,
-  });
+  check(
+    "accepted_context_spliced_into_original_line",
+    afterAcceptText === completedLine,
+    {
+      afterAcceptText,
+      expected: completedLine,
+    },
+  );
+  const afterAcceptDayPageState = (afterAccept.dayPage ?? {}) as Json;
+  const ledger = (afterAcceptDayPageState.contextReferenceLedger ?? {}) as Json;
+  const lastRoundTripReceipt =
+    (afterAcceptDayPageState.lastContextRoundTripReceipt ?? {}) as Json;
+  check(
+    "context_reference_ledger_rebuilt_from_markdown",
+    ledger.markdownReferenceCount === 1 && ledger.aliasCount === 1,
+    {
+      ledger,
+    },
+  );
+  check(
+    "automation_exposes_completed_roundtrip_receipt",
+    lastRoundTripReceipt.status === "completed" &&
+      lastRoundTripReceipt.redacted === true,
+    {
+      lastRoundTripReceipt,
+    },
+  );
+
+  const afterAcceptLog = await appLogText(driver);
+  const pendingReceiptsAfterAccept = contextReceiptLines(
+    afterAcceptLog,
+    "pending",
+  );
+  const completedReceiptsAfterAccept = contextReceiptLines(
+    afterAcceptLog,
+    "completed",
+  );
+  const completedReceiptText = completedReceiptsAfterAccept.join("\n");
+  check(
+    "context_roundtrip_pending_receipt_redacted",
+    pendingReceiptsAfterAccept.length >= 1,
+    {
+      pendingReceipts: pendingReceiptsAfterAccept.slice(-2),
+    },
+  );
+  check(
+    "context_roundtrip_completed_receipt_redacted",
+    completedReceiptsAfterAccept.length >= 1,
+    {
+      completedReceipts: completedReceiptsAfterAccept.slice(-2),
+    },
+  );
+  check(
+    "context_roundtrip_completed_receipt_hashes_visible_reference",
+    completedReceiptText.includes('"visibleReferenceHash":"sha256:'),
+    {
+      completedReceipts: completedReceiptsAfterAccept.slice(-2),
+    },
+  );
+  check(
+    "context_roundtrip_receipts_do_not_log_raw_context",
+    !completedReceiptText.includes("What I’m Looking At") &&
+      !completedReceiptText.includes("kit://context?profile=minimal"),
+    {
+      completedReceipts: completedReceiptsAfterAccept.slice(-2),
+    },
+  );
 
   const afterAcceptElements = (await driver.getElements(
     { target: { type: "main" }, limit: 220 },
     { timeoutMs: 5000 },
   )) as Json;
-  check("day_page_has_no_local_prompt_builder_after_context_accept", localOverlayIds(afterAcceptElements).length === 0, {
-    localOverlayIds: localOverlayIds(afterAcceptElements),
-  });
+  check(
+    "day_page_has_no_local_prompt_builder_after_context_accept",
+    localOverlayIds(afterAcceptElements).length === 0,
+    {
+      localOverlayIds: localOverlayIds(afterAcceptElements),
+    },
+  );
+
+  await gpuiKey(driver, "left");
+  await gpuiKey(driver, "backspace");
+  await Bun.sleep(500);
+  const afterAtomicDelete = (await driver.getState({
+    timeoutMs: 5000,
+  })) as Json;
+  const afterAtomicDeleteText = await editorText(driver);
+  const atomicDeleteLedger = (((afterAtomicDelete.dayPage ?? {}) as Json)
+    .contextReferenceLedger ?? {}) as Json;
+  check(
+    "markdown_context_reference_deletes_atomically",
+    typeof afterAtomicDeleteText === "string" &&
+      !afterAtomicDeleteText.includes("[What I’m Looking At]") &&
+      !afterAtomicDeleteText.includes("kit://context?profile=minimal"),
+    {
+      afterAtomicDeleteText,
+    },
+  );
+  check(
+    "context_reference_ledger_clears_after_atomic_delete",
+    atomicDeleteLedger.markdownReferenceCount === 0 &&
+      atomicDeleteLedger.aliasCount === 0,
+    {
+      atomicDeleteLedger,
+    },
+  );
+
+  const restoreAcceptedLine = (await driver.batch(
+    [
+      { type: "setInput", text: completedLine },
+      {
+        type: "waitFor",
+        condition: {
+          type: "stateMatch",
+          state: { promptType: "dayPage", inputValue: completedLine },
+        },
+      },
+    ],
+    { timeoutMs: 5000 },
+  )) as Json;
+  check(
+    "restored_accepted_line_for_cmd_enter",
+    restoreAcceptedLine.success === true,
+    {
+      batch: restoreAcceptedLine,
+    },
+  );
 
   driver.simulateKey("enter", ["cmd"]);
   await Bun.sleep(900);
@@ -200,32 +347,115 @@ try {
     { timeoutMs: 5000 },
   )) as Json;
   const appLog = await Bun.file(`${driver.sessionDir}/app.log`).text();
-  const deprecatedStartedLine = firstMatchingLog(appLog, `event=${deprecatedMarkdownHandoffEvent}_started`);
-  const deprecatedSubmitLine = firstMatchingLog(appLog, deprecatedMarkdownHandoffEvent);
-  const deprecatedLineHandoff = firstMatchingLog(appLog, deprecatedLineHandoffSource);
+  const deprecatedStartedLine = firstMatchingLog(
+    appLog,
+    `event=${deprecatedMarkdownHandoffEvent}_started`,
+  );
+  const deprecatedSubmitLine = firstMatchingLog(
+    appLog,
+    deprecatedMarkdownHandoffEvent,
+  );
+  const deprecatedLineHandoff = firstMatchingLog(
+    appLog,
+    deprecatedLineHandoffSource,
+  );
   const promptCompilerIds = localOverlayIds(afterSubmitElements);
   const footerButtons = Array.isArray(afterSubmit.activeFooter?.buttons)
     ? (afterSubmit.activeFooter.buttons as Json[])
     : [];
 
-  check("cmd_enter_stays_on_day_page", afterSubmit.promptType === "dayPage", {
-    promptType: afterSubmit.promptType,
-  });
-  check("cmd_enter_keeps_day_page_line_unchanged", afterSubmitText === completedLine, {
+  check(
+    "cmd_enter_opens_agent_chat_from_day_page",
+    afterSubmit.promptType === "agentChatChat",
+    {
+      promptType: afterSubmit.promptType,
+    },
+  );
+  check("cmd_enter_leaves_day_page_surface", afterSubmitText === null, {
     afterSubmitText,
-    expected: completedLine,
   });
-  check("cmd_enter_does_not_render_prompt_builder", promptCompilerIds.length === 0, {
-    localOverlayIds: promptCompilerIds,
+  check(
+    "cmd_enter_does_not_render_prompt_builder",
+    promptCompilerIds.length === 0,
+    {
+      localOverlayIds: promptCompilerIds,
+    },
+  );
+  check(
+    "cmd_enter_does_not_emit_deprecated_day_handoff_logs",
+    !deprecatedStartedLine && !deprecatedSubmitLine && !deprecatedLineHandoff,
+    {
+      deprecatedStartedLine,
+      deprecatedSubmitLine,
+      deprecatedLineHandoff,
+    },
+  );
+  check(
+    "day_footer_has_no_agent_button",
+    footerButtons.every((button) => button.action !== "ai"),
+    {
+      footerButtons,
+    },
+  );
+
+  const reopenedAfterAgentChat = await openDayPage(driver, `${runId}-cancel`);
+  check(
+    "reopened_day_page_after_agent_chat",
+    reopenedAfterAgentChat.promptType === "dayPage",
+    {
+      promptType: reopenedAfterAgentChat.promptType,
+    },
+  );
+
+  const cancelPrefix = `Day Page context cancel ${runId} `;
+  const cancelSeed = (await driver.batch(
+    [
+      { type: "setInput", text: cancelPrefix },
+      {
+        type: "waitFor",
+        condition: {
+          type: "stateMatch",
+          state: { promptType: "dayPage", inputValue: cancelPrefix },
+        },
+      },
+    ],
+    { timeoutMs: 5000 },
+  )) as Json;
+  check("seeded_cancel_prefix", cancelSeed.success === true, {
+    batch: cancelSeed,
   });
-  check("cmd_enter_does_not_emit_deprecated_day_handoff_logs", !deprecatedStartedLine && !deprecatedSubmitLine && !deprecatedLineHandoff, {
-    deprecatedStartedLine,
-    deprecatedSubmitLine,
-    deprecatedLineHandoff,
+  await typeText(driver, "@file");
+  const cancelMenuState = (await driver.waitFor(
+    {
+      type: "stateMatch",
+      state: { promptType: "none", inputValue: "@file" },
+    },
+    { timeoutMs: 5000 },
+  )) as Json;
+  check("cancel_path_swapped_to_main_menu", cancelMenuState.success === true, {
+    cancelMenuState,
   });
-  check("day_footer_has_no_agent_button", footerButtons.every((button) => button.action !== "ai"), {
-    footerButtons,
-  });
+  driver.simulateKey("escape");
+  await Bun.sleep(500);
+  const afterCancel = (await driver.getState({ timeoutMs: 5000 })) as Json;
+  const afterCancelText = await editorText(driver);
+  const afterCancelLog = await appLogText(driver);
+  const cancelledReceipts = contextReceiptLines(afterCancelLog, "cancelled");
+  check(
+    "escape_cancels_back_to_day_page",
+    afterCancel.promptType === "dayPage",
+    {
+      promptType: afterCancel.promptType,
+      afterCancelText,
+    },
+  );
+  check(
+    "context_roundtrip_cancelled_receipt_redacted",
+    cancelledReceipts.length >= 1,
+    {
+      cancelledReceipts: cancelledReceipts.slice(-2),
+    },
+  );
 
   const pass = failures.length === 0;
   console.log(

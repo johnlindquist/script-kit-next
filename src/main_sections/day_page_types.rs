@@ -39,6 +39,36 @@ impl DayPageSpineHandoffState {
             content,
         );
     }
+
+    pub(crate) fn sync_with_markdown_references(&mut self, content: &str) {
+        let inline_tokens = crate::ai::context_mentions::inline_token_spans(content)
+            .into_iter()
+            .map(|span| span.token)
+            .collect::<std::collections::HashSet<_>>();
+        let previous = std::mem::take(&mut self.mention_aliases);
+        self.mention_aliases = day_page_context_reference_aliases_from_markdown(content);
+        for (token, part) in previous {
+            if inline_tokens.contains(&token) {
+                self.mention_aliases.insert(token, part);
+            }
+        }
+    }
+
+    pub(crate) fn ledger_state(&self, content: &str) -> serde_json::Value {
+        let markdown_reference_count = day_page_context_reference_spans(content).len();
+        let inline_reference_count = crate::ai::context_mentions::inline_token_spans(content)
+            .into_iter()
+            .filter(|span| self.mention_aliases.contains_key(&span.token))
+            .count();
+        serde_json::json!({
+            "schemaVersion": 1,
+            "source": "runtime.dayPage.contextReferenceLedger",
+            "redacted": true,
+            "aliasCount": self.mention_aliases.len(),
+            "markdownReferenceCount": markdown_reference_count,
+            "inlineReferenceCount": inline_reference_count,
+        })
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -98,4 +128,7 @@ pub struct DayPageView {
     /// Last Day Page → Agent Chat handoff receipt exposed to automation.
     /// Redacted: carries scope/count/hash metadata only, never raw markdown.
     pub(crate) last_agent_chat_handoff_receipt: Option<serde_json::Value>,
+    /// Last Today `@context` round-trip receipt exposed to automation.
+    /// Redacted: carries counts/ranges/hashes only, never raw context text.
+    pub(crate) last_context_round_trip_receipt: Option<serde_json::Value>,
 }
