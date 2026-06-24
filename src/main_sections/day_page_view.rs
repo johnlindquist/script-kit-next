@@ -134,6 +134,7 @@ impl DayPageView {
             last_editor_content_len: 0,
             kit_resource_preview: None,
             read_mode: false,
+            last_agent_chat_handoff_receipt: None,
         }
     }
 
@@ -413,6 +414,7 @@ impl DayPageView {
             "previewAnchor": preview_anchor,
             "taskStats": task_stats,
             "kitResourcePreview": kit_resource_preview,
+            "lastAgentChatHandoffReceipt": self.last_agent_chat_handoff_receipt.clone(),
         })
     }
 
@@ -1263,6 +1265,11 @@ impl DayPageView {
 
         if exact_cmd && key == "." {
             self.activate_deeplink_under_cursor(window, cx);
+            return;
+        }
+
+        if exact_cmd && (key == "enter" || key == "return") {
+            self.open_agent_chat_about_current_line(window, cx);
             return;
         }
 

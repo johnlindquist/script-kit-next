@@ -95,4 +95,7 @@ pub struct DayPageView {
     /// True when Day Page content is rendered through the shared Notes
     /// Markdown preview renderer instead of the editable Notes editor input.
     pub(crate) read_mode: bool,
+    /// Last Day Page → Agent Chat handoff receipt exposed to automation.
+    /// Redacted: carries scope/count/hash metadata only, never raw markdown.
+    pub(crate) last_agent_chat_handoff_receipt: Option<serde_json::Value>,
 }

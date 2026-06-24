@@ -8,7 +8,10 @@
 
 pub(crate) const DAY_PAGE_ACTIONS_SECTION_TITLE: &str = "Today";
 pub(crate) const DAY_PAGE_ASK_AGENT_CHAT_ACTION_ID: &str = "day_page:ask_agent_chat";
+pub(crate) const DAY_PAGE_ASK_AGENT_CHAT_CURRENT_LINE_ACTION_ID: &str =
+    "day_page:ask_agent_chat_current_line";
 pub(crate) const DAY_PAGE_AGENT_CHAT_CONTEXT_SOURCE: &str = "day_page_today";
+pub(crate) const DAY_PAGE_CURRENT_LINE_AGENT_CHAT_CONTEXT_SOURCE: &str = "day_page_current_line";
 pub(crate) const DAY_PAGE_PREVIEW_AGENT_CHAT_CONTEXT_SOURCE: &str = "day_page_kit_resource_preview";
 pub(crate) const DAY_PAGE_PREVIEW_ADD_TO_AGENT_CHAT_ACTION_ID: &str =
     "day_page:kit_preview_add_to_agent_chat";
@@ -35,6 +38,97 @@ fn day_page_editor_action_shortcut(toolbar_id: &str) -> Option<&'static str> {
         "strikethrough" => Some("cmd+shift+x"),
         _ => None,
     }
+}
+
+struct ActiveDayPageLine<'a> {
+    text: &'a str,
+    line_number: usize,
+    byte_range: std::ops::Range<usize>,
+}
+
+fn active_day_page_line(content: &str, cursor: usize) -> ActiveDayPageLine<'_> {
+    let mut cursor = cursor.min(content.len());
+    while cursor > 0 && !content.is_char_boundary(cursor) {
+        cursor -= 1;
+    }
+    let line_start = content[..cursor].rfind('\n').map_or(0, |index| index + 1);
+    let line_end = content[cursor..]
+        .find('\n')
+        .map_or(content.len(), |index| cursor + index);
+    let line_number = content[..line_start]
+        .bytes()
+        .filter(|byte| *byte == b'\n')
+        .count()
+        + 1;
+    ActiveDayPageLine {
+        text: &content[line_start..line_end],
+        line_number,
+        byte_range: line_start..line_end,
+    }
+}
+
+fn push_unique_day_page_context_part(
+    parts: &mut Vec<crate::ai::message_parts::AiContextPart>,
+    part: crate::ai::message_parts::AiContextPart,
+) {
+    if !parts.contains(&part) {
+        parts.push(part);
+    }
+}
+
+fn day_page_agent_chat_part_kind(part: &crate::ai::message_parts::AiContextPart) -> &'static str {
+    match part {
+        crate::ai::message_parts::AiContextPart::ResourceUri { .. } => "resourceUri",
+        crate::ai::message_parts::AiContextPart::FilePath { .. } => "filePath",
+        crate::ai::message_parts::AiContextPart::SkillFile { .. } => "skillFile",
+        crate::ai::message_parts::AiContextPart::TextBlock { .. } => "textBlock",
+        crate::ai::message_parts::AiContextPart::FocusedTarget { .. } => "focusedTarget",
+        crate::ai::message_parts::AiContextPart::AmbientContext { .. } => "ambientContext",
+    }
+}
+
+fn day_page_app_context_part_from_shared(
+    part: script_kit_gpui::ai::AiContextPart,
+) -> Option<crate::ai::message_parts::AiContextPart> {
+    serde_json::from_value(serde_json::to_value(part).ok()?).ok()
+}
+
+fn day_page_agent_chat_fingerprint(value: &str) -> String {
+    use sha2::{Digest, Sha256};
+
+    format!("sha256:{:x}", Sha256::digest(value.as_bytes()))
+}
+
+#[derive(Clone, Copy)]
+enum DayPageAgentHandoffMode {
+    CurrentLine,
+    ExplicitWholeDay,
+}
+
+impl DayPageAgentHandoffMode {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::CurrentLine => "currentLine",
+            Self::ExplicitWholeDay => "explicitWholeDay",
+        }
+    }
+
+    fn source(self) -> &'static str {
+        match self {
+            Self::CurrentLine => DAY_PAGE_CURRENT_LINE_AGENT_CHAT_CONTEXT_SOURCE,
+            Self::ExplicitWholeDay => DAY_PAGE_AGENT_CHAT_CONTEXT_SOURCE,
+        }
+    }
+
+    fn includes_whole_day(self) -> bool {
+        matches!(self, Self::ExplicitWholeDay)
+    }
+}
+
+struct DayPageAgentHandoffPacket {
+    parts: Vec<crate::ai::message_parts::AiContextPart>,
+    prompt_seed: String,
+    receipt: serde_json::Value,
 }
 
 fn save_today_action() -> crate::actions::Action {
@@ -165,12 +259,21 @@ pub(crate) fn day_page_host_actions_section(
     if !view.session.is_viewing_fragment() && viewing_today {
         actions.push(
             Action::new(
+                DAY_PAGE_ASK_AGENT_CHAT_CURRENT_LINE_ACTION_ID,
+                "Ask Agent Chat About Current Line",
+                Some("Attach only the active Today line and references on that line".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut("cmd+enter")
+            .with_section(DAY_PAGE_ACTIONS_SECTION_TITLE),
+        );
+        actions.push(
+            Action::new(
                 DAY_PAGE_ASK_AGENT_CHAT_ACTION_ID,
                 "Ask Agent Chat About Today",
                 Some("Attach Today's brain to Agent Chat and start a question".to_string()),
                 ActionCategory::ScriptContext,
             )
-            .with_shortcut("cmd+enter")
             .with_section(DAY_PAGE_ACTIONS_SECTION_TITLE),
         );
     }
@@ -295,13 +398,178 @@ impl DayPageView {
         }
     }
 
+    fn build_whole_day_agent_chat_packet(&self, cx: &App) -> DayPageAgentHandoffPacket {
+        let date_label = self.day_page_agent_chat_date_label();
+        let canonical_path = self.day_page_agent_chat_canonical_path(&date_label);
+        let parts = vec![self.today_agent_chat_context_part(cx)];
+        let receipt = self.build_agent_chat_handoff_receipt(
+            DayPageAgentHandoffMode::ExplicitWholeDay,
+            &date_label,
+            canonical_path.as_deref(),
+            None,
+            &parts,
+            cx,
+        );
+
+        DayPageAgentHandoffPacket {
+            parts,
+            prompt_seed: "Ask about Today's brain: ".to_string(),
+            receipt,
+        }
+    }
+
+    fn build_current_line_agent_chat_packet(&self, cx: &App) -> DayPageAgentHandoffPacket {
+        let content = self.notes_editor.read(cx).content(cx);
+        let selection = self.notes_editor.read(cx).selection(cx);
+        let active_line = active_day_page_line(&content, selection.end);
+        let line_text = active_line.text.trim();
+        let date_label = self.day_page_agent_chat_date_label();
+        let canonical_path = self.day_page_agent_chat_canonical_path(&date_label);
+        let source = format!(
+            "{}#line={}",
+            canonical_path.as_deref().unwrap_or("brain://days/Today"),
+            active_line.line_number
+        );
+
+        let mut parts = vec![crate::ai::message_parts::AiContextPart::TextBlock {
+            label: format!("Today line {} - {date_label}", active_line.line_number),
+            source,
+            text: if line_text.is_empty() {
+                "(Active Today line is empty.)".to_string()
+            } else {
+                line_text.to_string()
+            },
+            mime_type: Some("text/markdown".to_string()),
+        }];
+
+        for part in
+            script_kit_gpui::day_page::context_parts_from_day_page_markdown_links(active_line.text)
+        {
+            if let Some(part) = day_page_app_context_part_from_shared(part) {
+                push_unique_day_page_context_part(&mut parts, part);
+            }
+        }
+
+        for (token, part) in &self.spine_handoff.mention_aliases {
+            if active_line.text.contains(token) {
+                push_unique_day_page_context_part(&mut parts, part.clone());
+            }
+        }
+
+        let receipt = self.build_agent_chat_handoff_receipt(
+            DayPageAgentHandoffMode::CurrentLine,
+            &date_label,
+            canonical_path.as_deref(),
+            Some(&active_line),
+            &parts,
+            cx,
+        );
+
+        DayPageAgentHandoffPacket {
+            parts,
+            prompt_seed: if line_text.is_empty() {
+                "Ask about this Today line: ".to_string()
+            } else {
+                line_text.to_string()
+            },
+            receipt,
+        }
+    }
+
+    fn day_page_agent_chat_date_label(&self) -> String {
+        self.session
+            .bound_date()
+            .map(|date| date.to_string())
+            .unwrap_or_else(|| "Today".to_string())
+    }
+
+    fn day_page_agent_chat_canonical_path(&self, date_label: &str) -> Option<String> {
+        self.session
+            .path()
+            .map(|path| path.display().to_string())
+            .or_else(|| Some(format!("brain://days/{date_label}")))
+    }
+
+    fn build_agent_chat_handoff_receipt(
+        &self,
+        mode: DayPageAgentHandoffMode,
+        date_label: &str,
+        canonical_path: Option<&str>,
+        active_line: Option<&ActiveDayPageLine<'_>>,
+        parts: &[crate::ai::message_parts::AiContextPart],
+        cx: &App,
+    ) -> serde_json::Value {
+        let content = self.notes_editor.read(cx).content(cx);
+        let total_lines = content.lines().count();
+        let omitted_line_count = active_line
+            .map(|_| total_lines.saturating_sub(1))
+            .unwrap_or(0);
+        let packet_chars = parts
+            .iter()
+            .map(|part| match part {
+                crate::ai::message_parts::AiContextPart::TextBlock { text, .. } => {
+                    text.chars().count()
+                }
+                _ => 0,
+            })
+            .sum::<usize>();
+        let part_receipts = parts
+            .iter()
+            .map(|part| {
+                let source = part.source();
+                serde_json::json!({
+                    "kind": day_page_agent_chat_part_kind(part),
+                    "labelChars": part.label().chars().count(),
+                    "sourceChars": source.chars().count(),
+                    "sourceHash": day_page_agent_chat_fingerprint(source),
+                })
+            })
+            .collect::<Vec<_>>();
+
+        serde_json::json!({
+            "schemaVersion": 1,
+            "receiptKind": "dayPage.agentChatHandoff",
+            "redacted": true,
+            "mode": mode.as_str(),
+            "source": mode.source(),
+            "date": date_label,
+            "canonicalPathChars": canonical_path.map(|path| path.chars().count()),
+            "canonicalPathHash": canonical_path.map(day_page_agent_chat_fingerprint),
+            "lineRange": active_line.map(|line| serde_json::json!({
+                "lineNumber": line.line_number,
+                "start": line.byte_range.start,
+                "end": line.byte_range.end,
+                "unit": "utf8ByteOffset",
+                "lineChars": line.text.chars().count(),
+            })),
+            "wholeDayIncluded": mode.includes_whole_day(),
+            "excludedContent": {
+                "omittedLineCount": omitted_line_count,
+                "omittedContentIncluded": false,
+                "contentFingerprint": day_page_agent_chat_fingerprint(&content),
+            },
+            "packetChars": packet_chars,
+            "contextPartCount": parts.len(),
+            "contextParts": part_receipts,
+        })
+    }
+
     pub(crate) fn open_agent_chat_about_today(
         &mut self,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         self.save(cx);
-        let part = self.today_agent_chat_context_part(cx);
+        let packet = self.build_whole_day_agent_chat_packet(cx);
+        self.last_agent_chat_handoff_receipt = Some(packet.receipt.clone());
+        tracing::info!(
+            target: "script_kit::day_page",
+            event = "day_page_agent_chat_handoff_receipt",
+            receipt_json = %packet.receipt,
+        );
+        let parts = packet.parts.clone();
+        let prompt_seed = packet.prompt_seed.clone();
+        let part = parts[0].clone();
         let Some(app) = self.app.upgrade() else {
             return;
         };
@@ -328,7 +596,68 @@ impl DayPageView {
                 if let AppView::AgentChatView { entity } = &app.current_view {
                     let entity = entity.clone();
                     entity.update(cx, |chat, cx| {
-                        chat.set_input("Ask about Today's brain: ".to_string(), cx);
+                        let _ = chat.stage_inline_context_parts_from_host(
+                            parts.clone(),
+                            DAY_PAGE_AGENT_CHAT_CONTEXT_SOURCE,
+                            cx,
+                        );
+                        chat.set_input(prompt_seed.clone(), cx);
+                    });
+                }
+            });
+        });
+    }
+
+    pub(crate) fn open_agent_chat_about_current_line(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.save(cx);
+        let packet = self.build_current_line_agent_chat_packet(cx);
+        self.last_agent_chat_handoff_receipt = Some(packet.receipt.clone());
+        tracing::info!(
+            target: "script_kit::day_page",
+            event = "day_page_agent_chat_handoff_receipt",
+            receipt_json = %packet.receipt,
+        );
+        let parts = packet.parts.clone();
+        let prompt_seed = packet.prompt_seed.clone();
+        let Some(part) = parts.first().cloned() else {
+            return;
+        };
+        let Some(app) = self.app.upgrade() else {
+            return;
+        };
+
+        window.defer(cx, move |_window, cx| {
+            app.update(cx, |app, cx| {
+                if app.has_day_page_context_round_trip_pending() {
+                    tracing::warn!(
+                        target: "script_kit::day_page",
+                        event = "day_page_agent_chat_open_blocked",
+                        reason = "context_round_trip_pending",
+                    );
+                    return;
+                }
+                app.clear_actions_popup_state();
+                if crate::actions::is_actions_window_open() {
+                    crate::actions::close_actions_window(cx);
+                }
+                app.open_tab_ai_agent_chat_with_context_part(
+                    part,
+                    DAY_PAGE_CURRENT_LINE_AGENT_CHAT_CONTEXT_SOURCE,
+                    cx,
+                );
+                if let AppView::AgentChatView { entity } = &app.current_view {
+                    let entity = entity.clone();
+                    entity.update(cx, |chat, cx| {
+                        let _ = chat.stage_inline_context_parts_from_host(
+                            parts.clone(),
+                            DAY_PAGE_CURRENT_LINE_AGENT_CHAT_CONTEXT_SOURCE,
+                            cx,
+                        );
+                        chat.set_input(prompt_seed.clone(), cx);
                     });
                 }
             });
@@ -454,6 +783,12 @@ impl ScriptListApp {
                 entity.update(cx, |view, cx| view.open_agent_chat_about_today(window, cx));
                 true
             }
+            DAY_PAGE_ASK_AGENT_CHAT_CURRENT_LINE_ACTION_ID => {
+                entity.update(cx, |view, cx| {
+                    view.open_agent_chat_about_current_line(window, cx)
+                });
+                true
+            }
             DAY_PAGE_PREVIEW_ADD_TO_AGENT_CHAT_ACTION_ID => entity.update(cx, |view, cx| {
                 view.open_agent_chat_about_kit_resource_preview(window, cx)
             }),
@@ -553,5 +888,35 @@ mod day_page_markdown_action_tests {
             day_page_toolbar_id_from_action_id("day_page:format_numbered_list").as_deref(),
             Some("numbered-list")
         );
+    }
+
+    #[test]
+    fn active_day_page_line_scopes_to_cursor_line() {
+        let content = "first [README](file:///tmp/readme.md)\nsecond active\nthird";
+        let cursor = content.find("active").expect("active line exists");
+        let line = active_day_page_line(content, cursor);
+        assert_eq!(line.text, "second active");
+        assert_eq!(line.line_number, 2);
+    }
+
+    #[test]
+    fn day_page_agent_chat_actions_distinguish_line_and_whole_day() {
+        assert_eq!(
+            DAY_PAGE_ASK_AGENT_CHAT_CURRENT_LINE_ACTION_ID,
+            "day_page:ask_agent_chat_current_line"
+        );
+        assert_eq!(DAY_PAGE_ASK_AGENT_CHAT_ACTION_ID, "day_page:ask_agent_chat");
+        assert_ne!(
+            DAY_PAGE_CURRENT_LINE_AGENT_CHAT_CONTEXT_SOURCE, DAY_PAGE_AGENT_CHAT_CONTEXT_SOURCE,
+            "current-line and whole-day handoffs must be separately receiptable"
+        );
+    }
+
+    #[test]
+    fn day_page_agent_chat_receipt_hashes_sources() {
+        let hash = day_page_agent_chat_fingerprint("/private/day-page.md#line=2");
+        assert_eq!(hash.len(), "sha256:".len() + 64);
+        assert!(hash.starts_with("sha256:"));
+        assert!(!hash.contains("day-page"));
     }
 }
