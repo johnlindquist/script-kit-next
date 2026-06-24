@@ -15,6 +15,7 @@ pub(crate) const DAY_PAGE_PREVIEW_ADD_TO_AGENT_CHAT_ACTION_ID: &str =
 pub(crate) const DAY_PAGE_PREVIEW_COPY_URI_ACTION_ID: &str = "day_page:kit_preview_copy_uri";
 pub(crate) const DAY_PAGE_PREVIEW_OPEN_SOURCE_ACTION_ID: &str = "day_page:kit_preview_open_source";
 pub(crate) const DAY_PAGE_PREVIEW_CLOSE_ACTION_ID: &str = "day_page:kit_preview_close";
+pub(crate) const DAY_PAGE_TOGGLE_READ_MODE_ACTION_ID: &str = "day_page:toggle_read_mode";
 
 fn day_page_editor_action_id(toolbar_id: &str) -> String {
     format!("day_page:format_{}", toolbar_id.replace('-', "_"))
@@ -139,6 +140,24 @@ pub(crate) fn day_page_host_actions_section(
         actions.push(save_today_action());
     }
 
+    actions.push(
+        Action::new(
+            DAY_PAGE_TOGGLE_READ_MODE_ACTION_ID,
+            if view.read_mode {
+                "Edit Markdown"
+            } else {
+                "Preview Markdown"
+            },
+            Some(if view.read_mode {
+                "Return to the editable Day Page notes editor".to_string()
+            } else {
+                "Read Today's markdown with the shared Notes preview renderer".to_string()
+            }),
+            ActionCategory::ScriptContext,
+        )
+        .with_section(DAY_PAGE_ACTIONS_SECTION_TITLE),
+    );
+
     let viewing_today = view
         .session
         .bound_date()
@@ -160,7 +179,7 @@ pub(crate) fn day_page_host_actions_section(
         .read_from_clipboard()
         .and_then(|item| item.text().map(|text| text.to_string()))
         .filter(|text| !text.trim().is_empty());
-    if clipboard_text.is_some() {
+    if clipboard_text.is_some() && !view.read_mode {
         actions.push(
             Action::new(
                 "day_page:insert_clipboard",
@@ -172,18 +191,20 @@ pub(crate) fn day_page_host_actions_section(
         );
     }
 
-    for item in crate::components::notes_editor::NOTES_EDITOR_TOOLBAR_ACTIONS {
-        let toolbar_id = item.spec.id;
-        actions.push(
-            Action::new(
-                day_page_editor_action_id(toolbar_id),
-                crate::components::notes_editor::notes_editor_toolbar_action_title(toolbar_id),
-                Some("Apply shared Notes editor Markdown formatting".to_string()),
-                ActionCategory::ScriptContext,
-            )
-            .with_shortcut_opt(day_page_editor_action_shortcut(toolbar_id).map(str::to_string))
-            .with_section(DAY_PAGE_ACTIONS_SECTION_TITLE),
-        );
+    if !view.read_mode {
+        for item in crate::components::notes_editor::NOTES_EDITOR_TOOLBAR_ACTIONS {
+            let toolbar_id = item.spec.id;
+            actions.push(
+                Action::new(
+                    day_page_editor_action_id(toolbar_id),
+                    crate::components::notes_editor::notes_editor_toolbar_action_title(toolbar_id),
+                    Some("Apply shared Notes editor Markdown formatting".to_string()),
+                    ActionCategory::ScriptContext,
+                )
+                .with_shortcut_opt(day_page_editor_action_shortcut(toolbar_id).map(str::to_string))
+                .with_section(DAY_PAGE_ACTIONS_SECTION_TITLE),
+            );
+        }
     }
 
     actions
@@ -466,6 +487,10 @@ impl ScriptListApp {
                 }
                 can_close
             }),
+            DAY_PAGE_TOGGLE_READ_MODE_ACTION_ID => {
+                entity.update(cx, |view, cx| view.toggle_read_mode(window, cx));
+                true
+            }
             "day_page:back_to_today" => {
                 entity.update(cx, |view, cx| view.return_to_day_page(window, cx));
                 true

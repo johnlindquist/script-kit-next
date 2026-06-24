@@ -37,6 +37,43 @@ impl DayPageView {
         });
         let mut elements = vec![protocol::ElementInfo::panel("day-page"), editor];
 
+        if self.read_mode && self.kit_resource_preview.is_none() {
+            elements.push(protocol::ElementInfo {
+                semantic_id: "day-page-read-preview".to_string(),
+                element_type: protocol::ElementType::Panel,
+                text: Some("Day Page Preview".to_string()),
+                value: Some(content.clone()),
+                selected: None,
+                focused: None,
+                index: None,
+                role: Some("day_page_read_preview".to_string()),
+                kind: Some("markdown_preview".to_string()),
+                source: Some(
+                    crate::components::notes_editor::NOTES_EDITOR_PREVIEW_RENDER_PATH.to_string(),
+                ),
+                source_name: Some(
+                    crate::components::notes_editor::NOTES_EDITOR_STYLE_OWNER.to_string(),
+                ),
+                selectable: Some(false),
+                status_kind: None,
+                action_disabled: None,
+                style: Some(protocol::ElementStyleInfo {
+                    owner: editor_surface.owner.to_string(),
+                    input_render_path: Some(
+                        crate::components::notes_editor::NOTES_EDITOR_PREVIEW_RENDER_PATH
+                            .to_string(),
+                    ),
+                    editor_runtime: None,
+                    surface_background_rgb: Some(editor_surface.background_rgb),
+                    occlusion_rgba: Some(editor_surface.occlusion_rgba),
+                    padding_x: Some(metrics.editor_padding_x),
+                    padding_y: Some(metrics.editor_padding_y),
+                    font_family_source: Some("theme.mono_font_family".to_string()),
+                    text_size_source: Some("theme.mono_font_size".to_string()),
+                }),
+            });
+        }
+
         if self.session.is_viewing_fragment() {
             elements.push(protocol::ElementInfo {
                 semantic_id: script_kit_gpui::day_page::FRAGMENT_BACK_ID.to_string(),
@@ -100,5 +137,4 @@ impl DayPageView {
         let total_count = elements.len();
         (elements.into_iter().take(limit).collect(), total_count)
     }
-
 }

@@ -92,4 +92,7 @@ pub struct DayPageView {
     pub(crate) last_editor_content_len: usize,
     /// Read-only preview opened from a `kit://` resource link in Day Page markdown.
     pub(crate) kit_resource_preview: Option<DayPageKitResourcePreviewState>,
+    /// True when Day Page content is rendered through the shared Notes
+    /// Markdown preview renderer instead of the editable Notes editor input.
+    pub(crate) read_mode: bool,
 }

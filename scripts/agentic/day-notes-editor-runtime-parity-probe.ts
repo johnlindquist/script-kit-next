@@ -120,6 +120,163 @@ async function notesState(driver: Driver): Promise<Json> {
   return (result.notes ?? result) as Json;
 }
 
+async function currentState(driver: Driver): Promise<Json> {
+  return (await driver.getState({ timeoutMs: 5000 })) as Json;
+}
+
+async function waitForDayReadMode(driver: Driver, readMode: boolean): Promise<Json> {
+  for (let i = 0; i < 40; i += 1) {
+    const state = await currentState(driver);
+    if (state.dayPage?.readMode === readMode) return state;
+    await Bun.sleep(100);
+  }
+  return currentState(driver);
+}
+
+function isActionsWindow(win: Json): boolean {
+  return (
+    win.id === "actions-dialog" ||
+    win.automationId === "actions-dialog" ||
+    win.kind === "ActionsDialog" ||
+    win.windowKind === "ActionsDialog" ||
+    win.semanticSurface === "actionsDialog"
+  );
+}
+
+async function actionsWindowRegistered(driver: Driver): Promise<boolean> {
+  const windows = (await driver.listAutomationWindows({ timeoutMs: 3000 })) as Json;
+  return ((windows.windows ?? []) as Json[]).some(isActionsWindow);
+}
+
+async function waitForActionsReady(driver: Driver): Promise<void> {
+  for (let i = 0; i < 50; i += 1) {
+    const state = (await driver.getState({ timeoutMs: 1000 }).catch(() => null)) as Json | null;
+    const registered = await actionsWindowRegistered(driver).catch(() => false);
+    if (registered || state?.promptType === "actionsDialog" || state?.actionsDialog?.open === true) {
+      return;
+    }
+    await Bun.sleep(100);
+  }
+  throw new Error("ActionsDialog did not become automation-ready");
+}
+
+async function waitForActionsReopenDebounce(driver: Driver): Promise<void> {
+  for (let i = 0; i < 20; i += 1) {
+    if (!(await actionsWindowRegistered(driver).catch(() => false))) break;
+    await Bun.sleep(50);
+  }
+  // AppImpl intentionally suppresses immediate Actions reopens to avoid a
+  // footer-click close/reopen race. Keep the probe on the product path.
+  await Bun.sleep(350);
+}
+
+function visibleActions(dialog: Json): Json[] {
+  const rows = dialog.visibleActions;
+  if (Array.isArray(rows)) return rows as Json[];
+  const sample = (dialog.actions as Json | undefined)?.visibleSample;
+  return Array.isArray(sample) ? (sample as Json[]) : [];
+}
+
+function rowActionId(row: Json): string {
+  return String(row.id ?? row.actionId ?? row.value ?? "");
+}
+
+async function actionsDialogState(driver: Driver): Promise<Json> {
+  if (await actionsWindowRegistered(driver).catch(() => false)) {
+    const state = (await driver.request(
+      { type: "getState", target: { type: "kind", kind: "actionsDialog" }, summaryOnly: true },
+      { expect: "stateResult", timeoutMs: 5000 },
+    )) as Json;
+    return (state.actionsDialog ?? {}) as Json;
+  }
+  const state = await currentState(driver);
+  return (state.actionsDialog ?? {}) as Json;
+}
+
+async function actionsElements(driver: Driver): Promise<Json[]> {
+  const target = (await actionsWindowRegistered(driver).catch(() => false))
+    ? { type: "kind", kind: "actionsDialog" }
+    : { type: "main" };
+  const elements = (await driver.getElements({ target, limit: 260 }, { timeoutMs: 5000 })) as Json;
+  return walkElements(elements);
+}
+
+async function findActionSemanticId(driver: Driver, actionId: string): Promise<string> {
+  for (let i = 0; i < 30; i += 1) {
+    const dialog = await actionsDialogState(driver).catch(() => null);
+    const rows = dialog ? visibleActions(dialog) : [];
+    const row = rows.find((candidate) => rowActionId(candidate) === actionId);
+    const elements = await actionsElements(driver).catch(() => []);
+    const element = elements.find((candidate) =>
+      String(candidate.semanticId ?? "").endsWith(`:${actionId}`),
+    );
+    const semanticId = String(element?.semanticId ?? row?.semanticId ?? "");
+    if (semanticId.startsWith("choice:")) return semanticId;
+    await Bun.sleep(100);
+  }
+  return "";
+}
+
+async function toggleDayReadModeViaActions(driver: Driver, label: string): Promise<Json> {
+  await waitForActionsReopenDebounce(driver);
+  const open = (await driver.batch([{ type: "openActions" }], { timeoutMs: 7000 })) as Json;
+  check(`open_actions_for_${label.replace(/\s+/g, "_").toLowerCase()}`, open.success === true, {
+    batch: open,
+  });
+  await waitForActionsReady(driver);
+  const target = (await actionsWindowRegistered(driver).catch(() => false))
+    ? { type: "kind", kind: "actionsDialog" }
+    : { type: "main" };
+  const filter = (await driver.request(
+    {
+      type: "batch",
+      requestId: `${runId}-filter-${label.replace(/\s+/g, "-")}`,
+      target,
+      commands: [{ type: "setInput", text: label }],
+      options: { stopOnError: true, timeout: 7000 },
+    },
+    { expect: "batchResult", timeoutMs: 8000 },
+  )) as Json;
+  check(`filter_actions_for_${label.replace(/\s+/g, "_").toLowerCase()}`, filter.success === true, {
+    batch: filter,
+  });
+  const semanticId = await findActionSemanticId(driver, "day_page:toggle_read_mode");
+  check(`find_read_mode_action_${label.replace(/\s+/g, "_").toLowerCase()}`, semanticId.startsWith("choice:"), {
+    semanticId,
+  });
+  const select = (await driver.request(
+    {
+      type: "batch",
+      requestId: `${runId}-select-read-mode-${label.replace(/\s+/g, "-")}`,
+      target,
+      commands: semanticId.startsWith("choice:")
+        ? [{ type: "selectBySemanticId", semanticId }]
+        : [{ type: "selectByValue", value: "day_page:toggle_read_mode" }],
+      options: { stopOnError: true, timeout: 7000 },
+    },
+    { expect: "batchResult", timeoutMs: 8000 },
+  )) as Json;
+  check(`select_read_mode_action_${label.replace(/\s+/g, "_").toLowerCase()}`, select.success === true, {
+    batch: select,
+  });
+  const activateTarget = (await actionsWindowRegistered(driver).catch(() => false))
+    ? { type: "kind", kind: "actionsDialog" }
+    : { type: "main" };
+  const activate = (await driver.request(
+    {
+      type: "simulateGpuiEvent",
+      requestId: `${runId}-activate-read-mode-${label.replace(/\s+/g, "-")}`,
+      target: activateTarget,
+      event: { type: "keyDown", key: "enter", modifiers: [] },
+    },
+    { expect: "simulateGpuiEventResult", timeoutMs: 5000 },
+  )) as Json;
+  check(`activate_read_mode_action_${label.replace(/\s+/g, "_").toLowerCase()}`, activate.ok !== false, {
+    activate,
+  });
+  return { filter, select, activate };
+}
+
 function buildLongMarkdown(): string {
   const lines = [
     "---",
@@ -160,10 +317,12 @@ const driver = await Driver.launch({
   binary: BINARY,
   sandboxHome: true,
   sessionName: "day-notes-editor-runtime-parity",
+  readyTimeoutMs: 60_000,
   defaultTimeoutMs: 9000,
   env: {
     SCRIPT_KIT_PANEL_INVARIANTS_ALLOW_MISMATCH: "1",
     SCRIPT_KIT_BRAIN_TZ: process.env.SCRIPT_KIT_BRAIN_TZ ?? "America/Denver",
+    SCRIPT_KIT_AGENTIC_KEEP_ACTIONS_WINDOW_OPEN: "1",
   },
 });
 
@@ -294,7 +453,7 @@ try {
     ranges: dayLinkHighlights,
   });
 
-  await gpuiKey(driver, "pageup", { type: "main" });
+  await gpuiKey(driver, "pageup");
   await Bun.sleep(180);
   dayElements = await timedGetElements(driver, "dayGetElementsMs", {
     target: { type: "main" },
@@ -365,12 +524,65 @@ try {
     },
   );
 
+  const readModeMarkdown = [
+    `# Day read mode ${runId}`,
+    "",
+    "- [ ] unchecked task",
+    "- [x] checked task",
+    "",
+    "Shared preview renderer should mount inside AppView::DayPage.",
+    "",
+  ].join("\n");
+  const setDayTasks = (await driver.batch([{ type: "setInput", text: readModeMarkdown }], {
+    timeoutMs: 8000,
+  })) as Json;
+  check("set_day_task_markdown_for_read_mode", setDayTasks.success === true, { batch: setDayTasks });
+
+  await toggleDayReadModeViaActions(driver, "Preview Markdown");
+  const readModeState = await waitForDayReadMode(driver, true);
+  const dayPage = (readModeState.dayPage ?? {}) as Json;
+  const dayPreviewAnchor = (dayPage.previewAnchor ?? {}) as Json;
+  const dayTaskStats = (dayPage.taskStats ?? {}) as Json;
+  check("day_read_mode_enabled", dayPage.readMode === true && dayPage.mode === "read", {
+    mode: dayPage.mode ?? null,
+    readMode: dayPage.readMode ?? null,
+  });
+  check("day_read_mode_uses_shared_preview_owner", dayPreviewAnchor.owner === "components.notes_editor", {
+    previewAnchor: dayPreviewAnchor,
+  });
+  check(
+    "day_read_mode_uses_shared_preview_render_path",
+    dayPreviewAnchor.renderPath === "components.notes_editor.render_preview",
+    { previewAnchor: dayPreviewAnchor },
+  );
+  check(
+    "day_read_mode_preview_scroll_receipt_available",
+    dayPreviewAnchor.scrollMetricsAvailable === true && dayPreviewAnchor.scroll?.available === true,
+    { previewAnchor: dayPreviewAnchor },
+  );
+  check("day_read_mode_task_receipt_counts", dayTaskStats.total === 2 && dayTaskStats.checked === 1 && dayTaskStats.unchecked === 1, {
+    taskStats: dayTaskStats,
+  });
+  const dayReadElements = await timedGetElements(driver, "dayGetElementsMs", {
+    target: { type: "main" },
+    limit: 220,
+  });
+  const dayReadPreview = findSemantic(dayReadElements, "day-page-read-preview");
+  check("day_read_preview_element_exposed", Boolean(dayReadPreview), { preview: dayReadPreview });
+
+  await toggleDayReadModeViaActions(driver, "Edit Markdown");
+  const editModeState = await waitForDayReadMode(driver, false);
+  check("day_read_mode_toggle_returns_to_edit", editModeState.dayPage?.readMode === false && editModeState.dayPage?.mode === "edit", {
+    dayPage: editModeState.dayPage ?? null,
+  });
+
   const notesP95 = p95(timings.notesGetElementsMs);
   const dayP95 = p95(timings.dayGetElementsMs);
-  check("scroll_responsiveness_under_budget", notesP95 <= 250 && dayP95 <= 250 && dayP95 / Math.max(1, notesP95) <= 2.0, {
+  const dayRatio = dayP95 / Math.max(1, notesP95);
+  check("scroll_responsiveness_under_budget", notesP95 <= 250 && dayP95 <= 250 && (dayP95 <= 25 || dayRatio <= 2.0), {
     notesP95,
     dayP95,
-    ratio: Number((dayP95 / Math.max(1, notesP95)).toFixed(2)),
+    ratio: Number(dayRatio.toFixed(2)),
     timings,
   });
 

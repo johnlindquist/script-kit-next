@@ -133,6 +133,7 @@ impl DayPageView {
             ),
             last_editor_content_len: 0,
             kit_resource_preview: None,
+            read_mode: false,
         }
     }
 
@@ -160,6 +161,7 @@ impl DayPageView {
         let content = self.session.disk_content().to_string();
         self.reset_day_page_spine_handoff_state(true, true);
         self.kit_resource_preview = None;
+        self.read_mode = false;
         self.refresh_fragment_open_targets(&content);
         // Loads are not typing: pre-set the length so the Change event this
         // emits cannot read as growth and auto-swap to the main menu.
@@ -363,6 +365,8 @@ impl DayPageView {
 
     pub(crate) fn automation_state(&self, cx: &App) -> serde_json::Value {
         let input = self.automation_input_value(cx);
+        let task_stats = day_page_task_stats(&input);
+        let preview_anchor = self.automation_preview_anchor(&input, cx);
         let kit_resource_preview = match self.kit_resource_preview.as_ref() {
             Some(preview) => {
                 let availability = self
@@ -398,11 +402,59 @@ impl DayPageView {
             "schemaVersion": 1,
             "redacted": true,
             "inputLength": input.chars().count(),
+            "readMode": self.read_mode,
+            "mode": if self.kit_resource_preview.is_some() {
+                "kitResourcePreview"
+            } else if self.read_mode {
+                "read"
+            } else {
+                "edit"
+            },
+            "previewAnchor": preview_anchor,
+            "taskStats": task_stats,
             "kitResourcePreview": kit_resource_preview,
         })
     }
 
+    fn automation_preview_anchor(&self, input: &str, cx: &App) -> serde_json::Value {
+        let preview_available = self.read_mode && self.kit_resource_preview.is_none();
+        let scroll = if preview_available {
+            let editor = self.notes_editor.read(cx);
+            automation_scroll_handle_metrics(
+                editor.preview_scroll_handle(),
+                "runtime.components.notes_editor.preview.ScrollHandle",
+            )
+        } else {
+            serde_json::Value::Null
+        };
+
+        serde_json::json!({
+            "schemaVersion": 1,
+            "source": "runtime.dayPage.automationState",
+            "redacted": true,
+            "available": preview_available,
+            "previewEnabled": preview_available,
+            "owner": crate::components::notes_editor::NOTES_EDITOR_STYLE_OWNER,
+            "renderPath": crate::components::notes_editor::NOTES_EDITOR_PREVIEW_RENDER_PATH,
+            "scrollSource": "runtime.components.notes_editor.preview.ScrollHandle",
+            "scrollMetricsAvailable": preview_available,
+            "scroll": scroll,
+            "inputLength": input.chars().count(),
+            "stopReason": if preview_available {
+                serde_json::Value::Null
+            } else if self.kit_resource_preview.is_some() {
+                serde_json::Value::String("Day Page kit resource preview is mounted".to_string())
+            } else {
+                serde_json::Value::String("Day Page read mode is not enabled".to_string())
+            },
+        })
+    }
+
     pub fn focus_editor(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.read_mode {
+            self.focus_handle.focus(window, cx);
+            return;
+        }
         self.focus_editor_at_end(window, cx);
         self.defer_editor_bottom_scroll(window, cx);
         self.schedule_editor_bottom_scroll_retries(cx);
@@ -468,6 +520,7 @@ impl DayPageView {
 
     pub fn set_input(&mut self, text: String, window: &mut Window, cx: &mut Context<Self>) {
         self.kit_resource_preview = None;
+        self.read_mode = false;
         self.notes_editor.update(cx, |editor, cx| {
             editor.set_value_with_cursor_at_end(text.clone(), window, cx);
         });
@@ -522,6 +575,61 @@ fn should_normalize_day_page_references_after_edit(
         .chars()
         .next_back()
         .is_some_and(char::is_whitespace)
+}
+
+fn automation_scroll_handle_metrics(
+    handle: &gpui::ScrollHandle,
+    source: &'static str,
+) -> serde_json::Value {
+    let offset = handle.offset();
+    let max_offset = handle.max_offset();
+    let viewport = handle.bounds().size;
+    let max_scroll_top = max_offset.y.as_f32().max(0.0);
+    let max_scroll_left = max_offset.x.as_f32().max(0.0);
+    let scroll_top = (-offset.y.as_f32()).clamp(0.0, max_scroll_top);
+    let scroll_left = (-offset.x.as_f32()).clamp(0.0, max_scroll_left);
+
+    serde_json::json!({
+        "schemaVersion": 1,
+        "source": source,
+        "available": true,
+        "offsetUnit": "logicalPx",
+        "scrollTop": scroll_top,
+        "scrollLeft": scroll_left,
+        "rawOffsetX": offset.x.as_f32(),
+        "rawOffsetY": offset.y.as_f32(),
+        "scrollHeight": viewport.height.as_f32() + max_scroll_top,
+        "scrollWidth": viewport.width.as_f32() + max_scroll_left,
+        "clientHeight": viewport.height.as_f32(),
+        "clientWidth": viewport.width.as_f32(),
+        "maxScrollTop": max_scroll_top,
+        "maxScrollLeft": max_scroll_left,
+        "canScrollY": max_scroll_top > 0.0,
+        "canScrollX": max_scroll_left > 0.0,
+    })
+}
+
+fn day_page_task_stats(content: &str) -> serde_json::Value {
+    let mut total = 0_usize;
+    let mut checked = 0_usize;
+    let mut unchecked = 0_usize;
+    for line in content.lines() {
+        let trimmed = line.trim_start();
+        if trimmed.starts_with("- [ ] ") {
+            total += 1;
+            unchecked += 1;
+        } else if trimmed.starts_with("- [x] ") || trimmed.starts_with("- [X] ") {
+            total += 1;
+            checked += 1;
+        }
+    }
+
+    serde_json::json!({
+        "schemaVersion": 1,
+        "total": total,
+        "checked": checked,
+        "unchecked": unchecked,
+    })
 }
 
 impl Focusable for DayPageView {
@@ -673,6 +781,8 @@ impl Render for DayPageView {
 
         let editor_content = if self.kit_resource_preview.is_some() {
             self.render_kit_resource_preview(cx)
+        } else if self.read_mode {
+            self.render_day_page_read_mode(cx)
         } else {
             div()
                 .relative()
@@ -950,6 +1060,67 @@ impl DayPageView {
             .into_any_element()
     }
 
+    fn render_day_page_read_mode(&self, cx: &mut Context<Self>) -> AnyElement {
+        let content = self.notes_editor.read(cx).content(cx);
+        let day_page = cx.entity().downgrade();
+        let on_toggle_task: crate::notes::markdown::TaskToggleHandler =
+            std::rc::Rc::new(move |marker_range, checked, window, cx| {
+                if let Some(day_page) = day_page.upgrade() {
+                    day_page.update(cx, |view, cx| {
+                        view.toggle_task_marker_from_read_mode(marker_range, checked, window, cx);
+                    });
+                }
+            });
+
+        self.notes_editor
+            .read(cx)
+            .render_preview(&content, on_toggle_task, cx.theme())
+    }
+
+    pub(crate) fn toggle_read_mode(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.kit_resource_preview.is_some() {
+            return;
+        }
+        self.read_mode = !self.read_mode;
+        if self.read_mode {
+            self.focus_handle.focus(window, cx);
+        } else {
+            self.focus_editor_at_end(window, cx);
+        }
+        cx.notify();
+    }
+
+    pub(crate) fn toggle_task_marker_from_read_mode(
+        &mut self,
+        marker_range: std::ops::Range<usize>,
+        checked: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        if self.kit_resource_preview.is_some() {
+            return false;
+        }
+        let toggled = self.notes_editor.update(cx, |editor, cx| {
+            editor.toggle_task_marker_at(marker_range, checked, window, cx)
+        });
+        if toggled {
+            let content = self.notes_editor.read(cx).content(cx);
+            self.last_editor_content_len = content.len();
+            self.session.apply_editor_content(&content);
+            self.refresh_fragment_open_targets(&content);
+            self.spine_handoff
+                .prune_mention_aliases_for_content(&content);
+            self.schedule_autosave_flush(cx);
+            self.sync_footer(window, cx);
+            tracing::info!(
+                target: "script_kit::day_page",
+                event = "day_page_read_mode_task_toggled",
+            );
+            cx.notify();
+        }
+        toggled
+    }
+
     pub(crate) fn kit_resource_preview_action_availability(
         &self,
     ) -> Option<DayPageKitPreviewActionAvailability> {
@@ -1213,6 +1384,7 @@ impl DayPageView {
                     mime_type = %preview.mime_type,
                     truncated = preview.truncated,
                 );
+                self.read_mode = false;
                 self.kit_resource_preview = Some(DayPageKitResourcePreviewState::from_preview(
                     preview,
                     allow_agent_chat_action,
