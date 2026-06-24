@@ -17,6 +17,67 @@ use script_kit_gpui::day_page::{
 const DAY_PAGE_KIT_PREVIEW_MUTED_OPACITY: f32 = 0.72;
 const DAY_PAGE_KIT_PREVIEW_BORDER_OPACITY: f32 = 0.2;
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum DayPageKitResourceSourceTarget {
+    Note(crate::notes::NoteId),
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct DayPageKitPreviewActionAvailability {
+    pub(crate) can_add_to_agent_chat: bool,
+    pub(crate) can_copy_uri: bool,
+    pub(crate) open_source_target: Option<DayPageKitResourceSourceTarget>,
+    pub(crate) open_source_unavailable_reason: Option<String>,
+    pub(crate) can_close: bool,
+}
+
+fn day_page_kit_resource_source_target_for_uri(
+    uri: &str,
+) -> (Option<DayPageKitResourceSourceTarget>, Option<String>) {
+    if uri == "kit://notes" || uri.starts_with("kit://notes?") {
+        return (
+            None,
+            Some("Notes collection previews do not have a single source note.".to_string()),
+        );
+    }
+
+    if let Some(rest) = uri.strip_prefix("kit://notes/") {
+        let id = rest.split(['?', '#']).next().unwrap_or_default();
+        let Some(note_id) = crate::notes::NoteId::parse(id) else {
+            return (
+                None,
+                Some("This notes resource URI does not include a valid note id.".to_string()),
+            );
+        };
+        if crate::notes::get_note(note_id).ok().flatten().is_some() {
+            return (Some(DayPageKitResourceSourceTarget::Note(note_id)), None);
+        }
+        return (None, Some("The source note no longer exists.".to_string()));
+    }
+
+    if uri == "kit://scripts" {
+        return (
+            None,
+            Some("Scripts collection previews do not have a single source file.".to_string()),
+        );
+    }
+
+    if uri.starts_with("kit://clipboard-history") {
+        return (
+            None,
+            Some(
+                "Clipboard history previews do not have an editable source in this slice."
+                    .to_string(),
+            ),
+        );
+    }
+
+    (
+        None,
+        Some("This resource has no source opener in this slice.".to_string()),
+    )
+}
+
 impl DayPageView {
     pub fn new(
         app: Entity<ScriptListApp>,
@@ -303,17 +364,29 @@ impl DayPageView {
     pub(crate) fn automation_state(&self, cx: &App) -> serde_json::Value {
         let input = self.automation_input_value(cx);
         let kit_resource_preview = match self.kit_resource_preview.as_ref() {
-            Some(preview) => serde_json::json!({
-                "schemaVersion": 1,
-                "active": true,
-                "redacted": true,
-                "title": preview.title,
-                "uri": preview.uri,
-                "mimeType": preview.mime_type,
-                "readOnly": true,
-                "truncated": preview.truncated,
-                "textLength": preview.text.chars().count(),
-            }),
+            Some(preview) => {
+                let availability = self
+                    .kit_resource_preview_action_availability()
+                    .expect("preview action availability exists when preview is open");
+                serde_json::json!({
+                    "schemaVersion": 1,
+                    "active": true,
+                    "redacted": true,
+                    "title": preview.title,
+                    "uri": preview.uri,
+                    "mimeType": preview.mime_type,
+                    "readOnly": true,
+                    "truncated": preview.truncated,
+                    "textLength": preview.text.chars().count(),
+                    "actionAvailability": {
+                        "addToAgentChat": availability.can_add_to_agent_chat,
+                        "copyUri": availability.can_copy_uri,
+                        "openSource": availability.open_source_target.is_some(),
+                        "openSourceReason": availability.open_source_unavailable_reason,
+                        "closePreview": availability.can_close,
+                    },
+                })
+            }
             None => serde_json::json!({
                 "schemaVersion": 1,
                 "active": false,
@@ -690,6 +763,22 @@ impl Render for DayPageView {
 }
 
 impl DayPageView {
+    pub(crate) fn execute_day_page_action_from_preview(
+        &mut self,
+        action_id: &'static str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(app) = self.app.upgrade() else {
+            return;
+        };
+        window.defer(cx, move |window, cx| {
+            let _ = app.update(cx, |app, cx| {
+                app.execute_day_page_action(action_id, window, cx);
+            });
+        });
+    }
+
     fn render_kit_resource_preview(&self, cx: &mut Context<Self>) -> AnyElement {
         let Some(preview) = self.kit_resource_preview.as_ref() else {
             return div().into_any_element();
@@ -697,10 +786,12 @@ impl DayPageView {
 
         let title = preview.title.clone();
         let uri = preview.uri.clone();
-        let copy_uri = uri.clone();
         let mime_type = preview.mime_type.clone();
         let text = preview.text.clone();
         let truncated = preview.truncated;
+        let availability = self
+            .kit_resource_preview_action_availability()
+            .expect("preview action availability exists when preview is open");
 
         div()
             .id("day-page-kit-resource-preview")
@@ -757,6 +848,24 @@ impl DayPageView {
                             .flex()
                             .items_center()
                             .gap_2()
+                            .when(availability.can_add_to_agent_chat, |parent| {
+                                parent.child(
+                                    div()
+                                        .id("day-page-kit-resource-preview-add-agent-chat")
+                                        .text_xs()
+                                        .text_color(cx.theme().accent)
+                                        .cursor_pointer()
+                                        .hover(|s| s.text_color(cx.theme().foreground))
+                                        .on_click(cx.listener(|this, _, window, cx| {
+                                            this.execute_day_page_action_from_preview(
+                                                crate::DAY_PAGE_PREVIEW_ADD_TO_AGENT_CHAT_ACTION_ID,
+                                                window,
+                                                cx,
+                                            );
+                                        }))
+                                        .child("Add to Agent Chat"),
+                                )
+                            })
                             .child(
                                 div()
                                     .id("day-page-kit-resource-preview-copy-uri")
@@ -764,13 +873,33 @@ impl DayPageView {
                                     .text_color(cx.theme().accent)
                                     .cursor_pointer()
                                     .hover(|s| s.text_color(cx.theme().foreground))
-                                    .on_click(cx.listener(move |_this, _, _window, cx| {
-                                        cx.write_to_clipboard(gpui::ClipboardItem::new_string(
-                                            copy_uri.clone(),
-                                        ));
+                                    .on_click(cx.listener(|this, _, window, cx| {
+                                        this.execute_day_page_action_from_preview(
+                                            crate::DAY_PAGE_PREVIEW_COPY_URI_ACTION_ID,
+                                            window,
+                                            cx,
+                                        );
                                     }))
                                     .child("Copy URI"),
                             )
+                            .when(availability.open_source_target.is_some(), |parent| {
+                                parent.child(
+                                    div()
+                                        .id("day-page-kit-resource-preview-open-source")
+                                        .text_xs()
+                                        .text_color(cx.theme().accent)
+                                        .cursor_pointer()
+                                        .hover(|s| s.text_color(cx.theme().foreground))
+                                        .on_click(cx.listener(|this, _, window, cx| {
+                                            this.execute_day_page_action_from_preview(
+                                                crate::DAY_PAGE_PREVIEW_OPEN_SOURCE_ACTION_ID,
+                                                window,
+                                                cx,
+                                            );
+                                        }))
+                                        .child("Open Source"),
+                                )
+                            })
                             .child(
                                 div()
                                     .id("day-page-kit-resource-preview-close")
@@ -779,9 +908,13 @@ impl DayPageView {
                                     .cursor_pointer()
                                     .hover(|s| s.text_color(cx.theme().foreground))
                                     .on_click(cx.listener(|this, _, window, cx| {
-                                        this.close_kit_resource_preview(window, cx);
+                                        this.execute_day_page_action_from_preview(
+                                            crate::DAY_PAGE_PREVIEW_CLOSE_ACTION_ID,
+                                            window,
+                                            cx,
+                                        );
                                     }))
-                                    .child("Close"),
+                                    .child("Close Preview"),
                             ),
                     ),
             )
@@ -815,6 +948,58 @@ impl DayPageView {
                     .child("Esc to return"),
             )
             .into_any_element()
+    }
+
+    pub(crate) fn kit_resource_preview_action_availability(
+        &self,
+    ) -> Option<DayPageKitPreviewActionAvailability> {
+        let preview = self.kit_resource_preview.as_ref()?;
+        let (open_source_target, open_source_unavailable_reason) =
+            day_page_kit_resource_source_target_for_uri(&preview.uri);
+        Some(DayPageKitPreviewActionAvailability {
+            can_add_to_agent_chat: preview.allow_agent_chat_action,
+            can_copy_uri: true,
+            open_source_target,
+            open_source_unavailable_reason,
+            can_close: true,
+        })
+    }
+
+    pub(crate) fn open_kit_resource_preview_source(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let Some(availability) = self.kit_resource_preview_action_availability() else {
+            return false;
+        };
+        match availability.open_source_target {
+            Some(DayPageKitResourceSourceTarget::Note(note_id)) => {
+                let Ok(Some(note)) = crate::notes::get_note(note_id) else {
+                    return false;
+                };
+                let path = crate::notes::note_file_path(note.id).ok().flatten();
+                if let Err(error) = self.session.bind_note_content(
+                    note.id.as_str().to_string(),
+                    note.title.clone(),
+                    note.content.clone(),
+                    path,
+                    Utc::now(),
+                ) {
+                    tracing::error!(
+                        target: "script_kit::day_page",
+                        error = %error,
+                        "day_page_kit_preview_open_source_failed"
+                    );
+                    return false;
+                }
+                self.apply_loaded_content_to_editor(window, cx);
+                self.focus_editor(window, cx);
+                cx.notify();
+                true
+            }
+            None => false,
+        }
     }
 
     fn handle_key_down(
@@ -1004,8 +1189,11 @@ impl DayPageView {
             Activation::ScopedSearch { source, query } => {
                 self.open_scoped_search_deeplink(source, query, window, cx);
             }
-            Activation::KitResourcePreview { uri, .. } => {
-                self.open_kit_resource_preview(uri, window, cx);
+            Activation::KitResourcePreview {
+                uri,
+                allow_agent_chat_action,
+            } => {
+                self.open_kit_resource_preview(uri, allow_agent_chat_action, window, cx);
             }
         }
     }
@@ -1013,6 +1201,7 @@ impl DayPageView {
     fn open_kit_resource_preview(
         &mut self,
         uri: String,
+        allow_agent_chat_action: bool,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
@@ -1024,7 +1213,10 @@ impl DayPageView {
                     mime_type = %preview.mime_type,
                     truncated = preview.truncated,
                 );
-                self.kit_resource_preview = Some(preview.into());
+                self.kit_resource_preview = Some(DayPageKitResourcePreviewState::from_preview(
+                    preview,
+                    allow_agent_chat_action,
+                ));
                 self.focus_handle.focus(window, cx);
                 self.sync_footer(window, cx);
                 cx.notify();

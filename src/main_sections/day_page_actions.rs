@@ -9,6 +9,12 @@
 pub(crate) const DAY_PAGE_ACTIONS_SECTION_TITLE: &str = "Today";
 pub(crate) const DAY_PAGE_ASK_AGENT_CHAT_ACTION_ID: &str = "day_page:ask_agent_chat";
 pub(crate) const DAY_PAGE_AGENT_CHAT_CONTEXT_SOURCE: &str = "day_page_today";
+pub(crate) const DAY_PAGE_PREVIEW_AGENT_CHAT_CONTEXT_SOURCE: &str = "day_page_kit_resource_preview";
+pub(crate) const DAY_PAGE_PREVIEW_ADD_TO_AGENT_CHAT_ACTION_ID: &str =
+    "day_page:kit_preview_add_to_agent_chat";
+pub(crate) const DAY_PAGE_PREVIEW_COPY_URI_ACTION_ID: &str = "day_page:kit_preview_copy_uri";
+pub(crate) const DAY_PAGE_PREVIEW_OPEN_SOURCE_ACTION_ID: &str = "day_page:kit_preview_open_source";
+pub(crate) const DAY_PAGE_PREVIEW_CLOSE_ACTION_ID: &str = "day_page:kit_preview_close";
 
 fn day_page_editor_action_id(toolbar_id: &str) -> String {
     format!("day_page:format_{}", toolbar_id.replace('-', "_"))
@@ -30,6 +36,17 @@ fn day_page_editor_action_shortcut(toolbar_id: &str) -> Option<&'static str> {
     }
 }
 
+fn save_today_action() -> crate::actions::Action {
+    crate::actions::Action::new(
+        "day_page:save",
+        "Save Today",
+        Some("Write the day page to disk now".to_string()),
+        crate::actions::ActionCategory::ScriptContext,
+    )
+    .with_shortcut("cmd+s")
+    .with_section(DAY_PAGE_ACTIONS_SECTION_TITLE)
+}
+
 /// Build the Today section rows for the current Day Page state.
 pub(crate) fn day_page_host_actions_section(
     view: &DayPageView,
@@ -39,6 +56,57 @@ pub(crate) fn day_page_host_actions_section(
 
     let mut actions = Vec::new();
     let viewing_fragment = view.session.is_viewing_fragment();
+
+    if let Some(preview) = view.kit_resource_preview.as_ref() {
+        let availability = view
+            .kit_resource_preview_action_availability()
+            .expect("preview action availability exists when preview is open");
+        if availability.can_add_to_agent_chat {
+            actions.push(
+                Action::new(
+                    DAY_PAGE_PREVIEW_ADD_TO_AGENT_CHAT_ACTION_ID,
+                    "Add to Agent Chat",
+                    Some("Attach only this kit:// preview URI to Agent Chat".to_string()),
+                    ActionCategory::ScriptContext,
+                )
+                .with_section(DAY_PAGE_ACTIONS_SECTION_TITLE),
+            );
+        }
+        actions.push(
+            Action::new(
+                DAY_PAGE_PREVIEW_COPY_URI_ACTION_ID,
+                "Copy URI",
+                Some("Copy this resource URI".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_section(DAY_PAGE_ACTIONS_SECTION_TITLE),
+        );
+        if availability.open_source_target.is_some() {
+            actions.push(
+                Action::new(
+                    DAY_PAGE_PREVIEW_OPEN_SOURCE_ACTION_ID,
+                    "Open Source",
+                    Some("Open the source represented by this resource in Today".to_string()),
+                    ActionCategory::ScriptContext,
+                )
+                .with_section(DAY_PAGE_ACTIONS_SECTION_TITLE),
+            );
+        }
+        actions.push(
+            Action::new(
+                DAY_PAGE_PREVIEW_CLOSE_ACTION_ID,
+                "Close Preview / Back to Today",
+                Some(format!("Return from {}", preview.uri)),
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut("escape")
+            .with_section(DAY_PAGE_ACTIONS_SECTION_TITLE),
+        );
+        if view.is_dirty() {
+            actions.push(save_today_action());
+        }
+        return actions;
+    }
 
     if viewing_fragment {
         actions.push(
@@ -68,16 +136,7 @@ pub(crate) fn day_page_host_actions_section(
     }
 
     if view.is_dirty() {
-        actions.push(
-            Action::new(
-                "day_page:save",
-                "Save Today",
-                Some("Write the day page to disk now".to_string()),
-                ActionCategory::ScriptContext,
-            )
-            .with_shortcut("cmd+s")
-            .with_section(DAY_PAGE_ACTIONS_SECTION_TITLE),
-        );
+        actions.push(save_today_action());
     }
 
     let viewing_today = view
@@ -131,6 +190,65 @@ pub(crate) fn day_page_host_actions_section(
 }
 
 impl DayPageView {
+    pub(crate) fn kit_resource_preview_context_part(
+        &self,
+    ) -> Option<crate::ai::message_parts::AiContextPart> {
+        let preview = self.kit_resource_preview.as_ref()?;
+        if !preview.allow_agent_chat_action {
+            return None;
+        }
+        Some(crate::ai::message_parts::AiContextPart::ResourceUri {
+            uri: preview.uri.clone(),
+            label: preview.title.clone(),
+        })
+    }
+
+    pub(crate) fn open_agent_chat_about_kit_resource_preview(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let Some(part) = self.kit_resource_preview_context_part() else {
+            if let Some(preview) = self.kit_resource_preview.as_ref() {
+                tracing::warn!(
+                    target: "script_kit::day_page",
+                    event = "day_page_kit_preview_agent_chat_blocked",
+                    uri = %preview.uri,
+                );
+            }
+            return false;
+        };
+        let prompt = self
+            .kit_resource_preview
+            .as_ref()
+            .map(|preview| format!("Ask about {}: ", preview.title))
+            .unwrap_or_else(|| "Ask about this resource: ".to_string());
+        let Some(app) = self.app.upgrade() else {
+            return false;
+        };
+
+        window.defer(cx, move |_window, cx| {
+            app.update(cx, |app, cx| {
+                app.clear_actions_popup_state();
+                if crate::actions::is_actions_window_open() {
+                    crate::actions::close_actions_window(cx);
+                }
+                app.open_tab_ai_agent_chat_with_context_part(
+                    part,
+                    DAY_PAGE_PREVIEW_AGENT_CHAT_CONTEXT_SOURCE,
+                    cx,
+                );
+                if let AppView::AgentChatView { entity } = &app.current_view {
+                    let entity = entity.clone();
+                    entity.update(cx, |chat, cx| {
+                        chat.set_input(prompt.clone(), cx);
+                    });
+                }
+            });
+        });
+        true
+    }
+
     fn today_agent_chat_context_part(&self, cx: &App) -> crate::ai::message_parts::AiContextPart {
         let content = self.notes_editor.read(cx).content(cx);
         let date_label = self
@@ -249,7 +367,6 @@ impl DayPageView {
         cx.notify();
         true
     }
-
 }
 
 impl ScriptListApp {
@@ -316,6 +433,39 @@ impl ScriptListApp {
                 entity.update(cx, |view, cx| view.open_agent_chat_about_today(window, cx));
                 true
             }
+            DAY_PAGE_PREVIEW_ADD_TO_AGENT_CHAT_ACTION_ID => entity.update(cx, |view, cx| {
+                view.open_agent_chat_about_kit_resource_preview(window, cx)
+            }),
+            DAY_PAGE_PREVIEW_COPY_URI_ACTION_ID => {
+                let uri = {
+                    let view = entity.read(cx);
+                    view.kit_resource_preview_action_availability()
+                        .filter(|availability| availability.can_copy_uri)
+                        .and_then(|_| {
+                            view.kit_resource_preview
+                                .as_ref()
+                                .map(|preview| preview.uri.clone())
+                        })
+                };
+                if let Some(uri) = uri {
+                    cx.write_to_clipboard(gpui::ClipboardItem::new_string(uri));
+                    true
+                } else {
+                    false
+                }
+            }
+            DAY_PAGE_PREVIEW_OPEN_SOURCE_ACTION_ID => entity.update(cx, |view, cx| {
+                view.open_kit_resource_preview_source(window, cx)
+            }),
+            DAY_PAGE_PREVIEW_CLOSE_ACTION_ID => entity.update(cx, |view, cx| {
+                let can_close = view
+                    .kit_resource_preview_action_availability()
+                    .is_some_and(|availability| availability.can_close);
+                if can_close {
+                    view.close_kit_resource_preview(window, cx);
+                }
+                can_close
+            }),
             "day_page:back_to_today" => {
                 entity.update(cx, |view, cx| view.return_to_day_page(window, cx));
                 true

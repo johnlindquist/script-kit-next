@@ -48,18 +48,21 @@ pub(crate) struct DayPageKitResourcePreviewState {
     pub(crate) mime_type: String,
     pub(crate) text: String,
     pub(crate) truncated: bool,
+    pub(crate) allow_agent_chat_action: bool,
 }
 
-impl From<crate::notes::deeplink_activation::KitResourcePreview>
-    for DayPageKitResourcePreviewState
-{
-    fn from(preview: crate::notes::deeplink_activation::KitResourcePreview) -> Self {
+impl DayPageKitResourcePreviewState {
+    pub(crate) fn from_preview(
+        preview: crate::notes::deeplink_activation::KitResourcePreview,
+        allow_agent_chat_action: bool,
+    ) -> Self {
         Self {
             title: preview.title,
             uri: preview.uri,
             mime_type: preview.mime_type,
             text: preview.text,
             truncated: preview.truncated,
+            allow_agent_chat_action,
         }
     }
 }
