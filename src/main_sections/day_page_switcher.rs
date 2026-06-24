@@ -54,7 +54,10 @@ pub(crate) fn load_day_switcher_entries(substrate: &BrainSubstrate) -> Vec<DaySw
     entries
 }
 
-pub(crate) fn day_switcher_entry_label(date: chrono::NaiveDate, today: chrono::NaiveDate) -> String {
+pub(crate) fn day_switcher_entry_label(
+    date: chrono::NaiveDate,
+    today: chrono::NaiveDate,
+) -> String {
     let formatted = date.format("%Y-%m-%d · %A").to_string();
     if date == today {
         format!("Today · {formatted}")
@@ -111,6 +114,13 @@ impl DayPageView {
     }
 
     pub(crate) fn open_note_switcher(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if let Err(error) = crate::notes::init_notes_db() {
+            tracing::warn!(
+                target: "script_kit::day_page",
+                error = %error,
+                "day_page_note_switcher_notes_init_failed"
+            );
+        }
         let notes = crate::notes::get_all_notes().unwrap_or_else(|error| {
             tracing::warn!(
                 target: "script_kit::day_page",
@@ -210,6 +220,20 @@ impl DayPageView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        let is_local_switch_target =
+            action_id.starts_with("daypage_") || action_id.starts_with("note_");
+        if is_local_switch_target
+            && self.session.is_dirty()
+            && !self.save_and_sync_footer(window, cx)
+        {
+            tracing::warn!(
+                target: "script_kit::day_page",
+                action_id,
+                "day_page_note_switcher_dirty_save_failed"
+            );
+            cx.notify();
+            return;
+        }
         self.note_switcher.close(cx);
         if let Some(date) = action_id.strip_prefix("daypage_") {
             if let Ok(date) = chrono::NaiveDate::parse_from_str(date, "%Y-%m-%d") {

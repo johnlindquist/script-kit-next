@@ -183,6 +183,31 @@ impl DayPageDocumentSession {
         Ok(content)
     }
 
+    fn return_day_anchor(&self, context: &'static str) -> Result<(PathBuf, NaiveDate)> {
+        match &self.binding {
+            DayPageBinding::Day => {
+                let path = self
+                    .path
+                    .clone()
+                    .with_context(|| format!("{context} without day bind"))?;
+                let date = self
+                    .bound_date
+                    .with_context(|| format!("{context} without day date"))?;
+                Ok((path, date))
+            }
+            DayPageBinding::Note {
+                return_day_path,
+                return_day_date,
+                ..
+            }
+            | DayPageBinding::Fragment {
+                return_day_path,
+                return_day_date,
+                ..
+            } => Ok((return_day_path.clone(), *return_day_date)),
+        }
+    }
+
     /// Bind the editor to a regular Notes document while keeping the Day Page
     /// surface local to the main window.
     pub fn bind_note_content(
@@ -193,13 +218,7 @@ impl DayPageDocumentSession {
         path: Option<PathBuf>,
         now: DateTime<Utc>,
     ) -> Result<String> {
-        let day_path = self
-            .path
-            .clone()
-            .with_context(|| "note open without day bind")?;
-        let day_date = self
-            .bound_date
-            .with_context(|| "note open without day date")?;
+        let (day_path, day_date) = self.return_day_anchor("note open")?;
 
         if self.dirty {
             self.save(now)?;
@@ -274,19 +293,39 @@ impl DayPageDocumentSession {
             return Ok(());
         }
 
+        let note_binding_id = match &self.binding {
+            DayPageBinding::Note { note_id, .. } => Some(note_id.clone()),
+            _ => None,
+        };
+
+        if let Some(note_id_text) = note_binding_id {
+            let note_id = crate::notes::NoteId::parse(&note_id_text)
+                .with_context(|| format!("parsing day page note id {note_id_text}"))?;
+            crate::notes::init_notes_db().context("initializing notes before day page save")?;
+            let mut note = crate::notes::get_note(note_id)?
+                .with_context(|| format!("loading note before day page save {note_id}"))?;
+            note.set_content(content);
+            crate::notes::save_note(&note)
+                .with_context(|| format!("saving note from day page {note_id}"))?;
+            let saved_path = crate::notes::note_file_path(note.id)?
+                .with_context(|| format!("resolving saved note path {note_id}"))?;
+            if let DayPageBinding::Note { title, .. } = &mut self.binding {
+                *title = note.title.clone();
+            }
+            self.path = Some(saved_path.clone());
+            self.dirty = false;
+            self.disk_content = content.to_string();
+            self.last_mtime = fs::metadata(&saved_path)
+                .and_then(|meta| meta.modified())
+                .ok();
+            let _ = now;
+            return Ok(());
+        }
+
         let path = self
             .path
             .clone()
             .with_context(|| "day page save without bind")?;
-
-        if let DayPageBinding::Note { .. } = &self.binding {
-            io::atomic_write(&path, content)
-                .with_context(|| format!("writing note from day page {}", path.display()))?;
-            self.dirty = false;
-            self.disk_content = content.to_string();
-            self.last_mtime = fs::metadata(&path).and_then(|meta| meta.modified()).ok();
-            return Ok(());
-        }
 
         io::atomic_write(&path, content)
             .with_context(|| format!("writing day page {}", path.display()))?;
@@ -379,6 +418,7 @@ impl DayPageDocumentSession {
 mod tests {
     use super::*;
     use chrono_tz::Tz;
+    use std::time::{SystemTime, UNIX_EPOCH};
 
     fn test_session() -> (tempfile::TempDir, DayPageDocumentSession) {
         let dir = tempfile::tempdir().expect("tempdir");
@@ -390,6 +430,25 @@ mod tests {
         DateTime::parse_from_rfc3339(now)
             .expect("parse time")
             .with_timezone(&Utc)
+    }
+
+    fn notes_test_guard() -> std::sync::MutexGuard<'static, ()> {
+        static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+        LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
+    fn unique_note_content(label: &str) -> String {
+        let millis = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|duration| duration.as_millis())
+            .unwrap_or(0);
+        format!("# {label} {millis}\n\nbody {}", crate::notes::NoteId::new())
+    }
+
+    fn saved_note(content: &str) -> crate::notes::Note {
+        let note = crate::notes::Note::with_content(content);
+        crate::notes::save_note(&note).expect("save note");
+        note
     }
 
     #[test]
@@ -434,6 +493,176 @@ mod tests {
             session.path().expect("path"),
             &session.substrate().paths().day_page(day_one.date_naive())
         );
+    }
+
+    #[test]
+    fn binding_different_day_saves_dirty_current_day_first() {
+        let (_dir, mut session) = test_session();
+        let day_one = utc("2026-06-11T09:42:00Z");
+        let day_two = utc("2026-06-12T09:42:00Z");
+        session.bind_today(day_one).expect("bind day one");
+        let day_one_path = session.path().expect("day one path").clone();
+
+        session.apply_editor_content("dirty before day switch");
+        session
+            .bind_today(day_two)
+            .expect("switching days saves dirty original");
+
+        assert_eq!(
+            fs::read_to_string(day_one_path).expect("read original day"),
+            "dirty before day switch"
+        );
+        assert_eq!(session.bound_date(), Some(day_two.date_naive()));
+        assert!(!session.is_dirty());
+    }
+
+    #[test]
+    fn binding_regular_note_saves_dirty_day_before_local_switch() {
+        let (dir, mut session) = test_session();
+        let now = utc("2026-06-11T09:42:00Z");
+        session.bind_today(now).expect("bind day");
+        let day_path = session.path().expect("day path").clone();
+        let note_path = dir.path().join("note.md");
+        fs::write(&note_path, "note body").expect("write note path");
+
+        session.apply_editor_content("dirty before note switch");
+        session
+            .bind_note_content(
+                "note-id".to_string(),
+                "Note Title".to_string(),
+                "note body".to_string(),
+                Some(note_path),
+                now,
+            )
+            .expect("switch to note");
+
+        assert_eq!(
+            fs::read_to_string(day_path).expect("read day"),
+            "dirty before note switch"
+        );
+        assert!(session.is_viewing_note());
+        assert!(!session.is_dirty());
+    }
+
+    #[test]
+    fn regular_note_save_uses_notes_storage_and_updates_index() {
+        let _guard = notes_test_guard();
+        crate::notes::init_notes_db().expect("init notes db");
+        let (_dir, mut session) = test_session();
+        let now = utc("2026-06-11T09:42:00Z");
+        session.bind_today(now).expect("bind day");
+
+        let note = saved_note(&unique_note_content("day-page-save-original"));
+        let note_path = crate::notes::note_file_path(note.id)
+            .expect("note path result")
+            .expect("note path");
+        session
+            .bind_note_content(
+                note.id.as_str().to_string(),
+                note.title.clone(),
+                note.content.clone(),
+                Some(note_path.clone()),
+                now,
+            )
+            .expect("bind note");
+
+        let updated = unique_note_content("day-page-save-updated");
+        session.apply_editor_content(&updated);
+        session.save_content(&updated, now).expect("save note");
+
+        let stored = crate::notes::get_note(note.id)
+            .expect("get note")
+            .expect("stored note");
+        assert_eq!(stored.content, updated);
+        assert_eq!(
+            stored.title,
+            session.viewing_note_title().unwrap_or_default()
+        );
+        assert!(
+            fs::read_to_string(note_path)
+                .expect("read canonical note")
+                .contains(&updated),
+            "canonical note file should contain updated body"
+        );
+        assert!(!session.is_dirty());
+    }
+
+    #[test]
+    fn binding_second_regular_note_preserves_original_return_day_anchor() {
+        let _guard = notes_test_guard();
+        crate::notes::init_notes_db().expect("init notes db");
+        let (_dir, mut session) = test_session();
+        let now = utc("2026-06-11T09:42:00Z");
+        session.bind_today(now).expect("bind day");
+        let original_day_path = session.path().expect("day path").clone();
+        let original_day_date = session.bound_date().expect("day date");
+
+        let note_a = saved_note(&unique_note_content("anchor-note-a"));
+        let note_b = saved_note(&unique_note_content("anchor-note-b"));
+        let note_a_path = crate::notes::note_file_path(note_a.id)
+            .expect("note a path result")
+            .expect("note a path");
+        let note_b_path = crate::notes::note_file_path(note_b.id)
+            .expect("note b path result")
+            .expect("note b path");
+
+        session
+            .bind_note_content(
+                note_a.id.as_str().to_string(),
+                note_a.title.clone(),
+                note_a.content.clone(),
+                Some(note_a_path),
+                now,
+            )
+            .expect("bind note a");
+        let edited_a = unique_note_content("anchor-note-a-edited");
+        session.apply_editor_content(&edited_a);
+        session
+            .bind_note_content(
+                note_b.id.as_str().to_string(),
+                note_b.title.clone(),
+                note_b.content.clone(),
+                Some(note_b_path),
+                now,
+            )
+            .expect("switch note a to note b");
+
+        let stored_a = crate::notes::get_note(note_a.id)
+            .expect("get note a")
+            .expect("stored note a");
+        assert_eq!(stored_a.content, edited_a);
+
+        session.return_to_day(now).expect("return to day");
+        assert_eq!(session.path(), Some(&original_day_path));
+        assert_eq!(session.bound_date(), Some(original_day_date));
+        assert!(!session.is_dirty());
+    }
+
+    #[test]
+    fn failed_regular_note_save_preserves_dirty_state() {
+        let (_dir, mut session) = test_session();
+        let now = utc("2026-06-11T09:42:00Z");
+        session.bind_today(now).expect("bind day");
+        session
+            .bind_note_content(
+                "not-a-note-id".to_string(),
+                "Missing Note".to_string(),
+                "stale body".to_string(),
+                None,
+                now,
+            )
+            .expect("bind synthetic note");
+
+        session.apply_editor_content("dirty missing note");
+        let error = session
+            .save_content("dirty missing note", now)
+            .expect_err("missing note save should fail");
+
+        assert!(
+            error.to_string().contains("parsing day page note id"),
+            "{error:#}"
+        );
+        assert!(session.is_dirty());
     }
 
     #[test]
