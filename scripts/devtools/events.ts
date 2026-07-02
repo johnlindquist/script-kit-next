@@ -3,7 +3,7 @@ import { outputSummary, summarizeText, tryParseJson as summarizeJsonText } from 
 
 type JsonObject = Record<string, unknown>;
 
-type Command = "tail" | "record";
+type Command = "tail" | "record" | "logs" | "crashes";
 
 type Args = {
   command: Command;
@@ -21,6 +21,13 @@ type Args = {
   externalSession: string;
   externalOutputLog: string;
   wrapperTimeoutMs: number;
+  file: string;
+  since: string;
+  marker: string;
+  level: string;
+  target: string;
+  cid: string;
+  allSessions: boolean;
 };
 
 const actionOutputFields = [
@@ -37,6 +44,17 @@ function usage() {
     "Usage:",
     "  bun scripts/devtools/events.ts tail [--session <name>] [--limit <n>] [--contains <text>] [--include-mcp-audit]",
     "  bun scripts/devtools/events.ts record [--session <name>] [--start] [--show] [--output <path>] [--preview-bytes <n>] [--inline-full-output] [--include-mcp-audit] [--external-session <slug>] [--external-output-log <path>] [--wrapper-timeout-ms <n>] -- <devtools command...>",
+    "  bun scripts/devtools/events.ts logs [--file <jsonl>] [--all-sessions] [--since <rfc3339|HH:MM:SS[.mmm]>] [--marker <text>] [--level <trace|debug|info|warn|error>] [--target <substr>] [--cid <correlation-id>] [--contains <text>] [--limit <n>]",
+    "  bun scripts/devtools/events.ts crashes [--limit <n>]",
+    "",
+    "logs    queries the structured JSONL sinks (default ~/.scriptkit/logs/latest-session.jsonl,",
+    "        --all-sessions for the append-forever script-kit-gpui.jsonl). --since accepts the",
+    "        rfc3339 timestamps used in the JSONL or a bare UTC clock time matching the compact",
+    "        stderr format; --level is a minimum severity; --marker keeps only entries after the",
+    "        last line containing the text (pairs with dev_marker / session_start markers).",
+    "crashes surfaces the newest macOS DiagnosticReports .ips files for script-kit-gpui with the",
+    "        exception type, termination reason, and faulting-thread frames, so a dead app is",
+    "        diagnosable in one call (the dev.sh crash watchdog is opt-in).",
   ].join("\n");
 }
 
@@ -46,7 +64,7 @@ function parseArgs(argv: string[]): Args {
     process.exit(0);
   }
   const command = argv[0] as Command | undefined;
-  if (!command || !["tail", "record"].includes(command)) {
+  if (!command || !["tail", "record", "logs", "crashes"].includes(command)) {
     console.error(usage());
     process.exit(2);
   }
@@ -68,6 +86,13 @@ function parseArgs(argv: string[]): Args {
     externalSession: "",
     externalOutputLog: "",
     wrapperTimeoutMs: 0,
+    file: "",
+    since: "",
+    marker: "",
+    level: "",
+    target: "",
+    cid: "",
+    allSessions: false,
   };
 
   for (let index = 0; index < options.length; index += 1) {
@@ -99,6 +124,20 @@ function parseArgs(argv: string[]): Args {
       args.externalOutputLog = options[++index] ?? "";
     } else if (arg === "--wrapper-timeout-ms") {
       args.wrapperTimeoutMs = Number(options[++index] ?? 0);
+    } else if (arg === "--file") {
+      args.file = options[++index] ?? "";
+    } else if (arg === "--since") {
+      args.since = options[++index] ?? "";
+    } else if (arg === "--marker") {
+      args.marker = options[++index] ?? "";
+    } else if (arg === "--level") {
+      args.level = (options[++index] ?? "").toLowerCase();
+    } else if (arg === "--target") {
+      args.target = options[++index] ?? "";
+    } else if (arg === "--cid") {
+      args.cid = options[++index] ?? "";
+    } else if (arg === "--all-sessions") {
+      args.allSessions = true;
     }
   }
 
@@ -184,7 +223,9 @@ function parseLine(line: string, index: number) {
     ?? stringValue(parsed?.command_type)
     ?? /command_type=([^ ]+)/.exec(line)?.[1]
     ?? null;
-  const compactLevel = /^\d+(?:\.\d+)?\|([iwedt])\|/.exec(line)?.[1] ?? null;
+  // Compact format is HH:MM:SS.mmm|L|C|... ; older logs may still carry the
+  // pre-2026-07 SS.mmm prefix, so accept both.
+  const compactLevel = /^(?:\d{2}:\d{2}:)?\d{2}\.\d{3}\|([iwedt])\|/.exec(line)?.[1] ?? null;
   const level = stringValue(parsed?.level)?.toLowerCase()
     ?? (parsed?.success === false ? "error" : null)
     ?? (parsed?.success === true ? "info" : null)
@@ -398,8 +439,228 @@ function classify(status: JsonObject, child: JsonObject | null, appLines: unknow
   return "ok";
 }
 
+// --- logs: query the structured JSONL sinks ---------------------------------
+
+const LEVEL_RANK: Record<string, number> = { trace: 0, debug: 1, info: 2, warn: 3, error: 4 };
+
+/** Accepts the JSONL rfc3339 timestamps or a bare UTC clock time (compact stderr format). */
+function parseSince(since: string): number | null {
+  const clock = /^(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,3}))?$/.exec(since);
+  if (clock) {
+    const now = new Date();
+    const candidate = Date.UTC(
+      now.getUTCFullYear(),
+      now.getUTCMonth(),
+      now.getUTCDate(),
+      Number(clock[1]),
+      Number(clock[2]),
+      Number(clock[3]),
+      Number((clock[4] ?? "0").padEnd(3, "0")),
+    );
+    // A clock time later than "now" means the span started yesterday.
+    return candidate > now.getTime() ? candidate - 24 * 3600 * 1000 : candidate;
+  }
+  const parsed = Date.parse(since);
+  return Number.isNaN(parsed) ? null : parsed;
+}
+
+function defaultJsonlPath(allSessions: boolean) {
+  const home = Bun.env.HOME || "";
+  if (!home) return "";
+  return allSessions
+    ? `${home}/.scriptkit/logs/script-kit-gpui.jsonl`
+    : `${home}/.scriptkit/logs/latest-session.jsonl`;
+}
+
+async function cmdLogs(args: Args) {
+  const path = args.file || defaultJsonlPath(args.allSessions);
+  const warnings: string[] = [];
+  const sinceMs = args.since ? parseSince(args.since) : null;
+  if (args.since && sinceMs === null) {
+    warnings.push(`--since '${args.since}' is not rfc3339 or HH:MM:SS[.mmm]; ignoring it`);
+  }
+  const minLevel = args.level ? LEVEL_RANK[args.level] : null;
+  if (args.level && minLevel === undefined) {
+    warnings.push(`--level '${args.level}' is not one of trace|debug|info|warn|error; ignoring it`);
+  }
+
+  let rawLines: string[] = [];
+  try {
+    rawLines = (await Bun.file(path).text()).split(/\r?\n/).filter(Boolean);
+  } catch {
+    warnings.push(`could not read ${path}`);
+  }
+
+  if (args.marker) {
+    const markerIndex = rawLines.findLastIndex((line) => line.includes(args.marker));
+    if (markerIndex >= 0) {
+      rawLines = rawLines.slice(markerIndex + 1);
+    } else {
+      warnings.push(`marker '${args.marker}' not found; returning the unmarked span`);
+    }
+  }
+
+  const entries: JsonObject[] = [];
+  let unparsedLines = 0;
+  for (const line of rawLines) {
+    const parsed = tryJson(line);
+    if (!parsed) {
+      unparsedLines += 1;
+      continue;
+    }
+    if (sinceMs !== null && typeof parsed.timestamp === "string") {
+      const ts = Date.parse(parsed.timestamp);
+      if (!Number.isNaN(ts) && ts < sinceMs) continue;
+    }
+    if (minLevel !== null && minLevel !== undefined) {
+      const rank = LEVEL_RANK[String(parsed.level ?? "").toLowerCase()];
+      if (rank !== undefined && rank < minLevel) continue;
+    }
+    if (args.target && !String(parsed.target ?? "").includes(args.target)) continue;
+    if (args.cid && String(parsed.correlation_id ?? "") !== args.cid) continue;
+    if (args.contains && !line.includes(args.contains)) continue;
+    entries.push(parsed);
+  }
+  const matched = entries.length;
+  const kept = entries.slice(-args.limit);
+  if (matched > kept.length) {
+    warnings.push(`matched ${matched} entries; returning the last ${kept.length} (raise --limit for more)`);
+  }
+  if (unparsedLines > 0) {
+    warnings.push(`${unparsedLines} non-JSON lines skipped`);
+  }
+
+  console.log(JSON.stringify({
+    schemaVersion: 1,
+    tool: "script-kit-devtools.events",
+    command: "events.logs",
+    classification: kept.length > 0 ? "ok" : "blocked-by-missing-primitive",
+    source: {
+      path,
+      allSessions: args.allSessions,
+      since: args.since || null,
+      sinceMs,
+      marker: args.marker || null,
+      level: args.level || null,
+      target: args.target || null,
+      cid: args.cid || null,
+      contains: args.contains || null,
+      limit: args.limit,
+    },
+    totalLines: rawLines.length,
+    matched,
+    entries: kept,
+    warnings,
+  }, null, 2));
+}
+
+// --- crashes: surface the newest DiagnosticReports .ips ---------------------
+
+type IpsFrame = { image: string; symbol: string; offset: number | null };
+
+function parseIpsReport(text: string): JsonObject {
+  const newline = text.indexOf("\n");
+  const header = tryJson(newline >= 0 ? text.slice(0, newline) : text) ?? {};
+  const body = newline >= 0 ? tryJson(text.slice(newline + 1)) : null;
+  if (!body) {
+    return { header, parseError: "could not parse .ips body JSON" };
+  }
+  const images = Array.isArray(body.usedImages) ? (body.usedImages as JsonObject[]) : [];
+  const faultingIndex = typeof body.faultingThread === "number" ? body.faultingThread : 0;
+  const threads = Array.isArray(body.threads) ? (body.threads as JsonObject[]) : [];
+  const faulting = threads[faultingIndex] ?? null;
+  const frames: IpsFrame[] = [];
+  if (faulting && Array.isArray(faulting.frames)) {
+    for (const rawFrame of (faulting.frames as JsonObject[]).slice(0, 8)) {
+      const imageIndex = typeof rawFrame.imageIndex === "number" ? rawFrame.imageIndex : -1;
+      const image = images[imageIndex];
+      frames.push({
+        image: String(image?.name ?? image?.path ?? `image#${imageIndex}`),
+        symbol: String(rawFrame.symbol ?? `+${rawFrame.imageOffset ?? "?"}`),
+        offset: typeof rawFrame.symbolLocation === "number" ? rawFrame.symbolLocation : null,
+      });
+    }
+  }
+  const exception = (body.exception ?? {}) as JsonObject;
+  const termination = (body.termination ?? {}) as JsonObject;
+  return {
+    procName: body.procName ?? header.app_name ?? null,
+    crashTime: body.captureTime ?? header.timestamp ?? null,
+    exceptionType: exception.type ?? null,
+    signal: exception.signal ?? null,
+    exceptionSubtype: exception.subtype ?? null,
+    terminationIndicator: termination.indicator ?? null,
+    terminationReasons: termination.reasons ?? null,
+    faultingThread: faultingIndex,
+    faultingThreadName: faulting?.name ?? faulting?.queue ?? null,
+    topFrames: frames,
+  };
+}
+
+async function cmdCrashes(args: Args) {
+  const home = Bun.env.HOME || "";
+  const dir = `${home}/Library/Logs/DiagnosticReports`;
+  const warnings: string[] = [];
+  let names: string[] = [];
+  try {
+    const { readdirSync } = await import("node:fs");
+    names = readdirSync(dir).filter((name) => /^script-kit-gpui.*\.ips$/.test(name));
+  } catch {
+    warnings.push(`could not read ${dir}`);
+  }
+  const { statSync } = await import("node:fs");
+  const limit = Math.min(args.limit, 10);
+  const candidates = names
+    .map((name) => {
+      const path = `${dir}/${name}`;
+      try {
+        return { path, modifiedMs: statSync(path).mtimeMs };
+      } catch {
+        return null;
+      }
+    })
+    .filter((entry): entry is { path: string; modifiedMs: number } => entry !== null)
+    .sort((a, b) => b.modifiedMs - a.modifiedMs)
+    .slice(0, limit);
+
+  const reports: JsonObject[] = [];
+  for (const candidate of candidates) {
+    try {
+      const parsed = parseIpsReport(await Bun.file(candidate.path).text());
+      reports.push({
+        path: candidate.path,
+        modified: new Date(candidate.modifiedMs).toISOString(),
+        ...parsed,
+      });
+    } catch (error) {
+      warnings.push(`failed to parse ${candidate.path}: ${error}`);
+    }
+  }
+  if (reports.length === 0) {
+    warnings.push("no script-kit-gpui .ips crash reports found (a missing report does NOT rule out a crash — check `events.ts logs --level error` and the app.log tail too)");
+  }
+
+  console.log(JSON.stringify({
+    schemaVersion: 1,
+    tool: "script-kit-devtools.events",
+    command: "events.crashes",
+    classification: reports.length > 0 ? "ok" : "not-reproduced",
+    source: { dir, matchedFiles: names.length, limit },
+    reports,
+    warnings,
+  }, null, 2));
+}
+
 async function main() {
   const args = parseArgs(Bun.argv.slice(2));
+  if (args.command === "logs") {
+    await cmdLogs(args);
+    return;
+  }
+  if (args.command === "crashes") {
+    await cmdCrashes(args);
+    return;
+  }
   const status = await sessionStatus(args);
   const logPath = String(status.log ?? "");
   const responsesPath = String(status.responses ?? "");
