@@ -1027,6 +1027,7 @@ impl AgentChatTranscript {
                         .flex_shrink()
                         .overflow_hidden()
                         .whitespace_nowrap()
+                        .text_ellipsis()
                         .font_family(FONT_MONO)
                         .opacity(block_style.status_opacity)
                         .text_color(rgb(_colors.text_primary))
@@ -1041,9 +1042,13 @@ impl AgentChatTranscript {
                         .child(meta.status.label().to_string()),
                 )
             })
-            .when(is_collapsed && collapsed_line_count > 0, |d| {
+            // Collapsed-size hint; single-line bodies get no badge (the
+            // chevron already says "expandable" and "1 lines" reads broken).
+            .when(is_collapsed && collapsed_line_count > 1, |d| {
                 d.child(
                     div()
+                        .flex_none()
+                        .whitespace_nowrap()
                         .text_size(px(style_def.markdown.body_font_size))
                         .opacity(block_style.status_opacity)
                         .text_color(rgb(_colors.accent_color))
@@ -1193,6 +1198,8 @@ impl AgentChatTranscript {
                 |d| {
                     d.child(
                         div()
+                            .flex_none()
+                            .whitespace_nowrap()
                             .text_size(px(style_def.markdown.body_font_size))
                             .opacity(block_style.status_opacity)
                             .when(is_tool, |d| d.text_color(rgb(_colors.accent_color)))

@@ -10721,11 +10721,13 @@ impl AgentChatView {
                 "Queue message — sends when the current turn finishes",
                 "agent_chat-queue-btn",
             ),
+            // Quiet activity dot — Esc (and the footer Stop) is the stop
+            // affordance; clicking the dot still cancels for mouse users.
             (true, false) => (
-                "\u{25A0}",
-                rgba(0xEF444460),
-                0.90_f32,
-                "Stop streaming",
+                "\u{25CF}",
+                rgba(0x00000000),
+                0.40_f32,
+                "Streaming \u{2014} press Esc to stop",
                 "agent_chat-streaming-dot",
             ),
             (false, true) => (
@@ -10757,13 +10759,7 @@ impl AgentChatView {
             .opacity(opacity)
             .tooltip(move |window, cx| Tooltip::new(tooltip_text.clone()).build(window, cx));
 
-        if can_send {
-            btn = btn.cursor_pointer().on_click(move |_event, _window, cx| {
-                if let Some(view) = weak_view.upgrade() {
-                    view.update(cx, |this, cx| this.submit_with_expanded_tokens(cx));
-                }
-            });
-        } else if is_streaming {
+        if is_streaming && !can_send {
             btn = btn.cursor_pointer().on_click(move |_event, _window, cx| {
                 if let Some(view) = weak_view.upgrade() {
                     view.update(cx, |this, cx| {
@@ -10772,61 +10768,12 @@ impl AgentChatView {
                     });
                 }
             });
-        }
-
-        btn.child(icon_char).into_any_element()
-    }
-
-    fn render_send_button(
-        &self,
-        can_send: bool,
-        is_streaming: bool,
-        theme: &crate::theme::Theme,
-        cx: &mut Context<Self>,
-    ) -> gpui::AnyElement {
-        let accent = theme.colors.accent.selected;
-        let text_primary = theme.colors.text.primary;
-
-        let (icon_char, bg, opacity) = if is_streaming {
-            // Red stop square
-            ("\u{25A0}", rgba(0xEF444460), 0.90_f32)
         } else if can_send {
-            // Accent send arrow
-            ("\u{2191}", rgba((accent << 8) | 0x30), 0.90)
-        } else {
-            // Muted disabled arrow
-            ("\u{2191}", rgba((text_primary << 8) | 0x06), 0.30)
-        };
-        let button_id = if is_streaming {
-            "agent_chat-streaming-dot"
-        } else {
-            "agent_chat-send-btn"
-        };
-
-        let mut btn = div()
-            .id(button_id)
-            .flex()
-            .items_center()
-            .justify_center()
-            .size(px(24.0))
-            .rounded(px(6.0))
-            .bg(bg)
-            .text_sm()
-            .opacity(opacity);
-
-        if can_send {
-            btn = btn
-                .cursor_pointer()
-                .on_click(cx.listener(|this, _event, _window, cx| {
-                    this.submit_with_expanded_tokens(cx);
-                }));
-        } else if is_streaming {
-            btn = btn
-                .cursor_pointer()
-                .on_click(cx.listener(|this, _event, _window, cx| {
-                    this.live_thread()
-                        .update(cx, |thread, cx| thread.cancel_streaming(cx));
-                }));
+            btn = btn.cursor_pointer().on_click(move |_event, _window, cx| {
+                if let Some(view) = weak_view.upgrade() {
+                    view.update(cx, |this, cx| this.submit_with_expanded_tokens(cx));
+                }
+            });
         }
 
         btn.child(icon_char).into_any_element()
