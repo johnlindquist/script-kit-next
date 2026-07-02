@@ -56,6 +56,12 @@ pub struct DayPageDocumentSession {
     /// the content actually written to disk so a host can adopt it into the
     /// editor; left `None` for a clean save.
     last_save_merged: Option<String>,
+    /// True only for the today-following `Day` binding — one bound to the local
+    /// date as it was at bind time (`bind_today`, or `return_to_day` back onto
+    /// today). Explicitly-opened past days, notes, and fragments are never
+    /// today-following, so [`DayPageDocumentSession::day_has_rolled`] leaves
+    /// them bound across midnight instead of dragging them onto the new day.
+    follows_today: bool,
 }
 
 impl DayPageDocumentSession {
@@ -70,6 +76,7 @@ impl DayPageDocumentSession {
             base_disk_content: String::new(),
             last_mtime: None,
             last_save_merged: None,
+            follows_today: false,
         }
     }
 
@@ -134,6 +141,22 @@ impl DayPageDocumentSession {
         self.bind_date(date, now)
     }
 
+    /// True when this document follows "today" but the local day (resolved in
+    /// the substrate timezone, the same logic `bind_today` uses) has rolled past
+    /// the bound date — the view should save the pre-midnight buffer to the old
+    /// day, then rebind to the new day. Never true for an explicitly-opened past
+    /// day, a note, or a fragment; those stay put across midnight.
+    pub fn day_has_rolled(&self, now: DateTime<Utc>) -> bool {
+        if !self.follows_today {
+            return false;
+        }
+        let Some(bound) = self.bound_date else {
+            return false;
+        };
+        let local_today = now.with_timezone(&self.substrate.timezone()).date_naive();
+        local_today != bound
+    }
+
     pub fn bind_date(&mut self, date: NaiveDate, now: DateTime<Utc>) -> Result<String> {
         if self.dirty {
             match self.bound_date {
@@ -159,9 +182,11 @@ impl DayPageDocumentSession {
             .with_context(|| format!("reading day page {}", path.display()))?;
         let mtime = fs::metadata(&path).and_then(|meta| meta.modified()).ok();
 
+        let local_today = now.with_timezone(&self.substrate.timezone()).date_naive();
         self.bound_date = Some(date);
         self.path = Some(path);
         self.binding = DayPageBinding::Day;
+        self.follows_today = date == local_today;
         self.dirty = false;
         self.disk_content = content.clone();
         self.base_disk_content = content.clone();
@@ -202,6 +227,7 @@ impl DayPageDocumentSession {
             return_day_path: day_path,
             return_day_date: day_date,
         };
+        self.follows_today = false;
         self.dirty = false;
         self.disk_content = content.clone();
         self.base_disk_content = content.clone();
@@ -273,6 +299,7 @@ impl DayPageDocumentSession {
             return_day_path: day_path,
             return_day_date: day_date,
         };
+        self.follows_today = false;
         self.dirty = false;
         self.disk_content = content.clone();
         self.base_disk_content = content.clone();
@@ -313,9 +340,11 @@ impl DayPageDocumentSession {
             .and_then(|meta| meta.modified())
             .ok();
 
+        let local_today = now.with_timezone(&self.substrate.timezone()).date_naive();
         self.path = Some(return_day_path);
         self.bound_date = Some(return_day_date);
         self.binding = DayPageBinding::Day;
+        self.follows_today = return_day_date == local_today;
         self.dirty = false;
         self.disk_content = content.clone();
         self.base_disk_content = content.clone();
@@ -675,6 +704,67 @@ mod tests {
         assert_ne!(
             session.path().expect("path"),
             &session.substrate().paths().day_page(day_one.date_naive())
+        );
+    }
+
+    #[test]
+    fn day_has_rolled_false_within_the_bound_day() {
+        let (_dir, mut session) = test_session();
+        let bind = utc("2026-06-11T09:42:00Z");
+        session.bind_today(bind).expect("bind");
+        assert!(!session.day_has_rolled(bind), "no roll at bind time");
+        assert!(
+            !session.day_has_rolled(utc("2026-06-11T23:59:00Z")),
+            "no roll later on the same local day"
+        );
+    }
+
+    #[test]
+    fn day_has_rolled_true_after_local_midnight() {
+        let (_dir, mut session) = test_session();
+        // Bind just before local midnight (UTC substrate), then cross it.
+        session
+            .bind_today(utc("2026-06-11T23:59:00Z"))
+            .expect("bind");
+        assert!(
+            session.day_has_rolled(utc("2026-06-12T00:01:00Z")),
+            "an open today-following page must report a roll after midnight"
+        );
+    }
+
+    #[test]
+    fn day_has_rolled_false_for_note_binding() {
+        let (_dir, mut session) = test_session();
+        let now = utc("2026-06-11T09:42:00Z");
+        session.bind_today(now).expect("bind day");
+        session
+            .bind_note_content(
+                "note-id".to_string(),
+                "Note Title".to_string(),
+                "body".to_string(),
+                None,
+                now,
+            )
+            .expect("bind note");
+        assert!(
+            !session.day_has_rolled(utc("2026-06-13T00:01:00Z")),
+            "a note binding never rolls with the day"
+        );
+    }
+
+    #[test]
+    fn day_has_rolled_false_for_explicitly_opened_past_day() {
+        let (_dir, mut session) = test_session();
+        let now = utc("2026-06-11T09:42:00Z");
+        let past = NaiveDate::from_ymd_opt(2026, 6, 1).expect("valid date");
+        session.bind_date(past, now).expect("bind past day");
+        assert!(
+            !session.day_has_rolled(now),
+            "an explicitly-opened past day is not today-following"
+        );
+        assert!(
+            !session.day_has_rolled(utc("2026-06-12T00:01:00Z")),
+            "a past day must not roll even as wall-clock time advances"
         );
     }
 

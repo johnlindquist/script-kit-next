@@ -290,6 +290,29 @@ impl DayPageView {
     /// so the footer dirty state always converges to the real disk state.
     const SAVE_DEBOUNCE_MS: u64 = 300;
 
+    /// When the Day Page is left open across local midnight, the bound file
+    /// still points at yesterday, so new typing would autosave into the wrong
+    /// day. On the next render side effect, flush the pre-midnight buffer to
+    /// YESTERDAY's file (via `save`, which writes the still-bound old path),
+    /// then rebind to today and reload the editor. Guarded to the today-
+    /// following `Day` binding by `day_has_rolled`, so an open note, fragment,
+    /// or explicitly-opened past day is never dragged onto the new day.
+    fn maybe_rebind_after_midnight(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if !self.session.day_has_rolled(Utc::now()) {
+            return;
+        }
+        // `save` reads the editor buffer, applies it to the session, and writes
+        // it to the currently-bound (yesterday's) path; a no-op when unchanged.
+        self.save(cx);
+        // `bind_today` rebinds to the new day and loads its content into the
+        // editor via `apply_loaded_content_to_editor`.
+        self.bind_today(window, cx);
+        tracing::info!(
+            target: "script_kit::day_page",
+            event = "day_page_rebound_after_midnight",
+        );
+    }
+
     fn maybe_autosave(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if !self.session.is_dirty() {
             return;
@@ -654,6 +677,7 @@ impl Focusable for DayPageView {
 impl Render for DayPageView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.poll_external_disk_changes(window, cx);
+        self.maybe_rebind_after_midnight(window, cx);
         self.maybe_autosave(window, cx);
 
         let app = self.app.upgrade().expect("DayPageView app entity dropped");
