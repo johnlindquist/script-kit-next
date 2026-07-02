@@ -1893,6 +1893,39 @@ impl ScriptListApp {
                     );
                 }
             }
+            Message::GetLogs {
+                request_id,
+                limit,
+                level,
+                target,
+                contains,
+            } => {
+                let limit = limit.unwrap_or(100);
+                let (entries, matched) = crate::logging::query_log_ring(
+                    limit,
+                    level.as_deref(),
+                    target.as_deref(),
+                    contains.as_deref(),
+                );
+                let entries = entries
+                    .into_iter()
+                    .filter_map(|entry| serde_json::to_value(entry).ok())
+                    .collect();
+                let response = Message::LogsResult {
+                    request_id,
+                    entries,
+                    matched,
+                    capacity: crate::logging::LOG_RING_CAPACITY,
+                };
+                if let Some(ref sender) = self.response_sender {
+                    let _ = sender.try_send(response);
+                } else {
+                    tracing::warn!(
+                        category = "STDIN",
+                        "No response sender available for getLogs"
+                    );
+                }
+            }
             Message::CheckAccessibility { request_id } => {
                 let granted = crate::permissions_wizard::check_accessibility_permission();
                 tracing::info!(

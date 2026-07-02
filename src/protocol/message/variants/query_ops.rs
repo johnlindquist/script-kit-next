@@ -858,6 +858,44 @@ macro_rules! protocol_message_variants_query_ops {
         snapshot: super::types::automation_inspect::AutomationInspectSnapshot,
     },
 
+    // ============================================================
+    // IN-PROCESS LOG QUERY
+    // ============================================================
+    /// Fetch recent structured log entries from the in-process ring buffer,
+    /// so agents can assert on log content in the same receipt as UI state
+    /// without touching files on disk.
+    #[serde(rename = "getLogs")]
+    GetLogs {
+        #[serde(rename = "requestId")]
+        request_id: String,
+        /// Max entries to return (default 100, capped at the ring capacity).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        limit: Option<usize>,
+        /// Minimum severity: trace|debug|info|warn|error.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        level: Option<String>,
+        /// Substring match on the tracing target (e.g. "brain", "ai::agent_chat").
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        target: Option<String>,
+        /// Substring match on the message text.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        contains: Option<String>,
+    },
+
+    /// Response with recent structured log entries.
+    #[serde(rename = "logsResult")]
+    LogsResult {
+        #[serde(rename = "requestId")]
+        request_id: String,
+        /// Matching entries, oldest first.
+        entries: Vec<serde_json::Value>,
+        /// Total entries in the ring that matched the filters (may exceed
+        /// `entries.len()` when `limit` truncated the result).
+        matched: usize,
+        /// Ring capacity, so agents know the retention window.
+        capacity: usize,
+    },
+
         }
     };
 }

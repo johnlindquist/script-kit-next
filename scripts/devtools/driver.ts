@@ -430,6 +430,22 @@ export class Driver {
   }
 
   /**
+   * Fetch recent structured log entries from the app's in-process ring
+   * buffer (last 500 events). Filters: limit, level (min severity),
+   * target (substring), contains (message substring). Lets a probe assert
+   * on log content without reading files off disk.
+   */
+  getLogs(
+    filters: { limit?: number; level?: string; target?: string; contains?: string } = {},
+    opts: { timeoutMs?: number } = {},
+  ): Promise<Json> {
+    return this.request(
+      { type: "getLogs", ...filters },
+      { expect: "logsResult", ...opts },
+    );
+  }
+
+  /**
    * Capture a screenshot of the app (whole main window by default, or a
    * specific automation window via `target`). Returns the screenshotResult
    * message ({ data: base64 PNG, width, height } or { error }). Pass

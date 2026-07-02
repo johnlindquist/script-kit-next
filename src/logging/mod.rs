@@ -652,6 +652,118 @@ impl<'a> MakeWriter<'a> for TeeWriterMaker {
 static LOG_BUFFER: OnceLock<Mutex<VecDeque<String>>> = OnceLock::new();
 const MAX_LOG_LINES: usize = 50;
 // =============================================================================
+// PROTOCOL LOG RING - structured in-memory buffer behind the getLogs verb
+// =============================================================================
+// Unlike LOG_BUFFER above (50 formatted strings for the in-app HUD), this ring
+// keeps structured entries for every tracing event that passes the env filter,
+// so agents can fetch recent logs over the automation protocol without
+// touching files on disk.
+
+/// One structured entry in the protocol log ring.
+#[derive(Clone, Debug, serde::Serialize)]
+pub struct LogRingEntry {
+    /// rfc3339 with milliseconds — same format as the JSONL sinks.
+    pub timestamp: String,
+    pub level: String,
+    pub target: String,
+    pub correlation_id: String,
+    pub message: String,
+}
+
+pub const LOG_RING_CAPACITY: usize = 500;
+static LOG_RING: OnceLock<Mutex<VecDeque<LogRingEntry>>> = OnceLock::new();
+
+fn log_ring() -> &'static Mutex<VecDeque<LogRingEntry>> {
+    LOG_RING.get_or_init(|| Mutex::new(VecDeque::with_capacity(LOG_RING_CAPACITY)))
+}
+
+/// tracing layer that mirrors every filtered event into the protocol log ring.
+pub struct LogRingLayer;
+
+impl<S> tracing_subscriber::layer::Layer<S> for LogRingLayer
+where
+    S: Subscriber + for<'a> LookupSpan<'a>,
+{
+    fn on_event(
+        &self,
+        event: &tracing::Event<'_>,
+        _ctx: tracing_subscriber::layer::Context<'_, S>,
+    ) {
+        let mut extractor = CategoryExtractor::new();
+        event.record(&mut extractor);
+        let entry = LogRingEntry {
+            timestamp: chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
+            level: event.metadata().level().to_string(),
+            target: event.metadata().target().to_string(),
+            correlation_id: extractor
+                .correlation_id
+                .unwrap_or_else(current_correlation_id),
+            message: extractor.message,
+        };
+        if let Ok(mut ring) = log_ring().lock() {
+            if ring.len() >= LOG_RING_CAPACITY {
+                ring.pop_front();
+            }
+            ring.push_back(entry);
+        }
+    }
+}
+
+fn level_rank(level: &str) -> Option<u8> {
+    match level.to_ascii_uppercase().as_str() {
+        "TRACE" => Some(0),
+        "DEBUG" => Some(1),
+        "INFO" => Some(2),
+        "WARN" | "WARNING" => Some(3),
+        "ERROR" => Some(4),
+        _ => None,
+    }
+}
+
+/// Query the protocol log ring. Filters are ANDed; `min_level` is a minimum
+/// severity name, `target`/`contains` are substring matches. Returns the last
+/// `limit` matching entries (oldest first) plus the total match count.
+pub fn query_log_ring(
+    limit: usize,
+    min_level: Option<&str>,
+    target: Option<&str>,
+    contains: Option<&str>,
+) -> (Vec<LogRingEntry>, usize) {
+    let min_rank = min_level.and_then(level_rank);
+    let Ok(ring) = log_ring().lock() else {
+        return (Vec::new(), 0);
+    };
+    let matching: Vec<&LogRingEntry> = ring
+        .iter()
+        .filter(|entry| {
+            if let Some(min) = min_rank {
+                if level_rank(&entry.level).map(|r| r < min).unwrap_or(false) {
+                    return false;
+                }
+            }
+            if let Some(t) = target {
+                if !entry.target.contains(t) {
+                    return false;
+                }
+            }
+            if let Some(c) = contains {
+                if !entry.message.contains(c) && !entry.target.contains(c) {
+                    return false;
+                }
+            }
+            true
+        })
+        .collect();
+    let total = matching.len();
+    let entries = matching
+        .into_iter()
+        .skip(total.saturating_sub(limit))
+        .cloned()
+        .collect();
+    (entries, total)
+}
+
+// =============================================================================
 // LOG CAPTURE SYSTEM
 // =============================================================================
 // Allows capturing logs to a separate timestamped file via hotkey toggle.
@@ -912,6 +1024,7 @@ fn init_internal() -> LoggingGuard {
         tracing_subscriber::registry()
             .with(env_filter)
             .with(json_layer)
+            .with(LogRingLayer)
             .with(ai_layer)
             .init();
     } else {
@@ -926,6 +1039,7 @@ fn init_internal() -> LoggingGuard {
         tracing_subscriber::registry()
             .with(env_filter)
             .with(json_layer)
+            .with(LogRingLayer)
             .with(pretty_layer)
             .init();
     }
@@ -2191,6 +2305,59 @@ mod tests {
         assert_eq!(legacy_level_for_category("TRACE"), LegacyLogLevel::Trace);
         assert_eq!(legacy_level_for_category("UI"), LegacyLogLevel::Info);
     }
+    // -------------------------------------------------------------------------
+    // protocol log ring tests
+    // -------------------------------------------------------------------------
+
+    fn push_ring_entry(level: &str, target: &str, message: &str) {
+        let entry = LogRingEntry {
+            timestamp: "2026-07-01T00:00:00.000Z".to_string(),
+            level: level.to_string(),
+            target: target.to_string(),
+            correlation_id: "test-cid".to_string(),
+            message: message.to_string(),
+        };
+        let mut ring = log_ring().lock().unwrap_or_else(|e| e.into_inner());
+        if ring.len() >= LOG_RING_CAPACITY {
+            ring.pop_front();
+        }
+        ring.push_back(entry);
+    }
+
+    #[test]
+    fn test_query_log_ring_filters_and_limit() {
+        // The ring is process-global and other tests may log; use a unique
+        // target so this test's entries are isolated.
+        let target = "ring_test::filters";
+        push_ring_entry("INFO", target, "first info");
+        push_ring_entry("WARN", target, "a warning");
+        push_ring_entry("ERROR", target, "an error");
+        push_ring_entry("DEBUG", target, "debug noise");
+
+        // Target filter alone sees all four.
+        let (entries, matched) = query_log_ring(10, None, Some(target), None);
+        assert_eq!(matched, 4);
+        assert_eq!(entries.len(), 4);
+
+        // Min-level warn keeps warn + error only.
+        let (entries, matched) = query_log_ring(10, Some("warn"), Some(target), None);
+        assert_eq!(matched, 2);
+        assert!(entries
+            .iter()
+            .all(|e| e.level == "WARN" || e.level == "ERROR"));
+
+        // Contains filter matches message text.
+        let (entries, matched) = query_log_ring(10, None, Some(target), Some("an error"));
+        assert_eq!(matched, 1);
+        assert_eq!(entries[0].message, "an error");
+
+        // Limit truncates from the front but reports the full match count.
+        let (entries, matched) = query_log_ring(2, None, Some(target), None);
+        assert_eq!(matched, 4);
+        assert_eq!(entries.len(), 2);
+        assert_eq!(entries[1].message, "debug noise");
+    }
+
     // -------------------------------------------------------------------------
     // get_compact_timestamp tests
     // -------------------------------------------------------------------------
