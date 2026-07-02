@@ -14,6 +14,7 @@ use std::sync::Arc;
 
 use crate::ai::agent_chat::content::{ContentBlock, ImageContent, TextContent};
 use gpui::{Context, SharedString, Task};
+use smol::Timer;
 
 use crate::components::text_input::TextInputState;
 use crate::protocol::AiMessageInfo;
@@ -24,6 +25,7 @@ use super::notifications::{
     dispatch_agent_chat_notification, should_notify_agent_chat_event, truncate_notification_body,
     AgentChatNotificationDebounce, AgentChatNotificationEvent, AgentChatNotificationVisibility,
 };
+use super::streaming_buffer::StreamingTextBuffer;
 use super::{
     build_tab_ai_agent_chat_context_blocks, AgentChatApprovalRequest, AgentChatEvent,
     AgentChatEventRx,
@@ -430,6 +432,10 @@ pub(crate) struct AgentChatThread {
     stream_task: Option<Task<()>>,
     /// Handle to the permission listener task.
     permission_task: Option<Task<()>>,
+    /// Buffered assistant deltas waiting for typewriter-paced reveal.
+    streaming_text_buffer: StreamingTextBuffer,
+    /// Handle to the active assistant text drain task.
+    streaming_text_drain_task: Option<Task<()>>,
 
     /// Generation guard for async stream delivery into the transcript.
     transcript_generation: u64,
@@ -520,6 +526,8 @@ impl AgentChatThread {
             ttft_pending: false,
             stream_task: None,
             permission_task: None,
+            streaming_text_buffer: StreamingTextBuffer::default(),
+            streaming_text_drain_task: None,
             transcript_generation: 0,
             next_message_id: 1,
             host_window_state: None,
@@ -1814,6 +1822,70 @@ impl AgentChatThread {
         }));
     }
 
+    fn start_streaming_text_drain_if_needed(&mut self, cx: &mut Context<Self>) {
+        if self.streaming_text_buffer.is_empty() || self.streaming_text_drain_task.is_some() {
+            return;
+        }
+
+        let generation = self.transcript_generation;
+        self.streaming_text_drain_task = Some(cx.spawn(async move |this, cx| loop {
+            Timer::after(std::time::Duration::from_millis(16)).await;
+
+            let should_continue = this
+                .update(cx, |this, cx| {
+                    if this.transcript_generation != generation {
+                        this.streaming_text_buffer.flush_all();
+                        this.streaming_text_drain_task = None;
+                        return false;
+                    }
+
+                    let changed = this.drain_streaming_text_once();
+                    if changed {
+                        cx.notify();
+                    }
+
+                    if this.streaming_text_buffer.is_empty() {
+                        this.streaming_text_drain_task = None;
+                        false
+                    } else {
+                        true
+                    }
+                })
+                .unwrap_or(false);
+
+            if !should_continue {
+                break;
+            }
+        }));
+    }
+
+    fn drain_streaming_text_once(&mut self) -> bool {
+        let budget = self.streaming_text_buffer.drain_budget_for_tick();
+        let Some(delta) = self.streaming_text_buffer.drain_next(budget) else {
+            return false;
+        };
+        self.append_assistant_stream_delta(delta)
+    }
+
+    fn append_assistant_stream_delta(&mut self, delta: String) -> bool {
+        let accumulated =
+            self.accumulated_text_after_append(AgentChatThreadMessageRole::Assistant, &delta);
+        let changed = self.append_chunk(AgentChatThreadMessageRole::Assistant, delta.clone());
+        if changed {
+            crate::ai::subscriptions::publish_stream_chunk(&self.ui_thread_id, delta, accumulated);
+        }
+        changed
+    }
+
+    fn flush_streaming_text_buffer(&mut self) -> bool {
+        let delta = self.streaming_text_buffer.flush_all();
+        self.streaming_text_drain_task = None;
+        if delta.is_empty() {
+            return false;
+        }
+        self.append_assistant_stream_delta(delta)
+    }
+
     /// Apply a single Agent Chat event to thread state.
     ///
     /// Streaming text deltas coalesce into stable messages via `append_chunk`.
@@ -1833,16 +1905,9 @@ impl AgentChatThread {
             }
             AgentChatEvent::AgentMessageDelta(chunk) => {
                 self.log_time_to_first_token("assistant_message");
-                let accumulated = self
-                    .accumulated_text_after_append(AgentChatThreadMessageRole::Assistant, &chunk);
-                let delta = chunk.clone();
-                changed |= self.append_chunk(AgentChatThreadMessageRole::Assistant, chunk);
-                if changed {
-                    crate::ai::subscriptions::publish_stream_chunk(
-                        &self.ui_thread_id,
-                        delta,
-                        accumulated,
-                    );
+                if !chunk.is_empty() {
+                    self.streaming_text_buffer.push_chunk(chunk);
+                    self.start_streaming_text_drain_if_needed(cx);
                 }
                 changed |= self.set_status(AgentChatThreadStatus::Streaming);
             }
@@ -1925,9 +1990,11 @@ impl AgentChatThread {
                 }
             }
             AgentChatEvent::ForkCompleted { text } => {
+                changed |= self.flush_streaming_text_buffer();
                 changed |= self.apply_fork_completed(text, cx);
             }
             AgentChatEvent::TurnFinished { .. } => {
+                changed |= self.flush_streaming_text_buffer();
                 if self.pending_permission.take().is_some() {
                     changed = true;
                 }
@@ -2069,6 +2136,7 @@ impl AgentChatThread {
                 changed |= self.set_status(AgentChatThreadStatus::Error);
             }
             AgentChatEvent::Failed { error } => {
+                let _ = self.flush_streaming_text_buffer();
                 self.maybe_notify_agent_chat_event(
                     AgentChatNotificationEvent::Failed,
                     "Agent Chat — turn failed",
@@ -2101,6 +2169,7 @@ impl AgentChatThread {
             return false;
         }
 
+        self.flush_streaming_text_buffer();
         let had_pending_permission = self.pending_permission.take().is_some();
         let assistant = self.latest_message_with_role(AgentChatThreadMessageRole::Assistant);
         let assistant_id = assistant.map(|message| message.id);
@@ -2942,6 +3011,7 @@ impl AgentChatThread {
     /// Also clears all pending context state so no stale chips or hidden
     /// blocks leak into the next conversation.
     pub(crate) fn clear_messages(&mut self, cx: &mut Context<Self>) {
+        self.flush_streaming_text_buffer();
         self.messages.clear();
         self.active_plan_entries.clear();
         self.active_tool_calls.clear();
@@ -2966,6 +3036,7 @@ impl AgentChatThread {
         message_count: Option<usize>,
         cx: &mut Context<Self>,
     ) -> Result<(), String> {
+        self.flush_streaming_text_buffer();
         let user_text = user_text.unwrap_or_else(|| "No-token activity fixture".to_string());
         let user_text = user_text.trim();
         if user_text.is_empty() {
@@ -3057,6 +3128,7 @@ impl AgentChatThread {
             agent_chat_kitchen_sink_fixture, AgentChatKitchenSinkFixtureRole,
         };
 
+        self.flush_streaming_text_buffer();
         let fixture = agent_chat_kitchen_sink_fixture();
         self.stream_task = None;
         self.pending_permission = None;
@@ -3156,6 +3228,7 @@ impl AgentChatThread {
         if !matches!(self.status, AgentChatThreadStatus::Streaming) {
             return;
         }
+        self.flush_streaming_text_buffer();
         self.queue_paused = true;
         if let Err(error) = self.connection.cancel_turn(self.ui_thread_id.clone()) {
             tracing::warn!(
@@ -3180,6 +3253,7 @@ impl AgentChatThread {
         cx: &mut Context<Self>,
     ) {
         self.bump_transcript_generation("load_saved_messages");
+        self.flush_streaming_text_buffer();
         self.stream_task = None;
         self.stream_started_at = None;
         self.pending_permission = None;
@@ -3563,6 +3637,8 @@ impl AgentChatThread {
             ttft_pending: false,
             stream_task: None,
             permission_task: None,
+            streaming_text_buffer: StreamingTextBuffer::default(),
+            streaming_text_drain_task: None,
             transcript_generation: 0,
             next_message_id: 1,
             host_window_state: None,
@@ -4025,6 +4101,8 @@ mod tests {
             ttft_pending: false,
             stream_task: None,
             permission_task: None,
+            streaming_text_buffer: StreamingTextBuffer::default(),
+            streaming_text_drain_task: None,
             transcript_generation: 0,
             next_message_id: 1,
             host_window_state: None,

@@ -37,6 +37,7 @@ pub(crate) mod popup_window;
 pub(crate) mod portal_contract;
 pub(crate) mod preflight;
 pub(crate) mod setup_state;
+pub(crate) mod streaming_buffer;
 pub(crate) mod surface_state;
 pub(crate) mod thread;
 pub(crate) mod tool_card;
