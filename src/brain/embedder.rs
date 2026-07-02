@@ -15,7 +15,7 @@ use anyhow::{anyhow, Context as _, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdin, Command, Stdio};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{mpsc, Arc, Mutex};
@@ -107,7 +107,14 @@ pub struct BrainEmbedder {
 impl BrainEmbedder {
     pub fn spawn(model: ResolvedEmbedModel) -> Result<Self> {
         let helper_path = resolve_helper_path()?;
-        let mut child = Command::new(&helper_path)
+        Self::spawn_with_helper(&helper_path, model)
+    }
+
+    /// Spawn against an explicit helper binary path. Splitting resolution out of
+    /// the wiring lets tests point the embedder at a fake helper without the
+    /// real `script-kit-ghost-llm-helper` binary being installed.
+    pub(crate) fn spawn_with_helper(helper_path: &Path, model: ResolvedEmbedModel) -> Result<Self> {
+        let mut child = Command::new(helper_path)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::null())
@@ -160,8 +167,20 @@ impl BrainEmbedder {
     }
 
     /// Embed a batch of texts. Blocking; returns unit-normalized vectors in
-    /// input order (empty vec for empty inputs).
+    /// input order (empty vec for empty inputs). Bounded by
+    /// [`EMBED_BATCH_TIMEOUT`] so a wedged helper cannot stall the caller.
     pub fn embed(&self, texts: Vec<String>) -> Result<Vec<Vec<f32>>> {
+        self.embed_with_timeout(texts, EMBED_BATCH_TIMEOUT)
+    }
+
+    /// [`embed`](Self::embed) with an explicit response timeout — tests use a
+    /// short one to prove a dead helper fails fast without waiting the full
+    /// production ceiling.
+    pub(crate) fn embed_with_timeout(
+        &self,
+        texts: Vec<String>,
+        timeout: Duration,
+    ) -> Result<Vec<Vec<f32>>> {
         if texts.is_empty() {
             return Ok(Vec::new());
         }
@@ -183,7 +202,7 @@ impl BrainEmbedder {
             return Err(err);
         }
         let response = rx
-            .recv_timeout(EMBED_BATCH_TIMEOUT)
+            .recv_timeout(timeout)
             .context("brain embed helper timed out")?;
         if !response.ok {
             return Err(anyhow!(response
@@ -255,4 +274,73 @@ fn resolve_helper_path() -> Result<PathBuf> {
         dir = current.parent().map(PathBuf::from);
     }
     Err(anyhow!("brain embed helper binary not found"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Write as _;
+    use std::os::unix::fs::PermissionsExt as _;
+
+    fn write_fake_helper(dir: &Path, script: &str) -> PathBuf {
+        let path = dir.join("fake-brain-embed-helper.sh");
+        let mut file = std::fs::File::create(&path).expect("create fake helper");
+        file.write_all(script.as_bytes())
+            .expect("write fake helper");
+        file.flush().expect("flush fake helper");
+        drop(file);
+        let mut perms = std::fs::metadata(&path).expect("meta").permissions();
+        perms.set_mode(0o755);
+        std::fs::set_permissions(&path, perms).expect("chmod fake helper");
+        path
+    }
+
+    fn fake_model() -> ResolvedEmbedModel {
+        ResolvedEmbedModel {
+            path: PathBuf::from("/nonexistent/brain-embed-model.gguf"),
+            model_id: "brain-embed:fake:0:0".to_string(),
+        }
+    }
+
+    /// A helper child that exits immediately must (a) be reported dead by
+    /// `is_alive()` and (b) make `embed()` return an error FAST — the whole
+    /// point of Plan 05. The old code blocked `recv_timeout` for the full
+    /// batch ceiling; this test would take minutes if the fix regressed, so it
+    /// asserts the call returns in well under the (short, test-only) timeout.
+    #[test]
+    fn dead_helper_is_detected_and_embed_fails_fast() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let helper = write_fake_helper(dir.path(), "#!/bin/sh\nexit 0\n");
+        let embedder =
+            BrainEmbedder::spawn_with_helper(&helper, fake_model()).expect("spawn fake helper");
+
+        // is_alive() flips to false once the child exits (poll up to ~2s).
+        let mut alive_after_exit = true;
+        for _ in 0..40 {
+            if !embedder.is_alive() {
+                alive_after_exit = false;
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(50));
+        }
+        assert!(
+            !alive_after_exit,
+            "is_alive() must report the exited child as dead"
+        );
+
+        // embed() must error rather than hang: the child is gone, so writing to
+        // its closed stdin fails immediately (and the reader saw EOF), well
+        // inside the short test timeout.
+        let started = std::time::Instant::now();
+        let result = embedder.embed_with_timeout(vec!["x".to_string()], Duration::from_secs(2));
+        let elapsed = started.elapsed();
+        assert!(
+            result.is_err(),
+            "embed against a dead helper must return Err"
+        );
+        assert!(
+            elapsed < Duration::from_secs(1),
+            "embed must fail fast, not block on the timeout: took {elapsed:?}"
+        );
+    }
 }
