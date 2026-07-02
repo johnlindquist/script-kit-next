@@ -45,7 +45,17 @@ pub struct DayPageDocumentSession {
     binding: DayPageBinding,
     dirty: bool,
     disk_content: String,
+    /// The content we last observed on disk (or last wrote). Unlike
+    /// `disk_content`, this is NEVER replaced by editor input, so a save can
+    /// diff the real on-disk file against it to detect external appends made
+    /// while the editor was open.
+    base_disk_content: String,
     last_mtime: Option<SystemTime>,
+    /// Set by `save_content` when a save had to merge external appends (or
+    /// resolve a conflict) rather than write the editor buffer verbatim. Holds
+    /// the content actually written to disk so a host can adopt it into the
+    /// editor; left `None` for a clean save.
+    last_save_merged: Option<String>,
 }
 
 impl DayPageDocumentSession {
@@ -57,7 +67,9 @@ impl DayPageDocumentSession {
             binding: DayPageBinding::Day,
             dirty: false,
             disk_content: String::new(),
+            base_disk_content: String::new(),
             last_mtime: None,
+            last_save_merged: None,
         }
     }
 
@@ -107,6 +119,13 @@ impl DayPageDocumentSession {
         &self.disk_content
     }
 
+    /// The content written by the last `save_content` when it had to merge
+    /// external appends or resolve a conflict, so a host can adopt it into the
+    /// editor. `None` after a clean save.
+    pub fn last_save_merged(&self) -> Option<&str> {
+        self.last_save_merged.as_deref()
+    }
+
     /// Bind to today's day page for `now` (timezone from substrate). Creates an
     /// empty file when missing. Day rollover binds a new path when the local
     /// date changes.
@@ -145,6 +164,7 @@ impl DayPageDocumentSession {
         self.binding = DayPageBinding::Day;
         self.dirty = false;
         self.disk_content = content.clone();
+        self.base_disk_content = content.clone();
         self.last_mtime = mtime;
 
         Ok(content)
@@ -178,6 +198,7 @@ impl DayPageDocumentSession {
         };
         self.dirty = false;
         self.disk_content = content.clone();
+        self.base_disk_content = content.clone();
         self.last_mtime = mtime;
 
         Ok(content)
@@ -242,6 +263,7 @@ impl DayPageDocumentSession {
         };
         self.dirty = false;
         self.disk_content = content.clone();
+        self.base_disk_content = content.clone();
         self.last_mtime = mtime;
 
         Ok(content)
@@ -278,6 +300,7 @@ impl DayPageDocumentSession {
         self.binding = DayPageBinding::Day;
         self.dirty = false;
         self.disk_content = content.clone();
+        self.base_disk_content = content.clone();
         self.last_mtime = mtime;
 
         Ok(content)
@@ -315,6 +338,8 @@ impl DayPageDocumentSession {
             self.path = Some(saved_path.clone());
             self.dirty = false;
             self.disk_content = content.to_string();
+            self.base_disk_content = content.to_string();
+            self.last_save_merged = None;
             self.last_mtime = fs::metadata(&saved_path)
                 .and_then(|meta| meta.modified())
                 .ok();
@@ -327,12 +352,73 @@ impl DayPageDocumentSession {
             .clone()
             .with_context(|| "day page save without bind")?;
 
-        io::atomic_write(&path, content)
-            .with_context(|| format!("writing day page {}", path.display()))?;
+        // Serialize the read-of-disk + write against background appenders
+        // (`;todo`, clipboard sediment, dictation) that also mutate this file.
+        // Compare the real on-disk content to the baseline we last saw: if an
+        // external writer appended lines since then, MERGE them instead of
+        // blindly overwriting, so a capture that landed during the autosave
+        // debounce is never silently lost.
+        let written = io::with_brain_write_lock(|| -> Result<Written> {
+            let disk_now = fs::read_to_string(&path).unwrap_or_default();
+
+            if disk_now == self.base_disk_content {
+                io::atomic_write(&path, content)
+                    .with_context(|| format!("writing day page {}", path.display()))?;
+                return Ok(Written::clean(content.to_string()));
+            }
+
+            if let Some(suffix) = external_append_suffix(&disk_now, &self.base_disk_content) {
+                let merged = merge_editor_with_external_appends(content, suffix, &disk_now);
+                io::atomic_write(&path, &merged)
+                    .with_context(|| format!("writing merged day page {}", path.display()))?;
+                return Ok(Written::merged(merged));
+            }
+
+            // Non-append divergence (an external edit rewrote earlier content).
+            // Keep both versions: the editor buffer wins the bound file, and the
+            // on-disk version is copied to the brain trash for recovery.
+            let trash_dir = self.substrate.paths().trash_dir();
+            let stem = path
+                .file_stem()
+                .and_then(|stem| stem.to_str())
+                .unwrap_or("day");
+            let ext = path
+                .extension()
+                .and_then(|ext| ext.to_str())
+                .unwrap_or("md");
+            let ts = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|duration| duration.as_secs())
+                .unwrap_or(0);
+            let conflict_path = trash_dir.join(format!("{stem}.conflict-{ts}.{ext}"));
+            io::atomic_write(&conflict_path, &disk_now).with_context(|| {
+                format!("writing day page conflict copy {}", conflict_path.display())
+            })?;
+            tracing::warn!(
+                target: "script_kit::brain",
+                path = %path.display(),
+                conflict_copy = %conflict_path.display(),
+                "day page diverged on disk in a non-append way; kept editor buffer and copied the disk version to trash"
+            );
+            io::atomic_write(&path, content)
+                .with_context(|| format!("writing day page {}", path.display()))?;
+            Ok(Written::merged(content.to_string()))
+        })?;
 
         self.dirty = false;
-        self.disk_content = content.to_string();
-        self.last_mtime = fs::metadata(&path).and_then(|meta| meta.modified()).ok();
+        self.disk_content = written.content.clone();
+        self.base_disk_content = written.content.clone();
+        if written.adopted {
+            // The editor buffer no longer matches disk. Force the next disk poll
+            // to re-read and adopt the written content by clearing the mtime
+            // fingerprint, and expose it via `last_save_merged` for hosts that
+            // want to adopt it immediately.
+            self.last_mtime = None;
+            self.last_save_merged = Some(written.content);
+        } else {
+            self.last_mtime = fs::metadata(&path).and_then(|meta| meta.modified()).ok();
+            self.last_save_merged = None;
+        }
 
         let _ = now;
         Ok(())
@@ -361,7 +447,8 @@ impl DayPageDocumentSession {
             .path
             .clone()
             .with_context(|| "adopt disk content without bind")?;
-        self.disk_content = content;
+        self.disk_content = content.clone();
+        self.base_disk_content = content;
         self.dirty = false;
         self.last_mtime = fs::metadata(&path).and_then(|meta| meta.modified()).ok();
         Ok(())
@@ -386,8 +473,10 @@ impl DayPageDocumentSession {
         let content = fs::read_to_string(&path)
             .with_context(|| format!("re-reading day page {}", path.display()))?;
         self.disk_content = content.clone();
+        self.base_disk_content = content.clone();
         self.last_mtime = mtime;
         self.dirty = false;
+        self.last_save_merged = None;
 
         Ok(Some(content))
     }
@@ -412,6 +501,53 @@ impl DayPageDocumentSession {
             .with_context(|| "external append without bind")?;
         io::atomic_append_line(&path, line)
     }
+}
+
+/// Outcome of a day-file save: the bytes actually written to disk, and whether
+/// they diverge from the editor buffer (a merge or conflict) so the editor must
+/// re-adopt them.
+struct Written {
+    content: String,
+    adopted: bool,
+}
+
+impl Written {
+    fn clean(content: String) -> Self {
+        Self {
+            content,
+            adopted: false,
+        }
+    }
+
+    fn merged(content: String) -> Self {
+        Self {
+            content,
+            adopted: true,
+        }
+    }
+}
+
+/// If `disk_now` is `base` followed by extra appended content, return that
+/// suffix. Returns `None` when disk is not a pure append over the baseline
+/// (an external edit, truncation, or no real added content).
+fn external_append_suffix<'a>(disk_now: &'a str, base: &str) -> Option<&'a str> {
+    let suffix = disk_now.strip_prefix(base.trim_end())?;
+    if suffix.trim().is_empty() {
+        return None;
+    }
+    Some(suffix)
+}
+
+/// Combine the editor buffer with external appends detected on disk, preserving
+/// a single joining newline and the trailing newline if the disk file had one.
+fn merge_editor_with_external_appends(content: &str, suffix: &str, disk_now: &str) -> String {
+    let mut merged = content.trim_end().to_string();
+    merged.push('\n');
+    merged.push_str(suffix.trim_start_matches('\n'));
+    if disk_now.ends_with('\n') && !merged.ends_with('\n') {
+        merged.push('\n');
+    }
+    merged
 }
 
 #[cfg(test)]
@@ -748,6 +884,107 @@ mod tests {
         assert_ne!(
             session.path().expect("path"),
             &session.substrate().paths().day_page(now.date_naive())
+        );
+    }
+
+    /// Data-loss regression: an external append that lands between bind and the
+    /// debounced autosave must survive the save. The saved file must contain
+    /// BOTH the editor buffer and the appended line.
+    #[test]
+    fn save_merges_external_append_landing_before_autosave() {
+        let (_dir, mut session) = test_session();
+        let now = utc("2026-06-11T09:42:00Z");
+        session.bind_today(now).expect("bind");
+        let path = session.path().expect("path").clone();
+
+        // User types (editor is now dirty).
+        session.apply_editor_content("morning thought");
+        // A background writer (e.g. ;todo) appends before the autosave fires.
+        io::atomic_append_line(&path, "09:45 - [ ] buy milk").expect("external append");
+
+        session
+            .save_content("morning thought", now)
+            .expect("save merges");
+
+        let disk = fs::read_to_string(&path).expect("read day file");
+        assert!(
+            disk.contains("morning thought"),
+            "editor content kept: {disk:?}"
+        );
+        assert!(disk.contains("buy milk"), "external append kept: {disk:?}");
+        assert_eq!(
+            session.last_save_merged(),
+            Some(disk.as_str()),
+            "merged save exposes the written content for adoption"
+        );
+    }
+
+    /// A clean save (no external writer touched the file since bind) writes the
+    /// editor buffer verbatim and reports no merge.
+    #[test]
+    fn save_writes_exact_editor_content_when_no_external_change() {
+        let (_dir, mut session) = test_session();
+        let now = utc("2026-06-11T09:42:00Z");
+        session.bind_today(now).expect("bind");
+        let path = session.path().expect("path").clone();
+
+        session.apply_editor_content("just my words");
+        session.save_content("just my words", now).expect("save");
+
+        let disk = fs::read_to_string(&path).expect("read day file");
+        assert_eq!(disk, "just my words");
+        assert_eq!(
+            session.last_save_merged(),
+            None,
+            "clean save is not a merge"
+        );
+    }
+
+    /// When the disk diverged in a non-append way (an external edit rewrote
+    /// earlier content), neither version is destroyed: the editor buffer wins
+    /// the bound file and the on-disk version is copied to the brain trash.
+    #[test]
+    fn save_preserves_disk_on_non_append_divergence() {
+        let (_dir, mut session) = test_session();
+        let now = utc("2026-06-11T09:42:00Z");
+        session.bind_today(now).expect("bind creates");
+        let path = session.path().expect("path").clone();
+
+        // Establish a non-empty baseline on disk.
+        session.apply_editor_content("line one\nline two");
+        session
+            .save_content("line one\nline two", now)
+            .expect("seed save");
+
+        // User edits; meanwhile an external writer REWRITES the file wholesale.
+        session.apply_editor_content("line one edited\nline two");
+        io::atomic_write(&path, "completely different disk content").expect("external rewrite");
+
+        session
+            .save_content("line one edited\nline two", now)
+            .expect("save resolves conflict");
+
+        let disk = fs::read_to_string(&path).expect("read day file");
+        assert_eq!(
+            disk, "line one edited\nline two",
+            "editor buffer wins bound path"
+        );
+
+        let trash_dir = session.substrate().paths().trash_dir();
+        let conflict = fs::read_dir(&trash_dir)
+            .expect("trash dir")
+            .filter_map(|entry| entry.ok())
+            .find(|entry| entry.file_name().to_string_lossy().contains(".conflict-"))
+            .expect("a conflict copy should exist in trash");
+        let conflict_body = fs::read_to_string(conflict.path()).expect("read conflict copy");
+        assert_eq!(
+            conflict_body, "completely different disk content",
+            "conflict copy preserves the diverged disk version"
+        );
+        assert_eq!(
+            session.last_save_merged(),
+            Some("line one edited\nline two"),
+            "conflict save exposes the written editor content for adoption"
         );
     }
 }
