@@ -285,7 +285,7 @@ const surfaces: Surface[] = [
       "src/notes/window/window_ops.rs",
       "src/notes/window/render_ui.rs",
       "src/notes/actions_panel.rs",
-      "src/notes/browse_panel.rs",
+      "src/notes/window/panels.rs",
       "src/notes/storage.rs",
       "src/notes/model.rs",
     ],

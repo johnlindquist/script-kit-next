@@ -361,7 +361,7 @@ fn coverage_source_files_exist_for_notes_and_dictation() {
         "src/notes/window/agent_chat_host.rs",
         "src/notes/window/window_ops.rs",
         "src/notes/actions_panel.rs",
-        "src/notes/browse_panel.rs",
+        "src/notes/window/panels.rs",
         "src/notes/storage.rs",
         "src/notes/model.rs",
         "src/dictation/window.rs",
