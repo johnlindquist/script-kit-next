@@ -843,14 +843,32 @@ pub(crate) fn save_generated_script_from_response(
     prompt: &str,
     raw_response: &str,
 ) -> Result<PathBuf> {
+    save_generated_script_from_response_with_slug(prompt, raw_response, None)
+}
+
+/// Save an AI-generated script through the full contract pipeline —
+/// extraction, convention enforcement, contract audit (rejecting
+/// concurrent-prompt-API usage), receipt, and Bun verification.
+///
+/// `slug_override` preserves a user-chosen filename (e.g. the Tab-AI save
+/// offer) while still routing the source through the contract checks.
+///
+/// Bun verification runs on a background thread: callers are on the UI
+/// thread and `bun build` can take up to its 15s timeout. The receipt is
+/// written immediately with a skipped/pending marker and rewritten with the
+/// real verification result when the background run completes.
+pub(crate) fn save_generated_script_from_response_with_slug(
+    prompt: &str,
+    raw_response: &str,
+    slug_override: Option<&str>,
+) -> Result<PathBuf> {
     let prepared = prepare_script_from_ai_response_with_contract(prompt, raw_response)?;
-    let script_path =
-        crate::script_creation::create_new_script(&prepared.slug).with_context(|| {
-            format!(
-                "Failed to create script for AI response (state=create_failed, slug={})",
-                prepared.slug
-            )
-        })?;
+    let slug = slug_override
+        .map(|slug| slug.to_string())
+        .unwrap_or_else(|| prepared.slug.clone());
+    let script_path = crate::script_creation::create_new_script(&slug).with_context(|| {
+        format!("Failed to create script for AI response (state=create_failed, slug={slug})")
+    })?;
 
     fs::write(&script_path, &prepared.source).with_context(|| {
         format!(
@@ -860,11 +878,10 @@ pub(crate) fn save_generated_script_from_response(
     })?;
 
     let receipt_path = generated_script_receipt_path(&script_path);
-    let verification = verify_generated_script_with_bun_build(&script_path);
-    let receipt = GeneratedScriptReceipt {
+    let mut receipt = GeneratedScriptReceipt {
         schema_version: AI_GENERATED_SCRIPT_RECEIPT_SCHEMA_VERSION,
         prompt: prompt.trim().to_string(),
-        slug: prepared.slug,
+        slug,
         slug_source: prepared.slug_source,
         slug_source_kind: prepared.slug_source_kind.to_string(),
         model_id: "unknown".to_string(),
@@ -873,20 +890,35 @@ pub(crate) fn save_generated_script_from_response(
         receipt_path: receipt_path.display().to_string(),
         shell_execution_warning: false,
         contract: prepared.contract,
-        verification,
+        verification: GeneratedScriptVerificationReceipt::skipped(
+            "bun_build_running_in_background",
+        ),
         current_app_recipe: None,
     };
     write_generated_script_receipt(&receipt_path, &receipt)?;
 
-    if let Err(error) = crate::ai::upsert_current_app_automation_memory_from_receipt(&receipt) {
-        tracing::warn!(
-            target: "ai",
-            error = %error,
-            slug = %receipt.slug,
-            receipt_path = %receipt.receipt_path,
-            "current_app_automation_memory.upsert_failed"
-        );
-    }
+    let verify_script_path = script_path.clone();
+    let verify_receipt_path = receipt_path;
+    std::thread::spawn(move || {
+        receipt.verification = verify_generated_script_with_bun_build(&verify_script_path);
+        if let Err(error) = write_generated_script_receipt(&verify_receipt_path, &receipt) {
+            tracing::warn!(
+                target: "ai",
+                error = %error,
+                receipt_path = %receipt.receipt_path,
+                "generated_script_receipt.verification_rewrite_failed"
+            );
+        }
+        if let Err(error) = crate::ai::upsert_current_app_automation_memory_from_receipt(&receipt) {
+            tracing::warn!(
+                target: "ai",
+                error = %error,
+                slug = %receipt.slug,
+                receipt_path = %receipt.receipt_path,
+                "current_app_automation_memory.upsert_failed"
+            );
+        }
+    });
 
     Ok(script_path)
 }

@@ -328,12 +328,17 @@ fn test_legacy_save_path_writes_receipt_sidecar() {
         "invariant_legacy_save_writes_receipt: legacy save path must persist the receipt sidecar"
     );
     assert!(
-        generator
-            .contains("let verification = verify_generated_script_with_bun_build(&script_path);"),
-        "invariant_legacy_save_verification: legacy save path must record bounded verification"
+        generator.contains(
+            "receipt.verification = verify_generated_script_with_bun_build(&verify_script_path);"
+        ),
+        "invariant_legacy_save_verification: legacy save path must still record bounded bun \
+         verification — it runs on a background thread because callers are on the UI thread \
+         and bun build can take its full 15s timeout"
     );
     assert!(
-        generator.contains("verification,"),
-        "invariant_legacy_save_receipt_verification: legacy save receipt must include verification"
+        generator.contains("bun_build_running_in_background"),
+        "invariant_legacy_save_receipt_verification: the receipt must be written immediately \
+         with a pending marker and rewritten with the real verification result when the \
+         background run completes"
     );
 }

@@ -5375,34 +5375,36 @@ impl ScriptListApp {
             return;
         };
 
-        let created_path = match crate::script_creation::create_new_script(&state.filename_stem) {
-            Ok(path) => path,
-            Err(error) => {
-                tracing::warn!(
-                    event = "tab_ai_save_create_failed",
-                    error = %error,
-                    filename_stem = %state.filename_stem,
-                );
-                if let Some(save_state) = &mut self.tab_ai_save_offer_state {
-                    save_state.error = Some(format!("Failed to create script: {error}").into());
-                }
-                cx.notify();
-                return;
-            }
+        // Route through the contract pipeline (extraction, convention
+        // enforcement, concurrent-prompt-API rejection, receipt, background
+        // Bun verification) instead of a bare create + write — a generated
+        // script that the tested generator would reject must not land on
+        // disk unflagged. The user-chosen filename stem still wins.
+        let prompt = if state.record.intent.trim().is_empty() {
+            state.filename_stem.as_str()
+        } else {
+            state.record.intent.as_str()
         };
-
-        if let Err(error) = std::fs::write(&created_path, &state.record.generated_source) {
-            tracing::warn!(
-                event = "tab_ai_save_write_failed",
-                error = %error,
-                path = %created_path.display(),
-            );
-            if let Some(save_state) = &mut self.tab_ai_save_offer_state {
-                save_state.error = Some(format!("Failed to write script: {error}").into());
-            }
-            cx.notify();
-            return;
-        }
+        let created_path =
+            match crate::ai::script_generation::save_generated_script_from_response_with_slug(
+                prompt,
+                &state.record.generated_source,
+                Some(&state.filename_stem),
+            ) {
+                Ok(path) => path,
+                Err(error) => {
+                    tracing::warn!(
+                        event = "tab_ai_save_create_failed",
+                        error = %error,
+                        filename_stem = %state.filename_stem,
+                    );
+                    if let Some(save_state) = &mut self.tab_ai_save_offer_state {
+                        save_state.error = Some(format!("Failed to save script: {error}").into());
+                    }
+                    cx.notify();
+                    return;
+                }
+            };
 
         tracing::info!(
             event = "tab_ai_script_saved",
