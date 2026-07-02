@@ -1130,7 +1130,9 @@ fn dispatch_detached_action(
         "Selected Agent Chat Actions Menu item"
     );
 
-    if let Some(model_id) = crate::actions::agent_chat_switch_model_id_from_action(action_id) {
+    let model_id = crate::actions::agent_chat_switch_model_id_from_action(action_id)
+        .or_else(|| action_id.strip_prefix("chat:select_model_"));
+    if let Some(model_id) = model_id {
         if let Some(entity) = entity_weak.upgrade() {
             entity.update(cx, |chat, cx| {
                 if let Some(thread) = chat.thread() {
@@ -1465,6 +1467,33 @@ fn dispatch_detached_action(
         "agent_chat_show_history" => {
             let opened = open_detached_history_actions(cx);
             tracing::info!(event = "detached_action_show_history_actions", opened);
+        }
+        "chat:toggle_favorite_model" => {
+            if let Some(entity) = entity_weak.upgrade() {
+                entity.update(cx, |chat, cx| {
+                    if let Some(thread) = chat.thread() {
+                        thread.update(cx, |thread, cx| {
+                            if let Some(model_id) = thread.selected_model_id().map(str::to_string) {
+                                thread.toggle_favorite_model(&model_id, cx);
+                            }
+                        });
+                    }
+                });
+            }
+        }
+        "chat:cycle_favorite_model" => {
+            if let Some(entity) = entity_weak.upgrade() {
+                entity.update(cx, |chat, cx| {
+                    if let Some(thread) = chat.thread() {
+                        thread.update(cx, |thread, cx| thread.cycle_favorite_model(cx));
+                    }
+                });
+            }
+        }
+        "chat:expand_composer" => {
+            if let Some(entity) = entity_weak.upgrade() {
+                entity.update(cx, |chat, cx| chat.toggle_expanded_composer(cx));
+            }
         }
         "agent_chat_clear_history" => {
             let kit = crate::setup::get_kit_path();

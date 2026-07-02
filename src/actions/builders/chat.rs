@@ -109,10 +109,15 @@ impl ChatModelPickerRowPlan {
         }
     }
 
-    fn title(self, model: &ChatModelInfo) -> String {
-        match self {
+    fn title(self, model: &ChatModelInfo, favorite: bool) -> String {
+        let base = match self {
             Self::CurrentModel => format!("{} ✓", model.display_name),
             Self::AvailableModel => model.display_name.clone(),
+        };
+        if favorite {
+            format!("★ {base}")
+        } else {
+            base
         }
     }
 
@@ -231,7 +236,10 @@ pub fn get_chat_model_picker_actions(info: &ChatPromptInfo) -> Vec<Action> {
 
         let action = Action::new(
             format!("chat:select_model_{}", model.id),
-            row_plan.title(model),
+            row_plan.title(
+                model,
+                crate::ai::agent_chat::ui::favorite_models::is_favorite_model_id(&model.id),
+            ),
             Some(row_plan.description(model)),
             ActionCategory::ScriptContext,
         )
@@ -495,6 +503,33 @@ pub fn get_ai_command_bar_actions() -> Vec<Action> {
             ActionCategory::ScriptContext,
         )
         .with_icon(IconName::ArrowRight)
+        .with_section("Actions"),
+        Action::new(
+            "chat:toggle_favorite_model",
+            "Favorite Current Model",
+            Some("Stars or unstars the current AI model".to_string()),
+            ActionCategory::ScriptContext,
+        )
+        .with_shortcut("\u{2325}\u{2318}F")
+        .with_icon(IconName::Star)
+        .with_section("Actions"),
+        Action::new(
+            "chat:cycle_favorite_model",
+            "Cycle Favorite Model",
+            Some("Switches to the next favorited model".to_string()),
+            ActionCategory::ScriptContext,
+        )
+        .with_shortcut("\u{2325}\u{2318}M")
+        .with_icon(IconName::Settings)
+        .with_section("Actions"),
+        Action::new(
+            "chat:expand_composer",
+            "Expand Composer",
+            Some("Toggles a taller multi-line composer".to_string()),
+            ActionCategory::ScriptContext,
+        )
+        .with_shortcut("\u{21e7}\u{2318}E")
+        .with_icon(IconName::Settings)
         .with_section("Actions"),
         Action::new(
             "chat:toggle_shortcuts_help",

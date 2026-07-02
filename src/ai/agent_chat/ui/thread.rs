@@ -3090,6 +3090,22 @@ impl AgentChatThread {
         }
     }
 
+    pub(crate) fn toggle_favorite_model(&mut self, model_id: &str, cx: &mut Context<Self>) {
+        super::favorite_models::toggle_favorite_model_id(model_id);
+        cx.notify();
+    }
+
+    pub(crate) fn cycle_favorite_model(&mut self, cx: &mut Context<Self>) {
+        let favorites = super::favorite_models::load_favorite_model_ids();
+        if let Some(model_id) = super::favorite_models::next_favorite_model_id(
+            self.selected_model_id(),
+            &favorites,
+            self.available_models(),
+        ) {
+            self.select_model(&model_id, cx);
+        }
+    }
+
     /// Elapsed seconds since streaming started, or `None` if not streaming.
     pub(crate) fn stream_elapsed_secs(&self) -> Option<u64> {
         self.stream_started_at.map(|t| t.elapsed().as_secs())

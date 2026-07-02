@@ -73,3 +73,38 @@ pub(crate) fn build_agent_chat_conversation_markdown_from_export(
     }
     wrote_any.then_some(md)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use gpui::SharedString;
+
+    fn message(id: u64, role: AgentChatThreadMessageRole, body: &str) -> AgentChatThreadMessage {
+        AgentChatThreadMessage {
+            id,
+            role,
+            body: SharedString::from(body.to_string()),
+            tool_call_id: None,
+            tool_meta: None,
+        }
+    }
+
+    #[test]
+    fn agent_chat_markdown_export_labels_roles_and_preserves_fences() {
+        let markdown = build_agent_chat_conversation_markdown(&[
+            message(1, AgentChatThreadMessageRole::User, "show rust"),
+            message(
+                2,
+                AgentChatThreadMessageRole::Assistant,
+                "```rust\nfn main() {}\n```",
+            ),
+            message(3, AgentChatThreadMessageRole::System, "saved"),
+        ])
+        .expect("markdown");
+
+        assert!(markdown.starts_with("# Agent Chat Conversation"));
+        assert!(markdown.contains("**You**\n\nshow rust"));
+        assert!(markdown.contains("**Assistant**\n\n```rust\nfn main() {}\n```"));
+        assert!(markdown.contains("**System**\n\nsaved"));
+    }
+}

@@ -755,6 +755,7 @@ pub(crate) struct AgentChatView {
     _slash_discovery_task: Task<()>,
     /// Active slash/profile composer picker session (None = picker hidden).
     pub(crate) composer_picker_session: Option<AgentChatComposerPickerSession>,
+    expanded_composer: bool,
     /// Surface-local Spine state for the Agent Chat composer. When this projection
     /// owns the conversation area, the transcript is replaced with the
     /// Spine list (context / slash / profile / style / capture / CWD rows).
@@ -1272,6 +1273,15 @@ impl AgentChatView {
         }
     }
 
+    fn composer_height(&self) -> f32 {
+        Self::composer_height_for_expanded(self.expanded_composer)
+    }
+
+    fn composer_height_for_expanded(expanded: bool) -> f32 {
+        let line_count = if expanded { 6.0 } else { 1.0 };
+        (Self::AGENT_CHAT_INPUT_PADDING_Y * 2.0) + (Self::AGENT_CHAT_INPUT_LINE_HEIGHT * line_count)
+    }
+
     pub(crate) fn automation_layout_info(
         &self,
         target: &crate::protocol::AutomationWindowInfo,
@@ -1284,8 +1294,7 @@ impl AgentChatView {
             .as_ref()
             .map(|bounds| (bounds.width as f32, bounds.height as f32))
             .unwrap_or((480.0, 440.0));
-        let composer_height =
-            (Self::AGENT_CHAT_INPUT_PADDING_Y * 2.0) + Self::AGENT_CHAT_INPUT_LINE_HEIGHT;
+        let composer_height = self.composer_height();
         let footer_height = self.inline_footer_height();
         let message_height = (window_height - composer_height - footer_height).max(0.0);
         let composer_y = message_height;
@@ -1414,8 +1423,7 @@ impl AgentChatView {
             .as_ref()
             .map(|bounds| (bounds.width as f32, bounds.height as f32))
             .unwrap_or((480.0, 440.0));
-        let composer_height =
-            (Self::AGENT_CHAT_INPUT_PADDING_Y * 2.0) + Self::AGENT_CHAT_INPUT_LINE_HEIGHT;
+        let composer_height = Self::composer_height_for_expanded(false);
         let footer_height = crate::window_resize::main_layout::HINT_STRIP_HEIGHT;
         let message_height = (window_height - composer_height - footer_height).max(0.0);
         let footer_y = (window_height - footer_height).max(message_height + composer_height);
@@ -4029,6 +4037,57 @@ impl AgentChatView {
         }
     }
 
+    fn export_thread_to_downloads(&mut self, cx: &mut Context<Self>) {
+        let (markdown, session_id) = {
+            let thread = self.live_thread();
+            let thread_ref = thread.read(cx);
+            (
+                super::export::build_agent_chat_conversation_markdown_from_thread(&thread_ref),
+                thread_ref.ui_thread_id().to_string(),
+            )
+        };
+
+        let result = markdown
+            .ok_or_else(|| "Nothing to export yet".to_string())
+            .and_then(|markdown| {
+                let dir = dirs::download_dir().unwrap_or_else(std::env::temp_dir);
+                std::fs::create_dir_all(&dir)
+                    .map_err(|error| format!("Create export directory failed: {error}"))?;
+                let safe_session_id = session_id
+                    .chars()
+                    .map(|ch| {
+                        if ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_') {
+                            ch
+                        } else {
+                            '-'
+                        }
+                    })
+                    .collect::<String>();
+                let path = dir.join(format!("agent-chat-export-{safe_session_id}.md"));
+                std::fs::write(&path, markdown)
+                    .map_err(|error| format!("Write export failed: {error}"))?;
+                if let Err(error) = crate::platform::reveal_in_finder(&path) {
+                    tracing::warn!(
+                        target: "script_kit::agent_chat",
+                        event = "agent_chat_export_reveal_failed",
+                        path = %path.display(),
+                        error = %error,
+                    );
+                }
+                Ok(path)
+            });
+
+        self.live_thread().update(cx, |thread, cx| match result {
+            Ok(path) => thread.push_system_message(
+                format!("Exported Agent Chat thread to {}", path.display()),
+                cx,
+            ),
+            Err(error) => {
+                thread.push_system_message(format!("Agent Chat export failed: {error}"), cx)
+            }
+        });
+    }
+
     pub(crate) fn has_focused_text_context(&self) -> bool {
         self.focused_text.is_some()
     }
@@ -4047,6 +4106,11 @@ impl AgentChatView {
                 "Agent Chat footer Paste Response request dropped because no host callback was installed"
             );
         }
+    }
+
+    pub(crate) fn toggle_expanded_composer(&mut self, cx: &mut Context<Self>) {
+        self.expanded_composer = !self.expanded_composer;
+        cx.notify();
     }
 
     pub(super) fn refresh_composer_picker_state_after_parent_change(
@@ -5512,6 +5576,7 @@ impl AgentChatView {
             cached_slash_commands: Vec::new(),
             _slash_discovery_task: slash_task,
             composer_picker_session: None,
+            expanded_composer: false,
             composer_spine: Default::default(),
             dismissed_mention_trigger: None,
             composer_parent_window: None,
@@ -5599,6 +5664,7 @@ impl AgentChatView {
             cached_slash_commands: Vec::new(),
             _slash_discovery_task: noop_slash,
             composer_picker_session: None,
+            expanded_composer: false,
             composer_spine: Default::default(),
             dismissed_mention_trigger: None,
             composer_parent_window: None,
@@ -8593,8 +8659,11 @@ impl AgentChatView {
         status: AgentChatThreadStatus,
         weak_view: WeakEntity<AgentChatView>,
         theme: &crate::theme::Theme,
+        expanded_composer: bool,
     ) -> gpui::AnyElement {
         let menu_def = crate::designs::current_main_menu_theme().def();
+        let max_visible_height =
+            expanded_composer.then_some(Self::AGENT_CHAT_INPUT_LINE_HEIGHT * 6.0);
         let input_body = Self::render_composer_input_text(
             input_text,
             input_cursor,
@@ -8610,7 +8679,7 @@ impl AgentChatView {
             pasted_text_pills,
             placeholder_text,
             theme,
-            None,
+            max_visible_height,
         );
         let _ = (profile_icon_name, profile_active_pending);
         let can_send = !input_text.trim().is_empty();
@@ -8658,6 +8727,7 @@ impl AgentChatView {
             status,
             weak_view,
             theme,
+            false,
         );
         crate::components::main_view_chrome::render_main_view_header(
             crate::components::main_view_chrome::MainViewHeaderChrome {
@@ -12011,7 +12081,7 @@ impl AgentChatView {
                 cx.notify();
             }
             AgentChatToolbarEvent::ExportThread => {
-                // KNOWN: Needs Window context unavailable in subscription handlers.
+                this.export_thread_to_downloads(cx);
             }
             AgentChatToolbarEvent::ClearThread => {
                 this.live_thread().update(cx, |thread, cx| {
@@ -12023,10 +12093,19 @@ impl AgentChatView {
                 cx.notify();
             }
             AgentChatToolbarEvent::OpenHistory => {
-                // KNOWN: Needs Window context unavailable in subscription handlers.
+                if let Some(parent) = this.composer_parent_window {
+                    this.open_history_popup_from_host(
+                        parent.handle,
+                        parent.bounds,
+                        parent.display_id,
+                        cx,
+                    );
+                } else {
+                    this.toggle_history_popup_from_cached_parent(cx);
+                }
             }
             AgentChatToolbarEvent::CloseChat => {
-                // KNOWN: Needs Window context unavailable in subscription handlers.
+                crate::ai::agent_chat::ui::chat_window::close_chat_window(cx);
             }
         })
         .detach();
@@ -13212,6 +13291,29 @@ impl AgentChatView {
             return;
         }
 
+        if modifiers.platform && modifiers.shift && key.eq_ignore_ascii_case("e") {
+            self.toggle_expanded_composer(cx);
+            cx.stop_propagation();
+            return;
+        }
+
+        if modifiers.platform && modifiers.alt && key.eq_ignore_ascii_case("m") {
+            self.live_thread()
+                .update(cx, |thread, cx| thread.cycle_favorite_model(cx));
+            cx.stop_propagation();
+            return;
+        }
+
+        if modifiers.platform && modifiers.alt && key.eq_ignore_ascii_case("f") {
+            self.live_thread().update(cx, |thread, cx| {
+                if let Some(model_id) = thread.selected_model_id().map(str::to_string) {
+                    thread.toggle_favorite_model(&model_id, cx);
+                }
+            });
+            cx.stop_propagation();
+            return;
+        }
+
         // ── Cmd+. → cancel streaming (standard macOS cancel) ──────
         if modifiers.platform && key == "." {
             let is_streaming = matches!(
@@ -14121,6 +14223,7 @@ impl Render for AgentChatView {
                 status,
                 view_entity.clone(),
                 &theme,
+                self.expanded_composer,
             );
             let footer_snapshot = self.footer_snapshot(cx);
             let context_labels = crate::components::main_view_chrome::MainViewContextLabels::new(

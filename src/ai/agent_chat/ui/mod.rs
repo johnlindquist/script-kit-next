@@ -24,6 +24,7 @@ pub(crate) mod context;
 pub(crate) mod conversation_export;
 pub(crate) mod events;
 pub(crate) mod export;
+pub(crate) mod favorite_models;
 pub(crate) mod history;
 pub(crate) mod history_attachment;
 pub(crate) mod history_popup;
