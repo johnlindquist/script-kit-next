@@ -984,6 +984,81 @@ fn ensure_notes_fts_triggers(conn: &Connection) -> Result<()> {
 /// later caller.
 static NOTES_DB_INIT_LOCK: Mutex<()> = Mutex::new(());
 
+/// Open a connection at `path`, apply the standard pragmas, verify integrity
+/// with `quick_check`, and ensure the schema. Any failure returns Err with the
+/// connection already dropped, so the caller can safely rename files aside.
+fn open_and_check_notes_db(path: &Path) -> Result<Connection> {
+    let conn = Connection::open(path).context("Failed to open notes database")?;
+    conn.execute_batch("PRAGMA journal_mode=WAL;")
+        .context("Failed to enable WAL mode")?;
+    conn.execute_batch("PRAGMA foreign_keys=ON;")
+        .context("Failed to enable notes foreign keys")?;
+    let integrity: String = conn
+        .query_row("PRAGMA quick_check(1)", [], |row| row.get(0))
+        .context("notes quick_check")?;
+    if integrity != "ok" {
+        anyhow::bail!("notes quick_check reported: {integrity}");
+    }
+    ensure_notes_schema(&conn)?;
+    Ok(conn)
+}
+
+fn notes_path_with_suffix(path: &Path, suffix: &str) -> PathBuf {
+    let mut name = path
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    name.push_str(suffix);
+    path.with_file_name(name)
+}
+
+/// Move a damaged notes db and its WAL/SHM sidecars aside to
+/// `*.corrupt-<secs>` siblings. Returns the destination of the primary db
+/// file for logging.
+fn move_corrupt_notes_db_aside(path: &Path) -> Result<PathBuf> {
+    let secs = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    let corrupt = format!(".corrupt-{secs}");
+    let mut primary_dest = notes_path_with_suffix(path, &corrupt);
+    for suffix in ["", "-wal", "-shm"] {
+        let from = notes_path_with_suffix(path, suffix);
+        if !from.exists() {
+            continue;
+        }
+        let dest = notes_path_with_suffix(&from, &corrupt);
+        fs::rename(&from, &dest)
+            .with_context(|| format!("move corrupt notes file {} aside", from.display()))?;
+        if suffix.is_empty() {
+            primary_dest = dest;
+        }
+    }
+    Ok(primary_dest)
+}
+
+/// Open the notes DB at `path`, recovering from corruption by moving the
+/// damaged database aside and starting fresh. Markdown under `brain/notes/`
+/// is canonical (ADR 0003), so the caller rebuilds the index from files when
+/// the returned bool is `true` — a corrupt index must never present as an
+/// empty Notes list while the notes still exist on disk.
+fn open_or_recover_notes_db(path: &Path) -> Result<(Connection, bool)> {
+    match open_and_check_notes_db(path) {
+        Ok(conn) => Ok((conn, false)),
+        Err(err) => {
+            // open_and_check_notes_db dropped its connection on the error
+            // path, so the files are unlocked and safe to rename.
+            let moved = move_corrupt_notes_db_aside(path)?;
+            warn!(
+                error = %err,
+                moved_to = %moved.display(),
+                "notes.sqlite failed integrity check; moved aside and rebuilding index from markdown"
+            );
+            Ok((open_and_check_notes_db(path)?, true))
+        }
+    }
+}
+
 /// Initialize the notes database
 ///
 /// This function is idempotent - it's safe to call multiple times.
@@ -1023,16 +1098,9 @@ pub fn init_notes_db() -> Result<()> {
     }
 
     let db_exists = db_path.exists();
-    let conn = Connection::open(&db_path).context("Failed to open notes database")?;
+    let (conn, recovered) = open_or_recover_notes_db(&db_path)?;
 
-    conn.execute_batch("PRAGMA journal_mode=WAL;")
-        .context("Failed to enable WAL mode")?;
-    conn.execute_batch("PRAGMA foreign_keys=ON;")
-        .context("Failed to enable notes foreign keys")?;
-
-    ensure_notes_schema(&conn)?;
-
-    if !db_exists || schema_needs_rebuild(&conn)? {
+    if !db_exists || recovered || schema_needs_rebuild(&conn)? {
         rebuild_index_from_files_with_conn(&conn)
             .context("Failed to rebuild notes index from brain files")?;
     } else {
@@ -2234,6 +2302,55 @@ pub(crate) fn notes_db_test_guard() -> std::sync::MutexGuard<'static, ()> {
 mod tests {
     use super::*;
     use std::time::{SystemTime, UNIX_EPOCH};
+
+    /// A corrupt notes.sqlite must be moved aside and replaced with a fresh,
+    /// working database — never surfaced as an error (which breaks deeplink
+    /// open, search, and MCP note tools) or as a silently empty Notes list.
+    /// Markdown is canonical, so the caller rebuilds the index when the
+    /// recovery flag is true.
+    #[test]
+    fn open_or_recover_notes_db_moves_corrupt_db_aside_and_starts_fresh() {
+        let dir = std::env::temp_dir().join(format!(
+            "sk_notes_recovery_{}_{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0)
+        ));
+        fs::create_dir_all(&dir).expect("create temp dir");
+        let db_path = dir.join("notes.sqlite");
+        fs::write(&db_path, b"this is not a sqlite database").expect("write garbage db");
+
+        let (conn, recovered) =
+            open_or_recover_notes_db(&db_path).expect("recovery must succeed on corrupt db");
+        assert!(recovered, "corrupt db must be reported as recovered");
+
+        // The damaged file was preserved aside, not deleted.
+        let corrupt_siblings = fs::read_dir(&dir)
+            .expect("read temp dir")
+            .filter_map(|entry| entry.ok())
+            .filter(|entry| entry.file_name().to_string_lossy().contains(".corrupt-"))
+            .count();
+        assert_eq!(corrupt_siblings, 1, "damaged db must be moved aside");
+
+        // The fresh connection is usable with the notes schema in place.
+        let note_count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM notes", [], |row| row.get(0))
+            .expect("fresh db must have the notes schema");
+        assert_eq!(note_count, 0);
+
+        // A healthy db must open without triggering recovery.
+        drop(conn);
+        let (_conn, recovered_again) =
+            open_or_recover_notes_db(&db_path).expect("healthy reopen must succeed");
+        assert!(
+            !recovered_again,
+            "healthy db must not be treated as corrupt"
+        );
+
+        let _ = fs::remove_dir_all(&dir);
+    }
 
     fn unique_test_token(prefix: &str) -> String {
         let millis = SystemTime::now()
