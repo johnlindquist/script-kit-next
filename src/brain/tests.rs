@@ -1593,6 +1593,81 @@ fn file_sources_sync_day_page_fragment_and_forget_trashed_note() {
 }
 
 #[test]
+fn index_capture_now_makes_day_capture_recallable_without_a_cycle() {
+    let _db = init_test_db();
+    let tmp = tempfile::TempDir::new().expect("tempdir");
+    let substrate = test_substrate(&tmp.path().join("brain"));
+    let now = chrono::Utc.with_ymd_and_hms(2026, 7, 1, 16, 45, 0).unwrap();
+    // Globally-unique single token so FTS + provenance counting can't collide
+    // with day pages other parallel tests write into the shared brain DB.
+    let marker = "zebrafishinstantrecall";
+    let source_id = now.date_naive().to_string();
+
+    // A capture writes the file only. Under cfg(test) the substrate's
+    // auto-index wrapper is a no-op, so nothing is in brain_docs yet — this
+    // isolates `index_capture_now` as the thing under test.
+    substrate
+        .append_to_day(
+            now,
+            DayEntry::Capture {
+                text: format!("captured line about {marker}"),
+            },
+        )
+        .expect("append day capture");
+    assert!(
+        store::get_doc(DocSource::DayPage, &source_id)
+            .unwrap()
+            .is_none(),
+        "capture write alone must not index under cfg(test)"
+    );
+
+    // Synchronous index: FTS must see the marker WITHOUT running any cycle.
+    let day_path = substrate.paths().day_page(now.date_naive());
+    super::indexer::index_capture_now(&day_path);
+
+    let doc = store::get_doc(DocSource::DayPage, &source_id)
+        .unwrap()
+        .expect("day page doc row exists immediately after index_capture_now");
+    let hits = store::fts_search(marker, 10).unwrap();
+    assert!(
+        hits.contains(&doc.id),
+        "FTS must match the captured marker with no indexer cycle"
+    );
+
+    // Identity parity: the periodic sync over the same substrate must upsert
+    // the SAME row. Drift would leave a second day_page doc carrying the same
+    // marker. Count by marker (not globally) to stay robust under parallel
+    // tests that write their own day pages into this shared DB.
+    let day_docs_with_marker = || {
+        store::recent_docs_for_source(DocSource::DayPage, 0, 1000)
+            .expect("day docs")
+            .into_iter()
+            .filter(|doc| doc.content.contains(marker))
+            .count()
+    };
+    assert_eq!(
+        day_docs_with_marker(),
+        1,
+        "index_capture_now created exactly one day page row"
+    );
+
+    let synced = sync_day_pages_with_substrate(&substrate).expect("sync day pages");
+    assert_eq!(synced, 1, "sync sees exactly the one day file");
+    assert_eq!(
+        day_docs_with_marker(),
+        1,
+        "sync reused the row index_capture_now created — no identity drift / duplicate"
+    );
+    let after = store::get_doc(DocSource::DayPage, &source_id)
+        .unwrap()
+        .expect("day page row still present after sync");
+    assert_eq!(
+        after.id, doc.id,
+        "sync upserted the same row id, proving shared identity"
+    );
+}
+
+#[test]
 fn brain_rebuild_from_files_restores_day_fragment_and_note_sources() {
     let _db = init_test_db();
     let tmp = tempfile::TempDir::new().expect("tempdir");

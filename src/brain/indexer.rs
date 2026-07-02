@@ -11,7 +11,7 @@
 
 use super::embedder::{resolve_embed_model, BrainEmbedder};
 use super::store::{self, DocSource};
-use super::substrate::BrainSubstrate;
+use super::substrate::{BrainFrontmatter, BrainSubstrate};
 use anyhow::{Context as _, Result};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -441,6 +441,95 @@ fn canonical_brain_path(kind: &str, filename: &str) -> String {
     format!("brain/{kind}/{filename}")
 }
 
+/// The identity + content a brain file source contributes to `brain_docs`.
+///
+/// Derived by ONE helper per source kind (`derive_day_page_doc`,
+/// `derive_fragment_doc`, `derive_note_doc`) so the periodic file-source sync
+/// and the synchronous capture-time index ([`index_capture_now`]) cannot
+/// drift. Drift is the sharp edge here: if the two paths disagreed on
+/// `source`/`source_id`/`canonical_path`, every capture would create a
+/// DUPLICATE row that the next sync cycle re-adds or garbage-collects.
+pub(crate) struct DerivedDoc {
+    pub source: DocSource,
+    pub source_id: String,
+    pub title: String,
+    pub content: String,
+    pub updated_at: i64,
+    pub canonical_path: String,
+}
+
+impl DerivedDoc {
+    fn upsert(&self) -> Result<i64> {
+        store::upsert_doc_with_canonical_path(
+            self.source,
+            &self.source_id,
+            &self.title,
+            &self.content,
+            self.updated_at,
+            Some(&self.canonical_path),
+        )
+    }
+}
+
+/// Day page identity: `source_id` is the `YYYY-MM-DD` file stem; the content is
+/// the raw file (day pages carry no frontmatter). `None` for a nameless or
+/// empty-stem path.
+fn derive_day_page_doc(path: &Path, content: &str) -> Option<DerivedDoc> {
+    let stem = path.file_stem().and_then(|stem| stem.to_str())?;
+    if stem.is_empty() {
+        return None;
+    }
+    let filename = path.file_name().and_then(|name| name.to_str())?;
+    Some(DerivedDoc {
+        source: DocSource::DayPage,
+        source_id: stem.to_string(),
+        title: format!("Day Page {stem}"),
+        content: content.to_string(),
+        updated_at: file_mtime_timestamp(path),
+        canonical_path: canonical_brain_path("days", filename),
+    })
+}
+
+/// Fragment identity: `source_id` is the file stem; title, content (body plus
+/// appended provenance), and `updated_at` come from the parsed frontmatter.
+fn derive_fragment_doc(
+    path: &Path,
+    frontmatter: &BrainFrontmatter,
+    body: &str,
+) -> Option<DerivedDoc> {
+    let fragment_id = path.file_stem().and_then(|stem| stem.to_str())?;
+    if fragment_id.is_empty() {
+        return None;
+    }
+    let filename = path.file_name().and_then(|name| name.to_str())?;
+    let mut content = body.to_string();
+    if let Some(source) = &frontmatter.source {
+        content.push_str(&format!("\n\nProvenance: {source}"));
+    }
+    Some(DerivedDoc {
+        source: DocSource::Fragment,
+        source_id: fragment_id.to_string(),
+        title: fragment_title(fragment_id, frontmatter.source.as_deref()),
+        content,
+        updated_at: frontmatter.updated.timestamp(),
+        canonical_path: canonical_brain_path("fragments", filename),
+    })
+}
+
+/// Note identity: `source_id` is the frontmatter id; the title is derived from
+/// the body's first non-empty line.
+fn derive_note_doc(path: &Path, frontmatter: &BrainFrontmatter, body: &str) -> Option<DerivedDoc> {
+    let filename = path.file_name().and_then(|name| name.to_str())?;
+    Some(DerivedDoc {
+        source: DocSource::Note,
+        source_id: frontmatter.id.to_string(),
+        title: title_from_note_body(body),
+        content: body.to_string(),
+        updated_at: frontmatter.updated.timestamp(),
+        canonical_path: canonical_brain_path("notes", filename),
+    })
+}
+
 pub(crate) fn sync_notes_with_substrate(substrate: &BrainSubstrate) -> Result<usize> {
     let notes_dir = substrate.paths().notes_dir();
     let mut synced = 0usize;
@@ -470,22 +559,11 @@ pub(crate) fn sync_notes_with_substrate(substrate: &BrainSubstrate) -> Result<us
                 continue;
             }
         };
-        let title = title_from_note_body(&body);
-        let source_id = frontmatter.id.to_string();
-        let updated_at = frontmatter.updated.timestamp();
-        let Some(filename) = path.file_name().and_then(|name| name.to_str()) else {
+        let Some(doc) = derive_note_doc(&path, &frontmatter, &body) else {
             continue;
         };
-        let canonical_path = canonical_brain_path("notes", filename);
-        store::upsert_doc_with_canonical_path(
-            DocSource::Note,
-            &source_id,
-            &title,
-            &body,
-            updated_at,
-            Some(&canonical_path),
-        )?;
-        live_ids.push(source_id);
+        doc.upsert()?;
+        live_ids.push(doc.source_id);
         synced += 1;
     }
     let removed = forget_missing_file_docs(DocSource::Note, substrate.paths().base(), &live_ids)?;
@@ -506,10 +584,6 @@ pub(crate) fn sync_day_pages_with_substrate(substrate: &BrainSubstrate) -> Resul
     let mut synced = 0usize;
     let mut live_ids = Vec::new();
     for path in list_markdown_files(&days_dir)? {
-        let source_id = match path.file_stem().and_then(|stem| stem.to_str()) {
-            Some(stem) if !stem.is_empty() => stem.to_string(),
-            _ => continue,
-        };
         let content = match fs::read_to_string(&path) {
             Ok(content) => content,
             Err(error) => {
@@ -522,21 +596,11 @@ pub(crate) fn sync_day_pages_with_substrate(substrate: &BrainSubstrate) -> Resul
                 continue;
             }
         };
-        let title = format!("Day Page {source_id}");
-        let updated_at = file_mtime_timestamp(&path);
-        let Some(filename) = path.file_name().and_then(|name| name.to_str()) else {
+        let Some(doc) = derive_day_page_doc(&path, &content) else {
             continue;
         };
-        let canonical_path = canonical_brain_path("days", filename);
-        store::upsert_doc_with_canonical_path(
-            DocSource::DayPage,
-            &source_id,
-            &title,
-            &content,
-            updated_at,
-            Some(&canonical_path),
-        )?;
-        live_ids.push(source_id);
+        doc.upsert()?;
+        live_ids.push(doc.source_id);
         synced += 1;
     }
     let removed =
@@ -558,10 +622,6 @@ pub(crate) fn sync_fragments_with_substrate(substrate: &BrainSubstrate) -> Resul
     let mut synced = 0usize;
     let mut live_ids = Vec::new();
     for path in list_markdown_files(&fragments_dir)? {
-        let fragment_id = match path.file_stem().and_then(|stem| stem.to_str()) {
-            Some(stem) if !stem.is_empty() => stem.to_string(),
-            _ => continue,
-        };
         let raw = match fs::read_to_string(&path) {
             Ok(raw) => raw,
             Err(error) => {
@@ -586,25 +646,11 @@ pub(crate) fn sync_fragments_with_substrate(substrate: &BrainSubstrate) -> Resul
                 continue;
             }
         };
-        let title = fragment_title(&fragment_id, frontmatter.source.as_deref());
-        let mut content = body;
-        if let Some(source) = &frontmatter.source {
-            content.push_str(&format!("\n\nProvenance: {source}"));
-        }
-        let updated_at = frontmatter.updated.timestamp();
-        let Some(filename) = path.file_name().and_then(|name| name.to_str()) else {
+        let Some(doc) = derive_fragment_doc(&path, &frontmatter, &body) else {
             continue;
         };
-        let canonical_path = canonical_brain_path("fragments", filename);
-        store::upsert_doc_with_canonical_path(
-            DocSource::Fragment,
-            &fragment_id,
-            &title,
-            &content,
-            updated_at,
-            Some(&canonical_path),
-        )?;
-        live_ids.push(fragment_id);
+        doc.upsert()?;
+        live_ids.push(doc.source_id);
         synced += 1;
     }
     let removed =
@@ -614,6 +660,88 @@ pub(crate) fn sync_fragments_with_substrate(substrate: &BrainSubstrate) -> Resul
     }
     Ok(synced)
 }
+
+/// Index a just-captured brain file into the derived store immediately so
+/// lexical (FTS) recall sees it without waiting for the next indexer cycle.
+/// Embeddings remain async: the periodic cycle picks up docs whose vectors are
+/// missing, and this wakes it. Failures are logged, never surfaced — capture
+/// must never fail because indexing hiccuped.
+pub fn index_capture_now(path: &Path) {
+    if let Err(error) = try_index_capture(path) {
+        tracing::warn!(
+            target: "script_kit::brain",
+            path = %path.display(),
+            error = %error,
+            "synchronous capture index skipped"
+        );
+    }
+}
+
+fn try_index_capture(path: &Path) -> Result<()> {
+    let Some(doc) = derive_capture_doc(path)? else {
+        return Ok(());
+    };
+    store::init_brain_db()?;
+    doc.upsert()?;
+    // Embeddings stay async; nudge the indexer to vectorize the new row. This
+    // only sends a channel message — no model work runs on the caller thread.
+    wake_indexer();
+    Ok(())
+}
+
+/// Classify a brain file by its parent directory and derive its doc identity
+/// using the SAME per-source-kind helpers the periodic sync uses, so a capture
+/// and the next cycle agree on one row. Non-brain paths, non-markdown files,
+/// and conflict copies are ignored (`Ok(None)`).
+fn derive_capture_doc(path: &Path) -> Result<Option<DerivedDoc>> {
+    if path.extension().and_then(|ext| ext.to_str()) != Some("md") {
+        return Ok(None);
+    }
+    if is_conflict_copy_path(path) {
+        return Ok(None);
+    }
+    let kind = path
+        .parent()
+        .and_then(|parent| parent.file_name())
+        .and_then(|name| name.to_str());
+    match kind {
+        Some("days") => {
+            let content = fs::read_to_string(path)
+                .with_context(|| format!("reading captured day page {}", path.display()))?;
+            Ok(derive_day_page_doc(path, &content))
+        }
+        Some("fragments") => {
+            let raw = fs::read_to_string(path)
+                .with_context(|| format!("reading captured fragment {}", path.display()))?;
+            let (frontmatter, body) = BrainFrontmatter::parse(&raw)
+                .with_context(|| format!("parsing captured fragment {}", path.display()))?;
+            Ok(derive_fragment_doc(path, &frontmatter, &body))
+        }
+        Some("notes") => {
+            let raw = fs::read_to_string(path)
+                .with_context(|| format!("reading captured note {}", path.display()))?;
+            let (frontmatter, body) = BrainFrontmatter::parse(&raw)
+                .with_context(|| format!("parsing captured note {}", path.display()))?;
+            Ok(derive_note_doc(path, &frontmatter, &body))
+        }
+        _ => Ok(None),
+    }
+}
+
+/// Call-site wrapper for capture write paths (substrate `append_to_day` /
+/// `write_fragment` wrappers, Day Page editor saves). Real in production; a
+/// no-op under `cfg(test)` so unrelated capture-path tests (day_trace,
+/// sediment, day_page, substrate) that share the process-global test brain DB
+/// cannot contaminate brain source counts. The behavior itself is unit-tested
+/// directly via [`index_capture_now`] and proven end-to-end by the runtime
+/// probe (`scripts/agentic/brain-instant-recall-probe.ts`).
+#[cfg(not(test))]
+pub fn index_capture_after_write(path: &Path) {
+    index_capture_now(path);
+}
+
+#[cfg(test)]
+pub fn index_capture_after_write(_path: &Path) {}
 
 /// Mirror `;` capture stores into brain_docs: links (`links.md`) and snippets
 /// (`snippets.md`). Notes captured via `;note` already arrive through
