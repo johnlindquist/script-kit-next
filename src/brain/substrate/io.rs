@@ -3,8 +3,32 @@
 use std::fs;
 use std::io::Write as _;
 use std::path::Path;
+use std::sync::Mutex;
 
 use anyhow::{Context as _, Result};
+
+/// Process-wide serialization for every mutation of files under the brain
+/// substrate. Day/note/fragment files have multiple concurrent writers (editor
+/// autosave, `;todo` capture, clipboard sediment, dictation, agent traces);
+/// several perform an unlocked read-modify-write. Without one lock a background
+/// append can land between a save's disk read and its overwrite, silently
+/// dropping the appended line.
+static BRAIN_FILE_WRITE_LOCK: Mutex<()> = Mutex::new(());
+
+/// Run `f` while holding the process-wide brain file write lock. All mutations
+/// of files under the brain substrate (writes, appends, editor saves) MUST go
+/// through this so read-modify-write appends can never interleave with saves.
+///
+/// The lock is NOT reentrant: never call a `with_brain_write_lock`-wrapped
+/// function from inside another wrapped closure. `atomic_write` deliberately
+/// does not take the lock so it can be used as the write primitive inside a
+/// wrapped read-modify-write scope.
+pub fn with_brain_write_lock<T>(f: impl FnOnce() -> T) -> T {
+    let _guard = BRAIN_FILE_WRITE_LOCK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    f()
+}
 
 /// Write `contents` to `path` atomically via a temp file in the same directory.
 pub fn atomic_write(path: &Path, contents: &str) -> Result<()> {
@@ -40,21 +64,25 @@ pub fn atomic_write(path: &Path, contents: &str) -> Result<()> {
     Ok(())
 }
 
-/// Append `line` to an existing file atomically (read-modify-write).
+/// Append `line` to an existing file atomically (read-modify-write). The entire
+/// read-modify-write runs under [`with_brain_write_lock`] so a concurrent append
+/// or editor save cannot interleave between the disk read and the rewrite.
 pub fn atomic_append_line(path: &Path, line: &str) -> Result<()> {
-    let mut contents = if path.exists() {
-        fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?
-    } else {
-        String::new()
-    };
+    with_brain_write_lock(|| {
+        let mut contents = if path.exists() {
+            fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?
+        } else {
+            String::new()
+        };
 
-    if !contents.is_empty() && !contents.ends_with('\n') {
-        contents.push('\n');
-    }
-    contents.push_str(line);
-    if !line.ends_with('\n') {
-        contents.push('\n');
-    }
+        if !contents.is_empty() && !contents.ends_with('\n') {
+            contents.push('\n');
+        }
+        contents.push_str(line);
+        if !line.ends_with('\n') {
+            contents.push('\n');
+        }
 
-    atomic_write(path, &contents)
+        atomic_write(path, &contents)
+    })
 }

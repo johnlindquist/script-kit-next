@@ -1831,3 +1831,50 @@ fn embed_cycle_chunks_long_docs_and_clears_pending() {
     .unwrap();
     assert_eq!(embedded, 0, "all-empty vectors store nothing and terminate");
 }
+
+/// Concurrent `atomic_append_line` on one file must never drop a line. Before
+/// the process-wide write lock this read-modify-write raced: two threads read
+/// the same contents, each appended one line, and one overwrite clobbered the
+/// other. With the lock every append is serialized, so all 200 lines survive.
+#[test]
+fn concurrent_atomic_append_line_never_drops_a_line() {
+    use super::substrate::io::atomic_append_line;
+    use std::collections::HashSet;
+
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = dir.path().join("append-race.md");
+
+    const THREADS: usize = 8;
+    const PER_THREAD: usize = 25;
+
+    std::thread::scope(|scope| {
+        for thread_index in 0..THREADS {
+            let path = path.clone();
+            scope.spawn(move || {
+                for line_index in 0..PER_THREAD {
+                    atomic_append_line(&path, &format!("t{thread_index}-l{line_index}"))
+                        .expect("atomic append under lock");
+                }
+            });
+        }
+    });
+
+    let contents = std::fs::read_to_string(&path).expect("read appended file");
+    let lines: Vec<&str> = contents.lines().collect();
+    assert_eq!(
+        lines.len(),
+        THREADS * PER_THREAD,
+        "every append must survive the read-modify-write race"
+    );
+    let unique: HashSet<&str> = lines.iter().copied().collect();
+    assert_eq!(unique.len(), THREADS * PER_THREAD, "no duplicated lines");
+    for thread_index in 0..THREADS {
+        for line_index in 0..PER_THREAD {
+            let expected = format!("t{thread_index}-l{line_index}");
+            assert!(
+                unique.contains(expected.as_str()),
+                "missing appended line {expected}"
+            );
+        }
+    }
+}

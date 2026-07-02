@@ -7,7 +7,7 @@ use anyhow::{Context as _, Result};
 use chrono::{DateTime, NaiveDate, Utc};
 use chrono_tz::Tz;
 
-use super::io::atomic_write;
+use super::io::{atomic_write, with_brain_write_lock};
 use super::paths::BrainPaths;
 use super::trash::trash_file;
 use super::FragmentReference;
@@ -111,26 +111,33 @@ pub fn undo_clipboard_sediment_lines(
         return Ok(());
     }
 
-    let source_uri = format!("scriptkit://clipboard/{entry_id}");
-    let resource_uri = crate::clipboard_history::entry_resource_uri(entry_id);
-    let trimmed = text.trim();
+    // Hold the process-wide brain write lock across the whole read-modify-write
+    // (multiple day-page filters plus fragment trashing) so a concurrent append
+    // or editor save cannot interleave and resurrect a line we are removing.
+    // The nested helpers use `atomic_write`/`trash_file`, neither of which takes
+    // the lock, so this does not re-enter the non-reentrant mutex.
+    with_brain_write_lock(|| {
+        let source_uri = format!("scriptkit://clipboard/{entry_id}");
+        let resource_uri = crate::clipboard_history::entry_resource_uri(entry_id);
+        let trimmed = text.trim();
 
-    if let Some(day) = kept_url_day {
-        if let Ok(date) = NaiveDate::parse_from_str(day, "%Y-%m-%d") {
-            remove_kept_url_line(paths, date, trimmed)?;
-            remove_clipboard_ref_line(paths, date, &resource_uri)?;
+        if let Some(day) = kept_url_day {
+            if let Ok(date) = NaiveDate::parse_from_str(day, "%Y-%m-%d") {
+                remove_kept_url_line(paths, date, trimmed)?;
+                remove_clipboard_ref_line(paths, date, &resource_uri)?;
+            }
         }
-    }
 
-    if brain_kept {
-        let (today, _) = local_day_and_time(now, tz);
-        remove_clipboard_ref_line(paths, today, &resource_uri)?;
-        remove_capture_line(paths, today, trimmed)?;
-        remove_fragment_reference_for_source(paths, today, &source_uri)?;
-        trash_fragment_for_source(paths, &source_uri)?;
-    }
+        if brain_kept {
+            let (today, _) = local_day_and_time(now, tz);
+            remove_clipboard_ref_line(paths, today, &resource_uri)?;
+            remove_capture_line(paths, today, trimmed)?;
+            remove_fragment_reference_for_source(paths, today, &source_uri)?;
+            trash_fragment_for_source(paths, &source_uri)?;
+        }
 
-    Ok(())
+        Ok(())
+    })
 }
 
 fn remove_kept_url_line(paths: &BrainPaths, date: NaiveDate, url: &str) -> Result<()> {

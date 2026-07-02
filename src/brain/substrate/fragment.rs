@@ -8,7 +8,7 @@ use crate::notes::NoteId;
 
 use super::day::local_day_and_time;
 use super::frontmatter::BrainFrontmatter;
-use super::io::atomic_write;
+use super::io::{atomic_write, with_brain_write_lock};
 use super::paths::BrainPaths;
 use super::slug::{dedupe_slug_in_dir, source_slug};
 use super::words::{excerpt_words, word_count};
@@ -53,15 +53,21 @@ pub fn write_fragment_with_why(
     let (date, time_hm) = local_day_and_time(now, tz);
     let stamp = time_hm.replace(':', "");
     let base_id = format!("{date}-{stamp}-{}", source_slug(source_label));
-    let fragment_id = dedupe_slug_in_dir(&paths.fragments_dir(), &base_id);
-    let fragment_path = paths.fragment_file(&fragment_id);
 
     let mut frontmatter = BrainFrontmatter::new(NoteId::new(), now, now).with_source(source_uri);
     if let Some(why) = why.filter(|value| !value.trim().is_empty()) {
         frontmatter = frontmatter.with_why(why);
     }
     let document = frontmatter.render(content.trim());
-    atomic_write(&fragment_path, &document)?;
+
+    // Serialize slug dedup + write under the process-wide brain write lock so
+    // two concurrent fragment writers cannot pick the same slug and clobber each
+    // other's file. `atomic_write` does not take the lock, so no re-entry.
+    let fragment_id = with_brain_write_lock(|| -> Result<String> {
+        let fragment_id = dedupe_slug_in_dir(&paths.fragments_dir(), &base_id);
+        atomic_write(&paths.fragment_file(&fragment_id), &document)?;
+        Ok(fragment_id)
+    })?;
 
     let excerpt = excerpt_words(content, FRAGMENT_EXCERPT_WORDS);
     let relative_link = format!("../fragments/{fragment_id}.md");
