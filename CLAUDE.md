@@ -121,6 +121,8 @@ Disk policy: the wrapper enforces a total `target-agent` budget at lock acquisit
 
 Source-audit tests (tests that `read_to_string`/`include_str!` app source and assert on its text) are decision locks, not behavior coverage. They are a scarce resource — do NOT mint one per feature pass.
 
+Reality check: roughly three quarters of `tests/` predates this policy and is source audits. That corpus is grandfathered behind `tests/source_audit_ratchet.rs` (shrink-only) — its prevalence is NOT precedent for writing more. New invariants climb the ladder below, and when a grandfathered audit blocks a legitimate refactor, apply the pruning rule instead of patching its strings.
+
 Enforcement ladder — pick the highest rung that can express the invariant:
 
 1. **Compiler/type system** — exhaustive `match` without a wildcard arm, newtypes for tokens, visibility. If the compiler can enforce it, do not write a test for it.
