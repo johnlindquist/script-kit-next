@@ -5347,6 +5347,7 @@ impl AgentChatView {
                 focused_text_phase,
                 focused_text_input_locked,
                 ui_thread_id,
+                fork_points,
             ) = {
                 let thread_ref = thread.read(cx);
                 let activity = thread_ref.awaiting_first_assistant_text();
@@ -5368,7 +5369,8 @@ impl AgentChatView {
                     .filter(|r| r.validated)
                     .map(|r| r.path);
                 let tid = thread_ref.ui_thread_id().to_string();
-                (activity, msgs, st, pd, md, ready, phase, locked, tid)
+                let forks = thread_ref.fork_points().to_vec();
+                (activity, msgs, st, pd, md, ready, phase, locked, tid, forks)
             };
 
             // The active thread's messages are on screen — mark them seen.
@@ -5418,6 +5420,8 @@ impl AgentChatView {
                 transcript.update(cx, |transcript, cx| {
                     transcript.set_messages(messages, cx);
                     transcript.set_show_activity_row(activity_row_visible, cx);
+                    transcript.set_thread_status(status, cx);
+                    transcript.set_fork_points(fork_points, cx);
                 });
             }
 
@@ -12085,15 +12089,63 @@ impl AgentChatView {
     }
 
     fn ensure_transcript(&mut self, cx: &mut Context<Self>) -> Entity<AgentChatTranscript> {
-        let messages = {
+        let (messages, status, fork_points) = {
             let thread_ref = self.live_thread().read(cx);
-            thread_ref.messages.clone()
+            (
+                thread_ref.messages.clone(),
+                thread_ref.status,
+                thread_ref.fork_points().to_vec(),
+            )
         };
+
+        let weak_view = cx.entity().downgrade();
+        let fork_handler = std::sync::Arc::new(
+            move |message_id: u64, window: &mut Window, cx: &mut App| {
+                let Some(view) = weak_view.upgrade() else {
+                    return;
+                };
+                view.update(cx, |this, cx| {
+                let Some(thread) = this.thread() else {
+                    return;
+                };
+                let mut fork_requested = false;
+                thread.update(cx, |thread, cx| {
+                    let Some(point) = AgentChatThread::fork_point_for_message_id(
+                        &thread.messages,
+                        thread.fork_points(),
+                        message_id,
+                    ) else {
+                        thread.push_system_message(
+                            "Edit branch unavailable for this message. Try again after the fork list refreshes.",
+                            cx,
+                        );
+                        return;
+                    };
+                    let entry_id = point.entry_id.clone();
+                    if thread.fork_to_message(&entry_id, cx) {
+                        fork_requested = true;
+                    } else {
+                        thread.push_system_message(
+                            "Edit branch unavailable right now. Wait for the current turn to finish and try again.",
+                            cx,
+                        );
+                    }
+                });
+                if fork_requested && !this.focus_handle.is_focused(window) {
+                    window.focus(&this.focus_handle, cx);
+                    this.cursor_visible = true;
+                }
+            });
+            },
+        );
 
         if let Some(transcript) = &self.transcript {
             transcript.update(cx, |transcript, cx| {
+                transcript.set_on_fork_edit_message(fork_handler.clone());
                 transcript.set_messages(messages, cx);
                 transcript.set_ui_variant(self.ui_variant, cx);
+                transcript.set_thread_status(status, cx);
+                transcript.set_fork_points(fork_points, cx);
             });
             return transcript.clone();
         }
@@ -12101,12 +12153,42 @@ impl AgentChatView {
         let ui_variant = self.ui_variant;
         let transcript =
             cx.new(|cx| AgentChatTranscript::new(messages, cx).with_ui_variant(ui_variant));
+        transcript.update(cx, |transcript, cx| {
+            transcript.set_on_fork_edit_message(fork_handler);
+            transcript.set_thread_status(status, cx);
+            transcript.set_fork_points(fork_points, cx);
+        });
 
         cx.subscribe(
             &transcript,
-            |_this, _transcript, _event, _cx| match _event {
+            |this, _transcript, event, cx| match event {
                 AgentChatTranscriptEvent::ToggleMessage(_id) => {
                     // Handle message toggle if needed by parent
+                }
+                AgentChatTranscriptEvent::ForkEditMessage(message_id) => {
+                    let Some(thread) = this.thread() else {
+                        return;
+                    };
+                    thread.update(cx, |thread, cx| {
+                        let Some(point) = AgentChatThread::fork_point_for_message_id(
+                            &thread.messages,
+                            thread.fork_points(),
+                            *message_id,
+                        ) else {
+                            thread.push_system_message(
+                                "Edit branch unavailable for this message. Try again after the fork list refreshes.",
+                                cx,
+                            );
+                            return;
+                        };
+                        let entry_id = point.entry_id.clone();
+                        if !thread.fork_to_message(&entry_id, cx) {
+                            thread.push_system_message(
+                                "Edit branch unavailable right now. Wait for the current turn to finish and try again.",
+                                cx,
+                            );
+                        }
+                    });
                 }
             },
         )

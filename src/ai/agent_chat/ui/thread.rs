@@ -2670,6 +2670,31 @@ impl AgentChatThread {
         &self.fork_points
     }
 
+    /// Resolve the Pi fork point for a transcript user message. Primary mapping
+    /// is conversation ordinal: nth visible user message maps to nth Pi fork
+    /// point. If the local transcript and Pi fork list are out of sync, fall
+    /// back to exact user-message text matching.
+    pub(crate) fn fork_point_for_message_id<'a>(
+        messages: &[AgentChatThreadMessage],
+        fork_points: &'a [super::events::AgentChatForkPoint],
+        message_id: u64,
+    ) -> Option<&'a super::events::AgentChatForkPoint> {
+        let user_messages: Vec<&AgentChatThreadMessage> = messages
+            .iter()
+            .filter(|message| matches!(message.role, AgentChatThreadMessageRole::User))
+            .collect();
+        let user_ordinal = user_messages
+            .iter()
+            .position(|message| message.id == message_id)?;
+
+        if user_messages.len() == fork_points.len() {
+            return fork_points.get(user_ordinal);
+        }
+
+        let user_text = user_messages[user_ordinal].body.as_ref();
+        fork_points.iter().find(|point| point.text == user_text)
+    }
+
     /// Refresh the rewindable user-message list from the agent session.
     /// No-op (with a debug log) for connections without rewind support.
     pub(crate) fn refresh_fork_points(&mut self, cx: &mut Context<Self>) {
@@ -3862,6 +3887,68 @@ mod tests {
 
         assert_eq!(thread.messages.len(), 1, "transcript untouched");
         assert!(thread.input.text().is_empty(), "composer untouched");
+    }
+
+    #[test]
+    fn fork_point_for_message_id_maps_by_user_ordinal() {
+        let mut thread = test_thread(Vec::new(), false);
+        thread.push_message(AgentChatThreadMessageRole::User, "first ask");
+        thread.push_message(AgentChatThreadMessageRole::Assistant, "first answer");
+        thread.push_message(AgentChatThreadMessageRole::User, "second ask");
+        let second_user_id = thread.messages[2].id;
+        let fork_points = vec![
+            fork_point("entry-0", "stale first text from pi"),
+            fork_point("entry-1", "stale second text from pi"),
+        ];
+
+        let point = AgentChatThread::fork_point_for_message_id(
+            &thread.messages,
+            &fork_points,
+            second_user_id,
+        )
+        .expect("second user message should resolve by ordinal");
+
+        assert_eq!(point.entry_id, "entry-1");
+    }
+
+    #[test]
+    fn fork_point_for_message_id_falls_back_to_text_when_lengths_mismatch() {
+        let mut thread = test_thread(Vec::new(), false);
+        thread.push_message(AgentChatThreadMessageRole::User, "first ask");
+        thread.push_message(AgentChatThreadMessageRole::Assistant, "first answer");
+        thread.push_message(AgentChatThreadMessageRole::User, "second ask");
+        let second_user_id = thread.messages[2].id;
+        let fork_points = vec![fork_point("entry-second", "second ask")];
+
+        let point = AgentChatThread::fork_point_for_message_id(
+            &thread.messages,
+            &fork_points,
+            second_user_id,
+        )
+        .expect("mismatched fork list should resolve by exact text");
+
+        assert_eq!(point.entry_id, "entry-second");
+    }
+
+    #[test]
+    fn fork_point_for_message_id_returns_none_when_unresolvable() {
+        let mut thread = test_thread(Vec::new(), false);
+        thread.push_message(AgentChatThreadMessageRole::User, "first ask");
+        let first_user_id = thread.messages[0].id;
+        let fork_points = Vec::new();
+
+        assert!(AgentChatThread::fork_point_for_message_id(
+            &thread.messages,
+            &fork_points,
+            first_user_id,
+        )
+        .is_none());
+        assert!(AgentChatThread::fork_point_for_message_id(
+            &thread.messages,
+            &fork_points,
+            first_user_id + 999,
+        )
+        .is_none());
     }
 
     #[test]

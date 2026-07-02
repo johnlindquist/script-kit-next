@@ -5,10 +5,14 @@ use gpui::{
 };
 use gpui_component::scroll::ScrollableElement;
 use gpui_component::text::{TextView, TextViewState, TextViewStyle};
+use gpui_component::tooltip::Tooltip;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
-use super::super::thread::{AgentChatThread, AgentChatThreadMessage, AgentChatThreadMessageRole};
+use super::super::events::AgentChatForkPoint;
+use super::super::thread::{
+    AgentChatThread, AgentChatThreadMessage, AgentChatThreadMessageRole, AgentChatThreadStatus,
+};
 use super::super::tool_card::{
     classify_diff_line, AgentChatToolCardMeta, AgentChatToolStatus, DiffLineKind,
 };
@@ -19,6 +23,7 @@ use crate::theme::{self, PromptColors};
 
 pub enum AgentChatTranscriptEvent {
     ToggleMessage(u64),
+    ForkEditMessage(u64),
 }
 
 impl gpui::EventEmitter<AgentChatTranscriptEvent> for AgentChatTranscript {}
@@ -146,6 +151,9 @@ pub struct AgentChatTranscript {
     message_texts: HashMap<u64, String>,
     message_stats: HashMap<u64, HeavyMarkdownStats>,
     message_previews: HashMap<u64, String>,
+    on_fork_edit_message: Option<Arc<dyn Fn(u64, &mut Window, &mut App) + 'static>>,
+    fork_points: Vec<AgentChatForkPoint>,
+    thread_status: AgentChatThreadStatus,
     ui_variant: AgentChatUiVariant,
     /// While a turn is streaming with no assistant text yet, render a
     /// synthetic "Thinking…" row at the tail so the wait is visible in the
@@ -168,6 +176,9 @@ impl AgentChatTranscript {
             message_texts: HashMap::new(),
             message_stats: HashMap::new(),
             message_previews: HashMap::new(),
+            on_fork_edit_message: None,
+            fork_points: Vec::new(),
+            thread_status: AgentChatThreadStatus::Idle,
             ui_variant: AgentChatUiVariant::Standard,
             show_activity_row: false,
         };
@@ -328,6 +339,37 @@ impl AgentChatTranscript {
         }
         self.show_activity_row = show;
         self.list_state.reset(self.row_count());
+        cx.notify();
+    }
+
+    pub(crate) fn set_on_fork_edit_message(
+        &mut self,
+        handler: Arc<dyn Fn(u64, &mut Window, &mut App) + 'static>,
+    ) {
+        self.on_fork_edit_message = Some(handler);
+    }
+
+    pub(crate) fn set_fork_points(
+        &mut self,
+        fork_points: Vec<AgentChatForkPoint>,
+        cx: &mut Context<Self>,
+    ) {
+        if self.fork_points == fork_points {
+            return;
+        }
+        self.fork_points = fork_points;
+        cx.notify();
+    }
+
+    pub(crate) fn set_thread_status(
+        &mut self,
+        thread_status: AgentChatThreadStatus,
+        cx: &mut Context<Self>,
+    ) {
+        if self.thread_status == thread_status {
+            return;
+        }
+        self.thread_status = thread_status;
         cx.notify();
     }
 
@@ -613,6 +655,10 @@ impl AgentChatTranscript {
         text_view_state: &gpui::Entity<TextViewState>,
         style_def: &AgentChatStyleDef,
         entity: &gpui::WeakEntity<AgentChatTranscript>,
+        messages: &[AgentChatThreadMessage],
+        fork_points: &[AgentChatForkPoint],
+        thread_status: AgentChatThreadStatus,
+        on_fork_edit_message: Option<Arc<dyn Fn(u64, &mut Window, &mut App) + 'static>>,
     ) -> gpui::AnyElement {
         let theme = theme::get_cached_theme();
         let presentation = ui_variant.config().transcript;
@@ -625,6 +671,11 @@ impl AgentChatTranscript {
                 text_view_state,
                 presentation,
                 style_def,
+                entity,
+                messages,
+                fork_points,
+                thread_status,
+                on_fork_edit_message,
             ),
             AgentChatThreadMessageRole::Assistant => Self::render_assistant_message(
                 msg,
@@ -700,15 +751,62 @@ impl AgentChatTranscript {
     }
 
     fn render_user_message(
-        _msg: &AgentChatThreadMessage,
+        msg: &AgentChatThreadMessage,
         _colors: &PromptColors,
         theme: &crate::theme::Theme,
         text_view_state: &gpui::Entity<TextViewState>,
         presentation: AgentChatTranscriptPresentation,
         style_def: &AgentChatStyleDef,
+        _entity: &gpui::WeakEntity<AgentChatTranscript>,
+        messages: &[AgentChatThreadMessage],
+        fork_points: &[AgentChatForkPoint],
+        thread_status: AgentChatThreadStatus,
+        on_fork_edit_message: Option<Arc<dyn Fn(u64, &mut Window, &mut App) + 'static>>,
     ) -> gpui::AnyElement {
         let user_style = style_def.user_message;
+        let forkable =
+            matches!(
+                thread_status,
+                AgentChatThreadStatus::Idle | AgentChatThreadStatus::Error
+            ) && AgentChatThread::fork_point_for_message_id(messages, fork_points, msg.id)
+                .is_some();
+        let message_id = msg.id;
+        let edit_button = (forkable && on_fork_edit_message.is_some()).then(|| {
+            let on_fork_edit_message = on_fork_edit_message.clone();
+            div()
+                .id(SharedString::from(format!(
+                    "agent_chat-fork-edit-{message_id}"
+                )))
+                .absolute()
+                .top(px(4.0))
+                .right(px(4.0))
+                .flex()
+                .items_center()
+                .justify_center()
+                .size(px(22.0))
+                .rounded(px(6.0))
+                .bg(rgba((theme.colors.text.primary << 8) | 0x08))
+                .text_color(rgb(_colors.text_primary))
+                .text_size(px((style_def.markdown.body_font_size - 1.0).max(10.0)))
+                .opacity(0.0)
+                .group_hover("agent-chat-user-message-row", |d| d.opacity(0.82))
+                .hover(|d| d.opacity(1.0))
+                .cursor_pointer()
+                .tooltip(|window, cx| {
+                    Tooltip::new("Edit & branch from here — removes later messages")
+                        .build(window, cx)
+                })
+                .on_click(move |_event, window, cx| {
+                    if let Some(handler) = on_fork_edit_message.as_ref() {
+                        handler(message_id, window, cx);
+                    }
+                })
+                .child("✎")
+        });
+
         let bubble = div()
+            .relative()
+            .group("agent-chat-user-message-row")
             .w_full()
             .px(px(user_style.padding_x))
             .py(
@@ -732,7 +830,8 @@ impl AgentChatTranscript {
                 _colors,
                 rgb(_colors.text_primary),
                 style_def,
-            ));
+            ))
+            .when_some(edit_button, |d, button| d.child(button));
 
         if matches!(presentation, AgentChatTranscriptPresentation::RoleSplit) {
             div()
@@ -1223,6 +1322,9 @@ impl Render for AgentChatTranscript {
             AgentChatTranscriptPresentation::FocusedTextPreview
         );
         let messages_snapshot = self.messages.clone();
+        let on_fork_edit_message = self.on_fork_edit_message.clone();
+        let fork_points_snapshot = self.fork_points.clone();
+        let thread_status = self.thread_status;
         let collapsed_ids = self.collapsed_ids.clone();
         let visible_indices: Vec<usize> = if focused_text_preview {
             messages_snapshot
@@ -1294,6 +1396,10 @@ impl Render for AgentChatTranscript {
                         text_view_state,
                         &style_def,
                         &entity,
+                        &messages_snapshot,
+                        &fork_points_snapshot,
+                        thread_status,
+                        on_fork_edit_message.clone(),
                     ));
                 } else {
                     continue;
@@ -1391,6 +1497,10 @@ impl Render for AgentChatTranscript {
                     text_view_state,
                     &style_def,
                     &entity,
+                    &messages_snapshot,
+                    &fork_points_snapshot,
+                    thread_status,
+                    on_fork_edit_message.clone(),
                 ))
                 .into_any()
             })
