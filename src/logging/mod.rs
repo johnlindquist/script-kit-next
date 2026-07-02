@@ -10,12 +10,13 @@
 //!
 //! When `SCRIPT_KIT_AI_LOG=1` is set, stderr uses compact format:
 //! ```text
-//! SS.mmm|L|C|message
+//! HH:MM:SS.mmm|L|C|message
 //! ```
 //! Where:
-//! - SS.mmm = seconds.milliseconds within current minute (resets each minute)
+//! - HH:MM:SS.mmm = UTC wall-clock time (sortable across the whole session;
+//!   matches the JSONL rfc3339 timestamps so agents can correlate the two)
 //! - L = single char level (i/w/e/d/t)
-//! - C = single char category code (see AGENTS.md for legend)
+//! - C = single char category code (see `category_to_code` below for the legend)
 //!
 //!
 //! # JSONL Output Format
@@ -332,16 +333,23 @@ fn infer_category_from_target(target: &str) -> char {
         '-' // Unknown
     }
 }
-/// Get seconds.milliseconds within current minute
-fn get_minute_timestamp() -> String {
+/// UTC wall-clock time as `HH:MM:SS.mmm`.
+///
+/// The old `SS.mmm` (seconds within the current minute) reset every 60s,
+/// which made app.log impossible to sort or slice by time — an agent could
+/// not express "logs since 14:32:05". Full clock time stays sortable across
+/// the whole session and lines up with the JSONL rfc3339 timestamps.
+fn get_compact_timestamp() -> String {
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default();
     let total_millis = now.as_millis();
-    let millis_in_minute = total_millis % 60_000;
-    let seconds = millis_in_minute / 1000;
-    let millis = millis_in_minute % 1000;
-    format!("{:02}.{:03}", seconds, millis)
+    let millis = total_millis % 1000;
+    let total_secs = total_millis / 1000;
+    let seconds = total_secs % 60;
+    let minutes = (total_secs / 60) % 60;
+    let hours = (total_secs / 3600) % 24;
+    format!("{:02}:{:02}:{:02}.{:03}", hours, minutes, seconds, millis)
 }
 /// Visitor to extract category field from tracing events
 struct CategoryExtractor {
@@ -429,7 +437,7 @@ impl Visit for CategoryExtractor {
     }
 }
 /// Compact AI formatter for stderr output.
-/// Format: `SS.mmm|L|C|message`
+/// Format: `HH:MM:SS.mmm|L|C|message` (UTC)
 pub struct CompactAiFormatter;
 impl<S, N> FormatEvent<S, N> for CompactAiFormatter
 where
@@ -442,7 +450,7 @@ where
         mut writer: fmt::format::Writer<'_>,
         event: &tracing::Event<'_>,
     ) -> std::fmt::Result {
-        let timestamp = get_minute_timestamp();
+        let timestamp = get_compact_timestamp();
         let level_char = level_to_char(*event.metadata().level());
 
         // Extract category and message from fields
@@ -2184,53 +2192,52 @@ mod tests {
         assert_eq!(legacy_level_for_category("UI"), LegacyLogLevel::Info);
     }
     // -------------------------------------------------------------------------
-    // get_minute_timestamp tests
+    // get_compact_timestamp tests
     // -------------------------------------------------------------------------
 
+    /// Parse "HH:MM:SS.mmm" into total milliseconds since midnight UTC.
+    fn parse_compact_ts(ts: &str) -> u64 {
+        let (clock, millis) = ts.split_once('.').expect("timestamp should contain '.'");
+        let parts: Vec<u64> = clock.split(':').map(|p| p.parse().unwrap()).collect();
+        assert_eq!(parts.len(), 3, "clock part of '{}' should be HH:MM:SS", ts);
+        let millis: u64 = millis.parse().expect("millis should be numeric");
+        ((parts[0] * 60 + parts[1]) * 60 + parts[2]) * 1000 + millis
+    }
+
     #[test]
-    fn test_get_minute_timestamp_format() {
-        let ts = get_minute_timestamp();
-        // Format should be "SS.mmm" - 2 digits, dot, 3 digits
-        assert_eq!(ts.len(), 6, "Timestamp '{}' should be 6 chars", ts);
-        assert!(ts.contains('.'), "Timestamp '{}' should contain '.'", ts);
-
-        let parts: Vec<&str> = ts.split('.').collect();
-        assert_eq!(parts.len(), 2);
-
-        let seconds: u32 = parts[0].parse().expect("seconds should be numeric");
-        let millis: u32 = parts[1].parse().expect("millis should be numeric");
-
-        assert!(seconds < 60, "Seconds {} should be < 60", seconds);
-        assert!(millis < 1000, "Millis {} should be < 1000", millis);
+    fn test_get_compact_timestamp_format() {
+        let ts = get_compact_timestamp();
+        // Format should be "HH:MM:SS.mmm" - sortable across the whole session
+        assert_eq!(ts.len(), 12, "Timestamp '{}' should be 12 chars", ts);
+        let total_ms = parse_compact_ts(&ts);
+        assert!(
+            total_ms < 24 * 3600 * 1000,
+            "Timestamp '{}' should be within one day",
+            ts
+        );
     }
     #[test]
-    fn test_get_minute_timestamp_changes() {
-        // Two calls in quick succession should produce similar timestamps
-        let ts1 = get_minute_timestamp();
+    fn test_get_compact_timestamp_monotonic_across_minute() {
+        // Two calls a few ms apart must remain ordered even when the wall
+        // clock crosses a minute boundary — the old SS.mmm format failed this.
+        let ts1 = get_compact_timestamp();
         std::thread::sleep(std::time::Duration::from_millis(5));
-        let ts2 = get_minute_timestamp();
+        let ts2 = get_compact_timestamp();
 
-        // Parse both
-        let parse = |ts: &str| -> u64 {
-            let parts: Vec<&str> = ts.split('.').collect();
-            let secs: u64 = parts[0].parse().unwrap();
-            let millis: u64 = parts[1].parse().unwrap();
-            secs * 1000 + millis
-        };
-
-        let diff = parse(&ts2).saturating_sub(parse(&ts1));
-        // Should be at least 5ms apart (we slept 5ms)
+        let diff = parse_compact_ts(&ts2).saturating_sub(parse_compact_ts(&ts1));
         assert!(
             diff >= 4,
             "Timestamps should be at least 4ms apart, got {}ms",
             diff
         );
-        // But not more than 100ms (reasonable execution time)
         assert!(
             diff < 100,
             "Timestamps should be less than 100ms apart, got {}ms",
             diff
         );
+        // Lexicographic ordering must agree with chronological ordering
+        // (ignoring the once-a-day midnight wraparound).
+        assert!(ts1 < ts2, "'{}' should sort before '{}'", ts1, ts2);
     }
     // -------------------------------------------------------------------------
     // Compact format output validation (pattern matching)
@@ -2239,14 +2246,14 @@ mod tests {
     #[test]
     fn test_compact_format_pattern() {
         // Real example from logs:
-        // "11.697|i|A|Application logging initialized event_type=app_lifecycle..."
-        let example = "11.697|i|A|Application logging initialized";
+        // "18:42:11.697|i|A|Application logging initialized event_type=app_lifecycle..."
+        let example = "18:42:11.697|i|A|Application logging initialized";
 
         let parts: Vec<&str> = example.split('|').collect();
         assert_eq!(parts.len(), 4, "Compact format should have 4 parts");
 
-        // Part 0: timestamp (SS.mmm)
-        assert_eq!(parts[0].len(), 6);
+        // Part 0: timestamp (HH:MM:SS.mmm)
+        assert_eq!(parts[0].len(), 12);
         assert!(parts[0].contains('.'));
 
         // Part 1: level (single char)
@@ -2263,10 +2270,14 @@ mod tests {
     fn test_compact_format_real_examples() {
         // Real log lines from test run
         let examples = [
-            ("11.697|i|A|Application logging initialized", "i", "A"),
-            ("11.717|i|N|Successfully loaded config", "i", "N"),
-            ("11.741|i|H|Registered global hotkey meta+Digit0", "i", "H"),
-            ("11.779|i|P|Available displays: 1", "i", "P"),
+            ("18:42:11.697|i|A|Application logging initialized", "i", "A"),
+            ("18:42:11.717|i|N|Successfully loaded config", "i", "N"),
+            (
+                "18:42:11.741|i|H|Registered global hotkey meta+Digit0",
+                "i",
+                "H",
+            ),
+            ("18:42:11.779|i|P|Available displays: 1", "i", "P"),
         ];
 
         for (line, expected_level, expected_cat) in examples {
@@ -2293,10 +2304,10 @@ mod tests {
     fn test_compact_format_token_savings() {
         // Real comparison from logs:
         // Standard: "2025-12-27T15:22:13.150640Z  INFO script_kit_gpui::logging: Selected display..."
-        // Compact:  "13.150|i|P|Selected display..."
+        // Compact:  "15:22:13.150|i|P|Selected display..."
 
         let standard_prefix = "2025-12-27T15:22:13.150640Z  INFO script_kit_gpui::logging: ";
-        let compact_prefix = "13.150|i|P|";
+        let compact_prefix = "15:22:13.150|i|P|";
 
         let savings_percent =
             100.0 - (compact_prefix.len() as f64 / standard_prefix.len() as f64 * 100.0);
@@ -2308,10 +2319,11 @@ mod tests {
             savings_percent
         );
 
-        // Actual: 11 chars vs 59 chars = 81% savings
+        // Actual: 17 chars vs 59 chars = ~71% savings (the full HH:MM:SS.mmm
+        // timestamp costs 6 chars over the old SS.mmm but keeps lines sortable)
         assert!(
-            savings_percent > 80.0,
-            "Should save >80% on prefix, got {:.1}%",
+            savings_percent > 70.0,
+            "Should save >70% on prefix, got {:.1}%",
             savings_percent
         );
     }

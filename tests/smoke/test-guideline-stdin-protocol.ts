@@ -31,7 +31,7 @@
  *
  * ## AI Log Mode:
  * Always use SCRIPT_KIT_AI_LOG=1 for compact logs (saves ~70% tokens)
- * Format: SS.mmm|L|C|message
+ * Format: HH:MM:SS.mmm|L|C|message (UTC)
  * Categories: P=POSITION A=APP U=UI S=STDIN H=HOTKEY V=VISIBILITY E=EXEC K=KEY etc.
  */
 
@@ -109,7 +109,7 @@ try {
       expected_warning_after_2s: 'WARNING: No stdin JSON received after 2 seconds'
     },
     ai_log_format: {
-      format: 'SS.mmm|L|C|message',
+      format: 'HH:MM:SS.mmm|L|C|message',
       levels: { i: 'INFO', w: 'WARN', e: 'ERROR', d: 'DEBUG', t: 'TRACE' },
       categories: {
         P: 'POSITION', A: 'APP', U: 'UI', S: 'STDIN',
