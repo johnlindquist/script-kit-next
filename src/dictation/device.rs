@@ -362,6 +362,38 @@ pub fn save_dictation_device_id(device_id: Option<&str>) -> Result<()> {
     Ok(())
 }
 
+/// Persist the selected dictation model catalog ID.
+///
+/// Pass `None` to clear the preference and revert to the default model.
+pub fn save_dictation_model(model: Option<&str>) -> Result<()> {
+    let mut prefs = crate::config::load_user_preferences();
+    prefs.dictation.model = model.map(str::to_owned);
+    crate::config::save_user_preferences(&prefs)?;
+    tracing::info!(
+        category = "DICTATION",
+        model = ?model,
+        "Saved dictation model preference"
+    );
+    crate::dictation::runtime::notify_dictation_model_preference_changed();
+    Ok(())
+}
+
+/// Persist the dictation language hint.
+///
+/// Pass `None` to clear the language preference.
+pub fn save_dictation_language(language: Option<&str>) -> Result<()> {
+    let mut prefs = crate::config::load_user_preferences();
+    prefs.dictation.language = language.map(str::to_owned);
+    crate::config::save_user_preferences(&prefs)?;
+    tracing::info!(
+        category = "DICTATION",
+        language = ?language,
+        "Saved dictation language preference"
+    );
+    crate::dictation::runtime::notify_dictation_model_preference_changed();
+    Ok(())
+}
+
 #[cfg(target_os = "macos")]
 use objc::runtime::{Object, BOOL, YES};
 #[cfg(target_os = "macos")]

@@ -4,6 +4,7 @@
 #![allow(unused_imports)]
 
 pub mod capture;
+mod catalog;
 mod delivery;
 mod device;
 pub mod download;
@@ -17,6 +18,10 @@ mod visualizer;
 mod window;
 
 pub use capture::{start_capture, DictationCaptureHandle};
+pub use catalog::{
+    dictation_model_catalog, dictation_model_entry, format_dictation_model_size,
+    DictationEngineKind, DictationModelCatalogEntry, DictationModelId,
+};
 pub use delivery::{
     parse_dictation_target_label, resolve_delivery_target_request,
     DictationDeliveryTargetResolution, DictationDeliveryTargetSource, DictationWrongTargetReason,
@@ -27,8 +32,9 @@ pub use device::{
     device_selection_action_from_value, device_selection_value, list_input_device_menu_items,
     list_input_devices, microphone_display_label, microphone_permission_status,
     request_microphone_permission, request_microphone_permission_nonblocking,
-    resolve_selected_input_device, save_dictation_device_id, DeviceResolution,
-    DictationDeviceMenuItem, DictationDeviceSelectionAction, DICTATION_SYSTEM_DEFAULT_DEVICE_VALUE,
+    resolve_selected_input_device, save_dictation_device_id, save_dictation_language,
+    save_dictation_model, DeviceResolution, DictationDeviceMenuItem,
+    DictationDeviceSelectionAction, DICTATION_SYSTEM_DEFAULT_DEVICE_VALUE,
 };
 pub use history::{
     build_history_entry, delete_history_entry, format_history_duration_ms,

@@ -405,8 +405,10 @@ impl ScriptListApp {
                     if !matches!(
                         value.as_str(),
                         BUILTIN_DICTATION_MODEL_DOWNLOAD
+                            | BUILTIN_DICTATION_MODEL_USE_RECOMMENDED
                             | BUILTIN_DICTATION_MODEL_CANCEL
                             | BUILTIN_DICTATION_MODEL_HIDE
+                            | BUILTIN_DICTATION_MODEL_START_PENDING
                     ) {
                         self.show_error_toast("Choose Download or Not now", cx);
                         return;
@@ -419,6 +421,19 @@ impl ScriptListApp {
                         true,
                     );
                     self.handle_dictation_model_selection(&value, cx);
+                    return;
+                }
+
+                // Intercept dictation setup prompt.
+                if prompt_id == BUILTIN_DICTATION_SETUP_PROMPT_ID {
+                    self.record_submit_diagnostic(
+                        "prompt",
+                        "submit_arg_prompt_from_current_state",
+                        Some(prompt_id),
+                        Some(value.as_str()),
+                        true,
+                    );
+                    self.handle_dictation_setup_selection(&value, cx);
                     return;
                 }
 

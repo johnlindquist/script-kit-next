@@ -24,6 +24,7 @@ pub trait DictationEngine: Send {
 pub struct DictationTranscriptionConfig {
     pub model_path: PathBuf,
     pub initial_prompt: Option<String>,
+    pub language: Option<String>,
     pub idle_unload_after: Duration,
     /// Minimum number of 16 kHz mono samples required before attempting
     /// transcription.  Shorter clips are treated as silence.
@@ -72,6 +73,7 @@ impl Default for DictationTranscriptionConfig {
         Self {
             model_path: resolve_default_model_path(),
             initial_prompt: None,
+            language: None,
             idle_unload_after: Duration::from_secs(300),
             // 100 ms at 16 kHz
             minimum_samples: 1_600,
@@ -179,6 +181,7 @@ pub fn build_session_result(
 /// `unload()` to free the model memory.
 pub struct WhisperDictationEngine {
     model_path: PathBuf,
+    language: Option<String>,
     engine: Option<TranscribeWhisperEngine>,
 }
 
@@ -186,6 +189,7 @@ impl std::fmt::Debug for WhisperDictationEngine {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("WhisperDictationEngine")
             .field("model_path", &self.model_path)
+            .field("language", &self.language)
             .field("engine_loaded", &self.engine.is_some())
             .finish()
     }
@@ -209,6 +213,7 @@ impl WhisperDictationEngine {
         }
         Ok(Self {
             model_path: path.clone(),
+            language: config.language.clone(),
             engine: None,
         })
     }
@@ -249,6 +254,7 @@ impl WhisperDictationEngine {
 
 impl DictationEngine for WhisperDictationEngine {
     fn transcribe(&mut self, samples: &[f32], initial_prompt: Option<&str>) -> Result<String> {
+        let language = self.language.clone();
         let engine = self.load_if_needed()?;
 
         tracing::debug!(
@@ -263,6 +269,7 @@ impl DictationEngine for WhisperDictationEngine {
                 samples,
                 &WhisperInferenceParams {
                     initial_prompt: initial_prompt.map(str::to_owned),
+                    language,
                     ..Default::default()
                 },
             )

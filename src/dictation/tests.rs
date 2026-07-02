@@ -606,6 +606,59 @@ fn resolve_whisper_model_path_ends_with_expected_filename() {
     );
 }
 
+#[test]
+fn dictation_model_catalog_ids_round_trip_and_unknown_falls_back() {
+    use crate::dictation::DictationModelId;
+
+    for entry in crate::dictation::dictation_model_catalog() {
+        assert_eq!(
+            DictationModelId::from_str(entry.stable_id),
+            Some(entry.id),
+            "catalog id must round-trip: {}",
+            entry.stable_id
+        );
+    }
+
+    assert_eq!(
+        DictationModelId::from_preference(Some("not-a-real-model")),
+        DictationModelId::default()
+    );
+    assert_eq!(
+        DictationModelId::from_preference(None),
+        DictationModelId::ParakeetTdt06bV3
+    );
+}
+
+#[test]
+fn dictation_model_catalog_marks_only_parakeet_recommended() {
+    use crate::dictation::DictationModelId;
+
+    let catalog = crate::dictation::dictation_model_catalog();
+    let recommended: Vec<_> = catalog
+        .iter()
+        .filter(|entry| entry.recommended)
+        .map(|entry| entry.id)
+        .collect();
+
+    assert_eq!(recommended, vec![DictationModelId::ParakeetTdt06bV3]);
+    assert!(catalog
+        .iter()
+        .any(|entry| entry.description == "Fast and accurate. Supports 25 European languages."));
+    assert!(catalog
+        .iter()
+        .any(|entry| entry.description == "Broadest language coverage, but may run a bit slow."));
+}
+
+#[test]
+fn dictation_model_size_formatting_reuses_human_readable_units() {
+    assert_eq!(crate::dictation::format_dictation_model_size(0), "0 B");
+    assert_eq!(crate::dictation::format_dictation_model_size(1024), "1 KB");
+    assert_eq!(
+        crate::dictation::format_dictation_model_size(500_000_000),
+        "476.8 MB"
+    );
+}
+
 // ---------------------------------------------------------------------------
 // Runtime handoff architecture tests
 // ---------------------------------------------------------------------------
@@ -1374,8 +1427,8 @@ fn dictation_surfaces_missing_model_with_download() {
         .expect("read builtin_execution.rs");
 
     assert!(
-        builtin_src.contains("is_parakeet_model_available()"),
-        "dictation start path must check Parakeet model availability"
+        builtin_src.contains("dictation_model_entry(model_id)"),
+        "dictation start path must check selected catalog model availability"
     );
     assert!(
         builtin_src.contains("start_parakeet_model_download"),
@@ -2344,13 +2397,37 @@ fn dictation_preferences_serialize_selected_device_id_as_camel_case() {
     let preferences = crate::config::ScriptKitUserPreferences {
         dictation: crate::config::DictationPreferences {
             selected_device_id: Some("usb-mic".to_string()),
+            ..Default::default()
         },
         ..Default::default()
     };
 
     let value = serde_json::to_value(&preferences).expect("serialize config-backed preferences");
     assert_eq!(value["dictation"]["selectedDeviceId"], "usb-mic");
+    assert!(value["dictation"].get("model").is_none());
+    assert!(value["dictation"].get("language").is_none());
     assert!(value["dictation"].get("selected_device_id").is_none());
+}
+
+#[test]
+fn dictation_preferences_serde_round_trip_model_and_language() {
+    let preferences = crate::config::ScriptKitUserPreferences {
+        dictation: crate::config::DictationPreferences {
+            selected_device_id: Some("usb-mic".to_string()),
+            model: Some("whisper-medium".to_string()),
+            language: Some("de".to_string()),
+        },
+        ..Default::default()
+    };
+
+    let value = serde_json::to_value(&preferences).expect("serialize dictation preferences");
+    assert_eq!(value["dictation"]["selectedDeviceId"], "usb-mic");
+    assert_eq!(value["dictation"]["model"], "whisper-medium");
+    assert_eq!(value["dictation"]["language"], "de");
+
+    let decoded: crate::config::ScriptKitUserPreferences =
+        serde_json::from_value(value).expect("deserialize dictation preferences");
+    assert_eq!(decoded.dictation, preferences.dictation);
 }
 
 #[test]
@@ -2377,6 +2454,7 @@ fn save_user_preferences_writes_config_and_cleans_known_legacy_settings() {
     let preferences = crate::config::ScriptKitUserPreferences {
         dictation: crate::config::DictationPreferences {
             selected_device_id: Some("usb-mic".to_string()),
+            ..Default::default()
         },
         ..Default::default()
     };
@@ -3780,29 +3858,48 @@ fn parakeet_model_archive_size_is_reasonable() {
 }
 
 // ---------------------------------------------------------------------------
-// Runtime Parakeet fallback logic
+// Runtime transcriber cache selection logic
 // ---------------------------------------------------------------------------
 
 #[test]
-fn runtime_uses_parakeet_only() {
-    let runtime_src = std::fs::read_to_string("src/dictation/runtime.rs").expect("read runtime.rs");
+fn transcriber_cache_rebuilds_when_model_or_language_changes_or_idle() {
+    use crate::dictation::runtime::{should_rebuild_cached_transcriber, CachedTranscriberKey};
+    use crate::dictation::DictationModelId;
 
-    assert!(
-        runtime_src.contains("is_parakeet_model_available"),
-        "runtime must check Parakeet model availability"
-    );
-    assert!(
-        runtime_src.contains("ParakeetDictationEngine"),
-        "runtime must reference ParakeetDictationEngine"
-    );
-    assert!(
-        !runtime_src.contains("WhisperDictationEngine"),
-        "runtime must not fall back to Whisper — Parakeet is the only engine"
-    );
-    assert!(
-        runtime_src.contains("Parakeet model not downloaded"),
-        "runtime must bail with a clear message when Parakeet is missing"
-    );
+    let parakeet = CachedTranscriberKey {
+        model_id: DictationModelId::ParakeetTdt06bV3,
+        language: None,
+    };
+    let whisper_en = CachedTranscriberKey {
+        model_id: DictationModelId::WhisperMedium,
+        language: Some("en".to_string()),
+    };
+    let whisper_de = CachedTranscriberKey {
+        model_id: DictationModelId::WhisperMedium,
+        language: Some("de".to_string()),
+    };
+
+    assert!(should_rebuild_cached_transcriber(None, &parakeet, false));
+    assert!(!should_rebuild_cached_transcriber(
+        Some(&parakeet),
+        &parakeet,
+        false
+    ));
+    assert!(should_rebuild_cached_transcriber(
+        Some(&parakeet),
+        &parakeet,
+        true
+    ));
+    assert!(should_rebuild_cached_transcriber(
+        Some(&parakeet),
+        &whisper_en,
+        false
+    ));
+    assert!(should_rebuild_cached_transcriber(
+        Some(&whisper_en),
+        &whisper_de,
+        false
+    ));
 }
 
 // ---------------------------------------------------------------------------
@@ -3851,7 +3948,7 @@ fn downloading_prompt_includes_eta_and_cancel_action() {
     let prompt_start = src
         .find("fn build_dictation_model_prompt")
         .expect("build_dictation_model_prompt must exist");
-    let prompt_src = &src[prompt_start..prompt_start + 5000.min(src.len() - prompt_start)];
+    let prompt_src = &src[prompt_start..prompt_start + 7000.min(src.len() - prompt_start)];
 
     assert!(
         prompt_src.contains("format_progress_summary"),
@@ -3913,8 +4010,8 @@ fn dictation_transcription_logs_model_resolution_details() {
         "transcription log must include model_is_file"
     );
     assert!(
-        src.contains("Parakeet model not downloaded"),
-        "runtime must bail with a clear message when Parakeet is missing"
+        src.contains("model not downloaded"),
+        "runtime must bail with a clear message when the selected model is missing"
     );
 }
 
@@ -4902,8 +4999,8 @@ fn missing_model_entry_gate_opens_download_prompt() {
 
     // Must check model availability before starting capture.
     assert!(
-        arm_src.contains("is_parakeet_model_available()"),
-        "Dictation entry must check Parakeet model availability"
+        arm_src.contains("model.is_available()"),
+        "Dictation entry must check selected model availability"
     );
 
     // When model is missing, must open the rich download prompt.
@@ -4915,7 +5012,7 @@ fn missing_model_entry_gate_opens_download_prompt() {
     // The model check must come before delivery target check — we don't
     // want to fail on delivery validation when the real issue is missing model.
     let model_check_pos = arm_src
-        .find("is_parakeet_model_available()")
+        .find("model.is_available()")
         .expect("model check must exist");
     let delivery_check_pos = arm_src
         .find("ensure_dictation_builtin_target_available")
@@ -4958,7 +5055,7 @@ fn dictation_start_preflight_requests_mic_access_and_uses_real_model_status() {
         "preflight must fire the TCC prompt for NotDetermined mic permission"
     );
     assert!(
-        preflight_src.contains("is_parakeet_model_available()"),
+        preflight_src.contains("model.is_available()"),
         "preflight must derive model status from disk, not hardcode Available"
     );
 }

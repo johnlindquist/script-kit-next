@@ -861,6 +861,12 @@ pub struct DictationPreferences {
     /// Persisted microphone device ID. `None` means use system default.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub selected_device_id: Option<String>,
+    /// Persisted dictation model catalog ID. `None` means use the default model.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
+    /// Persisted language hint for engines that support one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub language: Option<String>,
 }
 
 /// Projection of config-backed runtime preferences.

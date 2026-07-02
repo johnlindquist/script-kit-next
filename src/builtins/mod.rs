@@ -1852,19 +1852,18 @@ fn hidden_builtin_entry(id: &str) -> Option<BuiltInEntry> {
     match id {
         "builtin/dictation-to-app" => Some(BuiltInEntry::new_with_icon(
             id,
-            "Start Dictation to Agent Chat",
-            "Start dictation and submit the result to Agent Chat",
+            "Start Dictation to App",
+            "Start dictation and paste the result into the frontmost app",
             vec![
                 "dictation",
                 "dictate",
                 "voice",
                 "microphone",
                 "app",
-                "agent_chat",
-                "chat",
-                "ai",
+                "frontmost",
+                "paste",
             ],
-            BuiltInFeature::DictationToAiHarness,
+            BuiltInFeature::DictationToFrontmostApp,
             "mic",
         )),
         "builtin/dictation-to-notes" => Some(BuiltInEntry::new_with_icon(
@@ -2907,7 +2906,7 @@ mod tests {
 
         let app_route = resolve_builtin_entry("builtin/dictation-to-app", &config)
             .expect("dictation-to-app route should resolve");
-        assert_eq!(app_route.feature, BuiltInFeature::DictationToAiHarness);
+        assert_eq!(app_route.feature, BuiltInFeature::DictationToFrontmostApp);
 
         let notes_route = resolve_builtin_entry("builtin/dictation-to-notes", &config)
             .expect("dictation-to-notes route should resolve");

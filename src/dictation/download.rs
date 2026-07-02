@@ -279,6 +279,15 @@ pub fn download_parakeet_model(
     Ok(model_dir)
 }
 
+/// Return the size of the resumable Parakeet archive partial, when present.
+pub fn parakeet_partial_archive_size() -> Option<u64> {
+    let model_dir = resolve_default_model_path();
+    let models_parent = model_dir.parent()?;
+    let partial_path = models_parent.join("parakeet-v3-int8.tar.gz.partial");
+    let len = std::fs::metadata(partial_path).ok()?.len();
+    (len > 0).then_some(len)
+}
+
 /// Download the archive file with resume support.
 fn download_archive(
     url: &str,

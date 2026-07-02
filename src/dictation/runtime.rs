@@ -1,9 +1,9 @@
 use crate::dictation::capture::{start_capture, DictationCaptureHandle};
+use crate::dictation::catalog::{dictation_model_entry, DictationEngineKind, DictationModelId};
 use crate::dictation::device::{list_input_devices, resolve_selected_input_device};
 use crate::dictation::transcription::{
-    captured_duration, is_parakeet_model_available, merge_captured_chunks,
-    should_skip_transcription, DictationTranscriber, DictationTranscriptionConfig,
-    ParakeetDictationEngine,
+    captured_duration, merge_captured_chunks, DictationTranscriber, DictationTranscriptionConfig,
+    ParakeetDictationEngine, WhisperDictationEngine,
 };
 use crate::dictation::types::{
     CapturedAudioChunk, CompletedDictationCapture, DictationCaptureConfig, DictationCaptureEvent,
@@ -91,7 +91,18 @@ static LAST_STOP_RECEIPT: Mutex<Option<serde_json::Value>> = Mutex::new(None);
 /// Lazily-initialized transcriber, kept alive across sessions so the model
 /// does not need to be reloaded for every dictation.  Unloaded after an idle
 /// timeout via `maybe_unload_transcriber()`.
-static TRANSCRIBER: Mutex<Option<DictationTranscriber>> = Mutex::new(None);
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct CachedTranscriberKey {
+    pub model_id: DictationModelId,
+    pub language: Option<String>,
+}
+
+struct CachedTranscriber {
+    key: CachedTranscriberKey,
+    transcriber: DictationTranscriber,
+}
+
+static TRANSCRIBER: Mutex<Option<CachedTranscriber>> = Mutex::new(None);
 
 /// Monotonic counter for redacted delivery receipts exposed through automation.
 static DELIVERY_RECEIPT_GENERATION: AtomicU64 = AtomicU64::new(0);
@@ -618,6 +629,8 @@ pub fn automation_state() -> serde_json::Value {
     let config = crate::config::load_config();
     let prefs = crate::config::load_user_preferences();
     let selected_device_id = prefs.dictation.selected_device_id.as_deref();
+    let selected_model_id = DictationModelId::from_preference(prefs.dictation.model.as_deref());
+    let selected_model = dictation_model_entry(selected_model_id);
     let permission = crate::dictation::microphone_permission_status();
     let devices_result = if matches!(
         permission,
@@ -657,8 +670,13 @@ pub fn automation_state() -> serde_json::Value {
             "ready": setup_state.ready,
             "model": {
                 "status": dictation_model_status_label(&setup_state.model_status),
+                "id": selected_model.stable_id,
+                "displayName": selected_model.display_name,
+                "description": selected_model.description,
+                "recommended": selected_model.recommended,
+                "downloadedSize": selected_model.downloaded_size_label(),
                 "generation": generation,
-                "source": "parakeetModelAvailability",
+                "source": "dictationModelCatalog",
             },
             "microphone": {
                 "permissionStatus": format!("{:?}", permission),
@@ -713,12 +731,27 @@ pub(crate) fn notify_dictation_device_preference_changed() -> u64 {
     bump_dictation_state_generation()
 }
 
+pub(crate) fn notify_dictation_model_preference_changed() -> u64 {
+    *TRANSCRIBER.lock() = None;
+    bump_dictation_state_generation()
+}
+
 fn dictation_model_status() -> DictationModelStatus {
-    if is_parakeet_model_available() {
+    let prefs = crate::config::load_user_preferences();
+    let model_id = DictationModelId::from_preference(prefs.dictation.model.as_deref());
+    if dictation_model_entry(model_id).is_available() {
         DictationModelStatus::Available
     } else {
         DictationModelStatus::NotDownloaded
     }
+}
+
+pub(crate) fn should_rebuild_cached_transcriber(
+    cached_key: Option<&CachedTranscriberKey>,
+    requested_key: &CachedTranscriberKey,
+    cached_is_idle: bool,
+) -> bool {
+    cached_key != Some(requested_key) || cached_is_idle
 }
 
 fn dictation_model_status_label(status: &DictationModelStatus) -> &'static str {
@@ -803,7 +836,14 @@ fn microphone_device_snapshot(
 /// subsequent calls.  Returns `Ok(None)` when the audio is too short or
 /// silent.
 pub fn transcribe_captured_audio(chunks: &[CapturedAudioChunk]) -> Result<Option<String>> {
-    let config = DictationTranscriptionConfig::default();
+    let prefs = crate::config::load_user_preferences();
+    let model_id = DictationModelId::from_preference(prefs.dictation.model.as_deref());
+    let catalog_entry = dictation_model_entry(model_id);
+    let config = DictationTranscriptionConfig {
+        model_path: catalog_entry.path(),
+        language: prefs.dictation.language.clone(),
+        ..Default::default()
+    };
     let audio_duration = captured_duration(chunks);
     let samples = merge_captured_chunks(chunks);
     let rms = crate::dictation::transcription::rms(&samples);
@@ -815,6 +855,8 @@ pub fn transcribe_captured_audio(chunks: &[CapturedAudioChunk]) -> Result<Option
         sample_count = samples.len(),
         rms,
         minimum_samples = config.minimum_samples,
+        model_id = catalog_entry.stable_id,
+        model_display_name = catalog_entry.display_name,
         model_path = %config.model_path.display(),
         model_exists = config.model_path.exists(),
         model_is_file = config.model_path.is_file(),
@@ -842,11 +884,20 @@ pub fn transcribe_captured_audio(chunks: &[CapturedAudioChunk]) -> Result<Option
     }
 
     let mut guard = TRANSCRIBER.lock();
+    let requested_key = CachedTranscriberKey {
+        model_id,
+        language: config.language.clone(),
+    };
 
-    let should_rebuild = guard
+    let cached_is_idle = guard
         .as_ref()
-        .map(DictationTranscriber::is_idle)
-        .unwrap_or(true);
+        .map(|cached| cached.transcriber.is_idle())
+        .unwrap_or(false);
+    let should_rebuild = should_rebuild_cached_transcriber(
+        guard.as_ref().map(|cached| &cached.key),
+        &requested_key,
+        cached_is_idle,
+    );
 
     tracing::debug!(
         category = "DICTATION",
@@ -856,30 +907,55 @@ pub fn transcribe_captured_audio(chunks: &[CapturedAudioChunk]) -> Result<Option
     );
 
     if should_rebuild {
-        if !is_parakeet_model_available() {
-            anyhow::bail!(
-                "Parakeet model not downloaded. Use the dictation settings to download it."
-            );
+        if !catalog_entry.is_available() {
+            if matches!(catalog_entry.engine_kind, DictationEngineKind::Parakeet) {
+                anyhow::bail!(
+                    "Parakeet model not downloaded ({}). Use the dictation settings to download it.",
+                    catalog_entry.display_name
+                );
+            } else {
+                anyhow::bail!(
+                    "{} model not downloaded. Use the dictation settings to download it.",
+                    catalog_entry.display_name
+                );
+            }
         }
         tracing::info!(
             category = "DICTATION",
+            model_id = catalog_entry.stable_id,
+            model_display_name = catalog_entry.display_name,
             model_path = %config.model_path.display(),
-            "Initializing Parakeet ONNX dictation engine"
+            "Initializing dictation engine"
         );
-        let engine: Box<dyn crate::dictation::transcription::DictationEngine> = Box::new(
-            ParakeetDictationEngine::new(&config.model_path).with_context(|| {
-                format!(
-                    "failed to initialize Parakeet engine from {}",
-                    config.model_path.display()
-                )
-            })?,
-        );
-        *guard = Some(DictationTranscriber::new(config.clone(), engine));
+        let engine: Box<dyn crate::dictation::transcription::DictationEngine> =
+            match catalog_entry.engine_kind {
+                DictationEngineKind::Parakeet => Box::new(
+                    ParakeetDictationEngine::new(&config.model_path).with_context(|| {
+                        format!(
+                            "failed to initialize Parakeet engine from {}",
+                            config.model_path.display()
+                        )
+                    })?,
+                ),
+                DictationEngineKind::Whisper => {
+                    Box::new(WhisperDictationEngine::new(&config).with_context(|| {
+                        format!(
+                            "failed to initialize Whisper engine from {}",
+                            config.model_path.display()
+                        )
+                    })?)
+                }
+            };
+        *guard = Some(CachedTranscriber {
+            key: requested_key,
+            transcriber: DictationTranscriber::new(config.clone(), engine),
+        });
     }
 
     let result = guard
         .as_ref()
         .context("dictation transcriber unavailable")?
+        .transcriber
         .transcribe_samples(&samples);
 
     match &result {
@@ -908,7 +984,7 @@ pub fn maybe_unload_transcriber() {
     let mut guard = TRANSCRIBER.lock();
     if guard
         .as_ref()
-        .map(DictationTranscriber::is_idle)
+        .map(|cached| cached.transcriber.is_idle())
         .unwrap_or(false)
     {
         *guard = None;
