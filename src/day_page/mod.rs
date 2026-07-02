@@ -3,6 +3,7 @@
 mod document;
 mod render;
 mod sediment;
+pub(crate) mod telemetry;
 #[cfg(test)]
 mod tests;
 

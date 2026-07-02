@@ -504,6 +504,14 @@ pub fn execute_menu_action(bundle_id: &str, menu_path: &[String]) -> Result<()> 
     cf_release(menu_bar);
     cf_release(ax_app);
 
+    if result.is_ok() {
+        crate::executor::telemetry::log_menu_action_executed(
+            "menu_executor::execute_menu_action",
+            bundle_id,
+            menu_path.len(),
+        );
+    }
+
     result
 }
 

@@ -203,6 +203,15 @@ pub fn insert_inbox_item(
                 params![kind.as_str(), title, detail.trim(), source, source_id, hash],
             )
             .context("insert brain inbox item")?;
+        if inserted > 0 {
+            tracing::info!(
+                target: "script_kit::brain",
+                event = "inbox_item_added",
+                kind = kind.as_str(),
+                source,
+                title_len = title.chars().count(),
+            );
+        }
         Ok(inserted > 0)
     })
 }
@@ -265,6 +274,13 @@ pub(crate) fn resolve_inbox_item_at(id: i64, now: i64) -> Result<bool> {
                 params![now, id],
             )
             .context("resolve brain inbox item")?;
+        if updated > 0 {
+            tracing::info!(
+                target: "script_kit::brain",
+                event = "inbox_item_resolved",
+                id,
+            );
+        }
         Ok(updated > 0)
     })
 }

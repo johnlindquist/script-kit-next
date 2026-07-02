@@ -405,6 +405,11 @@ impl Scheduler {
                         limit = SCHEDULED_SCRIPT_MAX_CONCURRENT_RUNS,
                         "Skipping scheduled run dispatch because concurrency limit is reached"
                     );
+                    crate::executor::telemetry::log_scheduler_job_skipped(
+                        "scheduler::run_loop",
+                        &path.display().to_string(),
+                        "concurrency_limit",
+                    );
                     continue;
                 }
 
@@ -413,6 +418,10 @@ impl Scheduler {
                     warn!("Failed to send RunScript event, receiver dropped");
                     return;
                 }
+                crate::executor::telemetry::log_scheduler_job_fired(
+                    "scheduler::run_loop",
+                    &path.display().to_string(),
+                );
                 remaining_dispatches = remaining_dispatches.saturating_sub(1);
             }
 

@@ -319,6 +319,7 @@ impl ProcessHandle {
             return;
         }
         self.killed = true;
+        super::telemetry::log_script_killed("executor::process_handle_kill", self.pid, "SIGTERM");
 
         #[cfg(unix)]
         {
@@ -533,6 +534,12 @@ impl SplitSession {
             .map_err(|e| format!("Failed to wait for script process: {}", e))?;
         let code = status.code().unwrap_or(-1);
         info!(category = "EXEC", exit_code = code, "Script exited");
+        super::telemetry::log_script_exited(
+            "executor::split_session_wait",
+            self.process_handle.pid,
+            code,
+            None,
+        );
         Ok(code)
     }
 
@@ -797,6 +804,7 @@ pub fn spawn_script_with_extra_env(
 
     let process_handle = ProcessHandle::new(pid, script_path.to_string());
     info!(category = "EXEC", pid, "ScriptSession created");
+    super::telemetry::log_script_spawned("executor::spawn_script_with_extra_env", script_path, pid);
 
     Ok(ScriptSession {
         stdin,

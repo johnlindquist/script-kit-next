@@ -30,6 +30,7 @@ impl PtyManager {
 
         self.size = new_size;
         info!(cols, rows, "PTY resized successfully");
+        crate::terminal::telemetry::log_terminal_resized("pty::resize", cols, rows);
 
         Ok(())
     }
@@ -102,6 +103,7 @@ impl PtyManager {
         info!("Waiting for child process to exit");
         let status = self.child.wait().context("Failed to wait for child")?;
         info!(exit_status = ?status, "Child process exited");
+        crate::terminal::telemetry::log_pty_exited("pty::wait", &format!("{status:?}"));
         Ok(status)
     }
 
@@ -111,6 +113,7 @@ impl PtyManager {
         info!("Killing child process");
         self.child.kill().context("Failed to kill child process")?;
         info!("Child process killed");
+        crate::terminal::telemetry::log_pty_killed("pty::kill");
         Ok(())
     }
 

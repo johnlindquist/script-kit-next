@@ -120,6 +120,7 @@ impl EventListener for EventProxy {
             }
             AlacrittyEvent::ChildExit(code) => {
                 info!(exit_code = code, "Child process exited");
+                crate::terminal::telemetry::log_terminal_child_exit("alacritty::event_proxy", code);
                 Some(TerminalEvent::Exit(code))
             }
             AlacrittyEvent::Wakeup => {

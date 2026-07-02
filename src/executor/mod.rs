@@ -13,6 +13,7 @@ pub(crate) mod runner;
 mod scriptlet;
 mod selected_text;
 mod stderr_buffer;
+pub(crate) mod telemetry;
 
 // Re-export public items for external use
 // Allow unused imports - these are public API exports that may be used by external code

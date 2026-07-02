@@ -208,6 +208,13 @@ pub fn record_search_selection_signals(query: &str, selected_result_key: &str) {
 /// searchable without waiting for the next timer cycle. Fire-and-forget
 /// off-thread; never blocks the capture path.
 pub fn record_capture_signals(target: &str, body: &str, tags: &[String]) {
+    tracing::info!(
+        target: "script_kit::brain",
+        event = "capture_recorded",
+        target_len = target.chars().count(),
+        body_bytes = body.len(),
+        tag_count = tags.len(),
+    );
     let target = target.to_string();
     let body = body.to_string();
     let tags = tags.to_vec();

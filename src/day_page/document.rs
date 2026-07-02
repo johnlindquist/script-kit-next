@@ -167,6 +167,12 @@ impl DayPageDocumentSession {
         self.base_disk_content = content.clone();
         self.last_mtime = mtime;
 
+        super::telemetry::log_document_loaded(
+            "document::bind_date",
+            "day",
+            Some(&date.to_string()),
+            content.len(),
+        );
         Ok(content)
     }
 
@@ -201,6 +207,12 @@ impl DayPageDocumentSession {
         self.base_disk_content = content.clone();
         self.last_mtime = mtime;
 
+        super::telemetry::log_document_loaded(
+            "document::bind_fragment",
+            "fragment",
+            Some(&day_date.to_string()),
+            content.len(),
+        );
         Ok(content)
     }
 
@@ -266,6 +278,12 @@ impl DayPageDocumentSession {
         self.base_disk_content = content.clone();
         self.last_mtime = mtime;
 
+        super::telemetry::log_document_loaded(
+            "document::bind_note_content",
+            "note",
+            None,
+            content.len(),
+        );
         Ok(content)
     }
 
@@ -303,6 +321,12 @@ impl DayPageDocumentSession {
         self.base_disk_content = content.clone();
         self.last_mtime = mtime;
 
+        super::telemetry::log_document_loaded(
+            "document::return_to_day",
+            "day",
+            Some(&return_day_date.to_string()),
+            content.len(),
+        );
         Ok(content)
     }
 
@@ -343,6 +367,12 @@ impl DayPageDocumentSession {
             self.last_mtime = fs::metadata(&saved_path)
                 .and_then(|meta| meta.modified())
                 .ok();
+            super::telemetry::log_document_saved(
+                "document::save_content",
+                "note",
+                content.len(),
+                false,
+            );
             let _ = now;
             return Ok(());
         }
@@ -427,6 +457,16 @@ impl DayPageDocumentSession {
         // fragments/ by the file's parent directory.
         crate::brain::indexer::index_capture_after_write(&path);
 
+        let kind = match &self.binding {
+            DayPageBinding::Fragment { .. } => "fragment",
+            _ => "day",
+        };
+        super::telemetry::log_document_saved(
+            "document::save_content",
+            kind,
+            self.disk_content.len(),
+            written.adopted,
+        );
         let _ = now;
         Ok(())
     }

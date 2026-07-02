@@ -38,6 +38,7 @@ pub mod alacritty;
 pub mod command_bar;
 pub mod command_bar_ui;
 pub mod pty;
+pub(crate) mod telemetry;
 pub mod theme_adapter;
 
 // Re-export main types for convenient access

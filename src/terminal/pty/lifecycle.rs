@@ -89,6 +89,13 @@ impl PtyManager {
             .context("Failed to take PTY writer")?;
 
         info!("PTY spawned successfully");
+        crate::terminal::telemetry::log_pty_spawned(
+            "pty::spawn_internal",
+            cmd,
+            child.process_id(),
+            cols,
+            rows,
+        );
 
         Ok(Self {
             master: pair.master,
