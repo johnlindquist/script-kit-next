@@ -238,8 +238,25 @@ mod tests {
         );
     }
 
-    // Note: launch_application is not tested automatically to avoid
-    // actually launching apps during test runs. It can be tested manually.
+    // Note: the success path of launch_application is not tested automatically
+    // to avoid actually launching apps during test runs.
+
+    #[test]
+    fn launch_application_errors_when_bundle_path_is_gone() {
+        let app = AppInfo {
+            name: "Ghost App".to_string(),
+            path: PathBuf::from("/Applications/DefinitelyNotInstalled-ScriptKitTest.app"),
+            bundle_id: None,
+            icon: None,
+        };
+
+        let error = launch_application(&app)
+            .expect_err("launching a missing bundle must error, not silently succeed");
+        assert!(
+            error.to_string().contains("moved or uninstalled"),
+            "error should explain the stale entry: {error}"
+        );
+    }
 
     /// Test that load_apps_from_db returns apps WITH icons decoded synchronously.
     ///

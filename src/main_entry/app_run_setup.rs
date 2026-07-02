@@ -1676,8 +1676,14 @@ app.run(move |cx: &mut App| {
                         }
                     }
 
-                    // Trigger cache refresh (scan_applications updates the in-memory cache)
-                    let _ = app_launcher::scan_applications();
+                    // Rescan disk off the UI thread and replace the in-memory
+                    // cache — scan_applications() alone only clones the cache,
+                    // so new/removed apps would never appear until restart.
+                    cx.background_executor()
+                        .spawn(async move {
+                            let _ = app_launcher::scan_applications_fresh();
+                        })
+                        .await;
 
                     // Notify UI to re-fetch cached apps and invalidate search caches
                     // This ensures new apps appear in search results immediately

@@ -24,20 +24,23 @@ pub fn scan_applications() -> Vec<AppInfo> {
     APP_CACHE.lock().map(|g| g.clone()).unwrap_or_default()
 }
 
-/// Force a fresh scan of applications (bypasses cache)
+/// Force a fresh scan of applications and replace the in-memory cache.
 ///
-/// This is useful if you need to detect newly installed applications.
-/// Note: This does NOT update the static cache - it just returns fresh results.
-#[allow(dead_code)]
+/// This is how newly installed/removed apps show up without an app restart:
+/// the app watcher calls this on /Applications changes. Blocking (disk +
+/// sqlite) — run on a background thread/executor, never the UI thread.
 pub fn scan_applications_fresh() -> Vec<AppInfo> {
     let start = Instant::now();
     let apps = scan_all_directories_with_db_update();
+    if let Ok(mut guard) = APP_CACHE.lock() {
+        *guard = apps.clone();
+    }
     let duration_ms = start.elapsed().as_millis();
 
     info!(
         app_count = apps.len(),
         duration_ms = duration_ms,
-        "Fresh scan of applications"
+        "Fresh scan of applications (cache updated)"
     );
 
     apps
