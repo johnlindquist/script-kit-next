@@ -16,11 +16,19 @@
 //!   milliseconds and avoids shipping a vector-extension dependency.
 
 use anyhow::{anyhow, Context as _, Result};
-use rusqlite::{params, Connection, OptionalExtension, Row};
+use rusqlite::{params, Connection, OpenFlags, OptionalExtension, Row};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, OnceLock};
 
 static BRAIN_DB: OnceLock<Arc<Mutex<Connection>>> = OnceLock::new();
+
+/// A SEPARATE read-only connection for recall queries. All writes share the one
+/// `BRAIN_DB` `Mutex<Connection>`, so a long indexer write (embedding batch
+/// upserts) would otherwise queue submit-path recall SELECTs behind it — WAL
+/// permits concurrent readers ONLY through a distinct connection. `Some(None)`
+/// records that the read connection could not be opened (fall back to the write
+/// connection); the outer `OnceLock` avoids retrying the open on every call.
+static BRAIN_DB_READ: OnceLock<Option<Arc<Mutex<Connection>>>> = OnceLock::new();
 
 /// A document source. Stable string keys — stored in sqlite.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -511,6 +519,54 @@ pub(crate) fn with_conn<T>(f: impl FnOnce(&Connection) -> Result<T>) -> Result<T
     f(&conn)
 }
 
+/// Open the dedicated read-only connection. Requires the primary db (file +
+/// schema) to already exist — `init_brain_db()` guarantees that. Applies the
+/// same `busy_timeout` as the write connection; no schema/WAL pragmas because a
+/// read-only connection follows the WAL created by the write connection.
+fn open_read_conn() -> Result<Connection> {
+    let path = brain_db_path();
+    let conn = Connection::open_with_flags(
+        &path,
+        OpenFlags::SQLITE_OPEN_READ_ONLY
+            | OpenFlags::SQLITE_OPEN_URI
+            | OpenFlags::SQLITE_OPEN_NO_MUTEX,
+    )
+    .context("open brain read-only connection")?;
+    conn.pragma_update(None, "busy_timeout", 5000)
+        .context("brain read busy_timeout")?;
+    Ok(conn)
+}
+
+/// Lazily initialize (or return) the read-only connection. `None` when it could
+/// not be opened (e.g. first-launch ordering) — callers fall back to the write
+/// connection so recall never fails just because the read path is unavailable.
+fn read_db() -> Option<Arc<Mutex<Connection>>> {
+    // Ensure the file and schema exist before opening a READ_ONLY handle.
+    if init_brain_db().is_err() {
+        return None;
+    }
+    BRAIN_DB_READ
+        .get_or_init(|| open_read_conn().ok().map(|conn| Arc::new(Mutex::new(conn))))
+        .clone()
+}
+
+/// Run a pure-SELECT closure against the read-only connection so it never queues
+/// behind an in-flight indexer write on the shared write `Mutex`. Falls back to
+/// [`with_conn`] when the read connection is unavailable. MUST NOT be used for
+/// anything that writes (upserts, `meta_set`, signal inserts) — the connection
+/// is READ_ONLY and will error on writes.
+pub(crate) fn with_read_conn<T>(f: impl FnOnce(&Connection) -> Result<T>) -> Result<T> {
+    match read_db() {
+        Some(db) => {
+            let conn = db
+                .lock()
+                .map_err(|_| anyhow!("brain read db lock poisoned"))?;
+            f(&conn)
+        }
+        None => with_conn(f),
+    }
+}
+
 /// Reset mutable brain rows between unit tests while preserving the process
 /// global connection and schema. Brain tests share `BRAIN_DB`, so per-test
 /// isolation has to clear derived rows instead of trying to rebind the
@@ -875,45 +931,45 @@ pub fn store_chunk_embeddings(
 /// once per chunk; cosine ranking dedupes to best-chunk-per-doc. Loaded into
 /// memory for brute-force cosine — see module docs for why this is fine.
 pub fn load_embeddings(model_id: &str) -> Result<Vec<(i64, Vec<f32>)>> {
-    let db = get_db()?;
-    let conn = db.lock().map_err(|_| anyhow!("brain db lock poisoned"))?;
-    let mut stmt = conn.prepare(
-        "SELECT doc_id, vec FROM brain_chunk_embeddings WHERE model_id = ?1
-         ORDER BY doc_id, chunk_index",
-    )?;
-    let rows = stmt
-        .query_map(params![model_id], |row| {
-            Ok((row.get::<_, i64>(0)?, row.get::<_, Vec<u8>>(1)?))
-        })?
-        .collect::<std::result::Result<Vec<_>, _>>()?;
-    Ok(rows
-        .into_iter()
-        .map(|(id, bytes)| {
-            let vec = bytes
-                .chunks_exact(4)
-                .map(|c| f32::from_le_bytes([c[0], c[1], c[2], c[3]]))
-                .collect();
-            (id, vec)
-        })
-        .collect())
+    with_read_conn(|conn| {
+        let mut stmt = conn.prepare(
+            "SELECT doc_id, vec FROM brain_chunk_embeddings WHERE model_id = ?1
+             ORDER BY doc_id, chunk_index",
+        )?;
+        let rows = stmt
+            .query_map(params![model_id], |row| {
+                Ok((row.get::<_, i64>(0)?, row.get::<_, Vec<u8>>(1)?))
+            })?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+        Ok(rows
+            .into_iter()
+            .map(|(id, bytes)| {
+                let vec = bytes
+                    .chunks_exact(4)
+                    .map(|c| f32::from_le_bytes([c[0], c[1], c[2], c[3]]))
+                    .collect();
+                (id, vec)
+            })
+            .collect())
+    })
 }
 
 /// FTS5 BM25 search over all brain docs. Returns (doc_id, rank) best-first.
 pub fn fts_search(query: &str, limit: usize) -> Result<Vec<i64>> {
-    let db = get_db()?;
-    let conn = db.lock().map_err(|_| anyhow!("brain db lock poisoned"))?;
     let fts_query = sanitize_fts_query(query);
     if fts_query.is_empty() {
         return Ok(Vec::new());
     }
-    let mut stmt = conn.prepare(
-        "SELECT rowid FROM brain_docs_fts WHERE brain_docs_fts MATCH ?1
-         ORDER BY bm25(brain_docs_fts, 2.0, 1.0) LIMIT ?2",
-    )?;
-    let rows = stmt
-        .query_map(params![fts_query, limit as i64], |row| row.get::<_, i64>(0))?
-        .collect::<std::result::Result<Vec<_>, _>>()?;
-    Ok(rows)
+    with_read_conn(|conn| {
+        let mut stmt = conn.prepare(
+            "SELECT rowid FROM brain_docs_fts WHERE brain_docs_fts MATCH ?1
+             ORDER BY bm25(brain_docs_fts, 2.0, 1.0) LIMIT ?2",
+        )?;
+        let rows = stmt
+            .query_map(params![fts_query, limit as i64], |row| row.get::<_, i64>(0))?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+        Ok(rows)
+    })
 }
 
 /// Quote each term (so punctuation can't break FTS5 syntax) and join with OR:
@@ -943,24 +999,24 @@ pub fn substring_search(query: &str, limit: usize) -> Result<Vec<i64>> {
     if terms.is_empty() {
         return Ok(Vec::new());
     }
-    let db = get_db()?;
-    let conn = db.lock().map_err(|_| anyhow!("brain db lock poisoned"))?;
-    let clause = (1..=terms.len())
-        .map(|n| format!("title LIKE ?{n} ESCAPE '\\' OR content LIKE ?{n} ESCAPE '\\'"))
-        .collect::<Vec<_>>()
-        .join(" OR ");
-    let sql = format!(
-        "SELECT id FROM brain_docs WHERE {clause}
-         ORDER BY updated_at DESC LIMIT {limit}"
-    );
-    let mut stmt = conn.prepare(&sql)?;
-    let patterns = terms.iter().map(|term| format!("%{term}%"));
-    let rows = stmt
-        .query_map(rusqlite::params_from_iter(patterns), |row| {
-            row.get::<_, i64>(0)
-        })?
-        .collect::<std::result::Result<Vec<_>, _>>()?;
-    Ok(rows)
+    with_read_conn(|conn| {
+        let clause = (1..=terms.len())
+            .map(|n| format!("title LIKE ?{n} ESCAPE '\\' OR content LIKE ?{n} ESCAPE '\\'"))
+            .collect::<Vec<_>>()
+            .join(" OR ");
+        let sql = format!(
+            "SELECT id FROM brain_docs WHERE {clause}
+             ORDER BY updated_at DESC LIMIT {limit}"
+        );
+        let mut stmt = conn.prepare(&sql)?;
+        let patterns = terms.iter().map(|term| format!("%{term}%"));
+        let rows = stmt
+            .query_map(rusqlite::params_from_iter(patterns), |row| {
+                row.get::<_, i64>(0)
+            })?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+        Ok(rows)
+    })
 }
 
 fn sanitize_fts_query(query: &str) -> String {
@@ -977,34 +1033,34 @@ pub fn get_docs_by_ids(ids: &[i64]) -> Result<Vec<BrainDoc>> {
     if ids.is_empty() {
         return Ok(Vec::new());
     }
-    let db = get_db()?;
-    let conn = db.lock().map_err(|_| anyhow!("brain db lock poisoned"))?;
-    let placeholders = ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
-    let sql = format!(
-        "SELECT {BRAIN_DOC_SELECT_COLUMNS}
-         FROM brain_docs WHERE id IN ({placeholders})"
-    );
-    let mut stmt = conn.prepare(&sql)?;
-    let rows = stmt
-        .query_map(rusqlite::params_from_iter(ids.iter()), brain_doc_from_row)?
-        .collect::<std::result::Result<Vec<_>, _>>()?;
-    Ok(rows.into_iter().flatten().collect())
+    with_read_conn(|conn| {
+        let placeholders = ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+        let sql = format!(
+            "SELECT {BRAIN_DOC_SELECT_COLUMNS}
+             FROM brain_docs WHERE id IN ({placeholders})"
+        );
+        let mut stmt = conn.prepare(&sql)?;
+        let rows = stmt
+            .query_map(rusqlite::params_from_iter(ids.iter()), brain_doc_from_row)?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+        Ok(rows.into_iter().flatten().collect())
+    })
 }
 
 /// Most recently updated docs across all sources, newest first. Backs the
 /// armed-but-empty `brain:` launcher filter ("show me what my brain holds")
 /// so the explicit source filter never renders a blank dead end.
 pub fn recent_docs(limit: usize) -> Result<Vec<BrainDoc>> {
-    let db = get_db()?;
-    let conn = db.lock().map_err(|_| anyhow!("brain db lock poisoned"))?;
-    let mut stmt = conn.prepare(&format!(
-        "SELECT {BRAIN_DOC_SELECT_COLUMNS}
-         FROM brain_docs ORDER BY updated_at DESC LIMIT ?1",
-    ))?;
-    let rows = stmt
-        .query_map(params![limit as i64], brain_doc_from_row)?
-        .collect::<std::result::Result<Vec<_>, _>>()?;
-    Ok(rows.into_iter().flatten().collect())
+    with_read_conn(|conn| {
+        let mut stmt = conn.prepare(&format!(
+            "SELECT {BRAIN_DOC_SELECT_COLUMNS}
+             FROM brain_docs ORDER BY updated_at DESC LIMIT ?1",
+        ))?;
+        let rows = stmt
+            .query_map(params![limit as i64], brain_doc_from_row)?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+        Ok(rows.into_iter().flatten().collect())
+    })
 }
 
 /// Docs of one source updated at/after `since`, newest first. Evidence
@@ -1048,23 +1104,23 @@ pub fn record_signal(topic: &str, weight: i64, source: &str) -> Result<()> {
 
 /// Recent signals (newest first), for ranking boosts and the focus view.
 pub fn recent_signals(limit: usize) -> Result<Vec<BrainSignal>> {
-    let db = get_db()?;
-    let conn = db.lock().map_err(|_| anyhow!("brain db lock poisoned"))?;
-    let mut stmt = conn.prepare(
-        "SELECT topic, weight, source, created_at FROM brain_signals
-         ORDER BY created_at DESC LIMIT ?1",
-    )?;
-    let rows = stmt
-        .query_map(params![limit as i64], |row| {
-            Ok(BrainSignal {
-                topic: row.get(0)?,
-                weight: row.get(1)?,
-                source: row.get(2)?,
-                created_at: row.get(3)?,
-            })
-        })?
-        .collect::<std::result::Result<Vec<_>, _>>()?;
-    Ok(rows)
+    with_read_conn(|conn| {
+        let mut stmt = conn.prepare(
+            "SELECT topic, weight, source, created_at FROM brain_signals
+             ORDER BY created_at DESC LIMIT ?1",
+        )?;
+        let rows = stmt
+            .query_map(params![limit as i64], |row| {
+                Ok(BrainSignal {
+                    topic: row.get(0)?,
+                    weight: row.get(1)?,
+                    source: row.get(2)?,
+                    created_at: row.get(3)?,
+                })
+            })?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+        Ok(rows)
+    })
 }
 
 /// Retention windows for the brain's own ambient records. Content the user

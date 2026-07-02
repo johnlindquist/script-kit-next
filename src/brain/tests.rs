@@ -144,6 +144,63 @@ fn brain_search_dedupes_identical_content_across_sources() {
     );
 }
 
+/// Recall SELECTs route through a SEPARATE read-only connection so an in-flight
+/// indexer write (which holds the single write `Mutex<Connection>`) cannot stall
+/// a submit-path recall query. Proves both correctness (read path returns the
+/// seeded doc) and the regression the fix prevents (a thread holding the write
+/// lock for 500ms must not delay recall — pre-fix it shared that one Mutex and
+/// blocked). If the read connection silently fell back to the write connection,
+/// the timing assertion below would fail, so this also guards the open path.
+#[test]
+fn recall_uses_read_connection_and_does_not_queue_behind_writes() {
+    let _db = init_test_db();
+    store::upsert_doc(
+        DocSource::Note,
+        "readconn-doc",
+        "readconn recall subject",
+        "The quokka telemetry pipeline ships nightly to the readconn warehouse.",
+        100,
+    )
+    .unwrap();
+
+    // brain_search now routes its SELECTs through with_read_conn; it must still
+    // find the seeded doc via the read connection.
+    let hits = search::brain_search("quokka telemetry", None, None, 4).unwrap();
+    assert!(
+        hits.iter().any(|hit| hit.doc.source_id == "readconn-doc"),
+        "read-path recall must return the seeded doc"
+    );
+
+    // Hold the WRITE connection Mutex for 500ms in a background thread, then time
+    // a recall query on this thread. A separate read connection returns promptly;
+    // the pre-fix shared Mutex would make recall wait out the writer.
+    let (tx, rx) = std::sync::mpsc::channel();
+    let writer = std::thread::spawn(move || {
+        store::with_conn(|_conn| {
+            let _ = tx.send(());
+            std::thread::sleep(std::time::Duration::from_millis(500));
+            Ok(())
+        })
+        .unwrap();
+    });
+    rx.recv().expect("writer acquired the write lock");
+
+    let started = std::time::Instant::now();
+    let under_contention = search::brain_search("quokka telemetry", None, None, 4).unwrap();
+    let elapsed = started.elapsed();
+    assert!(
+        under_contention
+            .iter()
+            .any(|hit| hit.doc.source_id == "readconn-doc"),
+        "read-path recall must still return the seeded doc under write contention"
+    );
+    assert!(
+        elapsed < std::time::Duration::from_millis(300),
+        "recall must not queue behind the 500ms write lock: took {elapsed:?}"
+    );
+    writer.join().expect("writer thread finished");
+}
+
 /// Regression: terms of 2-3 bytes ("git", "k8s", "ai") used to be dropped by
 /// the FTS sanitizer, producing an empty query and an invisible brain section
 /// for exactly the short tool names users recall most.
