@@ -14,7 +14,7 @@
 use anyhow::{anyhow, Context as _, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufRead, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdin, Command, Stdio};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -83,16 +83,52 @@ pub fn resolve_embed_model() -> Option<ResolvedEmbedModel> {
     }?;
     let meta = std::fs::metadata(&candidate).ok()?;
     let name = candidate.file_name()?.to_string_lossy().into_owned();
-    let mtime = meta
-        .modified()
-        .ok()
-        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-        .map(|d| d.as_secs())
-        .unwrap_or(0);
+    // Key the model id on a CONTENT fingerprint (length + hash of the first
+    // 1 MiB), never mtime: re-downloading or restoring the identical model file
+    // bumps mtime, which previously made every stored chunk embedding look stale
+    // and triggered hours of silent background re-embedding. The fingerprint is
+    // stable across re-downloads of the same bytes.
+    let fingerprint = fingerprint_model_file(&candidate);
     Some(ResolvedEmbedModel {
-        model_id: format!("brain-embed:{name}:{}:{mtime}", meta.len()),
+        model_id: format!("brain-embed:{name}:{}:{fingerprint}", meta.len()),
         path: candidate,
     })
+}
+
+/// Hex fingerprint of a model file: SHA-256 over the first 1 MiB. GGUF headers
+/// (metadata, tensor descriptors) live at the file start, so the leading MiB
+/// distinguishes any two distinct models while staying cheap for multi-GB
+/// weights. Combined with the file length in the id, this is a content identity
+/// that survives re-download/restore of the same bytes. Falls back to `"0"` when
+/// the file cannot be read (a missing model already degrades to FTS-only).
+fn fingerprint_model_file(path: &Path) -> String {
+    use sha2::{Digest, Sha256};
+    const FINGERPRINT_PREFIX: usize = 1024 * 1024;
+    let Ok(mut file) = std::fs::File::open(path) else {
+        return "0".to_string();
+    };
+    let mut hasher = Sha256::new();
+    let mut remaining = FINGERPRINT_PREFIX;
+    let mut buf = [0u8; 64 * 1024];
+    while remaining > 0 {
+        let want = remaining.min(buf.len());
+        match file.read(&mut buf[..want]) {
+            Ok(0) => break,
+            Ok(n) => {
+                hasher.update(&buf[..n]);
+                remaining -= n;
+            }
+            Err(_) => return "0".to_string(),
+        }
+    }
+    let digest = hasher.finalize();
+    // First 16 hex chars (8 bytes) is ample collision resistance for a model id.
+    let mut hex = String::with_capacity(16);
+    for byte in digest.iter().take(8) {
+        use std::fmt::Write as _;
+        let _ = write!(hex, "{byte:02x}");
+    }
+    hex
 }
 
 /// A live helper subprocess dedicated to embeddings.
@@ -341,6 +377,40 @@ mod tests {
         assert!(
             elapsed < Duration::from_secs(1),
             "embed must fail fast, not block on the timeout: took {elapsed:?}"
+        );
+    }
+
+    /// The model fingerprint must be keyed on file CONTENT, not mtime. Rewriting
+    /// the identical bytes (which bumps mtime) must NOT change the fingerprint —
+    /// that stability is the whole point of the fix (mtime churn triggered
+    /// re-embed storms). Changing a byte in the first 1 MiB must change it.
+    #[test]
+    fn fingerprint_is_content_stable_across_mtime_bumps() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("model.gguf");
+
+        let bytes = vec![0xABu8; 4096];
+        std::fs::write(&path, &bytes).expect("write model");
+        let first = fingerprint_model_file(&path);
+
+        // Rewrite the same bytes after a delay so mtime advances but content is
+        // identical. The fingerprint must be unchanged.
+        std::thread::sleep(Duration::from_millis(1100));
+        std::fs::write(&path, &bytes).expect("rewrite identical model");
+        let after_mtime_bump = fingerprint_model_file(&path);
+        assert_eq!(
+            first, after_mtime_bump,
+            "fingerprint must be stable across an mtime bump of identical bytes"
+        );
+
+        // Flip one byte inside the first 1 MiB: fingerprint must differ.
+        let mut changed = bytes.clone();
+        changed[0] = 0x00;
+        std::fs::write(&path, &changed).expect("write changed model");
+        let after_content_change = fingerprint_model_file(&path);
+        assert_ne!(
+            first, after_content_change,
+            "fingerprint must change when file content changes"
         );
     }
 }
