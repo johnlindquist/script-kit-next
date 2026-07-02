@@ -2,19 +2,22 @@ use std::{
     collections::HashMap,
     ops::Range,
     sync::{Arc, Mutex},
+    time::Duration,
 };
 
 use gpui::{
-    AnyElement, App, DefiniteLength, Div, ElementId, FontStyle, FontWeight, Half, HighlightStyle,
-    InteractiveElement as _, IntoElement, Length, ObjectFit, ParentElement, SharedString,
-    SharedUri, StatefulInteractiveElement, Styled, StyledImage as _, Window, div, img,
-    prelude::FluentBuilder as _, px, relative, rems,
+    AnyElement, App, ClipboardItem, DefiniteLength, Div, ElementId, FontStyle, FontWeight, Half,
+    HighlightStyle, InteractiveElement as _, IntoElement, Length, ObjectFit, ParentElement,
+    SharedString, SharedUri, StatefulInteractiveElement, Styled, StyledImage as _, Window, div,
+    img, prelude::FluentBuilder as _, px, relative, rems,
 };
 use markdown::mdast;
 use ropey::Rope;
 
 use crate::{
-    ActiveTheme as _, Icon, IconName, StyledExt, h_flex,
+    ActiveTheme as _, Icon, IconName, Sizable as _, StyledExt,
+    button::{Button, ButtonVariants as _},
+    h_flex,
     highlighter::{HighlightTheme, SyntaxHighlighter},
     text::{
         CodeBlockActionsFn,
@@ -647,6 +650,7 @@ impl CodeBlock {
                 div()
                     .id(("codeblock", options.ix))
                     .p_3()
+                    .group("codeblock")
                     .rounded(cx.theme().radius)
                     .bg(cx.theme().muted)
                     .font_family(cx.theme().mono_font_family.clone())
@@ -654,6 +658,17 @@ impl CodeBlock {
                     .relative()
                     .refine_style(&style.code_block)
                     .child(Inline::new("code", self.state.clone(), vec![], styles))
+                    .when(style.code_block_copy_button, |this| {
+                        this.child(
+                            div()
+                                .absolute()
+                                .top_2()
+                                .right_2()
+                                .invisible()
+                                .group_hover("codeblock", |this| this.visible())
+                                .child(self.render_copy_button(options.ix, window, cx)),
+                        )
+                    })
                     .when_some(node_cx.code_block_actions.clone(), |this, actions| {
                         this.child(
                             div()
@@ -661,6 +676,7 @@ impl CodeBlock {
                                 .absolute()
                                 .top_2()
                                 .right_2()
+                                .when(style.code_block_copy_button, |this| this.right_8())
                                 .bg(cx.theme().muted)
                                 .rounded(cx.theme().radius)
                                 .child(actions(&self, window, cx)),
@@ -669,6 +685,53 @@ impl CodeBlock {
             )
             .into_any_element()
     }
+
+    fn render_copy_button(&self, ix: usize, window: &mut Window, cx: &mut App) -> impl IntoElement {
+        let state = window.use_keyed_state(("codeblock-copy", ix), cx, |_, _| {
+            CodeBlockCopyButtonState::default()
+        });
+        let copied = state.read(cx).copied;
+        let code = self.code();
+
+        Button::new(("codeblock-copy-button", ix))
+            .icon(if copied {
+                IconName::Check
+            } else {
+                IconName::Copy
+            })
+            .ghost()
+            .xsmall()
+            .when(!copied, |this| {
+                this.on_click(move |_, window, cx| {
+                    cx.stop_propagation();
+                    cx.write_to_clipboard(ClipboardItem::new_string(code.to_string()));
+                    state.update(cx, |state, cx| {
+                        state.copied = true;
+                        cx.notify();
+                    });
+
+                    let state = state.clone();
+                    cx.spawn(async move |cx| {
+                        cx.background_executor()
+                            .timer(Duration::from_millis(1500))
+                            .await;
+                        _ = state.update(cx, |state, cx| {
+                            state.copied = false;
+                            cx.notify();
+                        });
+                    })
+                    .detach();
+
+                    window.refresh();
+                })
+            })
+    }
+}
+
+#[doc(hidden)]
+#[derive(Default)]
+struct CodeBlockCopyButtonState {
+    copied: bool,
 }
 
 /// A context for rendering nodes, contains link references.

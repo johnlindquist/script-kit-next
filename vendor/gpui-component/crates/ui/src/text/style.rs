@@ -20,6 +20,8 @@ pub struct TextViewStyle {
     pub highlight_theme: Arc<HighlightTheme>,
     /// The style refinement for code blocks.
     pub code_block: StyleRefinement,
+    /// Whether code blocks render a hover-revealed copy button.
+    pub code_block_copy_button: bool,
     /// The style refinement for blockquotes.
     pub blockquote: StyleRefinement,
     pub is_dark: bool,
@@ -31,6 +33,7 @@ impl PartialEq for TextViewStyle {
             && self.heading_base_font_size == other.heading_base_font_size
             && self.highlight_theme == other.highlight_theme
             && self.code_block == other.code_block
+            && self.code_block_copy_button == other.code_block_copy_button
             && self.blockquote == other.blockquote
             && self.is_dark == other.is_dark
     }
@@ -44,6 +47,7 @@ impl Default for TextViewStyle {
             heading_font_size: None,
             highlight_theme: HighlightTheme::default_light().clone(),
             code_block: StyleRefinement::default(),
+            code_block_copy_button: false,
             blockquote: StyleRefinement::default(),
             is_dark: false,
         }
@@ -71,9 +75,28 @@ impl TextViewStyle {
         self
     }
 
+    /// Enable or disable the built-in copy button for code blocks.
+    pub fn code_block_copy_button(mut self, enabled: bool) -> Self {
+        self.code_block_copy_button = enabled;
+        self
+    }
+
     /// Set style for blockquotes.
     pub fn blockquote(mut self, style: StyleRefinement) -> Self {
         self.blockquote = style;
         self
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn code_block_copy_button_round_trips_in_style() {
+        let style = TextViewStyle::default().code_block_copy_button(true);
+
+        assert!(style.code_block_copy_button);
+        assert!(style != TextViewStyle::default());
     }
 }

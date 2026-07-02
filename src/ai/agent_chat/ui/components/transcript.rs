@@ -497,6 +497,7 @@ impl AgentChatTranscript {
                     .py(px(style_def.markdown.code_block_padding_y))
                     .text_size(px(style_def.markdown.code_block_font_size)),
             )
+            .code_block_copy_button(true)
             .blockquote(
                 StyleRefinement::default()
                     .bg(blockquote_bg)
