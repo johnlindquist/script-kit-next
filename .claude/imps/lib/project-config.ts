@@ -155,8 +155,25 @@ function bridgeTimeoutEnv(): void {
   }
 }
 
+/**
+ * Codex derives the workspace-write sandbox root from the per-turn cwd
+ * (sent as the client's process.cwd() with every prompt), and the documented
+ * workflow launches imps from .agents/imps — which made each imp's writable
+ * scope the runtime directory itself, so no imp could patch repo source and
+ * approvalPolicy "never" blocked escalation. Pin the client process to the
+ * repo root so turns are sandboxed to the repository, not the imps dir.
+ */
+function pinCwdToRepoRoot(): void {
+  try {
+    if (process.cwd() !== repoRoot) process.chdir(repoRoot);
+  } catch {
+    // Deleted/unreadable cwd — leave it; the turn will surface the error.
+  }
+}
+
 export function makeProjectImpConfig(name = basename(process.argv[1])): ImpConfig {
   bridgeTimeoutEnv();
+  pinCwdToRepoRoot();
   const registry = loadRegistry();
   const imp = findImp(name);
   const readOnly = imp.permission === "read-only";
