@@ -168,18 +168,27 @@ impl DayPageDocumentSession {
         }
 
         let path = self.substrate.paths().day_page(date);
-        if !path.exists() {
-            let parent = path
-                .parent()
-                .with_context(|| format!("day page path has no parent: {}", path.display()))?;
-            fs::create_dir_all(parent)
-                .with_context(|| format!("creating days dir {}", parent.display()))?;
-            io::atomic_write(&path, "")
-                .with_context(|| format!("creating day page {}", path.display()))?;
-        }
 
-        let content = fs::read_to_string(&path)
-            .with_context(|| format!("reading day page {}", path.display()))?;
+        // Create-if-missing + initial read under the process-wide brain write
+        // lock. Without it, an external appender (`atomic_append_line`, which
+        // holds the same lock) can write the first capture of the day between
+        // our exists check and the empty create, and the create then clobbers
+        // it. Re-test existence INSIDE the lock so we never overwrite a file an
+        // appender created first. `atomic_write` intentionally does not take the
+        // lock, so calling it here does not re-enter the non-reentrant mutex.
+        let content = io::with_brain_write_lock(|| -> Result<String> {
+            if !path.exists() {
+                let parent = path
+                    .parent()
+                    .with_context(|| format!("day page path has no parent: {}", path.display()))?;
+                fs::create_dir_all(parent)
+                    .with_context(|| format!("creating days dir {}", parent.display()))?;
+                io::atomic_write(&path, "")
+                    .with_context(|| format!("creating day page {}", path.display()))?;
+            }
+            fs::read_to_string(&path)
+                .with_context(|| format!("reading day page {}", path.display()))
+        })?;
         let mtime = fs::metadata(&path).and_then(|meta| meta.modified()).ok();
 
         let local_today = now.with_timezone(&self.substrate.timezone()).date_naive();
@@ -766,6 +775,51 @@ mod tests {
             !session.day_has_rolled(utc("2026-06-12T00:01:00Z")),
             "a past day must not roll even as wall-clock time advances"
         );
+    }
+
+    /// Data-loss regression (Plan 01 follow-up): binding a fresh day must not
+    /// clobber a first-of-day capture that an external appender writes at the
+    /// same moment. Pre-fix, bind_date's exists-check/create/read ran OUTSIDE the
+    /// brain write lock, so an `atomic_append_line` landing between the check and
+    /// the empty create was overwritten. Both now share the lock, so the append
+    /// always survives. Looped so the interleaving is exercised repeatedly.
+    #[test]
+    fn bind_date_does_not_clobber_concurrent_first_capture() {
+        use std::sync::{Arc, Barrier};
+
+        let dir = tempfile::tempdir().expect("tempdir");
+        let substrate = BrainSubstrate::with_timezone(dir.path().join("brain"), Tz::UTC);
+        let now = utc("2026-06-11T09:42:00Z");
+
+        for i in 0..50u32 {
+            // A distinct fresh day per iteration so the file starts absent and
+            // the create path is exercised every time.
+            let date = NaiveDate::from_yo_opt(2026, 1 + i).expect("valid ordinal date");
+            let path = substrate.paths().day_page(date);
+            let line = format!("09:45 first capture {i}");
+
+            let barrier = Arc::new(Barrier::new(2));
+            let appender = {
+                let path = path.clone();
+                let line = line.clone();
+                let barrier = Arc::clone(&barrier);
+                std::thread::spawn(move || {
+                    barrier.wait();
+                    io::atomic_append_line(&path, &line).expect("external append");
+                })
+            };
+
+            let mut session = DayPageDocumentSession::new(substrate.clone());
+            barrier.wait();
+            session.bind_date(date, now).expect("bind fresh day");
+            appender.join().expect("appender thread joined");
+
+            let disk = fs::read_to_string(&path).expect("read day file");
+            assert!(
+                disk.contains(&line),
+                "iteration {i}: first-of-day capture must survive bind_date create: {disk:?}"
+            );
+        }
     }
 
     #[test]
