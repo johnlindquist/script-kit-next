@@ -138,6 +138,26 @@ pub fn current_correlation_id() -> String {
         })
     })
 }
+/// Snapshot the *scoped* correlation id — `None` when only the process-wide
+/// default is active. The scope is thread-local, so it dies at every
+/// `cx.spawn`/`cx.defer`/background-executor/GCD hop; capture it with this
+/// before the hop and re-apply it inside the task with
+/// [`with_correlation_scope`] so multi-step interactions stay correlated.
+pub fn scoped_correlation_id() -> Option<String> {
+    CORRELATION_ID.with(|cell| cell.borrow().clone())
+}
+/// Run `f` with a previously captured correlation scope applied. A `None`
+/// scope (no interaction id was active at capture time) runs `f` unchanged
+/// rather than clobbering whatever scope the executing thread already has.
+pub fn with_correlation_scope<T>(scope: Option<&str>, f: impl FnOnce() -> T) -> T {
+    match scope {
+        Some(id) => {
+            let _guard = set_correlation_id(id);
+            f()
+        }
+        None => f(),
+    }
+}
 // =============================================================================
 // BENCHMARKING UTILITIES (for hotkey → prompt latency analysis)
 // =============================================================================
@@ -2305,6 +2325,39 @@ mod tests {
         assert_eq!(legacy_level_for_category("TRACE"), LegacyLogLevel::Trace);
         assert_eq!(legacy_level_for_category("UI"), LegacyLogLevel::Info);
     }
+    // -------------------------------------------------------------------------
+    // correlation scope propagation tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_with_correlation_scope_carries_id_across_capture() {
+        // Capture inside an interaction scope...
+        let captured = {
+            let _guard = set_correlation_id("scope-test-id");
+            scoped_correlation_id()
+        };
+        assert_eq!(captured.as_deref(), Some("scope-test-id"));
+
+        // ...and re-apply it later (simulating the far side of a spawn/defer
+        // hop, including on a different thread where the thread-local is
+        // empty).
+        let seen = std::thread::spawn(move || {
+            with_correlation_scope(captured.as_deref(), current_correlation_id)
+        })
+        .join()
+        .expect("scope thread should not panic");
+        assert_eq!(seen, "scope-test-id");
+    }
+
+    #[test]
+    fn test_with_correlation_scope_none_preserves_existing_scope() {
+        let _guard = set_correlation_id("outer-scope");
+        // A None capture (no interaction id at capture time) must not clobber
+        // the executing thread's active scope.
+        let seen = with_correlation_scope(None, current_correlation_id);
+        assert_eq!(seen, "outer-scope");
+    }
+
     // -------------------------------------------------------------------------
     // protocol log ring tests
     // -------------------------------------------------------------------------

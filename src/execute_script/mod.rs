@@ -607,7 +607,12 @@ impl ScriptListApp {
                     self.prompt_receiver = Some(rx);
 
                     // Spawn event-driven listener for prompt messages (replaces 50ms polling)
+                    // Correlation scope is thread-local and dies at the spawn
+                    // boundary; carry the script run's id into the listener so
+                    // every handle_prompt_message log correlates with the run.
+                    let listener_correlation_scope = logging::scoped_correlation_id();
                     cx.spawn(async move |this, cx| {
+                        let scope = listener_correlation_scope;
                         tracing::info!(
                             category = "EXEC",
                             "Prompt message listener started (event-driven)"
@@ -615,15 +620,17 @@ impl ScriptListApp {
 
                         // Event-driven: recv().await yields until a message arrives
                         while let Ok(msg) = rx_for_listener.recv().await {
-                            tracing::info!(
-                                category = "EXEC",
-                                prompt_message = ?msg,
-                                "Prompt message received"
-                            );
-                            let _ = cx.update(|cx| {
-                                this.update(cx, |app, cx| {
-                                    app.handle_prompt_message(msg, cx);
-                                })
+                            logging::with_correlation_scope(scope.as_deref(), || {
+                                tracing::info!(
+                                    category = "EXEC",
+                                    prompt_message = ?msg,
+                                    "Prompt message received"
+                                );
+                                let _ = cx.update(|cx| {
+                                    this.update(cx, |app, cx| {
+                                        app.handle_prompt_message(msg, cx);
+                                    })
+                                });
                             });
                         }
 
@@ -1122,9 +1129,11 @@ impl ScriptListApp {
                                                 if let protocol::ClipboardAction::Write = action {
                                                     match format {
                                                         Some(protocol::ClipboardFormat::Image) => {
-                                                            if let Err(e) = write_clipboard_image_from_base64(
-                                                                content.as_ref(),
-                                                            ) {
+                                                            if let Err(e) =
+                                                                write_clipboard_image_from_base64(
+                                                                    content.as_ref(),
+                                                                )
+                                                            {
                                                                 tracing::error!(
                                                                     category = "EXEC",
                                                                     error = %e,
@@ -1138,7 +1147,9 @@ impl ScriptListApp {
                                                                 use arboard::Clipboard;
                                                                 match Clipboard::new() {
                                                                     Ok(mut clipboard) => {
-                                                                        if let Err(e) = clipboard.set_text(text.clone()) {
+                                                                        if let Err(e) = clipboard
+                                                                            .set_text(text.clone())
+                                                                        {
                                                                             tracing::error!(
                                                                                 category = "EXEC",
                                                                                 error = %e,
@@ -1856,7 +1867,8 @@ impl ScriptListApp {
                                     }
 
                                     // Handle GetAgentChatState - needs Agent Chat view state, forward to UI thread
-                                    if let Message::GetAgentChatState { request_id, target } = &msg {
+                                    if let Message::GetAgentChatState { request_id, target } = &msg
+                                    {
                                         tracing::info!(
                                             category = "EXEC",
                                             request_id = %request_id,
@@ -1891,12 +1903,13 @@ impl ScriptListApp {
                                             action = ?action,
                                             "PerformAgentChatSetupAction request"
                                         );
-                                        let prompt_msg = PromptMessage::PerformAgentChatSetupAction {
-                                            request_id: request_id.clone(),
-                                            action: *action,
-                                            agent_id: agent_id.clone(),
-                                            target: target.clone(),
-                                        };
+                                        let prompt_msg =
+                                            PromptMessage::PerformAgentChatSetupAction {
+                                                request_id: request_id.clone(),
+                                                action: *action,
+                                                agent_id: agent_id.clone(),
+                                                target: target.clone(),
+                                            };
                                         if tx.send_blocking(prompt_msg).is_err() {
                                             tracing::info!(
                                                 category = "EXEC",
@@ -1908,7 +1921,8 @@ impl ScriptListApp {
                                     }
 
                                     // Handle ResetAgentChatTestProbe - forward to UI thread
-                                    if let Message::ResetAgentChatTestProbe { request_id, target } = &msg
+                                    if let Message::ResetAgentChatTestProbe { request_id, target } =
+                                        &msg
                                     {
                                         tracing::info!(
                                             category = "EXEC",
