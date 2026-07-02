@@ -249,6 +249,7 @@ impl ScriptListApp {
             profile_name = %profile.name,
             backend = ?profile.backend,
         );
+        self.refresh_agent_model_footer_labels();
         self.prewarm_selected_agent_chat_profile_for_current_cwd(
             &prefs.ai,
             "agent_chat_profile_selection",

@@ -2,4 +2,7 @@
 import { runImp } from "../lib/isolated.ts";
 import { makeProjectImpConfig } from "../lib/project-config.ts";
 
-await runImp(makeProjectImpConfig("imp-sk-hotkeys"));
+// The router imports this module to read config.route; only direct execution runs the imp.
+export const config = makeProjectImpConfig("imp-sk-hotkeys");
+
+if (import.meta.main) await runImp(config);

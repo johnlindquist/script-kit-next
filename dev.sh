@@ -220,10 +220,13 @@ if [ "${SCRIPT_KIT_DEV_ENSURE_PI_SIDECAR:-1}" = "1" ]; then
 fi
 
 # --- Crash watchdog -----------------------------------------------------------
-# Supervise the session app pid: loud banner + auto-relaunch on abnormal death,
-# incremental-cache wipe on a repeat crash of the same binary, and a stop-and-
-# report banner when a clean rebuild still crashes (real bug, not cache rot).
-if [ "${SCRIPT_KIT_DEV_CRASH_WATCHDOG:-1}" = "1" ]; then
+# Optional supervisor for the session app pid: loud banner + auto-relaunch on
+# abnormal death, incremental-cache wipe on a repeat crash of the same binary,
+# and a stop-and-report banner when a clean rebuild still crashes. Keep this
+# off by default so using Script Kit's Quit command during dev leaves the app
+# stopped instead of being silently relaunched by dev.sh.
+SCRIPT_KIT_DEV_CRASH_WATCHDOG="${SCRIPT_KIT_DEV_CRASH_WATCHDOG:-0}"
+if [ "$SCRIPT_KIT_DEV_CRASH_WATCHDOG" = "1" ]; then
     bash scripts/agentic/dev-crash-watchdog.sh "$SCRIPT_KIT_DEV_SESSION_NAME" &
     SCRIPT_KIT_DEV_WATCHDOG_PID=$!
 fi
@@ -256,7 +259,7 @@ if [ "$SCRIPT_KIT_DEV_MARKER_HOTKEY" = "1" ]; then
     echo "   Dev marker: Ctrl+M writes one structured marker + screenshot path, then opens Notes for context"
 fi
 echo "   Clear screen between rebuilds: SCRIPT_KIT_DEV_CLEAR=${SCRIPT_KIT_DEV_CLEAR:-0} (set =1 to enable cargo-watch -c)"
-echo "   Crash watchdog: SCRIPT_KIT_DEV_CRASH_WATCHDOG=${SCRIPT_KIT_DEV_CRASH_WATCHDOG:-1} (banner + auto-relaunch on app crash)"
+echo "   Crash watchdog: SCRIPT_KIT_DEV_CRASH_WATCHDOG=${SCRIPT_KIT_DEV_CRASH_WATCHDOG} (set =1 for banner + auto-relaunch on app crash)"
 echo ""
 
 # Clear-screen is opt-in. cargo-watch -c wipes the heartbeat output, so default

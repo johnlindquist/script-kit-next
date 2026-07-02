@@ -2,6 +2,7 @@ For a map of main UI surfaces to code implementation, see [GLOSSARY.md]
 
 # Before Starting Work
 
+- **Route through a project imp first.** Imps are the primary mechanism for agents working with this code: run `bun imps/project-imp --which "<task>"` from `.agents/imps` to find the owner, then delegate to it (see "Project Imps — Primary Mechanism" below). Work directly only for trivial edits, when the imp runtime is unavailable, or when the user explicitly asks you to.
 - Inspect the relevant source, tests, and repo-local skills before editing.
 - Prefer current code and generated artifacts over stale notes or memory.
 - Keep edits narrowly scoped and verify them with the smallest check that can fail for the changed behavior.
@@ -10,6 +11,8 @@ For a map of main UI surfaces to code implementation, see [GLOSSARY.md]
 ## Oracle / Packx Bundle Context
 
 For Oracle review or `oracle-packx` work in this repository, include the repo process context in the bundle or prompt unless the user explicitly excludes it: `AGENTS.md`, the owning `.agents/skills/<skill>/SKILL.md`, and relevant source, tests, generated contracts, and verification notes.
+
+For runtime/UX bugs headed to `oracle-packx-conversation`, run `imp-sk-devtools` first and include its investigation receipts (intake, primitive stack, measurements, classification, likely owner, red/green proof plan) in the bundle — that pairing is a primary workflow in this repo.
 
 If a `packx` preview with include globs unexpectedly matches `0` files in this repository, rebuild the bundle from an explicit path list instead of widening blindly. A reliable workaround is:
 
@@ -21,15 +24,30 @@ xargs packx --limit 900k --strip-comments --minify -f markdown --no-interactive 
 
 Use this when directory/include-glob matching undercounts relevant files; keep `CLAUDE.md` excluded and verify the preview count plus final non-empty bundle before consulting Oracle.
 
-## Project Imps Routing
+## Project Imps — Primary Mechanism
 
-Project imps live under `.agents/imps/` and are feature-bound Codex specialists
-for this repository. They use `gpt-5.5` with `medium` reasoning and keep local
-self-improvement lesson overlays under `.agents/imps/lessons/local/`.
+Project imps are the **primary mechanism for agents working with this code**.
+Every substantive task — building, debugging, auditing, fixing, testing,
+releasing — starts by routing to the owning imp; direct hand-editing is the
+fallback, not the default.
 
-For non-trivial work touching an owned surface, attempt the matching project
-imp before editing. Codex remains responsible for source inspection, patch
-review, preserving unrelated dirty work, and final verification.
+Imps live under `.agents/imps/` and are feature-bound Codex specialists for
+this repository. They use `gpt-5.5` with `medium` reasoning and keep local
+lesson overlays under `.agents/imps/lessons/local/`. The vendored runtime is
+tracked by `.agents/imps/imps.manifest.json`; imp learning flows through the
+upstream evolution system (`imp-sk-<name> evolve` to review suggestions), and
+lesson files are reviewed overlays folded into imp prompts at launch.
+
+Default workflow for any task:
+
+1. `bun imps/project-imp --which "<task>"` to confirm the owner (or pick from the routing rules below).
+2. Delegate the task to that imp: `bun imps/project-imp "<task>"` or `bun imps/imp-sk-<name> --run "<task>"`.
+3. Pair the owner with at most one cross-cutting role imp when needed (audit → fix, fix → probe, etc.).
+4. The calling agent stays responsible for source inspection, patch review, preserving unrelated dirty work, and final verification — delegating the work does not delegate accountability.
+
+Skip the imp only when the task is trivial (≤ a few mechanical lines), the imp
+runtime is unavailable or repeatedly stalls, or the user explicitly directs
+otherwise — and say in the final answer which imp was skipped and why.
 
 Use:
 
@@ -37,7 +55,12 @@ Use:
 cd .agents/imps
 bun imps/project-imp --which "<task prompt>"
 bun imps/project-imp "<task prompt>"
+bun imps/imp-sk-<name> --run "<task prompt>"   # direct, non-interactive
 ```
+
+Direct `imp-sk-*` invocations open an interactive Codex TUI by default; agents
+must pass `--run` (or `-q`) for the non-interactive streaming path. The
+`project-imp` router adds `--run` itself.
 
 Routing rules:
 
@@ -56,11 +79,21 @@ Routing rules:
 - macOS platform, windows, tray/menu bar, icons, permissions, startup, Pi sidecar -> `imp-sk-platform`.
 - MCP server, resources, script tools, schema compatibility -> `imp-sk-mcp`.
 - Repo process docs, `.agents/**`, probes, source audits, `dev.sh`, cargo wrappers -> `imp-sk-devex`.
+- Local LLM/ghost backend, dictation, whisper, computer use, OCR, camera, AI vault -> `imp-sk-ai-core`.
+- Settings, config persistence, onboarding/NUX, kit store, sync, updates, login item, secrets -> `imp-sk-settings`.
 
-Project imps are advisory specialists, not blockers. If an imp is unavailable,
-too slow, or the task is trivial, continue normally and mention the skipped imp
-in the final answer. Do not fan out broadly by default; use the primary owner
-imp plus one relevant cross-cutting imp when needed.
+Role imps (cross-cutting, any surface):
+
+- Build failures, cargo lock contention, `target-agent` disk budget, clippy/fmt debt, stuck builds -> `imp-sk-build-doctor`.
+- DevTools work: runtime proof, app inspection/investigation, driver probes, screenshots, simulateGpuiEvent, red/green receipts -> `imp-sk-devtools` (the imp form of the `script-kit-devtools` skill).
+- Read-only audit sweeps, UX inconsistency hunts, hardcoded-token findings (never edits) -> `imp-sk-auditor`.
+- Test authorship, enforcement-ladder placement, contract tests, ratchet, flaky tests -> `imp-sk-tests`.
+- Version bumps, `v*` tags, pre-tag clippy gate, release workflow -> `imp-sk-release`.
+
+Imps are the default path, but never a hard blocker: if the runtime is down or
+an imp repeatedly stalls, continue directly and mention the skipped imp in the
+final answer. Do not fan out broadly by default; use the primary owner imp plus
+one relevant cross-cutting imp when needed.
 
 Local lesson overlays are not repo policy. Only reviewed promoted lessons,
 regression tests/probes, or `AGENTS.md` updates affect general routing. Lessons

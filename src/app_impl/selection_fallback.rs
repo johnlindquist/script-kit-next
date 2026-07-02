@@ -788,54 +788,137 @@ impl ScriptListApp {
         cx.notify();
     }
 
-    /// Enter on a pinned "Brain Inbox" row. The item's source is opened via
-    /// the same routing as [`Self::execute_root_brain_hit_open`] — notes open
-    /// in the Notes editor, chat turns resume their conversation with the
-    /// follow-up prompt auto-submitted as the next turn, and everything else
-    /// hands a prompt-ready summary of the item to Agent Chat. The item is
-    /// resolved only AFTER its route succeeds: resolution is destructive (no
-    /// undo), so a failed open must leave the observation in the inbox.
+    /// Enter on a pinned "Brain Inbox" row. Always opens Agent Chat with the
+    /// full inbox follow-up staged as context plus a visible local assistant
+    /// prompt. The launcher must not auto-submit the follow-up, prefill the
+    /// composer, or resolve the inbox item: resolution is destructive and
+    /// belongs to an explicit action after the user reviews the staged item.
     pub(crate) fn execute_root_brain_inbox_open(
         &mut self,
         item: crate::brain::InboxItem,
         cx: &mut Context<Self>,
     ) {
-        match item.source.as_str() {
-            "note" => match crate::notes::NoteId::parse(&item.source_id) {
-                Some(note_id) => {
-                    self.execute_root_note_open(note_id, cx);
-                    self.resolve_root_brain_inbox_item(item.id, cx);
-                }
-                None => {
-                    logging::log(
-                        "ERROR",
-                        &format!("Brain inbox item has invalid note id: {}", item.source_id),
-                    );
-                    self.show_hud("Failed to open note".to_string(), Some(HUD_MEDIUM_MS), cx);
-                }
-            },
-            "chat_turn" => {
-                // source_id is "{thread_id}#{turn_index}"; resume by thread id
-                // and auto-submit the follow-up prompt into the conversation.
-                let prompt = crate::brain::response_prompt_for_inbox_item(&item);
-                let thread_id = item
-                    .source_id
-                    .split('#')
-                    .next()
-                    .unwrap_or(item.source_id.as_str());
-                self.resume_agent_chat_conversation_with_followup(thread_id, &prompt, cx);
-                self.resolve_root_brain_inbox_item(item.id, cx);
-            }
-            _ => {
-                let prompt = crate::brain::response_prompt_for_inbox_item(&item);
-                let entry_intent = (!prompt.is_empty()).then_some(prompt);
-                self.open_tab_ai_agent_chat_with_entry_intent_suppressing_focused_part(
-                    entry_intent,
-                    cx,
-                );
-                self.resolve_root_brain_inbox_item(item.id, cx);
-            }
+        let context_part = Self::brain_inbox_context_part(&item);
+        if item.source.as_str() == "chat_turn" {
+            // source_id is "{thread_id}#{turn_index}"; load the saved
+            // conversation when possible, then stage the inbox as context
+            // instead of sending a surprise turn.
+            let thread_id = item
+                .source_id
+                .split('#')
+                .next()
+                .unwrap_or(item.source_id.as_str());
+            self.open_agent_chat_with_staged_brain_inbox_prompt(Some(thread_id), context_part, cx);
+        } else {
+            self.open_agent_chat_with_staged_brain_inbox_prompt(None, context_part, cx);
         }
+    }
+
+    fn open_agent_chat_with_staged_brain_inbox_prompt(
+        &mut self,
+        history_thread_id: Option<&str>,
+        context_part: crate::ai::message_parts::AiContextPart,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(chat_entity) =
+            crate::ai::agent_chat::ui::chat_window::get_detached_agent_chat_view_entity()
+        {
+            chat_entity.update(cx, |chat_view, cx| {
+                if let Some(thread_id) = history_thread_id {
+                    chat_view.resume_from_history(thread_id, cx);
+                }
+                Self::stage_brain_inbox_context_on_agent_chat(chat_view, context_part.clone(), cx);
+            });
+            self.reset_to_script_list(cx);
+            return;
+        }
+
+        self.open_tab_ai_agent_chat_with_entry_intent_suppressing_focused_part(None, cx);
+
+        if let AppView::AgentChatView { entity } = &self.current_view {
+            let entity = entity.clone();
+            entity.update(cx, |chat_view, cx| {
+                if let Some(thread_id) = history_thread_id {
+                    chat_view.resume_from_history(thread_id, cx);
+                }
+                Self::stage_brain_inbox_context_on_agent_chat(chat_view, context_part, cx);
+            });
+        } else {
+            tracing::warn!(
+                target: "script_kit::brain",
+                event = "brain_inbox_stage_agent_chat_unavailable",
+                "Unable to stage Brain Inbox prompt because Agent Chat did not open"
+            );
+        }
+    }
+
+    fn stage_brain_inbox_context_on_agent_chat(
+        chat_view: &mut crate::ai::agent_chat::ui::AgentChatView,
+        context_part: crate::ai::message_parts::AiContextPart,
+        cx: &mut Context<crate::ai::agent_chat::ui::AgentChatView>,
+    ) {
+        let assistant_message = Self::brain_inbox_local_assistant_message(&context_part);
+        if let Some(thread) = chat_view.thread() {
+            thread.update(cx, |thread, cx| {
+                thread.replace_pending_context_parts(vec![context_part], "brain_inbox_enter", cx);
+                thread.push_local_assistant_message(assistant_message, cx);
+            });
+        }
+    }
+
+    fn brain_inbox_local_assistant_message(
+        context_part: &crate::ai::message_parts::AiContextPart,
+    ) -> String {
+        let crate::ai::message_parts::AiContextPart::TextBlock { text, .. } = context_part else {
+            return "What should we do with this inbox item?".to_string();
+        };
+        let mut visible_context = text
+            .split_once("\nTask:\n")
+            .map(|(context, _)| context)
+            .unwrap_or(text.as_str())
+            .trim();
+        visible_context = visible_context
+            .strip_prefix("Follow up on this Brain Inbox item.\n\n")
+            .unwrap_or(visible_context)
+            .trim();
+        if visible_context.is_empty() {
+            return "What should we do with this inbox item?".to_string();
+        }
+        format!("What should we do with this?\n\n{visible_context}")
+    }
+
+    fn brain_inbox_context_part(
+        item: &crate::brain::InboxItem,
+    ) -> crate::ai::message_parts::AiContextPart {
+        crate::ai::message_parts::AiContextPart::TextBlock {
+            label: Self::brain_inbox_context_label(item),
+            source: format!("brain-inbox://{}", item.id),
+            text: crate::brain::response_prompt_for_inbox_item(item),
+            mime_type: Some("text/markdown".to_string()),
+        }
+    }
+
+    fn brain_inbox_context_label(item: &crate::brain::InboxItem) -> String {
+        let title = Self::brain_inbox_short_title(item);
+        if title.is_empty() {
+            "Brain Inbox".to_string()
+        } else {
+            format!("Brain Inbox: {title}")
+        }
+    }
+
+    fn brain_inbox_short_title(item: &crate::brain::InboxItem) -> String {
+        let collapsed = item.title.split_whitespace().collect::<Vec<_>>().join(" ");
+        const MAX_CHARS: usize = 80;
+        if collapsed.chars().count() <= MAX_CHARS {
+            return collapsed;
+        }
+        let split_at = collapsed
+            .char_indices()
+            .nth(MAX_CHARS)
+            .map(|(idx, _)| idx)
+            .unwrap_or(collapsed.len());
+        format!("{}...", collapsed[..split_at].trim_end())
     }
 
     pub(crate) fn selected_root_directory_query_owned(&mut self) -> Option<String> {

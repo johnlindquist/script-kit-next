@@ -19,12 +19,19 @@
     "imp-sk-terminal": "./imps/imp-sk-terminal",
     "imp-sk-execution": "./imps/imp-sk-execution",
     "imp-sk-platform": "./imps/imp-sk-platform",
-    "imp-sk-mcp": "./imps/imp-sk-mcp"
+    "imp-sk-mcp": "./imps/imp-sk-mcp",
+    "imp-sk-build-doctor": "./imps/imp-sk-build-doctor",
+    "imp-sk-devtools": "./imps/imp-sk-devtools",
+    "imp-sk-auditor": "./imps/imp-sk-auditor",
+    "imp-sk-tests": "./imps/imp-sk-tests",
+    "imp-sk-release": "./imps/imp-sk-release",
+    "imp-sk-ai-core": "./imps/imp-sk-ai-core",
+    "imp-sk-settings": "./imps/imp-sk-settings"
   },
   "scripts": {
     "list": "bun imps/project-imps list",
     "which": "bun imps/project-imp --which",
-    "check": "rm -rf /tmp/script-kit-project-imps-check && mkdir -p /tmp/script-kit-project-imps-check && bun build --target bun bin/project-imp.ts --outdir /tmp/script-kit-project-imps-check/router && bun build --target bun bin/project-imps.ts --outdir /tmp/script-kit-project-imps-check/fleet && bun build --target bun imps/imp-sk-scout --outdir /tmp/script-kit-project-imps-check/scout && bun build --target bun imps/imp-sk-agent-chat --outdir /tmp/script-kit-project-imps-check/agent-chat"
+    "check": "rm -rf /tmp/script-kit-project-imps-check && mkdir -p /tmp/script-kit-project-imps-check && bun build --target bun bin/project-imp.ts --outdir /tmp/script-kit-project-imps-check/router && bun build --target bun bin/project-imps.ts --outdir /tmp/script-kit-project-imps-check/fleet && bun build --target bun imps/imp-sk-scout --outdir /tmp/script-kit-project-imps-check/scout && bun build --target bun imps/imp-sk-agent-chat --outdir /tmp/script-kit-project-imps-check/agent-chat && bun build --target bun imps/imp-sk-build-doctor --outdir /tmp/script-kit-project-imps-check/build-doctor && bun build --target bun imps/imp-sk-auditor --outdir /tmp/script-kit-project-imps-check/auditor"
   },
   "dependencies": {
     "@openai/codex-sdk": "^0.134.0"

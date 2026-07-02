@@ -46,7 +46,8 @@ fn streaming_activity_row_is_a_single_idempotent_tail_row() {
         "\n    pub fn toggle_collapsed(",
     );
     assert!(
-        setter_body.contains("if self.show_activity_row == show") && setter_body.contains("return;"),
+        setter_body.contains("if self.show_activity_row == show")
+            && setter_body.contains("return;"),
         "set_show_activity_row must early-return when the flag is unchanged to avoid reset/notify churn"
     );
     assert!(
@@ -174,6 +175,33 @@ fn transcript_message_sync_is_idempotent() {
         setter_body.contains("if self.messages_match_current(&messages)")
             && setter_body.contains("return;"),
         "AgentChatTranscript::set_messages must avoid notify/reset churn when messages are unchanged"
+    );
+}
+
+#[test]
+fn transcript_heavy_markdown_preview_covers_link_dense_user_prompts() {
+    let stats_body = source_between(
+        TRANSCRIPT_SOURCE,
+        "impl HeavyMarkdownStats",
+        "\npub struct AgentChatTranscript",
+    );
+    let preview_body = source_between(
+        TRANSCRIPT_SOURCE,
+        "fn should_use_heavy_markdown_preview(",
+        "\n    fn heavy_markdown_preview_text(",
+    );
+
+    assert!(
+        TRANSCRIPT_SOURCE.contains("link_like_spans")
+            && stats_body.contains("count_link_like_spans(trimmed)")
+            && stats_body.contains("self.link_like_spans >= 8")
+            && stats_body.contains("self.link_like_spans >= 14"),
+        "link-dense Brain prompts must qualify for the heavy markdown preview before they become large by bytes/lines alone"
+    );
+    assert!(
+        preview_body.contains("AgentChatThreadMessageRole::User")
+            && preview_body.contains("AgentChatThreadMessageRole::Assistant"),
+        "heavy markdown preview must cover user prompts as well as assistant responses"
     );
 }
 

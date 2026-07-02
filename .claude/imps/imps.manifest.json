@@ -1,0 +1,19 @@
+{
+  "schema": 1,
+  "runtimePackage": "codex-imps",
+  "runtimePackageVersion": "0.3.0",
+  "sdkDependencyVersion": "^0.134.0",
+  "generatedAt": "2026-07-02T04:22:50Z",
+  "layout": "imps-local-lib",
+  "agentImport": "./lib/isolated.ts",
+  "files": [
+    { "path": "lib/isolated.ts", "sha256": "c4f7a5e9aab5cb8d1b9977c25253fc7bf28fe57700b171b9be150fa4ec3b1524" },
+    { "path": "lib/imp.ts", "sha256": "df89af416a38ca72c94b31b0c0631a8ba611611b0d508775e7df4780bf9b542b" },
+    { "path": "lib/appserver.ts", "sha256": "f8a89d17ff23fc4eaa09e2c48d82ca7a47f17022ce8cf0ce66a9eb0b5a60dfb3" },
+    { "path": "lib/codex-runtime.ts", "sha256": "ed5ac50a382b84f3e94721f9ac01fad53230400a9d0074160a9d46a7a1cd0350" },
+    { "path": "lib/defaults.ts", "sha256": "58570384371b9953916832ed29a08a6040e29158af705a386dde079e734a2583" },
+    { "path": "lib/evolution.ts", "sha256": "35d8ed66a85daa7196acdbdaf3f9f1c632c507beceaee20baaaa10f61723aa43" },
+    { "path": "lib/evolution-evaluator.ts", "sha256": "de060e6007d0e07b29a03147c17f27efb783b5602b1344390d8b7b562f0aac75" },
+    { "path": "lib/transcript.ts", "sha256": "357686e05eea211cb07354aa20e33000d9a69118ee6e7d8a03aac9a2e9ca99e7" }
+  ]
+}

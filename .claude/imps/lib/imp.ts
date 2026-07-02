@@ -24,17 +24,28 @@ import { createHash } from "crypto";
 import { spawn } from "child_process";
 import type { ImpConfig } from "./isolated.ts";
 import { AppServerClient } from "./appserver.ts";
-import { selfImproveFingerprintParts } from "./self-improve.ts";
+import { impReadyTimeoutMs } from "./defaults.ts";
 
-function envMs(names: string | string[], fallback: number): number {
-  for (const name of Array.isArray(names) ? names : [names]) {
-    const raw = process.env[name];
-    if (!raw) continue;
-    const parsed = Number(raw);
-    if (Number.isFinite(parsed) && parsed > 0) return parsed;
-  }
-  return fallback;
-}
+type WarmImpRequest = {
+  prompt: string;
+  quiet: boolean;
+  cwd: string;
+  effort?: string;
+  turnTimeoutMs?: number;
+};
+
+/**
+ * Per-chunk streaming notifications suppressed in quiet mode: they exist only
+ * for live rendering and can be high-volume. Structural notifications
+ * (item/started, item/completed, turn/completed, thread/tokenUsage/updated) are
+ * always forwarded so the client can build its audit transcript even for `-q`.
+ */
+const QUIET_SUPPRESSED_NOTIFICATIONS = new Set<string>([
+  "item/agentMessage/delta",
+  "item/reasoning/textDelta",
+  "item/reasoning/summaryTextDelta",
+  "item/commandExecution/outputDelta",
+]);
 
 export function socketPath(name: string): string {
   return `/tmp/codex-imp-${name}.sock`;
@@ -53,28 +64,44 @@ export function metaPath(name: string): string {
  * mtime) so edits are caught even when timestamps are preserved (git checkout,
  * tarball extraction, etc.).
  */
+export function runtimeLibDirsForExecutable(exe: string): string[] {
+  const dir = dirname(exe);
+  return [
+    join(dir, "lib"),
+    join(dir, "..", "lib"),
+  ];
+}
+
 export function sourceFingerprint(config?: ImpConfig): string {
   const files: string[] = [];
+  const seen = new Set<string>();
   let exe: string;
   try {
     exe = realpathSync(process.argv[1]);
   } catch {
     exe = process.argv[1];
   }
-  files.push(exe);
-  // lib/ sits next to the imps/ dir: <repo>/imps/imp-X -> <repo>/lib/*.ts
-  const libDir = join(dirname(exe), "..", "lib");
-  try {
-    for (const f of readdirSync(libDir)) {
-      if (f.endsWith(".ts")) files.push(join(libDir, f));
-    }
-  } catch {}
-  const hash = createHash("sha256");
-  for (const part of config ? selfImproveFingerprintParts(config) : []) {
-    hash.update(part);
-    hash.update("\0");
-    if (part.startsWith("path:")) files.push(part.slice("path:".length));
+
+  const addFile = (path: string) => {
+    let key = path;
+    try {
+      key = realpathSync(path);
+    } catch {}
+    if (seen.has(key)) return;
+    seen.add(key);
+    files.push(path);
+  };
+
+  addFile(exe);
+  for (const libDir of runtimeLibDirsForExecutable(exe)) {
+    try {
+      for (const f of readdirSync(libDir)) {
+        if (f.endsWith(".ts")) addFile(join(libDir, f));
+      }
+    } catch {}
   }
+  const hash = createHash("sha256");
+  void config;
   files.sort();
   for (const f of files) {
     try {
@@ -152,7 +179,7 @@ export async function serveImp(config: ImpConfig): Promise<void> {
       const line = buf.slice(0, nl);
       buf = buf.slice(nl + 1);
 
-      let req: { prompt?: string; quiet?: boolean; cwd?: string; effort?: string; ctl?: string };
+      let req: Partial<WarmImpRequest> & { ctl?: string };
       try {
         req = JSON.parse(line);
       } catch (e: any) {
@@ -187,10 +214,14 @@ export async function serveImp(config: ImpConfig): Promise<void> {
             prompt,
             {
               onNotification: (method, params) => {
-                if (!req.quiet) send({ type: "notif", method, params });
+                // Forward structural notifications even in quiet mode so the
+                // client can record the audit transcript; drop only the noisy
+                // per-chunk deltas that quiet mode would never render.
+                if (req.quiet && QUIET_SUPPRESSED_NOTIFICATIONS.has(method)) return;
+                send({ type: "notif", method, params });
               },
             },
-            { cwd: req.cwd, effort: req.effort },
+            { cwd: req.cwd, effort: req.effort, turnTimeoutMs: req.turnTimeoutMs },
           );
           send({ type: "final", text: finalText });
           send({ type: "done" });
@@ -309,10 +340,7 @@ export async function stopWarmImp(name: string, pid?: number): Promise<void> {
  * spawn a fresh one — so editing an imp's instructions/model, or any lib/*.ts,
  * takes effect on the very next prompt.
  */
-export async function ensureWarmImp(
-  config: ImpConfig,
-  readyTimeoutMs = envMs(["SCRIPT_KIT_IMP_READY_TIMEOUT_MS", "CODEX_IMP_READY_TIMEOUT_MS"], 120_000),
-): Promise<boolean> {
+export async function ensureWarmImp(config: ImpConfig, readyTimeoutMs = impReadyTimeoutMs()): Promise<boolean> {
   const sock = socketPath(config.name);
   const current = sourceFingerprint(config);
 
@@ -353,7 +381,7 @@ export async function ensureWarmImp(
 
 export async function runViaWarmImp(
   name: string,
-  req: { prompt: string; quiet: boolean; cwd: string; effort?: string },
+  req: WarmImpRequest,
   handlers: ClientEventHandlers,
   signal?: AbortSignal,
 ): Promise<void> {

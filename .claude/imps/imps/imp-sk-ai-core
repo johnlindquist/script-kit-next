@@ -3,6 +3,6 @@ import { runImp } from "../lib/isolated.ts";
 import { makeProjectImpConfig } from "../lib/project-config.ts";
 
 // The router imports this module to read config.route; only direct execution runs the imp.
-export const config = makeProjectImpConfig("imp-sk-clipboard");
+export const config = makeProjectImpConfig("imp-sk-ai-core");
 
 if (import.meta.main) await runImp(config);

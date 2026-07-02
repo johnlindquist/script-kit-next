@@ -1,98 +1,163 @@
 /**
  * Shared runtime helpers for isolated Codex imp profiles.
- *
- * Self-improvement is owned by lib/self-improve.ts and is available to every
- * imp through this shared runtime. It is opt-in: normal profiles remain a
- * no-op unless `selfImprove.enabled` or CODEX_IMP_SELF_IMPROVE enables them.
  */
 import {
-  chmodSync,
-  copyFileSync,
+  createHash,
+} from "crypto";
+import {
   existsSync,
   mkdirSync,
+  readFileSync,
+  realpathSync,
   symlinkSync,
   writeFileSync,
 } from "fs";
 import { join } from "path";
 import type { ImpConfig } from "./isolated.ts";
-import {
-  applySelfImproveOverlay,
-  profileLibDir,
-  resolveSelfImprove,
-  stopHookEnabled,
-  type SelfImproveConfig,
-} from "./self-improve.ts";
-
-export type { SelfImproveConfig };
 
 export interface PreparedCodexHome {
   /** Env vars to merge into the spawned Codex process. */
   extraEnv: Record<string, string>;
   hooksEnabled: boolean;
-  lessonsPath?: string;
 }
 
-export function hooksEnabled(config: ImpConfig): boolean {
-  return stopHookEnabled(config);
+export function sourceCodexHome(realHome = process.env.HOME!): string {
+  return process.env.CODEX_HOME || join(realHome, ".codex");
 }
 
-export function applyLessonOverlay(config: ImpConfig): ImpConfig {
-  return applySelfImproveOverlay(config);
+export function trustedProjectsConfig(configToml: string): string {
+  const blocks: string[] = [];
+
+  let currentHeader: string | undefined;
+  let currentBody: string[] = [];
+
+  const flush = () => {
+    if (!currentHeader) return;
+    const trustMatch = currentBody.join("\n").match(/^trust_level\s*=\s*"(trusted|untrusted)"\s*$/m);
+    if (trustMatch) {
+      blocks.push(`${currentHeader}\ntrust_level = "${trustMatch[1]}"`);
+    }
+  };
+
+  for (const line of configToml.split(/\r?\n/)) {
+    const projectHeader = line.match(/^\[projects\."((?:\\.|[^"\\])*)"\]\s*$/);
+    if (projectHeader) {
+      flush();
+      currentHeader = `[projects."${projectHeader[1]}"]`;
+      currentBody = [];
+      continue;
+    }
+
+    if (/^\[/.test(line)) {
+      flush();
+      currentHeader = undefined;
+      currentBody = [];
+      continue;
+    }
+
+    if (currentHeader) currentBody.push(line);
+  }
+  flush();
+
+  return blocks.length ? `${blocks.join("\n\n")}\n` : "";
 }
 
-function shellQuote(s: string): string {
-  return `'${s.replace(/'/g, `'\\''`)}'`;
+function copyTrustedProjects(sourceHome: string, isolatedHome: string) {
+  const configSrc = join(sourceHome, "config.toml");
+  const configDst = join(isolatedHome, "config.toml");
+  if (!existsSync(configSrc) || existsSync(configDst)) return;
+
+  const config = trustedProjectsConfig(readFileSync(configSrc, "utf8"));
+  if (config) writeFileSync(configDst, config);
 }
 
-export function prepareIsolatedCodexHome(
-  config: ImpConfig,
-  isolatedHome: string,
-  realHome = process.env.HOME!,
-): PreparedCodexHome {
-  mkdirSync(isolatedHome, { recursive: true });
+function appendImpTuiDefaults(isolatedHome: string): void {
+  const configPath = join(isolatedHome, "config.toml");
+  const current = existsSync(configPath) ? readFileSync(configPath, "utf8") : "";
+  const prefix = current.trim() ? `${current.replace(/\s*$/, "\n\n")}` : "";
+  writeFileSync(configPath, `${prefix}[tui]\nshow_tooltips = false\n`, "utf8");
+}
 
-  const authSrc = `${realHome}/.codex/auth.json`;
-  const authDst = `${isolatedHome}/auth.json`;
+function symlinkAuth(sourceHome: string, isolatedHome: string) {
+  const authSrc = join(sourceHome, "auth.json");
+  const authDst = join(isolatedHome, "auth.json");
   if (existsSync(authSrc) && !existsSync(authDst)) {
     symlinkSync(authSrc, authDst);
   }
+}
 
-  const resolved = resolveSelfImprove(config);
-  if (!resolved.enabled) {
-    return { extraEnv: {}, hooksEnabled: false };
+function shellQuote(value: string): string {
+  return `'${value.replace(/'/g, `'\\''`)}'`;
+}
+
+function tomlEscape(value: string): string {
+  return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+}
+
+function canonicalJson(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(canonicalJson);
+  if (value && typeof value === "object") {
+    const out: Record<string, unknown> = {};
+    for (const key of Object.keys(value).sort()) {
+      out[key] = canonicalJson((value as Record<string, unknown>)[key]);
+    }
+    return out;
   }
+  return value;
+}
 
-  const extraEnv = { ...resolved.extraEnv };
-  if (!resolved.stopHook) {
-    return { extraEnv, hooksEnabled: false, lessonsPath: resolved.lessonsPath };
-  }
+function versionForTomlShape(value: unknown): string {
+  const serialized = JSON.stringify(canonicalJson(value));
+  return `sha256:${createHash("sha256").update(serialized).digest("hex")}`;
+}
 
-  const hooksDir = join(isolatedHome, "hooks");
-  mkdirSync(hooksDir, { recursive: true });
-  const handlerSrc = join(profileLibDir(resolved.selfPath), "self-improve-stop.ts");
-  const handlerDst = join(hooksDir, "self-improve-stop.ts");
-  copyFileSync(handlerSrc, handlerDst);
-  chmodSync(handlerDst, 0o755);
+function bundledHookTrustedHash(command: string): string {
+  return versionForTomlShape({
+    event_name: "user_prompt_submit",
+    hooks: [
+      {
+        async: false,
+        command,
+        statusMessage: "Checking imp evolution feedback",
+        timeout: 10,
+        type: "command",
+      },
+    ],
+  });
+}
 
+function appendBundledHookTrust(isolatedHome: string, hookKey: string, trustedHash: string): void {
+  const configPath = join(isolatedHome, "config.toml");
+  const current = existsSync(configPath) ? readFileSync(configPath, "utf8") : "";
+  const prefix = current.trim() ? `${current.replace(/\s*$/, "\n\n")}` : "";
   writeFileSync(
-    join(isolatedHome, "config.toml"),
-    ["# Generated by codex-imps for this self-improving profile.", "bypass_hook_trust = true", "", "[features]", "hooks = true", ""].join("\n"),
+    configPath,
+    `${prefix}[hooks.state."${tomlEscape(hookKey)}"]\ntrusted_hash = "${tomlEscape(trustedHash)}"\n`,
     "utf8",
   );
+}
 
+function writeBundledUserPromptSubmitHook(config: ImpConfig, isolatedHome: string): boolean {
+  if (!config.bundledUserPromptSubmitHookSource) return false;
+  const hooksDir = join(isolatedHome, "hooks");
+  const hookPath = join(hooksDir, "imps-plus-user-prompt-submit.ts");
+  const hooksJsonPath = join(isolatedHome, "hooks.json");
+  const command = `${shellQuote(process.execPath)} ${shellQuote(hookPath)}`;
+  mkdirSync(hooksDir, { recursive: true });
+  writeFileSync(hookPath, config.bundledUserPromptSubmitHookSource, "utf8");
   writeFileSync(
-    join(isolatedHome, "hooks.json"),
+    hooksJsonPath,
     JSON.stringify(
       {
         hooks: {
-          Stop: [
+          UserPromptSubmit: [
             {
               hooks: [
                 {
                   type: "command",
-                  command: `bun ${shellQuote(handlerDst)}`,
+                  command,
                   timeout: 10,
-                  statusMessage: "self-improve: scan turn for failures",
+                  statusMessage: "Checking imp evolution feedback",
                 },
               ],
             },
@@ -104,6 +169,26 @@ export function prepareIsolatedCodexHome(
     ) + "\n",
     "utf8",
   );
+  appendBundledHookTrust(
+    isolatedHome,
+    `${realpathSync(hooksJsonPath)}:user_prompt_submit:0:0`,
+    bundledHookTrustedHash(command),
+  );
+  return true;
+}
 
-  return { extraEnv, hooksEnabled: true, lessonsPath: resolved.lessonsPath };
+export function prepareIsolatedCodexHome(
+  config: ImpConfig,
+  isolatedHome: string,
+  realHome = process.env.HOME!,
+): PreparedCodexHome {
+  mkdirSync(isolatedHome, { recursive: true });
+
+  const sourceHome = sourceCodexHome(realHome);
+  symlinkAuth(sourceHome, isolatedHome);
+  copyTrustedProjects(sourceHome, isolatedHome);
+  appendImpTuiDefaults(isolatedHome);
+  const hooksEnabled = writeBundledUserPromptSubmitHook(config, isolatedHome);
+
+  return { extraEnv: {}, hooksEnabled };
 }

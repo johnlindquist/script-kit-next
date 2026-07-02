@@ -32,6 +32,7 @@ struct HeavyMarkdownStats {
     table_like_lines: usize,
     blockquote_lines: usize,
     list_like_lines: usize,
+    link_like_spans: usize,
 }
 
 impl HeavyMarkdownStats {
@@ -63,6 +64,7 @@ impl HeavyMarkdownStats {
             {
                 stats.list_like_lines += 1;
             }
+            stats.link_like_spans += count_link_like_spans(trimmed);
         }
 
         stats
@@ -76,8 +78,63 @@ impl HeavyMarkdownStats {
                     || self.fence_markers >= 4
                     || self.table_like_lines >= 3
                     || self.blockquote_lines >= 6
-                    || self.list_like_lines >= 14))
+                    || self.list_like_lines >= 14
+                    || self.link_like_spans >= 8))
+            || self.link_like_spans >= 14
     }
+}
+
+fn count_link_like_spans(line: &str) -> usize {
+    let markdown_targets = markdown_link_target_ranges(line);
+    markdown_targets.len() + count_bare_link_spans(line, &markdown_targets)
+}
+
+fn markdown_link_target_ranges(line: &str) -> Vec<std::ops::Range<usize>> {
+    let bytes = line.as_bytes();
+    let mut ranges = Vec::new();
+    let mut index = 0;
+
+    while let Some(close_label_rel) = line[index..].find("](") {
+        let close_label = index + close_label_rel;
+        let Some(open_label_rel) = line[..close_label].rfind('[') else {
+            index = close_label + 2;
+            continue;
+        };
+        if open_label_rel + 1 >= close_label {
+            index = close_label + 2;
+            continue;
+        }
+
+        let target_start = close_label + 2;
+        let Some(close_target_rel) = line[target_start..].find(')') else {
+            break;
+        };
+        let close_target = target_start + close_target_rel;
+        if bytes[target_start..close_target]
+            .iter()
+            .any(|byte| !byte.is_ascii_whitespace())
+        {
+            ranges.push(target_start..close_target);
+        }
+        index = close_target + 1;
+    }
+
+    ranges
+}
+
+fn count_bare_link_spans(line: &str, markdown_targets: &[std::ops::Range<usize>]) -> usize {
+    ["http://", "https://", "kit://", "scriptkit://"]
+        .iter()
+        .map(|needle| {
+            line.match_indices(needle)
+                .filter(|(index, _)| {
+                    !markdown_targets
+                        .iter()
+                        .any(|range| range.start <= *index && *index < range.end)
+                })
+                .count()
+        })
+        .sum()
 }
 
 pub struct AgentChatTranscript {
@@ -173,8 +230,10 @@ impl AgentChatTranscript {
         msg: &AgentChatThreadMessage,
         stats: HeavyMarkdownStats,
     ) -> bool {
-        matches!(msg.role, AgentChatThreadMessageRole::Assistant)
-            && msg.tool_meta.is_none()
+        matches!(
+            msg.role,
+            AgentChatThreadMessageRole::User | AgentChatThreadMessageRole::Assistant
+        ) && msg.tool_meta.is_none()
             && stats.is_scroll_heavy()
     }
 
@@ -1366,5 +1425,67 @@ impl Render for AgentChatTranscript {
             .overflow_hidden()
             .child(transcript_content)
             .vertical_scrollbar(&self.list_state)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn message(
+        role: AgentChatThreadMessageRole,
+        body: impl Into<SharedString>,
+    ) -> AgentChatThreadMessage {
+        AgentChatThreadMessage {
+            id: 1,
+            role,
+            body: body.into(),
+            tool_call_id: None,
+            tool_meta: None,
+        }
+    }
+
+    #[test]
+    fn heavy_markdown_stats_count_markdown_and_bare_links() {
+        let body = [
+            "[Calendar](scriptkit://run/add-to-google-calendar)",
+            "[Docs](https://example.com/docs) and https://example.com/raw",
+            "[empty]() [not a link]",
+        ]
+        .join("\n");
+
+        let stats = HeavyMarkdownStats::from_text(&body);
+
+        assert_eq!(stats.link_like_spans, 4);
+    }
+
+    #[test]
+    fn link_dense_user_messages_use_heavy_preview_path() {
+        let body = (0..14)
+            .map(|ix| format!("[Brain source {ix}](scriptkit://agent-chat/thread-{ix})"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let stats = HeavyMarkdownStats::from_text(&body);
+        let msg = message(AgentChatThreadMessageRole::User, body);
+
+        assert!(stats.is_scroll_heavy());
+        assert!(AgentChatTranscript::should_use_heavy_markdown_preview(
+            &msg, stats
+        ));
+    }
+
+    #[test]
+    fn heavy_markdown_preview_still_skips_tool_rows() {
+        let body = (0..20)
+            .map(|ix| format!("[Tool source {ix}](https://example.com/{ix})"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let stats = HeavyMarkdownStats::from_text(&body);
+        let msg = message(AgentChatThreadMessageRole::Tool, body);
+
+        assert!(stats.is_scroll_heavy());
+        assert!(!AgentChatTranscript::should_use_heavy_markdown_preview(
+            &msg, stats
+        ));
     }
 }

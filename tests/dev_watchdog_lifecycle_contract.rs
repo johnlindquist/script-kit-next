@@ -1,8 +1,28 @@
 //! Source-level contracts for dev crash watchdog classification.
 
+const DEV_SH: &str = include_str!("../dev.sh");
 const WATCHDOG_SH: &str = include_str!("../scripts/agentic/dev-crash-watchdog.sh");
 const SESSION_SH: &str = include_str!("../scripts/agentic/session.sh");
 const SUPERVISOR_PY: &str = include_str!("../scripts/agentic/session-supervisor.py");
+
+#[test]
+fn dev_sh_keeps_crash_watchdog_auto_relaunch_opt_in() {
+    for needle in [
+        "SCRIPT_KIT_DEV_CRASH_WATCHDOG=\"${SCRIPT_KIT_DEV_CRASH_WATCHDOG:-0}\"",
+        "set =1 for banner + auto-relaunch on app crash",
+        "off by default so using Script Kit's Quit command during dev leaves the app",
+    ] {
+        assert!(
+            DEV_SH.contains(needle),
+            "dev.sh must keep crash-watchdog relaunch opt-in marker: {needle}"
+        );
+    }
+
+    assert!(
+        WATCHDOG_SH.contains("auto-relaunching"),
+        "opt-in watchdog should still preserve crash auto-relaunch behavior"
+    );
+}
 
 #[test]
 fn session_start_uses_supervisor_for_structured_app_exit_receipts() {

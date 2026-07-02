@@ -12,6 +12,17 @@ fn production_source(path: &str) -> String {
         .to_string()
 }
 
+fn source_between<'a>(source: &'a str, start: &str, end: &str) -> &'a str {
+    let start_idx = source
+        .find(start)
+        .unwrap_or_else(|| panic!("start marker not found: {start}"));
+    let rest = &source[start_idx..];
+    let end_idx = rest
+        .find(end)
+        .unwrap_or_else(|| panic!("end marker not found after {start}: {end}"));
+    &rest[..end_idx]
+}
+
 #[test]
 fn main_window_search_surfaces_use_shared_main_view_input_shell() {
     let shared = read_source("src/components/main_view_chrome.rs");
@@ -374,6 +385,20 @@ fn agent_chat_composer_shell_consumes_main_menu_header_geometry() {
     assert!(!agent_chat.contains("render_main_view_header_divider("));
     assert!(agent_chat.contains("render_main_view_context_zone_inert"));
     assert!(agent_chat.contains("MainViewContextLabels::new"));
+    assert!(agent_chat.contains("pub(crate) fn agent_model_header_label(&self) -> String"));
+    let agent_chat_header_labels = source_between(
+        &agent_chat,
+        "let context_labels = crate::components::main_view_chrome::MainViewContextLabels::new(",
+        "let header = crate::components::main_view_chrome::MainViewHeaderChrome",
+    );
+    assert!(
+        agent_chat_header_labels.contains("footer_snapshot.agent_model_header_label()"),
+        "Agent Chat shared header must use the same Agent · Model label shape as the main menu header"
+    );
+    assert!(
+        !agent_chat_header_labels.contains("footer_snapshot.profile_display"),
+        "Agent Chat shared header must not pass a profile-only label into the model chip"
+    );
     assert!(agent_chat.contains("snapshot.profile_display.clone()"));
     assert!(agent_chat.contains("snapshot.model_display.clone()"));
     assert!(agent_chat.contains(".id(\"agent_chat-profile-display\")"));

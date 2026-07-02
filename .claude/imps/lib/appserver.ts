@@ -17,22 +17,13 @@
 import { spawn, type ChildProcess } from "child_process";
 import { rmSync } from "fs";
 import type { ImpConfig } from "./isolated.ts";
-import { applyLessonOverlay, prepareIsolatedCodexHome } from "./codex-runtime.ts";
-import { createSelfImproveObserver } from "./self-improve.ts";
+import { prepareIsolatedCodexHome } from "./codex-runtime.ts";
+import { createEvolutionObserver } from "./evolution.ts";
+import { DEFAULT_IMP_MODEL, DEFAULT_IMP_REASONING_EFFORT, impRpcTimeoutMs, impTurnTimeoutMs } from "./defaults.ts";
 
 export interface TurnHandlers {
   /** Raw app-server notification (method + params). */
   onNotification?: (method: string, params: any) => void;
-}
-
-function envMs(names: string | string[], fallback: number): number {
-  for (const name of Array.isArray(names) ? names : [names]) {
-    const raw = process.env[name];
-    if (!raw) continue;
-    const parsed = Number(raw);
-    if (Number.isFinite(parsed) && parsed > 0) return parsed;
-  }
-  return fallback;
 }
 
 export class AppServerClient {
@@ -48,17 +39,15 @@ export class AppServerClient {
   private hooksEnabled = false;
 
   constructor(config: ImpConfig) {
-    // Fold accumulated self-improvement lessons into developerInstructions once,
-    // at imp start. Hot-reload restarts this imp when the overlay changes.
-    this.config = applyLessonOverlay(config);
-    this.model = this.config.model || process.env.CODEX_IMP_MODEL || process.env.CODEX_PROFILE_MODEL || "gpt-5.3-codex-spark";
+    this.config = config;
+    this.model = this.config.model || process.env.CODEX_IMP_MODEL || process.env.CODEX_PROFILE_MODEL || DEFAULT_IMP_MODEL;
     this.isolatedHome = `/tmp/codex-appserver-${this.config.name}-${process.pid}`;
   }
 
   /** Spawn the app-server and complete the initialize handshake. */
   async start(): Promise<void> {
     const realHome = process.env.HOME!;
-    // Symlinks auth, and (when self-improvement is enabled) writes the hook config.
+    // Symlinks auth into the throwaway Codex home.
     const runtime = prepareIsolatedCodexHome(this.config, this.isolatedHome, realHome);
     this.hooksEnabled = runtime.hooksEnabled;
 
@@ -117,10 +106,7 @@ export class AppServerClient {
     this.child.stdin!.write(JSON.stringify({ jsonrpc: "2.0", method, params }) + "\n");
   }
 
-  private awaitResponse(
-    id: number,
-    timeoutMs = envMs(["SCRIPT_KIT_IMP_START_TIMEOUT_MS", "CODEX_IMP_START_TIMEOUT_MS"], 180_000),
-  ): Promise<any> {
+  private awaitResponse(id: number, timeoutMs = impRpcTimeoutMs()): Promise<any> {
     return new Promise((resolve, reject) => {
       const t = setTimeout(() => {
         this.handlers.delete(h);
@@ -152,7 +138,7 @@ export class AppServerClient {
       developerInstructions: this.config.developerInstructions,
       ephemeral: true,
       config: {
-        model_reasoning_effort: this.config.reasoningEffort || "low",
+        model_reasoning_effort: this.config.reasoningEffort || DEFAULT_IMP_REASONING_EFFORT,
         show_raw_agent_reasoning: true,
         skills: { include_instructions: false },
         include_apps_instructions: false,
@@ -163,14 +149,11 @@ export class AppServerClient {
         memories: { use_memories: false },
         mcp_servers: {},
         web_search: "disabled",
-        // Non-interactive isolated imps own a throwaway CODEX_HOME, so user
-        // hooks can't be approved via a TUI — bypass trust to let them run.
-        // Passed here (not just config.toml) because thread/start config does
-        // not inherit the on-disk bypass flag.
-        bypass_hook_trust: this.hooksEnabled,
         features: {
           plugins: false, hooks: this.hooksEnabled, memories: false, apps: false,
-          image_generation: false, tool_search: false, tool_suggest: false,
+          image_generation: this.config.enableImageGeneration === true,
+          tool_search: false,
+          tool_suggest: false,
         },
       },
     });
@@ -183,22 +166,23 @@ export class AppServerClient {
    * Streams notifications via handlers.onNotification. Resolves with the final
    * agent message text on turn/completed.
    */
-  async runTurn(prompt: string, handlers: TurnHandlers, opts?: { cwd?: string; effort?: string }): Promise<string> {
+  async runTurn(prompt: string, handlers: TurnHandlers, opts?: { cwd?: string; effort?: string; turnTimeoutMs?: number }): Promise<string> {
     if (!this.ready) throw new Error("app-server not ready");
+    if (!prompt.trim()) throw new Error("missing prompt");
     const threadId = await this.startThread();
-    const observer = createSelfImproveObserver(this.config);
+    const observer = createEvolutionObserver(this.config, prompt);
 
     return new Promise<string>((resolve, reject) => {
       let finalText = "";
       const t = setTimeout(() => {
         this.handlers.delete(h);
-        observer.finish({ status: "timeout", transport: "app-server" });
+        observer.finish({ status: "timeout", transport: "app-server", finalText, threadId });
         reject(new Error(`turn timeout\nstderr:\n${this.stderrTail}`));
-      }, envMs(["SCRIPT_KIT_IMP_TURN_TIMEOUT_MS", "CODEX_IMP_TURN_TIMEOUT_MS"], 1_800_000));
+      }, opts?.turnTimeoutMs ?? impTurnTimeoutMs());
       const h = (msg: any) => {
         if (msg.__exit !== undefined) {
           clearTimeout(t); this.handlers.delete(h);
-          observer.finish({ status: "app-server-exit", transport: "app-server", code: msg.__exit });
+          observer.finish({ status: "app-server-exit", transport: "app-server", finalText, threadId });
           reject(new Error(`app-server exited mid-turn (code ${msg.__exit})\nstderr:\n${this.stderrTail}`));
           return;
         }
@@ -212,7 +196,14 @@ export class AppServerClient {
           if (msg.params.item.text) finalText = msg.params.item.text;
         } else if (msg.method === "turn/completed") {
           clearTimeout(t); this.handlers.delete(h);
-          observer.finish({ status: "completed", transport: "app-server" });
+          const turn = msg.params?.turn;
+          observer.finish({
+            status: typeof turn?.status === "string" ? turn.status : "completed",
+            transport: "app-server",
+            finalText,
+            threadId,
+            turnId: turn?.id,
+          });
           resolve(finalText);
         }
       };
@@ -221,7 +212,7 @@ export class AppServerClient {
         threadId,
         input: [{ type: "text", text: prompt, text_elements: [] }],
         cwd: opts?.cwd || process.cwd(),
-        effort: opts?.effort || this.config.reasoningEffort || "low",
+        effort: opts?.effort || this.config.reasoningEffort || DEFAULT_IMP_REASONING_EFFORT,
       });
     });
   }

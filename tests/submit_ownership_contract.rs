@@ -22,12 +22,122 @@ fn source_between<'a>(source: &'a str, start: &str, end: &str) -> &'a str {
     &source[start_idx..start_idx + end_idx]
 }
 
+fn source_function_body<'a>(source: &'a str, signature: &str) -> &'a str {
+    let start = source
+        .find(signature)
+        .unwrap_or_else(|| panic!("missing function signature: {signature}"));
+    let after_signature = &source[start..];
+    let open = after_signature
+        .find('{')
+        .unwrap_or_else(|| panic!("missing function body open: {signature}"));
+    let body_start = start + open;
+    let mut depth = 0usize;
+    for (offset, ch) in source[body_start..].char_indices() {
+        match ch {
+            '{' => depth += 1,
+            '}' => {
+                depth -= 1;
+                if depth == 0 {
+                    return &source[body_start..=body_start + offset];
+                }
+            }
+            _ => {}
+        }
+    }
+    panic!("missing function body close: {signature}");
+}
+
 fn source_window<'a>(source: &'a str, start: &str, len: usize) -> &'a str {
     let start_idx = source
         .find(start)
         .unwrap_or_else(|| panic!("missing source start: {start}"));
     let end_idx = (start_idx + len).min(source.len());
     &source[start_idx..end_idx]
+}
+
+#[test]
+fn brain_inbox_enter_stages_agent_chat_without_submit_or_resolve() {
+    // Brain Inbox launcher rows are observations that require an explicit
+    // user decision. Plain Enter may stage a follow-up draft, but must not
+    // submit an Agent Chat turn or destructively resolve the inbox row.
+    let execute_body = source_function_body(
+        SELECTION_FALLBACK,
+        "pub(crate) fn execute_root_brain_inbox_open",
+    );
+    assert!(
+        execute_body.contains("brain_inbox_context_part(&item)")
+            && execute_body.contains("open_agent_chat_with_staged_brain_inbox_prompt("),
+        "Brain Inbox Enter should build context and delegate to the staging helper"
+    );
+    assert!(
+        !execute_body.contains("resolve_root_brain_inbox_item")
+            && !execute_body.contains("execute_root_note_open")
+            && !execute_body.contains("brain_inbox_composer_draft")
+            && !execute_body.contains("resume_agent_chat_conversation_with_followup"),
+        "Brain Inbox Enter must not resolve, open notes directly, prefill the composer, or use the auto-submit follow-up route"
+    );
+
+    let staging_body = source_function_body(
+        SELECTION_FALLBACK,
+        "fn open_agent_chat_with_staged_brain_inbox_prompt",
+    );
+    assert!(
+        staging_body.contains(
+            "open_tab_ai_agent_chat_with_entry_intent_suppressing_focused_part(None, cx)"
+        ) && staging_body.contains("stage_brain_inbox_context_on_agent_chat(")
+            && staging_body.contains("chat_view.resume_from_history(thread_id, cx)"),
+        "The Brain Inbox staging helper should open Agent Chat without entry intent, optionally resume chat history, and stage inbox context"
+    );
+    assert!(
+        !staging_body.contains("submit_reused_entry_intent")
+            && !staging_body.contains("submit_input")
+            && !staging_body.contains("set_input(prompt")
+            && !staging_body.contains("resolve_root_brain_inbox_item"),
+        "The Brain Inbox staging helper must not auto-submit, put the full prompt in the composer, or resolve the inbox item"
+    );
+    assert!(
+        staging_body.find("resume_from_history(thread_id, cx)")
+            < staging_body.find("stage_brain_inbox_context_on_agent_chat("),
+        "Brain Inbox chat_turn handoff should resume history before staging the inbox context"
+    );
+
+    let context_part_body = source_function_body(SELECTION_FALLBACK, "fn brain_inbox_context_part");
+    assert!(
+        context_part_body.contains("AiContextPart::TextBlock")
+            && context_part_body
+                .contains("text: crate::brain::response_prompt_for_inbox_item(item)")
+            && context_part_body.contains("mime_type: Some(\"text/markdown\".to_string())"),
+        "The full Brain Inbox prompt should be staged as a markdown TextBlock context part"
+    );
+
+    let stage_context_body = source_function_body(
+        SELECTION_FALLBACK,
+        "fn stage_brain_inbox_context_on_agent_chat",
+    );
+    assert!(
+        stage_context_body.contains("replace_pending_context_parts")
+            && stage_context_body.contains("vec![context_part]")
+            && stage_context_body.contains("brain_inbox_local_assistant_message(&context_part)")
+            && stage_context_body.contains("push_local_assistant_message")
+            && !stage_context_body.contains("set_input("),
+        "Agent Chat staging should replace pending context and show local assistant guidance without preloading the composer"
+    );
+    assert!(
+        !stage_context_body.contains("submit_input")
+            && !stage_context_body.contains("submit_blocks")
+            && !stage_context_body.contains("start_turn"),
+        "Brain Inbox guidance must not start a provider turn"
+    );
+
+    let assistant_message_body =
+        source_function_body(SELECTION_FALLBACK, "fn brain_inbox_local_assistant_message");
+    assert!(
+        assistant_message_body.contains("split_once(\"\\nTask:\\n\")")
+            && assistant_message_body
+                .contains("strip_prefix(\"Follow up on this Brain Inbox item.\\n\\n\")")
+            && assistant_message_body.contains("What should we do with this?"),
+        "Visible Brain Inbox assistant guidance should use clean intro copy and show the actual inbox context"
+    );
 }
 
 #[test]
@@ -60,7 +170,8 @@ fn builtin_submit_transitions_that_return_to_script_list_arm_enter_echo_guard() 
     );
     assert!(
         SUBMIT_DIAGNOSTICS.contains("fn record_return_to_script_list_submit")
-            && SUBMIT_DIAGNOSTICS.contains("self.record_submit_diagnostic(owner, route, None, value, true);")
+            && SUBMIT_DIAGNOSTICS
+                .contains("self.record_submit_diagnostic(owner, route, None, value, true);")
             && theme_submit.contains("record_return_to_script_list_submit")
             && theme_submit.contains("\"theme_chooser\"")
             && theme_submit.contains("\"submit_theme_chooser_from_input_enter\"")

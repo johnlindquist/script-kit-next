@@ -146,6 +146,16 @@ fn profile_selection_updates_live_agent_chat_footer_without_relaunch() {
     assert!(AGENT_CHAT_VIEW_SOURCE.contains("pub(crate) fn set_profile_display("));
     assert!(TAB_AI_MODE_SOURCE.contains("view.set_profile_display("));
     assert!(TAB_AI_MODE_SOURCE.contains("select_agent_chat_profile_and_relaunch"));
+    let body = fn_body(
+        TAB_AI_MODE_SOURCE,
+        "fn select_agent_chat_profile_and_relaunch(",
+    );
+    assert!(
+        body.contains("refresh_agent_model_footer_labels")
+            && body.find("refresh_agent_model_footer_labels")
+                < body.find("view.set_profile_display("),
+        "live Agent Chat profile selection must refresh the shared main-menu header labels before updating the embedded view"
+    );
 }
 
 #[test]

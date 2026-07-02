@@ -643,6 +643,19 @@ impl AgentChatThread {
         true
     }
 
+    /// Add a local assistant guidance message without starting a provider turn.
+    ///
+    /// Host-owned staging flows use this to explain what context was attached
+    /// while still requiring the user to explicitly submit the next turn.
+    pub(crate) fn push_local_assistant_message(
+        &mut self,
+        body: impl Into<SharedString>,
+        cx: &mut Context<Self>,
+    ) {
+        self.push_message(AgentChatThreadMessageRole::Assistant, body);
+        cx.notify();
+    }
+
     pub(crate) fn recall_last_user_message(&mut self, cx: &mut Context<Self>) -> bool {
         if !matches!(
             self.status,

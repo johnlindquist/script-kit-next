@@ -93,7 +93,9 @@ function receipt(
 }
 
 const startedAt = Date.now();
-const child = spawn(command, [promptWithBudget(prompt)], {
+// The updated runtime defaults to an interactive Codex TUI; the router needs
+// the warm non-interactive streaming path, so always pass --run.
+const child = spawn(command, ["--run", promptWithBudget(prompt)], {
   cwd: repoRoot,
   stdio: ["inherit", "pipe", "pipe"],
   env: process.env,

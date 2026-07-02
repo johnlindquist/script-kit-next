@@ -2,4 +2,6 @@
 import { runImp } from "../lib/isolated.ts";
 import { makeProjectImpConfig } from "../lib/project-config.ts";
 
-await runImp(makeProjectImpConfig());
+export const config = makeProjectImpConfig();
+
+if (import.meta.main) await runImp(config);

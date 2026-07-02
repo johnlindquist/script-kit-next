@@ -544,6 +544,14 @@ pub fn compute_match_indices_for_result(result: &SearchResult, query: &str) -> M
         }
         SearchResult::Fallback(fm) => {
             let mut indices = MatchIndices::default();
+            if fm
+                .stable_selection_key_override
+                .as_deref()
+                .is_some_and(|key| key.starts_with("fallback/root-file-search-handoff/"))
+            {
+                return indices;
+            }
+
             let fallback_label = fm.display_label();
 
             // Try name match for fallback items
@@ -621,6 +629,36 @@ mod tests {
             indices.name_indices,
             vec![4, 5, 6, 7, 8],
             "contiguous substring should beat earliest fuzzy chars like the 'e' in 'The'"
+        );
+    }
+
+    #[test]
+    fn root_file_handoff_fallback_does_not_highlight_typed_query() {
+        let result = SearchResult::Fallback(
+            FallbackMatch::new(
+                FallbackItem::Builtin(BuiltinFallback::new(
+                    "search-files",
+                    "Search Files",
+                    "Search for files matching this query",
+                    "Search",
+                    FallbackAction::SearchFiles,
+                    FallbackCondition::Always,
+                    10,
+                )),
+                0,
+            )
+            .with_display_overrides(
+                "Search Files for \"why is this\"",
+                "Open full File Search · preview matches filename words",
+            )
+            .with_stable_selection_key("fallback/root-file-search-handoff/global"),
+        );
+
+        let indices = compute_match_indices_for_result(&result, "why is this");
+
+        assert!(
+            indices.name_indices.is_empty() && indices.description_indices.is_empty(),
+            "root file handoff copy changes every keystroke, so it should not flash fuzzy highlights"
         );
     }
 }

@@ -336,6 +336,18 @@ pub(crate) struct AgentChatFooterSnapshot {
 }
 
 impl AgentChatFooterSnapshot {
+    pub(crate) fn agent_model_header_label(&self) -> String {
+        match (
+            self.profile_display.trim().is_empty(),
+            self.model_display.trim().is_empty(),
+        ) {
+            (false, false) => format!("{} · {}", self.profile_display, self.model_display),
+            (false, true) => self.profile_display.clone(),
+            (true, false) => self.model_display.clone(),
+            (true, true) => String::new(),
+        }
+    }
+
     pub(crate) fn model_status_label(&self) -> String {
         match self.status_text {
             Some(status) if !status.is_empty() => {
@@ -13681,10 +13693,15 @@ impl Render for AgentChatView {
             );
             let footer_snapshot = self.footer_snapshot(cx);
             let context_labels = crate::components::main_view_chrome::MainViewContextLabels::new(
-                footer_snapshot.cwd_display.unwrap_or_else(|| {
-                    crate::components::main_view_chrome::MAIN_VIEW_CWD_UNAVAILABLE_LABEL.to_string()
-                }),
-                footer_snapshot.profile_display,
+                footer_snapshot
+                    .cwd_display
+                    .as_ref()
+                    .cloned()
+                    .unwrap_or_else(|| {
+                        crate::components::main_view_chrome::MAIN_VIEW_CWD_UNAVAILABLE_LABEL
+                            .to_string()
+                    }),
+                footer_snapshot.agent_model_header_label(),
             );
             let header = crate::components::main_view_chrome::MainViewHeaderChrome {
                 context: Some(
