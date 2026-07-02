@@ -24,6 +24,9 @@ pub fn atomic_write(path: &Path, contents: &str) -> Result<()> {
         .with_context(|| format!("writing temp file {}", temp.path().display()))?;
     temp.flush()
         .with_context(|| format!("flushing temp file {}", temp.path().display()))?;
+    temp.as_file()
+        .sync_all()
+        .with_context(|| format!("syncing temp file {}", temp.path().display()))?;
 
     temp.persist(path).map_err(|error| {
         anyhow::anyhow!(
