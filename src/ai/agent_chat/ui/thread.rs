@@ -8,7 +8,7 @@
 //! intent) populates `initial_input` and calls `submit_input()` after deferred
 //! capture resolves.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -240,6 +240,22 @@ struct PreparedTurnBlocks {
     receipt: Option<crate::ai::message_parts::ContextResolutionReceipt>,
 }
 
+/// A user submit captured while the current turn is locked.
+#[derive(Debug, Clone)]
+pub(crate) struct AgentChatQueuedMessage {
+    pub(crate) text: String,
+    pub(crate) context_parts: Vec<crate::ai::message_parts::AiContextPart>,
+}
+
+impl AgentChatQueuedMessage {
+    fn new(text: String, context_parts: Vec<crate::ai::message_parts::AiContextPart>) -> Self {
+        Self {
+            text,
+            context_parts,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct CompletedChatTurnIngest {
     thread_id: String,
@@ -307,6 +323,11 @@ pub(crate) struct AgentChatThread {
     queued_submit_while_bootstrapping: bool,
     /// Human-readable status note for the bootstrap phase.
     context_bootstrap_note: Option<SharedString>,
+
+    /// User messages submitted while the current turn is locked.
+    queued_messages: VecDeque<AgentChatQueuedMessage>,
+    /// User cancellation pauses queued auto-send without discarding drafts.
+    queue_paused: bool,
 
     // ── Structured session state (readable by the view) ──────────
     /// Current plan entries from the latest `PlanUpdated` event.
@@ -427,6 +448,8 @@ impl AgentChatThread {
             context_bootstrap_state: AgentChatContextBootstrapState::Preparing,
             queued_submit_while_bootstrapping: false,
             context_bootstrap_note: None,
+            queued_messages: VecDeque::new(),
+            queue_paused: false,
             active_plan_entries: Vec::new(),
             active_mode_id: None,
             available_commands: Vec::new(),
@@ -710,16 +733,20 @@ impl AgentChatThread {
     /// Prepends staged context blocks on the first submit, then clears them.
     /// Starts streaming events from the Agent Chat agent.
     pub(crate) fn submit_input(&mut self, cx: &mut Context<Self>) -> Result<(), String> {
+        let input = self.input.text().to_string();
+        let trimmed = input.trim();
+        if trimmed.is_empty() {
+            return Ok(());
+        }
+
+        self.resume_queue_for_manual_submit();
+
         if matches!(
             self.status,
             AgentChatThreadStatus::Streaming | AgentChatThreadStatus::WaitingForPermission
         ) {
-            return Ok(());
-        }
-
-        let input = self.input.text().to_string();
-        let trimmed = input.trim();
-        if trimmed.is_empty() {
+            self.queue_current_composer(trimmed.to_string());
+            cx.notify();
             return Ok(());
         }
 
@@ -737,20 +764,38 @@ impl AgentChatThread {
 
         let prepared = self.prepare_turn_blocks_with_receipt(trimmed);
         self.set_context_resolution_note(prepared.receipt.as_ref());
-        let blocks = prepared.blocks;
+        self.start_prepared_turn(trimmed.to_string(), prepared.blocks, true, cx)
+    }
 
+    fn resume_queue_for_manual_submit(&mut self) {
+        self.queue_paused = false;
+    }
+
+    fn queue_current_composer(&mut self, text: String) {
+        self.queued_messages.push_back(AgentChatQueuedMessage::new(
+            text,
+            std::mem::take(&mut self.pending_context_parts),
+        ));
+        self.input.clear();
+    }
+
+    fn start_prepared_turn(
+        &mut self,
+        display_text: String,
+        blocks: Vec<ContentBlock>,
+        clear_composer: bool,
+        cx: &mut Context<Self>,
+    ) -> Result<(), String> {
         let msg_id = self.alloc_id();
         self.messages.push(AgentChatThreadMessage::new(
             msg_id,
             AgentChatThreadMessageRole::User,
-            trimmed.to_string(),
+            display_text.clone(),
         ));
-        self.publish_sdk_new_message(
-            msg_id,
-            AgentChatThreadMessageRole::User,
-            trimmed.to_string(),
-        );
-        self.input.clear();
+        self.publish_sdk_new_message(msg_id, AgentChatThreadMessageRole::User, display_text);
+        if clear_composer {
+            self.input.clear();
+        }
         self.stream_started_at = Some(std::time::Instant::now());
         self.ttft_pending = true;
         self.status = AgentChatThreadStatus::Streaming;
@@ -765,11 +810,45 @@ impl AgentChatThread {
             })
             .map_err(|error| error.to_string())?;
 
-        // A successful retry should return the session to the live transcript
-        // instead of keeping the runtime setup recovery card armed.
         self.setup_state = None;
         self.bind_stream(rx, cx);
         cx.notify();
+        Ok(())
+    }
+
+    fn submit_queued_message(
+        &mut self,
+        message: AgentChatQueuedMessage,
+        cx: &mut Context<Self>,
+    ) -> Result<(), String> {
+        let saved_blocks = std::mem::take(&mut self.pending_context_blocks);
+        let saved_consumed = self.pending_context_consumed;
+        let saved_parts = std::mem::replace(&mut self.pending_context_parts, message.context_parts);
+        let saved_ambient = self.pending_ambient_context_enabled;
+
+        self.pending_context_consumed = false;
+        self.pending_ambient_context_enabled = false;
+        let prepared = self.prepare_turn_blocks_with_receipt(&message.text);
+        self.set_context_resolution_note(prepared.receipt.as_ref());
+
+        self.pending_context_blocks = saved_blocks;
+        self.pending_context_consumed = saved_consumed;
+        self.pending_context_parts = saved_parts;
+        self.pending_ambient_context_enabled = saved_ambient;
+
+        self.start_prepared_turn(message.text, prepared.blocks, false, cx)
+    }
+
+    fn submit_next_queued_if_ready(&mut self, cx: &mut Context<Self>) -> Result<(), String> {
+        if self.queue_paused
+            || self.queued_messages.is_empty()
+            || !matches!(self.status, AgentChatThreadStatus::Idle)
+        {
+            return Ok(());
+        }
+        if let Some(message) = self.queued_messages.pop_front() {
+            self.submit_queued_message(message, cx)?;
+        }
         Ok(())
     }
 
@@ -1759,6 +1838,13 @@ impl AgentChatThread {
                                 );
                             }
                         });
+                }
+                if let Err(error) = self.submit_next_queued_if_ready(cx) {
+                    tracing::warn!(
+                        target: "script_kit::tab_ai",
+                        event = "agent_chat_queue_auto_submit_failed",
+                        error = %error,
+                    );
                 }
             }
             AgentChatEvent::SetupRequired {
@@ -2852,6 +2938,7 @@ impl AgentChatThread {
         if !matches!(self.status, AgentChatThreadStatus::Streaming) {
             return;
         }
+        self.queue_paused = true;
         if let Err(error) = self.connection.cancel_turn(self.ui_thread_id.clone()) {
             tracing::warn!(
                 target: "script_kit::tab_ai",
@@ -2961,6 +3048,28 @@ impl AgentChatThread {
     /// Whether a submit is queued waiting for context bootstrap.
     pub(crate) fn queued_submit_while_bootstrapping(&self) -> bool {
         self.queued_submit_while_bootstrapping
+    }
+
+    pub(crate) fn queued_messages(&self) -> &VecDeque<AgentChatQueuedMessage> {
+        &self.queued_messages
+    }
+
+    pub(crate) fn queue_paused(&self) -> bool {
+        self.queue_paused
+    }
+
+    pub(crate) fn remove_queued_message(&mut self, index: usize, cx: &mut Context<Self>) {
+        if index < self.queued_messages.len() {
+            self.queued_messages.remove(index);
+            cx.notify();
+        }
+    }
+
+    pub(crate) fn clear_queued_messages(&mut self, cx: &mut Context<Self>) {
+        if !self.queued_messages.is_empty() {
+            self.queued_messages.clear();
+            cx.notify();
+        }
     }
 
     /// Human-readable bootstrap status note, if any.
@@ -3215,6 +3324,8 @@ impl AgentChatThread {
             context_bootstrap_state: AgentChatContextBootstrapState::Ready,
             queued_submit_while_bootstrapping: false,
             context_bootstrap_note: None,
+            queued_messages: VecDeque::new(),
+            queue_paused: false,
             active_plan_entries: Vec::new(),
             active_mode_id: None,
             available_commands: Vec::new(),
@@ -3415,6 +3526,12 @@ impl AgentChatThread {
             }
             super::AgentChatEvent::TurnFinished { .. } => {
                 self.set_status(AgentChatThreadStatus::Idle);
+                if !self.queue_paused {
+                    if let Some(message) = self.queued_messages.pop_front() {
+                        self.push_message(AgentChatThreadMessageRole::User, message.text);
+                        self.set_status(AgentChatThreadStatus::Streaming);
+                    }
+                }
             }
             super::AgentChatEvent::SetupRequired {
                 reason,
@@ -3570,6 +3687,8 @@ mod tests {
             context_bootstrap_state: AgentChatContextBootstrapState::Ready,
             queued_submit_while_bootstrapping: false,
             context_bootstrap_note: None,
+            queued_messages: VecDeque::new(),
+            queue_paused: false,
             active_plan_entries: Vec::new(),
             active_mode_id: None,
             available_commands: Vec::new(),
@@ -4172,6 +4291,93 @@ mod tests {
             "turn finished should not produce a message"
         );
         assert_eq!(thread.status, AgentChatThreadStatus::Idle);
+    }
+
+    #[test]
+    fn submit_while_streaming_queues_and_clears_composer() {
+        let mut thread = test_thread(Vec::new(), true);
+        thread.status = AgentChatThreadStatus::Streaming;
+        thread.input.set_text("follow up".to_string());
+        thread
+            .pending_context_parts
+            .push(crate::ai::message_parts::AiContextPart::TextBlock {
+                label: "ctx".to_string(),
+                source: "test".to_string(),
+                text: "ctx".to_string(),
+                mime_type: None,
+            });
+
+        let text = thread.input.text().trim().to_string();
+        thread.resume_queue_for_manual_submit();
+        thread.queue_current_composer(text);
+
+        assert_eq!(thread.queued_messages().len(), 1);
+        assert_eq!(thread.queued_messages()[0].text, "follow up");
+        assert_eq!(thread.queued_messages()[0].context_parts.len(), 1);
+        assert!(thread.input.text().is_empty());
+        assert!(thread.pending_context_parts().is_empty());
+        assert_eq!(thread.status, AgentChatThreadStatus::Streaming);
+    }
+
+    #[test]
+    fn turn_finished_auto_sends_front_of_queue() {
+        let mut thread = test_thread(Vec::new(), true);
+        thread.status = AgentChatThreadStatus::Streaming;
+        thread
+            .queued_messages
+            .push_back(AgentChatQueuedMessage::new(
+                "first queued".to_string(),
+                Vec::new(),
+            ));
+        thread
+            .queued_messages
+            .push_back(AgentChatQueuedMessage::new(
+                "second queued".to_string(),
+                Vec::new(),
+            ));
+
+        thread.apply_event_test(AgentChatEvent::TurnFinished {
+            stop_reason: "end_turn".into(),
+        });
+
+        assert_eq!(thread.status, AgentChatThreadStatus::Streaming);
+        assert_eq!(
+            thread.messages.last().unwrap().body.as_ref(),
+            "first queued"
+        );
+        assert_eq!(thread.queued_messages().len(), 1);
+        assert_eq!(thread.queued_messages()[0].text, "second queued");
+    }
+
+    #[test]
+    fn paused_queue_does_not_auto_send_on_turn_finished() {
+        let mut thread = test_thread(Vec::new(), true);
+        thread.status = AgentChatThreadStatus::Streaming;
+        thread.queue_paused = true;
+        thread
+            .queued_messages
+            .push_back(AgentChatQueuedMessage::new(
+                "held queued".to_string(),
+                Vec::new(),
+            ));
+
+        thread.apply_event_test(AgentChatEvent::TurnFinished {
+            stop_reason: "cancelled".into(),
+        });
+
+        assert_eq!(thread.status, AgentChatThreadStatus::Idle);
+        assert!(thread.messages.is_empty());
+        assert_eq!(thread.queued_messages().len(), 1);
+    }
+
+    #[test]
+    fn manual_submit_clears_queue_pause() {
+        let mut thread = test_thread(Vec::new(), true);
+        thread.queue_paused = true;
+
+        thread.resume_queue_for_manual_submit();
+
+        assert!(!thread.queue_paused());
     }
 
     #[test]

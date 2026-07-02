@@ -14,6 +14,7 @@ use gpui::{
 };
 
 use gpui_component::scroll::ScrollableElement;
+use gpui_component::tooltip::Tooltip;
 
 use crate::ai::agent_chat::content::{ContentBlock, TextContent};
 use crate::ai::agent_chat::events::{AgentChatEvent, AgentChatEventRx};
@@ -742,6 +743,8 @@ pub(crate) struct AgentChatView {
     history_closed_at: Option<Instant>,
     /// Whether the + attachment menu popup is open.
     attach_menu_open: bool,
+    /// Whether the queued message strip is expanded to individual rows.
+    message_queue_expanded: bool,
     /// Cmd+F search: (query, current_match_index). None = search hidden.
     pub(crate) search_state: Option<(String, usize)>,
     /// Cached slash commands discovered at creation, with source identity.
@@ -5467,6 +5470,7 @@ impl AgentChatView {
             history_menu: None,
             history_closed_at: None,
             attach_menu_open: false,
+            message_queue_expanded: false,
             search_state: None,
             cached_slash_commands: Vec::new(),
             _slash_discovery_task: slash_task,
@@ -5552,6 +5556,7 @@ impl AgentChatView {
             history_menu: None,
             history_closed_at: None,
             attach_menu_open: false,
+            message_queue_expanded: false,
             search_state: None,
             cached_slash_commands: Vec::new(),
             _slash_discovery_task: noop_slash,
@@ -8547,6 +8552,7 @@ impl AgentChatView {
         placeholder_text: Rgba,
         profile_icon_name: Option<&str>,
         profile_active_pending: bool,
+        status: AgentChatThreadStatus,
         weak_view: WeakEntity<AgentChatView>,
         theme: &crate::theme::Theme,
     ) -> gpui::AnyElement {
@@ -8568,14 +8574,17 @@ impl AgentChatView {
             theme,
             None,
         );
-        let _ = (profile_icon_name, profile_active_pending, weak_view);
+        let _ = (profile_icon_name, profile_active_pending);
+        let can_send = !input_text.trim().is_empty();
 
         crate::components::main_view_chrome::render_main_view_input_shell(
             theme,
             menu_def,
             crate::components::main_view_chrome::MainViewInputChrome {
                 body: input_body,
-                trailing: Vec::new(),
+                trailing: vec![Self::render_send_button_for_state(
+                    can_send, status, weak_view, theme,
+                )],
             },
         )
     }
@@ -8592,6 +8601,7 @@ impl AgentChatView {
         placeholder_text: Rgba,
         profile_icon_name: Option<&str>,
         profile_active_pending: bool,
+        status: AgentChatThreadStatus,
         weak_view: WeakEntity<AgentChatView>,
         theme: &crate::theme::Theme,
     ) -> gpui::AnyElement {
@@ -8607,6 +8617,7 @@ impl AgentChatView {
             placeholder_text,
             profile_icon_name,
             profile_active_pending,
+            status,
             weak_view,
             theme,
         );
@@ -9769,6 +9780,146 @@ impl AgentChatView {
     /// Shows a status note during Ask Anything capture (e.g. "Capturing
     /// desktop context…" while preparing, "Ask Anything ready" once done).
     /// Hidden when there is no note or when the note is empty.
+
+    fn render_message_queue_strip(&self, cx: &mut Context<Self>) -> gpui::AnyElement {
+        let (queued, paused) = {
+            let thread = self.live_thread().read(cx);
+            (
+                thread.queued_messages().iter().cloned().collect::<Vec<_>>(),
+                thread.queue_paused(),
+            )
+        };
+
+        if queued.is_empty() {
+            return div()
+                .id("agent_chat-message-queue-empty")
+                .into_any_element();
+        }
+
+        let theme = theme::get_cached_theme();
+        let border = theme.colors.ui.border;
+        let accent = theme.colors.accent.selected;
+        let expanded = self.message_queue_expanded;
+        let count = queued.len();
+        let mut container = div()
+            .id("agent_chat-message-queue-strip")
+            .w_full()
+            .px(px(12.0))
+            .pb(px(6.0));
+
+        let header = div()
+            .id("agent_chat-message-queue-header")
+            .flex()
+            .items_center()
+            .justify_between()
+            .gap(px(8.0))
+            .px(px(8.0))
+            .py(px(5.0))
+            .rounded(px(6.0))
+            .bg(rgba((border << 8) | 0x10))
+            .border_1()
+            .border_color(rgba((border << 8) | 0x28))
+            .cursor_pointer()
+            .on_click(cx.listener(|this, _event, _window, cx| {
+                this.message_queue_expanded = !this.message_queue_expanded;
+                cx.notify();
+            }))
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(px(6.0))
+                    .child(div().text_xs().text_color(rgb(accent)).child("↑"))
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(rgb(theme.colors.text.muted))
+                            .child(if paused {
+                                format!("{count} queued · paused")
+                            } else {
+                                format!("{count} queued")
+                            }),
+                    ),
+            )
+            .child(
+                div()
+                    .text_xs()
+                    .opacity(0.45)
+                    .child(if expanded { "Hide" } else { "Show" }),
+            );
+
+        container = container.child(header);
+
+        if expanded {
+            let mut list = div()
+                .mt(px(4.0))
+                .rounded(px(6.0))
+                .border_1()
+                .border_color(rgba((border << 8) | 0x22))
+                .bg(rgba((theme.colors.text.primary << 8) | 0x04));
+
+            for (index, message) in queued.into_iter().enumerate() {
+                let text = message.text.trim().replace('\n', " ");
+                list = list.child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap(px(8.0))
+                        .px(px(8.0))
+                        .py(px(5.0))
+                        .child(
+                            div()
+                                .flex_grow()
+                                .min_w(px(0.0))
+                                .text_xs()
+                                .text_color(rgb(theme.colors.text.dimmed))
+                                .overflow_hidden()
+                                .text_ellipsis()
+                                .child(text),
+                        )
+                        .child(
+                            div()
+                                .id(ElementId::Name(SharedString::from(format!(
+                                    "agent_chat-queue-remove-{index}"
+                                ))))
+                                .cursor_pointer()
+                                .text_xs()
+                                .px(px(5.0))
+                                .py(px(1.0))
+                                .rounded(px(999.0))
+                                .text_color(rgba((theme.colors.text.muted << 8) | 0x70))
+                                .hover(|d| d.bg(rgba((border << 8) | 0x18)))
+                                .on_click(cx.listener(move |this, _event, _window, cx| {
+                                    this.live_thread().update(cx, |thread, cx| {
+                                        thread.remove_queued_message(index, cx);
+                                    });
+                                }))
+                                .child("×"),
+                        ),
+                );
+            }
+
+            list = list.child(
+                div()
+                    .id("agent_chat-message-queue-clear")
+                    .px(px(8.0))
+                    .py(px(5.0))
+                    .text_xs()
+                    .text_color(rgb(theme.colors.text.muted))
+                    .cursor_pointer()
+                    .hover(|d| d.bg(rgba((border << 8) | 0x12)))
+                    .on_click(cx.listener(|this, _event, _window, cx| {
+                        this.live_thread()
+                            .update(cx, |thread, cx| thread.clear_queued_messages(cx));
+                    }))
+                    .child("Clear"),
+            );
+            container = container.child(list);
+        }
+
+        container.into_any_element()
+    }
+
     fn render_context_bootstrap_note(&self, cx: &mut Context<Self>) -> gpui::AnyElement {
         let (state, note) = {
             let thread = self.live_thread().read(cx);
@@ -10374,6 +10525,81 @@ impl AgentChatView {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         Self::render_toolbar_from_snapshot(self.footer_snapshot(cx), weak_view)
+    }
+
+    fn render_send_button_for_state(
+        can_send: bool,
+        status: AgentChatThreadStatus,
+        weak_view: WeakEntity<AgentChatView>,
+        theme: &crate::theme::Theme,
+    ) -> gpui::AnyElement {
+        let is_streaming = matches!(status, AgentChatThreadStatus::Streaming);
+        let is_waiting = matches!(status, AgentChatThreadStatus::WaitingForPermission);
+        let accent = theme.colors.accent.selected;
+        let text_primary = theme.colors.text.primary;
+
+        let (icon_char, bg, opacity, tooltip, id) = match (is_streaming || is_waiting, can_send) {
+            (true, true) => (
+                "\u{21E7}",
+                rgba((accent << 8) | 0x24),
+                0.92_f32,
+                "Queue message — sends when the current turn finishes",
+                "agent_chat-queue-btn",
+            ),
+            (true, false) => (
+                "\u{25A0}",
+                rgba(0xEF444460),
+                0.90_f32,
+                "Stop streaming",
+                "agent_chat-streaming-dot",
+            ),
+            (false, true) => (
+                "\u{2191}",
+                rgba((accent << 8) | 0x30),
+                0.90_f32,
+                "Send message",
+                "agent_chat-send-btn",
+            ),
+            (false, false) => (
+                "\u{2191}",
+                rgba((text_primary << 8) | 0x06),
+                0.30_f32,
+                "Type a message first",
+                "agent_chat-send-btn",
+            ),
+        };
+
+        let tooltip_text = tooltip.to_string();
+        let mut btn = div()
+            .id(id)
+            .flex()
+            .items_center()
+            .justify_center()
+            .size(px(24.0))
+            .rounded(px(6.0))
+            .bg(bg)
+            .text_sm()
+            .opacity(opacity)
+            .tooltip(move |window, cx| Tooltip::new(tooltip_text.clone()).build(window, cx));
+
+        if can_send {
+            btn = btn.cursor_pointer().on_click(move |_event, _window, cx| {
+                if let Some(view) = weak_view.upgrade() {
+                    view.update(cx, |this, cx| this.submit_with_expanded_tokens(cx));
+                }
+            });
+        } else if is_streaming {
+            btn = btn.cursor_pointer().on_click(move |_event, _window, cx| {
+                if let Some(view) = weak_view.upgrade() {
+                    view.update(cx, |this, cx| {
+                        this.live_thread()
+                            .update(cx, |thread, cx| thread.cancel_streaming(cx));
+                    });
+                }
+            });
+        }
+
+        btn.child(icon_char).into_any_element()
     }
 
     fn render_send_button(
@@ -13554,7 +13780,8 @@ impl Render for AgentChatView {
         let view_entity: WeakEntity<AgentChatView> = cx.entity().downgrade();
         let ui_variant = self.ui_variant;
         let variant_config = ui_variant.config();
-        let status_label = Self::agent_chat_thread_status_label(thread.status);
+        let status = thread.status;
+        let status_label = Self::agent_chat_thread_status_label(status);
         let context_chip_count = attached_parts.len();
         let message_count = messages.len();
         let profile_icon_name = thread.profile_icon_name().map(str::to_string);
@@ -13688,6 +13915,7 @@ impl Render for AgentChatView {
                 placeholder_text,
                 profile_icon_name.as_deref(),
                 profile_active_pending,
+                status,
                 view_entity.clone(),
                 &theme,
             );
@@ -13746,6 +13974,7 @@ impl Render for AgentChatView {
                 );
             }
             pre_main.push(self.render_context_bootstrap_note(cx));
+            pre_main.push(self.render_message_queue_strip(cx));
             if let Some((query, current_idx)) = self.search_state.clone() {
                 let match_count = if query.is_empty() {
                     0
@@ -13939,6 +14168,7 @@ impl Render for AgentChatView {
             .when(variant_config.show_variant_badge, |d| {
                 d.child(Self::render_variant_badge(ui_variant, &theme))
             })
+            .child(self.render_message_queue_strip(cx))
             .when(
                 matches!(variant_config.composer, AgentChatComposerPlacement::Default),
                 |d| {
@@ -13953,6 +14183,7 @@ impl Render for AgentChatView {
                         placeholder_text,
                         profile_icon_name.as_deref(),
                         profile_active_pending,
+                        status,
                         view_entity.clone(),
                         &theme,
                     ))
@@ -14064,6 +14295,7 @@ impl Render for AgentChatView {
                     ))
                 },
             )
+            .child(self.render_message_queue_strip(cx))
             .when(
                 matches!(variant_config.composer, AgentChatComposerPlacement::BottomDock),
                 |d| {
@@ -14078,6 +14310,7 @@ impl Render for AgentChatView {
                         placeholder_text,
                         profile_icon_name.as_deref(),
                         profile_active_pending,
+                        status,
                         view_entity.clone(),
                         &theme,
                     ))
