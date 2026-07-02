@@ -21,15 +21,50 @@
  *   bun scripts/devtools/driver.ts smoke
  */
 
-import { mkdirSync, existsSync, rmSync, symlinkSync } from "node:fs";
+import { mkdirSync, existsSync, rmSync, statSync, symlinkSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import type { Subprocess } from "bun";
 
 const PROJECT_ROOT = resolve(import.meta.dir, "../..");
-const DEFAULT_BINARY =
-  process.env.SCRIPT_KIT_GPUI_BINARY ??
-  join(PROJECT_ROOT, "target/debug/script-kit-gpui");
+/**
+ * Both build paths produce a runnable binary: ./dev.sh owns target/debug and
+ * agent-cargo.sh owns the shared agent pool. Historically the driver silently
+ * defaulted to target/debug, so an agent that had just built via agent-cargo
+ * verified a stale dev.sh binary. With no explicit override we now pick the
+ * freshest candidate by mtime and say so on stderr.
+ */
+const BINARY_CANDIDATES = [
+  join(PROJECT_ROOT, "target/debug/script-kit-gpui"),
+  join(PROJECT_ROOT, "target-agent/pools/agent-debug/debug/script-kit-gpui"),
+];
+
+function resolveDefaultBinary(): string {
+  const explicit = process.env.SCRIPT_KIT_GPUI_BINARY;
+  if (explicit) return explicit;
+
+  const found = BINARY_CANDIDATES.flatMap((path) => {
+    try {
+      return [{ path, mtimeMs: statSync(path).mtimeMs }];
+    } catch {
+      return [];
+    }
+  }).sort((a, b) => b.mtimeMs - a.mtimeMs);
+
+  if (found.length === 0) return BINARY_CANDIDATES[0];
+  const chosen = found[0];
+  if (found.length > 1) {
+    const stale = found[1];
+    const ageGapSec = Math.round((chosen.mtimeMs - stale.mtimeMs) / 1000);
+    console.error(
+      `[driver] binary: ${chosen.path} (freshest of ${found.length} candidates; ` +
+        `${stale.path} is ${ageGapSec}s older). Pass binary:/SCRIPT_KIT_GPUI_BINARY to override.`,
+    );
+  } else {
+    console.error(`[driver] binary: ${chosen.path} (only candidate present)`);
+  }
+  return chosen.path;
+}
 const READY_MARKER_STARTUP = "STARTUP_READY ";
 const READY_MARKER_APP =
   "APP_READY|main-window-ready show=false focus=false stdin-safe";
@@ -42,7 +77,10 @@ export type Json = Record<string, any>;
 let launchCounter = 0;
 
 export interface DriverOptions {
-  /** Path to the app binary. Defaults to SCRIPT_KIT_GPUI_BINARY or target/debug. */
+  /**
+   * Path to the app binary. Defaults to SCRIPT_KIT_GPUI_BINARY, else the
+   * freshest (by mtime) of target/debug and the agent-cargo pool binary.
+   */
   binary?: string;
   /**
    * Session label reported to the app (logs/protocol bus). Treated as a
@@ -126,10 +164,11 @@ export class Driver {
   }
 
   static async launch(options: DriverOptions = {}): Promise<Driver> {
-    const binary = options.binary ?? DEFAULT_BINARY;
+    const binary = options.binary ?? resolveDefaultBinary();
     if (!existsSync(binary)) {
       throw new Error(
-        `Binary not found at ${binary}. Build it with ./scripts/agentic/agent-cargo.sh build --bin script-kit-gpui`,
+        `Binary not found at ${binary} (candidates checked: ${BINARY_CANDIDATES.join(", ")}). ` +
+          `Build one with ./scripts/agentic/agent-cargo.sh build --bin script-kit-gpui`,
       );
     }
 

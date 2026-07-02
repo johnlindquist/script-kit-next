@@ -34,7 +34,23 @@ canonical_session_dir() {
 }
 SESSION_DIR="$(canonical_session_dir "$SESSION_DIR_RAW")"
 PROJECT_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-BINARY="${SCRIPT_KIT_GPUI_BINARY:-${PROJECT_ROOT}/target/debug/script-kit-gpui}"
+# With no explicit override, pick the freshest of the dev.sh binary and the
+# agent-cargo pool binary so a just-built agent binary is never silently
+# shadowed by a stale target/debug one (and vice versa).
+resolve_default_binary() {
+  local dev_bin="${PROJECT_ROOT}/target/debug/script-kit-gpui"
+  local agent_bin="${PROJECT_ROOT}/target-agent/pools/agent-debug/debug/script-kit-gpui"
+  if [ ! -x "$agent_bin" ]; then echo "$dev_bin"; return; fi
+  if [ ! -x "$dev_bin" ]; then echo "$agent_bin"; return; fi
+  if [ "$agent_bin" -nt "$dev_bin" ]; then
+    echo "[session.sh] binary: $agent_bin (fresher than target/debug; set SCRIPT_KIT_GPUI_BINARY to override)" >&2
+    echo "$agent_bin"
+  else
+    echo "[session.sh] binary: $dev_bin (fresher than agent pool; set SCRIPT_KIT_GPUI_BINARY to override)" >&2
+    echo "$dev_bin"
+  fi
+}
+BINARY="${SCRIPT_KIT_GPUI_BINARY:-$(resolve_default_binary)}"
 READY_TIMEOUT_MS="${SCRIPT_KIT_SESSION_READY_TIMEOUT_MS:-3000}"
 READY_LOG_MARKER_APP="APP_READY|main-window-ready show=false focus=false stdin-safe"
 READY_LOG_MARKER_STARTUP="STARTUP_READY "
