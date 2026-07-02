@@ -956,6 +956,33 @@ fn open_writer_or_sink(
         })
 }
 
+/// Rotate `path` to `<path>.1` (replacing the previous rotation) when it
+/// exceeds `max_bytes`. One generation is enough: the append-forever log
+/// exists for post-hoc cross-session queries; `latest-session.jsonl` is the
+/// per-launch surface. `max_bytes == 0` disables rotation.
+fn rotate_log_if_oversized(path: &std::path::Path, max_bytes: u64) {
+    if max_bytes == 0 {
+        return;
+    }
+    let Ok(meta) = fs::metadata(path) else {
+        return;
+    };
+    if meta.len() <= max_bytes {
+        return;
+    }
+    let mut rotated_os = path.as_os_str().to_owned();
+    rotated_os.push(".1");
+    let rotated = PathBuf::from(rotated_os);
+    match fs::rename(path, &rotated) {
+        Ok(()) => eprintln!(
+            "[SCRIPT-KIT-GPUI] Rotated oversized log ({} bytes) to {}",
+            meta.len(),
+            rotated.display()
+        ),
+        Err(e) => eprintln!("[LOGGING] Failed to rotate {}: {}", path.display(), e),
+    }
+}
+
 /// Internal initialization that returns a LoggingGuard.
 /// This is used by init() to store the guard in LOGGING_GUARD.
 fn init_internal() -> LoggingGuard {
@@ -978,6 +1005,15 @@ fn init_internal() -> LoggingGuard {
 
     let log_path = log_dir.join("script-kit-gpui.jsonl");
     let session_path = log_dir.join("latest-session.jsonl");
+
+    // The append-forever log grows without bound (observed at 4GB+), which
+    // makes every all-sessions query pay for years of history. Rotate one
+    // generation at launch when it exceeds the cap.
+    let rotate_cap = std::env::var("SCRIPT_KIT_LOG_ROTATE_BYTES")
+        .ok()
+        .and_then(|v| v.parse::<u64>().ok())
+        .unwrap_or(128 * 1024 * 1024);
+    rotate_log_if_oversized(&log_path, rotate_cap);
 
     // Store session log path for panic hook and public access
     let _ = SESSION_LOG_PATH.set(session_path.clone());
@@ -2325,6 +2361,42 @@ mod tests {
         assert_eq!(legacy_level_for_category("TRACE"), LegacyLogLevel::Trace);
         assert_eq!(legacy_level_for_category("UI"), LegacyLogLevel::Info);
     }
+    // -------------------------------------------------------------------------
+    // log rotation tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_rotate_log_if_oversized() {
+        let dir = std::env::temp_dir().join(format!("sk-rotate-test-{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("rotate-me.jsonl");
+        let rotated = dir.join("rotate-me.jsonl.1");
+
+        // Under the cap: untouched.
+        fs::write(&path, b"small").unwrap();
+        rotate_log_if_oversized(&path, 100);
+        assert!(path.exists());
+        assert!(!rotated.exists());
+
+        // Over the cap: renamed to .1.
+        fs::write(&path, vec![b'x'; 200]).unwrap();
+        rotate_log_if_oversized(&path, 100);
+        assert!(!path.exists());
+        assert_eq!(fs::metadata(&rotated).unwrap().len(), 200);
+
+        // Next oversized rotation replaces the previous .1.
+        fs::write(&path, vec![b'y'; 300]).unwrap();
+        rotate_log_if_oversized(&path, 100);
+        assert_eq!(fs::metadata(&rotated).unwrap().len(), 300);
+
+        // Cap 0 disables rotation entirely.
+        fs::write(&path, vec![b'z'; 300]).unwrap();
+        rotate_log_if_oversized(&path, 0);
+        assert!(path.exists());
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
     // -------------------------------------------------------------------------
     // correlation scope propagation tests
     // -------------------------------------------------------------------------
