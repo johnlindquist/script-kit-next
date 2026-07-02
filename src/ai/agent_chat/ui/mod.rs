@@ -30,6 +30,7 @@ pub(crate) mod history_popup;
 pub(crate) mod hosted;
 pub(crate) mod kitchen_sink_fixture;
 pub(crate) mod labels;
+pub(crate) mod notifications;
 pub(crate) mod permission_broker;
 pub(crate) mod popup_registry;
 pub(crate) mod popup_window;

@@ -958,6 +958,11 @@ pub struct AiPreferences {
     /// Name of the profile currently applied. Matches one of `profiles[].name`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub selected_profile_name: Option<String>,
+
+    /// Show Agent Chat OS notifications when a turn needs attention while hidden.
+    /// `None` preserves the default-on behavior.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub agent_chat_notify_when_hidden: Option<bool>,
 }
 
 /// A pre-configured Agent Chat profile authored in `config.ts`.

@@ -149,6 +149,7 @@ pub(crate) fn resolve_focused_text_pi_launch(
         pi_binary: ai.pi_binary.clone(),
         profiles: ai.profiles.clone(),
         selected_profile_name: None,
+        agent_chat_notify_when_hidden: ai.agent_chat_notify_when_hidden,
         cwd: ai.cwd.clone(),
     };
 

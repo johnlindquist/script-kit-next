@@ -20,6 +20,10 @@ use crate::protocol::AiMessageInfo;
 
 use crate::ai::agent_chat::runtime::{AgentChatConnection, AgentChatTurnRequest};
 
+use super::notifications::{
+    dispatch_agent_chat_notification, should_notify_agent_chat_event, truncate_notification_body,
+    AgentChatNotificationDebounce, AgentChatNotificationEvent, AgentChatNotificationVisibility,
+};
 use super::{
     build_tab_ai_agent_chat_context_blocks, AgentChatApprovalRequest, AgentChatEvent,
     AgentChatEventRx,
@@ -75,6 +79,18 @@ pub(crate) enum AgentChatThreadStatus {
     WaitingForPermission,
     /// The last turn failed.
     Error,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum AgentChatHostWindowKind {
+    Main,
+    Detached,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct AgentChatHostWindowState {
+    pub(crate) kind: AgentChatHostWindowKind,
+    pub(crate) key: bool,
 }
 
 /// Severity for the active composer callout.
@@ -421,6 +437,11 @@ pub(crate) struct AgentChatThread {
     /// Monotonically increasing message ID counter.
     next_message_id: u64,
 
+    /// Host-window state last observed by the AgentChatView render/activation hooks.
+    host_window_state: Option<AgentChatHostWindowState>,
+    notification_debounce: AgentChatNotificationDebounce,
+    current_turn_id: u64,
+
     // ── Model selection ──────────────────────────────────────
     /// Available models for this agent.
     available_models: Vec<super::config::AgentChatModelEntry>,
@@ -501,6 +522,9 @@ impl AgentChatThread {
             permission_task: None,
             transcript_generation: 0,
             next_message_id: 1,
+            host_window_state: None,
+            notification_debounce: AgentChatNotificationDebounce::default(),
+            current_turn_id: 0,
             selected_model_display_name: {
                 let id = init.selected_model_id.as_deref();
                 id.and_then(|sel| {
@@ -514,6 +538,59 @@ impl AgentChatThread {
         };
         this.bind_permission_listener(cx);
         this
+    }
+
+    pub(crate) fn set_host_window_state(
+        &mut self,
+        state: AgentChatHostWindowState,
+        cx: &mut Context<Self>,
+    ) {
+        if self.host_window_state == Some(state) {
+            return;
+        }
+        self.host_window_state = Some(state);
+        cx.notify();
+    }
+
+    fn notification_visibility(&self) -> AgentChatNotificationVisibility {
+        let Some(state) = self.host_window_state else {
+            return AgentChatNotificationVisibility::Unknown;
+        };
+        let visible = match state.kind {
+            AgentChatHostWindowKind::Main => crate::is_main_window_visible(),
+            AgentChatHostWindowKind::Detached => {
+                crate::ai::agent_chat::ui::chat_window::is_chat_window_open()
+            }
+        };
+        if visible && state.key {
+            AgentChatNotificationVisibility::VisibleAndKey
+        } else {
+            AgentChatNotificationVisibility::HiddenOrNotKey
+        }
+    }
+
+    fn notifications_enabled() -> bool {
+        crate::config::load_user_preferences()
+            .ai
+            .agent_chat_notify_when_hidden
+            .unwrap_or(true)
+    }
+
+    fn maybe_notify_agent_chat_event(
+        &mut self,
+        event: AgentChatNotificationEvent,
+        title: &'static str,
+        body: String,
+    ) {
+        if should_notify_agent_chat_event(
+            event,
+            self.notification_visibility(),
+            Self::notifications_enabled(),
+            self.current_turn_id,
+            &mut self.notification_debounce,
+        ) {
+            dispatch_agent_chat_notification(title, truncate_notification_body(&body));
+        }
     }
 
     /// Stage context blocks from a `TabAiContextBlob`.
@@ -842,6 +919,7 @@ impl AgentChatThread {
         self.ttft_pending = true;
         self.status = AgentChatThreadStatus::Streaming;
         self.active_callout = None;
+        self.current_turn_id = self.current_turn_id.wrapping_add(1);
 
         self.setup_state = None;
         self.bind_stream(rx, cx);
@@ -1110,6 +1188,26 @@ impl AgentChatThread {
         };
         self.push_message(AgentChatThreadMessageRole::System, body);
         cx.notify();
+    }
+
+    fn permission_notification_body(&self, request: &AgentChatApprovalRequest) -> String {
+        request
+            .preview
+            .as_ref()
+            .map(|preview| {
+                preview
+                    .subject
+                    .as_ref()
+                    .map(|subject| format!("{} · {subject}", preview.tool_title))
+                    .unwrap_or_else(|| preview.tool_title.clone())
+            })
+            .unwrap_or_else(|| {
+                if request.body.trim().is_empty() {
+                    request.title.clone()
+                } else {
+                    format!("{} · {}", request.title, request.body)
+                }
+            })
     }
 
     /// Build a human-readable audit message for a permission resolution.
@@ -1693,6 +1791,21 @@ impl AgentChatThread {
                         entity.update(cx, |this, cx| {
                             this.pending_permission = Some(request);
                             this.status = AgentChatThreadStatus::WaitingForPermission;
+                            let body = this.permission_notification_body(
+                                this.pending_permission
+                                    .as_ref()
+                                    .expect("request was just set"),
+                            );
+                            let request_id = this
+                                .pending_permission
+                                .as_ref()
+                                .map(|request| request.id)
+                                .unwrap_or_default();
+                            this.maybe_notify_agent_chat_event(
+                                AgentChatNotificationEvent::WaitingForPermission { request_id },
+                                "Agent Chat — approval needed",
+                                body,
+                            );
                             cx.notify();
                         });
                     }
@@ -1822,16 +1935,22 @@ impl AgentChatThread {
                 if let Some(message) =
                     self.latest_message_with_role(AgentChatThreadMessageRole::Assistant)
                 {
+                    let message_id = message.id;
                     let full_content = message.body.to_string();
                     if !full_content.is_empty() {
+                        self.maybe_notify_agent_chat_event(
+                            AgentChatNotificationEvent::TurnFinished,
+                            "Agent Chat — response ready",
+                            full_content.clone(),
+                        );
                         crate::ai::subscriptions::publish_stream_complete(
                             &self.ui_thread_id,
-                            message.id.to_string(),
+                            message_id.to_string(),
                             full_content.clone(),
                             None,
                         );
                         self.publish_sdk_new_message(
-                            message.id,
+                            message_id,
                             AgentChatThreadMessageRole::Assistant,
                             full_content,
                         );
@@ -1950,6 +2069,11 @@ impl AgentChatThread {
                 changed |= self.set_status(AgentChatThreadStatus::Error);
             }
             AgentChatEvent::Failed { error } => {
+                self.maybe_notify_agent_chat_event(
+                    AgentChatNotificationEvent::Failed,
+                    "Agent Chat — turn failed",
+                    error.clone(),
+                );
                 crate::ai::subscriptions::publish_error(
                     Some(&self.ui_thread_id),
                     "AGENT_CHAT_TURN_FAILED".to_string(),
@@ -3416,6 +3540,9 @@ impl AgentChatThread {
             permission_task: None,
             transcript_generation: 0,
             next_message_id: 1,
+            host_window_state: None,
+            notification_debounce: AgentChatNotificationDebounce::default(),
+            current_turn_id: 0,
             available_models: Vec::new(),
             selected_model_id: None,
             selected_model_display_name: None,
@@ -3813,6 +3940,9 @@ mod tests {
             permission_task: None,
             transcript_generation: 0,
             next_message_id: 1,
+            host_window_state: None,
+            notification_debounce: AgentChatNotificationDebounce::default(),
+            current_turn_id: 0,
             available_models: Vec::new(),
             selected_model_id: None,
             selected_model_display_name: None,

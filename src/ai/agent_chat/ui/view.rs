@@ -34,8 +34,9 @@ use super::history_popup::{
     HISTORY_POPUP_SEARCH_LIMIT,
 };
 use super::thread::{
-    AgentChatCalloutSeverity, AgentChatContextBootstrapState, AgentChatThread,
-    AgentChatThreadMessage, AgentChatThreadMessageRole, AgentChatThreadStatus,
+    AgentChatCalloutSeverity, AgentChatContextBootstrapState, AgentChatHostWindowKind,
+    AgentChatHostWindowState, AgentChatThread, AgentChatThreadMessage, AgentChatThreadMessageRole,
+    AgentChatThreadStatus,
 };
 use super::types::{
     AgentChatComposerParentWindow, AgentChatComposerPickerSession, AgentChatComposerPickerTrigger,
@@ -728,6 +729,7 @@ pub(crate) struct AgentChatView {
     /// Observer subscriptions keyed by thread entity id (session + retained),
     /// so swapping the session thread never double-registers an observer.
     thread_observers: std::collections::HashMap<gpui::EntityId, gpui::Subscription>,
+    host_activation_subscription: Option<gpui::Subscription>,
     focus_handle: FocusHandle,
     /// Virtualized variable-height message list state.
     permission_index: usize,
@@ -980,6 +982,36 @@ impl AgentChatView {
         actions_window_open: bool,
     ) -> bool {
         window_active && view_focused && !actions_window_open
+    }
+
+    fn host_window_state_for_window(&self, window: &Window) -> AgentChatHostWindowState {
+        let kind = if crate::ai::agent_chat::ui::chat_window::is_chat_window(window) {
+            AgentChatHostWindowKind::Detached
+        } else {
+            AgentChatHostWindowKind::Main
+        };
+        AgentChatHostWindowState {
+            kind,
+            key: window.is_window_active() && self.focus_handle.is_focused(window),
+        }
+    }
+
+    fn sync_host_window_state(&mut self, window: &Window, cx: &mut Context<Self>) {
+        let Some(thread) = self.thread() else {
+            return;
+        };
+        let state = self.host_window_state_for_window(window);
+        thread.update(cx, |thread, cx| thread.set_host_window_state(state, cx));
+    }
+
+    fn ensure_host_activation_subscription(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.host_activation_subscription.is_some() {
+            return;
+        }
+        self.host_activation_subscription =
+            Some(cx.observe_window_activation(window, |this, window, cx| {
+                this.sync_host_window_state(window, cx);
+            }));
     }
 
     fn was_history_recently_closed(&self) -> bool {
@@ -5461,6 +5493,7 @@ impl AgentChatView {
             retained_threads: Vec::new(),
             thread_last_seen: std::collections::HashMap::new(),
             thread_observers,
+            host_activation_subscription: None,
             focus_handle: cx.focus_handle(),
             permission_index: 0,
             permission_options_open: false,
@@ -5547,6 +5580,7 @@ impl AgentChatView {
             retained_threads: Vec::new(),
             thread_last_seen: std::collections::HashMap::new(),
             thread_observers: std::collections::HashMap::new(),
+            host_activation_subscription: None,
             focus_handle: cx.focus_handle(),
             permission_index: 0,
             permission_options_open: false,
@@ -13850,6 +13884,9 @@ impl Focusable for AgentChatView {
 
 impl Render for AgentChatView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        self.ensure_host_activation_subscription(window, cx);
+        self.sync_host_window_state(window, cx);
+
         // Setup mode: render the inline setup card instead of the chat.
         let setup_state = if let AgentChatSession::Setup(state) = &self.session {
             Some(state.clone())
