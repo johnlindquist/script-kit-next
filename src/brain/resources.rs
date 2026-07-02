@@ -218,12 +218,18 @@ pub fn read_brain_resource(uri: &str) -> Result<(String, String), String> {
                 .map(|ts| serde_json::json!(ts))
                 .unwrap_or(serde_json::Value::Null)
         };
+        // BrainHealth snapshot recorded by the indexer after every cycle, so
+        // swallowed failures surface here. Null until the first cycle runs.
+        let health = super::health::read_health()
+            .and_then(|health| serde_json::to_value(health).ok())
+            .unwrap_or(serde_json::Value::Null);
         let body = serde_json::json!({
             "schemaVersion": 1,
             "docs": docs,
             "docsBySource": docs_by_source,
             "embedded": embedded,
             "signals": signals,
+            "health": health,
             "semanticSearch": model.is_some(),
             "embedModel": model.map(|m| m.model_id),
             "embedHelperFound": super::embedder::helper_available(),

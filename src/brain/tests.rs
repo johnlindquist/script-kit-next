@@ -603,6 +603,17 @@ fn brain_status_resource_reports_health() {
     sync_day_pages_with_substrate(&substrate).expect("sync status day pages");
     sync_fragments_with_substrate(&substrate).expect("sync status fragments");
     store::meta_set("last_index_cycle", "1780000000").expect("set index heartbeat");
+    super::health::record_health(&super::health::BrainHealth {
+        last_cycle_started_unix: Some(1_780_000_000),
+        last_cycle_finished_unix: Some(1_780_000_004),
+        last_cycle_ok: Some(true),
+        last_error: None,
+        docs_total: 3,
+        docs_pending_embedding: 3,
+        recall_mode: "lexical-only".to_string(),
+        embedder_alive: false,
+    })
+    .expect("record status health snapshot");
 
     let (mime, body) = super::resources::read_brain_resource("kit://brain").unwrap();
     assert_eq!(mime, "application/json");
@@ -613,6 +624,16 @@ fn brain_status_resource_reports_health() {
     assert_eq!(value["docsBySource"]["fragment"], 1);
     assert_eq!(value["docsBySource"]["note"], 1);
     assert!(value.get("embedHelperFound").is_some(), "helper presence");
+    let health = &value["health"];
+    assert_eq!(health["last_cycle_ok"], true, "cycle outcome surfaced");
+    assert!(health["last_error"].is_null(), "no error on a clean cycle");
+    assert_eq!(health["docs_total"], 3, "doc count in health block");
+    assert_eq!(health["docs_pending_embedding"], 3);
+    assert_eq!(
+        health["recall_mode"], "lexical-only",
+        "recall mode surfaced in health block"
+    );
+    assert_eq!(health["embedder_alive"], false);
     assert_eq!(value["lastIndexCycle"], 1780000000, "indexer heartbeat");
     assert_eq!(value["ftsVersion"], "2", "fts migration recorded");
     assert!(value["dbSizeBytes"].as_u64().unwrap_or(0) > 0, "db on disk");
