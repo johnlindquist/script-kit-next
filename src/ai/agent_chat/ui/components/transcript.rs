@@ -1177,9 +1177,7 @@ impl AgentChatTranscript {
                     .pt(px(4.0))
                     .text_size(px(style_def.markdown.body_font_size))
                     .opacity(error_style.hint_opacity)
-                    .child(
-                        "Try sending your message again or use \u{2318}N for a new conversation",
-                    ),
+                    .child("This failure is saved in the transcript"),
             )
             .into_any_element()
     }

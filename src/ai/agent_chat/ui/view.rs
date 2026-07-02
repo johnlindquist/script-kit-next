@@ -34,8 +34,8 @@ use super::history_popup::{
     HISTORY_POPUP_SEARCH_LIMIT,
 };
 use super::thread::{
-    AgentChatContextBootstrapState, AgentChatThread, AgentChatThreadMessage,
-    AgentChatThreadMessageRole, AgentChatThreadStatus,
+    AgentChatCalloutSeverity, AgentChatContextBootstrapState, AgentChatThread,
+    AgentChatThreadMessage, AgentChatThreadMessageRole, AgentChatThreadStatus,
 };
 use super::types::{
     AgentChatComposerParentWindow, AgentChatComposerPickerSession, AgentChatComposerPickerTrigger,
@@ -3196,12 +3196,12 @@ impl AgentChatView {
             FooterAction::Actions => self.trigger_toggle_actions(window, cx),
             FooterAction::Close => self.trigger_close_requested(window, cx),
             FooterAction::Ai => self.open_profile_trigger_picker_in_window(window, cx),
+            FooterAction::Retry => self.retry_last_user_turn(cx),
             FooterAction::Apply => {}
             FooterAction::Replace
             | FooterAction::Append
             | FooterAction::Copy
-            | FooterAction::Expand
-            | FooterAction::Retry => {}
+            | FooterAction::Expand => {}
             FooterAction::Cwd => {
                 // TODO: Open the CWD picker as an overlay so the user can
                 // change their directory without leaving the chat. For now,
@@ -9781,6 +9781,143 @@ impl AgentChatView {
     /// desktop context…" while preparing, "Ask Anything ready" once done).
     /// Hidden when there is no note or when the note is empty.
 
+    fn retry_last_user_turn(&mut self, cx: &mut Context<Self>) {
+        if let Err(error) = self
+            .live_thread()
+            .update(cx, |thread, cx| thread.retry_last_user_turn(cx))
+        {
+            tracing::warn!(
+                target: "script_kit::agent_chat",
+                event = "agent_chat_retry_failed",
+                error = %error,
+            );
+        }
+    }
+
+    fn render_active_callout(&self, cx: &mut Context<Self>) -> gpui::AnyElement {
+        let callout = self.live_thread().read(cx).active_callout().cloned();
+        let Some(callout) = callout else {
+            return div().id("agent_chat-callout-empty").into_any_element();
+        };
+
+        let theme = theme::get_cached_theme();
+        let colors = PromptColors::from_theme(&theme);
+        let accent = match callout.severity {
+            AgentChatCalloutSeverity::Error => theme.colors.ui.error,
+        };
+        let detail = callout
+            .detail
+            .as_ref()
+            .map(|detail| detail.to_string())
+            .unwrap_or_default();
+
+        div()
+            .id("agent_chat-callout-stack")
+            .w_full()
+            .px(px(12.0))
+            .pb(px(6.0))
+            .child(
+                div()
+                    .id("agent_chat-active-callout")
+                    .flex()
+                    .items_center()
+                    .gap(px(8.0))
+                    .px(px(8.0))
+                    .py(px(6.0))
+                    .rounded(px(6.0))
+                    .bg(rgba((theme.colors.ui.border << 8) | 0x10))
+                    .border_1()
+                    .border_color(rgba((theme.colors.ui.border << 8) | 0x28))
+                    .child(div().text_xs().text_color(rgb(accent)).child("⚠"))
+                    .child(
+                        div()
+                            .flex_grow()
+                            .min_w(px(0.0))
+                            .flex()
+                            .items_center()
+                            .gap(px(6.0))
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .font_weight(FontWeight::SEMIBOLD)
+                                    .text_color(rgb(colors.text_primary))
+                                    .whitespace_nowrap()
+                                    .child(callout.title.clone()),
+                            )
+                            .when(!detail.is_empty(), |d| {
+                                d.child(
+                                    div()
+                                        .min_w(px(0.0))
+                                        .overflow_hidden()
+                                        .text_ellipsis()
+                                        .text_xs()
+                                        .text_color(rgb(colors.text_secondary))
+                                        .child(detail.clone()),
+                                )
+                            }),
+                    )
+                    .when(callout.can_retry, |d| {
+                        d.child(
+                            div()
+                                .id("agent_chat-callout-retry")
+                                .cursor_pointer()
+                                .text_xs()
+                                .font_weight(FontWeight::SEMIBOLD)
+                                .px(px(7.0))
+                                .py(px(3.0))
+                                .rounded(px(5.0))
+                                .text_color(rgb(theme.colors.text.on_accent))
+                                .bg(rgb(theme.colors.accent.selected))
+                                .hover(|el| el.opacity(0.9))
+                                .on_click(cx.listener(|this, _event, _window, cx| {
+                                    this.retry_last_user_turn(cx);
+                                }))
+                                .child("Retry"),
+                        )
+                    })
+                    .child(
+                        div()
+                            .id("agent_chat-callout-copy-error")
+                            .cursor_pointer()
+                            .text_xs()
+                            .px(px(7.0))
+                            .py(px(3.0))
+                            .rounded(px(5.0))
+                            .text_color(rgb(theme.colors.text.muted))
+                            .hover(|el| el.bg(rgba((theme.colors.ui.border << 8) | 0x18)))
+                            .on_click(cx.listener(move |this, _event, _window, cx| {
+                                if let Some(text) = this
+                                    .live_thread()
+                                    .read(cx)
+                                    .active_callout()
+                                    .and_then(|callout| callout.detail.as_ref())
+                                    .map(|detail| detail.to_string())
+                                {
+                                    cx.write_to_clipboard(gpui::ClipboardItem::new_string(text));
+                                }
+                            }))
+                            .child("Copy Error"),
+                    )
+                    .child(
+                        div()
+                            .id("agent_chat-callout-dismiss")
+                            .cursor_pointer()
+                            .text_xs()
+                            .px(px(5.0))
+                            .py(px(1.0))
+                            .rounded(px(999.0))
+                            .text_color(rgba((theme.colors.text.muted << 8) | 0x70))
+                            .hover(|el| el.bg(rgba((theme.colors.ui.border << 8) | 0x18)))
+                            .on_click(cx.listener(|this, _event, _window, cx| {
+                                this.live_thread()
+                                    .update(cx, |thread, cx| thread.dismiss_active_callout(cx));
+                            }))
+                            .child("×"),
+                    ),
+            )
+            .into_any_element()
+    }
+
     fn render_message_queue_strip(&self, cx: &mut Context<Self>) -> gpui::AnyElement {
         let (queued, paused) = {
             let thread = self.live_thread().read(cx);
@@ -13975,6 +14112,7 @@ impl Render for AgentChatView {
             }
             pre_main.push(self.render_context_bootstrap_note(cx));
             pre_main.push(self.render_message_queue_strip(cx));
+            pre_main.push(self.render_active_callout(cx));
             if let Some((query, current_idx)) = self.search_state.clone() {
                 let match_count = if query.is_empty() {
                     0
@@ -14169,6 +14307,7 @@ impl Render for AgentChatView {
                 d.child(Self::render_variant_badge(ui_variant, &theme))
             })
             .child(self.render_message_queue_strip(cx))
+            .child(self.render_active_callout(cx))
             .when(
                 matches!(variant_config.composer, AgentChatComposerPlacement::Default),
                 |d| {
@@ -14296,6 +14435,7 @@ impl Render for AgentChatView {
                 },
             )
             .child(self.render_message_queue_strip(cx))
+            .child(self.render_active_callout(cx))
             .when(
                 matches!(variant_config.composer, AgentChatComposerPlacement::BottomDock),
                 |d| {

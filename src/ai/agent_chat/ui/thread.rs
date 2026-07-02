@@ -77,6 +77,32 @@ pub(crate) enum AgentChatThreadStatus {
     Error,
 }
 
+/// Severity for the active composer callout.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum AgentChatCalloutSeverity {
+    Error,
+}
+
+/// Dismissable, actionable callout rendered above the composer.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct AgentChatCallout {
+    pub(crate) severity: AgentChatCalloutSeverity,
+    pub(crate) title: SharedString,
+    pub(crate) detail: Option<SharedString>,
+    pub(crate) can_retry: bool,
+}
+
+impl AgentChatCallout {
+    fn failed(error: impl Into<SharedString>, can_retry: bool) -> Self {
+        Self {
+            severity: AgentChatCalloutSeverity::Error,
+            title: "Turn failed".into(),
+            detail: Some(error.into()),
+            can_retry,
+        }
+    }
+}
+
 /// Role for a message in the thread history.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum AgentChatThreadMessageRole {
@@ -299,6 +325,8 @@ pub(crate) struct AgentChatThread {
     pub(crate) input: TextInputState,
     /// Current thread status.
     pub(crate) status: AgentChatThreadStatus,
+    /// Active composer callout, rendered above the composer until dismissed or superseded.
+    active_callout: Option<AgentChatCallout>,
     /// Pending permission request awaiting user decision.
     pub(crate) pending_permission: Option<AgentChatApprovalRequest>,
 
@@ -440,6 +468,7 @@ impl AgentChatThread {
                 _ => TextInputState::new(),
             },
             status: AgentChatThreadStatus::Idle,
+            active_callout: None,
             pending_permission: None,
             pending_context_blocks: Vec::new(),
             pending_context_consumed: false,
@@ -764,7 +793,7 @@ impl AgentChatThread {
 
         let prepared = self.prepare_turn_blocks_with_receipt(trimmed);
         self.set_context_resolution_note(prepared.receipt.as_ref());
-        self.start_prepared_turn(trimmed.to_string(), prepared.blocks, true, cx)
+        self.start_prepared_turn(trimmed.to_string(), prepared.blocks, true, true, cx)
     }
 
     fn resume_queue_for_manual_submit(&mut self) {
@@ -784,22 +813,9 @@ impl AgentChatThread {
         display_text: String,
         blocks: Vec<ContentBlock>,
         clear_composer: bool,
+        push_user_message: bool,
         cx: &mut Context<Self>,
     ) -> Result<(), String> {
-        let msg_id = self.alloc_id();
-        self.messages.push(AgentChatThreadMessage::new(
-            msg_id,
-            AgentChatThreadMessageRole::User,
-            display_text.clone(),
-        ));
-        self.publish_sdk_new_message(msg_id, AgentChatThreadMessageRole::User, display_text);
-        if clear_composer {
-            self.input.clear();
-        }
-        self.stream_started_at = Some(std::time::Instant::now());
-        self.ttft_pending = true;
-        self.status = AgentChatThreadStatus::Streaming;
-
         let rx = self
             .connection
             .start_turn(AgentChatTurnRequest {
@@ -809,6 +825,23 @@ impl AgentChatThread {
                 model_id: self.selected_model_id.clone(),
             })
             .map_err(|error| error.to_string())?;
+
+        if push_user_message {
+            let msg_id = self.alloc_id();
+            self.messages.push(AgentChatThreadMessage::new(
+                msg_id,
+                AgentChatThreadMessageRole::User,
+                display_text.clone(),
+            ));
+            self.publish_sdk_new_message(msg_id, AgentChatThreadMessageRole::User, display_text);
+        }
+        if clear_composer {
+            self.input.clear();
+        }
+        self.stream_started_at = Some(std::time::Instant::now());
+        self.ttft_pending = true;
+        self.status = AgentChatThreadStatus::Streaming;
+        self.active_callout = None;
 
         self.setup_state = None;
         self.bind_stream(rx, cx);
@@ -836,7 +869,7 @@ impl AgentChatThread {
         self.pending_context_parts = saved_parts;
         self.pending_ambient_context_enabled = saved_ambient;
 
-        self.start_prepared_turn(message.text, prepared.blocks, false, cx)
+        self.start_prepared_turn(message.text, prepared.blocks, false, true, cx)
     }
 
     fn submit_next_queued_if_ready(&mut self, cx: &mut Context<Self>) -> Result<(), String> {
@@ -910,10 +943,45 @@ impl AgentChatThread {
             })
             .map_err(|error| error.to_string())?;
 
+        self.active_callout = None;
         self.setup_state = None;
         self.bind_stream(rx, cx);
         cx.notify();
         Ok(())
+    }
+
+    pub(crate) fn active_callout(&self) -> Option<&AgentChatCallout> {
+        self.active_callout.as_ref()
+    }
+
+    pub(crate) fn dismiss_active_callout(&mut self, cx: &mut Context<Self>) {
+        if self.active_callout.take().is_some() {
+            cx.notify();
+        }
+    }
+
+    fn last_user_turn_text(&self) -> Option<String> {
+        self.messages
+            .iter()
+            .rev()
+            .find(|message| matches!(message.role, AgentChatThreadMessageRole::User))
+            .map(|message| message.body.to_string())
+    }
+
+    pub(crate) fn retry_last_user_turn(&mut self, cx: &mut Context<Self>) -> Result<(), String> {
+        if !matches!(
+            self.status,
+            AgentChatThreadStatus::Error | AgentChatThreadStatus::Idle
+        ) {
+            return Ok(());
+        }
+
+        let Some(display_text) = self.last_user_turn_text() else {
+            return Err("no_user_turn_to_retry".to_string());
+        };
+        let prepared = self.prepare_turn_blocks_with_receipt(display_text.trim());
+        self.set_context_resolution_note(prepared.receipt.as_ref());
+        self.start_prepared_turn(display_text, prepared.blocks, false, false, cx)
     }
 
     /// Resolve a pending permission request with the user's selection.
@@ -1887,9 +1955,10 @@ impl AgentChatThread {
                     "AGENT_CHAT_TURN_FAILED".to_string(),
                     error.clone(),
                 );
-                if self.pending_permission.take().is_some() {
-                    changed = true;
-                }
+                let _ = self.pending_permission.take();
+                let can_retry = self.last_user_turn_text().is_some();
+                self.active_callout = Some(AgentChatCallout::failed(error.clone(), can_retry));
+                changed = true;
                 changed |= self.push_message(AgentChatThreadMessageRole::Error, error);
                 changed |= self.set_status(AgentChatThreadStatus::Error);
             }
@@ -3316,6 +3385,7 @@ impl AgentChatThread {
                 _ => TextInputState::new(),
             },
             status: AgentChatThreadStatus::Idle,
+            active_callout: None,
             pending_permission: None,
             pending_context_blocks: context_blocks,
             pending_context_consumed: false,
@@ -3352,6 +3422,37 @@ impl AgentChatThread {
             profile_display_name: None,
             profile_icon_name: None,
         }
+    }
+
+    pub(super) fn dismiss_active_callout_test(&mut self) {
+        self.active_callout = None;
+    }
+
+    pub(super) fn retry_last_user_turn_test(&mut self) -> Result<(), String> {
+        if !matches!(
+            self.status,
+            AgentChatThreadStatus::Error | AgentChatThreadStatus::Idle
+        ) {
+            return Ok(());
+        }
+
+        let Some(display_text) = self.last_user_turn_text() else {
+            return Err("no_user_turn_to_retry".to_string());
+        };
+        let prepared = self.prepare_turn_blocks_with_receipt(display_text.trim());
+        self.set_context_resolution_note(prepared.receipt.as_ref());
+        let _request = AgentChatTurnRequest {
+            ui_thread_id: self.ui_thread_id.clone(),
+            cwd: self.cwd.clone(),
+            blocks: prepared.blocks,
+            model_id: self.selected_model_id.clone(),
+        };
+        self.stream_started_at = Some(std::time::Instant::now());
+        self.ttft_pending = true;
+        self.status = AgentChatThreadStatus::Streaming;
+        self.active_callout = None;
+        self.setup_state = None;
+        Ok(())
     }
 
     /// Add a context part without a GPUI context (skips `cx.notify()`).
@@ -3550,6 +3651,8 @@ impl AgentChatThread {
                 self.set_status(AgentChatThreadStatus::Error);
             }
             super::AgentChatEvent::Failed { error } => {
+                let can_retry = self.last_user_turn_text().is_some();
+                self.active_callout = Some(AgentChatCallout::failed(error.clone(), can_retry));
                 self.push_message(AgentChatThreadMessageRole::Error, error);
                 self.set_status(AgentChatThreadStatus::Error);
             }
@@ -3679,6 +3782,7 @@ mod tests {
             messages: Vec::new(),
             input: TextInputState::new(),
             status: AgentChatThreadStatus::Idle,
+            active_callout: None,
             pending_permission: None,
             pending_context_blocks,
             pending_context_consumed,
@@ -4421,8 +4525,9 @@ mod tests {
     }
 
     #[test]
-    fn failed_event_creates_error_message() {
+    fn failed_event_creates_error_message_and_retryable_callout() {
         let mut thread = test_thread(Vec::new(), true);
+        thread.push_message(AgentChatThreadMessageRole::User, "please try");
 
         apply_event_test(
             &mut thread,
@@ -4431,10 +4536,65 @@ mod tests {
             },
         );
 
-        assert_eq!(thread.messages.len(), 1);
-        assert_eq!(thread.messages[0].role, AgentChatThreadMessageRole::Error);
-        assert_eq!(thread.messages[0].body.as_ref(), "connection lost");
+        assert_eq!(thread.messages.len(), 2);
+        assert_eq!(thread.messages[1].role, AgentChatThreadMessageRole::Error);
+        assert_eq!(thread.messages[1].body.as_ref(), "connection lost");
         assert_eq!(thread.status, AgentChatThreadStatus::Error);
+        let callout = thread.active_callout().expect("failed turn arms callout");
+        assert_eq!(callout.severity, AgentChatCalloutSeverity::Error);
+        assert_eq!(callout.title.as_ref(), "Turn failed");
+        assert_eq!(callout.detail.as_ref().unwrap().as_ref(), "connection lost");
+        assert!(callout.can_retry);
+    }
+
+    #[test]
+    fn retry_from_error_reenters_streaming_without_duplicate_user_message() {
+        let mut thread = test_thread(Vec::new(), true);
+        thread.push_message(AgentChatThreadMessageRole::User, "please try");
+        thread.apply_event_test(AgentChatEvent::Failed {
+            error: "connection lost".into(),
+        });
+        let before = thread.messages.len();
+
+        thread.retry_last_user_turn_test().unwrap();
+
+        assert_eq!(thread.status, AgentChatThreadStatus::Streaming);
+        assert_eq!(thread.messages.len(), before);
+        assert_eq!(
+            thread
+                .messages
+                .iter()
+                .filter(|message| matches!(message.role, AgentChatThreadMessageRole::User))
+                .count(),
+            1
+        );
+        assert!(thread.active_callout().is_none());
+    }
+
+    #[test]
+    fn dismiss_clears_failed_turn_callout() {
+        let mut thread = test_thread(Vec::new(), true);
+        thread.push_message(AgentChatThreadMessageRole::User, "please try");
+        thread.apply_event_test(AgentChatEvent::Failed {
+            error: "connection lost".into(),
+        });
+
+        thread.dismiss_active_callout_test();
+
+        assert!(thread.active_callout().is_none());
+    }
+
+    #[test]
+    fn starting_new_turn_clears_failed_turn_callout() {
+        let mut thread = test_thread(Vec::new(), true);
+        thread.push_message(AgentChatThreadMessageRole::User, "please try");
+        thread.apply_event_test(AgentChatEvent::Failed {
+            error: "connection lost".into(),
+        });
+
+        thread.retry_last_user_turn_test().unwrap();
+
+        assert!(thread.active_callout().is_none());
     }
 
     #[test]
