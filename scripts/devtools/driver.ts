@@ -103,6 +103,13 @@ export interface DriverOptions {
    * specifically tests model-download behavior. Default true.
    */
   sharedModels?: boolean;
+  /**
+   * With sandboxHome, seed the sandbox with the Pi/Codex auth state live
+   * Agent Chat probes need (runs scripts/agentic/seed-sandbox-home.sh:
+   * APFS-clones ~/.pi plus ~/.codex/{auth.json,config.toml}). Default false —
+   * leave it off unless the probe drives a live agent.
+   */
+  seedAgentAuth?: boolean;
   /** Extra env vars for the app process (test providers, feature flags). */
   env?: Record<string, string>;
   /** Max ms to wait for the readiness log marker. Default 10000. */
@@ -214,6 +221,18 @@ export class Driver {
         const realModels = join(homedir(), ".scriptkit", "models");
         mkdirSync(realModels, { recursive: true });
         symlinkSync(realModels, join(kitDir, "models"));
+      }
+      if (options.seedAgentAuth) {
+        const seed = Bun.spawnSync(
+          ["bash", join(PROJECT_ROOT, "scripts/agentic/seed-sandbox-home.sh"), home],
+          { stdout: "pipe", stderr: "pipe" },
+        );
+        if (seed.exitCode !== 0) {
+          throw new Error(
+            `seed-sandbox-home failed (exit ${seed.exitCode}): ${seed.stderr.toString().trim()}`,
+          );
+        }
+        console.error(`[driver] ${seed.stdout.toString().trim()}`);
       }
     }
 
@@ -396,6 +415,66 @@ export class Driver {
     opts: { timeoutMs?: number; pollIntervalMs?: number } = {},
   ): Promise<Json> {
     return this.waitFor({ type: "stateMatch", state }, opts);
+  }
+
+  /**
+   * Wait until the observed state stops changing: resolves once `samples`
+   * consecutive probes return an identical fingerprint. Use this instead of
+   * hardcoded sleeps (the scattered `sleep(1500)` settle hacks) before the
+   * first submit after opening a surface — it returns as soon as the surface
+   * is actually stable rather than after a guessed delay.
+   *
+   * Returns { settled, elapsedMs, probes, lastState }. `settled: false`
+   * means the timeout elapsed while state was still changing — treat that
+   * as a receipt to report, not a silent pass.
+   */
+  async waitForSettle(
+    opts: {
+      /** Consecutive identical samples required. Default 3. */
+      samples?: number;
+      /** Delay between samples. Default 100ms. */
+      intervalMs?: number;
+      /** Overall deadline. Default 5000ms. */
+      timeoutMs?: number;
+      /** Custom probe; defaults to getState. Must return comparable JSON. */
+      probe?: () => Promise<Json>;
+    } = {},
+  ): Promise<{ settled: boolean; elapsedMs: number; probes: number; lastState: Json }> {
+    const required = Math.max(2, opts.samples ?? 3);
+    const intervalMs = opts.intervalMs ?? 100;
+    const timeoutMs = opts.timeoutMs ?? 5000;
+    const probe = opts.probe ?? (() => this.getState());
+    const start = performance.now();
+
+    let lastFingerprint = "";
+    let stableCount = 0;
+    let probes = 0;
+    let lastState: Json = {};
+    while (performance.now() - start < timeoutMs) {
+      lastState = await probe();
+      probes += 1;
+      // Every response carries its own requestId; exclude it (top-level)
+      // from the fingerprint or no two probes would ever match.
+      const { requestId: _requestId, ...comparable } = lastState;
+      const fingerprint = JSON.stringify(comparable);
+      stableCount = fingerprint === lastFingerprint ? stableCount + 1 : 1;
+      lastFingerprint = fingerprint;
+      if (stableCount >= required) {
+        return {
+          settled: true,
+          elapsedMs: Math.round(performance.now() - start),
+          probes,
+          lastState,
+        };
+      }
+      await Bun.sleep(intervalMs);
+    }
+    return {
+      settled: false,
+      elapsedMs: Math.round(performance.now() - start),
+      probes,
+      lastState,
+    };
   }
 
   /** One round trip: setFilter + wait until the input value is applied. */

@@ -45,6 +45,8 @@ Dev/agent-built binaries run outside a `.app` bundle, so the bundled `Contents/M
 Driver rules of thumb:
 
 - Use `sandboxHome: true` unless the bug specifically needs real user data; it keeps runs reproducible and protects real Script Kit state.
+- For live Agent Chat/brain probes add `seedAgentAuth: true` (or run `bash scripts/agentic/seed-sandbox-home.sh <sandbox-home>`) — it APFS-clones `~/.pi` plus `~/.codex/{auth.json,config.toml}` into the sandbox in one call.
+- Use `await driver.waitForSettle()` instead of hardcoded sleeps before the first submit after opening a surface (the old `sleep(1500)` set_model-race workaround): it polls until N consecutive identical states and typically returns in ~300ms.
 - Whole-scenario `batch` (setInput → waitFor → select) is one round trip and the fastest proof shape; per-command calls are still fast and easier to interleave with assertions.
 - Always `await driver.close()` (use try/finally) so no app instance outlives the probe.
 - The one-shot CLIs below remain correct for single inspections, strict target-identity receipts, and red/green compare artifacts. `scripts/agentic/root-source-filter-matrix.ts` is the migration template for porting a session.sh script to the driver.
