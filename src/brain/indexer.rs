@@ -82,13 +82,14 @@ pub fn start_brain_indexer() {
             // Let app startup settle before the first cycle.
             std::thread::sleep(Duration::from_secs(20));
             let mut embedder: Option<BrainEmbedder> = None;
+            let mut backoff = EmbedBackoff::default();
             loop {
                 let started_unix = unix_now();
-                let result = run_cycle(&mut embedder);
+                let result = run_cycle(&mut embedder, &mut backoff);
                 if let Err(err) = &result {
                     tracing::warn!(target: "script_kit::brain", error = %err, "brain index cycle failed");
                 }
-                record_cycle_health(started_unix, result.as_ref().err(), &embedder);
+                record_cycle_health(started_unix, result.as_ref().err(), &embedder, &backoff);
                 // Serve wake/embed requests until the next cycle is due.
                 let deadline = std::time::Instant::now() + CYCLE_INTERVAL;
                 loop {
@@ -118,7 +119,7 @@ pub fn start_brain_indexer() {
 }
 
 /// One full cycle: sync sources, then embed what's missing.
-pub fn run_cycle(embedder: &mut Option<BrainEmbedder>) -> Result<()> {
+pub fn run_cycle(embedder: &mut Option<BrainEmbedder>, backoff: &mut EmbedBackoff) -> Result<()> {
     store::init_brain_db()?;
     let synced = sync_notes().unwrap_or_else(|err| {
         tracing::debug!(target: "script_kit::brain", error = %err, "notes sync skipped");
@@ -144,7 +145,7 @@ pub fn run_cycle(embedder: &mut Option<BrainEmbedder>) -> Result<()> {
     // Embedding trouble (missing helper binary, model load failure) must
     // never take down the rest of the metabolism — lexical search, journal,
     // and the curator all work without vectors.
-    let embedded = embed_pending(embedder).unwrap_or_else(|err| {
+    let embedded = embed_pending(embedder, backoff).unwrap_or_else(|err| {
         tracing::warn!(target: "script_kit::brain", error = %err, "embedding pass skipped");
         0
     });
@@ -188,24 +189,35 @@ fn record_cycle_health(
     started_unix: Option<u64>,
     err: Option<&anyhow::Error>,
     embedder: &Option<BrainEmbedder>,
+    backoff: &EmbedBackoff,
 ) {
     let (docs_total, docs_pending_embedding) = match store::doc_stats() {
         // doc_stats() => (docs, embedded, signals); pending is what has no vector yet.
         Ok((docs, embedded, _signals)) => (docs, (docs - embedded).max(0)),
         Err(_) => (0, 0),
     };
-    // Plan 05 upgrades this to child.try_wait() liveness
-    let embedder_alive = embedder.is_some();
+    let embedder_alive = embedder.as_ref().is_some_and(BrainEmbedder::is_alive);
     let recall_mode = if resolve_embed_model().is_some() && embedder_alive {
         "semantic"
     } else {
         "lexical-only"
     };
+    // A cycle that skipped the embed phase to back off a broken helper still
+    // returns Ok, so surface the backoff on the health card via last_error
+    // rather than letting it read as a clean cycle.
+    let last_error = err.map(|err| format!("{err:#}")).or_else(|| {
+        backoff.is_backing_off().then(|| {
+            format!(
+                "embedder backing off ({} consecutive failures)",
+                backoff.consecutive_failures
+            )
+        })
+    });
     let health = super::health::BrainHealth {
         last_cycle_started_unix: started_unix,
         last_cycle_finished_unix: unix_now(),
         last_cycle_ok: Some(err.is_none()),
-        last_error: err.map(|err| format!("{err:#}")),
+        last_error,
         docs_total,
         docs_pending_embedding,
         recall_mode: recall_mode.to_string(),
@@ -883,8 +895,84 @@ pub(crate) fn sync_capture_stores_in_sk_path(sk_path: &std::path::Path) -> Resul
     Ok(synced)
 }
 
-/// Embed docs with missing/stale vectors. Returns the number embedded.
-fn embed_pending(embedder: &mut Option<BrainEmbedder>) -> Result<usize> {
+/// Number of consecutive embed failures before the backoff kicks in.
+const EMBED_BACKOFF_THRESHOLD: u32 = 3;
+
+/// Cross-cycle accounting for embed-helper failures, owned by the indexer loop.
+/// Once the helper fails [`EMBED_BACKOFF_THRESHOLD`] times in a row we stop
+/// hammering it for a few cycles instead of respawning-and-failing every 2min.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct EmbedBackoff {
+    consecutive_failures: u32,
+    cycles_since_failure: u32,
+}
+
+impl EmbedBackoff {
+    fn record_success(&mut self) {
+        self.consecutive_failures = 0;
+        self.cycles_since_failure = 0;
+    }
+
+    fn record_failure(&mut self) {
+        self.consecutive_failures = self.consecutive_failures.saturating_add(1);
+        self.cycles_since_failure = 0;
+    }
+
+    fn note_skipped_cycle(&mut self) {
+        self.cycles_since_failure = self.cycles_since_failure.saturating_add(1);
+    }
+
+    /// Whether the embedder is currently in its cool-down window.
+    fn is_backing_off(&self) -> bool {
+        should_skip_embed(self.consecutive_failures, self.cycles_since_failure)
+    }
+}
+
+/// Pure backoff decision, split out so the cross-cycle accounting is unit
+/// testable without a subprocess: after [`EMBED_BACKOFF_THRESHOLD`] consecutive
+/// failures, skip the embed phase for the next `failures - (THRESHOLD - 1)`
+/// cycles (simple linear backoff — 3 failures skips 1 cycle, 4 skips 2, ...).
+pub(crate) fn should_skip_embed(consecutive_failures: u32, cycles_since_failure: u32) -> bool {
+    consecutive_failures >= EMBED_BACKOFF_THRESHOLD
+        && cycles_since_failure < consecutive_failures - (EMBED_BACKOFF_THRESHOLD - 1)
+}
+
+/// Embed docs with missing/stale vectors. Returns the number embedded. Owns the
+/// respawn/backoff policy: a dead or model-mismatched helper is dropped and
+/// respawned, an embed error drops the slot so the next cycle gets a fresh
+/// pipe, and repeated failures trip [`EmbedBackoff`] to skip the phase.
+fn embed_pending(
+    embedder: &mut Option<BrainEmbedder>,
+    backoff: &mut EmbedBackoff,
+) -> Result<usize> {
+    if backoff.is_backing_off() {
+        backoff.note_skipped_cycle();
+        tracing::warn!(
+            target: "script_kit::brain",
+            consecutive_failures = backoff.consecutive_failures,
+            "brain embedder backing off; skipping embed phase this cycle"
+        );
+        return Ok(0);
+    }
+    let result = embed_pending_once(embedder);
+    match &result {
+        Ok(_) => backoff.record_success(),
+        Err(_) => {
+            // Broken pipe, timeout, or a crashed helper: drop the slot so the
+            // next cycle respawns instead of reusing a dead process, and step
+            // the backoff so we stop respawning-and-failing on every cycle.
+            *embedder = None;
+            backoff.record_failure();
+        }
+    }
+    result
+}
+
+/// One embed attempt against a live helper: (re)spawn as needed, then run the
+/// chunk/batch/split bookkeeping. Split from [`embed_pending`] so the borrow of
+/// the embedder inside the embed closure ends before the caller can null the
+/// slot on error.
+fn embed_pending_once(embedder: &mut Option<BrainEmbedder>) -> Result<usize> {
     if resolve_embed_model().is_none() {
         // Zero-setup semantic search: fetch the model once the brain has
         // content worth embedding (politeness rules in brain::download).
@@ -896,12 +984,20 @@ fn embed_pending(embedder: &mut Option<BrainEmbedder>) -> Result<usize> {
     let Some(model) = resolve_embed_model() else {
         return Ok(0);
     };
-    let embedder = match embedder {
-        Some(e) if e.model_id() == model.model_id => e,
-        slot => slot.insert(BrainEmbedder::spawn(model)?),
-    };
-    let model_id = embedder.model_id().to_string();
-    embed_pending_with(&model_id, |texts| embedder.embed(texts))
+    // Drop a cached helper whose model changed OR whose child has died; a
+    // crashed helper was previously reused forever until app restart.
+    if embedder
+        .as_ref()
+        .is_some_and(|e| e.model_id() != model.model_id || !e.is_alive())
+    {
+        *embedder = None;
+    }
+    if embedder.is_none() {
+        *embedder = Some(BrainEmbedder::spawn(model)?);
+    }
+    let e = embedder.as_ref().expect("embedder present after spawn");
+    let model_id = e.model_id().to_string();
+    embed_pending_with(&model_id, |texts| e.embed(texts))
 }
 
 /// The embed cycle with the embedder injected — the chunk → one-batch-call →

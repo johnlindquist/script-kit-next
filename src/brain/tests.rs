@@ -2021,6 +2021,35 @@ fn embed_cycle_chunks_long_docs_and_clears_pending() {
     assert_eq!(embedded, 0, "all-empty vectors store nothing and terminate");
 }
 
+/// Embed backoff policy: no skipping until 3 consecutive failures, then a
+/// linear cool-down window (3 failures skips 1 cycle, 4 skips 2, ...), and any
+/// success (cycles_since_failure reset with failures back to 0) resumes embeds.
+#[test]
+fn embed_backoff_skips_only_after_threshold_and_scales_linearly() {
+    use super::indexer::should_skip_embed;
+
+    // Below threshold: never skip, regardless of cycles since failure.
+    assert!(!should_skip_embed(0, 0));
+    assert!(!should_skip_embed(1, 0));
+    assert!(!should_skip_embed(2, 0));
+    assert!(!should_skip_embed(2, 5));
+
+    // 3 consecutive failures: skip exactly the next 1 cycle.
+    assert!(
+        should_skip_embed(3, 0),
+        "first cycle after 3 failures skips"
+    );
+    assert!(!should_skip_embed(3, 1), "second cycle retries");
+
+    // 4 consecutive failures: skip the next 2 cycles, then retry.
+    assert!(should_skip_embed(4, 0));
+    assert!(should_skip_embed(4, 1));
+    assert!(!should_skip_embed(4, 2));
+
+    // A success resets the counter, so we are never in backoff again.
+    assert!(!should_skip_embed(0, 0));
+}
+
 /// Concurrent `atomic_append_line` on one file must never drop a line. Before
 /// the process-wide write lock this read-modify-write raced: two threads read
 /// the same contents, each appended one line, and one overwrite clobbered the
