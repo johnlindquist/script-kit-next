@@ -452,9 +452,11 @@ fn move_corrupt_brain_db_aside(path: &Path) -> Result<PathBuf> {
 /// Open the brain DB at `path`, recovering from corruption by moving the
 /// damaged database aside and starting fresh. The SQLite index is derived
 /// from canonical markdown, so a fresh DB heals on the next indexer cycle.
-fn open_or_recover_brain_db(path: &Path) -> Result<Connection> {
+/// The returned bool is `true` when recovery ran (the caller should wake the
+/// indexer so the empty index repopulates promptly).
+fn open_or_recover_brain_db(path: &Path) -> Result<(Connection, bool)> {
     match open_and_check(path) {
-        Ok(conn) => Ok(conn),
+        Ok(conn) => Ok((conn, false)),
         Err(err) => {
             // `open_and_check` dropped its connection on the error path, so the
             // files are unlocked and safe to rename before retrying.
@@ -465,7 +467,7 @@ fn open_or_recover_brain_db(path: &Path) -> Result<Connection> {
                 moved_to = %moved.display(),
                 "brain.sqlite failed integrity check; moved aside and rebuilding index from markdown"
             );
-            open_and_check(path)
+            Ok((open_and_check(path)?, true))
         }
     }
 }
@@ -479,8 +481,16 @@ pub fn init_brain_db() -> Result<()> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).context("create brain db dir")?;
     }
-    let conn = open_or_recover_brain_db(&path)?;
+    let (conn, recovered) = open_or_recover_brain_db(&path)?;
     let _ = BRAIN_DB.set(Arc::new(Mutex::new(conn)));
+    if recovered {
+        // The fresh index is empty; nudge the indexer to repopulate it from
+        // canonical markdown now instead of waiting for the next cycle. This is
+        // a no-op before the indexer thread starts (its startup cycle populates
+        // the fresh DB anyway); the wake only matters for corruption detected
+        // at runtime after the indexer is already running.
+        crate::brain::indexer::wake_indexer();
+    }
     Ok(())
 }
 
@@ -1284,7 +1294,8 @@ mod store_recovery_tests {
     fn fresh_path_opens_with_schema() {
         let tmp = tempfile::TempDir::new().expect("tempdir");
         let path = tmp.path().join("brain.sqlite");
-        let conn = open_or_recover_brain_db(&path).expect("open fresh brain db");
+        let (conn, recovered) = open_or_recover_brain_db(&path).expect("open fresh brain db");
+        assert!(!recovered, "a fresh path must not report recovery");
         assert!(brain_docs_present(&conn), "fresh db has brain_docs schema");
         assert!(
             !corrupt_sibling_exists(&path),
@@ -1297,7 +1308,8 @@ mod store_recovery_tests {
         let tmp = tempfile::TempDir::new().expect("tempdir");
         let path = tmp.path().join("brain.sqlite");
         std::fs::write(&path, b"not a sqlite db").expect("prime corrupt db");
-        let conn = open_or_recover_brain_db(&path).expect("recover corrupt brain db");
+        let (conn, recovered) = open_or_recover_brain_db(&path).expect("recover corrupt brain db");
+        assert!(recovered, "a corrupt db must report recovery");
         assert!(
             corrupt_sibling_exists(&path),
             "corrupt db is moved to a *.corrupt-* sibling"
@@ -1310,7 +1322,7 @@ mod store_recovery_tests {
         let tmp = tempfile::TempDir::new().expect("tempdir");
         let path = tmp.path().join("brain.sqlite");
         {
-            let conn = open_or_recover_brain_db(&path).expect("create brain db");
+            let (conn, _) = open_or_recover_brain_db(&path).expect("create brain db");
             conn.execute(
                 "INSERT INTO brain_docs (source, source_id, title, content) \
                  VALUES ('note', 'seed', 'T', 'body')",
@@ -1318,7 +1330,8 @@ mod store_recovery_tests {
             )
             .expect("seed a doc row");
         }
-        let conn = open_or_recover_brain_db(&path).expect("reopen valid brain db");
+        let (conn, recovered) = open_or_recover_brain_db(&path).expect("reopen valid brain db");
+        assert!(!recovered, "a valid db must not report recovery");
         let count: i64 = conn
             .query_row("SELECT COUNT(*) FROM brain_docs", [], |row| row.get(0))
             .unwrap();

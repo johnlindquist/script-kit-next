@@ -756,6 +756,50 @@ fn recall_file_source_refresh_indexes_notes_and_day_pages_together() {
     assert!(block.contains(note_token), "{block}");
 }
 
+/// After corruption recovery the brain index is empty; the existing
+/// file-source sync must repopulate it from canonical markdown so recall heals
+/// without waiting for embeddings or a later cycle. Simulates the fresh
+/// post-recovery DB by clearing derived rows (what `init_test_db` already
+/// does), then proves one day file lands back in `brain_docs`.
+#[test]
+fn recovered_empty_index_repopulates_from_file_sources() {
+    let _db = init_test_db();
+    let empty: i64 = store::with_conn(|conn| {
+        Ok(conn.query_row("SELECT COUNT(*) FROM brain_docs", [], |r| r.get(0))?)
+    })
+    .expect("count docs on fresh index");
+    assert_eq!(empty, 0, "recovered index starts empty");
+
+    let tmp = tempfile::TempDir::new().expect("tempdir");
+    let substrate = test_substrate(&tmp.path().join("brain"));
+    let now = chrono::Utc.with_ymd_and_hms(2026, 7, 1, 12, 0, 0).unwrap();
+    substrate
+        .append_to_day(
+            now,
+            DayEntry::Capture {
+                text: "recovered-index heal marker RCV-7788".to_string(),
+            },
+        )
+        .expect("append day fact");
+
+    let receipt = sync_file_sources_for_recall_with_substrate(&substrate);
+    assert_eq!(receipt.failed_sources, Vec::<&'static str>::new());
+    assert!(receipt.day_pages >= 1, "day file synced into a fresh index");
+
+    let day_docs: i64 = store::with_conn(|conn| {
+        Ok(conn.query_row(
+            "SELECT COUNT(*) FROM brain_docs WHERE source = 'day_page'",
+            [],
+            |r| r.get(0),
+        )?)
+    })
+    .expect("count day docs after rebuild");
+    assert!(
+        day_docs >= 1,
+        "fresh index repopulated with the day page doc"
+    );
+}
+
 #[test]
 fn brain_recall_resource_reads_file_derived_day_page() {
     let _db = init_test_db();
