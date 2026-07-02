@@ -24,7 +24,7 @@ import { createHash } from "crypto";
 import { spawn } from "child_process";
 import type { ImpConfig } from "./isolated.ts";
 import { AppServerClient } from "./appserver.ts";
-import { impReadyTimeoutMs } from "./defaults.ts";
+import { impClientGraceMs, impReadyTimeoutMs, impTurnTimeoutMs } from "./defaults.ts";
 
 type WarmImpRequest = {
   prompt: string;
@@ -206,10 +206,20 @@ export async function serveImp(config: ImpConfig): Promise<void> {
       }
       const prompt = req.prompt;
 
+      // A client that dies mid-turn (killed task, dropped connection) must not
+      // leave a zombie turn blocking the serial chain: abort the in-flight turn
+      // so the chain advances and later clients aren't queued behind a corpse.
+      const turnAbort = new AbortController();
+      let turnSettled = false;
+      socket.on("close", () => {
+        if (!turnSettled) turnAbort.abort();
+      });
+
       lastActivity = Date.now();
       activeTurns++;
       chain = chain.then(async () => {
         try {
+          if (turnAbort.signal.aborted) return; // client left before its turn started
           const finalText = await client.runTurn(
             prompt,
             {
@@ -221,13 +231,14 @@ export async function serveImp(config: ImpConfig): Promise<void> {
                 send({ type: "notif", method, params });
               },
             },
-            { cwd: req.cwd, effort: req.effort, turnTimeoutMs: req.turnTimeoutMs },
+            { cwd: req.cwd, effort: req.effort, turnTimeoutMs: req.turnTimeoutMs, signal: turnAbort.signal },
           );
           send({ type: "final", text: finalText });
           send({ type: "done" });
         } catch (e: any) {
           send({ type: "error", message: e.message || String(e) });
         } finally {
+          turnSettled = true;
           activeTurns--;
           lastActivity = Date.now();
           socket.end();
@@ -386,17 +397,36 @@ export async function runViaWarmImp(
   signal?: AbortSignal,
 ): Promise<void> {
   const sock = socketPath(name);
+  // The server guarantees an error/final within its turn timeout, so silence
+  // beyond turnTimeout + grace means the imp is wedged or gone. Without this
+  // bound a dead server holds the client forever (resolve only fires on
+  // socket end/error). Queued-behind-another-turn waits count as silence too,
+  // which is intentional: past the bound the cold fallback is faster than the
+  // queue. Rejecting here routes the caller to its cold-run fallback.
+  const idleLimitMs = (req.turnTimeoutMs ?? impTurnTimeoutMs()) + impClientGraceMs();
   await new Promise<void>((resolve, reject) => {
     const socket = createConnection(sock);
     let buf = "";
+    let idleTimer: ReturnType<typeof setTimeout> | undefined;
+    const armIdle = () => {
+      if (idleTimer) clearTimeout(idleTimer);
+      idleTimer = setTimeout(() => {
+        socket.destroy();
+        reject(new Error(`warm imp silent for ${idleLimitMs}ms (turn timeout + grace) — treating it as wedged`));
+      }, idleLimitMs);
+      idleTimer.unref?.();
+    };
+    const disarm = () => { if (idleTimer) clearTimeout(idleTimer); };
 
-    const onAbort = () => { socket.destroy(); reject(new Error("aborted")); };
+    const onAbort = () => { disarm(); socket.destroy(); reject(new Error("aborted")); };
     if (signal) signal.addEventListener("abort", onAbort);
 
     socket.once("connect", () => {
       socket.write(JSON.stringify(req) + "\n");
+      armIdle();
     });
     socket.on("data", (chunk) => {
+      armIdle();
       buf += chunk.toString("utf8");
       let nl;
       while ((nl = buf.indexOf("\n")) !== -1) {
@@ -411,10 +441,12 @@ export async function runViaWarmImp(
       }
     });
     socket.once("end", () => {
+      disarm();
       if (signal) signal.removeEventListener("abort", onAbort);
       resolve();
     });
     socket.once("error", (e) => {
+      disarm();
       if (signal) signal.removeEventListener("abort", onAbort);
       reject(e);
     });

@@ -28,3 +28,27 @@ export function impRpcTimeoutMs(): number {
 export function impTurnTimeoutMs(): number {
   return envNumber("CODEX_IMP_TURN_TIMEOUT_MS", DEFAULT_IMP_TURN_TIMEOUT_MS);
 }
+
+// ── Hang guards ──────────────────────────────────────────────────────
+// First-byte window for piped stdin: a backgrounded caller can hand the imp
+// an open-but-silent stdin that never EOFs; without a bound the run parks
+// forever before spawning anything.
+export const DEFAULT_IMP_STDIN_FIRST_BYTE_MS = 2_000;
+// Idle window between stdin chunks once data has started flowing.
+export const DEFAULT_IMP_STDIN_IDLE_MS = 10_000;
+// Client-side grace on top of the turn timeout when talking to a warm imp:
+// the server guarantees an error/final within its turn timeout, so silence
+// beyond turnTimeout + grace means the server is wedged or gone.
+export const DEFAULT_IMP_CLIENT_GRACE_MS = 60_000;
+
+export function impStdinFirstByteMs(): number {
+  return envNumber("CODEX_IMP_STDIN_FIRST_BYTE_MS", DEFAULT_IMP_STDIN_FIRST_BYTE_MS);
+}
+
+export function impStdinIdleMs(): number {
+  return envNumber("CODEX_IMP_STDIN_IDLE_MS", DEFAULT_IMP_STDIN_IDLE_MS);
+}
+
+export function impClientGraceMs(): number {
+  return envNumber("CODEX_IMP_CLIENT_GRACE_MS", DEFAULT_IMP_CLIENT_GRACE_MS);
+}

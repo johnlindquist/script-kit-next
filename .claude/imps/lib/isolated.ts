@@ -9,6 +9,7 @@ import { Codex, type CodexOptions, type ThreadOptions, type UserInput } from "@o
 import { realpathSync, rmSync, unlinkSync, writeFileSync } from "fs";
 import { spawn } from "child_process";
 import { ensureWarmImp, runViaWarmImp, serveImp } from "./imp.ts";
+import { readPipedStdin } from "./stdin.ts";
 import { prepareIsolatedCodexHome } from "./codex-runtime.ts";
 import {
   createEvolutionObserver,
@@ -561,7 +562,10 @@ non-interactive path, or --no-warm for a cold one-off run.`);
 
   // Piped stdin becomes a temp file the imp can read with shell commands, so
   // `cat data.json | imp-jq --run "count users"` just works. TTY stdin is ignored;
-  // an open-but-empty pipe yields "" and is also ignored.
+  // an open-but-empty pipe yields "" and is also ignored. The read is bounded
+  // (readPipedStdin): backgrounded callers can leave stdin open-but-silent with
+  // no EOF ever coming, which would otherwise park the run right here before
+  // any spawn or output.
   let effectivePrompt = prompt;
   if (!effectivePrompt.trim()) {
     console.error(`${config.name}: no prompt provided`);
@@ -569,7 +573,7 @@ non-interactive path, or --no-warm for a cold one-off run.`);
   }
   let stdinFile: string | undefined;
   if (!process.stdin.isTTY) {
-    const data = await Bun.stdin.text();
+    const data = await readPipedStdin();
     if (data.trim()) {
       stdinFile = `/tmp/codex-imp-stdin-${config.name}-${process.pid}`;
       writeFileSync(stdinFile, data);

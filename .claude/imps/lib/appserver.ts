@@ -166,22 +166,42 @@ export class AppServerClient {
    * Streams notifications via handlers.onNotification. Resolves with the final
    * agent message text on turn/completed.
    */
-  async runTurn(prompt: string, handlers: TurnHandlers, opts?: { cwd?: string; effort?: string; turnTimeoutMs?: number }): Promise<string> {
+  async runTurn(prompt: string, handlers: TurnHandlers, opts?: { cwd?: string; effort?: string; turnTimeoutMs?: number; signal?: AbortSignal }): Promise<string> {
     if (!this.ready) throw new Error("app-server not ready");
     if (!prompt.trim()) throw new Error("missing prompt");
+    if (opts?.signal?.aborted) throw new Error("turn aborted before start");
     const threadId = await this.startThread();
     const observer = createEvolutionObserver(this.config, prompt);
 
     return new Promise<string>((resolve, reject) => {
       let finalText = "";
+      // Best-effort: stop the server-side turn so an abandoned/timed-out turn
+      // doesn't keep burning tokens and streaming notifications into the NEXT
+      // turn's handler on this shared app-server. Older app-servers without
+      // turn/interrupt just return an rpc error, which we ignore.
+      const interrupt = () => {
+        try { this.send("turn/interrupt", { threadId }); } catch {}
+      };
+      const onAbort = () => {
+        clearTimeout(t); this.handlers.delete(h);
+        interrupt();
+        observer.finish({ status: "aborted", transport: "app-server", finalText, threadId });
+        reject(new Error("turn aborted: client disconnected"));
+      };
+      const settle = () => {
+        clearTimeout(t); this.handlers.delete(h);
+        opts?.signal?.removeEventListener("abort", onAbort);
+      };
+      opts?.signal?.addEventListener("abort", onAbort, { once: true });
       const t = setTimeout(() => {
-        this.handlers.delete(h);
+        settle();
+        interrupt();
         observer.finish({ status: "timeout", transport: "app-server", finalText, threadId });
         reject(new Error(`turn timeout\nstderr:\n${this.stderrTail}`));
       }, opts?.turnTimeoutMs ?? impTurnTimeoutMs());
       const h = (msg: any) => {
         if (msg.__exit !== undefined) {
-          clearTimeout(t); this.handlers.delete(h);
+          settle();
           observer.finish({ status: "app-server-exit", transport: "app-server", finalText, threadId });
           reject(new Error(`app-server exited mid-turn (code ${msg.__exit})\nstderr:\n${this.stderrTail}`));
           return;
@@ -195,7 +215,7 @@ export class AppServerClient {
           // Authoritative full text (covers non-streamed/low-effort paths)
           if (msg.params.item.text) finalText = msg.params.item.text;
         } else if (msg.method === "turn/completed") {
-          clearTimeout(t); this.handlers.delete(h);
+          settle();
           const turn = msg.params?.turn;
           observer.finish({
             status: typeof turn?.status === "string" ? turn.status : "completed",
