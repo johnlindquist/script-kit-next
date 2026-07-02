@@ -627,6 +627,55 @@ fn brain_status_resource_reports_health() {
 }
 
 #[test]
+fn health_snapshot_round_trips_all_fields() {
+    let _db = init_test_db();
+    let health = super::health::BrainHealth {
+        last_cycle_started_unix: Some(1_780_000_000),
+        last_cycle_finished_unix: Some(1_780_000_005),
+        last_cycle_ok: Some(false),
+        last_error: Some("embed helper missing".to_string()),
+        docs_total: 42,
+        docs_pending_embedding: 7,
+        recall_mode: "lexical-only".to_string(),
+        embedder_alive: false,
+    };
+    super::health::record_health(&health).expect("record health");
+    let read = super::health::read_health().expect("health snapshot present");
+    assert_eq!(read, health, "every field round-trips through the meta KV");
+}
+
+#[test]
+fn health_error_snapshot_is_replaced_by_later_ok() {
+    let _db = init_test_db();
+    let failed = super::health::BrainHealth {
+        last_cycle_started_unix: Some(1_780_000_000),
+        last_cycle_finished_unix: Some(1_780_000_005),
+        last_cycle_ok: Some(false),
+        last_error: Some("cycle blew up".to_string()),
+        docs_total: 3,
+        docs_pending_embedding: 3,
+        recall_mode: "lexical-only".to_string(),
+        embedder_alive: false,
+    };
+    super::health::record_health(&failed).expect("record failing snapshot");
+    let recovered = super::health::BrainHealth {
+        last_cycle_started_unix: Some(1_780_000_100),
+        last_cycle_finished_unix: Some(1_780_000_106),
+        last_cycle_ok: Some(true),
+        last_error: None,
+        docs_total: 4,
+        docs_pending_embedding: 0,
+        recall_mode: "semantic".to_string(),
+        embedder_alive: true,
+    };
+    super::health::record_health(&recovered).expect("record ok snapshot");
+    let read = super::health::read_health().expect("health snapshot present");
+    assert_eq!(read.last_cycle_ok, Some(true), "latest snapshot wins");
+    assert_eq!(read.last_error, None, "prior error cleared on success");
+    assert_eq!(read, recovered);
+}
+
+#[test]
 fn activity_journal_appends_newest_first_and_recalls() {
     let _db = init_test_db();
     store::append_activity("searched files for \"png\" and opened CleanShot.png").unwrap();

@@ -24,6 +24,7 @@ pub mod curator;
 pub mod day_trace;
 pub mod download;
 pub mod embedder;
+pub mod health;
 pub mod inbox;
 pub mod indexer;
 pub mod launcher;

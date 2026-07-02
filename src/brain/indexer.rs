@@ -18,7 +18,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, RecvTimeoutError, Sender};
 use std::sync::OnceLock;
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 const CYCLE_INTERVAL: Duration = Duration::from_secs(120);
 const EMBED_BATCH: usize = 16;
@@ -83,9 +83,12 @@ pub fn start_brain_indexer() {
             std::thread::sleep(Duration::from_secs(20));
             let mut embedder: Option<BrainEmbedder> = None;
             loop {
-                if let Err(err) = run_cycle(&mut embedder) {
+                let started_unix = unix_now();
+                let result = run_cycle(&mut embedder);
+                if let Err(err) = &result {
                     tracing::warn!(target: "script_kit::brain", error = %err, "brain index cycle failed");
                 }
+                record_cycle_health(started_unix, result.as_ref().err(), &embedder);
                 // Serve wake/embed requests until the next cycle is due.
                 let deadline = std::time::Instant::now() + CYCLE_INTERVAL;
                 loop {
@@ -167,6 +170,48 @@ pub fn run_cycle(embedder: &mut Option<BrainEmbedder>) -> Result<()> {
         &chrono::Utc::now().timestamp().to_string(),
     );
     Ok(())
+}
+
+/// Wall-clock seconds since the Unix epoch, or `None` if the clock is before
+/// the epoch (never in practice).
+fn unix_now() -> Option<u64> {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .ok()
+        .map(|d| d.as_secs())
+}
+
+/// Record a [`BrainHealth`](super::health::BrainHealth) snapshot after a cycle,
+/// success or failure, so brain failures surface on the `kit://brain` status
+/// resource instead of being swallowed into a `tracing::warn!`.
+fn record_cycle_health(
+    started_unix: Option<u64>,
+    err: Option<&anyhow::Error>,
+    embedder: &Option<BrainEmbedder>,
+) {
+    let (docs_total, docs_pending_embedding) = match store::doc_stats() {
+        // doc_stats() => (docs, embedded, signals); pending is what has no vector yet.
+        Ok((docs, embedded, _signals)) => (docs, (docs - embedded).max(0)),
+        Err(_) => (0, 0),
+    };
+    // Plan 05 upgrades this to child.try_wait() liveness
+    let embedder_alive = embedder.is_some();
+    let recall_mode = if resolve_embed_model().is_some() && embedder_alive {
+        "semantic"
+    } else {
+        "lexical-only"
+    };
+    let health = super::health::BrainHealth {
+        last_cycle_started_unix: started_unix,
+        last_cycle_finished_unix: unix_now(),
+        last_cycle_ok: Some(err.is_none()),
+        last_error: err.map(|err| format!("{err:#}")),
+        docs_total,
+        docs_pending_embedding,
+        recall_mode: recall_mode.to_string(),
+        embedder_alive,
+    };
+    let _ = super::health::record_health(&health);
 }
 
 /// Once a day, age out the brain's own ambient records (old activity
