@@ -217,6 +217,22 @@
                         "KEYWORD",
                         "Enable in System Preferences > Privacy & Security > Accessibility",
                     );
+                    // Keep this thread waiting so granting Accessibility arms
+                    // text expansion without an app restart.
+                    match keyword_manager::init_keyword_manager_when_accessibility_granted() {
+                        Ok(Some(count)) => logging::log(
+                            "KEYWORD",
+                            &format!(
+                                "Accessibility granted - text expansion enabled with {} triggers",
+                                count
+                            ),
+                        ),
+                        Ok(None) => {}
+                        Err(e) => logging::log(
+                            "KEYWORD",
+                            &format!("Failed to initialize text expansion after grant: {}", e),
+                        ),
+                    }
                 }
                 Err(e) => {
                     logging::log(

@@ -983,6 +983,22 @@ pub fn init_keyword_manager() -> Result<Option<usize>> {
     // Text expansion is macOS-only for now
     Ok(None)
 }
+
+/// Block until Accessibility permission is granted, then initialize.
+///
+/// Granting Accessibility in System Settings must arm text expansion without
+/// an app restart. Call on a dedicated background thread after
+/// `init_keyword_manager()` returned `Ok(None)`; polls AXIsProcessTrusted
+/// (cheap) until it flips, then performs the normal initialization.
+#[cfg(target_os = "macos")]
+pub fn init_keyword_manager_when_accessibility_granted() -> Result<Option<usize>> {
+    const POLL_INTERVAL: std::time::Duration = std::time::Duration::from_secs(5);
+    while !KeywordManager::has_accessibility_permission() {
+        std::thread::sleep(POLL_INTERVAL);
+    }
+    info!("Accessibility permission granted - arming text expansion without restart");
+    init_keyword_manager()
+}
 /// Update keyword triggers when a scriptlet file changes
 ///
 /// This is called by the file watcher when a scriptlet file is modified.
