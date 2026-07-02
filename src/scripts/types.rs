@@ -1092,6 +1092,7 @@ mod tests {
                 message_count: 4,
                 session_id: "session-123".to_string(),
                 title: "How do I search files?".to_string(),
+                custom_title: None,
                 preview: "Use the root launcher".to_string(),
                 search_text: "how do i search files use the root launcher".to_string(),
             },

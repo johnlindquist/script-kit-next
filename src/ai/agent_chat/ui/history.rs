@@ -48,6 +48,9 @@ pub(crate) struct AgentChatHistoryEntry {
     pub session_id: String,
     /// Short title derived from the first user message (max 100 chars).
     pub title: String,
+    /// User- or LLM-provided conversation title.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub custom_title: Option<String>,
     /// Preview derived from the last assistant message (max 160 chars).
     pub preview: String,
     /// Lowercased searchable text from the first few transcript turns.
@@ -98,6 +101,11 @@ pub(crate) fn root_agent_chat_history_query_is_eligible(
 impl AgentChatHistoryEntry {
     /// Returns `title` if populated, otherwise falls back to `first_message`.
     pub(crate) fn title_display(&self) -> &str {
+        if let Some(custom_title) = self.custom_title.as_deref().map(str::trim) {
+            if !custom_title.is_empty() {
+                return custom_title;
+            }
+        }
         if self.title.is_empty() {
             &self.first_message
         } else {
@@ -128,6 +136,8 @@ pub(crate) struct SavedConversation {
     pub session_id: String,
     pub timestamp: String,
     pub messages: Vec<SavedMessage>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub custom_title: Option<String>,
 }
 
 // ── Text helpers ─────────────────────────────────────────────────────
@@ -150,6 +160,17 @@ fn normalize_search_text(value: &str) -> String {
 
 fn bounded_search_text(value: &str) -> String {
     truncate_chars(&normalize_search_text(value), HISTORY_SEARCH_TEXT_MAX_CHARS)
+}
+
+pub(crate) fn sanitize_conversation_title(value: &str) -> String {
+    let collapsed = collapse_whitespace(value);
+    let trimmed = collapsed
+        .trim()
+        .trim_matches(|ch| matches!(ch, '\'' | '"' | '“' | '”' | '‘' | '’'))
+        .trim()
+        .trim_end_matches(|ch| matches!(ch, '.' | ',' | ';' | ':' | '!' | '?'))
+        .trim();
+    truncate_chars(trimmed, 60)
 }
 
 // ── Index builder ────────────────────────────────────────────────────
@@ -193,10 +214,15 @@ pub(crate) fn build_history_entry(
         message_count: conversation.messages.len(),
         session_id: conversation.session_id.clone(),
         title: title.clone(),
+        custom_title: conversation.custom_title.clone(),
         preview: preview.clone(),
         search_text: bounded_search_text(&format!(
-            "{}\n{}\n{}\n{}",
-            title, preview, transcript_sample, conversation.timestamp
+            "{}\n{}\n{}\n{}\n{}",
+            title,
+            conversation.custom_title.as_deref().unwrap_or_default(),
+            preview,
+            transcript_sample,
+            conversation.timestamp
         )),
     })
 }
@@ -508,6 +534,13 @@ fn parse_history_entries(content: &str) -> Vec<AgentChatHistoryEntry> {
         .filter_map(|line| serde_json::from_str(line).ok())
         .map(|mut entry: AgentChatHistoryEntry| {
             // Back-fill missing fields from legacy entries.
+            if entry
+                .custom_title
+                .as_deref()
+                .is_some_and(|title| title.trim().is_empty())
+            {
+                entry.custom_title = None;
+            }
             if entry.title.is_empty() {
                 entry.title = entry.first_message.clone();
             }
@@ -516,8 +549,11 @@ fn parse_history_entries(content: &str) -> Vec<AgentChatHistoryEntry> {
             }
             if entry.search_text.is_empty() {
                 entry.search_text = bounded_search_text(&format!(
-                    "{}\n{}\n{}",
-                    entry.title, entry.preview, entry.timestamp
+                    "{}\n{}\n{}\n{}",
+                    entry.title,
+                    entry.custom_title.as_deref().unwrap_or_default(),
+                    entry.preview,
+                    entry.timestamp
                 ));
             } else {
                 entry.search_text = bounded_search_text(&entry.search_text);
@@ -549,6 +585,21 @@ pub(crate) fn load_conversation(session_id: &str) -> Option<SavedConversation> {
     let path = conversations_dir().join(format!("{session_id}.json"));
     let content = std::fs::read_to_string(&path).ok()?;
     serde_json::from_str(&content).ok()
+}
+
+pub(crate) fn rename_conversation(session_id: &str, new_title: &str) -> anyhow::Result<()> {
+    use anyhow::Context;
+
+    let mut conversation = load_conversation(session_id)
+        .with_context(|| format!("load saved Agent Chat conversation {session_id}"))?;
+    let sanitized = sanitize_conversation_title(new_title);
+    conversation.custom_title = (!sanitized.is_empty()).then_some(sanitized);
+    save_conversation(&conversation);
+
+    let entry = build_history_entry(&conversation)
+        .with_context(|| format!("rebuild Agent Chat history entry {session_id}"))?;
+    save_history_entry(&entry);
+    Ok(())
 }
 
 /// Delete a single conversation by session ID.
@@ -622,6 +673,7 @@ fn cleanup_old_conversations(keep: usize) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::{Mutex, OnceLock};
 
     // ── Helpers ──────────────────────────────────────────────────────
 
@@ -633,6 +685,7 @@ mod tests {
         SavedConversation {
             session_id: session_id.to_string(),
             timestamp: timestamp.to_string(),
+            custom_title: None,
             messages: messages
                 .into_iter()
                 .map(|(role, body)| SavedMessage {
@@ -641,6 +694,11 @@ mod tests {
                 })
                 .collect(),
         }
+    }
+
+    fn history_env_lock() -> &'static Mutex<()> {
+        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+        LOCK.get_or_init(|| Mutex::new(()))
     }
 
     // ── Serde roundtrip ─────────────────────────────────────────────
@@ -653,12 +711,14 @@ mod tests {
             message_count: 5,
             session_id: "test-123".to_string(),
             title: "hello world".to_string(),
+            custom_title: Some("Real title".to_string()),
             preview: "The answer is 42".to_string(),
             search_text: "hello world the answer is 42".to_string(),
         };
         let json = serde_json::to_string(&entry).expect("serialize");
         let parsed: AgentChatHistoryEntry = serde_json::from_str(&json).expect("deserialize");
         assert_eq!(parsed.title, "hello world");
+        assert_eq!(parsed.custom_title.as_deref(), Some("Real title"));
         assert_eq!(parsed.preview, "The answer is 42");
         assert!(!parsed.search_text.is_empty());
     }
@@ -672,8 +732,18 @@ mod tests {
         assert_eq!(entry.first_message, "fix the login");
         // New fields default to empty strings.
         assert!(entry.title.is_empty());
+        assert!(entry.custom_title.is_none());
         assert!(entry.preview.is_empty());
         assert!(entry.search_text.is_empty());
+    }
+
+    #[test]
+    fn legacy_saved_conversation_without_custom_title_deserializes() {
+        let legacy_json = r#"{"session_id":"legacy-conv","timestamp":"2026-03-01T12:00:00Z","messages":[{"role":"user","body":"hello"}]}"#;
+        let conversation: SavedConversation =
+            serde_json::from_str(legacy_json).expect("legacy conversation should deserialize");
+        assert_eq!(conversation.session_id, "legacy-conv");
+        assert!(conversation.custom_title.is_none());
     }
 
     #[test]
@@ -686,6 +756,39 @@ mod tests {
         let json = serde_json::to_string_pretty(&conv).expect("serialize");
         assert!(json.contains("hello"));
         assert!(json.contains("hi there!"));
+    }
+
+    #[test]
+    fn rename_conversation_updates_saved_conversation_and_index() {
+        let _guard = history_env_lock().lock().expect("history env lock");
+        let previous_sk_path = std::env::var(crate::setup::SK_PATH_ENV).ok();
+        let temp = tempfile::tempdir().expect("temp dir");
+        std::env::set_var(crate::setup::SK_PATH_ENV, temp.path());
+
+        let conv = make_conversation(
+            "rename-1",
+            "2026-04-01T18:00:00Z",
+            vec![("user", "please debug auth"), ("assistant", "I found it")],
+        );
+        save_conversation(&conv);
+        save_history_entry(&build_history_entry(&conv).expect("entry"));
+
+        rename_conversation("rename-1", r#"" Auth Debugging Plan! ""#).expect("rename");
+        let saved = load_conversation("rename-1").expect("saved conversation");
+        assert_eq!(saved.custom_title.as_deref(), Some("Auth Debugging Plan"));
+
+        let entries = load_history();
+        let entry = entries
+            .iter()
+            .find(|entry| entry.session_id == "rename-1")
+            .expect("history entry");
+        assert_eq!(entry.title_display(), "Auth Debugging Plan");
+
+        match previous_sk_path {
+            Some(path) => std::env::set_var(crate::setup::SK_PATH_ENV, path),
+            None => std::env::remove_var(crate::setup::SK_PATH_ENV),
+        }
+        invalidate_history_cache();
     }
 
     // ── build_history_entry ─────────────────────────────────────────
@@ -705,6 +808,7 @@ mod tests {
         );
         let entry = build_history_entry(&conv).expect("should build");
         assert_eq!(entry.title, "help me fix login");
+        assert!(entry.custom_title.is_none());
         assert!(entry.preview.contains("expired OAuth redirect URI"));
         assert!(entry.search_text.contains("oauth"));
         assert!(entry.search_text.contains("redirect"));
@@ -768,6 +872,14 @@ mod tests {
         };
         assert_eq!(entry.title_display(), "fallback title");
 
+        let custom = AgentChatHistoryEntry {
+            first_message: "ignored".to_string(),
+            title: "heuristic title".to_string(),
+            custom_title: Some("Custom Title".to_string()),
+            ..Default::default()
+        };
+        assert_eq!(custom.title_display(), "Custom Title");
+
         let entry2 = AgentChatHistoryEntry {
             first_message: "ignored".to_string(),
             title: "real title".to_string(),
@@ -809,6 +921,7 @@ mod tests {
                 message_count: 4,
                 session_id: "s1".to_string(),
                 title: "help me fix login".to_string(),
+                custom_title: None,
                 preview: "The root cause is an expired OAuth redirect URI".to_string(),
                 search_text: normalize_search_text(
                     "help me fix login\nThe root cause is an expired OAuth redirect URI\nuser: help me fix login\nassistant: The root cause is an expired OAuth redirect URI",
@@ -820,6 +933,7 @@ mod tests {
                 message_count: 3,
                 session_id: "s2".to_string(),
                 title: "add dark mode".to_string(),
+                custom_title: None,
                 preview: "I added CSS variables for theming".to_string(),
                 search_text: normalize_search_text(
                     "add dark mode\nI added CSS variables for theming\nuser: add dark mode\nassistant: I added CSS variables for theming",
@@ -831,6 +945,7 @@ mod tests {
                 message_count: 6,
                 session_id: "s3".to_string(),
                 title: "review PR 42".to_string(),
+                custom_title: None,
                 preview: "The PR looks good but the OAuth scope is too broad".to_string(),
                 search_text: normalize_search_text(
                     "review PR 42\nThe PR looks good but the OAuth scope is too broad\nuser: review PR 42\nassistant: The PR looks good but the OAuth scope is too broad",

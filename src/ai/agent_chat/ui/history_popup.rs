@@ -1,5 +1,6 @@
 use std::sync::{Mutex, OnceLock};
 
+use chrono::{DateTime, Datelike, Local};
 use gpui::prelude::FluentBuilder as _;
 use gpui::{
     div, px, uniform_list, AnyElement, AnyWindowHandle, App, AppContext, Bounds, Context,
@@ -30,6 +31,37 @@ const HISTORY_POPUP_VERTICAL_PADDING: f32 = 4.0;
 pub(super) const HISTORY_POPUP_SEARCH_LIMIT: usize = 24;
 pub(super) const HISTORY_POPUP_PAGE_JUMP: usize = 8;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum AgentChatHistoryDateBucket {
+    Today,
+    Yesterday,
+    ThisWeek,
+    Older,
+}
+
+impl AgentChatHistoryDateBucket {
+    fn label(self) -> &'static str {
+        match self {
+            Self::Today => "Today",
+            Self::Yesterday => "Yesterday",
+            Self::ThisWeek => "This Week",
+            Self::Older => "Older",
+        }
+    }
+}
+
+#[derive(Clone)]
+enum AgentChatHistoryPopupListItem {
+    Header {
+        bucket: AgentChatHistoryDateBucket,
+        count: usize,
+    },
+    Entry {
+        entry_index: usize,
+        entry: AgentChatHistoryPopupEntry,
+    },
+}
+
 /// A single popup row derived from a ranked search hit.
 #[derive(Clone)]
 pub(crate) struct AgentChatHistoryPopupEntry {
@@ -58,6 +90,75 @@ impl AgentChatHistoryPopupEntry {
             hit,
         }
     }
+}
+
+pub(crate) fn history_date_bucket(
+    timestamp: &str,
+    now: DateTime<Local>,
+) -> AgentChatHistoryDateBucket {
+    let Ok(parsed) = DateTime::parse_from_rfc3339(timestamp) else {
+        return AgentChatHistoryDateBucket::Older;
+    };
+    let local = parsed.with_timezone(&Local);
+    let entry_date = local.date_naive();
+    let now_date = now.date_naive();
+
+    if entry_date == now_date {
+        return AgentChatHistoryDateBucket::Today;
+    }
+    if entry_date == now_date.pred_opt().unwrap_or(now_date) {
+        return AgentChatHistoryDateBucket::Yesterday;
+    }
+    if local.iso_week() == now.iso_week() {
+        return AgentChatHistoryDateBucket::ThisWeek;
+    }
+    AgentChatHistoryDateBucket::Older
+}
+
+pub(crate) fn bucket_history_entries(
+    entries: &[AgentChatHistoryPopupEntry],
+    now: DateTime<Local>,
+) -> Vec<(AgentChatHistoryDateBucket, Vec<AgentChatHistoryPopupEntry>)> {
+    let mut buckets = vec![
+        (AgentChatHistoryDateBucket::Today, Vec::new()),
+        (AgentChatHistoryDateBucket::Yesterday, Vec::new()),
+        (AgentChatHistoryDateBucket::ThisWeek, Vec::new()),
+        (AgentChatHistoryDateBucket::Older, Vec::new()),
+    ];
+    for entry in entries {
+        let bucket = history_date_bucket(&entry.hit.entry.timestamp, now);
+        if let Some((_, bucket_entries)) = buckets
+            .iter_mut()
+            .find(|(candidate, _)| *candidate == bucket)
+        {
+            bucket_entries.push(entry.clone());
+        }
+    }
+    buckets
+        .into_iter()
+        .filter(|(_, bucket_entries)| !bucket_entries.is_empty())
+        .collect()
+}
+
+fn history_popup_list_items(
+    entries: &[AgentChatHistoryPopupEntry],
+    now: DateTime<Local>,
+) -> Vec<AgentChatHistoryPopupListItem> {
+    let mut items = Vec::new();
+    for (bucket, bucket_entries) in bucket_history_entries(entries, now) {
+        items.push(AgentChatHistoryPopupListItem::Header {
+            bucket,
+            count: bucket_entries.len(),
+        });
+        for entry in bucket_entries {
+            let entry_index = entries
+                .iter()
+                .position(|candidate| candidate.hit.entry.session_id == entry.hit.entry.session_id)
+                .unwrap_or(0);
+            items.push(AgentChatHistoryPopupListItem::Entry { entry_index, entry });
+        }
+    }
+    items
 }
 #[derive(Clone)]
 pub(crate) struct AgentChatHistoryPopupSnapshot {
@@ -163,7 +264,9 @@ fn popup_height(snapshot: &AgentChatHistoryPopupSnapshot) -> f32 {
         HISTORY_POPUP_EMPTY_HEIGHT
     } else {
         let visible_rows = snapshot.entries.len().min(HISTORY_POPUP_VISIBLE_ROWS) as f32;
+        let header_count = bucket_history_entries(&snapshot.entries, Local::now()).len() as f32;
         visible_rows * HISTORY_POPUP_ROW_HEIGHT
+            + header_count * crate::list_item::SECTION_HEADER_HEIGHT
     };
 
     HISTORY_POPUP_SEARCH_HEIGHT
@@ -737,12 +840,13 @@ impl Render for AgentChatHistoryPopupWindow {
                             .into_any_element()
                     } else {
                         let entries = self.snapshot.entries.clone();
+                        let list_items = history_popup_list_items(&entries, Local::now());
                         let selected_index = self.snapshot.selected_index;
                         let source_view = self.source_view.clone();
 
                         uniform_list(
                             "agent_chat-history-popup-list",
-                            entries.len(),
+                            list_items.len(),
                             cx.processor(
                                 move |_this,
                                       visible_range: std::ops::Range<usize>,
@@ -750,15 +854,31 @@ impl Render for AgentChatHistoryPopupWindow {
                                       cx| {
                                 visible_range
                                     .map(|idx| {
-                                        let entry = entries[idx].clone();
-                                        let is_selected = idx == selected_index;
+                                        let item = list_items[idx].clone();
+                                        let (entry_index, entry) = match item {
+                                            AgentChatHistoryPopupListItem::Header {
+                                                bucket,
+                                                count,
+                                            } => {
+                                                return crate::components::unified_list_item::SectionHeader::new(
+                                                    bucket.label(),
+                                                )
+                                                .count(count)
+                                                .into_any_element();
+                                            }
+                                            AgentChatHistoryPopupListItem::Entry {
+                                                entry_index,
+                                                entry,
+                                            } => (entry_index, entry),
+                                        };
+                                        let is_selected = entry_index == selected_index;
                                         let row_entry = entry.clone();
                                         let row_view = source_view.clone();
                                         let click_view = source_view.clone();
 
                                         div()
                                             .id(SharedString::from(format!(
-                                                "agent_chat-history-popup-row-{idx}"
+                                                "agent_chat-history-popup-row-{entry_index}"
                                             )))
                                             .h(px(HISTORY_POPUP_ROW_HEIGHT))
                                             .w_full()
@@ -777,22 +897,22 @@ impl Render for AgentChatHistoryPopupWindow {
                                             .when(is_selected, |d| d.bg(selected_bg))
                                             .when(!is_selected, |d| d.hover(|d| d.bg(hover_bg)))
                                             .on_mouse_move(cx.listener(move |this, _event, _window, cx| {
-                                                if this.snapshot.selected_index != idx {
-                                                    this.snapshot.selected_index = idx;
-                                                    this.sync_selection_to_source_view(idx, cx);
+                                                if this.snapshot.selected_index != entry_index {
+                                                    this.snapshot.selected_index = entry_index;
+                                                    this.sync_selection_to_source_view(entry_index, cx);
                                                     cx.notify();
                                                 } else if let Some(view) = row_view.upgrade() {
                                                     view.update(cx, |view, cx| {
-                                                        view.sync_history_popup_selection_from_window(idx, cx);
+                                                        view.sync_history_popup_selection_from_window(entry_index, cx);
                                                     });
                                                 }
                                             }))
                                             .on_click(
                                                 cx.listener(move |this, _event, _window, cx| {
-                                                    this.snapshot.selected_index = idx;
+                                                    this.snapshot.selected_index = entry_index;
                                                     if let Some(view) = click_view.upgrade() {
                                                         view.update(cx, |view, cx| {
-                                                            view.sync_history_popup_selection_from_window(idx, cx);
+                                                            view.sync_history_popup_selection_from_window(entry_index, cx);
                                                         });
                                                     }
                                                     this.attach_summary(&row_entry, cx);
@@ -971,12 +1091,14 @@ pub(super) fn history_popup_key_intent(
 #[cfg(test)]
 mod tests {
     use super::{
-        history_popup_key_intent, popup_bounds, popup_height, AgentChatHistoryPopupEntry,
+        bucket_history_entries, history_date_bucket, history_popup_key_intent, popup_bounds,
+        popup_height, AgentChatHistoryDateBucket, AgentChatHistoryPopupEntry,
         AgentChatHistoryPopupKeyIntent, AgentChatHistoryPopupSnapshot, HISTORY_POPUP_MAX_WIDTH,
     };
     use crate::ai::agent_chat::ui::history::{
         AgentChatHistoryEntry, AgentChatHistorySearchField, AgentChatHistorySearchHit,
     };
+    use chrono::TimeZone;
     use gpui::SharedString;
 
     fn make_entry(
@@ -984,9 +1106,23 @@ mod tests {
         first_message: &str,
         message_count: usize,
     ) -> AgentChatHistoryPopupEntry {
+        make_entry_with_timestamp(
+            session_id,
+            first_message,
+            message_count,
+            "2026-04-05T12:00:00Z",
+        )
+    }
+
+    fn make_entry_with_timestamp(
+        session_id: &str,
+        first_message: &str,
+        message_count: usize,
+        timestamp: &str,
+    ) -> AgentChatHistoryPopupEntry {
         AgentChatHistoryPopupEntry::from_hit(AgentChatHistorySearchHit {
             entry: AgentChatHistoryEntry {
-                timestamp: "2026-04-05T12:00:00Z".to_string(),
+                timestamp: timestamp.to_string(),
                 first_message: first_message.to_string(),
                 message_count,
                 session_id: session_id.to_string(),
@@ -1038,6 +1174,7 @@ mod tests {
                 timestamp: "2026-04-08T08:10:00Z".to_string(),
                 first_message: "continue".to_string(),
                 title: "Continue the deployment cleanup".to_string(),
+                custom_title: None,
                 preview: "I found the stale kubernetes secret".to_string(),
                 search_text: "kubernetes secret deployment".to_string(),
                 message_count: 14,
@@ -1056,6 +1193,73 @@ mod tests {
         assert_eq!(entry.match_label.as_ref(), "transcript");
         assert!(entry.meta.as_ref().contains("14 msgs"));
         assert_eq!(entry.hit.score, 42);
+    }
+
+    #[test]
+    fn history_date_bucket_groups_today_yesterday_this_week_and_older() {
+        let now = chrono::Local
+            .with_ymd_and_hms(2026, 4, 8, 12, 0, 0)
+            .single()
+            .expect("local datetime");
+        assert_eq!(
+            history_date_bucket(&now.to_rfc3339(), now),
+            AgentChatHistoryDateBucket::Today
+        );
+        assert_eq!(
+            history_date_bucket(&(now - chrono::Duration::days(1)).to_rfc3339(), now),
+            AgentChatHistoryDateBucket::Yesterday
+        );
+        assert_eq!(
+            history_date_bucket(&(now - chrono::Duration::days(2)).to_rfc3339(), now),
+            AgentChatHistoryDateBucket::ThisWeek
+        );
+        assert_eq!(
+            history_date_bucket(&(now - chrono::Duration::days(10)).to_rfc3339(), now),
+            AgentChatHistoryDateBucket::Older
+        );
+    }
+
+    #[test]
+    fn bucket_history_entries_preserves_bucket_order_and_counts() {
+        let now = chrono::Local
+            .with_ymd_and_hms(2026, 4, 8, 12, 0, 0)
+            .single()
+            .expect("local datetime");
+        let entries = vec![
+            make_entry_with_timestamp(
+                "old",
+                "Old",
+                1,
+                &(now - chrono::Duration::days(10)).to_rfc3339(),
+            ),
+            make_entry_with_timestamp("today", "Today", 1, &now.to_rfc3339()),
+            make_entry_with_timestamp(
+                "week",
+                "Week",
+                1,
+                &(now - chrono::Duration::days(2)).to_rfc3339(),
+            ),
+            make_entry_with_timestamp(
+                "yesterday",
+                "Yesterday",
+                1,
+                &(now - chrono::Duration::days(1)).to_rfc3339(),
+            ),
+        ];
+
+        let buckets = bucket_history_entries(&entries, now);
+        assert_eq!(
+            buckets
+                .iter()
+                .map(|(bucket, entries)| (*bucket, entries.len()))
+                .collect::<Vec<_>>(),
+            vec![
+                (AgentChatHistoryDateBucket::Today, 1),
+                (AgentChatHistoryDateBucket::Yesterday, 1),
+                (AgentChatHistoryDateBucket::ThisWeek, 1),
+                (AgentChatHistoryDateBucket::Older, 1),
+            ]
+        );
     }
 
     #[test]

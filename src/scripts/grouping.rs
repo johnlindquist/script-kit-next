@@ -2617,6 +2617,7 @@ mod advanced_query_tests {
                 message_count: 3,
                 session_id: session_id.to_string(),
                 title: title.to_string(),
+                custom_title: None,
                 preview: "Prior assistant reply".to_string(),
                 search_text: title.to_lowercase(),
             },

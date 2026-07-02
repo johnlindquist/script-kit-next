@@ -31,6 +31,14 @@ use super::{
     AgentChatEventRx,
 };
 
+fn truncate_chars_for_title_prompt(value: &str, max_chars: usize) -> String {
+    let mut out: String = value.chars().take(max_chars).collect();
+    if value.chars().count() > max_chars {
+        out.push('\u{2026}');
+    }
+    out
+}
+
 #[cfg(test)]
 struct TestAgentChatConnection;
 
@@ -447,6 +455,7 @@ pub(crate) struct AgentChatThread {
     host_window_state: Option<AgentChatHostWindowState>,
     notification_debounce: AgentChatNotificationDebounce,
     current_turn_id: u64,
+    llm_title_attempted: bool,
 
     // ── Model selection ──────────────────────────────────────
     /// Available models for this agent.
@@ -533,6 +542,7 @@ impl AgentChatThread {
             host_window_state: None,
             notification_debounce: AgentChatNotificationDebounce::default(),
             current_turn_id: 0,
+            llm_title_attempted: false,
             selected_model_display_name: {
                 let id = init.selected_model_id.as_deref();
                 id.and_then(|sel| {
@@ -546,6 +556,89 @@ impl AgentChatThread {
         };
         this.bind_permission_listener(cx);
         this
+    }
+
+    fn maybe_spawn_auto_title(&mut self, conversation: &super::history::SavedConversation) {
+        if self.llm_title_attempted || conversation.custom_title.is_some() {
+            return;
+        }
+        if !conversation
+            .messages
+            .iter()
+            .any(|message| message.role.eq_ignore_ascii_case("assistant"))
+        {
+            return;
+        }
+
+        let Some(first_user) = conversation
+            .messages
+            .iter()
+            .find(|message| message.role.eq_ignore_ascii_case("user"))
+            .map(|message| message.body.clone())
+        else {
+            return;
+        };
+        let Some(first_assistant) = conversation
+            .messages
+            .iter()
+            .find(|message| message.role.eq_ignore_ascii_case("assistant"))
+            .map(|message| message.body.clone())
+        else {
+            return;
+        };
+
+        self.llm_title_attempted = true;
+        let session_id = conversation.session_id.clone();
+        let user_excerpt = truncate_chars_for_title_prompt(&first_user, 400);
+        let assistant_excerpt = truncate_chars_for_title_prompt(&first_assistant, 400);
+
+        let spawn_result = std::thread::Builder::new()
+            .name("agent_chat-auto-title".to_string())
+            .spawn(move || {
+                let registry =
+                    crate::ai::providers::ProviderRegistry::from_environment_with_config(None);
+                if !registry.has_any_provider() {
+                    return;
+                }
+
+                let result = (|| -> anyhow::Result<()> {
+                    let (model, provider) =
+                        crate::ai::script_generation::select_generation_model(&registry)?;
+                    let messages = vec![
+                        crate::ai::providers::ProviderMessage::system(
+                            "You title chat conversations. Reply with ONLY a concise 3-6 word title. No quotes, no punctuation at the end.",
+                        ),
+                        crate::ai::providers::ProviderMessage::user(format!(
+                            "User: {user_excerpt}\nAssistant: {assistant_excerpt}"
+                        )),
+                    ];
+                    let raw = provider.send_message(&messages, &model.id)?;
+                    let title = super::history::sanitize_conversation_title(&raw);
+                    if title.is_empty() {
+                        return Ok(());
+                    }
+                    super::history::rename_conversation(&session_id, &title)?;
+                    Ok(())
+                })();
+
+                if let Err(error) = result {
+                    tracing::debug!(
+                        target: "script_kit::tab_ai",
+                        event = "agent_chat_auto_title_failed",
+                        session_id = %session_id,
+                        error = %error,
+                    );
+                }
+            });
+
+        if let Err(error) = spawn_result {
+            tracing::debug!(
+                target: "script_kit::tab_ai",
+                event = "agent_chat_auto_title_spawn_failed",
+                session_id = %conversation.session_id,
+                error = %error,
+            );
+        }
     }
 
     pub(crate) fn set_host_window_state(
@@ -2033,9 +2126,13 @@ impl AgentChatThread {
                     .any(|m| matches!(m.role, AgentChatThreadMessageRole::User))
                 {
                     let timestamp = chrono::Utc::now().to_rfc3339();
+                    let existing_custom_title =
+                        super::history::load_conversation(&self.ui_thread_id)
+                            .and_then(|conversation| conversation.custom_title);
                     let conversation = super::history::SavedConversation {
                         session_id: self.ui_thread_id.clone(),
                         timestamp,
+                        custom_title: existing_custom_title.clone(),
                         messages: self
                             .messages
                             .iter()
@@ -2046,6 +2143,7 @@ impl AgentChatThread {
                             .collect(),
                     };
                     super::history::save_conversation(&conversation);
+                    self.maybe_spawn_auto_title(&conversation);
 
                     super::history::build_history_entry(&conversation).map(|entry| {
                         tracing::info!(
@@ -3644,6 +3742,7 @@ impl AgentChatThread {
             host_window_state: None,
             notification_debounce: AgentChatNotificationDebounce::default(),
             current_turn_id: 0,
+            llm_title_attempted: false,
             available_models: Vec::new(),
             selected_model_id: None,
             selected_model_display_name: None,
@@ -4108,6 +4207,7 @@ mod tests {
             host_window_state: None,
             notification_debounce: AgentChatNotificationDebounce::default(),
             current_turn_id: 0,
+            llm_title_attempted: false,
             available_models: Vec::new(),
             selected_model_id: None,
             selected_model_display_name: None,

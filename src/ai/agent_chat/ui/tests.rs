@@ -1889,6 +1889,7 @@ fn delete_conversation_removes_file_and_rewrites_index() {
     let conv = SavedConversation {
         session_id: "session-a".to_string(),
         timestamp: "2026-04-05T10:00:00Z".to_string(),
+        custom_title: None,
         messages: vec![SavedMessage {
             role: "user".to_string(),
             body: "test message".to_string(),

@@ -126,6 +126,7 @@ mod tests {
         SavedConversation {
             session_id: "test-attach-1".to_string(),
             timestamp: "2026-04-05T12:00:00Z".to_string(),
+            custom_title: None,
             messages: vec![
                 SavedMessage {
                     role: "user".to_string(),
