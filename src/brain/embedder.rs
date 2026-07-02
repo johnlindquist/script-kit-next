@@ -19,10 +19,16 @@ use std::path::PathBuf;
 use std::process::{Child, ChildStdin, Command, Stdio};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{mpsc, Arc, Mutex};
+use std::time::Duration;
 
 const HELPER_ENV: &str = "SCRIPT_KIT_GHOST_LLM_HELPER";
 const HELPER_NAME: &str = "script-kit-ghost-llm-helper";
 const MODEL_ENV: &str = "SCRIPT_KIT_BRAIN_EMBED_MODEL_PATH";
+
+/// Hard ceiling for one embed batch call. 60s for a 16-doc chunked batch on
+/// CPU is generous but bounded — the model runs CPU-only today, so do NOT drop
+/// below 60s. A wedged helper must never stall the indexer thread for minutes.
+const EMBED_BATCH_TIMEOUT: Duration = Duration::from_secs(60);
 
 #[derive(Debug, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
@@ -144,6 +150,15 @@ impl BrainEmbedder {
         &self.model.model_id
     }
 
+    /// True while the helper child process is still running.
+    pub fn is_alive(&self) -> bool {
+        self.child
+            .lock()
+            .ok()
+            .map(|mut child| matches!(child.try_wait(), Ok(None)))
+            .unwrap_or(false)
+    }
+
     /// Embed a batch of texts. Blocking; returns unit-normalized vectors in
     /// input order (empty vec for empty inputs).
     pub fn embed(&self, texts: Vec<String>) -> Result<Vec<Vec<f32>>> {
@@ -168,7 +183,7 @@ impl BrainEmbedder {
             return Err(err);
         }
         let response = rx
-            .recv_timeout(std::time::Duration::from_secs(300))
+            .recv_timeout(EMBED_BATCH_TIMEOUT)
             .context("brain embed helper timed out")?;
         if !response.ok {
             return Err(anyhow!(response
@@ -200,6 +215,9 @@ impl Drop for BrainEmbedder {
             let _ = stdin.take();
         }
         if let Ok(mut child) = self.child.lock() {
+            // A replaced or dropped embedder must never leak a zombie helper,
+            // even if the shutdown request above never reached a wedged child.
+            let _ = child.kill();
             let _ = child.wait();
         }
     }
