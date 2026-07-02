@@ -73,7 +73,16 @@ impl BrainSubstrate {
         let (date, timestamp) = day::local_day_and_time(now, self.tz);
         let path = self.paths.day_page(date);
         let line = entry.format_line(&timestamp);
-        io::atomic_append_line(&path, &line)
+        io::atomic_append_line(&path, &line)?;
+        // Layering exception: the substrate is otherwise a pure file layer, but
+        // every append_to_day caller (clipboard sediment, `;todo`, agent day
+        // traces, dictation) is a capture that must be recallable at once.
+        // Indexing here — once — instead of at each call site keeps the diff
+        // small and derives the doc from the exact file just written, so it can
+        // never drift from the periodic sync. `index_capture_after_write` is a
+        // cfg(test) no-op so file-layer tests stay pure.
+        crate::brain::indexer::index_capture_after_write(&path);
+        Ok(())
     }
 
     /// Write a long capture as a fragment when it exceeds
@@ -86,7 +95,7 @@ impl BrainSubstrate {
         source_uri: &str,
         content: &str,
     ) -> Result<Option<FragmentReference>> {
-        fragment::write_fragment(&self.paths, now, self.tz, source_label, source_uri, content)
+        self.write_fragment_with_why(now, source_label, source_uri, content, None)
     }
 
     /// Write a long capture as a fragment, optionally attaching a post-copy why.
@@ -98,7 +107,7 @@ impl BrainSubstrate {
         content: &str,
         why: Option<&str>,
     ) -> Result<Option<FragmentReference>> {
-        fragment::write_fragment_with_why(
+        let reference = fragment::write_fragment_with_why(
             &self.paths,
             now,
             self.tz,
@@ -106,7 +115,18 @@ impl BrainSubstrate {
             source_uri,
             content,
             why,
-        )
+        )?;
+        // Same layering exception as append_to_day: index the fragment file the
+        // writer just produced so long captures are recallable immediately. The
+        // reference's relative_link is `../fragments/<id>.md`; resolve it back to
+        // the absolute path under this substrate.
+        if let Some(reference) = &reference {
+            if let Some(filename) = reference.relative_link.rsplit('/').next() {
+                let fragment_path = self.paths.fragments_dir().join(filename);
+                crate::brain::indexer::index_capture_after_write(&fragment_path);
+            }
+        }
+        Ok(reference)
     }
 
     /// Remove sediment lines written for a clipboard entry (T12 reject undo).

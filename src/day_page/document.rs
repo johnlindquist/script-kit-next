@@ -420,6 +420,13 @@ impl DayPageDocumentSession {
             self.last_save_merged = None;
         }
 
+        // Editor saves write the day/fragment file directly via io::atomic_write
+        // (not through the substrate append wrappers), so index it here too — a
+        // Day Page edit is a capture and must be recallable without waiting for
+        // the next indexer cycle. cfg(test) no-op; classifies days/ vs
+        // fragments/ by the file's parent directory.
+        crate::brain::indexer::index_capture_after_write(&path);
+
         let _ = now;
         Ok(())
     }
