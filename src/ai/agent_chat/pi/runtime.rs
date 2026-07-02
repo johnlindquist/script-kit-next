@@ -809,6 +809,15 @@ async fn read_stdout<R>(
         "Pi RPC process exited before responding",
         stderr_failure_hint.as_ref(),
     );
+    // A turn that was mid-stream when the process died lives in `active_turn`,
+    // not `pending` — without a terminal event its receiver waits forever.
+    send_to_active(
+        &active_turn,
+        AgentChatEvent::Failed {
+            error: error.clone(),
+        },
+    )
+    .await;
     fail_pending_responses(&pending, &error).await;
 }
 
@@ -1144,6 +1153,40 @@ mod tests {
                 AgentChatEvent::Failed { error } if error.contains("exited before responding")
                     && error.contains("No API key found for provider anthropic")
             ));
+        });
+    }
+
+    #[test]
+    fn read_stdout_fails_active_turn_when_pi_exits_mid_stream() {
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+
+        runtime.block_on(async {
+            let pending: PendingResponses = Arc::new(Mutex::new(HashMap::new()));
+            let active_turn: ActiveTurn = Arc::new(Mutex::new(None));
+            let (event_tx, event_rx) = async_channel::bounded(1);
+            active_turn.lock().replace(ActiveTurnState {
+                ui_thread_id: "thread-test".to_string(),
+                prompt_id: "prompt-test".to_string(),
+                event_tx,
+            });
+
+            read_stdout(tokio::io::empty(), pending, active_turn.clone(), None).await;
+
+            let event = event_rx.recv().await.unwrap();
+            assert!(
+                matches!(
+                    event,
+                    AgentChatEvent::Failed { error } if error.contains("exited before responding")
+                ),
+                "active streaming turn must receive a terminal Failed event when Pi dies"
+            );
+            assert!(
+                active_turn.lock().is_none(),
+                "active turn must be cleared after the terminal event"
+            );
         });
     }
 
