@@ -17,7 +17,7 @@
 
 use anyhow::{anyhow, Context as _, Result};
 use rusqlite::{params, Connection, OptionalExtension, Row};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, OnceLock};
 
 static BRAIN_DB: OnceLock<Arc<Mutex<Connection>>> = OnceLock::new();
@@ -396,6 +396,80 @@ fn migrate_fts_tokenizer(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
+/// Append `suffix` to the full path string (SQLite forms its sidecar and
+/// backup names by suffixing the whole db path, e.g. `brain.sqlite-wal`).
+fn brain_path_with_suffix(path: &Path, suffix: &str) -> PathBuf {
+    let mut name = path.as_os_str().to_os_string();
+    name.push(suffix);
+    PathBuf::from(name)
+}
+
+/// Open a connection at `path`, apply the standard pragmas, verify integrity
+/// with `quick_check`, and ensure the schema. Any failure returns Err with the
+/// connection already dropped, so the caller can safely rename files.
+fn open_and_check(path: &Path) -> Result<Connection> {
+    let conn = Connection::open(path).context("open brain.sqlite")?;
+    conn.pragma_update(None, "journal_mode", "WAL")
+        .context("brain WAL")?;
+    conn.pragma_update(None, "busy_timeout", 5000)
+        .context("brain busy_timeout")?;
+    conn.pragma_update(None, "foreign_keys", "ON")
+        .context("brain foreign_keys")?;
+    let integrity: String = conn
+        .query_row("PRAGMA quick_check(1)", [], |row| row.get(0))
+        .context("brain quick_check")?;
+    if integrity != "ok" {
+        return Err(anyhow!("brain quick_check reported: {integrity}"));
+    }
+    ensure_brain_schema(&conn)?;
+    Ok(conn)
+}
+
+/// Move the damaged db and its WAL/SHM sidecars aside to `*.corrupt-<secs>`
+/// siblings. Returns the destination of the primary db file for logging.
+fn move_corrupt_brain_db_aside(path: &Path) -> Result<PathBuf> {
+    let secs = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    let corrupt = format!(".corrupt-{secs}");
+    let mut primary_dest = brain_path_with_suffix(path, &corrupt);
+    for suffix in ["", "-wal", "-shm"] {
+        let from = brain_path_with_suffix(path, suffix);
+        if !from.exists() {
+            continue;
+        }
+        let dest = brain_path_with_suffix(&from, &corrupt);
+        std::fs::rename(&from, &dest)
+            .with_context(|| format!("move corrupt brain file {} aside", from.display()))?;
+        if suffix.is_empty() {
+            primary_dest = dest;
+        }
+    }
+    Ok(primary_dest)
+}
+
+/// Open the brain DB at `path`, recovering from corruption by moving the
+/// damaged database aside and starting fresh. The SQLite index is derived
+/// from canonical markdown, so a fresh DB heals on the next indexer cycle.
+fn open_or_recover_brain_db(path: &Path) -> Result<Connection> {
+    match open_and_check(path) {
+        Ok(conn) => Ok(conn),
+        Err(err) => {
+            // `open_and_check` dropped its connection on the error path, so the
+            // files are unlocked and safe to rename before retrying.
+            let moved = move_corrupt_brain_db_aside(path)?;
+            tracing::warn!(
+                target: "script_kit::brain",
+                error = %err,
+                moved_to = %moved.display(),
+                "brain.sqlite failed integrity check; moved aside and rebuilding index from markdown"
+            );
+            open_and_check(path)
+        }
+    }
+}
+
 /// Initialize (or return) the global brain DB connection. Idempotent.
 pub fn init_brain_db() -> Result<()> {
     if BRAIN_DB.get().is_some() {
@@ -405,14 +479,7 @@ pub fn init_brain_db() -> Result<()> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).context("create brain db dir")?;
     }
-    let conn = Connection::open(&path).context("open brain.sqlite")?;
-    conn.pragma_update(None, "journal_mode", "WAL")
-        .context("brain WAL")?;
-    conn.pragma_update(None, "busy_timeout", 5000)
-        .context("brain busy_timeout")?;
-    conn.pragma_update(None, "foreign_keys", "ON")
-        .context("brain foreign_keys")?;
-    ensure_brain_schema(&conn)?;
+    let conn = open_or_recover_brain_db(&path)?;
     let _ = BRAIN_DB.set(Arc::new(Mutex::new(conn)));
     Ok(())
 }
@@ -1183,5 +1250,82 @@ mod store_migration_tests {
         assert!(legacy_gone, "legacy table dropped");
         // Idempotent: running again must not error.
         ensure_brain_schema(&conn).expect("second upgrade is a no-op");
+    }
+}
+
+#[cfg(test)]
+mod store_recovery_tests {
+    use super::*;
+
+    /// The SQLite index is derived-only (canonical data is markdown), so a
+    /// corrupt `brain.sqlite` must never brick recall: it is moved aside and a
+    /// fresh, healable database takes its place. These tests exercise
+    /// `open_or_recover_brain_db` on explicit temp paths so they never touch
+    /// the process-global `BRAIN_DB` connection.
+    fn brain_docs_present(conn: &Connection) -> bool {
+        conn.query_row(
+            "SELECT EXISTS(SELECT 1 FROM sqlite_master \
+             WHERE type='table' AND name='brain_docs')",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap()
+    }
+
+    fn corrupt_sibling_exists(path: &Path) -> bool {
+        let dir = path.parent().expect("temp path has a parent");
+        std::fs::read_dir(dir)
+            .expect("read temp dir")
+            .filter_map(|entry| entry.ok())
+            .any(|entry| entry.file_name().to_string_lossy().contains(".corrupt-"))
+    }
+
+    #[test]
+    fn fresh_path_opens_with_schema() {
+        let tmp = tempfile::TempDir::new().expect("tempdir");
+        let path = tmp.path().join("brain.sqlite");
+        let conn = open_or_recover_brain_db(&path).expect("open fresh brain db");
+        assert!(brain_docs_present(&conn), "fresh db has brain_docs schema");
+        assert!(
+            !corrupt_sibling_exists(&path),
+            "a fresh path must not trigger recovery"
+        );
+    }
+
+    #[test]
+    fn corrupt_db_is_moved_aside_and_healed() {
+        let tmp = tempfile::TempDir::new().expect("tempdir");
+        let path = tmp.path().join("brain.sqlite");
+        std::fs::write(&path, b"not a sqlite db").expect("prime corrupt db");
+        let conn = open_or_recover_brain_db(&path).expect("recover corrupt brain db");
+        assert!(
+            corrupt_sibling_exists(&path),
+            "corrupt db is moved to a *.corrupt-* sibling"
+        );
+        assert!(brain_docs_present(&conn), "recovered db has the schema");
+    }
+
+    #[test]
+    fn valid_db_reopens_without_recovery() {
+        let tmp = tempfile::TempDir::new().expect("tempdir");
+        let path = tmp.path().join("brain.sqlite");
+        {
+            let conn = open_or_recover_brain_db(&path).expect("create brain db");
+            conn.execute(
+                "INSERT INTO brain_docs (source, source_id, title, content) \
+                 VALUES ('note', 'seed', 'T', 'body')",
+                [],
+            )
+            .expect("seed a doc row");
+        }
+        let conn = open_or_recover_brain_db(&path).expect("reopen valid brain db");
+        let count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM brain_docs", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(count, 1, "rows survive a clean reopen");
+        assert!(
+            !corrupt_sibling_exists(&path),
+            "a valid db must not trigger recovery"
+        );
     }
 }
