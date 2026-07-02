@@ -7325,8 +7325,17 @@ impl ScriptListApp {
             }
         };
         let device_count = devices.as_ref().map(|devices| devices.len()).unwrap_or(0);
+        // Real model status, not a hardcoded Available: the builtin start path
+        // gates on the model upstream, but this preflight must stay honest for
+        // every other entry point so a missing model routes to setup before
+        // recording starts instead of after transcription fails.
+        let model_status = if crate::dictation::is_parakeet_model_available() {
+            crate::dictation::DictationModelStatus::Available
+        } else {
+            dictation_model_prompt_status().lock().clone()
+        };
         let setup_state = crate::dictation::build_dictation_setup_state(
-            crate::dictation::DictationModelStatus::Available,
+            model_status,
             permission,
             devices,
             selected_device_id,
@@ -7360,8 +7369,18 @@ impl ScriptListApp {
             crate::dictation::DictationMicrophoneStatus::PermissionNeeded(
                 crate::dictation::DictationMicrophonePermissionStatus::NotDetermined,
             ) => {
+                // Fire the macOS TCC prompt here — nothing else in the app
+                // calls requestAccess, and System Settings won't even list
+                // Script Kit under Microphone until it has fired once.
+                crate::dictation::request_microphone_permission_nonblocking(|status| {
+                    tracing::info!(
+                        category = "DICTATION",
+                        status = ?status,
+                        "Microphone permission prompt resolved"
+                    );
+                });
                 self.show_error_toast(
-                    "Microphone access is needed. Open Dictation Setup and choose Allow Microphone.",
+                    "Choose Allow when macOS asks for microphone access, then start dictation again.",
                     cx,
                 );
                 self.open_dictation_model_prompt(cx);
@@ -7390,7 +7409,11 @@ impl ScriptListApp {
             | crate::dictation::DictationMicrophoneStatus::PermissionNeeded(
                 crate::dictation::DictationMicrophonePermissionStatus::Granted
                 | crate::dictation::DictationMicrophonePermissionStatus::Unknown,
-            ) => {}
+            ) => {
+                // Mic is fine, so the only way to be un-ready here is a
+                // missing/in-flight model — route to the download prompt.
+                self.open_dictation_model_prompt(cx);
+            }
         }
         tracing::info!(
             category = "DICTATION",

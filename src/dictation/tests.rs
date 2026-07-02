@@ -4927,6 +4927,43 @@ fn missing_model_entry_gate_opens_download_prompt() {
 }
 
 // ---------------------------------------------------------------------------
+// Start preflight must fire the mic TCC prompt and use real model status
+// ---------------------------------------------------------------------------
+
+/// A fresh install has microphone permission NotDetermined. macOS only shows
+/// the consent dialog when the app calls
+/// `AVCaptureDevice requestAccessForMediaType:`, and System Settings does not
+/// list the app under Microphone until that has fired at least once. The
+/// dictation start preflight is the only user-reachable trigger, so it must
+/// actually request access — otherwise new users have NO path to grant the
+/// permission (release audit 2026-07-01). It must also derive model status
+/// from disk instead of hardcoding Available, so a missing model routes to
+/// setup before recording starts rather than after transcription fails.
+#[test]
+fn dictation_start_preflight_requests_mic_access_and_uses_real_model_status() {
+    let src = std::fs::read_to_string("src/app_execute/builtin_execution.rs")
+        .expect("read builtin_execution.rs");
+
+    let start = src
+        .find("fn open_dictation_setup_if_not_ready(")
+        .expect("open_dictation_setup_if_not_ready must exist");
+    let tail = &src[start..];
+    let end = tail
+        .find("fn ensure_dictation_delivery_target_available(")
+        .expect("preflight must be followed by ensure_dictation_delivery_target_available");
+    let preflight_src = &tail[..end];
+
+    assert!(
+        preflight_src.contains("request_microphone_permission_nonblocking"),
+        "preflight must fire the TCC prompt for NotDetermined mic permission"
+    );
+    assert!(
+        preflight_src.contains("is_parakeet_model_available()"),
+        "preflight must derive model status from disk, not hardcode Available"
+    );
+}
+
+// ---------------------------------------------------------------------------
 // Missing-model transcription recovery opens prompt instead of dead-end toast
 // ---------------------------------------------------------------------------
 
