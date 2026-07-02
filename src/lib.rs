@@ -419,12 +419,51 @@ pub fn main_window_visibility_generation() -> u64 {
     MAIN_WINDOW_VISIBILITY_GENERATION.load(Ordering::SeqCst)
 }
 
+/// Hook fired on every real main-window visibility transition.
+///
+/// The main-hotkey gesture classifier lives in the binary crate (its statics
+/// are duplicated per crate), so hide paths compiled into this library — e.g.
+/// the active-Space-change observer in `platform::visibility_focus` — cannot
+/// reach it directly. The binary installs a hook at startup that keeps the
+/// classifier's Closed/Open state aligned with the flag; without it, an
+/// implicit hide leaves the classifier `Open` and every later hotkey press
+/// classifies as a tap that routing swallows (dead hotkey).
+static MAIN_WINDOW_VISIBILITY_TRANSITION_HOOK: OnceLock<fn(bool)> = OnceLock::new();
+
+/// Install the visibility-transition hook (first caller wins).
+pub fn install_main_window_visibility_transition_hook(hook: fn(bool)) {
+    let _ = MAIN_WINDOW_VISIBILITY_TRANSITION_HOOK.set(hook);
+}
+
 /// Set the main window visibility state
 pub fn set_main_window_visible(visible: bool) {
     let previous = MAIN_WINDOW_VISIBLE.swap(visible, Ordering::SeqCst);
     if previous != visible {
         MAIN_WINDOW_VISIBILITY_GENERATION.fetch_add(1, Ordering::SeqCst);
+        if let Some(hook) = MAIN_WINDOW_VISIBILITY_TRANSITION_HOOK.get() {
+            hook(visible);
+        }
     }
+}
+
+/// Set when the main window was hidden by an implicit path (click-outside
+/// focus loss, active-Space change) so the next show restores the surface
+/// exactly instead of resetting to ScriptList. Lives here rather than in the
+/// binary so lib-side hide paths (the Space-change observer) can mark it.
+static RESTORE_MAIN_STATE_AFTER_FOCUS_LOSS: AtomicBool = AtomicBool::new(false);
+
+pub fn mark_main_state_restore_after_focus_loss() {
+    RESTORE_MAIN_STATE_AFTER_FOCUS_LOSS.store(true, Ordering::SeqCst);
+}
+
+pub fn clear_main_state_restore_after_focus_loss() {
+    RESTORE_MAIN_STATE_AFTER_FOCUS_LOSS.store(false, Ordering::SeqCst);
+}
+
+pub fn consume_main_state_restore_after_focus_loss() -> bool {
+    RESTORE_MAIN_STATE_AFTER_FOCUS_LOSS
+        .compare_exchange(true, false, Ordering::SeqCst, Ordering::SeqCst)
+        .is_ok()
 }
 
 /// Check if a script requested hiding the window

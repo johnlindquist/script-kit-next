@@ -313,25 +313,27 @@ use utils::render_path_with_highlights;
 
 // Global state for hotkey signaling between threads
 static NEEDS_RESET: AtomicBool = AtomicBool::new(false); // Track if window needs reset to script list on next show
-static RESTORE_MAIN_STATE_AFTER_FOCUS_LOSS: AtomicBool = AtomicBool::new(false);
 
-fn mark_main_state_restore_after_focus_loss() {
-    RESTORE_MAIN_STATE_AFTER_FOCUS_LOSS.store(true, Ordering::SeqCst);
-}
-
-fn clear_main_state_restore_after_focus_loss() {
-    RESTORE_MAIN_STATE_AFTER_FOCUS_LOSS.store(false, Ordering::SeqCst);
-}
-
-fn consume_main_state_restore_after_focus_loss() -> bool {
-    RESTORE_MAIN_STATE_AFTER_FOCUS_LOSS
-        .compare_exchange(true, false, Ordering::SeqCst, Ordering::SeqCst)
-        .is_ok()
+/// Keep the main-hotkey gesture classifier (a binary-crate static) aligned
+/// with the shared visibility flag. Installed into the library's
+/// `set_main_window_visible` chokepoint so EVERY hide path — including
+/// lib-side ones like the active-Space-change observer — re-arms the
+/// classifier. Without this, an implicit hide leaves the classifier `Open`,
+/// the next key-down never classifies as `ShowImmediate`, and the main
+/// hotkey goes permanently dead.
+fn main_window_visibility_transition_hook(visible: bool) {
+    if visible {
+        crate::hotkeys::sync_main_gesture_window_shown();
+    } else {
+        crate::hotkeys::reset_main_gesture_classifier();
+    }
 }
 
 pub use script_kit_gpui::{
-    agentic_protocol_bus, emoji, emoji_usage, get_main_window_handle, is_main_window_visible,
-    main_window_visibility_generation, set_main_window_handle, set_main_window_visible,
+    agentic_protocol_bus, clear_main_state_restore_after_focus_loss,
+    consume_main_state_restore_after_focus_loss, emoji, emoji_usage, get_main_window_handle,
+    is_main_window_visible, main_window_visibility_generation,
+    mark_main_state_restore_after_focus_loss, set_main_window_handle, set_main_window_visible,
     terminal_history,
 };
 // Oracle-Session `window-activation-invariants-guard` PR1 — the
@@ -460,6 +462,9 @@ fn write_notes_run_exec_probe_receipt(
 }
 
 fn main() {
+    script_kit_gpui::install_main_window_visibility_transition_hook(
+        main_window_visibility_transition_hook,
+    );
     crate::notes::register_notes_run_command_executor(execute_notes_run_command_from_main);
     include!("main_entry/app_run_setup.rs");
 }
@@ -467,8 +472,15 @@ fn main() {
 mod tests {
     use super::{is_main_window_visible, set_main_window_visible};
 
+    /// The visibility flag and the gesture classifier are process-wide state;
+    /// tests touching them must serialize through this lock.
+    static VISIBILITY_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
     #[test]
     fn main_window_visibility_is_shared_with_library() {
+        let _guard = VISIBILITY_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         set_main_window_visible(false);
         script_kit_gpui::set_main_window_visible(false);
 
@@ -483,5 +495,43 @@ mod tests {
             !is_main_window_visible(),
             "main visibility should mirror library visibility"
         );
+    }
+
+    /// Regression: hide paths that only clear the visibility flag (click-outside
+    /// focus loss, active-Space change) used to leave the gesture classifier
+    /// `Open`, so the next hotkey key-down never classified as `ShowImmediate`
+    /// and routing swallowed every press — the main hotkey went permanently
+    /// dead. The transition hook installed in `main()` must re-arm it.
+    #[test]
+    fn implicit_hide_rearms_main_hotkey_show_immediate() {
+        let _guard = VISIBILITY_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        script_kit_gpui::install_main_window_visibility_transition_hook(
+            super::main_window_visibility_transition_hook,
+        );
+
+        // Shown steady state: flag true, classifier Open.
+        set_main_window_visible(true);
+        crate::hotkeys::sync_main_gesture_window_shown();
+
+        // Implicit hide: only the shared flag is cleared — no explicit
+        // classifier reset, exactly like the Space-change/focus-loss paths.
+        set_main_window_visible(false);
+
+        let events = crate::hotkeys::process_main_hotkey_physical_event(
+            crate::hotkeys::MainHotkeyPhysicalEvent {
+                phase: crate::hotkeys::MainHotkeyPhase::KeyDown,
+                correlation_id: "test:implicit-hide-rearm".to_string(),
+                at: std::time::Instant::now(),
+            },
+        );
+        assert!(
+            events.contains(&crate::hotkeys::gesture::GestureEvent::ShowImmediate),
+            "key-down after an implicit hide must classify as ShowImmediate, got {events:?}"
+        );
+
+        // Leave the classifier in the closed steady state for other tests.
+        crate::hotkeys::reset_main_gesture_classifier();
     }
 }

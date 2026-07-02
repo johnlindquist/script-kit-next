@@ -302,6 +302,17 @@ fn show_main_window_helper(
             );
             view.focused_input = FocusedInput::MainFilter;
             view.pending_focus = Some(FocusTarget::MainFilter);
+        } else if restore_after_focus_loss
+            && matches!(view.current_view, AppView::AgentChatView { .. })
+        {
+            // An implicit hide (Space change, focus loss) must not destroy a
+            // live Agent Chat session — bring it back exactly as it was and
+            // put the caret back in the composer.
+            logging::log(
+                "VISIBILITY",
+                "Restoring embedded Agent Chat exactly after focus-loss hide",
+            );
+            view.request_focus(FocusTarget::AgentChat, ctx);
         } else if !matches!(view.current_view, AppView::ScriptList) {
             logging::log(
                 "VISIBILITY",

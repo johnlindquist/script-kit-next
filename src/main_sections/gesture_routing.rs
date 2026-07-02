@@ -220,7 +220,24 @@ impl ScriptListApp {
     /// and hold-from-closed instead. `close_and_reset_window` funnels through
     /// `reset_to_script_list`, which flushes a dirty Day Page before the
     /// entity drops.
+    ///
+    /// Exception: an embedded Agent Chat is a sticky surface that survives
+    /// click-outside, so the panel can be on screen without key status. A tap
+    /// in that state means "get me back to my chat" — reclaim key + composer
+    /// focus instead of destroying the live session.
     pub(crate) fn handle_main_hotkey_tap(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+        if !self.was_window_focused
+            && matches!(self.current_view, AppView::AgentChatView { .. })
+        {
+            logging::log(
+                "GESTURE",
+                "Tap with unfocused Agent Chat — reclaiming focus instead of closing",
+            );
+            platform::show_main_window_without_activation();
+            self.request_focus(FocusTarget::AgentChat, cx);
+            cx.notify();
+            return;
+        }
         self.close_and_reset_window(cx);
     }
 }

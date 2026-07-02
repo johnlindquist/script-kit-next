@@ -136,6 +136,10 @@ fn hide_main_window_for_active_space_change() {
     }
 
     crate::set_main_window_visible(false);
+    // Space-change hides are implicit — the user never dismissed the surface.
+    // Mark the restore flag so the next show brings back the current view
+    // (typed filter, embedded Agent Chat session) instead of resetting it.
+    crate::mark_main_state_restore_after_focus_loss();
     hide_main_window();
     logging::log(
         "PANEL",
