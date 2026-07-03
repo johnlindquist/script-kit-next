@@ -89,6 +89,8 @@ Role imps (cross-cutting, any surface):
 - Read-only audit sweeps, UX inconsistency hunts, hardcoded-token findings (never edits) -> `imp-sk-auditor`.
 - Test authorship, enforcement-ladder placement, contract tests, ratchet, flaky tests -> `imp-sk-tests`.
 - Version bumps, `v*` tags, pre-tag clippy gate, release workflow -> `imp-sk-release`.
+- Perf complaints (lag, jank, stutter, slow scroll, frame budget, CPU spikes): reproduce with real input, `sample` profiling, draw-share red/green, dev-profile opt levels -> `imp-sk-perf`.
+- Vendored GPUI internals (`vendor/gpui*`, gpui-component): list/ListState/measure_all semantics, TextView/markdown pipeline, scrollbar, minimal vendor patches + pinned source audits -> `imp-sk-gpui-vendor`.
 
 Imps are the default path, but never a hard blocker: if the runtime is down or
 an imp repeatedly stalls, continue directly and mention the skipped imp in the
