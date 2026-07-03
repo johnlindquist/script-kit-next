@@ -2702,10 +2702,11 @@ fn agent_chat_transient_trigger_exit_on_empty_composer() {
 fn agent_chat_transcript_keeps_selectable_markdown_with_chat_scaled_typography() {
     assert!(
         AGENT_CHAT_TRANSCRIPT_SOURCE.contains("fn selectable_markdown_view(")
-            && AGENT_CHAT_TRANSCRIPT_SOURCE.contains(".selectable(true)")
+            && AGENT_CHAT_TRANSCRIPT_SOURCE
+                .contains(".selectable(crate::logging::agent_chat_markdown_selectable_enabled())")
             && AGENT_CHAT_TRANSCRIPT_SOURCE
                 .contains(".text_size(px(style_def.markdown.body_font_size))"),
-        "Agent Chat transcript messages must stay selectable without reverting to oversized document typography"
+        "Agent Chat transcript messages must stay selectable (the selectable flag defaults on) without reverting to oversized document typography"
     );
 
     assert!(

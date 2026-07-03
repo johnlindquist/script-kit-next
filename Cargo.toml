@@ -266,6 +266,30 @@ debug = 0
 incremental = true
 codegen-units = 256
 
+# Scroll/animation frame cost is dominated by layout+paint code in gpui,
+# gpui-component, and taffy; at opt-level 0 a dev build misses the frame
+# budget whenever background load (cargo watch, embedder) competes for cores.
+# Optimize dependencies once at compile time while the app crate itself stays
+# opt-level 0 for fast incremental rebuilds. `package."*"` skips workspace
+# members, so the vendored UI crates are listed explicitly.
+[profile.dev.package."*"]
+opt-level = 2
+
+[profile.dev.package.gpui]
+opt-level = 2
+
+[profile.dev.package.gpui-component]
+opt-level = 2
+
+[profile.dev.package.gpui_util]
+opt-level = 2
+
+[profile.dev.package.gpui_macos]
+opt-level = 2
+
+[profile.dev.package.gpui_platform]
+opt-level = 2
+
 [profile.test]
 debug = 1
 incremental = true

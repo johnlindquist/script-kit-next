@@ -1,7 +1,7 @@
 use gpui::{
-    div, list, prelude::*, px, rems, rgb, rgba, Animation, AnimationExt as _, App, Context, Entity,
-    FontWeight, ListAlignment, ListOffset, ListSizingBehavior, ListState, Render, Rgba,
-    SharedString, StyleRefinement, Window,
+    Animation, AnimationExt as _, App, Context, Entity, FontWeight, ListAlignment, ListOffset,
+    ListSizingBehavior, ListState, Render, Rgba, SharedString, StyleRefinement, Window, div, list,
+    prelude::*, px, rems, rgb, rgba,
 };
 use gpui_component::scroll::ScrollableElement;
 use gpui_component::text::{TextView, TextViewState, TextViewStyle};
@@ -14,7 +14,7 @@ use super::super::thread::{
     AgentChatThread, AgentChatThreadMessage, AgentChatThreadMessageRole, AgentChatThreadStatus,
 };
 use super::super::tool_card::{
-    classify_diff_line, AgentChatToolCardMeta, AgentChatToolStatus, DiffLineKind,
+    AgentChatToolCardMeta, AgentChatToolStatus, DiffLineKind, classify_diff_line,
 };
 use super::super::ui_variant::{AgentChatTranscriptPresentation, AgentChatUiVariant};
 use crate::dev_style_tool::agent_chat_catalog::AgentChatStyleDef;
@@ -501,7 +501,61 @@ impl AgentChatTranscript {
         }
     }
 
+    /// Build (or reuse) the markdown `TextViewStyle` for transcript rows.
+    ///
+    /// This runs once per visible row per frame during scrolling, and building
+    /// a `HighlightTheme` clones a full syntax style table. Memoize on the
+    /// exact inputs so repeated frames return the same `Arc`ed theme, which
+    /// also lets `TextViewStyle::eq` inside `TextView` hit its pointer
+    /// fast path instead of deep-comparing the syntax table per row per frame.
     fn transcript_text_style(
+        theme: &crate::theme::Theme,
+        colors: &PromptColors,
+        style_def: &AgentChatStyleDef,
+    ) -> TextViewStyle {
+        #[derive(PartialEq)]
+        struct StyleCacheKey {
+            style_def: AgentChatStyleDef,
+            is_dark: bool,
+            accent: u32,
+            secondary: u32,
+            muted: u32,
+            code_bg: u32,
+            quote_border: u32,
+        }
+        thread_local! {
+            static STYLE_CACHE: std::cell::RefCell<Option<(StyleCacheKey, TextViewStyle)>> =
+                const { std::cell::RefCell::new(None) };
+        }
+
+        let key = StyleCacheKey {
+            style_def: *style_def,
+            is_dark: theme.is_dark_mode(),
+            accent: theme.colors.accent.selected,
+            secondary: theme.colors.text.secondary,
+            muted: theme.colors.text.muted,
+            code_bg: colors.code_bg,
+            quote_border: colors.quote_border,
+        };
+
+        if let Some(style) = STYLE_CACHE.with(|cache| {
+            cache
+                .borrow()
+                .as_ref()
+                .filter(|(cached_key, _)| *cached_key == key)
+                .map(|(_, style)| style.clone())
+        }) {
+            return style;
+        }
+
+        let style = Self::build_transcript_text_style(theme, colors, style_def);
+        STYLE_CACHE.with(|cache| {
+            *cache.borrow_mut() = Some((key, style.clone()));
+        });
+        style
+    }
+
+    fn build_transcript_text_style(
         _theme: &crate::theme::Theme,
         colors: &PromptColors,
         style_def: &AgentChatStyleDef,
@@ -1572,7 +1626,10 @@ mod tests {
 
         let stats = HeavyMarkdownStats::from_text(&body);
 
-        assert_eq!(stats.link_like_spans, 4);
+        // Calendar: 1 markdown link (its scriptkit:// target is excluded from
+        // bare counting). Docs: 1 markdown link + 1 bare URL outside the
+        // target. Empty target and bracket-only text count as 0.
+        assert_eq!(stats.link_like_spans, 3);
     }
 
     #[test]

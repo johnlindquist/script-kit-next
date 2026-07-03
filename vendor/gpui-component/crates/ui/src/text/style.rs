@@ -31,7 +31,11 @@ impl PartialEq for TextViewStyle {
     fn eq(&self, other: &Self) -> bool {
         self.paragraph_gap == other.paragraph_gap
             && self.heading_base_font_size == other.heading_base_font_size
-            && self.highlight_theme == other.highlight_theme
+            // Pointer fast path first: this comparison runs for every
+            // TextView on every frame, and deep-comparing a HighlightTheme
+            // walks the whole syntax style table.
+            && (Arc::ptr_eq(&self.highlight_theme, &other.highlight_theme)
+                || self.highlight_theme == other.highlight_theme)
             && self.code_block == other.code_block
             && self.code_block_copy_button == other.code_block_copy_button
             && self.blockquote == other.blockquote
