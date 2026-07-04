@@ -131,7 +131,6 @@ flate2 = "1.0"
 tar = "0.4"
 
 # Selected text functionality (getSelectedText/setSelectedText)
-get-selected-text = "0.1"      # Hybrid AX + clipboard fallback for reading selected text
 arboard = "3.6"                # Clipboard access for setSelectedText fallback
 
 # System tray / menu bar integration

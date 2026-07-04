@@ -5,9 +5,11 @@
 //!
 //! ## Architecture
 //!
-//! - `get_selected_text()`: Uses `get-selected-text` crate which tries AX API first,
-//!   then falls back to clipboard simulation with Cmd+C
-//! - `set_selected_text()`: Uses clipboard + enigo keyboard simulation (Cmd+V)
+//! - `get_selected_text()`: per-pid AX read of the source app's focused
+//!   element first, then a selection-only simulated ⌘C with pasteboard
+//!   change-count polling and snapshot/restore (works in AX-opaque editors
+//!   like Google Docs)
+//! - `set_selected_text()`: Uses clipboard + keyboard simulation (Cmd+V)
 //!
 //! ## Permissions
 //!
@@ -16,8 +18,6 @@
 #[cfg(target_os = "macos")]
 use anyhow::Context;
 use anyhow::{anyhow, bail, Result};
-#[cfg(target_os = "macos")]
-use get_selected_text::get_selected_text as get_selected_text_impl;
 #[cfg(target_os = "macos")]
 use macos_accessibility_client::accessibility;
 #[cfg(target_os = "macos")]
@@ -380,10 +380,15 @@ fn cf_string_to_string_if_string(value: CFTypeRef) -> Option<String> {
 
 /// Get the currently selected text from the focused application.
 ///
-/// Uses the `get-selected-text` crate which implements:
-/// 1. AXSelectedText attribute (fastest, most reliable)
-/// 2. AXSelectedTextRange + AXStringForRange (fallback)
-/// 3. Clipboard simulation with Cmd+C (last resort, saves/restores clipboard)
+/// Chain (Raycast parity):
+/// 1. Per-pid AX read of the source app's focused element (AXSelectedText,
+///    then AXSelectedTextRange + AXStringForRange). Targeting the last real
+///    app by pid matters: the system-wide focused element is unreliable
+///    cross-process and can resolve to our own panel once it is key.
+/// 2. Simulated ⌘C with pasteboard change-count polling and snapshot/restore.
+///    This is the only channel that works in AX-opaque editors like Google
+///    Docs, whose canvas renderer exposes no AX text at all. It never posts
+///    ⌘A, so the user's selection survives.
 ///
 /// # Returns
 /// The selected text, or empty string if nothing is selected.
@@ -404,19 +409,29 @@ pub fn get_selected_text() -> Result<String> {
 
     debug!("Attempting to get selected text");
 
-    // The crate handles all the complexity:
-    // - Tries AX API first
-    // - Falls back to clipboard simulation
-    // - Caches per-app behavior with LRU cache
-    match get_selected_text_impl() {
-        Ok(text) => {
-            if text.is_empty() {
-                debug!("No text selected (empty result)");
-                Ok(String::new())
-            } else {
-                info!(text_len = text.len(), "Got selected text");
-                Ok(text)
-            }
+    let source_pid = crate::frontmost_app_tracker::get_last_real_app().map(|app| app.pid);
+    match crate::platform::accessibility::focused_text::selected_text_for_app_ax_only(source_pid) {
+        Ok(Some(text)) => {
+            info!(text_len = text.len(), "Got selected text via AX");
+            return Ok(text);
+        }
+        Ok(None) => {
+            debug!("AX reported no selection; trying selection copy fallback");
+        }
+        Err(error) => {
+            debug!(%error, "AX selection read failed; trying selection copy fallback");
+        }
+    }
+
+    match crate::platform::accessibility::clipboard::copy_selection_plain_text_preserving_clipboard(
+    ) {
+        Ok(Some(text)) => {
+            info!(text_len = text.len(), "Got selected text via copy fallback");
+            Ok(text)
+        }
+        Ok(None) => {
+            debug!("No text selected (copy fallback produced no clipboard change)");
+            Ok(String::new())
         }
         Err(e) => {
             warn!(error = %e, "Failed to get selected text");

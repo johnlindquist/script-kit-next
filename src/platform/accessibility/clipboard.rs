@@ -79,6 +79,54 @@ pub fn paste_plain_text_preserving_clipboard(text: &str) -> Result<()> {
         .context("Failed to restore clipboard after focused-text Agent Chat paste fallback")
 }
 
+/// Raycast-parity selection capture: simulate ⌘C into the active app, wait for
+/// the pasteboard change count to move, read the copied text, then restore the
+/// user's clipboard. This is the only capture channel that works in AX-opaque
+/// editors (Google Docs renders text on a canvas and exposes no AXSelectedText).
+/// Returns `Ok(None)` when no copy landed within the deadline (no selection, or
+/// the app ignored ⌘C) — the pasteboard is untouched in that case. Unlike
+/// `copy_all_plain_text_preserving_clipboard`, this never posts ⌘A, so the
+/// user's selection survives.
+pub fn copy_selection_plain_text_preserving_clipboard() -> Result<Option<String>> {
+    #[cfg(target_os = "macos")]
+    {
+        let snapshot = capture_general_pasteboard_snapshot()
+            .context("Failed to snapshot clipboard before selection copy fallback")?;
+        let baseline_change_count = general_pasteboard_change_count()
+            .context("Failed to read clipboard change count before selection copy fallback")?;
+        simulate_command_key(KEY_C)
+            .context("Failed to simulate copy for selection copy fallback")?;
+        let copied_change_count = match wait_for_pasteboard_change(
+            baseline_change_count,
+            std::time::Duration::from_millis(500),
+        ) {
+            Ok(count) => count,
+            // No clipboard change means the app copied nothing (no selection).
+            // The pasteboard is untouched, so there is nothing to restore.
+            Err(_) => return Ok(None),
+        };
+        let text = read_plain_text_from_pasteboard().ok();
+
+        let restore_result = match general_pasteboard_change_count() {
+            Ok(current_change_count) if current_change_count == copied_change_count => {
+                restore_general_pasteboard_snapshot(&snapshot)
+            }
+            Ok(_) => {
+                bail!("Clipboard changed during selection copy fallback; skipped restore")
+            }
+            Err(e) => Err(e).context("Failed to read clipboard change count before restore"),
+        };
+        restore_result.context("Failed to restore clipboard after selection copy fallback")?;
+
+        Ok(text.filter(|text| !text.trim().is_empty()))
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        bail!("selection copy fallback requires macOS")
+    }
+}
+
 pub fn copy_all_plain_text_preserving_clipboard() -> Result<String> {
     let snapshot = capture_general_pasteboard_snapshot()
         .context("Failed to snapshot clipboard before focused-text copy fallback")?;
@@ -431,4 +479,71 @@ pub fn general_pasteboard_change_count() -> Result<i64> {
 
     #[cfg(not(target_os = "macos"))]
     bail!("focused-text Agent Chat pasteboard change counts require macOS");
+}
+
+#[cfg(all(test, target_os = "macos"))]
+mod runtime_probe_tests {
+    use super::*;
+
+    /// Manual runtime proof of the Raycast-parity selection copy fallback.
+    /// Requires AX permission and a frontmost app holding a text selection
+    /// (TextEdit fixture; see the selection-fallback probe recipe). Posts a
+    /// real ⌘C at the frontmost app, so it must never run in CI:
+    /// `agent-cargo.sh test --lib copy_selection_fallback -- --ignored`
+    #[test]
+    #[ignore = "posts a real ⌘C at the frontmost app; run manually with a TextEdit selection fixture"]
+    fn copy_selection_fallback_captures_selection_and_restores_clipboard() {
+        eprintln!(
+            "test process AX trusted: {}",
+            super::super::permissions::has_accessibility_permission()
+        );
+        let clipboard_before = arboard::Clipboard::new()
+            .expect("open clipboard")
+            .get_text()
+            .unwrap_or_default();
+        let change_count_before =
+            general_pasteboard_change_count().expect("read change count before");
+
+        let captured = copy_selection_plain_text_preserving_clipboard()
+            .expect("selection copy fallback should not error");
+
+        let clipboard_after = arboard::Clipboard::new()
+            .expect("open clipboard")
+            .get_text()
+            .unwrap_or_default();
+        assert_eq!(
+            clipboard_before, clipboard_after,
+            "user clipboard must be restored byte-identically"
+        );
+
+        match captured {
+            Some(text) => {
+                assert!(
+                    !text.trim().is_empty(),
+                    "captured selection must be non-empty"
+                );
+                // A successful capture writes + restores: change count moves.
+                let change_count_after =
+                    general_pasteboard_change_count().expect("read change count after");
+                assert!(
+                    change_count_after > change_count_before,
+                    "capture path should have bumped the change count during copy+restore"
+                );
+                eprintln!(
+                    "captured selection ({} chars): {text}",
+                    text.chars().count()
+                );
+            }
+            None => {
+                // No selection in the frontmost app: pasteboard untouched.
+                let change_count_after =
+                    general_pasteboard_change_count().expect("read change count after");
+                assert_eq!(
+                    change_count_before, change_count_after,
+                    "no-selection path must leave the pasteboard completely untouched"
+                );
+                eprintln!("no selection captured; pasteboard untouched");
+            }
+        }
+    }
 }
