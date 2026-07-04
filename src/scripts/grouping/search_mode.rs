@@ -196,6 +196,13 @@ pub(super) fn build_search_mode_results(
         }
     }
 
+    if matches!(grouped.first(), Some(GroupedListItem::Item(_))) {
+        grouped.insert(
+            0,
+            GroupedListItem::SectionHeader("Results".to_string(), None),
+        );
+    }
+
     let fallbacks_elevated = fallback_count > 0 && !has_other_results;
     debug!(
         result_count = results.len(),
@@ -270,6 +277,49 @@ mod tests {
     }
 
     #[test]
+    fn search_mode_adds_results_header_for_plain_results() {
+        let results = vec![app("Plain Result", score_from_tier(900, 0))];
+
+        let (grouped, sorted_results) = build_search_mode_results(
+            results,
+            &[],
+            &FrecencyStore::new(),
+            "plain",
+            None,
+            None,
+            false,
+        );
+
+        assert!(matches!(
+            grouped.first(),
+            Some(GroupedListItem::SectionHeader(label, None)) if label == "Results"
+        ));
+        assert!(matches!(grouped.get(1), Some(GroupedListItem::Item(0))));
+        assert_eq!(sorted_results[0].name(), "Plain Result");
+    }
+
+    #[test]
+    fn search_mode_does_not_add_results_header_to_empty_results() {
+        let (grouped, _flat) = build_search_mode_results(
+            Vec::new(),
+            &[],
+            &FrecencyStore::new(),
+            "empty",
+            None,
+            None,
+            true,
+        );
+
+        assert!(
+            grouped.iter().all(|item| !matches!(
+                item,
+                GroupedListItem::SectionHeader(label, None) if label == "Results"
+            )),
+            "empty search results must not emit a Results header, got {grouped:?}"
+        );
+    }
+
+    #[test]
     fn search_mode_keeps_exact_menu_bar_action_above_weaker_results() {
         let results = vec![
             app("Position Helper", score_from_tier(700, 0)),
@@ -299,9 +349,20 @@ mod tests {
             .expect("at least one grouped result");
 
         assert_eq!(first_item.name(), "Reset Window Positions");
+        assert!(matches!(
+            grouped.first(),
+            Some(GroupedListItem::SectionHeader(label, None)) if label == "Menu Bar Actions"
+        ));
         assert!(grouped.iter().any(
             |item| matches!(item, GroupedListItem::SectionHeader(label, None) if label == "Menu Bar Actions")
         ));
+        assert!(
+            grouped.iter().all(|item| !matches!(
+                item,
+                GroupedListItem::SectionHeader(label, None) if label == "Results"
+            )),
+            "Menu Bar Actions header must not be preceded by duplicate Results, got {grouped:?}"
+        );
     }
 
     #[test]

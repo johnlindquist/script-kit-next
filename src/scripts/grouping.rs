@@ -339,14 +339,22 @@ pub(crate) fn pin_alias_match_first(
         }
     };
 
+    let pin_index = |grouped: &[GroupedListItem]| -> usize {
+        match grouped.first() {
+            Some(GroupedListItem::SectionHeader(label, _)) if label == "Results" => 1,
+            _ => 0,
+        }
+    };
+
     let Some(pos) = grouped
         .iter()
         .position(|item| matches!(item, GroupedListItem::Item(idx) if *idx == flat_idx))
     else {
-        grouped.insert(0, GroupedListItem::Item(flat_idx));
+        let insert_at = pin_index(grouped).min(grouped.len());
+        grouped.insert(insert_at, GroupedListItem::Item(flat_idx));
         return;
     };
-    if pos == 0 {
+    if pos == pin_index(grouped) {
         return;
     }
 
@@ -362,7 +370,8 @@ pub(crate) fn pin_alias_match_first(
     {
         grouped.remove(pos - 1);
     }
-    grouped.insert(0, entry);
+    let insert_at = pin_index(grouped).min(grouped.len());
+    grouped.insert(insert_at, entry);
 }
 
 /// Validation-aware sibling of [`get_grouped_results_with_input_history`].
@@ -2486,6 +2495,35 @@ mod advanced_query_tests {
     }
 
     #[test]
+    fn pin_alias_match_first_preserves_leading_results_header() {
+        let mut flat = vec![
+            builtin_result("Other Command"),
+            builtin_result("Aliased Command"),
+        ];
+        let mut grouped = vec![
+            GroupedListItem::SectionHeader("Results".to_string(), None),
+            GroupedListItem::Item(0),
+            GroupedListItem::Item(1),
+        ];
+
+        pin_alias_match_first(
+            &mut grouped,
+            &mut flat,
+            &|result| matches!(result, SearchResult::BuiltIn(bm) if bm.entry.id == "builtin/aliased-command"),
+            &|| builtin_result("Aliased Command"),
+        );
+
+        assert!(matches!(
+            grouped.first(),
+            Some(GroupedListItem::SectionHeader(label, None)) if label == "Results"
+        ));
+        assert!(
+            matches!(grouped.get(1), Some(GroupedListItem::Item(1))),
+            "alias target must be pinned under Results, got {grouped:?}"
+        );
+    }
+
+    #[test]
     fn pin_alias_match_first_inserts_fallback_when_target_missing() {
         let mut flat = vec![builtin_result("Other Command")];
         let mut grouped = vec![GroupedListItem::Item(0)];
@@ -3096,6 +3134,7 @@ mod advanced_query_tests {
         assert_eq!(
             section_labels,
             vec![
+                "Results",
                 "Files",
                 "Browser Tabs",
                 "Notes",
@@ -3254,6 +3293,7 @@ mod advanced_query_tests {
         assert_eq!(
             section_labels,
             vec![
+                "Results",
                 "Files",
                 "Agent Chat Conversations",
                 "Browser History",
