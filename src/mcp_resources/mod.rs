@@ -3126,6 +3126,8 @@ fn parse_context_resource_request(uri: &str) -> Result<ContextResourceRequest, S
     let mut selected_profile: Option<&str> = None;
     let mut diagnostics = false;
     let mut saw_override = false;
+    let mut saw_explicit_screenshot = false;
+    let mut saw_explicit_panel_screenshot = false;
 
     for pair in query.split('&').filter(|pair| !pair.is_empty()) {
         let (key, value) = pair.split_once('=').unwrap_or((pair, "1"));
@@ -3168,12 +3170,29 @@ fn parse_context_resource_request(uri: &str) -> Result<ContextResourceRequest, S
             ("screenshot", v) => {
                 options.include_screenshot = parse_bool_param(v)?;
                 saw_override = true;
+                saw_explicit_screenshot = true;
             }
             ("panelScreenshot", v) => {
                 options.include_panel_screenshot = parse_bool_param(v)?;
                 saw_override = true;
+                saw_explicit_panel_screenshot = true;
             }
             _ => return Err(invalid_context_param(key, value)),
+        }
+    }
+
+    // Pixel data must be opted into explicitly on custom (per-field) queries.
+    // The baseline for overrides is `all()`, which includes the focused-window
+    // screenshot — inherited silently, a metadata query like `?selectedText=1&
+    // focusedWindow=0` used to embed a full-window base64 PNG and blow the
+    // model's context window (758KB observed from the @selection attachment).
+    // An explicit `profile=` keeps its documented pixel semantics.
+    if (saw_override || diagnostics) && selected_profile.is_none() {
+        if !saw_explicit_screenshot {
+            options.include_screenshot = false;
+        }
+        if !saw_explicit_panel_screenshot {
+            options.include_panel_screenshot = false;
         }
     }
 
@@ -4047,6 +4066,39 @@ mod tests {
     fn parse_context_resource_request_supports_schema_uri() {
         let request = parse_context_resource_request("kit://context/schema").unwrap();
         assert!(matches!(request.kind, ContextResourceKind::Schema));
+    }
+
+    /// Per-field queries inherit their baseline from `all()`, which includes
+    /// pixel capture. Pixel data must be explicit opt-in: the `@selection`
+    /// attachment URI once inherited `include_screenshot` silently and shipped
+    /// a 758KB base64 PNG as prompt text, overflowing the model's context.
+    #[test]
+    fn parse_context_resource_request_field_overrides_disable_pixels_unless_explicit() {
+        let request = parse_context_resource_request(
+            "kit://context?selectedText=1&frontmostApp=0&menuBar=0&browserUrl=0&focusedWindow=0",
+        )
+        .unwrap();
+        assert!(request.options.include_selected_text);
+        assert!(!request.options.include_screenshot);
+        assert!(!request.options.include_panel_screenshot);
+
+        let diagnostics = parse_context_resource_request("kit://context?diagnostics=1").unwrap();
+        assert!(!diagnostics.options.include_screenshot);
+        assert!(!diagnostics.options.include_panel_screenshot);
+
+        let explicit = parse_context_resource_request(
+            "kit://context?screenshot=1&selectedText=0&frontmostApp=0&menuBar=0&browserUrl=0&focusedWindow=0",
+        )
+        .unwrap();
+        assert!(explicit.options.include_screenshot);
+        assert!(!explicit.options.include_panel_screenshot);
+
+        // An explicit profile keeps its documented pixel semantics.
+        let minimal = parse_context_resource_request("kit://context?profile=minimal").unwrap();
+        assert_eq!(
+            minimal.options,
+            crate::context_snapshot::CaptureContextOptions::minimal()
+        );
     }
 
     #[test]

@@ -440,6 +440,66 @@ pub fn get_selected_text() -> Result<String> {
     }
 }
 
+/// Selection if any; otherwise the focused field's whole text — "what the
+/// user is working on".
+///
+/// Used by the rewrite flow at explicit submit: a user who types a tweet and
+/// invokes `.concise` without selecting first still means "rewrite my draft".
+/// Chain after `get_selected_text` comes back empty:
+/// 1. Passive per-pid AX whole-field read (no keystrokes, no pasteboard).
+/// 2. ⌘A+⌘C with clipboard snapshot/restore for AX-opaque editors (Chrome,
+///    Google Docs). Side effect: leaves the field's text selected.
+///
+/// All results are capped at the focused-text capture ceiling so a huge
+/// document can never flood the prompt.
+#[instrument(skip_all)]
+#[cfg(target_os = "macos")]
+pub fn get_selection_or_focused_text() -> Result<String> {
+    let selection = get_selected_text()?;
+    if !selection.trim().is_empty() {
+        return Ok(selection);
+    }
+
+    let source_pid = crate::frontmost_app_tracker::get_last_real_app().map(|app| app.pid);
+    match crate::platform::accessibility::focused_text::focused_text_for_app_ax_only(source_pid) {
+        Ok(Some(text)) => {
+            info!(
+                text_len = text.len(),
+                "No selection; using focused-field text via AX"
+            );
+            return Ok(text);
+        }
+        Ok(None) => {
+            debug!("AX reported empty focused field; trying copy-all fallback");
+        }
+        Err(error) => {
+            debug!(%error, "AX focused-field read failed; trying copy-all fallback");
+        }
+    }
+
+    match crate::platform::accessibility::clipboard::copy_all_plain_text_preserving_clipboard() {
+        Ok(text) => {
+            let (text, truncated) =
+                crate::platform::accessibility::focused_text::truncate_focused_text_capture(text);
+            info!(
+                text_len = text.len(),
+                truncated, "No selection; using focused-field text via copy-all fallback"
+            );
+            Ok(text)
+        }
+        Err(error) => {
+            debug!(%error, "Copy-all fallback captured nothing; treating as no text");
+            Ok(String::new())
+        }
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+#[instrument(skip_all)]
+pub fn get_selection_or_focused_text() -> Result<String> {
+    get_selected_text()
+}
+
 // ============================================================================
 // Set Selected Text
 // ============================================================================

@@ -199,6 +199,47 @@ fn selected_text_for_app_ax_only_platform(
     Err(FocusedTextError::UnsupportedTarget)
 }
 
+/// Passive AX-only read of the WHOLE text in `pid`'s focused element,
+/// truncated to [`MAX_FOCUSED_TEXT_CAPTURE_CHARS`]. Secure fields return
+/// `None`. Never posts keystrokes and never touches the pasteboard.
+pub fn focused_text_for_app_ax_only(pid: Option<i32>) -> Result<Option<String>, FocusedTextError> {
+    if !super::permissions::has_accessibility_permission() {
+        return Err(FocusedTextError::AccessibilityPermissionRequired);
+    }
+    focused_text_for_app_ax_only_platform(pid)
+}
+
+#[cfg(target_os = "macos")]
+fn focused_text_for_app_ax_only_platform(
+    pid: Option<i32>,
+) -> Result<Option<String>, FocusedTextError> {
+    let element = match pid {
+        Some(pid) => super::ax::focused_ui_element_for_pid(pid),
+        None => super::ax::focused_ui_element_for_app(None),
+    }
+    .map_err(|err| FocusedTextError::Platform(err.to_string()))?;
+    let role = super::ax::role(element.as_ptr());
+    let subrole = super::ax::subrole(element.as_ptr());
+    if classify_content_kind(role.as_deref(), subrole.as_deref()) == FocusedTextContentKind::Secure
+    {
+        return Ok(None);
+    }
+    match super::ax::whole_text(element.as_ptr()) {
+        Ok(text) => {
+            let (text, _truncated) = truncate_focused_text_capture(text);
+            Ok(Some(text).filter(|text| !text.trim().is_empty()))
+        }
+        Err(err) => Err(FocusedTextError::Platform(err.to_string())),
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn focused_text_for_app_ax_only_platform(
+    _pid: Option<i32>,
+) -> Result<Option<String>, FocusedTextError> {
+    Err(FocusedTextError::UnsupportedTarget)
+}
+
 pub fn capture_focused_text_field(
     options: CaptureFocusedTextOptions,
 ) -> Result<FocusedTextSnapshot, FocusedTextError> {

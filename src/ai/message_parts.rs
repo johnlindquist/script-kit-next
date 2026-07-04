@@ -172,6 +172,83 @@ impl ContextResolutionReceipt {
     }
 }
 
+/// Hard ceiling on resolved resource text embedded into a single prompt
+/// block. One context attachment must never be able to exhaust the model's
+/// context window (a 758KB base64 screenshot inlined as text did exactly
+/// that via the `@selection` attachment).
+const MAX_RESOURCE_PROMPT_CHARS: usize = 100_000;
+
+/// Prompt blocks are TEXT: a base64 image payload inside a JSON resource is
+/// unreadable to the model and burns (or overflows) the context window.
+/// Replace any `base64Data` string values with a small stub, then enforce
+/// the overall size ceiling.
+fn sanitize_resource_text_for_prompt(text: &str, mime_type: &str, uri: &str) -> String {
+    let mut sanitized = if mime_type == "application/json" && text.contains("\"base64Data\"") {
+        match serde_json::from_str::<serde_json::Value>(text) {
+            Ok(mut value) => {
+                let stripped = strip_base64_data_fields(&mut value);
+                if stripped > 0 {
+                    tracing::warn!(
+                        target: "script_kit::message_parts",
+                        event = "context_resource_base64_stripped_from_prompt_text",
+                        uri = %uri,
+                        stripped_fields = stripped,
+                        original_chars = text.chars().count(),
+                        "stripped base64 payloads from text-embedded context resource"
+                    );
+                    serde_json::to_string_pretty(&value).unwrap_or_else(|_| text.to_string())
+                } else {
+                    text.to_string()
+                }
+            }
+            Err(_) => text.to_string(),
+        }
+    } else {
+        text.to_string()
+    };
+
+    if sanitized.chars().count() > MAX_RESOURCE_PROMPT_CHARS {
+        let original_chars = sanitized.chars().count();
+        sanitized = sanitized
+            .chars()
+            .take(MAX_RESOURCE_PROMPT_CHARS)
+            .collect::<String>();
+        sanitized.push_str("\n[truncated: context attachment exceeded the prompt size ceiling]");
+        tracing::warn!(
+            target: "script_kit::message_parts",
+            event = "context_resource_prompt_text_truncated",
+            uri = %uri,
+            original_chars,
+            max_chars = MAX_RESOURCE_PROMPT_CHARS,
+        );
+    }
+    sanitized
+}
+
+fn strip_base64_data_fields(value: &mut serde_json::Value) -> usize {
+    match value {
+        serde_json::Value::Object(map) => {
+            let mut stripped = 0;
+            for (key, entry) in map.iter_mut() {
+                if key == "base64Data" {
+                    if let Some(data) = entry.as_str() {
+                        let chars = data.len();
+                        *entry = serde_json::Value::String(format!(
+                            "[binary omitted: {chars} base64 chars]"
+                        ));
+                        stripped += 1;
+                        continue;
+                    }
+                }
+                stripped += strip_base64_data_fields(entry);
+            }
+            stripped
+        }
+        serde_json::Value::Array(items) => items.iter_mut().map(strip_base64_data_fields).sum(),
+        _ => 0,
+    }
+}
+
 /// Resolve a single context part into a prompt block string.
 ///
 /// - `ResourceUri` resolves via `mcp_resources::read_resource`.
@@ -196,7 +273,9 @@ pub fn resolve_context_part_to_prompt_block(
 
             Ok(format!(
                 "<context source=\"{}\" mimeType=\"{}\">\n{}\n</context>",
-                content.uri, content.mime_type, content.text
+                content.uri,
+                content.mime_type,
+                sanitize_resource_text_for_prompt(&content.text, &content.mime_type, &content.uri)
             ))
         }
         AiContextPart::FilePath { path, .. } => match std::fs::read_to_string(path) {
@@ -949,6 +1028,37 @@ mod tests {
         assert!(block.contains("<skill path=\""));
         assert!(block.contains("Review the current diff."));
         assert!(block.contains("</skill>"));
+    }
+
+    /// Regression: a `kit://context` resource once carried a 758KB base64
+    /// screenshot into the prompt text and overflowed the model's context.
+    #[test]
+    fn test_sanitize_resource_text_strips_base64_payloads_from_json() {
+        let big = "A".repeat(200_000);
+        let json = format!(
+            "{{\"focusedWindowImage\":{{\"mimeType\":\"image/png\",\"base64Data\":\"{big}\"}},\"selectedText\":\"hello\"}}"
+        );
+        let sanitized =
+            sanitize_resource_text_for_prompt(&json, "application/json", "kit://context?test");
+        assert!(!sanitized.contains(&big), "base64 payload must be stripped");
+        assert!(sanitized.contains("[binary omitted: 200000 base64 chars]"));
+        assert!(sanitized.contains("hello"), "non-binary fields survive");
+        assert!(sanitized.chars().count() <= MAX_RESOURCE_PROMPT_CHARS + 100);
+    }
+
+    #[test]
+    fn test_sanitize_resource_text_truncates_oversized_content() {
+        let huge = "x".repeat(MAX_RESOURCE_PROMPT_CHARS + 5_000);
+        let sanitized = sanitize_resource_text_for_prompt(&huge, "text/plain", "kit://big");
+        assert!(sanitized.chars().count() < huge.chars().count());
+        assert!(sanitized.contains("[truncated: context attachment exceeded"));
+
+        let small = "small content";
+        assert_eq!(
+            sanitize_resource_text_for_prompt(small, "application/json", "kit://small"),
+            small,
+            "content without base64 and under the ceiling passes through unchanged"
+        );
     }
 
     #[test]

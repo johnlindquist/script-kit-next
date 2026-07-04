@@ -523,10 +523,13 @@ impl ScriptListApp {
         } else {
             None
         };
+        // Selection-or-focused-field: a user who invokes a rewrite while
+        // typing (no selection) means "rewrite my draft", so fall back to the
+        // focused field's text rather than submitting an empty attachment.
         let parts = materialize_selection_context_parts(
             plan.context_parts.clone(),
             cached_selection,
-            || crate::selected_text::get_selected_text().ok(),
+            || crate::selected_text::get_selection_or_focused_text().ok(),
         );
         let selected_profile_name = if let Some(profile) = plan.selected_profile.as_ref() {
             let mut prefs = crate::config::load_user_preferences();
