@@ -440,6 +440,25 @@ pub fn get_selected_text() -> Result<String> {
     }
 }
 
+/// What kind of text a rewrite capture actually grabbed. Surfaces use this
+/// to tell the user where the text came from ("Selection" vs "Draft").
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CapturedTextKind {
+    /// The user's explicit selection.
+    Selection,
+    /// The focused field's whole text — no selection existed at capture time.
+    FocusedField,
+}
+
+/// Text captured for a rewrite, plus where it was grabbed from.
+#[derive(Debug, Clone)]
+pub struct CapturedText {
+    pub text: String,
+    pub kind: CapturedTextKind,
+    /// Name of the app the text was captured from, when known.
+    pub source_app: Option<String>,
+}
+
 /// Selection if any; otherwise the focused field's whole text — "what the
 /// user is working on".
 ///
@@ -454,20 +473,31 @@ pub fn get_selected_text() -> Result<String> {
 /// document can never flood the prompt.
 #[instrument(skip_all)]
 #[cfg(target_os = "macos")]
-pub fn get_selection_or_focused_text() -> Result<String> {
+pub fn capture_selection_or_focused_text() -> Result<Option<CapturedText>> {
+    let source = crate::frontmost_app_tracker::get_last_real_app();
+    let source_app = source.as_ref().map(|app| app.name.clone());
+    let source_pid = source.map(|app| app.pid);
+
     let selection = get_selected_text()?;
     if !selection.trim().is_empty() {
-        return Ok(selection);
+        return Ok(Some(CapturedText {
+            text: selection,
+            kind: CapturedTextKind::Selection,
+            source_app,
+        }));
     }
 
-    let source_pid = crate::frontmost_app_tracker::get_last_real_app().map(|app| app.pid);
     match crate::platform::accessibility::focused_text::focused_text_for_app_ax_only(source_pid) {
         Ok(Some(text)) => {
             info!(
                 text_len = text.len(),
                 "No selection; using focused-field text via AX"
             );
-            return Ok(text);
+            return Ok(Some(CapturedText {
+                text,
+                kind: CapturedTextKind::FocusedField,
+                source_app,
+            }));
         }
         Ok(None) => {
             debug!("AX reported empty focused field; trying copy-all fallback");
@@ -485,19 +515,29 @@ pub fn get_selection_or_focused_text() -> Result<String> {
                 text_len = text.len(),
                 truncated, "No selection; using focused-field text via copy-all fallback"
             );
-            Ok(text)
+            Ok(Some(CapturedText {
+                text,
+                kind: CapturedTextKind::FocusedField,
+                source_app,
+            })
+            .filter(|captured| !captured.text.trim().is_empty()))
         }
         Err(error) => {
             debug!(%error, "Copy-all fallback captured nothing; treating as no text");
-            Ok(String::new())
+            Ok(None)
         }
     }
 }
 
 #[cfg(not(target_os = "macos"))]
 #[instrument(skip_all)]
-pub fn get_selection_or_focused_text() -> Result<String> {
-    get_selected_text()
+pub fn capture_selection_or_focused_text() -> Result<Option<CapturedText>> {
+    let text = get_selected_text()?;
+    Ok((!text.trim().is_empty()).then(|| CapturedText {
+        text,
+        kind: CapturedTextKind::Selection,
+        source_app: None,
+    }))
 }
 
 // ============================================================================

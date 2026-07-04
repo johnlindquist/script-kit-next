@@ -86,6 +86,7 @@ mod tests {
             body: SharedString::from(body.to_string()),
             tool_call_id: None,
             tool_meta: None,
+            attachments: Vec::new(),
         }
     }
 

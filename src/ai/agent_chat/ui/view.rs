@@ -14842,6 +14842,7 @@ mod tests {
             body: "Write file\nrunning".into(),
             tool_call_id: Some("tc-123".to_string()),
             tool_meta: None,
+            attachments: Vec::new(),
         };
 
         assert!(AgentChatView::permission_request_matches_message(

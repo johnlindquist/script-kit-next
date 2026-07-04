@@ -1,7 +1,7 @@
 use gpui::{
-    Animation, AnimationExt as _, App, Context, Entity, FontWeight, ListAlignment, ListOffset,
-    ListSizingBehavior, ListState, Render, Rgba, SharedString, StyleRefinement, Window, div, list,
-    prelude::*, px, rems, rgb, rgba,
+    div, list, prelude::*, px, rems, rgb, rgba, Animation, AnimationExt as _, App, Context, Entity,
+    FontWeight, ListAlignment, ListOffset, ListSizingBehavior, ListState, Render, Rgba,
+    SharedString, StyleRefinement, Window,
 };
 use gpui_component::scroll::ScrollableElement;
 use gpui_component::text::{TextView, TextViewState, TextViewStyle};
@@ -14,7 +14,7 @@ use super::super::thread::{
     AgentChatThread, AgentChatThreadMessage, AgentChatThreadMessageRole, AgentChatThreadStatus,
 };
 use super::super::tool_card::{
-    AgentChatToolCardMeta, AgentChatToolStatus, DiffLineKind, classify_diff_line,
+    classify_diff_line, AgentChatToolCardMeta, AgentChatToolStatus, DiffLineKind,
 };
 use super::super::ui_variant::{AgentChatTranscriptPresentation, AgentChatUiVariant};
 use crate::dev_style_tool::agent_chat_catalog::AgentChatStyleDef;
@@ -858,6 +858,46 @@ impl AgentChatTranscript {
                 .child("✎")
         });
 
+        // Visible receipt of what was attached with this message: label with
+        // provenance ("Selection — Safari") plus a short excerpt of the text,
+        // so the user can see WHAT is being rewritten and where it came from.
+        let attachment_receipts = (!msg.attachments.is_empty()).then(|| {
+            let label_color = rgba((theme.colors.text.primary << 8) | 0x99);
+            let snippet_color = rgba((theme.colors.text.primary << 8) | 0xc2);
+            let quote_bar = rgba((theme.colors.text.primary << 8) | 0x2e);
+            div()
+                .flex()
+                .flex_col()
+                .gap(px(6.0))
+                .pb(px(8.0))
+                .children(msg.attachments.iter().map(|attachment| {
+                    div()
+                        .flex()
+                        .flex_col()
+                        .gap(px(2.0))
+                        .pl(px(8.0))
+                        .border_l_2()
+                        .border_color(quote_bar)
+                        .child(
+                            div()
+                                .text_size(px((style_def.markdown.body_font_size - 2.0).max(10.0)))
+                                .text_color(label_color)
+                                .child(attachment.label.clone()),
+                        )
+                        .when_some(attachment.snippet.clone(), |d, snippet| {
+                            d.child(
+                                div()
+                                    .text_size(px(
+                                        (style_def.markdown.body_font_size - 1.0).max(10.0)
+                                    ))
+                                    .text_color(snippet_color)
+                                    .italic()
+                                    .child(snippet),
+                            )
+                        })
+                }))
+        });
+
         let bubble = div()
             .relative()
             .group("agent-chat-user-message-row")
@@ -878,6 +918,7 @@ impl AgentChatTranscript {
                 matches!(presentation, AgentChatTranscriptPresentation::UserBold),
                 |d| d.font_weight(FontWeight::BOLD),
             )
+            .when_some(attachment_receipts, |d, receipts| d.child(receipts))
             .child(Self::selectable_markdown_view(
                 text_view_state,
                 theme,
@@ -1612,6 +1653,7 @@ mod tests {
             body: body.into(),
             tool_call_id: None,
             tool_meta: None,
+            attachments: Vec::new(),
         }
     }
 

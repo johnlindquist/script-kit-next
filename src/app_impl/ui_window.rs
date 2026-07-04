@@ -1370,19 +1370,30 @@ impl ScriptListApp {
         let source_pid = source_app.as_ref().map(|app| app.pid);
         let source_name = source_app.map(|app| app.name);
         cx.spawn(async move |this, cx| {
+            // Passive AX-only reads: selection first, then the focused
+            // field's whole text ("draft") so the style rows can preview what
+            // a rewrite would capture even when nothing is selected.
             let result = cx
                 .background_executor()
                 .spawn(async move {
-                    crate::platform::accessibility::focused_text::selected_text_for_app_ax_only(
+                    match crate::platform::accessibility::focused_text::selected_text_for_app_ax_only(
                         source_pid,
-                    )
+                    ) {
+                        Ok(Some(text)) => Ok((Some(text), false)),
+                        Ok(None) | Err(_) => {
+                            crate::platform::accessibility::focused_text::focused_text_for_app_ax_only(
+                                source_pid,
+                            )
+                            .map(|draft| (draft, true))
+                        }
+                    }
                 })
                 .await;
             let error = result.as_ref().err().map(|e| e.to_string());
-            let selection = result
-                .ok()
-                .flatten()
-                .filter(|text| !text.trim().is_empty());
+            let (selection, is_draft) = match result {
+                Ok((text, is_draft)) => (text.filter(|t| !t.trim().is_empty()), is_draft),
+                Err(_) => (None, false),
+            };
             let _ = this.update(cx, |app, cx| {
                 if app.shown_selection_hint_token != token {
                     return;
@@ -1391,13 +1402,21 @@ impl ScriptListApp {
                     target: "script_kit::selection_hint",
                     event = "selection_hint_sniff_complete",
                     has_selection = selection.is_some(),
+                    is_draft,
                     chars = selection.as_deref().map(|s| s.chars().count()).unwrap_or(0),
                     source_app = source_name.as_deref().unwrap_or("unknown"),
                     source_pid = source_pid.unwrap_or(-1),
                     error = error.as_deref().unwrap_or(""),
                 );
-                app.shown_selection_hint_text = selection.clone();
-                app.spine_live_preview_cache.seed_selection_text(selection);
+                // The header chip stays selection-only (a chip for every
+                // focused text field would be noise); the preview cache gets
+                // both so style rows and the submit-freeze agree.
+                app.shown_selection_hint_text = if is_draft { None } else { selection.clone() };
+                app.spine_live_preview_cache.seed_selection_preview(
+                    selection,
+                    is_draft,
+                    source_name.clone(),
+                );
                 cx.notify();
             });
         })

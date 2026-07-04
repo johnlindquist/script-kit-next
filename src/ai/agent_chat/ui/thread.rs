@@ -150,6 +150,43 @@ pub(crate) struct AgentChatThreadMessage {
     pub tool_call_id: Option<String>,
     /// Structured card metadata for Tool messages (kind, status, subject, diff).
     pub tool_meta: Option<super::tool_card::AgentChatToolCardMeta>,
+    /// Context attached to this user message at submit (label + snippet),
+    /// rendered in the transcript so the user can see WHAT text was sent and
+    /// where it was grabbed from (e.g. `Selection — Safari`).
+    pub attachments: Vec<AgentChatMessageAttachment>,
+}
+
+/// Visible receipt of one context part sent with a user message.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct AgentChatMessageAttachment {
+    pub label: SharedString,
+    /// Short excerpt of the attached text, when the part carries text.
+    pub snippet: Option<SharedString>,
+}
+
+impl AgentChatMessageAttachment {
+    /// Max chars of attached text shown in the transcript receipt.
+    const SNIPPET_MAX_CHARS: usize = 220;
+
+    fn from_part(part: &crate::ai::message_parts::AiContextPart) -> Self {
+        use crate::ai::message_parts::AiContextPart;
+        let snippet = match part {
+            AiContextPart::TextBlock { text, .. } => {
+                let collapsed = text.split_whitespace().collect::<Vec<_>>().join(" ");
+                let mut snippet: String = collapsed.chars().take(Self::SNIPPET_MAX_CHARS).collect();
+                if collapsed.chars().count() > Self::SNIPPET_MAX_CHARS {
+                    snippet.push('\u{2026}');
+                }
+                (!snippet.is_empty()).then(|| SharedString::from(snippet))
+            }
+            AiContextPart::FilePath { path, .. } => Some(SharedString::from(path.clone())),
+            _ => None,
+        };
+        Self {
+            label: SharedString::from(part.label().to_string()),
+            snippet,
+        }
+    }
 }
 
 impl AgentChatThreadMessage {
@@ -160,6 +197,7 @@ impl AgentChatThreadMessage {
             body: body.into(),
             tool_call_id: None,
             tool_meta: None,
+            attachments: Vec::new(),
         }
     }
 
@@ -175,6 +213,7 @@ impl AgentChatThreadMessage {
             body: body.into(),
             tool_call_id: Some(tool_call_id),
             tool_meta: None,
+            attachments: Vec::new(),
         }
     }
 }
@@ -274,6 +313,9 @@ pub(crate) struct AgentChatThreadInit {
 struct PendingContextTurn {
     blocks: Vec<ContentBlock>,
     receipt: crate::ai::message_parts::ContextResolutionReceipt,
+    /// Visible label+snippet receipts for the consumed parts, attached to the
+    /// transcript user message.
+    attachments: Vec<AgentChatMessageAttachment>,
 }
 
 /// Resolved turn-scoped context blocks plus the receipt describing
@@ -290,6 +332,8 @@ struct ResolvedPendingContext {
 struct PreparedTurnBlocks {
     blocks: Vec<ContentBlock>,
     receipt: Option<crate::ai::message_parts::ContextResolutionReceipt>,
+    /// Visible label+snippet receipts for the transcript user message.
+    attachments: Vec<AgentChatMessageAttachment>,
 }
 
 /// A user submit captured while the current turn is locked.
@@ -971,7 +1015,14 @@ impl AgentChatThread {
 
         let prepared = self.prepare_turn_blocks_with_receipt(trimmed);
         self.set_context_resolution_note(prepared.receipt.as_ref());
-        self.start_prepared_turn(trimmed.to_string(), prepared.blocks, true, true, cx)
+        self.start_prepared_turn(
+            trimmed.to_string(),
+            prepared.blocks,
+            prepared.attachments,
+            true,
+            true,
+            cx,
+        )
     }
 
     fn resume_queue_for_manual_submit(&mut self) {
@@ -990,6 +1041,7 @@ impl AgentChatThread {
         &mut self,
         display_text: String,
         blocks: Vec<ContentBlock>,
+        attachments: Vec<AgentChatMessageAttachment>,
         clear_composer: bool,
         push_user_message: bool,
         cx: &mut Context<Self>,
@@ -1006,11 +1058,13 @@ impl AgentChatThread {
 
         if push_user_message {
             let msg_id = self.alloc_id();
-            self.messages.push(AgentChatThreadMessage::new(
+            let mut message = AgentChatThreadMessage::new(
                 msg_id,
                 AgentChatThreadMessageRole::User,
                 display_text.clone(),
-            ));
+            );
+            message.attachments = attachments;
+            self.messages.push(message);
             self.publish_sdk_new_message(msg_id, AgentChatThreadMessageRole::User, display_text);
         }
         if clear_composer {
@@ -1048,7 +1102,14 @@ impl AgentChatThread {
         self.pending_context_parts = saved_parts;
         self.pending_ambient_context_enabled = saved_ambient;
 
-        self.start_prepared_turn(message.text, prepared.blocks, false, true, cx)
+        self.start_prepared_turn(
+            message.text,
+            prepared.blocks,
+            prepared.attachments,
+            false,
+            true,
+            cx,
+        )
     }
 
     fn submit_next_queued_if_ready(&mut self, cx: &mut Context<Self>) -> Result<(), String> {
@@ -1160,7 +1221,14 @@ impl AgentChatThread {
         };
         let prepared = self.prepare_turn_blocks_with_receipt(display_text.trim());
         self.set_context_resolution_note(prepared.receipt.as_ref());
-        self.start_prepared_turn(display_text, prepared.blocks, false, false, cx)
+        self.start_prepared_turn(
+            display_text,
+            prepared.blocks,
+            prepared.attachments,
+            false,
+            false,
+            cx,
+        )
     }
 
     /// Resolve a pending permission request with the user's selection.
@@ -1621,7 +1689,16 @@ impl AgentChatThread {
             failed_part_count = receipt.failures.len(),
         );
 
-        Some(PendingContextTurn { blocks, receipt })
+        let attachments = pending_parts
+            .iter()
+            .map(AgentChatMessageAttachment::from_part)
+            .collect();
+
+        Some(PendingContextTurn {
+            blocks,
+            receipt,
+            attachments,
+        })
     }
 
     /// Build the content blocks for a turn, consuming staged context on first use.
@@ -1681,6 +1758,7 @@ impl AgentChatThread {
 
         if let Some(turn) = self.take_pending_context_for_turn() {
             let receipt = turn.receipt;
+            let attachments = turn.attachments;
             blocks.extend(turn.blocks);
 
             if receipt.attempted > 0 {
@@ -1705,6 +1783,7 @@ impl AgentChatThread {
             return PreparedTurnBlocks {
                 blocks,
                 receipt: Some(receipt),
+                attachments,
             };
         }
 
@@ -1718,6 +1797,7 @@ impl AgentChatThread {
         PreparedTurnBlocks {
             blocks,
             receipt: None,
+            attachments: Vec::new(),
         }
     }
 
@@ -5486,6 +5566,36 @@ mod tests {
             thread.context_bootstrap_note, None,
             "a clean follow-up submit should clear stale failure messaging"
         );
+    }
+
+    /// The submitted user message must carry a visible receipt of what text
+    /// was attached and where it came from (e.g. `Draft — TextEdit` plus a
+    /// snippet), so a rewrite never sends invisible context.
+    #[test]
+    fn prepared_turn_carries_attachment_receipts_for_transcript() {
+        let mut thread = test_thread(Vec::new(), false);
+        thread.add_context_part_test(crate::ai::message_parts::AiContextPart::TextBlock {
+            label: "Draft \u{2014} TextEdit".to_string(),
+            source: "frontmost-app#selection=full".to_string(),
+            text: "This  draft\nspans   whitespace and should collapse.".to_string(),
+            mime_type: None,
+        });
+
+        let prepared = thread.prepare_turn_blocks_with_receipt("rewrite this");
+
+        assert_eq!(prepared.attachments.len(), 1);
+        let attachment = &prepared.attachments[0];
+        assert_eq!(attachment.label.as_ref(), "Draft \u{2014} TextEdit");
+        assert_eq!(
+            attachment.snippet.as_ref().map(|s| s.as_ref()),
+            Some("This draft spans whitespace and should collapse."),
+            "snippet must be whitespace-collapsed attached text"
+        );
+
+        // No pending context → no receipts.
+        let mut clean = test_thread(Vec::new(), false);
+        let empty = clean.prepare_turn_blocks_with_receipt("hello");
+        assert!(empty.attachments.is_empty());
     }
 
     // ── current_setup_requirements tests ─────────────────────

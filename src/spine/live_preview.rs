@@ -29,6 +29,11 @@ pub(crate) struct SpineLivePreview {
     pub browser_url_is_focused: bool,
     pub browser_url_app_name: Option<String>,
     pub selection_text: Option<String>,
+    /// True when `selection_text` is the focused field's whole text (no
+    /// selection existed) rather than an explicit selection.
+    pub selection_is_draft: bool,
+    /// App the selection/draft preview was read from, when known.
+    pub selection_source_app: Option<String>,
     pub clipboard_text: Option<String>,
     pub menu_bar_summary: Option<String>,
     pub script_count: Option<usize>,
@@ -40,6 +45,8 @@ struct ExpensiveResult {
     browser_url_is_focused: bool,
     browser_url_app_name: Option<String>,
     selection_text: Option<String>,
+    selection_is_draft: bool,
+    selection_source_app: Option<String>,
 }
 
 #[derive(Debug, Default)]
@@ -144,12 +151,16 @@ impl SpineLivePreviewCache {
             let changed = r.browser_url != self.current.browser_url
                 || r.browser_url_is_focused != self.current.browser_url_is_focused
                 || r.browser_url_app_name != self.current.browser_url_app_name
-                || r.selection_text != self.current.selection_text;
+                || r.selection_text != self.current.selection_text
+                || r.selection_is_draft != self.current.selection_is_draft
+                || r.selection_source_app != self.current.selection_source_app;
             if changed {
                 self.current.browser_url = r.browser_url;
                 self.current.browser_url_is_focused = r.browser_url_is_focused;
                 self.current.browser_url_app_name = r.browser_url_app_name;
                 self.current.selection_text = r.selection_text;
+                self.current.selection_is_draft = r.selection_is_draft;
+                self.current.selection_source_app = r.selection_source_app;
                 self.generation = self.generation.wrapping_add(1);
             }
         }
@@ -158,9 +169,19 @@ impl SpineLivePreviewCache {
     /// Seed the selection preview from the show-time passive AX sniff so the
     /// header hint chip, style rows, and `@selection` submit-freeze all agree
     /// on the same captured text without re-reading AX.
-    pub(crate) fn seed_selection_text(&mut self, selection: Option<String>) {
-        if self.current.selection_text != selection {
+    pub(crate) fn seed_selection_preview(
+        &mut self,
+        selection: Option<String>,
+        is_draft: bool,
+        source_app: Option<String>,
+    ) {
+        if self.current.selection_text != selection
+            || self.current.selection_is_draft != is_draft
+            || self.current.selection_source_app != source_app
+        {
             self.current.selection_text = selection;
+            self.current.selection_is_draft = is_draft;
+            self.current.selection_source_app = source_app;
             self.generation = self.generation.wrapping_add(1);
         }
     }
@@ -226,34 +247,52 @@ impl SpineLivePreviewCache {
             } else {
                 (None, false, None)
             };
-            let selection_text = if needs.selection_text {
-                match crate::selected_text::get_selected_text_ax_only() {
-                    Ok(selection) => {
-                        if selection.is_none() {
-                            tracing::debug!(
-                                target: "script_kit::spine",
-                                event = "spine_preview_selection_ax_only_empty"
-                            );
+            // Passive per-pid reads only: the system-wide focused element is
+            // unreliable once our panel is key, and a passive preview must
+            // never post keystrokes or touch the pasteboard. Selection first,
+            // then the focused field's whole text ("draft").
+            let (selection_text, selection_is_draft, selection_source_app) = if needs.selection_text
+            {
+                let source = crate::frontmost_app_tracker::get_last_real_app();
+                let source_app = source.as_ref().map(|app| app.name.clone());
+                let source_pid = source.map(|app| app.pid);
+                match crate::platform::accessibility::focused_text::selected_text_for_app_ax_only(
+                    source_pid,
+                ) {
+                    Ok(Some(selection)) => (Some(selection), false, source_app),
+                    Ok(None) | Err(_) => {
+                        match crate::platform::accessibility::focused_text::focused_text_for_app_ax_only(
+                            source_pid,
+                        ) {
+                            Ok(Some(draft)) => (Some(draft), true, source_app),
+                            Ok(None) => {
+                                tracing::debug!(
+                                    target: "script_kit::spine",
+                                    event = "spine_preview_selection_ax_only_empty"
+                                );
+                                (None, false, source_app)
+                            }
+                            Err(error) => {
+                                tracing::debug!(
+                                    target: "script_kit::spine",
+                                    event = "spine_preview_selection_ax_only_failed",
+                                    error = %error
+                                );
+                                (None, false, source_app)
+                            }
                         }
-                        selection
-                    }
-                    Err(error) => {
-                        tracing::debug!(
-                            target: "script_kit::spine",
-                            event = "spine_preview_selection_ax_only_failed",
-                            error = %error
-                        );
-                        None
                     }
                 }
             } else {
-                None
+                (None, false, None)
             };
             let result = ExpensiveResult {
                 browser_url,
                 browser_url_is_focused,
                 browser_url_app_name,
                 selection_text,
+                selection_is_draft,
+                selection_source_app,
             };
             if let Ok(mut slot) = slot.lock() {
                 if slot.in_flight.map(|(id, _)| id) == Some(request_id) {
@@ -363,7 +402,8 @@ impl SpineLivePreview {
                 if self.selection_text.is_some() {
                     "Attach the selected text to your command".into()
                 } else {
-                    "No text selected \u{2014} select text first".into()
+                    "No text selected \u{2014} the focused text will be captured when you submit"
+                        .into()
                 }
             }
             ContextAttachmentKind::Browser => {
@@ -414,10 +454,29 @@ impl SpineLivePreview {
         if let Some(t) = &self.selection_text {
             let preview = truncate_preview(t, 80);
             if !preview.is_empty() {
-                return format!("Will rewrite: \u{201c}{preview}\u{201d}");
+                let what = if self.selection_is_draft {
+                    "your draft"
+                } else {
+                    "selection"
+                };
+                return match self
+                    .selection_source_app
+                    .as_deref()
+                    .or(self.frontmost_app_name.as_deref())
+                {
+                    Some(app) => {
+                        format!("Will rewrite {what} in {app}: \u{201c}{preview}\u{201d}")
+                    }
+                    None => format!("Will rewrite {what}: \u{201c}{preview}\u{201d}"),
+                };
             }
         }
-        "Will rewrite selected text (select text first)".to_string()
+        // Nothing readable passively (AX-opaque apps like Chrome/Google Docs):
+        // the text is still captured at submit via the Cmd+C fallback.
+        match self.frontmost_app_name.as_deref() {
+            Some(app) => format!("Will rewrite the selected or focused text in {app}"),
+            None => "Will rewrite the selected or focused text".to_string(),
+        }
     }
 }
 

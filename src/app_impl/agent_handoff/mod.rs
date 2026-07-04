@@ -48,8 +48,8 @@ enum TabAiHarnessCloseDisposition {
 /// dropping the attachment.
 fn materialize_selection_context_parts(
     parts: Vec<crate::ai::message_parts::AiContextPart>,
-    cached_selection: Option<&str>,
-    capture_live: impl FnOnce() -> Option<String>,
+    cached_selection: Option<crate::selected_text::CapturedText>,
+    capture_live: impl FnOnce() -> Option<crate::selected_text::CapturedText>,
 ) -> Vec<crate::ai::message_parts::AiContextPart> {
     use crate::ai::message_parts::AiContextPart;
 
@@ -64,14 +64,12 @@ fn materialize_selection_context_parts(
     }
 
     let captured = capture_live()
-        .filter(|text| !text.trim().is_empty())
+        .filter(|captured| !captured.text.trim().is_empty())
         .or_else(|| {
-            cached_selection
-                .filter(|text| !text.trim().is_empty())
-                .map(str::to_string)
+            cached_selection.filter(|captured| !captured.text.trim().is_empty())
         });
 
-    let Some(text) = captured else {
+    let Some(captured) = captured else {
         tracing::warn!(
             target: "script_kit::spine",
             event = "spine_selection_capture_empty_at_handoff",
@@ -83,19 +81,32 @@ fn materialize_selection_context_parts(
     tracing::info!(
         target: "script_kit::spine",
         event = "spine_selection_materialized_at_handoff",
-        text_len = text.len(),
+        text_len = captured.text.len(),
+        kind = ?captured.kind,
+        source_app = captured.source_app.as_deref().unwrap_or("unknown"),
     );
+
+    // Label carries provenance into the transcript attachment chip:
+    // "Selection — Safari" / "Draft — Google Chrome".
+    let what = match captured.kind {
+        crate::selected_text::CapturedTextKind::Selection => "Selection",
+        crate::selected_text::CapturedTextKind::FocusedField => "Draft",
+    };
+    let label = match &captured.source_app {
+        Some(app) => format!("{what} \u{2014} {app}"),
+        None => what.to_string(),
+    };
 
     parts
         .into_iter()
         .map(|part| match part {
-            AiContextPart::ResourceUri { uri, label } if uri == selection_uri => {
+            AiContextPart::ResourceUri { uri, .. } if uri == selection_uri => {
                 AiContextPart::TextBlock {
-                    label,
+                    label: label.clone(),
                     // `#selection=` keys the `@selected` inline token, keeping
                     // the chip distinct from the lazy `@selection` mention.
                     source: "frontmost-app#selection=full".to_string(),
-                    text: text.clone(),
+                    text: captured.text.clone(),
                     mime_type: None,
                 }
             }
@@ -516,10 +527,22 @@ impl ScriptListApp {
         // taken over app activation and the AX/Cmd+C capture reads from the
         // wrong window ("No selected text was provided").
         let cached_selection = if use_selection_preview_cache {
-            self.spine_live_preview_cache
-                .current
+            let preview = &self.spine_live_preview_cache.current;
+            preview
                 .selection_text
-                .as_deref()
+                .clone()
+                .map(|text| crate::selected_text::CapturedText {
+                    text,
+                    kind: if preview.selection_is_draft {
+                        crate::selected_text::CapturedTextKind::FocusedField
+                    } else {
+                        crate::selected_text::CapturedTextKind::Selection
+                    },
+                    source_app: preview
+                        .selection_source_app
+                        .clone()
+                        .or_else(|| preview.frontmost_app_name.clone()),
+                })
         } else {
             None
         };
@@ -529,7 +552,11 @@ impl ScriptListApp {
         let parts = materialize_selection_context_parts(
             plan.context_parts.clone(),
             cached_selection,
-            || crate::selected_text::get_selection_or_focused_text().ok(),
+            || {
+                crate::selected_text::capture_selection_or_focused_text()
+                    .ok()
+                    .flatten()
+            },
         );
         let selected_profile_name = if let Some(profile) = plan.selected_profile.as_ref() {
             let mut prefs = crate::config::load_user_preferences();
@@ -6025,19 +6052,36 @@ mod tests {
         );
     }
 
+    fn captured(text: &str, source_app: Option<&str>) -> crate::selected_text::CapturedText {
+        crate::selected_text::CapturedText {
+            text: text.to_string(),
+            kind: crate::selected_text::CapturedTextKind::Selection,
+            source_app: source_app.map(str::to_string),
+        }
+    }
+
     #[test]
     fn materialize_selection_swaps_resource_for_captured_text() {
         let parts = super::materialize_selection_context_parts(
             vec![selection_resource_part()],
             None,
-            || Some("captured live".to_string()),
+            || Some(captured("captured live", Some("Safari"))),
         );
         match &parts[0] {
-            crate::ai::message_parts::AiContextPart::TextBlock { text, source, .. } => {
+            crate::ai::message_parts::AiContextPart::TextBlock {
+                text,
+                source,
+                label,
+                ..
+            } => {
                 assert_eq!(text, "captured live");
                 assert!(
                     source.contains("#selection="),
                     "source must key the @selected inline token, got {source}"
+                );
+                assert_eq!(
+                    label, "Selection \u{2014} Safari",
+                    "label must carry provenance into the transcript receipt"
                 );
             }
             other => panic!("expected TextBlock, got {other:?}"),
@@ -6048,7 +6092,7 @@ mod tests {
     fn materialize_selection_falls_back_to_live_preview_cache() {
         let parts = super::materialize_selection_context_parts(
             vec![selection_resource_part()],
-            Some("cached preview"),
+            Some(captured("cached preview", None)),
             || None,
         );
         match &parts[0] {
@@ -6063,8 +6107,8 @@ mod tests {
     fn materialize_selection_keeps_lazy_part_when_nothing_captured() {
         let parts = super::materialize_selection_context_parts(
             vec![selection_resource_part()],
-            Some("   "),
-            || Some("  ".to_string()),
+            Some(captured("   ", None)),
+            || Some(captured("  ", None)),
         );
         assert!(matches!(
             &parts[0],
