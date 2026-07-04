@@ -989,6 +989,13 @@ pub(crate) struct ScriptListApp {
     /// 4.6"), shown alongside the agent in the footer marker.
     pub(crate) spine_model_label: Option<String>,
     spine_live_preview_cache: crate::spine::live_preview::SpineLivePreviewCache,
+    /// Passive AX-only sniff of the frontmost app's selected text, refreshed
+    /// on every main-window show. Powers the "Rewrite selection" hint chip in
+    /// the main-view context zone. MUST stay on `get_selected_text_ax_only`:
+    /// a passive hint may never post keystrokes or touch the pasteboard.
+    pub(crate) shown_selection_hint_text: Option<String>,
+    /// Monotonic token guarding stale async sniff results (bumped per show).
+    pub(crate) shown_selection_hint_token: u64,
     /// Cached state for the menu-syntax trigger picker. `filter_input_change` runs
     /// `plan_trigger_picker_transition` on every filter update and keeps this
     /// field in sync while the detached popup window renders from the snapshot

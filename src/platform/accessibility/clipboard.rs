@@ -57,6 +57,12 @@ pub fn paste_plain_text_preserving_clipboard(text: &str) -> Result<()> {
     crate::selected_text::simulate_paste_with_cg()
         .context("Failed to simulate focused-text Agent Chat paste")?;
 
+    // The target app reads the pasteboard asynchronously after ⌘V lands;
+    // restoring immediately would paste the user's OLD clipboard. There is no
+    // observable "paste consumed" signal, so give the app a settle window
+    // (mirrors `selected_text::set_via_clipboard_fallback`).
+    std::thread::sleep(std::time::Duration::from_millis(150));
+
     let restore_result = match general_pasteboard_change_count() {
         Ok(current_change_count) if current_change_count == temporary_change_count => {
             restore_general_pasteboard_snapshot(&snapshot)
@@ -80,11 +86,18 @@ pub fn copy_all_plain_text_preserving_clipboard() -> Result<String> {
     #[cfg(target_os = "macos")]
     {
         select_all_text_for_focused_text_fallback()?;
+        let baseline_change_count = general_pasteboard_change_count()
+            .context("Failed to read clipboard change count before focused-text copy fallback")?;
         simulate_command_key(KEY_C).context("Failed to copy text for focused-text fallback")?;
-        std::thread::sleep(std::time::Duration::from_millis(90));
-
-        let copied_change_count = general_pasteboard_change_count()
-            .context("Failed to read clipboard change count after focused-text copy fallback")?;
+        // Poll the change count instead of sleeping a fixed interval: fast apps
+        // finish in a few ms, slow apps get the full deadline, and a copy that
+        // never lands is reported as a failure instead of silently returning
+        // the user's pre-existing clipboard contents as "captured text".
+        let copied_change_count = wait_for_pasteboard_change(
+            baseline_change_count,
+            std::time::Duration::from_millis(600),
+        )
+        .context("Focused-text copy fallback did not produce a clipboard change")?;
         let text = read_plain_text_from_pasteboard()
             .context("Failed to read copied focused text from clipboard fallback")?;
 
@@ -106,6 +119,29 @@ pub fn copy_all_plain_text_preserving_clipboard() -> Result<String> {
     {
         let _ = snapshot;
         bail!("focused-text copy fallback requires macOS");
+    }
+}
+
+/// Poll the general pasteboard until its change count moves off `baseline_change_count`,
+/// returning the new count. Bails once `deadline` elapses with no change.
+#[cfg(target_os = "macos")]
+fn wait_for_pasteboard_change(
+    baseline_change_count: i64,
+    deadline: std::time::Duration,
+) -> Result<i64> {
+    let started = std::time::Instant::now();
+    loop {
+        let current = general_pasteboard_change_count()?;
+        if current != baseline_change_count {
+            return Ok(current);
+        }
+        if started.elapsed() >= deadline {
+            bail!(
+                "Pasteboard change count stayed at {baseline_change_count} for {}ms after simulated copy",
+                deadline.as_millis()
+            );
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
     }
 }
 

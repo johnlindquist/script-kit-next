@@ -254,6 +254,8 @@ impl ScriptListApp {
                     return;
                 } else if self.dispatch_kit_store_primary_footer_action(cx) {
                     return;
+                } else if self.dispatch_migrate_v1_primary_footer_action(cx) {
+                    return;
                 } else if matches!(self.current_view, AppView::ThemeChooserView { .. }) {
                     self.submit_theme_chooser_from_input_enter(window, cx);
                     return;
@@ -1032,6 +1034,46 @@ impl ScriptListApp {
             return buttons;
         }
 
+        if let AppView::MigrateV1View {
+            filter,
+            selected_index,
+            board,
+        } = &self.current_view
+        {
+            use crate::footer_popup::{FooterAction, FooterButtonConfig};
+
+            let footer_disabled = self.main_window_footer_buttons_blocked();
+            let visible = Self::migrate_visible_rows(&board.rows, filter);
+            let selected = visible
+                .get(*selected_index)
+                .and_then(|row_ix| board.rows.get(*row_ix));
+            let buttons = match board.phase {
+                MigrateBoardPhase::Report => vec![
+                    FooterButtonConfig::new(FooterAction::Run, "↵", "Port all")
+                        .enabled(!footer_disabled && !board.rows.is_empty()),
+                    FooterButtonConfig::new(FooterAction::Close, "Esc", "Back")
+                        .enabled(!footer_disabled),
+                ],
+                MigrateBoardPhase::Porting => vec![
+                    FooterButtonConfig::new(FooterAction::Run, "", "Porting…").enabled(false),
+                    FooterButtonConfig::new(FooterAction::Close, "Esc", "Hide").enabled(true),
+                ],
+                MigrateBoardPhase::Done => vec![
+                    FooterButtonConfig::new(FooterAction::Run, "↵", "Port with AI").enabled(
+                        !footer_disabled
+                            && selected
+                                .and_then(|row| row.status.as_deref())
+                                .is_some_and(|status| status == "needs-review"),
+                    ),
+                    FooterButtonConfig::new(FooterAction::Close, "Esc", "Back")
+                        .enabled(!footer_disabled),
+                ],
+                _ => vec![FooterButtonConfig::new(FooterAction::Close, "Esc", "Back")
+                    .enabled(!footer_disabled)],
+            };
+            return buttons;
+        }
+
         if let AppView::InstalledKitsView {
             filter,
             selected_index,
@@ -1311,6 +1353,74 @@ impl ScriptListApp {
         }
     }
 
+    /// Refresh the passive "selected text" sniff that powers the header hint
+    /// chip. Runs `get_selected_text_ax_only` on the background executor — it
+    /// never posts keystrokes and never reads or writes the pasteboard, so it
+    /// is safe to run speculatively on every show. Clears the previous hint
+    /// synchronously so a stale selection from the last show can never flash.
+    pub(crate) fn refresh_shown_selection_hint(&mut self, cx: &mut Context<Self>) {
+        self.shown_selection_hint_token = self.shown_selection_hint_token.wrapping_add(1);
+        let token = self.shown_selection_hint_token;
+        if self.shown_selection_hint_text.take().is_some() {
+            cx.notify();
+        }
+        // Target the app the user came FROM by pid: once our panel shows, the
+        // system-wide focused element can already point at Script Kit itself.
+        let source_app = crate::frontmost_app_tracker::get_last_real_app();
+        let source_pid = source_app.as_ref().map(|app| app.pid);
+        let source_name = source_app.map(|app| app.name);
+        cx.spawn(async move |this, cx| {
+            let result = cx
+                .background_executor()
+                .spawn(async move {
+                    crate::platform::accessibility::focused_text::selected_text_for_app_ax_only(
+                        source_pid,
+                    )
+                })
+                .await;
+            let error = result.as_ref().err().map(|e| e.to_string());
+            let selection = result
+                .ok()
+                .flatten()
+                .filter(|text| !text.trim().is_empty());
+            let _ = this.update(cx, |app, cx| {
+                if app.shown_selection_hint_token != token {
+                    return;
+                }
+                tracing::info!(
+                    target: "script_kit::selection_hint",
+                    event = "selection_hint_sniff_complete",
+                    has_selection = selection.is_some(),
+                    chars = selection.as_deref().map(|s| s.chars().count()).unwrap_or(0),
+                    source_app = source_name.as_deref().unwrap_or("unknown"),
+                    source_pid = source_pid.unwrap_or(-1),
+                    error = error.as_deref().unwrap_or(""),
+                );
+                app.shown_selection_hint_text = selection.clone();
+                app.spine_live_preview_cache.seed_selection_text(selection);
+                cx.notify();
+            });
+        })
+        .detach();
+    }
+
+    /// Header hint chip shown only while the main menu is up AND the passive
+    /// sniff found selected text in the app the user came from.
+    pub(crate) fn selection_hint_chip(
+        &self,
+    ) -> Option<crate::components::main_view_chrome::MainViewSelectionHintChip> {
+        if !matches!(self.current_view, AppView::ScriptList) {
+            return None;
+        }
+        let text = self.shown_selection_hint_text.as_deref()?;
+        Some(crate::components::main_view_chrome::MainViewSelectionHintChip {
+            label: format!(
+                "Rewrite \u{201c}{}\u{201d}",
+                crate::components::main_view_chrome::selection_hint_snippet(text, 24)
+            ),
+        })
+    }
+
     pub(crate) fn main_view_context_labels(
         &self,
     ) -> crate::components::main_view_chrome::MainViewContextLabels {
@@ -1345,6 +1455,7 @@ impl ScriptListApp {
             &self.theme,
             menu_def,
             self.main_view_context_labels(),
+            self.selection_hint_chip(),
             cx.listener(|this, _: &gpui::ClickEvent, window, cx| {
                 this.dispatch_main_window_footer_action(
                     crate::footer_popup::FooterAction::Cwd,
@@ -1360,6 +1471,17 @@ impl ScriptListApp {
                     cx,
                     "main_view_context_click",
                 );
+            }),
+            cx.listener(|this, _: &gpui::ClickEvent, window, cx| {
+                // Single-keystroke on-ramp into the existing `.style` rewrite
+                // flow: a style-only input auto-attaches `@selection` +
+                // `/rewrite` and auto-submits on pick (A9 decision).
+                tracing::info!(
+                    target: "script_kit::selection_hint",
+                    event = "selection_hint_chip_clicked",
+                );
+                this.set_filter_text_immediate(".".to_string(), window, cx);
+                this.request_focus(FocusTarget::MainFilter, cx);
             }),
         )
     }
@@ -1385,6 +1507,8 @@ impl ScriptListApp {
             &self.theme,
             menu_def,
             self.main_view_context_labels(),
+            None,
+            |_event, _window, _cx| {},
             |_event, _window, _cx| {},
             |_event, _window, _cx| {},
         )
@@ -1667,6 +1791,10 @@ impl ScriptListApp {
             }
             AppView::NamingPrompt { .. } => Some((ViewType::ArgPromptNoChoices, 0)),
             AppView::BrowseKitsView { results, .. } => Some((ViewType::MainWindow, results.len())),
+            AppView::MigrateV1View { filter, board, .. } => Some((
+                ViewType::MainWindow,
+                Self::migrate_visible_rows(&board.rows, filter).len(),
+            )),
             AppView::InstalledKitsView { filter, kits, .. } => Some((
                 ViewType::MainWindow,
                 Self::kit_store_installed_visible_rows(kits, filter).len(),

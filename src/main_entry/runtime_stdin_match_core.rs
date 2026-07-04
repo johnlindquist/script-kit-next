@@ -101,6 +101,10 @@
                                 let focus_handle = view.focus_handle(ctx);
                                 window.focus(&focus_handle, ctx);
                                 sync_main_automation_window(None, true, true);
+
+                                // Passive AX-only selection sniff for the "Rewrite
+                                // selection" hint chip — mirrors show_main_window_helper.
+                                view.refresh_shown_selection_hint(ctx);
                             }
                             ExternalCommand::Hide { ref request_id } => {
                                 let rid = request_id.as_deref().unwrap_or("-");

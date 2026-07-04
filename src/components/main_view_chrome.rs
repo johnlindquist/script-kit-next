@@ -15,6 +15,8 @@ pub(crate) const MAIN_VIEW_CONTEXT_LOGO_ID: &str = "main-view-context-logo";
 pub(crate) const MAIN_VIEW_CONTEXT_CWD_BUTTON_ID: &str = "main-view-context-cwd-button";
 #[allow(dead_code)]
 pub(crate) const MAIN_VIEW_CONTEXT_MODEL_BUTTON_ID: &str = "main-view-context-model-button";
+#[allow(dead_code)]
+pub(crate) const MAIN_VIEW_CONTEXT_SELECTION_BUTTON_ID: &str = "main-view-context-selection-button";
 pub(crate) const MAIN_VIEW_HEADER_ID: &str = "main-view-header";
 pub(crate) const MAIN_VIEW_CWD_UNAVAILABLE_LABEL: &str = "No cwd";
 pub(crate) const MAIN_VIEW_AGENT_MODEL_UNAVAILABLE_LABEL: &str = "Agent model unavailable";
@@ -43,6 +45,27 @@ impl MainViewContextLabels {
             agent_model_label,
         }
     }
+}
+
+/// Conditional "I see you have text selected" hint chip for the context zone.
+/// Present only when the show-time passive AX sniff found a selection in the
+/// app the user came from; clicking it routes into the `.style` rewrite flow.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct MainViewSelectionHintChip {
+    pub(crate) label: String,
+}
+
+/// Single-line preview of captured selected text for hint labels: whitespace
+/// runs collapse to one space, and text longer than `max_chars` is cut at a
+/// char boundary with a trailing ellipsis.
+#[allow(dead_code)] // Used by the binary target through include!-merged render code.
+pub(crate) fn selection_hint_snippet(text: &str, max_chars: usize) -> String {
+    let collapsed = text.split_whitespace().collect::<Vec<_>>().join(" ");
+    if collapsed.chars().count() <= max_chars {
+        return collapsed;
+    }
+    let truncated: String = collapsed.chars().take(max_chars).collect();
+    format!("{}\u{2026}", truncated.trim_end())
 }
 
 pub(crate) struct MainViewInputChrome {
@@ -189,15 +212,25 @@ pub(crate) fn render_main_view_context_zone(
         agent_model_label.unwrap_or_else(|| MAIN_VIEW_AGENT_MODEL_UNAVAILABLE_LABEL.to_string()),
     );
 
-    render_main_view_context_zone_required(theme, def, labels, on_cwd_click, on_agent_model_click)
+    render_main_view_context_zone_required(
+        theme,
+        def,
+        labels,
+        None,
+        on_cwd_click,
+        on_agent_model_click,
+        |_event, _window, _cx| {},
+    )
 }
 
 pub(crate) fn render_main_view_context_zone_required(
     theme: &crate::theme::Theme,
     def: MainMenuThemeDef,
     labels: MainViewContextLabels,
+    selection_hint: Option<MainViewSelectionHintChip>,
     on_cwd_click: impl Fn(&ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
     on_agent_model_click: impl Fn(&ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
+    on_selection_click: impl Fn(&ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
 ) -> AnyElement {
     let info = def.header_info_bar;
     let text_alpha = (info.opacity.clamp(0.0, 1.0) * 255.0).round() as u32;
@@ -326,6 +359,66 @@ pub(crate) fn render_main_view_context_zone_required(
         model_chip = model_chip.border_1().border_color(border).bg(rest_bg);
     }
 
+    let selection_chip = selection_hint.map(|hint| {
+        let key_slot = if info.show_keys {
+            div()
+                .opacity(info.key_opacity.clamp(0.0, 1.0))
+                .child(
+                    crate::components::footer_chrome::render_footer_hint_button_like(
+                        crate::components::footer_chrome::FooterHintButtonSpec {
+                            label: hint.label.clone().into(),
+                            key: ".".into(),
+                            slot_width_px: None,
+                            key_first: false,
+                            justify:
+                                crate::components::footer_chrome::FooterHintContentJustify::Start,
+                            label_font_size_px: Some(info.font_size),
+                            keycap_font_size_px: Some(header_keycap_font_size),
+                            keycap_height_px: Some(header_keycap_height),
+                            hover_text_alpha: Some(info.pill_hover_text_alpha),
+                            hover_glyph_alpha: Some(info.pill_hover_key_alpha),
+                            hover_keycap_border_alpha: Some(info.pill_hover_border_alpha),
+                        },
+                        theme,
+                    ),
+                )
+                .into_any_element()
+        } else {
+            div()
+                .min_w(px(0.0))
+                .overflow_hidden()
+                .text_ellipsis()
+                .child(hint.label.clone())
+                .into_any_element()
+        };
+
+        let mut chip = div()
+            .id(MAIN_VIEW_CONTEXT_SELECTION_BUTTON_ID)
+            .min_w(px(0.0))
+            .flex()
+            .flex_row()
+            .items_center()
+            .gap(px(info.gap_px))
+            .px(px(info.pill_padding_x))
+            .py(px(info.pill_padding_y))
+            .rounded(px(info.pill_radius))
+            .font_family(info.font_family)
+            .text_size(px(info.font_size))
+            .text_color(text_color)
+            .cursor_pointer()
+            .hover(move |s| {
+                s.bg(hover_bg)
+                    .text_color(hover_text_color)
+                    .border_color(hover_border)
+            })
+            .on_click(on_selection_click)
+            .child(key_slot);
+        if show_pills {
+            chip = chip.border_1().border_color(border).bg(rest_bg);
+        }
+        chip
+    });
+
     let mut left_lane = div()
         .flex_1()
         .min_w(px(0.0))
@@ -336,6 +429,9 @@ pub(crate) fn render_main_view_context_zone_required(
         .gap(px(info.gap_px));
     if info.show_cwd {
         left_lane = left_lane.child(cwd_chip);
+    }
+    if let Some(chip) = selection_chip {
+        left_lane = left_lane.child(chip);
     }
     if info.show_cwd
         && info.show_agent_model
@@ -488,4 +584,32 @@ pub(crate) fn render_main_view_input_shell(
     }
 
     input.into_any_element()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::selection_hint_snippet;
+
+    #[test]
+    fn snippet_collapses_whitespace_and_truncates_at_char_boundary() {
+        assert_eq!(
+            selection_hint_snippet("hello   world\n\tnext", 24),
+            "hello world next"
+        );
+        assert_eq!(
+            selection_hint_snippet("the quick brown fox jumps over the lazy dog", 15),
+            "the quick brown\u{2026}"
+        );
+        // Multi-byte chars must not split; count is in chars, not bytes.
+        assert_eq!(
+            selection_hint_snippet("héllö wörld ünïcödé", 7),
+            "héllö w\u{2026}"
+        );
+    }
+
+    #[test]
+    fn snippet_short_text_passes_through_unchanged() {
+        assert_eq!(selection_hint_snippet("short", 24), "short");
+        assert_eq!(selection_hint_snippet("  padded  ", 24), "padded");
+    }
 }

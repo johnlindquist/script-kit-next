@@ -160,6 +160,45 @@ pub fn focused_text_snapshot_for_capture_failure() -> FocusedTextSnapshot {
     }
 }
 
+/// Passive AX-only read of the selected text in `pid`'s focused element
+/// (system-wide focused element first, per-app fallback). Secure fields
+/// return `None`. Never posts keystrokes and never touches the pasteboard,
+/// so it is safe to call speculatively (hint chips, previews).
+pub fn selected_text_for_app_ax_only(pid: Option<i32>) -> Result<Option<String>, FocusedTextError> {
+    if !super::permissions::has_accessibility_permission() {
+        return Err(FocusedTextError::AccessibilityPermissionRequired);
+    }
+    selected_text_for_app_ax_only_platform(pid)
+}
+
+#[cfg(target_os = "macos")]
+fn selected_text_for_app_ax_only_platform(
+    pid: Option<i32>,
+) -> Result<Option<String>, FocusedTextError> {
+    // Per-app-first when the source pid is known: by the time this passive
+    // read runs, our own panel may be key, so the system-wide focused element
+    // could be Script Kit's own input instead of the app the user came from.
+    let element = match pid {
+        Some(pid) => super::ax::focused_ui_element_for_pid(pid),
+        None => super::ax::focused_ui_element_for_app(None),
+    }
+    .map_err(|err| FocusedTextError::Platform(err.to_string()))?;
+    let role = super::ax::role(element.as_ptr());
+    let subrole = super::ax::subrole(element.as_ptr());
+    if classify_content_kind(role.as_deref(), subrole.as_deref()) == FocusedTextContentKind::Secure
+    {
+        return Ok(None);
+    }
+    Ok(super::ax::selected_text(element.as_ptr()))
+}
+
+#[cfg(not(target_os = "macos"))]
+fn selected_text_for_app_ax_only_platform(
+    _pid: Option<i32>,
+) -> Result<Option<String>, FocusedTextError> {
+    Err(FocusedTextError::UnsupportedTarget)
+}
+
 pub fn capture_focused_text_field(
     options: CaptureFocusedTextOptions,
 ) -> Result<FocusedTextSnapshot, FocusedTextError> {
@@ -185,6 +224,10 @@ fn capture_focused_text_field_platform(
         return Err(FocusedTextError::SecureField);
     }
 
+    // Read the selection range BEFORE any text fetch: the clipboard fallback
+    // below posts ⌘A+⌘C into the app, which replaces the user's real
+    // selection with select-all and would make this read lie.
+    let selected_range_utf16 = super::ax::selected_text_range(element.as_ptr());
     let mut used_clipboard_fallback = false;
     let text = match super::ax::whole_text(element.as_ptr()) {
         Ok(text) => text,
@@ -207,7 +250,6 @@ fn capture_focused_text_field_platform(
             text
         }
     };
-    let selected_range_utf16 = super::ax::selected_text_range(element.as_ptr());
     let caret_range_utf16 = selected_range_utf16.map(|range| TextRangeUtf16 {
         location: range.location + range.length,
         length: 0,

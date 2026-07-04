@@ -2268,6 +2268,10 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                 window.focus(&focus_handle, ctx);
                                 sync_main_automation_window(None, true, true);
 
+                                // Passive AX-only selection sniff for the "Rewrite
+                                // selection" hint chip — mirrors show_main_window_helper.
+                                view.refresh_shown_selection_hint(ctx);
+
                                 // Run-14 Pass-13 fix: echo a windowVisibilityAck
                                 // back so `session.sh rpc … {"type":"show",
                                 // "requestId":"x"}` no longer hits the 5-second

@@ -155,6 +155,16 @@ impl SpineLivePreviewCache {
         }
     }
 
+    /// Seed the selection preview from the show-time passive AX sniff so the
+    /// header hint chip, style rows, and `@selection` submit-freeze all agree
+    /// on the same captured text without re-reading AX.
+    pub(crate) fn seed_selection_text(&mut self, selection: Option<String>) {
+        if self.current.selection_text != selection {
+            self.current.selection_text = selection;
+            self.generation = self.generation.wrapping_add(1);
+        }
+    }
+
     pub(crate) fn refresh_preview_nonblocking(&mut self, needs: SpinePreviewNeeds) {
         self.collect_pending_expensive();
 

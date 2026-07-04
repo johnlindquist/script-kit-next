@@ -352,6 +352,18 @@ fn prune_stale_sessions_locked(
     });
 }
 
+/// Focused element of a SPECIFIC app by pid, never consulting the system-wide
+/// element. Required when our own panel may already be key: the system-wide
+/// `AXFocusedUIElement` would resolve to Script Kit itself instead of the app
+/// the user came from.
+#[cfg(target_os = "macos")]
+pub(crate) fn focused_ui_element_for_pid(pid: i32) -> Result<OwnedAxElement> {
+    let app = unsafe { AXUIElementCreateApplication(pid) };
+    let app = OwnedAxElement::from_create_rule(app)?;
+    let value = copy_attribute(app.as_ptr(), AX_FOCUSED_UI_ELEMENT)?;
+    OwnedAxElement::from_create_rule(value as AXUIElementRef)
+}
+
 #[cfg(target_os = "macos")]
 pub(crate) fn focused_ui_element_for_app(pid: Option<i32>) -> Result<OwnedAxElement> {
     let system = unsafe { AXUIElementCreateSystemWide() };
@@ -393,6 +405,28 @@ pub(crate) fn is_enabled(element: AXUIElementRef) -> Option<bool> {
     let result = cf_bool_value(value);
     cf_release(value);
     result
+}
+
+#[cfg(target_os = "macos")]
+const AX_SELECTED_TEXT: &str = "AXSelectedText";
+
+/// Passive read of the element's selected text: `AXSelectedText` first, then
+/// `AXSelectedTextRange` + `AXStringForRange`. Never posts keystrokes and
+/// never touches the pasteboard.
+#[cfg(target_os = "macos")]
+pub(crate) fn selected_text(element: AXUIElementRef) -> Option<String> {
+    if let Some(text) = string_attribute(element, AX_SELECTED_TEXT) {
+        if !text.trim().is_empty() {
+            return Some(text);
+        }
+    }
+    let range = selected_text_range(element)?;
+    if range.length == 0 {
+        return None;
+    }
+    string_for_range(element, range)
+        .ok()
+        .filter(|text| !text.trim().is_empty())
 }
 
 #[cfg(target_os = "macos")]

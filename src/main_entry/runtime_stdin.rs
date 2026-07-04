@@ -251,6 +251,10 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                 // Ensure render-loop focus state is set so the input autofocuses
                                 view.focused_input = FocusedInput::MainFilter;
                                 view.pending_focus = Some(FocusTarget::MainFilter);
+
+                                // Passive AX-only selection sniff for the "Rewrite
+                                // selection" hint chip — mirrors show_main_window_helper.
+                                view.refresh_shown_selection_hint(ctx);
                             }
                             ExternalCommand::Hide { ref request_id } => {
                                 let rid = request_id.as_deref().unwrap_or("-");

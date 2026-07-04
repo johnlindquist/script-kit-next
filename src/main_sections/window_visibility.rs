@@ -293,6 +293,10 @@ fn show_main_window_helper(
         // the grouped empty-query view is computed for this show. A fresh
         // show is the one moment a full newest-first reorder is allowed.
         view.refresh_root_brain_inbox_if_stale(true, ctx);
+        // Passive AX-only sniff of the source app's selected text for the
+        // "Rewrite selection" hint chip. Must run at show time, while the
+        // frontmost app still owns AX focus; never touches the pasteboard.
+        view.refresh_shown_selection_hint(ctx);
         if needs_reset_before_show {
             view.reset_to_script_list(ctx);
         } else if restore_after_focus_loss && matches!(view.current_view, AppView::ScriptList) {

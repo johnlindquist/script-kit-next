@@ -14243,6 +14243,8 @@ impl Render for AgentChatView {
                         &theme,
                         menu_def,
                         context_labels,
+                        None,
+                        |_event, _window, _cx| {},
                         |_event, _window, _cx| {},
                         |_event, _window, _cx| {},
                     ),

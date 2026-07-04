@@ -1079,6 +1079,8 @@ impl ScriptListApp {
             spine_agent_label: initial_spine_agent_label,
             spine_model_label: initial_spine_model_label,
             spine_live_preview_cache: Default::default(),
+            shown_selection_hint_text: None,
+            shown_selection_hint_token: 0,
             menu_syntax_trigger_picker_state:
                 crate::menu_syntax_trigger_picker::MenuSyntaxTriggerPickerState::default(),
             menu_syntax_object_selector_state:
