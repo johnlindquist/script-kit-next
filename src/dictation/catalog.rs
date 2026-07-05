@@ -145,10 +145,14 @@ pub fn dictation_model_catalog() -> [DictationModelCatalogEntry; 2] {
 }
 
 pub fn dictation_model_entry(id: DictationModelId) -> DictationModelCatalogEntry {
-    dictation_model_catalog()
-        .into_iter()
-        .find(|entry| entry.id == id)
-        .expect("catalog must contain every DictationModelId")
+    // Destructure the fixed catalog array and match on `id` so the mapping is
+    // total by construction: adding a `DictationModelId` variant (or growing
+    // the catalog) becomes a compile error here instead of a runtime panic.
+    let [parakeet, whisper] = dictation_model_catalog();
+    match id {
+        DictationModelId::ParakeetTdt06bV3 => parakeet,
+        DictationModelId::WhisperMedium => whisper,
+    }
 }
 
 pub fn format_dictation_model_size(bytes: u64) -> String {

@@ -995,7 +995,13 @@ fn embed_pending_once(embedder: &mut Option<BrainEmbedder>) -> Result<usize> {
     if embedder.is_none() {
         *embedder = Some(BrainEmbedder::spawn(model)?);
     }
-    let e = embedder.as_ref().expect("embedder present after spawn");
+    let Some(e) = embedder.as_ref() else {
+        // Unreachable: set to `Some` directly above. Fail soft instead of
+        // panicking so a spawn-vs-drop race can never abort the indexer.
+        return Err(anyhow::anyhow!(
+            "brain embedder missing immediately after spawn"
+        ));
+    };
     let model_id = e.model_id().to_string();
     embed_pending_with(&model_id, |texts| e.embed(texts))
 }

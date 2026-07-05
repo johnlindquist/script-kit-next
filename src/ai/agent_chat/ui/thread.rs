@@ -2065,18 +2065,13 @@ impl AgentChatThread {
                 cx.update(|cx| {
                     if let Some(entity) = entity_ref.upgrade() {
                         entity.update(cx, |this, cx| {
-                            this.pending_permission = Some(request);
                             this.status = AgentChatThreadStatus::WaitingForPermission;
-                            let body = this.permission_notification_body(
-                                this.pending_permission
-                                    .as_ref()
-                                    .expect("request was just set"),
-                            );
-                            let request_id = this
-                                .pending_permission
-                                .as_ref()
-                                .map(|request| request.id)
-                                .unwrap_or_default();
+                            // Compute the notification body and id from the owned
+                            // request before moving it into `pending_permission`,
+                            // so we never have to re-borrow-and-expect it back out.
+                            let request_id = request.id;
+                            let body = this.permission_notification_body(&request);
+                            this.pending_permission = Some(request);
                             this.maybe_notify_agent_chat_event(
                                 AgentChatNotificationEvent::WaitingForPermission { request_id },
                                 "Agent Chat — approval needed",
