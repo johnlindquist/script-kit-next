@@ -2349,6 +2349,16 @@ pub fn render_section_header(
     colors: ListItemColors,
     is_first: bool,
 ) -> impl IntoElement {
+    render_section_header_with_subtitle(label, icon, None, colors, is_first)
+}
+
+pub fn render_section_header_with_subtitle(
+    label: &str,
+    icon: Option<&str>,
+    subtitle: Option<&str>,
+    colors: ListItemColors,
+    is_first: bool,
+) -> impl IntoElement {
     let metrics = resolved_list_item_metrics();
     // Section header at 32px (8px grid aligned, SECTION_HEADER_HEIGHT)
     // Used with GPUI's list() component which supports variable-height items.
@@ -2402,6 +2412,9 @@ pub fn render_section_header(
         );
     }
 
+    let has_subtitle = subtitle.is_some_and(|value| !value.trim().is_empty());
+    let subtitle_text = subtitle.filter(|value| !value.trim().is_empty());
+
     let (header_height, padding_top) = if is_first {
         // First section headers align their top breathing room with the shared
         // main-view header bottom padding, so the query/header block and the
@@ -2412,6 +2425,14 @@ pub fn render_section_header(
         )
     } else {
         (metrics.section_header_height, metrics.section_padding_top)
+    };
+    let header_height = if has_subtitle {
+        header_height
+            + metrics.section_header_font_size
+            + metrics.section_gap
+            + metrics.section_padding_bottom
+    } else {
+        header_height
     };
 
     // Clean section headers — no background tint for a calmer list appearance
@@ -2430,7 +2451,17 @@ pub fn render_section_header(
     }; // Later headers stay bottom-anchored between rows.
 
     // No separator lines — spacing alone defines groups per whisper-chrome spec
-    header.child(content)
+    let mut stack = div().flex().flex_col().gap(px(metrics.section_gap)).child(content);
+    if let Some(subtitle) = subtitle_text {
+        stack = stack.child(
+            div()
+                .text_size(px(metrics.section_header_font_size))
+                .font_weight(metrics.section_weight)
+                .text_color(rgba((colors.text_primary << 8) | colors.alpha_hint))
+                .child(subtitle.to_string()),
+        );
+    }
+    header.child(stack)
 }
 // Note: GPUI rendering tests omitted due to GPUI macro recursion limit issues.
 // The LIST_ITEM_HEIGHT constant is 40.0 and the component is integration-tested

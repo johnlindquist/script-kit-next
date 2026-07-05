@@ -556,6 +556,7 @@ mod tests {
         };
         let script_without = make_script_with_extra("script bare", HashMap::new());
         let scriptlet_with = Arc::new(Scriptlet {
+            icon: None,
             name: "Run Snippet".to_string(),
             description: Some("Snippet with shortcut".to_string()),
             code: "console.log('snippet')".to_string(),
@@ -570,6 +571,7 @@ mod tests {
             alias: None,
         });
         let scriptlet_without = Arc::new(Scriptlet {
+            icon: None,
             name: "Bare Snippet".to_string(),
             description: None,
             code: "console.log('bare')".to_string(),

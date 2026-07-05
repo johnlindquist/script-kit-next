@@ -48,9 +48,9 @@ pub use indexer::{ingest_chat_turn, start_brain_indexer, wake_indexer};
 pub use launcher::{
     recent_root_brain_hits, root_brain_inbox_subtitle, root_brain_memory_preview_html,
     root_brain_passive_query_is_eligible, root_brain_passive_search_text,
-    root_brain_query_is_eligible, search_root_brain_direct, search_root_brain_semantic,
-    semantic_root_brain_hits_for_query, RootBrainInboxSectionOptions, RootBrainSearchHit,
-    RootBrainSectionOptions,
+    root_brain_query_is_eligible, root_brain_query_plan, search_root_brain_direct,
+    search_root_brain_semantic, semantic_root_brain_hits_for_query, RootBrainInboxSectionOptions,
+    RootBrainQueryPlan, RootBrainSearchHit, RootBrainSectionOptions,
 };
 pub use search::{brain_search, render_context_block, BrainHit};
 pub use store::{get_doc, init_brain_db, record_signal, DocSource};

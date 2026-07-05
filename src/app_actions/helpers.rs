@@ -615,6 +615,7 @@ mod app_actions_tests {
                 file_path: Some("/tmp/snippets/tools.md#open-github".to_string()),
                 command: Some("open-github".to_string()),
                 alias: None,
+                icon: None,
             }),
             score: 0,
             display_file_path: Some("tools.md#open-github".to_string()),

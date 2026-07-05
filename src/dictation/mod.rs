@@ -1,6 +1,11 @@
 //! Voice dictation: audio capture, transcription, and transcript delivery.
-
-#![allow(dead_code)]
+//!
+//! This module compiles into both the library and the binary crate.  The
+//! re-export lists below form the library's public API, so the binary build
+//! (which only consumes a subset) would otherwise flag them as unused —
+//! hence the scoped `unused_imports` allow.  `dead_code` is deliberately NOT
+//! allowed module-wide: genuinely dead items must be deleted or carry a
+//! documented item-level allow.
 #![allow(unused_imports)]
 
 pub mod capture;
@@ -44,24 +49,29 @@ pub use history::{
     search_root_dictation_history_direct, DictationHistoryEntry, DictationHistorySearchField,
     DictationHistorySearchHit, RootDictationHistorySearchHit, RootDictationHistorySectionOptions,
 };
+// The batch_select_* automation hooks are consumed by the binary crate
+// (prompt_handler), which compiles this module separately — the library
+// build alone cannot see those uses.
+#[allow(unused_imports)]
 pub(crate) use microphone_popup_window::{
     batch_select_dictation_microphone_popup_row_by_semantic_id,
     batch_select_dictation_microphone_popup_row_by_value,
     build_dictation_microphone_popup_snapshot, close_dictation_microphone_popup_window,
     is_dictation_microphone_popup_window_open, sync_dictation_microphone_popup_window,
-    DictationMicrophonePopupRequest, DictationMicrophonePopupRow, DictationMicrophonePopupSnapshot,
-    DICTATION_MICROPHONE_POPUP_AUTOMATION_ID,
+    DictationMicrophonePopupRequest, DictationMicrophonePopupSnapshot,
 };
 pub use runtime::{
     abort_dictation, automation_state, begin_stop_capture, can_cycle_dictation_target,
     current_dictation_phase, cycle_dictation_target, delivery_receipt_generation,
-    dictation_elapsed, finish_stop_capture, get_active_dictation_device, get_dictation_target,
-    is_dictation_busy, is_dictation_recording, is_dictation_stopping, last_delivery_receipt,
-    last_stop_receipt, last_wrong_target_refusal, maybe_unload_transcriber,
-    record_delivery_receipt, record_wrong_target_refusal, redacted_transcript_fingerprint,
-    resolve_final_or_partial_transcript, set_dictation_target_cycle, set_overlay_phase,
-    snapshot_overlay_state, toggle_dictation, transcribe_captured_audio, BeginStopCapture,
-    DictationStopJob, DictationStopReason, DictationTranscriptResolution,
+    dictation_auto_stop_due, dictation_elapsed, finish_stop_capture,
+    get_active_dictation_device, get_dictation_target, is_dictation_busy, is_dictation_recording,
+    is_dictation_stopping, last_delivery_receipt, last_stop_receipt, last_wrong_target_refusal,
+    maybe_unload_transcriber, pending_dictation_device_label, record_delivery_receipt,
+    record_wrong_target_refusal, redacted_transcript_fingerprint,
+    resolve_final_or_partial_transcript, set_dictation_target_cycle,
+    set_pending_dictation_device_label, set_overlay_phase, snapshot_overlay_state, toggle_dictation,
+    transcribe_captured_audio, BeginStopCapture, DictationStopJob, DictationStopReason,
+    DictationTranscriptResolution,
 };
 pub use setup::{
     build_dictation_setup_state, DictationHotkeyStatus, DictationMicrophonePermissionStatus,
@@ -71,7 +81,7 @@ pub use transcription::{
     build_session_result, captured_duration, is_parakeet_model_available, merge_captured_chunks,
     resolve_default_model_path, resolve_whisper_model_path, DictationEngine, DictationTranscriber,
     DictationTranscriptionConfig, ParakeetDictationEngine, WhisperDictationEngine,
-    PARAKEET_MODEL_ARCHIVE_SIZE, PARAKEET_MODEL_URL,
+    PARAKEET_MODEL_ARCHIVE_SIZE, PARAKEET_MODEL_URL, WHISPER_MODEL_SIZE, WHISPER_MODEL_URL,
 };
 pub use types::{
     CapturedAudioChunk, CompletedDictationCapture, DictationCaptureConfig, DictationCaptureEvent,
@@ -80,8 +90,6 @@ pub use types::{
     DictationToggleOutcome, RawAudioChunk,
 };
 pub use visualizer::{animate_bars, silent_bars};
-pub(crate) use window::overlay_phase_copy;
-pub(crate) use window::render_dictation_overlay_state_preview;
 pub use window::{
     automation_layout_info, begin_overlay_session, close_dictation_overlay,
     is_dictation_overlay_open, open_dictation_overlay, overlay_generation,

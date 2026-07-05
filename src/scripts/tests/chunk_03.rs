@@ -400,6 +400,7 @@ fn test_search_result_properties() {
 #[test]
 fn test_scriptlet_with_all_metadata() {
     let scriptlet = Scriptlet {
+        icon: None,
         name: "Full Scriptlet".to_string(),
         description: Some("Complete metadata".to_string()),
         code: "code here".to_string(),

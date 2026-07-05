@@ -2,17 +2,10 @@ use super::read_source;
 
 #[test]
 fn root_unified_ai_vault_contract() {
-    // The committed-head spec table was split into `source_heads.rs` by the
-    // in-progress grammar refactor while keeping the enum + receipt labels
-    // in `payload.rs`. Scan both so this audit survives the move, and
-    // normalise the `long:` field-name to the historical `canonical:`
-    // spelling so existing assertions still apply.
-    let payload = format!(
-        "{}\n{}",
-        read_source("src/menu_syntax/payload.rs"),
-        read_source("src/menu_syntax/source_heads.rs"),
-    )
-    .replace("long: \"", "canonical: \"");
+    // `payload.rs` owns the committed-head spec table (`SOURCE_HEAD_SPECS`);
+    // the abandoned `source_heads.rs` split was deleted as an uncompiled
+    // orphan.
+    let payload = read_source("src/menu_syntax/payload.rs");
     let payload = payload.as_str();
     let config = read_source("src/config/types.rs");
     let defaults = read_source("src/config/defaults.rs");

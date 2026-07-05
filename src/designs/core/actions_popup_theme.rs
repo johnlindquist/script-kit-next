@@ -88,9 +88,9 @@ pub fn base_actions_popup_theme() -> ActionsPopupThemeDef {
             padding_x: crate::actions::constants::ACTION_PADDING_X,
             padding_y_extra: 2.0,
             // Actions popups are a compact satellite surface: the search/header
-            // text stays smaller than the main-menu search (20) and main-list
-            // names (14).
-            font_size: 13.0,
+            // text stays smaller than the main-menu search (20) but matches
+            // main-list names (14) for readability.
+            font_size: 14.0,
             cursor_width: 2.0,
             cursor_height: 16.0,
             prefix_gap: 6.0,
@@ -111,9 +111,9 @@ pub fn base_actions_popup_theme() -> ActionsPopupThemeDef {
             radius: crate::actions::constants::ACTIONS_ROW_RADIUS,
             selection_opacity: 0.72,
             hover_opacity: 0.56,
-            // One step below the main-list name font (14): action rows are
-            // one-line commands, not primary content rows.
-            title_font_size: 13.0,
+            // Matches the main-list name font (14): 13 read as too small in
+            // practice even though action rows are one-line commands.
+            title_font_size: 14.0,
         },
         section: ActionsPopupSectionTokens {
             padding_x: crate::actions::constants::ACTION_PADDING_X,

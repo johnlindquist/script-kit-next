@@ -44,6 +44,8 @@ pub enum HotkeyAction {
     Dictation,
     /// Inline AI focused-text editor
     InlineAiTextEdit,
+    /// Instant rewrite: capture focused text and stream rewrite variations
+    RewriteText,
     /// Dev-only marker capture while launched from ./dev.sh.
     DevMarker,
     /// Script shortcut - run the script at this path
@@ -85,6 +87,8 @@ struct HotkeyRoutes {
     dictation_id: Option<u32>,
     /// Current inline AI text-edit hotkey ID (for quick lookup)
     inline_ai_id: Option<u32>,
+    /// Current rewrite hotkey ID (for quick lookup)
+    rewrite_id: Option<u32>,
     /// Current dev marker hotkey ID (for quick lookup)
     dev_marker_id: Option<u32>,
 }
@@ -99,6 +103,7 @@ impl HotkeyRoutes {
             logs_id: None,
             dictation_id: None,
             inline_ai_id: None,
+            rewrite_id: None,
             dev_marker_id: None,
         }
     }
@@ -117,6 +122,7 @@ impl HotkeyRoutes {
             HotkeyAction::ToggleLogs => self.logs_id = Some(id),
             HotkeyAction::Dictation => self.dictation_id = Some(id),
             HotkeyAction::InlineAiTextEdit => self.inline_ai_id = Some(id),
+            HotkeyAction::RewriteText => self.rewrite_id = Some(id),
             HotkeyAction::DevMarker => self.dev_marker_id = Some(id),
             HotkeyAction::Script(path) => {
                 self.script_paths.insert(path.clone(), id);
@@ -159,6 +165,11 @@ impl HotkeyRoutes {
                         self.inline_ai_id = None;
                     }
                 }
+                HotkeyAction::RewriteText => {
+                    if self.rewrite_id == Some(id) {
+                        self.rewrite_id = None;
+                    }
+                }
                 HotkeyAction::DevMarker => {
                     if self.dev_marker_id == Some(id) {
                         self.dev_marker_id = None;
@@ -189,6 +200,7 @@ impl HotkeyRoutes {
             HotkeyAction::ToggleLogs => self.logs_id?,
             HotkeyAction::Dictation => self.dictation_id?,
             HotkeyAction::InlineAiTextEdit => self.inline_ai_id?,
+            HotkeyAction::RewriteText => self.rewrite_id?,
             HotkeyAction::DevMarker => self.dev_marker_id?,
             HotkeyAction::Script(path) => *self.script_paths.get(path)?,
         };
@@ -204,6 +216,7 @@ fn hotkey_action_label(action: &HotkeyAction) -> String {
         HotkeyAction::ToggleLogs => "Logs".to_string(),
         HotkeyAction::Dictation => "Dictation".to_string(),
         HotkeyAction::InlineAiTextEdit => "Inline AI Text Edit".to_string(),
+        HotkeyAction::RewriteText => "Rewrite".to_string(),
         HotkeyAction::DevMarker => "Dev Marker".to_string(),
         HotkeyAction::Script(command_id) => command_id.clone(),
     }
@@ -398,6 +411,7 @@ fn rebind_hotkey_transactional(
             HotkeyAction::ToggleLogs => routes_guard.logs_id,
             HotkeyAction::Dictation => routes_guard.dictation_id,
             HotkeyAction::InlineAiTextEdit => routes_guard.inline_ai_id,
+            HotkeyAction::RewriteText => routes_guard.rewrite_id,
             HotkeyAction::DevMarker => routes_guard.dev_marker_id,
             HotkeyAction::Script(path) => routes_guard.get_script_id(path),
         }
@@ -451,6 +465,7 @@ fn rebind_hotkey_transactional(
             HotkeyAction::ToggleLogs => routes_guard.logs_id,
             HotkeyAction::Dictation => routes_guard.dictation_id,
             HotkeyAction::InlineAiTextEdit => routes_guard.inline_ai_id,
+            HotkeyAction::RewriteText => routes_guard.rewrite_id,
             HotkeyAction::DevMarker => routes_guard.dev_marker_id,
             HotkeyAction::Script(path) => routes_guard.get_script_id(path),
         };
@@ -571,6 +586,20 @@ pub fn update_hotkeys(cfg: &config::Config) {
             rebind_hotkey_transactional(
                 &manager_guard,
                 HotkeyAction::InlineAiTextEdit,
+                mods,
+                code,
+                &display,
+            );
+        }
+    }
+
+    // Update rewrite hotkey
+    if let Some(rewrite_config) = cfg.get_rewrite_hotkey() {
+        if let Some((mods, code)) = parse_hotkey_config(&rewrite_config) {
+            let display = hotkey_config_to_display(&rewrite_config);
+            rebind_hotkey_transactional(
+                &manager_guard,
+                HotkeyAction::RewriteText,
                 mods,
                 code,
                 &display,
@@ -1411,12 +1440,39 @@ pub(crate) fn inline_ai_hotkey_channel() -> &'static (
 ) {
     &INLINE_AI_HOTKEY_CHANNEL
 }
+// REWRITE_HOTKEY_CHANNEL: Channel for the system-wide instant rewrite flow.
+#[allow(dead_code)]
+static REWRITE_HOTKEY_CHANNEL: LazyLock<(
+    async_channel::Sender<HotkeyEvent>,
+    async_channel::Receiver<HotkeyEvent>,
+)> = LazyLock::new(|| async_channel::bounded(10));
+/// Get the rewrite hotkey channel, initializing it on first access.
+#[allow(dead_code)]
+pub(crate) fn rewrite_hotkey_channel() -> &'static (
+    async_channel::Sender<HotkeyEvent>,
+    async_channel::Receiver<HotkeyEvent>,
+) {
+    &REWRITE_HOTKEY_CHANNEL
+}
 // DICTATION_HOTKEY_CHANNEL: Channel for dictation toggle events
 #[allow(dead_code)]
 static DICTATION_HOTKEY_CHANNEL: LazyLock<(
     async_channel::Sender<HotkeyEvent>,
     async_channel::Receiver<HotkeyEvent>,
 )> = LazyLock::new(|| async_channel::bounded(10));
+
+/// Push-to-talk hold threshold: when the dictation hotkey press started a
+/// recording and the key is held at least this long, releasing it stops and
+/// transcribes.  A quicker tap keeps classic toggle behavior (press again to
+/// stop).
+const DICTATION_PUSH_TO_TALK_MIN_HOLD: std::time::Duration =
+    std::time::Duration::from_millis(500);
+
+/// Instant of the dictation hotkey press that started the current recording.
+/// `None` when the last press was a stop-edge (or no press happened yet), so
+/// releases after a stop press never re-toggle.
+static DICTATION_PTT_PRESSED_AT: parking_lot::Mutex<Option<std::time::Instant>> =
+    parking_lot::Mutex::new(None);
 /// Get the dictation hotkey channel, initializing it on first access.
 #[allow(dead_code)]
 pub(crate) fn dictation_hotkey_channel() -> &'static (
@@ -1662,6 +1718,9 @@ pub(crate) fn start_hotkey_listener(config: config::Config) {
                 &inline_ai_hotkey,
             );
         }
+        if let Some(rewrite_hotkey) = config.get_rewrite_hotkey() {
+            register_builtin_hotkey(&manager_guard, HotkeyAction::RewriteText, &rewrite_hotkey);
+        }
 
         // Track which command IDs have been registered to avoid duplicates
         let mut registered_commands: HashSet<String> = HashSet::new();
@@ -1771,13 +1830,14 @@ pub(crate) fn start_hotkey_listener(config: config::Config) {
             logging::log(
                 "KEY_SETUP",
                 &format!(
-                    "GLOBAL_HOTKEY_ROUTE_SUMMARY main={:?} notes={:?} ai={:?} logs={:?} dictation={:?} inline_ai={:?} scripts={} routes=[{}]",
+                    "GLOBAL_HOTKEY_ROUTE_SUMMARY main={:?} notes={:?} ai={:?} logs={:?} dictation={:?} inline_ai={:?} rewrite={:?} scripts={} routes=[{}]",
                     routes_guard.main_id,
                     routes_guard.notes_id,
                     routes_guard.ai_id,
                     routes_guard.logs_id,
                     routes_guard.dictation_id,
                     routes_guard.inline_ai_id,
+                    routes_guard.rewrite_id,
                     routes_guard.script_paths.len(),
                     route_details
                 ),
@@ -1798,6 +1858,8 @@ pub(crate) fn start_hotkey_listener(config: config::Config) {
                 match (action.as_ref(), event.state) {
                     (_, HotKeyState::Pressed) => {}
                     (Some(HotkeyAction::Main), HotKeyState::Released) => {}
+                    // Dictation consumes releases for push-to-talk.
+                    (Some(HotkeyAction::Dictation), HotKeyState::Released) => {}
                     _ => continue,
                 }
 
@@ -1879,6 +1941,23 @@ pub(crate) fn start_hotkey_listener(config: config::Config) {
                         }
                         gcd::dispatch_to_main(|| {});
                     }
+                    Some(HotkeyAction::RewriteText) => {
+                        let correlation_id = format!("hotkey:rewrite:{}", Uuid::new_v4());
+                        let _guard = logging::set_correlation_id(correlation_id.clone());
+
+                        logging::log(
+                            "HOTKEY",
+                            "Rewrite hotkey pressed - dispatching instant rewrite capture",
+                        );
+                        if rewrite_hotkey_channel()
+                            .0
+                            .try_send(HotkeyEvent { correlation_id })
+                            .is_err()
+                        {
+                            logging::log("HOTKEY", "Rewrite hotkey channel full/closed");
+                        }
+                        gcd::dispatch_to_main(|| {});
+                    }
                     Some(HotkeyAction::ToggleLogs) => {
                         // Set correlation ID for this hotkey event
                         let correlation_id = format!("hotkey:logs:{}", Uuid::new_v4());
@@ -1913,16 +1992,59 @@ pub(crate) fn start_hotkey_listener(config: config::Config) {
                         let correlation_id = format!("hotkey:dictation:{}", Uuid::new_v4());
                         let _guard = logging::set_correlation_id(correlation_id.clone());
 
-                        logging::log(
-                            "HOTKEY",
-                            "Dictation hotkey pressed - dispatching to main thread",
-                        );
-                        if dictation_hotkey_channel()
-                            .0
-                            .try_send(HotkeyEvent { correlation_id })
-                            .is_err()
-                        {
-                            logging::log("HOTKEY", "Dictation hotkey channel full/closed");
+                        match event.state {
+                            HotKeyState::Pressed => {
+                                // Arm push-to-talk only when this press starts
+                                // a recording; a stop-edge press must not turn
+                                // its own release into another toggle.
+                                let starts_recording = !crate::dictation::is_dictation_busy();
+                                *DICTATION_PTT_PRESSED_AT.lock() =
+                                    starts_recording.then(std::time::Instant::now);
+
+                                logging::log(
+                                    "HOTKEY",
+                                    "Dictation hotkey pressed - dispatching to main thread",
+                                );
+                                if dictation_hotkey_channel()
+                                    .0
+                                    .try_send(HotkeyEvent { correlation_id })
+                                    .is_err()
+                                {
+                                    logging::log("HOTKEY", "Dictation hotkey channel full/closed");
+                                }
+                            }
+                            HotKeyState::Released => {
+                                let Some(pressed_at) = DICTATION_PTT_PRESSED_AT.lock().take()
+                                else {
+                                    continue;
+                                };
+                                if pressed_at.elapsed() < DICTATION_PUSH_TO_TALK_MIN_HOLD {
+                                    // Quick tap: classic toggle — keep recording.
+                                    continue;
+                                }
+                                if !crate::config::load_user_preferences()
+                                    .dictation
+                                    .push_to_talk_enabled()
+                                {
+                                    continue;
+                                }
+                                if !crate::dictation::is_dictation_recording() {
+                                    // Recording never started (preflight took
+                                    // over) or already stopped another way.
+                                    continue;
+                                }
+                                logging::log(
+                                    "HOTKEY",
+                                    "Dictation hotkey released after hold - stopping (push-to-talk)",
+                                );
+                                if dictation_hotkey_channel()
+                                    .0
+                                    .try_send(HotkeyEvent { correlation_id })
+                                    .is_err()
+                                {
+                                    logging::log("HOTKEY", "Dictation hotkey channel full/closed");
+                                }
+                            }
                         }
                     }
                     Some(HotkeyAction::DevMarker) => {

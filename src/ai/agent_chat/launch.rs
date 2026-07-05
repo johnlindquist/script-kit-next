@@ -138,12 +138,31 @@ pub(crate) fn resolve_selected_pi_launch_with_cwd_override(
     PiAgentChatLaunch::from_profile_with_cwd_override(profile, cwd_override)
 }
 
+/// Resolve only the working directory the currently selected profile would
+/// launch in, mirroring `from_profile_with_cwd_override`'s
+/// `launch_spec.cwd.unwrap_or(get_kit_path())` fallback.
+///
+/// Unlike `resolve_selected_pi_launch`, this performs no filesystem writes
+/// (`ensure_pi_cwd`/`create_dir_all`), builds no launch spec, requires no Pi
+/// binary, and emits no per-call log — safe for hot paths such as building
+/// the main-menu `>` cwd picker rows on every keystroke.
+pub(crate) fn resolve_selected_launch_cwd(
+    ai: &AiPreferences,
+    ctx: &AgentChatProfileContext,
+) -> PathBuf {
+    let profile = resolve_effective_profile(ai, ctx);
+    profile.cwd.unwrap_or_else(crate::setup::get_kit_path)
+}
+
 pub(crate) fn resolve_focused_text_pi_launch(
     ai: &AiPreferences,
     ctx: &AgentChatProfileContext,
 ) -> Result<PiAgentChatLaunch> {
     let text_ai = AiPreferences {
-        selected_model_id: ai.selected_model_id.clone(),
+        // Deliberately drop the global model selection: the Text/rewrite mini
+        // is pinned to `TEXT_PI_MODEL` (fastest Codex) so variations stream
+        // back with minimal latency regardless of the Agent Chat model.
+        selected_model_id: None,
         selected_profile_id: Some(BUILTIN_TEXT_PROFILE_ID.to_string()),
         selected_backend: Some(AgentChatBackend::Pi),
         pi_binary: ai.pi_binary.clone(),
@@ -154,6 +173,25 @@ pub(crate) fn resolve_focused_text_pi_launch(
     };
 
     PiAgentChatLaunch::from_profile(resolve_effective_profile(&text_ai, ctx))
+}
+
+/// Resolve the zero-context Quick AI launch (launcher Tab-with-text).
+///
+/// Unlike `resolve_focused_text_pi_launch`, this deliberately bypasses
+/// `apply_ai_fallbacks`: the Quick AI profile's model is pinned to
+/// `QUICK_AI_PI_MODEL` and must not be replaced by `ai.selected_model_id`.
+/// Only the pi binary fallback from preferences is honored.
+pub(crate) fn resolve_quick_ai_pi_launch(
+    ai: &AiPreferences,
+    ctx: &AgentChatProfileContext,
+) -> Result<PiAgentChatLaunch> {
+    let mut profile = crate::ai::agent_chat::profiles::built_in_quick_ai_profile(ctx);
+    if profile.pi_binary.is_none() {
+        profile.pi_binary = crate::ai::agent_chat::profiles::clean_opt(ai.pi_binary.as_deref())
+            .map(crate::ai::agent_chat::pi::binary::expand_tilde_path)
+            .or_else(crate::ai::agent_chat::pi::binary::default_pi_binary);
+    }
+    PiAgentChatLaunch::from_profile(profile)
 }
 
 fn pi_model_selection_id(profile: &ResolvedAgentChatProfile) -> Option<String> {
@@ -299,9 +337,11 @@ mod tests {
         assert_eq!(launch.profile.id, BUILTIN_TEXT_PROFILE_ID);
         assert_eq!(launch.profile.name, "Text");
         assert_eq!(launch.cwd, PathBuf::from("/tmp/kit/agent-chat/text"));
+        // Pinned to the fastest Codex model; the global model selection must
+        // not leak into the rewrite mini (speed is the surface contract).
         assert_eq!(
             launch.selected_model_id.as_deref(),
-            Some("openai-codex/gpt-5.4")
+            Some("openai-codex/gpt-5.3-codex-spark")
         );
         // The Text/mini profile now ships exactly one read-only network tool so
         // live-info questions can search the web; it must NOT fall back to
@@ -353,7 +393,10 @@ mod tests {
     }
 
     #[test]
-    fn focused_text_pi_launch_uses_text_profile_with_model_override() {
+    fn focused_text_pi_launch_ignores_global_model_override() {
+        // The rewrite mini is a speed surface: even with a user-selected
+        // Agent Chat model, the Text profile stays pinned to the fastest
+        // Codex model (same contract as Quick AI).
         let ai = AiPreferences {
             pi_binary: Some("/tmp/test-pi".to_string()),
             selected_model_id: Some("claude-sonnet".to_string()),
@@ -365,8 +408,59 @@ mod tests {
         assert_eq!(launch.profile.id, BUILTIN_TEXT_PROFILE_ID);
         assert_eq!(launch.profile.backend, AgentChatBackend::Pi);
         assert_eq!(launch.profile.provider.as_deref(), Some("openai-codex"));
-        assert_eq!(launch.profile.model.as_deref(), Some("claude-sonnet"));
+        assert_eq!(
+            launch.profile.model.as_deref(),
+            Some(crate::ai::agent_chat::profiles::TEXT_PI_MODEL)
+        );
         assert_eq!(launch.cwd, PathBuf::from("/tmp/kit/agent-chat/text"));
+    }
+
+    #[test]
+    fn quick_ai_pi_launch_is_zero_context_and_pins_spark_model() {
+        // Even with a user-selected model, Quick AI must stay pinned to the
+        // spark model and strip every context/tool surface.
+        let ai = AiPreferences {
+            pi_binary: Some("/tmp/test-pi".to_string()),
+            selected_model_id: Some("openai-codex/gpt-5.5".to_string()),
+            selected_profile_id: Some(
+                crate::ai::agent_chat::profiles::BUILTIN_SCRIPT_KIT_PROFILE_ID.to_string(),
+            ),
+            ..AiPreferences::default()
+        };
+
+        let launch = resolve_quick_ai_pi_launch(&ai, &ctx()).unwrap();
+        let argv = launch.launch_spec.argv();
+
+        assert_eq!(
+            launch.profile.id,
+            crate::ai::agent_chat::profiles::BUILTIN_QUICK_AI_PROFILE_ID
+        );
+        assert_eq!(
+            launch.selected_model_id.as_deref(),
+            Some("openai-codex/gpt-5.3-codex-spark")
+        );
+        assert_eq!(launch.cwd, PathBuf::from("/tmp/kit/agent-chat/quick-ai"));
+        assert!(argv.contains(&"--no-tools".to_string()));
+        assert!(argv.contains(&"--no-extensions".to_string()));
+        assert!(argv.contains(&"--no-skills".to_string()));
+        assert!(argv.contains(&"--no-prompt-templates".to_string()));
+        assert!(argv.contains(&"--no-context-files".to_string()));
+        assert!(argv.contains(&"--no-session".to_string()));
+        assert_eq!(
+            launch.launch_spec.append_system_prompt.as_deref(),
+            Some(crate::ai::agent_chat::profiles::QUICK_AI_APPEND_SYSTEM_PROMPT)
+        );
+        assert_eq!(launch.launch_spec.system_prompt, None);
+    }
+
+    #[test]
+    fn quick_ai_profile_is_not_a_pickable_built_in() {
+        // Quick AI is a launch mode, not a profile-picker entry.
+        let ids: Vec<String> = crate::ai::agent_chat::profiles::built_in_profiles(&ctx())
+            .into_iter()
+            .map(|profile| profile.id)
+            .collect();
+        assert!(!ids.contains(&crate::ai::agent_chat::profiles::BUILTIN_QUICK_AI_PROFILE_ID.to_string()));
     }
 
     #[test]

@@ -15,6 +15,7 @@ fn wrap_scriptlets(scriptlets: Vec<Scriptlet>) -> Vec<Arc<Scriptlet>> {
 /// Helper to create a test Scriptlet with minimal required fields
 fn test_scriptlet(name: &str, tool: &str, code: &str) -> Scriptlet {
     Scriptlet {
+        icon: None,
         name: name.to_string(),
         description: None,
         code: code.to_string(),
@@ -33,6 +34,7 @@ fn test_scriptlet(name: &str, tool: &str, code: &str) -> Scriptlet {
 /// Helper to create a test Scriptlet with description
 fn test_scriptlet_with_desc(name: &str, tool: &str, code: &str, desc: &str) -> Scriptlet {
     Scriptlet {
+        icon: None,
         name: name.to_string(),
         description: Some(desc.to_string()),
         code: code.to_string(),
@@ -117,6 +119,7 @@ fn test_read_scriptlets_from_file_not_markdown() {
 fn test_scriptlet_new_fields() {
     // Verify the new Scriptlet struct fields work
     let scriptlet = Scriptlet {
+        icon: None,
         name: "Test".to_string(),
         description: Some("Desc".to_string()),
         code: "code".to_string(),

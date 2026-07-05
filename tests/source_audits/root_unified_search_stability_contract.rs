@@ -366,7 +366,8 @@ fn agentic_root_search_frame_stability_proof_compares_preflight_receipts() {
         "samples",
         "provider settled without warming",
         "SCRIPT_KIT_ROOT_FILE_SEARCH_TEST_PROVIDER",
-        "loading !== true",
+        // The probe classifies frames by explicit loading-state checks.
+        "loading === true",
         "loading === false",
     ] {
         assert!(

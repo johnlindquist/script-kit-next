@@ -511,6 +511,27 @@ pub fn get_script_context_actions(script: &ScriptInfo) -> Vec<Action> {
         );
     }
 
+    // Built-in command rows (identified by their `builtin:<id>` path) get a
+    // Copy Command ID action so the id is reachable without opening config.
+    if !script.is_script
+        && !script.is_scriptlet
+        && !script.is_app
+        && !script.is_agent
+        && script.path.starts_with("builtin:")
+    {
+        actions.push(
+            Action::new(
+                "copy_command_id",
+                "Copy Command ID",
+                Some("Copy this built-in command's id to clipboard".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut("⇧⌘.")
+            .with_icon(IconName::Copy)
+            .with_section("Copy"),
+        );
+    }
+
     if script.is_script {
         actions.push(
             Action::new(
@@ -2253,6 +2274,26 @@ mod tests {
         assert!(has_action(&actions, "run_script"));
         assert!(has_action(&actions, "toggle_info"));
         assert!(has_action(&actions, "copy_deeplink"));
+    }
+
+    #[test]
+    fn builtin_rows_include_copy_command_id_but_not_script_or_app_actions() {
+        let script = ScriptInfo::with_all(
+            "Clipboard History",
+            "builtin:clipboard-history",
+            false,
+            "Open Clipboard History",
+            None,
+            None,
+        );
+        let actions = get_script_context_actions(&script);
+
+        assert!(has_action(&actions, "copy_command_id"));
+        assert!(has_action(&actions, "run_script"));
+        assert!(has_action(&actions, "toggle_info"));
+        assert!(!has_action(&actions, "edit_script"));
+        assert!(!has_action(&actions, "reveal_in_finder"));
+        assert!(!has_action(&actions, "quit_app"));
     }
 
     #[test]

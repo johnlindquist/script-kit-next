@@ -207,12 +207,16 @@ pub fn render_design_item(
                         .clone()
                         .or_else(|| sm.scriptlet.keyword.clone())
                         .or_else(|| sm.scriptlet.alias.clone());
-                    // Differentiate scriptlet icon by tool type
-                    let icon = match sm.scriptlet.tool.as_str() {
-                        "bash" | "sh" | "zsh" => IconKind::Svg("Terminal".to_string()),
-                        "paste" | "snippet" => IconKind::Svg("Copy".to_string()),
-                        "open" => IconKind::Svg("PlayFilled".to_string()),
-                        _ => IconKind::Svg("BoltFilled".to_string()),
+                    // Prefer the scriptlet's own icon (from `icon:` metadata or bundle
+                    // frontmatter), falling back to a tool-type default
+                    let icon = match &sm.scriptlet.icon {
+                        Some(icon_name) => IconKind::Svg(icon_name.clone()),
+                        None => match sm.scriptlet.tool.as_str() {
+                            "bash" | "sh" | "zsh" => IconKind::Svg("Terminal".to_string()),
+                            "paste" | "snippet" => IconKind::Svg("Copy".to_string()),
+                            "open" => IconKind::Svg("PlayFilled".to_string()),
+                            _ => IconKind::Svg("BoltFilled".to_string()),
+                        },
                     };
                     // Auto-generate description: prefer code preview, fall back to tool name
                     // Code preview gives users immediate insight into what the scriptlet does

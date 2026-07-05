@@ -7,7 +7,7 @@ use crate::dictation::transcription::{
 };
 use crate::dictation::types::{
     CapturedAudioChunk, CompletedDictationCapture, DictationCaptureConfig, DictationCaptureEvent,
-    DictationDeviceId, DictationDeviceInfo, DictationModelStatus, DictationSessionPhase,
+    DictationDeviceInfo, DictationModelStatus, DictationSessionPhase,
     DictationTarget, DictationToggleOutcome,
 };
 use crate::dictation::visualizer::silent_bars;
@@ -43,6 +43,16 @@ struct DictationSession {
     /// Microphone resolved when capture started. Changing preferences while
     /// recording applies to the next session, not this live AVCaptureSession.
     active_device: Option<DictationDeviceInfo>,
+    /// Monotonic id used to match async partial-transcription results (and
+    /// their published text) to the session they were computed for.
+    session_generation: u64,
+    /// Whether live partial transcripts are enabled for this session
+    /// (snapshotted from config at start so the pump never reads config).
+    live_preview: bool,
+    /// Auto-stop ceiling snapshotted from config at start. `None` = no limit.
+    max_duration: Option<Duration>,
+    /// When the last partial transcription attempt started (rate limiter).
+    last_partial_attempt_at: Option<Instant>,
 }
 
 /// Global singleton guarded by a parking_lot Mutex.
@@ -58,6 +68,8 @@ pub enum DictationStopReason {
     GlobalEscape,
     NativeFooter,
     Synthetic,
+    /// The configured `dictation.maxDurationSecs` ceiling was reached.
+    MaxDurationReached,
 }
 
 #[derive(Debug, Clone)]
@@ -103,6 +115,32 @@ struct CachedTranscriber {
 }
 
 static TRANSCRIBER: Mutex<Option<CachedTranscriber>> = Mutex::new(None);
+
+// ---------------------------------------------------------------------------
+// Live partial transcription (recording-time preview)
+// ---------------------------------------------------------------------------
+
+/// Monotonic counter distinguishing capture sessions for partial results.
+static SESSION_GENERATION: AtomicU64 = AtomicU64::new(0);
+
+/// `true` while a partial transcription inference is running on its worker
+/// thread — prevents overlapping inferences.
+static PARTIAL_INFLIGHT: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
+/// Latest partial transcript, tagged with the session generation it belongs
+/// to so a stale result from a previous session is never displayed.
+static PARTIAL_TRANSCRIPT: Mutex<Option<(u64, String)>> = Mutex::new(None);
+
+/// Minimum spacing between partial transcription attempts.
+const PARTIAL_TRANSCRIPTION_INTERVAL: Duration = Duration::from_millis(1_500);
+
+/// Minimum audio (16 kHz mono samples) before the first partial attempt.
+const PARTIAL_MIN_SAMPLES: usize = 16_000; // 1 s
+
+/// Partial preview transcribes at most this much trailing audio so preview
+/// latency stays flat on long recordings (the final pass uses everything).
+const PARTIAL_WINDOW: Duration = Duration::from_secs(20);
 
 /// Monotonic counter for redacted delivery receipts exposed through automation.
 static DELIVERY_RECEIPT_GENERATION: AtomicU64 = AtomicU64::new(0);
@@ -285,14 +323,15 @@ pub fn finish_stop_capture(
     };
 
     let collect_duration = stop_state.requested_at.elapsed();
-    let (chunk_count, audio_duration_ms, error) = match result {
+    let (chunk_count, audio_duration_ms, truncated, error) = match result {
         Ok(Some(capture)) => (
             Some(capture.chunks.len()),
             Some(capture.audio_duration.as_millis() as u64),
+            capture.truncated,
             None,
         ),
-        Ok(None) => (Some(0), Some(0), None),
-        Err(error) => (None, None, Some(error.to_string())),
+        Ok(None) => (Some(0), Some(0), false, None),
+        Err(error) => (None, None, false, Some(error.to_string())),
     };
     *LAST_STOP_RECEIPT.lock() = Some(serde_json::json!({
         "inFlight": false,
@@ -302,6 +341,7 @@ pub fn finish_stop_capture(
         "targetLabel": stop_state.target.overlay_label(),
         "collectDurationMs": collect_duration.as_millis() as u64,
         "timedOut": error.as_ref().is_some_and(|message| message.contains("timed out")),
+        "truncated": truncated,
         "chunkCount": chunk_count,
         "audioDurationMs": audio_duration_ms,
         "error": error,
@@ -341,6 +381,22 @@ pub fn get_active_dictation_device() -> Option<DictationDeviceInfo> {
         .lock()
         .as_ref()
         .and_then(|session| session.active_device.clone())
+}
+
+/// Display label of a microphone selected while a recording session is live.
+///
+/// The live AVCaptureSession keeps the mic it opened with, so a preference
+/// change only applies to the next session — the overlay footer shows this
+/// label as "<name> (next)" so the switch is not silently deferred.
+static PENDING_DEVICE_LABEL: Mutex<Option<String>> = Mutex::new(None);
+
+pub fn set_pending_dictation_device_label(label: Option<String>) {
+    *PENDING_DEVICE_LABEL.lock() = label;
+    bump_dictation_state_generation();
+}
+
+pub fn pending_dictation_device_label() -> Option<String> {
+    PENDING_DEVICE_LABEL.lock().clone()
 }
 
 /// Record a content-safe receipt for the most recent dictation delivery.
@@ -561,13 +617,121 @@ pub fn snapshot_overlay_state() -> Option<DictationOverlayState> {
         }
     }
 
+    maybe_begin_partial_transcription(session);
+
+    let transcript = PARTIAL_TRANSCRIPT
+        .lock()
+        .as_ref()
+        .filter(|(generation, _)| *generation == session.session_generation)
+        .map(|(_, text)| SharedString::from(text.clone()))
+        .unwrap_or_default();
+
     Some(DictationOverlayState {
         phase: session.overlay_phase.clone(),
         elapsed: session.started_at.elapsed(),
         bars: session.last_bars,
-        transcript: SharedString::default(),
+        transcript,
         target: session.target,
     })
+}
+
+/// Returns `true` when the active recording has outlived its configured
+/// max-duration ceiling and should be auto-stopped by the caller.
+pub fn dictation_auto_stop_due() -> bool {
+    let guard = SESSION.lock();
+    let Some(session) = guard.as_ref() else {
+        return false;
+    };
+    matches!(
+        session.overlay_phase,
+        DictationSessionPhase::Recording | DictationSessionPhase::Confirming
+    ) && session
+        .max_duration
+        .is_some_and(|limit| session.started_at.elapsed() >= limit)
+}
+
+/// Kick off a background partial transcription of the trailing audio window
+/// when live preview is enabled and no attempt is already running.
+///
+/// Runs on the overlay pump tick while holding the session lock, so it only
+/// copies samples out and spawns a worker thread — the inference itself never
+/// blocks the lock.
+fn maybe_begin_partial_transcription(session: &mut DictationSession) {
+    if !session.live_preview
+        || session.overlay_phase != DictationSessionPhase::Recording
+        || PARTIAL_INFLIGHT.load(Ordering::Acquire)
+    {
+        return;
+    }
+    if session
+        .last_partial_attempt_at
+        .is_some_and(|at| at.elapsed() < PARTIAL_TRANSCRIPTION_INTERVAL)
+    {
+        return;
+    }
+
+    // Trailing window: walk chunks back-to-front until the window is full.
+    let mut window_duration = Duration::ZERO;
+    let mut start_ix = session.chunks.len();
+    while start_ix > 0 && window_duration < PARTIAL_WINDOW {
+        start_ix -= 1;
+        window_duration += session.chunks[start_ix].duration;
+    }
+    let samples = merge_captured_chunks(&session.chunks[start_ix..]);
+    if samples.len() < PARTIAL_MIN_SAMPLES {
+        return;
+    }
+
+    let prefs = crate::config::load_user_preferences();
+    let model_id = DictationModelId::from_preference(prefs.dictation.model.as_deref());
+    if !dictation_model_entry(model_id).is_available() {
+        // No model on disk — a partial attempt would only produce log noise.
+        session.last_partial_attempt_at = Some(Instant::now());
+        return;
+    }
+
+    session.last_partial_attempt_at = Some(Instant::now());
+    let generation = session.session_generation;
+    let truncated_front = start_ix > 0;
+    PARTIAL_INFLIGHT.store(true, Ordering::Release);
+
+    std::thread::Builder::new()
+        .name("dictation-partial".into())
+        .spawn(move || {
+            let result = transcribe_samples_with_cached_engine(&samples);
+            match result {
+                Ok(Some(text)) => {
+                    let display = if truncated_front {
+                        format!("\u{2026}{text}")
+                    } else {
+                        text
+                    };
+                    let mut guard = PARTIAL_TRANSCRIPT.lock();
+                    // Only publish for the session the audio came from.
+                    if SESSION_GENERATION.load(Ordering::Acquire) == generation {
+                        *guard = Some((generation, display));
+                    }
+                }
+                Ok(None) => {}
+                Err(error) => {
+                    tracing::debug!(
+                        category = "DICTATION",
+                        error = %error,
+                        "Partial transcription attempt failed"
+                    );
+                }
+            }
+            PARTIAL_INFLIGHT.store(false, Ordering::Release);
+        })
+        .map(|_| ())
+        .unwrap_or_else(|error| {
+            PARTIAL_INFLIGHT.store(false, Ordering::Release);
+            tracing::warn!(
+                category = "DICTATION",
+                error = %error,
+                "Failed to spawn partial transcription thread"
+            );
+        });
 }
 
 /// Passive, redacted automation snapshot for Script Kit DevTools.
@@ -842,6 +1006,7 @@ pub fn transcribe_captured_audio(chunks: &[CapturedAudioChunk]) -> Result<Option
     let config = DictationTranscriptionConfig {
         model_path: catalog_entry.path(),
         language: prefs.dictation.language.clone(),
+        silence_rms: prefs.dictation.silence_rms_threshold(),
         ..Default::default()
     };
     let audio_duration = captured_duration(chunks);
@@ -855,6 +1020,7 @@ pub fn transcribe_captured_audio(chunks: &[CapturedAudioChunk]) -> Result<Option
         sample_count = samples.len(),
         rms,
         minimum_samples = config.minimum_samples,
+        silence_rms = config.silence_rms,
         model_id = catalog_entry.stable_id,
         model_display_name = catalog_entry.display_name,
         model_path = %config.model_path.display(),
@@ -873,15 +1039,55 @@ pub fn transcribe_captured_audio(chunks: &[CapturedAudioChunk]) -> Result<Option
         return Ok(None);
     }
 
-    if rms < 0.01 {
+    if rms < config.silence_rms {
         tracing::info!(
             category = "DICTATION",
             rms,
-            threshold = 0.01_f32,
+            threshold = config.silence_rms,
             "Skipping dictation transcription: audio too silent"
         );
         return Ok(None);
     }
+
+    let result = transcribe_samples_with_cached_engine(&samples);
+
+    match &result {
+        Ok(Some(transcript)) => tracing::info!(
+            category = "DICTATION",
+            transcript_len = transcript.len(),
+            "Dictation transcription succeeded"
+        ),
+        Ok(None) => tracing::info!(
+            category = "DICTATION",
+            "Dictation transcription completed without text"
+        ),
+        Err(error) => tracing::error!(
+            category = "DICTATION",
+            error = %error,
+            "Dictation transcription failed"
+        ),
+    }
+
+    result
+}
+
+/// Transcribe raw 16 kHz mono samples through the shared cached engine,
+/// (re)building the engine when the model/language preference changed or the
+/// cache idled out.
+///
+/// Shared by the final delivery pass and the live partial preview so both use
+/// identical engine state — a partial attempt also pre-warms the model that
+/// the final pass will use.
+pub(crate) fn transcribe_samples_with_cached_engine(samples: &[f32]) -> Result<Option<String>> {
+    let prefs = crate::config::load_user_preferences();
+    let model_id = DictationModelId::from_preference(prefs.dictation.model.as_deref());
+    let catalog_entry = dictation_model_entry(model_id);
+    let config = DictationTranscriptionConfig {
+        model_path: catalog_entry.path(),
+        language: prefs.dictation.language.clone(),
+        silence_rms: prefs.dictation.silence_rms_threshold(),
+        ..Default::default()
+    };
 
     let mut guard = TRANSCRIBER.lock();
     let requested_key = CachedTranscriberKey {
@@ -952,30 +1158,11 @@ pub fn transcribe_captured_audio(chunks: &[CapturedAudioChunk]) -> Result<Option
         });
     }
 
-    let result = guard
+    guard
         .as_ref()
         .context("dictation transcriber unavailable")?
         .transcriber
-        .transcribe_samples(&samples);
-
-    match &result {
-        Ok(Some(transcript)) => tracing::info!(
-            category = "DICTATION",
-            transcript_len = transcript.len(),
-            "Dictation transcription succeeded"
-        ),
-        Ok(None) => tracing::info!(
-            category = "DICTATION",
-            "Dictation transcription completed without text"
-        ),
-        Err(error) => tracing::error!(
-            category = "DICTATION",
-            error = %error,
-            "Dictation transcription failed"
-        ),
-    }
-
-    result
+        .transcribe_samples(samples)
 }
 
 /// Unload the cached transcriber if it has been idle for longer than its
@@ -1008,6 +1195,13 @@ fn start_recording(target: DictationTarget) -> Result<()> {
     let (event_rx, capture_handle) = start_capture(capture_config, device_id.as_ref())
         .context("failed to start audio capture")?;
 
+    let prefs = crate::config::load_user_preferences();
+    let session_generation = SESSION_GENERATION.fetch_add(1, Ordering::AcqRel) + 1;
+    *PARTIAL_TRANSCRIPT.lock() = None;
+    // A new session opens with the (possibly just-changed) saved preference,
+    // so any pending-device note from the previous session is obsolete.
+    *PENDING_DEVICE_LABEL.lock() = None;
+
     let session = DictationSession {
         capture_handle: Some(capture_handle),
         event_rx,
@@ -1018,6 +1212,10 @@ fn start_recording(target: DictationTarget) -> Result<()> {
         target,
         target_cycle: vec![target],
         active_device: active_device.clone(),
+        session_generation,
+        live_preview: prefs.dictation.live_preview_enabled(),
+        max_duration: prefs.dictation.max_duration(),
+        last_partial_attempt_at: None,
     };
 
     *SESSION.lock() = Some(session);
@@ -1073,6 +1271,7 @@ fn stop_recording() -> Result<Option<CompletedDictationCapture>> {
     Ok(Some(CompletedDictationCapture {
         chunks: session.chunks,
         audio_duration,
+        truncated: false,
     }))
 }
 
@@ -1088,7 +1287,7 @@ impl DictationStopJob {
             "capture_stop_job_started"
         );
 
-        stop_capture_and_collect_with_deadline(&mut self.session, timeout)?;
+        let truncated = stop_capture_and_collect_with_deadline(&mut self.session, timeout)?;
 
         let audio_duration = captured_duration(&self.session.chunks);
         tracing::info!(
@@ -1096,6 +1295,7 @@ impl DictationStopJob {
             chunks = self.session.chunks.len(),
             audio_duration_ms = audio_duration.as_millis() as u64,
             elapsed_ms = started.elapsed().as_millis() as u64,
+            truncated,
             "capture_stop_job_finished"
         );
 
@@ -1106,6 +1306,7 @@ impl DictationStopJob {
         Ok(Some(CompletedDictationCapture {
             chunks: self.session.chunks,
             audio_duration,
+            truncated,
         }))
     }
 }
@@ -1129,10 +1330,12 @@ fn stop_capture_and_collect(session: &mut DictationSession) -> Result<()> {
     anyhow::bail!("dictation capture stream closed before EndOfStream")
 }
 
+/// Returns `Ok(true)` when collection timed out before `EndOfStream` (the
+/// capture tail may be missing), `Ok(false)` on a clean end of stream.
 fn stop_capture_and_collect_with_deadline(
     session: &mut DictationSession,
     timeout: Duration,
-) -> Result<()> {
+) -> Result<bool> {
     let started = Instant::now();
     let _ = session.capture_handle.take();
 
@@ -1145,15 +1348,15 @@ fn stop_capture_and_collect_with_deadline(
                 chunks = session.chunks.len(),
                 "Timed out waiting for dictation capture EndOfStream; using partial capture"
             );
-            return Ok(());
+            return Ok(true);
         }
 
         match session.event_rx.try_recv() {
             Ok(DictationCaptureEvent::Chunk(chunk)) => session.chunks.push(chunk),
             Ok(DictationCaptureEvent::Bars(bars)) => session.last_bars = bars,
-            Ok(DictationCaptureEvent::EndOfStream) => return Ok(()),
+            Ok(DictationCaptureEvent::EndOfStream) => return Ok(false),
             Err(async_channel::TryRecvError::Empty) => std::thread::sleep(Duration::from_millis(5)),
-            Err(async_channel::TryRecvError::Closed) => return Ok(()),
+            Err(async_channel::TryRecvError::Closed) => return Ok(false),
         }
     }
 }
@@ -1165,16 +1368,12 @@ fn stop_capture_and_collect_with_deadline(
 /// Resolve the user's preferred microphone device.
 ///
 /// Reads the config-backed `dictation.selected_device_id` preference and, if the
-/// device is still present, returns its ID.  Falls back using ranked heuristics
+/// device is still present, returns it.  Falls back using ranked heuristics
 /// (system default → built-in → USB → first non-virtual → any) when the
 /// preference is unset or the device has disappeared.
 ///
 /// Delegates the pure selection logic to [`resolve_selected_input_device`] so
 /// the behavior is deterministic and testable without I/O.
-pub(crate) fn resolve_preferred_device() -> Result<Option<DictationDeviceId>> {
-    Ok(resolve_preferred_device_info()?.map(|device| device.id))
-}
-
 pub(crate) fn resolve_preferred_device_info() -> Result<Option<DictationDeviceInfo>> {
     let prefs = crate::config::load_user_preferences();
     let preferred_id = prefs.dictation.selected_device_id.clone();

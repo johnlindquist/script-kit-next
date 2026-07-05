@@ -241,6 +241,7 @@ fn make_skill_with_description(title: &str, description: &str) -> Arc<PluginSkil
 
 fn make_scriptlet(name: &str, description: Option<&str>) -> Arc<Scriptlet> {
     Arc::new(Scriptlet {
+        icon: None,
         name: name.to_string(),
         description: description.map(str::to_string),
         code: "echo hi".to_string(),

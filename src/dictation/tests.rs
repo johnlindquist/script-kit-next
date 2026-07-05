@@ -643,10 +643,12 @@ fn dictation_model_catalog_marks_only_parakeet_recommended() {
     assert_eq!(recommended, vec![DictationModelId::ParakeetTdt06bV3]);
     assert!(catalog
         .iter()
-        .any(|entry| entry.description == "Fast and accurate. Supports 25 European languages."));
+        .any(|entry| entry.description
+            == "Fast and accurate. Auto-detects 25 European languages (ignores the language setting)."));
     assert!(catalog
         .iter()
-        .any(|entry| entry.description == "Broadest language coverage, but may run a bit slow."));
+        .any(|entry| entry.description
+            == "Broadest language coverage and honors the language setting, but may run a bit slow."));
 }
 
 #[test]
@@ -876,6 +878,7 @@ fn stop_path_collects_all_chunks_including_tail_after_handle_drop() {
     let capture = CompletedDictationCapture {
         chunks,
         audio_duration,
+        truncated: false,
     };
     assert_eq!(capture.chunks.len(), 2);
     assert_eq!(capture.audio_duration, Duration::from_millis(15));
@@ -911,6 +914,7 @@ fn stop_path_empty_recording_produces_none() {
         DictationToggleOutcome::Stopped(Some(CompletedDictationCapture {
             audio_duration: crate::dictation::transcription::captured_duration(&chunks),
             chunks,
+            truncated: false,
         }))
     };
 
@@ -1431,8 +1435,8 @@ fn dictation_surfaces_missing_model_with_download() {
         "dictation start path must check selected catalog model availability"
     );
     assert!(
-        builtin_src.contains("start_parakeet_model_download"),
-        "missing Parakeet model must trigger a background download"
+        builtin_src.contains("start_dictation_model_download"),
+        "missing dictation model must trigger a background download"
     );
 }
 
@@ -1558,8 +1562,8 @@ fn frontmost_app_delivery_closes_overlay_before_paste() {
     let handler_src = &src[handler_start..];
 
     assert!(
-        !handler_src.contains("DictationSessionPhase::Finished"),
-        "successful dictation delivery should not render a Finished overlay anymore"
+        handler_src.contains("DictationSessionPhase::Finished"),
+        "internal dictation delivery must show the Finished confirmation pill"
     );
 
     let yield_offset = handler_src
@@ -2416,6 +2420,7 @@ fn dictation_preferences_serde_round_trip_model_and_language() {
             selected_device_id: Some("usb-mic".to_string()),
             model: Some("whisper-medium".to_string()),
             language: Some("de".to_string()),
+            ..Default::default()
         },
         ..Default::default()
     };
@@ -2592,6 +2597,7 @@ fn toggle_outcome_started_is_distinct_from_stopped() {
             duration: Duration::from_millis(10),
         }],
         audio_duration: Duration::from_millis(10),
+        truncated: false,
     }));
 
     assert_ne!(started, stopped_none);
@@ -2621,6 +2627,7 @@ fn toggle_outcome_stopped_some_carries_capture_data() {
     let capture = CompletedDictationCapture {
         chunks: chunks.clone(),
         audio_duration: Duration::from_millis(15),
+        truncated: false,
     };
     let outcome = DictationToggleOutcome::Stopped(Some(capture));
 
@@ -2657,6 +2664,7 @@ fn toggle_cycle_produces_transcribable_capture() -> Result<()> {
     let capture = CompletedDictationCapture {
         audio_duration: crate::dictation::captured_duration(&chunks),
         chunks,
+        truncated: false,
     };
 
     assert_eq!(capture.audio_duration, Duration::from_millis(30));
@@ -2823,8 +2831,12 @@ fn builtin_dictation_overlay_transitions_are_ordered_correctly() {
 
     let handler_src = dictation_handler_source(&src);
     assert!(
-        !handler_src.contains("DictationSessionPhase::Finished"),
-        "handler must close the dictation overlay on success instead of rendering a Finished phase"
+        handler_src.contains("DictationSessionPhase::Finished"),
+        "handler must render a brief Finished confirmation before the overlay closes"
+    );
+    assert!(
+        handler_src.contains("schedule_dictation_overlay_close(cx, Self::DICTATION_FINISHED_LINGER)"),
+        "handler must schedule the overlay close after the Finished linger"
     );
 
     // Transcription error: overlay shows Failed.
@@ -3098,8 +3110,8 @@ fn overlay_uses_glass_bar_styling() {
         "overlay must use the shared footer hint renderer for action buttons"
     );
     let rail_start = window_src
-        .find("fn render_clickable_action_rail")
-        .expect("clickable action rail renderer must exist");
+        .find("fn render_static_action_rail")
+        .expect("action rail renderer must exist");
     let rail_src = &window_src[rail_start..rail_start + 900.min(window_src.len() - rail_start)];
     assert!(
         !rail_src.contains(".bg(rgba(rail_chrome.surface_rgba))"),
@@ -3645,10 +3657,11 @@ fn missing_model_error_detects_parakeet_string_and_logs_model_path() {
 
     let handler_src = dictation_handler_source(&src);
 
-    // The error arm must detect the Parakeet-specific model-missing string.
+    // The error arm must detect the model-missing string (both engines
+    // bail with "... model not downloaded").
     assert!(
-        handler_src.contains("Parakeet model not downloaded"),
-        "handler must detect the 'Parakeet model not downloaded' error string"
+        handler_src.contains(r#"error_text.contains("model not downloaded")"#),
+        "handler must detect the 'model not downloaded' error string"
     );
     assert!(
         handler_src.contains("resolve_default_model_path()"),
@@ -4790,7 +4803,7 @@ fn delivery_routes_ai_chat_transcript_via_set_ai_input() {
     let handler_start = src
         .find("fn handle_dictation_transcript")
         .expect("handler must exist");
-    let handler_src = &src[handler_start..handler_start + 3000.min(src.len() - handler_start)];
+    let handler_src = &src[handler_start..handler_start + 8000.min(src.len() - handler_start)];
 
     assert!(
         handler_src.contains("ai::set_ai_input"),
@@ -4810,7 +4823,7 @@ fn internal_delivery_failure_falls_back_to_frontmost_app() {
     let handler_start = src
         .find("fn handle_dictation_transcript")
         .expect("handler must exist");
-    let handler_src = &src[handler_start..handler_start + 3000.min(src.len() - handler_start)];
+    let handler_src = &src[handler_start..handler_start + 8000.min(src.len() - handler_start)];
 
     // Both notes and AI delivery must have fallback logging on failure.
     assert!(
@@ -5075,10 +5088,10 @@ fn missing_model_transcription_recovery_opens_download_prompt() {
 
     let handler_src = dictation_handler_source(&src);
 
-    // Find the Parakeet-missing branch within the Err arm.
+    // Find the model-missing branch within the Err arm.
     let parakeet_branch_start = handler_src
-        .find("Parakeet model not downloaded")
-        .expect("handler must detect the Parakeet-missing error string");
+        .find(r#"error_text.contains("model not downloaded")"#)
+        .expect("handler must detect the model-missing error string");
     // Scope far enough after the detection to capture the full recovery branch,
     // including the early return after cleanup / prompt dispatch.
     let branch_src = &handler_src[parakeet_branch_start
@@ -5130,8 +5143,8 @@ fn download_failure_uses_classified_error() {
         .expect("read builtin_execution.rs");
 
     let download_fn_start = src
-        .find("fn start_parakeet_model_download(")
-        .expect("start_parakeet_model_download must exist");
+        .find("fn start_dictation_model_download(")
+        .expect("start_dictation_model_download must exist");
     // Scope from the function start to the next top-level function
     // (`build_dictation_model_prompt`) to capture the full error handling.
     let download_tail = &src[download_fn_start..];
@@ -5258,4 +5271,175 @@ fn preflight_accepts_launcher_without_tracked_frontmost_app() {
         preflight_src.contains("can_accept_dictation_into_main_filter()"),
         "preflight must accept launcher as a valid dictation destination"
     );
+}
+
+// ---------------------------------------------------------------------------
+// Live transcript preview + dictation preference defaults
+// ---------------------------------------------------------------------------
+
+#[test]
+fn transcript_preview_tail_keeps_short_text_verbatim() {
+    let preview = super::window::transcript_preview_tail("hello world", 90);
+    assert_eq!(preview.as_ref(), "hello world");
+}
+
+#[test]
+fn transcript_preview_tail_keeps_freshest_tail_with_ellipsis() {
+    let text = "a".repeat(50) + " the freshest tail of the dictation";
+    let preview = super::window::transcript_preview_tail(&text, 20);
+    assert!(preview.starts_with('\u{2026}'), "long text must lead with an ellipsis");
+    assert!(
+        preview.ends_with("of the dictation"),
+        "preview must keep the newest words, got: {preview}"
+    );
+    assert!(preview.chars().count() <= 21, "preview must respect max chars + ellipsis");
+}
+
+#[test]
+fn common_char_prefix_len_tracks_appends_and_rewrites() {
+    use super::window::common_char_prefix_len;
+    // Pure append: boundary sits at the end of the previous partial.
+    assert_eq!(common_char_prefix_len("hello", "hello world"), 5);
+    // Tail rewrite: only the shared prefix stays stable.
+    assert_eq!(common_char_prefix_len("hel", "hello world"), 3);
+    assert_eq!(common_char_prefix_len("hello there", "hello world"), 6);
+    // First partial of a session: everything is fresh.
+    assert_eq!(common_char_prefix_len("", "hello"), 0);
+    // Multi-byte chars count as single chars.
+    assert_eq!(common_char_prefix_len("héllo", "héllo wörld"), 5);
+}
+
+#[test]
+fn transcript_preview_spans_concat_matches_preview_tail() {
+    use super::window::{transcript_preview_spans, transcript_preview_tail};
+    let cases: &[(&str, usize, usize)] = &[
+        ("hello world", 5, 90),
+        ("  padded text  ", 8, 90),
+        ("héllo wörld from dictation", 11, 12),
+        ("short", 0, 90),
+    ];
+    let long = "a".repeat(50) + " the freshest tail of the dictation";
+    for (text, fresh_from, max) in cases.iter().copied().chain([
+        (long.as_str(), 10, 20),
+        (long.as_str(), long.chars().count() - 4, 20),
+    ]) {
+        let (stable, fresh) = transcript_preview_spans(text, fresh_from, max);
+        let joined = format!("{stable}{fresh}");
+        assert_eq!(
+            joined,
+            transcript_preview_tail(text, max).as_ref(),
+            "spans must reassemble the preview for {text:?} at {fresh_from}"
+        );
+    }
+}
+
+#[test]
+fn transcript_preview_spans_splits_at_fresh_boundary() {
+    use super::window::transcript_preview_spans;
+    // Short text: split falls exactly at the boundary.
+    let (stable, fresh) = transcript_preview_spans("hello world", 5, 90);
+    assert_eq!(stable.as_ref(), "hello");
+    assert_eq!(fresh.as_ref(), " world");
+
+    // First partial: the whole line is fresh so it fades in as one.
+    let (stable, fresh) = transcript_preview_spans("hello", 0, 90);
+    assert!(stable.is_empty());
+    assert_eq!(fresh.as_ref(), "hello");
+
+    // Boundary that scrolled out of the tail window: ellipsis stays stable,
+    // every visible char is fresh.
+    let long = "a".repeat(50) + " tail words";
+    let (stable, fresh) = transcript_preview_spans(&long, 3, 10);
+    assert_eq!(stable.as_ref(), "\u{2026}");
+    assert_eq!(fresh.as_ref(), "tail words");
+
+    // Boundary inside the tail window keeps the older visible text stable.
+    let total = long.chars().count();
+    let (stable, fresh) = transcript_preview_spans(&long, total - 5, 10);
+    assert_eq!(fresh.as_ref(), "words");
+    assert!(stable.ends_with("tail "), "stable keeps visible prefix, got: {stable}");
+}
+
+#[test]
+fn dictation_preferences_defaults_are_safe() {
+    let prefs = crate::config::DictationPreferences::default();
+    assert!(prefs.save_history_enabled(), "history stays on by default");
+    assert_eq!(
+        prefs.silence_rms_threshold(),
+        crate::config::DictationPreferences::DEFAULT_SILENCE_RMS
+    );
+    assert_eq!(
+        prefs.max_duration(),
+        Some(std::time::Duration::from_secs(
+            crate::config::DictationPreferences::DEFAULT_MAX_DURATION_SECS
+        ))
+    );
+    assert!(prefs.live_preview_enabled(), "live preview on by default");
+    assert!(prefs.push_to_talk_enabled(), "push-to-talk on by default");
+}
+
+#[test]
+fn dictation_preferences_clamp_and_disable_rules() {
+    let prefs = crate::config::DictationPreferences {
+        save_history: Some(false),
+        silence_rms: Some(9.0),
+        max_duration_secs: Some(0),
+        live_preview: Some(false),
+        push_to_talk: Some(false),
+        ..Default::default()
+    };
+    assert!(!prefs.save_history_enabled());
+    assert_eq!(prefs.silence_rms_threshold(), 0.5, "silence gate clamps to 0.5");
+    assert_eq!(prefs.max_duration(), None, "0 disables the max-duration guard");
+    assert!(!prefs.live_preview_enabled());
+    assert!(!prefs.push_to_talk_enabled());
+
+    let tiny = crate::config::DictationPreferences {
+        max_duration_secs: Some(5),
+        ..Default::default()
+    };
+    assert_eq!(
+        tiny.max_duration(),
+        Some(std::time::Duration::from_secs(30)),
+        "sub-30s ceilings clamp up to 30s"
+    );
+}
+
+#[test]
+fn completed_capture_truncation_flag_reaches_stop_receipt() {
+    // The stop receipt must expose `truncated` so DevTools can prove whether
+    // the capture tail was collected before the deadline.
+    let runtime_src = std::fs::read_to_string("src/dictation/runtime.rs").expect("read runtime");
+    assert!(
+        runtime_src.contains(r#""truncated": truncated,"#),
+        "stop receipt must carry the truncated flag"
+    );
+}
+
+#[test]
+fn dictation_target_destination_mapping_is_exhaustive_and_stable() {
+    use crate::dictation::types::{DictationDestination, DictationTarget};
+    let cases = [
+        (
+            DictationTarget::MainWindowFilter,
+            DictationDestination::MainWindowFilter,
+        ),
+        (
+            DictationTarget::MainWindowPrompt,
+            DictationDestination::ActivePrompt,
+        ),
+        (DictationTarget::NotesEditor, DictationDestination::NotesEditor),
+        (
+            DictationTarget::AiChatComposer,
+            DictationDestination::AiChatComposer,
+        ),
+        (
+            DictationTarget::TabAiHarness,
+            DictationDestination::TabAiHarness,
+        ),
+        (DictationTarget::ExternalApp, DictationDestination::FrontmostApp),
+    ];
+    for (target, destination) in cases {
+        assert_eq!(target.destination(), destination);
+    }
 }

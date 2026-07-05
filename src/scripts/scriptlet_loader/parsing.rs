@@ -251,5 +251,6 @@ pub(crate) fn parse_scriptlet_section(
             .as_ref()
             .and_then(|t| t.alias.clone())
             .or_else(|| html_metadata.get("alias").cloned()),
+        icon: html_metadata.get("icon").cloned(),
     })
 }

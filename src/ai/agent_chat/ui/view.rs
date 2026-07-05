@@ -5,6 +5,7 @@
 //! approval cards. Wraps an `AgentChatThread` entity for the Tab AI surface.
 
 use std::collections::HashSet;
+use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 use gpui::{
@@ -34,9 +35,9 @@ use super::history_popup::{
     HISTORY_POPUP_SEARCH_LIMIT,
 };
 use super::thread::{
-    AgentChatCalloutSeverity, AgentChatContextBootstrapState, AgentChatHostWindowKind,
-    AgentChatHostWindowState, AgentChatThread, AgentChatThreadMessage, AgentChatThreadMessageRole,
-    AgentChatThreadStatus,
+    decide_agent_chat_cwd_resolution, AgentChatCalloutSeverity, AgentChatContextBootstrapState,
+    AgentChatCwdResolutionDecision, AgentChatHostWindowKind, AgentChatHostWindowState,
+    AgentChatThread, AgentChatThreadMessage, AgentChatThreadMessageRole, AgentChatThreadStatus,
 };
 use super::types::{
     AgentChatComposerParentWindow, AgentChatComposerPickerSession, AgentChatComposerPickerTrigger,
@@ -368,6 +369,7 @@ impl AgentChatFooterSnapshot {
                 label: cwd.clone(),
                 icon_token: "folder".to_string(),
                 key: None,
+                tooltip: Some("Working directory — click to change".to_string()),
             });
         crate::footer_popup::FooterLeftInfo {
             dot_status: self.dot_status,
@@ -1711,8 +1713,8 @@ impl AgentChatView {
             }
             return vec![AgentChatFooterButtonSpec {
                 action: FooterAction::Replace,
-                key: "⌘↵",
-                label: "Replace",
+                key: "↵",
+                label: "Paste",
                 selected: false,
                 enabled: state.can_replace,
                 disabled_reason: if !state.can_replace {
@@ -2270,6 +2272,49 @@ impl AgentChatView {
         );
         cx.notify();
         true
+    }
+
+    /// Tab advances through the variation cards and wraps back to the first,
+    /// unlike Up/Down which saturate at the edges.
+    fn cycle_focused_text_variation_selection(&mut self, cx: &mut Context<Self>) -> bool {
+        let Some(next) = Self::next_variation_index_wrapping(
+            self.focused_text_selected_variation,
+            self.focused_text_variations.len(),
+        ) else {
+            return false;
+        };
+        self.select_focused_text_variation(next, cx)
+    }
+
+    fn next_variation_index_wrapping(current: Option<usize>, count: usize) -> Option<usize> {
+        if count == 0 {
+            return None;
+        }
+        Some(match current.filter(|index| *index < count) {
+            Some(index) => (index + 1) % count,
+            None => 0,
+        })
+    }
+
+    /// Plain Tab cycles the focused-text variation cards so the user can pick
+    /// the rewrite to paste. Shift+Tab stays reserved for the profile picker;
+    /// the scope toggle keeps Tab while no variations exist (ask phase).
+    fn handle_focused_text_variation_tab(
+        &mut self,
+        has_shift: bool,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        if has_shift
+            || self.ui_variant != AgentChatUiVariant::FocusedTextMini
+            || self.focused_text.is_none()
+            || self.focused_text_variations.is_empty()
+            || self.focused_text_editing_variation.is_some()
+            || self.scope_focused
+            || self.composer_picker_session.is_some()
+        {
+            return false;
+        }
+        self.cycle_focused_text_variation_selection(cx)
     }
 
     fn move_focused_text_variation_selection(
@@ -3149,9 +3194,40 @@ impl AgentChatView {
                 Some(FocusedTextMiniPhase::Result | FocusedTextMiniPhase::Error)
             )
         {
+            // AI-edit of the selected variation: a typed instruction in the
+            // result phase refines the selected variation into a fresh set of
+            // variations (⌘←/⌘→ walks back to the previous set) instead of
+            // expanding into the full chat surface.
+            if let Some(source_text) = self.selected_focused_text_variation_text() {
+                if !self.focused_text_variations.is_empty() {
+                    self.focused_text_variation_history
+                        .push(self.focused_text_variations.clone());
+                    self.focused_text_variation_history_index = None;
+                }
+                tracing::info!(
+                    target: "script_kit::focused_text",
+                    event = "focused_text_variation_refine_submitted",
+                    source_index = ?self.focused_text_selected_variation,
+                    source_text_len = source_text.chars().count(),
+                    history_len = self.focused_text_variation_history.len(),
+                );
+                return self.submit_focused_text_turn(
+                    crate::ai::focused_text::FocusedTextEditSemantics::Replace,
+                    cx,
+                    Some(source_text),
+                );
+            }
             self.expand_focused_text_to_full_chat(cx);
         }
         self.submit_focused_text_turn(semantics, cx, None)
+    }
+
+    /// The non-empty text of the currently selected variation, if any.
+    fn selected_focused_text_variation_text(&self) -> Option<String> {
+        self.focused_text_selected_variation
+            .and_then(|index| self.focused_text_variations.get(index))
+            .map(|variation| variation.text.clone())
+            .filter(|text| !text.trim().is_empty())
     }
 
     fn footer_hint_label(button: &AgentChatFooterButtonSpec) -> &'static str {
@@ -3165,6 +3241,7 @@ impl AgentChatView {
             FooterAction::Actions => "⌘K Actions",
             FooterAction::Ai => "⌘↵ Agent Chat",
             FooterAction::Apply => "⌘↩ Apply",
+            FooterAction::Replace if button.key == "↵" => "↵ Paste",
             FooterAction::Replace if button.key == "⌘↵" => "⌘↵ Replace",
             FooterAction::Replace => "⌘R Replace",
             FooterAction::Append => "⌘A Append",
@@ -3243,12 +3320,12 @@ impl AgentChatView {
             | FooterAction::Copy
             | FooterAction::Expand => {}
             FooterAction::Cwd => {
-                // TODO: Open the CWD picker as an overlay so the user can
-                // change their directory without leaving the chat. For now,
-                // log so the chip-click receipt still appears in tests.
+                self.cache_composer_parent_window(window, cx);
+                window.focus(&self.focus_handle, cx);
+                self.insert_picker_hint_prefix(">", cx);
                 tracing::info!(
                     target: "script_kit::agent_chat",
-                    event = "agent_chat_footer_cwd_chip_clicked_not_yet_wired",
+                    event = "agent_chat_footer_cwd_chip_opened_picker",
                 );
             }
             FooterAction::AgentModel => {
@@ -4989,6 +5066,153 @@ impl AgentChatView {
         }
     }
 
+    fn respawn_live_thread_for_cwd(
+        &mut self,
+        selected_cwd: PathBuf,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let Some(thread_entity) = self.thread() else {
+            return false;
+        };
+        let (current_cwd, status, current_profile_id) = {
+            let thread = thread_entity.read(cx);
+            (
+                thread.cwd().clone(),
+                thread.status(),
+                thread.profile_id().to_string(),
+            )
+        };
+        match decide_agent_chat_cwd_resolution(&current_cwd, &selected_cwd, status) {
+            AgentChatCwdResolutionDecision::Unchanged => return true,
+            AgentChatCwdResolutionDecision::BlockInFlight => {
+                thread_entity.update(cx, |thread, cx| {
+                    thread.set_notice_callout(
+                        "Working directory not changed",
+                        "Wait for the current Agent Chat turn to finish, then pick the directory again.",
+                        cx,
+                    );
+                });
+                tracing::info!(
+                    target: "script_kit::tab_ai",
+                    event = "agent_chat_cwd_respawn_blocked",
+                    old_cwd = %current_cwd.display(),
+                    new_cwd = %selected_cwd.display(),
+                    status = ?status,
+                );
+                return false;
+            }
+            AgentChatCwdResolutionDecision::RespawnNow => {}
+        }
+
+        let profile_ctx = crate::ai::agent_chat::profiles::AgentChatProfileContext::from_setup();
+        let ai_preferences = crate::config::load_user_preferences().ai;
+        let pi_launch =
+            match crate::ai::agent_chat::launch::resolve_selected_pi_launch_with_cwd_override(
+                &ai_preferences,
+                &profile_ctx,
+                Some(selected_cwd.clone()),
+            ) {
+                Ok(launch) => launch,
+                Err(error) => {
+                    thread_entity.update(cx, |thread, cx| {
+                        thread.set_notice_callout(
+                            "Working directory not changed",
+                            format!("Failed to resolve Pi Agent Chat session: {error}"),
+                            cx,
+                        );
+                    });
+                    tracing::warn!(
+                        target: "script_kit::tab_ai",
+                        event = "agent_chat_cwd_respawn_failed",
+                        old_cwd = %current_cwd.display(),
+                        new_cwd = %selected_cwd.display(),
+                        error = %error,
+                    );
+                    return false;
+                }
+            };
+        let manager = crate::ai::agent_chat::launch::warm_session_manager();
+        let (lease, origin) = match manager.acquire_ready_or_spawn_cold(pi_launch.warm_spec()) {
+            Ok(result) => result,
+            Err(error) => {
+                thread_entity.update(cx, |thread, cx| {
+                    thread.set_notice_callout(
+                        "Working directory not changed",
+                        format!("Failed to start Pi Agent Chat session: {error}"),
+                        cx,
+                    );
+                });
+                tracing::warn!(
+                    target: "script_kit::tab_ai",
+                    event = "agent_chat_cwd_respawn_failed",
+                    old_cwd = %current_cwd.display(),
+                    new_cwd = %selected_cwd.display(),
+                    error = %error,
+                );
+                return false;
+            }
+        };
+
+        let new_ui_thread_id = lease.ui_thread_id.clone();
+        let new_cwd = lease.cwd.clone();
+        // The respawn resolves the *currently selected* profile (same ambient
+        // resolution as every launch path). If the user changed their selected
+        // profile since this thread launched, the swap also changes the
+        // thread's profile — surface that instead of switching silently.
+        let profile_changed = pi_launch.profile.id != current_profile_id;
+        let new_profile_name = pi_launch.profile.name.clone();
+        thread_entity.update(cx, |thread, cx| {
+            thread.replace_pi_session(
+                lease.connection.clone(),
+                lease.ui_thread_id.clone(),
+                lease.cwd.clone(),
+                pi_launch.profile.id.clone(),
+                pi_launch.profile.name.clone().into(),
+                pi_launch.profile.icon_name.clone(),
+                pi_launch.available_models.clone(),
+                pi_launch.selected_model_id.clone(),
+                cx,
+            );
+            let mut message = format!(
+                "Working directory changed to `{}`. The Pi session was restarted for future turns; visible chat history was preserved.",
+                new_cwd.display()
+            );
+            if profile_changed {
+                message.push_str(&format!(
+                    " This thread now uses the currently selected profile: {new_profile_name}."
+                ));
+            }
+            thread.push_system_message(message, cx);
+        });
+        // Record under the profile the thread now runs as (pi_launch.profile),
+        // not the pre-respawn profile — on profile drift the picker reads
+        // recents for the live thread's profile, so recording under the old id
+        // would silently misattribute the entry. The profile's own default cwd
+        // is excluded as noise (it's already the Current row on fresh threads).
+        let default_cwd = pi_launch
+            .profile
+            .cwd
+            .clone()
+            .unwrap_or_else(crate::setup::get_kit_path);
+        crate::ai::agent_chat::ui::record_agent_chat_cwd_recent(
+            &pi_launch.profile.id,
+            new_cwd.clone(),
+            Some(default_cwd.as_path()),
+        );
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "agent_chat_cwd_respawn",
+            old_cwd = %current_cwd.display(),
+            new_cwd = %new_cwd.display(),
+            ui_thread_id = %new_ui_thread_id,
+            old_profile_id = %current_profile_id,
+            new_profile_id = %pi_launch.profile.id,
+            profile_changed = profile_changed,
+            warm_origin = ?origin,
+        );
+        true
+    }
+
     /// Switch the session to a retained background thread by `ui_thread_id`.
     /// Returns false when no retained thread matches.
     pub(crate) fn switch_to_thread(&mut self, ui_thread_id: &str, cx: &mut Context<Self>) -> bool {
@@ -5951,7 +6175,12 @@ impl AgentChatView {
     /// Consume Tab / Shift+Tab. When a permission card is active,
     /// cycle the highlighted option; otherwise just swallow the key so
     /// the global interceptors do not re-open a fresh Agent Chat chat.
-    pub(crate) fn handle_tab_key(&mut self, has_shift: bool, cx: &mut Context<Self>) -> bool {
+    pub(crate) fn handle_tab_key(
+        &mut self,
+        has_shift: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
         if self.is_setup_mode() {
             cx.notify();
             return true;
@@ -5975,6 +6204,23 @@ impl AgentChatView {
 
         // Plain Tab accepts the focused picker item (same as Enter but without submit).
         if !has_shift && self.handle_picker_accept_key("tab", cx) {
+            return true;
+        }
+
+        // Plain Tab accepts the highlighted spine projection row (e.g. the
+        // `>` working-directory list). The global Tab interceptor routes Tab
+        // here before the composer's key-down handler ever sees it, so
+        // without this check Tab silently no-ops while Enter accepts —
+        // proven at runtime via the cwd picker (Tab left `>desk` unresolved
+        // while Enter resolved and respawned).
+        if !has_shift
+            && self.agent_chat_spine_owns_list()
+            && self.accept_agent_chat_spine_projection_row(window, cx)
+        {
+            return true;
+        }
+
+        if self.handle_focused_text_variation_tab(has_shift, cx) {
             return true;
         }
 
@@ -6684,6 +6930,19 @@ impl AgentChatView {
         turns
     }
 
+    /// Instant-rewrite entry: the staged focused text IS the context, so mark
+    /// bootstrap ready and fire the three-variation rewrite turn immediately
+    /// instead of waiting for the user to press Enter.
+    pub(crate) fn submit_instant_rewrite(&mut self, cx: &mut Context<Self>) -> Result<(), String> {
+        self.live_thread()
+            .update(cx, |thread, cx| thread.mark_context_bootstrap_ready(cx));
+        self.submit_focused_text_turn(
+            crate::ai::focused_text::FocusedTextEditSemantics::Replace,
+            cx,
+            None,
+        )
+    }
+
     pub(crate) fn submit_focused_text_turn(
         &mut self,
         semantics: crate::ai::focused_text::FocusedTextEditSemantics,
@@ -7307,12 +7566,13 @@ impl AgentChatView {
             tracing::info!(target: "script_kit::agent_chat_spine", event = "refresh_skipped_setup_mode");
             return;
         }
-        let (text, cursor, thread_cwd) = {
+        let (text, cursor, thread_cwd, profile_id) = {
             let thread = self.live_thread().read(cx);
             (
                 thread.input.text().to_string(),
                 thread.input.cursor(),
                 thread.cwd().clone(),
+                thread.profile_id().to_string(),
             )
         };
         // Snapshot for the `@project:` subsearch: section builders run
@@ -7320,6 +7580,8 @@ impl AgentChatView {
         self.composer_spine.project_scope_cwd = Some(thread_cwd).filter(|cwd| {
             !cwd.as_os_str().is_empty() && cwd.as_path() != std::path::Path::new(".")
         });
+        self.composer_spine.project_scope_cwd_recents =
+            crate::ai::agent_chat::ui::agent_chat_cwd_recents_for_profile(&profile_id);
         self.composer_spine.refresh(&text, cursor);
         let owns = self.agent_chat_spine_owns_list();
         let kind = self
@@ -7511,11 +7773,15 @@ impl AgentChatView {
             }
         }
 
-        crate::spine::list::build_spine_list_sections_full_with_resolved_tokens(
+        crate::spine::list::build_spine_list_sections_full_with_resolved_tokens_and_context(
             &self.composer_spine.input.parse,
             projection,
             None,
             &|token| self.typed_mention_aliases.contains_key(token),
+            crate::spine::list::SpineListBuildContext {
+                current_cwd: self.composer_spine.project_scope_cwd.as_deref(),
+                cwd_recents: &self.composer_spine.project_scope_cwd_recents,
+            },
         )
     }
 
@@ -7911,17 +8177,17 @@ impl AgentChatView {
                 trailing_space,
             } => {
                 // CWD resolution mirrors the main-menu behavior: strip the
-                // segment from the composer entirely and apply the path to
-                // the thread so the chip and next prompt run from the chosen
-                // directory. Other sources insert the resolved replacement
-                // token like normal.
+                // segment from the composer entirely and respawn/re-acquire
+                // the Pi session under the chosen directory. Pi binds cwd at
+                // launch time, so updating only `thread.cwd()` would make the
+                // footer chip lie while the agent kept using its original cwd.
+                // Other sources insert the resolved replacement token like
+                // normal.
                 if resolution_source.as_ref() == "cwd" {
-                    let path = std::path::PathBuf::from(resolution_id.as_ref());
-                    if let Some(thread_entity) = self.thread() {
-                        thread_entity.update(cx, |thread, cx| {
-                            thread.set_cwd(path);
-                            cx.notify();
-                        });
+                    let path = PathBuf::from(resolution_id.as_ref());
+                    let changed = self.respawn_live_thread_for_cwd(path, cx);
+                    if !changed {
+                        return false;
                     }
                     let ok = self.replace_agent_chat_spine_segment(
                         segment_index,
@@ -8128,12 +8394,13 @@ impl AgentChatView {
         if self.is_setup_mode() {
             return false;
         }
-        let (text, cursor, thread_cwd) = {
+        let (text, cursor, thread_cwd, profile_id) = {
             let thread = self.live_thread().read(cx);
             (
                 thread.input.text().to_string(),
                 thread.input.cursor(),
                 thread.cwd().clone(),
+                thread.profile_id().to_string(),
             )
         };
         // Snapshot for the `@project:` subsearch: section builders run
@@ -8141,6 +8408,8 @@ impl AgentChatView {
         self.composer_spine.project_scope_cwd = Some(thread_cwd).filter(|cwd| {
             !cwd.as_os_str().is_empty() && cwd.as_path() != std::path::Path::new(".")
         });
+        self.composer_spine.project_scope_cwd_recents =
+            crate::ai::agent_chat::ui::agent_chat_cwd_recents_for_profile(&profile_id);
         self.composer_spine.refresh(&text, cursor);
         let plan = crate::spine::prompt_plan::build_spine_prompt_plan_with_aliases(
             &self.composer_spine.input.parse,
@@ -8274,9 +8543,10 @@ impl AgentChatView {
 
         for section in sections {
             children.push(
-                crate::list_item::render_section_header(
+                crate::list_item::render_section_header_with_subtitle(
                     section.title.as_ref(),
                     section.icon.as_ref().map(|icon| icon.as_ref()),
+                    section.subtitle.as_ref().map(|subtitle| subtitle.as_ref()),
                     list_colors,
                     is_first_section,
                 )
@@ -13617,6 +13887,13 @@ impl AgentChatView {
         }
 
         if crate::ui_foundation::is_key_tab(key)
+            && self.handle_focused_text_variation_tab(modifiers.shift, cx)
+        {
+            cx.stop_propagation();
+            return;
+        }
+
+        if crate::ui_foundation::is_key_tab(key)
             && self.handle_focused_text_scope_tab(modifiers.shift, cx)
         {
             cx.stop_propagation();
@@ -13740,6 +14017,25 @@ impl AgentChatView {
             return;
         }
 
+        // ── ⌘E opens the manual editor on the selected variation ──
+        if self.ui_variant == AgentChatUiVariant::FocusedTextMini
+            && self.focused_text.is_some()
+            && key.eq_ignore_ascii_case("e")
+            && modifiers.platform
+            && !modifiers.shift
+            && !modifiers.control
+            && !modifiers.alt
+            && !self.focused_text_variations.is_empty()
+            && self.focused_text_editing_variation.is_none()
+            && !self.scope_focused
+            && self.composer_picker_session.is_none()
+        {
+            if self.enter_focused_text_variation_editor(cx) {
+                cx.stop_propagation();
+                return;
+            }
+        }
+
         if self.ui_variant == AgentChatUiVariant::FocusedTextMini
             && self.focused_text.is_some()
             && !self.focused_text_variations.is_empty()
@@ -13779,6 +14075,9 @@ impl AgentChatView {
             return;
         }
 
+        // ── Mini result phase: plain Enter with an empty input pastes the
+        // selected variation back into the source app and dismisses the mini.
+        // (Manual editing of a variation moved to ⌘E.)
         if self.ui_variant == AgentChatUiVariant::FocusedTextMini
             && self.focused_text.is_some()
             && crate::ui_foundation::is_key_enter(key)
@@ -13790,8 +14089,33 @@ impl AgentChatView {
             && self.composer_picker_session.is_none()
             && self.focused_text_editing_variation.is_none()
         {
-            let input_empty = self.live_thread().read(cx).input.text().trim().is_empty();
-            if input_empty && self.enter_focused_text_variation_editor(cx) {
+            let (input_empty, result_ready, has_output) = {
+                let thread = self.live_thread().read(cx);
+                (
+                    thread.input.text().trim().is_empty(),
+                    self.focused_text_mini_result_ready_for_thread(thread),
+                    self.selected_focused_text_output(thread).is_some(),
+                )
+            };
+            // A completed selected variation is pastable even while the other
+            // angles are still streaming — Enter must not cancel the stream
+            // out from under a user who already picked their rewrite.
+            let selected_variation_complete = self
+                .focused_text_selected_variation
+                .and_then(|index| self.focused_text_variations.get(index))
+                .map(|variation| {
+                    variation.status == FocusedTextVariationStatus::Complete
+                        && !variation.text.trim().is_empty()
+                })
+                .unwrap_or(false);
+            if input_empty && (selected_variation_complete || (result_ready && has_output)) {
+                let receipt = self.apply_focused_text_output(
+                    crate::ai::focused_text::FocusedTextApplyAction::Replace,
+                    cx,
+                );
+                if receipt.success {
+                    self.trigger_close_window_requested(window, cx);
+                }
                 cx.stop_propagation();
                 return;
             }
@@ -14236,7 +14560,11 @@ impl Render for AgentChatView {
                             .to_string()
                     }),
                 footer_snapshot.agent_model_header_label(),
-            );
+            )
+            // In Agent Chat plain Tab is owned locally (picker accept /
+            // swallowed) and never opens the cwd picker — hide the ⇥ keycap.
+            // Shift+Tab does open the in-chat profile picker, so ⇧⇥ stays.
+            .with_tab_action(crate::components::main_view_chrome::MainViewTabChipAction::Inactive);
             let header = crate::components::main_view_chrome::MainViewHeaderChrome {
                 context: Some(
                     crate::components::main_view_chrome::render_main_view_context_zone_required(
@@ -14705,6 +15033,32 @@ mod tests {
     }
 
     #[test]
+    fn variation_tab_cycle_wraps_and_handles_empty() {
+        // No cards → no selection to make.
+        assert_eq!(AgentChatView::next_variation_index_wrapping(None, 0), None);
+        // First Tab lands on the first card.
+        assert_eq!(
+            AgentChatView::next_variation_index_wrapping(None, 3),
+            Some(0)
+        );
+        // Tab advances…
+        assert_eq!(
+            AgentChatView::next_variation_index_wrapping(Some(0), 3),
+            Some(1)
+        );
+        // …and wraps from the last card back to the first.
+        assert_eq!(
+            AgentChatView::next_variation_index_wrapping(Some(2), 3),
+            Some(0)
+        );
+        // Stale out-of-range selection resets to the first card.
+        assert_eq!(
+            AgentChatView::next_variation_index_wrapping(Some(7), 3),
+            Some(0)
+        );
+    }
+
+    #[test]
     fn thread_summary_title_uses_first_line_truncated() {
         assert_eq!(
             AgentChatView::thread_summary_title("Refactor the parser\nwith details"),
@@ -14787,6 +15141,14 @@ mod tests {
             cursor, 6,
             "cursor should land after the preserved trailing space"
         );
+    }
+
+    #[test]
+    fn cwd_footer_prefix_insert_opens_cwd_sigil_at_cursor() {
+        let (updated, cursor) =
+            AgentChatView::replace_active_trigger_or_insert_at_cursor("review files", 6, ">");
+        assert_eq!(updated, "review > files");
+        assert_eq!(cursor, 8);
     }
 
     #[test]

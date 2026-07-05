@@ -18,6 +18,7 @@ impl ScriptListApp {
                 | AppView::ThemeChooserView { .. }
                 | AppView::EmojiPickerView { .. }
                 | AppView::BrowseKitsView { .. }
+                | AppView::MigrateV1View { .. }
                 | AppView::InstalledKitsView { .. }
                 | AppView::ProcessManagerView { .. }
                 | AppView::SearchAiPresetsView { .. }

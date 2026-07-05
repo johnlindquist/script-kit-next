@@ -394,6 +394,7 @@ fn test_search_accessories_hide_source_hint_during_filtering() {
 #[test]
 fn test_resolve_tool_badge_hidden_during_filtering_for_scriptlets() {
     let scriptlet = Scriptlet {
+        icon: None,
         name: "Paste Rich Link".to_string(),
         description: Some("Paste as markdown link".to_string()),
         code: "https://example.com".to_string(),
@@ -415,6 +416,7 @@ fn test_resolve_tool_badge_hidden_during_filtering_for_scriptlets() {
 #[test]
 fn test_resolve_tool_badge_kept_when_not_filtering_for_scriptlets() {
     let scriptlet = Scriptlet {
+        icon: None,
         name: "Paste Rich Link".to_string(),
         description: Some("Paste as markdown link".to_string()),
         code: "https://example.com".to_string(),
@@ -634,6 +636,7 @@ fn test_hint_main_kit_not_shown() {
 fn test_scriptlet_hint_group_shown() {
     use crate::scripts::Scriptlet;
     let sl = Scriptlet {
+        icon: None,
         name: "Open GitHub".to_string(),
         description: None,
         code: "open https://github.com".to_string(),
@@ -657,6 +660,7 @@ fn test_scriptlet_hint_group_shown() {
 fn test_scriptlet_hint_main_group_hidden() {
     use crate::scripts::Scriptlet;
     let sl = Scriptlet {
+        icon: None,
         name: "Hello".to_string(),
         description: None,
         code: "echo hello".to_string(),
@@ -723,6 +727,7 @@ fn test_hint_tags_preferred_over_enter_text() {
 
 fn make_test_scriptlet(name: &str, code: &str, tool: &str) -> crate::scripts::Scriptlet {
     crate::scripts::Scriptlet {
+        icon: None,
         name: name.to_string(),
         description: None,
         code: code.to_string(),

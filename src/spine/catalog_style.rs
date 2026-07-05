@@ -145,6 +145,17 @@ mod tests {
         // Built-ins not overridden remain intact.
         assert!(styles.iter().any(|s| s.id == "professional"));
     }
+
+    #[test]
+    fn style_rows_surface_no_sigil_badge() {
+        // The `.` sigil is plumbing; the rewrite UI must not surface it.
+        let rows = build_style_rows("", 0, 0..0, true);
+        assert!(!rows.is_empty());
+        assert!(
+            rows.iter().all(|row| row.badges.is_empty()),
+            "style rows must not carry a '.' badge"
+        );
+    }
 }
 
 pub(super) fn build_style_rows(
@@ -174,7 +185,9 @@ pub(super) fn build_style_rows(
                 subtitle: Some(ss(spec.description)),
                 meta: None,
                 icon: Some(ss(spec.icon)),
-                badges: vec![ss(".")],
+                // No "." badge: the sigil is plumbing, not something the
+                // rewrite UI should surface to the user.
+                badges: Vec::new(),
                 score: i32::MAX.saturating_sub(rank as i32),
                 is_selectable: true,
                 // Style-only input auto-submits the rewrite plan to Agent

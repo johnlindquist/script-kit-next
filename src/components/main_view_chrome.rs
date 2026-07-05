@@ -26,10 +26,31 @@ pub(crate) const MAIN_VIEW_HEADER_DIVIDER_ID: &str = "main-view-header-divider";
 #[allow(dead_code)]
 pub(crate) const MAIN_VIEW_MAIN_ID: &str = "main-view-main";
 
+/// What pressing Tab actually does on the surface rendering the context row.
+/// The header Tab chip must always advertise the real action, so the owning
+/// surface computes this from the same state the Tab interceptor branches on.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum MainViewTabChipAction {
+    /// Tab opens the cwd picker — chip shows the cwd label with a ⇥ keycap.
+    ChangeCwd,
+    /// Tab sends the typed query to the zero-context Quick AI — chip swaps to
+    /// a "Quick AI" label with the ⇥ keycap.
+    QuickAi,
+    /// Tab does something else (or nothing) here — keep the cwd label for
+    /// orientation but hide the ⇥ keycap so the chip never lies.
+    Inactive,
+}
+
+pub(crate) const MAIN_VIEW_QUICK_AI_CHIP_LABEL: &str = "Quick AI";
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct MainViewContextLabels {
     pub(crate) cwd_label: String,
     pub(crate) agent_model_label: String,
+    pub(crate) tab_action: MainViewTabChipAction,
+    /// Whether Shift+Tab actually opens the agent/model (profile) picker on
+    /// this surface. When false the agent-model chip drops its ⇧⇥ keycap.
+    pub(crate) shift_tab_key_active: bool,
 }
 
 impl MainViewContextLabels {
@@ -43,7 +64,19 @@ impl MainViewContextLabels {
         Self {
             cwd_label,
             agent_model_label,
+            tab_action: MainViewTabChipAction::ChangeCwd,
+            shift_tab_key_active: true,
         }
+    }
+
+    pub(crate) fn with_tab_action(mut self, tab_action: MainViewTabChipAction) -> Self {
+        self.tab_action = tab_action;
+        self
+    }
+
+    pub(crate) fn with_shift_tab_key_active(mut self, active: bool) -> Self {
+        self.shift_tab_key_active = active;
+        self
     }
 }
 
@@ -244,9 +277,22 @@ pub(crate) fn render_main_view_context_zone_required(
     let header_keycap_font_size = (info.font_size * 0.88).max(8.0);
     let header_keycap_height = (info.font_size + 7.0).max(16.0);
 
-    let cwd_label = labels.cwd_label;
     let agent_model_label = labels.agent_model_label;
 
+    // The Tab chip always advertises the actual Tab action: the cwd label
+    // when Tab opens the cwd picker, "Quick AI" when Tab submits the typed
+    // query, and a keycap-less cwd label when Tab does neither here.
+    let cwd_label = match labels.tab_action {
+        MainViewTabChipAction::QuickAi => MAIN_VIEW_QUICK_AI_CHIP_LABEL.to_string(),
+        MainViewTabChipAction::ChangeCwd | MainViewTabChipAction::Inactive => labels.cwd_label,
+    };
+    let tab_key_active = !matches!(labels.tab_action, MainViewTabChipAction::Inactive);
+
+    // Inactive keeps rendering through the same hint-button component with an
+    // empty key (which renders zero keycaps) instead of a bare text div: the
+    // component's leading edge padding is what keeps the label's x-position
+    // stable, so swapping components would make the chip jump horizontally
+    // when Tab activates/deactivates (e.g. entering file navigation).
     let cwd_key = if info.show_keys {
         div()
             .opacity(info.key_opacity.clamp(0.0, 1.0))
@@ -254,7 +300,7 @@ pub(crate) fn render_main_view_context_zone_required(
                 crate::components::footer_chrome::render_footer_hint_button_like(
                     crate::components::footer_chrome::FooterHintButtonSpec {
                         label: cwd_label.clone().into(),
-                        key: "⇥".into(),
+                        key: if tab_key_active { "⇥" } else { "" }.into(),
                         slot_width_px: None,
                         key_first: false,
                         justify: crate::components::footer_chrome::FooterHintContentJustify::Start,
@@ -285,7 +331,7 @@ pub(crate) fn render_main_view_context_zone_required(
                 crate::components::footer_chrome::render_footer_hint_button_like(
                     crate::components::footer_chrome::FooterHintButtonSpec {
                         label: agent_model_label.clone().into(),
-                        key: "⇧⇥".into(),
+                        key: if labels.shift_tab_key_active { "⇧⇥" } else { "" }.into(),
                         slot_width_px: None,
                         key_first: false,
                         justify: crate::components::footer_chrome::FooterHintContentJustify::Start,

@@ -31,6 +31,7 @@ fn make_script(name: &str, plugin_id: &str) -> Arc<Script> {
 
 fn make_scriptlet(name: &str, plugin_id: &str) -> Arc<Scriptlet> {
     Arc::new(Scriptlet {
+        icon: None,
         name: name.to_string(),
         code: "echo hello".to_string(),
         tool: "bash".to_string(),

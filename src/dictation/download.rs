@@ -5,7 +5,8 @@
 //! downloads and reports progress via a callback.
 
 use crate::dictation::transcription::{
-    resolve_default_model_path, PARAKEET_MODEL_ARCHIVE_SIZE, PARAKEET_MODEL_URL,
+    resolve_default_model_path, resolve_whisper_model_path, PARAKEET_MODEL_ARCHIVE_SIZE,
+    PARAKEET_MODEL_URL, WHISPER_MODEL_SIZE, WHISPER_MODEL_URL,
 };
 use anyhow::{Context, Result};
 use std::io::Read;
@@ -284,6 +285,81 @@ pub fn parakeet_partial_archive_size() -> Option<u64> {
     let model_dir = resolve_default_model_path();
     let models_parent = model_dir.parent()?;
     let partial_path = models_parent.join("parakeet-v3-int8.tar.gz.partial");
+    let len = std::fs::metadata(partial_path).ok()?.len();
+    (len > 0).then_some(len)
+}
+
+/// Download the Whisper Medium (q4_1) model file to the models directory.
+///
+/// Unlike the Parakeet archive there is no extraction step: the file is
+/// downloaded to a `.partial` sibling (resumable via HTTP Range) and then
+/// atomically renamed into place.
+pub fn download_whisper_model(
+    on_progress: impl Fn(DownloadPhase, DownloadProgress) + Send,
+    cancel: Arc<AtomicBool>,
+) -> Result<PathBuf> {
+    let model_path = resolve_whisper_model_path();
+    let models_parent = model_path
+        .parent()
+        .context("cannot resolve models parent directory")?;
+
+    std::fs::create_dir_all(models_parent).with_context(|| {
+        format!(
+            "failed to create models directory: {}",
+            models_parent.display()
+        )
+    })?;
+
+    let partial_path = models_parent.join("whisper-medium-q4_1.bin.partial");
+
+    download_archive(
+        WHISPER_MODEL_URL,
+        &partial_path,
+        WHISPER_MODEL_SIZE,
+        &on_progress,
+        &cancel,
+    )?;
+
+    if cancel.load(Ordering::Relaxed) {
+        on_progress(
+            DownloadPhase::Cancelled,
+            DownloadProgress {
+                downloaded: 0,
+                total: 0,
+            },
+        );
+        return Err(anyhow::anyhow!("model download cancelled"));
+    }
+
+    std::fs::rename(&partial_path, &model_path).with_context(|| {
+        format!(
+            "failed to move downloaded model into place at {}",
+            model_path.display()
+        )
+    })?;
+
+    on_progress(
+        DownloadPhase::Complete,
+        DownloadProgress {
+            downloaded: WHISPER_MODEL_SIZE,
+            total: WHISPER_MODEL_SIZE,
+        },
+    );
+
+    tracing::info!(
+        category = "DICTATION",
+        model_path = %model_path.display(),
+        "Whisper model download complete"
+    );
+
+    Ok(model_path)
+}
+
+/// Return the size of the resumable Whisper model partial, when present.
+pub fn whisper_partial_model_size() -> Option<u64> {
+    let model_path = resolve_whisper_model_path();
+    let models_parent = model_path.parent()?;
+    let partial_path = models_parent.join("whisper-medium-q4_1.bin.partial");
     let len = std::fs::metadata(partial_path).ok()?.len();
     (len > 0).then_some(len)
 }

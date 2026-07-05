@@ -123,6 +123,7 @@ mod preview_panel_metadata_tests {
             file_path: Some("/tmp/tools.md#open-repo".to_string()),
             command: Some("open-repo".to_string()),
             alias: None,
+            icon: None,
         };
 
         let dark_key = preview_scriptlet_cache_key(&base, true);

@@ -45,6 +45,7 @@ fn script_struct_carries_plugin_id_and_title() {
 #[test]
 fn scriptlet_struct_carries_plugin_id_and_title() {
     let scriptlet = Scriptlet {
+        icon: None,
         name: "Open GitHub".to_string(),
         description: None,
         code: "echo hello".to_string(),
@@ -137,6 +138,7 @@ fn source_name_falls_back_to_kit_name_when_plugin_id_empty() {
 #[test]
 fn source_name_prefers_plugin_title_for_scriptlets() {
     let scriptlet = Arc::new(Scriptlet {
+        icon: None,
         name: "Open GitHub".to_string(),
         description: None,
         code: "open https://github.com".to_string(),
@@ -165,6 +167,7 @@ fn source_name_prefers_plugin_title_for_scriptlets() {
 #[test]
 fn source_name_falls_back_to_plugin_id_for_scriptlets() {
     let scriptlet = Arc::new(Scriptlet {
+        icon: None,
         name: "Open GitHub".to_string(),
         description: None,
         code: "open https://github.com".to_string(),
@@ -193,6 +196,7 @@ fn source_name_falls_back_to_plugin_id_for_scriptlets() {
 #[test]
 fn source_name_falls_back_to_group_when_plugin_id_empty() {
     let scriptlet = Arc::new(Scriptlet {
+        icon: None,
         name: "Open GitHub".to_string(),
         description: None,
         code: "open https://github.com".to_string(),
@@ -224,6 +228,7 @@ fn source_name_falls_back_to_group_when_plugin_id_empty() {
 fn duplicate_group_names_across_plugins_keep_distinct_plugin_ids() {
     // Two plugins with the same H1 group name in their scriptlet bundles
     let scriptlet_a = Arc::new(Scriptlet {
+        icon: None,
         name: "Copy URL".to_string(),
         description: None,
         code: "echo url".to_string(),
@@ -239,6 +244,7 @@ fn duplicate_group_names_across_plugins_keep_distinct_plugin_ids() {
     });
 
     let scriptlet_b = Arc::new(Scriptlet {
+        icon: None,
         name: "Open Docs".to_string(),
         description: None,
         code: "echo docs".to_string(),

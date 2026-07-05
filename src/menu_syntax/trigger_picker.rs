@@ -2603,6 +2603,7 @@ mod tests {
     fn bare_bang_builds_command_rows_from_scripts_and_scriptlets() {
         let deploy = make_script("Deploy Prod", "main", "[]");
         let scriptlet = Arc::new(Scriptlet {
+            icon: None,
             name: "Open PR".to_string(),
             description: Some("Open a pull request".to_string()),
             code: String::new(),
@@ -2637,6 +2638,7 @@ mod tests {
     fn duplicate_command_heads_are_visible_but_not_selectable() {
         let script = make_script("Deploy Prod", "main", "[]");
         let scriptlet = Arc::new(Scriptlet {
+            icon: None,
             name: "Deploy Prod".to_string(),
             description: Some("Duplicate command".to_string()),
             code: String::new(),
@@ -2679,6 +2681,7 @@ mod tests {
             script
         };
         let stamp_scriptlet = Arc::new(Scriptlet {
+            icon: None,
             name: "PS Stamp".to_string(),
             description: Some("Append local stamp".to_string()),
             code: String::new(),
@@ -2693,6 +2696,7 @@ mod tests {
             alias: Some("power-stamp".to_string()),
         });
         let dupe_scriptlet = Arc::new(Scriptlet {
+            icon: None,
             name: "PS Dupe".to_string(),
             description: Some("Duplicate command".to_string()),
             code: String::new(),

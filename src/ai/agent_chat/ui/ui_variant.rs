@@ -8,6 +8,10 @@ pub enum AgentChatUiVariant {
     DenseLog,
     Sidecar,
     FocusedTextMini,
+    /// Zero-context instant answers: launcher Tab-with-text. Pinned to the
+    /// Quick AI profile (spark model, no tools/skills/context). Not listed in
+    /// EXPERIMENTS — it is a launch mode, not a pickable chat design.
+    QuickAi,
 }
 
 impl AgentChatUiVariant {
@@ -29,6 +33,7 @@ impl AgentChatUiVariant {
             Self::DenseLog => "dense-log",
             Self::Sidecar => "sidecar",
             Self::FocusedTextMini => "focused-text-mini",
+            Self::QuickAi => "quick-ai",
         }
     }
 
@@ -41,6 +46,7 @@ impl AgentChatUiVariant {
             Self::DenseLog => "builtin/ai-chat/dense-log",
             Self::Sidecar => "builtin/ai-chat/sidecar",
             Self::FocusedTextMini => "builtin/ai-chat/focused-text-mini",
+            Self::QuickAi => "builtin/ai-chat/quick-ai",
         }
     }
 
@@ -53,6 +59,7 @@ impl AgentChatUiVariant {
             Self::DenseLog => "Agent Chat - Dense Log",
             Self::Sidecar => "Agent Chat - Sidecar",
             Self::FocusedTextMini => "Agent Chat - Focused Text",
+            Self::QuickAi => "Quick AI",
         }
     }
 
@@ -65,6 +72,7 @@ impl AgentChatUiVariant {
             Self::DenseLog => "Open Agent Chat in a compact transcript layout",
             Self::Sidecar => "Open Agent Chat with a live state sidecar",
             Self::FocusedTextMini => "Open Agent Chat as a compact focused-text editing surface",
+            Self::QuickAi => "Ask the zero-context Quick AI (no tools, skills, or memories)",
         }
     }
 
@@ -77,6 +85,7 @@ impl AgentChatUiVariant {
             Self::DenseLog => "Log",
             Self::Sidecar => "Sidecar",
             Self::FocusedTextMini => "Text",
+            Self::QuickAi => "Quick AI",
         }
     }
 
@@ -101,6 +110,7 @@ impl AgentChatUiVariant {
             Self::FocusedTextMini => {
                 keywords.extend(["text", "focused", "inline", "edit", "replace", "append"])
             }
+            Self::QuickAi => keywords.extend(["quick", "fast", "instant", "spark", "tab"]),
         }
         keywords
     }
@@ -153,6 +163,13 @@ impl AgentChatUiVariant {
                 transcript: AgentChatTranscriptPresentation::FocusedTextPreview,
                 composer: AgentChatComposerPlacement::FocusedTextSingleLine,
                 chrome: AgentChatChromeDensity::Mini,
+                show_sidecar: false,
+                show_variant_badge: false,
+            },
+            Self::QuickAi => AgentChatUiConfig {
+                transcript: AgentChatTranscriptPresentation::Standard,
+                composer: AgentChatComposerPlacement::Default,
+                chrome: AgentChatChromeDensity::Compact,
                 show_sidecar: false,
                 show_variant_badge: false,
             },

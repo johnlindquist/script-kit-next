@@ -601,6 +601,13 @@ impl Render for ScriptListApp {
             } => self
                 .render_browse_kits(query, selected_index, results, cx)
                 .into_any_element(),
+            AppView::MigrateV1View {
+                ref filter,
+                selected_index,
+                board,
+            } => self
+                .render_migrate_v1(filter, selected_index, board, cx)
+                .into_any_element(),
             AppView::InstalledKitsView {
                 ref filter,
                 selected_index,

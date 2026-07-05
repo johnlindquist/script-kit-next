@@ -298,6 +298,7 @@ fn bench_get_grouped_results_repeated_calls() {
     let scriptlets: Vec<Arc<Scriptlet>> = (0..50)
         .map(|i| {
             Arc::new(Scriptlet {
+                icon: None,
                 name: format!("snippet-{:02}", i),
                 file_path: Some(format!("/test/scriptlets/snippet-{:02}.md", i)),
                 tool: "ts".to_string(),

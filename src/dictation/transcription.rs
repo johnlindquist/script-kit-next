@@ -20,7 +20,7 @@ pub trait DictationEngine: Send {
     fn transcribe(&mut self, samples: &[f32], initial_prompt: Option<&str>) -> Result<String>;
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct DictationTranscriptionConfig {
     pub model_path: PathBuf,
     pub initial_prompt: Option<String>,
@@ -29,6 +29,8 @@ pub struct DictationTranscriptionConfig {
     /// Minimum number of 16 kHz mono samples required before attempting
     /// transcription.  Shorter clips are treated as silence.
     pub minimum_samples: usize,
+    /// RMS energy threshold below which audio is treated as silence.
+    pub silence_rms: f32,
 }
 
 /// Default Whisper model filename (relative to the models directory).
@@ -42,6 +44,18 @@ pub const PARAKEET_MODEL_URL: &str = "https://blob.handy.computer/parakeet-v3-in
 
 /// Expected size of the Parakeet model archive in bytes.
 pub const PARAKEET_MODEL_ARCHIVE_SIZE: u64 = 478_517_071;
+
+/// URL for downloading the Whisper Medium (q4_1) model file.
+///
+/// Served from the same blob host as the Parakeet archive and named exactly
+/// like the local model file, so no extraction or renaming is needed.
+pub const WHISPER_MODEL_URL: &str = "https://blob.handy.computer/whisper-medium-q4_1.bin";
+
+/// Expected size of the Whisper Medium (q4_1) model file in bytes.
+pub const WHISPER_MODEL_SIZE: u64 = 491_852_915;
+
+/// Default RMS silence gate (mirrors `DictationPreferences::DEFAULT_SILENCE_RMS`).
+pub const DEFAULT_SILENCE_RMS: f32 = 0.01;
 
 /// Resolve the default Parakeet model directory path.
 ///
@@ -77,6 +91,7 @@ impl Default for DictationTranscriptionConfig {
             idle_unload_after: Duration::from_secs(300),
             // 100 ms at 16 kHz
             minimum_samples: 1_600,
+            silence_rms: DEFAULT_SILENCE_RMS,
         }
     }
 }
@@ -378,7 +393,7 @@ pub(crate) fn should_skip_transcription(
     config: &DictationTranscriptionConfig,
     samples: &[f32],
 ) -> bool {
-    samples.len() < config.minimum_samples || rms(samples) < 0.01
+    samples.len() < config.minimum_samples || rms(samples) < config.silence_rms
 }
 
 pub(crate) fn rms(samples: &[f32]) -> f32 {

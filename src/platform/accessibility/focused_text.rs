@@ -160,6 +160,50 @@ pub fn focused_text_snapshot_for_capture_failure() -> FocusedTextSnapshot {
     }
 }
 
+/// Snapshot for text captured via the selection/Cmd+C ladder in AX-opaque
+/// apps (Chrome, Electron) where `capture_focused_text_field` fails. There is
+/// no registered AX element; Replace applies by pasting over the still-active
+/// selection in the source app (see `mutation::register_selection_paste_target`),
+/// so Append is unavailable.
+pub fn focused_text_snapshot_for_selection_paste(
+    text: String,
+    source_app: Option<String>,
+) -> FocusedTextSnapshot {
+    let captured_at_ms = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_millis())
+        .unwrap_or_default();
+    let session_id = FocusedTextSessionId(format!("focused-text-paste-{captured_at_ms}"));
+    super::mutation::register_selection_paste_target(&session_id);
+
+    let mut app = super::app_identity::current_frontmost_app_identity();
+    if let Some(name) = source_app.filter(|name| !name.trim().is_empty()) {
+        app.name = name;
+    }
+
+    FocusedTextSnapshot {
+        session_id,
+        captured_at_ms,
+        app,
+        target: FocusedTextTargetDescriptor {
+            role: None,
+            subrole: None,
+            title: None,
+            content_kind: FocusedTextContentKind::PlainText,
+        },
+        metrics: TextMetrics::from_text(&text),
+        geometry: FocusedFieldGeometry::default(),
+        capabilities: FocusedTextCapabilities {
+            can_replace: true,
+            can_append: false,
+            can_copy: true,
+        },
+        text,
+        selected_range_utf16: None,
+        caret_range_utf16: None,
+    }
+}
+
 /// Passive AX-only read of the selected text in `pid`'s focused element
 /// (system-wide focused element first, per-app fallback). Secure fields
 /// return `None`. Never posts keystrokes and never touches the pasteboard,

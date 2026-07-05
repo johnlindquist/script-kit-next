@@ -419,6 +419,12 @@ fn recover_config_fields(value: Value, correlation_id: &str) -> Config {
             "inlineAiHotkeyEnabled",
             correlation_id,
         ),
+        rewrite_hotkey: parse_optional_field(object, "rewriteHotkey", correlation_id),
+        rewrite_hotkey_enabled: parse_optional_field(
+            object,
+            "rewriteHotkeyEnabled",
+            correlation_id,
+        ),
         watcher: parse_optional_field(object, "watcher", correlation_id),
         layout: parse_optional_field(object, "layout", correlation_id),
         theme: parse_optional_field(object, "theme", correlation_id),

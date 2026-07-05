@@ -184,7 +184,6 @@ fn agent_chat_history_text_names_agent_chat_conversations() {
     let root_actions = super::read_source("src/app_impl/root_unified_result_actions.rs");
     let group_header = super::read_source("src/app_render/group_header_item.rs");
     let script_context_actions = super::read_source("src/actions/builders/script_context.rs");
-    let source_heads = super::read_source("src/menu_syntax/source_heads.rs");
     let payload = super::read_source("src/menu_syntax/payload.rs");
     let action_helpers = super::read_source("src/action_helpers.rs");
     let focused_info = super::read_source("src/app_render/focused_info.rs");
@@ -213,13 +212,16 @@ fn agent_chat_history_text_names_agent_chat_conversations() {
         "Agent Chat actions should not expose generic conversation-history text"
     );
     assert!(
-        source_heads.contains("label: \"Agent Chat Conversations\"")
+        payload.contains("label: \"Agent Chat Conversations\"")
             && payload.contains("Self::Conversations => \"Agent Chat Conversations\"")
             && action_helpers.contains("Cannot edit Agent Chat conversations"),
         "source filters and disabled action text should name Agent Chat conversations"
     );
+    // Formatting-insensitive: rustfmt may wrap the call, so assert the label
+    // and the indicator helper separately instead of pinning one line shape.
     assert!(
-        focused_info.contains("focused_info_type_indicator(\"Agent Chat Conversation\""),
+        focused_info.contains("\"Agent Chat Conversation\"")
+            && focused_info.contains("focused_info_type_indicator("),
         "Agent Chat history info panel type indicator should name Agent Chat"
     );
     assert!(

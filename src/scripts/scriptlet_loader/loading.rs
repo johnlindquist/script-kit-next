@@ -172,6 +172,9 @@ pub fn load_scriptlets() -> Vec<Arc<Scriptlet>> {
                     match fs::read_to_string(&entry) {
                         Ok(content) => {
                             let path_str = entry.to_string_lossy().to_string();
+                            // Bundle-level default icon from YAML frontmatter (e.g. `icon: layout-grid`)
+                            let bundle_icon = scriptlet_parser::parse_bundle_frontmatter(&content)
+                                .and_then(|fm| fm.icon);
                             let parsed = scriptlet_parser::parse_markdown_as_scriptlets(
                                 &content,
                                 Some(&path_str),
@@ -202,6 +205,12 @@ pub fn load_scriptlets() -> Vec<Arc<Scriptlet>> {
                                     file_path: Some(file_path),
                                     command: Some(parsed_scriptlet.command),
                                     alias: parsed_scriptlet.metadata.alias,
+                                    icon: parsed_scriptlet
+                                        .metadata
+                                        .extra
+                                        .get("icon")
+                                        .cloned()
+                                        .or_else(|| bundle_icon.clone()),
                                 }));
                             }
                         }
@@ -314,6 +323,8 @@ pub fn read_scriptlets_from_file(path: &Path) -> Vec<Arc<Scriptlet>> {
     };
 
     let path_str = path.to_string_lossy().to_string();
+    // Bundle-level default icon from YAML frontmatter (e.g. `icon: layout-grid`)
+    let bundle_icon = scriptlet_parser::parse_bundle_frontmatter(&content).and_then(|fm| fm.icon);
     let parsed = scriptlet_parser::parse_markdown_as_scriptlets(&content, Some(&path_str));
 
     // Resolve plugin identity from the file path.
@@ -347,6 +358,12 @@ pub fn read_scriptlets_from_file(path: &Path) -> Vec<Arc<Scriptlet>> {
                 file_path: Some(file_path),
                 command: Some(parsed_scriptlet.command),
                 alias: parsed_scriptlet.metadata.alias,
+                icon: parsed_scriptlet
+                    .metadata
+                    .extra
+                    .get("icon")
+                    .cloned()
+                    .or_else(|| bundle_icon.clone()),
             })
         })
         .collect();

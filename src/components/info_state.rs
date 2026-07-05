@@ -377,7 +377,7 @@ fn launcher_no_scripts_spec() -> InfoStateSpec {
         .section(InfoSection::new(vec![
             InfoGuidanceItem::new(Some("⌘N"), "Create a script")
                 .detail("Start a new automation in your scripts folder."),
-            InfoGuidanceItem::new(Some("⇥"), "Ask Agent Chat")
+            InfoGuidanceItem::new(Some("⌘↵"), "Ask Agent Chat")
                 .detail("Describe the workflow you want and let AI draft it."),
             InfoGuidanceItem::new(Some("⌘K"), "Open Actions")
                 .detail("Find reload, install, and setup commands."),
@@ -434,6 +434,8 @@ fn launcher_generic_no_results_spec(filter_text: &str) -> InfoStateSpec {
         .body("The launcher searches scripts, scriptlets, snippets, and built-in commands by name and metadata. Try fewer words, use a structured filter, capture the thought, or ask Agent Chat to turn it into a script.")
         .section(InfoSection::new(vec![
             InfoGuidanceItem::new(Some("Esc"), "Clear the search"),
+            InfoGuidanceItem::new(Some(":"), "Search other sources")
+                .detail(source_prefix_examples_detail()),
             InfoGuidanceItem::new(Some("type:"), "Search by metadata")
                 .detail("Examples: type:script · type:scriptlet · shortcut:cmd+k"),
             InfoGuidanceItem::new(Some(";todo"), "Capture instead")
@@ -442,6 +444,28 @@ fn launcher_generic_no_results_spec(filter_text: &str) -> InfoStateSpec {
                 .detail("Turn this search into a script request."),
         ]))
         .footer_note("Structured filters work best for metadata; plain words work best for names.")
+}
+
+/// Teach the source-head syntax with real heads from the canonical
+/// descriptor table, so this hint can never drift from the parser.
+/// Featured sources are the ones users most often don't know exist
+/// (browser history and todos surface only via their prefixes).
+fn source_prefix_examples_detail() -> String {
+    use crate::menu_syntax::payload::RootUnifiedSourceFilter as Source;
+
+    let featured = [
+        Source::Files,
+        Source::BrowserHistory,
+        Source::Todo,
+        Source::ClipboardHistory,
+    ];
+    let examples = crate::menu_syntax::payload::SOURCE_HEAD_SPECS
+        .iter()
+        .filter(|spec| featured.contains(&spec.source))
+        .map(|spec| spec.canonical)
+        .collect::<Vec<_>>()
+        .join(" · ");
+    format!("Examples: {examples} — type : to browse every source")
 }
 
 fn launcher_plain_hash_search(filter_text: &str) -> bool {

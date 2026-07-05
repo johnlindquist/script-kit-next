@@ -13,6 +13,7 @@ Organize and position windows with keyboard shortcuts. All commands operate on t
 
 <!--
 description: Tile {{app}} to left half of screen
+icon: panel-left
 -->
 
 ```ts
@@ -26,6 +27,7 @@ if (win) {
 
 <!--
 description: Tile {{app}} to right half of screen
+icon: panel-right
 -->
 
 ```ts
@@ -39,6 +41,7 @@ if (win) {
 
 <!--
 description: Tile {{app}} to top half of screen
+icon: panel-top
 -->
 
 ```ts
@@ -52,6 +55,7 @@ if (win) {
 
 <!--
 description: Tile {{app}} to bottom half of screen
+icon: panel-bottom
 -->
 
 ```ts
@@ -65,6 +69,7 @@ if (win) {
 
 <!--
 description: Tile {{app}} to top-left quadrant
+icon: arrow-up-left-square
 -->
 
 ```ts
@@ -78,6 +83,7 @@ if (win) {
 
 <!--
 description: Tile {{app}} to top-right quadrant
+icon: arrow-up-right-square
 -->
 
 ```ts
@@ -91,6 +97,7 @@ if (win) {
 
 <!--
 description: Tile {{app}} to bottom-left quadrant
+icon: arrow-down-left-square
 -->
 
 ```ts
@@ -104,6 +111,7 @@ if (win) {
 
 <!--
 description: Tile {{app}} to bottom-right quadrant
+icon: arrow-down-right-square
 -->
 
 ```ts
@@ -117,6 +125,7 @@ if (win) {
 
 <!--
 description: Tile {{app}} to left third of screen
+icon: align-start-vertical
 -->
 
 ```ts
@@ -130,6 +139,7 @@ if (win) {
 
 <!--
 description: Tile {{app}} to center third of screen
+icon: align-center-vertical
 -->
 
 ```ts
@@ -143,6 +153,7 @@ if (win) {
 
 <!--
 description: Tile {{app}} to right third of screen
+icon: align-end-vertical
 -->
 
 ```ts
@@ -156,6 +167,7 @@ if (win) {
 
 <!--
 description: Tile {{app}} to top third of screen
+icon: align-start-horizontal
 -->
 
 ```ts
@@ -169,6 +181,7 @@ if (win) {
 
 <!--
 description: Tile {{app}} to middle third of screen
+icon: align-center-horizontal
 -->
 
 ```ts
@@ -182,6 +195,7 @@ if (win) {
 
 <!--
 description: Tile {{app}} to bottom third of screen
+icon: align-end-horizontal
 -->
 
 ```ts
@@ -191,10 +205,11 @@ if (win) {
 }
 ```
 
-## Tile {{app}} First Two Thirds
+## Tile {{app}} Left Two Thirds
 
 <!--
-description: Tile {{app}} to first two-thirds of screen (left)
+description: Tile {{app}} to left two-thirds of screen
+icon: columns-3
 -->
 
 ```ts
@@ -204,10 +219,11 @@ if (win) {
 }
 ```
 
-## Tile {{app}} Last Two Thirds
+## Tile {{app}} Right Two Thirds
 
 <!--
-description: Tile {{app}} to last two-thirds of screen (right)
+description: Tile {{app}} to right two-thirds of screen
+icon: columns-3
 -->
 
 ```ts
@@ -221,6 +237,7 @@ if (win) {
 
 <!--
 description: Tile {{app}} to top two-thirds of screen
+icon: rows-3
 -->
 
 ```ts
@@ -234,6 +251,7 @@ if (win) {
 
 <!--
 description: Tile {{app}} to bottom two-thirds of screen
+icon: rows-3
 -->
 
 ```ts
@@ -247,6 +265,7 @@ if (win) {
 
 <!--
 description: Center {{app}} on screen (60% size)
+icon: focus
 -->
 
 ```ts
@@ -260,6 +279,7 @@ if (win) {
 
 <!--
 description: Expand {{app}} to 90% of screen with margins
+icon: expand
 -->
 
 ```ts
@@ -273,6 +293,7 @@ if (win) {
 
 <!--
 description: Maximize {{app}} to fill screen
+icon: maximize
 -->
 
 ```ts
@@ -286,6 +307,7 @@ if (win) {
 
 <!--
 description: Move {{app}} to next display/monitor
+icon: arrow-right-to-line
 -->
 
 ```ts
@@ -299,6 +321,7 @@ if (win) {
 
 <!--
 description: Move {{app}} to previous display/monitor
+icon: arrow-left-to-line
 -->
 
 ```ts
@@ -311,7 +334,8 @@ if (win) {
 ## Minimize {{app}}
 
 <!--
-description: Minimize {{app}}
+description: Minimize {{app}} to the Dock
+icon: minimize
 -->
 
 ```ts
@@ -325,6 +349,7 @@ if (win) {
 
 <!--
 description: Close the frontmost {{app}} window
+icon: square-x
 -->
 
 ```ts
@@ -338,6 +363,7 @@ if (win) {
 
 <!--
 description: Show information about connected displays
+icon: monitor
 -->
 
 ```ts
@@ -351,6 +377,7 @@ await div(
 
 <!--
 description: Show information about {{app}}'s frontmost window
+icon: info
 -->
 
 ```ts

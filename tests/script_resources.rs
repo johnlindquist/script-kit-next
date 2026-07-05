@@ -48,6 +48,7 @@ fn fixture_scripts() -> Vec<Arc<Script>> {
 fn fixture_scriptlets() -> Vec<Arc<Scriptlet>> {
     vec![
         Arc::new(Scriptlet {
+            icon: None,
             name: "Open GitHub".into(),
             description: Some("Opens GitHub in browser".into()),
             code: "open https://github.com".into(),
@@ -64,6 +65,7 @@ fn fixture_scriptlets() -> Vec<Arc<Scriptlet>> {
             plugin_title: None,
         }),
         Arc::new(Scriptlet {
+            icon: None,
             name: "Paste Greeting".into(),
             description: None,
             code: "Hello from Script Kit!".into(),

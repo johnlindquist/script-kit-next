@@ -1,7 +1,8 @@
 // App-specific action handlers for handle_action dispatch.
 //
 // Contains: show_info_in_finder, show_package_contents, copy_name,
-// copy_bundle_id, quit_app, force_quit_app, restart_app.
+// copy_bundle_id, copy_command_id (built-in rows), quit_app, force_quit_app,
+// restart_app.
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum AppCopyHandlerAction {
@@ -279,6 +280,24 @@ impl ScriptListApp {
                         )
                     }
                 }
+            }
+            "copy_command_id" => {
+                tracing::info!(category = "UI", trace_id = %trace_id, "copy built-in command id action");
+                let Some(result) = self.get_selected_result() else {
+                    return DispatchOutcome::error(
+                        crate::action_helpers::ERROR_ACTION_FAILED,
+                        "No item selected",
+                    );
+                };
+                let scripts::SearchResult::BuiltIn(m) = result else {
+                    return DispatchOutcome::error(
+                        crate::action_helpers::ERROR_ACTION_FAILED,
+                        "Copy Command ID is only available for built-in commands",
+                    );
+                };
+                let id = m.entry.id.clone();
+                self.copy_to_clipboard_with_feedback(&id, format!("Copied: {id}"), true, cx);
+                DispatchOutcome::success()
             }
             "copy_name" | "copy_bundle_id" => {
                 let Some(copy_action) = AppCopyHandlerAction::from_action_id(action_id) else {

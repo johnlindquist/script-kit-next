@@ -2447,10 +2447,17 @@ interface TemplateMessage {
   template: string;
 }
 
+interface EnvConfig {
+  hint?: string;
+  placeholder?: string;
+  secret?: boolean;
+}
+
 interface EnvMessage {
   type: 'env';
   id: string;
   key: string;
+  prompt?: string;
   secret?: boolean;
 }
 
@@ -3729,10 +3736,10 @@ declare global {
   /**
    * Get/set environment variable
    * @param key - Environment variable key
-   * @param promptFn - Optional function to prompt for value if not set
+   * @param config - Optional prompt text, v1 env options, or function to prompt for value if not set
    * @returns The environment variable value
    */
-  function env(key: string, promptFn?: () => Promise<string>): Promise<string>;
+  function env(key: string, config?: string | EnvConfig | (() => Promise<string>)): Promise<string>;
   
   // =============================================================================
   // System APIs (TIER 3)
@@ -5416,7 +5423,7 @@ globalThis.template = async function template(
 
 globalThis.env = async function env(
   key: string,
-  promptFn?: () => Promise<string>
+  config?: string | EnvConfig | (() => Promise<string>)
 ): Promise<string> {
   // First check if the env var is already set
   const existingValue = process.env[key];
@@ -5425,8 +5432,8 @@ globalThis.env = async function env(
   }
 
   // If a prompt function is provided, use it to get the value
-  if (promptFn) {
-    const value = await promptFn();
+  if (typeof config === 'function') {
+    const value = await config();
     process.env[key] = value;
     return value;
   }
@@ -5448,15 +5455,28 @@ globalThis.env = async function env(
       resolve(value);
     }, autoSubmitValue);
 
+    const inferredSecret = key.toLowerCase().includes('secret') ||
+      key.toLowerCase().includes('password') ||
+      key.toLowerCase().includes('token') ||
+      key.toLowerCase().includes('key');
+    const prompt = typeof config === 'string'
+      ? config
+      : config && typeof config === 'object'
+        ? config.hint ?? config.placeholder
+        : undefined;
+    const secret = config && typeof config === 'object'
+      ? config.secret ?? inferredSecret
+      : inferredSecret;
+
     const message: EnvMessage = {
       type: 'env',
       id,
       key,
-      secret: key.toLowerCase().includes('secret') ||
-              key.toLowerCase().includes('password') ||
-              key.toLowerCase().includes('token') ||
-              key.toLowerCase().includes('key'),
+      secret,
     };
+    if (prompt !== undefined) {
+      message.prompt = prompt;
+    }
 
     send(message);
   });

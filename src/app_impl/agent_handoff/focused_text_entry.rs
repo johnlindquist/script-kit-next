@@ -345,6 +345,128 @@ impl ScriptListApp {
         cx.notify();
     }
 
+    /// Capture text for the instant rewrite flow. AX field capture first
+    /// (real session, whole-field Replace); when the app is AX-opaque
+    /// (Chrome, Electron) or the field reads empty, fall back to the
+    /// selection/Cmd+C ladder and apply-back becomes paste-over-selection.
+    pub(crate) fn capture_rewrite_snapshot(
+        &self,
+        source: &'static str,
+    ) -> Option<crate::platform::accessibility::FocusedTextSnapshot> {
+        let capture_started = std::time::Instant::now();
+        match crate::platform::accessibility::capture_focused_text_field(
+            crate::platform::accessibility::CaptureFocusedTextOptions::default(),
+        ) {
+            Ok(snapshot) if !snapshot.text.trim().is_empty() => {
+                tracing::info!(
+                    target: "script_kit::focused_text",
+                    event = "instant_rewrite_capture_complete",
+                    source,
+                    session_id = %snapshot.session_id,
+                    app_name = %snapshot.app.name,
+                    chars = snapshot.metrics.chars,
+                    elapsed_ms = capture_started.elapsed().as_millis() as u64,
+                );
+                return Some(snapshot);
+            }
+            Ok(_) => {
+                tracing::info!(
+                    target: "script_kit::focused_text",
+                    event = "instant_rewrite_ax_capture_empty",
+                    source,
+                );
+            }
+            Err(error) => {
+                tracing::warn!(
+                    target: "script_kit::focused_text",
+                    event = "instant_rewrite_ax_capture_failed",
+                    source,
+                    error = %error,
+                );
+            }
+        }
+
+        let captured = crate::selected_text::capture_selection_or_focused_text()
+            .ok()
+            .flatten()
+            .filter(|captured| !captured.text.trim().is_empty())?;
+        tracing::info!(
+            target: "script_kit::focused_text",
+            event = "instant_rewrite_capture_fallback",
+            source,
+            kind = ?captured.kind,
+            source_app = captured.source_app.as_deref().unwrap_or(""),
+            chars = captured.text.chars().count(),
+            elapsed_ms = capture_started.elapsed().as_millis() as u64,
+        );
+        Some(
+            crate::platform::accessibility::focused_text::focused_text_snapshot_for_selection_paste(
+                captured.text,
+                captured.source_app,
+            ),
+        )
+    }
+
+    /// Instant rewrite flow (rewrite hotkey / "Rewrite selection" chip):
+    /// capture the focused field or selection, open the FocusedTextMini, and
+    /// immediately stream the three rewrite variations with the default
+    /// instruction — no typing needed. When nothing is capturable, show a HUD
+    /// instead of converting (shrinking) the main window into an error mini.
+    pub(crate) fn open_instant_rewrite_mini(
+        &mut self,
+        source: &'static str,
+        cx: &mut Context<Self>,
+    ) {
+        self.dismiss_focused_text_agent_chat_before_recapture(cx);
+        match self.capture_rewrite_snapshot(source) {
+            Some(snapshot) => self.open_focused_text_rewrite_from_snapshot(snapshot, source, cx),
+            None => {
+                tracing::warn!(
+                    target: "script_kit::focused_text",
+                    event = "instant_rewrite_nothing_to_rewrite",
+                    source,
+                );
+                self.show_hud(
+                    "Nothing to rewrite — select text or focus a text field".to_string(),
+                    Some(2200),
+                    cx,
+                );
+            }
+        }
+    }
+
+    /// Open the FocusedTextMini for `snapshot` and fire the three rewrite
+    /// variations immediately with [`DEFAULT_REWRITE_INSTRUCTION`]. If the
+    /// instant submit cannot start (e.g. context bootstrap still preparing),
+    /// the instruction stays staged in the input so Enter retries it.
+    pub(crate) fn open_focused_text_rewrite_from_snapshot(
+        &mut self,
+        snapshot: crate::platform::accessibility::FocusedTextSnapshot,
+        source: &'static str,
+        cx: &mut Context<Self>,
+    ) {
+        self.open_focused_text_agent_chat_from_snapshot(
+            snapshot,
+            Some(crate::ai::focused_text::DEFAULT_REWRITE_INSTRUCTION.to_string()),
+            source,
+            cx,
+        );
+
+        let AppView::AgentChatView { entity } = self.current_view.clone() else {
+            return;
+        };
+        entity.update(cx, |chat, cx| {
+            if let Err(error) = chat.submit_instant_rewrite(cx) {
+                tracing::warn!(
+                    target: "script_kit::focused_text",
+                    event = "instant_rewrite_submit_failed",
+                    source,
+                    error = %error,
+                );
+            }
+        });
+    }
+
     pub(crate) fn open_focused_text_agent_chat_from_capture_failure(
         &mut self,
         error: crate::platform::accessibility::FocusedTextError,

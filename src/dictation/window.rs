@@ -23,8 +23,6 @@ pub(crate) const OVERLAY_RADIUS_PX: f32 = crate::ui::chrome::LIQUID_GLASS_PANEL_
 pub(crate) const OVERLAY_HORIZONTAL_PADDING_PX: f32 = 11.0;
 /// Font size for timer, status, and transcript text.
 pub(crate) const STATUS_TEXT_SIZE_PX: f32 = 11.5;
-/// Right-side spacer width to balance the timer column.
-pub(crate) const TIMER_SPACER_WIDTH_PX: f32 = 32.0;
 /// Width of the right-hand target badge slot (replaces spacer when target is shown).
 pub(crate) const TARGET_BADGE_SLOT_WIDTH_PX: f32 = 108.0;
 /// App icon size in the external-app destination badge.
@@ -40,6 +38,10 @@ pub(crate) const WAVEFORM_BAR_GAP_PX: f32 = 3.0;
 pub(crate) const WAVEFORM_BAR_MIN_HEIGHT_PX: f32 = 4.0;
 /// Maximum waveform bar height (peak level).
 pub(crate) const WAVEFORM_BAR_MAX_HEIGHT_PX: f32 = 18.0;
+
+/// Duration of the fade applied to newly transcribed text and to the
+/// transcript line when it re-enters after a phase swap.
+pub(crate) const TRANSCRIPT_FADE_IN_MS: u64 = 280;
 
 /// Number of transcribing-state dots.
 pub(crate) const TRANSCRIBING_DOT_COUNT: usize = 3;
@@ -194,9 +196,10 @@ impl Default for DictationOverlayState {
 // ---------------------------------------------------------------------------
 
 use gpui::{
-    div, prelude::*, px, rgba, svg, AnyElement, App, Context, FocusHandle, Focusable, IntoElement,
-    KeyDownEvent, MouseButton, MouseDownEvent, ParentElement, Render, StatefulInteractiveElement,
-    Styled, Task, Window, WindowBounds, WindowOptions,
+    div, ease_out_quint, prelude::*, px, rgba, svg, Animation, AnimationExt, AnyElement, App,
+    Context, Div, ElementId, FocusHandle, Focusable, IntoElement, KeyDownEvent, MouseButton,
+    MouseDownEvent, ParentElement, Render, StatefulInteractiveElement, Styled, Task, Window,
+    WindowBounds, WindowOptions,
 };
 
 use crate::list_item::FONT_SYSTEM_UI;
@@ -371,7 +374,7 @@ fn remove_global_escape_monitor() {}
 static ESCAPE_REQUESTED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 /// Flag: the global key monitor detected an Enter press while in Confirming
-/// phase. Enter in Confirming = abort the session.
+/// phase. Enter in Confirming = stop and transcribe the session.
 static ENTER_REQUESTED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 // ---------------------------------------------------------------------------
@@ -384,6 +387,8 @@ const ACTION_STOP_LABEL: &str = "Stop";
 const ACTION_MIC_LABEL: &str = "Select Mic";
 /// Single-word action label for discarding the current recording.
 const ACTION_CANCEL_LABEL: &str = "Cancel";
+/// Single-word action label for discarding from the confirmation state.
+const ACTION_DISCARD_LABEL: &str = "Discard";
 /// Single-word action label for resuming from confirmation.
 const ACTION_CONTINUE_LABEL: &str = "Continue";
 /// Single-word action label for closing terminal overlay states.
@@ -392,6 +397,8 @@ const ACTION_CLOSE_LABEL: &str = "Close";
 const ESC_KEYCAP: &str = "esc";
 /// Keycap shown for Enter.
 const ENTER_KEYCAP: &str = "\u{21b5}";
+/// Keycap shown for Backspace (discard from confirmation).
+const BACKSPACE_KEYCAP: &str = "\u{232b}";
 /// Keycap token rendered as a Lucide microphone glyph by footer chrome.
 const MIC_KEYCAP: &str = crate::components::footer_chrome::FOOTER_MIC_ICON_TOKEN;
 
@@ -405,7 +412,8 @@ pub(crate) enum OverlayEscapeAction {
     TransitionToConfirming,
     /// Escape during Confirming — dismiss confirmation and resume recording.
     ResumeRecording,
-    /// Enter during Confirming — actually abort the session.
+    /// Escape during a short recording (or Backspace during Confirming) —
+    /// abort the session and discard the audio.
     AbortSession,
     CloseOverlay,
     Propagate,
@@ -522,6 +530,11 @@ pub struct DictationOverlay {
     transcribing_started_at: Option<Instant>,
     /// Whether the user has "Reduce motion" enabled in system accessibility.
     reduced_motion: bool,
+    /// Char offset into `state.transcript` where the newest partial text
+    /// begins; everything before it is already on screen and stays static.
+    transcript_fresh_from: usize,
+    /// Bumped on each transcript change so the fresh-tail fade restarts.
+    transcript_generation: u64,
     /// Keeps the transcribing tick loop alive; dropped when phase changes.
     _animation_task: Option<Task<()>>,
     /// Drains native footer button clicks for the dictation window.
@@ -537,6 +550,8 @@ impl DictationOverlay {
             last_render_logged_phase: None,
             transcribing_started_at: None,
             reduced_motion: crate::platform::prefers_reduced_motion(),
+            transcript_fresh_from: 0,
+            transcript_generation: 0,
             _animation_task: None,
             _footer_action_task: None,
         }
@@ -577,10 +592,11 @@ impl DictationOverlay {
 
         match action {
             FooterAction::Stop | FooterAction::Run | FooterAction::Apply => {
-                if self.state.phase == DictationSessionPhase::Recording {
+                if matches!(
+                    self.state.phase,
+                    DictationSessionPhase::Recording | DictationSessionPhase::Confirming
+                ) {
                     self.submit_overlay_session(window, cx);
-                } else if self.state.phase == DictationSessionPhase::Confirming {
-                    self.abort_overlay_session(window, cx);
                 } else {
                     self.close_overlay_from_within(window, cx);
                 }
@@ -590,7 +606,15 @@ impl DictationOverlay {
                     self.open_microphone_picker(window, cx);
                 }
             }
-            FooterAction::Close | FooterAction::Actions => {
+            // Discard slot: only shown in Confirming; discards the recording.
+            FooterAction::Actions => {
+                if self.state.phase == DictationSessionPhase::Confirming {
+                    self.abort_overlay_session(window, cx);
+                } else {
+                    self.close_overlay_from_within(window, cx);
+                }
+            }
+            FooterAction::Close => {
                 if self.state.phase == DictationSessionPhase::Confirming {
                     self.resume_recording(window, cx);
                 } else if self.state.phase == DictationSessionPhase::Recording {
@@ -785,14 +809,14 @@ impl DictationOverlay {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> GlobalKeyProcessResult {
-        // Enter is only meaningful in the Confirming phase (= abort session).
+        // Enter is only meaningful in the Confirming phase (= stop & transcribe).
         let enter = ENTER_REQUESTED.swap(false, std::sync::atomic::Ordering::SeqCst);
         if enter && self.state.phase == DictationSessionPhase::Confirming {
             tracing::info!(
                 category = "DICTATION",
-                "Processing global Enter request in Confirming phase — aborting"
+                "Processing global Enter request in Confirming phase — stopping to transcribe"
             );
-            self.abort_overlay_session(window, cx);
+            self.submit_overlay_session(window, cx);
             // Clear any pending escape too — we've already acted.
             ESCAPE_REQUESTED.store(false, std::sync::atomic::Ordering::SeqCst);
             return GlobalKeyProcessResult::Closed;
@@ -888,6 +912,14 @@ impl DictationOverlay {
                 state.bars
             };
 
+        // Track where newly transcribed text begins so the renderer can fade
+        // in just the fresh tail instead of popping the whole line.
+        if state.transcript != self.state.transcript {
+            self.transcript_fresh_from =
+                common_char_prefix_len(self.state.transcript.as_ref(), state.transcript.as_ref());
+            self.transcript_generation = self.transcript_generation.wrapping_add(1);
+        }
+
         self.state = state;
 
         if entering_transcribing && !self.reduced_motion {
@@ -969,82 +1001,14 @@ impl DictationOverlay {
             .child(badge)
     }
 
-    /// Render the runtime recording action rail.
-    fn render_recording_actions(&self, cx: &mut Context<Self>) -> AnyElement {
-        render_clickable_action_rail([
-            render_clickable_action_chip(
-                "dictation-mic-button",
-                SharedString::default(),
-                MIC_KEYCAP.into(),
-                cx.listener(|this, _event: &MouseDownEvent, window, cx| {
-                    this.open_microphone_picker(window, cx);
-                }),
-            )
-            .into_any_element(),
-            render_clickable_action_chip(
-                "dictation-stop-button",
-                ACTION_STOP_LABEL.into(),
-                dictation_stop_keycap(),
-                cx.listener(|this, _event: &MouseDownEvent, window, cx| {
-                    this.submit_overlay_session(window, cx);
-                }),
-            )
-            .into_any_element(),
-            render_clickable_action_chip(
-                "dictation-cancel-button",
-                ACTION_CANCEL_LABEL.into(),
-                ESC_KEYCAP.into(),
-                cx.listener(|this, _event: &MouseDownEvent, window, cx| {
-                    this.abort_overlay_session(window, cx);
-                }),
-            )
-            .into_any_element(),
-        ])
-    }
-
-    /// Render the runtime confirmation action rail.
-    fn render_confirming_actions(&self, cx: &mut Context<Self>) -> AnyElement {
-        render_clickable_action_rail([
-            render_clickable_action_chip(
-                "dictation-stop-button",
-                ACTION_STOP_LABEL.into(),
-                ENTER_KEYCAP.into(),
-                cx.listener(|this, _event: &MouseDownEvent, window, cx| {
-                    this.abort_overlay_session(window, cx);
-                }),
-            )
-            .into_any_element(),
-            render_clickable_action_chip(
-                "dictation-continue-button",
-                ACTION_CONTINUE_LABEL.into(),
-                ESC_KEYCAP.into(),
-                cx.listener(|this, _event: &MouseDownEvent, window, cx| {
-                    this.resume_recording(window, cx);
-                }),
-            )
-            .into_any_element(),
-        ])
-    }
-
-    /// Render a compact Close action for terminal phases.
-    fn render_close_action(&self, cx: &mut Context<Self>) -> AnyElement {
-        render_clickable_action_rail([render_clickable_action_chip(
-            "dictation-close-button",
-            ACTION_CLOSE_LABEL.into(),
-            ESC_KEYCAP.into(),
-            cx.listener(|this, _event: &MouseDownEvent, window, cx| {
-                this.close_overlay_from_within(window, cx);
-            }),
-        )
-        .into_any_element()])
-    }
-
     /// Handle key-down events for the overlay.
     ///
     /// Escape semantics (vercel-voice 5-second threshold pattern):
+    /// - Recording + Enter → stop and transcribe
     /// - Recording (< 5 s) + Escape → immediate abort
     /// - Recording (≥ 5 s) + Escape → transition to Confirming
-    /// - Confirming + Enter → abort the session
+    /// - Confirming + Enter → stop and transcribe (the good path)
+    /// - Confirming + Backspace/Delete → discard the recording
     /// - Confirming + Escape → resume Recording
     /// - Confirming + any other key → swallowed (no state change)
     /// - Transcribing / Delivering / Finished / Failed → dismiss overlay only
@@ -1072,13 +1036,36 @@ impl DictationOverlay {
             return;
         }
 
-        // In Confirming state, only Enter and Escape have meaning.
-        // All other keys are swallowed without changing state.
+        // Enter during Recording stops the session and transcribes, matching
+        // the footer's Stop affordance.
+        if self.state.phase == DictationSessionPhase::Recording
+            && crate::ui_foundation::is_key_enter(key)
+        {
+            tracing::info!(
+                category = "DICTATION",
+                "Enter pressed while recording, stopping to transcribe"
+            );
+            self.submit_overlay_session(window, cx);
+            cx.stop_propagation();
+            return;
+        }
+
+        // In Confirming state, only Enter, Backspace/Delete, and Escape have
+        // meaning. All other keys are swallowed without changing state.
         if self.state.phase == DictationSessionPhase::Confirming {
             if crate::ui_foundation::is_key_enter(key) {
                 tracing::info!(
                     category = "DICTATION",
-                    "Enter pressed during confirmation, aborting dictation session"
+                    "Enter pressed during confirmation, stopping to transcribe"
+                );
+                self.submit_overlay_session(window, cx);
+                cx.stop_propagation();
+                return;
+            }
+            if key == "backspace" || key == "delete" {
+                tracing::info!(
+                    category = "DICTATION",
+                    "Backspace pressed during confirmation, discarding dictation session"
                 );
                 self.abort_overlay_session(window, cx);
                 cx.stop_propagation();
@@ -1191,6 +1178,25 @@ impl Render for DictationOverlay {
                 let timer_text = format_elapsed(*elapsed);
                 let active = has_sound(bars);
                 let target_badge_interactive = crate::dictation::can_cycle_dictation_target();
+                // Live partial transcript replaces the waveform once text
+                // arrives; the timer keeps ticking as the level cue.
+                let center = if self.state.transcript.is_empty() {
+                    div()
+                        .flex_1()
+                        .flex()
+                        .flex_row()
+                        .items_center()
+                        .justify_center()
+                        .child(render_waveform_bars(bars, active))
+                        .into_any_element()
+                } else {
+                    render_live_transcript_line(
+                        &self.state.transcript,
+                        self.transcript_fresh_from,
+                        self.transcript_generation,
+                        self.reduced_motion,
+                    )
+                };
 
                 div()
                     .flex()
@@ -1221,16 +1227,8 @@ impl Render for DictationOverlay {
                                             .child(timer_text),
                                     ),
                             )
-                            // Center: waveform bars (flex-grow to fill)
-                            .child(
-                                div()
-                                    .flex_1()
-                                    .flex()
-                                    .flex_row()
-                                    .items_center()
-                                    .justify_center()
-                                    .child(render_waveform_bars(bars, active)),
-                            )
+                            // Center: waveform bars or live partial transcript
+                            .child(center)
                             // Right: destination badge
                             .child(self.render_target_badge_slot(target_badge_interactive, cx))
                             .into_any_element(),
@@ -1315,40 +1313,74 @@ impl Render for DictationOverlay {
                     ))
                     .child(native_footer_spacer())
             }
-            DictationSessionPhase::Delivering => div()
-                .flex()
-                .flex_col()
-                .items_center()
-                .justify_center()
-                .gap(px(3.))
-                .w_full()
-                .child(render_glass_signal_band(
-                    div()
-                        .text_size(px(STATUS_TEXT_SIZE_PX))
-                        .font_family(FONT_SYSTEM_UI)
-                        .text_color(text_color)
-                        .overflow_hidden()
-                        .child("Delivering\u{2026}")
-                        .into_any_element(),
-                ))
-                .child(native_footer_spacer()),
-            DictationSessionPhase::Finished => div()
-                .flex()
-                .flex_col()
-                .items_center()
-                .justify_center()
-                .gap(px(3.))
-                .w_full()
-                .child(render_glass_signal_band(
-                    div()
-                        .text_size(px(STATUS_TEXT_SIZE_PX))
-                        .font_family(FONT_SYSTEM_UI)
-                        .text_color(text_color)
-                        .overflow_hidden()
-                        .child(finished_label())
-                        .into_any_element(),
-                ))
-                .child(native_footer_spacer()),
+            DictationSessionPhase::Delivering => {
+                let transcript = self.state.transcript.clone();
+                let mut band = div()
+                    .flex()
+                    .flex_row()
+                    .items_center()
+                    .justify_center()
+                    .gap(px(8.))
+                    .w_full()
+                    .child(
+                        div()
+                            .text_size(px(STATUS_TEXT_SIZE_PX))
+                            .font_family(FONT_SYSTEM_UI)
+                            .text_color(muted_text)
+                            .whitespace_nowrap()
+                            .child("Delivering\u{2026}"),
+                    );
+                if !transcript.is_empty() {
+                    band = band.child(fade_in_line(
+                        "dictation-transcript-delivering",
+                        self.reduced_motion,
+                        render_transcript_line(&transcript, false),
+                    ));
+                }
+                div()
+                    .flex()
+                    .flex_col()
+                    .items_center()
+                    .justify_center()
+                    .gap(px(3.))
+                    .w_full()
+                    .child(render_glass_signal_band(band.into_any_element()))
+                    .child(native_footer_spacer())
+            }
+            DictationSessionPhase::Finished => {
+                let transcript = self.state.transcript.clone();
+                let mut band = div()
+                    .flex()
+                    .flex_row()
+                    .items_center()
+                    .justify_center()
+                    .gap(px(8.))
+                    .w_full()
+                    .child(
+                        div()
+                            .text_size(px(STATUS_TEXT_SIZE_PX))
+                            .font_family(FONT_SYSTEM_UI)
+                            .text_color(text_color)
+                            .whitespace_nowrap()
+                            .child(finished_label()),
+                    );
+                if !transcript.is_empty() {
+                    band = band.child(fade_in_line(
+                        "dictation-transcript-finished",
+                        self.reduced_motion,
+                        render_transcript_line(&transcript, true),
+                    ));
+                }
+                div()
+                    .flex()
+                    .flex_col()
+                    .items_center()
+                    .justify_center()
+                    .gap(px(3.))
+                    .w_full()
+                    .child(render_glass_signal_band(band.into_any_element()))
+                    .child(native_footer_spacer())
+            }
             DictationSessionPhase::Failed(ref msg) => {
                 let err_text: SharedString = format!("Error: {msg}").into();
                 div()
@@ -1408,6 +1440,155 @@ impl Render for DictationOverlay {
 /// Format the finished overlay state label.
 pub(crate) fn finished_label() -> SharedString {
     "Done".into()
+}
+
+/// Max characters of transcript text shown inside the pill.
+pub(crate) const TRANSCRIPT_PREVIEW_MAX_CHARS: usize = 90;
+
+/// Keep the freshest tail of a live transcript for the single-line preview,
+/// prefixing an ellipsis when older text was cut off.
+pub(crate) fn transcript_preview_tail(text: &str, max_chars: usize) -> SharedString {
+    let trimmed = text.trim();
+    let char_count = trimmed.chars().count();
+    if char_count <= max_chars {
+        return trimmed.to_string().into();
+    }
+    let skip = char_count - max_chars;
+    let tail: String = trimmed.chars().skip(skip).collect();
+    format!("\u{2026}{}", tail.trim_start()).into()
+}
+
+/// Count the chars shared at the start of two transcript snapshots.
+///
+/// Live partials may rewrite their tail, so the boundary is the first
+/// divergent char rather than the previous transcript's length.
+pub(crate) fn common_char_prefix_len(previous: &str, current: &str) -> usize {
+    previous
+        .chars()
+        .zip(current.chars())
+        .take_while(|(a, b)| a == b)
+        .count()
+}
+
+/// Split the live transcript preview into (stable, fresh) spans, where
+/// `fresh_from` is the char offset into `text` at which newly arrived text
+/// begins. Concatenating the spans always reproduces
+/// `transcript_preview_tail(text, max_chars)` exactly.
+pub(crate) fn transcript_preview_spans(
+    text: &str,
+    fresh_from: usize,
+    max_chars: usize,
+) -> (SharedString, SharedString) {
+    let chars: Vec<char> = text.chars().collect();
+    let start = chars.iter().take_while(|c| c.is_whitespace()).count();
+    let trailing = chars[start..]
+        .iter()
+        .rev()
+        .take_while(|c| c.is_whitespace())
+        .count();
+    let trimmed = &chars[start..chars.len() - trailing];
+    // Fresh boundary relative to the trimmed text.
+    let mut fresh = fresh_from.saturating_sub(start).min(trimmed.len());
+    let (ellipsis, visible) = if trimmed.len() <= max_chars {
+        ("", trimmed)
+    } else {
+        let skip = trimmed.len() - max_chars;
+        let tail = &trimmed[skip..];
+        let ws = tail.iter().take_while(|c| c.is_whitespace()).count();
+        // A boundary that scrolled out of the window means every visible
+        // char is fresh.
+        fresh = fresh.saturating_sub(skip + ws);
+        ("\u{2026}", &tail[ws..])
+    };
+    let fresh = fresh.min(visible.len());
+    let stable: String = ellipsis
+        .chars()
+        .chain(visible[..fresh].iter().copied())
+        .collect();
+    let fresh_text: String = visible[fresh..].iter().copied().collect();
+    (stable.into(), fresh_text.into())
+}
+
+/// Render the recording-time transcript with only the newest partial text
+/// fading in, so words stream in instead of the whole line popping.
+fn render_live_transcript_line(
+    transcript: &SharedString,
+    fresh_from: usize,
+    generation: u64,
+    reduced_motion: bool,
+) -> AnyElement {
+    let theme = get_cached_theme();
+    let color = theme.colors.text.primary.with_opacity(OPACITY_ACTIVE);
+    let (stable, fresh) =
+        transcript_preview_spans(transcript.as_ref(), fresh_from, TRANSCRIPT_PREVIEW_MAX_CHARS);
+    let mut line = div()
+        .flex_1()
+        .flex()
+        .flex_row()
+        .items_center()
+        .justify_center()
+        .px(px(6.))
+        .overflow_hidden()
+        .text_size(px(STATUS_TEXT_SIZE_PX))
+        .font_family(FONT_SYSTEM_UI)
+        .text_color(color)
+        .whitespace_nowrap();
+    if !stable.is_empty() {
+        line = line.child(div().flex_none().whitespace_nowrap().child(stable));
+    }
+    if fresh.is_empty() {
+        return line.into_any_element();
+    }
+    let fresh_span = div().flex_none().whitespace_nowrap().child(fresh);
+    if reduced_motion {
+        return line.child(fresh_span).into_any_element();
+    }
+    line.child(fresh_span.with_animation(
+        ElementId::from(("dictation-transcript-fresh", generation)),
+        Animation::new(Duration::from_millis(TRANSCRIPT_FADE_IN_MS)).with_easing(ease_out_quint()),
+        |el, delta| el.opacity(delta),
+    ))
+    .into_any_element()
+}
+
+/// Wrap a transcript line in a one-shot fade so it eases in after a phase
+/// swap instead of popping. No-op under reduced motion.
+fn fade_in_line(id: &'static str, reduced_motion: bool, line: Div) -> AnyElement {
+    if reduced_motion {
+        return line.into_any_element();
+    }
+    line.with_animation(
+        id,
+        Animation::new(Duration::from_millis(TRANSCRIPT_FADE_IN_MS)).with_easing(ease_out_quint()),
+        |el, delta| el.opacity(delta),
+    )
+    .into_any_element()
+}
+
+/// Render the final transcript as a single centered line in the pill.
+fn render_transcript_line(transcript: &SharedString, muted: bool) -> Div {
+    let theme = get_cached_theme();
+    let color = if muted {
+        theme.colors.text.muted.with_opacity(OPACITY_TEXT_MUTED)
+    } else {
+        theme.colors.text.primary.with_opacity(OPACITY_ACTIVE)
+    };
+    div()
+        .flex_1()
+        .flex()
+        .flex_row()
+        .items_center()
+        .justify_center()
+        .px(px(6.))
+        .overflow_hidden()
+        .text_size(px(STATUS_TEXT_SIZE_PX))
+        .font_family(FONT_SYSTEM_UI)
+        .text_color(color)
+        .whitespace_nowrap()
+        .child(transcript_preview_tail(
+            transcript.as_ref(),
+            TRANSCRIPT_PREVIEW_MAX_CHARS,
+        ))
 }
 
 /// Render waveform bars for the glass bar.
@@ -1491,6 +1672,14 @@ fn dictation_hotkey_keycap(hotkey: &crate::config::HotkeyConfig) -> String {
 }
 
 fn active_microphone_footer_label() -> SharedString {
+    // A mic picked mid-recording only applies to the next session — show it
+    // as pending instead of pretending the live capture switched.
+    if let Some(pending) = crate::dictation::pending_dictation_device_label()
+        .map(|label| crate::dictation::microphone_display_label(&label))
+        .filter(|label| !label.trim().is_empty())
+    {
+        return format!("{pending} (next)").into();
+    }
     crate::dictation::get_active_dictation_device()
         .map(|device| crate::dictation::microphone_display_label(&device.name))
         .filter(|label| !label.trim().is_empty())
@@ -1498,13 +1687,14 @@ fn active_microphone_footer_label() -> SharedString {
         .into()
 }
 
+#[allow(dead_code)] // preview-chain helper (see render_dictation_overlay_state_preview)
 fn action_chip_width(label: &str) -> f32 {
     use crate::components::footer_chrome::{footer_action_slot_width, FooterActionSlot};
 
     match label {
         "" => footer_action_slot_width(FooterActionSlot::Ai),
         ACTION_STOP_LABEL => footer_action_slot_width(FooterActionSlot::Stop),
-        ACTION_CANCEL_LABEL | ACTION_CLOSE_LABEL => {
+        ACTION_CANCEL_LABEL | ACTION_CLOSE_LABEL | ACTION_DISCARD_LABEL => {
             footer_action_slot_width(FooterActionSlot::Close)
         }
         ACTION_MIC_LABEL => footer_action_slot_width(FooterActionSlot::PasteResponse),
@@ -1534,6 +1724,7 @@ fn dictation_native_footer_config(
         ],
         DictationSessionPhase::Confirming => vec![
             FooterButtonConfig::new(FooterAction::Stop, ENTER_KEYCAP, ACTION_STOP_LABEL),
+            FooterButtonConfig::new(FooterAction::Actions, BACKSPACE_KEYCAP, ACTION_DISCARD_LABEL),
             FooterButtonConfig::new(FooterAction::Close, ESC_KEYCAP, ACTION_CONTINUE_LABEL),
         ],
         DictationSessionPhase::Idle => Vec::new(),
@@ -1562,6 +1753,7 @@ fn native_footer_spacer() -> impl IntoElement {
         .min_h(px(rail_chrome.height_px))
 }
 
+#[allow(dead_code)] // preview-chain helper (see render_dictation_overlay_state_preview)
 fn footer_action_button_height() -> f32 {
     crate::components::footer_chrome::footer_button_height(
         crate::window_resize::main_layout::NATIVE_MAIN_WINDOW_FOOTER_HEIGHT,
@@ -1579,6 +1771,7 @@ fn render_glass_signal_band(body: AnyElement) -> impl IntoElement {
         .child(body)
 }
 
+#[allow(dead_code)] // preview-chain helper (see render_dictation_overlay_state_preview)
 fn render_action_chip_content(label: SharedString, key: SharedString) -> impl IntoElement {
     let theme = get_cached_theme();
     if key.as_ref() == MIC_KEYCAP {
@@ -1593,6 +1786,7 @@ fn render_action_chip_content(label: SharedString, key: SharedString) -> impl In
     )
 }
 
+#[allow(dead_code)] // preview-chain helper (see render_dictation_overlay_state_preview)
 fn render_mic_action_chip_content(theme: &crate::theme::Theme) -> AnyElement {
     let footer_text = crate::components::footer_chrome::footer_hint_text_color(theme);
     let full_text = theme.colors.text.primary.to_rgb();
@@ -1631,6 +1825,7 @@ fn render_mic_action_chip_content(theme: &crate::theme::Theme) -> AnyElement {
         .into_any_element()
 }
 
+#[allow(dead_code)] // preview-chain helper (see render_dictation_overlay_state_preview)
 fn render_action_chip(label: &'static str, key: SharedString) -> impl IntoElement {
     div()
         .w(px(action_chip_width(label)))
@@ -1643,62 +1838,12 @@ fn render_action_chip(label: &'static str, key: SharedString) -> impl IntoElemen
         .child(render_action_chip_content(label.into(), key))
 }
 
-fn render_clickable_action_chip(
-    id: &'static str,
-    label: SharedString,
-    key: SharedString,
-    listener: impl Fn(&MouseDownEvent, &mut Window, &mut App) + 'static,
-) -> impl IntoElement {
-    let theme = get_cached_theme();
-    let rail_chrome = crate::components::footer_chrome::footer_rail_chrome(&theme);
-    let hover_bg = rgba(rail_chrome.hover_rgba);
-    let active_bg = rgba(rail_chrome.active_rgba);
-    let width = action_chip_width(label.as_ref());
-
-    div()
-        .id(id)
-        .w(px(width))
-        .h(px(footer_action_button_height()))
-        .flex()
-        .flex_row()
-        .items_center()
-        .justify_center()
-        .group("footer-action-button")
-        .rounded(px(rail_chrome.button_radius_px))
-        .cursor_pointer()
-        .hover(move |style| style.bg(hover_bg))
-        .active(move |style| style.bg(active_bg))
-        .on_mouse_down(MouseButton::Left, listener)
-        .child(render_action_chip_content(label, key))
-}
-
+#[allow(dead_code)] // preview-chain helper (see render_dictation_overlay_state_preview)
 fn wrap_dictation_overlay_action_rail(rail: impl IntoElement) -> impl IntoElement {
     div().w_full().child(rail)
 }
 
-fn render_clickable_action_rail(actions: impl IntoIterator<Item = AnyElement>) -> AnyElement {
-    let theme = get_cached_theme();
-    let rail_chrome = crate::components::footer_chrome::footer_rail_chrome(&theme);
-
-    let mut rail = div()
-        .id("dictation-action-rail")
-        .w_full()
-        .h(px(rail_chrome.height_px))
-        .min_h(px(rail_chrome.height_px))
-        .px(px(rail_chrome.side_inset_px))
-        .flex()
-        .flex_row()
-        .items_center()
-        .justify_end()
-        .gap(px(rail_chrome.item_gap_px));
-
-    for action in actions {
-        rail = rail.child(action);
-    }
-
-    rail.into_any_element()
-}
-
+#[allow(dead_code)] // preview-chain helper (see render_dictation_overlay_state_preview)
 fn render_static_action_rail(
     actions: impl IntoIterator<Item = (&'static str, SharedString)>,
 ) -> impl IntoElement {
@@ -1729,6 +1874,9 @@ fn render_static_action_rail(
 /// This keeps canonical Dictation stories on the same constants, waveform
 /// math, phase copy, and target-badge styling as the runtime overlay without
 /// opening a real floating window.
+// Storybook-parity preview surface: not reached from the runtime render
+// path, but kept canonical (and contract-tested) for design stories.
+#[allow(dead_code)]
 pub(crate) fn render_dictation_overlay_state_preview(
     state: &DictationOverlayState,
 ) -> gpui::AnyElement {
@@ -1851,6 +1999,7 @@ pub(crate) fn render_dictation_overlay_state_preview(
                 .child(wrap_dictation_overlay_action_rail(
                     render_static_action_rail([
                         (ACTION_STOP_LABEL, ENTER_KEYCAP.into()),
+                        (ACTION_DISCARD_LABEL, BACKSPACE_KEYCAP.into()),
                         (ACTION_CONTINUE_LABEL, ESC_KEYCAP.into()),
                     ]),
                 ))
@@ -1956,6 +2105,7 @@ pub(crate) fn render_dictation_overlay_state_preview(
         .into_any_element()
 }
 
+#[allow(dead_code)] // preview-chain helper (see render_dictation_overlay_state_preview)
 fn render_static_target_badge_slot(target: crate::dictation::DictationTarget) -> impl IntoElement {
     let theme = get_cached_theme();
     let badge = div()

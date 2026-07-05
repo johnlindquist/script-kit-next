@@ -33,8 +33,13 @@ fn root_passive_frame_times_every_passive_source() {
     }
 }
 
+/// WHY: commit 13a417737 removed blocking browser-history work from the
+/// per-keystroke path (187ms -> 14ms worst case). History participates
+/// passively again, but ONLY through the tabs-shaped contract: the implicit
+/// typing path must use the nonblocking snapshot-only cached lookup, with
+/// the refresh-kicking direct lookup confined to the explicit branch.
 #[test]
-fn browser_history_lookup_is_confined_to_explicit_source_filter() {
+fn implicit_browser_history_uses_cached_lookup_on_typing_path() {
     let filtering = include_str!("../../src/app_impl/filtering_cache.rs");
     let section = filtering
         .split("let browser_history_hits = timed_root_passive_source(")
@@ -47,13 +52,45 @@ fn browser_history_lookup_is_confined_to_explicit_source_filter() {
         "browser history branch must distinguish explicit from implicit source filters"
     );
     assert!(
-        section.contains("search_root_browser_history_meta_direct"),
-        "explicit browser history should use the direct lookup branch"
+        section.contains("search_root_browser_history_meta_cached"),
+        "implicit browser history must use the cached/snapshot lookup"
     );
     assert!(
-        !section.contains("search_root_browser_history_meta_cached"),
-        "implicit browser history should stay out of the ordinary typing path"
+        section.find("search_root_browser_history_meta_direct")
+            < section.find("search_root_browser_history_meta_cached"),
+        "direct browser history lookup should be confined to the explicit branch"
     );
+}
+
+/// WHY: the cached lookup runs synchronously per keystroke; any refresh
+/// spawn, thread join, or panicking lock here reintroduces the latency the
+/// explicit-only gating was added to remove.
+#[test]
+fn cached_browser_history_lookup_is_nonblocking() {
+    let history = include_str!("../../src/browser_history.rs");
+    let cached_section = history
+        .split("pub(crate) fn search_root_browser_history_meta_cached")
+        .nth(1)
+        .and_then(|rest| {
+            rest.split("pub(crate) fn search_root_browser_history_meta_direct")
+                .next()
+        })
+        .expect("cached browser history helper should exist");
+
+    for forbidden in [
+        "ensure_root_browser_history_refresh",
+        "std::thread::spawn",
+        ".join(",
+        ".lock().unwrap",
+        ".lock().expect",
+        "copy_sqlite_db_snapshot",
+        "Connection::open",
+    ] {
+        assert!(
+            !cached_section.contains(forbidden),
+            "cached browser-history lookup must not contain {forbidden}"
+        );
+    }
 }
 
 #[test]
@@ -182,6 +219,18 @@ fn explicit_browser_sources_have_app_managed_refresh_completion() {
     let updates = include_str!("../../src/app_impl/filter_input_updates.rs");
     let tabs = include_str!("../../src/browser_tabs.rs");
     let history = include_str!("../../src/browser_history.rs");
+
+    // WHY: every async landing must preserve the selection by identity
+    // (snapshot key before the re-splice, restore after) — an async section
+    // arriving above the highlighted row must never silently move it. Files,
+    // tabs, history, and windows all route through the shared reconcile;
+    // brain semantic landings must too (CLS audit).
+    let brain_search = include_str!("../../src/app_impl/root_brain_search.rs");
+    assert!(
+        brain_search.contains("main_menu_selection_snapshot")
+            && brain_search.contains("reconcile_script_list_after_results_refresh"),
+        "brain semantic landings must use the shared identity-preserving reconcile"
+    );
 
     for symbol in [
         "current_query_includes_root_source",

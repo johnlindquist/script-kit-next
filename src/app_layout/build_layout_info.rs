@@ -47,6 +47,7 @@ impl ScriptListApp {
             | AppView::FooterGalleryView { .. }
             | AppView::EmojiPickerView { .. }
             | AppView::BrowseKitsView { .. }
+            | AppView::MigrateV1View { .. }
             | AppView::InstalledKitsView { .. }
             | AppView::ProcessManagerView { .. }
             | AppView::CurrentAppCommandsView { .. }
@@ -101,6 +102,7 @@ impl ScriptListApp {
             AppView::CreationFeedback { .. } => "creationFeedback",
             AppView::NamingPrompt { .. } => "namingPrompt",
             AppView::BrowseKitsView { .. } => "browseKits",
+            AppView::MigrateV1View { .. } => "migrateV1",
             AppView::InstalledKitsView { .. } => "installedKits",
             AppView::ProcessManagerView { .. } => "processManager",
             AppView::CurrentAppCommandsView { .. } => "currentAppCommands",
@@ -140,6 +142,7 @@ impl ScriptListApp {
                 | AppView::FooterGalleryView { .. }
                 | AppView::EmojiPickerView { .. }
                 | AppView::BrowseKitsView { .. }
+                | AppView::MigrateV1View { .. }
                 | AppView::InstalledKitsView { .. }
                 | AppView::ProcessManagerView { .. }
                 | AppView::CurrentAppCommandsView { .. }

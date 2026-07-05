@@ -327,6 +327,27 @@
         })
         .detach();
 
+        // Rewrite hotkey listener. Captures the focused field and immediately
+        // streams three rewrite variations in the mini UI (no typing needed).
+        let app_entity_for_rewrite = app_entity.clone();
+        cx.spawn(async move |cx: &mut gpui::AsyncApp| {
+            logging::log("HOTKEY", "Rewrite hotkey listener started (event-driven)");
+            while let Ok(hotkey_event) = hotkeys::rewrite_hotkey_channel().1.recv().await {
+                let _guard = logging::set_correlation_id(hotkey_event.correlation_id.clone());
+                logging::log(
+                    "HOTKEY",
+                    "Rewrite hotkey triggered - starting instant rewrite capture",
+                );
+                let _ = cx.update(|cx: &mut gpui::App| {
+                    app_entity_for_rewrite.update(cx, |view, cx| {
+                        view.open_instant_rewrite_mini("rewrite_hotkey", cx);
+                    });
+                });
+            }
+            logging::log("HOTKEY", "Rewrite hotkey listener exiting (channel closed)");
+        })
+        .detach();
+
         // Dictation hotkey listener - event-driven via async_channel
         // The global dictation shortcut routes to Agent Chat quick-submit.
         // Contextual main-window/prompt dictation remains available from the

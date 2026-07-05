@@ -438,6 +438,11 @@ impl ScriptListApp {
                         // Handle keys in fallback mode
                         match key_lower.as_str() {
                             "tab" => {
+                                // Mirrors the live Tab interceptor in
+                                // startup.rs: menu-syntax focus → empty-input
+                                // cwd pick → Quick AI (text) → root-dir
+                                // completion. Keep the two paths in lockstep
+                                // or the header Tab chip lies to automation.
                                 if view.menu_syntax_capture_form_owns_input() {
                                     if has_shift {
                                         view.focus_previous_menu_syntax_form_field(window, ctx);
@@ -448,6 +453,45 @@ impl ScriptListApp {
                                         "STDIN",
                                         "SimulateKey: Tab - move menu syntax form focus",
                                     );
+                                } else if !has_shift
+                                    && view.spine_enabled
+                                    && !view.show_actions_popup
+                                    && view.filter_text.trim().is_empty()
+                                {
+                                    tracing::info!(
+                                        target: "script_kit::spine",
+                                        event = "cwd_pick_enter_file_search_tab",
+                                        "SimulateKey Tab → FileSearchView (cwd pick)"
+                                    );
+                                    view.cwd_pick_mode = true;
+                                    view.open_file_search_view(
+                                        "~/".to_string(),
+                                        FileSearchPresentation::Full,
+                                        ctx,
+                                    );
+                                    view.suppress_filter_events = true;
+                                    view.gpui_input_state.update(ctx, |state, cx| {
+                                        state.set_value("~/".to_string(), window, cx);
+                                        let len = "~/".len();
+                                        state.set_selection(len, len, window, cx);
+                                    });
+                                    view.suppress_filter_events = false;
+                                } else if !has_shift
+                                    && !view.show_actions_popup
+                                    && !view.menu_syntax_object_selector_owns_main_keyboard()
+                                    && !view.menu_syntax_trigger_picker_owns_main_keyboard()
+                                    && !view.filter_text.trim().is_empty()
+                                    && !crate::file_search::looks_like_root_directory_browse_query(
+                                        &view.filter_text,
+                                    )
+                                {
+                                    tracing::info!(
+                                        target: "script_kit::tab_ai",
+                                        event = "quick_ai_tab_entry",
+                                        "SimulateKey Tab → Quick AI (zero-context spark)"
+                                    );
+                                    let query = view.filter_text.clone();
+                                    view.open_quick_ai_from_launcher(query, window, ctx);
                                 } else if view.try_navigate_root_file_directory_with_tab(
                                     has_shift, window, ctx,
                                 ) {
@@ -521,6 +565,11 @@ impl ScriptListApp {
                     } else {
                         match key_lower.as_str() {
                             "tab" => {
+                                // Mirrors the live Tab interceptor in
+                                // startup.rs: menu-syntax focus → empty-input
+                                // cwd pick → Quick AI (text) → root-dir
+                                // completion. Keep the two paths in lockstep
+                                // or the header Tab chip lies to automation.
                                 if view.menu_syntax_capture_form_owns_input() {
                                     if has_shift {
                                         view.focus_previous_menu_syntax_form_field(window, ctx);
@@ -531,6 +580,45 @@ impl ScriptListApp {
                                         "STDIN",
                                         "SimulateKey: Tab - move menu syntax form focus",
                                     );
+                                } else if !has_shift
+                                    && view.spine_enabled
+                                    && !view.show_actions_popup
+                                    && view.filter_text.trim().is_empty()
+                                {
+                                    tracing::info!(
+                                        target: "script_kit::spine",
+                                        event = "cwd_pick_enter_file_search_tab",
+                                        "SimulateKey Tab → FileSearchView (cwd pick)"
+                                    );
+                                    view.cwd_pick_mode = true;
+                                    view.open_file_search_view(
+                                        "~/".to_string(),
+                                        FileSearchPresentation::Full,
+                                        ctx,
+                                    );
+                                    view.suppress_filter_events = true;
+                                    view.gpui_input_state.update(ctx, |state, cx| {
+                                        state.set_value("~/".to_string(), window, cx);
+                                        let len = "~/".len();
+                                        state.set_selection(len, len, window, cx);
+                                    });
+                                    view.suppress_filter_events = false;
+                                } else if !has_shift
+                                    && !view.show_actions_popup
+                                    && !view.menu_syntax_object_selector_owns_main_keyboard()
+                                    && !view.menu_syntax_trigger_picker_owns_main_keyboard()
+                                    && !view.filter_text.trim().is_empty()
+                                    && !crate::file_search::looks_like_root_directory_browse_query(
+                                        &view.filter_text,
+                                    )
+                                {
+                                    tracing::info!(
+                                        target: "script_kit::tab_ai",
+                                        event = "quick_ai_tab_entry",
+                                        "SimulateKey Tab → Quick AI (zero-context spark)"
+                                    );
+                                    let query = view.filter_text.clone();
+                                    view.open_quick_ai_from_launcher(query, window, ctx);
                                 } else if view.try_navigate_root_file_directory_with_tab(
                                     has_shift, window, ctx,
                                 ) {

@@ -1,0 +1,365 @@
+{
+  "//": "Single source of truth for v1 → v2 API compatibility. Consumed by BOTH the classifier (scan + api-scan validator) and the port prompt, so the agent and the validators can never disagree about what is allowed. Statuses: supported | renamed | caveat | stub | removed. Derived from the real v2 SDK surface (scripts/kit-sdk.ts, SDK_VERSION 0.2.0); update this file when the SDK grows.",
+  "apis": {
+    "arg": { "status": "supported" },
+    "div": { "status": "supported" },
+    "editor": { "status": "supported" },
+    "select": { "status": "supported" },
+    "mini": { "status": "supported" },
+    "micro": { "status": "supported" },
+    "fields": { "status": "supported" },
+    "form": { "status": "supported" },
+    "path": { "status": "supported" },
+    "hotkey": { "status": "supported" },
+    "drop": { "status": "supported" },
+    "template": { "status": "supported" },
+    "env": {
+      "status": "supported",
+      "note": "v1-compatible: env(key, { hint, placeholder, secret }) and env(key, 'prompt text') both work — keep them verbatim. Masking is also auto-inferred from key names containing secret/password/token/key."
+    },
+    "term": { "status": "supported" },
+    "chat": { "status": "supported" },
+    "webcam": { "status": "supported" },
+    "mic": { "status": "supported" },
+    "eyeDropper": { "status": "supported" },
+    "find": { "status": "supported" },
+    "md": { "status": "supported" },
+    "notify": { "status": "supported" },
+    "hud": { "status": "supported" },
+    "say": { "status": "supported" },
+    "beep": { "status": "supported" },
+    "setSelectedText": { "status": "supported" },
+    "getSelectedText": { "status": "supported" },
+    "clipboard": { "status": "supported" },
+    "copy": { "status": "supported" },
+    "paste": { "status": "supported" },
+    "hide": { "status": "supported" },
+    "show": { "status": "supported" },
+    "blur": { "status": "supported" },
+    "submit": { "status": "supported" },
+    "exit": { "status": "supported" },
+    "setInput": { "status": "supported" },
+    "setPanel": { "status": "supported" },
+    "setPreview": { "status": "supported" },
+    "setPrompt": { "status": "supported" },
+    "setActions": { "status": "supported" },
+    "uuid": { "status": "supported" },
+    "home": { "status": "supported" },
+    "kitPath": { "status": "supported" },
+    "tmpPath": { "status": "supported" },
+    "isFile": { "status": "supported" },
+    "isDir": { "status": "supported" },
+    "isBin": { "status": "supported" },
+    "browse": { "status": "supported" },
+    "run": { "status": "supported" },
+    "inspect": { "status": "supported" },
+    "memoryMap": { "status": "supported" },
+    "compile": { "status": "supported" },
+
+    "edit": {
+      "status": "renamed",
+      "replacement": "editFile",
+      "note": "v2 renamed edit() to editFile(filePath)."
+    },
+    "textarea": {
+      "status": "renamed",
+      "replacement": "editor",
+      "note": "v2 has no textarea(); editor() is the multi-line input."
+    },
+    "dev": {
+      "status": "renamed",
+      "replacement": "inspect",
+      "note": "dev(obj) opened DevTools in v1; inspect(obj) shows the data in v2."
+    },
+    "toast": {
+      "status": "renamed",
+      "replacement": "hud",
+      "note": "hud(message) for transient in-launcher feedback; notify() for OS Notification Center."
+    },
+
+    "kenvPath": {
+      "status": "caveat",
+      "replacement": "skPath",
+      "note": "The workspace moved from ~/.kenv to ~/.scriptkit and the layout changed: scripts live in plugins/<plugin>/scripts. kenvPath('scripts', ...) → skPath('plugins', 'main', 'scripts', ...); other kenvPath uses usually map to skPath(...)."
+    },
+    "menu": {
+      "status": "caveat",
+      "note": "menu() exists in v2 but is currently a no-op (no menu-bar icon control). Remove the call or leave it — it will not error."
+    },
+    "setStatus": {
+      "status": "caveat",
+      "note": "setStatus() exists in v2 but is currently a no-op. Prefer hud() for user-visible status."
+    },
+
+    "widget": {
+      "status": "stub",
+      "replacement": "div",
+      "note": "widget() sends a message the v2 app does not render yet ('[SDK] widget() is not yet implemented'). Rebuild the surface with div(html, actions) — use setActions()/onTab-style choices for interactivity — or split the flow into arg/select steps. If the widget was a passive always-on display, state that it has no v2 equivalent yet in behavior_changes."
+    },
+    "vite": {
+      "status": "removed",
+      "note": "v1 vite() widget windows have no v2 equivalent. Rebuild as div()/form() flows, or declare the loss in behavior_changes."
+    },
+    "clipboard.writeHTML": {
+      "status": "stub",
+      "note": "v2 clipboard implements only readText/writeText/readImage/writeImage. For HTML, write the plain-text fallback via clipboard.writeText or shell out to osascript/pbcopy with HTML flavor; declare the fidelity loss."
+    },
+    "clipboard.writeBuffer": {
+      "status": "stub",
+      "note": "Not implemented in v2 (only readText/writeText/readImage/writeImage). Images: clipboard.writeImage(buffer); other flavors need a shell fallback."
+    },
+    "clipboard.writeFileUrl": {
+      "status": "stub",
+      "note": "Not implemented in v2 clipboard; shell out (osascript 'set the clipboard to POSIX file ...') if load-bearing."
+    },
+    "clipboard.readHTML": {
+      "status": "stub",
+      "note": "Not implemented in v2 clipboard (only readText/writeText/readImage/writeImage); use readText and declare the fidelity loss."
+    },
+    "clipboard.readRTF": {
+      "status": "stub",
+      "note": "Not implemented in v2 clipboard; use readText and declare the fidelity loss."
+    },
+    "clipboard.writeRTF": {
+      "status": "stub",
+      "note": "Not implemented in v2 clipboard; write plain text instead and declare the loss."
+    },
+    "clipboard.readBookmark": {
+      "status": "stub",
+      "note": "Not implemented in v2 clipboard."
+    },
+    "clipboard.writeBookmark": {
+      "status": "stub",
+      "note": "Not implemented in v2 clipboard."
+    },
+    "clipboard.readFindText": {
+      "status": "stub",
+      "note": "Not implemented in v2 clipboard."
+    },
+    "clipboard.writeFindText": {
+      "status": "stub",
+      "note": "Not implemented in v2 clipboard."
+    },
+    "clipboard.clear": {
+      "status": "stub",
+      "note": "Not implemented in v2 clipboard; clipboard.writeText('') approximates it."
+    },
+    "keyboard.type": {
+      "status": "stub",
+      "replacement": "setSelectedText",
+      "note": "keyboard.type() throws UnsupportedSdkFeatureError in v2 (no native key injection yet). To insert text into the frontmost app use setSelectedText(text) — it pastes at the cursor. There is no v2 way to type into arbitrary apps key-by-key."
+    },
+    "keyboard.tap": {
+      "status": "stub",
+      "note": "keyboard.tap() throws UnsupportedSdkFeatureError in v2. Key-combo injection into other apps has no v2 equivalent; if it targeted Script Kit's own prompt, restructure with submit()/setInput()."
+    },
+    "keyboard.pressKey": {
+      "status": "stub",
+      "note": "Throws UnsupportedSdkFeatureError in v2; see keyboard.tap."
+    },
+    "keyboard.releaseKey": {
+      "status": "stub",
+      "note": "Throws UnsupportedSdkFeatureError in v2; see keyboard.tap."
+    },
+    "mouse.move": {
+      "status": "stub",
+      "note": "mouse.* throws UnsupportedSdkFeatureError in v2 — no coordinate mouse control."
+    },
+    "mouse.leftClick": {
+      "status": "stub",
+      "note": "mouse.* throws UnsupportedSdkFeatureError in v2 — no coordinate mouse control."
+    },
+    "mouse.rightClick": {
+      "status": "stub",
+      "note": "mouse.* throws UnsupportedSdkFeatureError in v2 — no coordinate mouse control."
+    },
+    "mouse.setPosition": {
+      "status": "stub",
+      "note": "mouse.* throws UnsupportedSdkFeatureError in v2 — no coordinate mouse control."
+    },
+
+    "db": {
+      "status": "removed",
+      "replacement": "JSON file at skPath('db', ...)",
+      "note": "v1 db() (lowdb) is gone. Persist plain JSON under skPath('db', '<name>.json').",
+      "snippet": "const dbPath = skPath('db', 'my-data.json');\nasync function loadDb<T>(fallback: T): Promise<T> {\n  try { return JSON.parse(await Bun.file(dbPath).text()); } catch { return fallback; }\n}\nasync function saveDb(data: unknown) {\n  await Bun.write(dbPath, JSON.stringify(data, null, 2));\n}"
+    },
+    "store": {
+      "status": "removed",
+      "replacement": "JSON file at skPath('db', ...)",
+      "note": "v1 store() is gone; use the same JSON-file pattern as db()."
+    },
+    "exec": {
+      "status": "removed",
+      "replacement": "Bun.$ template or node:child_process",
+      "note": "v1 exec() (execa) is gone. v2 scripts run under bun: use await Bun.$`cmd args`.text() (import { $ } from 'bun'), or node:child_process for node compatibility."
+    },
+    "$": {
+      "status": "removed",
+      "replacement": "Bun.$",
+      "note": "Use import { $ } from 'bun' and await $`cmd`.text()."
+    },
+    "spawn": {
+      "status": "removed",
+      "replacement": "Bun.spawn or node:child_process",
+      "note": "Import spawn explicitly from node:child_process; it is no longer a global."
+    },
+    "get": {
+      "status": "removed",
+      "replacement": "fetch",
+      "note": "v1 get/post/put/patch/del (axios) are gone. Use native fetch; note axios responses put payload on `.data`, fetch needs `await res.json()`."
+    },
+    "post": { "status": "removed", "replacement": "fetch", "note": "See get." },
+    "put": { "status": "removed", "replacement": "fetch", "note": "See get." },
+    "patch": { "status": "removed", "replacement": "fetch", "note": "See get." },
+    "del": { "status": "removed", "replacement": "fetch", "note": "See get." },
+    "download": {
+      "status": "removed",
+      "replacement": "fetch + Bun.write",
+      "note": "await Bun.write(dest, await fetch(url))"
+    },
+    "setLoading": {
+      "status": "removed",
+      "replacement": "hud",
+      "note": "v1 setLoading(true/false) spinner has no v2 equivalent. Use hud() for transient feedback or omit, and declare the lost busy indicator in behavior_changes when the work is slow."
+    },
+    "trash": {
+      "status": "removed",
+      "replacement": "node:fs rm or Finder trash via osascript",
+      "note": "No global trash(). For real move-to-Trash use osascript ('tell application \"Finder\" to delete POSIX file ...'); for plain deletion use node:fs rm."
+    },
+    "degit": {
+      "status": "removed",
+      "replacement": "git clone --depth 1",
+      "note": "await Bun.$`git clone --depth 1 ${repo} ${dest}`"
+    },
+    "replace": {
+      "status": "removed",
+      "replacement": "read/replace/write with Bun.file",
+      "note": "v1 replace() (replace-in-file) is gone; read the file, String.replace, write it back."
+    },
+    "globby": {
+      "status": "removed",
+      "replacement": "Bun.Glob",
+      "note": "new Bun.Glob(pattern).scan(dir)"
+    },
+    "glob": {
+      "status": "removed",
+      "replacement": "Bun.Glob",
+      "note": "new Bun.Glob(pattern).scan(dir)"
+    },
+    "chalk": {
+      "status": "removed",
+      "replacement": "plain strings or Bun.color",
+      "note": "Terminal coloring is rarely meaningful in v2 prompts; drop it or import chalk explicitly (bun auto-installs imports)."
+    },
+    "highlight": {
+      "status": "removed",
+      "replacement": "md",
+      "note": "v1 highlight() is gone; md() renders markdown (including fenced code) for div()."
+    },
+    "npm": {
+      "status": "removed",
+      "replacement": "standard import",
+      "note": "v1 npm('pkg') is gone. Use a normal `import x from 'pkg'` — v2 scripts run under bun, which auto-installs imports on first run."
+    },
+    "attemptImport": {
+      "status": "removed",
+      "replacement": "standard import",
+      "note": "See npm."
+    },
+    "silentAttemptImport": {
+      "status": "removed",
+      "replacement": "standard import",
+      "note": "See npm."
+    },
+    "wait": {
+      "status": "removed",
+      "replacement": "await new Promise(r => setTimeout(r, ms))",
+      "note": "No global wait(); inline a setTimeout promise."
+    },
+    "formatDate": {
+      "status": "removed",
+      "replacement": "import { format } from 'date-fns' or Intl.DateTimeFormat",
+      "note": "date-fns is no longer bundled; import it explicitly (bun auto-installs) or use Intl."
+    },
+    "formatDateToNow": {
+      "status": "removed",
+      "replacement": "import { formatDistanceToNow } from 'date-fns'",
+      "note": "See formatDate."
+    },
+    "createChoiceSearch": {
+      "status": "removed",
+      "note": "Pass plain choice arrays to arg()/select(); v2's launcher does the filtering."
+    },
+    "groupChoices": {
+      "status": "removed",
+      "note": "Choice grouping helpers are gone; use flat choice arrays (a `group` field on choices is not rendered by v2 yet — declare in behavior_changes if grouping mattered)."
+    },
+    "selectFile": {
+      "status": "removed",
+      "replacement": "path",
+      "note": "Use await path() for file selection."
+    },
+    "selectFolder": {
+      "status": "removed",
+      "replacement": "path",
+      "note": "Use await path() and pick a directory."
+    },
+    "revealFile": {
+      "status": "removed",
+      "replacement": "Bun.$ open -R",
+      "note": "await Bun.$`open -R ${filePath}` reveals in Finder."
+    },
+    "playAudioFile": {
+      "status": "removed",
+      "replacement": "Bun.$ afplay",
+      "note": "await Bun.$`afplay ${filePath}`"
+    },
+    "registerShortcut": {
+      "status": "removed",
+      "replacement": "// Shortcut: metadata",
+      "note": "Runtime shortcut registration is gone; declare a `// Shortcut: cmd shift x` metadata comment on a dedicated script instead."
+    },
+    "unregisterShortcut": {
+      "status": "removed",
+      "note": "See registerShortcut."
+    },
+    "onTab": {
+      "status": "removed",
+      "replacement": "arg with choices",
+      "note": "v1 tab pages are gone. Restructure as a top-level arg()/select() whose choice routes to each former tab's flow, or split into separate scripts."
+    },
+    "onExit": {
+      "status": "removed",
+      "replacement": "process.on('exit', ...)",
+      "note": "Use standard process exit hooks."
+    },
+    "setAlwaysOnTop": {
+      "status": "removed",
+      "note": "Window pinning is app-managed in v2; remove the call."
+    },
+    "setIgnoreMouseEvents": {
+      "status": "removed",
+      "note": "No v2 equivalent; remove the call."
+    },
+    "startDrag": {
+      "status": "removed",
+      "note": "No v2 equivalent; remove the call and declare in behavior_changes if the drag was load-bearing."
+    },
+    "mainScript": {
+      "status": "removed",
+      "replacement": "exit",
+      "note": "v1 mainScript() returned to the main menu; in v2 just exit() — the launcher is already there."
+    },
+    "getActiveScreen": {
+      "status": "removed",
+      "replacement": "getDisplays",
+      "note": "Use getDisplays() and pick the active one."
+    },
+    "getMousePosition": {
+      "status": "removed",
+      "note": "No v2 equivalent (no mouse APIs)."
+    }
+  }
+}

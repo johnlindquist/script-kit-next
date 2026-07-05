@@ -72,15 +72,20 @@ impl ScriptListApp {
             .is_some_and(|advanced_query| advanced_query.has_predicates());
         let brain_options = self.root_brain_semantic_options_for_query(&source_filters);
 
-        // Eligibility gates identical to the sync lexical pass, plus the
+        // Shared query-eligibility decision with the sync lexical pass
+        // (`crate::brain::root_brain_query_plan`), plus the async-only
         // main-list ownership checks the root file search applies.
+        // `RecentsOnly` (bare `brain:`) is ineligible here on purpose: the
+        // sync pass shows recents, which are not semantic results.
         let explicit_brain =
             source_filters.includes(crate::menu_syntax::RootUnifiedSourceFilter::Brain);
-        let effective_brain_query = if explicit_brain {
-            (!trimmed.is_empty()).then(|| trimmed.to_string())
-        } else {
-            crate::brain::root_brain_passive_search_text(trimmed, brain_options)
-        };
+        let brain_plan = crate::brain::root_brain_query_plan(
+            trimmed,
+            explicit_brain,
+            advanced_predicate_active,
+            source_filters.allows(crate::menu_syntax::RootUnifiedSourceFilter::Brain),
+            brain_options,
+        );
         let can_collect = matches!(self.current_view, AppView::ScriptList)
             && !self.menu_syntax_object_selector_state.owns_main_list()
             && !self.menu_syntax_trigger_picker_state.owns_main_list()
@@ -88,11 +93,8 @@ impl ScriptListApp {
                 .menu_syntax_mode
                 .capture_composer_owns_input_for(trimmed)
             && !self.menu_syntax_mode.command_owns_input_for(trimmed);
-        let eligible = can_collect
-            && !advanced_predicate_active
-            && source_filters.allows(crate::menu_syntax::RootUnifiedSourceFilter::Brain)
-            && brain_options.max_results > 0
-            && effective_brain_query.is_some();
+        let eligible =
+            can_collect && brain_options.max_results > 0 && matches!(&brain_plan, crate::brain::RootBrainQueryPlan::Search(_));
 
         if !eligible {
             tracing::debug!(
@@ -102,15 +104,15 @@ impl ScriptListApp {
                 advanced_predicate_active,
                 allows = source_filters.allows(crate::menu_syntax::RootUnifiedSourceFilter::Brain),
                 max_results = brain_options.max_results,
-                query_eligible =
-                    crate::brain::root_brain_query_is_eligible(trimmed, brain_options),
-                effective_query = effective_brain_query.as_deref().unwrap_or(""),
+                plan = ?brain_plan,
                 "brain semantic pass ineligible"
             );
             self.clear_root_brain_semantic_state(cx);
             return;
         }
-        let query_owned = effective_brain_query.expect("eligible brain query");
+        let crate::brain::RootBrainQueryPlan::Search(query_owned) = brain_plan else {
+            unreachable!("eligible implies Search plan");
+        };
         tracing::debug!(
             target: "script_kit::brain",
             query = %query_owned,
@@ -218,11 +220,20 @@ impl ScriptListApp {
         }
         self.root_brain_semantic_results = Some((query, hits));
         self.root_brain_semantic_epoch = self.root_brain_semantic_epoch.wrapping_add(1);
-        self.invalidate_root_passive_and_grouped_cache();
         if matches!(self.current_view, AppView::ScriptList) {
-            self.sync_list_state_for_filter_replacement();
-            self.validate_selection_bounds(cx);
-            self.rebuild_main_window_preflight_if_needed();
+            // Identity-preserving landing, matching every other async source
+            // (files/tabs/history/windows): snapshot the selection key BEFORE
+            // the re-splice so a section appearing above it cannot silently
+            // move the highlighted row.
+            let selection_before = self.main_menu_selection_snapshot();
+            self.invalidate_root_passive_and_grouped_cache();
+            self.reconcile_script_list_after_results_refresh(
+                "brain_semantic_results_applied",
+                selection_before,
+                cx,
+            );
+        } else {
+            self.invalidate_root_passive_and_grouped_cache();
         }
         cx.notify();
     }

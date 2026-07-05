@@ -20,6 +20,10 @@ pub(crate) struct AgentChatComposerSpineState {
     /// section builders run without `cx`, so they cannot read the thread
     /// entity). Scopes the `@project:` subsearch.
     pub(crate) project_scope_cwd: Option<std::path::PathBuf>,
+    /// Cached profile-scoped cwd MRU for the live thread. Loaded through the
+    /// Agent Chat in-memory recents cache during composer refresh, not during
+    /// the no-`cx` section render path.
+    pub(crate) project_scope_cwd_recents: Vec<std::path::PathBuf>,
 }
 
 #[allow(dead_code)]

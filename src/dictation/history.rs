@@ -432,7 +432,7 @@ pub fn root_dictation_history_query_is_eligible(
 ) -> bool {
     let trimmed = query.trim();
     options.enabled
-        && trimmed.len() >= options.min_query_chars
+        && crate::scripts::search::query_meets_min_query_chars(trimmed, options.min_query_chars)
         && !trimmed.contains('\n')
         && !trimmed.contains('\r')
 }

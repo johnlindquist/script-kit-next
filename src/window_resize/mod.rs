@@ -285,6 +285,10 @@ pub(crate) const MAIN_WINDOW_WIDTH: f32 = 750.0;
 const FOCUSED_TEXT_MINI_INPUT_ONLY_HEIGHT: f32 = crate::panel::PROMPT_INPUT_FIELD_HEIGHT;
 const FOCUSED_TEXT_MINI_STREAMING_HEIGHT: f32 = FOCUSED_TEXT_MINI_INPUT_ONLY_HEIGHT;
 const FOCUSED_TEXT_MINI_RESULT_HEIGHT: f32 = 150.0;
+/// Window height when the mini shows the three stacked variation cards.
+/// Mirrors `focused_text_variation_area_height(3)` in the Agent Chat view:
+/// 3 × card-min(96) + 2 × gap(8) + 2 × padding(8) = 320, plus the input row.
+const FOCUSED_TEXT_MINI_VARIATIONS_HEIGHT: f32 = FOCUSED_TEXT_MINI_INPUT_ONLY_HEIGHT + 320.0;
 const FOCUSED_TEXT_MINI_RESIZE_ANIMATE: bool = true;
 
 pub(crate) fn focused_text_mini_input_height() -> f32 {
@@ -601,7 +605,13 @@ fn height_for_view_with_layout(
         ViewType::FocusedTextMini => match item_count {
             0 => px(FOCUSED_TEXT_MINI_INPUT_ONLY_HEIGHT + WINDOW_BORDER_Y),
             1 => px(FOCUSED_TEXT_MINI_STREAMING_HEIGHT + WINDOW_BORDER_Y),
-            _ => px(FOCUSED_TEXT_MINI_RESULT_HEIGHT + WINDOW_BORDER_Y),
+            // `focused_text_mini_sizing_count`: 2 = single result, 5 = the
+            // three variation cards, +1 when the scope row is visible.
+            2..=4 => px(FOCUSED_TEXT_MINI_RESULT_HEIGHT + WINDOW_BORDER_Y),
+            5 => px(FOCUSED_TEXT_MINI_VARIATIONS_HEIGHT + WINDOW_BORDER_Y),
+            _ => px(FOCUSED_TEXT_MINI_VARIATIONS_HEIGHT
+                + FOCUSED_TEXT_MINI_INPUT_ONLY_HEIGHT
+                + WINDOW_BORDER_Y),
         },
         ViewType::ArgPromptWithChoices => {
             let visible_items = item_count.max(1) as f32;

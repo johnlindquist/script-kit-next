@@ -2043,6 +2043,7 @@ mod tests {
         /// Helper to create a test scriptlet
         fn test_scriptlet(name: &str, tool: &str) -> Scriptlet {
             Scriptlet {
+                icon: None,
                 name: name.to_string(),
                 description: None,
                 code: "echo test".to_string(),

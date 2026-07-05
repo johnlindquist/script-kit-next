@@ -18,6 +18,57 @@ pub(crate) const ABOUT_SURFACE_EXEMPTION: &str =
 /// capture_key_down handler and the simulateKey dispatcher.
 pub(crate) const BRAIN_MEMORY_PREVIEW_PROMPT_ID: &str = "brain-memory-preview";
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum MigrateBoardPhase {
+    Unavailable(String),
+    Scanning,
+    Report,
+    Porting,
+    Done,
+}
+
+impl Default for MigrateBoardPhase {
+    fn default() -> Self {
+        Self::Scanning
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+struct MigrateBoardState {
+    phase: MigrateBoardPhase,
+    rows: Vec<MigrateScriptRow>,
+    v1_dir: String,
+    engine_path: Option<String>,
+    port_started: bool,
+}
+
+#[derive(Debug, Clone, Default)]
+struct MigrateScriptRow {
+    file: String,
+    path: String,
+    bucket: String,
+    incompatible_apis: Vec<String>,
+    phase: String,
+    status: Option<String>,
+    note_summary: Option<String>,
+    failure: Option<String>,
+    attempts: Vec<MigrateAttemptReceipt>,
+}
+
+#[derive(Debug, Clone, Default)]
+struct MigrateAttemptReceipt {
+    attempt: usize,
+    verdicts: Vec<MigrateVerdictReceipt>,
+}
+
+#[derive(Debug, Clone, Default)]
+struct MigrateVerdictReceipt {
+    id: String,
+    outcome: String,
+    summary: String,
+    detail: String,
+}
+
 #[derive(Debug, Clone)]
 enum AppView {
     /// Showing the script list
@@ -244,6 +295,12 @@ enum AppView {
         selected_index: usize,
         results: Vec<KitStoreSearchResult>,
     },
+    /// Live board for scanning and porting Script Kit v1 scripts.
+    MigrateV1View {
+        filter: String,
+        selected_index: usize,
+        board: MigrateBoardState,
+    },
     /// Managing locally installed kits (update/remove)
     InstalledKitsView {
         filter: String,
@@ -385,6 +442,7 @@ pub(crate) enum SurfaceKind {
     GenericFilterableList,
     Settings,
     KitStoreBrowse,
+    MigrateV1,
     KitStoreInstalled,
     ProcessManager,
     CurrentAppCommands,
@@ -765,6 +823,7 @@ impl AppView {
             AppView::WindowSwitcherView { .. } => "WindowSwitcherView",
             AppView::BrowserTabsView { .. } => "BrowserTabsView",
             AppView::BrowseKitsView { .. } => "BrowseKitsView",
+            AppView::MigrateV1View { .. } => "MigrateV1View",
             AppView::InstalledKitsView { .. } => "InstalledKitsView",
             AppView::SettingsView { .. } => "SettingsView",
             AppView::PermissionsWizardView { .. } => "PermissionsWizardView",
@@ -832,6 +891,7 @@ impl AppView {
             AppView::WindowSwitcherView { .. } => SurfaceKind::WindowSwitcher,
             AppView::BrowserTabsView { .. } => SurfaceKind::BrowserTabs,
             AppView::BrowseKitsView { .. } => SurfaceKind::KitStoreBrowse,
+            AppView::MigrateV1View { .. } => SurfaceKind::MigrateV1,
             AppView::InstalledKitsView { .. } => SurfaceKind::KitStoreInstalled,
             AppView::SettingsView { .. } => SurfaceKind::Settings,
             AppView::PermissionsWizardView { .. } => SurfaceKind::PermissionsWizard,
@@ -899,6 +959,7 @@ impl AppView {
                 | AppView::FooterGalleryView { .. }
                 | AppView::EmojiPickerView { .. }
                 | AppView::BrowseKitsView { .. }
+                | AppView::MigrateV1View { .. }
                 | AppView::InstalledKitsView { .. }
                 | AppView::ProcessManagerView { .. }
                 | AppView::CurrentAppCommandsView { .. }
@@ -972,6 +1033,7 @@ impl AppView {
             AppView::SettingsView { .. } => Some("settings"),
             AppView::PermissionsWizardView { .. } => Some("permissions_wizard"),
             AppView::BrowseKitsView { .. } => Some("kit_store_browse"),
+            AppView::MigrateV1View { .. } => Some("migrate_v1"),
             AppView::InstalledKitsView { .. } => Some("kit_store_installed"),
             AppView::FavoritesBrowseView { .. } => Some("favorites"),
             AppView::ConfirmPrompt { .. } => Some("confirm_prompt"),
@@ -1229,6 +1291,20 @@ impl SurfaceKind {
                 CompactLauncherVisual,
                 standard,
                 "kitStoreBrowse",
+            ),
+            SurfaceKind::MigrateV1 => LauncherSurfaceContract::new(
+                LauncherSurfaceContractVocabulary::new(
+                    FilterableLauncherList,
+                    LauncherFilter,
+                    NoPersistentPreview,
+                ),
+                LauncherFilterFocus,
+                LauncherListKeyboard,
+                HostRowActions,
+                StateAndElementsProof,
+                CompactLauncherVisual,
+                standard,
+                "migrate_v1",
             ),
             SurfaceKind::KitStoreInstalled => LauncherSurfaceContract::new(
                 LauncherSurfaceContractVocabulary::new(

@@ -313,6 +313,8 @@ pub enum BuiltInFeature {
     /// [`ScriptCommandType::NewScript`] so the fast `New Script` path stays
     /// one-keystroke for MCP/API/trigger callers.
     NewScriptFromTemplate,
+    /// Script Kit v1-to-v2 migration board.
+    MigrateV1Scripts,
 }
 /// A built-in feature entry that appears in the main search
 #[derive(Debug, Clone)]
@@ -534,6 +536,7 @@ impl BuiltInEntry {
             BuiltInFeature::AiVault => "Open AI Vault",
             BuiltInFeature::SdkReference => "Open SDK Reference",
             BuiltInFeature::NewScriptFromTemplate => "Browse Templates",
+            BuiltInFeature::MigrateV1Scripts => "Migrate v1 Scripts",
         }
     }
 
@@ -651,6 +654,7 @@ impl BuiltInEntry {
             BuiltInFeature::AiVault => "Vault",
             BuiltInFeature::SdkReference => "SDK Docs",
             BuiltInFeature::NewScriptFromTemplate => "Templates",
+            BuiltInFeature::MigrateV1Scripts => "Migrate",
         }
     }
 }
@@ -834,6 +838,16 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         debug!("Added SDK Reference built-in entry");
 
         entries.push(BuiltInEntry::new_with_icon(
+            "builtin/migrate-v1-scripts",
+            "Migrate v1 Scripts",
+            "Port Script Kit v1 scripts from ~/.kenv/scripts to v2",
+            vec!["migrate", "v1", "kenv", "import", "port"],
+            BuiltInFeature::MigrateV1Scripts,
+            "import",
+        ));
+        debug!("Added Migrate v1 Scripts built-in entry");
+
+        entries.push(BuiltInEntry::new_with_icon(
             "builtin/dictation-history",
             "Dictation History",
             "Browse, search, and reuse saved dictation transcripts",
@@ -846,7 +860,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
                 "mic",
             ],
             BuiltInFeature::DictationHistory,
-            "mic",
+            "history",
         ));
         debug!("Added Dictation History built-in entry");
 
@@ -999,7 +1013,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
             "Hide all windows to reveal the desktop",
             vec!["show", "desktop", "hide", "windows"],
             BuiltInFeature::SystemAction(SystemActionType::ShowDesktop),
-            "monitor",
+            "monitor-down",
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
@@ -1044,7 +1058,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
             "Set system volume to 0% (mute)",
             vec!["volume", "mute", "0", "percent", "zero", "off"],
             BuiltInFeature::SystemAction(SystemActionType::Volume0),
-            "volume-x",
+            "volume-off",
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
@@ -1071,7 +1085,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
             "Set system volume to 75%",
             vec!["volume", "75", "percent", "high", "loud"],
             BuiltInFeature::SystemAction(SystemActionType::Volume75),
-            "volume-1",
+            "volume-2",
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
@@ -1099,7 +1113,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
             "Quit the Script Kit application",
             vec!["quit", "exit", "close", "script", "kit", "app"],
             BuiltInFeature::SystemAction(SystemActionType::QuitScriptKit),
-            "log-out",
+            "circle-x",
         ));
 
         // System utilities
@@ -1126,7 +1140,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
             "Activate the screen saver",
             vec!["screen", "saver", "screensaver"],
             BuiltInFeature::SystemAction(SystemActionType::StartScreenSaver),
-            "image",
+            "monitor-play",
         ));
 
         // System Preferences
@@ -1136,7 +1150,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
             "Open macOS System Settings",
             vec!["system", "settings", "preferences", "prefs"],
             BuiltInFeature::SystemAction(SystemActionType::OpenSystemPreferences),
-            "settings",
+            "settings-2",
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
@@ -1324,7 +1338,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
                 "image",
             ],
             BuiltInFeature::AiCommand(AiCommandType::SendScreenToAi),
-            "camera",
+            "monitor-up",
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
@@ -1420,7 +1434,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
                 "create",
             ],
             BuiltInFeature::ScriptCommand(ScriptCommandType::NewExtension),
-            "sparkles",
+            "scroll-text",
         ));
 
         // =========================================================================
@@ -1455,7 +1469,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
                 "assistant",
             ],
             BuiltInFeature::PermissionCommand(PermissionCommandType::AllowScreenRecording),
-            "monitor",
+            "monitor-check",
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
@@ -1564,7 +1578,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
                     "reset", "window", "position", "default", "restore", "layout", "location",
                 ],
                 BuiltInFeature::SettingsCommand(SettingsCommandType::ResetWindowPositions),
-                "refresh-cw",
+                "rotate-ccw",
             ));
         }
 
@@ -1591,7 +1605,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
             "Check dictation model, microphone, and hotkey readiness",
             vec!["dictation", "setup", "microphone", "parakeet", "hotkey"],
             BuiltInFeature::SettingsCommand(SettingsCommandType::DictationSetup),
-            "mic",
+            "sliders-horizontal",
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
@@ -1652,7 +1666,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
                 "jot",
             ],
             BuiltInFeature::UtilityCommand(UtilityCommandType::ScratchPad),
-            "notebook-pen",
+            "square-pen",
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
@@ -1697,7 +1711,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
                 "tab ai",
             ],
             BuiltInFeature::UtilityCommand(UtilityCommandType::ClaudeCode),
-            "bot",
+            "terminal",
         ));
 
         entries.push(BuiltInEntry::new_with_icon(

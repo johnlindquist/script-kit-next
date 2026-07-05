@@ -107,10 +107,10 @@ impl AgentChatSetupCard {
             return false;
         }
 
-        if ui_foundation::is_key_tab(key) {
-            cx.emit(AgentChatSetupCardEvent::Retry);
-            return true;
-        }
+        // Tab is deliberately unbound here: the Retry event it used to emit
+        // is a no-op in the subscription handler, and the card's hints only
+        // document Enter. An unadvertised half-dead Tab binding just makes
+        // the displayed Tab information wrong.
 
         if ui_foundation::is_key_enter(key) {
             cx.emit(AgentChatSetupCardEvent::OpenPicker);

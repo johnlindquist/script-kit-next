@@ -1342,7 +1342,17 @@ impl ScriptListApp {
                 "Attaching to Agent Chat".into(),
             ]
         } else if selected_file.is_some() {
-            let primary = "\u{21b5} Open";
+            // Tab browses into the selected directory (Shift+Tab goes up) —
+            // the surface's signature interaction, so it must be advertised.
+            let selected_is_directory = selected_file
+                .as_ref()
+                .map(|f| matches!(f.file_type, file_search::FileType::Directory))
+                .unwrap_or(false);
+            let primary = if selected_is_directory {
+                "\u{21b5} Open · \u{21e5} Browse"
+            } else {
+                "\u{21b5} Open"
+            };
             vec![primary.into(), ai_hint.into(), "\u{2318}K Actions".into()]
         } else if self.file_search_current_dir.is_some() {
             vec![

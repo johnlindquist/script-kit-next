@@ -213,6 +213,7 @@ impl ScriptListApp {
             AppView::CreationFeedback { .. } => "CreationFeedback",
             AppView::NamingPrompt { .. } => "NamingPrompt",
             AppView::BrowseKitsView { .. } => "BrowseKitsView",
+            AppView::MigrateV1View { .. } => "MigrateV1View",
             AppView::InstalledKitsView { .. } => "InstalledKitsView",
             AppView::ProcessManagerView { .. } => "ProcessManagerView",
             AppView::CurrentAppCommandsView { .. } => "CurrentAppCommandsView",
@@ -292,6 +293,14 @@ impl ScriptListApp {
         self.editor_escape_armed_at = None;
         self.current_view = AppView::ScriptList;
         self.set_main_window_mode_state_only(MainWindowMode::Mini, cx, "reset_to_script_list");
+        // A full reset lands on the launcher root, so there is nowhere left to
+        // "go back" to. A stale `opened_from_main_menu` here makes the next
+        // Escape on an empty ScriptList run a no-op go_back_or_close (visible
+        // as "Escape does nothing, second Escape closes"). Launcher sub-modes
+        // that legitimately keep the flag while hosting ScriptList (attachment
+        // portals, mini→full Main Window, vault filter) all set it back to
+        // `true` after their own view setup, never through this reset.
+        self.opened_from_main_menu = false;
 
         // A force-reset bypasses the portal close paths; drop any
         // ScriptList-hosted spine file portal so `is_in_attachment_portal`

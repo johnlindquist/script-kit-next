@@ -86,6 +86,7 @@ mod tests {
     #[test]
     fn scriptlet_command_head_prefers_declared_command() {
         let scriptlet = Scriptlet {
+            icon: None,
             name: "Open PR".to_string(),
             description: None,
             code: String::new(),

@@ -309,6 +309,15 @@ pub(crate) fn root_unified_action_owner_for_result(
     result: &SearchResult,
 ) -> RootUnifiedResultActionOwner {
     match result {
+        // App and BuiltIn rows deliberately delegate to the legacy script
+        // actions menu: for apps it is a strict superset of the root subject
+        // arm (Finder section, favorites, quit/restart/force-quit), and for
+        // built-ins it carries Show Info plus the global actions. The App and
+        // BuiltIn arms in `root_unified_action_subject_from_result` /
+        // `root_unified_actions_for_subject` below stay as the complete
+        // subject matrix (locked by
+        // tests/source_audits/root_unified_source_actions_contract.rs) but
+        // are not reachable from this owner routing.
         SearchResult::Script(_)
         | SearchResult::Scriptlet(_)
         | SearchResult::BuiltIn(_)

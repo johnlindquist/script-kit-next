@@ -261,6 +261,7 @@ pub(crate) struct FooterCwdChip {
     /// communicates the keyboard shortcut that opens the cwd picker. Renders
     /// with the same bordered chrome as the trailing footer buttons.
     pub key: Option<String>,
+    pub tooltip: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -1870,6 +1871,7 @@ unsafe fn layout_footer_left_info(
                 NSPoint::new(chip_start_x, 0.0),
                 NSSize::new((x - chip_start_x).max(0.0), bounds.size.height),
             ),
+            cwd_chip.tooltip.as_deref(),
         );
 
         x += FOOTER_CWD_CHIP_TRAILING_GAP_PX;
@@ -2148,7 +2150,11 @@ unsafe fn ensure_footer_cwd_chip_label(left_info_view: id, text: &str, text_colo
 }
 
 #[cfg(target_os = "macos")]
-unsafe fn layout_footer_cwd_chip_hit_target(left_info_view: id, frame: cocoa::foundation::NSRect) {
+unsafe fn layout_footer_cwd_chip_hit_target(
+    left_info_view: id,
+    frame: cocoa::foundation::NSRect,
+    tooltip: Option<&str>,
+) {
     use objc::{class, msg_send, sel, sel_impl};
 
     if frame.size.width <= 0.0 || frame.size.height <= 0.0 {
@@ -2177,6 +2183,8 @@ unsafe fn layout_footer_cwd_chip_hit_target(left_info_view: id, frame: cocoa::fo
     let _: () = msg_send![button, setEnabled: YES];
     let _: () = msg_send![button, setTarget: footer_action_target()];
     let _: () = msg_send![button, setAction: footer_action_selector(FooterAction::Cwd)];
+    let tooltip = tooltip.map(ns_string).unwrap_or(nil);
+    let _: () = msg_send![button, setToolTip: tooltip];
 }
 
 #[cfg(target_os = "macos")]

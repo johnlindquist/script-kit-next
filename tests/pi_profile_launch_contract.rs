@@ -7,9 +7,10 @@ use script_kit_gpui::ai::agent_chat::pi::launch_spec::PiLaunchSpec;
 use script_kit_gpui::ai::agent_chat::profiles::{
     agent_chat_profile_picker_entries, persist_agent_chat_profile_selection,
     resolve_effective_profile, selected_agent_chat_profile_picker_id, AgentChatProfileContext,
-    AgentChatProfileSource, BUILTIN_GENERAL_PROFILE_ID, BUILTIN_SCRIPT_KIT_PROFILE_ID,
+    AgentChatProfileSource, BUILTIN_BRAIN_PROFILE_ID, BUILTIN_GENERAL_PROFILE_ID,
+    BUILTIN_SCRIPT_KIT_PROFILE_ID,
     BUILTIN_TEXT_PROFILE_ID, DEFAULT_PI_MODEL, DEFAULT_PI_PROVIDER, GENERAL_PI_TOOLS,
-    SCRIPT_KIT_PI_TOOLS, TEXT_APPEND_SYSTEM_PROMPT, TEXT_BLOCKED_ACTION_MESSAGE,
+    SCRIPT_KIT_PI_TOOLS, TEXT_APPEND_SYSTEM_PROMPT, TEXT_BLOCKED_ACTION_MESSAGE, TEXT_PI_MODEL,
 };
 use script_kit_gpui::config::{AgentChatBackend, AgentChatProfile, AiPreferences};
 
@@ -29,7 +30,10 @@ fn ai_with_pi_binary(path: &str) -> AiPreferences {
 #[test]
 fn general_builtin_profile_builds_locked_down_pi_rpc_launch_spec() {
     let ctx = context();
-    let profile = resolve_effective_profile(&ai_with_pi_binary("/tmp/test-pi"), &ctx);
+    // Brain is the no-selection default; select General explicitly.
+    let mut ai = ai_with_pi_binary("/tmp/test-pi");
+    ai.selected_profile_id = Some(BUILTIN_GENERAL_PROFILE_ID.to_string());
+    let profile = resolve_effective_profile(&ai, &ctx);
     assert_eq!(profile.source, AgentChatProfileSource::BuiltIn);
     assert_eq!(profile.id, BUILTIN_GENERAL_PROFILE_ID);
     assert_eq!(profile.name, "General");
@@ -126,7 +130,8 @@ fn text_builtin_profile_builds_focused_text_only_pi_rpc_launch_spec() {
     assert_eq!(profile.name, "Text");
     assert_eq!(profile.backend, AgentChatBackend::Pi);
     assert_eq!(profile.provider.as_deref(), Some(DEFAULT_PI_PROVIDER));
-    assert_eq!(profile.model.as_deref(), Some(DEFAULT_PI_MODEL));
+    // Pinned to the fastest Codex model for the instant rewrite flow.
+    assert_eq!(profile.model.as_deref(), Some(TEXT_PI_MODEL));
     assert_eq!(profile.system_prompt, None);
     assert_eq!(
         profile.append_system_prompt.as_deref(),
@@ -255,6 +260,7 @@ fn selected_model_id_overrides_builtin_profile_default_model() {
     let ctx = context();
     let ai = AiPreferences {
         pi_binary: Some("/tmp/test-pi".to_string()),
+        selected_profile_id: Some(BUILTIN_GENERAL_PROFILE_ID.to_string()),
         selected_model_id: Some("gpt-5.5-pro".to_string()),
         ..AiPreferences::default()
     };
@@ -301,7 +307,7 @@ fn profile_pi_binary_overrides_global_pi_binary_preference() {
 }
 
 #[test]
-fn unmatched_profile_selection_falls_back_to_general() {
+fn unmatched_profile_selection_falls_back_to_brain() {
     let ctx = context();
     let ai = AiPreferences {
         pi_binary: Some("/tmp/test-pi".to_string()),
@@ -310,8 +316,9 @@ fn unmatched_profile_selection_falls_back_to_general() {
         ..AiPreferences::default()
     };
 
+    // Brain is the memory-aware default when no selection resolves.
     let profile = resolve_effective_profile(&ai, &ctx);
-    assert_eq!(profile.id, BUILTIN_GENERAL_PROFILE_ID);
+    assert_eq!(profile.id, BUILTIN_BRAIN_PROFILE_ID);
     assert_eq!(profile.backend, AgentChatBackend::Pi);
 }
 
@@ -339,7 +346,7 @@ fn plugin_namespace_selection_cannot_resolve_to_custom_user_profile() {
 }
 
 #[test]
-fn legacy_agent_chat_backend_selection_falls_back_to_general_pi() {
+fn legacy_agent_chat_backend_selection_falls_back_to_brain_pi() {
     let ctx = context();
     let ai = AiPreferences {
         pi_binary: Some("/tmp/test-pi".to_string()),
@@ -347,8 +354,9 @@ fn legacy_agent_chat_backend_selection_falls_back_to_general_pi() {
         ..AiPreferences::default()
     };
 
+    // Brain is the memory-aware default when no selection resolves.
     let profile = resolve_effective_profile(&ai, &ctx);
-    assert_eq!(profile.id, BUILTIN_GENERAL_PROFILE_ID);
+    assert_eq!(profile.id, BUILTIN_BRAIN_PROFILE_ID);
     assert_eq!(profile.backend, AgentChatBackend::Pi);
     assert_eq!(profile.model.as_deref(), Some("claude-sonnet-4-6"));
 }

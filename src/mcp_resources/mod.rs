@@ -3606,6 +3606,7 @@ mod tests {
     /// Helper to create a test scriptlet
     fn test_scriptlet(name: &str, tool: &str, description: Option<&str>) -> Scriptlet {
         Scriptlet {
+            icon: None,
             name: name.to_string(),
             description: description.map(|s| s.to_string()),
             code: "echo test".to_string(),
@@ -3897,6 +3898,7 @@ mod tests {
     #[test]
     fn test_scriptlet_resource_entry_from_scriptlet() {
         let scriptlet = Scriptlet {
+            icon: None,
             name: "Full Scriptlet".to_string(),
             description: Some("Test description".to_string()),
             code: "echo test".to_string(),

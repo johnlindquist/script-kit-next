@@ -519,6 +519,53 @@ impl ScriptListApp {
             return false;
         }
 
+        // Style-only rewrites (`.` + pick a style) route into the instant
+        // rewrite mini instead of the full Agent Chat transcript: three fast
+        // variations, Tab to choose, Enter to paste back — and no `.` sigil
+        // surfaced anywhere. Falls back to the legacy Agent Chat handoff when
+        // the focused field can't be captured over AX (e.g. web apps that
+        // only work through the Cmd+C selection fallback).
+        if plan.selected_style.is_some()
+            && crate::spine::prompt_plan::spine_parse_is_style_only(&parse)
+        {
+            if let Some(snapshot) = self.capture_rewrite_snapshot("spine_style_rewrite") {
+                let style = plan.selected_style.clone().expect("checked above");
+                tracing::info!(
+                    target: "script_kit::spine",
+                    event = "spine_style_rewrite_routed_to_mini",
+                    style = %style.id,
+                    chars = snapshot.metrics.chars,
+                    app_name = %snapshot.app.name,
+                );
+                if reset_launcher_filter {
+                    self.reset_spine_launcher_filter_after_submit();
+                }
+                if clear_aliases_after_submit {
+                    self.spine_mention_aliases.clear();
+                }
+                self.open_focused_text_agent_chat_from_snapshot(
+                    snapshot,
+                    Some(style.instruction),
+                    "spine_style_rewrite",
+                    cx,
+                );
+                if let AppView::AgentChatView { entity } = self.current_view.clone() {
+                    entity.update(cx, |chat, cx| {
+                        if let Err(error) = chat.submit_instant_rewrite(cx) {
+                            tracing::warn!(
+                                target: "script_kit::focused_text",
+                                event = "instant_rewrite_submit_failed",
+                                source = "spine_style_rewrite",
+                                error = %error,
+                            );
+                        }
+                    });
+                }
+                cx.notify();
+                return true;
+            }
+        }
+
         let prompt = plan.normalized_prompt.trim().to_string();
         // Freeze `@selection` into real text NOW, while the launcher panel is
         // still a non-activating overlay and the source app owns focus. The
@@ -625,14 +672,7 @@ impl ScriptListApp {
         );
 
         if reset_launcher_filter {
-            self.filter_text.clear();
-            self.computed_filter_text.clear();
-            self.pending_filter_sync = true;
-            self.spine_parse = Default::default();
-            self.spine_projection = None;
-            self.spine_empty_subsearch_armed_for = None;
-            self.spine_live_preview_cache = Default::default();
-            self.invalidate_grouped_cache();
+            self.reset_spine_launcher_filter_after_submit();
         }
         // Launcher input aliases are tied to a cleared ephemeral prompt. Day
         // Page aliases may still back visible note text, so callers decide
@@ -673,6 +713,17 @@ impl ScriptListApp {
 
         cx.notify();
         true
+    }
+
+    fn reset_spine_launcher_filter_after_submit(&mut self) {
+        self.filter_text.clear();
+        self.computed_filter_text.clear();
+        self.pending_filter_sync = true;
+        self.spine_parse = Default::default();
+        self.spine_projection = None;
+        self.spine_empty_subsearch_armed_for = None;
+        self.spine_live_preview_cache = Default::default();
+        self.invalidate_grouped_cache();
     }
 
     fn spine_prompt_plan_for_aliases(
@@ -716,6 +767,37 @@ impl ScriptListApp {
                 suppress_focused_part,
                 ui_variant,
             ),
+            cx,
+        );
+    }
+
+    /// Quick AI: launcher Tab-with-text entry. Sends `query` as the first
+    /// turn of a fresh zero-context session (Quick AI profile — spark model,
+    /// no tools/skills/memories/context) and clears the launcher filter so
+    /// returning from the chat lands on a clean list.
+    ///
+    /// The `QuickAi` ui variant does the heavy lifting downstream: it forces
+    /// `suppress_focused_part`, skips detached/embedded chat reuse, and routes
+    /// launch resolution to `resolve_quick_ai_pi_launch`.
+    pub(crate) fn open_quick_ai_from_launcher(
+        &mut self,
+        query: String,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let query = query.trim().to_string();
+        if query.is_empty() {
+            return;
+        }
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "quick_ai_launcher_entry",
+            query_chars = query.chars().count(),
+        );
+        self.clear_filter(window, cx);
+        self.open_tab_ai_agent_chat_with_entry_intent_variant(
+            Some(query),
+            crate::ai::agent_chat::ui::ui_variant::AgentChatUiVariant::QuickAi,
             cx,
         );
     }
@@ -891,7 +973,14 @@ impl ScriptListApp {
             .filter(|value| !value.is_empty())
             .map(str::to_string);
 
-        if crate::ai::agent_chat::ui::chat_window::is_chat_window_open() {
+        // Quick AI must always launch its own zero-context session: reusing a
+        // detached window or the cached embedded chat would submit the query
+        // into the user's ongoing thread — wrong profile, wrong model, and
+        // with context the mode promises not to load.
+        let quick_ai =
+            ui_variant == crate::ai::agent_chat::ui::ui_variant::AgentChatUiVariant::QuickAi;
+
+        if !quick_ai && crate::ai::agent_chat::ui::chat_window::is_chat_window_open() {
             match normalized_entry_intent.as_ref().map(|intent| {
                 crate::ai::agent_chat::ui::chat_window::submit_reused_entry_intent_in_detached_chat(
                     intent.clone(),
@@ -919,11 +1008,13 @@ impl ScriptListApp {
             .as_ref()
             .is_some_and(|entity| entity.read(cx).is_setup_mode());
 
-        if Self::should_reuse_embedded_agent_chat_view_for_open(
-            normalized_entry_intent.as_deref(),
-            has_cached_retry_request,
-            cached_agent_chat_is_setup_mode,
-        ) && self.try_reuse_embedded_agent_chat_view(entry_intent.clone(), ui_variant, cx)
+        if !quick_ai
+            && Self::should_reuse_embedded_agent_chat_view_for_open(
+                normalized_entry_intent.as_deref(),
+                has_cached_retry_request,
+                cached_agent_chat_is_setup_mode,
+            )
+            && self.try_reuse_embedded_agent_chat_view(entry_intent.clone(), ui_variant, cx)
         {
             return;
         }
@@ -1996,6 +2087,7 @@ impl ScriptListApp {
                 | AppView::ThemeChooserView { .. }
                 | AppView::EmojiPickerView { .. }
                 | AppView::BrowseKitsView { .. }
+                | AppView::MigrateV1View { .. }
                 | AppView::InstalledKitsView { .. }
                 | AppView::ProcessManagerView { .. }
                 | AppView::SearchAiPresetsView { .. }
@@ -3473,6 +3565,14 @@ impl ScriptListApp {
             self.restore_current_view_with_focus(return_view, return_focus_target);
         }
 
+        // Returning to the launcher root consumes the "opened from main menu"
+        // origin. Leaving it set makes the NEXT Escape on the empty ScriptList
+        // run a no-op go_back_or_close instead of hiding the window (the
+        // "brain item → Agent Chat → Escape → Escape doesn't close" bug).
+        if matches!(self.current_view, AppView::ScriptList) && !self.is_in_attachment_portal() {
+            self.opened_from_main_menu = false;
+        }
+
         if return_is_script_list {
             self.clear_transient_script_list_trigger_on_return(window, cx);
         } else {
@@ -3597,6 +3697,10 @@ impl ScriptListApp {
         self.tab_ai_harness_return_focus_target = None;
 
         self.current_view = AppView::ScriptList;
+        // Same launcher-root landing rule as the close-to-origin path above:
+        // clear the origin flag so the next Escape hides the window instead of
+        // burning a press on a no-op go_back_or_close.
+        self.opened_from_main_menu = false;
         self.agent_chat_ready_script_path = None;
         self.agent_chat_footer_dot_status = None;
         self.agent_chat_footer_model_display = None;
@@ -3807,6 +3911,7 @@ impl ScriptListApp {
             | AppView::ThemeChooserView { .. }
             | AppView::EmojiPickerView { .. }
             | AppView::BrowseKitsView { .. }
+            | AppView::MigrateV1View { .. }
             | AppView::InstalledKitsView { .. }
             | AppView::ProcessManagerView { .. }
             | AppView::SearchAiPresetsView { .. }
@@ -5142,6 +5247,7 @@ impl ScriptListApp {
             AppView::DesignExplorerView { .. } => "DesignExplorer".to_string(),
             AppView::ActionsDialog => "ActionsDialog".to_string(),
             AppView::BrowseKitsView { .. } => "BrowseKits".to_string(),
+            AppView::MigrateV1View { .. } => "MigrateV1".to_string(),
             AppView::InstalledKitsView { .. } => "InstalledKits".to_string(),
             AppView::ProcessManagerView { .. } => "ProcessManager".to_string(),
             AppView::SearchAiPresetsView { .. } => "SearchAiPresets".to_string(),
@@ -5198,7 +5304,8 @@ impl ScriptListApp {
             | AppView::DictationHistoryView { filter, .. }
             | AppView::NotesBrowseView { filter, .. }
             | AppView::SdkReferenceView { filter, .. }
-            | AppView::ScriptTemplateCatalogView { filter, .. } => non_empty(filter.clone()),
+            | AppView::ScriptTemplateCatalogView { filter, .. }
+            | AppView::MigrateV1View { filter, .. } => non_empty(filter.clone()),
 
             AppView::FileSearchView { query, .. } => non_empty(query.clone()),
 

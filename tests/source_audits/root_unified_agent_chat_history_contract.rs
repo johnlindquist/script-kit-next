@@ -5,7 +5,9 @@ fn root_unified_agent_chat_history_config_is_real_and_scoped() {
 
     assert!(config_types.contains("pub struct UnifiedSearchAgentChatHistoryConfig"));
     assert!(config_types.contains("fn agent_chat_history_section_options("));
-    assert!(config_schema.contains("agent_chatHistory?: UnifiedSearchAgentChatHistoryConfig"));
+    // The schema uses the canonical camelCase key; the Rust config also
+    // accepts the historical `agent_chatHistory` sed-artifact via serde alias.
+    assert!(config_schema.contains("agentChatHistory?: UnifiedSearchAgentChatHistoryConfig"));
     assert!(
         config_schema.contains("clipboardHistory?: UnifiedSearchClipboardHistoryConfig")
             && config_schema.contains("notes?: UnifiedSearchNotesConfig"),

@@ -9,7 +9,7 @@
 //! capture resolves.
 
 use std::collections::{HashMap, VecDeque};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use crate::ai::agent_chat::content::{ContentBlock, ImageContent, TextContent};
@@ -92,6 +92,31 @@ pub(crate) enum AgentChatThreadStatus {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum AgentChatCwdResolutionDecision {
+    Unchanged,
+    RespawnNow,
+    BlockInFlight,
+}
+
+pub(crate) fn decide_agent_chat_cwd_resolution(
+    current_cwd: &Path,
+    selected_cwd: &Path,
+    status: AgentChatThreadStatus,
+) -> AgentChatCwdResolutionDecision {
+    if current_cwd == selected_cwd {
+        return AgentChatCwdResolutionDecision::Unchanged;
+    }
+    match status {
+        AgentChatThreadStatus::Streaming | AgentChatThreadStatus::WaitingForPermission => {
+            AgentChatCwdResolutionDecision::BlockInFlight
+        }
+        AgentChatThreadStatus::Idle | AgentChatThreadStatus::Error => {
+            AgentChatCwdResolutionDecision::RespawnNow
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum AgentChatHostWindowKind {
     Main,
     Detached,
@@ -125,6 +150,15 @@ impl AgentChatCallout {
             title: "Turn failed".into(),
             detail: Some(error.into()),
             can_retry,
+        }
+    }
+
+    fn notice(title: impl Into<SharedString>, detail: impl Into<SharedString>) -> Self {
+        Self {
+            severity: AgentChatCalloutSeverity::Error,
+            title: title.into(),
+            detail: Some(detail.into()),
+            can_retry: false,
         }
     }
 }
@@ -523,6 +557,67 @@ impl AgentChatThread {
 
     pub(crate) fn cwd(&self) -> &PathBuf {
         &self.cwd
+    }
+
+    pub(crate) fn status(&self) -> AgentChatThreadStatus {
+        self.status
+    }
+
+    pub(crate) fn profile_id(&self) -> &str {
+        &self.profile_id
+    }
+
+    pub(crate) fn set_notice_callout(
+        &mut self,
+        title: impl Into<SharedString>,
+        detail: impl Into<SharedString>,
+        cx: &mut Context<Self>,
+    ) {
+        self.active_callout = Some(AgentChatCallout::notice(title, detail));
+        cx.notify();
+    }
+
+    pub(crate) fn replace_pi_session(
+        &mut self,
+        connection: Arc<dyn AgentChatConnection>,
+        ui_thread_id: String,
+        cwd: PathBuf,
+        profile_id: String,
+        profile_display_name: SharedString,
+        profile_icon_name: Option<String>,
+        available_models: Vec<super::config::AgentChatModelEntry>,
+        selected_model_id: Option<String>,
+        cx: &mut Context<Self>,
+    ) {
+        self.flush_streaming_text_buffer();
+        self.stream_task = None;
+        self.streaming_text_drain_task = None;
+        self.connection = connection;
+        self.ui_thread_id = ui_thread_id;
+        self.cwd = cwd;
+        self.profile_id = profile_id;
+        self.profile_display_name = Some(profile_display_name.clone());
+        self.display_name = profile_display_name;
+        self.profile_icon_name = profile_icon_name;
+        self.available_models = available_models;
+        self.selected_model_id = selected_model_id;
+        self.selected_model_display_name = None;
+        self.active_plan_entries.clear();
+        self.active_mode_id = None;
+        self.available_commands.clear();
+        self.active_tool_calls.clear();
+        self.tool_call_lookup.clear();
+        self.standing_approvals.clear();
+        self.fork_points.clear();
+        self.pending_fork_ordinal = None;
+        self.pending_permission = None;
+        self.setup_state = None;
+        self.usage_tokens = None;
+        self.usage_cost_usd = None;
+        self.active_callout = None;
+        self.set_status(AgentChatThreadStatus::Idle);
+        self.bump_transcript_generation("cwd_respawn");
+        cx.notify();
     }
 
     /// Create a new thread entity with optional initial input.
@@ -4094,6 +4189,44 @@ mod tests {
             entry_id: entry_id.to_string(),
             text: text.to_string(),
         }
+    }
+
+    #[test]
+    fn cwd_resolution_decision_respawns_only_when_idle_or_error() {
+        let current = Path::new("/tmp/old");
+        let selected = Path::new("/tmp/new");
+
+        assert_eq!(
+            decide_agent_chat_cwd_resolution(current, current, AgentChatThreadStatus::Streaming),
+            AgentChatCwdResolutionDecision::Unchanged
+        );
+        assert_eq!(
+            decide_agent_chat_cwd_resolution(current, selected, AgentChatThreadStatus::Idle),
+            AgentChatCwdResolutionDecision::RespawnNow
+        );
+        assert_eq!(
+            decide_agent_chat_cwd_resolution(current, selected, AgentChatThreadStatus::Error),
+            AgentChatCwdResolutionDecision::RespawnNow
+        );
+    }
+
+    #[test]
+    fn cwd_resolution_decision_blocks_in_flight_turns() {
+        let current = Path::new("/tmp/old");
+        let selected = Path::new("/tmp/new");
+
+        assert_eq!(
+            decide_agent_chat_cwd_resolution(current, selected, AgentChatThreadStatus::Streaming),
+            AgentChatCwdResolutionDecision::BlockInFlight
+        );
+        assert_eq!(
+            decide_agent_chat_cwd_resolution(
+                current,
+                selected,
+                AgentChatThreadStatus::WaitingForPermission
+            ),
+            AgentChatCwdResolutionDecision::BlockInFlight
+        );
     }
 
     #[test]

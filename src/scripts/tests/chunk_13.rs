@@ -189,6 +189,7 @@ fn test_fuzzy_search_scriptlets_by_file_path() {
     // Users should be able to search by ".md" to find scriptlets
     let scriptlets = wrap_scriptlets(vec![
         Scriptlet {
+            icon: None,
             name: "Open GitHub".to_string(),
             description: Some("Opens GitHub in browser".to_string()),
             code: "open('https://github.com')".to_string(),
@@ -203,6 +204,7 @@ fn test_fuzzy_search_scriptlets_by_file_path() {
             plugin_title: None,
         },
         Scriptlet {
+            icon: None,
             name: "Copy Text".to_string(),
             description: Some("Copies text".to_string()),
             code: "copy()".to_string(),
@@ -227,6 +229,7 @@ fn test_fuzzy_search_scriptlets_by_anchor() {
     // Users should be able to search by anchor slug
     let scriptlets = wrap_scriptlets(vec![
         Scriptlet {
+            icon: None,
             name: "Open GitHub".to_string(),
             description: None,
             code: "code".to_string(),
@@ -241,6 +244,7 @@ fn test_fuzzy_search_scriptlets_by_anchor() {
             plugin_title: None,
         },
         Scriptlet {
+            icon: None,
             name: "Close Tab".to_string(),
             description: None,
             code: "code".to_string(),
@@ -265,6 +269,7 @@ fn test_fuzzy_search_scriptlets_by_anchor() {
 fn test_fuzzy_search_scriptlets_display_file_path() {
     // display_file_path should be the filename#anchor format
     let scriptlets = wrap_scriptlets(vec![Scriptlet {
+        icon: None,
         name: "Test".to_string(),
         description: None,
         code: "code".to_string(),
@@ -291,6 +296,7 @@ fn test_fuzzy_search_scriptlets_display_file_path() {
 #[test]
 fn test_fuzzy_search_scriptlets_match_indices() {
     let scriptlets = wrap_scriptlets(vec![Scriptlet {
+        icon: None,
         name: "Other".to_string(), // Name doesn't match
         description: None,
         code: "code".to_string(),

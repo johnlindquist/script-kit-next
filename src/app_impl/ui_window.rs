@@ -279,6 +279,16 @@ impl ScriptListApp {
                 } else if let AppView::DropPrompt { entity, .. } = &self.current_view {
                     let entity = entity.clone();
                     entity.update(cx, |prompt, _cx| prompt.submit());
+                } else if let AppView::FormPrompt { id, entity, .. } = &self.current_view {
+                    let entity = entity.clone();
+                    let prompt_id = id.clone();
+                    let validation_message = entity.read(cx).submit_validation_message(cx);
+                    if let Some(message) = validation_message {
+                        self.show_hud(message, Some(HUD_LONG_MS), cx);
+                        return;
+                    }
+                    let values = entity.read(cx).collect_values(cx);
+                    self.submit_prompt_response(prompt_id, Some(values), cx);
                 } else if !self.try_run_ready_agent_chat_script(cx) {
                     self.execute_selected(cx);
                 }
@@ -320,6 +330,9 @@ impl ScriptListApp {
                 } else if let AppView::TemplatePrompt { entity, .. } = &self.current_view {
                     let entity = entity.clone();
                     entity.update(cx, |prompt, cx| prompt.next_input(cx));
+                } else if let AppView::FormPrompt { entity, .. } = &self.current_view {
+                    let entity = entity.clone();
+                    entity.update(cx, |form, cx| form.focus_next(window, cx));
                 } else {
                     self.open_tab_ai_agent_chat_with_entry_intent(None, cx);
                 }
@@ -852,6 +865,29 @@ impl ScriptListApp {
             return buttons;
         }
 
+        if matches!(self.current_view, AppView::FormPrompt { .. }) {
+            use crate::footer_popup::{FooterAction, FooterButtonConfig};
+
+            let footer_disabled = self.main_window_footer_buttons_blocked();
+            let actions_open = self.show_actions_popup || crate::actions::is_actions_window_open();
+            let enabled = !footer_disabled;
+            let buttons = vec![
+                FooterButtonConfig::new(FooterAction::Run, "⌘↵", "Submit").enabled(enabled),
+                FooterButtonConfig::new(FooterAction::Ai, "⇥", "Next Field").enabled(enabled),
+                FooterButtonConfig::new(FooterAction::Actions, "⌘K", "Actions")
+                    .selected(actions_open)
+                    .enabled(enabled),
+            ];
+            tracing::debug!(
+                target: "script_kit::footer_popup",
+                event = "main_window_footer_buttons_resolved",
+                view = ?self.current_view,
+                button_count = buttons.len(),
+                "Resolved FormPrompt footer buttons"
+            );
+            return buttons;
+        }
+
         if matches!(self.current_view, AppView::HotkeyPrompt { .. }) {
             use crate::footer_popup::{FooterAction, FooterButtonConfig};
 
@@ -1335,6 +1371,7 @@ impl ScriptListApp {
                 label: label.clone(),
                 icon_token: "folder".to_string(),
                 key: Some("⇥".to_string()),
+                tooltip: None,
             })
     }
 
@@ -1440,6 +1477,47 @@ impl ScriptListApp {
         })
     }
 
+    /// What Tab actually does on the current surface — the single source of
+    /// truth for the header Tab chip. MUST mirror the Tab interceptor's
+    /// branch order in `startup.rs` (menu-syntax pickers → empty-input cwd
+    /// pick → directory-browse completion → Quick AI) so the chip never
+    /// advertises an action Tab won't take.
+    pub(crate) fn main_header_tab_chip_action(
+        &self,
+    ) -> crate::components::main_view_chrome::MainViewTabChipAction {
+        use crate::components::main_view_chrome::MainViewTabChipAction;
+
+        if !matches!(self.current_view, AppView::ScriptList) || self.show_actions_popup {
+            return MainViewTabChipAction::Inactive;
+        }
+        // Menu-syntax pickers/forms claim Tab first and show their own hints.
+        if self.menu_syntax_object_selector_owns_main_keyboard()
+            || self.menu_syntax_trigger_picker_owns_main_keyboard()
+            || self.menu_syntax_capture_form_owns_input()
+        {
+            return MainViewTabChipAction::Inactive;
+        }
+        if self.filter_text.trim().is_empty() {
+            if self.spine_enabled {
+                return MainViewTabChipAction::ChangeCwd;
+            }
+            return MainViewTabChipAction::Inactive;
+        }
+        // Directory-browse queries keep Tab for path completion.
+        if crate::file_search::looks_like_root_directory_browse_query(&self.filter_text) {
+            return MainViewTabChipAction::Inactive;
+        }
+        MainViewTabChipAction::QuickAi
+    }
+
+    /// Whether Shift+Tab opens the profile (agent/model) picker on the
+    /// current surface — mirrors `try_open_profile_search_from_script_list_shift_tab`.
+    fn main_header_shift_tab_key_active(&self) -> bool {
+        matches!(self.current_view, AppView::ScriptList)
+            && self.spine_enabled
+            && !self.show_actions_popup
+    }
+
     pub(crate) fn main_view_context_labels(
         &self,
     ) -> crate::components::main_view_chrome::MainViewContextLabels {
@@ -1463,6 +1541,8 @@ impl ScriptListApp {
             cwd_label,
             agent_model_label,
         )
+        .with_tab_action(self.main_header_tab_chip_action())
+        .with_shift_tab_key_active(self.main_header_shift_tab_key_active())
     }
 
     pub(crate) fn render_clickable_main_view_context_zone(
@@ -1476,6 +1556,16 @@ impl ScriptListApp {
             self.main_view_context_labels(),
             self.selection_hint_chip(),
             cx.listener(|this, _: &gpui::ClickEvent, window, cx| {
+                // The chip is a button for whatever Tab currently does:
+                // Quick AI submit when the input has text, cwd picker otherwise.
+                if matches!(
+                    this.main_header_tab_chip_action(),
+                    crate::components::main_view_chrome::MainViewTabChipAction::QuickAi
+                ) {
+                    let query = this.filter_text.clone();
+                    this.open_quick_ai_from_launcher(query, window, cx);
+                    return;
+                }
                 this.dispatch_main_window_footer_action(
                     crate::footer_popup::FooterAction::Cwd,
                     window,
@@ -1492,15 +1582,15 @@ impl ScriptListApp {
                 );
             }),
             cx.listener(|this, _: &gpui::ClickEvent, window, cx| {
-                // Single-keystroke on-ramp into the existing `.style` rewrite
-                // flow: a style-only input auto-attaches `@selection` +
-                // `/rewrite` and auto-submits on pick (A9 decision).
+                // Single-click on-ramp into the instant rewrite mini: capture
+                // the focused text and immediately stream three rewrite
+                // variations. No `.` sigil is surfaced to the user.
                 tracing::info!(
                     target: "script_kit::selection_hint",
                     event = "selection_hint_chip_clicked",
                 );
-                this.set_filter_text_immediate(".".to_string(), window, cx);
-                this.request_focus(FocusTarget::MainFilter, cx);
+                let _ = window;
+                this.open_instant_rewrite_mini("selection_hint_chip", cx);
             }),
         )
     }
@@ -2356,6 +2446,7 @@ mod tests {
                 file_path: None,
                 command: None,
                 alias: None,
+                icon: None,
             }),
             score: 100,
             display_file_path: None,

@@ -603,6 +603,25 @@ impl ScriptListApp {
                 )
                 .into()
             }
+            AppView::MigrateV1View {
+                filter,
+                selected_index,
+                board,
+            } => {
+                let rows: Vec<String> = Self::migrate_visible_rows(&board.rows, filter)
+                    .into_iter()
+                    .filter_map(|ix| board.rows.get(ix).map(|row| row.file.clone()))
+                    .collect();
+                self.collect_named_rows(
+                    "migrate-v1-filter",
+                    filter.clone(),
+                    "migrate-v1-results",
+                    &rows,
+                    *selected_index,
+                    limit,
+                )
+                .into()
+            }
 
             AppView::InstalledKitsView {
                 filter,

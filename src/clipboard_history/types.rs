@@ -158,7 +158,9 @@ pub fn root_clipboard_history_query_is_eligible(
     options: RootClipboardHistorySectionOptions,
 ) -> bool {
     let query = query.trim();
-    options.enabled && !query.contains('\n') && query.chars().count() >= options.min_query_chars
+    options.enabled
+        && !query.contains('\n')
+        && crate::scripts::search::query_meets_min_query_chars(query, options.min_query_chars)
 }
 
 pub fn root_clipboard_entry_is_eligible(entry: &ClipboardEntryMeta) -> bool {

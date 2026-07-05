@@ -92,7 +92,7 @@ fn root_unified_dictation_history_result_is_stable_and_non_bindable() {
     assert!(types.contains("\"dictation-history/{}\""));
     assert!(types.contains("SearchResult::DictationHistory(_) => \"Paste Dictation\""));
     assert!(types.contains("SearchResult::DictationHistory(_) => (\"Dictation\", \"mic\")"));
-    assert!(unified.contains("SearchResult::DictationHistory(_) => 11"));
+    assert!(unified.contains("SearchResult::DictationHistory(_) => 12"));
 }
 
 #[test]

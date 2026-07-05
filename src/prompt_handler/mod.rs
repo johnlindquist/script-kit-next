@@ -4243,6 +4243,28 @@ impl ScriptListApp {
                             selected_value,
                         )
                     }
+                    AppView::MigrateV1View {
+                        filter,
+                        selected_index,
+                        board,
+                    } => {
+                        let total = board.rows.len();
+                        let visible = Self::migrate_visible_rows(&board.rows, filter);
+                        let selected_value = visible
+                            .get(*selected_index)
+                            .and_then(|row_ix| board.rows.get(*row_ix))
+                            .map(|row| row.file.clone());
+                        (
+                            "migrateV1".to_string(),
+                            None,
+                            None,
+                            filter.clone(),
+                            total,
+                            visible.len(),
+                            *selected_index as i32,
+                            selected_value,
+                        )
+                    }
                     AppView::InstalledKitsView {
                         filter,
                         selected_index,

@@ -81,7 +81,7 @@ fn root_unified_browser_tabs_result_is_stable_non_bindable_and_tab_typed() {
     assert!(types.contains("SearchResult::BrowserTab(_) => (\"Tab\", \"panel-top\")"));
     assert!(types.contains("SearchResult::BrowserTab(_) => Some(\"Browser Tabs\")"));
     assert!(unified.contains("SearchResult::BrowserTab(_) => 7"));
-    assert!(unified.contains("SearchResult::Note(_) => 9"));
+    assert!(unified.contains("SearchResult::Note(_) => 10"));
 }
 
 #[test]

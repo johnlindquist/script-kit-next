@@ -95,7 +95,11 @@ pub(crate) fn root_agent_chat_history_query_is_eligible(
     query: &str,
     options: RootAgentChatHistorySectionOptions,
 ) -> bool {
-    options.enabled && query.trim().chars().count() >= options.min_query_chars
+    options.enabled
+        && crate::scripts::search::query_meets_min_query_chars(
+            query.trim(),
+            options.min_query_chars,
+        )
 }
 
 impl AgentChatHistoryEntry {

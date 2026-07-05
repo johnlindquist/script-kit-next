@@ -29,6 +29,7 @@ impl ScriptListApp {
                 | AppView::FavoritesBrowseView { .. }
                 | AppView::DesignGalleryView { .. }
                 | AppView::BrowseKitsView { .. }
+                | AppView::MigrateV1View { .. }
                 | AppView::InstalledKitsView { .. }
         )
     }
@@ -68,6 +69,7 @@ impl ScriptListApp {
             | AppView::SettingsView { .. }
             | AppView::DesignGalleryView { .. }
             | AppView::BrowseKitsView { .. }
+            | AppView::MigrateV1View { .. }
             | AppView::InstalledKitsView { .. } => Some(ActionsDialogHost::BuiltinList),
             _ => None,
         }

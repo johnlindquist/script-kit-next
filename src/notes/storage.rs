@@ -143,7 +143,9 @@ pub(crate) fn automation_storage_identity() -> serde_json::Value {
 
 pub(crate) fn root_notes_query_is_eligible(query: &str, options: RootNotesSectionOptions) -> bool {
     let query = query.trim();
-    options.enabled && !query.contains('\n') && query.chars().count() >= options.min_query_chars
+    options.enabled
+        && !query.contains('\n')
+        && crate::scripts::search::query_meets_min_query_chars(query, options.min_query_chars)
 }
 
 /// Get the path to the notes database

@@ -844,6 +844,7 @@ mod tests {
             file_path: None,
             command: None,
             alias: None,
+            icon: None,
         })
     }
 

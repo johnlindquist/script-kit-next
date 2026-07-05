@@ -319,7 +319,12 @@ pub fn read_all_artifacts(sk_path: &Path) -> ReadArtifactReport {
 }
 
 pub fn root_todo_query_is_eligible(query: &str, options: RootTodoSectionOptions) -> bool {
-    options.enabled && query.chars().count() >= options.min_query_chars && !query.contains('\n')
+    options.enabled
+        && crate::scripts::search::query_meets_min_query_chars(
+            query.trim(),
+            options.min_query_chars,
+        )
+        && !query.contains('\n')
 }
 
 pub fn search_root_todos_direct(
@@ -348,6 +353,99 @@ pub fn search_root_todos_in_sk_path(
         .collect::<Vec<_>>();
     hits.shrink_to_fit();
     hits
+}
+
+/// Day-page todo snapshot for the implicit (passive) typing path. The direct
+/// search re-reads up to 30 day-page files per call, which is fine for an
+/// explicit `todo:` filter but not per keystroke; the passive path filters
+/// this in-memory snapshot instead (mirroring the browser-history model:
+/// stale snapshots are still served, refresh happens on a detached thread).
+struct RootTodoSnapshotCache {
+    snapshot: Option<RootTodoSnapshot>,
+    refresh_in_flight: bool,
+}
+
+struct RootTodoSnapshot {
+    captured_at: std::time::Instant,
+    hits: std::sync::Arc<Vec<RootTodoSearchHit>>,
+}
+
+static ROOT_TODO_SNAPSHOT: std::sync::Mutex<RootTodoSnapshotCache> =
+    std::sync::Mutex::new(RootTodoSnapshotCache {
+        snapshot: None,
+        refresh_in_flight: false,
+    });
+
+const ROOT_TODO_SNAPSHOT_TTL: std::time::Duration = std::time::Duration::from_secs(30);
+
+/// Nonblocking snapshot-only lookup for the implicit (passive) typing path:
+/// one mutex lock plus an in-memory filter. No file I/O ever happens here —
+/// call `ensure_root_todos_snapshot_refresh` (cheap, self-guarded) to keep
+/// the snapshot warm.
+pub fn search_root_todos_cached(
+    query: &str,
+    options: RootTodoSectionOptions,
+) -> Vec<RootTodoSearchHit> {
+    if !root_todo_query_is_eligible(query, options) {
+        return Vec::new();
+    }
+    let candidates = {
+        let Ok(cache) = ROOT_TODO_SNAPSHOT.lock() else {
+            return Vec::new();
+        };
+        match cache.snapshot.as_ref() {
+            Some(snapshot) => snapshot.hits.clone(),
+            None => return Vec::new(),
+        }
+    };
+    let normalized_query = normalize_match_text(query);
+    candidates
+        .iter()
+        .filter(|hit| todo_hit_matches(hit, &normalized_query))
+        .take(options.max_results)
+        .cloned()
+        .collect()
+}
+
+/// Kick a background day-page scan when the todo snapshot is missing or past
+/// its TTL. Self-guarded: costs one mutex lock + `Instant` check when fresh,
+/// and spawns at most one detached scan thread per TTL window.
+pub fn ensure_root_todos_snapshot_refresh() {
+    {
+        let Ok(mut cache) = ROOT_TODO_SNAPSHOT.lock() else {
+            return;
+        };
+        let is_fresh = cache
+            .snapshot
+            .as_ref()
+            .is_some_and(|snapshot| snapshot.captured_at.elapsed() <= ROOT_TODO_SNAPSHOT_TTL);
+        if is_fresh || cache.refresh_in_flight {
+            return;
+        }
+        cache.refresh_in_flight = true;
+    }
+    let sk_path = default_sk_path();
+    std::thread::spawn(move || {
+        let hits = collect_day_page_todo_hits(&sk_path, RECENT_DAY_PAGE_SCAN_LIMIT);
+        if let Ok(mut cache) = ROOT_TODO_SNAPSHOT.lock() {
+            cache.snapshot = Some(RootTodoSnapshot {
+                captured_at: std::time::Instant::now(),
+                hits: std::sync::Arc::new(hits),
+            });
+            cache.refresh_in_flight = false;
+        }
+    });
+}
+
+#[cfg(test)]
+pub(crate) fn set_root_todo_snapshot_for_tests(hits: Vec<RootTodoSearchHit>) {
+    if let Ok(mut cache) = ROOT_TODO_SNAPSHOT.lock() {
+        cache.snapshot = Some(RootTodoSnapshot {
+            captured_at: std::time::Instant::now(),
+            hits: std::sync::Arc::new(hits),
+        });
+        cache.refresh_in_flight = false;
+    }
 }
 
 fn brain_days_dir(sk_path: &Path) -> PathBuf {
@@ -804,6 +902,42 @@ mod tests {
     use super::*;
     use std::fs;
     use tempfile::TempDir;
+
+    fn snapshot_hit(body: &str) -> RootTodoSearchHit {
+        RootTodoSearchHit {
+            stable_key: format!("day/test.md:{}", body.len()),
+            title: body.to_string(),
+            body: body.to_string(),
+            subtitle: String::new(),
+            tags: Vec::new(),
+            priority: None,
+            due: None,
+            created_at: None,
+            path: PathBuf::from("/tmp/test.md"),
+            line_number: Some(1),
+            raw_line: format!("- [ ] {body}"),
+        }
+    }
+
+    #[test]
+    fn cached_todo_lookup_filters_injected_snapshot_without_io() {
+        set_root_todo_snapshot_for_tests(vec![
+            snapshot_hit("renew passport"),
+            snapshot_hit("buy milk"),
+        ]);
+        let options = RootTodoSectionOptions {
+            enabled: true,
+            max_results: 10,
+            min_query_chars: 3,
+        };
+
+        let hits = search_root_todos_cached("passport", options);
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].body, "renew passport");
+
+        // Below min_query_chars: ineligible, no snapshot scan.
+        assert!(search_root_todos_cached("pa", options).is_empty());
+    }
 
     fn write_file(dir: &Path, name: &str, contents: &str) -> PathBuf {
         let path = dir.join(name);

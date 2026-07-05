@@ -107,6 +107,7 @@ fn make_scriptlet_with_opts(
     group: Option<&str>,
 ) -> Arc<Scriptlet> {
     Arc::new(Scriptlet {
+        icon: None,
         name: name.to_string(),
         description: None,
         code: "echo hello".to_string(),

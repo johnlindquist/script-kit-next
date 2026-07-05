@@ -73,6 +73,28 @@ impl DictationModelCatalogEntry {
         }
     }
 
+    /// Expected size of the remote download for this model, in bytes.
+    pub fn download_size_bytes(&self) -> u64 {
+        match self.id {
+            DictationModelId::ParakeetTdt06bV3 => {
+                crate::dictation::transcription::PARAKEET_MODEL_ARCHIVE_SIZE
+            }
+            DictationModelId::WhisperMedium => crate::dictation::transcription::WHISPER_MODEL_SIZE,
+        }
+    }
+
+    /// Size of a resumable partial download for this model, when present.
+    pub fn partial_download_size_bytes(&self) -> Option<u64> {
+        match self.id {
+            DictationModelId::ParakeetTdt06bV3 => {
+                crate::dictation::download::parakeet_partial_archive_size()
+            }
+            DictationModelId::WhisperMedium => {
+                crate::dictation::download::whisper_partial_model_size()
+            }
+        }
+    }
+
     pub fn is_available(&self) -> bool {
         match self.id {
             DictationModelId::ParakeetTdt06bV3 => {
@@ -105,7 +127,8 @@ pub fn dictation_model_catalog() -> [DictationModelCatalogEntry; 2] {
             id: DictationModelId::ParakeetTdt06bV3,
             stable_id: DictationModelId::ParakeetTdt06bV3.as_str(),
             display_name: "Parakeet TDT 0.6B v3",
-            description: "Fast and accurate. Supports 25 European languages.",
+            description:
+                "Fast and accurate. Auto-detects 25 European languages (ignores the language setting).",
             recommended: true,
             engine_kind: DictationEngineKind::Parakeet,
         },
@@ -113,7 +136,8 @@ pub fn dictation_model_catalog() -> [DictationModelCatalogEntry; 2] {
             id: DictationModelId::WhisperMedium,
             stable_id: DictationModelId::WhisperMedium.as_str(),
             display_name: "Whisper Medium",
-            description: "Broadest language coverage, but may run a bit slow.",
+            description:
+                "Broadest language coverage and honors the language setting, but may run a bit slow.",
             recommended: false,
             engine_kind: DictationEngineKind::Whisper,
         },

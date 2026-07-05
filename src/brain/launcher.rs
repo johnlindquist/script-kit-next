@@ -93,11 +93,9 @@ pub struct RootBrainSearchHit {
 
 pub fn root_brain_query_is_eligible(query: &str, options: RootBrainSectionOptions) -> bool {
     let query = query.trim();
-    // min_query_chars is measured in BYTES: it exists to skip noisy 1-2
-    // keystroke ASCII prefixes, but a single emoji (4 bytes) or CJK char
-    // (3 bytes) already carries full recall intent — counting chars made
-    // "🚀" and one-character CJK words unsearchable (audit F12).
-    options.enabled && !query.contains('\n') && query.len() >= options.min_query_chars
+    options.enabled
+        && !query.contains('\n')
+        && crate::scripts::search::query_meets_min_query_chars(query, options.min_query_chars)
 }
 
 const PASSIVE_ROOT_BRAIN_STOPWORDS: &[&str] = &[
@@ -164,6 +162,55 @@ pub fn root_brain_passive_search_text(
 
 pub fn root_brain_passive_query_is_eligible(query: &str, options: RootBrainSectionOptions) -> bool {
     root_brain_passive_search_text(query, options).is_some()
+}
+
+/// One shared decision for BOTH brain passes — the sync lexical pass in
+/// `filtering_cache.rs` and the async semantic pass in `root_brain_search.rs`
+/// — so their eligibility rules cannot drift apart.
+///
+/// The async pass layers view-state gates (`can_collect`, `max_results > 0`)
+/// on top; those are ownership concerns, not query concerns, and stay at the
+/// call site. `advanced_query_blocks` is likewise caller-supplied because the
+/// two passes intentionally gate on different advanced-query granularity
+/// (sync: any advanced query; async: predicates only).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RootBrainQueryPlan {
+    /// The brain section renders nothing and semantic state clears.
+    Skip,
+    /// Bare explicit `brain:`: show the most recent memories instead of a
+    /// blank panel (audit F6). No search runs — recents are not semantic
+    /// results, so the async pass stays cleared.
+    RecentsOnly,
+    /// Run the lexical search now (and the semantic pass async) with this
+    /// effective query text: trimmed input for explicit `brain:`, the
+    /// stopword-stripped passive text otherwise.
+    Search(String),
+}
+
+pub fn root_brain_query_plan(
+    search_text: &str,
+    explicit_brain: bool,
+    advanced_query_blocks: bool,
+    allow_brain: bool,
+    options: RootBrainSectionOptions,
+) -> RootBrainQueryPlan {
+    if advanced_query_blocks || !allow_brain {
+        return RootBrainQueryPlan::Skip;
+    }
+    let trimmed = search_text.trim();
+    if explicit_brain {
+        if trimmed.is_empty() {
+            return RootBrainQueryPlan::RecentsOnly;
+        }
+        if root_brain_query_is_eligible(trimmed, options) {
+            return RootBrainQueryPlan::Search(trimmed.to_string());
+        }
+        return RootBrainQueryPlan::Skip;
+    }
+    match root_brain_passive_search_text(trimmed, options) {
+        Some(text) => RootBrainQueryPlan::Search(text),
+        None => RootBrainQueryPlan::Skip,
+    }
 }
 
 /// Search the brain for passive root-launcher rows. Returns an empty list when
@@ -364,6 +411,57 @@ fn strip_activity_stamp(line: &str) -> &str {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn query_plan_locks_shared_sync_async_decisions() {
+        let passive = RootBrainSectionOptions {
+            enabled: true,
+            max_results: 4,
+            min_query_chars: 3,
+        };
+        // Explicit `brain:` widens options exactly like both call sites do.
+        let explicit = RootBrainSectionOptions {
+            enabled: true,
+            max_results: 12,
+            min_query_chars: 0,
+        };
+
+        // Bare `brain:` shows recents (sync) and stays semantically cleared
+        // (async) — one variant, both behaviors.
+        assert_eq!(
+            root_brain_query_plan("  ", true, false, true, explicit),
+            RootBrainQueryPlan::RecentsOnly
+        );
+        // Explicit with any query searches the trimmed text.
+        assert_eq!(
+            root_brain_query_plan(" x ", true, false, true, explicit),
+            RootBrainQueryPlan::Search("x".to_string())
+        );
+        // Passive 2-char ASCII stays below min_query_chars.
+        assert_eq!(
+            root_brain_query_plan("xy", false, false, true, passive),
+            RootBrainQueryPlan::Skip
+        );
+        // Passive 2-char CJK is 6 bytes — eligible (F12 byte semantics).
+        assert_eq!(
+            root_brain_query_plan("日本", false, false, true, passive),
+            RootBrainQueryPlan::Search("日本".to_string())
+        );
+        // Advanced-query and negated-source gates always win.
+        assert_eq!(
+            root_brain_query_plan("memory", false, true, true, passive),
+            RootBrainQueryPlan::Skip
+        );
+        assert_eq!(
+            root_brain_query_plan("memory", false, false, false, passive),
+            RootBrainQueryPlan::Skip
+        );
+        // Passive stopword-only queries have no meaningful terms.
+        assert_eq!(
+            root_brain_query_plan("the and", false, false, true, passive),
+            RootBrainQueryPlan::Skip
+        );
+    }
 
     #[test]
     fn eligibility_mirrors_notes_gating() {

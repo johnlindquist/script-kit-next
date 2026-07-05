@@ -74,7 +74,7 @@ fn get_settings_items() -> Vec<SettingsItem> {
         SettingsItem {
             name: "Dictation Setup",
             description: "Check model, microphone, and hotkey readiness",
-            icon: "mic",
+            icon: "sliders-horizontal",
             action: SettingsAction::DictationSetup,
         },
         SettingsItem {
@@ -110,7 +110,7 @@ fn get_settings_items() -> Vec<SettingsItem> {
         SettingsItem {
             name: "Screen Recording Permission Assistant",
             description: "Open the Permission Assistant for Screen Recording",
-            icon: "monitor",
+            icon: "monitor-check",
             action: SettingsAction::AllowScreenRecording,
         },
         SettingsItem {
@@ -138,7 +138,7 @@ fn get_settings_items() -> Vec<SettingsItem> {
         items.push(SettingsItem {
             name: "Reset Window Positions",
             description: "Restore all windows to default positions",
-            icon: "refresh-cw",
+            icon: "rotate-ccw",
             action: SettingsAction::ResetWindowPositions,
         });
     }
@@ -220,7 +220,7 @@ impl ScriptListApp {
                     feature: crate::builtins::BuiltInFeature::SettingsCommand(
                         crate::builtins::SettingsCommandType::DictationSetup,
                     ),
-                    icon: Some("mic".to_string()),
+                    icon: Some("sliders-horizontal".to_string()),
                     group: crate::builtins::BuiltInGroup::Core,
                 };
 
@@ -352,7 +352,7 @@ impl ScriptListApp {
                     feature: crate::builtins::BuiltInFeature::PermissionCommand(
                         crate::builtins::PermissionCommandType::AllowScreenRecording,
                     ),
-                    icon: Some("monitor".to_string()),
+                    icon: Some("monitor-check".to_string()),
                     group: crate::builtins::BuiltInGroup::Core,
                 };
 

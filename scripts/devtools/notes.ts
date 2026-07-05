@@ -1,5 +1,7 @@
 #!/usr/bin/env bun
 
+import { classifyEnvelopeError } from "./lib/client.ts";
+
 type JsonObject = Record<string, unknown>;
 
 type Args = {
@@ -284,7 +286,16 @@ function buildShortcutActivationReceipt(sendReceipt: JsonObject | null, beforeEn
       activeScopeBecameActionsPanel: afterSnapshot.activeScope === "actionsPanel",
       focusTransitionAdvanced: focusGenerationAdvanced,
     },
-    classification: delivered && opened ? "ok" : "reproduced",
+    // "reproduced" is reserved for a verified failure: the command was
+    // delivered but the panel did not open. A failed SEND is a transport
+    // problem, not a reproduced app bug — classify it fail-closed instead.
+    classification: !delivered
+      ? (classifyEnvelopeError(sendReceipt) === "ok"
+          ? "blocked-by-response-timeout"
+          : classifyEnvelopeError(sendReceipt))
+      : opened
+        ? "ok"
+        : "reproduced",
     failure: delivered && !opened
       ? "target-scoped batch openActions did not open the Notes actions command bar"
       : null,

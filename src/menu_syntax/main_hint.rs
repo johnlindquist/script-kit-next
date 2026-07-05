@@ -2575,7 +2575,7 @@ fn qualifier_value_partial(token: &str, head: &str) -> Option<String> {
 }
 
 /// Truncate `token` at the first colon (inclusive) so we can hand the
-/// committed head to [[crate::menu_syntax::source_heads::source_head_for_token]].
+/// committed head to `source_head_spec_for_token`.
 fn extract_head_prefix(token: &str) -> String {
     if let Some(colon_idx) = token.find(':') {
         token[..=colon_idx].to_string()
@@ -2957,6 +2957,7 @@ mod tests {
 
     fn scriptlet(name: &str, command: Option<&str>) -> Arc<Scriptlet> {
         Arc::new(Scriptlet {
+            icon: None,
             name: name.to_string(),
             description: None,
             code: String::new(),

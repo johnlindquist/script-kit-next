@@ -161,12 +161,6 @@ impl AudioVisualiser {
 
         Some(smoothed)
     }
-
-    /// Reset internal state (call when starting a new recording session).
-    pub fn reset(&mut self) {
-        self.buffer.clear();
-        self.noise_floor.fill(-40.0);
-    }
 }
 
 // ---------------------------------------------------------------------------

@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::OnceLock;
+use std::sync::{Mutex, OnceLock};
 
 use anyhow::Context as _;
 use serde::{Deserialize, Serialize};
@@ -1255,6 +1255,8 @@ pub(crate) fn load_selected_profile_system_prompt() -> Option<(String, String)> 
 // ---------------------------------------------------------------------------
 
 const AGENT_CHAT_AGENT_RUNTIME_STATE_SCHEMA_VERSION: u32 = 1;
+const AGENT_CHAT_CWD_RECENTS_SCHEMA_VERSION: u32 = 1;
+const AGENT_CHAT_CWD_RECENTS_CAP: usize = 5;
 
 /// File-backed Agent Chat agent runtime state cache.
 ///
@@ -1266,6 +1268,151 @@ pub(crate) struct AgentChatAgentRuntimeStateFile {
     pub schema_version: u32,
     #[serde(default)]
     pub agents: HashMap<String, AgentChatAgentRuntimeState>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AgentChatCwdRecentsFile {
+    schema_version: u32,
+    #[serde(default)]
+    profiles: HashMap<String, Vec<PathBuf>>,
+}
+
+impl Default for AgentChatCwdRecentsFile {
+    fn default() -> Self {
+        Self {
+            schema_version: AGENT_CHAT_CWD_RECENTS_SCHEMA_VERSION,
+            profiles: HashMap::new(),
+        }
+    }
+}
+
+impl AgentChatCwdRecentsFile {
+    fn recents_for_profile(&self, profile_id: &str) -> Vec<PathBuf> {
+        self.profiles.get(profile_id).cloned().unwrap_or_default()
+    }
+
+    fn push_recent_for_profile(
+        &mut self,
+        profile_id: &str,
+        cwd: PathBuf,
+        default_cwd: Option<&Path>,
+    ) -> bool {
+        if !cwd.is_absolute() || default_cwd == Some(cwd.as_path()) {
+            return false;
+        }
+
+        let recents = self.profiles.entry(profile_id.to_string()).or_default();
+        let before = recents.clone();
+        recents.retain(|existing| existing != &cwd);
+        recents.insert(0, cwd);
+        recents.truncate(AGENT_CHAT_CWD_RECENTS_CAP);
+        *recents != before
+    }
+}
+
+static AGENT_CHAT_CWD_RECENTS_CACHE: OnceLock<Mutex<AgentChatCwdRecentsFile>> = OnceLock::new();
+
+/// Default path for the Agent Chat cwd picker MRU file.
+///
+/// Follows the Agent Chat runtime-state pattern: small app-side UI state lives
+/// as schema-versioned JSON under `~/.scriptkit/agent_chat/`.
+pub(crate) fn default_agent_chat_cwd_recents_path() -> PathBuf {
+    crate::setup::get_kit_path()
+        .join("agent_chat")
+        .join("cwd-recents.json")
+}
+
+fn load_agent_chat_cwd_recents_file_from_disk() -> AgentChatCwdRecentsFile {
+    let path = default_agent_chat_cwd_recents_path();
+    let bytes = match std::fs::read(&path) {
+        Ok(bytes) => bytes,
+        Err(_) => return AgentChatCwdRecentsFile::default(),
+    };
+    match serde_json::from_slice::<AgentChatCwdRecentsFile>(&bytes) {
+        Ok(file) => file,
+        Err(error) => {
+            tracing::warn!(
+                target: "script_kit::tab_ai",
+                event = "agent_chat_cwd_recents_load_failed",
+                path = %path.display(),
+                error = %error,
+            );
+            AgentChatCwdRecentsFile::default()
+        }
+    }
+}
+
+fn agent_chat_cwd_recents_cache() -> &'static Mutex<AgentChatCwdRecentsFile> {
+    AGENT_CHAT_CWD_RECENTS_CACHE
+        .get_or_init(|| Mutex::new(load_agent_chat_cwd_recents_file_from_disk()))
+}
+
+/// Return the cached cwd MRU for a profile. This is safe for per-keystroke
+/// list building: disk is read only when the process-global cache initializes.
+pub(crate) fn agent_chat_cwd_recents_for_profile(profile_id: &str) -> Vec<PathBuf> {
+    agent_chat_cwd_recents_cache()
+        .lock()
+        .map(|file| file.recents_for_profile(profile_id))
+        .unwrap_or_default()
+}
+
+pub(crate) fn record_agent_chat_cwd_recent(
+    profile_id: &str,
+    cwd: PathBuf,
+    default_cwd: Option<&Path>,
+) {
+    let mut file = match agent_chat_cwd_recents_cache().lock() {
+        Ok(file) => file,
+        Err(error) => {
+            tracing::warn!(
+                target: "script_kit::tab_ai",
+                event = "agent_chat_cwd_recents_lock_failed",
+                error = %error,
+            );
+            return;
+        }
+    };
+    if !file.push_recent_for_profile(profile_id, cwd.clone(), default_cwd) {
+        return;
+    }
+
+    let path = default_agent_chat_cwd_recents_path();
+    if let Some(parent) = path.parent() {
+        if let Err(error) = std::fs::create_dir_all(parent) {
+            tracing::warn!(
+                target: "script_kit::tab_ai",
+                event = "agent_chat_cwd_recents_persist_failed",
+                path = %path.display(),
+                error = %error,
+            );
+            return;
+        }
+    }
+    match serde_json::to_vec_pretty(&*file) {
+        Ok(bytes) => {
+            if let Err(error) = std::fs::write(&path, bytes) {
+                tracing::warn!(
+                    target: "script_kit::tab_ai",
+                    event = "agent_chat_cwd_recents_persist_failed",
+                    path = %path.display(),
+                    profile_id = %profile_id,
+                    cwd = %cwd.display(),
+                    error = %error,
+                );
+            }
+        }
+        Err(error) => {
+            tracing::warn!(
+                target: "script_kit::tab_ai",
+                event = "agent_chat_cwd_recents_persist_failed",
+                path = %path.display(),
+                profile_id = %profile_id,
+                cwd = %cwd.display(),
+                error = %error,
+            );
+        }
+    }
 }
 
 impl Default for AgentChatAgentRuntimeStateFile {
@@ -1448,6 +1595,60 @@ mod tests {
         AgentChatAgentInstallState, AgentChatAgentSource,
     };
     use tempfile::tempdir;
+
+    #[test]
+    fn cwd_recents_push_dedupe_cap_and_ignore_default() {
+        let mut file = AgentChatCwdRecentsFile::default();
+        let default = Path::new("/tmp/default");
+
+        assert!(!file.push_recent_for_profile("general", default.to_path_buf(), Some(default)));
+        for name in ["one", "two", "three", "four", "five"] {
+            assert!(file.push_recent_for_profile(
+                "general",
+                PathBuf::from(format!("/tmp/{name}")),
+                Some(default),
+            ));
+        }
+        assert!(file.push_recent_for_profile(
+            "general",
+            PathBuf::from("/tmp/six"),
+            Some(default),
+        ));
+        assert!(file.push_recent_for_profile(
+            "general",
+            PathBuf::from("/tmp/three"),
+            Some(default),
+        ));
+
+        assert_eq!(
+            file.recents_for_profile("general"),
+            vec![
+                PathBuf::from("/tmp/three"),
+                PathBuf::from("/tmp/six"),
+                PathBuf::from("/tmp/five"),
+                PathBuf::from("/tmp/four"),
+                PathBuf::from("/tmp/two"),
+            ]
+        );
+    }
+
+    #[test]
+    fn cwd_recents_are_isolated_per_profile_and_absolute_only() {
+        let mut file = AgentChatCwdRecentsFile::default();
+
+        assert!(file.push_recent_for_profile("general", PathBuf::from("/tmp/general"), None));
+        assert!(file.push_recent_for_profile("brain", PathBuf::from("/tmp/brain"), None));
+        assert!(!file.push_recent_for_profile("general", PathBuf::from("relative"), None));
+
+        assert_eq!(
+            file.recents_for_profile("general"),
+            vec![PathBuf::from("/tmp/general")]
+        );
+        assert_eq!(
+            file.recents_for_profile("brain"),
+            vec![PathBuf::from("/tmp/brain")]
+        );
+    }
 
     fn catalog_entry(id: &str, display_name: &str) -> AgentChatAgentCatalogEntry {
         AgentChatAgentCatalogEntry {

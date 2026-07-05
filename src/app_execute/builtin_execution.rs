@@ -931,6 +931,7 @@ enum SurfaceOpenBuiltinAction {
     DictationHistory,
     SdkReference,
     ScriptTemplateCatalog,
+    MigrateV1Scripts,
 }
 
 impl SurfaceOpenBuiltinAction {
@@ -955,6 +956,7 @@ impl SurfaceOpenBuiltinAction {
             builtins::BuiltInFeature::DictationHistory => Some(Self::DictationHistory),
             builtins::BuiltInFeature::SdkReference => Some(Self::SdkReference),
             builtins::BuiltInFeature::NewScriptFromTemplate => Some(Self::ScriptTemplateCatalog),
+            builtins::BuiltInFeature::MigrateV1Scripts => Some(Self::MigrateV1Scripts),
             _ => None,
         }
     }
@@ -980,6 +982,7 @@ impl SurfaceOpenBuiltinAction {
             Self::DictationHistory => "open_dictation_history",
             Self::SdkReference => "open_sdk_reference",
             Self::ScriptTemplateCatalog => "open_script_template_catalog",
+            Self::MigrateV1Scripts => "open_migrate_v1",
         }
     }
 
@@ -1001,6 +1004,7 @@ impl SurfaceOpenBuiltinAction {
             Self::DictationHistory => "Opening Dictation History",
             Self::SdkReference => "Opening SDK Reference",
             Self::ScriptTemplateCatalog => "Opening Script Template Catalog",
+            Self::MigrateV1Scripts => "Opening Migrate v1 Scripts",
         }
     }
 }
@@ -4042,6 +4046,11 @@ impl ScriptListApp {
                     .expect("surface open arm should only receive NewScriptFromTemplate");
                 self.execute_surface_open_builtin(open_action, dctx, cx)
             }
+            builtins::BuiltInFeature::MigrateV1Scripts => {
+                let open_action = SurfaceOpenBuiltinAction::from_feature(&entry.feature)
+                    .expect("surface open arm should only receive MigrateV1Scripts");
+                self.execute_surface_open_builtin(open_action, dctx, cx)
+            }
         }
     }
 
@@ -4345,6 +4354,15 @@ impl ScriptListApp {
                     true,
                     cx,
                 );
+            }
+            SurfaceOpenBuiltinAction::MigrateV1Scripts => {
+                tracing::info!(
+                    category = "BUILTIN",
+                    trace_id = %dctx.trace_id,
+                    "{}",
+                    action.log_message()
+                );
+                self.open_migrate_v1_view(cx);
             }
         }
 
@@ -6134,7 +6152,7 @@ impl ScriptListApp {
                     let stop_result = cx
                         .background_executor()
                         .spawn(async move {
-                            job.collect_with_deadline(std::time::Duration::from_secs(2))
+                            job.collect_with_deadline(Self::DICTATION_STOP_COLLECT_DEADLINE)
                         })
                         .await;
                     let _ = this.update(cx, |this, cx| {
@@ -6143,6 +6161,18 @@ impl ScriptListApp {
                         }
                         match stop_result {
                             Ok(Some(capture)) if transcribe => {
+                                if capture.truncated {
+                                    tracing::warn!(
+                                        category = "DICTATION",
+                                        request_id,
+                                        "Capture collection timed out; transcribing partial audio"
+                                    );
+                                    this.show_error_toast(
+                                        "Dictation stop timed out — the tail of the recording may be missing"
+                                            .to_string(),
+                                        cx,
+                                    );
+                                }
                                 this.begin_dictation_transcription(capture, target, cx);
                             }
                             Ok(_) => {
@@ -6268,7 +6298,7 @@ impl ScriptListApp {
     /// animation and stops automatically when the session ends.
     fn spawn_dictation_overlay_pump(&mut self, cx: &mut Context<Self>) {
         let generation = crate::dictation::overlay_generation();
-        cx.spawn(async move |_this, cx| {
+        cx.spawn(async move |this, cx| {
             loop {
                 cx.background_executor()
                     .timer(std::time::Duration::from_millis(16))
@@ -6280,6 +6310,31 @@ impl ScriptListApp {
                         "Overlay pump detected generation change, stopping"
                     );
                     break;
+                }
+                // Guard against runaway recordings: auto-stop and transcribe
+                // once the configured max duration is reached.  The stop
+                // coordinator dedupes repeat requests while the stop is in
+                // flight.
+                if crate::dictation::dictation_auto_stop_due() {
+                    tracing::warn!(
+                        category = "DICTATION",
+                        "Dictation reached its configured max duration; auto-stopping"
+                    );
+                    let _ = this.update(cx, |this, cx| {
+                        this.show_hud(
+                            "Dictation reached its time limit — transcribing".to_string(),
+                            Some(HUD_MEDIUM_MS),
+                            cx,
+                        );
+                        let target = crate::dictation::get_dictation_target()
+                            .unwrap_or_else(|| this.resolve_dictation_target());
+                        this.request_active_dictation_stop(
+                            crate::dictation::DictationStopReason::MaxDurationReached,
+                            target,
+                            true,
+                            cx,
+                        );
+                    });
                 }
                 let Some(state) = crate::dictation::snapshot_overlay_state() else {
                     break;
@@ -6304,15 +6359,42 @@ impl ScriptListApp {
     ) {
         match result {
             Ok(Some(transcript)) => {
-                let history_entry =
-                    crate::dictation::record_dictation_history(&transcript, audio_duration, target);
-                tracing::info!(
-                    category = "DICTATION",
-                    event = "dictation_history_recorded_before_delivery",
-                    entry_id = %history_entry.id,
-                    target = %history_entry.target,
+                let history_entry_id = if crate::config::load_user_preferences()
+                    .dictation
+                    .save_history_enabled()
+                {
+                    let history_entry = crate::dictation::record_dictation_history(
+                        &transcript,
+                        audio_duration,
+                        target,
+                    );
+                    tracing::info!(
+                        category = "DICTATION",
+                        event = "dictation_history_recorded_before_delivery",
+                        entry_id = %history_entry.id,
+                        target = %history_entry.target,
+                    );
+                    history_entry.id
+                } else {
+                    tracing::info!(
+                        category = "DICTATION",
+                        event = "dictation_history_skipped_by_preference",
+                        "dictation.saveHistory is disabled; transcript not persisted"
+                    );
+                    String::new()
+                };
+                // Show the recognized text while it is being delivered so the
+                // user gets confirmation of what was heard.
+                let _ = crate::dictation::update_dictation_overlay(
+                    crate::dictation::DictationOverlayState {
+                        phase: crate::dictation::DictationSessionPhase::Delivering,
+                        elapsed: audio_duration,
+                        transcript: transcript.clone().into(),
+                        target,
+                        ..Default::default()
+                    },
+                    cx,
                 );
-                let history_entry_id = history_entry.id.clone();
                 // Route delivery based on the target that was captured at
                 // session start, not the current UI state.
                 let mut delivery_insertion_range: Option<serde_json::Value> = None;
@@ -6377,26 +6459,9 @@ impl ScriptListApp {
                 };
 
                 if delivered_internally {
-                    let destination = match target {
-                        crate::dictation::DictationTarget::MainWindowFilter => {
-                            crate::dictation::DictationDestination::MainWindowFilter
-                        }
-                        crate::dictation::DictationTarget::MainWindowPrompt => {
-                            crate::dictation::DictationDestination::ActivePrompt
-                        }
-                        crate::dictation::DictationTarget::NotesEditor => {
-                            crate::dictation::DictationDestination::NotesEditor
-                        }
-                        crate::dictation::DictationTarget::AiChatComposer => {
-                            crate::dictation::DictationDestination::AiChatComposer
-                        }
-                        crate::dictation::DictationTarget::TabAiHarness => {
-                            crate::dictation::DictationDestination::TabAiHarness
-                        }
-                        crate::dictation::DictationTarget::ExternalApp => {
-                            crate::dictation::DictationDestination::FrontmostApp
-                        }
-                    };
+                    // Single source of truth for the target → destination
+                    // mapping lives on DictationTarget::destination().
+                    let destination = target.destination();
                     let insertion_range = match destination {
                         crate::dictation::DictationDestination::MainWindowFilter
                         | crate::dictation::DictationDestination::ActivePrompt
@@ -6435,7 +6500,19 @@ impl ScriptListApp {
                         insertion_range,
                     );
 
-                    let _ = crate::dictation::close_dictation_overlay(cx);
+                    // Brief "Done" confirmation with the delivered text, then
+                    // close the overlay.
+                    let _ = crate::dictation::update_dictation_overlay(
+                        crate::dictation::DictationOverlayState {
+                            phase: crate::dictation::DictationSessionPhase::Finished,
+                            elapsed: audio_duration,
+                            transcript: transcript.clone().into(),
+                            target,
+                            ..Default::default()
+                        },
+                        cx,
+                    );
+                    self.schedule_dictation_overlay_close(cx, Self::DICTATION_FINISHED_LINGER);
                     if matches!(target, crate::dictation::DictationTarget::MainWindowFilter)
                         && !script_kit_gpui::is_main_window_visible()
                     {
@@ -6618,10 +6695,21 @@ impl ScriptListApp {
                                         error = %error,
                                         "Failed to paste dictation transcript"
                                     );
-                                    this.show_error_toast(
-                                        format!("Dictation paste failed: {error}"),
-                                        cx,
-                                    );
+                                    // Recovery: leave the transcript on the
+                                    // clipboard so the dictation isn't lost.
+                                    let copied = arboard::Clipboard::new()
+                                        .and_then(|mut clipboard| {
+                                            clipboard.set_text(transcript.clone())
+                                        })
+                                        .is_ok();
+                                    let message = if copied {
+                                        format!(
+                                            "Dictation paste failed — transcript copied to clipboard, press \u{2318}V to paste ({error})"
+                                        )
+                                    } else {
+                                        format!("Dictation paste failed: {error}")
+                                    };
+                                    this.show_error_toast(message, cx);
                                 }
                             }
                             this.schedule_dictation_transcriber_cleanup(
@@ -6669,7 +6757,7 @@ impl ScriptListApp {
                     "Transcription failed"
                 );
 
-                if error_text.contains("Parakeet model not downloaded") {
+                if error_text.contains("model not downloaded") {
                     let _ = crate::dictation::close_dictation_overlay(cx);
                     self.dispatch_window_event(
                         crate::window_orchestrator::WindowEvent::AbortDictation,
@@ -6803,13 +6891,25 @@ impl ScriptListApp {
 
     const DICTATION_FOCUS_SETTLE_MS: u64 = 120;
 
+    /// How long the stop coordinator waits for the capture pipeline to flush
+    /// its tail chunk and emit `EndOfStream`.  Hitting this deadline truncates
+    /// the recording tail, so it is generous — the flush normally completes in
+    /// well under a second.
+    const DICTATION_STOP_COLLECT_DEADLINE: std::time::Duration =
+        std::time::Duration::from_secs(5);
+
+    /// How long the Finished pill stays visible before the overlay closes.
+    const DICTATION_FINISHED_LINGER: std::time::Duration =
+        std::time::Duration::from_millis(900);
+
     fn dictation_focus_settle_duration() -> std::time::Duration {
         std::time::Duration::from_millis(Self::DICTATION_FOCUS_SETTLE_MS)
     }
 
-    /// Start downloading the Parakeet model in the background, showing
-    /// progress via in-prompt updates and HUD fallback.
-    fn start_parakeet_model_download(&mut self, cx: &mut Context<Self>) {
+    /// Start downloading the selected dictation model (Parakeet archive or
+    /// Whisper file) in the background, showing progress via in-prompt
+    /// updates and HUD fallback.
+    fn start_dictation_model_download(&mut self, cx: &mut Context<Self>) {
         if PARAKEET_MODEL_DOWNLOAD_IN_PROGRESS
             .compare_exchange(
                 false,
@@ -6896,6 +6996,16 @@ impl ScriptListApp {
         })
         .detach();
 
+        // The runner honors the model selected in preferences: the Parakeet
+        // archive or the Whisper model file.
+        let engine_kind = {
+            let prefs = crate::config::load_user_preferences();
+            let model_id = crate::dictation::DictationModelId::from_preference(
+                prefs.dictation.model.as_deref(),
+            );
+            crate::dictation::dictation_model_entry(model_id).engine_kind
+        };
+
         cx.spawn(async move |this, cx| {
             let result = cx
                 .background_executor()
@@ -6905,12 +7015,13 @@ impl ScriptListApp {
                         let speed_tracker =
                             std::sync::Arc::new(parking_lot::Mutex::new(SpeedTracker::new()));
                         let ui_emitter = ui_emitter.clone();
-                        crate::dictation::download::download_parakeet_model(
+                        let progress_callback =
                             {
                                 let speed_tracker = speed_tracker.clone();
                                 let ui_emitter = ui_emitter.clone();
                                 let progress_tx = progress_tx;
-                                move |phase, progress| {
+                                move |phase: crate::dictation::download::DownloadPhase,
+                                      progress: crate::dictation::download::DownloadProgress| {
                                     match phase {
                                         crate::dictation::download::DownloadPhase::Downloading => {
                                             let pct = progress.percentage();
@@ -6982,9 +7093,21 @@ impl ScriptListApp {
                                         | crate::dictation::download::DownloadPhase::Complete => {}
                                     }
                                 }
-                            },
-                            cancel,
-                        )
+                            };
+                        match engine_kind {
+                            crate::dictation::DictationEngineKind::Parakeet => {
+                                crate::dictation::download::download_parakeet_model(
+                                    progress_callback,
+                                    cancel,
+                                )
+                            }
+                            crate::dictation::DictationEngineKind::Whisper => {
+                                crate::dictation::download::download_whisper_model(
+                                    progress_callback,
+                                    cancel,
+                                )
+                            }
+                        }
                     }
                 })
                 .await;
@@ -6995,7 +7118,10 @@ impl ScriptListApp {
                     .store(false, std::sync::atomic::Ordering::Release);
                 match result {
                     Ok(_path) => {
-                        tracing::info!(category = "DICTATION", "Parakeet model download complete");
+                        tracing::info!(
+                            category = "DICTATION",
+                            "Dictation model download complete"
+                        );
                         this.update_dictation_model_prompt_if_visible(
                             crate::dictation::DictationModelStatus::Available,
                             cx,
@@ -7015,7 +7141,7 @@ impl ScriptListApp {
                     }
                     Err(error) if error.to_string().contains("cancelled") => {
                         let cancelled = "model download cancelled".to_string();
-                        tracing::info!(category = "DICTATION", "Parakeet model download cancelled");
+                        tracing::info!(category = "DICTATION", "Dictation model download cancelled");
                         this.update_dictation_model_prompt_if_visible(
                             crate::dictation::DictationModelStatus::DownloadFailed(cancelled),
                             cx,
@@ -7034,7 +7160,7 @@ impl ScriptListApp {
                             category = "DICTATION",
                             error = %raw_error,
                             user_error = %error_text,
-                            "Parakeet model download failed"
+                            "Dictation model download failed"
                         );
                         this.update_dictation_model_prompt_if_visible(
                             crate::dictation::DictationModelStatus::DownloadFailed(
@@ -7063,7 +7189,8 @@ impl ScriptListApp {
         let prefs = crate::config::load_user_preferences();
         let model_id =
             crate::dictation::DictationModelId::from_preference(prefs.dictation.model.as_deref());
-        let partial_size = crate::dictation::download::parakeet_partial_archive_size();
+        let partial_size = crate::dictation::dictation_model_entry(model_id)
+            .partial_download_size_bytes();
         Self::build_dictation_model_prompt_for_model(status, model_id, partial_size)
     }
 
@@ -7071,9 +7198,8 @@ impl ScriptListApp {
     /// prompt based on the current `DictationModelStatus`.  Pure function
     /// with no side effects — suitable for unit testing.
     ///
-    /// The download pipeline only ever fetches the Parakeet archive, so all
-    /// download-related copy names Parakeet regardless of the selected model;
-    /// a missing non-downloadable model offers switching to Parakeet instead.
+    /// Both catalog models are downloadable in-app; a missing non-recommended
+    /// model additionally offers switching back to the recommended Parakeet.
     fn build_dictation_model_prompt_for_model(
         status: crate::dictation::DictationModelStatus,
         model_id: crate::dictation::DictationModelId,
@@ -7094,59 +7220,14 @@ impl ScriptListApp {
             .downloaded_size_label()
             .map(|size| format!(" · {size} on disk"))
             .unwrap_or_default();
-        let archive_size =
-            crate::dictation::download::format_bytes(crate::dictation::PARAKEET_MODEL_ARCHIVE_SIZE);
+        let archive_size_bytes = model.download_size_bytes();
+        let archive_size = crate::dictation::download::format_bytes(archive_size_bytes);
         let model_summary = format!("{model_marker}{downloaded_size} · {}", model.description);
 
         match status {
-            DictationModelStatus::NotDownloaded
-                if matches!(
-                    model.engine_kind,
-                    crate::dictation::DictationEngineKind::Whisper
-                ) =>
-            {
-                // No download pipeline exists for Whisper; the model file must
-                // be placed manually. Offer switching back to the recommended
-                // (downloadable) Parakeet model instead of a misleading
-                // download button.
-                (
-                    format!("{} not installed", model.display_name),
-                    format!(
-                        "{model_summary} \u{00b7} expected at {} \u{00b7} or switch to the recommended model",
-                        model.path().display()
-                    ),
-                    vec![
-                        Choice {
-                            name: format!("Switch to {}", parakeet.display_name),
-                            value: BUILTIN_DICTATION_MODEL_USE_RECOMMENDED.to_string(),
-                            description: Some(format!(
-                                "Recommended \u{00b7} downloads if needed ({archive_size})"
-                            )),
-                            key: None,
-                            semantic_id: Some(builtin_choice_semantic_id(
-                                BUILTIN_DICTATION_MODEL_PROMPT_ID,
-                                0,
-                                BUILTIN_DICTATION_MODEL_USE_RECOMMENDED,
-                            )),
-                        },
-                        Choice {
-                            name: "Not now".to_string(),
-                            value: BUILTIN_DICTATION_MODEL_CANCEL.to_string(),
-                            description: Some("Leave dictation unchanged".to_string()),
-                            key: None,
-                            semantic_id: Some(builtin_choice_semantic_id(
-                                BUILTIN_DICTATION_MODEL_PROMPT_ID,
-                                1,
-                                BUILTIN_DICTATION_MODEL_CANCEL,
-                            )),
-                        },
-                    ],
-                )
-            }
             DictationModelStatus::NotDownloaded => {
                 let resume_pct = partial_archive_size.filter(|size| *size > 0).map(|size| {
-                    ((size.saturating_mul(100)) / crate::dictation::PARAKEET_MODEL_ARCHIVE_SIZE)
-                        .min(99)
+                    ((size.saturating_mul(100)) / archive_size_bytes.max(1)).min(99)
                 });
                 let title = resume_pct
                     .map(|pct| format!("Resume download ({}% already downloaded)", pct))
@@ -7157,34 +7238,48 @@ impl ScriptListApp {
                 let placeholder = resume_pct
                     .map(|pct| format!("{model_summary} \u{00b7} {archive_size} download \u{00b7} local after install \u{00b7} resumes from {pct}%"))
                     .unwrap_or_else(|| format!("{model_summary} \u{00b7} {archive_size} download \u{00b7} local after install \u{00b7} resumable if interrupted"));
-                (
-                    title,
-                    placeholder,
-                    vec![
-                        Choice {
-                            name: choice_name,
-                            value: BUILTIN_DICTATION_MODEL_DOWNLOAD.to_string(),
-                            description: Some("Required for local dictation".to_string()),
-                            key: None,
-                            semantic_id: Some(builtin_choice_semantic_id(
-                                BUILTIN_DICTATION_MODEL_PROMPT_ID,
-                                0,
-                                BUILTIN_DICTATION_MODEL_DOWNLOAD,
-                            )),
-                        },
-                        Choice {
-                            name: "Not now".to_string(),
-                            value: BUILTIN_DICTATION_MODEL_CANCEL.to_string(),
-                            description: Some("Leave dictation unchanged".to_string()),
-                            key: None,
-                            semantic_id: Some(builtin_choice_semantic_id(
-                                BUILTIN_DICTATION_MODEL_PROMPT_ID,
-                                1,
-                                BUILTIN_DICTATION_MODEL_CANCEL,
-                            )),
-                        },
-                    ],
-                )
+                let mut choices = vec![Choice {
+                    name: choice_name,
+                    value: BUILTIN_DICTATION_MODEL_DOWNLOAD.to_string(),
+                    description: Some("Required for local dictation".to_string()),
+                    key: None,
+                    semantic_id: Some(builtin_choice_semantic_id(
+                        BUILTIN_DICTATION_MODEL_PROMPT_ID,
+                        0,
+                        BUILTIN_DICTATION_MODEL_DOWNLOAD,
+                    )),
+                }];
+                if !model.recommended {
+                    let parakeet_size = crate::dictation::download::format_bytes(
+                        parakeet.download_size_bytes(),
+                    );
+                    choices.push(Choice {
+                        name: format!("Switch to {}", parakeet.display_name),
+                        value: BUILTIN_DICTATION_MODEL_USE_RECOMMENDED.to_string(),
+                        description: Some(format!(
+                            "Recommended \u{00b7} downloads if needed ({parakeet_size})"
+                        )),
+                        key: None,
+                        semantic_id: Some(builtin_choice_semantic_id(
+                            BUILTIN_DICTATION_MODEL_PROMPT_ID,
+                            choices.len(),
+                            BUILTIN_DICTATION_MODEL_USE_RECOMMENDED,
+                        )),
+                    });
+                }
+                let cancel_index = choices.len();
+                choices.push(Choice {
+                    name: "Not now".to_string(),
+                    value: BUILTIN_DICTATION_MODEL_CANCEL.to_string(),
+                    description: Some("Leave dictation unchanged".to_string()),
+                    key: None,
+                    semantic_id: Some(builtin_choice_semantic_id(
+                        BUILTIN_DICTATION_MODEL_PROMPT_ID,
+                        cancel_index,
+                        BUILTIN_DICTATION_MODEL_CANCEL,
+                    )),
+                });
+                (title, placeholder, choices)
             }
             DictationModelStatus::Downloading {
                 percentage,
@@ -7258,7 +7353,7 @@ impl ScriptListApp {
                             value: BUILTIN_DICTATION_MODEL_DOWNLOAD.to_string(),
                             description: Some(format!(
                                 "Resume the {} download",
-                                parakeet.display_name
+                                model.display_name
                             )),
                             key: None,
                             semantic_id: Some(builtin_choice_semantic_id(
@@ -7290,7 +7385,7 @@ impl ScriptListApp {
                         value: BUILTIN_DICTATION_MODEL_DOWNLOAD.to_string(),
                         description: Some(format!(
                             "Try the {} download again",
-                            parakeet.display_name
+                            model.display_name
                         )),
                         key: None,
                         semantic_id: Some(builtin_choice_semantic_id(
@@ -7435,22 +7530,28 @@ impl ScriptListApp {
     fn handle_dictation_model_selection(&mut self, value: &str, cx: &mut Context<Self>) {
         match value {
             BUILTIN_DICTATION_MODEL_DOWNLOAD => {
+                let prefs = crate::config::load_user_preferences();
+                let model_id = crate::dictation::DictationModelId::from_preference(
+                    prefs.dictation.model.as_deref(),
+                );
+                let model = crate::dictation::dictation_model_entry(model_id);
                 tracing::info!(
                     category = "DICTATION",
-                    "User accepted Parakeet model download"
+                    model_id = model.stable_id,
+                    "User accepted dictation model download"
                 );
                 // Transition the prompt to downloading state instead of closing it.
                 self.render_dictation_model_prompt(
                     crate::dictation::DictationModelStatus::Downloading {
                         percentage: 0,
                         downloaded_bytes: 0,
-                        total_bytes: crate::dictation::PARAKEET_MODEL_ARCHIVE_SIZE,
+                        total_bytes: model.download_size_bytes(),
                         speed_bytes_per_sec: 0,
                         eta_seconds: None,
                     },
                     cx,
                 );
-                self.start_parakeet_model_download(cx);
+                self.start_dictation_model_download(cx);
             }
             BUILTIN_DICTATION_MODEL_USE_RECOMMENDED => {
                 tracing::info!(
@@ -7477,20 +7578,20 @@ impl ScriptListApp {
                         crate::dictation::DictationModelStatus::Downloading {
                             percentage: 0,
                             downloaded_bytes: 0,
-                            total_bytes: crate::dictation::PARAKEET_MODEL_ARCHIVE_SIZE,
+                            total_bytes: parakeet.download_size_bytes(),
                             speed_bytes_per_sec: 0,
                             eta_seconds: None,
                         },
                         cx,
                     );
-                    self.start_parakeet_model_download(cx);
+                    self.start_dictation_model_download(cx);
                 }
             }
             BUILTIN_DICTATION_MODEL_CANCEL => {
                 if PARAKEET_MODEL_DOWNLOAD_IN_PROGRESS.load(std::sync::atomic::Ordering::Acquire) {
                     tracing::info!(
                         category = "DICTATION",
-                        "User requested Parakeet model download cancellation"
+                        "User requested dictation model download cancellation"
                     );
                     if let Some(cancel) = parakeet_model_download_cancel_slot().lock().clone() {
                         cancel.store(true, std::sync::atomic::Ordering::Release);
@@ -7503,14 +7604,14 @@ impl ScriptListApp {
                 } else {
                     tracing::info!(
                         category = "DICTATION",
-                        "User declined Parakeet model download"
+                        "User declined dictation model download"
                     );
                     *pending_dictation_model_action().lock() = None;
                     self.reset_to_script_list(cx);
                 }
             }
             BUILTIN_DICTATION_MODEL_HIDE => {
-                tracing::info!(category = "DICTATION", "User hid Parakeet model prompt");
+                tracing::info!(category = "DICTATION", "User hid dictation model prompt");
                 // Dismissing a completed download ("Done") abandons the pending
                 // dictation intent; hiding an in-flight download keeps it so
                 // the completion prompt can still offer to continue.
@@ -7539,7 +7640,7 @@ impl ScriptListApp {
             _ => {
                 tracing::info!(
                     category = "DICTATION",
-                    "User declined Parakeet model download"
+                    "User declined dictation model download"
                 );
                 self.reset_to_script_list(cx);
             }

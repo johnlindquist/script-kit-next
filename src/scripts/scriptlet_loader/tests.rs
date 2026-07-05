@@ -138,3 +138,54 @@ fn power_syntax_scriptlet_examples_parse_command_slugs() {
     assert!(commands.contains(&"ps-dupe"));
     assert_eq!(commands.len(), 2);
 }
+
+#[test]
+fn parse_scriptlet_section_reads_icon_metadata() {
+    let section = r#"## Tile App Left Half
+
+<!--
+description: Tile to left half of screen
+icon: panel-left
+-->
+
+```ts
+await tileWindow(1, 'left');
+```
+"#;
+    let scriptlet = parse_scriptlet_section(section, None).expect("scriptlet should parse");
+    assert_eq!(scriptlet.icon.as_deref(), Some("panel-left"));
+
+    let section_without_icon = r#"## Plain
+
+```ts
+console.log("hi");
+```
+"#;
+    let scriptlet = parse_scriptlet_section(section_without_icon, None).expect("should parse");
+    assert_eq!(scriptlet.icon, None);
+}
+
+#[test]
+fn window_management_scriptlets_all_declare_launcher_icons() {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("kit-init")
+        .join("scriptlets")
+        .join("window-management")
+        .join("main.md");
+    let content = std::fs::read_to_string(path).expect("read window management scriptlets");
+    let scriptlets = crate::scriptlets::parse_markdown_as_scriptlets(&content, None);
+    assert!(!scriptlets.is_empty());
+
+    for scriptlet in &scriptlets {
+        let icon = scriptlet
+            .metadata
+            .extra
+            .get("icon")
+            .unwrap_or_else(|| panic!("scriptlet {:?} should declare an icon", scriptlet.name));
+        assert!(
+            crate::icons::lucide_from_str(icon).is_some(),
+            "scriptlet {:?} icon {icon:?} must resolve to a Lucide icon",
+            scriptlet.name
+        );
+    }
+}

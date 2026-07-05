@@ -10,6 +10,12 @@ use super::{
 pub const SPINE_LIST_MODEL_VERSION: u64 = 6;
 pub const SPINE_LIST_RESOLUTION_GENERATION: u64 = 0;
 
+#[derive(Debug, Clone, Copy, Default)]
+pub(crate) struct SpineListBuildContext<'a> {
+    pub current_cwd: Option<&'a std::path::Path>,
+    pub cwd_recents: &'a [std::path::PathBuf],
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SpineListSection {
     pub id: SharedString,
@@ -262,6 +268,22 @@ pub(crate) fn build_spine_list_sections_full_with_resolved_tokens(
     live_preview: Option<&super::live_preview::SpineLivePreview>,
     _is_resolved_token: &dyn Fn(&str) -> bool,
 ) -> Vec<SpineListSection> {
+    build_spine_list_sections_full_with_resolved_tokens_and_context(
+        parse,
+        projection,
+        live_preview,
+        _is_resolved_token,
+        SpineListBuildContext::default(),
+    )
+}
+
+pub(crate) fn build_spine_list_sections_full_with_resolved_tokens_and_context(
+    parse: &SpineParse,
+    projection: &SpineCursorProjection,
+    live_preview: Option<&super::live_preview::SpineLivePreview>,
+    _is_resolved_token: &dyn Fn(&str) -> bool,
+    build_context: SpineListBuildContext<'_>,
+) -> Vec<SpineListSection> {
     let segment = active_segment(parse, projection);
     let raw = segment.map(|segment| segment.raw.as_str()).unwrap_or("");
 
@@ -313,7 +335,14 @@ pub(crate) fn build_spine_list_sections_full_with_resolved_tokens(
             )]
         }
         SpineSegmentKind::ProjectCwd { .. } => {
-            vec![super::catalog_cwd::build_cwd_section(parse, projection)]
+            vec![super::catalog_cwd::build_cwd_section(
+                parse,
+                projection,
+                super::catalog_cwd::CwdRootRowsParams {
+                    current_cwd: build_context.current_cwd,
+                    recents: build_context.cwd_recents,
+                },
+            )]
         }
         SpineSegmentKind::ModeExit { sigil, rest } => {
             vec![build_mode_exit_section(parse, projection, *sigil, rest)]

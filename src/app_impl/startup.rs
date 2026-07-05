@@ -1681,6 +1681,33 @@ impl ScriptListApp {
                                 return;
                             }
 
+                            // Quick AI: Tab with a non-empty query sends the
+                            // typed text to the zero-context Quick AI profile
+                            // (spark model, no tools/skills/memories). This is
+                            // the header Tab chip's advertised action whenever
+                            // the input has text, so it runs BEFORE root-file
+                            // directory completion — only path-shaped queries
+                            // (~/, /) keep Tab for browsing, matching the
+                            // chip's predicate in `main_header_tab_chip_action`.
+                            if matches!(this.current_view, AppView::ScriptList)
+                                && !has_shift
+                                && !this.show_actions_popup
+                                && !this.filter_text.trim().is_empty()
+                                && !crate::file_search::looks_like_root_directory_browse_query(
+                                    &this.filter_text,
+                                )
+                            {
+                                let query = this.filter_text.clone();
+                                tracing::info!(
+                                    target: "script_kit::tab_ai",
+                                    event = "quick_ai_tab_entry",
+                                    "Tab → Quick AI (zero-context spark)"
+                                );
+                                this.open_quick_ai_from_launcher(query, window, cx);
+                                cx.stop_propagation();
+                                return;
+                            }
+
                             if matches!(this.current_view, AppView::ScriptList)
                                 && this.try_navigate_root_file_directory_with_tab(
                                     has_shift, window, cx,
@@ -1720,7 +1747,7 @@ impl ScriptListApp {
                                     return;
                                 }
                                 let handled = entity
-                                    .update(cx, |chat, cx| chat.handle_tab_key(false, cx));
+                                    .update(cx, |chat, cx| chat.handle_tab_key(false, window, cx));
                                 if handled {
                                     cx.stop_propagation();
                                     return;

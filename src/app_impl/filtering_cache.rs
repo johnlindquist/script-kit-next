@@ -470,31 +470,88 @@ impl ScriptListApp {
         .detach();
     }
 
+    /// Mirrors `root_browser_tabs_refresh_options_for_query`: explicit
+    /// `history:` widens the options; an implicit (passive) eligible query
+    /// keeps config options so the snapshot warms for the cached typing-path
+    /// lookup. Returns `None` when history cannot surface for this query.
+    fn root_browser_history_refresh_options_for_query(
+        &self,
+        query_text: &str,
+    ) -> Option<(
+        crate::browser_history::RootBrowserHistorySectionOptions,
+        bool,
+    )> {
+        let source = crate::menu_syntax::RootUnifiedSourceFilter::BrowserHistory;
+        let unified_search = self.config.get_unified_search();
+        let mut options = unified_search.browser_history_section_options();
+        let advanced_query = self.menu_syntax_mode.advanced_query_for(query_text);
+        let source_filters = advanced_query
+            .map(|query| query.source_filters.clone())
+            .unwrap_or_default();
+        let explicit_history = source_filters.includes(source) && source_filters.allows(source);
+
+        if explicit_history {
+            options.enabled = true;
+            options.min_query_chars = 0;
+            options.max_age_days = 365;
+            options.max_results = options
+                .max_results
+                .max(unified_search.passive_result_limits().max_total_results);
+            return Some((options, true));
+        }
+
+        if !source_filters.allows(source) {
+            return None;
+        }
+
+        if advanced_query.is_some_and(|query| query.has_predicates()) {
+            return None;
+        }
+
+        if self.menu_syntax_object_selector_state.owns_main_list()
+            || self.menu_syntax_trigger_picker_state.owns_main_list()
+            || self
+                .menu_syntax_mode
+                .capture_composer_owns_input_for(query_text)
+            || self.menu_syntax_mode.command_owns_input_for(query_text)
+        {
+            return None;
+        }
+
+        let search_text =
+            crate::menu_syntax::free_text_for_search(&self.menu_syntax_mode, query_text);
+        if !crate::browser_history::root_browser_history_query_is_eligible(
+            search_text,
+            options.clone(),
+        ) {
+            return None;
+        }
+
+        Some((options, false))
+    }
+
     pub(crate) fn maybe_start_root_browser_history_refresh_for_query(
         &mut self,
         query_text: &str,
         cx: &mut Context<Self>,
     ) {
-        let source = crate::menu_syntax::RootUnifiedSourceFilter::BrowserHistory;
-        if !self.current_query_includes_root_source(query_text, source) {
+        let Some((options, explicit_history)) =
+            self.root_browser_history_refresh_options_for_query(query_text)
+        else {
             return;
-        }
+        };
 
         let Some(home) = std::env::var_os("HOME").map(std::path::PathBuf::from) else {
             return;
         };
-        let unified_search = self.config.get_unified_search();
-        let mut options = unified_search.browser_history_section_options();
-        options.enabled = true;
-        options.min_query_chars = 0;
-        options.max_age_days = 365;
-        options.max_results = options
-            .max_results
-            .max(unified_search.passive_result_limits().max_total_results);
-        let Some(refresh) = crate::browser_history::try_begin_root_browser_history_refresh(
-            &options,
-            "explicit_history_query",
-        ) else {
+        let reason = if explicit_history {
+            "explicit_history_query"
+        } else {
+            "implicit_history_query"
+        };
+        let Some(refresh) =
+            crate::browser_history::try_begin_root_browser_history_refresh(&options, reason)
+        else {
             return;
         };
 
@@ -534,7 +591,11 @@ impl ScriptListApp {
                 }
                 let selection_before = app.main_menu_selection_snapshot();
                 app.invalidate_root_passive_and_grouped_cache();
-                if app.current_query_includes_root_source(&app.computed_filter_text, source) {
+                let query_text = app.computed_filter_text.clone();
+                if app
+                    .root_browser_history_refresh_options_for_query(&query_text)
+                    .is_some()
+                {
                     app.reconcile_script_list_after_results_refresh(
                         "browser_history_refresh_complete",
                         selection_before,
@@ -627,48 +688,41 @@ impl ScriptListApp {
         let allow_browser_history =
             source_filters.allows(crate::menu_syntax::RootUnifiedSourceFilter::BrowserHistory);
 
-        let passive_brain_search_text = (!explicit_brain)
-            .then(|| crate::brain::root_brain_passive_search_text(search_text, brain_options))
-            .flatten();
-        let effective_brain_search_text = if explicit_brain {
-            Some(search_text.trim().to_string())
-        } else {
-            passive_brain_search_text.clone()
-        };
+        // Single shared eligibility decision for both brain passes (sync
+        // lexical here, async semantic in `root_brain_search.rs`) so the two
+        // can never drift. `RecentsOnly` covers the armed bare `brain:` case
+        // (audit F6): show the most recent memories instead of a blank panel.
+        let brain_plan = crate::brain::root_brain_query_plan(
+            search_text,
+            explicit_brain,
+            advanced_query_active,
+            allow_brain,
+            brain_options,
+        );
         // Prefer the async hybrid (semantic) batch when it was computed for
         // exactly this query; the sync lexical pass below is the instant
         // first paint while semantic results are still in flight.
-        let brain_semantic_hits = effective_brain_search_text.as_deref().and_then(|brain_query| {
-            crate::brain::semantic_root_brain_hits_for_query(
-                brain_query,
-                self.root_brain_semantic_results.as_ref(),
-                &brain_options,
-            )
-        });
+        let brain_semantic_hits = match &brain_plan {
+            crate::brain::RootBrainQueryPlan::Search(brain_query) => {
+                crate::brain::semantic_root_brain_hits_for_query(
+                    brain_query,
+                    self.root_brain_semantic_results.as_ref(),
+                    &brain_options,
+                )
+            }
+            _ => None,
+        };
         let brain_hits = timed_root_passive_source("brain", search_text, explicit_brain, || {
-            if advanced_query_active || !allow_brain {
-                Vec::new()
-            } else if explicit_brain && search_text.trim().is_empty() {
-                // Armed `brain:` with no query yet: show the most recent
-                // memories instead of a blank panel (audit finding F6). This
-                // must come before the eligibility branch — the explicit
-                // filter forces min_query_chars to 0, which makes the empty
-                // query "eligible" for a search that can only return nothing.
-                crate::brain::recent_root_brain_hits(brain_options.max_results)
-            } else if crate::brain::root_brain_query_is_eligible(search_text, brain_options) {
-                if explicit_brain {
-                    brain_semantic_hits.unwrap_or_else(|| {
-                        crate::brain::search_root_brain_direct(search_text, &brain_options)
-                    })
-                } else if let Some(brain_query) = passive_brain_search_text.as_deref() {
+            match &brain_plan {
+                crate::brain::RootBrainQueryPlan::Skip => Vec::new(),
+                crate::brain::RootBrainQueryPlan::RecentsOnly => {
+                    crate::brain::recent_root_brain_hits(brain_options.max_results)
+                }
+                crate::brain::RootBrainQueryPlan::Search(brain_query) => {
                     brain_semantic_hits.unwrap_or_else(|| {
                         crate::brain::search_root_brain_direct(brain_query, &brain_options)
                     })
-                } else {
-                    Vec::new()
                 }
-            } else {
-                Vec::new()
             }
         });
 
@@ -695,7 +749,12 @@ impl ScriptListApp {
                 if explicit_todos {
                     crate::menu_syntax::search_root_todos_direct(search_text, todo_options)
                 } else {
-                    Vec::new()
+                    // Implicit typing path: nonblocking snapshot filter. The
+                    // day-page file scan happens on a detached refresh
+                    // thread (self-guarded, at most once per TTL), never on
+                    // the keystroke path.
+                    crate::menu_syntax::ensure_root_todos_snapshot_refresh();
+                    crate::menu_syntax::search_root_todos_cached(search_text, todo_options)
                 }
             } else {
                 Vec::new()
@@ -827,18 +886,29 @@ impl ScriptListApp {
             search_text,
             explicit_browser_history,
             || {
-                if explicit_browser_history
-                    && !advanced_query_active
+                if !advanced_query_active
                     && allow_browser_history
                     && crate::browser_history::root_browser_history_query_is_eligible(
                         search_text,
                         browser_history_options.clone(),
                     )
                 {
-                    crate::browser_history::search_root_browser_history_meta_direct(
-                        search_text,
-                        browser_history_options.clone(),
-                    )
+                    if explicit_browser_history {
+                        crate::browser_history::search_root_browser_history_meta_direct(
+                            search_text,
+                            browser_history_options.clone(),
+                        )
+                    } else {
+                        // Implicit typing path mirrors browser tabs: a
+                        // nonblocking snapshot-only lookup. The blocking-risk
+                        // work (SQLite copies) stays on the background
+                        // refresh thread, preserving the 13a417737 latency
+                        // fix while letting history participate passively.
+                        crate::browser_history::search_root_browser_history_meta_cached(
+                            search_text,
+                            browser_history_options.clone(),
+                        )
+                    }
                 } else {
                     Vec::new()
                 }
@@ -1525,13 +1595,28 @@ impl ScriptListApp {
                 }
 
                 let live_preview = preview_needs.map(|_| &self.spine_live_preview_cache.current);
+                let cwd_context = if matches!(
+                    projection.active_segment_kind,
+                    crate::spine::SpineSegmentKind::ProjectCwd { .. }
+                ) {
+                    main_menu_agent_chat_cwd_context()
+                } else {
+                    None
+                };
 
                 let sections =
-                    crate::spine::list::build_spine_list_sections_full_with_resolved_tokens(
+                    crate::spine::list::build_spine_list_sections_full_with_resolved_tokens_and_context(
                         &self.spine_parse,
                         projection,
                         live_preview,
                         &|token| self.spine_mention_aliases.contains_key(token),
+                        crate::spine::list::SpineListBuildContext {
+                            current_cwd: cwd_context.as_ref().map(|context| context.0.as_path()),
+                            cwd_recents: cwd_context
+                                .as_ref()
+                                .map(|context| context.1.as_slice())
+                                .unwrap_or(&[]),
+                        },
                     );
                 let mut grouped_items = Vec::new();
                 let mut flat_results: Vec<scripts::SearchResult> = Vec::new();
@@ -3768,6 +3853,21 @@ pub(crate) fn build_rich_provider_json_rows(
         }
     }
     (grouped, flat)
+}
+
+fn main_menu_agent_chat_cwd_context() -> Option<(std::path::PathBuf, Vec<std::path::PathBuf>)> {
+    let ai_preferences = crate::config::load_user_preferences().ai;
+    let profile_ctx = crate::ai::agent_chat::profiles::AgentChatProfileContext::from_setup();
+    let profile =
+        crate::ai::agent_chat::profiles::resolve_effective_profile(&ai_preferences, &profile_ctx);
+    // Pure cwd-only resolution: the full launch resolver runs create_dir_all
+    // and logs per call, which is unacceptable in this per-keystroke path.
+    let cwd = crate::ai::agent_chat::launch::resolve_selected_launch_cwd(
+        &ai_preferences,
+        &profile_ctx,
+    );
+    let recents = crate::ai::agent_chat::ui::agent_chat_cwd_recents_for_profile(&profile.id);
+    Some((cwd, recents))
 }
 
 pub(crate) fn build_rich_cwd_root_rows(

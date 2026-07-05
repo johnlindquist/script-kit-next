@@ -122,6 +122,13 @@ pub(super) fn build_search_mode_results(
                 .match_tier()
                 .cmp(&results[a].match_tier())
                 .then_with(|| boosted[b].cmp(&boosted[a]))
+                .then_with(|| {
+                    // Same type-priority tie-break as the raw unified sort, so
+                    // equal-tier, equal-score rows keep builtin/app/window/script
+                    // ordering instead of collapsing to alphabetical.
+                    crate::scripts::search::result_type_order(&results[a])
+                        .cmp(&crate::scripts::search::result_type_order(&results[b]))
+                })
                 .then_with(|| results[a].name().cmp(results[b].name()))
         });
 
@@ -317,6 +324,30 @@ mod tests {
             )),
             "empty search results must not emit a Results header, got {grouped:?}"
         );
+    }
+
+    #[test]
+    fn search_mode_breaks_equal_score_ties_by_type_order_before_name() {
+        // Same tier, same boosted score: the builtin must sort above the app
+        // (type order 0 vs 1) even though the app name sorts first
+        // alphabetically — mirroring the raw unified-search tie-break.
+        let results = vec![
+            app("Alpha", score_from_tier(900, 10)),
+            builtin("Zed Command", BuiltInGroup::Core, score_from_tier(900, 10)),
+        ];
+
+        let (_grouped, sorted_results) = build_search_mode_results(
+            results,
+            &[],
+            &FrecencyStore::new(),
+            "z",
+            None,
+            None,
+            true,
+        );
+
+        assert_eq!(sorted_results[0].name(), "Zed Command");
+        assert_eq!(sorted_results[1].name(), "Alpha");
     }
 
     #[test]

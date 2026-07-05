@@ -1,8 +1,7 @@
 use std::sync::{Mutex, OnceLock};
 
-use anyhow::Context as _;
 use gpui::{
-    div, prelude::FluentBuilder, AnyElement, AnyWindowHandle, App, AppContext, Bounds, Context,
+    div, AnyElement, AnyWindowHandle, App, AppContext, Bounds, Context,
     DisplayId, FocusHandle, Focusable, InteractiveElement, IntoElement, KeyDownEvent,
     ParentElement, Pixels, Render, SharedString, StatefulInteractiveElement, Styled, WeakEntity,
     Window, WindowHandle,
@@ -14,8 +13,8 @@ use crate::components::inline_dropdown::{
 };
 use crate::components::inline_popup_window::{
     configure_inline_popup_window, inline_popup_height_for_row_height,
-    inline_popup_width_for_window, inline_popup_window_options, set_inline_popup_window_bounds,
-    INLINE_POPUP_EDGE_GUTTER, INLINE_POPUP_MAX_VISIBLE_ROWS, INLINE_POPUP_VERTICAL_PADDING,
+    inline_popup_window_options, set_inline_popup_window_bounds, INLINE_POPUP_EDGE_GUTTER,
+    INLINE_POPUP_MAX_VISIBLE_ROWS, INLINE_POPUP_VERTICAL_PADDING,
 };
 
 use super::{
@@ -299,6 +298,9 @@ pub(crate) fn is_dictation_microphone_popup_window_open() -> bool {
         .unwrap_or(false)
 }
 
+// Called from the binary crate's prompt_handler automation path; the
+// library build compiles this module without that caller.
+#[allow(dead_code)]
 pub(crate) fn batch_select_dictation_microphone_popup_row_by_value(
     value: &str,
     cx: &mut App,
@@ -316,6 +318,8 @@ pub(crate) fn batch_select_dictation_microphone_popup_row_by_value(
         .flatten()
 }
 
+// See batch_select_dictation_microphone_popup_row_by_value.
+#[allow(dead_code)]
 pub(crate) fn batch_select_dictation_microphone_popup_row_by_semantic_id(
     semantic_id: &str,
     cx: &mut App,
@@ -424,6 +428,12 @@ impl DictationMicrophonePopupWindow {
             row_id = %row.row_id,
             "Dictation microphone popup updated preference"
         );
+        // The live AVCaptureSession keeps the mic it opened with — surface the
+        // pending switch in the overlay footer instead of silently applying
+        // the change one session late.
+        if crate::dictation::is_dictation_recording() {
+            crate::dictation::set_pending_dictation_device_label(Some(row.title.to_string()));
+        }
         if let Some(view) = self.source_view.upgrade() {
             let _ = cx.update_window(self.parent_window_handle, |_entity, _window, cx| {
                 view.update(cx, |_overlay, cx| {

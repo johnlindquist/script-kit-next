@@ -172,6 +172,7 @@ fn test_script_fails_wrong_is_filter() {
 #[test]
 fn test_scriptlet_passes_group_filter() {
     let scriptlet = Scriptlet {
+        icon: None,
         name: "Deploy".to_string(),
         code: "echo deploy".to_string(),
         tool: "bash".to_string(),
@@ -193,6 +194,7 @@ fn test_scriptlet_passes_group_filter() {
 #[test]
 fn test_scriptlet_passes_tool_filter() {
     let scriptlet = Scriptlet {
+        icon: None,
         name: "Deploy".to_string(),
         code: "echo deploy".to_string(),
         tool: "bash".to_string(),
@@ -228,6 +230,7 @@ fn test_type_filter_script_excludes_scriptlets() {
 
     // Scriptlets should not pass
     let scriptlet = Scriptlet {
+        icon: None,
         name: "Snippet".to_string(),
         code: "echo hi".to_string(),
         tool: "bash".to_string(),

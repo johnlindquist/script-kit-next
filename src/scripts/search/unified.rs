@@ -16,7 +16,7 @@ use super::{
 };
 
 #[inline]
-fn result_type_order(r: &SearchResult) -> i32 {
+pub(crate) fn result_type_order(r: &SearchResult) -> i32 {
     match r {
         SearchResult::BuiltIn(_) => 0, // Built-ins first
         SearchResult::App(_) => 1,     // Apps second

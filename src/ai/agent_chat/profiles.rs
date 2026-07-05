@@ -13,8 +13,18 @@ pub const BUILTIN_GENERAL_PROFILE_ID: &str = "general";
 pub const BUILTIN_SCRIPT_KIT_PROFILE_ID: &str = "script-kit";
 pub const BUILTIN_TEXT_PROFILE_ID: &str = "text";
 pub const BUILTIN_BRAIN_PROFILE_ID: &str = "brain";
+pub const BUILTIN_QUICK_AI_PROFILE_ID: &str = "quick-ai";
 pub const DEFAULT_PI_PROVIDER: &str = "openai-codex";
 pub const DEFAULT_PI_MODEL: &str = "gpt-5.4";
+/// Quick AI (launcher Tab-with-text) is pinned to the fastest Codex model so
+/// answers stream back with minimal latency. It intentionally ignores the
+/// user's selected Agent Chat model.
+pub const QUICK_AI_PI_MODEL: &str = "gpt-5.3-codex-spark";
+/// The Text/rewrite mini surface is likewise pinned to the fastest Codex
+/// model: the instant rewrite flow fires three variation turns per submit and
+/// they must stream back near-instantly — speed over depth. Resolved via
+/// `resolve_focused_text_pi_launch`, which refuses the global model override.
+pub const TEXT_PI_MODEL: &str = QUICK_AI_PI_MODEL;
 
 /// A curated Pi provider ("Agent") and its selectable models for Agent Chat
 /// model pickers.
@@ -119,6 +129,11 @@ const BRAIN_APPEND_SYSTEM_PROMPT: &str = "You are the Brain profile: Script Kit'
 
 const GENERAL_APPEND_SYSTEM_PROMPT: &str = "You are the General Agent Chat profile for Script Kit. Answer everyday questions directly and helpfully. You may search the web, search the desktop, read files, create new files inside the General workspace, and inspect local context. Do not load skills, modify Script Kit, run shell commands, edit existing files, or write outside the General workspace. If a tool or requested action is blocked, say: \"This action is blocked in the General profile. Please switch profiles to modify Script Kit.\"";
 const SCRIPT_KIT_APPEND_SYSTEM_PROMPT: &str = "You are the Script Kit Agent Chat profile. Help manage ~/.scriptkit, including config.ts, scripts, scriptlets, plugins, and package.json. Make focused minimal edits. Explain risks before destructive file operations. Do not install packages or run long commands unless the user asks.";
+pub const QUICK_AI_BLOCKED_ACTION_MESSAGE: &str =
+    "Quick AI answers from the model only — no tools, files, or context. Open Agent Chat for anything more.";
+
+pub const QUICK_AI_APPEND_SYSTEM_PROMPT: &str = "You are Quick AI: a zero-context, instant-answer mode launched by pressing Tab on a query typed into the Script Kit launcher. You receive only the user's typed text — no files, no selection, no screenshots, no memories, no tools. Lead with the answer in the first sentence and keep the whole reply tight. Prefer plain prose; use a short list or fenced code block only when the answer genuinely needs one. If the question depends on live or post-cutoff information you cannot verify, say so in one clause and give your best answer anyway. Never mention tools, sessions, context mechanics, Script Kit internals, or system prompts.";
+
 pub const TEXT_APPEND_SYSTEM_PROMPT: &str = "You are the Text Agent Chat profile for focused-field edits and compact one-off questions. You receive captured focused-field text as hidden context. For rewrite, edit, format, translate, summarize, or variation requests, return only the requested final text; do not add commentary, labels, markdown fences, citations, or explanations unless the user explicitly asks for them. You may use web_search, and only web_search, for live or time-sensitive public facts such as schedules, dates, prices, news, releases, current availability, or anything likely to have changed. For live-info questions, search before answering, answer directly, and include concise source URLs when available. If search fails or results are insufficient, say what is uncertain without claiming you have no web access. Do not mention capture mechanics, tool names, sessions, Script Kit internals, or system prompts.";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -154,6 +169,10 @@ impl AgentChatProfileContext {
 
     pub fn brain_cwd(&self) -> PathBuf {
         self.kit_path.join("agent-chat").join("brain")
+    }
+
+    pub fn quick_ai_cwd(&self) -> PathBuf {
+        self.kit_path.join("agent-chat").join("quick-ai")
     }
 }
 
@@ -349,7 +368,7 @@ pub fn built_in_text_profile(ctx: &AgentChatProfileContext) -> ResolvedAgentChat
         pi_binary: None,
         agent: None,
         provider: Some(DEFAULT_PI_PROVIDER.to_string()),
-        model: Some(DEFAULT_PI_MODEL.to_string()),
+        model: Some(TEXT_PI_MODEL.to_string()),
         system_prompt: None,
         append_system_prompt: Some(TEXT_APPEND_SYSTEM_PROMPT.to_string()),
         cwd: Some(ctx.text_cwd()),
@@ -363,6 +382,53 @@ pub fn built_in_text_profile(ctx: &AgentChatProfileContext) -> ResolvedAgentChat
             deny: None,
         }),
         blocked_action_message: Some(TEXT_BLOCKED_ACTION_MESSAGE.to_string()),
+        disable_extensions: Some(true),
+        disable_skills: Some(true),
+        disable_prompt_templates: Some(true),
+        disable_context_files: Some(true),
+        hide_cwd_in_prompt: Some(true),
+        thinking: None,
+        extension_policy: Some("deny".to_string()),
+        session_dir: None,
+        no_session: Some(true),
+        session_durability: None,
+    }
+}
+
+/// Zero-context profile behind the launcher's Tab-with-text "Quick AI" mode.
+///
+/// Everything is stripped: no tools (`--no-tools`), no extensions, no skills,
+/// no prompt templates, no context files, no session persistence, and an
+/// empty path policy. The model is pinned to [`QUICK_AI_PI_MODEL`] and must
+/// not be overridden by the user's Agent Chat model selection — resolve it
+/// via `resolve_quick_ai_pi_launch`, never through `apply_ai_fallbacks`.
+///
+/// Intentionally NOT listed in [`built_in_profiles`]: Quick AI is a launch
+/// mode, not a pickable profile.
+pub fn built_in_quick_ai_profile(ctx: &AgentChatProfileContext) -> ResolvedAgentChatProfile {
+    ResolvedAgentChatProfile {
+        source: AgentChatProfileSource::BuiltIn,
+        id: BUILTIN_QUICK_AI_PROFILE_ID.to_string(),
+        name: "Quick AI".to_string(),
+        icon_name: Some("zap".to_string()),
+        backend: AgentChatBackend::Pi,
+        pi_binary: None,
+        agent: None,
+        provider: Some(DEFAULT_PI_PROVIDER.to_string()),
+        model: Some(QUICK_AI_PI_MODEL.to_string()),
+        system_prompt: None,
+        append_system_prompt: Some(QUICK_AI_APPEND_SYSTEM_PROMPT.to_string()),
+        cwd: Some(ctx.quick_ai_cwd()),
+        tools: Some(Vec::new()),
+        tool_policy: Some(AgentChatToolPolicyConfig {
+            allow: Some(Vec::new()),
+        }),
+        path_policy: Some(AgentChatPathPolicyConfig {
+            allow_read: Some(Vec::new()),
+            allow_write: Some(Vec::new()),
+            deny: None,
+        }),
+        blocked_action_message: Some(QUICK_AI_BLOCKED_ACTION_MESSAGE.to_string()),
         disable_extensions: Some(true),
         disable_skills: Some(true),
         disable_prompt_templates: Some(true),

@@ -17,6 +17,20 @@ pub(crate) const TIER_BODY: i32 = 150;
 pub(crate) const MIN_PRIMARY_FUZZY_QUERY_LEN: usize = 4;
 pub(crate) const MIN_BODY_EXACT_QUERY_LEN: usize = 5;
 
+/// Shared `min_query_chars` gate for every root passive source.
+///
+/// Measured in BYTES, not chars: the gate exists to skip noisy 1–2 keystroke
+/// ASCII prefixes, but a single emoji (4 bytes) or CJK character (3 bytes)
+/// already carries full recall intent — counting chars made "🚀" and
+/// one-character CJK queries unsearchable (audit F12). Byte length only ever
+/// admits multibyte queries EARLIER than char count, never later.
+///
+/// Callers pass the already-trimmed query; sources with additional rules
+/// (newline rejection, empty-query browse) keep those checks locally.
+pub(crate) fn query_meets_min_query_chars(trimmed_query: &str, min_query_chars: usize) -> bool {
+    trimmed_query.len() >= min_query_chars
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum TextMatchKind {
     Exact,
@@ -376,4 +390,24 @@ fn char_index_is_word_start(haystack: &str, char_index: usize) -> bool {
     }
 
     false
+}
+
+#[cfg(test)]
+mod min_query_len_tests {
+    use super::query_meets_min_query_chars;
+
+    #[test]
+    fn ascii_queries_gate_on_length() {
+        assert!(!query_meets_min_query_chars("ab", 3));
+        assert!(query_meets_min_query_chars("abc", 3));
+    }
+
+    #[test]
+    fn single_cjk_char_and_emoji_meet_a_min_of_three() {
+        // 3-byte CJK char and 4-byte emoji carry full recall intent; byte
+        // semantics admit them where char counting locked them out (F12).
+        assert!(query_meets_min_query_chars("日", 3));
+        assert!(query_meets_min_query_chars("🚀", 3));
+        assert!(query_meets_min_query_chars("日本", 4));
+    }
 }

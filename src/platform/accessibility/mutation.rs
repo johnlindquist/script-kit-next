@@ -28,6 +28,30 @@ pub fn register_in_memory_focused_text_target(session_id: &FocusedTextSessionId,
     }
 }
 
+/// Sessions whose capture came from the selection/Cmd+C ladder rather than a
+/// registered AX element (AX-opaque apps like Chrome/Electron). Replace for
+/// these sessions applies by pasting over the still-active selection in the
+/// source app (clipboard-preserving Cmd+V) instead of an AX field write.
+fn selection_paste_targets() -> &'static Mutex<std::collections::HashSet<String>> {
+    static TARGETS: OnceLock<Mutex<std::collections::HashSet<String>>> = OnceLock::new();
+    TARGETS.get_or_init(|| Mutex::new(std::collections::HashSet::new()))
+}
+
+/// Mark a session as a selection-paste target (see [`selection_paste_targets`]).
+pub fn register_selection_paste_target(session_id: &FocusedTextSessionId) {
+    if let Ok(mut targets) = selection_paste_targets().lock() {
+        targets.insert(session_id.to_string());
+    }
+}
+
+/// Whether Replace for this session applies via paste-over-selection.
+pub fn is_selection_paste_target(session_id: &FocusedTextSessionId) -> bool {
+    selection_paste_targets()
+        .lock()
+        .map(|targets| targets.contains(&session_id.to_string()))
+        .unwrap_or(false)
+}
+
 /// Read the current contents of an in-memory fixture target, if any.
 pub fn in_memory_focused_text(session_id: &FocusedTextSessionId) -> Option<String> {
     in_memory_focused_text_targets()
@@ -169,6 +193,24 @@ pub fn replace_focused_text(
         return Ok(result);
     }
 
+    if is_selection_paste_target(&session_id) {
+        #[cfg(target_os = "macos")]
+        {
+            let _ = options;
+            return crate::selected_text::set_selected_text(text)
+                .map(|_| TextMutationResult {
+                    action: TextMutationAction::Replace,
+                    changed_text: true,
+                    copied_to_clipboard: false,
+                })
+                .map_err(|err| FocusedTextError::Platform(err.to_string()));
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            return Err(FocusedTextError::UnsupportedTarget);
+        }
+    }
+
     #[cfg(target_os = "macos")]
     {
         super::ax::replace_registered_focused_text(&session_id, text, options, current_time_ms())
@@ -243,6 +285,36 @@ mod in_memory_target_tests {
             in_memory_focused_text(&id).as_deref(),
             Some("Friendlier rewrite"),
             "the in-memory buffer must actually hold the new text"
+        );
+    }
+
+    #[test]
+    fn selection_paste_registry_marks_sessions() {
+        let id = FocusedTextSessionId::new_for_tests("ft-selection-paste");
+        assert!(!is_selection_paste_target(&id));
+        register_selection_paste_target(&id);
+        assert!(is_selection_paste_target(&id));
+        let other = FocusedTextSessionId::new_for_tests("ft-selection-paste-other");
+        assert!(!is_selection_paste_target(&other));
+    }
+
+    #[test]
+    fn selection_paste_snapshot_replaces_but_never_appends() {
+        let snapshot =
+            super::super::focused_text::focused_text_snapshot_for_selection_paste(
+                "picked in Chrome".to_string(),
+                Some("Google Chrome".to_string()),
+            );
+        assert!(snapshot.capabilities.can_replace);
+        assert!(
+            !snapshot.capabilities.can_append,
+            "paste-over-selection cannot append"
+        );
+        assert!(snapshot.capabilities.can_copy);
+        assert_eq!(snapshot.app.name, "Google Chrome");
+        assert!(
+            is_selection_paste_target(&snapshot.session_id),
+            "constructor must register the paste-apply session"
         );
     }
 

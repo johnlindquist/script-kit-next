@@ -282,7 +282,7 @@ pub(crate) fn root_browser_history_query_is_eligible(
 ) -> bool {
     let trimmed = query.trim();
     options.enabled
-        && trimmed.chars().count() >= options.min_query_chars
+        && crate::scripts::search::query_meets_min_query_chars(trimmed, options.min_query_chars)
         && !trimmed.contains('\n')
         && !trimmed.contains('\r')
 }
@@ -305,6 +305,26 @@ pub(crate) fn search_root_browser_history_meta(
 }
 
 #[allow(dead_code)]
+/// Nonblocking snapshot-only lookup for the implicit (passive) typing path.
+/// Mirrors `search_root_browser_tabs_meta_cached`: no refresh spawn, no env
+/// access — one mutex lock plus a bounded fuzzy scan over the cached
+/// snapshot (stale snapshots are still served). Freshness is the app
+/// layer's job (`maybe_start_root_browser_history_refresh_for_query`).
+pub(crate) fn search_root_browser_history_meta_cached(
+    query: &str,
+    options: RootBrowserHistorySectionOptions,
+) -> Vec<RootBrowserHistorySearchHit> {
+    if !root_browser_history_query_is_eligible(query, options.clone()) {
+        return Vec::new();
+    }
+
+    let candidates = cached_root_browser_history_snapshot(options.cache_ttl_ms);
+    root_fuzzy_search_browser_history_hits(&candidates, query, options.search_urls)
+        .into_iter()
+        .take(options.max_results)
+        .collect()
+}
+
 pub(crate) fn search_root_browser_history_meta_direct(
     query: &str,
     options: RootBrowserHistorySectionOptions,
@@ -328,14 +348,6 @@ pub(crate) fn search_root_browser_history_meta_direct(
         .into_iter()
         .take(options.max_results)
         .collect()
-}
-
-#[allow(dead_code)]
-pub(crate) fn search_root_browser_history_meta_cached(
-    query: &str,
-    options: RootBrowserHistorySectionOptions,
-) -> Vec<RootBrowserHistorySearchHit> {
-    search_root_browser_history_meta_direct(query, options)
 }
 
 #[allow(dead_code)] // Root unified search calls this through the binary app layer.

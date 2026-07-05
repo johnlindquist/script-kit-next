@@ -18,6 +18,18 @@ const classifications = [
   "blocked-by-external-wrapper-timeout",
   "blocked-by-session-queue",
   "blocked-by-parse-error",
+  // Session transport died or was never started (session_dead, forwarder_dead,
+  // no_session, app_process_dead_*): retry a dimension CLI cannot help; the
+  // caller must restart the session. Emitted by lib/client.ts classification.
+  "blocked-by-session-lifecycle",
+  // surface.ts / investigate.ts: the requested SurfaceKind has no entry in
+  // docs/ai/contracts/surface-contracts.json.
+  "blocked-by-unknown-surface",
+  // investigate.ts progress states: the investigation loop has not yet
+  // produced (needs-red-proof) or has produced (ready-for-green-proof) a
+  // failing red receipt for the story under investigation.
+  "needs-red-proof",
+  "ready-for-green-proof",
 ];
 
 const receiptEnvelopeFields = [

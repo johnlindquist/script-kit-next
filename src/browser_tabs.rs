@@ -445,7 +445,7 @@ pub(crate) fn root_browser_tabs_query_is_eligible(
 ) -> bool {
     let query = query.trim();
     options.enabled
-        && query.len() >= options.min_query_chars
+        && crate::scripts::search::query_meets_min_query_chars(query, options.min_query_chars)
         && !query.contains('\n')
         && !query.contains('\r')
 }

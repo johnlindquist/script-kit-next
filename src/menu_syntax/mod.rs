@@ -47,10 +47,11 @@ pub use actions::{
 };
 #[allow(unused_imports)]
 pub use artifacts::{
-    read_all_artifacts, read_jsonl_artifact, read_payload_dir, root_todo_query_is_eligible,
-    search_root_object_candidates_direct, search_root_object_candidates_in_sk_path,
-    search_root_todos_direct, search_root_todos_in_sk_path, CaptureArtifact, CaptureArtifactKind,
-    ReadArtifactReport, RootTodoSearchHit, RootTodoSectionOptions,
+    ensure_root_todos_snapshot_refresh, read_all_artifacts, read_jsonl_artifact, read_payload_dir,
+    root_todo_query_is_eligible, search_root_object_candidates_direct,
+    search_root_object_candidates_in_sk_path, search_root_todos_cached, search_root_todos_direct,
+    search_root_todos_in_sk_path, CaptureArtifact, CaptureArtifactKind, ReadArtifactReport,
+    RootTodoSearchHit, RootTodoSectionOptions,
 };
 pub use capture_gate::{decide_capture_gate_for_script, CaptureGateDecision};
 #[allow(unused_imports)]

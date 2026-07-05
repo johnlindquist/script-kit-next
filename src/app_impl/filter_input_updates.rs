@@ -676,6 +676,14 @@ impl ScriptListApp {
                 Self::sync_builtin_query_state(filter, selected_index, text);
                 true
             }
+            AppView::MigrateV1View {
+                filter,
+                selected_index,
+                ..
+            } => {
+                Self::sync_builtin_query_state(filter, selected_index, text);
+                true
+            }
             _ => false,
         }
     }

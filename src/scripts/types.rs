@@ -62,6 +62,8 @@ pub struct Scriptlet {
     pub command: Option<String>,
     /// Alias for quick triggering
     pub alias: Option<String>,
+    /// Lucide icon name (kebab-case) from scriptlet `icon:` metadata or bundle frontmatter
+    pub icon: Option<String>,
 }
 
 impl Scriptlet {

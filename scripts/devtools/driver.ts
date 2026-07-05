@@ -2,26 +2,54 @@
 /**
  * scripts/devtools/driver.ts — persistent, event-driven protocol driver.
  *
- * Owns the app process directly: commands are written to the app's stdin
- * pipe and responses are matched event-driven from the app's stdout pipe
- * (the app writes one flushed JSON line per protocol response — see
- * src/stdin_commands/mod.rs create_stdout_response_sender). This replaces
- * the per-command path of: bun process spawn → session.sh → FIFO forwarder
- * → 50ms polling of protocol-responses.ndjson, which costs ~0.5-2s per
- * command. A driver round trip is one pipe write + one pipe read.
+ * Two transports share one typed protocol surface (ProtocolCore):
+ *
+ * - Driver.launch(): owns the app process directly. Commands are written to
+ *   the app's stdin pipe and responses are matched event-driven from the
+ *   app's stdout pipe (the app writes one flushed JSON line per protocol
+ *   response — see src/stdin_commands/mod.rs create_stdout_response_sender).
+ *   This replaces the per-command path of: bun process spawn → session.sh →
+ *   FIFO forwarder → 50ms polling of protocol-responses.ndjson, which costs
+ *   ~0.5-2s per command. A driver round trip is one pipe write + one pipe read.
+ *
+ * - Driver.attach(): connects to an ALREADY-RUNNING session.sh session by
+ *   name. Commands are written to the session's input FIFO (honoring the same
+ *   <session>/command.lock session.sh uses) and responses are tailed from the
+ *   session's protocol-responses.ndjson. close() never kills the app — the
+ *   session outlives the client. This is the cheap path for one-shot
+ *   inspections against a warm app, and the sandbox-escape path: a caller
+ *   outside the sandbox launches the session, a sandboxed agent attaches.
  *
  * Usage (library):
  *   import { Driver } from "./driver";
- *   const d = await Driver.launch({ sandboxHome: true });
+ *   const d = await Driver.launch({ sandboxHome: true });   // owns the app
+ *   const a = await Driver.attach({ session: "default" });  // joins a session
  *   await d.setFilterAndWait("notes");
  *   const state = await d.getState();
  *   await d.close();
  *
- * Usage (smoke check):
+ * Both transports support `await using` (Symbol.asyncDispose → close()).
+ *
+ * Usage (smoke checks):
  *   bun scripts/devtools/driver.ts smoke
+ *   bun scripts/devtools/driver.ts attach-smoke [session]
  */
 
-import { mkdirSync, existsSync, rmSync, statSync, symlinkSync } from "node:fs";
+import {
+  mkdirSync,
+  existsSync,
+  rmSync,
+  rmdirSync,
+  statSync,
+  symlinkSync,
+  readFileSync,
+  openSync,
+  readSync,
+  closeSync,
+  appendFileSync,
+  watch,
+  type FSWatcher,
+} from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import type { Subprocess } from "bun";
@@ -124,6 +152,22 @@ export interface DriverOptions {
   protocolBusFile?: boolean;
 }
 
+export interface AttachOptions {
+  /** Name of the running session.sh session to join. Default "default". */
+  session?: string;
+  /** Root of session dirs. Default SCRIPT_KIT_SESSION_DIR or /tmp/sk-agentic-sessions. */
+  sessionsRoot?: string;
+  /** Default per-request timeout. Default 5000. */
+  defaultTimeoutMs?: number;
+  /**
+   * Verify the session answers a getState probe before returning. Default
+   * true — attach fails fast with an actionable error instead of a hang.
+   */
+  verify?: boolean;
+  /** Poll interval for the response-file tail fallback. Default 100ms. */
+  pollIntervalMs?: number;
+}
+
 export interface DriverStats {
   requestsSent: number;
   responsesMatched: number;
@@ -134,14 +178,15 @@ export interface DriverStats {
 interface Pending {
   resolve: (value: Json) => void;
   reject: (error: Error) => void;
-  expect?: string;
   timer: ReturnType<typeof setTimeout>;
 }
 
-export class Driver {
-  readonly sessionName: string;
-  readonly sessionDir: string;
-  readonly logPath: string;
+/**
+ * Shared protocol surface: requestId bookkeeping, response matching, and the
+ * typed helpers. Subclasses provide the transport (writeCommand) and
+ * lifecycle (close).
+ */
+export abstract class ProtocolCore {
   readonly stats: DriverStats = {
     requestsSent: 0,
     responsesMatched: 0,
@@ -149,159 +194,37 @@ export class Driver {
     readyWaitMs: 0,
   };
 
-  private proc: Subprocess<"pipe", "pipe", "pipe">;
-  private pending = new Map<string, Pending>();
-  private requestCounter = 0;
-  private defaultTimeoutMs: number;
-  private logWriter: ReturnType<ReturnType<typeof Bun.file>["writer"]>;
-  private readyResolve: (() => void) | null = null;
-  private exited = false;
-  private exitError: Error | null = null;
+  protected pending = new Map<string, Pending>();
+  protected requestCounter = 0;
+  protected defaultTimeoutMs: number;
+  protected requestIdPrefix: string;
 
-  private constructor(
-    proc: Subprocess<"pipe", "pipe", "pipe">,
-    opts: Required<Pick<DriverOptions, "sessionName" | "sessionDir" | "defaultTimeoutMs">>,
-  ) {
-    this.proc = proc;
-    this.sessionName = opts.sessionName;
-    this.sessionDir = opts.sessionDir;
-    this.defaultTimeoutMs = opts.defaultTimeoutMs;
-    this.logPath = join(opts.sessionDir, "app.log");
-    this.logWriter = Bun.file(this.logPath).writer();
+  protected constructor(defaultTimeoutMs: number, requestIdPrefix = "drv") {
+    this.defaultTimeoutMs = defaultTimeoutMs;
+    this.requestIdPrefix = requestIdPrefix;
   }
 
-  static async launch(options: DriverOptions = {}): Promise<Driver> {
-    const binary = options.binary ?? resolveDefaultBinary();
-    if (!existsSync(binary)) {
-      throw new Error(
-        `Binary not found at ${binary} (candidates checked: ${BINARY_CANDIDATES.join(", ")}). ` +
-          `Build one with ./scripts/agentic/agent-cargo.sh build --bin script-kit-gpui`,
-      );
-    }
+  /** Transport write of one JSON command line. */
+  protected abstract writeCommand(payload: Json): void;
 
-    // Unique per launch — multiple drivers in one process, and parallel
-    // processes reusing the same sessionName, must never share artifacts.
-    const launchId = `${process.pid}-${++launchCounter}-${Date.now().toString(36)}`;
-    const sessionName = options.sessionName ?? `driver-${launchId}`;
-    const sessionDir =
-      options.sessionDir ??
-      join(
-        "/tmp/sk-driver-sessions",
-        options.sessionName ? `${sessionName}-${launchId}` : sessionName,
-      );
-    rmSync(sessionDir, { recursive: true, force: true });
-    mkdirSync(sessionDir, { recursive: true });
+  abstract get alive(): boolean;
 
-    const env: Record<string, string> = {
-      ...(process.env as Record<string, string>),
-      SCRIPT_KIT_AI_LOG: "1",
-      SCRIPT_KIT_SHORTCUT_DEBUG: "1",
-      RUST_LOG: DEFAULT_RUST_LOG,
-      SCRIPT_KIT_AGENTIC_SESSION_NAME: sessionName,
-      SCRIPT_KIT_AGENTIC_SESSION_GENERATION: `driver-${Date.now()}`,
-      ...(options.env ?? {}),
-    };
-    if (options.protocolBusFile !== false) {
-      env.SCRIPT_KIT_AGENTIC_PROTOCOL_RESPONSES_PATH = join(
-        sessionDir,
-        "protocol-responses.ndjson",
-      );
-    }
-    if (options.sandboxHome) {
-      const home = join(sessionDir, "home");
-      const kitDir = join(home, ".scriptkit");
-      mkdirSync(kitDir, { recursive: true });
-      env.HOME = home;
-      env.SK_PATH = kitDir;
-      if (options.sharedModels !== false) {
-        // Every model path resolves under $SK_PATH/models (dictation
-        // Whisper/Parakeet, brain GGUF). Symlink the real cache so sandboxed
-        // launches never re-download 1-2GB per session; downloads triggered
-        // inside a sandbox land in the shared cache for future runs.
-        const realModels = join(homedir(), ".scriptkit", "models");
-        mkdirSync(realModels, { recursive: true });
-        symlinkSync(realModels, join(kitDir, "models"));
-      }
-      if (options.seedAgentAuth) {
-        const seed = Bun.spawnSync(
-          ["bash", join(PROJECT_ROOT, "scripts/agentic/seed-sandbox-home.sh"), home],
-          { stdout: "pipe", stderr: "pipe" },
-        );
-        if (seed.exitCode !== 0) {
-          throw new Error(
-            `seed-sandbox-home failed (exit ${seed.exitCode}): ${seed.stderr.toString().trim()}`,
-          );
-        }
-        console.error(`[driver] ${seed.stdout.toString().trim()}`);
-      }
-    }
+  abstract close(): Promise<void>;
 
-    const proc = Bun.spawn([binary], {
-      cwd: PROJECT_ROOT,
-      env,
-      stdin: "pipe",
-      stdout: "pipe",
-      stderr: "pipe",
-    });
-
-    const driver = new Driver(proc, {
-      sessionName,
-      sessionDir,
-      defaultTimeoutMs: options.defaultTimeoutMs ?? 5000,
-    });
-
-    const readyPromise = new Promise<void>((resolveReady) => {
-      driver.readyResolve = resolveReady;
-    });
-    driver.consumeStream(proc.stdout, true);
-    driver.consumeStream(proc.stderr, false);
-    proc.exited.then((code) => {
-      driver.exited = true;
-      driver.exitError = new Error(
-        `App process exited (code ${code}) — see ${driver.logPath}`,
-      );
-      driver.failAllPending(driver.exitError);
-      driver.readyResolve?.();
-    });
-
-    const readyStart = performance.now();
-    const readyTimeoutMs = options.readyTimeoutMs ?? 10_000;
-    const timedOut = await Promise.race([
-      readyPromise.then(() => false),
-      Bun.sleep(readyTimeoutMs).then(() => true),
-    ]);
-    driver.stats.readyWaitMs = Math.round(performance.now() - readyStart);
-    if (driver.exited) {
-      throw driver.exitError ?? new Error("App process exited during startup");
-    }
-    if (timedOut) {
-      // Marker not seen — fall back to a protocol probe before giving up.
-      try {
-        await driver.request({ type: "getState" }, { timeoutMs: 2000 });
-      } catch {
-        await driver.close();
-        throw new Error(
-          `App did not become ready within ${readyTimeoutMs}ms — see ${driver.logPath}`,
-        );
-      }
-    }
-    return driver;
+  async [Symbol.asyncDispose](): Promise<void> {
+    await this.close();
   }
 
-  // --- transport -------------------------------------------------------------
-
-  /** Fire-and-forget: write one command line to the app's stdin. */
+  /** Fire-and-forget: write one command line to the transport. */
   send(command: Json): void {
-    if (this.exited) {
-      throw this.exitError ?? new Error("App process has exited");
-    }
-    this.proc.stdin.write(`${JSON.stringify(command)}\n`);
-    this.proc.stdin.flush();
+    this.writeCommand(command);
   }
 
   /**
-   * Send a command and resolve when the response line carrying the same
-   * requestId arrives on stdout. Event-driven — no polling, no subprocesses.
+   * Send a command and resolve when the response carrying the same requestId
+   * arrives. Event-driven — no polling subprocesses. The optional `expect`
+   * is advisory only (any typed response settles the request; callers
+   * inspect `type` themselves).
    */
   request(
     command: Json,
@@ -310,7 +233,7 @@ export class Driver {
     const requestId: string =
       typeof command.requestId === "string" && command.requestId.length > 0
         ? command.requestId
-        : `drv-${++this.requestCounter}`;
+        : `${this.requestIdPrefix}-${process.pid}-${++this.requestCounter}`;
     const payload = { ...command, requestId };
     const timeoutMs = opts.timeoutMs ?? this.defaultTimeoutMs;
 
@@ -326,12 +249,11 @@ export class Driver {
       this.pending.set(requestId, {
         resolve: resolvePromise,
         reject: rejectPromise,
-        expect: opts.expect,
         timer,
       });
       this.stats.requestsSent += 1;
       try {
-        this.send(payload);
+        this.writeCommand(payload);
       } catch (error) {
         clearTimeout(timer);
         this.pending.delete(requestId);
@@ -340,7 +262,29 @@ export class Driver {
     });
   }
 
-  // --- typed helpers -----------------------------------------------------------
+  protected handleResponse(parsed: Json): void {
+    const requestId = parsed.requestId;
+    if (typeof requestId !== "string") return;
+    const pending = this.pending.get(requestId);
+    if (!pending) {
+      this.stats.unmatchedResponses += 1;
+      return;
+    }
+    this.pending.delete(requestId);
+    clearTimeout(pending.timer);
+    this.stats.responsesMatched += 1;
+    pending.resolve(parsed);
+  }
+
+  protected failAllPending(error: Error): void {
+    for (const [, pending] of this.pending) {
+      clearTimeout(pending.timer);
+      pending.reject(error);
+    }
+    this.pending.clear();
+  }
+
+  // --- typed helpers ---------------------------------------------------------
 
   getState(opts: { timeoutMs?: number } = {}): Promise<Json> {
     return this.request({ type: "getState" }, { expect: "stateResult", ...opts });
@@ -551,6 +495,163 @@ export class Driver {
     }
     return result as Json;
   }
+}
+
+export class Driver extends ProtocolCore {
+  readonly sessionName: string;
+  readonly sessionDir: string;
+  readonly logPath: string;
+
+  private proc: Subprocess<"pipe", "pipe", "pipe">;
+  private logWriter: ReturnType<ReturnType<typeof Bun.file>["writer"]>;
+  private readyResolve: (() => void) | null = null;
+  private exited = false;
+  private exitError: Error | null = null;
+
+  private constructor(
+    proc: Subprocess<"pipe", "pipe", "pipe">,
+    opts: Required<Pick<DriverOptions, "sessionName" | "sessionDir" | "defaultTimeoutMs">>,
+  ) {
+    super(opts.defaultTimeoutMs, "drv");
+    this.proc = proc;
+    this.sessionName = opts.sessionName;
+    this.sessionDir = opts.sessionDir;
+    this.logPath = join(opts.sessionDir, "app.log");
+    this.logWriter = Bun.file(this.logPath).writer();
+  }
+
+  /** Attach to a running session.sh session instead of launching a process. */
+  static attach(options: AttachOptions = {}): Promise<AttachedDriver> {
+    return AttachedDriver.attach(options);
+  }
+
+  static async launch(options: DriverOptions = {}): Promise<Driver> {
+    const binary = options.binary ?? resolveDefaultBinary();
+    if (!existsSync(binary)) {
+      throw new Error(
+        `Binary not found at ${binary} (candidates checked: ${BINARY_CANDIDATES.join(", ")}). ` +
+          `Build one with ./scripts/agentic/agent-cargo.sh build --bin script-kit-gpui`,
+      );
+    }
+
+    // Unique per launch — multiple drivers in one process, and parallel
+    // processes reusing the same sessionName, must never share artifacts.
+    const launchId = `${process.pid}-${++launchCounter}-${Date.now().toString(36)}`;
+    const sessionName = options.sessionName ?? `driver-${launchId}`;
+    const sessionDir =
+      options.sessionDir ??
+      join(
+        "/tmp/sk-driver-sessions",
+        options.sessionName ? `${sessionName}-${launchId}` : sessionName,
+      );
+    rmSync(sessionDir, { recursive: true, force: true });
+    mkdirSync(sessionDir, { recursive: true });
+
+    const env: Record<string, string> = {
+      ...(process.env as Record<string, string>),
+      SCRIPT_KIT_AI_LOG: "1",
+      SCRIPT_KIT_SHORTCUT_DEBUG: "1",
+      RUST_LOG: DEFAULT_RUST_LOG,
+      SCRIPT_KIT_AGENTIC_SESSION_NAME: sessionName,
+      SCRIPT_KIT_AGENTIC_SESSION_GENERATION: `driver-${Date.now()}`,
+      ...(options.env ?? {}),
+    };
+    if (options.protocolBusFile !== false) {
+      env.SCRIPT_KIT_AGENTIC_PROTOCOL_RESPONSES_PATH = join(
+        sessionDir,
+        "protocol-responses.ndjson",
+      );
+    }
+    if (options.sandboxHome) {
+      const home = join(sessionDir, "home");
+      const kitDir = join(home, ".scriptkit");
+      mkdirSync(kitDir, { recursive: true });
+      env.HOME = home;
+      env.SK_PATH = kitDir;
+      if (options.sharedModels !== false) {
+        // Every model path resolves under $SK_PATH/models (dictation
+        // Whisper/Parakeet, brain GGUF). Symlink the real cache so sandboxed
+        // launches never re-download 1-2GB per session; downloads triggered
+        // inside a sandbox land in the shared cache for future runs.
+        const realModels = join(homedir(), ".scriptkit", "models");
+        mkdirSync(realModels, { recursive: true });
+        symlinkSync(realModels, join(kitDir, "models"));
+      }
+      if (options.seedAgentAuth) {
+        const seed = Bun.spawnSync(
+          ["bash", join(PROJECT_ROOT, "scripts/agentic/seed-sandbox-home.sh"), home],
+          { stdout: "pipe", stderr: "pipe" },
+        );
+        if (seed.exitCode !== 0) {
+          throw new Error(
+            `seed-sandbox-home failed (exit ${seed.exitCode}): ${seed.stderr.toString().trim()}`,
+          );
+        }
+        console.error(`[driver] ${seed.stdout.toString().trim()}`);
+      }
+    }
+
+    const proc = Bun.spawn([binary], {
+      cwd: PROJECT_ROOT,
+      env,
+      stdin: "pipe",
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+
+    const driver = new Driver(proc, {
+      sessionName,
+      sessionDir,
+      defaultTimeoutMs: options.defaultTimeoutMs ?? 5000,
+    });
+
+    const readyPromise = new Promise<void>((resolveReady) => {
+      driver.readyResolve = resolveReady;
+    });
+    driver.consumeStream(proc.stdout, true);
+    driver.consumeStream(proc.stderr, false);
+    proc.exited.then((code) => {
+      driver.exited = true;
+      driver.exitError = new Error(
+        `App process exited (code ${code}) — see ${driver.logPath}`,
+      );
+      driver.failAllPending(driver.exitError);
+      driver.readyResolve?.();
+    });
+
+    const readyStart = performance.now();
+    const readyTimeoutMs = options.readyTimeoutMs ?? 10_000;
+    const timedOut = await Promise.race([
+      readyPromise.then(() => false),
+      Bun.sleep(readyTimeoutMs).then(() => true),
+    ]);
+    driver.stats.readyWaitMs = Math.round(performance.now() - readyStart);
+    if (driver.exited) {
+      throw driver.exitError ?? new Error("App process exited during startup");
+    }
+    if (timedOut) {
+      // Marker not seen — fall back to a protocol probe before giving up.
+      try {
+        await driver.request({ type: "getState" }, { timeoutMs: 2000 });
+      } catch {
+        await driver.close();
+        throw new Error(
+          `App did not become ready within ${readyTimeoutMs}ms — see ${driver.logPath}`,
+        );
+      }
+    }
+    return driver;
+  }
+
+  // --- transport -------------------------------------------------------------
+
+  protected writeCommand(payload: Json): void {
+    if (this.exited) {
+      throw this.exitError ?? new Error("App process has exited");
+    }
+    this.proc.stdin.write(`${JSON.stringify(payload)}\n`);
+    this.proc.stdin.flush();
+  }
 
   // --- lifecycle ---------------------------------------------------------------
 
@@ -590,14 +691,6 @@ export class Driver {
   }
 
   // --- internals -----------------------------------------------------------------
-
-  private failAllPending(error: Error): void {
-    for (const [, pending] of this.pending) {
-      clearTimeout(pending.timer);
-      pending.reject(error);
-    }
-    this.pending.clear();
-  }
 
   private async consumeStream(
     stream: ReadableStream<Uint8Array>,
@@ -646,64 +739,292 @@ export class Driver {
     } catch {
       return;
     }
-    const requestId = parsed.requestId;
-    if (typeof requestId !== "string") return;
-    const pending = this.pending.get(requestId);
-    if (!pending) {
-      this.stats.unmatchedResponses += 1;
-      return;
-    }
-    if (pending.expect && parsed.type !== pending.expect) {
-      // A different message reusing this requestId (e.g. an error envelope)
-      // still settles the request — callers inspect `type` themselves.
-      if (parsed.type !== "error" && parsed.type !== undefined) {
-        // Allow mismatched-but-real responses through rather than hanging.
-      }
-    }
-    this.pending.delete(requestId);
-    clearTimeout(pending.timer);
-    this.stats.responsesMatched += 1;
-    pending.resolve(parsed);
+    this.handleResponse(parsed);
   }
 }
 
-// --- CLI smoke check -------------------------------------------------------------
+/**
+ * Client attached to a running session.sh session: writes to the session
+ * input FIFO under the session command.lock, tails the session's
+ * protocol-responses.ndjson for matching responses. Never kills the app.
+ */
+export class AttachedDriver extends ProtocolCore {
+  readonly sessionName: string;
+  readonly sessionDir: string;
+  readonly responsesPath: string;
+
+  private fifoPath: string;
+  private readOffset = 0;
+  private watcher: FSWatcher | null = null;
+  private pollTimer: ReturnType<typeof setInterval> | null = null;
+  private closed = false;
+  private lineBuffer = "";
+
+  private constructor(opts: { sessionName: string; sessionDir: string; defaultTimeoutMs: number }) {
+    super(opts.defaultTimeoutMs, "atd");
+    this.sessionName = opts.sessionName;
+    this.sessionDir = opts.sessionDir;
+    this.fifoPath = join(opts.sessionDir, "input");
+    this.responsesPath = join(opts.sessionDir, "protocol-responses.ndjson");
+  }
+
+  static async attach(options: AttachOptions = {}): Promise<AttachedDriver> {
+    const sessionName = options.session ?? "default";
+    const root = options.sessionsRoot ?? process.env.SCRIPT_KIT_SESSION_DIR ?? "/tmp/sk-agentic-sessions";
+    const sessionDir = join(root, sessionName);
+    const fifoPath = join(sessionDir, "input");
+    const pidPath = join(sessionDir, "pid");
+
+    if (!existsSync(sessionDir) || !existsSync(fifoPath)) {
+      throw new Error(
+        `No running session '${sessionName}' under ${root} — start one with: bash scripts/agentic/session.sh start ${sessionName}`,
+      );
+    }
+    const pid = Number(readFileSync(pidPath, "utf8").trim() || "0");
+    if (!pid || !processAlive(pid)) {
+      throw new Error(
+        `Session '${sessionName}' app process (pid ${pid || "unknown"}) is not running — restart with: bash scripts/agentic/session.sh start ${sessionName}`,
+      );
+    }
+
+    const attached = new AttachedDriver({
+      sessionName,
+      sessionDir,
+      defaultTimeoutMs: options.defaultTimeoutMs ?? 5000,
+    });
+    // Start tailing at current EOF: earlier responses belong to other clients.
+    try {
+      attached.readOffset = statSync(attached.responsesPath).size;
+    } catch {
+      attached.readOffset = 0;
+    }
+    attached.startTail(options.pollIntervalMs ?? 100);
+
+    if (options.verify !== false) {
+      const readyStart = performance.now();
+      try {
+        await attached.request({ type: "getState" }, { timeoutMs: options.defaultTimeoutMs ?? 5000 });
+      } catch (error) {
+        await attached.close();
+        throw new Error(
+          `Attached to session '${sessionName}' but getState probe failed (${error instanceof Error ? error.message : error}). ` +
+            `The session may be wedged — check bash scripts/agentic/session.sh health ${sessionName}`,
+        );
+      }
+      attached.stats.readyWaitMs = Math.round(performance.now() - readyStart);
+    }
+    return attached;
+  }
+
+  // --- transport -------------------------------------------------------------
+
+  protected writeCommand(payload: Json): void {
+    if (this.closed) {
+      throw new Error("AttachedDriver closed");
+    }
+    const line = `${JSON.stringify(payload)}\n`;
+    // Honor the same per-session command lock session.sh rpc/send use so
+    // concurrent writers never interleave partial lines in the FIFO.
+    const lockDir = join(this.sessionDir, "command.lock");
+    const deadline = performance.now() + 2000;
+    let locked = false;
+    while (performance.now() < deadline) {
+      try {
+        mkdirSync(lockDir);
+        locked = true;
+        break;
+      } catch {
+        // busy — spin briefly; lock holders release in well under 2s
+        Bun.sleepSync(10);
+      }
+    }
+    if (!locked) {
+      throw new Error(`Timed out acquiring session command lock at ${lockDir}`);
+    }
+    try {
+      appendFileSync(this.fifoPath, line);
+    } finally {
+      try {
+        rmdirSync(lockDir);
+      } catch {
+        // released elsewhere
+      }
+    }
+  }
+
+  private startTail(pollIntervalMs: number): void {
+    const drain = () => this.drainResponses();
+    try {
+      this.watcher = watch(this.responsesPath, { persistent: false }, drain);
+    } catch {
+      // File may not exist yet; the poll below will pick it up and we retry
+      // the watcher on each poll tick until it attaches.
+    }
+    this.pollTimer = setInterval(() => {
+      if (!this.watcher) {
+        try {
+          this.watcher = watch(this.responsesPath, { persistent: false }, drain);
+        } catch {
+          // still missing
+        }
+      }
+      drain();
+    }, pollIntervalMs);
+    this.pollTimer.unref?.();
+  }
+
+  private drainResponses(): void {
+    if (this.closed) return;
+    let size: number;
+    try {
+      size = statSync(this.responsesPath).size;
+    } catch {
+      return;
+    }
+    if (size < this.readOffset) {
+      // File rotated/truncated — start over from the top.
+      this.readOffset = 0;
+      this.lineBuffer = "";
+    }
+    if (size === this.readOffset) return;
+
+    const length = size - this.readOffset;
+    const buffer = Buffer.alloc(length);
+    let fd: number;
+    try {
+      fd = openSync(this.responsesPath, "r");
+    } catch {
+      return;
+    }
+    try {
+      const read = readSync(fd, buffer, 0, length, this.readOffset);
+      this.readOffset += read;
+      this.lineBuffer += buffer.subarray(0, read).toString("utf8");
+    } finally {
+      closeSync(fd);
+    }
+
+    let newlineIndex = this.lineBuffer.indexOf("\n");
+    while (newlineIndex >= 0) {
+      const line = this.lineBuffer.slice(0, newlineIndex).trim();
+      this.lineBuffer = this.lineBuffer.slice(newlineIndex + 1);
+      if (line.startsWith("{")) {
+        try {
+          this.handleResponse(JSON.parse(line));
+        } catch {
+          // partial/garbled line — skip
+        }
+      }
+      newlineIndex = this.lineBuffer.indexOf("\n");
+    }
+  }
+
+  // --- lifecycle ---------------------------------------------------------------
+
+  get alive(): boolean {
+    if (this.closed) return false;
+    try {
+      const pid = Number(readFileSync(join(this.sessionDir, "pid"), "utf8").trim() || "0");
+      return Boolean(pid) && processAlive(pid);
+    } catch {
+      return false;
+    }
+  }
+
+  /** Detach only — the session and app keep running. */
+  async close(): Promise<void> {
+    if (this.closed) return;
+    this.closed = true;
+    this.failAllPending(new Error("AttachedDriver closed"));
+    this.watcher?.close();
+    this.watcher = null;
+    if (this.pollTimer) {
+      clearInterval(this.pollTimer);
+      this.pollTimer = null;
+    }
+  }
+}
+
+function processAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// --- CLI smoke checks -------------------------------------------------------------
 
 if (import.meta.main) {
   const mode = process.argv[2] ?? "smoke";
-  if (mode !== "smoke") {
-    console.error("Usage: bun scripts/devtools/driver.ts smoke");
+  if (mode === "smoke") {
+    const started = performance.now();
+    const driver = await Driver.launch({ sandboxHome: true });
+    const launchedMs = Math.round(performance.now() - started);
+
+    const rpcStart = performance.now();
+    const state = await driver.getState();
+    const stateMs = Math.round(performance.now() - rpcStart);
+
+    const filterStart = performance.now();
+    await driver.setFilterAndWait("smoke");
+    const filterMs = Math.round(performance.now() - filterStart);
+
+    await driver.close();
+    console.log(
+      JSON.stringify(
+        {
+          schemaVersion: 1,
+          status: "ok",
+          launchMs: launchedMs,
+          readyWaitMs: driver.stats.readyWaitMs,
+          getStateMs: stateMs,
+          setFilterAndWaitMs: filterMs,
+          promptType: state.promptType ?? null,
+          inputValueAfterFilter: "smoke",
+          stats: driver.stats,
+          log: driver.logPath,
+        },
+        null,
+        2,
+      ),
+    );
+  } else if (mode === "attach-smoke") {
+    const session = process.argv[3] ?? "default";
+    const started = performance.now();
+    const attached = await Driver.attach({ session });
+    const attachMs = Math.round(performance.now() - started);
+
+    const rpcStart = performance.now();
+    const state = await attached.getState();
+    const stateMs = Math.round(performance.now() - rpcStart);
+
+    const secondStart = performance.now();
+    await attached.getState();
+    const secondStateMs = Math.round(performance.now() - secondStart);
+
+    await attached.close();
+    console.log(
+      JSON.stringify(
+        {
+          schemaVersion: 1,
+          status: "ok",
+          session,
+          attachMs,
+          readyWaitMs: attached.stats.readyWaitMs,
+          getStateMs: stateMs,
+          secondGetStateMs: secondStateMs,
+          promptType: state.promptType ?? null,
+          stats: attached.stats,
+          responsesPath: attached.responsesPath,
+        },
+        null,
+        2,
+      ),
+    );
+  } else {
+    console.error("Usage: bun scripts/devtools/driver.ts smoke | attach-smoke [session]");
     process.exit(2);
   }
-  const started = performance.now();
-  const driver = await Driver.launch({ sandboxHome: true });
-  const launchedMs = Math.round(performance.now() - started);
-
-  const rpcStart = performance.now();
-  const state = await driver.getState();
-  const stateMs = Math.round(performance.now() - rpcStart);
-
-  const filterStart = performance.now();
-  await driver.setFilterAndWait("smoke");
-  const filterMs = Math.round(performance.now() - filterStart);
-
-  await driver.close();
-  console.log(
-    JSON.stringify(
-      {
-        schemaVersion: 1,
-        status: "ok",
-        launchMs: launchedMs,
-        readyWaitMs: driver.stats.readyWaitMs,
-        getStateMs: stateMs,
-        setFilterAndWaitMs: filterMs,
-        promptType: state.promptType ?? null,
-        inputValueAfterFilter: "smoke",
-        stats: driver.stats,
-        log: driver.logPath,
-      },
-      null,
-      2,
-    ),
-  );
 }

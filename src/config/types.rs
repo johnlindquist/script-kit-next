@@ -67,6 +67,11 @@ pub struct ClipboardHistorySecretRejectionConfig {
 #[serde(default, rename_all = "camelCase")]
 pub struct UnifiedSearchConfig {
     pub enabled: bool,
+    /// Display order for the reorderable passive sections. Files and Windows
+    /// are intentionally NOT part of this list: they render in fixed slots
+    /// ahead of every passive section (Windows, then Files/Recent Files)
+    /// because they carry their own promotion, handoff, and provider-status
+    /// semantics that don't fit the shared passive budget.
     #[serde(default = "default_unified_search_passive_source_order")]
     pub passive_source_order: Vec<UnifiedSearchPassiveSource>,
     pub passive_result_limits: UnifiedSearchPassiveResultLimitsConfig,
@@ -108,6 +113,13 @@ impl Default for UnifiedSearchConfig {
     }
 }
 
+/// The user-orderable passive unified-search sections (`passiveSourceOrder`).
+///
+/// Files and Windows are deliberately excluded: both are appended in fixed
+/// positions before the passive loop (see `append_root_windows_section` /
+/// `append_root_file_section` in `scripts/grouping.rs`) with their own
+/// promotion, handoff-CTA, and provider-status behavior, so they never
+/// participate in the shared passive result budget or this ordering.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, std::hash::Hash)]
 #[serde(rename_all = "camelCase")]
 pub enum UnifiedSearchPassiveSource {
@@ -182,6 +194,11 @@ impl Default for UnifiedSearchFilesConfig {
     }
 }
 
+/// Todos participate passively once the query reaches `min_query_chars`
+/// (byte length), served from an in-memory day-page snapshot refreshed
+/// off-thread. An explicit `todo:` filter forces min 0 and browses all
+/// recent todos directly. The default is 3 (not 0) so the empty-query
+/// launcher never floods with every open todo.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(default, rename_all = "camelCase")]
 pub struct UnifiedSearchTodosConfig {
@@ -195,7 +212,7 @@ impl Default for UnifiedSearchTodosConfig {
         Self {
             enabled: true,
             max_results: 10,
-            min_query_chars: 0,
+            min_query_chars: 3,
         }
     }
 }
@@ -218,6 +235,11 @@ impl Default for UnifiedSearchAgentChatHistoryConfig {
     }
 }
 
+/// AI Vault rows surface ONLY with an explicit `vault:` / `v:` source filter.
+/// The vault's cold path (SQLite snapshot copy + JSONL scan) measured
+/// 99–168ms synchronous, so passive per-keystroke participation was removed
+/// (commit 13a417737: worst-case typing latency 187ms -> 14ms). `enabled`
+/// governs whether the explicit filter works at all.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(default, rename_all = "camelCase")]
 pub struct UnifiedSearchAiVaultConfig {
@@ -369,6 +391,11 @@ impl Default for UnifiedSearchBrowserTabsConfig {
     }
 }
 
+/// Browser History participates passively once the query reaches
+/// `min_query_chars` (byte length, default 4), served from an in-memory
+/// snapshot refreshed off-thread — the per-keystroke path never touches
+/// SQLite. An explicit `history:` / `h:` filter widens scope (min 0 chars,
+/// 365-day window, larger caps).
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(default, rename_all = "camelCase")]
 pub struct UnifiedSearchBrowserHistoryConfig {
@@ -864,9 +891,69 @@ pub struct DictationPreferences {
     /// Persisted dictation model catalog ID. `None` means use the default model.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub model: Option<String>,
-    /// Persisted language hint for engines that support one.
+    /// Persisted language hint for engines that support one (Whisper only —
+    /// Parakeet auto-detects its supported languages).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub language: Option<String>,
+    /// Whether transcripts are appended to `dictation-history.jsonl`
+    /// (default: true). Disable to keep dictated text out of plaintext history.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub save_history: Option<bool>,
+    /// RMS energy threshold below which a capture is treated as silence and
+    /// skipped (default: 0.01). Lower this if a quiet microphone causes
+    /// dictations to be silently dropped.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub silence_rms: Option<f32>,
+    /// Auto-stop guard for runaway recordings, in seconds
+    /// (default: 600; 0 disables the guard).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_duration_secs: Option<u64>,
+    /// Live partial transcript preview in the recording overlay
+    /// (default: true).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub live_preview: Option<bool>,
+    /// Hold-the-dictation-hotkey push-to-talk: release after holding to stop
+    /// and transcribe; a quick tap keeps toggle behavior (default: true).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub push_to_talk: Option<bool>,
+}
+
+impl DictationPreferences {
+    pub const DEFAULT_SILENCE_RMS: f32 = 0.01;
+    pub const DEFAULT_MAX_DURATION_SECS: u64 = 600;
+
+    /// Whether transcripts should be persisted to dictation history.
+    pub fn save_history_enabled(&self) -> bool {
+        self.save_history.unwrap_or(true)
+    }
+
+    /// Silence gate applied before transcription, clamped to a sane range.
+    pub fn silence_rms_threshold(&self) -> f32 {
+        self.silence_rms
+            .unwrap_or(Self::DEFAULT_SILENCE_RMS)
+            .clamp(0.0, 0.5)
+    }
+
+    /// Auto-stop ceiling for a recording session. `None` when disabled (0).
+    pub fn max_duration(&self) -> Option<std::time::Duration> {
+        match self
+            .max_duration_secs
+            .unwrap_or(Self::DEFAULT_MAX_DURATION_SECS)
+        {
+            0 => None,
+            secs => Some(std::time::Duration::from_secs(secs.clamp(30, 14_400))),
+        }
+    }
+
+    /// Whether the recording overlay shows live partial transcripts.
+    pub fn live_preview_enabled(&self) -> bool {
+        self.live_preview.unwrap_or(true)
+    }
+
+    /// Whether holding the dictation hotkey acts as push-to-talk.
+    pub fn push_to_talk_enabled(&self) -> bool {
+        self.push_to_talk.unwrap_or(true)
+    }
 }
 
 /// Projection of config-backed runtime preferences.
@@ -1379,6 +1466,18 @@ impl HotkeyConfig {
         }
     }
 
+    /// Create the default rewrite hotkey (Cmd+Ctrl+R): captures the focused
+    /// text and immediately streams three rewrite variations in the mini UI.
+    /// Chosen to sit in the same Cmd+Ctrl family as Notes (Cmd+Ctrl+N) and
+    /// inline AI (Cmd+Ctrl+I); "R" for rewrite. Configurable for users who
+    /// need Xcode's Cmd+Ctrl+R.
+    pub fn default_rewrite_hotkey() -> Self {
+        HotkeyConfig {
+            modifiers: vec!["meta".to_string(), "ctrl".to_string()],
+            key: "KeyR".to_string(),
+        }
+    }
+
     /// Convert to a human-readable display string using macOS symbols (e.g., "⌘⇧K").
     ///
     /// Uses standard macOS modifier symbols in order: ⌃ (Control), ⌥ (Option), ⇧ (Shift), ⌘ (Command)
@@ -1500,6 +1599,10 @@ fn default_dictation_hotkey_enabled() -> bool {
 
 fn default_inline_ai_hotkey_enabled() -> bool {
     DEFAULT_INLINE_AI_HOTKEY_ENABLED
+}
+
+fn default_rewrite_hotkey_enabled() -> bool {
+    DEFAULT_REWRITE_HOTKEY_ENABLED
 }
 
 // ============================================
@@ -1764,6 +1867,20 @@ pub struct Config {
         rename = "inlineAiHotkeyEnabled"
     )]
     pub inline_ai_hotkey_enabled: Option<bool>,
+    /// Hotkey for the instant rewrite flow (default: Cmd+Ctrl+R)
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "rewriteHotkey"
+    )]
+    pub rewrite_hotkey: Option<HotkeyConfig>,
+    /// Whether rewrite hotkey registration is enabled (default: true)
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "rewriteHotkeyEnabled"
+    )]
+    pub rewrite_hotkey_enabled: Option<bool>,
     /// Watcher tuning settings
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub watcher: Option<WatcherConfig>,
@@ -1869,6 +1986,8 @@ impl Default for Config {
             dictation_hotkey_enabled: None, // Defaults to true via getter
             inline_ai_hotkey: None, // Will use HotkeyConfig::default_inline_ai_hotkey() via getter
             inline_ai_hotkey_enabled: None, // Defaults to true via getter
+            rewrite_hotkey: None,   // Will use HotkeyConfig::default_rewrite_hotkey() via getter
+            rewrite_hotkey_enabled: None, // Defaults to true via getter
             watcher: None,          // Will use WatcherConfig::default() via getter
             layout: None,           // Will use LayoutConfig::default() via getter
             theme: None,            // Will use ThemeSelectionPreferences::default() via getter
@@ -2086,6 +2205,26 @@ impl Config {
             self.inline_ai_hotkey
                 .clone()
                 .unwrap_or_else(HotkeyConfig::default_inline_ai_hotkey),
+        )
+    }
+
+    /// Returns true if rewrite hotkey registration is enabled.
+    pub fn is_rewrite_hotkey_enabled(&self) -> bool {
+        self.rewrite_hotkey_enabled
+            .unwrap_or_else(default_rewrite_hotkey_enabled)
+    }
+
+    /// Returns the rewrite hotkey configuration when enabled.
+    /// Falls back to default (Cmd+Ctrl+R) when enabled but not configured.
+    #[allow(dead_code)]
+    pub fn get_rewrite_hotkey(&self) -> Option<HotkeyConfig> {
+        if !self.is_rewrite_hotkey_enabled() {
+            return None;
+        }
+        Some(
+            self.rewrite_hotkey
+                .clone()
+                .unwrap_or_else(HotkeyConfig::default_rewrite_hotkey),
         )
     }
 
@@ -2475,6 +2614,42 @@ mod tests {
             ..Config::default()
         };
         assert_eq!(config.get_inline_ai_hotkey(), None);
+    }
+
+    #[test]
+    fn test_get_rewrite_hotkey_returns_default_when_unset() {
+        let config = Config::default();
+        assert_eq!(
+            config.get_rewrite_hotkey(),
+            Some(HotkeyConfig::default_rewrite_hotkey())
+        );
+    }
+
+    #[test]
+    fn test_get_rewrite_hotkey_returns_configured_value_when_enabled() {
+        let hotkey = HotkeyConfig {
+            modifiers: vec!["meta".to_string(), "alt".to_string()],
+            key: "KeyR".to_string(),
+        };
+        let config = Config {
+            rewrite_hotkey: Some(hotkey.clone()),
+            rewrite_hotkey_enabled: Some(true),
+            ..Config::default()
+        };
+        assert_eq!(config.get_rewrite_hotkey(), Some(hotkey));
+    }
+
+    #[test]
+    fn test_get_rewrite_hotkey_returns_none_when_disabled() {
+        let config = Config {
+            rewrite_hotkey: Some(HotkeyConfig {
+                modifiers: vec!["meta".to_string(), "alt".to_string()],
+                key: "KeyR".to_string(),
+            }),
+            rewrite_hotkey_enabled: Some(false),
+            ..Config::default()
+        };
+        assert_eq!(config.get_rewrite_hotkey(), None);
     }
 
     #[test]

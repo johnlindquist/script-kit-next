@@ -1,8 +1,18 @@
 #!/usr/bin/env bun
+/** Surface contract inspection. Shared transport/args/receipts live in lib/client.ts. */
 
-export {};
-
-type JsonObject = Record<string, unknown>;
+import {
+  type JsonObject,
+  classifyEnvelopeError,
+  finishReceipt,
+  parseTargetArgs,
+  printReceipt,
+  requestId,
+  responseOf,
+  rpc,
+  startClock,
+} from "./lib/client.ts";
+import { maybeStartAndShow, resolveTargetReceipt } from "./lib/target-identity.ts";
 
 type SurfaceContract = {
   surfaceKind: string;
@@ -35,103 +45,8 @@ function usage() {
     "Usage:",
     "  bun scripts/devtools/surface.ts inspect --surface <SurfaceKind> [target args]",
     "",
-    "Target args are forwarded to scripts/devtools/targets.ts inspect, e.g. --session <name> --main --strict --start --show.",
+    "Target args match scripts/devtools/targets.ts inspect, e.g. --session <name> --main --strict --start --show.",
   ].join("\n");
-}
-
-function parseArgs(argv: string[]) {
-  if (argv.includes("--help") || argv.includes("-h")) {
-    console.log(usage());
-    process.exit(0);
-  }
-
-  const command = argv[0] === "inspect" ? "inspect" : "";
-  const args = {
-    command,
-    surfaceKind: "",
-    timeoutMs: 8000,
-    forwarded: [] as string[],
-  };
-
-  if (!command) {
-    console.error(usage());
-    process.exit(2);
-  }
-
-  for (let index = 1; index < argv.length; index += 1) {
-    const arg = argv[index];
-    if (arg === "--surface") {
-      args.surfaceKind = argv[++index] ?? "";
-      args.forwarded.push("--surface", args.surfaceKind);
-    } else {
-      args.forwarded.push(arg);
-      if (
-        [
-          "--session",
-          "--target-id",
-          "--target-kind",
-          "--target-index",
-          "--target-title",
-          "--timeout",
-        ].includes(arg)
-      ) {
-        const value = argv[++index] ?? "";
-        args.forwarded.push(value);
-        if (arg === "--timeout") {
-          args.timeoutMs = Number(value) || args.timeoutMs;
-        }
-      }
-    }
-  }
-
-  if (!args.surfaceKind) {
-    console.error(usage());
-    process.exit(2);
-  }
-
-  return args;
-}
-
-function requestId(prefix: string) {
-  return `devtools-surface-${prefix}-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
-}
-
-async function run(command: string[], label: string): Promise<JsonObject> {
-  const proc = Bun.spawn(command, { stdout: "pipe", stderr: "pipe" });
-  const [stdout, stderr, exitCode] = await Promise.all([
-    new Response(proc.stdout).text(),
-    new Response(proc.stderr).text(),
-    proc.exited,
-  ]);
-  if (exitCode !== 0) {
-    return { status: "error", label, exitCode, stdout: stdout.trim(), stderr: stderr.trim() };
-  }
-  try {
-    return JSON.parse(stdout);
-  } catch {
-    return { status: "error", label, exitCode, stdout: stdout.trim(), stderr: stderr.trim(), error: "invalid_json_output" };
-  }
-}
-
-async function rpc(session: string, payload: JsonObject, expect: string, timeoutMs: number) {
-  return run(
-    [
-      "bash",
-      "scripts/agentic/session.sh",
-      "rpc",
-      session,
-      JSON.stringify(payload),
-      "--expect",
-      expect,
-      "--timeout",
-      String(timeoutMs),
-    ],
-    String(payload.type ?? "rpc"),
-  );
-}
-
-function responseOf(envelope: JsonObject): JsonObject {
-  return (envelope.response as JsonObject | undefined) ?? envelope;
 }
 
 async function readContracts() {
@@ -244,12 +159,20 @@ function contractPayload(contracts: Awaited<ReturnType<typeof readContracts>>, s
   };
 }
 
-function classify(targetReceipt: JsonObject, contract: ReturnType<typeof contractPayload>) {
+function classify(
+  targetReceipt: JsonObject,
+  stateEnvelope: JsonObject,
+  contract: ReturnType<typeof contractPayload>,
+) {
   if (!contract) {
     return "blocked-by-unknown-surface";
   }
   if (targetReceipt.classification !== "ok") {
     return targetReceipt.classification ?? "blocked-by-target-ambiguity";
+  }
+  const transport = classifyEnvelopeError(stateEnvelope);
+  if (transport !== "ok") {
+    return transport;
   }
   if (!contract.dismissPolicy) {
     return "blocked-by-missing-primitive";
@@ -258,43 +181,72 @@ function classify(targetReceipt: JsonObject, contract: ReturnType<typeof contrac
 }
 
 async function main() {
-  const args = parseArgs(Bun.argv.slice(2));
+  const argv = Bun.argv.slice(2);
+  if (argv[0] !== "inspect") {
+    if (argv.includes("--help") || argv.includes("-h")) {
+      console.log(usage());
+      process.exit(0);
+    }
+    console.error(usage());
+    process.exit(2);
+  }
+  const { args, warnings: argWarnings } = parseTargetArgs(argv.slice(1));
+  if (args.help) {
+    console.log(usage());
+    process.exit(0);
+  }
+  if (!args.expectedSurfaceKind) {
+    console.error(usage());
+    process.exit(2);
+  }
+  const surfaceKind = args.expectedSurfaceKind;
+
+  const clock = startClock();
   const contracts = await readContracts();
-  const targetReceipt = await run(["bun", "scripts/devtools/targets.ts", "inspect", ...args.forwarded], "targets.inspect");
+  await maybeStartAndShow(args);
+  const targetReceipt = await resolveTargetReceipt(args, { tool: "surface" });
   const stateEnvelope = await rpc(
-    String((targetReceipt as JsonObject).session ?? "default"),
+    args.session,
     {
       type: "getState",
-      requestId: requestId("state"),
-      target: (targetReceipt.requestedTarget as JsonObject | undefined)?.selector ?? { type: "main" },
+      requestId: requestId("surface", "state"),
+      target: (targetReceipt.requestedTarget as JsonObject | undefined)?.selector ?? args.target ?? { type: "main" },
       summaryOnly: true,
     },
     "stateResult",
     args.timeoutMs,
   );
   const state = responseOf(stateEnvelope);
-  const contract = contractPayload(contracts, args.surfaceKind);
-  const classification = classify(targetReceipt, contract);
+  const contract = contractPayload(contracts, surfaceKind);
+  const classification = classify(targetReceipt, stateEnvelope, contract);
   const runtime = enrichedRuntimeSurface(targetReceipt, state);
 
-  console.log(JSON.stringify({
-    schemaVersion: 1,
-    tool: "script-kit-devtools.surface",
-    command: "surface.inspect",
-    classification,
-    requestedSurfaceKind: args.surfaceKind,
-    target: targetReceipt.resolvedTarget ?? null,
-    requestedTarget: targetReceipt.requestedTarget ?? null,
-    contract,
-    runtime,
-    missingPrimitives: [
-      ...(contract ? [] : ["surfaceContract"]),
-      ...runtime.missingPrimitives,
-      targetReceipt.classification !== "ok" ? "strictTargetIdentity" : "",
-    ].filter(Boolean),
-    state,
-    targetReceipt,
-  }, null, 2));
+  printReceipt(finishReceipt(
+    { tool: "script-kit-devtools.surface", command: "surface.inspect", session: args.session, clock },
+    {
+      classification,
+      requestedSurfaceKind: surfaceKind,
+      target: targetReceipt.resolvedTarget ?? null,
+      requestedTarget: targetReceipt.requestedTarget ?? null,
+      contract,
+      runtime,
+      missingPrimitives: [
+        ...(contract ? [] : ["surfaceContract"]),
+        ...runtime.missingPrimitives,
+        targetReceipt.classification !== "ok" ? "strictTargetIdentity" : "",
+      ].filter(Boolean),
+      warnings: [
+        ...argWarnings,
+        contract ? "" : `no contract entry for surfaceKind '${surfaceKind}' in docs/ai/contracts/surface-contracts.json`,
+      ].filter(Boolean),
+      errors: [
+        ...((targetReceipt.errors as JsonObject[]) ?? []),
+        ...[stateEnvelope].filter((value) => value.status === "error"),
+      ],
+      state,
+      targetReceipt,
+    },
+  ));
 }
 
 await main();

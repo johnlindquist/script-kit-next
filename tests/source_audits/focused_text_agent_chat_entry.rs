@@ -367,7 +367,10 @@ fn focused_text_mini_height_helpers_match_resize_contract() {
         "pub(crate) fn focused_text_mini_preview_height() -> f32",
         "FOCUSED_TEXT_MINI_RESULT_HEIGHT - FOCUSED_TEXT_MINI_INPUT_ONLY_HEIGHT",
         "ViewType::FocusedTextMini => match item_count",
-        "_ => px(FOCUSED_TEXT_MINI_RESULT_HEIGHT + WINDOW_BORDER_Y)",
+        "2..=4 => px(FOCUSED_TEXT_MINI_RESULT_HEIGHT + WINDOW_BORDER_Y)",
+        // The three-variation rewrite layout gets its own window height so the
+        // stacked cards render without an internal scrollbar.
+        "5 => px(FOCUSED_TEXT_MINI_VARIATIONS_HEIGHT + WINDOW_BORDER_Y)",
         "FOCUSED_TEXT_MINI_RESIZE_ANIMATE",
     ] {
         assert!(

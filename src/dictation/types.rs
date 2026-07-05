@@ -74,6 +74,9 @@ pub enum DictationCaptureEvent {
 pub struct CompletedDictationCapture {
     pub chunks: Vec<CapturedAudioChunk>,
     pub audio_duration: Duration,
+    /// `true` when collection hit its deadline before `EndOfStream`, meaning
+    /// the tail of the recording may be missing from `chunks`.
+    pub truncated: bool,
 }
 
 /// Outcome of a `toggle_dictation()` call.
@@ -122,6 +125,22 @@ pub enum DictationTarget {
 }
 
 impl DictationTarget {
+    /// The delivery destination recorded in receipts for this target.
+    ///
+    /// Single source of truth for the `DictationTarget` →
+    /// `DictationDestination` mapping so the delivery pipeline and receipts
+    /// cannot drift.
+    pub fn destination(self) -> DictationDestination {
+        match self {
+            Self::MainWindowFilter => DictationDestination::MainWindowFilter,
+            Self::MainWindowPrompt => DictationDestination::ActivePrompt,
+            Self::NotesEditor => DictationDestination::NotesEditor,
+            Self::AiChatComposer => DictationDestination::AiChatComposer,
+            Self::TabAiHarness => DictationDestination::TabAiHarness,
+            Self::ExternalApp => DictationDestination::FrontmostApp,
+        }
+    }
+
     /// Short, stable label for the overlay destination badge.
     pub fn overlay_label(self) -> &'static str {
         match self {
@@ -139,9 +158,11 @@ impl DictationTarget {
 pub enum DictationSessionPhase {
     Idle,
     Recording,
-    /// Escape pressed during a long recording (>= 5s) — overlay shows Stop/Continue
-    /// affordances.  Enter or clicking Stop cancels the session; Escape or clicking
-    /// Continue dismisses confirmation and recording keeps running.
+    /// Escape pressed during a long recording (>= 5s) — overlay shows
+    /// Stop/Discard/Continue affordances.  Enter or clicking Stop finishes the
+    /// recording and transcribes it; Backspace or clicking Discard cancels the
+    /// session; Escape or clicking Continue dismisses confirmation and
+    /// recording keeps running.
     Confirming,
     Transcribing,
     Delivering,

@@ -832,7 +832,54 @@ pub(crate) fn get_grouped_results_with_validation_query_and_root_files_with_opti
         }
     }
 
+    append_missing_explicit_source_status_rows(&mut grouped, &flat_results, root_source_filters);
+
     (grouped, flat_results)
+}
+
+/// Every explicitly-included source must leave visible feedback. Passive
+/// sections early-return before building their status row when an
+/// eligibility or advanced-query guard fires, so an explicit filter (e.g.
+/// `history: tabs: foo` where only tabs matched) could otherwise vanish
+/// silently while other sections render. Base sources (Apps/Scripts/
+/// Commands) are covered by `append_base_source_status_rows`.
+///
+/// Skipped when the list has no selectable rows at all — the launcher's
+/// zero-result info state is the better surface for that case.
+fn append_missing_explicit_source_status_rows(
+    grouped: &mut Vec<GroupedListItem>,
+    flat_results: &[SearchResult],
+    root_source_filters: &crate::menu_syntax::RootUnifiedSourceFilterSet,
+) {
+    if !grouped
+        .iter()
+        .any(|item| matches!(item, GroupedListItem::Item(_)))
+    {
+        return;
+    }
+    for source in root_source_filters.positive_includes() {
+        if matches!(
+            source,
+            crate::menu_syntax::RootUnifiedSourceFilter::Apps
+                | crate::menu_syntax::RootUnifiedSourceFilter::Scripts
+                | crate::menu_syntax::RootUnifiedSourceFilter::Commands
+        ) {
+            continue;
+        }
+        let represented = grouped.iter().any(|item| match item {
+            GroupedListItem::Status(status) => status.source == source,
+            GroupedListItem::Item(index) => flat_results
+                .get(*index)
+                .and_then(SearchResult::root_unified_source)
+                .is_some_and(|item_source| item_source == source),
+            GroupedListItem::SectionHeader(..) => false,
+        });
+        if !represented {
+            grouped.push(GroupedListItem::Status(source_chip_result_status(
+                source, 0, 0, false,
+            )));
+        }
+    }
 }
 
 fn filter_grouped_results_by_root_sources(
@@ -1556,20 +1603,12 @@ fn source_chip_status_row(
 ) -> SourceChipStatusRow {
     SourceChipStatusRow {
         source,
-        source_name: source_chip_source_name(source).to_string(),
+        source_name: source.label().to_string(),
         status_kind,
         label,
         shown,
         loaded,
         total,
-    }
-}
-
-fn source_chip_source_name(source: crate::menu_syntax::RootUnifiedSourceFilter) -> &'static str {
-    match source {
-        crate::menu_syntax::RootUnifiedSourceFilter::ClipboardHistory => "Clipboard History",
-        crate::menu_syntax::RootUnifiedSourceFilter::Dictation => "Dictation History",
-        other => other.label(),
     }
 }
 
@@ -2727,6 +2766,50 @@ mod advanced_query_tests {
             provider_label: "Safari".to_string(),
             score: 100.0,
         }
+    }
+
+    #[test]
+    fn missing_explicit_passive_source_gets_a_status_row() {
+        use crate::menu_syntax::RootUnifiedSourceFilter;
+
+        let mut filters = crate::menu_syntax::RootUnifiedSourceFilterSet::default();
+        filters.insert(RootUnifiedSourceFilter::BrowserTabs);
+        filters.insert(RootUnifiedSourceFilter::BrowserHistory);
+
+        // Tabs matched; history's section early-returned before its status.
+        let flat = vec![SearchResult::BrowserTab(crate::scripts::BrowserTabMatch {
+            hit: root_browser_tab_hit("tab/1", "Design Doc"),
+            subtitle: "Safari".to_string(),
+            score: 100,
+        })];
+        let mut grouped = vec![
+            GroupedListItem::SectionHeader("Browser Tabs".to_string(), None),
+            GroupedListItem::Item(0),
+        ];
+        append_missing_explicit_source_status_rows(&mut grouped, &flat, &filters);
+
+        let history_status = grouped.iter().any(|item| matches!(
+            item,
+            GroupedListItem::Status(status)
+                if status.source == RootUnifiedSourceFilter::BrowserHistory && status.shown == 0
+        ));
+        assert!(
+            history_status,
+            "silently-empty explicit source must leave a status row, got {grouped:?}"
+        );
+        assert!(
+            !grouped.iter().any(|item| matches!(
+                item,
+                GroupedListItem::Status(status)
+                    if status.source == RootUnifiedSourceFilter::BrowserTabs
+            )),
+            "sources represented by result rows must not get a duplicate status"
+        );
+
+        // With zero selectable rows the launcher empty state owns feedback.
+        let mut empty: Vec<GroupedListItem> = Vec::new();
+        append_missing_explicit_source_status_rows(&mut empty, &[], &filters);
+        assert!(empty.is_empty());
     }
 
     fn root_browser_history_hit(

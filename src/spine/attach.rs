@@ -636,6 +636,7 @@ mod tests {
     #[test]
     fn scriptlet_attach_resolves_to_text_block_with_code() {
         let scriptlet = std::sync::Arc::new(crate::scripts::Scriptlet {
+            icon: None,
             name: "Open GitHub".to_string(),
             description: None,
             code: "open https://github.com".to_string(),

@@ -468,10 +468,13 @@ fn startup_shift_tab_opens_agent_chat_profile_picker() {
             src.contains("open_profile_trigger_picker_in_window"),
             "Shift+Tab in Agent Chat must open the in-chat Profile picker"
         );
-        // Plain Tab stays swallowed via handle_tab_key(false, ...).
+        // Plain Tab stays swallowed via handle_tab_key(false, ...). The
+        // handler is window-aware so it can accept the highlighted spine
+        // projection row (e.g. the `>` working-directory list) before
+        // falling back to swallowing.
         assert!(
-            src.contains("chat.handle_tab_key(false, cx)"),
-            "plain Tab in Agent Chat must remain swallowed (handle_tab_key(false))"
+            src.contains("chat.handle_tab_key(false, window, cx)"),
+            "plain Tab in Agent Chat must remain swallowed (handle_tab_key(false, window, ...))"
         );
     }
 }

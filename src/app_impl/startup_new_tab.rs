@@ -281,7 +281,7 @@
                                     return;
                                 }
                                 let handled = entity.update(cx, |chat, cx| {
-                                    chat.handle_tab_key(false, cx)
+                                    chat.handle_tab_key(false, window, cx)
                                 });
                                 if handled {
                                     cx.stop_propagation();

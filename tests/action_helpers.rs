@@ -57,6 +57,7 @@ fn make_script_match(name: &str, path: &str) -> ScriptMatch {
 fn make_scriptlet_match() -> ScriptletMatch {
     ScriptletMatch {
         scriptlet: Arc::new(Scriptlet {
+            icon: None,
             name: "test-scriptlet".to_string(),
             description: None,
             code: "console.log('test')".to_string(),

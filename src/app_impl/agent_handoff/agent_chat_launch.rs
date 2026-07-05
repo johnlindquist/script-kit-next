@@ -244,8 +244,20 @@ impl ScriptListApp {
         let ai_preferences = crate::config::load_user_preferences().ai;
         let focused_text_mini = request.ui_variant
             == crate::ai::agent_chat::ui::ui_variant::AgentChatUiVariant::FocusedTextMini;
+        let quick_ai = request.ui_variant
+            == crate::ai::agent_chat::ui::ui_variant::AgentChatUiVariant::QuickAi;
+        let cwd_override = if focused_text_mini || quick_ai {
+            None
+        } else {
+            self.spine_cwd_for_agent_chat_launch()
+        };
         let pi_launch_result = if focused_text_mini {
             crate::ai::agent_chat::launch::resolve_focused_text_pi_launch(
+                &ai_preferences,
+                &profile_ctx,
+            )
+        } else if quick_ai {
+            crate::ai::agent_chat::launch::resolve_quick_ai_pi_launch(
                 &ai_preferences,
                 &profile_ctx,
             )
@@ -253,11 +265,22 @@ impl ScriptListApp {
             crate::ai::agent_chat::launch::resolve_selected_pi_launch_with_cwd_override(
                 &ai_preferences,
                 &profile_ctx,
-                self.spine_cwd_for_agent_chat_launch(),
+                cwd_override.clone(),
             )
         };
         match pi_launch_result {
             Ok(pi_launch) => {
+                if cwd_override.is_some() {
+                    let default_cwd = crate::ai::agent_chat::launch::resolve_selected_launch_cwd(
+                        &ai_preferences,
+                        &profile_ctx,
+                    );
+                    crate::ai::agent_chat::ui::record_agent_chat_cwd_recent(
+                        &pi_launch.profile.id,
+                        pi_launch.cwd.clone(),
+                        Some(default_cwd.as_path()),
+                    );
+                }
                 self.open_tab_ai_pi_view_from_launch(
                     pi_launch,
                     request,
@@ -288,6 +311,15 @@ impl ScriptListApp {
                     self.toast_manager.push(
                         crate::components::toast::Toast::error(
                             "Pi Text profile is unavailable",
+                            &self.theme,
+                        )
+                        .duration_ms(Some(TOAST_ERROR_MS)),
+                    );
+                }
+                if quick_ai {
+                    self.toast_manager.push(
+                        crate::components::toast::Toast::error(
+                            "Quick AI is unavailable",
                             &self.theme,
                         )
                         .duration_ms(Some(TOAST_ERROR_MS)),
