@@ -134,8 +134,11 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.2.21
-      - name: Compile tests
-        run: cargo test --no-run --locked
+      # Actually RUN the suite (was previously --no-run / compile-only, which let
+      # real failures through). RUST_TEST_THREADS=1 above sidesteps the Obj-C
+      # teardown races that made parallel runs abort.
+      - name: Run tests
+        run: cargo test --locked
 
   typescript-tests:
     name: TypeScript SDK Tests

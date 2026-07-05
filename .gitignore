@@ -113,3 +113,8 @@ tests/autonomous/api-manifest.json
 
 # Compiled devtools helpers (build from .swift source)
 scripts/devtools/bin/
+
+# Agent/AI scratch run logs and eval telemetry (should never be tracked)
+.mdflow-eval-runs.jsonl
+/runs/
+/.fusion-runs/

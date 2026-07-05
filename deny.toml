@@ -1,0 +1,51 @@
+# cargo-deny configuration — gates supply-chain risk that CI previously did not.
+# Run with: cargo deny check
+# Motivated by the audit: a GPL-3.0 chain (zlog/ztracing) had silently linked
+# into the shipped binary, and RUSTSEC advisories were ungated.
+
+[advisories]
+version = 2
+# Fail the build on any security advisory in the dependency graph.
+yanked = "deny"
+# Track known unfixable/accepted advisories here rather than turning the gate
+# off. Add an entry with a comment justifying each exception.
+ignore = []
+
+[licenses]
+version = 2
+# The app ships as a distributed binary, so copyleft licenses that impose
+# obligations on the whole binary must not slip back in. Allow permissive and
+# weak-copyleft licenses commonly used across the Rust/Zed/gpui graph.
+allow = [
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "MIT",
+    "MIT-0",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Zlib",
+    "Unicode-3.0",
+    "Unicode-DFS-2016",
+    "MPL-2.0",
+    "CC0-1.0",
+    "0BSD",
+    "BSL-1.0",
+    "OpenSSL",
+]
+# Strong copyleft (GPL/AGPL/LGPL) is intentionally NOT allowed: keep the
+# zlog/ztracing-style GPL-3.0 chain from re-entering the shipped binary.
+confidence-threshold = 0.9
+
+[[licenses.exceptions]]
+# `ring` bundles its own permissive license text that cargo-deny can't always classify.
+name = "ring"
+allow = ["OpenSSL", "ISC", "MIT"]
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "allow" # the vendored gpui graph legitimately pulls pinned git deps
