@@ -88,7 +88,11 @@ smallvec = { version = "1.6", features = ["union", "const_new"] }
 async-channel = "2.5.0"
 stacksafe = "0.1"
 strum = { version = "0.27.2", features = ["derive"] }
-sum_tree = { git = "https://github.com/zed-industries/zed", rev = "54a95e717d4ed1589c9b0e38648f65424defc74b", package = "sum_tree" }
+# Use the Apache-2.0 crates.io publish (zed-sum-tree) instead of the git
+# `sum_tree`, whose transitive `ztracing`/`zlog` deps are GPL-3.0-or-later and
+# would otherwise impose GPL obligations on this distributed binary. This is the
+# only entry point for that GPL chain in the whole graph.
+sum_tree = { version = "0.2.0", package = "zed-sum-tree" }
 taffy = "=0.9.0"
 thiserror = "2.0.12"
 waker-fn = "1.2.0"

@@ -602,9 +602,11 @@ impl StateInner {
         if self.alignment == ListAlignment::Bottom && new_scroll_top == scroll_max {
             self.logical_scroll_top = None;
         } else {
-            let (start, ..) =
-                self.items
-                    .find::<ListItemSummary, _>((), &Height(new_scroll_top), Bias::Right);
+            // zed-sum-tree 0.2.0 (Apache-2.0) drops SumTree::find; seek a cursor
+            // to the same target/bias and read its accumulated dimension.
+            let mut cursor = self.items.cursor::<ListItemSummary>(());
+            cursor.seek(&Height(new_scroll_top), Bias::Right);
+            let start = cursor.start();
             let item_ix = start.count;
             let offset_in_item = new_scroll_top - start.height;
             self.logical_scroll_top = Some(ListOffset {
@@ -649,12 +651,10 @@ impl StateInner {
     }
 
     fn scroll_top(&self, logical_scroll_top: &ListOffset) -> Pixels {
-        let (start, ..) = self.items.find::<ListItemSummary, _>(
-            (),
-            &Count(logical_scroll_top.item_ix),
-            Bias::Right,
-        );
-        start.height + logical_scroll_top.offset_in_item
+        // zed-sum-tree 0.2.0 replaces SumTree::find with cursor seeking.
+        let mut cursor = self.items.cursor::<ListItemSummary>(());
+        cursor.seek(&Count(logical_scroll_top.item_ix), Bias::Right);
+        cursor.start().height + logical_scroll_top.offset_in_item
     }
 
     fn layout_all_items(
@@ -1009,10 +1009,10 @@ impl StateInner {
         if self.alignment == ListAlignment::Bottom && new_scroll_top == scroll_max {
             self.logical_scroll_top = None;
         } else {
-            let (start, _, _) =
-                self.items
-                    .find::<ListItemSummary, _>((), &Height(new_scroll_top), Bias::Right);
-
+            // zed-sum-tree 0.2.0 replaces SumTree::find with cursor seeking.
+            let mut cursor = self.items.cursor::<ListItemSummary>(());
+            cursor.seek(&Height(new_scroll_top), Bias::Right);
+            let start = cursor.start();
             let item_ix = start.count;
             let offset_in_item = new_scroll_top - start.height;
             self.logical_scroll_top = Some(ListOffset {
