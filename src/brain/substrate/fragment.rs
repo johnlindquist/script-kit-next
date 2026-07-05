@@ -26,6 +26,7 @@ pub const FRAGMENT_WORD_THRESHOLD: usize = 200;
 /// Target excerpt length for day-page fragment reference lines.
 pub const FRAGMENT_EXCERPT_WORDS: usize = 40;
 
+#[allow(dead_code)] // WIP: public fragment-writing API, wired once the caller lands.
 pub fn write_fragment(
     paths: &BrainPaths,
     now: DateTime<Utc>,

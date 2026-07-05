@@ -172,7 +172,7 @@ pub(crate) fn sanitize_conversation_title(value: &str) -> String {
         .trim()
         .trim_matches(|ch| matches!(ch, '\'' | '"' | '“' | '”' | '‘' | '’'))
         .trim()
-        .trim_end_matches(|ch| matches!(ch, '.' | ',' | ';' | ':' | '!' | '?'))
+        .trim_end_matches(['.', ',', ';', ':', '!', '?'])
         .trim();
     truncate_chars(trimmed, 60)
 }

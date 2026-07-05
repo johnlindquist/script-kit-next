@@ -119,7 +119,10 @@ pub fn start_brain_indexer() {
 }
 
 /// One full cycle: sync sources, then embed what's missing.
-pub fn run_cycle(embedder: &mut Option<BrainEmbedder>, backoff: &mut EmbedBackoff) -> Result<()> {
+pub(crate) fn run_cycle(
+    embedder: &mut Option<BrainEmbedder>,
+    backoff: &mut EmbedBackoff,
+) -> Result<()> {
     store::init_brain_db()?;
     let synced = sync_notes().unwrap_or_else(|err| {
         tracing::debug!(target: "script_kit::brain", error = %err, "notes sync skipped");

@@ -4119,7 +4119,7 @@ impl AgentChatView {
             let thread = self.live_thread();
             let thread_ref = thread.read(cx);
             (
-                super::export::build_agent_chat_conversation_markdown_from_thread(&thread_ref),
+                super::export::build_agent_chat_conversation_markdown_from_thread(thread_ref),
                 thread_ref.ui_thread_id().to_string(),
             )
         };
@@ -10153,12 +10153,6 @@ impl AgentChatView {
         container.into_any_element()
     }
 
-    /// Render a bootstrap note row below the context chips.
-    ///
-    /// Shows a status note during Ask Anything capture (e.g. "Capturing
-    /// desktop context…" while preparing, "Ask Anything ready" once done).
-    /// Hidden when there is no note or when the note is empty.
-
     fn retry_last_user_turn(&mut self, cx: &mut Context<Self>) {
         if let Err(error) = self
             .live_thread()
@@ -14029,11 +14023,10 @@ impl AgentChatView {
             && self.focused_text_editing_variation.is_none()
             && !self.scope_focused
             && self.composer_picker_session.is_none()
+            && self.enter_focused_text_variation_editor(cx)
         {
-            if self.enter_focused_text_variation_editor(cx) {
-                cx.stop_propagation();
-                return;
-            }
+            cx.stop_propagation();
+            return;
         }
 
         if self.ui_variant == AgentChatUiVariant::FocusedTextMini

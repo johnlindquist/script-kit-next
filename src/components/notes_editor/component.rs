@@ -110,6 +110,7 @@ impl NotesEditor {
         });
     }
 
+    #[allow(dead_code)] // WIP editor-focus helper; wired once the caller lands.
     pub(crate) fn focus_with_cursor_at_end(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.input_state.update(cx, |state, cx| {
             let cursor = state.value().len();
@@ -125,6 +126,7 @@ impl NotesEditor {
         });
     }
 
+    #[allow(dead_code)] // WIP editor helper; wired once the caller lands.
     pub(crate) fn scroll_to_bottom(&mut self, cx: &mut Context<Self>) {
         self.input_state.update(cx, |state, cx| {
             state.scroll_to_bottom_after_layout(cx);

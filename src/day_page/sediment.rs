@@ -462,7 +462,7 @@ fn find_unescaped_byte(text: &str, start: usize, needle: u8) -> Option<usize> {
                 slash_count += 1;
                 cursor -= 1;
             }
-            if slash_count % 2 == 0 {
+            if slash_count.is_multiple_of(2) {
                 return Some(index);
             }
         }

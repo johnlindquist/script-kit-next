@@ -1533,6 +1533,7 @@ pub(crate) enum AgentChatActionsDialogHost {
     Shared,
     /// Shared main-panel Agent Chat opened from the Day Page. Same as shared,
     /// plus the Day-return action that writes the last assistant reply back to Today.
+    #[allow(dead_code)] // WIP: constructed once the Day Page Agent Chat host lands.
     DayPage,
     /// Notes-hosted Agent Chat surface — subset that works inside the Notes window.
     /// `agent_chat_close` returns to the Notes editor rather than closing a window.

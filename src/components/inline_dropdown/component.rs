@@ -26,6 +26,7 @@ impl InlineDropdown {
         }
     }
 
+    #[allow(dead_code)] // WIP builder: used once a caller sets a custom empty state.
     pub(crate) fn empty_state(mut self, empty_state: InlineDropdownEmptyState) -> Self {
         self.empty_state = Some(empty_state);
         self

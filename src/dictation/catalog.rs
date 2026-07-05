@@ -2,16 +2,11 @@ use crate::dictation::download::format_bytes;
 use crate::dictation::transcription::{resolve_default_model_path, resolve_whisper_model_path};
 use std::path::PathBuf;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum DictationModelId {
+    #[default]
     ParakeetTdt06bV3,
     WhisperMedium,
-}
-
-impl Default for DictationModelId {
-    fn default() -> Self {
-        Self::ParakeetTdt06bV3
-    }
 }
 
 impl DictationModelId {
@@ -22,6 +17,9 @@ impl DictationModelId {
         }
     }
 
+    // Intentionally an inherent method returning Option (not std::str::FromStr):
+    // callers want a fallible lookup, not a trait bound.
+    #[allow(clippy::should_implement_trait)]
     pub fn from_str(value: &str) -> Option<Self> {
         match value {
             "parakeet-tdt-0.6b-v3" => Some(Self::ParakeetTdt06bV3),
@@ -127,8 +125,7 @@ pub fn dictation_model_catalog() -> [DictationModelCatalogEntry; 2] {
             id: DictationModelId::ParakeetTdt06bV3,
             stable_id: DictationModelId::ParakeetTdt06bV3.as_str(),
             display_name: "Parakeet TDT 0.6B v3",
-            description:
-                "Fast and accurate. Auto-detects 25 European languages (ignores the language setting).",
+            description: "Fast and accurate. Auto-detects 25 European languages (ignores the language setting).",
             recommended: true,
             engine_kind: DictationEngineKind::Parakeet,
         },
@@ -136,8 +133,7 @@ pub fn dictation_model_catalog() -> [DictationModelCatalogEntry; 2] {
             id: DictationModelId::WhisperMedium,
             stable_id: DictationModelId::WhisperMedium.as_str(),
             display_name: "Whisper Medium",
-            description:
-                "Broadest language coverage and honors the language setting, but may run a bit slow.",
+            description: "Broadest language coverage and honors the language setting, but may run a bit slow.",
             recommended: false,
             engine_kind: DictationEngineKind::Whisper,
         },

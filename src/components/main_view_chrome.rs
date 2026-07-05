@@ -35,6 +35,7 @@ pub(crate) enum MainViewTabChipAction {
     ChangeCwd,
     /// Tab sends the typed query to the zero-context Quick AI — chip swaps to
     /// a "Quick AI" label with the ⇥ keycap.
+    #[allow(dead_code)] // WIP: Quick AI Tab chip; constructed once the mode ships.
     QuickAi,
     /// Tab does something else (or nothing) here — keep the cwd label for
     /// orientation but hide the ⇥ keycap so the chip never lies.
@@ -74,6 +75,7 @@ impl MainViewContextLabels {
         self
     }
 
+    #[allow(dead_code)] // WIP builder for the Quick AI Tab chip; caller lands with the mode.
     pub(crate) fn with_shift_tab_key_active(mut self, active: bool) -> Self {
         self.shift_tab_key_active = active;
         self
@@ -331,7 +333,12 @@ pub(crate) fn render_main_view_context_zone_required(
                 crate::components::footer_chrome::render_footer_hint_button_like(
                     crate::components::footer_chrome::FooterHintButtonSpec {
                         label: agent_model_label.clone().into(),
-                        key: if labels.shift_tab_key_active { "⇧⇥" } else { "" }.into(),
+                        key: if labels.shift_tab_key_active {
+                            "⇧⇥"
+                        } else {
+                            ""
+                        }
+                        .into(),
                         slot_width_px: None,
                         key_first: false,
                         justify: crate::components::footer_chrome::FooterHintContentJustify::Start,

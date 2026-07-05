@@ -272,6 +272,7 @@ impl NotesApp {
         cx.notify();
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn replace_notes_spine_segment(
         &mut self,
         model: &crate::components::notes_editor::spine::NotesEditorSpineModel,

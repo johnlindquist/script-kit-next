@@ -50,6 +50,9 @@ impl AgentChatHistoryDateBucket {
     }
 }
 
+// Variants carry differently-sized payloads; boxing the large one would churn
+// this WIP popup for no real memory win at these list sizes.
+#[allow(clippy::large_enum_variant)]
 #[derive(Clone)]
 enum AgentChatHistoryPopupListItem {
     Header {

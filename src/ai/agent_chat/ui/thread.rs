@@ -577,6 +577,7 @@ impl AgentChatThread {
         cx.notify();
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn replace_pi_session(
         &mut self,
         connection: Arc<dyn AgentChatConnection>,

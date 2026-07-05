@@ -2119,6 +2119,7 @@ struct RootFileSectionUiState {
 }
 
 impl RootFileSectionUiState {
+    #[allow(clippy::too_many_arguments)]
     fn new(
         query: &str,
         mode: crate::file_search::RootFileSectionMode,
@@ -2788,11 +2789,13 @@ mod advanced_query_tests {
         ];
         append_missing_explicit_source_status_rows(&mut grouped, &flat, &filters);
 
-        let history_status = grouped.iter().any(|item| matches!(
-            item,
-            GroupedListItem::Status(status)
-                if status.source == RootUnifiedSourceFilter::BrowserHistory && status.shown == 0
-        ));
+        let history_status = grouped.iter().any(|item| {
+            matches!(
+                item,
+                GroupedListItem::Status(status)
+                    if status.source == RootUnifiedSourceFilter::BrowserHistory && status.shown == 0
+            )
+        });
         assert!(
             history_status,
             "silently-empty explicit source must leave a status row, got {grouped:?}"

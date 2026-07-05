@@ -54,8 +54,7 @@ pub fn markdown_editor_runtime_info() -> ElementEditorRuntimeInfo {
             .map(|language| (*language).to_string())
             .collect(),
         inline_markdown_injection_disabled: !MARKDOWN_INJECTION_LANGUAGES
-            .iter()
-            .any(|language| *language == MARKDOWN_INLINE_LANGUAGE)
+            .contains(&MARKDOWN_INLINE_LANGUAGE)
             && !MARKDOWN_INJECTIONS_QUERY.contains(MARKDOWN_INLINE_LANGUAGE),
         highlight_query_fingerprint: stable_query_fingerprint(MARKDOWN_HIGHLIGHTS_QUERY),
         injection_query_fingerprint: stable_query_fingerprint(MARKDOWN_INJECTIONS_QUERY),

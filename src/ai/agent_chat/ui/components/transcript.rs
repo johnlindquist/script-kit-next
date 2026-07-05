@@ -21,6 +21,9 @@ use crate::dev_style_tool::agent_chat_catalog::AgentChatStyleDef;
 use crate::list_item::FONT_MONO;
 use crate::theme::{self, PromptColors};
 
+/// Callback invoked when the user forks the thread by editing message `u64`.
+type ForkEditMessageHandler = Arc<dyn Fn(u64, &mut Window, &mut App) + 'static>;
+
 pub enum AgentChatTranscriptEvent {
     ToggleMessage(u64),
     ForkEditMessage(u64),
@@ -151,7 +154,7 @@ pub struct AgentChatTranscript {
     message_texts: HashMap<u64, String>,
     message_stats: HashMap<u64, HeavyMarkdownStats>,
     message_previews: HashMap<u64, String>,
-    on_fork_edit_message: Option<Arc<dyn Fn(u64, &mut Window, &mut App) + 'static>>,
+    on_fork_edit_message: Option<ForkEditMessageHandler>,
     fork_points: Vec<AgentChatForkPoint>,
     thread_status: AgentChatThreadStatus,
     ui_variant: AgentChatUiVariant,
@@ -342,10 +345,7 @@ impl AgentChatTranscript {
         cx.notify();
     }
 
-    pub(crate) fn set_on_fork_edit_message(
-        &mut self,
-        handler: Arc<dyn Fn(u64, &mut Window, &mut App) + 'static>,
-    ) {
+    pub(crate) fn set_on_fork_edit_message(&mut self, handler: ForkEditMessageHandler) {
         self.on_fork_edit_message = Some(handler);
     }
 
@@ -701,6 +701,9 @@ impl AgentChatTranscript {
         })
     }
 
+    // Render entry point threaded straight from the transcript's own state; the
+    // parameter list mirrors that state rather than a synthetic params struct.
+    #[allow(clippy::too_many_arguments)]
     fn render_message(
         ui_variant: AgentChatUiVariant,
         msg: &AgentChatThreadMessage,
@@ -712,7 +715,7 @@ impl AgentChatTranscript {
         messages: &[AgentChatThreadMessage],
         fork_points: &[AgentChatForkPoint],
         thread_status: AgentChatThreadStatus,
-        on_fork_edit_message: Option<Arc<dyn Fn(u64, &mut Window, &mut App) + 'static>>,
+        on_fork_edit_message: Option<ForkEditMessageHandler>,
     ) -> gpui::AnyElement {
         let theme = theme::get_cached_theme();
         let presentation = ui_variant.config().transcript;
@@ -804,6 +807,7 @@ impl AgentChatTranscript {
             .into_any()
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn render_user_message(
         msg: &AgentChatThreadMessage,
         _colors: &PromptColors,
@@ -815,7 +819,7 @@ impl AgentChatTranscript {
         messages: &[AgentChatThreadMessage],
         fork_points: &[AgentChatForkPoint],
         thread_status: AgentChatThreadStatus,
-        on_fork_edit_message: Option<Arc<dyn Fn(u64, &mut Window, &mut App) + 'static>>,
+        on_fork_edit_message: Option<ForkEditMessageHandler>,
     ) -> gpui::AnyElement {
         let user_style = style_def.user_message;
         let forkable =
