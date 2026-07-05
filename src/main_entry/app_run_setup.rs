@@ -1432,6 +1432,21 @@ app.run(move |cx: &mut App| {
                     continue;
                 }
 
+                // Security gate: the scriptkit:// scheme is web-reachable, so
+                // refuse to silently execute scripts/scriptlets/paths from a
+                // drive-by deeplink unless the user has opted in. UI-opening and
+                // app-launch deeplinks still pass through.
+                if !deeplink_execution_allowed(&command_id) {
+                    logging::log(
+                        "DEEPLINK",
+                        &format!(
+                            "Blocked script-executing deeplink '{}' (set SCRIPT_KIT_ALLOW_DEEPLINK_SCRIPTS=1 to allow)",
+                            command_id
+                        ),
+                    );
+                    continue;
+                }
+
                 let id_clone = command_id.clone();
                 let app_entity_inner = app_entity_for_deeplinks.clone();
                 let window_inner = window_for_deeplinks;
