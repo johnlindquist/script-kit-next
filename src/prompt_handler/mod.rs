@@ -2927,9 +2927,11 @@ impl ScriptListApp {
                     )
                 } else if has_tabstops {
                     // Auto-detect template in content
+                    // Log length only — editor prompt bodies are user content and
+                    // must not be persisted to the on-disk log.
                     tracing::info!(
                         category = "UI",
-                        content = %content_str,
+                        content_len = content_str.len(),
                         "Auto-detected template in content"
                     );
                     EditorPrompt::with_template(

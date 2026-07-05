@@ -275,8 +275,9 @@ impl ScriptListApp {
     /// Open a terminal with a specific command (for fallback "Run in Terminal")
     pub fn open_terminal_with_command(&mut self, command: String, cx: &mut Context<Self>) {
         let terminal_action = TerminalOpenUtilityAction::SdkCommandTerminal;
-        tracing::info!(message = %&format!("Opening terminal with command: {}", command),
-        );
+        // Log length only — command lines routinely carry credentials as args
+        // (--password, tokens) and must not be persisted to the on-disk log.
+        tracing::info!(command_len = command.len(), "Opening terminal with command");
 
         // Create submit callback that just closes on exit/escape
         let submit_callback: std::sync::Arc<dyn Fn(String, Option<String>) + Send + Sync> =

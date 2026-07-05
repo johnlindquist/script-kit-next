@@ -214,7 +214,44 @@ fn open_and_init_connection(db_path: &PathBuf) -> Result<Connection> {
 
     ensure_clipboard_schema(&conn)?;
 
+    // Clipboard history captures whatever the user copies (messages, tokens,
+    // one-time codes). Keep the DB and its WAL/SHM sidecars owner-only (0600)
+    // rather than inheriting umask. Best-effort; done after WAL mode so the
+    // sidecar files exist.
+    harden_clipboard_db_permissions(db_path);
+
     Ok(conn)
+}
+
+/// Restrict the clipboard-history SQLite file and its `-wal`/`-shm` sidecars to
+/// owner read/write (0600). Best-effort — a looser-permission DB is not worth
+/// failing to open the store over.
+fn harden_clipboard_db_permissions(db_path: &std::path::Path) {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        for suffix in ["", "-wal", "-shm"] {
+            let path = if suffix.is_empty() {
+                db_path.to_path_buf()
+            } else {
+                let mut os = db_path.as_os_str().to_owned();
+                os.push(suffix);
+                PathBuf::from(os)
+            };
+            if path.exists() {
+                if let Err(err) =
+                    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600))
+                {
+                    debug!(
+                        "Could not restrict clipboard DB permissions on {:?}: {err}",
+                        path
+                    );
+                }
+            }
+        }
+    }
+    #[cfg(not(unix))]
+    let _ = db_path;
 }
 
 /// Get or create the database connection

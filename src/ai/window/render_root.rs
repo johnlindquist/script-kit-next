@@ -281,7 +281,9 @@ impl AiApp {
                         state.set_value(query.clone(), window, cx);
                     });
                     self.on_search_change(cx);
-                    tracing::info!(target: "ai", query = %query, "Search filter set");
+                    // Log length only — the query text is user content and must
+                    // not be persisted to the on-disk log (matches the SetInput arm).
+                    tracing::info!(target: "ai", query_len = query.len(), "Search filter set");
                 }
                 AiCommand::SetInput { text, submit } => {
                     self.set_composer_value(&text, window, cx);

@@ -49,6 +49,25 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Mutex, OnceLock};
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
+
+/// Restrict a log file to owner read/write (0600). Best-effort: a log with
+/// looser permissions is not worth aborting startup over, and `.mode()` on
+/// `OpenOptions` only applies when the file is freshly created, so this also
+/// tightens logs left behind by an older build.
+fn harden_log_file_permissions(path: &std::path::Path) {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        if let Err(err) = fs::set_permissions(path, std::fs::Permissions::from_mode(0o600)) {
+            eprintln!(
+                "[SCRIPT-KIT-GPUI] warning: could not restrict log permissions on {}: {err}",
+                path.display()
+            );
+        }
+    }
+    #[cfg(not(unix))]
+    let _ = path;
+}
 use tracing::field::{Field, Visit};
 use tracing::{Level, Subscriber};
 use tracing_appender::non_blocking::WorkerGuard;
@@ -822,6 +841,8 @@ pub fn start_capture() -> anyhow::Result<PathBuf> {
     let path = log_dir.join(&filename);
 
     let file = OpenOptions::new().create(true).append(true).open(&path)?;
+    // Logs can capture user content; keep them owner-only (0600).
+    harden_log_file_permissions(&path);
 
     let session = CaptureSession {
         file,
@@ -1048,6 +1069,11 @@ fn init_internal() -> LoggingGuard {
             .open(&session_path),
         "session log file",
     );
+
+    // These JSONL logs can capture user content (queries, prompts, command
+    // lines); keep them owner-only (0600) rather than inheriting umask.
+    harden_log_file_permissions(&log_path);
+    harden_log_file_permissions(&session_path);
 
     // Create non-blocking writers for both files
     let (non_blocking_append, file_guard) = tracing_appender::non_blocking(file);
