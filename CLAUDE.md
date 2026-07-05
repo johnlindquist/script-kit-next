@@ -2,7 +2,7 @@ For a map of main UI surfaces to code implementation, see [GLOSSARY.md]
 
 # Before Starting Work
 
-- **Route through a project imp first.** Imps are the primary mechanism for agents working with this code: run `bun imps/project-imp --which "<task>"` from `.agents/imps` to find the owner, then delegate to it (see "Project Imps — Primary Mechanism" below). Work directly only for trivial edits, when the imp runtime is unavailable, or when the user explicitly asks you to.
+- **Route through a project flow first.** Flows are the primary mechanism for agents working with this code: pick the owner from the routing rules in "Project Flows — Primary Mechanism" below (or read `flows/README.md`), then delegate with `md flows/<name>.md "<task>"`. Work directly only for trivial edits, when mdflow is unavailable, or when the user explicitly asks you to.
 - Inspect the relevant source, tests, and repo-local skills before editing.
 - Prefer current code and generated artifacts over stale notes or memory.
 - Keep edits narrowly scoped and verify them with the smallest check that can fail for the changed behavior.
@@ -12,7 +12,7 @@ For a map of main UI surfaces to code implementation, see [GLOSSARY.md]
 
 For Oracle review or `oracle-packx` work in this repository, include the repo process context in the bundle or prompt unless the user explicitly excludes it: `AGENTS.md`, the owning `.agents/skills/<skill>/SKILL.md`, and relevant source, tests, generated contracts, and verification notes.
 
-For runtime/UX bugs headed to `oracle-packx-conversation`, run `imp-sk-devtools` first and include its investigation receipts (intake, primitive stack, measurements, classification, likely owner, red/green proof plan) in the bundle — that pairing is a primary workflow in this repo.
+For runtime/UX bugs headed to `oracle-packx-conversation`, run `flows/devtools.md` first and include its investigation receipts (intake, primitive stack, measurements, classification, likely owner, red/green proof plan) in the bundle — that pairing is a primary workflow in this repo.
 
 If a `packx` preview with include globs unexpectedly matches `0` files in this repository, rebuild the bundle from an explicit path list instead of widening blindly. A reliable workaround is:
 
@@ -24,83 +24,86 @@ xargs packx --limit 900k --strip-comments --minify -f markdown --no-interactive 
 
 Use this when directory/include-glob matching undercounts relevant files; keep `CLAUDE.md` excluded and verify the preview count plus final non-empty bundle before consulting Oracle.
 
-## Project Imps — Primary Mechanism
+## Project Flows — Primary Mechanism
 
-Project imps are the **primary mechanism for agents working with this code**.
+Project flows are the **primary mechanism for agents working with this code**.
 Every substantive task — building, debugging, auditing, fixing, testing,
-releasing — starts by routing to the owning imp; direct hand-editing is the
+releasing — starts by routing to the owning flow; direct hand-editing is the
 fallback, not the default.
 
-Imps live under `.agents/imps/` and are feature-bound Codex specialists for
-this repository. They use `gpt-5.5` with `medium` reasoning and keep local
-lesson overlays under `.agents/imps/lessons/local/`. The vendored runtime is
-tracked by `.agents/imps/imps.manifest.json`; imp learning flows through the
-upstream evolution system (`imp-sk-<name> evolve` to review suggestions), and
-lesson files are reviewed overlays folded into imp prompts at launch.
+Flows live under `flows/` at the repo root: one markdown agent per job, run
+by [mdflow](https://mdflow.dev) (`npm i -g mdflow@next`). They run on codex
+(pinned in `.mdflow.yaml`) at `gpt-5.5` with `medium` reasoning; sandbox mode
+is pinned per flow in frontmatter. Each `flows/<name>.md` file is
+**self-contained**: frontmatter owns the engine contract, the body owns the
+instructions, and there is no central registry. `flows/README.md` is the
+roster index. Flow learning is eval-driven: when a run disappoints, add a
+failing case to `flows/<name>.eval.ts`, then edit the flow until
+`md eval flows/<name>.md` passes.
 
 Default workflow for any task:
 
-1. `bun imps/project-imp --which "<task>"` to confirm the owner (or pick from the routing rules below).
-2. Delegate the task to that imp: `bun imps/project-imp "<task>"` or `bun imps/imp-sk-<name> --run "<task>"`.
-3. Pair the owner with at most one cross-cutting role imp when needed (audit → fix, fix → probe, etc.).
+1. Pick the owner from the routing rules below (unclear? run `md flows/scout.md "<task>"`).
+2. Delegate the task: `md flows/<name>.md "<task>"`.
+3. Pair the owner with at most one cross-cutting role flow when needed (audit → fix, fix → probe, etc.).
 4. The calling agent stays responsible for source inspection, patch review, preserving unrelated dirty work, and final verification — delegating the work does not delegate accountability.
 
-Skip the imp only when the task is trivial (≤ a few mechanical lines), the imp
-runtime is unavailable or repeatedly stalls, or the user explicitly directs
-otherwise — and say in the final answer which imp was skipped and why.
+Skip the flow only when the task is trivial (≤ a few mechanical lines),
+mdflow is unavailable or repeatedly stalls, or the user explicitly directs
+otherwise — and say in the final answer which flow was skipped and why.
 
-Use:
+Use (from the repo root):
 
 ```bash
-cd .agents/imps
-bun imps/project-imp --which "<task prompt>"
-bun imps/project-imp "<task prompt>"
-bun imps/imp-sk-<name> --run "<task prompt>"   # direct, non-interactive
+md flows/<name>.md "<task prompt>"        # delegate one job (one engine turn)
+md flows/<name>.md "<task>" --_dry-run    # free: exact command + resolved prompt
+md eval flows/<name>.md                   # run the flow's eval suite
+cat flows/README.md                       # roster
 ```
-
-Direct `imp-sk-*` invocations open an interactive Codex TUI by default; agents
-must pass `--run` (or `-q`) for the non-interactive streaming path. The
-`project-imp` router adds `--run` itself.
 
 Routing rules:
 
-- Use `imp-sk-scout` when ownership is unclear.
-- Agent Chat, `@file`, `@context`, attachments, portal, or Pi handoff -> `imp-sk-agent-chat`.
-- Day Page, Today, brain, fragments, spine, or Notes parity -> `imp-sk-brain`.
-- Clipboard history, sediment, post-copy, copy-to-brain, or no-popup capture -> `imp-sk-clipboard`.
-- Shared UI, components, list rows, inputs, prompt shells, chrome, or theme tokens -> `imp-sk-components`.
-- Script List, main window, mini/full view, launcher selection -> `imp-sk-launcher`.
-- Actions menu, command palette, trigger picker, confirm popup -> `imp-sk-actions`.
-- Hotkeys, gestures, tap/hold/double-tap, focus restoration -> `imp-sk-hotkeys`.
-- Script prompt renderers and protocol-to-renderer contracts -> `imp-sk-prompts`.
-- Built-in utility surfaces -> `imp-sk-builtins`.
-- Terminal prompt, PTY, command bar, terminal theme -> `imp-sk-terminal`.
-- Script execution, menu cache, metadata, scheduler -> `imp-sk-execution`.
-- macOS platform, windows, tray/menu bar, icons, permissions, startup, Pi sidecar -> `imp-sk-platform`.
-- MCP server, resources, script tools, schema compatibility -> `imp-sk-mcp`.
-- Repo process docs, `.agents/**`, probes, source audits, `dev.sh`, cargo wrappers -> `imp-sk-devex`.
-- Local LLM/ghost backend, dictation, whisper, computer use, OCR, camera, AI vault -> `imp-sk-ai-core`.
-- Settings, config persistence, onboarding/NUX, kit store, sync, updates, login item, secrets -> `imp-sk-settings`.
+- Use `flows/scout.md` when ownership is unclear.
+- Agent Chat, `@file`, `@context`, attachments, portal, or Pi handoff -> `flows/agent-chat.md`.
+- Day Page, Today, brain, fragments, spine, or Notes parity -> `flows/brain.md`.
+- Clipboard history, sediment, post-copy, copy-to-brain, or no-popup capture -> `flows/clipboard.md`.
+- Shared UI, components, list rows, inputs, prompt shells, chrome, or theme tokens -> `flows/components.md`.
+- Script List, main window, mini/full view, launcher selection -> `flows/launcher.md`.
+- Actions menu, command palette, trigger picker, confirm popup -> `flows/actions.md`.
+- Hotkeys, gestures, tap/hold/double-tap, focus restoration -> `flows/hotkeys.md`.
+- Script prompt renderers and protocol-to-renderer contracts -> `flows/prompts.md`.
+- Built-in utility surfaces -> `flows/builtins.md`.
+- Terminal prompt, PTY, command bar, terminal theme -> `flows/terminal.md`.
+- Script execution, menu cache, metadata, scheduler -> `flows/execution.md`.
+- macOS platform, windows, tray/menu bar, icons, permissions, startup, Pi sidecar -> `flows/platform.md`.
+- MCP server, resources, script tools, schema compatibility -> `flows/mcp.md`.
+- Repo process docs, `.agents/**`, `flows/**`, probes, source audits, `dev.sh`, cargo wrappers -> `flows/devex.md`.
+- Local LLM/ghost backend, dictation, whisper, computer use, OCR, camera, AI vault -> `flows/ai-core.md`.
+- Settings, config persistence, onboarding/NUX, kit store, sync, updates, login item, secrets -> `flows/settings.md`.
+- v1→v2 script migration: `scripts/migrate` engine, compat map, validator ladder, honesty pass, Migrate board built-in -> `flows/migrate.md`.
 
-Role imps (cross-cutting, any surface):
+Role flows (cross-cutting, any surface):
 
-- Build failures, cargo lock contention, `target-agent` disk budget, clippy/fmt debt, stuck builds -> `imp-sk-build-doctor`.
-- DevTools work: runtime proof, app inspection/investigation, driver probes, screenshots, simulateGpuiEvent, red/green receipts -> `imp-sk-devtools` (the imp form of the `script-kit-devtools` skill).
-- Read-only audit sweeps, UX inconsistency hunts, hardcoded-token findings (never edits) -> `imp-sk-auditor`.
-- Test authorship, enforcement-ladder placement, contract tests, ratchet, flaky tests -> `imp-sk-tests`.
-- Version bumps, `v*` tags, pre-tag clippy gate, release workflow -> `imp-sk-release`.
-- Perf complaints (lag, jank, stutter, slow scroll, frame budget, CPU spikes): reproduce with real input, `sample` profiling, draw-share red/green, dev-profile opt levels -> `imp-sk-perf`.
-- Vendored GPUI internals (`vendor/gpui*`, gpui-component): list/ListState/measure_all semantics, TextView/markdown pipeline, scrollbar, minimal vendor patches + pinned source audits -> `imp-sk-gpui-vendor`.
+- Build failures, cargo lock contention, `target-agent` disk budget, clippy/fmt debt, stuck builds -> `flows/build-doctor.md`.
+- DevTools work: runtime proof, app inspection/investigation, driver probes, screenshots, simulateGpuiEvent, red/green receipts -> `flows/devtools.md` (the flow form of the `script-kit-devtools` skill).
+- Read-only audit sweeps, UX inconsistency hunts, hardcoded-token findings (never edits) -> `flows/auditor.md`.
+- Test authorship, enforcement-ladder placement, contract tests, ratchet, flaky tests -> `flows/tests.md`.
+- Version bumps, `v*` tags, pre-tag clippy gate, release workflow -> `flows/release.md`.
+- Perf complaints (lag, jank, stutter, slow scroll, frame budget, CPU spikes): reproduce with real input, `sample` profiling, draw-share red/green, dev-profile opt levels -> `flows/perf.md`.
+- Vendored GPUI internals (`vendor/gpui*`, gpui-component): list/ListState/measure_all semantics, TextView/markdown pipeline, scrollbar, minimal vendor patches + pinned source audits -> `flows/gpui-vendor.md`.
+- Escape/dismiss behavior (escape ladder, swallowed/extra Escape, `opened_from_main_menu` origin flag, DismissPolicy, go-back vs close-window, "stays open" reports) -> `flows/escape.md`.
 
-Imps are the default path, but never a hard blocker: if the runtime is down or
-an imp repeatedly stalls, continue directly and mention the skipped imp in the
-final answer. Do not fan out broadly by default; use the primary owner imp plus
-one relevant cross-cutting imp when needed.
+Flows are the default path, but never a hard blocker: if mdflow is down or a
+flow repeatedly stalls, continue directly and mention the skipped flow in the
+final answer. Do not fan out broadly by default; use the primary owner flow
+plus one relevant cross-cutting flow when needed.
 
-Local lesson overlays are not repo policy. Only reviewed promoted lessons,
-regression tests/probes, or `AGENTS.md` updates affect general routing. Lessons
-may guide future imp runs, but never override user instructions, dirty-work
-preservation, or this file.
+Flow prompt content is not repo policy. Only regression tests/probes or
+`AGENTS.md` updates affect general routing. Prompt changes in
+`flows/<name>.md` files guide future flow runs, but never override user
+instructions, dirty-work preservation, or this file. After editing a flow,
+verify it for free with `md flows/<name>.md "<smoke task>" --_dry-run` and
+keep its eval suite passing.
 
 ## UI Consistency and Shared Component Contract
 
