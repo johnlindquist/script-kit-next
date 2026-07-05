@@ -14,9 +14,9 @@
 
 use super::builders::*;
 use super::command_bar::CommandBarConfig;
-use super::dialog::{build_grouped_items_static, coerce_action_selection, GroupedActionItem};
+use super::dialog::{GroupedActionItem, build_grouped_items_static, coerce_action_selection};
 use super::types::*;
-use super::window::{count_section_headers, WindowPosition};
+use super::window::{WindowPosition, count_section_headers};
 use crate::clipboard_history::ContentType;
 use crate::file_search::{FileInfo, FileType};
 use crate::prompts::PathInfo;
@@ -671,7 +671,7 @@ fn ai_command_bar_actions_section_has_four_actions() {
         .iter()
         .filter(|a| a.section.as_deref() == Some("Actions"))
         .count();
-    assert_eq!(action_count, 4);
+    assert_eq!(action_count, 7);
 }
 
 #[test]
@@ -1457,7 +1457,10 @@ fn file_context_image_treated_as_file() {
 #[test]
 fn global_actions_is_seeded() {
     let actions = get_global_actions();
-    assert!(!actions.is_empty(), "global actions should expose at least one row");
+    assert!(
+        !actions.is_empty(),
+        "global actions should expose at least one row"
+    );
 }
 
 // ============================================================================

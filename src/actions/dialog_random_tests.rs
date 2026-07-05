@@ -5,22 +5,22 @@
 //! dialog helpers, window utilities, and configuration presets.
 
 use super::builders::{
-    get_ai_command_bar_actions, get_chat_context_actions, get_chat_model_picker_actions,
-    get_clipboard_history_context_actions, get_file_context_actions, get_new_chat_actions,
-    get_note_switcher_actions, get_notes_command_bar_actions, get_path_context_actions,
-    get_script_context_actions, get_scriptlet_context_actions_with_custom, to_deeplink_name,
     ChatModelInfo, ChatPromptInfo, ClipboardEntryInfo, NewChatModelInfo, NewChatPresetInfo,
-    NoteSwitcherNoteInfo, NotesInfo,
+    NoteSwitcherNoteInfo, NotesInfo, get_ai_command_bar_actions, get_chat_context_actions,
+    get_chat_model_picker_actions, get_clipboard_history_context_actions, get_file_context_actions,
+    get_new_chat_actions, get_note_switcher_actions, get_notes_command_bar_actions,
+    get_path_context_actions, get_script_context_actions,
+    get_scriptlet_context_actions_with_custom, to_deeplink_name,
 };
 use super::command_bar::CommandBarConfig;
 use super::dialog::{
-    build_grouped_items_static, coerce_action_selection, ActionsDialog, GroupedActionItem,
+    ActionsDialog, GroupedActionItem, build_grouped_items_static, coerce_action_selection,
 };
 use super::types::{
     Action, ActionCategory, ActionsDialogConfig, AnchorPosition, ScriptInfo, SearchPosition,
     SectionStyle,
 };
-use super::window::{count_section_headers, WindowPosition};
+use super::window::{WindowPosition, count_section_headers};
 use crate::clipboard_history::ContentType;
 use crate::designs::icon_variations::IconName;
 use crate::file_search::{FileInfo, FileType};
@@ -771,9 +771,11 @@ fn chat_zero_models() {
     assert!(actions.iter().any(|a| a.id == "chat:change_model"));
     assert!(actions.iter().any(|a| a.id == "chat:continue_in_chat"));
     // No flat model rows in root — models live in the drill-down picker
-    assert!(!actions
-        .iter()
-        .any(|a| a.id.starts_with("chat:select_model_")));
+    assert!(
+        !actions
+            .iter()
+            .any(|a| a.id.starts_with("chat:select_model_"))
+    );
 }
 
 #[test]
@@ -989,7 +991,7 @@ fn ai_command_bar_all_twelve_ids() {
     for id in &expected {
         assert!(ids.contains(id), "Missing AI action: {}", id);
     }
-    assert_eq!(actions.len(), 35);
+    assert_eq!(actions.len(), 38);
 }
 
 #[test]
@@ -1462,40 +1464,52 @@ fn protocol_action_with_value() {
 
 #[test]
 fn protocol_action_visibility_combinations() {
-    assert!(ProtocolAction {
-        visible: None,
-        ..ProtocolAction::new("a".into())
-    }
-    .is_visible());
-    assert!(ProtocolAction {
-        visible: Some(true),
-        ..ProtocolAction::new("a".into())
-    }
-    .is_visible());
-    assert!(!ProtocolAction {
-        visible: Some(false),
-        ..ProtocolAction::new("a".into())
-    }
-    .is_visible());
+    assert!(
+        ProtocolAction {
+            visible: None,
+            ..ProtocolAction::new("a".into())
+        }
+        .is_visible()
+    );
+    assert!(
+        ProtocolAction {
+            visible: Some(true),
+            ..ProtocolAction::new("a".into())
+        }
+        .is_visible()
+    );
+    assert!(
+        !ProtocolAction {
+            visible: Some(false),
+            ..ProtocolAction::new("a".into())
+        }
+        .is_visible()
+    );
 }
 
 #[test]
 fn protocol_action_close_combinations() {
-    assert!(ProtocolAction {
-        close: None,
-        ..ProtocolAction::new("a".into())
-    }
-    .should_close());
-    assert!(ProtocolAction {
-        close: Some(true),
-        ..ProtocolAction::new("a".into())
-    }
-    .should_close());
-    assert!(!ProtocolAction {
-        close: Some(false),
-        ..ProtocolAction::new("a".into())
-    }
-    .should_close());
+    assert!(
+        ProtocolAction {
+            close: None,
+            ..ProtocolAction::new("a".into())
+        }
+        .should_close()
+    );
+    assert!(
+        ProtocolAction {
+            close: Some(true),
+            ..ProtocolAction::new("a".into())
+        }
+        .should_close()
+    );
+    assert!(
+        !ProtocolAction {
+            close: Some(false),
+            ..ProtocolAction::new("a".into())
+        }
+        .should_close()
+    );
 }
 
 // =========================================================================

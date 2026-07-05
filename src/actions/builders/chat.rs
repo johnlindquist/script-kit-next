@@ -528,7 +528,9 @@ pub fn get_ai_command_bar_actions() -> Vec<Action> {
             Some("Toggles a taller multi-line composer".to_string()),
             ActionCategory::ScriptContext,
         )
-        .with_shortcut("\u{21e7}\u{2318}E")
+        // ⌥⌘E: ⇧⌘E is already taken by chat:export_markdown; keep the ⌥⌘
+        // pattern of the sibling new actions (⌥⌘F favorite, ⌥⌘M cycle model).
+        .with_shortcut("\u{2325}\u{2318}E")
         .with_icon(IconName::Settings)
         .with_section("Actions"),
         Action::new(

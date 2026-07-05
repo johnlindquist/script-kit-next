@@ -15,18 +15,18 @@
 //! - Path context action count consistency
 
 use super::builders::{
-    get_ai_command_bar_actions, get_chat_context_actions, get_chat_model_picker_actions,
-    get_clipboard_history_context_actions, get_file_context_actions, get_new_chat_actions,
-    get_note_switcher_actions, get_notes_command_bar_actions, get_path_context_actions,
-    get_script_context_actions, get_scriptlet_context_actions_with_custom, ChatModelInfo,
-    ChatPromptInfo, ClipboardEntryInfo, NewChatModelInfo, NewChatPresetInfo,
-    NoteSwitcherNoteInfo, NotesInfo,
+    ChatModelInfo, ChatPromptInfo, ClipboardEntryInfo, NewChatModelInfo, NewChatPresetInfo,
+    NoteSwitcherNoteInfo, NotesInfo, get_ai_command_bar_actions, get_chat_context_actions,
+    get_chat_model_picker_actions, get_clipboard_history_context_actions, get_file_context_actions,
+    get_new_chat_actions, get_note_switcher_actions, get_notes_command_bar_actions,
+    get_path_context_actions, get_script_context_actions,
+    get_scriptlet_context_actions_with_custom,
 };
 use super::constants::{
     ACTION_ITEM_HEIGHT, ACTION_ROW_INSET, HEADER_HEIGHT, POPUP_MAX_HEIGHT, POPUP_WIDTH,
     SEARCH_INPUT_HEIGHT,
 };
-use super::dialog::{build_grouped_items_static, coerce_action_selection, GroupedActionItem};
+use super::dialog::{GroupedActionItem, build_grouped_items_static, coerce_action_selection};
 use super::types::{
     Action, ActionCategory, ActionsDialogConfig, AnchorPosition, SearchPosition, SectionStyle,
 };
@@ -146,7 +146,7 @@ fn test_count_section_headers_out_of_bounds_index() {
     let actions =
         vec![Action::new("a", "A", None, ActionCategory::ScriptContext).with_section("Response")];
     let filtered = vec![0, 5, 10]; // 5 and 10 are out of bounds
-                                   // Should only count valid actions
+    // Should only count valid actions
     assert_eq!(count_section_headers(&actions, &filtered), 1);
 }
 
@@ -450,7 +450,10 @@ fn test_score_action_combined_bonuses() {
     );
 
     let score = ActionsDialog::score_action(&action, "copy");
-    assert_eq!(score, 100, "Current scoring returns prefix score for this query");
+    assert_eq!(
+        score, 100,
+        "Current scoring returns prefix score for this query"
+    );
 }
 
 #[test]
@@ -668,7 +671,10 @@ fn test_clipboard_destructive_actions_always_last() {
     let actions = get_clipboard_history_context_actions(&entry);
     let ids: Vec<&str> = actions.iter().map(|a| a.id.as_str()).collect();
 
-    let delete_idx = ids.iter().position(|&id| id == "clip:clipboard_delete").unwrap();
+    let delete_idx = ids
+        .iter()
+        .position(|&id| id == "clip:clipboard_delete")
+        .unwrap();
     let delete_multi_idx = ids
         .iter()
         .position(|&id| id == "clip:clipboard_delete_multiple")
@@ -997,7 +1003,7 @@ fn test_ai_command_bar_has_expected_ids() {
     assert!(ids.contains(&"chat:capture_screen_area"));
     assert!(ids.contains(&"chat:inspect_context"));
     assert!(ids.contains(&"chat:toggle_window_mode"));
-    assert_eq!(ids.len(), 35);
+    assert_eq!(ids.len(), 38);
 }
 
 // =========================================================================
@@ -1043,7 +1049,11 @@ fn test_chat_with_models_and_response() {
     // change_model + continue_in_chat + copy_response + clear_conversation + capture_screen_area = 5
     assert_eq!(actions.len(), 5);
     // No flat model rows in root — models live in the drill-down picker
-    assert!(!actions.iter().any(|a| a.id.starts_with("chat:select_model_")));
+    assert!(
+        !actions
+            .iter()
+            .any(|a| a.id.starts_with("chat:select_model_"))
+    );
 
     // Model checkmarks are in the picker
     let picker = get_chat_model_picker_actions(&info);

@@ -900,6 +900,7 @@ pub const EXTERNAL_COMMAND_VERBS: &[&str] = &[
     "setMenuSyntaxFormField",
     "triggerBuiltin",
     "simulateKey",
+    "simulateMainHotkeyGesture",
     "openNotes",
     "openAbout",
     "openCreationFeedback",
@@ -1482,6 +1483,15 @@ mod tests {
             },
             ExternalCommand::OpenDictationOverlayFixture { request_id: None },
             ExternalCommand::GetConfigFingerprint { request_id: None },
+            ExternalCommand::SimulateMainHotkeyGesture {
+                phase: String::new(),
+                request_id: None,
+            },
+            ExternalCommand::SetAgentChatTranscriptScroll {
+                item_ix: 0,
+                offset_px: 0.0,
+                request_id: None,
+            },
         ];
 
         let declared: BTreeSet<&str> = EXTERNAL_COMMAND_VERBS.iter().copied().collect();

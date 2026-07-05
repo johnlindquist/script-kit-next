@@ -12,7 +12,7 @@ mod from_dialog_builtin_action_validation_tests_11 {
 
     use super::builders::*;
     use super::dialog::{
-        build_grouped_items_static, coerce_action_selection, ActionsDialog, GroupedActionItem,
+        ActionsDialog, GroupedActionItem, build_grouped_items_static, coerce_action_selection,
     };
     use super::types::*;
     use crate::clipboard_history::ContentType;
@@ -570,7 +570,11 @@ mod from_dialog_builtin_action_validation_tests_11 {
             let actions = get_path_context_actions(info);
             assert!(actions.iter().any(|a| a.id == "file:copy_path"));
             assert!(actions.iter().any(|a| a.id == "file:open_in_editor"));
-            assert!(actions.iter().any(|a| a.id == "file:open_in_quick_terminal"));
+            assert!(
+                actions
+                    .iter()
+                    .any(|a| a.id == "file:open_in_quick_terminal")
+            );
             assert!(actions.iter().any(|a| a.id == "file:open_in_finder"));
             assert!(actions.iter().any(|a| a.id == "file:copy_filename"));
         }
@@ -583,7 +587,7 @@ mod from_dialog_builtin_action_validation_tests_11 {
     #[test]
     fn cat13_ai_command_bar_has_12_actions() {
         let actions = get_ai_command_bar_actions();
-        assert_eq!(actions.len(), 35);
+        assert_eq!(actions.len(), 38);
     }
 
     #[test]
@@ -1084,12 +1088,16 @@ mod from_dialog_builtin_action_validation_tests_11 {
             has_messages: false,
             has_response: true,
         };
-        assert!(!get_chat_context_actions(&no_resp)
-            .iter()
-            .any(|a| a.id == "chat:copy_response"));
-        assert!(get_chat_context_actions(&with_resp)
-            .iter()
-            .any(|a| a.id == "chat:copy_response"));
+        assert!(
+            !get_chat_context_actions(&no_resp)
+                .iter()
+                .any(|a| a.id == "chat:copy_response")
+        );
+        assert!(
+            get_chat_context_actions(&with_resp)
+                .iter()
+                .any(|a| a.id == "chat:copy_response")
+        );
     }
 
     #[test]
@@ -1106,12 +1114,16 @@ mod from_dialog_builtin_action_validation_tests_11 {
             has_messages: true,
             has_response: false,
         };
-        assert!(!get_chat_context_actions(&no_msgs)
-            .iter()
-            .any(|a| a.id == "chat:clear_conversation"));
-        assert!(get_chat_context_actions(&with_msgs)
-            .iter()
-            .any(|a| a.id == "chat:clear_conversation"));
+        assert!(
+            !get_chat_context_actions(&no_msgs)
+                .iter()
+                .any(|a| a.id == "chat:clear_conversation")
+        );
+        assert!(
+            get_chat_context_actions(&with_msgs)
+                .iter()
+                .any(|a| a.id == "chat:clear_conversation")
+        );
     }
 
     // ============================================================================
@@ -1811,7 +1823,7 @@ mod from_dialog_builtin_action_validation_tests_12 {
         // --- merged from tests_part_01.rs ---
         use super::super::builders::*;
         use super::super::dialog::{
-            build_grouped_items_static, coerce_action_selection, ActionsDialog, GroupedActionItem,
+            ActionsDialog, GroupedActionItem, build_grouped_items_static, coerce_action_selection,
         };
         use super::super::types::*;
         use crate::clipboard_history::ContentType;
@@ -2214,7 +2226,10 @@ mod from_dialog_builtin_action_validation_tests_12 {
                 .iter()
                 .filter(|a| a.section.as_deref() == Some("Actions"))
                 .count();
-            assert_eq!(count, 4, "Actions section should have 4 actions (submit, new_chat, delete_chat, branch_from_last)");
+            assert_eq!(
+                count, 7,
+                "Actions section should have 7 actions (submit, new_chat, delete_chat, branch_from_last)"
+            );
         }
 
         #[test]
@@ -2224,7 +2239,7 @@ mod from_dialog_builtin_action_validation_tests_12 {
                 .iter()
                 .filter(|a| a.section.as_deref() == Some("Attachments"))
                 .count();
-            assert_eq!(count, 4, "Attachments section should have 4 actions");
+            assert_eq!(count, 4, "Attachments section should have 7 actions");
         }
 
         #[test]
@@ -2259,7 +2274,7 @@ mod from_dialog_builtin_action_validation_tests_12 {
 
         #[test]
         fn cat06_ai_total_12_actions() {
-            assert_eq!(get_ai_command_bar_actions().len(), 35);
+            assert_eq!(get_ai_command_bar_actions().len(), 38);
         }
 
         // --- merged from tests_part_02.rs ---
@@ -2470,12 +2485,16 @@ mod from_dialog_builtin_action_validation_tests_12 {
                 has_messages: false,
                 has_response: false,
             };
-            assert!(get_chat_context_actions(&with)
-                .iter()
-                .any(|a| a.id == "chat:copy_response"));
-            assert!(!get_chat_context_actions(&without)
-                .iter()
-                .any(|a| a.id == "chat:copy_response"));
+            assert!(
+                get_chat_context_actions(&with)
+                    .iter()
+                    .any(|a| a.id == "chat:copy_response")
+            );
+            assert!(
+                !get_chat_context_actions(&without)
+                    .iter()
+                    .any(|a| a.id == "chat:copy_response")
+            );
         }
 
         #[test]
@@ -2492,12 +2511,16 @@ mod from_dialog_builtin_action_validation_tests_12 {
                 has_messages: false,
                 has_response: false,
             };
-            assert!(get_chat_context_actions(&with)
-                .iter()
-                .any(|a| a.id == "chat:clear_conversation"));
-            assert!(!get_chat_context_actions(&without)
-                .iter()
-                .any(|a| a.id == "chat:clear_conversation"));
+            assert!(
+                get_chat_context_actions(&with)
+                    .iter()
+                    .any(|a| a.id == "chat:clear_conversation")
+            );
+            assert!(
+                !get_chat_context_actions(&without)
+                    .iter()
+                    .any(|a| a.id == "chat:clear_conversation")
+            );
         }
 
         // =========================================================================
@@ -3807,7 +3830,7 @@ mod from_dialog_builtin_action_validation_tests_13 {
         // --- merged from tests_part_01.rs ---
         use super::super::builders::*;
         use super::super::dialog::{
-            build_grouped_items_static, coerce_action_selection, ActionsDialog, GroupedActionItem,
+            ActionsDialog, GroupedActionItem, build_grouped_items_static, coerce_action_selection,
         };
         use super::super::types::*;
         use crate::clipboard_history::ContentType;
@@ -4101,9 +4124,11 @@ mod from_dialog_builtin_action_validation_tests_13 {
         #[test]
         fn cat04_text_has_save_snippet() {
             let actions = get_clipboard_history_context_actions(&make_text_entry());
-            assert!(actions
-                .iter()
-                .any(|a| a.id == "clip:clipboard_save_snippet"));
+            assert!(
+                actions
+                    .iter()
+                    .any(|a| a.id == "clip:clipboard_save_snippet")
+            );
         }
 
         #[test]
@@ -4116,9 +4141,11 @@ mod from_dialog_builtin_action_validation_tests_13 {
         fn cat04_image_has_no_save_snippet() {
             // save_snippet exists only for TEXT entries; image entries get ocr instead.
             let actions = get_clipboard_history_context_actions(&make_image_entry());
-            assert!(!actions
-                .iter()
-                .any(|a| a.id == "clip:clipboard_save_snippet"));
+            assert!(
+                !actions
+                    .iter()
+                    .any(|a| a.id == "clip:clipboard_save_snippet")
+            );
             assert!(actions.iter().any(|a| a.id == "clip:clipboard_ocr"));
         }
 
@@ -5221,11 +5248,13 @@ mod from_dialog_builtin_action_validation_tests_13 {
             let actions = get_new_chat_actions(&[], &presets, &[]);
             assert_eq!(actions.len(), 1);
             assert_eq!(actions[0].section.as_deref(), Some("Presets"));
-            assert!(actions[0]
-                .description
-                .as_deref()
-                .unwrap()
-                .contains("preset"));
+            assert!(
+                actions[0]
+                    .description
+                    .as_deref()
+                    .unwrap()
+                    .contains("preset")
+            );
         }
 
         #[test]
@@ -5800,7 +5829,7 @@ mod from_dialog_builtin_action_validation_tests_14 {
         use super::super::builders::*;
         use super::super::command_bar::CommandBarConfig;
         use super::super::dialog::{
-            build_grouped_items_static, coerce_action_selection, ActionsDialog, GroupedActionItem,
+            ActionsDialog, GroupedActionItem, build_grouped_items_static, coerce_action_selection,
         };
         use super::super::types::*;
         use crate::clipboard_history::ContentType;
@@ -6073,7 +6102,7 @@ mod from_dialog_builtin_action_validation_tests_14 {
                 .iter()
                 .filter(|a| a.section.as_deref() == Some("Actions"))
                 .collect();
-            assert_eq!(section_actions.len(), 4);
+            assert_eq!(section_actions.len(), 7);
         }
 
         #[test]
@@ -7430,12 +7459,13 @@ mod from_dialog_builtin_action_validation_tests_14 {
             script.is_script = false;
             let actions = get_script_context_actions(&script);
             let edit = actions.iter().find(|a| a.id == "edit_script").unwrap();
-            assert!(edit
-                .description
-                .as_ref()
-                .unwrap()
-                .to_lowercase()
-                .contains("agent"));
+            assert!(
+                edit.description
+                    .as_ref()
+                    .unwrap()
+                    .to_lowercase()
+                    .contains("agent")
+            );
         }
 
         // =========================================================================
@@ -8354,11 +8384,13 @@ mod from_dialog_builtin_action_validation_tests_15 {
                 icon: IconName::Code,
             }];
             let actions = get_new_chat_actions(&[], &presets, &[]);
-            assert!(actions[0]
-                .description
-                .as_deref()
-                .unwrap()
-                .contains("preset"));
+            assert!(
+                actions[0]
+                    .description
+                    .as_deref()
+                    .unwrap()
+                    .contains("preset")
+            );
         }
 
         #[test]
@@ -8571,7 +8603,10 @@ mod from_dialog_builtin_action_validation_tests_15 {
                     "chat:submit",
                     "chat:new_chat",
                     "chat:delete_chat",
-                    "chat:branch_from_last"
+                    "chat:branch_from_last",
+                    "chat:toggle_favorite_model",
+                    "chat:cycle_favorite_model",
+                    "chat:expand_composer"
                 ]
             );
         }
@@ -9556,7 +9591,7 @@ mod from_dialog_builtin_action_validation_tests_15 {
 
         #[test]
         fn cat24_ai_total_13() {
-            assert_eq!(get_ai_command_bar_actions().len(), 35);
+            assert_eq!(get_ai_command_bar_actions().len(), 38);
         }
 
         #[test]
@@ -10056,7 +10091,7 @@ mod from_dialog_builtin_action_validation_tests_16 {
         use super::super::builders::*;
         use super::super::command_bar::CommandBarConfig;
         use super::super::dialog::{
-            build_grouped_items_static, coerce_action_selection, ActionsDialog, GroupedActionItem,
+            ActionsDialog, GroupedActionItem, build_grouped_items_static, coerce_action_selection,
         };
         use super::super::types::*;
         use crate::clipboard_history::ContentType;
@@ -10319,12 +10354,13 @@ mod from_dialog_builtin_action_validation_tests_16 {
             script.is_agent = true;
             let actions = get_script_context_actions(&script);
             let copy = actions.iter().find(|a| a.id == "copy_content").unwrap();
-            assert!(copy
-                .description
-                .as_ref()
-                .unwrap()
-                .to_lowercase()
-                .contains("file"));
+            assert!(
+                copy.description
+                    .as_ref()
+                    .unwrap()
+                    .to_lowercase()
+                    .contains("file")
+            );
         }
 
         #[test]
@@ -10766,11 +10802,13 @@ mod from_dialog_builtin_action_validation_tests_16 {
             }];
             let actions = get_new_chat_actions(&[], &presets, &[]);
             let preset_action = actions.iter().find(|a| a.id == "preset_code").unwrap();
-            assert!(preset_action
-                .description
-                .as_deref()
-                .unwrap()
-                .contains("preset"));
+            assert!(
+                preset_action
+                    .description
+                    .as_deref()
+                    .unwrap()
+                    .contains("preset")
+            );
         }
 
         #[test]
@@ -11574,12 +11612,13 @@ mod from_dialog_builtin_action_validation_tests_16 {
                 .iter()
                 .find(|a| a.id == "file:copy_filename")
                 .unwrap();
-            assert!(cf
-                .description
-                .as_ref()
-                .unwrap()
-                .to_lowercase()
-                .contains("filename"));
+            assert!(
+                cf.description
+                    .as_ref()
+                    .unwrap()
+                    .to_lowercase()
+                    .contains("filename")
+            );
         }
 
         // =========================================================================
@@ -12006,7 +12045,7 @@ mod from_dialog_builtin_action_validation_tests_17 {
         use super::super::builders::*;
         use super::super::command_bar::CommandBarConfig;
         use super::super::dialog::{
-            build_grouped_items_static, coerce_action_selection, ActionsDialog, GroupedActionItem,
+            ActionsDialog, GroupedActionItem, build_grouped_items_static, coerce_action_selection,
         };
         use super::super::types::*;
         use crate::clipboard_history::ContentType;
@@ -13545,11 +13584,12 @@ mod from_dialog_builtin_action_validation_tests_17 {
             let script = ScriptInfo::scriptlet("Open GitHub", "/path/url.md", None, None);
             let actions = get_scriptlet_context_actions_with_custom(&script, None);
             let dl = actions.iter().find(|a| a.id == "copy_deeplink").unwrap();
-            assert!(dl
-                .description
-                .as_ref()
-                .unwrap()
-                .contains("scriptkit://run/open-github"));
+            assert!(
+                dl.description
+                    .as_ref()
+                    .unwrap()
+                    .contains("scriptkit://run/open-github")
+            );
         }
 
         // ================================================================
@@ -13778,7 +13818,7 @@ mod from_dialog_builtin_action_validation_tests_18 {
         use super::super::builders::*;
         use super::super::command_bar::CommandBarConfig;
         use super::super::dialog::{
-            build_grouped_items_static, coerce_action_selection, ActionsDialog, GroupedActionItem,
+            ActionsDialog, GroupedActionItem, build_grouped_items_static, coerce_action_selection,
         };
         use super::super::types::*;
         use crate::clipboard_history::ContentType;
@@ -14022,12 +14062,16 @@ mod from_dialog_builtin_action_validation_tests_18 {
                 frontmost_app_name: None,
             };
             let actions = get_clipboard_history_context_actions(&entry);
-            assert!(!actions
-                .iter()
-                .any(|a| a.id == "clip:clipboard_annotate_cleanshot"));
-            assert!(!actions
-                .iter()
-                .any(|a| a.id == "clip:clipboard_upload_cleanshot"));
+            assert!(
+                !actions
+                    .iter()
+                    .any(|a| a.id == "clip:clipboard_annotate_cleanshot")
+            );
+            assert!(
+                !actions
+                    .iter()
+                    .any(|a| a.id == "clip:clipboard_upload_cleanshot")
+            );
         }
 
         #[cfg(target_os = "macos")]
@@ -14051,12 +14095,16 @@ mod from_dialog_builtin_action_validation_tests_18 {
             };
             let img_actions = get_clipboard_history_context_actions(&img);
             let txt_actions = get_clipboard_history_context_actions(&txt);
-            assert!(img_actions
-                .iter()
-                .any(|a| a.id == "clip:clipboard_open_with"));
-            assert!(!txt_actions
-                .iter()
-                .any(|a| a.id == "clip:clipboard_open_with"));
+            assert!(
+                img_actions
+                    .iter()
+                    .any(|a| a.id == "clip:clipboard_open_with")
+            );
+            assert!(
+                !txt_actions
+                    .iter()
+                    .any(|a| a.id == "clip:clipboard_open_with")
+            );
         }
 
         // =========================================================================
@@ -15359,7 +15407,7 @@ mod from_dialog_builtin_action_validation_tests_18 {
         #[test]
         fn cat27_total_ai_actions_is_12() {
             let actions = get_ai_command_bar_actions();
-            assert_eq!(actions.len(), 35);
+            assert_eq!(actions.len(), 38);
         }
 
         // =========================================================================
@@ -15616,7 +15664,7 @@ mod from_dialog_builtin_action_validation_tests_19 {
         use super::super::builders::*;
         use super::super::command_bar::CommandBarConfig;
         use super::super::dialog::{
-            build_grouped_items_static, coerce_action_selection, ActionsDialog, GroupedActionItem,
+            ActionsDialog, GroupedActionItem, build_grouped_items_static, coerce_action_selection,
         };
         use super::super::types::*;
         use crate::clipboard_history::ContentType;
@@ -15711,11 +15759,12 @@ mod from_dialog_builtin_action_validation_tests_19 {
             let script = ScriptInfo::builtin("Clipboard History");
             let actions = get_script_context_actions(&script);
             let dl = actions.iter().find(|a| a.id == "copy_deeplink").unwrap();
-            assert!(dl
-                .description
-                .as_ref()
-                .unwrap()
-                .contains("clipboard-history"));
+            assert!(
+                dl.description
+                    .as_ref()
+                    .unwrap()
+                    .contains("clipboard-history")
+            );
         }
 
         #[test]
@@ -15863,9 +15912,11 @@ mod from_dialog_builtin_action_validation_tests_19 {
             };
             let actions_disabled = get_notes_command_bar_actions(&disabled);
             let actions_enabled = get_notes_command_bar_actions(&enabled);
-            assert!(actions_disabled
-                .iter()
-                .any(|a| a.id == "enable_auto_sizing"));
+            assert!(
+                actions_disabled
+                    .iter()
+                    .any(|a| a.id == "enable_auto_sizing")
+            );
             assert!(!actions_enabled.iter().any(|a| a.id == "enable_auto_sizing"));
         }
 
@@ -15886,15 +15937,21 @@ mod from_dialog_builtin_action_validation_tests_19 {
                 is_trash_view: true,
                 auto_sizing_enabled: false,
             };
-            assert!(get_notes_command_bar_actions(&valid)
-                .iter()
-                .any(|a| a.id == "copy_note_as"));
-            assert!(!get_notes_command_bar_actions(&no_sel)
-                .iter()
-                .any(|a| a.id == "copy_note_as"));
-            assert!(!get_notes_command_bar_actions(&trash)
-                .iter()
-                .any(|a| a.id == "copy_note_as"));
+            assert!(
+                get_notes_command_bar_actions(&valid)
+                    .iter()
+                    .any(|a| a.id == "copy_note_as")
+            );
+            assert!(
+                !get_notes_command_bar_actions(&no_sel)
+                    .iter()
+                    .any(|a| a.id == "copy_note_as")
+            );
+            assert!(
+                !get_notes_command_bar_actions(&trash)
+                    .iter()
+                    .any(|a| a.id == "copy_note_as")
+            );
         }
 
         #[test]
@@ -15909,12 +15966,16 @@ mod from_dialog_builtin_action_validation_tests_19 {
                 is_trash_view: true,
                 auto_sizing_enabled: false,
             };
-            assert!(get_notes_command_bar_actions(&valid)
-                .iter()
-                .any(|a| a.id == "create_quicklink"));
-            assert!(!get_notes_command_bar_actions(&invalid)
-                .iter()
-                .any(|a| a.id == "create_quicklink"));
+            assert!(
+                get_notes_command_bar_actions(&valid)
+                    .iter()
+                    .any(|a| a.id == "create_quicklink")
+            );
+            assert!(
+                !get_notes_command_bar_actions(&invalid)
+                    .iter()
+                    .any(|a| a.id == "create_quicklink")
+            );
         }
 
         // =========================================================================
@@ -16364,7 +16425,10 @@ mod from_dialog_builtin_action_validation_tests_19 {
                     "chat:submit",
                     "chat:new_chat",
                     "chat:delete_chat",
-                    "chat:branch_from_last"
+                    "chat:branch_from_last",
+                    "chat:toggle_favorite_model",
+                    "chat:cycle_favorite_model",
+                    "chat:expand_composer"
                 ]
             );
         }
@@ -17039,12 +17103,13 @@ mod from_dialog_builtin_action_validation_tests_19 {
                 .find(|a| a.id == "clip:clipboard_pin")
                 .unwrap();
             assert_eq!(pin.title, "Pin Entry");
-            assert!(pin
-                .description
-                .as_ref()
-                .unwrap()
-                .to_lowercase()
-                .contains("pin"));
+            assert!(
+                pin.description
+                    .as_ref()
+                    .unwrap()
+                    .to_lowercase()
+                    .contains("pin")
+            );
         }
 
         // =========================================================================
@@ -17621,7 +17686,7 @@ mod from_dialog_builtin_action_validation_tests_20 {
         use super::super::builders::*;
         use super::super::command_bar::CommandBarConfig;
         use super::super::dialog::{
-            build_grouped_items_static, coerce_action_selection, ActionsDialog, GroupedActionItem,
+            ActionsDialog, GroupedActionItem, build_grouped_items_static, coerce_action_selection,
         };
         use super::super::types::*;
         use crate::clipboard_history::ContentType;
@@ -17716,12 +17781,13 @@ mod from_dialog_builtin_action_validation_tests_20 {
             let script = ScriptInfo::scriptlet("Test", "/path/test.md", None, None);
             let actions = get_scriptlet_context_actions_with_custom(&script, None);
             let cc = actions.iter().find(|a| a.id == "copy_content").unwrap();
-            assert!(cc
-                .description
-                .as_ref()
-                .unwrap()
-                .to_lowercase()
-                .contains("file"));
+            assert!(
+                cc.description
+                    .as_ref()
+                    .unwrap()
+                    .to_lowercase()
+                    .contains("file")
+            );
         }
 
         // =========================================================================
@@ -17810,12 +17876,13 @@ mod from_dialog_builtin_action_validation_tests_20 {
                 .iter()
                 .find(|a| a.id == "clip:clipboard_delete_all")
                 .unwrap();
-            assert!(da
-                .description
-                .as_ref()
-                .unwrap()
-                .to_lowercase()
-                .contains("pinned"));
+            assert!(
+                da.description
+                    .as_ref()
+                    .unwrap()
+                    .to_lowercase()
+                    .contains("pinned")
+            );
         }
 
         #[test]
@@ -17833,12 +17900,13 @@ mod from_dialog_builtin_action_validation_tests_20 {
                 .iter()
                 .find(|a| a.id == "clip:clipboard_delete")
                 .unwrap();
-            assert!(d
-                .description
-                .as_ref()
-                .unwrap()
-                .to_lowercase()
-                .contains("removes"));
+            assert!(
+                d.description
+                    .as_ref()
+                    .unwrap()
+                    .to_lowercase()
+                    .contains("removes")
+            );
         }
 
         #[test]
@@ -18833,9 +18901,11 @@ mod from_dialog_builtin_action_validation_tests_20 {
                 frontmost_app_name: None,
             };
             let actions = get_clipboard_history_context_actions(&entry);
-            assert!(actions
-                .iter()
-                .any(|a| a.id == "clip:clipboard_attach_to_ai"));
+            assert!(
+                actions
+                    .iter()
+                    .any(|a| a.id == "clip:clipboard_attach_to_ai")
+            );
         }
 
         #[test]
@@ -18849,9 +18919,11 @@ mod from_dialog_builtin_action_validation_tests_20 {
                 frontmost_app_name: None,
             };
             let actions = get_clipboard_history_context_actions(&entry);
-            assert!(actions
-                .iter()
-                .any(|a| a.id == "clip:clipboard_attach_to_ai"));
+            assert!(
+                actions
+                    .iter()
+                    .any(|a| a.id == "clip:clipboard_attach_to_ai")
+            );
         }
 
         #[test]

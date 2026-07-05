@@ -17,20 +17,20 @@ mod from_dialog_builtin_action_validation_tests_32 {
     //! 30 categories validating random built-in action behaviors across
     //! script, clipboard, file, path, AI, notes, chat, and new-chat contexts.
 
+    use crate::actions::ActionsDialog;
     use crate::actions::builders::{
-        get_ai_command_bar_actions, get_chat_context_actions, get_chat_model_picker_actions,
-        get_clipboard_history_context_actions, get_file_context_actions, get_new_chat_actions,
-        get_note_switcher_actions, get_notes_command_bar_actions, get_path_context_actions,
-        get_script_context_actions, get_scriptlet_context_actions_with_custom, to_deeplink_name,
         ChatModelInfo, ChatPromptInfo, ClipboardEntryInfo, NewChatModelInfo, NewChatPresetInfo,
-        NoteSwitcherNoteInfo, NotesInfo,
+        NoteSwitcherNoteInfo, NotesInfo, get_ai_command_bar_actions, get_chat_context_actions,
+        get_chat_model_picker_actions, get_clipboard_history_context_actions,
+        get_file_context_actions, get_new_chat_actions, get_note_switcher_actions,
+        get_notes_command_bar_actions, get_path_context_actions, get_script_context_actions,
+        get_scriptlet_context_actions_with_custom, to_deeplink_name,
     };
     use crate::actions::command_bar::CommandBarConfig;
     use crate::actions::dialog::{
-        build_grouped_items_static, coerce_action_selection, GroupedActionItem,
+        GroupedActionItem, build_grouped_items_static, coerce_action_selection,
     };
     use crate::actions::types::{Action, ActionCategory, SectionStyle};
-    use crate::actions::ActionsDialog;
     use crate::clipboard_history::ContentType;
     use crate::designs::icon_variations::IconName;
     use crate::file_search::{FileInfo, FileType};
@@ -223,9 +223,11 @@ mod from_dialog_builtin_action_validation_tests_32 {
             frontmost_app_name: None,
         };
         let actions = get_clipboard_history_context_actions(&entry);
-        assert!(!actions
-            .iter()
-            .any(|a| a.id == "clip:clipboard_annotate_cleanshot"));
+        assert!(
+            !actions
+                .iter()
+                .any(|a| a.id == "clip:clipboard_annotate_cleanshot")
+        );
     }
 
     #[test]
@@ -239,9 +241,11 @@ mod from_dialog_builtin_action_validation_tests_32 {
             frontmost_app_name: None,
         };
         let actions = get_clipboard_history_context_actions(&entry);
-        assert!(!actions
-            .iter()
-            .any(|a| a.id == "clip:clipboard_upload_cleanshot"));
+        assert!(
+            !actions
+                .iter()
+                .any(|a| a.id == "clip:clipboard_upload_cleanshot")
+        );
     }
 
     #[test]
@@ -372,22 +376,26 @@ mod from_dialog_builtin_action_validation_tests_32 {
     fn batch32_path_file_select_desc_submit() {
         let info = PathInfo::new("file.txt", "/p/file.txt", false);
         let actions = get_path_context_actions(&info);
-        assert!(actions[0]
-            .description
-            .as_ref()
-            .unwrap()
-            .contains("Selects this file"));
+        assert!(
+            actions[0]
+                .description
+                .as_ref()
+                .unwrap()
+                .contains("Selects this file")
+        );
     }
 
     #[test]
     fn batch32_path_dir_open_desc_navigate() {
         let info = PathInfo::new("dir", "/p/dir", true);
         let actions = get_path_context_actions(&info);
-        assert!(actions[0]
-            .description
-            .as_ref()
-            .unwrap()
-            .contains("Opens this directory"));
+        assert!(
+            actions[0]
+                .description
+                .as_ref()
+                .unwrap()
+                .contains("Opens this directory")
+        );
     }
 
     // ---------------------------------------------------------------------------
@@ -1220,11 +1228,12 @@ mod from_dialog_builtin_action_validation_tests_32 {
         let builtin = crate::actions::types::ScriptInfo::builtin("Clipboard History");
         let actions = get_script_context_actions(&builtin);
         let dl = actions.iter().find(|a| a.id == "copy_deeplink").unwrap();
-        assert!(dl
-            .description
-            .as_ref()
-            .unwrap()
-            .contains("scriptkit://run/clipboard-history"),);
+        assert!(
+            dl.description
+                .as_ref()
+                .unwrap()
+                .contains("scriptkit://run/clipboard-history"),
+        );
     }
 
     // ---------------------------------------------------------------------------
@@ -1242,9 +1251,11 @@ mod from_dialog_builtin_action_validation_tests_32 {
             frontmost_app_name: None,
         };
         let actions = get_clipboard_history_context_actions(&entry);
-        assert!(actions
-            .iter()
-            .any(|a| a.id == "clip:clipboard_save_snippet"));
+        assert!(
+            actions
+                .iter()
+                .any(|a| a.id == "clip:clipboard_save_snippet")
+        );
     }
 
     #[test]
@@ -1259,9 +1270,11 @@ mod from_dialog_builtin_action_validation_tests_32 {
         };
         let actions = get_clipboard_history_context_actions(&entry);
         // save_snippet exists only for text entries; images get clipboard_ocr instead
-        assert!(!actions
-            .iter()
-            .any(|a| a.id == "clip:clipboard_save_snippet"));
+        assert!(
+            !actions
+                .iter()
+                .any(|a| a.id == "clip:clipboard_save_snippet")
+        );
         assert!(actions.iter().any(|a| a.id == "clip:clipboard_ocr"));
     }
 
@@ -1432,15 +1445,15 @@ mod from_dialog_builtin_action_validation_tests_33 {
     //! built-in action window dialogs.
 
     use crate::actions::builders::{
+        ClipboardEntryInfo, NewChatModelInfo, NewChatPresetInfo, NoteSwitcherNoteInfo, NotesInfo,
         get_ai_command_bar_actions, get_clipboard_history_context_actions,
         get_file_context_actions, get_new_chat_actions, get_note_switcher_actions,
         get_notes_command_bar_actions, get_path_context_actions, get_script_context_actions,
-        get_scriptlet_context_actions_with_custom, to_deeplink_name, ClipboardEntryInfo,
-        NewChatModelInfo, NewChatPresetInfo, NoteSwitcherNoteInfo, NotesInfo,
+        get_scriptlet_context_actions_with_custom, to_deeplink_name,
     };
     use crate::actions::command_bar::CommandBarConfig;
     use crate::actions::dialog::{
-        build_grouped_items_static, coerce_action_selection, ActionsDialog,
+        ActionsDialog, build_grouped_items_static, coerce_action_selection,
     };
     use crate::actions::types::{
         Action, ActionCategory, AnchorPosition, ScriptInfo, SearchPosition, SectionStyle,
@@ -1982,12 +1995,14 @@ mod from_dialog_builtin_action_validation_tests_33 {
     fn ai_command_bar_paste_image_desc_mentions_clipboard() {
         let actions = get_ai_command_bar_actions();
         let action = actions.iter().find(|a| a.id == "chat:paste_image").unwrap();
-        assert!(action
-            .description
-            .as_ref()
-            .unwrap()
-            .to_lowercase()
-            .contains("clipboard"));
+        assert!(
+            action
+                .description
+                .as_ref()
+                .unwrap()
+                .to_lowercase()
+                .contains("clipboard")
+        );
     }
 
     // =====================================================================
@@ -2011,7 +2026,7 @@ mod from_dialog_builtin_action_validation_tests_33 {
             .iter()
             .filter(|a| a.section.as_deref() == Some("Actions"))
             .count();
-        assert_eq!(count, 4);
+        assert_eq!(count, 7);
     }
 
     #[test]
@@ -2027,7 +2042,7 @@ mod from_dialog_builtin_action_validation_tests_33 {
     #[test]
     fn ai_command_bar_total_is_12() {
         let actions = get_ai_command_bar_actions();
-        assert_eq!(actions.len(), 35);
+        assert_eq!(actions.len(), 38);
     }
 
     // =====================================================================
@@ -2109,12 +2124,13 @@ mod from_dialog_builtin_action_validation_tests_33 {
         agent.is_agent = true;
         let actions = get_script_context_actions(&agent);
         let edit = actions.iter().find(|a| a.id == "edit_script").unwrap();
-        assert!(edit
-            .description
-            .as_ref()
-            .unwrap()
-            .to_lowercase()
-            .contains("agent"));
+        assert!(
+            edit.description
+                .as_ref()
+                .unwrap()
+                .to_lowercase()
+                .contains("agent")
+        );
     }
 
     #[test]
@@ -2124,12 +2140,14 @@ mod from_dialog_builtin_action_validation_tests_33 {
         agent.is_agent = true;
         let actions = get_script_context_actions(&agent);
         let reveal = actions.iter().find(|a| a.id == "reveal_in_finder").unwrap();
-        assert!(reveal
-            .description
-            .as_ref()
-            .unwrap()
-            .to_lowercase()
-            .contains("agent"));
+        assert!(
+            reveal
+                .description
+                .as_ref()
+                .unwrap()
+                .to_lowercase()
+                .contains("agent")
+        );
     }
 
     #[test]
@@ -2210,12 +2228,14 @@ mod from_dialog_builtin_action_validation_tests_33 {
             .iter()
             .find(|a| a.id == "clip:clipboard_share")
             .unwrap();
-        assert!(share
-            .description
-            .as_ref()
-            .unwrap()
-            .to_lowercase()
-            .contains("share"));
+        assert!(
+            share
+                .description
+                .as_ref()
+                .unwrap()
+                .to_lowercase()
+                .contains("share")
+        );
     }
 
     // =====================================================================
@@ -2808,12 +2828,12 @@ mod from_dialog_builtin_action_validation_tests_34 {
     //! built-in action window dialogs.
 
     use crate::actions::builders::{
-        get_ai_command_bar_actions, get_chat_context_actions, get_chat_model_picker_actions,
-        get_clipboard_history_context_actions, get_file_context_actions, get_new_chat_actions,
-        get_note_switcher_actions, get_notes_command_bar_actions, get_path_context_actions,
-        get_script_context_actions, get_scriptlet_context_actions_with_custom, to_deeplink_name,
         ChatModelInfo, ChatPromptInfo, ClipboardEntryInfo, NewChatModelInfo, NewChatPresetInfo,
-        NoteSwitcherNoteInfo, NotesInfo,
+        NoteSwitcherNoteInfo, NotesInfo, get_ai_command_bar_actions, get_chat_context_actions,
+        get_chat_model_picker_actions, get_clipboard_history_context_actions,
+        get_file_context_actions, get_new_chat_actions, get_note_switcher_actions,
+        get_notes_command_bar_actions, get_path_context_actions, get_script_context_actions,
+        get_scriptlet_context_actions_with_custom, to_deeplink_name,
     };
     use crate::actions::command_bar::CommandBarConfig;
     use crate::actions::dialog::ActionsDialog;
@@ -3439,12 +3459,13 @@ mod from_dialog_builtin_action_validation_tests_34 {
             .iter()
             .find(|a| a.id == "chat:continue_in_chat")
             .unwrap();
-        assert!(cont
-            .description
-            .as_ref()
-            .unwrap()
-            .to_lowercase()
-            .contains("harness terminal"));
+        assert!(
+            cont.description
+                .as_ref()
+                .unwrap()
+                .to_lowercase()
+                .contains("harness terminal")
+        );
     }
 
     #[test]
@@ -4145,9 +4166,11 @@ mod from_dialog_builtin_action_validation_tests_34 {
             frontmost_app_name: None,
         };
         let actions = get_clipboard_history_context_actions(&entry);
-        assert!(!actions
-            .iter()
-            .any(|a| a.id == "clip:clipboard_upload_cleanshot"));
+        assert!(
+            !actions
+                .iter()
+                .any(|a| a.id == "clip:clipboard_upload_cleanshot")
+        );
     }
 
     // =====================================================================
@@ -4396,19 +4419,19 @@ mod from_dialog_builtin_action_validation_tests_35 {
     //! built-in action window dialogs.
 
     use crate::actions::builders::{
-        get_ai_command_bar_actions, get_chat_context_actions, get_chat_model_picker_actions,
-        get_clipboard_history_context_actions, get_file_context_actions, get_new_chat_actions,
-        get_note_switcher_actions, get_notes_command_bar_actions, get_path_context_actions,
-        get_script_context_actions, get_scriptlet_context_actions_with_custom, to_deeplink_name,
         ChatModelInfo, ChatPromptInfo, ClipboardEntryInfo, NewChatModelInfo, NewChatPresetInfo,
-        NoteSwitcherNoteInfo, NotesInfo,
+        NoteSwitcherNoteInfo, NotesInfo, get_ai_command_bar_actions, get_chat_context_actions,
+        get_chat_model_picker_actions, get_clipboard_history_context_actions,
+        get_file_context_actions, get_new_chat_actions, get_note_switcher_actions,
+        get_notes_command_bar_actions, get_path_context_actions, get_script_context_actions,
+        get_scriptlet_context_actions_with_custom, to_deeplink_name,
     };
     use crate::actions::command_bar::CommandBarConfig;
     use crate::actions::constants::{
         ACCENT_BAR_WIDTH, ACTION_ROW_INSET, HEADER_HEIGHT, SEARCH_INPUT_HEIGHT,
     };
     use crate::actions::dialog::{
-        build_grouped_items_static, coerce_action_selection, ActionsDialog,
+        ActionsDialog, build_grouped_items_static, coerce_action_selection,
     };
     use crate::actions::types::{Action, ActionCategory, ScriptInfo, SectionStyle};
     use crate::clipboard_history::ContentType;
@@ -4472,12 +4495,14 @@ mod from_dialog_builtin_action_validation_tests_35 {
             .iter()
             .find(|a| a.id == "clip:clipboard_attach_to_ai")
             .unwrap();
-        assert!(action
-            .description
-            .as_ref()
-            .unwrap()
-            .to_lowercase()
-            .contains("agent chat"));
+        assert!(
+            action
+                .description
+                .as_ref()
+                .unwrap()
+                .to_lowercase()
+                .contains("agent chat")
+        );
     }
 
     #[test]
@@ -4491,9 +4516,11 @@ mod from_dialog_builtin_action_validation_tests_35 {
             frontmost_app_name: None,
         };
         let actions = get_clipboard_history_context_actions(&entry);
-        assert!(actions
-            .iter()
-            .any(|a| a.id == "clip:clipboard_attach_to_ai"));
+        assert!(
+            actions
+                .iter()
+                .any(|a| a.id == "clip:clipboard_attach_to_ai")
+        );
     }
 
     // =====================================================================
@@ -4990,7 +5017,7 @@ mod from_dialog_builtin_action_validation_tests_35 {
     #[test]
     fn ai_bar_count_is_12() {
         let actions = get_ai_command_bar_actions();
-        assert_eq!(actions.len(), 35);
+        assert_eq!(actions.len(), 38);
     }
 
     // =====================================================================
@@ -5592,12 +5619,13 @@ mod from_dialog_builtin_action_validation_tests_35 {
             .iter()
             .find(|a| a.id == "copy_scriptlet_path")
             .unwrap();
-        assert!(cp
-            .description
-            .as_ref()
-            .unwrap()
-            .to_lowercase()
-            .contains("path"));
+        assert!(
+            cp.description
+                .as_ref()
+                .unwrap()
+                .to_lowercase()
+                .contains("path")
+        );
     }
 
     // =====================================================================
@@ -5776,12 +5804,14 @@ mod from_dialog_builtin_action_validation_tests_35 {
             .iter()
             .find(|a| a.id == "clip:clipboard_share")
             .unwrap();
-        assert!(share
-            .description
-            .as_ref()
-            .unwrap()
-            .to_lowercase()
-            .contains("share"));
+        assert!(
+            share
+                .description
+                .as_ref()
+                .unwrap()
+                .to_lowercase()
+                .contains("share")
+        );
     }
 
     #[test]
@@ -5914,20 +5944,20 @@ mod from_dialog_builtin_action_validation_tests_36 {
     //! built-in action window dialogs.
 
     use crate::actions::builders::{
+        ClipboardEntryInfo, NewChatModelInfo, NewChatPresetInfo, NoteSwitcherNoteInfo, NotesInfo,
         get_ai_command_bar_actions, get_clipboard_history_context_actions,
         get_file_context_actions, get_new_chat_actions, get_note_switcher_actions,
         get_notes_command_bar_actions, get_path_context_actions, get_script_context_actions,
-        get_scriptlet_context_actions_with_custom, to_deeplink_name, ClipboardEntryInfo,
-        NewChatModelInfo, NewChatPresetInfo, NoteSwitcherNoteInfo, NotesInfo,
+        get_scriptlet_context_actions_with_custom, to_deeplink_name,
     };
     use crate::actions::command_bar::CommandBarConfig;
     use crate::actions::dialog::{
-        build_grouped_items_static, coerce_action_selection, ActionsDialog,
+        ActionsDialog, build_grouped_items_static, coerce_action_selection,
     };
     use crate::actions::types::{Action, ActionCategory, AnchorPosition, ScriptInfo, SectionStyle};
     use crate::clipboard_history::ContentType;
-    use crate::designs::icon_variations::IconName;
     use crate::designs::DesignColors;
+    use crate::designs::icon_variations::IconName;
     use crate::file_search::{FileInfo, FileType};
     use crate::prompts::PathInfo;
     use crate::protocol::ProtocolAction;
@@ -6460,7 +6490,12 @@ mod from_dialog_builtin_action_validation_tests_36 {
             .find(|a| a.id == "file:open_in_quick_terminal")
             .unwrap();
         // Description is "Opens Quick Terminal at this location"
-        assert!(ot.description.as_deref().unwrap().contains("Quick Terminal"));
+        assert!(
+            ot.description
+                .as_deref()
+                .unwrap()
+                .contains("Quick Terminal")
+        );
     }
 
     #[test]
@@ -6486,9 +6521,11 @@ mod from_dialog_builtin_action_validation_tests_36 {
             is_dir: false,
         };
         let actions = get_path_context_actions(&pi);
-        assert!(actions
-            .iter()
-            .any(|a| a.id == "file:open_in_quick_terminal"));
+        assert!(
+            actions
+                .iter()
+                .any(|a| a.id == "file:open_in_quick_terminal")
+        );
     }
 
     // =====================================================================
@@ -6763,13 +6800,13 @@ mod from_dialog_builtin_action_validation_tests_36 {
             .iter()
             .filter(|a| a.section.as_deref() == Some("Actions"))
             .count();
-        assert_eq!(count, 4);
+        assert_eq!(count, 7);
     }
 
     #[test]
     fn ai_bar_total_is_12() {
         let actions = get_ai_command_bar_actions();
-        assert_eq!(actions.len(), 35);
+        assert_eq!(actions.len(), 38);
     }
 
     // =====================================================================
@@ -6990,9 +7027,11 @@ mod from_dialog_builtin_action_validation_tests_36 {
         ];
         let actions = get_new_chat_actions(&[], &presets, &[]);
         assert_eq!(actions.len(), 2);
-        assert!(actions
-            .iter()
-            .all(|a| a.section.as_deref() == Some("Presets")));
+        assert!(
+            actions
+                .iter()
+                .all(|a| a.section.as_deref() == Some("Presets"))
+        );
     }
 
     // =====================================================================
@@ -7451,7 +7490,7 @@ mod from_dialog_builtin_action_validation_tests_38 {
         use crate::actions::types::{
             Action, ActionCategory, AnchorPosition, ScriptInfo, SectionStyle,
         };
-        use crate::actions::window::{count_section_headers, WindowPosition};
+        use crate::actions::window::{WindowPosition, count_section_headers};
         use crate::clipboard_history::ContentType;
         use crate::designs::icon_variations::IconName;
         use crate::file_search::{FileInfo, FileType};
@@ -8882,7 +8921,7 @@ mod from_dialog_builtin_action_validation_tests_39 {
     mod tests {
         // --- merged from tests_part_01.rs ---
         use crate::actions::builders::*;
-        use crate::actions::dialog::{build_grouped_items_static, ActionsDialog};
+        use crate::actions::dialog::{ActionsDialog, build_grouped_items_static};
         use crate::actions::types::{Action, ActionCategory, ScriptInfo, SectionStyle};
         use crate::clipboard_history::ContentType;
         use crate::designs::icon_variations::IconName;
@@ -8890,7 +8929,7 @@ mod from_dialog_builtin_action_validation_tests_39 {
         use crate::prompts::PathInfo;
         use crate::scriptlets::Scriptlet;
 
-        use super::super::dialog::{coerce_action_selection, GroupedActionItem};
+        use super::super::dialog::{GroupedActionItem, coerce_action_selection};
 
         // =========================================================================
         // 1. ScriptInfo::with_shortcut: preserves fields and sets shortcut
@@ -9294,9 +9333,11 @@ mod from_dialog_builtin_action_validation_tests_39 {
             let actions = get_clipboard_history_context_actions(&entry);
             // save_snippet is text-only; images carry clipboard_ocr instead.
             assert!(actions.iter().any(|a| a.id == "clip:clipboard_ocr"));
-            assert!(!actions
-                .iter()
-                .any(|a| a.id == "clip:clipboard_save_snippet"));
+            assert!(
+                !actions
+                    .iter()
+                    .any(|a| a.id == "clip:clipboard_save_snippet")
+            );
         }
 
         #[test]
@@ -9364,12 +9405,16 @@ mod from_dialog_builtin_action_validation_tests_39 {
                 is_dir: true,
                 file_type: FileType::Directory,
             };
-            assert!(get_file_context_actions(&file)
-                .iter()
-                .any(|a| a.id == "file:reveal_in_finder"));
-            assert!(get_file_context_actions(&dir)
-                .iter()
-                .any(|a| a.id == "file:reveal_in_finder"));
+            assert!(
+                get_file_context_actions(&file)
+                    .iter()
+                    .any(|a| a.id == "file:reveal_in_finder")
+            );
+            assert!(
+                get_file_context_actions(&dir)
+                    .iter()
+                    .any(|a| a.id == "file:reveal_in_finder")
+            );
         }
 
         #[test]
@@ -9751,9 +9796,11 @@ mod from_dialog_builtin_action_validation_tests_39 {
         fn scriptlet_no_scriptlet_no_custom_actions() {
             let info = ScriptInfo::scriptlet("My Script", "/scripts.md", None, None);
             let actions = get_scriptlet_context_actions_with_custom(&info, None);
-            assert!(!actions
-                .iter()
-                .any(|a| a.id.starts_with("scriptlet_action:")));
+            assert!(
+                !actions
+                    .iter()
+                    .any(|a| a.id.starts_with("scriptlet_action:"))
+            );
         }
 
         // =========================================================================
@@ -9786,12 +9833,13 @@ mod from_dialog_builtin_action_validation_tests_39 {
         fn ai_bar_paste_image_desc_mentions_clipboard() {
             let actions = get_ai_command_bar_actions();
             let pi = actions.iter().find(|a| a.id == "chat:paste_image").unwrap();
-            assert!(pi
-                .description
-                .as_ref()
-                .unwrap()
-                .to_lowercase()
-                .contains("clipboard"));
+            assert!(
+                pi.description
+                    .as_ref()
+                    .unwrap()
+                    .to_lowercase()
+                    .contains("clipboard")
+            );
         }
 
         // =========================================================================
@@ -9844,9 +9892,11 @@ mod from_dialog_builtin_action_validation_tests_39 {
                 auto_sizing_enabled: false,
             };
             let actions = get_notes_command_bar_actions(&info);
-            assert!(actions
-                .iter()
-                .any(|a| a.section.as_deref() == Some("Notes")));
+            assert!(
+                actions
+                    .iter()
+                    .any(|a| a.section.as_deref() == Some("Notes"))
+            );
         }
 
         #[test]
@@ -9879,9 +9929,11 @@ mod from_dialog_builtin_action_validation_tests_39 {
                 auto_sizing_enabled: false,
             };
             let actions = get_notes_command_bar_actions(&info);
-            assert!(actions
-                .iter()
-                .any(|a| a.section.as_deref() == Some("Settings")));
+            assert!(
+                actions
+                    .iter()
+                    .any(|a| a.section.as_deref() == Some("Settings"))
+            );
         }
 
         // =========================================================================
@@ -10096,11 +10148,13 @@ mod from_dialog_builtin_action_validation_tests_39 {
                 .iter()
                 .find(|a| a.id == "chat:select_model_claude")
                 .unwrap();
-            assert!(model_action
-                .description
-                .as_ref()
-                .unwrap()
-                .contains("Anthropic"));
+            assert!(
+                model_action
+                    .description
+                    .as_ref()
+                    .unwrap()
+                    .contains("Anthropic")
+            );
         }
 
         #[test]
@@ -10611,12 +10665,13 @@ mod from_dialog_builtin_action_validation_tests_40 {
             info.is_script = false;
             let actions = get_script_context_actions(&info);
             let edit = actions.iter().find(|a| a.id == "edit_script").unwrap();
-            assert!(edit
-                .description
-                .as_ref()
-                .unwrap()
-                .to_lowercase()
-                .contains("agent"));
+            assert!(
+                edit.description
+                    .as_ref()
+                    .unwrap()
+                    .to_lowercase()
+                    .contains("agent")
+            );
         }
 
         // =========================================================================
@@ -11183,11 +11238,13 @@ mod from_dialog_builtin_action_validation_tests_40 {
                 .iter()
                 .find(|a| a.id == "file:open_in_editor")
                 .unwrap();
-            assert!(editor_action
-                .description
-                .as_ref()
-                .unwrap()
-                .contains("$EDITOR"));
+            assert!(
+                editor_action
+                    .description
+                    .as_ref()
+                    .unwrap()
+                    .contains("$EDITOR")
+            );
         }
 
         #[test]
@@ -11383,9 +11440,11 @@ mod from_dialog_builtin_action_validation_tests_40 {
             let script = ScriptInfo::scriptlet("snippet", "/path/snippet.md", None, None);
             let actions = get_scriptlet_context_actions_with_custom(&script, None);
             // Should not have any scriptlet_action: prefixed actions
-            assert!(!actions
-                .iter()
-                .any(|a| a.id.starts_with("scriptlet_action:")));
+            assert!(
+                !actions
+                    .iter()
+                    .any(|a| a.id.starts_with("scriptlet_action:"))
+            );
         }
 
         // =========================================================================
@@ -11397,11 +11456,13 @@ mod from_dialog_builtin_action_validation_tests_40 {
             let script = ScriptInfo::scriptlet("Open GitHub", "/path/snippet.md", None, None);
             let actions = get_scriptlet_context_actions_with_custom(&script, None);
             let deeplink = actions.iter().find(|a| a.id == "copy_deeplink").unwrap();
-            assert!(deeplink
-                .description
-                .as_ref()
-                .unwrap()
-                .contains("open-github"));
+            assert!(
+                deeplink
+                    .description
+                    .as_ref()
+                    .unwrap()
+                    .contains("open-github")
+            );
         }
 
         #[test]
@@ -11524,7 +11585,7 @@ mod from_dialog_builtin_action_validation_tests_40 {
         #[test]
         fn ai_bar_has_12_actions() {
             let actions = get_ai_command_bar_actions();
-            assert_eq!(actions.len(), 35);
+            assert_eq!(actions.len(), 38);
         }
 
         #[test]
@@ -12521,12 +12582,14 @@ mod from_dialog_builtin_action_validation_tests_41 {
                 .iter()
                 .find(|a| a.id == "clip:clipboard_share")
                 .unwrap();
-            assert!(share
-                .description
-                .as_ref()
-                .unwrap()
-                .to_lowercase()
-                .contains("share"));
+            assert!(
+                share
+                    .description
+                    .as_ref()
+                    .unwrap()
+                    .to_lowercase()
+                    .contains("share")
+            );
         }
 
         // =========================================================================
@@ -12585,12 +12648,14 @@ mod from_dialog_builtin_action_validation_tests_41 {
                 .iter()
                 .find(|a| a.id == "clip:clipboard_attach_to_ai")
                 .unwrap();
-            assert!(attach
-                .description
-                .as_ref()
-                .unwrap()
-                .to_lowercase()
-                .contains("agent chat"));
+            assert!(
+                attach
+                    .description
+                    .as_ref()
+                    .unwrap()
+                    .to_lowercase()
+                    .contains("agent chat")
+            );
         }
 
         #[test]
@@ -12604,9 +12669,11 @@ mod from_dialog_builtin_action_validation_tests_41 {
                 frontmost_app_name: None,
             };
             let actions = get_clipboard_history_context_actions(&entry);
-            assert!(actions
-                .iter()
-                .any(|a| a.id == "clip:clipboard_attach_to_ai"));
+            assert!(
+                actions
+                    .iter()
+                    .any(|a| a.id == "clip:clipboard_attach_to_ai")
+            );
         }
 
         // =========================================================================
@@ -12730,12 +12797,14 @@ mod from_dialog_builtin_action_validation_tests_41 {
                 file_type: FileType::Directory,
             };
             let actions = get_file_context_actions(&info);
-            assert!(actions[0]
-                .description
-                .as_ref()
-                .unwrap()
-                .to_lowercase()
-                .contains("folder"));
+            assert!(
+                actions[0]
+                    .description
+                    .as_ref()
+                    .unwrap()
+                    .to_lowercase()
+                    .contains("folder")
+            );
         }
 
         // =========================================================================
@@ -12801,12 +12870,16 @@ mod from_dialog_builtin_action_validation_tests_41 {
                 is_dir: true,
                 file_type: FileType::Directory,
             };
-            assert!(get_file_context_actions(&file_info)
-                .iter()
-                .any(|a| a.id == "file:reveal_in_finder"));
-            assert!(get_file_context_actions(&dir_info)
-                .iter()
-                .any(|a| a.id == "file:reveal_in_finder"));
+            assert!(
+                get_file_context_actions(&file_info)
+                    .iter()
+                    .any(|a| a.id == "file:reveal_in_finder")
+            );
+            assert!(
+                get_file_context_actions(&dir_info)
+                    .iter()
+                    .any(|a| a.id == "file:reveal_in_finder")
+            );
         }
 
         // =========================================================================
@@ -12840,12 +12913,13 @@ mod from_dialog_builtin_action_validation_tests_41 {
                 .iter()
                 .find(|a| a.id == "file:open_in_quick_terminal")
                 .unwrap();
-            assert!(term
-                .description
-                .as_ref()
-                .unwrap()
-                .to_lowercase()
-                .contains("terminal"));
+            assert!(
+                term.description
+                    .as_ref()
+                    .unwrap()
+                    .to_lowercase()
+                    .contains("terminal")
+            );
         }
 
         #[test]
@@ -12856,9 +12930,11 @@ mod from_dialog_builtin_action_validation_tests_41 {
                 is_dir: false,
             };
             let actions = get_path_context_actions(&info);
-            assert!(actions
-                .iter()
-                .any(|a| a.id == "file:open_in_quick_terminal"));
+            assert!(
+                actions
+                    .iter()
+                    .any(|a| a.id == "file:open_in_quick_terminal")
+            );
         }
 
         #[test]
@@ -13041,12 +13117,13 @@ mod from_dialog_builtin_action_validation_tests_41 {
             info.is_script = false;
             let actions = get_script_context_actions(&info);
             let edit = actions.iter().find(|a| a.id == "edit_script").unwrap();
-            assert!(edit
-                .description
-                .as_ref()
-                .unwrap()
-                .to_lowercase()
-                .contains("agent"));
+            assert!(
+                edit.description
+                    .as_ref()
+                    .unwrap()
+                    .to_lowercase()
+                    .contains("agent")
+            );
         }
 
         #[test]
@@ -13065,12 +13142,14 @@ mod from_dialog_builtin_action_validation_tests_41 {
             info.is_script = false;
             let actions = get_script_context_actions(&info);
             let reveal = actions.iter().find(|a| a.id == "reveal_in_finder").unwrap();
-            assert!(reveal
-                .description
-                .as_ref()
-                .unwrap()
-                .to_lowercase()
-                .contains("agent"));
+            assert!(
+                reveal
+                    .description
+                    .as_ref()
+                    .unwrap()
+                    .to_lowercase()
+                    .contains("agent")
+            );
         }
 
         // =========================================================================
@@ -13220,12 +13299,14 @@ mod from_dialog_builtin_action_validation_tests_41 {
         fn ai_bar_delete_chat_desc_mentions_delete() {
             let actions = get_ai_command_bar_actions();
             let delete = actions.iter().find(|a| a.id == "chat:delete_chat").unwrap();
-            assert!(delete
-                .description
-                .as_ref()
-                .unwrap()
-                .to_lowercase()
-                .contains("delete"));
+            assert!(
+                delete
+                    .description
+                    .as_ref()
+                    .unwrap()
+                    .to_lowercase()
+                    .contains("delete")
+            );
         }
 
         // =========================================================================
@@ -13257,12 +13338,13 @@ mod from_dialog_builtin_action_validation_tests_41 {
         fn ai_bar_new_chat_desc_mentions_conversation() {
             let actions = get_ai_command_bar_actions();
             let nc = actions.iter().find(|a| a.id == "chat:new_chat").unwrap();
-            assert!(nc
-                .description
-                .as_ref()
-                .unwrap()
-                .to_lowercase()
-                .contains("conversation"));
+            assert!(
+                nc.description
+                    .as_ref()
+                    .unwrap()
+                    .to_lowercase()
+                    .contains("conversation")
+            );
         }
 
         // =========================================================================
@@ -13445,11 +13527,13 @@ mod from_dialog_builtin_action_validation_tests_41 {
                 .iter()
                 .find(|a| a.id == "chat:select_model_claude")
                 .unwrap();
-            assert!(model_action
-                .description
-                .as_ref()
-                .unwrap()
-                .contains("Anthropic"));
+            assert!(
+                model_action
+                    .description
+                    .as_ref()
+                    .unwrap()
+                    .contains("Anthropic")
+            );
         }
 
         // =========================================================================
@@ -13480,9 +13564,11 @@ mod from_dialog_builtin_action_validation_tests_41 {
             };
             let picker = get_chat_model_picker_actions(&info);
             // Picker only has model rows
-            assert!(picker
-                .iter()
-                .all(|a| a.id.starts_with("chat:select_model_")));
+            assert!(
+                picker
+                    .iter()
+                    .all(|a| a.id.starts_with("chat:select_model_"))
+            );
             assert!(picker.iter().any(|a| a.id == "chat:select_model_a"));
             assert!(picker.iter().any(|a| a.id == "chat:select_model_b"));
             // continue_in_chat is in the root context, not the picker
@@ -13983,9 +14069,11 @@ mod from_dialog_builtin_action_validation_tests_44 {
             frontmost_app_name: None,
         };
         let actions = get_clipboard_history_context_actions(&entry);
-        assert!(!actions
-            .iter()
-            .any(|a| a.id == "clip:clipboard_upload_cleanshot"));
+        assert!(
+            !actions
+                .iter()
+                .any(|a| a.id == "clip:clipboard_upload_cleanshot")
+        );
     }
 
     #[cfg(target_os = "macos")]
@@ -14130,12 +14218,13 @@ mod from_dialog_builtin_action_validation_tests_44 {
         };
         let actions = get_file_context_actions(&file);
         let ql = actions.iter().find(|a| a.id == "file:quick_look").unwrap();
-        assert!(ql
-            .description
-            .as_ref()
-            .unwrap()
-            .to_lowercase()
-            .contains("preview"));
+        assert!(
+            ql.description
+                .as_ref()
+                .unwrap()
+                .to_lowercase()
+                .contains("preview")
+        );
     }
 
     // =========== 8. File context: copy_path shortcut is ⌘⇧C ===========
@@ -14203,9 +14292,11 @@ mod from_dialog_builtin_action_validation_tests_44 {
             is_dir: false,
         };
         let actions = get_path_context_actions(&p);
-        assert!(actions
-            .iter()
-            .all(|a| a.category == ActionCategory::ScriptContext));
+        assert!(
+            actions
+                .iter()
+                .all(|a| a.category == ActionCategory::ScriptContext)
+        );
     }
 
     #[test]
@@ -14216,9 +14307,11 @@ mod from_dialog_builtin_action_validation_tests_44 {
             is_dir: true,
         };
         let actions = get_path_context_actions(&p);
-        assert!(actions
-            .iter()
-            .all(|a| a.category == ActionCategory::ScriptContext));
+        assert!(
+            actions
+                .iter()
+                .all(|a| a.category == ActionCategory::ScriptContext)
+        );
     }
 
     #[test]
@@ -14500,12 +14593,13 @@ mod from_dialog_builtin_action_validation_tests_44 {
             .iter()
             .find(|a| a.id == "chat:copy_last_code")
             .unwrap();
-        assert!(clc
-            .description
-            .as_ref()
-            .unwrap()
-            .to_lowercase()
-            .contains("code"));
+        assert!(
+            clc.description
+                .as_ref()
+                .unwrap()
+                .to_lowercase()
+                .contains("code")
+        );
     }
 
     // =========== 16. AI bar: submit action details ===========
@@ -14535,12 +14629,13 @@ mod from_dialog_builtin_action_validation_tests_44 {
     fn ai_bar_submit_desc_mentions_send() {
         let actions = get_ai_command_bar_actions();
         let sub = actions.iter().find(|a| a.id == "chat:submit").unwrap();
-        assert!(sub
-            .description
-            .as_ref()
-            .unwrap()
-            .to_lowercase()
-            .contains("send"));
+        assert!(
+            sub.description
+                .as_ref()
+                .unwrap()
+                .to_lowercase()
+                .contains("send")
+        );
     }
 
     // =========== 17. AI bar: export_markdown details ===========
@@ -15497,9 +15592,11 @@ mod from_dialog_builtin_action_validation_tests_45 {
             frontmost_app_name: None,
         };
         let actions = get_clipboard_history_context_actions(&entry);
-        assert!(actions
-            .iter()
-            .any(|a| a.id == "clip:clipboard_save_snippet"));
+        assert!(
+            actions
+                .iter()
+                .any(|a| a.id == "clip:clipboard_save_snippet")
+        );
         assert!(actions.iter().any(|a| a.id == "clip:clipboard_save_file"));
     }
 
@@ -15562,9 +15659,11 @@ mod from_dialog_builtin_action_validation_tests_45 {
         };
         let actions = get_clipboard_history_context_actions(&entry);
         assert!(actions.iter().any(|a| a.id == "clip:clipboard_delete"));
-        assert!(actions
-            .iter()
-            .any(|a| a.id == "clip:clipboard_delete_multiple"));
+        assert!(
+            actions
+                .iter()
+                .any(|a| a.id == "clip:clipboard_delete_multiple")
+        );
         assert!(actions.iter().any(|a| a.id == "clip:clipboard_delete_all"));
     }
 
@@ -15581,9 +15680,11 @@ mod from_dialog_builtin_action_validation_tests_45 {
             frontmost_app_name: None,
         };
         let actions = get_clipboard_history_context_actions(&entry);
-        assert!(actions
-            .iter()
-            .any(|a| a.id == "clip:clipboard_annotate_cleanshot"));
+        assert!(
+            actions
+                .iter()
+                .any(|a| a.id == "clip:clipboard_annotate_cleanshot")
+        );
     }
 
     #[test]
@@ -15597,9 +15698,11 @@ mod from_dialog_builtin_action_validation_tests_45 {
             frontmost_app_name: None,
         };
         let actions = get_clipboard_history_context_actions(&entry);
-        assert!(!actions
-            .iter()
-            .any(|a| a.id == "clip:clipboard_annotate_cleanshot"));
+        assert!(
+            !actions
+                .iter()
+                .any(|a| a.id == "clip:clipboard_annotate_cleanshot")
+        );
     }
 
     #[test]
@@ -15701,9 +15804,11 @@ mod from_dialog_builtin_action_validation_tests_45 {
             file_type: FileType::File,
         };
         let actions = get_file_context_actions(&file_info);
-        assert!(actions
-            .iter()
-            .all(|a| a.category == ActionCategory::ScriptContext));
+        assert!(
+            actions
+                .iter()
+                .all(|a| a.category == ActionCategory::ScriptContext)
+        );
     }
 
     #[test]
@@ -15715,9 +15820,11 @@ mod from_dialog_builtin_action_validation_tests_45 {
             file_type: FileType::Directory,
         };
         let actions = get_file_context_actions(&file_info);
-        assert!(actions
-            .iter()
-            .all(|a| a.category == ActionCategory::ScriptContext));
+        assert!(
+            actions
+                .iter()
+                .all(|a| a.category == ActionCategory::ScriptContext)
+        );
     }
 
     #[test]
@@ -15729,9 +15836,11 @@ mod from_dialog_builtin_action_validation_tests_45 {
             file_type: FileType::File,
         };
         let actions = get_file_context_actions(&file_info);
-        assert!(!actions
-            .iter()
-            .any(|a| a.category == ActionCategory::ScriptOps));
+        assert!(
+            !actions
+                .iter()
+                .any(|a| a.category == ActionCategory::ScriptOps)
+        );
     }
 
     #[test]
@@ -15743,9 +15852,11 @@ mod from_dialog_builtin_action_validation_tests_45 {
             file_type: FileType::File,
         };
         let actions = get_file_context_actions(&file_info);
-        assert!(!actions
-            .iter()
-            .any(|a| a.category == ActionCategory::GlobalOps));
+        assert!(
+            !actions
+                .iter()
+                .any(|a| a.category == ActionCategory::GlobalOps)
+        );
     }
 
     // =========== 11. Path context: primary at index 0 ===========
@@ -15839,9 +15950,11 @@ mod from_dialog_builtin_action_validation_tests_45 {
             is_dir: true,
         };
         let actions = get_path_context_actions(&path_info);
-        assert!(actions
-            .iter()
-            .any(|a| a.id == "file:open_in_quick_terminal"));
+        assert!(
+            actions
+                .iter()
+                .any(|a| a.id == "file:open_in_quick_terminal")
+        );
         assert!(actions.iter().any(|a| a.id == "file:move_to_trash"));
     }
 
@@ -15958,17 +16071,21 @@ mod from_dialog_builtin_action_validation_tests_45 {
     #[test]
     fn global_actions_no_script_context() {
         let actions = get_global_actions();
-        assert!(!actions
-            .iter()
-            .any(|a| a.category == ActionCategory::ScriptContext));
+        assert!(
+            !actions
+                .iter()
+                .any(|a| a.category == ActionCategory::ScriptContext)
+        );
     }
 
     #[test]
     fn global_actions_has_global_ops() {
         let actions = get_global_actions();
-        assert!(actions
-            .iter()
-            .any(|a| a.category == ActionCategory::GlobalOps));
+        assert!(
+            actions
+                .iter()
+                .any(|a| a.category == ActionCategory::GlobalOps)
+        );
     }
 
     // =========== 16. Scriptlet with_custom: None scriptlet → no has_action=true ===========
@@ -15991,9 +16108,11 @@ mod from_dialog_builtin_action_validation_tests_45 {
     fn scriptlet_with_custom_none_no_scriptlet_action_ids() {
         let s = ScriptInfo::scriptlet("My Scriptlet", "/s.md", None, None);
         let actions = get_scriptlet_context_actions_with_custom(&s, None);
-        assert!(!actions
-            .iter()
-            .any(|a| a.id.starts_with("scriptlet_action:")));
+        assert!(
+            !actions
+                .iter()
+                .any(|a| a.id.starts_with("scriptlet_action:"))
+        );
     }
 
     #[test]
@@ -16010,11 +16129,13 @@ mod from_dialog_builtin_action_validation_tests_45 {
         let s = ScriptInfo::scriptlet("My Scriptlet", "/s.md", None, None);
         let actions = get_scriptlet_context_actions_with_custom(&s, None);
         let action = actions.iter().find(|a| a.id == "copy_content").unwrap();
-        assert!(action
-            .description
-            .as_ref()
-            .unwrap()
-            .contains("entire file content"));
+        assert!(
+            action
+                .description
+                .as_ref()
+                .unwrap()
+                .contains("entire file content")
+        );
     }
 
     #[test]
@@ -16083,9 +16204,11 @@ mod from_dialog_builtin_action_validation_tests_45 {
             "echo hi".to_string(),
         );
         let actions = get_scriptlet_defined_actions(&scriptlet);
-        assert!(!actions
-            .iter()
-            .any(|a| a.id.starts_with("scriptlet_action:")));
+        assert!(
+            !actions
+                .iter()
+                .any(|a| a.id.starts_with("scriptlet_action:"))
+        );
     }
 
     // =========== 19. Scriptlet defined: action with description preserved ===========
@@ -16186,15 +16309,17 @@ mod from_dialog_builtin_action_validation_tests_45 {
     #[test]
     fn ai_bar_all_descriptions_non_empty() {
         let actions = get_ai_command_bar_actions();
-        assert!(actions
-            .iter()
-            .all(|a| !a.description.as_ref().unwrap().is_empty()));
+        assert!(
+            actions
+                .iter()
+                .all(|a| !a.description.as_ref().unwrap().is_empty())
+        );
     }
 
     #[test]
     fn ai_bar_count_is_12() {
         let actions = get_ai_command_bar_actions();
-        assert_eq!(actions.len(), 35);
+        assert_eq!(actions.len(), 38);
     }
 
     #[test]
@@ -16628,9 +16753,11 @@ mod from_dialog_builtin_action_validation_tests_45 {
             frontmost_app_name: None,
         };
         let actions = get_clipboard_history_context_actions(&entry);
-        assert!(!actions
-            .iter()
-            .any(|a| a.id == "clip:clipboard_annotate_cleanshot"));
+        assert!(
+            !actions
+                .iter()
+                .any(|a| a.id == "clip:clipboard_annotate_cleanshot")
+        );
     }
 
     #[test]
@@ -16644,9 +16771,11 @@ mod from_dialog_builtin_action_validation_tests_45 {
             frontmost_app_name: None,
         };
         let actions = get_clipboard_history_context_actions(&entry);
-        assert!(!actions
-            .iter()
-            .any(|a| a.id == "clip:clipboard_upload_cleanshot"));
+        assert!(
+            !actions
+                .iter()
+                .any(|a| a.id == "clip:clipboard_upload_cleanshot")
+        );
     }
 
     // =========== 28. Script: scriptlet vs with_custom share common actions ===========
@@ -16741,7 +16870,7 @@ mod from_dialog_builtin_action_validation_tests_46 {
 
     use crate::actions::builders::*;
     use crate::actions::dialog::{
-        build_grouped_items_static, coerce_action_selection, GroupedActionItem,
+        GroupedActionItem, build_grouped_items_static, coerce_action_selection,
     };
     use crate::actions::types::{Action, ActionCategory, ScriptInfo, SectionStyle};
     use crate::clipboard_history::ContentType;
@@ -16977,9 +17106,11 @@ mod from_dialog_builtin_action_validation_tests_46 {
             frontmost_app_name: None,
         };
         let actions = get_clipboard_history_context_actions(&entry);
-        assert!(actions
-            .iter()
-            .any(|a| a.id == "clip:clipboard_paste_keep_open"));
+        assert!(
+            actions
+                .iter()
+                .any(|a| a.id == "clip:clipboard_paste_keep_open")
+        );
     }
 
     // =========== 6. Clipboard: copy shortcut ⌘↵ ===========
@@ -17304,11 +17435,12 @@ mod from_dialog_builtin_action_validation_tests_46 {
         let s = ScriptInfo::builtin("Clipboard History");
         let actions = get_script_context_actions(&s);
         let dl = actions.iter().find(|a| a.id == "copy_deeplink").unwrap();
-        assert!(dl
-            .description
-            .as_ref()
-            .unwrap()
-            .contains("scriptkit://run/clipboard-history"));
+        assert!(
+            dl.description
+                .as_ref()
+                .unwrap()
+                .contains("scriptkit://run/clipboard-history")
+        );
     }
 
     // =========== 13. Script: reset_ranking has no shortcut ===========
