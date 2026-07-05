@@ -211,70 +211,123 @@ pub fn select_all_text_for_focused_text_fallback() -> Result<()> {
 #[cfg(target_os = "macos")]
 impl PasteboardSnapshot {
     fn capture() -> Result<Self> {
+        // Snapshotting the pasteboard is racy: another process (a clipboard
+        // manager, a browser, any app) can write the general pasteboard while
+        // we enumerate its items, which makes AppKit's mutation handler raise
+        // an Obj-C NSException mid-read. Left uncaught that aborts the whole
+        // process (observed twice in the wild via EXC_BREAKPOINT in
+        // `_updateTypeCacheIfNeeded`). We defend on two axes:
+        //   1. Run the raw msg_send enumeration inside `objc_exception::try`
+        //      so a concurrent-mutation NSException becomes a recoverable Err.
+        //   2. Bracket the read with `changeCount` and retry a bounded number
+        //      of times so we return a self-consistent snapshot rather than a
+        //      torn one.
+        const MAX_ATTEMPTS: usize = 4;
+        let mut last_err: Option<anyhow::Error> = None;
+
+        for _ in 0..MAX_ATTEMPTS {
+            let before = general_pasteboard_change_count()
+                .context("Failed to read clipboard change count before snapshot")?;
+
+            // SAFETY: every raw objc call runs inside `objc_exception::try`,
+            // which converts the "collection mutated while enumerated"
+            // NSException into `Err(exception_ptr)` instead of unwinding into
+            // Rust (which would abort). We never touch the returned pointer.
+            let caught = unsafe { objc_exception::r#try(|| Self::capture_items_unchecked()) };
+
+            let items = match caught {
+                Ok(Ok(items)) => items,
+                Ok(Err(read_err)) => return Err(read_err),
+                Err(_exception) => {
+                    last_err = Some(anyhow::anyhow!(
+                        "NSPasteboard was mutated during snapshot (Obj-C exception); retrying"
+                    ));
+                    std::thread::sleep(std::time::Duration::from_millis(8));
+                    continue;
+                }
+            };
+
+            let after = general_pasteboard_change_count()
+                .context("Failed to read clipboard change count after snapshot")?;
+            if after != before {
+                last_err = Some(anyhow::anyhow!(
+                    "clipboard changed during snapshot (change_count {before} -> {after}); retrying"
+                ));
+                std::thread::sleep(std::time::Duration::from_millis(8));
+                continue;
+            }
+
+            return Ok(Self {
+                items,
+                change_count: after,
+            });
+        }
+
+        Err(last_err
+            .unwrap_or_else(|| anyhow::anyhow!("failed to snapshot pasteboard"))
+            .context("Gave up snapshotting a stable clipboard after retries"))
+    }
+
+    /// Raw pasteboard enumeration. MUST only be called inside
+    /// `objc::exception::catch` (see `capture`): if the pasteboard is mutated
+    /// concurrently, AppKit raises an Obj-C exception here that would otherwise
+    /// abort the process.
+    unsafe fn capture_items_unchecked() -> Result<Vec<PasteboardItemSnapshot>> {
         use cocoa::appkit::NSPasteboard;
         use cocoa::base::{id, nil};
         use objc::{msg_send, sel, sel_impl};
 
-        unsafe {
-            let pasteboard: id = NSPasteboard::generalPasteboard(nil);
-            if pasteboard == nil {
-                bail!("NSPasteboard.generalPasteboard returned nil");
-            }
-            let change_count: i64 = msg_send![pasteboard, changeCount];
-            let items: id = msg_send![pasteboard, pasteboardItems];
-            if items == nil {
-                return Ok(Self {
-                    items: Vec::new(),
-                    change_count,
-                });
-            }
-
-            let item_count: usize = msg_send![items, count];
-            let mut snapshot_items = Vec::with_capacity(item_count);
-            for item_index in 0..item_count {
-                let item: id = msg_send![items, objectAtIndex: item_index];
-                if item == nil {
-                    bail!("NSPasteboard returned nil item while snapshotting");
-                }
-                let types: id = msg_send![item, types];
-                if types == nil {
-                    bail!("NSPasteboard item returned nil type list while snapshotting");
-                }
-
-                let type_count: usize = msg_send![types, count];
-                let mut representations = Vec::with_capacity(type_count);
-                for type_index in 0..type_count {
-                    let type_id: id = msg_send![types, objectAtIndex: type_index];
-                    if type_id == nil {
-                        bail!("NSPasteboard item returned nil type while snapshotting");
-                    }
-                    let type_name = nsstring_to_string(type_id)
-                        .context("Failed to read NSPasteboard type name while snapshotting")?;
-                    let data: id = msg_send![item, dataForType: type_id];
-                    if data == nil {
-                        bail!("NSPasteboard item data was unavailable while snapshotting");
-                    }
-
-                    let byte_len: usize = msg_send![data, length];
-                    let bytes_ptr: *const u8 = msg_send![data, bytes];
-                    let data = if byte_len == 0 {
-                        Vec::new()
-                    } else {
-                        if bytes_ptr.is_null() {
-                            bail!("NSPasteboard item data pointer was nil while snapshotting");
-                        }
-                        std::slice::from_raw_parts(bytes_ptr, byte_len).to_vec()
-                    };
-                    representations.push(PasteboardRepresentation { type_name, data });
-                }
-                snapshot_items.push(PasteboardItemSnapshot { representations });
-            }
-
-            Ok(Self {
-                items: snapshot_items,
-                change_count,
-            })
+        let pasteboard: id = NSPasteboard::generalPasteboard(nil);
+        if pasteboard == nil {
+            bail!("NSPasteboard.generalPasteboard returned nil");
         }
+        let items: id = msg_send![pasteboard, pasteboardItems];
+        if items == nil {
+            return Ok(Vec::new());
+        }
+
+        let item_count: usize = msg_send![items, count];
+        let mut snapshot_items = Vec::with_capacity(item_count);
+        for item_index in 0..item_count {
+            let item: id = msg_send![items, objectAtIndex: item_index];
+            if item == nil {
+                bail!("NSPasteboard returned nil item while snapshotting");
+            }
+            let types: id = msg_send![item, types];
+            if types == nil {
+                bail!("NSPasteboard item returned nil type list while snapshotting");
+            }
+
+            let type_count: usize = msg_send![types, count];
+            let mut representations = Vec::with_capacity(type_count);
+            for type_index in 0..type_count {
+                let type_id: id = msg_send![types, objectAtIndex: type_index];
+                if type_id == nil {
+                    bail!("NSPasteboard item returned nil type while snapshotting");
+                }
+                let type_name = nsstring_to_string(type_id)
+                    .context("Failed to read NSPasteboard type name while snapshotting")?;
+                let data: id = msg_send![item, dataForType: type_id];
+                if data == nil {
+                    bail!("NSPasteboard item data was unavailable while snapshotting");
+                }
+
+                let byte_len: usize = msg_send![data, length];
+                let bytes_ptr: *const u8 = msg_send![data, bytes];
+                let data = if byte_len == 0 {
+                    Vec::new()
+                } else {
+                    if bytes_ptr.is_null() {
+                        bail!("NSPasteboard item data pointer was nil while snapshotting");
+                    }
+                    std::slice::from_raw_parts(bytes_ptr, byte_len).to_vec()
+                };
+                representations.push(PasteboardRepresentation { type_name, data });
+            }
+            snapshot_items.push(PasteboardItemSnapshot { representations });
+        }
+
+        Ok(snapshot_items)
     }
 
     fn restore(&self) -> Result<()> {

@@ -7924,6 +7924,7 @@ dependencies = [
  "notify-rust",
  "nucleo-matcher",
  "objc",
+ "objc_exception",
  "open",
  "parking_lot",
  "portable-pty",
