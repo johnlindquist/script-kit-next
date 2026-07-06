@@ -336,15 +336,8 @@ mod tests {
             builtin("Zed Command", BuiltInGroup::Core, score_from_tier(900, 10)),
         ];
 
-        let (_grouped, sorted_results) = build_search_mode_results(
-            results,
-            &[],
-            &FrecencyStore::new(),
-            "z",
-            None,
-            None,
-            true,
-        );
+        let (_grouped, sorted_results) =
+            build_search_mode_results(results, &[], &FrecencyStore::new(), "z", None, None, true);
 
         assert_eq!(sorted_results[0].name(), "Zed Command");
         assert_eq!(sorted_results[1].name(), "Alpha");

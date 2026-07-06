@@ -1519,8 +1519,11 @@ fn render_live_transcript_line(
 ) -> AnyElement {
     let theme = get_cached_theme();
     let color = theme.colors.text.primary.with_opacity(OPACITY_ACTIVE);
-    let (stable, fresh) =
-        transcript_preview_spans(transcript.as_ref(), fresh_from, TRANSCRIPT_PREVIEW_MAX_CHARS);
+    let (stable, fresh) = transcript_preview_spans(
+        transcript.as_ref(),
+        fresh_from,
+        TRANSCRIPT_PREVIEW_MAX_CHARS,
+    );
     let mut line = div()
         .flex_1()
         .flex()
@@ -1724,7 +1727,11 @@ fn dictation_native_footer_config(
         ],
         DictationSessionPhase::Confirming => vec![
             FooterButtonConfig::new(FooterAction::Stop, ENTER_KEYCAP, ACTION_STOP_LABEL),
-            FooterButtonConfig::new(FooterAction::Actions, BACKSPACE_KEYCAP, ACTION_DISCARD_LABEL),
+            FooterButtonConfig::new(
+                FooterAction::Actions,
+                BACKSPACE_KEYCAP,
+                ACTION_DISCARD_LABEL,
+            ),
             FooterButtonConfig::new(FooterAction::Close, ESC_KEYCAP, ACTION_CONTINUE_LABEL),
         ],
         DictationSessionPhase::Idle => Vec::new(),

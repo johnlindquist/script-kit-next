@@ -1,10 +1,9 @@
 use std::sync::{Mutex, OnceLock};
 
 use gpui::{
-    div, AnyElement, AnyWindowHandle, App, AppContext, Bounds, Context,
-    DisplayId, FocusHandle, Focusable, InteractiveElement, IntoElement, KeyDownEvent,
-    ParentElement, Pixels, Render, SharedString, StatefulInteractiveElement, Styled, WeakEntity,
-    Window, WindowHandle,
+    div, AnyElement, AnyWindowHandle, App, AppContext, Bounds, Context, DisplayId, FocusHandle,
+    Focusable, InteractiveElement, IntoElement, KeyDownEvent, ParentElement, Pixels, Render,
+    SharedString, StatefulInteractiveElement, Styled, WeakEntity, Window, WindowHandle,
 };
 
 use crate::components::inline_dropdown::{
@@ -12,9 +11,9 @@ use crate::components::inline_dropdown::{
     InlineDropdownColors, SOFT_COMPACT_PICKER_ROW_HEIGHT,
 };
 use crate::components::inline_popup_window::{
-    configure_inline_popup_window, inline_popup_height_for_row_height,
-    inline_popup_window_options, set_inline_popup_window_bounds, INLINE_POPUP_EDGE_GUTTER,
-    INLINE_POPUP_MAX_VISIBLE_ROWS, INLINE_POPUP_VERTICAL_PADDING,
+    configure_inline_popup_window, inline_popup_height_for_row_height, inline_popup_window_options,
+    set_inline_popup_window_bounds, INLINE_POPUP_EDGE_GUTTER, INLINE_POPUP_MAX_VISIBLE_ROWS,
+    INLINE_POPUP_VERTICAL_PADDING,
 };
 
 use super::{

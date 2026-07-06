@@ -33,15 +33,15 @@ pub(crate) fn highlight_indices_for(query: &str, haystack: &str) -> (bool, Vec<u
     let mut ctx = highlight::SearchHighlightMatchCtx::new(query);
     ctx.indices_for(haystack)
 }
+pub(crate) use match_contract::query_meets_min_query_chars;
 pub use nucleo::NucleoCtx;
 pub use scriptlets::fuzzy_search_scriptlets;
 pub use scripts::fuzzy_search_scripts;
 pub use skills::fuzzy_search_skills;
+pub(crate) use unified::result_type_order;
 pub use unified::{
     fuzzy_search_unified, fuzzy_search_unified_all, fuzzy_search_unified_all_with_skills,
 };
-pub(crate) use match_contract::query_meets_min_query_chars;
-pub(crate) use unified::result_type_order;
 #[cfg(test)]
 pub use unified::{fuzzy_search_unified_with_builtins, fuzzy_search_unified_with_windows};
 pub use windows::{fuzzy_search_root_windows, fuzzy_search_windows};

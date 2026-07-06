@@ -268,7 +268,10 @@ mod tests {
     fn cwd_rows_omit_current_when_no_current_cwd_is_available() {
         let rows = build_cwd_root_rows("", 0, 0..1, CwdRootRowsParams::default());
 
-        assert_eq!(rows.first().map(|row| row.title.as_ref()), Some("Script Kit"));
+        assert_eq!(
+            rows.first().map(|row| row.title.as_ref()),
+            Some("Script Kit")
+        );
         assert!(!titles(&rows).iter().any(|title| title == "Current"));
     }
 
@@ -290,7 +293,10 @@ mod tests {
             section.subtitle.as_ref().map(|value| value.as_ref()),
             Some("Where this chat reads and writes files and runs commands")
         );
-        assert_eq!(section.rows.first().map(|row| row.title.as_ref()), Some("Current"));
+        assert_eq!(
+            section.rows.first().map(|row| row.title.as_ref()),
+            Some("Current")
+        );
     }
 
     #[test]
@@ -313,7 +319,10 @@ mod tests {
         );
         assert!(rows[0].score > rows[1].score);
         assert!(rows[1].score > rows[2].score);
-        assert_eq!(rows[1].icon.as_ref().map(|icon| icon.as_ref()), Some("clock"));
+        assert_eq!(
+            rows[1].icon.as_ref().map(|icon| icon.as_ref()),
+            Some("clock")
+        );
     }
 
     #[test]
@@ -338,11 +347,17 @@ mod tests {
 
         let row_titles = titles(&rows);
         assert_eq!(
-            row_titles.iter().filter(|title| title.as_str() == "kept").count(),
+            row_titles
+                .iter()
+                .filter(|title| title.as_str() == "kept")
+                .count(),
             1
         );
         assert_eq!(
-            row_titles.iter().filter(|title| title.as_str() == "Home").count(),
+            row_titles
+                .iter()
+                .filter(|title| title.as_str() == "Home")
+                .count(),
             1
         );
     }

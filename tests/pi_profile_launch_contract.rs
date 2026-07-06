@@ -8,9 +8,9 @@ use script_kit_gpui::ai::agent_chat::profiles::{
     agent_chat_profile_picker_entries, persist_agent_chat_profile_selection,
     resolve_effective_profile, selected_agent_chat_profile_picker_id, AgentChatProfileContext,
     AgentChatProfileSource, BUILTIN_BRAIN_PROFILE_ID, BUILTIN_GENERAL_PROFILE_ID,
-    BUILTIN_SCRIPT_KIT_PROFILE_ID,
-    BUILTIN_TEXT_PROFILE_ID, DEFAULT_PI_MODEL, DEFAULT_PI_PROVIDER, GENERAL_PI_TOOLS,
-    SCRIPT_KIT_PI_TOOLS, TEXT_APPEND_SYSTEM_PROMPT, TEXT_BLOCKED_ACTION_MESSAGE, TEXT_PI_MODEL,
+    BUILTIN_SCRIPT_KIT_PROFILE_ID, BUILTIN_TEXT_PROFILE_ID, DEFAULT_PI_MODEL, DEFAULT_PI_PROVIDER,
+    GENERAL_PI_TOOLS, SCRIPT_KIT_PI_TOOLS, TEXT_APPEND_SYSTEM_PROMPT, TEXT_BLOCKED_ACTION_MESSAGE,
+    TEXT_PI_MODEL,
 };
 use script_kit_gpui::config::{AgentChatBackend, AgentChatProfile, AiPreferences};
 

@@ -1465,8 +1465,7 @@ static DICTATION_HOTKEY_CHANNEL: LazyLock<(
 /// recording and the key is held at least this long, releasing it stops and
 /// transcribes.  A quicker tap keeps classic toggle behavior (press again to
 /// stop).
-const DICTATION_PUSH_TO_TALK_MIN_HOLD: std::time::Duration =
-    std::time::Duration::from_millis(500);
+const DICTATION_PUSH_TO_TALK_MIN_HOLD: std::time::Duration = std::time::Duration::from_millis(500);
 
 /// Instant of the dictation hotkey press that started the current recording.
 /// `None` when the last press was a stop-edge (or no press happened yet), so

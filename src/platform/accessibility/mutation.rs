@@ -300,11 +300,10 @@ mod in_memory_target_tests {
 
     #[test]
     fn selection_paste_snapshot_replaces_but_never_appends() {
-        let snapshot =
-            super::super::focused_text::focused_text_snapshot_for_selection_paste(
-                "picked in Chrome".to_string(),
-                Some("Google Chrome".to_string()),
-            );
+        let snapshot = super::super::focused_text::focused_text_snapshot_for_selection_paste(
+            "picked in Chrome".to_string(),
+            Some("Google Chrome".to_string()),
+        );
         assert!(snapshot.capabilities.can_replace);
         assert!(
             !snapshot.capabilities.can_append,

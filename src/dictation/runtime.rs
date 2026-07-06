@@ -7,8 +7,8 @@ use crate::dictation::transcription::{
 };
 use crate::dictation::types::{
     CapturedAudioChunk, CompletedDictationCapture, DictationCaptureConfig, DictationCaptureEvent,
-    DictationDeviceInfo, DictationModelStatus, DictationSessionPhase,
-    DictationTarget, DictationToggleOutcome,
+    DictationDeviceInfo, DictationModelStatus, DictationSessionPhase, DictationTarget,
+    DictationToggleOutcome,
 };
 use crate::dictation::visualizer::silent_bars;
 use crate::dictation::window::DictationOverlayState;
@@ -125,8 +125,7 @@ static SESSION_GENERATION: AtomicU64 = AtomicU64::new(0);
 
 /// `true` while a partial transcription inference is running on its worker
 /// thread — prevents overlapping inferences.
-static PARTIAL_INFLIGHT: std::sync::atomic::AtomicBool =
-    std::sync::atomic::AtomicBool::new(false);
+static PARTIAL_INFLIGHT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 /// Latest partial transcript, tagged with the session generation it belongs
 /// to so a stale result from a previous session is never displayed.

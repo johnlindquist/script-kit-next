@@ -460,7 +460,8 @@ mod tests {
             .into_iter()
             .map(|profile| profile.id)
             .collect();
-        assert!(!ids.contains(&crate::ai::agent_chat::profiles::BUILTIN_QUICK_AI_PROFILE_ID.to_string()));
+        assert!(!ids
+            .contains(&crate::ai::agent_chat::profiles::BUILTIN_QUICK_AI_PROFILE_ID.to_string()));
     }
 
     #[test]

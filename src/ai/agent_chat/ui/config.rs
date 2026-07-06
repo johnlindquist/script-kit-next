@@ -1609,11 +1609,7 @@ mod tests {
                 Some(default),
             ));
         }
-        assert!(file.push_recent_for_profile(
-            "general",
-            PathBuf::from("/tmp/six"),
-            Some(default),
-        ));
+        assert!(file.push_recent_for_profile("general", PathBuf::from("/tmp/six"), Some(default),));
         assert!(file.push_recent_for_profile(
             "general",
             PathBuf::from("/tmp/three"),

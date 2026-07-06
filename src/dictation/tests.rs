@@ -645,10 +645,8 @@ fn dictation_model_catalog_marks_only_parakeet_recommended() {
         .iter()
         .any(|entry| entry.description
             == "Fast and accurate. Auto-detects 25 European languages (ignores the language setting)."));
-    assert!(catalog
-        .iter()
-        .any(|entry| entry.description
-            == "Broadest language coverage and honors the language setting, but may run a bit slow."));
+    assert!(catalog.iter().any(|entry| entry.description
+        == "Broadest language coverage and honors the language setting, but may run a bit slow."));
 }
 
 #[test]
@@ -2835,7 +2833,8 @@ fn builtin_dictation_overlay_transitions_are_ordered_correctly() {
         "handler must render a brief Finished confirmation before the overlay closes"
     );
     assert!(
-        handler_src.contains("schedule_dictation_overlay_close(cx, Self::DICTATION_FINISHED_LINGER)"),
+        handler_src
+            .contains("schedule_dictation_overlay_close(cx, Self::DICTATION_FINISHED_LINGER)"),
         "handler must schedule the overlay close after the Finished linger"
     );
 
@@ -5287,12 +5286,18 @@ fn transcript_preview_tail_keeps_short_text_verbatim() {
 fn transcript_preview_tail_keeps_freshest_tail_with_ellipsis() {
     let text = "a".repeat(50) + " the freshest tail of the dictation";
     let preview = super::window::transcript_preview_tail(&text, 20);
-    assert!(preview.starts_with('\u{2026}'), "long text must lead with an ellipsis");
+    assert!(
+        preview.starts_with('\u{2026}'),
+        "long text must lead with an ellipsis"
+    );
     assert!(
         preview.ends_with("of the dictation"),
         "preview must keep the newest words, got: {preview}"
     );
-    assert!(preview.chars().count() <= 21, "preview must respect max chars + ellipsis");
+    assert!(
+        preview.chars().count() <= 21,
+        "preview must respect max chars + ellipsis"
+    );
 }
 
 #[test]
@@ -5357,7 +5362,10 @@ fn transcript_preview_spans_splits_at_fresh_boundary() {
     let total = long.chars().count();
     let (stable, fresh) = transcript_preview_spans(&long, total - 5, 10);
     assert_eq!(fresh.as_ref(), "words");
-    assert!(stable.ends_with("tail "), "stable keeps visible prefix, got: {stable}");
+    assert!(
+        stable.ends_with("tail "),
+        "stable keeps visible prefix, got: {stable}"
+    );
 }
 
 #[test]
@@ -5389,8 +5397,16 @@ fn dictation_preferences_clamp_and_disable_rules() {
         ..Default::default()
     };
     assert!(!prefs.save_history_enabled());
-    assert_eq!(prefs.silence_rms_threshold(), 0.5, "silence gate clamps to 0.5");
-    assert_eq!(prefs.max_duration(), None, "0 disables the max-duration guard");
+    assert_eq!(
+        prefs.silence_rms_threshold(),
+        0.5,
+        "silence gate clamps to 0.5"
+    );
+    assert_eq!(
+        prefs.max_duration(),
+        None,
+        "0 disables the max-duration guard"
+    );
     assert!(!prefs.live_preview_enabled());
     assert!(!prefs.push_to_talk_enabled());
 
@@ -5428,7 +5444,10 @@ fn dictation_target_destination_mapping_is_exhaustive_and_stable() {
             DictationTarget::MainWindowPrompt,
             DictationDestination::ActivePrompt,
         ),
-        (DictationTarget::NotesEditor, DictationDestination::NotesEditor),
+        (
+            DictationTarget::NotesEditor,
+            DictationDestination::NotesEditor,
+        ),
         (
             DictationTarget::AiChatComposer,
             DictationDestination::AiChatComposer,
@@ -5437,7 +5456,10 @@ fn dictation_target_destination_mapping_is_exhaustive_and_stable() {
             DictationTarget::TabAiHarness,
             DictationDestination::TabAiHarness,
         ),
-        (DictationTarget::ExternalApp, DictationDestination::FrontmostApp),
+        (
+            DictationTarget::ExternalApp,
+            DictationDestination::FrontmostApp,
+        ),
     ];
     for (target, destination) in cases {
         assert_eq!(target.destination(), destination);

@@ -152,10 +152,7 @@ pub(crate) fn root_ai_vault_query_is_eligible(
     let query = query.trim();
     options.enabled
         && (query.is_empty()
-            || crate::scripts::search::query_meets_min_query_chars(
-                query,
-                options.min_query_chars,
-            ))
+            || crate::scripts::search::query_meets_min_query_chars(query, options.min_query_chars))
 }
 
 pub(crate) fn search_root_ai_vault_direct(

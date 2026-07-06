@@ -55,8 +55,8 @@ pub(crate) use catalog::{
     AgentChatAgentSource,
 };
 pub(crate) use config::{
-    claude_code_agent_config_cached, ensure_agent_chat_agents_catalog_seeded,
-    agent_chat_cwd_recents_for_profile, load_agent_chat_agent_catalog_entries,
+    agent_chat_cwd_recents_for_profile, claude_code_agent_config_cached,
+    ensure_agent_chat_agents_catalog_seeded, load_agent_chat_agent_catalog_entries,
     load_agent_chat_agent_configs, load_agent_chat_agent_runtime_states,
     open_agent_chat_agents_catalog_in_editor, persist_agent_chat_agent_runtime_state,
     prewarm_agent_config, record_agent_chat_cwd_recent,

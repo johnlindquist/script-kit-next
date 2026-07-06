@@ -2451,7 +2451,11 @@ pub fn render_section_header_with_subtitle(
     }; // Later headers stay bottom-anchored between rows.
 
     // No separator lines — spacing alone defines groups per whisper-chrome spec
-    let mut stack = div().flex().flex_col().gap(px(metrics.section_gap)).child(content);
+    let mut stack = div()
+        .flex()
+        .flex_col()
+        .gap(px(metrics.section_gap))
+        .child(content);
     if let Some(subtitle) = subtitle_text {
         stack = stack.child(
             div()
