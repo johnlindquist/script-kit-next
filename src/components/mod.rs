@@ -50,6 +50,7 @@ pub(crate) mod overlay_modal;
 pub mod prompt_container;
 pub mod prompt_footer;
 pub mod prompt_layout_shell;
+pub(crate) mod resource_preview;
 pub mod scrollbar;
 pub mod section_divider;
 pub mod shortcut_recorder;

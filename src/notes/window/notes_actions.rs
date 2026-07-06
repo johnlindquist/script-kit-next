@@ -182,6 +182,42 @@ impl NotesApp {
         }
     }
 
+    /// The editable source note behind the open kit resource preview, when
+    /// the previewed URI is `kit://notes/{id}` and that note still exists.
+    pub(super) fn kit_resource_preview_note_source(&self) -> Option<NoteId> {
+        let preview = self.kit_resource_preview.as_ref()?;
+        let note_id = crate::notes::deeplink_activation::kit_note_source_id(&preview.uri)?;
+        crate::notes::get_note(note_id)
+            .ok()
+            .flatten()
+            .is_some()
+            .then_some(note_id)
+    }
+
+    pub(super) fn copy_kit_resource_preview_uri(&mut self, cx: &mut Context<Self>) {
+        let Some(preview) = self.kit_resource_preview.as_ref() else {
+            return;
+        };
+        cx.write_to_clipboard(gpui::ClipboardItem::new_string(preview.uri.clone()));
+        self.show_action_feedback("Copied resource URI", false);
+        cx.notify();
+    }
+
+    /// Preview → edit: close the preview and open its source note in the
+    /// editor. Returns false when the previewed resource has no source note.
+    pub(super) fn open_kit_resource_preview_source(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let Some(note_id) = self.kit_resource_preview_note_source() else {
+            return false;
+        };
+        self.close_kit_resource_preview(window, cx);
+        self.open_note_deeplink(note_id, window, cx);
+        true
+    }
+
     fn open_external_deeplink_url(
         &mut self,
         href: String,

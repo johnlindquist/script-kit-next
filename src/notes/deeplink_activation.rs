@@ -128,7 +128,7 @@ pub(crate) fn resolve_activation(href: &str, surface: ActivationSurface) -> Acti
 pub(crate) fn read_cheap_kit_resource_preview(uri: &str) -> Result<KitResourcePreview, String> {
     if !is_cheap_text_kit_resource_uri(uri) {
         return Err(format!(
-            "Resource preview supports kit://notes, kit://scripts, and kit://clipboard-history in this slice: {uri}"
+            "Resource preview supports kit://notes, kit://scripts, kit://clipboard-history, and kit://dictation-history in this slice: {uri}"
         ));
     }
 
@@ -162,6 +162,16 @@ pub(crate) fn read_cheap_kit_resource_preview(uri: &str) -> Result<KitResourcePr
     })
 }
 
+/// Parse the note id out of a `kit://notes/{id}` resource URI.
+///
+/// Shared by the Day Page and Notes window previews so both surfaces agree
+/// on which previewed resources have an editable source note.
+pub(crate) fn kit_note_source_id(uri: &str) -> Option<crate::notes::NoteId> {
+    let rest = uri.strip_prefix("kit://notes/")?;
+    let id = rest.split(['?', '#']).next().unwrap_or_default();
+    crate::notes::NoteId::parse(id)
+}
+
 fn is_cheap_text_kit_resource_uri(uri: &str) -> bool {
     uri == "kit://notes"
         || uri.starts_with("kit://notes?")
@@ -169,6 +179,8 @@ fn is_cheap_text_kit_resource_uri(uri: &str) -> bool {
         || uri == "kit://scripts"
         || uri == "kit://clipboard-history"
         || uri.starts_with("kit://clipboard-history?")
+        || uri == "kit://dictation-history"
+        || uri.starts_with("kit://dictation-history?")
 }
 
 fn kit_resource_preview_title(uri: &str) -> String {
@@ -178,6 +190,8 @@ fn kit_resource_preview_title(uri: &str) -> String {
         "Scripts resource preview".to_string()
     } else if uri.starts_with("kit://clipboard-history") {
         "Clipboard history resource preview".to_string()
+    } else if uri.starts_with("kit://dictation-history") {
+        "Dictation history resource preview".to_string()
     } else {
         "Script Kit resource preview".to_string()
     }
@@ -492,8 +506,32 @@ mod tests {
         assert!(is_cheap_text_kit_resource_uri(
             "kit://clipboard-history?id=abc"
         ));
+        assert!(is_cheap_text_kit_resource_uri("kit://dictation-history"));
+        assert!(is_cheap_text_kit_resource_uri(
+            "kit://dictation-history?id=abc"
+        ));
         assert!(!is_cheap_text_kit_resource_uri("kit://context"));
         assert!(!is_cheap_text_kit_resource_uri("kit://git-diff"));
+    }
+
+    #[test]
+    fn kit_note_source_id_parses_only_single_note_uris() {
+        let id = "35dfb389-4931-4d80-b079-4fa74f738ce7";
+        let parsed = kit_note_source_id(&format!("kit://notes/{id}")).expect("valid note uri");
+        assert_eq!(parsed.as_str(), id);
+        assert_eq!(
+            kit_note_source_id(&format!("kit://notes/{id}?x=1")).expect("query stripped"),
+            parsed
+        );
+        assert_eq!(
+            kit_note_source_id(&format!("kit://notes/{id}#frag")).expect("fragment stripped"),
+            parsed
+        );
+        assert!(kit_note_source_id("kit://notes").is_none());
+        assert!(kit_note_source_id("kit://notes?limit=1").is_none());
+        assert!(kit_note_source_id("kit://notes/not-a-uuid").is_none());
+        assert!(kit_note_source_id("kit://scripts").is_none());
+        assert!(kit_note_source_id("kit://clipboard-history?id=abc").is_none());
     }
 
     #[test]

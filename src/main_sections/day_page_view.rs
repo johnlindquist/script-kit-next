@@ -14,9 +14,6 @@ use script_kit_gpui::day_page::{
     parse_day_page_segments, resolve_fragment_path, DayPageBinding, DayPageSegment,
 };
 
-const DAY_PAGE_KIT_PREVIEW_MUTED_OPACITY: f32 = 0.72;
-const DAY_PAGE_KIT_PREVIEW_BORDER_OPACITY: f32 = 0.2;
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum DayPageKitResourceSourceTarget {
     Note(crate::notes::NoteId),
@@ -41,9 +38,8 @@ fn day_page_kit_resource_source_target_for_uri(
         );
     }
 
-    if let Some(rest) = uri.strip_prefix("kit://notes/") {
-        let id = rest.split(['?', '#']).next().unwrap_or_default();
-        let Some(note_id) = crate::notes::NoteId::parse(id) else {
+    if uri.starts_with("kit://notes/") {
+        let Some(note_id) = crate::notes::deeplink_activation::kit_note_source_id(uri) else {
             return (
                 None,
                 Some("This notes resource URI does not include a valid note id.".to_string()),
@@ -67,6 +63,16 @@ fn day_page_kit_resource_source_target_for_uri(
             None,
             Some(
                 "Clipboard history previews do not have an editable source in this slice."
+                    .to_string(),
+            ),
+        );
+    }
+
+    if uri.starts_with("kit://dictation-history") {
+        return (
+            None,
+            Some(
+                "Dictation history previews do not have an editable source in this slice."
                     .to_string(),
             ),
         );
@@ -942,174 +948,117 @@ impl DayPageView {
     }
 
     fn render_kit_resource_preview(&self, cx: &mut Context<Self>) -> AnyElement {
+        use crate::components::hint_strip::ClickableHint;
+        use crate::components::resource_preview::{
+            render_resource_preview, ResourcePreviewAction, ResourcePreviewSurface,
+        };
+
         let Some(preview) = self.kit_resource_preview.as_ref() else {
             return div().into_any_element();
         };
-
-        let title = preview.title.clone();
-        let uri = preview.uri.clone();
-        let mime_type = preview.mime_type.clone();
-        let text = preview.text.clone();
-        let truncated = preview.truncated;
         let availability = self
             .kit_resource_preview_action_availability()
             .expect("preview action availability exists when preview is open");
 
-        div()
-            .id("day-page-kit-resource-preview")
-            .flex_1()
-            .min_h(px(0.))
-            .flex()
-            .flex_col()
-            .gap_3()
-            .py_2()
-            .child(
-                div()
-                    .flex()
-                    .items_start()
-                    .justify_between()
-                    .gap_3()
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_w(px(0.))
-                            .flex()
-                            .flex_col()
-                            .gap_1()
-                            .child(
-                                div()
-                                    .id("day-page-kit-resource-preview-title")
-                                    .text_sm()
-                                    .font_weight(FontWeight::SEMIBOLD)
-                                    .child(title),
-                            )
-                            .child(
-                                div()
-                                    .id("day-page-kit-resource-preview-uri")
-                                    .text_xs()
-                                    .text_color(cx.theme().muted_foreground)
-                                    .child(uri),
-                            )
-                            .child(
-                                div()
-                                    .id("day-page-kit-resource-preview-meta")
-                                    .text_xs()
-                                    .text_color(
-                                        cx.theme()
-                                            .muted_foreground
-                                            .opacity(DAY_PAGE_KIT_PREVIEW_MUTED_OPACITY),
-                                    )
-                                    .child(format!(
-                                        "{mime_type} · read-only{}",
-                                        if truncated { " · truncated" } else { "" }
-                                    )),
-                            ),
-                    )
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap_2()
-                            .when(availability.can_add_to_agent_chat, |parent| {
-                                parent.child(
-                                    div()
-                                        .id("day-page-kit-resource-preview-add-agent-chat")
-                                        .text_xs()
-                                        .text_color(cx.theme().accent)
-                                        .cursor_pointer()
-                                        .hover(|s| s.text_color(cx.theme().foreground))
-                                        .on_click(cx.listener(|this, _, window, cx| {
-                                            this.execute_day_page_action_from_preview(
-                                                crate::DAY_PAGE_PREVIEW_ADD_TO_AGENT_CHAT_ACTION_ID,
-                                                window,
-                                                cx,
-                                            );
-                                        }))
-                                        .child("Add to Agent Chat"),
-                                )
-                            })
-                            .child(
-                                div()
-                                    .id("day-page-kit-resource-preview-copy-uri")
-                                    .text_xs()
-                                    .text_color(cx.theme().accent)
-                                    .cursor_pointer()
-                                    .hover(|s| s.text_color(cx.theme().foreground))
-                                    .on_click(cx.listener(|this, _, window, cx| {
-                                        this.execute_day_page_action_from_preview(
-                                            crate::DAY_PAGE_PREVIEW_COPY_URI_ACTION_ID,
-                                            window,
-                                            cx,
-                                        );
-                                    }))
-                                    .child("Copy URI"),
-                            )
-                            .when(availability.open_source_target.is_some(), |parent| {
-                                parent.child(
-                                    div()
-                                        .id("day-page-kit-resource-preview-open-source")
-                                        .text_xs()
-                                        .text_color(cx.theme().accent)
-                                        .cursor_pointer()
-                                        .hover(|s| s.text_color(cx.theme().foreground))
-                                        .on_click(cx.listener(|this, _, window, cx| {
-                                            this.execute_day_page_action_from_preview(
-                                                crate::DAY_PAGE_PREVIEW_OPEN_SOURCE_ACTION_ID,
-                                                window,
-                                                cx,
-                                            );
-                                        }))
-                                        .child("Open Source"),
-                                )
-                            })
-                            .child(
-                                div()
-                                    .id("day-page-kit-resource-preview-close")
-                                    .text_xs()
-                                    .text_color(cx.theme().muted_foreground)
-                                    .cursor_pointer()
-                                    .hover(|s| s.text_color(cx.theme().foreground))
-                                    .on_click(cx.listener(|this, _, window, cx| {
-                                        this.execute_day_page_action_from_preview(
-                                            crate::DAY_PAGE_PREVIEW_CLOSE_ACTION_ID,
-                                            window,
-                                            cx,
-                                        );
-                                    }))
-                                    .child("Close Preview"),
-                            ),
-                    ),
+        let preview_action = |cx: &mut Context<Self>,
+                              id: &'static str,
+                              label: &'static str,
+                              muted: bool,
+                              action_id: &'static str| {
+            ResourcePreviewAction {
+                id: id.into(),
+                label: label.into(),
+                muted,
+                on_click: std::rc::Rc::new(cx.listener(move |this, _, window, cx| {
+                    this.execute_day_page_action_from_preview(action_id, window, cx);
+                })),
+            }
+        };
+        let preview_hint = |cx: &mut Context<Self>, label: &'static str, action_id: &'static str| {
+            ClickableHint::new(
+                label,
+                cx.listener(move |this, _, window, cx| {
+                    this.execute_day_page_action_from_preview(action_id, window, cx);
+                }),
             )
-            .child(
-                div()
-                    .id("day-page-kit-resource-preview-body")
-                    .flex_1()
-                    .min_h(px(0.))
-                    .overflow_y_scroll()
-                    .rounded(px(6.))
-                    .border_1()
-                    .border_color(
-                        cx.theme()
-                            .border
-                            .opacity(DAY_PAGE_KIT_PREVIEW_BORDER_OPACITY),
-                    )
-                    .p_3()
-                    .text_xs()
-                    .font_family(FONT_MONO)
-                    .text_color(cx.theme().foreground)
-                    .child(text),
-            )
-            .child(
-                div()
-                    .text_xs()
-                    .text_color(
-                        cx.theme()
-                            .muted_foreground
-                            .opacity(DAY_PAGE_KIT_PREVIEW_MUTED_OPACITY),
-                    )
-                    .child("Esc to return"),
-            )
-            .into_any_element()
+        };
+
+        let mut actions = Vec::new();
+        if availability.can_add_to_agent_chat {
+            actions.push(preview_action(
+                cx,
+                "day-page-kit-resource-preview-add-agent-chat",
+                "Add to Agent Chat",
+                false,
+                crate::DAY_PAGE_PREVIEW_ADD_TO_AGENT_CHAT_ACTION_ID,
+            ));
+        }
+        actions.push(preview_action(
+            cx,
+            "day-page-kit-resource-preview-copy-uri",
+            "Copy URI",
+            false,
+            crate::DAY_PAGE_PREVIEW_COPY_URI_ACTION_ID,
+        ));
+        if availability.open_source_target.is_some() {
+            actions.push(preview_action(
+                cx,
+                "day-page-kit-resource-preview-open-source",
+                "Open Source",
+                false,
+                crate::DAY_PAGE_PREVIEW_OPEN_SOURCE_ACTION_ID,
+            ));
+        }
+        actions.push(preview_action(
+            cx,
+            "day-page-kit-resource-preview-close",
+            "Close Preview",
+            true,
+            crate::DAY_PAGE_PREVIEW_CLOSE_ACTION_ID,
+        ));
+
+        let mut footer_hints = Vec::new();
+        if availability.open_source_target.is_some() {
+            footer_hints.push(preview_hint(
+                cx,
+                "↵ Open Source",
+                crate::DAY_PAGE_PREVIEW_OPEN_SOURCE_ACTION_ID,
+            ));
+        }
+        footer_hints.push(preview_hint(
+            cx,
+            "⌘C Copy URI",
+            crate::DAY_PAGE_PREVIEW_COPY_URI_ACTION_ID,
+        ));
+        if availability.can_add_to_agent_chat {
+            footer_hints.push(preview_hint(
+                cx,
+                "⌘↵ Add to Agent Chat",
+                crate::DAY_PAGE_PREVIEW_ADD_TO_AGENT_CHAT_ACTION_ID,
+            ));
+        }
+        footer_hints.push(preview_hint(
+            cx,
+            "Esc Close",
+            crate::DAY_PAGE_PREVIEW_CLOSE_ACTION_ID,
+        ));
+
+        render_resource_preview(
+            ResourcePreviewSurface {
+                id_prefix: "day-page-kit-resource-preview",
+                title: preview.title.clone().into(),
+                uri: preview.uri.clone().into(),
+                mime_type: preview.mime_type.clone().into(),
+                text: preview.text.clone().into(),
+                truncated: preview.truncated,
+                // Match the editor's own text inset so preview content aligns
+                // with Day Page prose instead of hugging the window edge.
+                inset_x: crate::notes::window::style::adopted_metrics().editor_padding_x,
+                actions,
+                footer_hints,
+            },
+            cx,
+        )
     }
 
     fn render_day_page_read_mode(&self, cx: &mut Context<Self>) -> AnyElement {
@@ -1269,6 +1218,46 @@ impl DayPageView {
         {
             self.close_kit_resource_preview(window, cx);
             return;
+        }
+
+        // Kit resource preview keyboard contract: the preview replaces the
+        // editor, so its power-user keys must win before any editor handling
+        // (but never over an open confirm popup). ⌘C copies the resource URI,
+        // ↵ opens the editable source (when one exists), ⌘↵ stages the
+        // resource in Agent Chat. These mirror the clickable footer hints
+        // rendered by the shared preview component.
+        if self.kit_resource_preview.is_some() && !crate::confirm::is_confirm_window_open() {
+            if exact_cmd && key == "c" {
+                self.execute_day_page_action_from_preview(
+                    crate::DAY_PAGE_PREVIEW_COPY_URI_ACTION_ID,
+                    window,
+                    cx,
+                );
+                return;
+            }
+            if exact_plain && crate::ui_foundation::is_key_enter(&key) {
+                // Swallow Enter even without a source target so it cannot
+                // leak into the hidden editor behind the preview.
+                self.execute_day_page_action_from_preview(
+                    crate::DAY_PAGE_PREVIEW_OPEN_SOURCE_ACTION_ID,
+                    window,
+                    cx,
+                );
+                return;
+            }
+            if exact_cmd
+                && crate::ui_foundation::is_key_enter(&key)
+                && self
+                    .kit_resource_preview_action_availability()
+                    .is_some_and(|availability| availability.can_add_to_agent_chat)
+            {
+                self.execute_day_page_action_from_preview(
+                    crate::DAY_PAGE_PREVIEW_ADD_TO_AGENT_CHAT_ACTION_ID,
+                    window,
+                    cx,
+                );
+                return;
+            }
         }
 
         if self.is_day_switcher_open() {

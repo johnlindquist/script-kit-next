@@ -604,6 +604,37 @@ impl NotesApp {
             return;
         }
 
+        // Kit resource preview keyboard contract: the preview replaces the
+        // editor, so its power-user keys must win before any editor handling.
+        // ⌘C copies the resource URI, ↵ opens the editable source note (when
+        // one exists). Escape stays with the shared dismiss ladder below.
+        // These mirror the clickable footer hints rendered by the shared
+        // preview component.
+        if self.kit_resource_preview.is_some() && !is_key_escape(key) {
+            if modifiers.platform
+                && !modifiers.shift
+                && !modifiers.control
+                && !modifiers.alt
+                && key.eq_ignore_ascii_case("c")
+            {
+                self.copy_kit_resource_preview_uri(cx);
+                cx.stop_propagation();
+                return;
+            }
+            if is_key_enter(key)
+                && !modifiers.platform
+                && !modifiers.shift
+                && !modifiers.control
+                && !modifiers.alt
+            {
+                // Swallow Enter even without a source note so it cannot leak
+                // into the hidden editor behind the preview.
+                self.open_kit_resource_preview_source(window, cx);
+                cx.stop_propagation();
+                return;
+            }
+        }
+
         if is_key_escape(key) {
             cx.stop_propagation();
             // Shared dismiss ladder (popups → ghost → search → focus → trash).
