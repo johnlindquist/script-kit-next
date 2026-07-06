@@ -8,6 +8,7 @@
 
 mod applescript;
 pub mod assets;
+pub(crate) mod db_permissions;
 mod html;
 mod paths;
 mod tailwind;

@@ -237,6 +237,10 @@ fn init_ai_db_at(db_path: PathBuf) -> Result<()> {
 
     info!(db_path = %db_path.display(), "AI chats database initialized");
 
+    // ai-chats.sqlite stores full conversation history. Keep it and its
+    // WAL/SHM sidecars owner-only rather than inheriting umask.
+    crate::utils::db_permissions::harden_sqlite_permissions(&db_path);
+
     // Try to set the global connection. If another thread beat us to it
     // (race condition), that's fine - just return success (idempotent).
     if AI_DB.set(Arc::new(Mutex::new(conn))).is_err() {

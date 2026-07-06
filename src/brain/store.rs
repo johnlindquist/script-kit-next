@@ -430,6 +430,9 @@ fn open_and_check(path: &Path) -> Result<Connection> {
         return Err(anyhow!("brain quick_check reported: {integrity}"));
     }
     ensure_brain_schema(&conn)?;
+    // brain.sqlite holds the full text of notes, day pages, fragments, and chat
+    // turns. Keep it (and its WAL/SHM sidecars) owner-only rather than umask.
+    crate::utils::db_permissions::harden_sqlite_permissions(path);
     Ok(conn)
 }
 

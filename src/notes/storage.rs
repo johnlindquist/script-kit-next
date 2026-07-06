@@ -333,6 +333,13 @@ fn write_conflict_copy(path: &Path, contents: &str) -> Result<()> {
     let conflict_path = parent.join(format!("{stem}.conflict-{timestamp}.md"));
     fs::write(&conflict_path, contents)
         .with_context(|| format!("writing conflict copy {}", conflict_path.display()))?;
+    // A conflict copy holds a full note body; keep it owner-only rather than the
+    // umask default that a raw fs::write would otherwise leave (0644).
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = fs::set_permissions(&conflict_path, fs::Permissions::from_mode(0o600));
+    }
     warn!(
         original = %path.display(),
         conflict = %conflict_path.display(),
@@ -1001,6 +1008,9 @@ fn open_and_check_notes_db(path: &Path) -> Result<Connection> {
         anyhow::bail!("notes quick_check reported: {integrity}");
     }
     ensure_notes_schema(&conn)?;
+    // notes.sqlite stores full note titles + bodies (+ FTS shadow). Keep it and
+    // its WAL/SHM sidecars owner-only rather than inheriting umask.
+    crate::utils::db_permissions::harden_sqlite_permissions(path);
     Ok(conn)
 }
 
