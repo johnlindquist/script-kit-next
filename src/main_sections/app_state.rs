@@ -1091,6 +1091,15 @@ pub(crate) struct ScriptListApp {
     main_menu_fallback_state: MainMenuFallbackState,
     // Theme before chooser was opened (for cancel/restore)
     theme_before_chooser: Option<std::sync::Arc<theme::Theme>>,
+    /// Active procedural background effect, if any.
+    pub(crate) background_effect: Option<crate::effects::BackgroundEffect>,
+    /// Effect strength (0.0..=1.0), loaded from preferences.
+    pub(crate) background_effect_intensity: f32,
+    /// Animation clock origin for the active background effect.
+    pub(crate) background_effect_started_at: Option<std::time::Instant>,
+    /// Frame ticker that re-renders while a background effect is active.
+    /// Dropping the task cancels the loop.
+    pub(crate) _background_effect_ticker: Option<gpui::Task<()>>,
     /// Theme Designer save/manage status for user-authored themes.
     pub(crate) theme_chooser_management: Option<ThemeChooserManagementState>,
     /// Theme Chooser's cached view-local component controls (Sliders & ColorPickers)

@@ -647,6 +647,12 @@ fn render_cursor(config: &TextInputRenderConfig<'_>) -> Div {
     if config.cursor_visible {
         cursor_bar = cursor_bar.bg(rgb(config.cursor_color));
     }
+    // The caret is where the app's attention is while typing: report its
+    // painted position so the background shader effect can react to it
+    // (main-window only; blink re-paints dedupe to no-ops).
+    cursor_bar = cursor_bar.child(crate::effects::effect_focus_probe(
+        crate::effects::EffectFocusSource::TextCursor,
+    ));
     cursor.child(cursor_bar)
 }
 

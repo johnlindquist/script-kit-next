@@ -16,6 +16,7 @@ mod app_impl_state_sync_tests;
 mod attachment_portal;
 #[path = "automation_surface.rs"]
 mod automation_surface;
+mod background_effects;
 #[path = "chat_actions.rs"]
 mod chat_actions;
 #[path = "execution_paths.rs"]

@@ -659,6 +659,7 @@ pub(crate) enum BackgroundTag {
     LinearGradient = 1,
     PatternSlash = 2,
     Checkerboard = 3,
+    ShaderEffect = 4,
 }
 
 /// A color space for color interpolation.
@@ -694,6 +695,16 @@ pub struct Background {
     pub(crate) solid: Hsla,
     pub(crate) gradient_angle_or_pattern_height: f32,
     pub(crate) colors: [LinearColorStop; 2],
+    /// Selects the procedural effect in the renderer when `tag` is `ShaderEffect`.
+    pub(crate) effect_id: f32,
+    /// Animation clock in seconds for `ShaderEffect` backgrounds.
+    pub(crate) effect_time: f32,
+    /// Normalized (0..1) focal point for `ShaderEffect` backgrounds — where
+    /// the app's attention currently is (focused item, mouse, or text cursor).
+    pub(crate) effect_focus: [f32; 2],
+    /// Seconds since the app last noted a "change" (selection moved, caret
+    /// moved, mouse moved). Effects use this as a decaying energy pulse.
+    pub(crate) effect_pulse: f32,
     /// Padding for alignment for repr(C) layout.
     pad: u32,
 }
@@ -717,6 +728,11 @@ impl std::fmt::Debug for Background {
                 "Checkerboard({:?}, {})",
                 self.solid, self.gradient_angle_or_pattern_height
             ),
+            BackgroundTag::ShaderEffect => write!(
+                f,
+                "ShaderEffect(id={}, t={}, {:?}, {:?})",
+                self.effect_id, self.effect_time, self.colors[0], self.colors[1]
+            ),
         }
     }
 }
@@ -730,6 +746,10 @@ impl Default for Background {
             color_space: ColorSpace::default(),
             gradient_angle_or_pattern_height: 0.0,
             colors: [LinearColorStop::default(), LinearColorStop::default()],
+            effect_id: 0.0,
+            effect_time: 0.0,
+            effect_focus: [0.5, 0.35],
+            effect_pulse: 1000.0,
             pad: 0,
         }
     }
@@ -755,6 +775,42 @@ pub fn checkerboard(color: impl Into<Hsla>, size: f32) -> Background {
         tag: BackgroundTag::Checkerboard,
         solid: color.into(),
         gradient_angle_or_pattern_height: size,
+        ..Default::default()
+    }
+}
+
+/// Creates a procedural shader-effect background.
+///
+/// `effect_id` selects the effect branch in the renderer's fill shader and
+/// `time` is the animation clock in seconds. The two colors are the effect's
+/// palette, exposed to the shader as the gradient color stops. `focus` is the
+/// normalized (0..1) point of current user attention (focused item, mouse, or
+/// text cursor) and `pulse` is the seconds elapsed since the last app
+/// "change"; effects treat a small `pulse` as a decaying burst of energy.
+pub fn shader_effect(
+    effect_id: u32,
+    time: f32,
+    focus: [f32; 2],
+    pulse: f32,
+    color_a: impl Into<Hsla>,
+    color_b: impl Into<Hsla>,
+) -> Background {
+    Background {
+        tag: BackgroundTag::ShaderEffect,
+        colors: [
+            LinearColorStop {
+                color: color_a.into(),
+                percentage: 0.0,
+            },
+            LinearColorStop {
+                color: color_b.into(),
+                percentage: 1.0,
+            },
+        ],
+        effect_id: effect_id as f32,
+        effect_time: time,
+        effect_focus: focus,
+        effect_pulse: pulse,
         ..Default::default()
     }
 }
@@ -855,6 +911,7 @@ impl Background {
             BackgroundTag::LinearGradient => self.colors.iter().all(|c| c.color.is_transparent()),
             BackgroundTag::PatternSlash => self.solid.is_transparent(),
             BackgroundTag::Checkerboard => self.solid.is_transparent(),
+            BackgroundTag::ShaderEffect => self.colors.iter().all(|c| c.color.is_transparent()),
         }
     }
 }

@@ -3858,6 +3858,48 @@ impl ScriptListApp {
                 self.execute_system_builtin(system_action, action_type, dctx, cx)
             }
 
+            // =========================================================================
+            // Background Effects
+            // =========================================================================
+            builtins::BuiltInFeature::BackgroundEffectNext => {
+                let next = self
+                    .background_effect
+                    .map(|effect| effect.next())
+                    .unwrap_or(crate::effects::BackgroundEffect::all()[0]);
+                self.set_background_effect(Some(next), cx);
+                self.toast_manager.push(
+                    components::toast::Toast::success(
+                        format!("Background Effect: {}", next.name()),
+                        &self.theme,
+                    )
+                    .duration_ms(Some(1500)),
+                );
+                Self::builtin_success(dctx, format!("background_effect::{}", next.slug()))
+            }
+            builtins::BuiltInFeature::BackgroundEffectPrevious => {
+                let prev = self
+                    .background_effect
+                    .map(|effect| effect.prev())
+                    .unwrap_or_else(|| *crate::effects::BackgroundEffect::all().last().unwrap());
+                self.set_background_effect(Some(prev), cx);
+                self.toast_manager.push(
+                    components::toast::Toast::success(
+                        format!("Background Effect: {}", prev.name()),
+                        &self.theme,
+                    )
+                    .duration_ms(Some(1500)),
+                );
+                Self::builtin_success(dctx, format!("background_effect::{}", prev.slug()))
+            }
+            builtins::BuiltInFeature::BackgroundEffectOff => {
+                self.set_background_effect(None, cx);
+                self.toast_manager.push(
+                    components::toast::Toast::info("Background Effect: Off", &self.theme)
+                        .duration_ms(Some(1500)),
+                );
+                Self::builtin_success(dctx, "background_effect::off")
+            }
+
             // NOTE: Window Actions removed - now handled by window-management extension
             // SDK tileWindow() still works via protocol messages in execute_script.rs
 

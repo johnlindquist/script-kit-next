@@ -432,6 +432,7 @@ fn recover_config_fields(value: Value, correlation_id: &str) -> Config {
         dictation: parse_optional_field(object, "dictation", correlation_id),
         ai: parse_optional_field(object, "ai", correlation_id),
         window_management: parse_optional_field(object, "windowManagement", correlation_id),
+        effects: parse_optional_field(object, "effects", correlation_id),
         commands: parse_optional_field(object, "commands", correlation_id),
         prompt_targets: parse_optional_field(object, "promptTargets", correlation_id),
         claude_code: parse_optional_field(object, "claudeCode", correlation_id),
@@ -492,6 +493,7 @@ fn recover_user_preferences_fields(value: Value, correlation_id: &str) -> Script
             defaults.window_management,
             correlation_id,
         ),
+        effects: parse_required_field(object, "effects", defaults.effects, correlation_id),
     }
 }
 
@@ -528,6 +530,7 @@ fn preferences_from_config(config: &Config) -> ScriptKitUserPreferences {
         dictation: config.get_dictation_preferences(),
         ai: config.get_ai_preferences(),
         window_management: config.get_window_management_preferences(),
+        effects: config.get_effects_preferences(),
     }
 }
 
@@ -550,6 +553,9 @@ fn overlay_legacy_preferences_if_missing(
     }
     if config.window_management.is_none() {
         prefs.window_management = legacy.window_management;
+    }
+    if config.effects.is_none() {
+        prefs.effects = legacy.effects;
     }
     prefs
 }
@@ -709,6 +715,13 @@ pub fn save_user_preferences(prefs: &ScriptKitUserPreferences) -> anyhow::Result
         current.window_management.is_some(),
         &prefs.window_management,
         &super::types::WindowManagementPreferences::default(),
+    )?;
+    write_preference_group(
+        &config_path,
+        "effects",
+        current.effects.is_some(),
+        &prefs.effects,
+        &super::types::EffectsPreferences::default(),
     )?;
 
     let correlation_id = format!("config_prefs_save:{}", uuid::Uuid::new_v4());

@@ -771,6 +771,45 @@ impl Render for ScriptListApp {
         let theme_background_gradients =
             crate::ui_foundation::theme_background_gradient_layers("bg-layer", &self.theme);
 
+        // Procedural background effect: hydrate the clock/ticker lazily so a
+        // preference loaded at startup animates without a dedicated init path.
+        if self.background_effect.is_some() {
+            if self.background_effect_started_at.is_none() {
+                self.background_effect_started_at = Some(std::time::Instant::now());
+            }
+            if self._background_effect_ticker.is_none() {
+                self.start_background_effect_ticker(cx);
+            }
+        }
+        let background_effect_layer = self.background_effect.map(|effect| {
+            let elapsed = self
+                .background_effect_started_at
+                .map(|started| started.elapsed().as_secs_f32())
+                .unwrap_or(0.0);
+            // The main filter caret paints inside gpui-component's input
+            // element, so the shared TextInput caret probe never sees it;
+            // report it here from the input's last painted caret bounds
+            // (dedupe in the recorder makes stationary re-reports free).
+            if let Some(caret) = self.gpui_input_state.read(cx).last_cursor_bounds() {
+                let viewport = window.viewport_size();
+                let (vw, vh) = (f32::from(viewport.width), f32::from(viewport.height));
+                if vw > 0.0 && vh > 0.0 {
+                    let center = caret.center();
+                    crate::effects::note_effect_focus(
+                        crate::effects::EffectFocusSource::TextCursor,
+                        f32::from(center.x) / vw,
+                        f32::from(center.y) / vh,
+                    );
+                }
+            }
+            crate::effects::background_effect_layer(
+                &self.theme,
+                effect,
+                self.background_effect_intensity,
+                elapsed,
+            )
+        });
+
         // Capture mouse_cursor_hidden for use in div builder
         let mouse_cursor_hidden = self.mouse_cursor_hidden;
 
@@ -993,15 +1032,32 @@ impl Render for ScriptListApp {
                         this.hovered_index = None;
                         this.hide_mouse_cursor(cx);
                     }))
-                    // Show cursor when mouse moves.
-                    .on_mouse_move(cx.listener(|this, _: &MouseMoveEvent, _window, cx| {
+                    // Show cursor when mouse moves; a moving mouse also
+                    // steers the background effect focus (no notify — the
+                    // effect ticker repaints while an effect is active).
+                    .on_mouse_move(cx.listener(|this, event: &MouseMoveEvent, window, cx| {
                         this.show_mouse_cursor(cx);
+                        if this.background_effect.is_some() {
+                            let viewport = window.viewport_size();
+                            let (vw, vh) =
+                                (f32::from(viewport.width), f32::from(viewport.height));
+                            if vw > 0.0 && vh > 0.0 {
+                                crate::effects::note_effect_focus(
+                                    crate::effects::EffectFocusSource::Mouse,
+                                    f32::from(event.position.x) / vw,
+                                    f32::from(event.position.y) / vh,
+                                );
+                            }
+                        }
                     }))
                     // Apply background only when vibrancy is disabled
                     .when_some(vibrancy_bg, |d, bg| d.bg(bg))
                     // A user-authored gradient is explicit theme content, so it
                     // renders even when vibrancy is enabled.
                     .children(theme_background_gradients)
+                    // Procedural shader effect layer, behind content, clipped
+                    // by the rounded window container.
+                    .children(background_effect_layer)
                     // Visual styling - rounded corners, subtle border, clip content
                     .rounded(px(12.))
                     .border_1()

@@ -984,6 +984,17 @@ impl InputState {
         self.text.offset_to_position(offset)
     }
 
+    /// Window-relative caret bounds from the most recent paint, if any.
+    ///
+    /// Script Kit vendor patch: exposed so embedders can react to caret
+    /// movement (e.g. steering the background-effect focus point) without
+    /// reaching into the private layout state.
+    pub fn last_cursor_bounds(&self) -> Option<Bounds<Pixels>> {
+        self.last_layout
+            .as_ref()
+            .and_then(|layout| layout.cursor_bounds)
+    }
+
     /// Set (0-based) [`Position`] of the cursor.
     ///
     /// This will move the cursor to the specified line and column, and update the selection range.

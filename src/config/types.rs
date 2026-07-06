@@ -956,6 +956,30 @@ impl DictationPreferences {
     }
 }
 
+/// Background shader-effect preferences.
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct EffectsPreferences {
+    /// Persisted background effect slug (for example: "aurora").
+    /// `None` means no effect.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub background: Option<String>,
+    /// Effect strength in the range 0.0 to 1.0 (default: 0.5).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub intensity: Option<f32>,
+}
+
+impl EffectsPreferences {
+    pub const DEFAULT_INTENSITY: f32 = 0.5;
+
+    /// Effect strength clamped to a sane range.
+    pub fn intensity(&self) -> f32 {
+        self.intensity
+            .unwrap_or(Self::DEFAULT_INTENSITY)
+            .clamp(0.0, 1.0)
+    }
+}
+
 /// Projection of config-backed runtime preferences.
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -975,6 +999,9 @@ pub struct ScriptKitUserPreferences {
     /// Window snapping and related desktop window-management settings.
     #[serde(default)]
     pub window_management: WindowManagementPreferences,
+    /// Background shader-effect settings.
+    #[serde(default)]
+    pub effects: EffectsPreferences,
 }
 
 /// Agent Chat backend selected for a profile or runtime preference.
@@ -1918,6 +1945,9 @@ pub struct Config {
         rename = "windowManagement"
     )]
     pub window_management: Option<WindowManagementPreferences>,
+    /// Background shader-effect preferences.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub effects: Option<EffectsPreferences>,
     /// Per-command configuration overrides (shortcuts, visibility)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub commands: Option<HashMap<String, CommandConfig>>,
@@ -1995,6 +2025,7 @@ impl Default for Config {
             dictation: None,        // Will use DictationPreferences::default() via getter
             ai: None,               // Will use AiPreferences::default() via getter
             window_management: None, // Will use WindowManagementPreferences::default() via getter
+            effects: None,          // Will use EffectsPreferences::default() via getter
             commands: None,         // No per-command overrides by default
             prompt_targets: None,   // No custom prompt targets by default
             claude_code: None,      // Will use ClaudeCodeConfig::default() via getter
@@ -2255,6 +2286,10 @@ impl Config {
     }
 
     /// Returns window-management preferences, or defaults.
+    pub fn get_effects_preferences(&self) -> EffectsPreferences {
+        self.effects.clone().unwrap_or_default()
+    }
+
     pub fn get_window_management_preferences(&self) -> WindowManagementPreferences {
         self.window_management.clone().unwrap_or_default()
     }

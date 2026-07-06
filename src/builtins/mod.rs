@@ -315,6 +315,12 @@ pub enum BuiltInFeature {
     NewScriptFromTemplate,
     /// Script Kit v1-to-v2 migration board.
     MigrateV1Scripts,
+    /// Cycle to the next background shader effect.
+    BackgroundEffectNext,
+    /// Cycle to the previous background shader effect.
+    BackgroundEffectPrevious,
+    /// Turn off the background shader effect.
+    BackgroundEffectOff,
 }
 /// A built-in feature entry that appears in the main search
 #[derive(Debug, Clone)]
@@ -537,6 +543,10 @@ impl BuiltInEntry {
             BuiltInFeature::SdkReference => "Open SDK Reference",
             BuiltInFeature::NewScriptFromTemplate => "Browse Templates",
             BuiltInFeature::MigrateV1Scripts => "Migrate v1 Scripts",
+            BuiltInFeature::BackgroundEffectNext | BuiltInFeature::BackgroundEffectPrevious => {
+                "Cycle Background Effect"
+            }
+            BuiltInFeature::BackgroundEffectOff => "Turn Off Background Effect",
         }
     }
 
@@ -655,6 +665,9 @@ impl BuiltInEntry {
             BuiltInFeature::SdkReference => "SDK Docs",
             BuiltInFeature::NewScriptFromTemplate => "Templates",
             BuiltInFeature::MigrateV1Scripts => "Migrate",
+            BuiltInFeature::BackgroundEffectNext => "Next Effect",
+            BuiltInFeature::BackgroundEffectPrevious => "Previous Effect",
+            BuiltInFeature::BackgroundEffectOff => "Effect Off",
         }
     }
 }
@@ -1597,6 +1610,42 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
             ],
             BuiltInFeature::SettingsCommand(SettingsCommandType::ChooseTheme),
             "palette",
+        ));
+
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin/background-effect-next",
+            "Background Effect: Next",
+            "Cycle to the next background shader effect",
+            vec![
+                "background",
+                "effect",
+                "shader",
+                "aurora",
+                "plasma",
+                "starfield",
+                "animation",
+                "fun",
+            ],
+            BuiltInFeature::BackgroundEffectNext,
+            "sparkles",
+        ));
+
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin/background-effect-previous",
+            "Background Effect: Previous",
+            "Cycle to the previous background shader effect",
+            vec!["background", "effect", "shader", "previous"],
+            BuiltInFeature::BackgroundEffectPrevious,
+            "sparkles",
+        ));
+
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin/background-effect-off",
+            "Background Effect: Off",
+            "Turn off the background shader effect",
+            vec!["background", "effect", "shader", "off", "disable"],
+            BuiltInFeature::BackgroundEffectOff,
+            "sparkles",
         ));
 
         entries.push(BuiltInEntry::new_with_icon(

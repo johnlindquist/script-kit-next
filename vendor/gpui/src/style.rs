@@ -682,7 +682,7 @@ impl Style {
                     | BackgroundTag::PatternSlash
                     | BackgroundTag::Checkerboard => color.solid,
 
-                    BackgroundTag::LinearGradient => color
+                    BackgroundTag::LinearGradient | BackgroundTag::ShaderEffect => color
                         .colors
                         .first()
                         .map(|stop| stop.color)

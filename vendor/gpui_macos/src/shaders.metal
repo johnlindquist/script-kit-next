@@ -1142,6 +1142,10 @@ GradientColor prepare_fill_color(uint tag, uint color_space, Hsla solid,
   GradientColor out;
   if (tag == 0 || tag == 2 || tag == 3) {
     out.solid = hsla_to_rgba(solid);
+  } else if (tag == 4) {
+    out.solid = hsla_to_rgba(solid);
+    out.color0 = hsla_to_rgba(color0);
+    out.color1 = hsla_to_rgba(color1);
   } else if (tag == 1) {
     out.color0 = hsla_to_rgba(color0);
     out.color1 = hsla_to_rgba(color1);
@@ -1162,6 +1166,354 @@ float2x2 rotate2d(float angle) {
     float s = sin(angle);
     float c = cos(angle);
     return float2x2(c, -s, s, c);
+}
+
+// ---- procedural shader-effect backgrounds (BackgroundTag::ShaderEffect) ----
+// Each effect maps (uv in 0..1, p = aspect-corrected uv, t seconds, fp =
+// aspect-corrected focus point, pe = decaying change-pulse energy in 0..1,
+// pt = raw seconds since the last app change, two straight-alpha palette
+// colors) to a straight-alpha color, matching the form the pattern branches
+// of fill_color produce. Effect intensity is carried by the palette colors'
+// alpha, set app-side. Effects are deliberately quiet at idle and lean
+// toward the focus point; a small pt reads as a soft burst of energy.
+
+float fx_hash21(float2 p) {
+  p = fract(p * float2(234.34, 435.345));
+  p += dot(p, p + 34.23);
+  return fract(p.x * p.y);
+}
+
+float2 fx_hash22(float2 p) {
+  float n = fx_hash21(p);
+  return float2(n, fx_hash21(p + n));
+}
+
+float fx_noise(float2 p) {
+  float2 i = floor(p);
+  float2 f = fract(p);
+  float2 u = f * f * (3.0 - 2.0 * f);
+  float a = fx_hash21(i);
+  float b = fx_hash21(i + float2(1.0, 0.0));
+  float c = fx_hash21(i + float2(0.0, 1.0));
+  float d = fx_hash21(i + float2(1.0, 1.0));
+  return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
+}
+
+float fx_fbm(float2 p) {
+  float v = 0.0;
+  float amp = 0.5;
+  for (int i = 0; i < 4; i++) {
+    v += amp * fx_noise(p);
+    p = p * 2.03 + float2(17.1, 9.2);
+    amp *= 0.5;
+  }
+  return v;
+}
+
+// Soft gaussian falloff around the focus point (both in p-space).
+float fx_focus_glow(float2 p, float2 fp, float tight) {
+  float2 d = p - fp;
+  return exp(-dot(d, d) * tight);
+}
+
+// Expanding ripple ring emitted from the focus point on each change.
+float fx_pulse_ring(float2 p, float2 fp, float pt, float speed, float sharp) {
+  float d = length(p - fp);
+  float r = pt * speed;
+  float band = (d - r) * sharp;
+  return exp(-band * band) * exp(-pt * 2.5);
+}
+
+// 1. Aurora — drifting sinusoidal curtains, brightening over the focus.
+float4 fx_aurora(float2 uv, float2 p, float t, float aspect, float2 fp,
+                 float pe, float pt, float4 ca, float4 cb) {
+  float glow = 0.0;
+  for (int i = 0; i < 3; i++) {
+    float fi = float(i);
+    float y = 0.25 + 0.18 * fi
+      + 0.06 * sin(p.x * (2.0 + fi) + t * (0.18 + 0.08 * fi) + fi * 2.1)
+      + 0.04 * sin(p.x * (5.0 + fi * 1.7) - t * (0.13 + 0.05 * fi));
+    float band = exp(-pow((uv.y - y) * (7.0 - fi), 2.0));
+    // Curtains lean softly toward the focused column.
+    band *= 0.7 + 0.6 * exp(-pow((p.x - fp.x) * 1.1, 2.0));
+    glow += band * (0.40 - 0.09 * fi);
+  }
+  glow *= 1.0 + pe * 0.5;
+  float hue_mix = 0.5 + 0.5 * sin(p.x * 1.5 + t * 0.12);
+  float4 col = mix(ca, cb, hue_mix);
+  return float4(col.rgb, col.a * glow * 0.55 * (1.0 - uv.y * 0.4));
+}
+
+// 2. Plasma — slow interference centered on the focus point.
+float4 fx_plasma(float2 uv, float2 p, float t, float aspect, float2 fp,
+                 float pe, float pt, float4 ca, float4 cb) {
+  float v = sin(p.x * 4.0 + t * 0.32)
+          + sin(p.y * 3.5 - t * 0.26)
+          + sin((p.x + p.y) * 2.8 + t * 0.20)
+          + sin(length(p - fp) * 6.0 - t * 0.45);
+  v = 0.5 + 0.5 * sin(v * 1.1);
+  float4 col = mix(ca, cb, v);
+  float a = (0.12 + 0.20 * v) * (1.0 + pe * 0.4 * fx_focus_glow(p, fp, 2.5));
+  a += fx_pulse_ring(p, fp, pt, 0.9, 9.0) * 0.10;
+  return float4(col.rgb, col.a * a);
+}
+
+// 3. Starfield — layers of twinkling, slowly drifting stars. The look is
+// intentionally preserved; changes only make nearby stars twinkle up briefly.
+float4 fx_starfield(float2 uv, float2 p, float t, float aspect, float2 fp,
+                    float pe, float pt, float4 ca, float4 cb) {
+  float acc = 0.0;
+  for (int i = 0; i < 3; i++) {
+    float fi = float(i);
+    float scale = 22.0 + fi * 18.0;
+    float2 q = p * scale + float2(t * (0.5 + fi * 0.4), 0.0);
+    float2 cell = floor(q);
+    float2 rnd = fx_hash22(cell);
+    float d = length(fract(q) - 0.3 - rnd * 0.4);
+    float twinkle = 0.5 + 0.5 * sin(t * (1.0 + rnd.y * 4.0) + rnd.x * 6.28);
+    float star = smoothstep(0.08, 0.0, d) * step(0.82, rnd.x) * twinkle;
+    // Stars around the focus glimmer a little brighter on change.
+    star *= 1.0 + 0.8 * pe * fx_focus_glow(p, fp, 5.0);
+    acc += star * (1.0 - fi * 0.25);
+  }
+  float4 col = mix(ca, cb, fx_hash21(floor(p * 40.0)));
+  return float4(col.rgb, col.a * acc);
+}
+
+// 4. Lava lamp — soft metaballs; a quiet blob wells up under the focus.
+float4 fx_lava(float2 uv, float2 p, float t, float aspect, float2 fp,
+               float pe, float pt, float4 ca, float4 cb) {
+  float field = 0.0;
+  for (int i = 0; i < 5; i++) {
+    float fi = float(i);
+    float2 c = float2(
+        (0.15 + 0.7 * fract(sin(fi * 12.9898) * 43758.5453)) * aspect,
+        1.0 - fract(fi * 0.37 + t * (0.012 + 0.008 * fi)));
+    float r = 0.09 + 0.05 * sin(fi * 2.0 + t * 0.3);
+    field += r * r / max(dot(p - c, p - c), 1e-4);
+  }
+  float fr = 0.06 + 0.05 * pe;
+  field += fr * fr / max(dot(p - fp, p - fp), 1e-4);
+  float body = smoothstep(0.9, 1.4, field);
+  float rim = smoothstep(0.9, 1.05, field) - smoothstep(1.15, 1.6, field);
+  float4 col = mix(ca, cb, clamp(field * 0.4, 0.0, 1.0));
+  return float4(col.rgb, col.a * (body * 0.28 + rim * 0.20));
+}
+
+// 5. Nebula — drifting fbm clouds, glowing gently around the focus.
+float4 fx_nebula(float2 uv, float2 p, float t, float aspect, float2 fp,
+                 float pe, float pt, float4 ca, float4 cb) {
+  float2 q = p * 2.4 + float2(t * 0.018, -t * 0.009);
+  float n = fx_fbm(q + fx_fbm(q + t * 0.012));
+  float m = smoothstep(0.35, 0.85, n);
+  m *= 0.75 + 0.5 * fx_focus_glow(p, fp, 2.2) * (0.4 + 0.6 * pe);
+  float4 col = mix(ca, cb, n);
+  return float4(col.rgb, col.a * m * 0.35);
+}
+
+// 6. Rain — sparse droplets that gather over the focused column.
+float4 fx_rain(float2 uv, float2 p, float t, float aspect, float2 fp,
+               float pe, float pt, float4 ca, float4 cb) {
+  float acc = 0.0;
+  for (int i = 0; i < 2; i++) {
+    float fi = float(i);
+    float2 q = p * float2(30.0 + fi * 14.0, 4.0 + fi * 2.0);
+    q.y += t * (0.9 + fi * 0.5);
+    float2 cell = floor(q);
+    float rnd = fx_hash21(cell);
+    float2 f = fract(q);
+    float drop = smoothstep(0.35, 0.0, abs(f.x - 0.5))
+               * smoothstep(1.0, 0.2, f.y)
+               * step(0.85 - pe * 0.10, rnd);
+    drop *= 0.55 + 0.65 * exp(-pow((p.x - fp.x) * 1.4, 2.0));
+    acc += drop * (0.40 - fi * 0.13);
+  }
+  float4 col = mix(ca, cb, uv.y);
+  return float4(col.rgb, col.a * acc);
+}
+
+// 7. Waves — low sine bands; a change sends a gentle swell under the focus.
+float4 fx_waves(float2 uv, float2 p, float t, float aspect, float2 fp,
+                float pe, float pt, float4 ca, float4 cb) {
+  float swell = pe * 0.02 * exp(-pow((p.x - fp.x) * 2.0, 2.0));
+  float acc = 0.0;
+  for (int i = 0; i < 3; i++) {
+    float fi = float(i);
+    float y = 0.86 - fi * 0.06 - swell * (1.0 + fi * 0.5)
+      + 0.02 * sin(p.x * (4.0 + fi * 2.0) + t * (0.45 - fi * 0.10) + fi * 1.7)
+      + 0.01 * sin(p.x * (9.0 + fi * 3.0) - t * (0.30 + fi * 0.10));
+    acc += smoothstep(y, y + 0.006, uv.y) * 0.13;
+  }
+  float4 col = mix(ca, cb, clamp(acc * 1.6, 0.0, 1.0));
+  return float4(col.rgb, col.a * acc);
+}
+
+// 8. Fireflies — soft glow points drawn toward the app's attention.
+float4 fx_fireflies(float2 uv, float2 p, float t, float aspect, float2 fp,
+                    float pe, float pt, float4 ca, float4 cb) {
+  float acc = 0.0;
+  float attract = 0.15 + 0.35 * pe;
+  for (int i = 0; i < 6; i++) {
+    float fi = float(i);
+    float2 seed = fx_hash22(float2(fi * 3.7, fi * 9.1));
+    float2 c = float2(
+        fract(seed.x + 0.05 * sin(t * (0.13 + seed.y * 0.2) + fi)) * aspect,
+        fract(seed.y + t * 0.008 * (0.5 + seed.x)
+              + 0.04 * cos(t * 0.20 + fi * 2.0)));
+    c = mix(c, fp, attract * (0.4 + 0.6 * seed.y));
+    float d = length(p - c);
+    float pulse =
+        0.35 + 0.65 * pow(0.5 + 0.5 * sin(t * (0.5 + seed.x) + fi * 2.4), 3.0);
+    acc += pulse * (0.7 + 0.6 * pe)
+         * (exp(-d * d * 900.0) + 0.25 * exp(-d * d * 90.0));
+  }
+  float4 col = mix(ca, cb, 0.3);
+  return float4(col.rgb, col.a * acc * 0.7);
+}
+
+// 9. Hue drift — a quiet gradient that leans toward the focus point.
+float4 fx_huedrift(float2 uv, float2 p, float t, float aspect, float2 fp,
+                   float pe, float pt, float4 ca, float4 cb) {
+  float2 center = float2(0.5 * aspect, 0.5);
+  float2 to_focus = fp - center + float2(cos(t * 0.05), sin(t * 0.05)) * 0.12;
+  float2 dir = to_focus / max(length(to_focus), 1e-3);
+  float g = 0.5 + 0.5 * dot(p - center, dir) * 1.4;
+  float4 col = mix(ca, cb, clamp(g, 0.0, 1.0));
+  return float4(col.rgb, col.a * (0.22 + pe * 0.08));
+}
+
+// 10. Grain — faint film grain that shimmers near the focus on change.
+float4 fx_grain(float2 uv, float2 p, float t, float aspect, float2 fp,
+                float pe, float pt, float4 ca, float4 cb) {
+  float n = fx_hash21(p * 700.0 + fract(t * 4.0) * 100.0);
+  float a = 0.10 + 0.12 * pe * fx_focus_glow(p, fp, 3.0);
+  return float4(ca.rgb, ca.a * n * a);
+}
+
+// 11. Scanlines — faint CRT lines; the vignette follows the focus.
+float4 fx_scanlines(float2 uv, float2 p, float t, float aspect, float2 fp,
+                    float pe, float pt, float4 ca, float4 cb) {
+  float line = 0.5 + 0.5 * sin((uv.y + t * 0.008) * 700.0);
+  float2 fuv = float2(fp.x / max(aspect, 1e-3), fp.y);
+  float2 vc = mix(float2(0.5, 0.5), fuv, 0.35);
+  float vig = smoothstep(1.1, 0.45, length(uv - vc));
+  return float4(ca.rgb, ca.a * line * (0.07 + 0.04 * pe) * vig);
+}
+
+// 12. Dot grid — quiet lattice lit around the focus; changes ripple outward.
+float4 fx_dotgrid(float2 uv, float2 p, float t, float aspect, float2 fp,
+                  float pe, float pt, float4 ca, float4 cb) {
+  float2 q = p * 36.0;
+  float d = length(fract(q) - 0.5);
+  float dot_mask = smoothstep(0.11, 0.07, d);
+  float2 cellp = (floor(q) + 0.5) / 36.0;
+  float glow = fx_focus_glow(cellp, fp, 14.0) * (0.3 + 0.7 * pe);
+  float ring = fx_pulse_ring(cellp, fp, pt, 0.7, 10.0);
+  float hi = clamp(glow + ring, 0.0, 1.0);
+  float4 col = mix(ca, cb, hi);
+  return float4(col.rgb, col.a * dot_mask * (0.07 + hi * 0.45));
+}
+
+// 13. Caustics — slow underwater shimmer, brightest near the focus.
+float4 fx_caustics(float2 uv, float2 p, float t, float aspect, float2 fp,
+                   float pe, float pt, float4 ca, float4 cb) {
+  float2 q = p * 5.0;
+  float v = 0.0;
+  for (int i = 0; i < 3; i++) {
+    float fi = float(i);
+    float2 w = q + float2(sin(q.y * 1.7 + t * 0.35 + fi),
+                          cos(q.x * 1.5 - t * 0.30 + fi));
+    v += 1.0 / max(abs(sin(w.x + w.y) * sin(w.x - w.y)), 0.08);
+  }
+  v = clamp(pow(v * 0.06, 2.2), 0.0, 1.0);
+  float4 col = mix(ca, cb, v);
+  float a = v * (0.22 + 0.20 * fx_focus_glow(p, fp, 2.0) * (0.3 + 0.7 * pe));
+  return float4(col.rgb, col.a * a);
+}
+
+// 14. Matrix — slow glyph columns that wake up near the focus.
+float4 fx_matrix(float2 uv, float2 p, float t, float aspect, float2 fp,
+                 float pe, float pt, float4 ca, float4 cb) {
+  float2 q = float2(p.x * 26.0, uv.y * 20.0);
+  float col_id = floor(q.x);
+  float speed = 1.5 + fx_hash21(float2(col_id, 1.0)) * 3.0;
+  float offset = fx_hash21(float2(col_id, 7.0)) * 20.0;
+  float head = fmod(t * speed + offset, 26.0) - 3.0;
+  float cell_y = floor(q.y);
+  float dist = head - cell_y;
+  float glow = dist >= 0.0 ? exp(-dist * 0.35) : 0.0;
+  float flicker =
+      step(0.35, fx_hash21(float2(col_id, cell_y + floor(t * 5.0))));
+  float in_cell = smoothstep(0.5, 0.32, abs(fract(q.x) - 0.5))
+                * smoothstep(0.5, 0.30, abs(fract(q.y) - 0.5));
+  float near = 0.55 + 0.9 * exp(-pow((p.x - fp.x) * 2.2, 2.0));
+  float4 col = mix(cb, ca, dist >= 0.0 ? exp(-dist * 1.2) : 0.0);
+  return float4(col.rgb,
+                col.a * glow * flicker * in_cell * 0.55 * near
+                    * (1.0 + pe * 0.5));
+}
+
+// 15. Breath — a slow radial glow that breathes where the app's attention is.
+float4 fx_breath(float2 uv, float2 p, float t, float aspect, float2 fp,
+                 float pe, float pt, float4 ca, float4 cb) {
+  float b = 0.5 + 0.5 * sin(t * 0.35);
+  b = clamp(b + pe * 0.35, 0.0, 1.0);
+  float2 center = mix(float2(0.5 * aspect, 0.5), fp, 0.55);
+  float d = length((p - center) * float2(1.0, 1.3));
+  float glow = exp(-pow(d * (2.6 - b * 0.9), 2.0));
+  float4 col = mix(ca, cb, b);
+  return float4(col.rgb, col.a * glow * (0.12 + b * 0.14));
+}
+
+// 16. Confetti — quiet by default; a change releases a burst near the focus.
+float4 fx_confetti(float2 uv, float2 p, float t, float aspect, float2 fp,
+                   float pe, float pt, float4 ca, float4 cb) {
+  float acc = 0.0;
+  float4 col = ca;
+  for (int i = 0; i < 3; i++) {
+    float fi = float(i);
+    float2 q = p * (14.0 + fi * 6.0);
+    q.y += t * (0.30 + fi * 0.18);
+    q.x += sin(t * 0.25 + fi) * 0.3;
+    float2 cell = floor(q);
+    float2 rnd = fx_hash22(cell + fi * 13.0);
+    float2 f = fract(q) - 0.5;
+    float rot = rnd.x * 6.28 + t * (rnd.y - 0.5) * 1.2;
+    float2 r = float2(f.x * cos(rot) - f.y * sin(rot),
+                      f.x * sin(rot) + f.y * cos(rot));
+    float sq = step(max(abs(r.x), abs(r.y)), 0.11) * step(0.90, rnd.y);
+    sq *= 0.2 + 0.8 * pe * fx_focus_glow(p, fp, 3.0);
+    acc += sq;
+    col = mix(col, mix(ca, cb, rnd.x), clamp(sq, 0.0, 1.0));
+  }
+  return float4(col.rgb, col.a * clamp(acc, 0.0, 1.0) * 0.45);
+}
+
+float4 shader_effect_color(int effect, float2 uv, float2 p, float aspect,
+                           float t, float2 fp, float pt, float4 ca,
+                           float4 cb) {
+  // Change-pulse energy: a fast ~120ms attack into a gentle ~600ms decay, so
+  // a change reads as a soft breath of energy rather than a pop.
+  float pe = exp(-pt * 1.6) * smoothstep(0.0, 0.12, pt);
+  switch (effect) {
+    case 1: return fx_aurora(uv, p, t, aspect, fp, pe, pt, ca, cb);
+    case 2: return fx_plasma(uv, p, t, aspect, fp, pe, pt, ca, cb);
+    case 3: return fx_starfield(uv, p, t, aspect, fp, pe, pt, ca, cb);
+    case 4: return fx_lava(uv, p, t, aspect, fp, pe, pt, ca, cb);
+    case 5: return fx_nebula(uv, p, t, aspect, fp, pe, pt, ca, cb);
+    case 6: return fx_rain(uv, p, t, aspect, fp, pe, pt, ca, cb);
+    case 7: return fx_waves(uv, p, t, aspect, fp, pe, pt, ca, cb);
+    case 8: return fx_fireflies(uv, p, t, aspect, fp, pe, pt, ca, cb);
+    case 9: return fx_huedrift(uv, p, t, aspect, fp, pe, pt, ca, cb);
+    case 10: return fx_grain(uv, p, t, aspect, fp, pe, pt, ca, cb);
+    case 11: return fx_scanlines(uv, p, t, aspect, fp, pe, pt, ca, cb);
+    case 12: return fx_dotgrid(uv, p, t, aspect, fp, pe, pt, ca, cb);
+    case 13: return fx_caustics(uv, p, t, aspect, fp, pe, pt, ca, cb);
+    case 14: return fx_matrix(uv, p, t, aspect, fp, pe, pt, ca, cb);
+    case 15: return fx_breath(uv, p, t, aspect, fp, pe, pt, ca, cb);
+    case 16: return fx_confetti(uv, p, t, aspect, fp, pe, pt, ca, cb);
+    default: return float4(0.0);
+  }
 }
 
 float4 fill_color(Background background,
@@ -1244,7 +1596,21 @@ float4 fill_color(Background background,
         
         color = solid_color;
         color.a *= saturate(should_be_colored);
-        break; 
+        break;
+    }
+    case 4: {
+        float2 size = float2(bounds.size.width, bounds.size.height);
+        float2 uv =
+            (position - float2(bounds.origin.x, bounds.origin.y)) / size;
+        float aspect = size.x / max(size.y, 1.0);
+        float2 p = float2(uv.x * aspect, uv.y);
+        float2 focus = float2(background.effect_focus[0] * aspect,
+                              background.effect_focus[1]);
+        color = shader_effect_color(int(background.effect_id + 0.5), uv, p,
+                                    aspect, background.effect_time, focus,
+                                    background.effect_pulse, color0,
+                                    color1);
+        break;
     }
   }
 

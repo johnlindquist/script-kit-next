@@ -35,6 +35,7 @@ pub mod designs;
 pub mod dev_marker;
 pub mod dev_style_tool;
 pub mod editor;
+pub mod effects;
 pub mod emoji;
 pub mod emoji_usage;
 pub mod error;

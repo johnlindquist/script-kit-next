@@ -2247,6 +2247,15 @@ impl RenderOnce for ListItem {
             });
         }
 
+        // The selected row is where the app's attention is: report its
+        // painted position so the background shader effect can lean toward
+        // it (main-window only; the probe is a zero-cost absolute overlay).
+        if self.selected {
+            container = container.child(crate::effects::effect_focus_probe(
+                crate::effects::EffectFocusSource::FocusedItem,
+            ));
+        }
+
         // Add content (no separate accent bar child needed)
         container.child(inner_content)
     }

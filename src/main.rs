@@ -86,6 +86,7 @@ mod dev_style_tool {
 }
 mod dictation;
 mod editor;
+mod effects;
 #[allow(dead_code)] // Public API in lib.rs; binary only uses ErrorSeverity currently
 mod error;
 mod executor;
