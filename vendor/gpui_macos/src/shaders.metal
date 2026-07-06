@@ -1272,8 +1272,9 @@ float4 fx_starfield(float2 uv, float2 p, float t, float aspect, float2 fp,
     float d = length(fract(q) - 0.3 - rnd * 0.4);
     float twinkle = 0.5 + 0.5 * sin(t * (1.0 + rnd.y * 4.0) + rnd.x * 6.28);
     float star = smoothstep(0.08, 0.0, d) * step(0.82, rnd.x) * twinkle;
-    // Stars around the focus glimmer a little brighter on change.
-    star *= 1.0 + 0.8 * pe * fx_focus_glow(p, fp, 5.0);
+    // Stars around the focus always glimmer brighter, and a change makes
+    // them flare a touch more — the sky itself stays untouched.
+    star *= 1.0 + fx_focus_glow(p, fp, 4.0) * (0.6 + 0.8 * pe);
     acc += star * (1.0 - fi * 0.25);
   }
   float4 col = mix(ca, cb, fx_hash21(floor(p * 40.0)));
@@ -1306,7 +1307,7 @@ float4 fx_nebula(float2 uv, float2 p, float t, float aspect, float2 fp,
   float2 q = p * 2.4 + float2(t * 0.018, -t * 0.009);
   float n = fx_fbm(q + fx_fbm(q + t * 0.012));
   float m = smoothstep(0.35, 0.85, n);
-  m *= 0.75 + 0.5 * fx_focus_glow(p, fp, 2.2) * (0.4 + 0.6 * pe);
+  m *= 0.7 + 0.6 * fx_focus_glow(p, fp, 2.2) * (0.6 + 0.4 * pe);
   float4 col = mix(ca, cb, n);
   return float4(col.rgb, col.a * m * 0.35);
 }
@@ -1352,7 +1353,7 @@ float4 fx_waves(float2 uv, float2 p, float t, float aspect, float2 fp,
 float4 fx_fireflies(float2 uv, float2 p, float t, float aspect, float2 fp,
                     float pe, float pt, float4 ca, float4 cb) {
   float acc = 0.0;
-  float attract = 0.15 + 0.35 * pe;
+  float attract = 0.25 + 0.35 * pe;
   for (int i = 0; i < 6; i++) {
     float fi = float(i);
     float2 seed = fx_hash22(float2(fi * 3.7, fi * 9.1));
@@ -1386,7 +1387,7 @@ float4 fx_huedrift(float2 uv, float2 p, float t, float aspect, float2 fp,
 float4 fx_grain(float2 uv, float2 p, float t, float aspect, float2 fp,
                 float pe, float pt, float4 ca, float4 cb) {
   float n = fx_hash21(p * 700.0 + fract(t * 4.0) * 100.0);
-  float a = 0.10 + 0.12 * pe * fx_focus_glow(p, fp, 3.0);
+  float a = 0.08 + 0.12 * fx_focus_glow(p, fp, 3.0) * (0.5 + 0.5 * pe);
   return float4(ca.rgb, ca.a * n * a);
 }
 
@@ -1407,7 +1408,7 @@ float4 fx_dotgrid(float2 uv, float2 p, float t, float aspect, float2 fp,
   float d = length(fract(q) - 0.5);
   float dot_mask = smoothstep(0.11, 0.07, d);
   float2 cellp = (floor(q) + 0.5) / 36.0;
-  float glow = fx_focus_glow(cellp, fp, 14.0) * (0.3 + 0.7 * pe);
+  float glow = fx_focus_glow(cellp, fp, 14.0) * (0.55 + 0.45 * pe);
   float ring = fx_pulse_ring(cellp, fp, pt, 0.7, 10.0);
   float hi = clamp(glow + ring, 0.0, 1.0);
   float4 col = mix(ca, cb, hi);
@@ -1427,7 +1428,7 @@ float4 fx_caustics(float2 uv, float2 p, float t, float aspect, float2 fp,
   }
   v = clamp(pow(v * 0.06, 2.2), 0.0, 1.0);
   float4 col = mix(ca, cb, v);
-  float a = v * (0.22 + 0.20 * fx_focus_glow(p, fp, 2.0) * (0.3 + 0.7 * pe));
+  float a = v * (0.20 + 0.24 * fx_focus_glow(p, fp, 2.0) * (0.6 + 0.4 * pe));
   return float4(col.rgb, col.a * a);
 }
 
@@ -1495,25 +1496,43 @@ float4 shader_effect_color(int effect, float2 uv, float2 p, float aspect,
   // Change-pulse energy: a fast ~120ms attack into a gentle ~600ms decay, so
   // a change reads as a soft breath of energy rather than a pop.
   float pe = exp(-pt * 1.6) * smoothstep(0.0, 0.12, pt);
+  float4 col = float4(0.0);
   switch (effect) {
-    case 1: return fx_aurora(uv, p, t, aspect, fp, pe, pt, ca, cb);
-    case 2: return fx_plasma(uv, p, t, aspect, fp, pe, pt, ca, cb);
-    case 3: return fx_starfield(uv, p, t, aspect, fp, pe, pt, ca, cb);
-    case 4: return fx_lava(uv, p, t, aspect, fp, pe, pt, ca, cb);
-    case 5: return fx_nebula(uv, p, t, aspect, fp, pe, pt, ca, cb);
-    case 6: return fx_rain(uv, p, t, aspect, fp, pe, pt, ca, cb);
-    case 7: return fx_waves(uv, p, t, aspect, fp, pe, pt, ca, cb);
-    case 8: return fx_fireflies(uv, p, t, aspect, fp, pe, pt, ca, cb);
-    case 9: return fx_huedrift(uv, p, t, aspect, fp, pe, pt, ca, cb);
-    case 10: return fx_grain(uv, p, t, aspect, fp, pe, pt, ca, cb);
-    case 11: return fx_scanlines(uv, p, t, aspect, fp, pe, pt, ca, cb);
-    case 12: return fx_dotgrid(uv, p, t, aspect, fp, pe, pt, ca, cb);
-    case 13: return fx_caustics(uv, p, t, aspect, fp, pe, pt, ca, cb);
-    case 14: return fx_matrix(uv, p, t, aspect, fp, pe, pt, ca, cb);
-    case 15: return fx_breath(uv, p, t, aspect, fp, pe, pt, ca, cb);
-    case 16: return fx_confetti(uv, p, t, aspect, fp, pe, pt, ca, cb);
+    case 1: col = fx_aurora(uv, p, t, aspect, fp, pe, pt, ca, cb); break;
+    case 2: col = fx_plasma(uv, p, t, aspect, fp, pe, pt, ca, cb); break;
+    case 3: col = fx_starfield(uv, p, t, aspect, fp, pe, pt, ca, cb); break;
+    case 4: col = fx_lava(uv, p, t, aspect, fp, pe, pt, ca, cb); break;
+    case 5: col = fx_nebula(uv, p, t, aspect, fp, pe, pt, ca, cb); break;
+    case 6: col = fx_rain(uv, p, t, aspect, fp, pe, pt, ca, cb); break;
+    case 7: col = fx_waves(uv, p, t, aspect, fp, pe, pt, ca, cb); break;
+    case 8: col = fx_fireflies(uv, p, t, aspect, fp, pe, pt, ca, cb); break;
+    case 9: col = fx_huedrift(uv, p, t, aspect, fp, pe, pt, ca, cb); break;
+    case 10: col = fx_grain(uv, p, t, aspect, fp, pe, pt, ca, cb); break;
+    case 11: col = fx_scanlines(uv, p, t, aspect, fp, pe, pt, ca, cb); break;
+    case 12: col = fx_dotgrid(uv, p, t, aspect, fp, pe, pt, ca, cb); break;
+    case 13: col = fx_caustics(uv, p, t, aspect, fp, pe, pt, ca, cb); break;
+    case 14: col = fx_matrix(uv, p, t, aspect, fp, pe, pt, ca, cb); break;
+    case 15: col = fx_breath(uv, p, t, aspect, fp, pe, pt, ca, cb); break;
+    case 16: col = fx_confetti(uv, p, t, aspect, fp, pe, pt, ca, cb); break;
     default: return float4(0.0);
   }
+
+  // Universal focus halo: a quiet accent glow that always sits under the
+  // app's attention point (mouse / caret / selected row) and glides with it,
+  // so every effect visibly tracks position even between changes. Starfield
+  // is exempt — its stars brighten near the focus instead, preserving the
+  // pure night-sky look.
+  if (effect != 3) {
+    float halo = fx_focus_glow(p, fp, 2.6);
+    float halo_a = ca.a * halo * (0.14 + 0.22 * pe);
+    float3 halo_rgb = mix(ca, cb, 0.35).rgb;
+    float total = col.a + halo_a;
+    if (total > 1e-5) {
+      col.rgb = (col.rgb * col.a + halo_rgb * halo_a) / total;
+    }
+    col.a = min(total, 1.0);
+  }
+  return col;
 }
 
 float4 fill_color(Background background,

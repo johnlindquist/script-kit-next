@@ -145,27 +145,28 @@ impl BackgroundEffect {
         all[(idx + all.len() - 1) % all.len()]
     }
 
-    /// Hue offset (0..1) between the effect's two palette colors. Kept
-    /// analogous (small offsets) rather than complementary so every effect
-    /// stays anchored to — and reads as — the user's theme accent.
+    /// Hue offset (0..1) between the effect's two palette colors. Tiny and
+    /// rotated toward the warm side of the accent: anything past ~0.06
+    /// stops reading as "the theme accent" (a gold accent lands in green),
+    /// so the second color is mostly a warmth/depth variation, not a new hue.
     fn hue_shift(self) -> f32 {
         match self {
-            BackgroundEffect::Aurora => 0.12,
-            BackgroundEffect::Plasma => 0.16,
-            BackgroundEffect::Starfield => 0.08,
-            BackgroundEffect::LavaLamp => 0.10,
-            BackgroundEffect::Nebula => 0.14,
-            BackgroundEffect::Rain => 0.06,
-            BackgroundEffect::Waves => 0.10,
-            BackgroundEffect::Fireflies => 0.08,
-            BackgroundEffect::HueDrift => 0.16,
+            BackgroundEffect::Aurora => 0.05,
+            BackgroundEffect::Plasma => 0.06,
+            BackgroundEffect::Starfield => 0.04,
+            BackgroundEffect::LavaLamp => 0.04,
+            BackgroundEffect::Nebula => 0.05,
+            BackgroundEffect::Rain => 0.03,
+            BackgroundEffect::Waves => 0.04,
+            BackgroundEffect::Fireflies => 0.04,
+            BackgroundEffect::HueDrift => 0.06,
             BackgroundEffect::Grain => 0.0,
             BackgroundEffect::Scanlines => 0.0,
-            BackgroundEffect::DotGrid => 0.12,
-            BackgroundEffect::Caustics => 0.10,
-            BackgroundEffect::Matrix => 0.14,
-            BackgroundEffect::Breath => 0.12,
-            BackgroundEffect::Confetti => 0.18,
+            BackgroundEffect::DotGrid => 0.05,
+            BackgroundEffect::Caustics => 0.04,
+            BackgroundEffect::Matrix => 0.05,
+            BackgroundEffect::Breath => 0.05,
+            BackgroundEffect::Confetti => 0.06,
         }
     }
 }
@@ -371,7 +372,9 @@ pub fn background_effect_layer(
 
     let color_a = tune(accent);
     let mut color_b = accent;
-    color_b.h = (accent.h + effect.hue_shift()).fract();
+    // Rotate toward the warm side so gold stays gold (never green) and the
+    // pair reads as one accent with depth; wrap via +1.0 to keep h in 0..1.
+    color_b.h = (accent.h - effect.hue_shift() + 1.0).fract();
     let color_b = tune(color_b);
 
     let (focus, pulse) = effect_focus_uniforms();
