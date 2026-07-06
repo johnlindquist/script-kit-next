@@ -110,6 +110,11 @@ pub struct DayPageView {
     pub(crate) spine_handoff: DayPageSpineHandoffState,
     /// Last debounced autosave write (Notes-parity SAVE_DEBOUNCE_MS throttle).
     pub(crate) last_autosave: Option<std::time::Instant>,
+
+    /// Throttle for the external-disk poll: `render` runs it every frame, but
+    /// the underlying `fs::metadata` stat only needs to run a few times a
+    /// second to catch background appends.
+    pub(crate) last_external_poll: Option<std::time::Instant>,
     /// True while a trailing autosave flush timer is pending.
     pub(crate) autosave_flush_scheduled: bool,
     /// Open past-day switcher (Cmd+P); None when closed.

@@ -177,9 +177,11 @@ impl Note {
         while let Some(bracket_start) = result.find('[') {
             if let Some(bracket_end) = result[bracket_start..].find(']') {
                 let absolute_bracket_end = bracket_start + bracket_end;
-                // Check if followed by (url)
+                // Check if followed by (url). `absolute_bracket_end` is a BYTE
+                // offset (from find), so index bytes — not chars — or a
+                // multibyte title before the link mis-detects the '('.
                 if result.len() > absolute_bracket_end + 1
-                    && result.chars().nth(absolute_bracket_end + 1) == Some('(')
+                    && result.as_bytes()[absolute_bracket_end + 1] == b'('
                 {
                     if let Some(paren_end) = result[absolute_bracket_end + 1..].find(')') {
                         let before = &result[..bracket_start];
@@ -209,13 +211,16 @@ impl Note {
         // Handle _italic_ (but not in the middle of words like snake_case)
         // Only strip if underscore is at word boundary
         while let Some(start) = result.find('_') {
-            // Check if this is a word boundary underscore
+            // Check if this is a word-boundary underscore. `start` is a BYTE
+            // offset, so take the char immediately before it via the byte-sliced
+            // prefix rather than treating the offset as a char index (which
+            // corrupts titles containing multibyte text before the '_').
             let at_start = start == 0
-                || !result
+                || !result[..start]
                     .chars()
-                    .nth(start - 1)
-                    .unwrap_or(' ')
-                    .is_alphanumeric();
+                    .next_back()
+                    .map(|c| c.is_alphanumeric())
+                    .unwrap_or(false);
             if at_start {
                 if let Some(end) = result[start + 1..].find('_') {
                     let before = &result[..start];

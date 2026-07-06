@@ -124,6 +124,7 @@ impl DayPageView {
             fragment_open_targets: Vec::new(),
             spine_handoff: Default::default(),
             last_autosave: None,
+            last_external_poll: None,
             autosave_flush_scheduled: false,
             day_switcher: None,
             note_switcher: crate::actions::CommandBar::new(
@@ -353,6 +354,17 @@ impl DayPageView {
     }
 
     pub fn poll_external_disk_changes(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        // Throttle the filesystem stat: `render` calls this every frame, but a
+        // background append (`;todo`, clipboard sediment, dictation) doesn't need
+        // sub-250ms detection. Without this, a long day page does an
+        // `fs::metadata` syscall on every single frame.
+        let now = std::time::Instant::now();
+        if let Some(last) = self.last_external_poll {
+            if now.duration_since(last) < std::time::Duration::from_millis(250) {
+                return;
+            }
+        }
+        self.last_external_poll = Some(now);
         if let Ok(Some(content)) = self.session.maybe_refresh_from_disk() {
             self.reset_day_page_spine_handoff_state(true, true);
             self.refresh_fragment_open_targets(&content);

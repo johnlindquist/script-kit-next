@@ -524,7 +524,21 @@ fn rebuild_index_from_files_with_conn_inner(conn: &Connection) -> Result<()> {
             if is_conflict_copy_path(&path) {
                 continue;
             }
-            let (note, slug, hash) = load_note_from_file(&substrate, &path, None, 0)?;
+            // Skip-and-log a single malformed/newer note file rather than
+            // aborting the whole rebuild — one hand-edited or version-skewed
+            // file must not be able to wedge the entire notes index (which
+            // rebuilds on init after a corrupt-DB recovery).
+            let (note, slug, hash) = match load_note_from_file(&substrate, &path, None, 0) {
+                Ok(loaded) => loaded,
+                Err(error) => {
+                    warn!(
+                        path = %path.display(),
+                        %error,
+                        "Skipping unreadable note during index rebuild"
+                    );
+                    continue;
+                }
+            };
             upsert_note_index_with_conn(conn, &note, &slug, &hash)?;
             remember_note_hash(note.id, hash);
         }
@@ -544,7 +558,17 @@ fn rebuild_index_from_files_with_conn_inner(conn: &Connection) -> Result<()> {
                 continue;
             }
             let deleted_at = Some(deleted_at_from_trash_path(&path));
-            let (note, slug, hash) = load_note_from_file(&substrate, &path, deleted_at, 0)?;
+            let (note, slug, hash) = match load_note_from_file(&substrate, &path, deleted_at, 0) {
+                Ok(loaded) => loaded,
+                Err(error) => {
+                    warn!(
+                        path = %path.display(),
+                        %error,
+                        "Skipping unreadable trashed note during index rebuild"
+                    );
+                    continue;
+                }
+            };
             upsert_note_index_with_conn(conn, &note, &slug, &hash)?;
             remember_note_hash(note.id, hash);
         }

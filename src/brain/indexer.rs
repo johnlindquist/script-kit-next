@@ -85,7 +85,26 @@ pub fn start_brain_indexer() {
             let mut backoff = EmbedBackoff::default();
             loop {
                 let started_unix = unix_now();
-                let result = run_cycle(&mut embedder, &mut backoff);
+                // Supervise the cycle: an unexpected panic here would otherwise
+                // unwind the whole indexer thread and silently stop ALL
+                // indexing/embedding/curation for the rest of the process. Catch
+                // it, surface it via health, reset the embedder in case it was
+                // left mid-operation, and keep the metabolism alive.
+                let result = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    run_cycle(&mut embedder, &mut backoff)
+                })) {
+                    Ok(result) => result,
+                    Err(panic) => {
+                        let msg = panic
+                            .downcast_ref::<&str>()
+                            .map(|s| (*s).to_string())
+                            .or_else(|| panic.downcast_ref::<String>().cloned())
+                            .unwrap_or_else(|| "unknown panic".to_string());
+                        tracing::error!(target: "script_kit::brain", panic = %msg, "brain index cycle PANICKED; recovering");
+                        embedder = None;
+                        Err(anyhow::anyhow!("brain index cycle panicked: {msg}"))
+                    }
+                };
                 if let Err(err) = &result {
                     tracing::warn!(target: "script_kit::brain", error = %err, "brain index cycle failed");
                 }
