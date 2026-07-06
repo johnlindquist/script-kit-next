@@ -846,7 +846,11 @@ impl Render for DayPageView {
             .flex_1()
             .min_h(px(0.))
             .h_full()
-            .pl(px(columns.input_text_inset_left))
+            // Symmetric content padding matching the notes/markdown editors,
+            // rather than the launcher's list-text column inset
+            // (`input_text_inset_left`) which pushed the day-page prose far to
+            // the right and looked inconsistent with every other markdown view.
+            .pl(px(columns.content_right_inset_x))
             .pr(px(columns.content_right_inset_x))
             .flex()
             .flex_col()
