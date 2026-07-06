@@ -12330,8 +12330,9 @@ mod from_dialog_builtin_action_validation_tests_17 {
         fn cat05_actions_with_shortcuts_count() {
             let actions = get_ai_command_bar_actions();
             let with_shortcuts = actions.iter().filter(|a| a.shortcut.is_some()).count();
-            // branch_from_last and change_model lack shortcuts => 14 - 2 = 12
-            assert_eq!(with_shortcuts, 12);
+            // The three favorite-model / expand-composer actions each carry a
+            // shortcut; branch_from_last and change_model still lack one.
+            assert_eq!(with_shortcuts, 15);
         }
 
         // ================================================================
@@ -15355,13 +15356,13 @@ mod from_dialog_builtin_action_validation_tests_18 {
         }
 
         #[test]
-        fn cat27_actions_section_has_4_actions() {
+        fn cat27_actions_section_has_7_actions() {
             let actions = get_ai_command_bar_actions();
             let actions_count = actions
                 .iter()
                 .filter(|a| a.section.as_ref() == Some(&"Actions".to_string()))
                 .count();
-            assert_eq!(actions_count, 4);
+            assert_eq!(actions_count, 7);
         }
 
         #[test]

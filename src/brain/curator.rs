@@ -50,11 +50,6 @@ fn cloud_curator_enabled() -> bool {
 }
 
 pub fn run_if_due() {
-    // Default-private: no automatic cloud egress of brain content unless the
-    // user opted in. Matches the seeded "Nothing is uploaded anywhere" note.
-    if !cloud_curator_enabled() {
-        return;
-    }
     let now = chrono::Utc::now().timestamp();
     let last = store::meta_get(LAST_RUN_MARKER)
         .ok()
@@ -72,6 +67,13 @@ pub fn run_if_due() {
     }
     // Mark first so a crashing model call can't hot-loop.
     let _ = store::meta_set(LAST_RUN_MARKER, &now.to_string());
+    // Default-private: the marker/interval bookkeeping above is harmless local
+    // state, but the actual distillation below sends brain content to a CLOUD
+    // model. Only do that when the user explicitly opted in — otherwise the
+    // seeded "Nothing is uploaded anywhere" promise holds.
+    if !cloud_curator_enabled() {
+        return;
+    }
     match run_focus_review() {
         Ok(true) => {
             tracing::info!(target: "script_kit::brain", "curator wrote focus review")
