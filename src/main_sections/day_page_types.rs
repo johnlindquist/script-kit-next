@@ -117,9 +117,8 @@ pub struct DayPageView {
     pub(crate) last_external_poll: Option<std::time::Instant>,
     /// True while a trailing autosave flush timer is pending.
     pub(crate) autosave_flush_scheduled: bool,
-    /// Open past-day switcher (Cmd+P); None when closed.
-    pub(crate) day_switcher: Option<DaySwitcherState>,
-    /// Shared Notes Cmd+P switcher component hosted by Day Page.
+    /// Shared Notes Cmd+P switcher component hosted by Day Page (the live
+    /// day/note switcher — opened as a centered popup).
     pub(crate) note_switcher: crate::actions::CommandBar,
     /// Editor byte length at the last observed change. The `@context`
     /// main-menu swap only triggers on growth so deleting inside an existing

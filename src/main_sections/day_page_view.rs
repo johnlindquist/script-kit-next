@@ -126,7 +126,6 @@ impl DayPageView {
             last_autosave: None,
             last_external_poll: None,
             autosave_flush_scheduled: false,
-            day_switcher: None,
             note_switcher: crate::actions::CommandBar::new(
                 Vec::new(),
                 crate::actions::CommandBarConfig::notes_recent_style(),

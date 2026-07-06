@@ -94,45 +94,11 @@ impl DayPageView {
             });
         }
 
-        if let Some(state) = self.day_switcher.as_ref() {
-            let today = Utc::now()
-                .with_timezone(&self.session.substrate().timezone())
-                .date_naive();
-            let filtered = filtered_day_switcher_indices(state, today);
-            elements.push(protocol::ElementInfo::list(
-                DAY_SWITCHER_LIST_ID,
-                filtered.len(),
-            ));
-            let selected_row = if filtered.is_empty() {
-                None
-            } else {
-                Some(state.selected.min(filtered.len() - 1))
-            };
-            for (row_ix, entry_index) in filtered.iter().enumerate() {
-                let Some(entry) = state.entries.get(*entry_index) else {
-                    continue;
-                };
-                elements.push(protocol::ElementInfo {
-                    semantic_id: day_switcher_semantic_id(entry.date),
-                    element_type: protocol::ElementType::Choice,
-                    text: Some(day_switcher_entry_label(entry.date, today)),
-                    value: Some(entry.date.to_string()),
-                    selected: Some(selected_row == Some(row_ix)),
-                    focused: None,
-                    index: Some(row_ix),
-                    role: Some("day_page_day_switcher_row".to_string()),
-                    kind: None,
-                    source: Some(state.query.clone()),
-                    source_name: None,
-                    selectable: Some(true),
-                    status_kind: None,
-                    action_disabled: None,
-                    style: None,
-                });
-            }
-            let total_count = elements.len();
-            return (elements.into_iter().take(limit).collect(), total_count);
-        }
+        // NOTE: the live day/note switcher is `note_switcher`, a centered
+        // CommandBar popup that surfaces its own rows through its popup
+        // automation window — not through this main-window element collection.
+        // The old inline `day_switcher` state was dead (always None), so its
+        // element block was removed along with the machinery.
 
         let total_count = elements.len();
         (elements.into_iter().take(limit).collect(), total_count)
