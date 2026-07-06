@@ -123,7 +123,7 @@ pub struct DayPageView {
     pub(crate) note_switcher: crate::actions::CommandBar,
     /// Editor byte length at the last observed change. The `@context`
     /// main-menu swap only triggers on growth so deleting inside an existing
-    /// mention never re-opens the search (day_page_round_trip.rs).
+    /// mention never re-opens the search (day_page_context_round_trip.rs).
     pub(crate) last_editor_content_len: usize,
     /// Read-only preview opened from a `kit://` resource link in Day Page markdown.
     pub(crate) kit_resource_preview: Option<DayPageKitResourcePreviewState>,

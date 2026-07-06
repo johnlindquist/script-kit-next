@@ -138,7 +138,7 @@ fn free_text_spine_projection_does_not_own_a_list() {
 
 #[test]
 fn day_page_context_round_trip_still_uses_main_menu() {
-    let round_trip = source("src/main_sections/day_page_round_trip.rs");
+    let round_trip = source("src/main_sections/day_page_context_round_trip.rs");
 
     for required in [
         "reset_to_script_list",

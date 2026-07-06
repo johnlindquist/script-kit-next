@@ -357,7 +357,7 @@ include!("main_sections/day_page_spine.rs");
 include!("main_sections/day_page_view.rs");
 include!("main_sections/day_page_switcher.rs");
 include!("main_sections/day_page_actions.rs");
-include!("main_sections/day_page_round_trip.rs");
+include!("main_sections/day_page_context_round_trip.rs");
 include!("main_sections/gesture_routing.rs");
 include!("main_sections/release_hints.rs");
 include!("main_sections/kitchen_sink_fixture.rs");

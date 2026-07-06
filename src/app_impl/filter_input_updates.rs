@@ -1084,7 +1084,7 @@ impl ScriptListApp {
                 } else {
                     // Today → main-menu round trip: the resolved token goes
                     // back into the originating Day Page line instead of the
-                    // launcher filter (see day_page_round_trip.rs).
+                    // launcher filter (see day_page_context_round_trip.rs).
                     if self.has_day_page_context_round_trip_pending() {
                         let token = replacement.as_ref().trim();
                         let alias = self.spine_mention_aliases.get(token).cloned();
