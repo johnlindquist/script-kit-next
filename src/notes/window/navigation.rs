@@ -1028,7 +1028,10 @@ impl NotesApp {
         let selection = self.editor_state.read(cx).selection();
         let cursor = selection.start.min(value.len());
         let current_line = value[..cursor].matches('\n').count() + 1;
-        let total_lines = value.lines().count().max(1);
+        // Count lines the same way as `current_line` (newlines + 1) so a cursor
+        // on the trailing empty line after a final '\n' can't read as "Ln 22/21".
+        // `str::lines()` drops that trailing empty line, causing the off-by-one.
+        let total_lines = (value.matches('\n').count() + 1).max(current_line);
         Some((current_line, total_lines))
     }
 
