@@ -183,7 +183,11 @@ impl NotesApp {
                     .min_w(px(0.))
                     .flex()
                     .items_center()
-                    .justify_center()
+                    // Left-align so that when the hover footer is squeezed (the
+                    // note-position counter appears), overflow clips the trailing
+                    // reading-time instead of the word count's leading digit
+                    // ("100 words" was rendering as "00 words").
+                    .justify_start()
                     .overflow_hidden()
                     .when_some(mention_preview.clone(), |d, (token, detail)| {
                         d.child(div().text_xs().text_color(cx.theme().accent).child(token))
