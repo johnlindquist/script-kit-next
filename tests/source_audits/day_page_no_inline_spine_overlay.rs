@@ -43,9 +43,12 @@ fn day_page_render_does_not_mount_inline_spine_overlay() {
         !render.contains("spine"),
         "Day render must stay editor-only; Spine is direct handoff logic, not a mounted Day overlay"
     );
+    // The inline day-switcher overlay was deleted (see "delete the dead
+    // inline day-switcher machinery"), so the editor is the only mounted
+    // surface this audit still requires.
     assert!(
-        render.contains("editor_input") && render.contains("day_switcher_panel"),
-        "Day render should only compose the shared editor plus the day switcher overlay"
+        render.contains("editor_input"),
+        "Day render should compose the shared editor"
     );
 }
 
