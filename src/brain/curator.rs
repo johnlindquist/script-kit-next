@@ -34,7 +34,27 @@ const INBOX_MAX_PER_CATEGORY: usize = 8;
 const STALE_PIN_DAYS: i64 = 14;
 
 /// Run the curator if it's due. Called from the indexer cycle.
+/// Env opt-in for the daily curator, which sends attention signals, activity
+/// journals, and recent chat turns to a CLOUD model (`pi_oneshot` defaults to
+/// openai-codex). It is OFF by default so the brain's "everything stays on this
+/// machine" promise holds unless the user explicitly turns distillation on.
+const CLOUD_CURATOR_ENV: &str = "SCRIPT_KIT_BRAIN_CLOUD_CURATOR";
+
+fn cloud_curator_enabled() -> bool {
+    std::env::var(CLOUD_CURATOR_ENV)
+        .map(|v| {
+            let v = v.trim();
+            !v.is_empty() && v != "0" && !v.eq_ignore_ascii_case("false")
+        })
+        .unwrap_or(false)
+}
+
 pub fn run_if_due() {
+    // Default-private: no automatic cloud egress of brain content unless the
+    // user opted in. Matches the seeded "Nothing is uploaded anywhere" note.
+    if !cloud_curator_enabled() {
+        return;
+    }
     let now = chrono::Utc::now().timestamp();
     let last = store::meta_get(LAST_RUN_MARKER)
         .ok()

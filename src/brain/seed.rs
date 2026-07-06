@@ -28,11 +28,16 @@ standing instructions (anything tagged #instructions is).
 
 ## Where it lives
 
-Everything is on this machine: `~/.scriptkit/db/brain.sqlite`. Nothing is
-uploaded anywhere. Inspect it with any sqlite tool; delete it to forget
-everything. Drop a GGUF embedding model into `~/.scriptkit/models/brain/`
-to enable semantic (meaning-based) search; without one, the Brain uses
-fast keyword search.
+Everything is on this machine: `~/.scriptkit/db/brain.sqlite`. Nothing leaves
+it by default — recall, search, and embedding all run locally. Inspect it with
+any sqlite tool; delete it to forget everything. Drop a GGUF embedding model
+into `~/.scriptkit/models/brain/` to enable semantic (meaning-based) search;
+without one, the Brain uses fast keyword search.
+
+The one exception is off by default: an optional daily "curator" that distills
+your activity and recent chat turns into an inbox using a cloud model. It only
+runs when you explicitly set `SCRIPT_KIT_BRAIN_CLOUD_CURATOR=1`. (Telegram
+memory, if you enable it, also answers via that cloud model.)
 
 ## Rules for agents reading this
 
