@@ -91,6 +91,10 @@ struct NotesDayBinding {
     date: NaiveDate,
     path: PathBuf,
     content: String,
+    /// Disk content last read/written for this binding — the baseline used to
+    /// detect and merge concurrent external appends (`;todo`, clipboard
+    /// sediment, dictation) so a capture is never clobbered by an editor save.
+    base_disk_content: String,
 }
 
 // NOTE: Theme watching is now centralized in crate::theme::service
@@ -430,6 +434,11 @@ pub struct NotesApp {
 
     /// File-backed day note currently open in the Notes editor.
     active_day_binding: Option<NotesDayBinding>,
+
+    /// Merged day-page content awaiting reconciliation into the editor buffer.
+    /// Set when a save merged in concurrent external appends; drained on the
+    /// next render tick so the editor shows the captured lines.
+    pending_day_editor_reconcile: Option<String>,
 
     /// Debounce: Whether the current note has unsaved changes
     has_unsaved_changes: bool,

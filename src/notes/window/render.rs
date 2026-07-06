@@ -142,6 +142,17 @@ impl NotesApp {
             );
             self.save_current_note();
         }
+
+        // A day-page save that merged in concurrent external captures leaves the
+        // merged text here; push it into the editor so those lines are visible
+        // and the next keystroke doesn't overwrite them.
+        if let Some(merged) = self.pending_day_editor_reconcile.take() {
+            self.editor_state.update(cx, |state, cx| {
+                let len = merged.len();
+                state.set_value(&merged, window, cx);
+                state.set_selection(len, len, window, cx);
+            });
+        }
     }
 }
 

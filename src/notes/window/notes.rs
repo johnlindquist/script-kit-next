@@ -374,6 +374,7 @@ impl NotesApp {
             date,
             path,
             content: content.clone(),
+            base_disk_content: content.clone(),
         });
         self.has_unsaved_changes = false;
         self.history_forward.clear();

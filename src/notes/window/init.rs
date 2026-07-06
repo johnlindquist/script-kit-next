@@ -174,6 +174,7 @@ impl NotesApp {
                 std::sync::Arc::new(theme::get_cached_theme()),
             ),
             active_day_binding: None,
+            pending_day_editor_reconcile: None,
             has_unsaved_changes: false,
             last_save_time: None,
             last_persisted_bounds: None,
@@ -254,21 +255,63 @@ impl NotesApp {
             return true;
         }
 
-        if let Some(day) = &self.active_day_binding {
-            if let Err(e) = std::fs::write(&day.path, &day.content) {
-                tracing::error!(
-                    error = %e,
-                    date = %day.date,
-                    path = %day.path.display(),
-                    "Failed to save day note from Notes window"
-                );
-                return false;
+        if let Some(day) = self.active_day_binding.as_mut() {
+            // Serialize against the background appenders (`;todo`, clipboard
+            // sediment, dictation) that also mutate this day file, and use an
+            // atomic write (fsync + rename). If an external writer appended
+            // lines since we last read disk, MERGE them instead of blindly
+            // overwriting — otherwise a capture that landed during the autosave
+            // debounce is silently lost (the whole reason `with_brain_write_lock`
+            // exists). Mirrors the main-window DayPageView save path.
+            use crate::brain::substrate::io;
+            let path = day.path.clone();
+            let editor_content = day.content.clone();
+            let base = day.base_disk_content.clone();
+
+            let written = io::with_brain_write_lock(|| -> anyhow::Result<(String, bool)> {
+                let disk_now = std::fs::read_to_string(&path).unwrap_or_default();
+                if disk_now == base {
+                    io::atomic_write(&path, &editor_content)?;
+                    return Ok((editor_content.clone(), false));
+                }
+                if let Some(suffix) = day_external_append_suffix(&disk_now, &base) {
+                    let merged =
+                        day_merge_editor_with_external_appends(&editor_content, suffix, &disk_now);
+                    io::atomic_write(&path, &merged)?;
+                    return Ok((merged, true));
+                }
+                // Non-append divergence: editor buffer wins the bound file (a
+                // future improvement could trash the disk copy like DayPageView).
+                io::atomic_write(&path, &editor_content)?;
+                Ok((editor_content.clone(), false))
+            });
+
+            match written {
+                Ok((content, merged)) => {
+                    day.content = content.clone();
+                    day.base_disk_content = content.clone();
+                    if merged {
+                        // External captures were folded in — reconcile them into
+                        // the editor on the next render tick so they're visible
+                        // and the next edit doesn't overwrite them.
+                        self.pending_day_editor_reconcile = Some(content);
+                    }
+                    debug!(date = %day.date, merged, "Day note saved from Notes window");
+                    self.has_unsaved_changes = false;
+                    self.last_save_time = Some(Instant::now());
+                    self.last_save_confirmed = Some(Instant::now());
+                    return true;
+                }
+                Err(e) => {
+                    tracing::error!(
+                        error = %e,
+                        date = %day.date,
+                        path = %path.display(),
+                        "Failed to save day note from Notes window"
+                    );
+                    return false;
+                }
             }
-            debug!(date = %day.date, "Day note saved from Notes window");
-            self.has_unsaved_changes = false;
-            self.last_save_time = Some(Instant::now());
-            self.last_save_confirmed = Some(Instant::now());
-            return true;
         }
 
         let Some(id) = self.selected_note_id else {
@@ -953,5 +996,59 @@ impl NotesApp {
                 "Manual resize detected - auto-sizing disabled"
             );
         }
+    }
+}
+
+/// Return the suffix that an external writer appended to a day file since we
+/// last saw `base`, or `None` if the disk content isn't `base` plus an append.
+/// Mirrors the DayPageView merge so a `;todo`/clipboard/dictation capture landing
+/// during the autosave debounce is preserved rather than clobbered.
+fn day_external_append_suffix<'a>(disk_now: &'a str, base: &str) -> Option<&'a str> {
+    let suffix = disk_now.strip_prefix(base.trim_end())?;
+    if suffix.trim().is_empty() {
+        return None;
+    }
+    Some(suffix)
+}
+
+/// Combine the editor buffer with external appends detected on disk, preserving
+/// a single joining newline and the trailing newline if the disk file had one.
+fn day_merge_editor_with_external_appends(content: &str, suffix: &str, disk_now: &str) -> String {
+    let mut merged = content.trim_end().to_string();
+    merged.push('\n');
+    merged.push_str(suffix.trim_start_matches('\n'));
+    if disk_now.ends_with('\n') && !merged.ends_with('\n') {
+        merged.push('\n');
+    }
+    merged
+}
+
+#[cfg(test)]
+mod day_save_merge_tests {
+    use super::{day_external_append_suffix, day_merge_editor_with_external_appends};
+
+    #[test]
+    fn detects_external_append_and_ignores_pure_edit() {
+        let base = "# Today\n\n- first\n";
+        assert_eq!(
+            day_external_append_suffix("# Today\n\n- first\n- captured\n", base),
+            Some("\n- captured\n")
+        );
+        // No external append: disk equals base -> None.
+        assert_eq!(day_external_append_suffix(base, base), None);
+    }
+
+    #[test]
+    fn merge_preserves_editor_edits_and_external_capture() {
+        // The editor changed the first line WHILE a capture appended a line.
+        let editor = "# Today edited\n\n- first";
+        let disk = "# Today\n\n- first\n- captured\n";
+        let base = "# Today\n\n- first\n";
+        let suffix = day_external_append_suffix(disk, base).expect("append detected");
+        let merged = day_merge_editor_with_external_appends(editor, suffix, disk);
+        // Both the editor's edit and the captured line survive.
+        assert!(merged.contains("# Today edited"));
+        assert!(merged.contains("- captured"));
+        assert!(merged.ends_with('\n'));
     }
 }

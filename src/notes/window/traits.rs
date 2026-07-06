@@ -8,17 +8,13 @@ impl Focusable for NotesApp {
 
 impl Drop for NotesApp {
     fn drop(&mut self) {
-        // Save any unsaved changes before closing
-        if self.has_unsaved_changes {
-            if let Some(id) = self.selected_note_id {
-                if let Some(note) = self.notes.iter().find(|n| n.id == id) {
-                    if let Err(e) = storage::save_note(note) {
-                        tracing::error!(error = %e, "Failed to save note on close");
-                    } else {
-                        debug!(note_id = %id, "Note saved on window close");
-                    }
-                }
-            }
+        // Save any unsaved changes before closing. Route through
+        // save_current_note so the ACTIVE DAY BINDING is saved too — the macOS
+        // traffic-light close only fires Drop (it bypasses the Escape/Cmd+W
+        // paths), and the previous regular-note-only logic here silently lost
+        // day-note edits. save_current_note needs no cx and no-ops when clean.
+        if self.has_unsaved_changes && !self.save_current_note() {
+            tracing::error!("Failed to save unsaved changes on Notes window close");
         }
 
         let _ = crate::windows::remove_automation_window(
