@@ -318,11 +318,16 @@ impl NotesApp {
         };
 
         if let Some(note) = note_list.iter().find(|n| n.id == id) {
-            let content_len = note.content.len();
             self.editor_state.update(cx, |state, cx| {
                 state.set_value(&note.content, window, cx);
-                // Move cursor to end of text (set selection to end..end = no selection, cursor at end)
-                state.set_selection(content_len, content_len, window, cx);
+                // Open at the TOP with the caret at the start so the note's
+                // title (the H1 first line) is the first visible line. Putting
+                // the caret at the end scrolls the editor to the bottom
+                // (set_selection scrolls to the caret), which clipped the
+                // accent-colored H1 off the top — the reported "stray yellow dot"
+                // was the sliver of that title line peeking above the fold.
+                // (select_day_note deliberately lands at the end for append.)
+                state.set_selection(0, 0, window, cx);
             });
         }
 
