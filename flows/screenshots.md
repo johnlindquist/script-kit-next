@@ -47,21 +47,28 @@ Numbered names are stable identifiers — reuse them exactly when re-capturing; 
 - `19-references` — Day Page with embedded kit:// clipboard references
 - `20-brain-inbox` — Brain Inbox resurfacing captures at the top of the launcher
 - `21-dictation` — dictation overlay with live waveform and mic controls
+- `22-shader-background` — launcher with the Aurora background shader over a clean desktop
+- `23-shader-background-alt` — launcher with the Starfield background shader over a clean desktop
 
 Staging rules that make these shots "glamour" grade:
 - Capture the real app running live on macOS with real data and real vibrancy — never mock, never composite in a design tool. The site's footer promises unedited captures; keep that promise.
 - Use a visually rich desktop background so translucency reads in the shot.
+- **Clean desktop rule: hide every other app before capturing** so the panel floats over the bare wallpaper — no editor/terminal/Finder windows bleeding through the vibrancy. `scripts/agentic/shader-screenshot-probe.ts` shows the pattern: snapshot visible process names via System Events, hide them all (snapshot names FIRST — mutating visibility while iterating a live `whose` filter throws Invalid Index), capture, then restore the same list.
 - Stage believable content first (clipboard entries, notes, a chat exchange, a TextEdit selection for the rewrite shots) via the devtools driver or by hand.
-- Target retina scale; published JPEGs are ~1675×1139.
+- Target retina scale; published JPEGs are ~1675×1139 or 2x-native.
 
 ## Capture mechanism
 Two mechanisms, per the devtools stack:
 
-1. **Driver capture (default)** — follow `scripts/agentic/a4-a9-screenshot-probe.ts`: `Driver.launch({ binary, sessionName, sandboxHome: true })` from `scripts/devtools/driver.ts`, stage state with `setFilterAndWait`/`simulateGpuiEvent`, then `driver.captureScreenshot({ target: { type: "kind", kind: "main" }, savePath })`. Requires the window on screen (`{ type: "show" }` first). Note: `sandboxHome: true` gives a clean home — for glamour shots with real data, capture against the user's real app state instead when the task asks for it.
-2. **OS-level capture** — `scripts/devtools/tahoe-oscapture.sh` (`screencapture -x` across displays, cropped to the matched window) when the shot must include the desktop behind the panel or native vibrancy that in-app capture misses.
+1. **Driver capture** — follow `scripts/agentic/a4-a9-screenshot-probe.ts`: `Driver.launch({ binary, sessionName, sandboxHome: true })` from `scripts/devtools/driver.ts`, stage state with `setFilterAndWait`/`simulateGpuiEvent`, then `driver.captureScreenshot({ target: { type: "kind", kind: "main" }, savePath })`. Requires the window on screen (`{ type: "show" }` first). In-app capture composites an opaque window with no desktop/vibrancy — use it for layout proofs, not published glamour shots. Note: `sandboxHome: true` gives a clean home — for glamour shots with real data, capture against the user's real app state instead when the task asks for it.
+2. **OS-level capture (default for published shots)** — `screencapture -x -R x,y,w,h` of the padded window region, rect resolved via `scripts/devtools/bin/tahoe_window_geometry --owner script-kit-gpui` (`winRect` is global points; retry while the window mounts). Protocol/driver window frames are NOT global screen coordinates — never feed them to `screencapture -R`. `scripts/devtools/tahoe-oscapture.sh` is the exact-crop variant; `scripts/agentic/shader-screenshot-probe.ts` is the canonical padded glamour probe (hide-others staging + geometry retry + restore).
+
+Shader/background-effect shots: `effects.background` is read ONCE at app startup (`src/effects.rs` `startup_prefs` OnceLock) — hot-reloading config.ts does not apply it. Pre-seed a home dir with `export default { effects: { background: "<slug>", intensity: 0.9 } }` in `.scriptkit/config.ts`, then `Driver.launch({ binary, env: { HOME, SK_PATH } })` — one launch per effect.
 
 Convert raw PNG → published JPEG with sips, keeping the raw PNG in `.test-screenshots/glamour/`:
 `sips -s format jpeg -s formatOptions 85 .test-screenshots/glamour/<name>.png --out site/images/<name>.jpg`
+
+**Environment gate (check FIRST):** OS-level capture needs Screen Recording permission, Automation (System Events) permission, and an unlocked composited display. Probe with `screencapture -x /tmp/screencheck.png` before staging anything. In a sandboxed/headless run (mdflow engine sandboxes fail with "could not create image from display", and driver launches may never reach APP_READY), do NOT retry blindly and do NOT fall back to in-app capture for published shots — instead report the blocker and hand back the exact command for the invoking agent to run from an interactive session, e.g. `bun scripts/agentic/shader-screenshot-probe.ts`. Producing that runnable probe + instructions counts as completing the task in a blocked environment.
 
 ## Command map
 repo state / what changed / dirty tree -> git status --short --branch
@@ -113,7 +120,11 @@ Example 2 — "add a new shot for <surface>":
 ## Error recovery (error text -> exact next step)
 "Blocking waiting for file lock on build directory" -> a bare cargo ran; rerun the same args via ./scripts/agentic/agent-cargo.sh
 capture returns { error } -> the window is not on screen; send { type: "show" }, sleep, retry once, then report
+"could not create image from display" -> this sandbox has no composited display / Screen Recording permission; stop capturing, report the blocker, and hand back the runnable probe command (e.g. `bun scripts/agentic/shader-screenshot-probe.ts`) for an interactive session
 screencapture permission denied -> report that Screen Recording permission is missing for the invoking terminal; do not work around it silently
+"Binary not found at target-agent/artifacts/<name>/..." -> the low-disk watcher evicted the artifact; rebuild with `SCRIPT_KIT_AGENT_ARTIFACT_NAME=<name> ./scripts/agentic/agent-cargo.sh build --bin script-kit-gpui`
+"no on-screen window owned by 'script-kit-gpui'" from tahoe_window_geometry -> the window is still mounting or the binary vanished mid-run; poll the geometry helper (~500ms up to 10s) before failing
+System Events "Invalid index. (-1719)" while hiding apps -> you mutated visibility while iterating a live `whose` filter; snapshot the process names first, then hide by name
 configured model unavailable -> stop and report the exact runtime error; never silently switch models
 rg exits 1 (no matches) -> broaden the pattern once, then report the absence plus the exact command used
 
