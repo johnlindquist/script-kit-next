@@ -1,26 +1,31 @@
-// Glamour video capture: short screen recordings of the app in use, for the
-// scriptkit.com landing page loops.
+// Glamour video capture: the single hero loop of the app in use, for the
+// scriptkit.com landing page.
 //
-// Scenarios:
-// - search-loop: human-paced typing in unified search, showing instant
-//   filtering across queries, ending on an empty filter for a clean loop.
-// - shaders-loop: type "next effect" once, then press Enter repeatedly —
-//   each press cycles the background shader live (aurora → plasma → …).
+// shaders-loop storyboard (~24s, SynthWave '84 theme, starts on Starfield):
+// type "next effect" live → Enter cycles the shader (LavaLamp → Nebula →
+// Rain → Waves → Fireflies), and between cycles the probe arrows the list
+// selection up/down and sweeps the real mouse across the panel — every
+// effect carries a focus halo that visibly tracks the caret, the selected
+// row, and the cursor, so the video shows the shaders reacting to live use.
 //
 // Mechanics (shared with shader-screenshot-probe.ts — keep in sync):
 // - Record on the display the window actually lands on (Script Kit positions
 //   on the display with the mouse); the capture rect comes from
 //   tahoe_window_geometry (global points), padded, fed to
 //   `screencapture -v -R` which records that region at retina scale.
-// - Effects are startup-only: pre-seed the home dir config.ts per scenario.
+// - Effects/theme are startup-only: pre-seed the home dir config.ts.
+// - protocol simulateKey only handles named keys (enter/backspace/up/down);
+//   typing is progressive setFilter prefixes, which renders identically.
+// - Mouse sweeps use cliclick (brew install cliclick) with easing; the
+//   original cursor position is saved and restored.
 // - Hide every other visible app first (snapshot names, restore after) so
 //   the panel floats over the bare wallpaper.
 // - Requires Screen Recording + Automation permissions in an interactive,
 //   unlocked session — not runnable from an agent sandbox.
 //
 // Run: bun scripts/agentic/glamour-video-probe.ts
-// Masters land in .test-screenshots/glamour/video/*.mov (VFR); encode for
-// the web with ffmpeg (fps=30, h264, faststart) into site/videos/.
+// Master lands in .test-screenshots/glamour/video/shaders-loop.mov (VFR);
+// encode for the web with ffmpeg (fps=30, h264, faststart) into site/videos/.
 
 import { join } from "node:path";
 import { mkdirSync, writeFileSync, rmSync } from "node:fs";
@@ -84,9 +89,6 @@ async function windowRectPoints(): Promise<{ x: number; y: number; w: number; h:
   throw new Error(`window geometry failed after retries: ${lastErr}`);
 }
 
-// simulateKey only handles named keys (enter/backspace/…), not letters —
-// per-letter key names are silently dropped. Progressive setFilter prefixes
-// render identically to typing.
 async function typeText(driver: Driver, text: string, perKeyMs = 95) {
   for (let i = 1; i <= text.length; i++) {
     driver.setFilter(text.slice(0, i));
@@ -101,123 +103,135 @@ async function backspaceAll(driver: Driver, text: string, perKeyMs = 55) {
   }
 }
 
-type Scenario = {
-  name: string;
-  effect: string | null;
-  theme: string | null;
-  durationSecs: number;
-  run: (driver: Driver) => Promise<void>;
-};
+async function arrowDance(driver: Driver, downs: number, ups: number, stepMs = 340) {
+  for (let i = 0; i < downs; i++) {
+    driver.simulateKey("down");
+    await Bun.sleep(stepMs);
+  }
+  for (let i = 0; i < ups; i++) {
+    driver.simulateKey("up");
+    await Bun.sleep(stepMs);
+  }
+}
 
-const SCENARIOS: Scenario[] = [
-  {
-    // Fireflies on the default amber theme: warm on-brand orbs drifting
-    // behind the search interaction.
-    name: "search-loop",
-    effect: "fireflies",
-    theme: null,
-    durationSecs: 16,
-    run: async (driver) => {
-      await Bun.sleep(900);
-      await typeText(driver, "clip");
-      await Bun.sleep(1500);
-      await backspaceAll(driver, "clip");
-      await Bun.sleep(500);
-      await typeText(driver, "notes");
-      await Bun.sleep(1500);
-      await backspaceAll(driver, "notes");
-      await Bun.sleep(500);
-      await typeText(driver, "window");
-      await Bun.sleep(1500);
-      await backspaceAll(driver, "window");
-      await Bun.sleep(1200);
-    },
-  },
-  {
-    // Starfield on SynthWave '84 (pink stars on deep blue) is the strongest
-    // opener; cycling from it walks LavaLamp -> Nebula -> Rain.
-    name: "shaders-loop",
-    effect: "starfield",
-    theme: "synthwave-84",
-    durationSecs: 18,
-    run: async (driver) => {
-      await Bun.sleep(1200);
-      await typeText(driver, "next effect");
-      await Bun.sleep(900);
-      for (let i = 0; i < 3; i++) {
-        driver.simulateKey("enter");
-        await Bun.sleep(3300);
-      }
-      await backspaceAll(driver, "next effect", 45);
-      await Bun.sleep(800);
-    },
-  },
-];
+function mousePos(): { x: number; y: number } | null {
+  const r = Bun.spawnSync(["cliclick", "p"]);
+  const m = r.stdout.toString().match(/(\d+),(\d+)/);
+  return m ? { x: Number(m[1]), y: Number(m[2]) } : null;
+}
+
+// Smoothly move the real cursor through the given points (global coords).
+async function mouseSweep(points: Array<{ x: number; y: number }>, easeMs = 700) {
+  for (const p of points) {
+    Bun.spawnSync(["cliclick", "-e", String(easeMs), `m:${Math.round(p.x)},${Math.round(p.y)}`]);
+    await Bun.sleep(120);
+  }
+}
 
 const receipt: any = { videos: [], errors: [] };
 const hidden = hideOtherApps();
 receipt.hiddenApps = hidden;
+const originalMouse = mousePos();
 
 try {
-  for (const scenario of SCENARIOS) {
-    const home = `/tmp/sk-video-home-${scenario.name}`;
-    rmSync(home, { recursive: true, force: true });
-    const kitDir = join(home, ".scriptkit");
-    mkdirSync(kitDir, { recursive: true });
-    const themeLine = scenario.theme ? `  theme: { presetId: "${scenario.theme}" },\n` : "";
-    const effectLine = scenario.effect
-      ? `  effects: { background: "${scenario.effect}", intensity: 0.9 },\n`
-      : "";
-    writeFileSync(join(kitDir, "config.ts"), `export default {\n${themeLine}${effectLine}};\n`);
+  const home = `/tmp/sk-video-home-shaders-loop`;
+  rmSync(home, { recursive: true, force: true });
+  const kitDir = join(home, ".scriptkit");
+  mkdirSync(kitDir, { recursive: true });
+  writeFileSync(
+    join(kitDir, "config.ts"),
+    `export default {\n  theme: { presetId: "synthwave-84" },\n  effects: { background: "starfield", intensity: 0.9 },\n};\n`,
+  );
 
-    const driver = await Driver.launch({
-      binary: join(PROJECT_ROOT, "target-agent/artifacts/glamour/script-kit-gpui"),
-      sessionName: `video-${scenario.name}`,
-      env: { HOME: home, SK_PATH: kitDir },
-    });
-    try {
-      driver.send({ type: "show" });
-      await driver.waitForSettle();
-      const f = await windowRectPoints();
-      const rect = {
-        x: Math.max(0, Math.round(f.x - PAD_X)),
-        y: Math.max(0, Math.round(f.y - PAD_Y)),
-        w: Math.round(f.w + PAD_X * 2),
-        h: Math.round(f.h + PAD_Y * 2),
-      };
-      const mov = join(OUT_DIR, `${scenario.name}.mov`);
-      rmSync(mov, { force: true });
-      const rec = Bun.spawn([
-        "screencapture", "-x", "-v",
-        "-V", String(scenario.durationSecs),
-        "-R", `${rect.x},${rect.y},${rect.w},${rect.h}`,
-        mov,
-      ]);
-      // let the recorder actually start before driving the UI
-      await Bun.sleep(900);
-      await scenario.run(driver);
-      await rec.exited;
-      let effectCycles: number | null = null;
-      if (scenario.name === "shaders-loop") {
-        const logs = (await driver.getLogs({
-          limit: 200,
-          contains: "background-effect-next",
-        })) as any;
-        effectCycles = (logs?.entries ?? []).filter((e: any) =>
-          String(e.message ?? "").includes("status=success"),
-        ).length;
-        if (!effectCycles) throw new Error("shader cycling never fired during recording");
-      }
-      receipt.videos.push({ name: scenario.name, rect, mov, effectCycles });
-    } catch (err: any) {
-      receipt.errors.push({ name: scenario.name, error: String(err?.message ?? err) });
-    } finally {
-      await driver.close();
-    }
+  const driver = await Driver.launch({
+    binary: join(PROJECT_ROOT, "target-agent/artifacts/glamour/script-kit-gpui"),
+    sessionName: "video-shaders-loop",
+    env: { HOME: home, SK_PATH: kitDir },
+  });
+  try {
+    driver.send({ type: "show" });
+    await driver.waitForSettle();
+    const f = await windowRectPoints();
+    const rect = {
+      x: Math.max(0, Math.round(f.x - PAD_X)),
+      y: Math.max(0, Math.round(f.y - PAD_Y)),
+      w: Math.round(f.w + PAD_X * 2),
+      h: Math.round(f.h + PAD_Y * 2),
+    };
+    // Sweep waypoints inside the window body (below the input row).
+    const cx = f.x + f.w / 2;
+    const listY = f.y + f.h * 0.55;
+    const left = { x: f.x + f.w * 0.18, y: listY };
+    const right = { x: f.x + f.w * 0.82, y: listY };
+    const lower = { x: cx, y: f.y + f.h * 0.8 };
+    const upper = { x: cx, y: f.y + f.h * 0.3 };
+
+    const DURATION = 26;
+    const mov = join(OUT_DIR, "shaders-loop.mov");
+    rmSync(mov, { force: true });
+    const rec = Bun.spawn([
+      "screencapture", "-x", "-v",
+      "-V", String(DURATION),
+      "-R", `${rect.x},${rect.y},${rect.w},${rect.h}`,
+      mov,
+    ]);
+    await Bun.sleep(900);
+
+    // — Starfield: mouse sweep, then type the command live.
+    await mouseSweep([left, right], 900);
+    await typeText(driver, "next effect");
+    await Bun.sleep(800);
+
+    // — LavaLamp: arrows walk the results, halo tracks the selection.
+    driver.simulateKey("enter");
+    await Bun.sleep(1400);
+    await arrowDance(driver, 3, 3);
+
+    // — Nebula: diagonal mouse sweep.
+    driver.simulateKey("enter");
+    await Bun.sleep(1200);
+    await mouseSweep([lower, upper, right], 650);
+
+    // — Rain: a short arrow run.
+    driver.simulateKey("enter");
+    await Bun.sleep(1200);
+    await arrowDance(driver, 2, 2);
+
+    // — Waves: wide sweep.
+    driver.simulateKey("enter");
+    await Bun.sleep(1200);
+    await mouseSweep([right, left], 900);
+
+    // — Fireflies: clear the filter, dance the Suggested list, final sweep.
+    driver.simulateKey("enter");
+    await Bun.sleep(1200);
+    await backspaceAll(driver, "next effect", 45);
+    await Bun.sleep(400);
+    await arrowDance(driver, 3, 3, 300);
+    await mouseSweep([left, right], 800);
+
+    await rec.exited;
+
+    const logs = (await driver.getLogs({
+      limit: 200,
+      contains: "background-effect-next",
+    })) as any;
+    const effectCycles = (logs?.entries ?? []).filter((e: any) =>
+      String(e.message ?? "").includes("status=success"),
+    ).length;
+    if (effectCycles < 5) throw new Error(`expected 5 shader cycles, saw ${effectCycles}`);
+    receipt.videos.push({ name: "shaders-loop", rect, mov, effectCycles });
+  } finally {
+    await driver.close();
   }
+} catch (err: any) {
+  receipt.errors.push({ error: String(err?.message ?? err) });
 } finally {
   restoreApps(hidden);
+  if (originalMouse) {
+    Bun.spawnSync(["cliclick", `m:${originalMouse.x},${originalMouse.y}`]);
+  }
 }
 
 console.log(JSON.stringify(receipt, null, 2));
-if (receipt.errors.length > 0 || receipt.videos.length !== SCENARIOS.length) process.exit(1);
+if (receipt.errors.length > 0 || receipt.videos.length !== 1) process.exit(1);
