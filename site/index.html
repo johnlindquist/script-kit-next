@@ -81,7 +81,7 @@
     background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
     padding: 8px; box-shadow: 0 40px 90px -32px rgba(0,0,0,.9); overflow: hidden;
   }
-  figure.shot img { width: 100%; height: auto; display: block; border-radius: calc(var(--radius) - 8px); }
+  figure.shot img, figure.shot video { width: 100%; height: auto; display: block; border-radius: calc(var(--radius) - 8px); }
   .hero-shot { margin: 56px auto 0; max-width: 1040px; }
   .hero-shot figcaption { text-align: center; color: var(--dimmer); font-size: .86rem; padding: 14px 8px 2px; }
 
@@ -184,6 +184,14 @@
     <span><b>settings</b> &amp; built-ins</span>
   </div>
   <div class="big-shot">
+    <figure class="shot">
+      <video autoplay muted loop playsinline poster="videos/search-loop-poster.jpg">
+        <source src="videos/search-loop.mp4" type="video/mp4">
+      </video>
+    </figure>
+    <figcaption style="color:var(--dimmer);font-size:.86rem;padding-top:14px">Real time, unedited: every keystroke re-ranks the whole list before the next one lands.</figcaption>
+  </div>
+  <div class="big-shot" style="margin-top:28px">
     <figure class="shot"><img src="images/02-search-filter.jpg" alt="Typing 'clip' surfaces Clipboard History, Paste Next Clipboard Item, and the front app's own Edit → Show Clipboard menu action"></figure>
     <figcaption style="color:var(--dimmer);font-size:.86rem;padding-top:14px">Typing <code class="k">clip</code> finds Script Kit's own tools <em style="color:rgba(255,255,255,.8)">and</em> the front app's menu-bar commands — one list, one Return key.</figcaption>
   </div>
@@ -340,6 +348,14 @@ copy(update)
     <div class="tag">Background effects</div>
     <h2>Real shaders behind your launcher.</h2>
     <p>Sixteen procedural effects — Aurora, Plasma, Starfield, Nebula, Caustics, Matrix, and more — rendered as live Metal shaders behind the launcher, tinted to your theme's accent and quietly tracking your cursor. Cycle them from the launcher, or pin one with <code class="k">effects.background</code> in config.</p>
+  </div>
+  <div class="big-shot" style="margin-top:40px">
+    <figure class="shot">
+      <video autoplay muted loop playsinline poster="videos/shaders-loop-poster.jpg">
+        <source src="videos/shaders-loop.mp4" type="video/mp4">
+      </video>
+    </figure>
+    <figcaption style="color:var(--dimmer);font-size:.86rem;padding-top:14px">Type <code class="k">next effect</code>, press Return, and the shader morphs live — here on the SynthWave&nbsp;'84 theme: Starfield → Lava Lamp → Nebula → Rain.</figcaption>
   </div>
   <div class="duo">
     <figure class="shot"><img src="images/22-shader-background.jpg" alt="Launcher with a live shader background effect"><figcaption>Live Metal shader, anchored to the theme accent</figcaption></figure>
