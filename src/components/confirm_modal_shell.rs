@@ -1,11 +1,10 @@
-use gpui::{
-    div, prelude::*, px, AnyElement, App, ClickEvent, Div, Rgba, SharedString, Stateful, Window,
-};
+use gpui::{div, prelude::*, px, AnyElement, Div, Rgba, SharedString, Stateful};
 
 use crate::components::footer_chrome::{
     render_footer_hint_action_button_frame, FooterHintActionButtonFrameSpec,
     FooterHintButtonLayoutOverrides, FooterHintContentJustify,
 };
+use crate::components::prompt_footer::FooterClickCallback;
 use crate::dev_style_tool::{
     runtime_overrides, StyleValue, CONFIRM_MODAL_GAP_KNOB_ID,
     CONFIRM_MODAL_HEADER_ACCENT_HEIGHT_KNOB_ID, CONFIRM_MODAL_HEADER_ACCENT_WIDTH_KNOB_ID,
@@ -50,7 +49,7 @@ pub(crate) struct ModalActionRowButton {
     pub(crate) selected: bool,
     pub(crate) enabled: bool,
     pub(crate) layout: FooterHintButtonLayoutOverrides,
-    pub(crate) on_click: Box<dyn Fn(&ClickEvent, &mut Window, &mut App) + 'static>,
+    pub(crate) on_click: FooterClickCallback,
 }
 
 pub(crate) fn confirm_modal_header(

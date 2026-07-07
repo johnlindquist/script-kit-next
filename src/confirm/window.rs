@@ -23,7 +23,7 @@ use crate::{
     components::footer_chrome::{
         current_main_menu_footer_height, current_main_menu_footer_metrics,
         footer_action_slot_width, footer_button_height, footer_centered_action_button_layout,
-        FooterActionSlot, FooterHintButtonLayoutOverrides,
+        footer_centered_action_edge_padding_x, FooterActionSlot, FooterHintButtonLayoutOverrides,
     },
     components::overlay_modal::MODAL_PADDING,
     dev_style_tool::{
@@ -242,31 +242,30 @@ fn confirm_action_button_radius() -> f32 {
 
 fn confirm_action_button_layout() -> FooterHintButtonLayoutOverrides {
     let footer_layout = footer_centered_action_button_layout();
+    let metrics = current_main_menu_footer_metrics();
     FooterHintButtonLayoutOverrides {
         button_padding_x_px: Some(confirm_modal_number(
             CONFIRM_MODAL_ACTIONS_PADDING_X_KNOB_ID,
             footer_layout
                 .button_padding_x_px
-                .expect("centered footer action layout sets x padding"),
+                .unwrap_or(metrics.button_padding_x),
         )),
         button_padding_y_px: Some(confirm_modal_number(
             CONFIRM_MODAL_ACTIONS_PADDING_Y_KNOB_ID,
             footer_layout
                 .button_padding_y_px
-                .expect("centered footer action layout sets y padding"),
+                .unwrap_or(metrics.button_padding_y),
         )),
         content_gap_px: Some(confirm_modal_number(
             CONFIRM_MODAL_ACTIONS_CONTENT_GAP_KNOB_ID,
-            footer_layout
-                .content_gap_px
-                .expect("centered footer action layout sets content gap"),
+            footer_layout.content_gap_px.unwrap_or(metrics.content_gap),
         )),
         button_radius_px: Some(confirm_action_button_radius()),
         edge_padding_x_px: Some(confirm_modal_number(
             CONFIRM_MODAL_ACTIONS_EDGE_PADDING_X_KNOB_ID,
             footer_layout
                 .edge_padding_x_px
-                .expect("centered footer action layout sets edge padding"),
+                .unwrap_or_else(footer_centered_action_edge_padding_x),
         )),
         // Confirm/cancel labels are caller-supplied ("Move to Trash", custom
         // cancel copy) — a fixed footer slot ellipsizes them. Hug the rendered
@@ -274,7 +273,6 @@ fn confirm_action_button_layout() -> FooterHintButtonLayoutOverrides {
         // the shared footer metrics above.
         shrink_frame_to_content_px: true,
         hug_frame_to_content: true,
-        ..footer_layout
     }
 }
 

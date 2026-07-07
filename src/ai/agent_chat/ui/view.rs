@@ -3453,6 +3453,7 @@ impl AgentChatView {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn render_agent_chat_footer_hint_button(
         id: &'static str,
         key: &'static str,
@@ -3461,7 +3462,7 @@ impl AgentChatView {
         selected: bool,
         enabled: bool,
         theme: &crate::theme::Theme,
-        on_click: Option<Rc<dyn Fn(&gpui::ClickEvent, &mut Window, &mut App) + 'static>>,
+        on_click: Option<crate::components::hint_strip::HintClickHandler>,
     ) -> gpui::AnyElement {
         let height = crate::components::footer_chrome::footer_button_height(
             crate::window_resize::main_layout::HINT_STRIP_HEIGHT,
