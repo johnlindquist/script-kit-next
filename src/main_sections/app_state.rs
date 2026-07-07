@@ -1374,4 +1374,4 @@ enum AliasMatch {
 }
 
 pub(crate) const ROOT_LAUNCHER_PLACEHOLDER: &str =
-    "Search • @ context • / command • . style • | profile";
+    "Search • @ context • / commands • ; capture • : filters";

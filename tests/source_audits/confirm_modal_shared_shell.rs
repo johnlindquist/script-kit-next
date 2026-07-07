@@ -56,6 +56,7 @@ fn confirm_modal_shell_is_registered_as_shared_component() {
 fn shortcut_recorder_and_confirm_popup_use_the_same_shell() {
     let shortcut = read("src/components/shortcut_recorder/render.rs");
     let confirm = read("src/confirm/window.rs");
+    let shell = read("src/components/confirm_modal_shell.rs");
 
     for (label, source, content_id) in [
         (
@@ -76,11 +77,10 @@ fn shortcut_recorder_and_confirm_popup_use_the_same_shell() {
             "{label} must use the shared confirm modal header"
         );
         assert!(
-            source.contains("render_footer_hint_action_button_frame")
-                && source.contains("FooterHintActionButtonFrameSpec")
-                && source.contains("FooterHintButtonLayoutOverrides")
-                && source.contains("FooterHintContentJustify::Center"),
-            "{label} must use the shared footer action button frame for modal actions"
+            source.contains("modal_action_row")
+                && source.contains("ModalActionRowButton")
+                && source.contains("FooterHintButtonLayoutOverrides"),
+            "{label} must route modal actions through the shared modal action row"
         );
         assert!(
             !source.contains("Button::new(")
@@ -92,9 +92,9 @@ fn shortcut_recorder_and_confirm_popup_use_the_same_shell() {
     assert!(
         shortcut.contains("shortcut-cancel-button")
             && shortcut.contains("shortcut-save-button")
-            && shortcut.contains("key_first: false")
+            && shell.contains("key_first: false")
             && shortcut.contains("CONFIRM_MODAL_ACTIONS_EDGE_PADDING_X_KNOB_ID"),
-        "shortcut recorder buttons must follow confirm modal footer-button ordering and designer controls"
+        "shortcut recorder buttons must follow confirm modal action ordering and designer controls"
     );
 }
 
@@ -112,7 +112,7 @@ fn confirm_popup_uses_shortcut_modal_button_and_chrome_tokens() {
             && footer.contains("FooterHintActionButtonFrameSpec")
             && footer.contains("render_footer_hint_button_like_with_layout")
             && footer.contains("render_footer_hint_action_button_frame")
-            && footer.contains("footer_hint_action_visual_width_px")
+            && footer.contains("footer_centered_action_edge_padding_x")
             && footer.contains("edge_padding_x_px")
             && footer.contains("shrink_frame_to_content_px")
             && footer.contains("footer-action-button-slot")
@@ -124,8 +124,8 @@ fn confirm_popup_uses_shortcut_modal_button_and_chrome_tokens() {
         "footer chrome must own the reusable action button frame, centering, hover, and active state used by confirm modal actions"
     );
     assert!(
-        confirm.contains("render_footer_hint_action_button_frame")
-            && confirm.contains("FooterHintActionButtonFrameSpec")
+        confirm.contains("modal_action_row")
+            && confirm.contains("ModalActionRowButton")
             && confirm.contains("FooterHintButtonLayoutOverrides")
             && confirm.contains("footer_action_slot_width")
             && confirm.contains("FooterActionSlot::Close")
@@ -133,10 +133,10 @@ fn confirm_popup_uses_shortcut_modal_button_and_chrome_tokens() {
             && confirm.contains("footer_button_height")
             && confirm.contains("current_main_menu_footer_height")
             && confirm.contains("current_main_menu_footer_metrics().item_gap_px")
-            && confirm.contains("FooterHintContentJustify")
             && confirm.contains("CONFIRM_MODAL_ACTIONS_BUTTON_HEIGHT_KNOB_ID")
             && confirm.contains("CONFIRM_MODAL_ACTIONS_EDGE_PADDING_X_KNOB_ID")
             && confirm.contains("edge_padding_x_px")
+            && confirm.contains("footer_centered_action_button_layout")
             && confirm.contains("shrink_frame_to_content_px")
             && confirm.contains("confirm_action_button_layout")
             && confirm.contains("confirm_modal_stack_gaps")
@@ -144,22 +144,21 @@ fn confirm_popup_uses_shortcut_modal_button_and_chrome_tokens() {
             && confirm.contains("confirm_anatomy_header_body_gap")
             && confirm.contains("confirm_anatomy_body_actions_gap")
             && confirm.contains("confirm_body_line_height"),
-        "confirm popup must reuse footer action frames and expose action/anatomy modal designer overrides"
+        "confirm popup must reuse the shared modal action row and expose action/anatomy modal designer overrides"
     );
     assert!(
-        render_block.contains("render_footer_hint_action_button_frame")
+        render_block.contains("modal_action_row")
+            && render_block.contains("ModalActionRowButton")
             && render_block.contains("confirm-cancel-button")
             && render_block.contains("confirm-ok-button")
             && render_block.contains("label: self.cancel_text.clone()")
             && render_block.contains("key: \"Esc\".into()")
             && render_block.contains("label: self.confirm_text.clone()")
             && render_block.contains("key: \"↵\".into()")
-            && render_block.contains("key_first: false")
-            && render_block.contains("FooterHintContentJustify::Center")
             && render_block.contains("confirm-modal-stack")
             && render_block.contains("confirm-modal-gap:after-header")
             && render_block.contains("confirm-modal-gap:after-body"),
-        "confirm popup actions must use the same footer shortcut/keycap renderer as main footer buttons"
+        "confirm popup actions must use the shared modal action-row primitive"
     );
     assert!(
         render_block.contains("gpui::rgb(chrome.accent_hex)")

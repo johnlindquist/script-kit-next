@@ -311,7 +311,7 @@ impl NotesApp {
                 confirm_text: "Reveal parent".into(),
                 cancel_text: "Dismiss".into(),
                 confirm_variant: gpui_component::button::ButtonVariant::Primary,
-                width: gpui::px(crate::confirm::PARENT_CONFIRM_DIALOG_WIDTH_PX),
+                width: gpui::px(crate::confirm::PARENT_MODAL_WIDTH_PX),
             },
             move |_window, cx| {
                 if let Err(error) = crate::file_search::reveal_in_finder(&parent_display) {
@@ -475,7 +475,7 @@ impl NotesApp {
                 confirm_text: "Copy link".into(),
                 cancel_text: "Dismiss".into(),
                 confirm_variant: gpui_component::button::ButtonVariant::Primary,
-                width: gpui::px(crate::confirm::PARENT_CONFIRM_DIALOG_WIDTH_PX),
+                width: gpui::px(crate::confirm::PARENT_MODAL_WIDTH_PX),
             },
             move |_window, cx| {
                 cx.write_to_clipboard(gpui::ClipboardItem::new_string(copy_link.clone()));

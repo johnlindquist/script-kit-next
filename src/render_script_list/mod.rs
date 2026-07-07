@@ -1760,6 +1760,20 @@ impl ScriptListApp {
                     ActionsRoute::NotHandled => {}
                 }
 
+                if has_cmd
+                    && event.keystroke.modifiers.shift
+                    && !event.keystroke.modifiers.alt
+                    && !event.keystroke.modifiers.control
+                    && this.try_execute_main_list_action_shortcut_from_display(
+                        key_str,
+                        &event.keystroke.modifiers,
+                        window,
+                        cx,
+                    )
+                {
+                    return;
+                }
+
                 if has_cmd {
                     let has_shift = event.keystroke.modifiers.shift;
                     let key_match = key_str.to_ascii_lowercase();
@@ -1781,14 +1795,7 @@ impl ScriptListApp {
                         // Script context shortcuts (require a selected script)
                         // Note: More specific patterns (with shift) must come BEFORE less specific ones
                         "k" if has_shift => {
-                            if this.try_execute_main_list_action_shortcut_from_display(
-                                key_str,
-                                &event.keystroke.modifiers,
-                                window,
-                                cx,
-                            ) {
-                                return;
-                            }
+                            return;
                         }
                         "k" => {
                             // Cmd+K - Toggle actions menu (routed through shared dispatcher)
@@ -1827,9 +1834,6 @@ impl ScriptListApp {
                             return;
                         }
                         "a" if has_shift => {
-                            // Cmd+Shift+A - Add/Update Alias
-                            logging::log("KEY", "Shortcut Cmd+Shift+A -> add_alias");
-                            this.handle_action("add_alias".to_string(), window, cx);
                             return;
                         }
                         // Global shortcuts

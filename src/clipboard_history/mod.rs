@@ -37,6 +37,7 @@ pub mod paste_sequential;
 mod quick_look;
 mod rejection;
 mod sediment;
+pub use sediment::keep_entry_in_today;
 mod temp_file;
 mod types;
 mod uri;

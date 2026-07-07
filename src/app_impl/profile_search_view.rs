@@ -186,12 +186,81 @@ impl ScriptListApp {
         let Some(result) = self.selected_profile_search_result_owned() else {
             return false;
         };
+        // The built-in Quick AI row is not a valid Agent Chat default — Enter
+        // on it performs the Quick AI assignment instead (same as Tab).
+        if result.profile.id == crate::ai::agent_chat::profiles::BUILTIN_QUICK_AI_PROFILE_ID {
+            return self.select_profile_search_result_for_quick_ai(cx);
+        }
+        // The trailing action row writes a starter markdown profile and hands
+        // it to the editor instead of switching profiles.
+        if result.profile.id == crate::profile_search::CREATE_PROFILE_ROW_ID {
+            return self.create_profile_from_profile_search(cx);
+        }
         let persisted = crate::profile_search::persist_profile_search_selection(&result.profile.id);
         if persisted {
             self.refresh_agent_model_footer_labels();
             self.arm_return_to_script_list_enter_guard_from_profile_search();
             self.reset_to_script_list(cx);
             self.refresh_agent_model_footer_labels();
+        }
+        cx.notify();
+        persisted
+    }
+
+    /// Enter on the "Create New Profile…" row: write a starter markdown
+    /// profile (mdflow format) into `<kit>/profiles/` and open it in the
+    /// configured editor.
+    pub(crate) fn create_profile_from_profile_search(&mut self, cx: &mut Context<Self>) -> bool {
+        let ctx = crate::ai::agent_chat::profiles::AgentChatProfileContext::from_setup();
+        match crate::ai::agent_chat::mdflow_profiles::create_mdflow_profile_from_template(&ctx) {
+            Ok(path) => {
+                tracing::info!(
+                    target: "script_kit::spine",
+                    event = "profile_search_create_profile",
+                    path = %path.display(),
+                    "Created markdown profile from template"
+                );
+                if let Err(error) = crate::script_creation::open_in_editor(&path, &self.config) {
+                    tracing::warn!(
+                        target: "script_kit::spine",
+                        %error,
+                        path = %path.display(),
+                        "Created profile but failed to open it in the editor"
+                    );
+                }
+                self.arm_return_to_script_list_enter_guard_from_profile_search();
+                self.reset_to_script_list(cx);
+                cx.notify();
+                true
+            }
+            Err(error) => {
+                tracing::warn!(
+                    target: "script_kit::spine",
+                    %error,
+                    "Failed to create markdown profile from template"
+                );
+                cx.notify();
+                false
+            }
+        }
+    }
+
+    /// Tab in Profile Search: use the highlighted profile for the launcher's
+    /// Quick AI (Tab-with-text) mode. Mirrored by the SimulateKey protocol in
+    /// `simulate_key_dispatch.rs` — keep the two paths in lockstep.
+    pub(crate) fn select_profile_search_result_for_quick_ai(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let Some(result) = self.selected_profile_search_result_owned() else {
+            return false;
+        };
+        let persisted = crate::profile_search::persist_quick_ai_profile_search_selection(
+            &result.profile.id,
+        );
+        if persisted {
+            self.arm_return_to_script_list_enter_guard_from_profile_search();
+            self.reset_to_script_list(cx);
         }
         cx.notify();
         persisted

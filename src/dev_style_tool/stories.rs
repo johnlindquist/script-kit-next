@@ -283,6 +283,7 @@ fn render_confirm_modal_story(_window: &mut Window, _cx: &mut App) -> AnyElement
         button_radius_px: Some(style.actions.button_radius),
         edge_padding_x_px: Some(style.actions.edge_padding_x),
         shrink_frame_to_content_px: false,
+        hug_frame_to_content: false,
     };
     let action_row = div()
         .w_full()
@@ -292,12 +293,12 @@ fn render_confirm_modal_story(_window: &mut Window, _cx: &mut App) -> AnyElement
         .gap(px(style.actions.gap))
         .child(render_footer_hint_action_button_frame(
             FooterHintActionButtonFrameSpec {
-                id: "story-confirm-cancel-button",
-                label: "Cancel".into(),
-                key: "Esc".into(),
-                slot_width_px: style.actions.cancel_slot_width,
+                id: "story-confirm-ok-button",
+                label: "Delete".into(),
+                key: "↵".into(),
+                slot_width_px: style.actions.confirm_slot_width,
                 height_px: style.actions.button_height,
-                selected: false,
+                selected: true,
                 key_first: false,
                 justify: FooterHintContentJustify::Center,
                 layout: action_layout,
@@ -306,12 +307,12 @@ fn render_confirm_modal_story(_window: &mut Window, _cx: &mut App) -> AnyElement
         ))
         .child(render_footer_hint_action_button_frame(
             FooterHintActionButtonFrameSpec {
-                id: "story-confirm-ok-button",
-                label: "Delete".into(),
-                key: "↵".into(),
-                slot_width_px: style.actions.confirm_slot_width,
+                id: "story-confirm-cancel-button",
+                label: "Cancel".into(),
+                key: "Esc".into(),
+                slot_width_px: style.actions.cancel_slot_width,
                 height_px: style.actions.button_height,
-                selected: true,
+                selected: false,
                 key_first: false,
                 justify: FooterHintContentJustify::Center,
                 layout: action_layout,

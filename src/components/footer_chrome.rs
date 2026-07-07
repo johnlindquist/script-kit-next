@@ -39,7 +39,7 @@ pub(crate) const FOOTER_ACTION_CONTENT_PADDING_X_PX: f32 = 4.0;
 // the two renderers stay in lockstep.
 pub(crate) const FOOTER_TRAILING_ACTION_EXTRA_PADDING_X_PX: f32 = 12.0;
 pub(crate) const FOOTER_KEY_ANCHORED_CONTENT_PADDING_X_PX: f32 = 6.0;
-pub(crate) const FOOTER_ACTION_BUTTON_RADIUS_PX: f32 = 14.0;
+pub(crate) const FOOTER_ACTION_BUTTON_RADIUS_PX: f32 = 6.0;
 pub(crate) const FOOTER_RUN_SLOT_MIN_WIDTH_PX: f32 = 92.0;
 pub(crate) const FOOTER_RUN_SLOT_MAX_WIDTH_PX: f32 = 242.0;
 pub(crate) const FOOTER_ACTIONS_SLOT_WIDTH_PX: f32 = 92.0;
@@ -117,6 +117,11 @@ pub(crate) struct FooterHintButtonLayoutOverrides {
     pub(crate) button_radius_px: Option<f32>,
     pub(crate) edge_padding_x_px: Option<f32>,
     pub(crate) shrink_frame_to_content_px: bool,
+    /// When true, the OUTER slot also hugs the rendered content (bounded by
+    /// `slot_width_px` as a max) instead of reserving the fixed slot width.
+    /// Use for footers that must stay whole in narrow windows; fixed-slot
+    /// grids (main footer, modal action rows) leave this false.
+    pub(crate) hug_frame_to_content: bool,
 }
 
 pub(crate) struct FooterHintActionButtonFrameSpec {
@@ -296,7 +301,17 @@ pub(crate) fn split_footer_shortcut(shortcut: &str) -> Vec<String> {
         return Vec::new();
     }
     if s.contains('+') {
-        return s.split('+').map(normalize_footer_key_token).collect();
+        let mut tokens: Vec<String> = s
+            .split('+')
+            .filter(|part| !part.is_empty())
+            .map(normalize_footer_key_token)
+            .collect();
+        // A trailing '+' is the plus key itself ("⌘+" is Cmd-Plus,
+        // "Ctrl++" is Ctrl-Plus), not a separator before an empty keycap.
+        if s.ends_with('+') {
+            tokens.push("+".to_string());
+        }
+        return tokens;
     }
     if s.chars().any(char::is_whitespace) {
         return s
@@ -377,6 +392,24 @@ pub(crate) fn footer_button_height(footer_height: f32) -> f32 {
     (footer_height - (metrics.button_padding_y * 2.0)).max(0.0)
 }
 
+pub(crate) fn footer_centered_action_edge_padding_x() -> f32 {
+    current_main_menu_footer_metrics().button_padding_x
+        + FOOTER_TRAILING_ACTION_EXTRA_PADDING_X_PX / 2.0
+}
+
+pub(crate) fn footer_centered_action_button_layout() -> FooterHintButtonLayoutOverrides {
+    let metrics = current_main_menu_footer_metrics();
+    FooterHintButtonLayoutOverrides {
+        button_padding_x_px: Some(metrics.button_padding_x),
+        button_padding_y_px: Some(metrics.button_padding_y),
+        content_gap_px: Some(metrics.content_gap),
+        button_radius_px: Some(metrics.button_radius),
+        edge_padding_x_px: Some(footer_centered_action_edge_padding_x()),
+        shrink_frame_to_content_px: false,
+        hug_frame_to_content: false,
+    }
+}
+
 pub(crate) fn render_footer_hint_content(
     label: SharedString,
     key: SharedString,
@@ -445,9 +478,7 @@ pub(crate) fn render_footer_hint_content_flex_with_layout(
         // padding the native AppKit footer reserves via
         // `footer_hint_legacy_extra_padding` (half of the extra per side on
         // top of the base button padding).
-        FooterHintContentJustify::Center => {
-            metrics.button_padding_x + FOOTER_TRAILING_ACTION_EXTRA_PADDING_X_PX / 2.0
-        }
+        FooterHintContentJustify::Center => footer_centered_action_edge_padding_x(),
         FooterHintContentJustify::Start => metrics.button_padding_x,
     };
     let edge_padding_x = layout
@@ -554,11 +585,16 @@ pub(crate) fn render_footer_hint_action_button_frame(
         .layout
         .button_radius_px
         .unwrap_or(metrics.button_radius);
+    let default_edge_padding_x = match spec.justify {
+        FooterHintContentJustify::KeyAnchored => metrics.run_button_padding_x,
+        FooterHintContentJustify::Center => footer_centered_action_edge_padding_x(),
+        FooterHintContentJustify::Start => metrics.button_padding_x,
+    };
     let edge_padding_x = spec
         .layout
         .edge_padding_x_px
         .or(spec.layout.button_padding_x_px)
-        .unwrap_or(metrics.button_padding_x);
+        .unwrap_or(default_edge_padding_x);
     let content_layout = FooterHintButtonLayoutOverrides {
         button_padding_x_px: Some(edge_padding_x),
         ..spec.layout
@@ -600,9 +636,13 @@ pub(crate) fn render_footer_hint_action_button_frame(
         )
     };
 
+    let hug_frame = spec.layout.hug_frame_to_content;
     div()
         .id(spec.id)
-        .w(px(spec.slot_width_px))
+        .when(!hug_frame, |style| style.w(px(spec.slot_width_px)))
+        // Hug mode: intrinsic content width that never shrinks or truncates —
+        // a footer button that ellipsizes its label or keycap is useless.
+        .when(hug_frame, |style| style.flex_none())
         .h(px(spec.height_px))
         .flex()
         .items_center()
@@ -612,7 +652,8 @@ pub(crate) fn render_footer_hint_action_button_frame(
         .child(
             div()
                 .when(!shrink_to_content, |style| style.w(px(spec.slot_width_px)))
-                .max_w(px(spec.slot_width_px))
+                .when(!hug_frame, |style| style.max_w(px(spec.slot_width_px)))
+                .when(hug_frame, |style| style.flex_none())
                 .min_w(px(0.0))
                 .h_full()
                 .flex()
@@ -684,10 +725,10 @@ fn render_footer_hint_content_impl(
     let hover_text = footer_hover_text_color(theme, hover_text_alpha);
     let hover_glyph = footer_hover_glyph_color(theme, hover_glyph_alpha);
     let metrics = current_main_menu_footer_metrics();
-    let default_edge_padding_x = if matches!(justify, FooterHintContentJustify::KeyAnchored) {
-        metrics.run_button_padding_x
-    } else {
-        metrics.button_padding_x
+    let default_edge_padding_x = match justify {
+        FooterHintContentJustify::KeyAnchored => metrics.run_button_padding_x,
+        FooterHintContentJustify::Center => footer_centered_action_edge_padding_x(),
+        FooterHintContentJustify::Start => metrics.button_padding_x,
     };
     let edge_padding_x = layout.button_padding_x_px.unwrap_or(default_edge_padding_x);
     let button_padding_y = layout
@@ -1195,6 +1236,12 @@ mod tests {
         assert_eq!(split_footer_shortcut("⌘F1"), vec!["⌘", "F1"]);
         assert_eq!(split_footer_shortcut("⌥⌘I"), vec!["⌥", "⌘", "I"]);
         assert_eq!(split_footer_shortcut("click"), vec!["click"]);
+        // A trailing '+' is the plus key (terminal Zoom In), never an
+        // empty keycap.
+        assert_eq!(split_footer_shortcut("⌘+"), vec!["⌘", "+"]);
+        assert_eq!(split_footer_shortcut("Ctrl++"), vec!["Ctrl", "+"]);
+        assert_eq!(split_footer_shortcut("⌘-"), vec!["⌘", "-"]);
+        assert_eq!(split_footer_shortcut("⌃\\"), vec!["⌃", "\\"]);
     }
 
     #[test]
@@ -1286,7 +1333,8 @@ mod tests {
         assert_eq!(FOOTER_ACTION_ITEM_GAP_PX, 2.0);
         assert_eq!(FOOTER_ACTION_CONTENT_GAP_PX, 4.0);
         assert_eq!(FOOTER_ACTION_CONTENT_PADDING_X_PX, 4.0);
-        assert_eq!(FOOTER_ACTION_BUTTON_RADIUS_PX, 14.0);
+        assert_eq!(FOOTER_ACTION_BUTTON_RADIUS_PX, 6.0);
+        assert_eq!(footer_centered_action_edge_padding_x(), 10.0);
         assert_eq!(FOOTER_RUN_SLOT_MIN_WIDTH_PX, 92.0);
         assert_eq!(FOOTER_RUN_SLOT_MAX_WIDTH_PX, 242.0);
         assert_eq!(footer_action_slot_width(FooterActionSlot::Actions), 92.0);

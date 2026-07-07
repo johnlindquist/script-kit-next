@@ -90,6 +90,8 @@ pub use elements::*;
 pub use executor::*;
 pub use geometry::*;
 pub use global::*;
+#[cfg(any(test, feature = "test-support"))]
+pub use gpui_macros::test;
 pub use gpui_macros::{
     AppContext, IntoElement, Render, VisualContext, property_test, register_action,
 };

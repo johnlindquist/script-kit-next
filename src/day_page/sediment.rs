@@ -180,6 +180,61 @@ pub fn parse_day_page_segments(content: &str) -> Vec<DayPageSegment> {
     segments
 }
 
+/// One clipboard-history reference lifted out of the Day Page editor buffer.
+///
+/// Clipboard sediment stays in the day file (canonical markdown, raw-free
+/// refs), but the editor does not show the raw `[Clipboard entry](kit://…)`
+/// lines — they read as link spam and swamp the note. The Day Page lifts them
+/// into a compact clipboard shelf below the editor instead.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ClipboardShelfItem {
+    pub timestamp: String,
+    pub entry_id: String,
+    /// The exact original day-file line, so rejoining is lossless and
+    /// `undo_clipboard_sediment_lines` token matching keeps working.
+    pub line: String,
+}
+
+/// Split day-page content into the visible note body and the clipboard shelf.
+///
+/// Every `HH:MM [label](kit://clipboard-history?id=…)` line moves to the
+/// shelf; all other lines stay verbatim (in order) in the visible body.
+pub fn split_day_page_clipboard_shelf(content: &str) -> (String, Vec<ClipboardShelfItem>) {
+    let mut shelf = Vec::new();
+    let mut visible: Vec<&str> = Vec::new();
+    for line in content.split('\n') {
+        if let Some((timestamp, entry_id)) = parse_clipboard_ref_line(line) {
+            shelf.push(ClipboardShelfItem {
+                timestamp,
+                entry_id,
+                line: line.to_string(),
+            });
+        } else {
+            visible.push(line);
+        }
+    }
+    (visible.join("\n"), shelf)
+}
+
+/// Rejoin the visible note body with the clipboard shelf into canonical
+/// day-file content. Shelf lines land grouped at the end of the file, so a
+/// legacy interleaved day page normalizes once through the ordinary
+/// merge-aware save path, and `split → join` is stable from then on.
+pub fn join_day_page_clipboard_shelf(visible: &str, shelf: &[ClipboardShelfItem]) -> String {
+    if shelf.is_empty() {
+        return visible.to_string();
+    }
+    let mut out = visible.to_string();
+    if !out.is_empty() && !out.ends_with('\n') {
+        out.push('\n');
+    }
+    for item in shelf {
+        out.push_str(&item.line);
+        out.push('\n');
+    }
+    out
+}
+
 /// Normalize raw link/reference tokens entering the Day Page editor into
 /// markdown so they render through the same markdown editor path as Notes.
 pub fn normalize_day_page_markdown_references(content: &str) -> String {
@@ -905,6 +960,68 @@ mod tests {
         let normalized = normalize_day_page_markdown_references(content);
 
         assert_eq!(normalized, content);
+    }
+
+    #[test]
+    fn clipboard_shelf_round_trip_is_identity_for_grouped_files() {
+        // Steady state: notes on top, clipboard refs grouped at the end.
+        let content = "09:00 morning note\nsecond line\n\
+            09:20 [Clipboard entry](kit://clipboard-history?id=entry-1)\n\
+            09:25 [Clipboard entry](kit://clipboard-history?id=entry-2)\n";
+
+        let (visible, shelf) = split_day_page_clipboard_shelf(content);
+        assert_eq!(visible, "09:00 morning note\nsecond line\n");
+        assert_eq!(shelf.len(), 2);
+        assert_eq!(shelf[0].timestamp, "09:20");
+        assert_eq!(shelf[0].entry_id, "entry-1");
+        assert_eq!(shelf[1].entry_id, "entry-2");
+        assert_eq!(join_day_page_clipboard_shelf(&visible, &shelf), content);
+    }
+
+    #[test]
+    fn clipboard_shelf_normalizes_interleaved_legacy_files_once() {
+        let content = "09:00 morning note\n\
+            09:20 [Clipboard entry](kit://clipboard-history?id=entry-1)\n\
+            09:30 closing thought\n";
+
+        let (visible, shelf) = split_day_page_clipboard_shelf(content);
+        assert_eq!(visible, "09:00 morning note\n09:30 closing thought\n");
+        assert_eq!(shelf.len(), 1);
+
+        // First join sinks the clipboard line to the end…
+        let normalized = join_day_page_clipboard_shelf(&visible, &shelf);
+        assert_eq!(
+            normalized,
+            "09:00 morning note\n09:30 closing thought\n\
+             09:20 [Clipboard entry](kit://clipboard-history?id=entry-1)\n"
+        );
+
+        // …and from then on split → join is stable.
+        let (visible_2, shelf_2) = split_day_page_clipboard_shelf(&normalized);
+        assert_eq!(visible_2, visible);
+        assert_eq!(shelf_2, shelf);
+        assert_eq!(
+            join_day_page_clipboard_shelf(&visible_2, &shelf_2),
+            normalized
+        );
+    }
+
+    #[test]
+    fn clipboard_shelf_split_is_identity_without_clipboard_refs() {
+        let content = "09:00 morning note\n\n09:30 closing thought\n";
+        let (visible, shelf) = split_day_page_clipboard_shelf(content);
+        assert_eq!(visible, content);
+        assert!(shelf.is_empty());
+        assert_eq!(join_day_page_clipboard_shelf(&visible, &shelf), content);
+    }
+
+    #[test]
+    fn clipboard_shelf_handles_clipboard_only_files() {
+        let content = "09:20 [Clipboard entry](kit://clipboard-history?id=entry-1)\n";
+        let (visible, shelf) = split_day_page_clipboard_shelf(content);
+        assert_eq!(visible, "");
+        assert_eq!(shelf.len(), 1);
+        assert_eq!(join_day_page_clipboard_shelf(&visible, &shelf), content);
     }
 
     #[test]

@@ -1460,8 +1460,9 @@ fn dictation_focus_settle_matches_reference_contract() {
 #[test]
 fn dictation_hotkey_routes_through_builtin_toggle_flow() {
     // Verify both entry-point files have a dictation hotkey listener that
-    // routes through the Agent Chat submit builtin without introducing a
-    // duplicate dictation implementation.
+    // routes through the config-governed dictation builtin (dictation.target
+    // decides the destination) without introducing a duplicate dictation
+    // implementation.
     for (label, path) in [
         (
             "runtime_tray_hotkeys.rs",
@@ -1476,8 +1477,9 @@ fn dictation_hotkey_routes_through_builtin_toggle_flow() {
             "{label} must consume the dictation hotkey channel"
         );
         assert!(
-            src.contains("builtin/dictation-to-ai"),
-            "{label} must route dictation hotkey through builtin/dictation-to-ai"
+            src.contains(r#"execute_by_command_id_or_path("builtin/dictation", ctx)"#),
+            "{label} must route the dictation hotkey through the config-governed \
+             builtin/dictation entry (dictation.target decides the destination)"
         );
         // Must NOT contain a second toggle_dictation call — only the builtin path owns that.
         let hotkey_section_start = src
@@ -1744,8 +1746,11 @@ fn overlay_waveform_opacity_stays_clamped() {
 fn overlay_dot_and_window_constants_match_target_contract() {
     use crate::theme::opacity::{OPACITY_ACTIVE, OPACITY_SELECTED};
 
-    assert_eq!(super::window::OVERLAY_WIDTH_PX, 520.0);
-    assert_eq!(super::window::OVERLAY_HEIGHT_PX, 72.0);
+    // 2026-07-06 caption redesign: 560×100 fits the header row (timer +
+    // destination chips + target badge), the enlarged caption band, and the
+    // native footer rail at one constant height for every phase.
+    assert_eq!(super::window::OVERLAY_WIDTH_PX, 560.0);
+    assert_eq!(super::window::OVERLAY_HEIGHT_PX, 100.0);
     // 562fb2964 (Liquid Glass): the radius derives from the shared panel
     // token so the overlay stays in lockstep with other glass panels.
     assert_eq!(
@@ -1753,6 +1758,9 @@ fn overlay_dot_and_window_constants_match_target_contract() {
         crate::ui::chrome::LIQUID_GLASS_PANEL_RADIUS_PX
     );
     assert_eq!(super::window::STATUS_TEXT_SIZE_PX, 11.5);
+    // The caption line matches the main-menu footer label size so the live
+    // transcript reads from a distance.
+    assert_eq!(super::window::TRANSCRIPT_TEXT_SIZE_PX, 13.0);
     assert_eq!(super::window::WAVEFORM_BAR_COUNT, 9);
     assert_eq!(super::window::WAVEFORM_BAR_WIDTH_PX, 3.0);
     assert_eq!(super::window::WAVEFORM_BAR_GAP_PX, 3.0);
@@ -3143,13 +3151,13 @@ fn overlay_uses_glass_bar_styling() {
 fn overlay_dimensions_match_glass_bar_contract() {
     assert_eq!(
         super::window::OVERLAY_WIDTH_PX,
-        520.0,
+        560.0,
         "overlay width must match the glass bar direction"
     );
     assert_eq!(
         super::window::OVERLAY_HEIGHT_PX,
-        72.0,
-        "overlay height must match the glass bar direction"
+        100.0,
+        "overlay height must fit header row + caption band + footer rail"
     );
     // 562fb2964 moved the radius from a local 12.0 to the shared Liquid
     // Glass panel token (16.0) so the overlay matches other glass panels.
@@ -4272,7 +4280,13 @@ fn dictation_overlay_claims_full_popup_bounds_contract() {
     // Root overlay node must fill the popup window edge-to-edge with overflow hidden
     assert!(
         body.contains(&compact_delta_contract(
-            "div().track_focus(&self.focus_handle).on_key_down(cx.listener(Self::handle_key_down)).w_full().h_full().overflow_hidden().child(surface)"
+            "div().track_focus(&self.focus_handle).on_key_down(cx.listener(Self::handle_key_down)).on_modifiers_changed("
+        )),
+        "root overlay node must fill the popup window edge-to-edge with overflow_hidden"
+    );
+    assert!(
+        body.contains(&compact_delta_contract(
+            ".w_full().h_full().overflow_hidden().child(surface)"
         )),
         "root overlay node must fill the popup window edge-to-edge with overflow_hidden"
     );
@@ -4380,7 +4394,10 @@ fn overlay_escape_propagates_only_when_idle() {
 fn confirming_ui_uses_stop_continue_copy_and_timer() {
     let src = std::fs::read_to_string("src/dictation/window.rs").expect("read window.rs");
     assert!(src.contains("Stop dictation?"));
-    assert!(src.contains("format_elapsed(*elapsed)"));
+    assert!(
+        src.contains("format_elapsed(self.state.elapsed)")
+            || src.contains("format_elapsed(state.elapsed)")
+    );
     assert!(
         !src.contains(r#""Abort \u{21b5}""#),
         "old Abort label should be removed"
@@ -4663,6 +4680,8 @@ fn dictation_target_enum_covers_all_surfaces() {
         DictationTarget::AiChatComposer,
         DictationTarget::TabAiHarness,
         DictationTarget::ExternalApp,
+        DictationTarget::DayPageToday,
+        DictationTarget::QuickAiQuestion,
     ];
     for target in &targets {
         match target {
@@ -4672,6 +4691,8 @@ fn dictation_target_enum_covers_all_surfaces() {
             DictationTarget::AiChatComposer => {}
             DictationTarget::TabAiHarness => {}
             DictationTarget::ExternalApp => {}
+            DictationTarget::DayPageToday => {}
+            DictationTarget::QuickAiQuestion => {}
         }
     }
 }
@@ -4680,7 +4701,9 @@ fn dictation_target_enum_covers_all_surfaces() {
 fn dictation_destination_includes_internal_surfaces() {
     use crate::dictation::types::DictationDestination;
 
-    // NotesEditor, AiChatComposer, and TabAiHarness must exist alongside the original variants.
+    // NotesEditor, AiChatComposer, and TabAiHarness must exist alongside the
+    // original variants, plus the chip-selectable DayPageToday and
+    // QuickAiQuestion destinations.
     let destinations = [
         DictationDestination::MainWindowFilter,
         DictationDestination::ActivePrompt,
@@ -4688,8 +4711,10 @@ fn dictation_destination_includes_internal_surfaces() {
         DictationDestination::NotesEditor,
         DictationDestination::AiChatComposer,
         DictationDestination::TabAiHarness,
+        DictationDestination::DayPageToday,
+        DictationDestination::QuickAiQuestion,
     ];
-    assert_eq!(destinations.len(), 6);
+    assert_eq!(destinations.len(), 8);
 }
 
 #[test]
@@ -4898,29 +4923,143 @@ fn dictation_runtime_exposes_target_cycle_helpers() {
 }
 
 #[test]
-fn overlay_target_badge_uses_pointer_affordances_and_cycles() {
-    let window_src = std::fs::read_to_string("src/dictation/window.rs").expect("read window.rs");
+fn overlay_destination_chip_click_behavior_matches_armed_option_matrix() {
+    use super::types::DictationSessionPhase;
+    use super::window::{chip_click_behavior, ChipClickBehavior};
 
+    let interactive = [
+        DictationSessionPhase::Recording,
+        DictationSessionPhase::Confirming,
+    ];
+    for phase in interactive {
+        assert_eq!(
+            chip_click_behavior(&phase, false, false),
+            ChipClickBehavior::Retarget,
+            "{phase:?} unarmed should only retarget"
+        );
+        assert_eq!(
+            chip_click_behavior(&phase, false, true),
+            ChipClickBehavior::Retarget,
+            "{phase:?} unarmed with Option should only retarget"
+        );
+        assert_eq!(
+            chip_click_behavior(&phase, true, true),
+            ChipClickBehavior::Retarget,
+            "{phase:?} armed with Option should stay in aim mode"
+        );
+        assert_eq!(
+            chip_click_behavior(&phase, true, false),
+            ChipClickBehavior::SendTo,
+            "{phase:?} armed without Option should send"
+        );
+    }
+
+    let non_interactive = [
+        DictationSessionPhase::Idle,
+        DictationSessionPhase::Transcribing,
+        DictationSessionPhase::Delivering,
+        DictationSessionPhase::Finished,
+        DictationSessionPhase::Failed("boom".to_string()),
+    ];
+    for phase in non_interactive {
+        for armed in [false, true] {
+            for option_held in [false, true] {
+                assert_eq!(
+                    chip_click_behavior(&phase, armed, option_held),
+                    ChipClickBehavior::Ignore,
+                    "{phase:?} should ignore chips regardless of armed/Option state"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn dictation_footer_stop_button_tracks_armed_state() {
+    use super::types::DictationSessionPhase;
+    use crate::footer_popup::FooterAction;
+
+    let has_stop = |phase, armed| {
+        super::window::dictation_native_footer_config(&phase, armed)
+            .buttons
+            .iter()
+            .any(|button| button.action == FooterAction::Stop)
+    };
+
+    assert!(!has_stop(DictationSessionPhase::Recording, false));
+    assert!(has_stop(DictationSessionPhase::Recording, true));
+    assert!(!has_stop(DictationSessionPhase::Confirming, false));
+    assert!(has_stop(DictationSessionPhase::Confirming, true));
+}
+
+#[test]
+fn dictation_chip_tooltips_match_aim_and_send_modes() {
+    use super::window::{chip_tooltip_label, DestinationChipMode};
+    use crate::dictation::DictationTarget;
+
+    let external_aim = chip_tooltip_label(DictationTarget::ExternalApp, DestinationChipMode::Aim);
     assert!(
-        window_src.contains("fn render_target_badge_slot("),
-        "overlay should render the target badge through a dedicated slot helper"
+        external_aim.as_ref().starts_with("Dictate into "),
+        "external app aim tooltip should name dictation target"
     );
+    assert_eq!(
+        chip_tooltip_label(DictationTarget::DayPageToday, DestinationChipMode::Aim).as_ref(),
+        "Dictate to today's note"
+    );
+    assert_eq!(
+        chip_tooltip_label(DictationTarget::QuickAiQuestion, DestinationChipMode::Aim).as_ref(),
+        "Dictate to AI"
+    );
+    assert_eq!(
+        chip_tooltip_label(DictationTarget::TabAiHarness, DestinationChipMode::Aim).as_ref(),
+        "Dictate to Agent Chat"
+    );
+
+    let external_send = chip_tooltip_label(DictationTarget::ExternalApp, DestinationChipMode::Send);
     assert!(
-        window_src.contains(".cursor_pointer()")
-            && window_src.contains(".hover(move |style| style.bg(hover_bg))")
-            && window_src.contains("this.cycle_target(cx);"),
-        "interactive target badge must expose pointer + hover + click-to-cycle behavior"
+        external_send.as_ref().starts_with("Stop & paste into "),
+        "external app send tooltip should name stop-and-paste outcome"
     );
+    assert_eq!(
+        chip_tooltip_label(DictationTarget::DayPageToday, DestinationChipMode::Send).as_ref(),
+        "Stop & append to today's note"
+    );
+    assert_eq!(
+        chip_tooltip_label(DictationTarget::QuickAiQuestion, DestinationChipMode::Send).as_ref(),
+        "Stop & ask AI"
+    );
+    assert_eq!(
+        chip_tooltip_label(DictationTarget::TabAiHarness, DestinationChipMode::Send).as_ref(),
+        "Stop & send to Agent Chat"
+    );
+}
+
+#[test]
+fn overlay_destination_chip_icons_resolve_to_lucide_assets() {
+    // Each chip carries an icon matching how its concept is drawn elsewhere
+    // in the app (paste/clipboard, day/calendar, ask/sparkles, Agent
+    // Chat/bot). Resolution must succeed so the chips never render blank
+    // icon slots.
+    for (target, verb, icon) in super::window::DICTATION_CHIP_TARGETS {
+        assert!(
+            super::window::chip_icon_path(icon).is_some(),
+            "chip {verb} ({target:?}) icon {icon:?} must resolve to a Lucide asset path"
+        );
+    }
 }
 
 #[test]
 fn overlay_timer_and_target_badge_use_readable_primary_text() {
     let window_src = std::fs::read_to_string("src/dictation/window.rs").expect("read window.rs");
 
+    // 2026-07-06 caption redesign: the timer reads active primary while the
+    // session is live and intentionally grays out (muted) once processing
+    // locks the duration in — the header holds its layout instead of
+    // vanishing into a progress indicator.
     assert!(
-        window_src
-            .contains("let timer_color = theme.colors.text.primary.with_opacity(OPACITY_ACTIVE);"),
-        "timer must use active primary text, not muted translucent text"
+        window_src.contains("let timer_color = if interactive {")
+            && window_src.contains("theme.colors.text.primary.with_opacity(OPACITY_ACTIVE)"),
+        "live timer must use active primary text, graying only during processing"
     );
     assert!(
         window_src.contains("render_target_badge_content(self.state.target)")
@@ -5184,6 +5323,8 @@ fn dictation_target_enum_includes_main_window_filter_variant() {
         DictationTarget::AiChatComposer => {}
         DictationTarget::TabAiHarness => {}
         DictationTarget::ExternalApp => {}
+        DictationTarget::DayPageToday => {}
+        DictationTarget::QuickAiQuestion => {}
     }
     assert_eq!(target.overlay_label(), "Script Kit");
 }
@@ -5200,8 +5341,10 @@ fn dictation_destination_includes_main_window_filter_variant() {
         DictationDestination::NotesEditor,
         DictationDestination::AiChatComposer,
         DictationDestination::TabAiHarness,
+        DictationDestination::DayPageToday,
+        DictationDestination::QuickAiQuestion,
     ];
-    assert_eq!(destinations.len(), 6);
+    assert_eq!(destinations.len(), 8);
 }
 
 #[test]
@@ -5277,94 +5420,49 @@ fn preflight_accepts_launcher_without_tracked_frontmost_app() {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn transcript_preview_tail_keeps_short_text_verbatim() {
-    let preview = super::window::transcript_preview_tail("hello world", 90);
-    assert_eq!(preview.as_ref(), "hello world");
+fn estimate_caption_lines_wraps_words_greedily() {
+    use super::window::estimate_caption_lines;
+
+    // Empty and single-word text is one line.
+    assert_eq!(estimate_caption_lines("", 10), 1);
+    assert_eq!(estimate_caption_lines("hello", 10), 1);
+
+    // "hello world" at width 8: "hello" (5) + " world" would need 11 > 8.
+    assert_eq!(estimate_caption_lines("hello world", 8), 2);
+    // At width 11 the two words fit one line exactly.
+    assert_eq!(estimate_caption_lines("hello world", 11), 1);
+
+    // A word longer than the line width still counts one line (the text
+    // system will break it; the estimate stays conservative).
+    assert_eq!(estimate_caption_lines(&"a".repeat(30), 10), 1);
+
+    // Steady prose grows roughly linearly.
+    let prose = "one two three four five six seven eight nine ten".repeat(3);
+    assert!(estimate_caption_lines(&prose, 20) >= 6);
 }
 
 #[test]
-fn transcript_preview_tail_keeps_freshest_tail_with_ellipsis() {
-    let text = "a".repeat(50) + " the freshest tail of the dictation";
-    let preview = super::window::transcript_preview_tail(&text, 20);
-    assert!(
-        preview.starts_with('\u{2026}'),
-        "long text must lead with an ellipsis"
-    );
-    assert!(
-        preview.ends_with("of the dictation"),
-        "preview must keep the newest words, got: {preview}"
-    );
-    assert!(
-        preview.chars().count() <= 21,
-        "preview must respect max chars + ellipsis"
-    );
+fn chunked_transcription_reserved_for_long_audio() {
+    use super::transcription::should_use_chunked_transcription;
+    let rate = 16_000u32;
+
+    // Typical short dictations take the single plain pass.
+    assert!(!should_use_chunked_transcription(20 * rate as usize, rate));
+    // A five-minute recording must go through the chunked path — one giant
+    // encoder pass is quadratic in audio length and can drop trailing speech.
+    assert!(should_use_chunked_transcription(300 * rate as usize, rate));
 }
 
 #[test]
-fn common_char_prefix_len_tracks_appends_and_rewrites() {
-    use super::window::common_char_prefix_len;
-    // Pure append: boundary sits at the end of the previous partial.
-    assert_eq!(common_char_prefix_len("hello", "hello world"), 5);
-    // Tail rewrite: only the shared prefix stays stable.
-    assert_eq!(common_char_prefix_len("hel", "hello world"), 3);
-    assert_eq!(common_char_prefix_len("hello there", "hello world"), 6);
-    // First partial of a session: everything is fresh.
-    assert_eq!(common_char_prefix_len("", "hello"), 0);
-    // Multi-byte chars count as single chars.
-    assert_eq!(common_char_prefix_len("héllo", "héllo wörld"), 5);
-}
-
-#[test]
-fn transcript_preview_spans_concat_matches_preview_tail() {
-    use super::window::{transcript_preview_spans, transcript_preview_tail};
-    let cases: &[(&str, usize, usize)] = &[
-        ("hello world", 5, 90),
-        ("  padded text  ", 8, 90),
-        ("héllo wörld from dictation", 11, 12),
-        ("short", 0, 90),
-    ];
-    let long = "a".repeat(50) + " the freshest tail of the dictation";
-    for (text, fresh_from, max) in cases.iter().copied().chain([
-        (long.as_str(), 10, 20),
-        (long.as_str(), long.chars().count() - 4, 20),
-    ]) {
-        let (stable, fresh) = transcript_preview_spans(text, fresh_from, max);
-        let joined = format!("{stable}{fresh}");
-        assert_eq!(
-            joined,
-            transcript_preview_tail(text, max).as_ref(),
-            "spans must reassemble the preview for {text:?} at {fresh_from}"
-        );
-    }
-}
-
-#[test]
-fn transcript_preview_spans_splits_at_fresh_boundary() {
-    use super::window::transcript_preview_spans;
-    // Short text: split falls exactly at the boundary.
-    let (stable, fresh) = transcript_preview_spans("hello world", 5, 90);
-    assert_eq!(stable.as_ref(), "hello");
-    assert_eq!(fresh.as_ref(), " world");
-
-    // First partial: the whole line is fresh so it fades in as one.
-    let (stable, fresh) = transcript_preview_spans("hello", 0, 90);
-    assert!(stable.is_empty());
-    assert_eq!(fresh.as_ref(), "hello");
-
-    // Boundary that scrolled out of the tail window: ellipsis stays stable,
-    // every visible char is fresh.
-    let long = "a".repeat(50) + " tail words";
-    let (stable, fresh) = transcript_preview_spans(&long, 3, 10);
-    assert_eq!(stable.as_ref(), "\u{2026}");
-    assert_eq!(fresh.as_ref(), "tail words");
-
-    // Boundary inside the tail window keeps the older visible text stable.
-    let total = long.chars().count();
-    let (stable, fresh) = transcript_preview_spans(&long, total - 5, 10);
-    assert_eq!(fresh.as_ref(), "words");
+fn overlay_growth_constants_bound_the_pill() {
+    use super::window::{
+        OVERLAY_HEIGHT_PX, OVERLAY_MAX_EXTRA_CAPTION_LINES, TRANSCRIPT_LINE_HEIGHT_PX,
+    };
+    let max_height =
+        OVERLAY_HEIGHT_PX + OVERLAY_MAX_EXTRA_CAPTION_LINES as f32 * TRANSCRIPT_LINE_HEIGHT_PX;
     assert!(
-        stable.ends_with("tail "),
-        "stable keeps visible prefix, got: {stable}"
+        max_height <= 200.0,
+        "fully grown dictation pill must stay a compact bottom-edge overlay, got {max_height}"
     );
 }
 
@@ -5384,6 +5482,87 @@ fn dictation_preferences_defaults_are_safe() {
     );
     assert!(prefs.live_preview_enabled(), "live preview on by default");
     assert!(prefs.push_to_talk_enabled(), "push-to-talk on by default");
+    assert_eq!(
+        prefs.target_mode(),
+        crate::config::DictationTargetMode::Sticky,
+        "target mode defaults to sticky"
+    );
+    assert_eq!(
+        prefs.sticky_target(),
+        None,
+        "no sticky destination until a chip has been picked"
+    );
+    assert!(
+        prefs.quick_ai_answers(),
+        "quick AI fires-and-shows by default"
+    );
+}
+
+#[test]
+fn dictation_target_mode_parses_config_values() {
+    use crate::config::{DictationPreferences, DictationTargetMode};
+    use crate::dictation::DictationTarget;
+
+    let context = DictationPreferences {
+        target: Some("context".to_string()),
+        ..Default::default()
+    };
+    assert_eq!(context.target_mode(), DictationTargetMode::Context);
+
+    let explicit = DictationPreferences {
+        target: Some("today".to_string()),
+        ..Default::default()
+    };
+    assert_eq!(
+        explicit.target_mode(),
+        DictationTargetMode::Explicit(DictationTarget::DayPageToday)
+    );
+
+    // Typos degrade to the sticky default instead of pinning a wrong target.
+    let typo = DictationPreferences {
+        target: Some("todya".to_string()),
+        ..Default::default()
+    };
+    assert_eq!(typo.target_mode(), DictationTargetMode::Sticky);
+
+    let sticky = DictationPreferences {
+        target: Some("sticky".to_string()),
+        last_target: Some("ask".to_string()),
+        ..Default::default()
+    };
+    assert_eq!(sticky.target_mode(), DictationTargetMode::Sticky);
+    assert_eq!(
+        sticky.sticky_target(),
+        Some(DictationTarget::QuickAiQuestion)
+    );
+
+    let composer = DictationPreferences {
+        quick_ai: Some("composer".to_string()),
+        ..Default::default()
+    };
+    assert!(!composer.quick_ai_answers());
+}
+
+#[test]
+fn dictation_sticky_labels_round_trip_through_parser() {
+    use crate::dictation::{parse_dictation_target_label, DictationTarget};
+
+    for target in [
+        DictationTarget::MainWindowFilter,
+        DictationTarget::MainWindowPrompt,
+        DictationTarget::NotesEditor,
+        DictationTarget::AiChatComposer,
+        DictationTarget::TabAiHarness,
+        DictationTarget::ExternalApp,
+        DictationTarget::DayPageToday,
+        DictationTarget::QuickAiQuestion,
+    ] {
+        assert_eq!(
+            parse_dictation_target_label(target.sticky_label()),
+            Some(target),
+            "sticky label for {target:?} must parse back to the same target"
+        );
+    }
 }
 
 #[test]

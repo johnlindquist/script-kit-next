@@ -190,7 +190,10 @@ pub(crate) fn day_page_host_actions_section(
         actions.push(
             Action::new(
                 DAY_PAGE_PREVIEW_CLOSE_ACTION_ID,
-                "Close Preview / Back to Today",
+                format!(
+                    "Close Preview / {}",
+                    view.kit_resource_preview_return_label()
+                ),
                 Some(format!("Return from {}", preview.uri)),
                 ActionCategory::ScriptContext,
             )

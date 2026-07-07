@@ -718,8 +718,17 @@ pub(crate) fn universal_prompt_hints() -> Vec<SharedString> {
 pub(crate) fn universal_prompt_hints_with_primary_label(
     primary_label: impl AsRef<str>,
 ) -> Vec<SharedString> {
+    universal_prompt_hints_with_primary_key_label("↵", primary_label)
+}
+
+#[allow(dead_code)]
+#[inline]
+pub(crate) fn universal_prompt_hints_with_primary_key_label(
+    primary_key: impl AsRef<str>,
+    primary_label: impl AsRef<str>,
+) -> Vec<SharedString> {
     vec![
-        format!("↵ {}", primary_label.as_ref()).into(),
+        format!("{} {}", primary_key.as_ref(), primary_label.as_ref()).into(),
         "⌘K Actions".into(),
         crate::ai::agent_chat::ui::labels::AGENT_CHAT_CMD_ENTER_HINT.into(),
     ]
@@ -851,10 +860,132 @@ pub(crate) fn render_universal_prompt_hint_strip_clickable_with_primary_label(
     on_actions: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
     on_ai: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
 ) -> AnyElement {
-    crate::components::HintStrip::new(universal_prompt_hints_with_primary_label(primary_label))
-        .on_hint_click(0, on_run)
-        .on_hint_click(1, on_actions)
-        .on_hint_click(2, on_ai)
+    render_universal_prompt_hint_strip_clickable_with_primary_key_label(
+        "↵",
+        primary_label,
+        on_run,
+        on_actions,
+        on_ai,
+    )
+}
+
+#[allow(dead_code)]
+pub(crate) fn render_universal_prompt_hint_strip_clickable_with_primary_key_label(
+    primary_key: impl AsRef<str>,
+    primary_label: impl AsRef<str>,
+    on_run: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
+    on_actions: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
+    on_ai: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
+) -> AnyElement {
+    crate::components::HintStrip::new(universal_prompt_hints_with_primary_key_label(
+        primary_key,
+        primary_label,
+    ))
+    .on_hint_click(0, on_run)
+    .on_hint_click(1, on_actions)
+    .on_hint_click(2, on_ai)
+    .into_any_element()
+}
+
+/// Canonical three-slot footer BUTTON row — the same `footer_chrome` button
+/// frame (label + one keycap per key) the main window footer renders. Window
+/// footers must use this instead of a text `HintStrip` so every surface's
+/// footer buttons share one component and one keycap language.
+#[allow(dead_code)]
+pub(crate) fn render_universal_footer_action_buttons(
+    id_prefix: &'static str,
+    primary_key: &'static str,
+    primary_label: &'static str,
+    on_primary: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
+    on_actions: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
+    on_ai: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
+) -> AnyElement {
+    use crate::components::footer_chrome::{
+        footer_action_slot_width, footer_button_height, render_footer_hint_action_button_frame,
+        FooterActionSlot, FooterHintActionButtonFrameSpec, FooterHintButtonLayoutOverrides,
+        FooterHintContentJustify, FOOTER_ACTION_ITEM_GAP_PX,
+    };
+
+    let theme = crate::theme::get_cached_theme();
+    let height = footer_button_height(crate::window_resize::main_layout::HINT_STRIP_HEIGHT);
+    let button = |id: &'static str,
+                  label: &'static str,
+                  key: &'static str,
+                  slot_width_px: f32|
+     -> gpui::Stateful<gpui::Div> {
+        render_footer_hint_action_button_frame(
+            FooterHintActionButtonFrameSpec {
+                id,
+                label: SharedString::from(label),
+                key: SharedString::from(key),
+                slot_width_px,
+                height_px: height,
+                selected: false,
+                key_first: false,
+                justify: FooterHintContentJustify::Center,
+                layout: FooterHintButtonLayoutOverrides {
+                    // Flexbox-native: pill AND slot hug label + keycaps (slot
+                    // width is only a max bound), so the row stays whole in
+                    // narrow windows instead of truncating labels.
+                    shrink_frame_to_content_px: true,
+                    hug_frame_to_content: true,
+                    ..FooterHintButtonLayoutOverrides::default()
+                },
+            },
+            &theme,
+        )
+    };
+
+    // Ids are formatted per-surface via the prefix so multiple windows can host
+    // the row without colliding element ids.
+    let (primary_id, actions_id, ai_id) = match id_prefix {
+        "notes" => (
+            "notes-footer-primary",
+            "notes-footer-actions",
+            "notes-footer-ai",
+        ),
+        _ => (
+            "universal-footer-primary",
+            "universal-footer-actions",
+            "universal-footer-ai",
+        ),
+    };
+
+    // flex_none on the row and hug/flex_none inside the frame: footer buttons
+    // never shrink or truncate — an ellipsized shortcut button is useless.
+    div()
+        .flex()
+        .flex_none()
+        .flex_row()
+        .items_center()
+        .gap(px(FOOTER_ACTION_ITEM_GAP_PX))
+        .child(
+            button(
+                primary_id,
+                primary_label,
+                primary_key,
+                footer_action_slot_width(FooterActionSlot::Run),
+            )
+            .on_click(move |event, window, cx| on_primary(event, window, cx)),
+        )
+        .child(
+            button(
+                actions_id,
+                "Actions",
+                "⌘K",
+                footer_action_slot_width(FooterActionSlot::Actions),
+            )
+            .on_click(move |event, window, cx| on_actions(event, window, cx)),
+        )
+        .child(
+            button(
+                ai_id,
+                "Agent",
+                "⌘↵",
+                footer_action_slot_width(FooterActionSlot::Ai),
+            )
+            .on_click(move |event, window, cx| on_ai(event, window, cx)),
+        )
         .into_any_element()
 }
 

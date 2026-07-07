@@ -30,8 +30,10 @@ find code / who owns / where is -> rg -n "<term>" src/main_sections/day_page_*
 surface map / repo policy -> read GLOSSARY.md and AGENTS.md
 type-check the library -> ./scripts/agentic/agent-cargo.sh check --lib
 verify changed behavior -> ./scripts/agentic/agent-cargo.sh test --lib notes_editor::spine
+verify clipboard shelf / sediment round-trip -> ./scripts/agentic/agent-cargo.sh test --lib day_page::sediment
 verify changed behavior -> focused Day Page or brain substrate tests
 verify changed behavior -> runtime probe for hotkey/toggle-visible changes
+Day Page view / footer wiring lives in the bin target -> ./scripts/agentic/agent-cargo.sh check --bin script-kit-gpui
 
 ## Owned paths
 - `src/main_sections/day_page_*`
@@ -41,6 +43,34 @@ verify changed behavior -> runtime probe for hotkey/toggle-visible changes
 - `src/spine/**`
 - `src/components/notes_editor/**`
 - `.notes/today-requirements.md`
+
+## Surface contracts (load-bearing — verify before changing, keep intact after)
+- **Day file is canonical; the editor shows a projection.** Clipboard sediment
+  refs (`HH:MM [label](kit://clipboard-history?id=…)` lines) stay in the day
+  file, but the Day Page editor buffer never shows them: on load they are
+  lifted into the collapsible clipboard shelf below the editor via
+  `split_day_page_clipboard_shelf` (src/day_page/sediment.rs), and every save
+  rejoins them grouped at the end via `join_day_page_clipboard_shelf`.
+  `split → join` must stay lossless. Any new path that writes editor text into
+  the session must go through the Day Page's `canonical_content_with_shelf`,
+  and any diff against disk content must compare projections
+  (`visible_content_of`), not editor-vs-canonical. Shelf preview text is
+  resolved live from clipboard history and is UI-only — never persist it; day
+  files stay raw-free. Every plan or change touching the shelf, sediment, or
+  day-file save path MUST name and run its round-trip gate verbatim:
+  `./scripts/agentic/agent-cargo.sh test --lib day_page::sediment`.
+- **kit:// resource previews are read-only overlays, and closing one returns.**
+  Escape/Close from a preview restores the editor underneath; it never closes
+  the window. Labels come from `kit_resource_preview_return_label()`
+  ("Back to Today" / "Back to Day" / "Back to Note" / "Back to Fragment") —
+  do not reintroduce a bare "Close".
+- **Preview actions live on the native footer in the main window.** The Day
+  Page passes empty `actions`/`footer_hints` to the shared
+  `src/components/resource_preview.rs` component; its actions are contributed
+  by `day_page_footer_buttons` (src/main_sections/day_page_view.rs) and routed
+  through `dispatch_day_page_preview_footer_action` (src/app_impl/ui_window.rs).
+  The Notes window has no native footer and keeps the in-body action row. Do
+  not add in-body action links back to the Day Page preview.
 
 ## Workflow
 1. Preserve unrelated dirty work; note pre-existing dirty files before changing anything.

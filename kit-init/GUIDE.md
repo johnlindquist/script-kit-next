@@ -100,8 +100,8 @@ Script Kit stores all its data in `~/.scriptkit/`. Here's the layout:
 │   │   ├── scripts/
 │   │   ├── scriptlets/
 │   │   ├── skills/
-│   │   ├── profiles/
 │   │   └── agents/
+├── profiles/
 ├── config.ts
 ├── theme.json
 ├── package.json
@@ -120,7 +120,7 @@ Script Kit stores all its data in `~/.scriptkit/`. Here's the layout:
 | `plugins/main/scripts/` | Your primary scripts - create `.ts` files here |
 | `plugins/main/scriptlets/` | Markdown scriptlet files with shell commands |
 | `plugins/main/skills/` | Reusable Agent Chat workflows (preferred reusable AI unit) |
-| `plugins/main/profiles/` | Isolated Pi-backed Agent Chat profile artifacts; `pathPolicy` is review metadata until runtime path enforcement exists |
+| `profiles/` | Agent Chat profiles — one markdown file per profile (`profiles/<id>.md`, mdflow format) |
 | `plugins/main/agents/` | AI agent definitions |
 | `sdk/` | Runtime SDK (auto-extracted, don't edit) |
 | `db/` | SQLite databases for Notes and AI |
@@ -779,6 +779,17 @@ For more patterns, read `~/.scriptkit/plugins/examples/agents/`.
 ---
 
 ## Configuration (config.ts)
+
+`~/.scriptkit/config.ts` is the single home for every Script Kit setting —
+hotkeys, theme, search sources, dictation, AI profiles, and more.
+
+> **Tip: let AI edit it for you.** Open Agent Chat (`Cmd+Shift+Space` or the
+> "Agent Chat" entry in the launcher) and just ask — for example *"switch my
+> theme preset to a light one"*, *"rebind the rewrite hotkey"*, or *"turn off
+> browser history in search"*. The agent updates `config.ts` through Script
+> Kit's validated config tools (`kit/config_set`), so mistakes are rejected
+> instead of breaking your setup. You can also press `Cmd+K` in the launcher
+> and run **Change Settings with AI**.
 
 Create `~/.scriptkit/config.ts` to customize Script Kit:
 

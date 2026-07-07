@@ -190,8 +190,7 @@ impl NotesApp {
         );
         let next_cursor = cursor + accepted_suffix.len();
         self.editor_state.update(cx, |state, cx| {
-            state.set_value(next_value, window, cx);
-            state.set_selection(next_cursor, next_cursor, window, cx);
+            state.set_value_preserving_scroll(next_value, next_cursor, window, cx);
         });
 
         self.notes_ghost_last_action = Some(match mode {

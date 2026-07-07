@@ -7263,7 +7263,7 @@ mod from_dialog_builtin_action_validation_tests_14 {
         #[test]
         fn cat20_global_actions_seeded() {
             // get_global_actions() is seeded (reload_scripts, settings, view_logs)
-            // plus config-dependent prompt-export/handoff actions, so we assert the
+            // plus the Discover rows, so we assert the
             // core ids rather than emptiness or an exact total count.
             let actions = get_global_actions();
             let ids = action_ids(&actions);
@@ -8851,8 +8851,8 @@ mod from_dialog_builtin_action_validation_tests_15 {
             };
             let actions = get_clipboard_history_context_actions(&entry);
             // paste, copy, paste_keep_open, share, attach, quick_look,
-            // pin, save_snippet, save_file, delete, delete_multiple, delete_all = 12
-            assert_eq!(actions.len(), 12, "Text on macOS: {}", actions.len());
+            // pin, keep_in_today, save_snippet, save_file, delete, delete_multiple, delete_all = 13
+            assert_eq!(actions.len(), 13, "Text on macOS: {}", actions.len());
         }
 
         #[cfg(target_os = "macos")]
@@ -8869,9 +8869,9 @@ mod from_dialog_builtin_action_validation_tests_15 {
             let actions = get_clipboard_history_context_actions(&entry);
             // paste, copy, paste_keep_open, share, attach, quick_look,
             // open_with, annotate_cleanshot, upload_cleanshot,
-            // pin, ocr, save_file, delete, delete_multiple, delete_all = 15
+            // pin, keep_in_today, ocr, save_file, delete, delete_multiple, delete_all = 16
             // (save_snippet is text-only; images get ocr instead)
-            assert_eq!(actions.len(), 15, "Image on macOS: {}", actions.len());
+            assert_eq!(actions.len(), 16, "Image on macOS: {}", actions.len());
         }
 
         #[cfg(target_os = "macos")]
@@ -12884,8 +12884,8 @@ mod from_dialog_builtin_action_validation_tests_17 {
             };
             let actions = get_clipboard_history_context_actions(&entry);
             // paste, copy, paste_keep_open, share, attach_to_ai, quick_look,
-            // pin, save_snippet, save_file, delete, delete_multiple, delete_all = 12
-            assert_eq!(actions.len(), 12);
+            // pin, keep_in_today, save_snippet, save_file, delete, delete_multiple, delete_all = 13
+            assert_eq!(actions.len(), 13);
         }
 
         #[cfg(target_os = "macos")]
@@ -12901,10 +12901,10 @@ mod from_dialog_builtin_action_validation_tests_17 {
             };
             let actions = get_clipboard_history_context_actions(&entry);
             // paste, copy, paste_keep_open, share, attach_to_ai, quick_look,
-            // open_with, annotate_cleanshot, upload_cleanshot, pin, ocr,
-            // save_file, delete, delete_multiple, delete_all = 15
+            // open_with, annotate_cleanshot, upload_cleanshot, pin, keep_in_today,
+            // ocr, save_file, delete, delete_multiple, delete_all = 16
             // (save_snippet is text-only; images get ocr instead)
-            assert_eq!(actions.len(), 15);
+            assert_eq!(actions.len(), 16);
         }
 
         // ================================================================

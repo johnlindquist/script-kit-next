@@ -916,6 +916,37 @@ pub struct DictationPreferences {
     /// and transcribe; a quick tap keeps toggle behavior (default: true).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub push_to_talk: Option<bool>,
+    /// How the delivery target is chosen when dictation starts without a
+    /// forced route (default: "sticky").
+    /// - "sticky": reuse the last destination picked via an overlay chip
+    ///   (persisted in `lastTarget`); falls back to context capture until
+    ///   one has been picked.
+    /// - "context": the active Script Kit surface at start time (legacy).
+    /// - explicit label ("frontmost", "today", "ask", "agent", "notes", …):
+    ///   always that destination.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub target: Option<String>,
+    /// What the "Ask AI" destination does with the transcript
+    /// (default: "answer").
+    /// - "answer": fire-and-show — submit the question and stream the answer.
+    /// - "composer": stage the transcript in the AI composer without sending.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub quick_ai: Option<String>,
+    /// Last destination picked via an overlay chip; consumed by "sticky"
+    /// target mode. Managed by the app — edit `target` instead.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_target: Option<String>,
+}
+
+/// How `dictation.target` resolves the delivery destination at session start.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DictationTargetMode {
+    /// Reuse the persisted `lastTarget`, falling back to context capture.
+    Sticky,
+    /// Resolve from the active Script Kit surface (legacy behavior).
+    Context,
+    /// Always deliver to this destination.
+    Explicit(crate::dictation::DictationTarget),
 }
 
 impl DictationPreferences {
@@ -953,6 +984,43 @@ impl DictationPreferences {
     /// Whether holding the dictation hotkey acts as push-to-talk.
     pub fn push_to_talk_enabled(&self) -> bool {
         self.push_to_talk.unwrap_or(true)
+    }
+
+    /// Resolve `dictation.target` into a [`DictationTargetMode`].
+    ///
+    /// Unrecognized values fall back to Sticky (the default) so a typo in
+    /// config.ts degrades to the default rather than silently pinning a
+    /// wrong destination.
+    pub fn target_mode(&self) -> DictationTargetMode {
+        match self.target.as_deref().map(str::trim) {
+            None | Some("") | Some("sticky") => DictationTargetMode::Sticky,
+            Some("context") => DictationTargetMode::Context,
+            Some(label) => match crate::dictation::parse_dictation_target_label(label) {
+                Some(target) => DictationTargetMode::Explicit(target),
+                None => {
+                    tracing::warn!(
+                        category = "DICTATION",
+                        target = %label,
+                        "Unknown dictation.target in config.ts; using sticky mode"
+                    );
+                    DictationTargetMode::Sticky
+                }
+            },
+        }
+    }
+
+    /// The persisted sticky destination, when valid.
+    pub fn sticky_target(&self) -> Option<crate::dictation::DictationTarget> {
+        crate::dictation::parse_dictation_target_label(self.last_target.as_deref()?)
+    }
+
+    /// Whether the "Ask AI" destination fires the question immediately and
+    /// shows the streamed answer (vs. staging it in the composer).
+    pub fn quick_ai_answers(&self) -> bool {
+        !matches!(
+            self.quick_ai.as_deref().map(str::trim),
+            Some("composer") | Some("compose")
+        )
     }
 }
 
@@ -1083,6 +1151,12 @@ pub struct AiPreferences {
     /// `None` preserves the default-on behavior.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub agent_chat_notify_when_hidden: Option<bool>,
+
+    /// Profile used by the launcher's Tab-with-text "Quick AI" mode. Set from
+    /// the Shift+Tab Profile Search (Tab = "Use for Quick AI"). `None` or the
+    /// built-in `quick-ai` id keeps the pinned fast zero-context default.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub quick_ai_profile_id: Option<String>,
 }
 
 /// A pre-configured Agent Chat profile authored in `config.ts`.

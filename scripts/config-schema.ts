@@ -731,7 +731,12 @@ export type {
   ContentPadding,
   BuiltInConfig,
   ProcessLimits,
-  
+  ClipboardHistorySecretRejectionConfig,
+  EffectsPreferences,
+  SpineStyleConfig,
+  SpineCommandConfig,
+  BrainRemoteConfig,
+
   // Key types for hotkey configuration
   KeyModifier,
   KeyCode,
@@ -1284,6 +1289,45 @@ export interface UpdatesConfig {
 export type AgentChatBackend = "agent_chat" | "pi";
 
 /**
+ * Structured Pi tool policy for an Agent Chat profile.
+ * `allow` supersedes the legacy `tools` array.
+ */
+export interface AgentChatToolPolicyConfig {
+  /**
+   * Tool allow-list. `[]` means no tools; omit to keep Pi defaults.
+   *
+   * @example ["read", "grep"]
+   */
+  allow?: string[];
+}
+
+/**
+ * Runtime filesystem scope forwarded to Pi for read/write-capable tools.
+ */
+export interface AgentChatPathPolicyConfig {
+  /**
+   * Paths (or globs) readable by the profile's tools.
+   *
+   * @example ["~/notes/**"]
+   */
+  allowRead?: string[];
+
+  /**
+   * Paths (or globs) writable by the profile's tools.
+   *
+   * @example ["~/notes/drafts/**"]
+   */
+  allowWrite?: string[];
+
+  /**
+   * Paths (or globs) denied even when covered by an allow rule.
+   *
+   * @example ["~/.ssh/**"]
+   */
+  deny?: string[];
+}
+
+/**
  * Named Agent Chat configuration profile stored in `~/.scriptkit/config.ts`.
  */
 export interface AiProfile {
@@ -1300,6 +1344,14 @@ export interface AiProfile {
    * @example "Long-form writing"
    */
   name: string;
+
+  /**
+   * Bundled icon name shown in Agent Chat profile affordances.
+   *
+   * @default undefined
+   * @example "sparkles"
+   */
+  iconName?: string;
 
   /**
    * Agent Chat backend for this profile.
@@ -1335,9 +1387,43 @@ export interface AiProfile {
   appendSystemPrompt?: string;
   cwd?: string;
   tools?: string[];
+
+  /**
+   * Structured Pi tool policy. `allow` supersedes the legacy `tools` array.
+   *
+   * @default undefined (Pi default tools)
+   * @example { allow: ["read", "grep"] }
+   */
+  toolPolicy?: AgentChatToolPolicyConfig;
+
+  /**
+   * Runtime filesystem scope forwarded to Pi for read/write-capable tools.
+   *
+   * @default undefined (Pi default scope)
+   * @example { allowRead: ["~/notes/**"], deny: ["~/.ssh/**"] }
+   */
+  pathPolicy?: AgentChatPathPolicyConfig;
+
+  /**
+   * Message Pi should return when a blocked capability/path is requested.
+   *
+   * @default undefined (Pi default message)
+   * @example "This profile is scoped to notes only."
+   */
+  blockedActionMessage?: string;
+
   disableExtensions?: boolean;
   disableSkills?: boolean;
   disablePromptTemplates?: boolean;
+
+  /**
+   * Skip loading context files (AGENTS.md and similar) for this profile.
+   *
+   * @default undefined (context files load normally)
+   * @example true
+   */
+  disableContextFiles?: boolean;
+
   hideCwdInPrompt?: boolean;
   thinking?: string;
   extensionPolicy?: string;
@@ -1382,6 +1468,13 @@ export interface AiPreferences {
    * Last-selected Agent Chat profile id.
    */
   selectedProfileId?: string;
+
+  /**
+   * Profile used by the launcher's Tab "Quick AI" mode. Set from the
+   * Shift+Tab Profile Search (Tab = "Use for Quick AI"). Omit (or use
+   * "quick-ai") for the pinned fast zero-context default.
+   */
+  quickAiProfileId?: string;
 
   /**
    * Last-selected Agent Chat backend.
@@ -1604,8 +1697,7 @@ export interface Config extends BaseConfig {
  *       provider: "openai-codex",
  *       model: "gpt-5.4"
  *     }
-   *   ],
-   *   activeProfileId: "writing"
+   *   ]
    * }
    * ```
    */
@@ -1633,6 +1725,29 @@ export interface Config extends BaseConfig {
   inlineAiHotkeyEnabled?: boolean;
 
   /**
+   * Global shortcut for the instant rewrite flow.
+   *
+   * When pressed, Script Kit captures the focused text in the frontmost
+   * macOS app and immediately streams three rewrite variations in the mini
+   * UI. Cmd+Ctrl+R sits in the same Cmd+Ctrl family as Notes (Cmd+Ctrl+N)
+   * and inline AI (Cmd+Ctrl+I); change it if you need Xcode's Cmd+Ctrl+R.
+   *
+   * @default { modifiers: ["meta", "ctrl"], key: "KeyR" }
+   * @example
+   * ```typescript
+   * rewriteHotkey: { modifiers: ["meta", "shift"], key: "KeyR" }
+   * ```
+   */
+  rewriteHotkey?: HotkeyConfig;
+
+  /**
+   * Enables registration of the instant rewrite global shortcut.
+   *
+   * @default true
+   */
+  rewriteHotkeyEnabled?: boolean;
+
+  /**
    * Design picker preferences and per-design token overrides.
    *
    * @default undefined (use Script Kit Classic with no overrides)
@@ -1653,6 +1768,8 @@ export interface Config extends BaseConfig {
   designs?: DesignsConfig;
 
   /**
+   * NOT YET WIRED — accepted by the schema but ignored by the app at runtime.
+   *
    * Window vibrancy material and show/hide animation preferences.
    *
    * Schema only - runtime still uses built-in defaults until a follow-up wires
@@ -1673,6 +1790,8 @@ export interface Config extends BaseConfig {
   windowAppearance?: WindowAppearanceConfig;
 
   /**
+   * NOT YET WIRED — accepted by the schema but ignored by the app at runtime.
+   *
    * Power Syntax launcher sigil preferences.
    *
    * Schema only - runtime still uses built-in defaults until a follow-up wires
@@ -1694,6 +1813,8 @@ export interface Config extends BaseConfig {
   powerSyntax?: PowerSyntaxConfig;
 
   /**
+   * NOT YET WIRED — accepted by the schema but ignored by the app at runtime.
+   *
    * Status-bar tray menu visibility preferences.
    *
    * Schema only - runtime still uses built-in defaults until a follow-up wires
@@ -1716,6 +1837,8 @@ export interface Config extends BaseConfig {
   tray?: TrayConfig;
 
   /**
+   * NOT YET WIRED — accepted by the schema but ignored by the app at runtime.
+   *
    * Update-checking preferences.
    *
    * Schema only - runtime still uses built-in defaults until a follow-up wires

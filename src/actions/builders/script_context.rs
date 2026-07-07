@@ -764,31 +764,79 @@ pub fn get_script_context_actions(script: &ScriptInfo) -> Vec<Action> {
 
 /// Predefined global actions surfaced in the Cmd+K dialog when the focused
 /// row offers no script-context entries (e.g. on the main script list).
+///
+/// The actions menu is contextual to the focused item, so this list must stay
+/// free of rows that act on some other surface's state. In particular the
+/// prompt export/handoff rows ("Export Prompt…", "Send Prompt to…") operate on
+/// the Agent Chat composer's built prompt and are owned by
+/// `get_agent_chat_actions`; adding them here leaks guaranteed-failure rows
+/// into every host (main list, file search, built-ins, …).
 pub fn get_global_actions() -> Vec<Action> {
-    let config = crate::config::load_config();
-    let mut actions = vec![
+    vec![
         Action::new(
             "reload_scripts",
             "Reload Scripts",
             Some("Re-scan ~/.scriptkit and rebuild the script index".into()),
             ActionCategory::GlobalOps,
-        ),
+        )
+        .with_shortcut("⌘R"),
         Action::new(
             "settings",
-            "Open Settings",
+            "Edit Config File",
             Some("Open ~/.scriptkit/config.ts in your editor".into()),
             ActionCategory::GlobalOps,
-        ),
+        )
+        .with_shortcut("⌘,"),
         Action::new(
             "view_logs",
             "Show Logs",
             Some("Toggle the in-launcher log panel".into()),
             ActionCategory::GlobalOps,
-        ),
-    ];
-    actions.extend(get_prompt_export_actions(&config));
-    actions.extend(get_prompt_target_actions(&config));
-    actions
+        )
+        .with_shortcut("⌘L"),
+        Action::new(
+            "open_help",
+            "Help & User Guide",
+            Some("Open the Script Kit guide (~/.scriptkit/GUIDE.md)".into()),
+            ActionCategory::GlobalOps,
+        )
+        .with_section("Discover"),
+        Action::new(
+            "ask_ai_settings",
+            "Change Settings with AI",
+            Some("Ask Agent Chat to update ~/.scriptkit/config.ts for you".into()),
+            ActionCategory::GlobalOps,
+        )
+        .with_section("Discover"),
+        Action::new(
+            "open_settings_menu",
+            "Open Settings Menu",
+            Some("Theme, dictation, microphone, permissions, window options".into()),
+            ActionCategory::GlobalOps,
+        )
+        .with_section("Discover"),
+        Action::new(
+            "setup_dictation",
+            "Set Up Dictation",
+            Some("Check microphone, model, and hotkey readiness".into()),
+            ActionCategory::GlobalOps,
+        )
+        .with_section("Discover"),
+        Action::new(
+            "check_permissions",
+            "Check Permissions",
+            Some("Review the macOS permissions Script Kit needs".into()),
+            ActionCategory::GlobalOps,
+        )
+        .with_section("Discover"),
+        Action::new(
+            "sdk_reference",
+            "Browse SDK Reference",
+            Some("Search the Script Kit SDK API documentation".into()),
+            ActionCategory::GlobalOps,
+        )
+        .with_section("Discover"),
+    ]
 }
 
 fn get_prompt_export_actions(config: &crate::config::Config) -> Vec<Action> {
@@ -1325,7 +1373,7 @@ fn agent_chat_profile_source_label(
     match source {
         crate::ai::agent_chat::profiles::AgentChatProfileSource::BuiltIn => "Built-in",
         crate::ai::agent_chat::profiles::AgentChatProfileSource::User => "Custom",
-        crate::ai::agent_chat::profiles::AgentChatProfileSource::Plugin => "Plugin",
+        crate::ai::agent_chat::profiles::AgentChatProfileSource::Mdflow => "Markdown",
     }
 }
 

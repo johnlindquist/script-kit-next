@@ -26,11 +26,12 @@ mod window;
 // cannot trace usage through include!() and reports a false-positive dead_code
 // warning for the non-lifecycle variant.
 #[allow(unused_imports)]
+pub(crate) use crate::components::confirm_modal_shell::PARENT_MODAL_WIDTH_PX;
+#[allow(unused_imports)]
 pub(crate) use parent_dialog::{
     confirm_with_parent_dialog, open_parent_confirm_dialog,
     open_parent_confirm_dialog_for_automation_parent, open_parent_confirm_dialog_for_entity,
     open_parent_confirm_dialog_with_lifecycle, ParentConfirmOptions,
-    PARENT_CONFIRM_DIALOG_WIDTH_PX,
 };
 
 #[allow(unused_imports)]

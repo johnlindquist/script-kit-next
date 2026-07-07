@@ -6,6 +6,14 @@ fn preview_panel_typography_body_line_height(typography: designs::DesignTypograp
     typography.font_size_sm * typography.line_height_relaxed
 }
 
+fn preview_panel_code_surface_rgba(chrome: crate::theme::AppChromeColors) -> u32 {
+    chrome.whisper_surface_rgba
+}
+
+fn preview_panel_code_radius_px() -> f32 {
+    crate::ui::chrome::LIQUID_GLASS_COMPACT_RADIUS_PX
+}
+
 fn truncate_preview_line_for_display(line: &str, max_chars: usize) -> String {
     if max_chars == 0 {
         return "...".to_string();
@@ -126,26 +134,18 @@ impl ScriptListApp {
             })
         };
 
-        // Get opacity for vibrancy support from theme
-        let opacity = self.theme.get_opacity();
-
         // Use design tokens for panel container chrome
-        let tokens = get_tokens(self.current_design);
-        let colors = tokens.colors();
         let chrome = crate::theme::AppChromeColors::from_theme(&self.theme);
-        let bg_main = colors.background;
-        let is_light_mode = !self.theme.is_dark_mode();
-        let bg_search_box = if is_light_mode { 0xf0f0f0 } else { colors.background_tertiary };
-        let border_radius = tokens.visual().radius_md;
+        let code_surface_rgba = preview_panel_code_surface_rgba(chrome);
+        let code_radius = preview_panel_code_radius_px();
+        let code_match_bg_rgba = chrome.accent_badge_bg_rgba;
+        let code_match_radius = get_tokens(self.current_design).visual().radius_sm;
 
-        // Preview panel container with left border separator
-        let preview_alpha = (opacity.preview * 255.0) as u32;
+        // Preview panel container with left border separator. The main shell
+        // supplies vibrancy; avoid painting an opaque panel over it.
         let mut panel = div()
             .w_full()
             .h_full()
-            .when(preview_alpha > 0, |d| {
-                d.bg(rgba((bg_main << 8) | preview_alpha))
-            })
             .border_l_1()
             .border_color(rgba(chrome.divider_rgba))
             .p(px(style.spacing.padding_lg))
@@ -255,8 +255,8 @@ impl ScriptListApp {
                             .w_full()
                             .min_w(px(280.))
                             .p(px(style.spacing.padding_md))
-                            .rounded(px(border_radius))
-                            .bg(rgba((bg_search_box << 8) | 0x80))
+                            .rounded(px(code_radius))
+                            .bg(rgba(code_surface_rgba))
                             .overflow_hidden()
                             .flex()
                             .flex_col();
@@ -278,8 +278,8 @@ impl ScriptListApp {
                                         div().text_color(rgb(span.color)).child(span.text);
                                     if span.is_match_emphasis {
                                         span_div = span_div
-                                            .bg(rgba(0xfbbf240fu32))
-                                            .rounded(px(2.));
+                                            .bg(rgba(code_match_bg_rgba))
+                                            .rounded(px(code_match_radius));
                                     }
                                     line_div = line_div.child(span_div);
                                 }
@@ -349,8 +349,8 @@ impl ScriptListApp {
                             .w_full()
                             .min_w(px(280.))
                             .p(px(style.spacing.padding_md))
-                            .rounded(px(border_radius))
-                            .bg(rgba((bg_search_box << 8) | 0x80))
+                            .rounded(px(code_radius))
+                            .bg(rgba(code_surface_rgba))
                             .overflow_hidden()
                             .flex()
                             .flex_col();
@@ -455,8 +455,8 @@ impl ScriptListApp {
                             .w_full()
                             .min_w(px(280.))
                             .p(px(style.spacing.padding_md))
-                            .rounded(px(border_radius))
-                            .bg(rgba((bg_search_box << 8) | 0x80))
+                            .rounded(px(code_radius))
+                            .bg(rgba(code_surface_rgba))
                             .overflow_hidden()
                             .flex()
                             .flex_col();

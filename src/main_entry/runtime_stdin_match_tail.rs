@@ -66,7 +66,7 @@
                                     confirm_text: confirm_text.unwrap_or_else(|| "Delete".to_string()).into(),
                                     cancel_text: cancel_text.unwrap_or_else(|| "Cancel".to_string()).into(),
                                     confirm_variant: gpui_component::button::ButtonVariant::Danger,
-                                    width: gpui::px(crate::confirm::PARENT_CONFIRM_DIALOG_WIDTH_PX),
+                                    width: gpui::px(crate::confirm::PARENT_MODAL_WIDTH_PX),
                                 };
                                 view.open_confirm_prompt(options, sender, ctx);
                             }
@@ -765,7 +765,7 @@
                                     Ok(handle) => {
                                         let fixture_bounds = gpui::Bounds {
                                             origin: gpui::point(gpui::px(585.0), gpui::px(177.0)),
-                                            size: gpui::size(gpui::px(520.0), gpui::px(72.0)),
+                                            size: gpui::size(gpui::px(560.0), gpui::px(100.0)),
                                         };
                                         let _ = handle.update(ctx, |_view, window, cx| {
                                             crate::components::inline_popup_window::set_inline_popup_window_bounds(window, fixture_bounds, cx);
@@ -775,8 +775,8 @@
                                             Some(crate::protocol::AutomationWindowBounds {
                                                 x: 585.0,
                                                 y: 177.0,
-                                                width: 520.0,
-                                                height: 72.0,
+                                                width: 560.0,
+                                                height: 100.0,
                                             }),
                                         );
                                         let state = crate::dictation::DictationOverlayState {

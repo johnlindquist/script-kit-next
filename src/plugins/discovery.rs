@@ -27,11 +27,6 @@ pub fn plugin_skills_dir(plugin_id: &str) -> PathBuf {
     plugins_container_dir().join(plugin_id).join("skills")
 }
 
-/// Return the Agent Chat profiles directory for a given plugin.
-pub fn plugin_profiles_dir(plugin_id: &str) -> PathBuf {
-    plugins_container_dir().join(plugin_id).join("profiles")
-}
-
 /// Return the agents directory for a given plugin.
 pub fn plugin_agents_dir(plugin_id: &str) -> PathBuf {
     plugins_container_dir().join(plugin_id).join("agents")

@@ -240,6 +240,17 @@ pub fn get_clipboard_history_context_actions(entry: &ClipboardEntryInfo) -> Vec<
 
     actions.push(entry_plan.pin_action());
 
+    actions.push(
+        Action::new(
+            "clip:clipboard_keep_in_today",
+            "Keep in Today",
+            Some("Adds this entry to today's Day Page (links are kept automatically)".to_string()),
+            ActionCategory::ScriptContext,
+        )
+        .with_icon(IconName::Plus)
+        .with_section("Edit"),
+    );
+
     if entry_plan.is_image() {
         actions.push(
             Action::new(

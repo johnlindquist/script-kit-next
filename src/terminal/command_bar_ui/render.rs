@@ -31,34 +31,6 @@ impl TerminalCommandBar {
         ]
     }
 
-    /// Parse shortcut string into individual keycaps
-    pub(super) fn parse_shortcut_keycaps(shortcut: &str) -> Vec<String> {
-        shortcut.chars().map(|c| c.to_string()).collect()
-    }
-
-    /// Render a single keycap
-    fn render_keycap(&self, key: &str, is_dark: bool) -> impl IntoElement {
-        let overlay_base = self.theme.colors.accent.selected_subtle;
-        let keycap_bg = rgba((overlay_base << 8) | if is_dark { 0x18 } else { 0x10 });
-        let keycap_text = rgb(self.theme.colors.text.dimmed);
-        let keycap_border = rgba((overlay_base << 8) | 0x20);
-
-        div()
-            .h(px(KEYCAP_HEIGHT))
-            .min_w(px(KEYCAP_MIN_WIDTH))
-            .px(px(6.))
-            .flex()
-            .items_center()
-            .justify_center()
-            .bg(keycap_bg)
-            .border_1()
-            .border_color(keycap_border)
-            .rounded(px(4.))
-            .text_xs()
-            .text_color(keycap_text)
-            .child(key.to_string())
-    }
-
     /// Render a command item
     fn render_command_item(
         &self,
@@ -66,8 +38,6 @@ impl TerminalCommandBar {
         cmd: &TerminalCommandItem,
         is_selected: bool,
     ) -> impl IntoElement {
-        let is_dark = self.theme.has_dark_colors();
-
         let opacity = self.theme.get_opacity();
         let selected_bg = {
             let alpha = (opacity.selected * 255.0) as u32;
@@ -82,13 +52,13 @@ impl TerminalCommandBar {
         let primary_text = rgb(self.theme.colors.text.primary);
         let secondary_text = rgb(self.theme.colors.text.secondary);
 
+        // Shared footer keycap chips (footer_chrome owns radius/border/typography)
+        // so command-bar shortcuts match every other keycap in the app.
         let shortcut_element = cmd.shortcut.as_ref().map(|shortcut| {
-            let keycaps = Self::parse_shortcut_keycaps(shortcut);
-            div()
-                .flex()
-                .flex_row()
-                .gap(px(2.))
-                .children(keycaps.into_iter().map(|k| self.render_keycap(&k, is_dark)))
+            crate::components::footer_chrome::render_footer_shortcut_keycaps(
+                shortcut.clone(),
+                &self.theme,
+            )
         });
 
         div()

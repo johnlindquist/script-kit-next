@@ -3,6 +3,7 @@
 pub(crate) mod content;
 pub mod events;
 pub(crate) mod launch;
+pub mod mdflow_profiles;
 pub mod metrics;
 pub mod pi;
 pub mod profiles;

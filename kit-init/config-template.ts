@@ -19,6 +19,11 @@ import type { Config } from "@scriptkit/sdk";
  * TYPE SAFETY:
  * This file uses `satisfies Config` for compile-time type checking.
  * Your editor will warn you about invalid options or values.
+ *
+ * TIP:
+ * You can ask Agent Chat to change any of these for you — it edits this
+ * file with validation (kit/config_set). Everything Script Kit persists
+ * as a setting lives in this one file.
  */
 export default {
   // ===========================================================================
@@ -113,13 +118,23 @@ export default {
   // Max text size (bytes) stored per clipboard history entry
   // Set to 0 to disable the limit
   // clipboardHistoryMaxTextLength: 100000,
+  //
+  // Hard clipboard secret rejection: extend the built-in blocklists.
+  // Copies from blocked apps (bundle-ID prefix match) and text matching
+  // secret patterns are never stored. Conservative defaults always apply;
+  // these lists only add to them.
+  // clipboardHistorySecretRejection: {
+  //   extraBlockedSourceApps: ["com.example.passwordmanager"],
+  //   extraSecretPatterns: ["^corp-token-[A-Za-z0-9]{32}$"],
+  // },
 
   // ===========================================================================
   // Auxiliary Window / Tool Hotkeys
   // ===========================================================================
 
-  // Notes has no default shortcut; set it explicitly if you want one.
-  // notesHotkey: { modifiers: ["meta", "shift"], key: "KeyN" },
+  // Notes falls back to Cmd+Ctrl+N when enabled and not explicitly set.
+  // notesHotkey: { modifiers: ["meta", "ctrl"], key: "KeyN" },
+  // notesHotkeyEnabled: true,
 
   // AI falls back to Cmd+Shift+Space when enabled and not explicitly set.
   // aiHotkey: { modifiers: ["meta", "shift"], key: "Space" },
@@ -133,30 +148,80 @@ export default {
   // Change this value to customize the global dictation shortcut.
   dictationHotkey: { modifiers: ["meta", "shift"], key: "Semicolon" },
   dictationHotkeyEnabled: true,
+
+  // Inline AI focused-text editing falls back to Cmd+Ctrl+I when enabled.
+  // Captures the focused text field in the frontmost app, then shows the
+  // inline agent overlay.
+  // inlineAiHotkey: { modifiers: ["meta", "ctrl"], key: "KeyI" },
+  // inlineAiHotkeyEnabled: true,
+
+  // Instant rewrite falls back to Cmd+Ctrl+R when enabled. Captures the
+  // focused text and immediately streams three rewrite variations in the
+  // mini UI. Change it if you need Xcode's Cmd+Ctrl+R.
+  // rewriteHotkey: { modifiers: ["meta", "ctrl"], key: "KeyR" },
+  // rewriteHotkeyEnabled: true,
   //
   // Runtime preferences also live here:
   // theme: { presetId: "nord" },
-  // dictation: { selectedDeviceId: "usb-mic" },
+  // dictation: {
+  //   selectedDeviceId: "usb-mic",
+  //   // Where transcripts go when the global shortcut starts dictation:
+  //   // - "sticky" (default): the last destination picked via an overlay
+  //   //   chip (Paste / Today / Ask / Send); falls back to context capture
+  //   //   until one has been picked. The pick persists as lastTarget.
+  //   // - "context": the active Script Kit surface at start time.
+  //   // - explicit: "frontmost" | "today" | "ask" | "agent" | "notes"
+  //   target: "sticky",
+  //   // What the "Ask" destination does with the transcript:
+  //   // - "answer" (default): submit immediately and stream the answer in
+  //   //   the mini AI window (fire-and-show).
+  //   // - "composer": stage it in the AI composer without sending.
+  //   quickAi: "answer",
+  // },
   // ai: {
-  //   // Single active model - backward-compatible default
-  //   selectedAgentChatAgentId: "codex-agent_chat",
+  //   // Last-selected model and profile (the profile id wins when both match)
   //   selectedModelId: "gpt-5.4",
-  //   // Named profiles for quick switching
+  //   selectedProfileId: "writing",
+  //   // Named Agent Chat profiles for quick switching
   //   profiles: [
-  //     { id: "writing",   label: "Long-form writing",
-  //       selectedModelId: "gpt-5.4", systemPromptSlug: "writing" },
-  //     { id: "code",      label: "Code review",
-  //       selectedModelId: "gpt-5.5", selectedAgentChatAgentId: "codex-agent_chat" },
+  //     { id: "writing", name: "Long-form writing",
+  //       model: "gpt-5.4", systemPrompt: "You are a long-form writing partner." },
+  //     { id: "code", name: "Code review",
+  //       provider: "openai-codex", model: "gpt-5.5" },
   //   ],
-  //   activeProfileId: "writing",
   // },
   // windowManagement: { snapMode: "expanded" },
+  //
+  // Design picker: active design plus per-design token overrides.
+  // designs: {
+  //   activeId: "script-kit-classic",
+  //   overrides: {
+  //     "script-kit-classic": { density: "comfortable" },
+  //   },
+  // },
+  //
+  // Background shader effect for the launcher window.
+  // intensity ranges 0.0-1.0 (default 0.5).
+  // effects: { background: "aurora", intensity: 0.5 },
   //
   // Behavior:
   // - No selectedDeviceId means use the macOS default microphone
   // - Missing saved microphone falls back to the best available device
   // - The app clears stale microphone preferences automatically
   // - Use the built-in "Select Microphone" action to change it
+
+  // ===========================================================================
+  // Unified Search
+  // ===========================================================================
+  // Passive extra sources (files, notes, browser history, clipboard, ...)
+  // in root launcher search. Each source has enabled/maxResults/minQueryChars
+  // knobs; see the UnifiedSearchConfig type for the full tree.
+  //
+  // unifiedSearch: {
+  //   enabled: true,
+  //   browserHistory: { enabled: true, maxAgeDays: 90 },
+  //   clipboardHistory: { enabled: false },
+  // },
 
   // ===========================================================================
   // Power Syntax
@@ -288,6 +353,30 @@ export default {
   //   // },
   // },
 
+  // Hide commands from the launcher main menu by canonical command ID.
+  // Hidden commands stay resolvable via shortcuts, deeplinks, and
+  // triggerBuiltin — this only filters them from visible lists.
+  // hiddenCommands: [
+  //   "builtin/clipboard-history",
+  //   "script/deprecated-tool",
+  // ],
+
+  // ===========================================================================
+  // Prompt Targets
+  // ===========================================================================
+  // Hand the built prompt off to an external tool. Targets appear in the
+  // Actions menu as prompt-target/<id> commands (assign shortcuts via
+  // `commands`). Prompt text arrives through the SCRIPT_KIT_PROMPT env var
+  // or {prompt} / {promptFile} placeholders in args/env.
+
+  // promptTargets: {
+  //   "my-app": {
+  //     title: "My App",
+  //     command: "/usr/local/bin/my-app",
+  //     args: ["--prompt", "{prompt}"],
+  //   },
+  // },
+
   // ===========================================================================
   // Process Limits
   // ===========================================================================
@@ -374,6 +463,21 @@ export default {
       // }
     },
   },
+
+  // ===========================================================================
+  // Brain Remote Access (Telegram)
+  // ===========================================================================
+  // Opt-in remote capture/queries into the brain (local memory) via a
+  // Telegram bot. SECURITY: the bot token grants remote access into your
+  // local memory — treat it like a password. The bridge only runs when
+  // enabled is true, a bot token is set, AND telegramAllowedUserIds is
+  // non-empty; an empty allowlist disables the bot entirely.
+
+  // brainRemote: {
+  //   enabled: false,
+  //   telegramBotToken: "123456:ABC-DEF...",  // from @BotFather; keep secret
+  //   telegramAllowedUserIds: [123456789],     // numeric Telegram user IDs
+  // },
 
   // ===========================================================================
   // Advanced Settings

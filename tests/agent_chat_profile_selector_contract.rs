@@ -321,17 +321,23 @@ fn profile_search_renderer_uses_shared_list_item_contract() {
 }
 
 #[test]
-fn profile_search_renderer_removes_non_current_profile_tag_but_keeps_current() {
-    assert!(RENDER_PROFILE_SEARCH_SOURCE.contains("if !result.selected"));
-    assert!(RENDER_PROFILE_SEARCH_SOURCE.contains("return None;"));
-    assert!(RENDER_PROFILE_SEARCH_SOURCE.contains(".child(\"Current\")"));
+fn profile_search_renderer_tags_only_current_and_quick_ai_rows() {
+    // Rows carry a status accessory only when they are the Agent Chat
+    // default ("Current") and/or the Quick AI target ("Quick AI"); every
+    // other row stays untagged — no per-row "Profile" noise.
+    assert!(RENDER_PROFILE_SEARCH_SOURCE.contains("(false, false) => return None,"));
+    assert!(RENDER_PROFILE_SEARCH_SOURCE.contains("\"Current\""));
+    assert!(RENDER_PROFILE_SEARCH_SOURCE.contains("\"Quick AI\""));
+    assert!(RENDER_PROFILE_SEARCH_SOURCE.contains("\"Current · Quick AI\""));
     assert!(!RENDER_PROFILE_SEARCH_SOURCE.contains("\"Profile\""));
-    assert!(COLLECT_ELEMENTS_SOURCE.contains("result.selected.then(|| \"current\".to_string())"));
+    assert!(COLLECT_ELEMENTS_SOURCE.contains("Some(\"current\".to_string())"));
+    assert!(COLLECT_ELEMENTS_SOURCE.contains("Some(\"quick-ai\".to_string())"));
 }
 
 #[test]
 fn profile_search_footer_uses_switch_profile_label() {
     assert!(RENDER_PROFILE_SEARCH_SOURCE.contains("↵ Switch Profile"));
+    assert!(RENDER_PROFILE_SEARCH_SOURCE.contains("⇥ Use for Quick AI"));
     assert!(!RENDER_PROFILE_SEARCH_SOURCE.contains("↵ Select Profile"));
     let body = fn_body(
         UI_WINDOW_SOURCE,

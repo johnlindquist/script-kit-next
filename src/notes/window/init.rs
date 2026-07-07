@@ -78,6 +78,11 @@ impl NotesApp {
             }
         });
 
+        // Deeplink hover state lives on the InputState and changes via plain
+        // cx.notify (no InputEvent), so the window must observe the editor
+        // state or the hover hint chip would never appear/disappear live.
+        let editor_hover_observation = cx.observe(&editor_state, |_, _, cx| cx.notify());
+
         // Subscribe to search changes
         let search_sub = cx.subscribe_in(&search_state, window, {
             move |this, _, ev: &InputEvent, window, cx| {
@@ -156,7 +161,8 @@ impl NotesApp {
             autosize_generation: 0,
             last_autosize_transition: None,
             focus_handle,
-            _subscriptions: vec![editor_sub, search_sub],
+            _subscriptions: vec![editor_sub, editor_hover_observation, search_sub],
+            last_deeplink_hover_hint: None,
             // Initialize CommandBar with notes-specific actions
             command_bar: CommandBar::new(
                 get_notes_command_bar_actions(&NotesInfo {
@@ -888,6 +894,16 @@ impl NotesApp {
         self.update_window_height(window, line_count, cx);
         info!("Auto-sizing enabled");
         cx.notify();
+    }
+
+    pub fn toggle_auto_sizing(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.auto_sizing_enabled {
+            self.auto_sizing_enabled = false;
+            info!("Auto-sizing disabled");
+            cx.notify();
+        } else {
+            self.enable_auto_sizing(window, cx);
+        }
     }
 
     /// Reset the Notes window to its default size and position — the

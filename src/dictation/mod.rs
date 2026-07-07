@@ -14,6 +14,7 @@ mod delivery;
 mod device;
 pub mod download;
 mod history;
+mod live_caption;
 mod microphone_popup_window;
 mod runtime;
 mod setup;
@@ -38,7 +39,7 @@ pub use device::{
     list_input_devices, microphone_display_label, microphone_permission_status,
     request_microphone_permission, request_microphone_permission_nonblocking,
     resolve_selected_input_device, save_dictation_device_id, save_dictation_language,
-    save_dictation_model, DeviceResolution, DictationDeviceMenuItem,
+    save_dictation_last_target, save_dictation_model, DeviceResolution, DictationDeviceMenuItem,
     DictationDeviceSelectionAction, DICTATION_SYSTEM_DEFAULT_DEVICE_VALUE,
 };
 pub use history::{
@@ -63,14 +64,15 @@ pub(crate) use microphone_popup_window::{
 pub use runtime::{
     abort_dictation, automation_state, begin_stop_capture, can_cycle_dictation_target,
     current_dictation_phase, cycle_dictation_target, delivery_receipt_generation,
-    dictation_auto_stop_due, dictation_elapsed, finish_stop_capture, get_active_dictation_device,
-    get_dictation_target, is_dictation_busy, is_dictation_recording, is_dictation_stopping,
-    last_delivery_receipt, last_stop_receipt, last_wrong_target_refusal, maybe_unload_transcriber,
-    pending_dictation_device_label, record_delivery_receipt, record_wrong_target_refusal,
-    redacted_transcript_fingerprint, resolve_final_or_partial_transcript,
-    set_dictation_target_cycle, set_overlay_phase, set_pending_dictation_device_label,
-    snapshot_overlay_state, toggle_dictation, transcribe_captured_audio, BeginStopCapture,
-    DictationStopJob, DictationStopReason, DictationTranscriptResolution,
+    dictation_auto_stop_due, dictation_elapsed, finalize_progress, finish_stop_capture,
+    get_active_dictation_device, get_dictation_target, is_dictation_busy, is_dictation_recording,
+    is_dictation_stopping, last_delivery_receipt, last_partial_transcript, last_stop_receipt,
+    last_wrong_target_refusal, maybe_unload_transcriber, pending_dictation_device_label,
+    record_delivery_receipt, record_wrong_target_refusal, redacted_transcript_fingerprint,
+    resolve_final_or_partial_transcript, set_dictation_session_target, set_dictation_target_cycle,
+    set_overlay_phase, set_pending_dictation_device_label, snapshot_overlay_state,
+    toggle_dictation, transcribe_captured_audio, BeginStopCapture, DictationStopJob,
+    DictationStopReason, DictationTranscriptResolution,
 };
 pub use setup::{
     build_dictation_setup_state, DictationHotkeyStatus, DictationMicrophonePermissionStatus,

@@ -47,6 +47,8 @@ pub const OPACITY_DISABLED: f32 = 0.40;
 pub const OPACITY_BORDER: f32 = 0.45;
 /// Selected/highlighted state.
 pub const OPACITY_SELECTED: f32 = 0.50;
+/// Main-window content dim layer while a modal surface is open above it.
+pub const OPACITY_MODAL_DIM: f32 = 0.52;
 /// Secondary icon emphasis.
 pub const OPACITY_ICON_MUTED: f32 = 0.55;
 /// Medium accent emphasis.
@@ -103,6 +105,7 @@ mod tests {
         assert_opacity_eq(OPACITY_DANGER_BG, 0.20);
         assert_opacity_eq(OPACITY_DANGER_HOVER, 0.25);
         assert_opacity_eq(OPACITY_SUGGESTION_HOVER, 0.35);
+        assert_opacity_eq(OPACITY_MODAL_DIM, 0.52);
         assert_opacity_eq(OPACITY_PREVIEW_TEXT, 0.75);
         assert_opacity_eq(OPACITY_PROMINENT, 0.80);
         assert_opacity_eq(OPACITY_ACTIVE, 0.90);

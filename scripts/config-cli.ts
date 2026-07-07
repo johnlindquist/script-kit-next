@@ -111,14 +111,33 @@ interface ThemeSelectionPreferences {
 
 interface DictationPreferences {
   selectedDeviceId?: string;
+  model?: string;
+  language?: string;
+  saveHistory?: boolean;
+  silenceRms?: number;
+  maxDurationSecs?: number;
+  livePreview?: boolean;
+  pushToTalk?: boolean;
 }
 
 type AgentChatBackend = "agent_chat" | "pi";
 
+interface AgentChatToolPolicyConfig {
+  allow?: string[];
+}
+
+interface AgentChatPathPolicyConfig {
+  allowRead?: string[];
+  allowWrite?: string[];
+  deny?: string[];
+}
+
 interface AiProfile {
   id?: string;
   name: string;
+  iconName?: string;
   backend?: AgentChatBackend;
+  piBinary?: string;
   agent?: string;
   provider?: string;
   model?: string;
@@ -126,9 +145,13 @@ interface AiProfile {
   appendSystemPrompt?: string;
   cwd?: string;
   tools?: string[];
+  toolPolicy?: AgentChatToolPolicyConfig;
+  pathPolicy?: AgentChatPathPolicyConfig;
+  blockedActionMessage?: string;
   disableExtensions?: boolean;
   disableSkills?: boolean;
   disablePromptTemplates?: boolean;
+  disableContextFiles?: boolean;
   hideCwdInPrompt?: boolean;
   thinking?: string;
   extensionPolicy?: string;
@@ -141,6 +164,7 @@ interface AiPreferences {
   selectedModelId?: string;
   selectedAgentChatAgentId?: string;
   selectedProfileId?: string;
+  quickAiProfileId?: string;
   selectedBackend?: AgentChatBackend;
   profiles?: AiProfile[];
   selectedProfileName?: string;
@@ -273,6 +297,31 @@ interface ClipboardHistorySecretRejectionConfig {
   extraSecretPatterns?: string[];
 }
 
+interface EffectsPreferences {
+  background?: string;
+  intensity?: number;
+}
+
+interface SpineStyleConfig {
+  id: string;
+  title?: string;
+  description?: string;
+  icon?: string;
+  instruction: string;
+}
+
+interface SpineCommandConfig {
+  name: string;
+  description?: string;
+  icon?: string;
+}
+
+interface BrainRemoteConfig {
+  enabled?: boolean;
+  telegramBotToken?: string;
+  telegramAllowedUserIds?: number[];
+}
+
 interface Config {
   hotkey: HotkeyConfig;
   bun_path?: string;
@@ -287,25 +336,35 @@ interface Config {
   processLimits?: ProcessLimits;
   suggested?: SuggestedConfig;
   notesHotkey?: HotkeyConfig;
+  notesHotkeyEnabled?: boolean;
   aiHotkey?: HotkeyConfig;
   aiHotkeyEnabled?: boolean;
   logsHotkey?: HotkeyConfig;
   logsHotkeyEnabled?: boolean;
   dictationHotkey?: HotkeyConfig;
   dictationHotkeyEnabled?: boolean;
+  inlineAiHotkey?: HotkeyConfig;
+  inlineAiHotkeyEnabled?: boolean;
+  rewriteHotkey?: HotkeyConfig;
+  rewriteHotkeyEnabled?: boolean;
   watcher?: WatcherConfig;
   layout?: LayoutConfig;
   theme?: ThemeSelectionPreferences;
   designs?: DesignsConfig;
   dictation?: DictationPreferences;
   ai?: AiPreferences;
+  spineStyles?: SpineStyleConfig[];
+  spineCommands?: SpineCommandConfig[];
   windowManagement?: WindowManagementPreferences;
   windowAppearance?: WindowAppearanceConfig;
+  effects?: EffectsPreferences;
   commands?: Record<string, CommandConfig>;
   promptTargets?: Record<string, PromptTargetConfig>;
   unifiedSearch?: UnifiedSearchConfig;
   claudeCode?: ClaudeCodeConfig;
   mcp?: McpConfig;
+  hiddenCommands?: string[];
+  brainRemote?: BrainRemoteConfig;
   powerSyntax?: PowerSyntaxConfig;
   tray?: TrayConfig;
   updates?: UpdatesConfig;
@@ -375,10 +434,16 @@ const DEFAULTS: Config & Record<string, unknown> = {
     trackUsage: true,
     excludedCommands: ["builtin/quit-script-kit"],
   },
+  notesHotkey: { modifiers: ["meta", "ctrl"], key: "KeyN" },
+  notesHotkeyEnabled: true,
   aiHotkeyEnabled: true,
   logsHotkeyEnabled: true,
   dictationHotkey: { modifiers: ["meta", "shift"], key: "Semicolon" },
   dictationHotkeyEnabled: true,
+  inlineAiHotkey: { modifiers: ["meta", "ctrl"], key: "KeyI" },
+  inlineAiHotkeyEnabled: true,
+  rewriteHotkey: { modifiers: ["meta", "ctrl"], key: "KeyR" },
+  rewriteHotkeyEnabled: true,
   watcher: {
     debounceMs: 500,
     stormThreshold: 200,
@@ -391,9 +456,13 @@ const DEFAULTS: Config & Record<string, unknown> = {
     maxHeight: 700
   },
   theme: undefined,
+  designs: undefined,
   dictation: undefined,
   ai: undefined,
   windowManagement: undefined,
+  effects: undefined,
+  hiddenCommands: undefined,
+  brainRemote: undefined,
   claudeCode: {
     enabled: false,
     path: undefined,
@@ -544,8 +613,15 @@ const CONFIG_SCHEMA: ConfigOption[] = [
   {
     key: "notesHotkey",
     type: "HotkeyConfig",
-    default: undefined,
-    description: "Hotkey for opening the Notes window (no default; set explicitly)"
+    default: { modifiers: ["meta", "ctrl"], key: "KeyN" },
+    description: "Hotkey for opening the Notes window (defaults to Cmd+Ctrl+N when enabled)",
+    example: '{"modifiers": ["meta", "ctrl"], "key": "KeyN"}'
+  },
+  {
+    key: "notesHotkeyEnabled",
+    type: "boolean",
+    default: true,
+    description: "Whether the Notes hotkey is registered"
   },
   {
     key: "aiHotkey",
@@ -582,6 +658,32 @@ const CONFIG_SCHEMA: ConfigOption[] = [
     type: "boolean",
     default: true,
     description: "Whether the dictation hotkey is registered"
+  },
+  {
+    key: "inlineAiHotkey",
+    type: "HotkeyConfig",
+    default: { modifiers: ["meta", "ctrl"], key: "KeyI" },
+    description: "Hotkey for inline AI focused-text editing (defaults to Cmd+Ctrl+I when enabled)",
+    example: '{"modifiers": ["meta", "ctrl"], "key": "KeyI"}'
+  },
+  {
+    key: "inlineAiHotkeyEnabled",
+    type: "boolean",
+    default: true,
+    description: "Whether the inline AI focused-text hotkey is registered"
+  },
+  {
+    key: "rewriteHotkey",
+    type: "HotkeyConfig",
+    default: { modifiers: ["meta", "ctrl"], key: "KeyR" },
+    description: "Hotkey for the instant rewrite flow (defaults to Cmd+Ctrl+R when enabled)",
+    example: '{"modifiers": ["meta", "ctrl"], "key": "KeyR"}'
+  },
+  {
+    key: "rewriteHotkeyEnabled",
+    type: "boolean",
+    default: true,
+    description: "Whether the instant rewrite hotkey is registered"
   },
   // --- Suggested ---
   {
@@ -677,6 +779,78 @@ const CONFIG_SCHEMA: ConfigOption[] = [
     description: "Preferred microphone device ID for dictation"
   },
   {
+    key: "dictation.model",
+    type: "string | undefined",
+    default: undefined,
+    description: "Dictation model catalog ID (undefined = default model)",
+    example: '"whisper-large-v3-turbo"'
+  },
+  {
+    key: "dictation.language",
+    type: "string | undefined",
+    default: undefined,
+    description: "Language hint for engines that support one (Whisper only; Parakeet auto-detects)",
+    example: '"en"'
+  },
+  {
+    key: "dictation.saveHistory",
+    type: "boolean",
+    default: true,
+    description: "Append transcripts to dictation-history.jsonl (disable to keep dictated text out of plaintext history)"
+  },
+  {
+    key: "dictation.pushToTalk",
+    type: "boolean",
+    default: true,
+    description: "Hold the dictation hotkey as push-to-talk (release to transcribe); a quick tap keeps toggle behavior"
+  },
+  {
+    key: "dictation.livePreview",
+    type: "boolean",
+    default: true,
+    description: "Show live partial transcripts in the recording overlay"
+  },
+  {
+    key: "dictation.silenceRms",
+    type: "number",
+    default: 0.01,
+    description: "RMS energy threshold below which a capture is skipped as silence (0.0-0.5; lower for quiet microphones)"
+  },
+  {
+    key: "dictation.maxDurationSecs",
+    type: "number",
+    default: 600,
+    description: "Auto-stop guard for runaway recordings in seconds (0 disables; runtime clamps to 30-14400)"
+  },
+  // --- Designs & effects ---
+  {
+    key: "designs.activeId",
+    type: "string | undefined",
+    default: undefined,
+    description: "Stable catalog ID of the active design",
+    example: '"script-kit-classic"'
+  },
+  {
+    key: "designs.cmd1Behavior",
+    type: '"picker" | "cycle" | undefined',
+    default: undefined,
+    description: 'Cmd+1 behavior: open the design picker or cycle designs ("picker" is the default behavior)',
+    example: '"picker"'
+  },
+  {
+    key: "effects.background",
+    type: "string | undefined",
+    default: undefined,
+    description: 'Background shader effect slug (for example "aurora"); undefined disables the effect',
+    example: '"aurora"'
+  },
+  {
+    key: "effects.intensity",
+    type: "number",
+    default: 0.5,
+    description: "Background effect strength from 0.0 to 1.0"
+  },
+  {
     key: "ai.selectedModelId",
     type: "string | undefined",
     default: undefined,
@@ -698,99 +872,99 @@ const CONFIG_SCHEMA: ConfigOption[] = [
     key: "windowAppearance.vibrancy",
     type: '"default" | "none" | "hud" | "popover" | "sidebar" | undefined',
     default: undefined,
-    description: "Schema-only window vibrancy material; runtime keeps built-in defaults until wired"
+    description: "NOT YET WIRED — accepted by the schema but ignored by the app at runtime. Window vibrancy material; runtime keeps built-in defaults until wired"
   },
   {
     key: "windowAppearance.animations",
     type: '"system" | "reduced" | "off" | undefined',
     default: undefined,
-    description: "Schema-only show/hide animation mode; runtime keeps built-in defaults until wired"
+    description: "NOT YET WIRED — accepted by the schema but ignored by the app at runtime. Show/hide animation mode; runtime keeps built-in defaults until wired"
   },
   {
     key: "powerSyntax.enabled",
     type: "boolean | undefined",
     default: undefined,
-    description: "Schema-only Power Syntax master switch; runtime keeps built-in defaults until wired"
+    description: "NOT YET WIRED — accepted by the schema but ignored by the app at runtime. Power Syntax master switch; runtime keeps built-in defaults until wired"
   },
   {
     key: "powerSyntax.captureSigil",
     type: '";" | "+" | "both" | undefined',
     default: undefined,
-    description: 'Schema-only capture sigil preference ("both" keeps legacy + and prefers ;)',
+    description: 'NOT YET WIRED — accepted by the schema but ignored by the app at runtime. Capture sigil preference ("both" keeps legacy + and prefers ;)',
     example: '"both"'
   },
   {
     key: "powerSyntax.commandSigil",
     type: '">" | "disabled" | undefined',
     default: undefined,
-    description: 'Schema-only command invocation sigil preference ("disabled" turns off > invocation once wired)',
+    description: 'NOT YET WIRED — accepted by the schema but ignored by the app at runtime. Command invocation sigil preference ("disabled" turns off > invocation once wired)',
     example: '">"'
   },
   {
     key: "powerSyntax.cmdEnterAi.enabled",
     type: "boolean | undefined",
     default: undefined,
-    description: "Schema-only Cmd+Enter AI enablement for Power Syntax"
+    description: "NOT YET WIRED — accepted by the schema but ignored by the app at runtime. Cmd+Enter AI enablement for Power Syntax"
   },
   {
     key: "powerSyntax.cmdEnterAi.modelId",
     type: "string | undefined",
     default: undefined,
-    description: "Schema-only Cmd+Enter AI model override; falls back to active Agent Chat model"
+    description: "NOT YET WIRED — accepted by the schema but ignored by the app at runtime. Cmd+Enter AI model override; falls back to active Agent Chat model"
   },
   {
     key: "powerSyntax.cmdEnterAi.systemPrompt",
     type: "string | undefined",
     default: undefined,
-    description: "Schema-only Cmd+Enter AI system prompt override; falls back to active Agent Chat model"
+    description: "NOT YET WIRED — accepted by the schema but ignored by the app at runtime. Cmd+Enter AI system prompt override; falls back to active Agent Chat model"
   },
   {
     key: "tray.showCurrentAppCommands",
     type: "boolean | undefined",
     default: undefined,
-    description: "Schema-only tray visibility for the dynamic <App> Commands header row; default true once wired"
+    description: "NOT YET WIRED — accepted by the schema but ignored by the app at runtime. Tray visibility for the dynamic <App> Commands header row; default true once wired"
   },
   {
     key: "tray.showNotes",
     type: "boolean | undefined",
     default: undefined,
-    description: "Schema-only tray visibility for Open Notes; default true once wired"
+    description: "NOT YET WIRED — accepted by the schema but ignored by the app at runtime. Tray visibility for Open Notes; default true once wired"
   },
   {
     key: "tray.showAgentChat",
     type: "boolean | undefined",
     default: undefined,
-    description: "Schema-only tray visibility for Open Agent Chat; default true once wired"
+    description: "NOT YET WIRED — accepted by the schema but ignored by the app at runtime. Tray visibility for Open Agent Chat; default true once wired"
   },
   {
     key: "tray.showReloadScripts",
     type: "boolean | undefined",
     default: undefined,
-    description: "Schema-only tray visibility for Reload Scripts; default true once wired"
+    description: "NOT YET WIRED — accepted by the schema but ignored by the app at runtime. Tray visibility for Reload Scripts; default true once wired"
   },
   {
     key: "tray.showHelp",
     type: "boolean | undefined",
     default: undefined,
-    description: "Schema-only tray visibility for Help/Feedback; default true once wired"
+    description: "NOT YET WIRED — accepted by the schema but ignored by the app at runtime. Tray visibility for Help/Feedback; default true once wired"
   },
   {
     key: "tray.showSocialLinks",
     type: "boolean | undefined",
     default: undefined,
-    description: "Schema-only tray visibility for Follow Us, GitHub, and Discord; default true once wired"
+    description: "NOT YET WIRED — accepted by the schema but ignored by the app at runtime. Tray visibility for Follow Us, GitHub, and Discord; default true once wired"
   },
   {
     key: "tray.showUpdateCheck",
     type: "boolean | undefined",
     default: undefined,
-    description: "Schema-only tray visibility for Check for Updates and Version rows; default true once wired"
+    description: "NOT YET WIRED — accepted by the schema but ignored by the app at runtime. Tray visibility for Check for Updates and Version rows; default true once wired"
   },
   {
     key: "updates.autoCheck",
     type: "boolean | undefined",
     default: undefined,
-    description: "Schema-only update auto-check preference; default true once wired"
+    description: "NOT YET WIRED — accepted by the schema but ignored by the app at runtime. Update auto-check preference; default true once wired"
   },
   // --- Commands & Claude Code ---
   {
@@ -804,6 +978,33 @@ const CONFIG_SCHEMA: ConfigOption[] = [
     type: "Record<string, PromptTargetConfig>",
     default: undefined,
     description: "Prompt handoff targets surfaced as prompt-target/<id> Actions and shortcut commands; built-in prompt actions use prompt-action/<id>"
+  },
+  {
+    key: "hiddenCommands",
+    type: "string[]",
+    default: undefined,
+    description: "Canonical command IDs hidden from the launcher main menu (still resolvable via triggerBuiltin, hotkeys, and deeplinks)",
+    example: '["builtin/clipboard-history", "script/deprecated-tool"]'
+  },
+  // --- Brain remote access ---
+  {
+    key: "brainRemote.enabled",
+    type: "boolean",
+    default: false,
+    description: "Master switch for the Telegram brain bridge (inactive without a bot token AND a non-empty telegramAllowedUserIds allowlist)"
+  },
+  {
+    key: "brainRemote.telegramBotToken",
+    type: "string | undefined",
+    default: undefined,
+    description: "Telegram bot token from @BotFather. SECURITY: grants remote capture/queries into local memory; treated as a secret and never logged"
+  },
+  {
+    key: "brainRemote.telegramAllowedUserIds",
+    type: "number[]",
+    default: [],
+    description: "Numeric Telegram user IDs allowed to query the brain (empty disables the bridge entirely)",
+    example: '[123456789]'
   },
   {
     key: "claudeCode.enabled",
@@ -1052,7 +1253,20 @@ function parseValue(value: string, key: string): unknown {
       throw new Error(`Invalid array value: ${value}. Use JSON format like '["meta", "shift"]'.`);
     }
   }
-  
+
+  if (type.includes('HotkeyConfig')) {
+    // Hotkey object - parse as JSON
+    try {
+      const parsed = JSON.parse(value);
+      if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+        throw new Error(`Expected object, got: ${typeof parsed}`);
+      }
+      return parsed;
+    } catch (e) {
+      throw new Error(`Invalid hotkey value: ${value}. Use JSON format like '{"modifiers": ["meta", "ctrl"], "key": "KeyR"}'.`);
+    }
+  }
+
   // String or other - return as-is
   return value;
 }
@@ -1062,7 +1276,7 @@ function parseValue(value: string, key: string): unknown {
  */
 function validateValue(key: string, value: unknown): { valid: boolean; error?: string } {
   // Validate command-ID arrays before falling through to generic handling
-  if (key === "suggested.excludedCommands") {
+  if (key === "suggested.excludedCommands" || key === "hiddenCommands") {
     const errors = validateCommandIdList(value, key);
     return {
       valid: errors.length === 0,
@@ -1074,10 +1288,18 @@ function validateValue(key: string, value: unknown): { valid: boolean; error?: s
   if (!schema) {
     return { valid: true }; // Unknown key - allow but warn
   }
-  
+
   // Type validation
   const type = schema.type;
-  
+
+  // Full HotkeyConfig values share the command-shortcut shape validation
+  if (type.includes('HotkeyConfig') && value !== undefined) {
+    const errors = validateCommandConfigFieldValue('shortcut', value, key);
+    if (errors.length > 0) {
+      return { valid: false, error: errors.map((e) => e.message).join('; ') };
+    }
+  }
+
   if (key === 'hotkey.modifiers') {
     if (!Array.isArray(value)) {
       return { valid: false, error: 'hotkey.modifiers must be an array' };
@@ -1097,6 +1319,30 @@ function validateValue(key: string, value: unknown): { valid: boolean; error?: s
         valid: false,
         error: `windowManagement.snapMode must be one of: ${validModes.join(', ')}`,
       };
+    }
+  }
+
+  if (key === 'designs.cmd1Behavior' && value !== undefined) {
+    const validBehaviors: Cmd1Behavior[] = ['picker', 'cycle'];
+    if (!validBehaviors.includes(value as Cmd1Behavior)) {
+      return {
+        valid: false,
+        error: `designs.cmd1Behavior must be one of: ${validBehaviors.join(', ')}`,
+      };
+    }
+  }
+
+  if (key === 'brainRemote.telegramAllowedUserIds' && value !== undefined) {
+    if (!Array.isArray(value)) {
+      return { valid: false, error: 'brainRemote.telegramAllowedUserIds must be an array' };
+    }
+    for (const id of value) {
+      if (typeof id !== 'number' || !Number.isInteger(id)) {
+        return {
+          valid: false,
+          error: `brainRemote.telegramAllowedUserIds entries must be integer Telegram user IDs (got: ${JSON.stringify(id)})`,
+        };
+      }
     }
   }
 
@@ -1171,6 +1417,15 @@ function validateValue(key: string, value: unknown): { valid: boolean; error?: s
     if (key.includes('padding') && value < 0) {
       return { valid: false, error: 'Padding cannot be negative' };
     }
+    if (key === 'effects.intensity' && (value < 0 || value > 1)) {
+      return { valid: false, error: 'effects.intensity must be between 0.0 and 1.0' };
+    }
+    if (key === 'dictation.silenceRms' && (value < 0 || value > 0.5)) {
+      return { valid: false, error: 'dictation.silenceRms must be between 0.0 and 0.5' };
+    }
+    if (key === 'dictation.maxDurationSecs' && value < 0) {
+      return { valid: false, error: 'dictation.maxDurationSecs cannot be negative (0 disables the guard)' };
+    }
   }
   
   if (type === 'boolean' && typeof value !== 'boolean') {
@@ -1181,98 +1436,211 @@ function validateValue(key: string, value: unknown): { valid: boolean; error?: s
 }
 
 /**
+ * Return a copy of `content` with comment text replaced by spaces.
+ *
+ * Line (`// ...`) and block comments are blanked while newlines and string
+ * literal contents are preserved, so the masked copy has exactly the same
+ * length and line structure as the original. Regex matches computed against
+ * the masked copy therefore map 1:1 onto the original source, which lets the
+ * writers below locate real properties without ever matching the commented
+ * example blocks that ship in config-template.ts.
+ */
+function maskComments(content: string): string {
+  let result = '';
+  let i = 0;
+  let state: 'code' | 'line' | 'block' | 'string' = 'code';
+  let stringChar = '';
+
+  while (i < content.length) {
+    const char = content[i];
+    const next = content[i + 1];
+
+    if (state === 'code') {
+      if (char === '/' && next === '/') {
+        state = 'line';
+        result += '  ';
+        i += 2;
+        continue;
+      }
+      if (char === '/' && next === '*') {
+        state = 'block';
+        result += '  ';
+        i += 2;
+        continue;
+      }
+      if (char === '"' || char === "'" || char === '`') {
+        state = 'string';
+        stringChar = char;
+      }
+      result += char;
+      i += 1;
+      continue;
+    }
+
+    if (state === 'line') {
+      if (char === '\n') {
+        state = 'code';
+        result += '\n';
+      } else {
+        result += ' ';
+      }
+      i += 1;
+      continue;
+    }
+
+    if (state === 'block') {
+      if (char === '*' && next === '/') {
+        state = 'code';
+        result += '  ';
+        i += 2;
+        continue;
+      }
+      result += char === '\n' ? '\n' : ' ';
+      i += 1;
+      continue;
+    }
+
+    // state === 'string'
+    if (char === '\\') {
+      result += char + (next ?? '');
+      i += 2;
+      continue;
+    }
+    if (char === stringChar) {
+      state = 'code';
+    }
+    result += char;
+    i += 1;
+  }
+
+  return result;
+}
+
+/**
+ * Index of the last non-whitespace character in `masked` before `end`,
+ * or -1 when there is none. Because comments are blanked in the masked
+ * copy, this finds the last real code token (e.g. to decide whether a
+ * trailing comma is needed and where to place it).
+ */
+function lastCodeCharIndex(masked: string, end: number): number {
+  for (let i = end - 1; i >= 0; i--) {
+    if (!/\s/.test(masked[i])) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+/**
+ * Insert `property` as a new top-level entry just before the closing
+ * `} satisfies Config` / `} as Config`, placing any needed comma directly
+ * after the last real (non-comment) token so trailing comment blocks are
+ * left untouched.
+ */
+function insertTopLevelProperty(content: string, masked: string, property: string): string {
+  const insertRegex = /(\s*)(})\s*(satisfies|as)\s+Config/;
+  const match = masked.match(insertRegex);
+  if (!match || match.index === undefined) {
+    return content;
+  }
+
+  const closeStart = match.index;
+  const lastCode = lastCodeCharIndex(masked, closeStart);
+  const needsComma = lastCode >= 0 && masked[lastCode] !== ',' && masked[lastCode] !== '{';
+
+  let before = content.slice(0, closeStart);
+  if (needsComma) {
+    before = before.slice(0, lastCode + 1) + ',' + before.slice(lastCode + 1);
+  }
+  return `${before}\n  ${property}${content.slice(closeStart)}`;
+}
+
+/**
  * Update a value in config.ts while preserving formatting
  * Uses regex-based replacement for simple cases
+ *
+ * Keys are located against a comment-masked copy of the source so commented
+ * example lines (e.g. `// aiHotkeyEnabled: true,` in config-template.ts) are
+ * never matched or edited. A key that exists only in comments is treated as
+ * absent and inserted as a real property.
  */
 function updateConfigValue(key: string, value: unknown): void {
   let content = readConfigFile();
-  
+
   if (!content) {
     // Create new config file
     content = createDefaultConfig();
   }
-  
+
   const parts = key.split('.');
   const valueStr = JSON.stringify(value);
-  
+  const masked = maskComments(content);
+
   // Strategy: For nested keys, we need to find and update the specific property
   // This is a simplified approach - for complex cases, consider ts-morph
-  
+
   if (parts.length === 1) {
     // Top-level key
     const keyName = parts[0];
     // Try to find existing key and replace - use a more flexible pattern
     // Match the key name followed by colon and value, stopping at comma, newline, or closing brace
-    const existingKeyRegex = new RegExp(`(\\s*["']?${keyName}["']?\\s*:\\s*)([^,}\\n]+(?:\\{[^}]*\\})?)`, 'g');
-    
-    if (existingKeyRegex.test(content)) {
-      // Reset lastIndex since test() advances it
-      existingKeyRegex.lastIndex = 0;
-      content = content.replace(existingKeyRegex, `$1${valueStr}`);
+    const existingKeyRegex = new RegExp(`(["']?${keyName}["']?\\s*:\\s*)([^,}\\n]+(?:\\{[^}]*\\})?)`);
+    const match = masked.match(existingKeyRegex);
+
+    if (match && match.index !== undefined) {
+      // Key exists in real code - replace just the value span. Trailing
+      // masked-comment characters are spaces, so trimming them keeps any
+      // inline comment after the value intact.
+      const valueStart = match.index + match[1].length;
+      const valueLength = match[2].replace(/\s+$/, '').length;
+      content = content.slice(0, valueStart) + valueStr + content.slice(valueStart + valueLength);
     } else {
-      // Key doesn't exist - need to add it
-      // Find the content before the closing } satisfies/as Config
-      // We need to ensure there's a comma after the last property
-      const insertRegex = /(\s*)(})\s*(satisfies|as)\s+Config/;
-      const match = content.match(insertRegex);
-      
-      if (match) {
-        // Find position to insert
-        const beforeClose = content.slice(0, content.indexOf(match[0]));
-        
-        // Check if we need to add a comma after the last property
-        // Look for the last non-whitespace character before the closing brace
-        const trimmedBefore = beforeClose.trimEnd();
-        const needsComma = !trimmedBefore.endsWith(',') && !trimmedBefore.endsWith('{');
-        
-        const commaIfNeeded = needsComma ? ',' : '';
-        content = content.replace(insertRegex, `${commaIfNeeded}\n  ${keyName}: ${valueStr}\n$2 $3 Config`);
-      }
+      // Key doesn't exist (or only appears in comments) - add it before the
+      // closing } satisfies/as Config
+      content = insertTopLevelProperty(content, masked, `${keyName}: ${valueStr}`);
     }
   } else if (parts.length === 2) {
     // Nested key (e.g., hotkey.key, padding.top)
     const [parent, child] = parts;
-    
+
     // Check if parent object exists - use a pattern that captures nested braces properly
     const parentRegex = new RegExp(`(["']?${parent}["']?\\s*:\\s*)\\{([^}]*)\\}`, 's');
-    const parentMatch = content.match(parentRegex);
-    
-    if (parentMatch) {
+    const parentMatch = masked.match(parentRegex);
+
+    if (parentMatch && parentMatch.index !== undefined) {
       // Parent exists - update or add the child property
-      const parentContent = parentMatch[2];
+      const innerStart = parentMatch.index + parentMatch[1].length + 1; // past the "{"
+      const maskedInner = parentMatch[2];
+      const innerEnd = innerStart + maskedInner.length;
       const childRegex = new RegExp(`(["']?${child}["']?\\s*:\\s*)([^,}\\n]+)`);
-      
-      if (childRegex.test(parentContent)) {
+      const childMatch = maskedInner.match(childRegex);
+
+      if (childMatch && childMatch.index !== undefined) {
         // Child exists - update it
-        const newParentContent = parentContent.replace(childRegex, `$1${valueStr}`);
-        content = content.replace(parentRegex, `$1{${newParentContent}}`);
+        const valueStart = innerStart + childMatch.index + childMatch[1].length;
+        const valueLength = childMatch[2].replace(/\s+$/, '').length;
+        content = content.slice(0, valueStart) + valueStr + content.slice(valueStart + valueLength);
       } else {
-        // Child doesn't exist - add it at the end of the parent object
-        const trimmedContent = parentContent.trimEnd();
-        const needsComma = !trimmedContent.endsWith(',') && trimmedContent.length > 0;
-        const commaIfNeeded = needsComma ? ',' : '';
-        const newParentContent = parentContent.trimEnd() + commaIfNeeded + `\n    ${child}: ${valueStr}`;
-        content = content.replace(parentRegex, `$1{${newParentContent}\n  }`);
+        // Child doesn't exist - add it at the end of the parent object,
+        // placing any needed comma after the last real (non-comment) token
+        const lastCode = lastCodeCharIndex(maskedInner, maskedInner.length);
+        const needsComma = lastCode >= 0 && maskedInner[lastCode] !== ',';
+        let inner = content.slice(innerStart, innerEnd);
+        if (needsComma) {
+          inner = inner.slice(0, lastCode + 1) + ',' + inner.slice(lastCode + 1);
+        }
+        const newInner = `${inner.trimEnd()}\n    ${child}: ${valueStr}\n  `;
+        content = content.slice(0, innerStart) + newInner + content.slice(innerEnd);
       }
     } else {
-      // Parent doesn't exist - create it with the child
-      // Same logic as top-level insertion but with nested object
-      const insertRegex = /(\s*)(})\s*(satisfies|as)\s+Config/;
-      const match = content.match(insertRegex);
-      
-      if (match) {
-        const beforeClose = content.slice(0, content.indexOf(match[0]));
-        const trimmedBefore = beforeClose.trimEnd();
-        const needsComma = !trimmedBefore.endsWith(',') && !trimmedBefore.endsWith('{');
-        const commaIfNeeded = needsComma ? ',' : '';
-        
-        content = content.replace(insertRegex, `${commaIfNeeded}\n  ${parent}: {\n    ${child}: ${valueStr}\n  }\n$2 $3 Config`);
-      }
+      // Parent doesn't exist (or only appears in comments) - create it with
+      // the child
+      content = insertTopLevelProperty(content, masked, `${parent}: {\n    ${child}: ${valueStr}\n  }`);
     }
   } else {
     throw new Error(`Deep nesting (${parts.length} levels) not supported. Max 2 levels.`);
   }
-  
+
   writeConfigFile(content);
 }
 
@@ -1293,18 +1661,32 @@ function resetConfigValue(key: string): void {
     if (!content) {
       return; // Nothing to reset
     }
-    
+
     const parts = key.split('.');
-    if (parts.length === 1) {
-      // Remove top-level key
-      const regex = new RegExp(`\\s*["']?${parts[0]}["']?\\s*:\\s*[^,}\\n]+,?\\n?`, 'g');
-      content = content.replace(regex, '');
-    } else if (parts.length === 2) {
-      // Remove nested key
-      const regex = new RegExp(`\\s*["']?${parts[1]}["']?\\s*:\\s*[^,}\\n]+,?`, 'g');
-      content = content.replace(regex, '');
+    const regex = parts.length === 1
+      ? new RegExp(`\\s*["']?${parts[0]}["']?\\s*:\\s*[^,}\\n]+,?\\n?`, 'g')
+      : new RegExp(`\\s*["']?${parts[1]}["']?\\s*:\\s*[^,}\\n]+,?`, 'g');
+
+    // Locate removals against the comment-masked source so commented example
+    // lines are never deleted, then splice the spans out of the original.
+    const masked = maskComments(content);
+    const spans: Array<[number, number]> = [];
+    for (const match of masked.matchAll(regex)) {
+      if (match.index === undefined) {
+        continue;
+      }
+      let end = match.index + match[0].length;
+      // Trailing masked-comment characters are spaces; keep them (and the
+      // inline comment they stand for) in the file.
+      while (end > match.index && (masked[end - 1] === ' ' || masked[end - 1] === '\t')) {
+        end -= 1;
+      }
+      spans.push([match.index, end]);
     }
-    
+    for (const [start, end] of spans.reverse()) {
+      content = content.slice(0, start) + content.slice(end);
+    }
+
     writeConfigFile(content);
   } else {
     // Set to default value
@@ -1741,11 +2123,16 @@ async function cmdValidate(): Promise<void> {
     const knownTopLevel = [
       'hotkey', 'bun_path', 'editor', 'padding', 'editorFontSize',
       'terminalFontSize', 'uiScale', 'builtIns', 'processLimits',
-      'clipboardHistoryMaxTextLength', 'suggested', 'notesHotkey',
+      'clipboardHistoryMaxTextLength', 'clipboardHistorySecretRejection',
+      'suggested', 'notesHotkey', 'notesHotkeyEnabled',
       'aiHotkey', 'aiHotkeyEnabled', 'logsHotkey', 'logsHotkeyEnabled',
-      'dictationHotkey', 'dictationHotkeyEnabled', 'watcher', 'layout',
-      'theme', 'dictation', 'ai', 'windowManagement', 'windowAppearance',
-      'commands', 'claudeCode', 'mcp', 'powerSyntax', 'tray', 'updates',
+      'dictationHotkey', 'dictationHotkeyEnabled',
+      'inlineAiHotkey', 'inlineAiHotkeyEnabled',
+      'rewriteHotkey', 'rewriteHotkeyEnabled', 'watcher', 'layout',
+      'theme', 'designs', 'dictation', 'ai', 'spineStyles', 'spineCommands',
+      'windowManagement', 'windowAppearance', 'effects', 'commands',
+      'promptTargets', 'unifiedSearch', 'claudeCode', 'mcp',
+      'hiddenCommands', 'brainRemote', 'powerSyntax', 'tray', 'updates',
     ];
     for (const key of Object.keys(config)) {
       if (!knownTopLevel.includes(key)) {
@@ -1888,8 +2275,8 @@ function validateConfigChange(change: ConfigChange): ValidateConfigChangeResult 
     };
   }
 
-  // Validate command-ID arrays (e.g. suggested.excludedCommands)
-  if (change.key === "suggested.excludedCommands") {
+  // Validate command-ID arrays (e.g. suggested.excludedCommands, hiddenCommands)
+  if (change.key === "suggested.excludedCommands" || change.key === "hiddenCommands") {
     const errors = validateCommandIdList(change.value, change.key);
     debugLog('validate_change_command_id_list', {
       key: change.key,

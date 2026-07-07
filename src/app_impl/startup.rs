@@ -1337,8 +1337,10 @@ impl ScriptListApp {
                 let is_detached_agent_chat =
                     crate::ai::agent_chat::ui::chat_window::is_chat_window(window);
                 let is_actions = crate::actions::is_actions_window(window);
+                let is_shortcut_recorder =
+                    super::shortcut_recorder::is_shortcut_recorder_window(window);
 
-                if is_notes || is_ai || is_detached_agent_chat {
+                if is_notes || is_ai || is_detached_agent_chat || is_shortcut_recorder {
                     return;
                 }
 
@@ -1382,7 +1384,9 @@ impl ScriptListApp {
                 let is_ai = crate::ai::is_ai_window(window);
                 let is_detached_agent_chat = crate::ai::agent_chat::ui::chat_window::is_chat_window(window);
                 let is_actions = crate::actions::is_actions_window(window);
-                if is_notes || is_ai || is_detached_agent_chat || is_actions {
+                let is_shortcut_recorder =
+                    super::shortcut_recorder::is_shortcut_recorder_window(window);
+                if is_notes || is_ai || is_detached_agent_chat || is_actions || is_shortcut_recorder {
                     tracing::debug!(
                         target: "script_kit::keyboard",
                         event = "tab_interceptor_skipped_secondary_window",
@@ -1390,6 +1394,7 @@ impl ScriptListApp {
                         is_ai,
                         is_detached_agent_chat,
                         is_actions,
+                        is_shortcut_recorder,
                     );
                     return;
                 }
@@ -1488,6 +1493,17 @@ impl ScriptListApp {
                                 save_offer_open = this.tab_ai_save_offer_state.is_some(),
                             );
 
+                            if this.main_window_modal_owns_keyboard() {
+                                tracing::debug!(
+                                    target: "script_kit::keyboard",
+                                    event = "tab_interceptor_suppressed_for_modal",
+                                    owner,
+                                    has_shift,
+                                );
+                                cx.stop_propagation();
+                                return;
+                            }
+
                             // File search owns Tab locally: plain Tab browses
                             // into the selected directory and Shift+Tab goes up.
                             if matches!(this.current_view, AppView::FileSearchView { .. }) {
@@ -1543,6 +1559,29 @@ impl ScriptListApp {
                                     crate::logging::log(
                                         "KEY",
                                         "Tab: no selected directory to navigate into",
+                                    );
+                                }
+                                return;
+                            }
+
+                            // Profile Search owns plain Tab: assign the
+                            // highlighted profile to Quick AI ("Use for Quick
+                            // AI") while Enter keeps switching the Agent Chat
+                            // default. Mirrored by the SimulateKey protocol in
+                            // simulate_key_dispatch.rs — keep in lockstep.
+                            if matches!(this.current_view, AppView::ProfileSearchView { .. }) {
+                                cx.stop_propagation();
+                                if this.show_actions_popup {
+                                    return;
+                                }
+                                if !has_shift {
+                                    let assigned =
+                                        this.select_profile_search_result_for_quick_ai(cx);
+                                    tracing::info!(
+                                        target: "script_kit::spine",
+                                        event = "profile_search_quick_ai_tab_assign",
+                                        assigned,
+                                        "Tab in Profile Search → Use for Quick AI"
                                     );
                                 }
                                 return;
@@ -2817,7 +2856,10 @@ impl ScriptListApp {
                 let is_ai = crate::ai::is_ai_window(window);
                 let is_detached_agent_chat = crate::ai::agent_chat::ui::chat_window::is_chat_window(window);
                 let is_actions = crate::actions::is_actions_window(window);
-                let is_secondary_surface_window = is_notes || is_ai || is_detached_agent_chat;
+                let is_shortcut_recorder =
+                    super::shortcut_recorder::is_shortcut_recorder_window(window);
+                let is_secondary_surface_window =
+                    is_notes || is_ai || is_detached_agent_chat || is_shortcut_recorder;
                 let actions_open_for_main = crate::actions::is_actions_window_open_for_main();
 
                 // A detached actions popup hosted by a secondary window (Notes,
@@ -2849,6 +2891,7 @@ impl ScriptListApp {
                         is_ai,
                         is_detached_agent_chat,
                         is_actions,
+                        is_shortcut_recorder,
                         key = %key,
                         is_actions_close_key,
                     );
@@ -2972,6 +3015,10 @@ impl ScriptListApp {
                             cx,
                         ) {
                             cx.stop_propagation();
+                            return;
+                        }
+
+                        if this.main_window_modal_owns_keyboard() {
                             return;
                         }
 

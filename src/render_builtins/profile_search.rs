@@ -7,12 +7,15 @@ fn profile_search_row_status_accessory(
     list_colors: &crate::list_item::ListItemColors,
     selected: bool,
 ) -> Option<AnyElement> {
-    if !result.selected {
-        return None;
-    }
+    let label = match (result.selected, result.quick_ai) {
+        (true, true) => "Current · Quick AI",
+        (true, false) => "Current",
+        (false, true) => "Quick AI",
+        (false, false) => return None,
+    };
     Some(
         div()
-            .max_w(px(88.0))
+            .max_w(px(132.0))
             .overflow_hidden()
             .text_xs()
             .whitespace_nowrap()
@@ -21,7 +24,7 @@ fn profile_search_row_status_accessory(
                 list_colors,
                 selected,
             )))
-            .child("Current")
+            .child(label)
             .into_any_element(),
     )
 }
@@ -295,18 +298,20 @@ impl ScriptListApp {
                     .as_ref()
                     .map(|path| path.display().to_string())
                     .unwrap_or_else(|| "Default".to_string());
-                let current_badge = if result.selected {
-                    Some(
-                        div()
-                            .text_xs()
-                            .font_weight(FontWeight::MEDIUM)
-                            .text_color(rgb(text_primary))
-                            .child("Current")
-                            .into_any_element(),
-                    )
-                } else {
-                    None
+                let badge_label = match (result.selected, result.quick_ai) {
+                    (true, true) => Some("Current · Quick AI"),
+                    (true, false) => Some("Current"),
+                    (false, true) => Some("Quick AI"),
+                    (false, false) => None,
                 };
+                let current_badge = badge_label.map(|label| {
+                    div()
+                        .text_xs()
+                        .font_weight(FontWeight::MEDIUM)
+                        .text_color(rgb(text_primary))
+                        .child(label)
+                        .into_any_element()
+                });
                 div()
                     .flex()
                     .flex_col()
@@ -428,7 +433,11 @@ impl ScriptListApp {
                     .into_any_element()
             });
 
-        let hints: Vec<SharedString> = vec!["↵ Switch Profile".into(), "Esc Back".into()];
+        let hints: Vec<SharedString> = vec![
+            "↵ Switch Profile".into(),
+            "⇥ Use for Quick AI".into(),
+            "Esc Back".into(),
+        ];
         crate::components::emit_prompt_hint_audit("profile_search", &hints);
         let footer =
             self.main_window_footer_slot(crate::components::render_simple_hint_strip(hints, None));

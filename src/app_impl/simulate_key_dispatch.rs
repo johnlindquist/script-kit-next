@@ -300,6 +300,19 @@ impl ScriptListApp {
         }
 
         if !actions_popup_consumed_key {
+            if matches!(key_lower.as_str(), "tab")
+                && !has_cmd
+                && !_has_alt
+                && !_has_ctrl
+                && view.main_window_modal_owns_keyboard()
+            {
+                logging::log(
+                    "STDIN",
+                    "SimulateKey: Tab suppressed while modal owns keyboard",
+                );
+                return;
+            }
+
             match &view.current_view {
                 AppView::ConfirmPrompt { .. } => match key_lower.as_str() {
                     "tab" => {
@@ -980,6 +993,16 @@ impl ScriptListApp {
                     "enter" => {
                         logging::log("STDIN", "SimulateKey: Enter - select Profile Search row");
                         view.select_profile_search_result(ctx);
+                    }
+                    "tab" if !has_shift => {
+                        // Mirrors the live Tab interceptor in startup.rs:
+                        // plain Tab in Profile Search assigns the highlighted
+                        // profile to Quick AI. Keep the two paths in lockstep.
+                        logging::log(
+                            "STDIN",
+                            "SimulateKey: Tab - use Profile Search row for Quick AI",
+                        );
+                        view.select_profile_search_result_for_quick_ai(ctx);
                     }
                     "escape" => {
                         logging::log("STDIN", "SimulateKey: Escape - close Profile Search");

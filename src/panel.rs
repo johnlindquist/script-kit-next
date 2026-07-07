@@ -52,8 +52,11 @@ pub fn running_status_message(context: &str) -> String {
 // Input Placeholder Configuration
 // ============================================================================
 
-/// Default placeholder text for the main search input
-pub const DEFAULT_PLACEHOLDER: &str = "Search or type @ / | . ; for commands";
+/// Default placeholder text for the main search input.
+///
+/// Aliases the crate-wide root launcher placeholder so every surface
+/// advertises the same sigil set — do not fork this copy.
+pub const DEFAULT_PLACEHOLDER: &str = crate::ROOT_LAUNCHER_PLACEHOLDER;
 
 // ============================================================================
 // Cursor Styling Constants
@@ -89,7 +92,11 @@ mod tests {
 
     #[test]
     fn test_default_placeholder_text() {
-        assert_eq!(DEFAULT_PLACEHOLDER, "Search or type @ / | . ; for commands");
+        assert_eq!(
+            DEFAULT_PLACEHOLDER,
+            crate::ROOT_LAUNCHER_PLACEHOLDER,
+            "panel placeholder must not fork from the root launcher copy"
+        );
     }
 
     #[test]

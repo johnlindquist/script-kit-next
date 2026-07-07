@@ -2751,7 +2751,7 @@ mod from_dialog_builtin_action_validation_tests_2 {
         let actions = get_global_actions();
         let ids: Vec<&str> = actions.iter().map(|a| a.id.as_str()).collect();
         // get_global_actions() is seeded (never empty): reload_scripts, settings,
-        // view_logs, plus config-dependent prompt-export/handoff actions.
+        // view_logs, plus the Discover rows.
         assert!(ids.contains(&"reload_scripts"));
         assert!(ids.contains(&"settings"));
         assert!(ids.contains(&"view_logs"));
@@ -8436,12 +8436,13 @@ mod from_dialog_builtin_action_validation_tests_5 {
             };
             let actions = get_clipboard_history_context_actions(&entry);
             // On macOS: paste, copy, paste_keep_open, share, attach_ai, quick_look,
-            //           pin, save_snippet, save_file, delete, delete_multiple, delete_all = 12
-            // Non-macOS: no quick_look = 11
+            //           pin, keep_in_today, save_snippet, save_file, delete, delete_multiple,
+            //           delete_all = 13
+            // Non-macOS: no quick_look = 12
             #[cfg(target_os = "macos")]
-            assert_eq!(actions.len(), 12);
+            assert_eq!(actions.len(), 13);
             #[cfg(not(target_os = "macos"))]
-            assert_eq!(actions.len(), 11);
+            assert_eq!(actions.len(), 12);
         }
 
         #[test]
@@ -8457,13 +8458,13 @@ mod from_dialog_builtin_action_validation_tests_5 {
             let actions = get_clipboard_history_context_actions(&entry);
             // Images do NOT get save_snippet (text-only); they get ocr instead.
             // On macOS: paste, copy, paste_keep_open, share, attach_ai, quick_look,
-            //           open_with, annotate_cleanshot, upload_cleanshot, unpin,
-            //           ocr, save_file, delete, delete_multiple, delete_all = 15
+            //           open_with, annotate_cleanshot, upload_cleanshot, unpin, keep_in_today,
+            //           ocr, save_file, delete, delete_multiple, delete_all = 16
             #[cfg(target_os = "macos")]
-            assert_eq!(actions.len(), 15);
-            // Non-macOS: no quick_look, open_with, annotate_cleanshot, upload_cleanshot = 11
+            assert_eq!(actions.len(), 16);
+            // Non-macOS: no quick_look, open_with, annotate_cleanshot, upload_cleanshot = 12
             #[cfg(not(target_os = "macos"))]
-            assert_eq!(actions.len(), 11);
+            assert_eq!(actions.len(), 12);
         }
 
         // =========================================================================
@@ -10250,7 +10251,7 @@ mod from_dialog_builtin_action_validation_tests_5 {
         #[test]
         fn global_actions_seeded() {
             // get_global_actions() is seeded (never empty): reload_scripts, settings,
-            // view_logs, plus config-dependent prompt-export/handoff actions.
+            // view_logs, plus the Discover rows.
             let actions = get_global_actions();
             let ids: Vec<&str> = actions.iter().map(|a| a.id.as_str()).collect();
             assert!(ids.contains(&"reload_scripts"));
@@ -12361,7 +12362,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
         #[test]
         fn global_actions_is_seeded() {
             // get_global_actions() is seeded (never empty): reload_scripts, settings,
-            // view_logs, plus config-dependent prompt-export/handoff actions.
+            // view_logs, plus the Discover rows.
             let actions = get_global_actions();
             let ids: Vec<&str> = actions.iter().map(|a| a.id.as_str()).collect();
             assert!(ids.contains(&"reload_scripts"));

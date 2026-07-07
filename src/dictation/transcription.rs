@@ -6,6 +6,7 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 use transcribe_rs::onnx::parakeet::ParakeetModel;
 use transcribe_rs::onnx::Quantization;
+use transcribe_rs::transcriber::{EnergyAdaptiveChunked, EnergyAdaptiveConfig, Transcriber as _};
 use transcribe_rs::whisper_cpp::{
     WhisperEngine as TranscribeWhisperEngine, WhisperInferenceParams,
 };
@@ -18,7 +19,89 @@ use transcribe_rs::{SpeechModel, TranscribeOptions};
 /// swapping engines does not ripple beyond `transcription.rs`.
 pub trait DictationEngine: Send {
     fn transcribe(&mut self, samples: &[f32], initial_prompt: Option<&str>) -> Result<String>;
+
+    /// Transcribe long audio in energy-split chunks, reporting fractional
+    /// progress (0.0–1.0) after each chunk completes.
+    ///
+    /// Both bundled backends degrade on very long single passes — Parakeet's
+    /// conformer encoder is O(T²) over the whole buffer and can drop trailing
+    /// speech, and Whisper's internal windowing gives no progress signal — so
+    /// finalize routes recordings longer than
+    /// [`LONG_AUDIO_CHUNK_TARGET_SECS`] through this path instead.
+    fn transcribe_long(
+        &mut self,
+        samples: &[f32],
+        initial_prompt: Option<&str>,
+        progress: &mut dyn FnMut(f32),
+    ) -> Result<String> {
+        let _ = progress;
+        self.transcribe(samples, initial_prompt)
+    }
 }
+
+/// Target duration of one finalize chunk. Chosen to sit inside Whisper's
+/// native 30 s window and well inside the range Parakeet was trained on.
+pub const LONG_AUDIO_CHUNK_TARGET_SECS: f32 = 24.0;
+
+/// Energy-split search window around the chunk target.
+const LONG_AUDIO_SEARCH_WINDOW_SECS: f32 = 3.0;
+
+/// Audio shorter than one chunk-plus-search-window is transcribed in a
+/// single plain pass; anything longer takes the chunked path.
+pub fn should_use_chunked_transcription(sample_count: usize, sample_rate_hz: u32) -> bool {
+    let secs = sample_count as f32 / sample_rate_hz.max(1) as f32;
+    secs > LONG_AUDIO_CHUNK_TARGET_SECS + LONG_AUDIO_SEARCH_WINDOW_SECS
+}
+
+/// Run the shared energy-adaptive chunked transcription over any
+/// `SpeechModel`, reporting progress as the fraction of audio samples whose
+/// chunks have finished transcribing.
+fn transcribe_long_with_model(
+    model: &mut dyn SpeechModel,
+    samples: &[f32],
+    language: Option<String>,
+    progress: &mut dyn FnMut(f32),
+) -> Result<String> {
+    let options = TranscribeOptions {
+        language,
+        ..Default::default()
+    };
+    let mut chunker = EnergyAdaptiveChunked::new(
+        EnergyAdaptiveConfig {
+            target_chunk_secs: LONG_AUDIO_CHUNK_TARGET_SECS,
+            search_window_secs: LONG_AUDIO_SEARCH_WINDOW_SECS,
+            padding_secs: 0.3,
+            min_chunk_secs: 0.5,
+            ..Default::default()
+        },
+        options,
+    );
+
+    // Feed in chunk-sized slices so a progress tick lands after every chunk
+    // the underlying model completes.
+    let slice_len = ((LONG_AUDIO_CHUNK_TARGET_SECS * SAMPLE_RATE_HZ as f32) as usize).max(1);
+    let total = samples.len().max(1);
+    let mut fed = 0usize;
+    for slice in samples.chunks(slice_len) {
+        chunker
+            .feed(model, slice)
+            .map_err(|e| anyhow::anyhow!("chunked transcription failed: {e}"))?;
+        fed += slice.len();
+        // feed() may hold up to one chunk buffered; report the fed fraction
+        // scaled down so 1.0 is reserved for finish().
+        progress((fed as f32 / total as f32) * 0.95);
+    }
+    // finish() transcribes the remainder and merges every chunk result into
+    // the authoritative transcript.
+    let merged = chunker
+        .finish(model)
+        .map_err(|e| anyhow::anyhow!("chunked transcription finalize failed: {e}"))?;
+    progress(1.0);
+    Ok(merged.text.trim().to_owned())
+}
+
+/// Expected input sample rate for both bundled engines.
+const SAMPLE_RATE_HZ: u32 = 16_000;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct DictationTranscriptionConfig {
@@ -125,14 +208,34 @@ impl DictationTranscriber {
     /// Transcribe raw 16 kHz mono samples.  Returns `Ok(None)` when the audio
     /// is below the minimum sample count or energy threshold.
     pub fn transcribe_samples(&self, samples: &[f32]) -> Result<Option<String>> {
+        self.transcribe_samples_with_progress(samples, &mut |_| {})
+    }
+
+    /// Transcribe raw 16 kHz mono samples, reporting fractional progress.
+    ///
+    /// Audio longer than one chunk window takes the energy-adaptive chunked
+    /// path (linear-time on long recordings, full-buffer coverage, real
+    /// progress ticks); short audio runs a single plain pass with a final
+    /// 1.0 tick.
+    pub fn transcribe_samples_with_progress(
+        &self,
+        samples: &[f32],
+        progress: &mut dyn FnMut(f32),
+    ) -> Result<Option<String>> {
         if should_skip_transcription(&self.config, samples) {
             return Ok(None);
         }
 
-        let text = self
-            .engine
-            .lock()
-            .transcribe(samples, self.config.initial_prompt.as_deref())?;
+        let text = {
+            let mut engine = self.engine.lock();
+            if should_use_chunked_transcription(samples.len(), SAMPLE_RATE_HZ) {
+                engine.transcribe_long(samples, self.config.initial_prompt.as_deref(), progress)?
+            } else {
+                let text = engine.transcribe(samples, self.config.initial_prompt.as_deref())?;
+                progress(1.0);
+                text
+            }
+        };
 
         *self.last_used_at.lock() = Instant::now();
 
@@ -292,6 +395,17 @@ impl DictationEngine for WhisperDictationEngine {
 
         Ok(result.text.trim().to_owned())
     }
+
+    fn transcribe_long(
+        &mut self,
+        samples: &[f32],
+        _initial_prompt: Option<&str>,
+        progress: &mut dyn FnMut(f32),
+    ) -> Result<String> {
+        let language = self.language.clone();
+        let engine = self.load_if_needed()?;
+        transcribe_long_with_model(engine, samples, language, progress)
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -382,6 +496,16 @@ impl DictationEngine for ParakeetDictationEngine {
             .map_err(|e| anyhow::anyhow!("parakeet transcription failed: {e}"))?;
 
         Ok(result.text.trim().to_owned())
+    }
+
+    fn transcribe_long(
+        &mut self,
+        samples: &[f32],
+        _initial_prompt: Option<&str>,
+        progress: &mut dyn FnMut(f32),
+    ) -> Result<String> {
+        let model = self.load_if_needed()?;
+        transcribe_long_with_model(model, samples, None, progress)
     }
 }
 

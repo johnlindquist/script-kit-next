@@ -17,14 +17,13 @@ use gpui_component::button::ButtonVariant as ConfirmButtonVariant;
 
 use crate::{
     components::confirm_modal_shell::{
-        confirm_modal_header, confirm_modal_number_override, confirm_modal_shell,
-        ConfirmModalShellConfig, CONFIRM_MODAL_RADIUS,
+        confirm_modal_header, confirm_modal_number_override, confirm_modal_shell, modal_action_row,
+        ConfirmModalShellConfig, ModalActionRowButton, CONFIRM_MODAL_RADIUS, MODAL_WIDTH_PX,
     },
     components::footer_chrome::{
         current_main_menu_footer_height, current_main_menu_footer_metrics,
-        footer_action_slot_width, footer_button_height, render_footer_hint_action_button_frame,
-        FooterActionSlot, FooterHintActionButtonFrameSpec, FooterHintButtonLayoutOverrides,
-        FooterHintContentJustify,
+        footer_action_slot_width, footer_button_height, footer_centered_action_button_layout,
+        FooterActionSlot, FooterHintButtonLayoutOverrides,
     },
     components::overlay_modal::MODAL_PADDING,
     dev_style_tool::{
@@ -43,7 +42,6 @@ use crate::{
     ui_foundation::{is_key_enter, is_key_escape, is_key_left, is_key_tab},
 };
 
-const CONFIRM_MODAL_WIDTH: f32 = 360.0;
 const CONFIRM_PADDING_X: f32 = MODAL_PADDING;
 const CONFIRM_PADDING_Y: f32 = 20.0;
 const CONFIRM_SECTION_GAP: f32 = 10.0;
@@ -58,6 +56,7 @@ const CONFIRM_LIFECYCLE_POLL_MS: u64 = 120;
 const NS_WINDOW_ABOVE: i64 = 1;
 
 static CONFIRM_WINDOW: OnceLock<Mutex<Option<WindowHandle<ConfirmPopupWindow>>>> = OnceLock::new();
+static CONFIRM_PARENT_WINDOW: OnceLock<Mutex<Option<AnyWindowHandle>>> = OnceLock::new();
 static CONFIRM_RESULT_TX: OnceLock<Mutex<Option<async_channel::Sender<bool>>>> = OnceLock::new();
 static CONFIRM_FOCUSED_BUTTON: OnceLock<Mutex<FocusedButton>> = OnceLock::new();
 
@@ -242,26 +241,40 @@ fn confirm_action_button_radius() -> f32 {
 }
 
 fn confirm_action_button_layout() -> FooterHintButtonLayoutOverrides {
-    let metrics = current_main_menu_footer_metrics();
+    let footer_layout = footer_centered_action_button_layout();
     FooterHintButtonLayoutOverrides {
         button_padding_x_px: Some(confirm_modal_number(
             CONFIRM_MODAL_ACTIONS_PADDING_X_KNOB_ID,
-            metrics.button_padding_x,
+            footer_layout
+                .button_padding_x_px
+                .expect("centered footer action layout sets x padding"),
         )),
         button_padding_y_px: Some(confirm_modal_number(
             CONFIRM_MODAL_ACTIONS_PADDING_Y_KNOB_ID,
-            metrics.button_padding_y,
+            footer_layout
+                .button_padding_y_px
+                .expect("centered footer action layout sets y padding"),
         )),
         content_gap_px: Some(confirm_modal_number(
             CONFIRM_MODAL_ACTIONS_CONTENT_GAP_KNOB_ID,
-            metrics.content_gap,
+            footer_layout
+                .content_gap_px
+                .expect("centered footer action layout sets content gap"),
         )),
         button_radius_px: Some(confirm_action_button_radius()),
         edge_padding_x_px: Some(confirm_modal_number(
             CONFIRM_MODAL_ACTIONS_EDGE_PADDING_X_KNOB_ID,
-            metrics.button_padding_x,
+            footer_layout
+                .edge_padding_x_px
+                .expect("centered footer action layout sets edge padding"),
         )),
+        // Confirm/cancel labels are caller-supplied ("Move to Trash", custom
+        // cancel copy) — a fixed footer slot ellipsizes them. Hug the rendered
+        // content like render_universal_footer_action_buttons while keeping
+        // the shared footer metrics above.
         shrink_frame_to_content_px: true,
+        hug_frame_to_content: true,
+        ..footer_layout
     }
 }
 
@@ -321,7 +334,7 @@ fn confirm_window_bounds(
     body: &str,
     cx: &App,
 ) -> Bounds<Pixels> {
-    let requested_width = width.min(px(CONFIRM_MODAL_WIDTH));
+    let requested_width = width.min(px(MODAL_WIDTH_PX));
     let actual_width = requested_width.min(parent_bounds.size.width);
     let dynamic_height = confirm_window_dynamic_height(actual_width, body, cx);
     confirm_window_bounds_from_height(parent_bounds, actual_width, dynamic_height)
@@ -540,9 +553,22 @@ fn notify_confirm_window(cx: &mut App) {
     }
 }
 
+fn notify_confirm_parent_window(cx: &mut App) {
+    if let Some(storage) = CONFIRM_PARENT_WINDOW.get() {
+        if let Ok(guard) = storage.lock() {
+            if let Some(handle) = guard.as_ref() {
+                let _ = handle.update(cx, |root, _window, cx| {
+                    cx.notify(root.entity_id());
+                });
+            }
+        }
+    }
+}
+
 #[allow(dead_code)]
 pub(crate) fn refresh_confirm_popup_for_runtime_style(cx: &mut App) {
     notify_confirm_window(cx);
+    notify_confirm_parent_window(cx);
 }
 
 #[allow(dead_code)]
@@ -618,6 +644,12 @@ pub(crate) fn close_confirm_window(cx: &mut App) {
                     "close_confirm_window: no handle stored"
                 );
             }
+        }
+    }
+    notify_confirm_parent_window(cx);
+    if let Some(storage) = CONFIRM_PARENT_WINDOW.get() {
+        if let Ok(mut guard) = storage.lock() {
+            *guard = None;
         }
     }
 }
@@ -991,6 +1023,11 @@ pub(crate) fn open_confirm_popup_window(
     if let Ok(mut guard) = storage.lock() {
         *guard = Some(handle);
     }
+    let parent_storage = CONFIRM_PARENT_WINDOW.get_or_init(|| Mutex::new(None));
+    if let Ok(mut guard) = parent_storage.lock() {
+        *guard = Some(parent_window.handle);
+    }
+    notify_confirm_parent_window(cx);
 
     // Store result sender and focused button state for key routing from main window
     let tx_storage = CONFIRM_RESULT_TX.get_or_init(|| Mutex::new(None));
@@ -1290,6 +1327,12 @@ impl ConfirmPopupWindow {
             );
             unregister_confirm_popup_automation_window("resolve_and_close");
             clear_confirm_window_handle();
+            notify_confirm_parent_window(_cx);
+            if let Some(storage) = CONFIRM_PARENT_WINDOW.get() {
+                if let Ok(mut guard) = storage.lock() {
+                    *guard = None;
+                }
+            }
             window.remove_window();
         });
     }
@@ -1423,54 +1466,47 @@ impl Render for ConfirmPopupWindow {
 
         let title_row = confirm_modal_header(self.title.clone(), accent_color, title_color);
 
-        let action_row = div()
-            .w_full()
-            .flex()
-            .flex_row()
-            .justify_end()
-            .gap(px(confirm_action_button_gap()))
-            .child(
-                render_footer_hint_action_button_frame(
-                    FooterHintActionButtonFrameSpec {
-                        id: "confirm-cancel-button",
-                        label: self.cancel_text.clone(),
-                        key: "Esc".into(),
-                        slot_width_px: cancel_slot_width,
-                        height_px: action_button_height,
-                        selected: cancel_focused,
-                        key_first: false,
-                        justify: FooterHintContentJustify::Center,
-                        layout: action_button_layout,
-                    },
-                    &theme,
-                )
-                .on_click(move |_, window, cx| {
-                    cancel_entity.update(cx, |this: &mut Self, cx| {
-                        this.resolve_and_close(false, window, cx);
-                    });
-                }),
-            )
-            .child(
-                render_footer_hint_action_button_frame(
-                    FooterHintActionButtonFrameSpec {
-                        id: "confirm-ok-button",
-                        label: self.confirm_text.clone(),
-                        key: "↵".into(),
-                        slot_width_px: confirm_slot_width,
-                        height_px: action_button_height,
-                        selected: confirm_focused,
-                        key_first: false,
-                        justify: FooterHintContentJustify::Center,
-                        layout: action_button_layout,
-                    },
-                    &theme,
-                )
-                .on_click(move |_, window, cx| {
-                    confirm_entity.update(cx, |this: &mut Self, cx| {
-                        this.resolve_and_close(true, window, cx);
-                    });
-                }),
-            );
+        // Footer button order, not macOS-alert order: the primary ↵ action
+        // leads and the Esc action trails, matching the native footer strips
+        // ("Run ↵ … Actions ⌘K", Quick Terminal's trailing Close, and the
+        // in-window SDK confirm's Apply ↵ / Close Esc).
+        let action_row = modal_action_row(
+            "confirm-modal-action-row",
+            confirm_action_button_gap(),
+            vec![
+                ModalActionRowButton {
+                    id: "confirm-ok-button",
+                    label: self.confirm_text.clone(),
+                    key: "↵".into(),
+                    slot_width_px: confirm_slot_width,
+                    height_px: action_button_height,
+                    selected: confirm_focused,
+                    enabled: true,
+                    layout: action_button_layout,
+                    on_click: Box::new(move |_, window, cx| {
+                        confirm_entity.update(cx, |this: &mut Self, cx| {
+                            this.resolve_and_close(true, window, cx);
+                        });
+                    }),
+                },
+                ModalActionRowButton {
+                    id: "confirm-cancel-button",
+                    label: self.cancel_text.clone(),
+                    key: "Esc".into(),
+                    slot_width_px: cancel_slot_width,
+                    height_px: action_button_height,
+                    selected: cancel_focused,
+                    enabled: true,
+                    layout: action_button_layout,
+                    on_click: Box::new(move |_, window, cx| {
+                        cancel_entity.update(cx, |this: &mut Self, cx| {
+                            this.resolve_and_close(false, window, cx);
+                        });
+                    }),
+                },
+            ],
+            &theme,
+        );
 
         let has_body = !self.body.trim().is_empty();
         let gaps = confirm_modal_stack_gaps(has_body);
@@ -1567,6 +1603,29 @@ mod tests {
     }
 
     #[test]
+    fn confirm_action_buttons_use_hugging_footer_action_layout() {
+        let metrics = current_main_menu_footer_metrics();
+        let layout = confirm_action_button_layout();
+
+        assert_eq!(layout.button_padding_x_px, Some(metrics.button_padding_x));
+        assert_eq!(layout.button_padding_y_px, Some(metrics.button_padding_y));
+        assert_eq!(layout.content_gap_px, Some(metrics.content_gap));
+        assert_eq!(layout.button_radius_px, Some(metrics.button_radius));
+        assert_eq!(
+            layout.edge_padding_x_px,
+            Some(crate::components::footer_chrome::footer_centered_action_edge_padding_x())
+        );
+        // Confirm/cancel labels are caller-supplied; fixed footer slots
+        // ellipsize longer copy ("Cancel" already clipped at the Close slot
+        // width). Hug content like render_universal_footer_action_buttons.
+        assert!(
+            layout.shrink_frame_to_content_px,
+            "confirm actions must hug their content so caller-supplied labels never truncate"
+        );
+        assert!(layout.hug_frame_to_content);
+    }
+
+    #[test]
     fn confirm_window_height_grows_with_body_lines_up_to_cap() {
         let no_body = confirm_window_height_from_body_lines(false, 0);
         let one_line = confirm_window_height_from_body_lines(true, 1);
@@ -1596,7 +1655,7 @@ mod tests {
             },
         };
 
-        let expected_width = CONFIRM_MODAL_WIDTH;
+        let expected_width = MODAL_WIDTH_PX;
         let expected_height = confirm_window_height_from_body_lines(true, 1);
         let bounds =
             confirm_window_bounds_from_height(parent_bounds, px(expected_width), expected_height);

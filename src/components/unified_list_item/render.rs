@@ -463,7 +463,11 @@ pub struct SectionHeader {
 
 #[cfg(test)]
 mod builder_tests {
-    use super::*;
+    // No `use super::*` here: the parent's `use gpui::*` re-exports
+    // `gpui_macros::test`, which would shadow the built-in `#[test]`
+    // attribute and expand itself forever (recursion-limit compile error).
+    use super::{TextContent, UnifiedListItem};
+    use gpui::ElementId;
 
     #[test]
     fn unified_list_item_direct_hover_defaults_enabled() {

@@ -3185,6 +3185,45 @@ impl ScriptListApp {
                 );
             }
         }
+
+        // Quick AI (launcher Tab-with-text) must feel instant: prewarm its
+        // session alongside the selected and Text profiles. Resolves through
+        // `resolve_quick_ai_pi_launch`, so a profile picked via Shift+Tab
+        // ("Use for Quick AI") is the one that gets warmed.
+        match crate::ai::agent_chat::launch::resolve_quick_ai_pi_launch(&ai_prefs, &profile_ctx) {
+            Ok(quick_ai_launch) => {
+                match crate::ai::agent_chat::launch::warm_session_manager()
+                    .prepare_warm_background(quick_ai_launch.warm_spec())
+                {
+                    Ok(snapshot) => {
+                        tracing::info!(
+                            target: "script_kit::tab_ai",
+                            event = "pi_agent_chat_warm_started",
+                            profile_id = %quick_ai_launch.profile.id,
+                            warm_key = %quick_ai_launch.warm_key,
+                            generation = snapshot.generation,
+                            state = ?snapshot.state,
+                        );
+                    }
+                    Err(error) => {
+                        tracing::info!(
+                            target: "script_kit::tab_ai",
+                            event = "pi_agent_chat_warm_unavailable",
+                            profile_id = %quick_ai_launch.profile.id,
+                            warm_key = %quick_ai_launch.warm_key,
+                            error = %error,
+                        );
+                    }
+                }
+            }
+            Err(error) => {
+                tracing::info!(
+                    target: "script_kit::tab_ai",
+                    event = "pi_agent_chat_quick_ai_warm_resolution_skipped",
+                    error = %error,
+                );
+            }
+        }
     }
 
     /// Startup prewarm: respects `warmOnStartup=false`.

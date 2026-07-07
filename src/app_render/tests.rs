@@ -94,6 +94,22 @@ mod preview_panel_metadata_tests {
     }
 
     #[test]
+    fn test_preview_panel_code_surface_uses_shared_whisper_chrome_token() {
+        let theme = crate::theme::Theme::dark_default();
+        let chrome = crate::theme::AppChromeColors::from_theme(&theme);
+
+        assert_eq!(preview_panel_code_surface_rgba(chrome), chrome.whisper_surface_rgba);
+    }
+
+    #[test]
+    fn test_preview_panel_code_radius_uses_compact_chrome_token() {
+        assert_eq!(
+            preview_panel_code_radius_px(),
+            crate::ui::chrome::LIQUID_GLASS_COMPACT_RADIUS_PX
+        );
+    }
+
+    #[test]
     fn test_truncate_preview_line_for_display_does_not_split_unicode_scalars() {
         let line = "A\u{1F680}BCDEF";
 

@@ -189,6 +189,13 @@ impl NotesApp {
                 cx.notify();
                 return; // Early return - browse panel handles its own focus
             }
+            NotesAction::TogglePreview => self.toggle_preview(window, cx),
+            NotesAction::CycleSortMode => self.cycle_sort_mode(cx),
+            NotesAction::OpenTrash => self.set_view_mode(NotesViewMode::Trash, window, cx),
+            NotesAction::EmptyTrash => self.empty_trash(cx),
+            NotesAction::BackToNotes => self.set_view_mode(NotesViewMode::AllNotes, window, cx),
+            NotesAction::HistoryBack => self.navigate_back(window, cx),
+            NotesAction::HistoryForward => self.navigate_forward(window, cx),
             NotesAction::FindInNote => {
                 // Close WITHOUT close_actions_panel: its deferred Editor
                 // focus-surface apply lands after the Search action opens the
@@ -228,7 +235,7 @@ impl NotesApp {
                 self.show_format_toolbar = !self.show_format_toolbar;
             }
             NotesAction::EnableAutoSizing => {
-                self.enable_auto_sizing(window, cx);
+                self.toggle_auto_sizing(window, cx);
             }
             NotesAction::ResetWindowPosition => {
                 self.reset_window_position_to_default(window, cx);
@@ -266,6 +273,13 @@ impl NotesApp {
             "new_note" => Some(NotesAction::NewNote),
             "duplicate_note" => Some(NotesAction::DuplicateNote),
             "browse_notes" => Some(NotesAction::BrowseNotes),
+            "toggle_preview" => Some(NotesAction::TogglePreview),
+            "cycle_sort_mode" => Some(NotesAction::CycleSortMode),
+            "open_trash" => Some(NotesAction::OpenTrash),
+            "empty_trash" => Some(NotesAction::EmptyTrash),
+            "back_to_notes" => Some(NotesAction::BackToNotes),
+            "history_back" => Some(NotesAction::HistoryBack),
+            "history_forward" => Some(NotesAction::HistoryForward),
             "find_in_note" => Some(NotesAction::FindInNote),
             "format" => Some(NotesAction::Format),
             "copy_note_as" => Some(NotesAction::CopyNoteAs),
@@ -276,7 +290,7 @@ impl NotesApp {
             "delete_note" => Some(NotesAction::DeleteNote),
             "restore_note" => Some(NotesAction::RestoreNote),
             "permanently_delete_note" => Some(NotesAction::PermanentlyDeleteNote),
-            "enable_auto_sizing" => Some(NotesAction::EnableAutoSizing),
+            "toggle_auto_sizing" | "enable_auto_sizing" => Some(NotesAction::EnableAutoSizing),
             "reset_window_position" => Some(NotesAction::ResetWindowPosition),
             "move_list_item_up" => Some(NotesAction::MoveListItemUp),
             "move_list_item_down" => Some(NotesAction::MoveListItemDown),

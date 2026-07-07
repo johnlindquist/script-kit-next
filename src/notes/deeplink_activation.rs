@@ -125,6 +125,35 @@ pub(crate) fn resolve_activation(href: &str, surface: ActivationSurface) -> Acti
     error(raw_href, ActivationErrorReason::UnknownScheme { scheme })
 }
 
+/// Honest verb for the editor hover hint chip: what a single click on the
+/// hovered deeplink will actually do, per [`resolve_activation`]. `None` for
+/// activations that only raise an error dialog — hovering a broken link must
+/// not advertise an action.
+pub(crate) fn hover_hint_verb(activation: &Activation) -> Option<&'static str> {
+    match activation {
+        Activation::KitResourcePreview { .. } => Some("Preview"),
+        Activation::OpenNote { .. } => Some("Open note"),
+        Activation::OpenFile { .. } => Some("Open file"),
+        Activation::OpenExternalUrl { .. } => Some("Open in browser"),
+        Activation::ScopedSearch { .. } => Some("Search"),
+        Activation::ConfirmBeforeRun { .. } => Some("Run (asks first)"),
+        Activation::Error(_) => None,
+    }
+}
+
+/// Hover hint chip model: the honest verb plus the hovered href, or `None`
+/// when no chip should render (nothing hovered, or the activation would only
+/// error). Shared by the render path and the automation render receipt so
+/// probes assert exactly what the chip gating logic decided.
+pub(crate) fn hover_hint_model(
+    hovered_href: Option<String>,
+    surface: ActivationSurface,
+) -> Option<(&'static str, String)> {
+    let href = hovered_href?;
+    let verb = hover_hint_verb(&resolve_activation(&href, surface))?;
+    Some((verb, href))
+}
+
 pub(crate) fn read_cheap_kit_resource_preview(uri: &str) -> Result<KitResourcePreview, String> {
     if !is_cheap_text_kit_resource_uri(uri) {
         return Err(format!(
@@ -211,7 +240,7 @@ pub(crate) fn run_deeplink_confirm_options(
         confirm_text: "Run".into(),
         cancel_text: "Cancel".into(),
         confirm_variant: gpui_component::button::ButtonVariant::Danger,
-        width: gpui::px(crate::confirm::PARENT_CONFIRM_DIALOG_WIDTH_PX),
+        width: gpui::px(crate::confirm::PARENT_MODAL_WIDTH_PX),
     }
 }
 
@@ -380,6 +409,32 @@ mod tests {
 
     fn resolve(href: &str) -> Activation {
         resolve_activation(href, ActivationSurface::NotesWindow)
+    }
+
+    #[test]
+    fn hover_hint_verb_matches_activation_semantics() {
+        assert_eq!(hover_hint_verb(&resolve("kit://notes")), Some("Preview"));
+        assert_eq!(
+            hover_hint_verb(&resolve("https://example.com")),
+            Some("Open in browser")
+        );
+        assert_eq!(
+            hover_hint_verb(&resolve("file:///tmp/example.txt")),
+            Some("Open file")
+        );
+        assert_eq!(
+            hover_hint_verb(&resolve("scriptkit://run/example-script")),
+            Some("Run (asks first)")
+        );
+    }
+
+    #[test]
+    fn hover_hint_verb_is_silent_for_error_activations() {
+        assert_eq!(
+            hover_hint_verb(&resolve("mailto:someone@example.com")),
+            None
+        );
+        assert_eq!(hover_hint_verb(&resolve("")), None);
     }
 
     #[test]

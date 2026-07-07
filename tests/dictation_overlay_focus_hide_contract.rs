@@ -74,9 +74,9 @@ fn dictation_overlay_opens_without_revealing_hidden_main_panel() {
 #[test]
 fn dictation_overlay_renders_visible_shortcut_rail() {
     assert!(
-        DICTATION_WINDOW.contains("pub(crate) const OVERLAY_WIDTH_PX: f32 = 520.0;")
-            && DICTATION_WINDOW.contains("pub(crate) const OVERLAY_HEIGHT_PX: f32 = 72.0;"),
-        "dictation overlay must reserve enough room for visible controls and action chips"
+        DICTATION_WINDOW.contains("pub(crate) const OVERLAY_WIDTH_PX: f32 = 560.0;")
+            && DICTATION_WINDOW.contains("pub(crate) const OVERLAY_HEIGHT_PX: f32 = 100.0;"),
+        "dictation overlay must reserve enough room for the header row, caption band, and action chips"
     );
     assert!(
         DICTATION_WINDOW.contains("const ACTION_STOP_LABEL: &str = \"Stop\";")
@@ -96,7 +96,7 @@ fn dictation_overlay_renders_visible_shortcut_rail() {
             && DICTATION_WINDOW.contains("fn dictation_native_footer_config(")
             && DICTATION_WINDOW.contains(".id(\"dictation-action-rail\")")
             && DICTATION_WINDOW.contains("native_footer_spacer()")
-            && DICTATION_WINDOW.contains("render_static_action_rail(["),
+            && DICTATION_WINDOW.contains("render_static_action_rail(rail_actions)"),
         "runtime must reserve the native footer slot while preview keeps the compact action rail"
     );
     assert!(
@@ -114,8 +114,10 @@ fn dictation_overlay_renders_visible_shortcut_rail() {
         DICTATION_WINDOW.contains("crate::components::footer_chrome::render_footer_hint_content")
             && DICTATION_WINDOW.contains("crate::components::footer_chrome::FooterHintKeyMode")
             && DICTATION_WINDOW.contains("fn render_mic_action_chip_content(")
+            // Icon API renamed external_path → path; the invariant is the
+            // shared FOOTER_MIC_ICON_PATH token, not the method name.
             && DICTATION_WINDOW
-                .contains(".external_path(crate::components::footer_chrome::FOOTER_MIC_ICON_PATH)")
+                .contains(".path(crate::components::footer_chrome::FOOTER_MIC_ICON_PATH)")
             && DICTATION_WINDOW.contains("fn footer_action_button_height()")
             && DICTATION_WINDOW.contains(".h(px(footer_action_button_height()))")
             && DICTATION_WINDOW.contains(".group(\"footer-action-button\")")
@@ -136,10 +138,13 @@ fn dictation_overlay_renders_visible_shortcut_rail() {
             && DICTATION_WINDOW.contains("FooterAction::Close"),
         "dictation overlay must reuse the native footer renderer while keeping action routing on a dictation-specific channel"
     );
+    // FOOTER_HINT_FONT_SIZE_PX was retired when hint font sizing moved to
+    // per-spec `label_font_size_px`/`keycap_font_size_px` options; the mic
+    // icon path became a plain literal. The invariant is the shared tokens,
+    // not their historical shapes.
     assert!(
-        FOOTER_CHROME.contains("pub(crate) const FOOTER_HINT_FONT_SIZE_PX: f32 = 12.0;")
-            && FOOTER_CHROME
-                .contains("pub(crate) const FOOTER_HINT_FONT_WEIGHT_APPKIT: f64 = 0.14;")
+        FOOTER_CHROME
+            .contains("pub(crate) const FOOTER_HINT_FONT_WEIGHT_APPKIT: f64 = 0.14;")
             && FOOTER_CHROME.contains(
                 "pub(crate) const FOOTER_HINT_FONT_WEIGHT_GPUI: FontWeight = FontWeight(500.0);"
             )
@@ -157,7 +162,7 @@ fn dictation_overlay_renders_visible_shortcut_rail() {
             && FOOTER_CHROME
                 .contains("pub(crate) const FOOTER_KEY_ANCHORED_CONTENT_PADDING_X_PX: f32 = 6.0;")
             && FOOTER_CHROME.contains("pub(crate) const FOOTER_MIC_ICON_TOKEN: &str = \"mic\";")
-            && FOOTER_CHROME.contains("pub(crate) const FOOTER_MIC_ICON_PATH: &str = concat!(")
+            && FOOTER_CHROME.contains("pub(crate) const FOOTER_MIC_ICON_PATH: &str =")
             && FOOTER_CHROME.contains("opacity.selected.max(FOOTER_CHIP_BORDER_SELECTED_ALPHA)")
             && FOOTER_CHROME.contains("pub(crate) fn footer_button_height(footer_height: f32)")
             && FOOTER_CHROME.contains("pub(crate) fn footer_rail_chrome(theme: &Theme)")

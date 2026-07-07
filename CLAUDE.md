@@ -81,6 +81,8 @@ Routing rules:
 - Local LLM/ghost backend, dictation, whisper, computer use, OCR, camera, AI vault -> `flows/ai-core.md`.
 - Settings, config persistence, onboarding/NUX, kit store, sync, updates, login item, secrets -> `flows/settings.md`.
 - v1→v2 script migration: `scripts/migrate` engine, compat map, validator ladder, honesty pass, Migrate board built-in -> `flows/migrate.md`.
+- scriptkit.com static site (`site/**`): page content, download links, deploys -> `flows/site.md`.
+- Marketing screenshots ("glamour" shot set, `site/images/**`) -> `flows/screenshots.md`.
 
 Role flows (cross-cutting, any surface):
 

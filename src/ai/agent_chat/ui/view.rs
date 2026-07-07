@@ -6,6 +6,7 @@
 
 use std::collections::HashSet;
 use std::path::PathBuf;
+use std::rc::Rc;
 use std::time::{Duration, Instant};
 
 use gpui::{
@@ -130,6 +131,12 @@ impl FocusedTextMiniPhase {
 }
 
 const FOCUSED_TEXT_BALANCED_VARIATION_INDEX: usize = 1;
+const AGENT_CHAT_FOOTER_LEADING_SLOT_WIDTH_PX: f32 =
+    crate::components::footer_chrome::FOOTER_PASTE_RESPONSE_SLOT_WIDTH_PX;
+const AGENT_CHAT_TRANSIENT_QUEUE_LANE_HEIGHT_PX: f32 = 36.0;
+const AGENT_CHAT_TRANSIENT_BOOTSTRAP_LANE_HEIGHT_PX: f32 = 34.0;
+const AGENT_CHAT_TRANSIENT_PLAN_LANE_HEIGHT_PX: f32 = 84.0;
+const AGENT_CHAT_TRANSIENT_PERMISSION_LANE_HEIGHT_PX: f32 = 156.0;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum FocusedTextVariationStatus {
@@ -1148,7 +1155,7 @@ impl AgentChatView {
                 let source = match entry.source {
                     crate::ai::agent_chat::profiles::AgentChatProfileSource::BuiltIn => "Built-in",
                     crate::ai::agent_chat::profiles::AgentChatProfileSource::User => "Custom",
-                    crate::ai::agent_chat::profiles::AgentChatProfileSource::Plugin => "Plugin",
+                    crate::ai::agent_chat::profiles::AgentChatProfileSource::Mdflow => "Markdown",
                 };
                 let backend = "Pi";
                 let score = if query_lower.is_empty() {
@@ -1641,7 +1648,16 @@ impl AgentChatView {
                     disabled_reason: None,
                 });
             }
-            AgentChatThreadStatus::WaitingForPermission => {}
+            AgentChatThreadStatus::WaitingForPermission => {
+                buttons.push(AgentChatFooterButtonSpec {
+                    action: FooterAction::Run,
+                    key: "↵",
+                    label: "Send",
+                    selected: false,
+                    enabled: false,
+                    disabled_reason: Some("waiting_for_permission"),
+                });
+            }
             AgentChatThreadStatus::Idle | AgentChatThreadStatus::Error => {
                 let input = thread.input.text();
                 let raw_empty = input.is_empty();
@@ -1700,14 +1716,13 @@ impl AgentChatView {
             return Vec::new();
         };
 
-        let has_output = self.selected_focused_text_output(thread).is_some();
-        let action_disabled_reason = if has_output {
-            None
-        } else {
-            Some("assistant_output_required")
-        };
-
         if self.ui_variant == AgentChatUiVariant::FocusedTextMini {
+            let has_output = self.selected_focused_text_output(thread).is_some();
+            let action_disabled_reason = if has_output {
+                None
+            } else {
+                Some("assistant_output_required")
+            };
             if !self.focused_text_mini_result_ready_for_thread(thread) || !has_output {
                 return Vec::new();
             }
@@ -1725,17 +1740,24 @@ impl AgentChatView {
             }];
         }
 
-        match thread.status {
-            AgentChatThreadStatus::Streaming => vec![AgentChatFooterButtonSpec {
+        let leading = match thread.status {
+            AgentChatThreadStatus::Streaming => AgentChatFooterButtonSpec {
                 action: FooterAction::Stop,
                 key: "Esc",
                 label: "Stop",
                 selected: false,
                 enabled: true,
                 disabled_reason: None,
-            }],
-            AgentChatThreadStatus::WaitingForPermission => Vec::new(),
-            AgentChatThreadStatus::Idle | AgentChatThreadStatus::Error => vec![
+            },
+            AgentChatThreadStatus::WaitingForPermission => AgentChatFooterButtonSpec {
+                action: FooterAction::Run,
+                key: "↵",
+                label: "Send",
+                selected: false,
+                enabled: false,
+                disabled_reason: Some("waiting_for_permission"),
+            },
+            AgentChatThreadStatus::Idle | AgentChatThreadStatus::Error => {
                 AgentChatFooterButtonSpec {
                     action: FooterAction::Run,
                     key: "↵",
@@ -1750,73 +1772,21 @@ impl AgentChatView {
                     } else {
                         None
                     },
-                },
-                AgentChatFooterButtonSpec {
-                    action: FooterAction::Replace,
-                    key: "⌘R",
-                    label: "Replace",
-                    selected: false,
-                    enabled: state.can_replace && has_output,
-                    disabled_reason: if !state.can_replace {
-                        Some("replace_unavailable")
-                    } else {
-                        action_disabled_reason
-                    },
-                },
-                AgentChatFooterButtonSpec {
-                    action: FooterAction::Append,
-                    key: "⌘A",
-                    label: "Append",
-                    selected: false,
-                    enabled: state.can_append && has_output,
-                    disabled_reason: if !state.can_append {
-                        Some("append_unavailable")
-                    } else {
-                        action_disabled_reason
-                    },
-                },
-                AgentChatFooterButtonSpec {
-                    action: FooterAction::Copy,
-                    key: "⌘C",
-                    label: "Copy",
-                    selected: false,
-                    enabled: state.can_copy && has_output,
-                    disabled_reason: if !state.can_copy {
-                        Some("copy_unavailable")
-                    } else {
-                        action_disabled_reason
-                    },
-                },
-                AgentChatFooterButtonSpec {
-                    action: FooterAction::Expand,
-                    key: if self.ui_variant == AgentChatUiVariant::FocusedTextMini {
-                        "⌘↵"
-                    } else {
-                        "⌘⇧M"
-                    },
-                    label: if self.ui_variant == AgentChatUiVariant::FocusedTextMini {
-                        "Chat"
-                    } else {
-                        "Collapse"
-                    },
-                    selected: false,
-                    enabled: true,
-                    disabled_reason: None,
-                },
-                AgentChatFooterButtonSpec {
-                    action: FooterAction::Retry,
-                    key: "⌘⇧R",
-                    label: "Retry",
-                    selected: false,
-                    enabled: self.has_retry_request(),
-                    disabled_reason: if self.has_retry_request() {
-                        None
-                    } else {
-                        Some("not_retryable")
-                    },
-                },
-            ],
-        }
+                }
+            }
+        };
+
+        vec![
+            leading,
+            AgentChatFooterButtonSpec {
+                action: FooterAction::Actions,
+                key: "⌘K",
+                label: "Actions",
+                selected: crate::actions::is_actions_window_open(),
+                enabled: true,
+                disabled_reason: None,
+            },
+        ]
     }
 
     fn focused_text_semantic_actions(
@@ -1863,7 +1833,7 @@ impl AgentChatView {
                 semantic_id: "focused-text-action-replace",
                 action_value: "focused-text-action-replace",
                 label: "Replace Selected Text",
-                shortcut: "⌘↵",
+                shortcut: if expanded { "⌘R" } else { "⌘↵" },
                 enabled: !streaming && state.can_replace && has_output,
                 disabled_reason: if streaming {
                     Some("streaming")
@@ -1875,7 +1845,7 @@ impl AgentChatView {
                 semantic_id: "focused-text-action-append",
                 action_value: "focused-text-action-append",
                 label: "Append to Selected Text",
-                shortcut: "⌘K",
+                shortcut: "⌘A",
                 enabled: !streaming && state.can_append && has_output,
                 disabled_reason: if streaming {
                     Some("streaming")
@@ -1887,7 +1857,7 @@ impl AgentChatView {
                 semantic_id: "focused-text-action-copy",
                 action_value: "focused-text-action-copy",
                 label: "Copy Response",
-                shortcut: "⌘K",
+                shortcut: "⌘C",
                 enabled: !streaming && state.can_copy && has_output,
                 disabled_reason: if streaming {
                     Some("streaming")
@@ -1901,7 +1871,7 @@ impl AgentChatView {
                 semantic_id: "focused-text-action-expand",
                 action_value: "focused-text-action-expand",
                 label: "Chat",
-                shortcut: "⌘K",
+                shortcut: "⌘↵",
                 enabled: true,
                 disabled_reason: None,
             });
@@ -1923,7 +1893,7 @@ impl AgentChatView {
                 semantic_id: "focused-text-action-retry",
                 action_value: "focused-text-action-retry",
                 label: "Retry",
-                shortcut: "⌘K",
+                shortcut: "⌘⇧R",
                 enabled: retryable,
                 disabled_reason: if retryable {
                     None
@@ -3389,49 +3359,13 @@ impl AgentChatView {
         let hint_opacity_byte = (crate::theme::opacity::OPACITY_TEXT_MUTED * 255.0).round() as u32;
         let hint_text_rgba = (hint_text_hex << 8) | hint_opacity_byte;
 
-        let mut hints = Vec::new();
-        for button in &snapshot.buttons {
-            let action = button.action;
-            let button_view = weak_view.clone();
-            hints.push(crate::components::ClickableHint::new(
-                Self::footer_hint_label(button),
-                move |_, window, cx| {
-                    if let Some(entity) = button_view.upgrade() {
-                        entity.update(cx, |chat, cx| {
-                            chat.dispatch_footer_button(action, window, cx);
-                        });
-                    }
-                },
-            ));
-        }
-
-        let history_view = weak_view.clone();
-        hints.push(crate::components::ClickableHint::new(
-            "⌘P History",
-            move |_, window, cx| {
-                if let Some(entity) = history_view.upgrade() {
-                    entity.update(cx, |chat, cx| {
-                        tracing::info!(
-                            target: "script_kit::tab_ai",
-                            event = "agent_chat_toolbar_history_clicked",
-                        );
-                        chat.trigger_open_history_command(window, cx);
-                    });
-                }
-            },
-        ));
-
-        let close_view = weak_view.clone();
-        hints.push(crate::components::ClickableHint::new(
-            "⌘W Close",
-            move |_, window, cx| {
-                if let Some(entity) = close_view.upgrade() {
-                    entity.update(cx, |chat, cx| {
-                        chat.trigger_close_requested(window, cx);
-                    });
-                }
-            },
-        ));
+        let hint_row = Self::render_agent_chat_footer_hint_row(
+            &snapshot,
+            weak_view.clone(),
+            true,
+            hint_text_rgba,
+            &theme,
+        );
 
         div()
             .w_full()
@@ -3449,10 +3383,7 @@ impl AgentChatView {
                 weak_view.clone(),
                 hint_text_rgba,
             ))
-            .child(crate::components::render_hint_icons_clickable(
-                hints,
-                hint_text_rgba,
-            ))
+            .child(hint_row)
             .into_any_element()
     }
 
@@ -3464,26 +3395,13 @@ impl AgentChatView {
         let hint_text_hex = theme.colors.text.primary;
         let hint_opacity_byte = (crate::theme::opacity::OPACITY_TEXT_MUTED * 255.0).round() as u32;
         let hint_text_rgba = (hint_text_hex << 8) | hint_opacity_byte;
-        let hints = snapshot
-            .buttons
-            .iter()
-            .map(|button| {
-                let action = button.action;
-                let selected = button.selected;
-                let button_view = weak_view.clone();
-                crate::components::SelectableHint::new(
-                    Self::footer_hint_label(button),
-                    move |_, window, cx| {
-                        if let Some(entity) = button_view.upgrade() {
-                            entity.update(cx, |chat, cx| {
-                                chat.dispatch_footer_button(action, window, cx);
-                            });
-                        }
-                    },
-                )
-                .selected(selected)
-            })
-            .collect::<Vec<_>>();
+        let hint_row = Self::render_agent_chat_footer_hint_row(
+            &snapshot,
+            weak_view.clone(),
+            false,
+            hint_text_rgba,
+            &theme,
+        );
 
         div()
             .w_full()
@@ -3501,11 +3419,167 @@ impl AgentChatView {
                 weak_view.clone(),
                 hint_text_rgba,
             ))
-            .child(crate::components::render_selectable_hint_icons(
-                hints,
-                hint_text_rgba,
-            ))
+            .child(hint_row)
             .into_any_element()
+    }
+
+    fn footer_slot_width(action: crate::footer_popup::FooterAction, leading: bool) -> f32 {
+        use crate::components::footer_chrome;
+        use crate::footer_popup::FooterAction;
+
+        if leading
+            && matches!(
+                action,
+                FooterAction::Run | FooterAction::Stop | FooterAction::PasteResponse
+            )
+        {
+            return AGENT_CHAT_FOOTER_LEADING_SLOT_WIDTH_PX;
+        }
+
+        match action {
+            FooterAction::Run => footer_chrome::FOOTER_RUN_SLOT_MIN_WIDTH_PX,
+            FooterAction::Actions => footer_chrome::FOOTER_ACTIONS_SLOT_WIDTH_PX,
+            FooterAction::Ai | FooterAction::Cwd | FooterAction::AgentModel => {
+                footer_chrome::FOOTER_AI_SLOT_WIDTH_PX
+            }
+            FooterAction::Apply
+            | FooterAction::Replace
+            | FooterAction::Append
+            | FooterAction::Copy
+            | FooterAction::Expand => footer_chrome::FOOTER_APPLY_SLOT_WIDTH_PX,
+            FooterAction::Retry | FooterAction::Stop => footer_chrome::FOOTER_STOP_SLOT_WIDTH_PX,
+            FooterAction::PasteResponse => footer_chrome::FOOTER_PASTE_RESPONSE_SLOT_WIDTH_PX,
+            FooterAction::Close => footer_chrome::FOOTER_CLOSE_SLOT_WIDTH_PX,
+        }
+    }
+
+    fn render_agent_chat_footer_hint_button(
+        id: &'static str,
+        key: &'static str,
+        label: &'static str,
+        slot_width_px: f32,
+        selected: bool,
+        enabled: bool,
+        theme: &crate::theme::Theme,
+        on_click: Option<Rc<dyn Fn(&gpui::ClickEvent, &mut Window, &mut App) + 'static>>,
+    ) -> gpui::AnyElement {
+        let height = crate::components::footer_chrome::footer_button_height(
+            crate::window_resize::main_layout::HINT_STRIP_HEIGHT,
+        );
+        let mut button = crate::components::footer_chrome::render_footer_hint_action_button_frame(
+            crate::components::footer_chrome::FooterHintActionButtonFrameSpec {
+                id,
+                label: SharedString::from(label),
+                key: SharedString::from(key),
+                slot_width_px,
+                height_px: height,
+                selected,
+                key_first: true,
+                justify: crate::components::footer_chrome::FooterHintContentJustify::Center,
+                layout: crate::components::footer_chrome::FooterHintButtonLayoutOverrides::default(
+                ),
+            },
+            theme,
+        )
+        .when(!enabled, |d| d.opacity(0.38));
+
+        if enabled {
+            if let Some(handler) = on_click {
+                button = button.on_click(move |event, window, cx| handler(event, window, cx));
+            }
+        }
+
+        button.into_any_element()
+    }
+
+    fn render_agent_chat_footer_hint_row(
+        snapshot: &AgentChatFooterSnapshot,
+        weak_view: WeakEntity<AgentChatView>,
+        include_history_and_close: bool,
+        _hint_text_rgba: u32,
+        theme: &crate::theme::Theme,
+    ) -> gpui::AnyElement {
+        let mut row = div().flex().flex_row().items_center().gap(px(
+            crate::components::footer_chrome::FOOTER_ACTION_ITEM_GAP_PX,
+        ));
+
+        for (index, button) in snapshot.buttons.iter().enumerate() {
+            let action = button.action;
+            let button_view = weak_view.clone();
+            let on_click = Rc::new(
+                move |_event: &gpui::ClickEvent, window: &mut Window, cx: &mut App| {
+                    if let Some(entity) = button_view.upgrade() {
+                        entity.update(cx, |chat, cx| {
+                            chat.dispatch_footer_button(action, window, cx);
+                        });
+                    }
+                },
+            );
+            row = row.child(Self::render_agent_chat_footer_hint_button(
+                if index == 0 {
+                    "agent-chat-footer-leading-slot"
+                } else {
+                    "agent-chat-footer-action-slot"
+                },
+                button.key,
+                button.label,
+                Self::footer_slot_width(button.action, index == 0),
+                button.selected,
+                button.enabled,
+                theme,
+                Some(on_click),
+            ));
+        }
+
+        if include_history_and_close {
+            let history_view = weak_view.clone();
+            let history_click = Rc::new(
+                move |_event: &gpui::ClickEvent, window: &mut Window, cx: &mut App| {
+                    if let Some(entity) = history_view.upgrade() {
+                        entity.update(cx, |chat, cx| {
+                            tracing::info!(
+                                target: "script_kit::tab_ai",
+                                event = "agent_chat_toolbar_history_clicked",
+                            );
+                            chat.trigger_open_history_command(window, cx);
+                        });
+                    }
+                },
+            );
+            row = row.child(Self::render_agent_chat_footer_hint_button(
+                "agent-chat-footer-history-slot",
+                "⌘P",
+                "History",
+                crate::components::footer_chrome::FOOTER_ACTIONS_SLOT_WIDTH_PX,
+                false,
+                true,
+                theme,
+                Some(history_click),
+            ));
+
+            let close_view = weak_view;
+            let close_click = Rc::new(
+                move |_event: &gpui::ClickEvent, window: &mut Window, cx: &mut App| {
+                    if let Some(entity) = close_view.upgrade() {
+                        entity.update(cx, |chat, cx| {
+                            chat.trigger_close_requested(window, cx);
+                        });
+                    }
+                },
+            );
+            row = row.child(Self::render_agent_chat_footer_hint_button(
+                "agent-chat-footer-close-slot",
+                "⌘W",
+                "Close",
+                crate::components::footer_chrome::FOOTER_CLOSE_SLOT_WIDTH_PX,
+                false,
+                true,
+                theme,
+                Some(close_click),
+            ));
+        }
+
+        row.into_any_element()
     }
 
     fn render_profile_status_marker_from_snapshot(
@@ -10290,6 +10364,31 @@ impl AgentChatView {
             .into_any_element()
     }
 
+    fn render_reserved_transient_lane(
+        id: &'static str,
+        height_px: f32,
+        content: Option<gpui::AnyElement>,
+    ) -> gpui::AnyElement {
+        div()
+            .id(id)
+            .w_full()
+            .h(px(height_px))
+            .overflow_hidden()
+            .when_some(content, |d, content| d.child(content))
+            .into_any_element()
+    }
+
+    fn message_queue_lane_active(&self, cx: &App) -> bool {
+        !self.live_thread().read(cx).queued_messages().is_empty()
+    }
+
+    fn context_bootstrap_note_lane_active(&self, cx: &App) -> bool {
+        self.live_thread()
+            .read(cx)
+            .context_bootstrap_note()
+            .is_some_and(|note| !note.trim().is_empty())
+    }
+
     fn render_message_queue_strip(&self, cx: &mut Context<Self>) -> gpui::AnyElement {
         let (queued, paused) = {
             let thread = self.live_thread().read(cx);
@@ -13797,6 +13896,33 @@ impl AgentChatView {
             return;
         }
 
+        if self.focused_text.is_some()
+            && self.ui_variant != AgentChatUiVariant::FocusedTextMini
+            && modifiers.platform
+            && !modifiers.control
+            && !modifiers.alt
+        {
+            let focused_action = if !modifiers.shift && key.eq_ignore_ascii_case("r") {
+                Some(FocusedTextMiniAction::Replace)
+            } else if !modifiers.shift && key.eq_ignore_ascii_case("a") {
+                Some(FocusedTextMiniAction::Append)
+            } else if !modifiers.shift && key.eq_ignore_ascii_case("c") {
+                Some(FocusedTextMiniAction::Copy)
+            } else if modifiers.shift && key.eq_ignore_ascii_case("m") {
+                Some(FocusedTextMiniAction::Expand)
+            } else if modifiers.shift && key.eq_ignore_ascii_case("r") {
+                Some(FocusedTextMiniAction::Retry)
+            } else {
+                None
+            };
+
+            if let Some(action) = focused_action {
+                self.perform_focused_text_mini_action(action, cx);
+                cx.stop_propagation();
+                return;
+            }
+        }
+
         if self.ui_variant == AgentChatUiVariant::FocusedTextMini
             && self.focused_text.is_some()
             && self.focused_text_input_locked_for_thread(self.live_thread().read(cx))
@@ -14602,8 +14728,24 @@ impl Render for AgentChatView {
                         .into_any_element(),
                 );
             }
-            pre_main.push(self.render_context_bootstrap_note(cx));
-            pre_main.push(self.render_message_queue_strip(cx));
+            pre_main.push(Self::render_reserved_transient_lane(
+                "agent_chat-context-bootstrap-lane",
+                AGENT_CHAT_TRANSIENT_BOOTSTRAP_LANE_HEIGHT_PX,
+                if self.context_bootstrap_note_lane_active(cx) {
+                    Some(self.render_context_bootstrap_note(cx))
+                } else {
+                    None
+                },
+            ));
+            pre_main.push(Self::render_reserved_transient_lane(
+                "agent_chat-message-queue-lane-top",
+                AGENT_CHAT_TRANSIENT_QUEUE_LANE_HEIGHT_PX,
+                if self.message_queue_lane_active(cx) {
+                    Some(self.render_message_queue_strip(cx))
+                } else {
+                    None
+                },
+            ));
             pre_main.push(self.render_active_callout(cx));
             if let Some((query, current_idx)) = self.search_state.clone() {
                 let match_count = if query.is_empty() {
@@ -14667,34 +14809,42 @@ impl Render for AgentChatView {
             );
 
             let mut post_main = Vec::new();
-            if !plan_entries.is_empty() {
-                post_main.push(
-                    div()
-                        .w_full()
-                        .px(px(8.0))
-                        .pb(px(4.0))
-                        .child(Self::render_plan_strip(&plan_entries))
-                        .into_any_element(),
-                );
-            }
-            if let Some(request) = pending_permission
-                .clone()
-                .filter(|_| !pending_permission_has_message_target)
-            {
-                post_main.push(
-                    div()
-                        .w_full()
-                        .px(px(8.0))
-                        .pb(px(4.0))
-                        .child(Self::render_permission_inline_card(
-                            &request,
-                            self.permission_index,
-                            self.permission_options_open,
-                            view_entity.clone(),
-                        ))
-                        .into_any_element(),
-                );
-            }
+            post_main.push(Self::render_reserved_transient_lane(
+                "agent_chat-plan-strip-lane",
+                AGENT_CHAT_TRANSIENT_PLAN_LANE_HEIGHT_PX,
+                if plan_entries.is_empty() {
+                    None
+                } else {
+                    Some(
+                        div()
+                            .w_full()
+                            .px(px(8.0))
+                            .pb(px(4.0))
+                            .child(Self::render_plan_strip(&plan_entries))
+                            .into_any_element(),
+                    )
+                },
+            ));
+            post_main.push(Self::render_reserved_transient_lane(
+                "agent_chat-permission-card-lane",
+                AGENT_CHAT_TRANSIENT_PERMISSION_LANE_HEIGHT_PX,
+                pending_permission
+                    .clone()
+                    .filter(|_| !pending_permission_has_message_target)
+                    .map(|request| {
+                        div()
+                            .w_full()
+                            .px(px(8.0))
+                            .pb(px(4.0))
+                            .child(Self::render_permission_inline_card(
+                                &request,
+                                self.permission_index,
+                                self.permission_options_open,
+                                view_entity.clone(),
+                            ))
+                            .into_any_element()
+                    }),
+            ));
 
             let main = div()
                 .id("agent_chat-conversation")
@@ -14798,7 +14948,15 @@ impl Render for AgentChatView {
             .when(variant_config.show_variant_badge, |d| {
                 d.child(Self::render_variant_badge(ui_variant, &theme))
             })
-            .child(self.render_message_queue_strip(cx))
+            .child(Self::render_reserved_transient_lane(
+                "agent_chat-message-queue-lane-top",
+                AGENT_CHAT_TRANSIENT_QUEUE_LANE_HEIGHT_PX,
+                if self.message_queue_lane_active(cx) {
+                    Some(self.render_message_queue_strip(cx))
+                } else {
+                    None
+                },
+            ))
             .child(self.render_active_callout(cx))
             .when(
                 matches!(variant_config.composer, AgentChatComposerPlacement::Default),
@@ -14834,7 +14992,15 @@ impl Render for AgentChatView {
             })
             // Context chips removed — all attachments are now inline @type:name tokens.
             // .child(self.render_pending_context_chips(cx))
-            .child(self.render_context_bootstrap_note(cx))
+            .child(Self::render_reserved_transient_lane(
+                "agent_chat-context-bootstrap-lane",
+                AGENT_CHAT_TRANSIENT_BOOTSTRAP_LANE_HEIGHT_PX,
+                if self.context_bootstrap_note_lane_active(cx) {
+                    Some(self.render_context_bootstrap_note(cx))
+                } else {
+                    None
+                },
+            ))
             // ── Search bar (Cmd+F) ─────────────────────────
             .when_some(self.search_state.clone(), |d, (query, current_idx)| {
                 let match_count = if query.is_empty() {
@@ -14901,32 +15067,52 @@ impl Render for AgentChatView {
                 ),
             )
             // ── Plan strip ────────────────────────────────────
-            .when(!plan_entries.is_empty(), |d| {
-                d.child(
-                    div()
-                        .w_full()
-                        .px(px(8.0))
-                        .pb(px(4.0))
-                        .child(Self::render_plan_strip(&plan_entries)),
-                )
-            })
+            .child(Self::render_reserved_transient_lane(
+                "agent_chat-plan-strip-lane",
+                AGENT_CHAT_TRANSIENT_PLAN_LANE_HEIGHT_PX,
+                if plan_entries.is_empty() {
+                    None
+                } else {
+                    Some(
+                        div()
+                            .w_full()
+                            .px(px(8.0))
+                            .pb(px(4.0))
+                            .child(Self::render_plan_strip(&plan_entries))
+                            .into_any_element(),
+                    )
+                },
+            ))
             // ── Pending permission fallback (non-tool-linked) ──────
-            .when_some(
+            .child(Self::render_reserved_transient_lane(
+                "agent_chat-permission-card-lane",
+                AGENT_CHAT_TRANSIENT_PERMISSION_LANE_HEIGHT_PX,
                 pending_permission
                     .clone()
-                    .filter(|_| !pending_permission_has_message_target),
-                |d, request| {
-                    d.child(div().w_full().px(px(8.0)).pb(px(4.0)).child(
-                        Self::render_permission_inline_card(
-                            &request,
-                            self.permission_index,
-                            self.permission_options_open,
-                            view_entity.clone(),
-                        ),
-                    ))
+                    .filter(|_| !pending_permission_has_message_target)
+                    .map(|request| {
+                        div()
+                            .w_full()
+                            .px(px(8.0))
+                            .pb(px(4.0))
+                            .child(Self::render_permission_inline_card(
+                                &request,
+                                self.permission_index,
+                                self.permission_options_open,
+                                view_entity.clone(),
+                            ))
+                            .into_any_element()
+                    }),
+            ))
+            .child(Self::render_reserved_transient_lane(
+                "agent_chat-message-queue-lane-bottom",
+                AGENT_CHAT_TRANSIENT_QUEUE_LANE_HEIGHT_PX,
+                if self.message_queue_lane_active(cx) {
+                    Some(self.render_message_queue_strip(cx))
+                } else {
+                    None
                 },
-            )
-            .child(self.render_message_queue_strip(cx))
+            ))
             .child(self.render_active_callout(cx))
             .when(
                 matches!(variant_config.composer, AgentChatComposerPlacement::BottomDock),

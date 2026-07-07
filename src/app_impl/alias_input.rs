@@ -44,7 +44,7 @@ impl ScriptListApp {
             );
             self.alias_input_state = None;
             self.alias_input_entity = None; // Clear entity to reset for next open
-                                            // Return focus to the main filter input (like close_shortcut_recorder does)
+            // Return focus to the main filter input (like close_shortcut_recorder does)
             self.pending_focus = Some(FocusTarget::MainFilter);
             cx.notify();
         }
@@ -140,7 +140,8 @@ impl ScriptListApp {
     /// Returns None if no alias input is active.
     ///
     /// The alias input entity is created once and persisted to maintain keyboard focus.
-    /// This follows the same pattern as render_shortcut_recorder_overlay.
+    /// This follows the legacy in-window modal pattern; shortcut recording now
+    /// uses a detached native popup so it can own raw key capture.
     pub(crate) fn render_alias_input_overlay(
         &mut self,
         window: &mut Window,

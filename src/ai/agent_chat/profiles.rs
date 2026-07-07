@@ -4,10 +4,8 @@ use crate::config::{
     AgentChatBackend, AgentChatPathPolicyConfig, AgentChatProfile, AgentChatToolPolicyConfig,
     AiPreferences,
 };
-use crate::plugins::profiles::{
-    discover_plugin_profiles, prompt_file_text, resolved_artifact_tools, validate_profile,
-    PluginProfile, ProfilePromptMode,
-};
+
+use super::mdflow_profiles::resolved_mdflow_profiles;
 
 pub const BUILTIN_GENERAL_PROFILE_ID: &str = "general";
 pub const BUILTIN_SCRIPT_KIT_PROFILE_ID: &str = "script-kit";
@@ -52,7 +50,10 @@ pub fn pi_provider_model_catalog() -> Vec<PiProviderCatalogEntry> {
         models: vec![
             ("gpt-5.5", "GPT-5.5"),
             ("gpt-5.4", "GPT-5.4"),
-            ("gpt-5-mini", "GPT-5 mini"),
+            // The fastest model a ChatGPT-account Codex subscription offers.
+            // (gpt-5-mini / *-codex-mini are rejected for ChatGPT accounts:
+            // "not supported when using Codex with a ChatGPT account".)
+            ("gpt-5.3-codex-spark", "GPT-5.3 Spark"),
         ],
     }]
 }
@@ -130,9 +131,15 @@ const BRAIN_APPEND_SYSTEM_PROMPT: &str = "You are the Brain profile: Script Kit'
 const GENERAL_APPEND_SYSTEM_PROMPT: &str = "You are the General Agent Chat profile for Script Kit. Answer everyday questions directly and helpfully. You may search the web, search the desktop, read files, create new files inside the General workspace, and inspect local context. Do not load skills, modify Script Kit, run shell commands, edit existing files, or write outside the General workspace. If a tool or requested action is blocked, say: \"This action is blocked in the General profile. Please switch profiles to modify Script Kit.\"";
 const SCRIPT_KIT_APPEND_SYSTEM_PROMPT: &str = "You are the Script Kit Agent Chat profile. Help manage ~/.scriptkit, including config.ts, scripts, scriptlets, plugins, and package.json. Make focused minimal edits. Explain risks before destructive file operations. Do not install packages or run long commands unless the user asks.";
 pub const QUICK_AI_BLOCKED_ACTION_MESSAGE: &str =
-    "Quick AI answers from the model only — no tools, files, or context. Open Agent Chat for anything more.";
+    "Quick AI answers from the model plus web search only — no files or local context. Open Agent Chat for anything more.";
 
-pub const QUICK_AI_APPEND_SYSTEM_PROMPT: &str = "You are Quick AI: a zero-context, instant-answer mode launched by pressing Tab on a query typed into the Script Kit launcher. You receive only the user's typed text — no files, no selection, no screenshots, no memories, no tools. Lead with the answer in the first sentence and keep the whole reply tight. Prefer plain prose; use a short list or fenced code block only when the answer genuinely needs one. If the question depends on live or post-cutoff information you cannot verify, say so in one clause and give your best answer anyway. Never mention tools, sessions, context mechanics, Script Kit internals, or system prompts.";
+/// Quick AI mirrors the Text profile's network posture: exactly one read-only
+/// network tool — `web_search` — so live questions ("who does the USA play
+/// tomorrow?") get real answers instead of "I can't verify schedules".
+/// No fs, no skills, no extensions; see `built_in_quick_ai_profile`.
+pub const QUICK_AI_PI_TOOLS: [&str; 1] = ["web_search"];
+
+pub const QUICK_AI_APPEND_SYSTEM_PROMPT: &str = "You are Quick AI: a zero-context, instant-answer mode launched by pressing Tab on a query typed into the Script Kit launcher. You receive only the user's typed text — no files, no selection, no screenshots, no memories. Lead with the answer in the first sentence and keep the whole reply tight. Prefer plain prose; use a short list or fenced code block only when the answer genuinely needs one. You may use web_search, and only web_search, for live or time-sensitive public facts such as schedules, dates, prices, news, releases, or anything likely to have changed; search before answering those, answer directly, and include concise source URLs when available. If search fails or results are insufficient, say what is uncertain without claiming you have no web access. Never mention tools, sessions, context mechanics, Script Kit internals, or system prompts.";
 
 pub const TEXT_APPEND_SYSTEM_PROMPT: &str = "You are the Text Agent Chat profile for focused-field edits and compact one-off questions. You receive captured focused-field text as hidden context. For rewrite, edit, format, translate, summarize, or variation requests, return only the requested final text; do not add commentary, labels, markdown fences, citations, or explanations unless the user explicitly asks for them. You may use web_search, and only web_search, for live or time-sensitive public facts such as schedules, dates, prices, news, releases, current availability, or anything likely to have changed. For live-info questions, search before answering, answer directly, and include concise source URLs when available. If search fails or results are insufficient, say what is uncertain without claiming you have no web access. Do not mention capture mechanics, tool names, sessions, Script Kit internals, or system prompts.";
 
@@ -140,7 +147,8 @@ pub const TEXT_APPEND_SYSTEM_PROMPT: &str = "You are the Text Agent Chat profile
 pub enum AgentChatProfileSource {
     BuiltIn,
     User,
-    Plugin,
+    /// A markdown profile file in `<kit>/profiles/*.md` (mdflow format).
+    Mdflow,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -397,9 +405,11 @@ pub fn built_in_text_profile(ctx: &AgentChatProfileContext) -> ResolvedAgentChat
 
 /// Zero-context profile behind the launcher's Tab-with-text "Quick AI" mode.
 ///
-/// Everything is stripped: no tools (`--no-tools`), no extensions, no skills,
-/// no prompt templates, no context files, no session persistence, and an
-/// empty path policy. The model is pinned to [`QUICK_AI_PI_MODEL`] and must
+/// Everything local is stripped: no extensions, no skills, no prompt
+/// templates, no context files, no session persistence, and an empty path
+/// policy. The single allowed tool is `web_search` ([`QUICK_AI_PI_TOOLS`])
+/// so live-info questions get real answers — same posture as the Text
+/// profile. The model is pinned to [`QUICK_AI_PI_MODEL`] and must
 /// not be overridden by the user's Agent Chat model selection — resolve it
 /// via `resolve_quick_ai_pi_launch`, never through `apply_ai_fallbacks`.
 ///
@@ -419,9 +429,9 @@ pub fn built_in_quick_ai_profile(ctx: &AgentChatProfileContext) -> ResolvedAgent
         system_prompt: None,
         append_system_prompt: Some(QUICK_AI_APPEND_SYSTEM_PROMPT.to_string()),
         cwd: Some(ctx.quick_ai_cwd()),
-        tools: Some(Vec::new()),
+        tools: Some(QUICK_AI_PI_TOOLS.iter().map(|s| s.to_string()).collect()),
         tool_policy: Some(AgentChatToolPolicyConfig {
-            allow: Some(Vec::new()),
+            allow: Some(QUICK_AI_PI_TOOLS.iter().map(|s| s.to_string()).collect()),
         }),
         path_policy: Some(AgentChatPathPolicyConfig {
             allow_read: Some(Vec::new()),
@@ -456,19 +466,9 @@ pub fn resolve_effective_profile(
     ctx: &AgentChatProfileContext,
 ) -> ResolvedAgentChatProfile {
     let built_ins = built_in_profiles(ctx);
-    let plugin_profiles = resolved_plugin_profiles(ctx);
+    let mdflow_profiles = resolved_mdflow_profiles(ctx);
 
     if let Some(selected_id) = clean_opt(ai.selected_profile_id.as_deref()) {
-        if selected_id.starts_with("plugin:") {
-            if let Some(profile) = plugin_profiles
-                .iter()
-                .find(|profile| profile.id == selected_id)
-            {
-                return apply_ai_fallbacks(profile.clone(), ai);
-            }
-            return apply_ai_fallbacks(built_in_general_profile(ctx), ai);
-        }
-
         if let Some(profile) = ai.profiles.iter().find(|profile| {
             clean_opt(profile.id.as_deref()) == Some(selected_id)
                 || generated_legacy_profile_id(&profile.name) == selected_id
@@ -476,7 +476,7 @@ pub fn resolve_effective_profile(
             return apply_ai_fallbacks(resolve_user_profile(profile), ai);
         }
 
-        if let Some(profile) = plugin_profiles
+        if let Some(profile) = mdflow_profiles
             .iter()
             .find(|profile| profile.id == selected_id)
         {
@@ -497,7 +497,7 @@ pub fn resolve_effective_profile(
             return apply_ai_fallbacks(resolve_user_profile(profile), ai);
         }
 
-        if let Some(profile) = plugin_profiles
+        if let Some(profile) = mdflow_profiles
             .iter()
             .find(|profile| profile.name.eq_ignore_ascii_case(selected_name))
         {
@@ -518,6 +518,56 @@ pub fn resolve_effective_profile(
     apply_ai_fallbacks(built_in_brain_profile(ctx), ai)
 }
 
+/// Resolve the profile the launcher's Quick AI mode should launch with.
+///
+/// `ai.quick_ai_profile_id` (set from the Shift+Tab Profile Search via Tab =
+/// "Use for Quick AI") picks any pickable profile; `None` or the built-in
+/// `quick-ai` id keeps the pinned fast zero-context default. Picked profiles
+/// go through `apply_ai_fallbacks` so they behave exactly as they do when
+/// selected in Agent Chat; the default stays pinned (never fallback-mapped)
+/// so the spark model can't be overridden by the global model selection.
+pub fn resolve_quick_ai_profile(
+    ai: &AiPreferences,
+    ctx: &AgentChatProfileContext,
+) -> ResolvedAgentChatProfile {
+    if let Some(selected_id) = clean_opt(ai.quick_ai_profile_id.as_deref()) {
+        if selected_id != BUILTIN_QUICK_AI_PROFILE_ID {
+            if let Some(profile) = resolved_agent_chat_profile_picker_profiles(ai, ctx)
+                .into_iter()
+                .find(|profile| profile.id == selected_id)
+            {
+                return apply_ai_fallbacks(profile, ai);
+            }
+            tracing::warn!(
+                target: "script_kit::agent_chat",
+                event = "quick_ai_profile_selection_missing",
+                profile_id = %selected_id,
+                "Quick AI profile selection no longer resolves; using the built-in default"
+            );
+        }
+    }
+    built_in_quick_ai_profile(ctx)
+}
+
+/// Persist the profile Quick AI should use. Accepts any pickable profile id
+/// plus the built-in `quick-ai` id (which restores the fast default).
+/// Returns the resolved profile on success.
+pub fn persist_quick_ai_profile_selection(
+    ai: &mut AiPreferences,
+    profile_id: &str,
+    ctx: &AgentChatProfileContext,
+) -> Option<ResolvedAgentChatProfile> {
+    let profile = if profile_id == BUILTIN_QUICK_AI_PROFILE_ID {
+        built_in_quick_ai_profile(ctx)
+    } else {
+        resolved_agent_chat_profile_picker_profiles(ai, ctx)
+            .into_iter()
+            .find(|profile| profile.id == profile_id)?
+    };
+    ai.quick_ai_profile_id = Some(profile.id.clone());
+    Some(profile)
+}
+
 pub fn agent_chat_profile_picker_entries(
     ai: &AiPreferences,
     ctx: &AgentChatProfileContext,
@@ -534,7 +584,7 @@ pub fn resolved_agent_chat_profile_picker_profiles(
 ) -> Vec<ResolvedAgentChatProfile> {
     let mut entries = built_in_profiles(ctx);
 
-    for profile in resolved_plugin_profiles(ctx) {
+    for profile in resolved_mdflow_profiles(ctx) {
         if entries.iter().any(|entry| entry.id == profile.id) {
             tracing::warn!(
                 target: "script_kit::agent_chat",
@@ -630,220 +680,6 @@ pub fn resolve_user_profile(profile: &AgentChatProfile) -> ResolvedAgentChatProf
         session_dir: clean_opt(profile.session_dir.as_deref()).map(str::to_string),
         no_session: profile.no_session,
         session_durability: clean_opt(profile.session_durability.as_deref()).map(str::to_string),
-    }
-}
-
-/// Plugin-profile resolution walks `<kit>/plugins/**` and reads every
-/// manifest and prompt file from disk. Hot paths resolve profiles several
-/// times per keystroke/frame (Profile Search navigation, the Agent Chat
-/// profile picker, footer label refresh, automation state snapshots), so the
-/// disk-backed pass is memoized here. Plugin installs/removals surface after
-/// the TTL elapses; callers that mutate plugins on disk and need the change
-/// immediately should call [`invalidate_plugin_profile_cache`].
-const PLUGIN_PROFILE_CACHE_TTL: std::time::Duration = std::time::Duration::from_secs(2);
-
-struct PluginProfileCacheEntry {
-    plugins_dir: PathBuf,
-    kit_path: PathBuf,
-    refreshed_at: std::time::Instant,
-    profiles: Vec<ResolvedAgentChatProfile>,
-}
-
-static PLUGIN_PROFILE_CACHE: std::sync::Mutex<Option<PluginProfileCacheEntry>> =
-    std::sync::Mutex::new(None);
-
-pub fn invalidate_plugin_profile_cache() {
-    if let Ok(mut cache) = PLUGIN_PROFILE_CACHE.lock() {
-        *cache = None;
-    }
-}
-
-fn plugin_profile_cache_entry_is_fresh(
-    entry: &PluginProfileCacheEntry,
-    plugins_dir: &std::path::Path,
-    kit_path: &std::path::Path,
-    now: std::time::Instant,
-) -> bool {
-    entry.plugins_dir == plugins_dir
-        && entry.kit_path == kit_path
-        && now.duration_since(entry.refreshed_at) < PLUGIN_PROFILE_CACHE_TTL
-}
-
-pub fn resolved_plugin_profiles(ctx: &AgentChatProfileContext) -> Vec<ResolvedAgentChatProfile> {
-    let plugins_dir = crate::plugins::plugins_container_dir();
-    if let Ok(cache) = PLUGIN_PROFILE_CACHE.lock() {
-        if let Some(entry) = cache.as_ref() {
-            if plugin_profile_cache_entry_is_fresh(
-                entry,
-                &plugins_dir,
-                &ctx.kit_path,
-                std::time::Instant::now(),
-            ) {
-                return entry.profiles.clone();
-            }
-        }
-    }
-
-    let profiles = resolved_plugin_profiles_uncached(ctx);
-    if let Ok(mut cache) = PLUGIN_PROFILE_CACHE.lock() {
-        *cache = Some(PluginProfileCacheEntry {
-            plugins_dir,
-            kit_path: ctx.kit_path.clone(),
-            refreshed_at: std::time::Instant::now(),
-            profiles: profiles.clone(),
-        });
-    }
-    profiles
-}
-
-fn resolved_plugin_profiles_uncached(
-    ctx: &AgentChatProfileContext,
-) -> Vec<ResolvedAgentChatProfile> {
-    let profiles = match discover_plugin_profiles() {
-        Ok(profiles) => profiles,
-        Err(error) => {
-            tracing::warn!(
-                target: "script_kit::agent_chat",
-                error = %error,
-                "agent_chat_plugin_profile_discovery_failed"
-            );
-            return Vec::new();
-        }
-    };
-    resolve_plugin_profile_entries(profiles, ctx)
-}
-
-pub fn resolve_plugin_profile_entries(
-    profiles: Vec<PluginProfile>,
-    ctx: &AgentChatProfileContext,
-) -> Vec<ResolvedAgentChatProfile> {
-    let mut resolved = Vec::new();
-    for profile in profiles {
-        match resolve_plugin_profile(&profile, ctx) {
-            Ok(profile) => {
-                if resolved
-                    .iter()
-                    .any(|entry: &ResolvedAgentChatProfile| entry.id == profile.id)
-                {
-                    tracing::warn!(
-                        target: "script_kit::agent_chat",
-                        event = "agent_chat_plugin_profile_duplicate_id_skipped",
-                        profile_id = %profile.id,
-                        profile_name = %profile.name,
-                    );
-                    continue;
-                }
-                resolved.push(profile);
-            }
-            Err(error) => {
-                tracing::warn!(
-                    target: "script_kit::agent_chat",
-                    plugin_id = %profile.plugin_id,
-                    profile_id = %profile.profile_id,
-                    error = %error,
-                    "agent_chat_plugin_profile_resolve_failed"
-                );
-            }
-        }
-    }
-    resolved
-}
-
-pub fn resolve_plugin_profile(
-    profile: &PluginProfile,
-    ctx: &AgentChatProfileContext,
-) -> anyhow::Result<ResolvedAgentChatProfile> {
-    validate_profile(profile)?;
-    let prompt_text = plugin_prompt_with_policy(profile)?;
-    let artifact = &profile.artifact;
-    let cwd = clean_opt(artifact.cwd.as_deref())
-        .map(crate::ai::agent_chat::pi::binary::expand_tilde_path)
-        .unwrap_or_else(|| {
-            ctx.kit_path
-                .join("agent-chat")
-                .join("profiles")
-                .join(&profile.profile_id)
-        });
-
-    let mut resolved = ResolvedAgentChatProfile {
-        source: AgentChatProfileSource::Plugin,
-        id: format!("plugin:{}/{}", profile.plugin_id, profile.profile_id),
-        name: artifact.name.trim().to_string(),
-        icon_name: clean_opt(artifact.icon_name.as_deref()).map(str::to_string),
-        backend: artifact.backend.unwrap_or(AgentChatBackend::Pi),
-        pi_binary: None,
-        agent: None,
-        provider: clean_opt(artifact.provider.as_deref()).map(str::to_string),
-        model: clean_opt(artifact.model.as_deref()).map(str::to_string),
-        system_prompt: None,
-        append_system_prompt: None,
-        cwd: Some(cwd),
-        tools: resolved_artifact_tools(artifact),
-        tool_policy: artifact.tool_policy.clone(),
-        path_policy: Some(artifact.path_policy.clone()),
-        blocked_action_message: clean_opt(artifact.blocked_action_message.as_deref())
-            .map(str::to_string),
-        disable_extensions: Some(artifact.disable_extensions.unwrap_or(true)),
-        disable_skills: Some(artifact.disable_skills.unwrap_or(true)),
-        disable_prompt_templates: Some(artifact.disable_prompt_templates.unwrap_or(true)),
-        disable_context_files: Some(artifact.disable_context_files.unwrap_or(true)),
-        hide_cwd_in_prompt: Some(artifact.hide_cwd_in_prompt.unwrap_or(true)),
-        thinking: clean_opt(artifact.thinking.as_deref()).map(str::to_string),
-        extension_policy: clean_opt(artifact.extension_policy.as_deref())
-            .map(str::to_string)
-            .or_else(|| Some("deny".to_string())),
-        session_dir: clean_opt(artifact.session_dir.as_deref()).map(str::to_string),
-        no_session: Some(artifact.no_session.unwrap_or(false)),
-        session_durability: clean_opt(artifact.session_durability.as_deref()).map(str::to_string),
-    };
-
-    match artifact.prompt.mode {
-        ProfilePromptMode::Replace => resolved.system_prompt = Some(prompt_text),
-        ProfilePromptMode::Append => resolved.append_system_prompt = Some(prompt_text),
-    }
-
-    Ok(resolved)
-}
-
-fn plugin_prompt_with_policy(profile: &PluginProfile) -> anyhow::Result<String> {
-    let prompt = prompt_file_text(profile)?;
-    Ok(format!(
-        "{}\n\n{}",
-        prompt.trim_end(),
-        plugin_profile_policy_appendix(profile)
-    ))
-}
-
-fn plugin_profile_policy_appendix(profile: &PluginProfile) -> String {
-    let artifact = &profile.artifact;
-    let tools = resolved_artifact_tools(artifact).unwrap_or_default();
-    let allow_read = artifact.path_policy.allow_read.clone().unwrap_or_default();
-    let allow_write = artifact.path_policy.allow_write.clone().unwrap_or_default();
-    let deny = artifact.path_policy.deny.clone().unwrap_or_default();
-    let blocked = artifact
-        .blocked_action_message
-        .as_deref()
-        .and_then(|message| clean_opt(Some(message)))
-        .unwrap_or("This action is outside the selected Script Kit profile.");
-
-    format!(
-        "[Script Kit profile contract]\nProfile id: plugin:{}/{}\nAllowed tools: {}\nAllowed read paths: {}\nAllowed write paths: {}\nDenied paths: {}\nIf the user requests work outside this contract, refuse briefly and say: \"{}\"",
-        profile.plugin_id,
-        profile.profile_id,
-        format_policy_list(&tools),
-        format_policy_list(&allow_read),
-        format_policy_list(&allow_write),
-        format_policy_list(&deny),
-        blocked
-    )
-}
-
-fn format_policy_list(values: &[String]) -> String {
-    let cleaned = clean_list(values);
-    if cleaned.is_empty() {
-        "none".to_string()
-    } else {
-        cleaned.join(", ")
     }
 }
 
@@ -958,85 +794,80 @@ mod built_in_profile_tests {
 }
 
 #[cfg(test)]
-mod plugin_profile_cache_tests {
+mod quick_ai_profile_selection_tests {
     use super::*;
-    use std::path::Path;
-    use std::time::{Duration, Instant};
 
-    fn entry(
-        plugins_dir: &Path,
-        kit_path: &Path,
-        refreshed_at: Instant,
-    ) -> PluginProfileCacheEntry {
-        PluginProfileCacheEntry {
-            plugins_dir: plugins_dir.to_path_buf(),
-            kit_path: kit_path.to_path_buf(),
-            refreshed_at,
-            profiles: Vec::new(),
+    fn ctx() -> AgentChatProfileContext {
+        AgentChatProfileContext {
+            kit_path: std::path::PathBuf::from("/tmp/script-kit-quick-ai-test"),
         }
     }
 
-    /// Profile Search navigation and the Agent Chat profile picker resolve
-    /// plugin profiles several times per keystroke; a fresh same-key entry
-    /// must be served from memory instead of re-walking `<kit>/plugins/**`.
     #[test]
-    fn fresh_same_key_entry_hits() {
-        let now = Instant::now();
-        let e = entry(Path::new("/kit/plugins"), Path::new("/kit"), now);
-        assert!(plugin_profile_cache_entry_is_fresh(
-            &e,
-            Path::new("/kit/plugins"),
-            Path::new("/kit"),
-            now + Duration::from_millis(50),
-        ));
+    fn quick_ai_defaults_to_built_in_when_unset() {
+        let ai = AiPreferences::default();
+        let profile = resolve_quick_ai_profile(&ai, &ctx());
+        assert_eq!(profile.id, BUILTIN_QUICK_AI_PROFILE_ID);
+        assert_eq!(profile.model.as_deref(), Some(QUICK_AI_PI_MODEL));
     }
 
     #[test]
-    fn expired_entry_misses() {
-        let now = Instant::now();
-        let e = entry(Path::new("/kit/plugins"), Path::new("/kit"), now);
-        assert!(!plugin_profile_cache_entry_is_fresh(
-            &e,
-            Path::new("/kit/plugins"),
-            Path::new("/kit"),
-            now + PLUGIN_PROFILE_CACHE_TTL,
-        ));
+    fn quick_ai_honors_picked_profile_id() {
+        let ai = AiPreferences {
+            quick_ai_profile_id: Some(BUILTIN_BRAIN_PROFILE_ID.to_string()),
+            ..AiPreferences::default()
+        };
+        let profile = resolve_quick_ai_profile(&ai, &ctx());
+        assert_eq!(profile.id, BUILTIN_BRAIN_PROFILE_ID);
     }
 
     #[test]
-    fn different_kit_path_misses() {
-        let now = Instant::now();
-        let e = entry(Path::new("/kit/plugins"), Path::new("/kit"), now);
-        assert!(!plugin_profile_cache_entry_is_fresh(
-            &e,
-            Path::new("/kit/plugins"),
-            Path::new("/other-kit"),
-            now,
-        ));
+    fn quick_ai_falls_back_to_built_in_for_stale_selection() {
+        let ai = AiPreferences {
+            quick_ai_profile_id: Some("plugin:gone/never-existed".to_string()),
+            ..AiPreferences::default()
+        };
+        let profile = resolve_quick_ai_profile(&ai, &ctx());
+        assert_eq!(profile.id, BUILTIN_QUICK_AI_PROFILE_ID);
     }
 
     #[test]
-    fn different_plugins_dir_misses() {
-        let now = Instant::now();
-        let e = entry(Path::new("/kit/plugins"), Path::new("/kit"), now);
-        assert!(!plugin_profile_cache_entry_is_fresh(
-            &e,
-            Path::new("/other-kit/plugins"),
-            Path::new("/kit"),
-            now,
-        ));
+    fn persist_accepts_quick_ai_id_and_picker_ids_only() {
+        let ctx = ctx();
+        let mut ai = AiPreferences::default();
+
+        let restored =
+            persist_quick_ai_profile_selection(&mut ai, BUILTIN_QUICK_AI_PROFILE_ID, &ctx);
+        assert!(restored.is_some());
+        assert_eq!(
+            ai.quick_ai_profile_id.as_deref(),
+            Some(BUILTIN_QUICK_AI_PROFILE_ID)
+        );
+
+        let picked = persist_quick_ai_profile_selection(&mut ai, BUILTIN_TEXT_PROFILE_ID, &ctx);
+        assert!(picked.is_some());
+        assert_eq!(
+            ai.quick_ai_profile_id.as_deref(),
+            Some(BUILTIN_TEXT_PROFILE_ID)
+        );
+
+        let rejected = persist_quick_ai_profile_selection(&mut ai, "no-such-profile", &ctx);
+        assert!(rejected.is_none());
+        // A rejected id must not clobber the previous valid selection.
+        assert_eq!(
+            ai.quick_ai_profile_id.as_deref(),
+            Some(BUILTIN_TEXT_PROFILE_ID)
+        );
     }
 
     #[test]
-    fn invalidate_clears_cache() {
-        if let Ok(mut cache) = PLUGIN_PROFILE_CACHE.lock() {
-            *cache = Some(entry(
-                Path::new("/kit/plugins"),
-                Path::new("/kit"),
-                Instant::now(),
-            ));
-        }
-        invalidate_plugin_profile_cache();
-        assert!(PLUGIN_PROFILE_CACHE.lock().unwrap().is_none());
+    fn quick_ai_selection_does_not_leak_into_agent_chat_default() {
+        let ai = AiPreferences {
+            quick_ai_profile_id: Some(BUILTIN_SCRIPT_KIT_PROFILE_ID.to_string()),
+            ..AiPreferences::default()
+        };
+        // The Agent Chat default resolution must ignore the Quick AI pick.
+        let effective = resolve_effective_profile(&ai, &ctx());
+        assert_eq!(effective.id, BUILTIN_BRAIN_PROFILE_ID);
     }
 }

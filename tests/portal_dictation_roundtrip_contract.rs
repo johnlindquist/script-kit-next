@@ -81,10 +81,47 @@ fn tab_ai_harness_delivery_opens_agent_chat_with_transcript_entry_intent() {
 }
 
 #[test]
+fn day_page_today_delivery_appends_capture_without_opening_ui() {
+    let handler = handler_slice();
+    assert!(
+        handler.contains("DictationTarget::DayPageToday =>"),
+        "DayPageToday arm must remain in the delivery match — it is the \
+         'Today' overlay chip's destination"
+    );
+    assert!(
+        handler.contains("append_to_day") && handler.contains("DayEntry::Capture"),
+        "DayPageToday delivery must append a timestamped capture through the \
+         brain substrate (lock-safe, self-indexing) rather than opening any UI"
+    );
+}
+
+#[test]
+fn quick_ai_delivery_submit_flag_comes_from_config() {
+    let handler = handler_slice();
+    assert!(
+        handler.contains("DictationTarget::QuickAiQuestion =>"),
+        "QuickAiQuestion arm must remain in the delivery match — it is the \
+         'Ask' overlay chip's destination"
+    );
+    assert!(
+        handler.contains("quick_ai_answers()"),
+        "QuickAiQuestion delivery must derive its submit flag from \
+         dictation.quickAi via quick_ai_answers() — hardcoding submit would \
+         break the 'composer' config mode"
+    );
+    assert!(
+        handler.contains("open_mini_ai_window_from(\"dictation_quick_ai\""),
+        "fire-and-show must open the mini AI window with a traceable source tag"
+    );
+}
+
+#[test]
 fn history_is_recorded_before_delivery_routing() {
     let handler = handler_slice();
+    // Match the call site by name — rustfmt reflows the argument list, and
+    // the invariant is the ordering, not the call's line layout.
     let history_pos = handler
-        .find("record_dictation_history(&transcript, audio_duration, target)")
+        .find("record_dictation_history(")
         .expect("record_dictation_history call must be present in the handler");
     let dispatch_pos = handler
         .find("let delivered_internally = match target {")

@@ -883,11 +883,21 @@ app.run(move |cx: &mut App| {
             let update_state = std::sync::Arc::new(std::sync::RwLock::new(
                 crate::updates::UpdateState::Idle,
             ));
-            // Mirror the user's main launcher hotkey on the "Open Script Kit"
-            // row so the tray and the global shortcut stay in lockstep.
-            let main_shortcut =
-                tray::main_shortcut_accelerator(&config_for_tray_actions.hotkey);
-            let tray_manager = cx.update(|_cx| match TrayManager::new(update_state.clone(), main_shortcut.clone()) {
+            // Mirror the user's global hotkeys on the tray rows (launcher,
+            // Notes, Agent Chat) so the menu and the shortcuts stay in
+            // lockstep instead of hiding the bindings.
+            let tray_shortcuts = tray::TrayShortcuts {
+                main: tray::main_shortcut_accelerator(&config_for_tray_actions.hotkey),
+                notes: config_for_tray_actions
+                    .get_notes_hotkey()
+                    .as_ref()
+                    .and_then(tray::main_shortcut_accelerator),
+                agent_chat: config_for_tray_actions
+                    .get_ai_hotkey()
+                    .as_ref()
+                    .and_then(tray::main_shortcut_accelerator),
+            };
+            let tray_manager = cx.update(|_cx| match TrayManager::new(update_state.clone(), tray_shortcuts.clone()) {
                 Ok(tm) => {
                     logging::log("TRAY", "Tray icon initialized successfully (deferred)");
                     Some(tm)
@@ -1303,9 +1313,11 @@ app.run(move |cx: &mut App| {
         }).detach();
 
         // Dictation hotkey listener - event-driven via async_channel
-        // The global dictation shortcut routes to Agent Chat quick-submit.
-        // Contextual main-window/prompt dictation remains available from the
-        // regular builtin entry.
+        // The global dictation shortcut routes through the config-governed
+        // dictation builtin: `dictation.target` decides the destination
+        // (sticky last chip pick by default, context capture or an explicit
+        // label otherwise). The forced Agent Chat route stays available as
+        // the builtin/dictation-to-ai menu entry.
         let app_entity_for_dictation = app_entity.clone();
         cx.spawn(async move |cx: &mut gpui::AsyncApp| {
             logging::log("HOTKEY", "Dictation hotkey listener started (event-driven)");
@@ -1313,12 +1325,12 @@ app.run(move |cx: &mut App| {
                 let _guard = logging::set_correlation_id(hotkey_event.correlation_id.clone());
                 logging::log(
                     "HOTKEY",
-                    "Dictation hotkey triggered - toggling Agent Chat dictation via builtin",
+                    "Dictation hotkey triggered - toggling dictation via builtin",
                 );
                 let app_entity_inner = app_entity_for_dictation.clone();
                 let _ = cx.update(move |cx: &mut gpui::App| {
                     let should_show_window = app_entity_inner.update(cx, |view, ctx| {
-                        view.execute_by_command_id_or_path("builtin/dictation-to-ai", ctx)
+                        view.execute_by_command_id_or_path("builtin/dictation", ctx)
                     });
                     if should_show_window {
                         logging::log(
@@ -3417,7 +3429,7 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                     Ok(handle) => {
                                         let fixture_bounds = gpui::Bounds {
                                             origin: gpui::point(gpui::px(585.0), gpui::px(177.0)),
-                                            size: gpui::size(gpui::px(520.0), gpui::px(72.0)),
+                                            size: gpui::size(gpui::px(560.0), gpui::px(100.0)),
                                         };
                                         let _ = handle.update(ctx, |_view, window, cx| {
                                             crate::components::inline_popup_window::set_inline_popup_window_bounds(window, fixture_bounds, cx);
@@ -3427,8 +3439,8 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                             Some(crate::protocol::AutomationWindowBounds {
                                                 x: 585.0,
                                                 y: 177.0,
-                                                width: 520.0,
-                                                height: 72.0,
+                                                width: 560.0,
+                                                height: 100.0,
                                             }),
                                         );
                                         let state = crate::dictation::DictationOverlayState {

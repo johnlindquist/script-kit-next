@@ -170,22 +170,26 @@ pub(crate) fn resolve_focused_text_pi_launch(
         selected_profile_name: None,
         agent_chat_notify_when_hidden: ai.agent_chat_notify_when_hidden,
         cwd: ai.cwd.clone(),
+        quick_ai_profile_id: None,
     };
 
     PiAgentChatLaunch::from_profile(resolve_effective_profile(&text_ai, ctx))
 }
 
-/// Resolve the zero-context Quick AI launch (launcher Tab-with-text).
+/// Resolve the Quick AI launch (launcher Tab-with-text).
 ///
-/// Unlike `resolve_focused_text_pi_launch`, this deliberately bypasses
-/// `apply_ai_fallbacks`: the Quick AI profile's model is pinned to
-/// `QUICK_AI_PI_MODEL` and must not be replaced by `ai.selected_model_id`.
-/// Only the pi binary fallback from preferences is honored.
+/// The profile comes from `resolve_quick_ai_profile`: the user's Shift+Tab
+/// picker choice (`ai.quick_ai_profile_id`) when set, else the built-in
+/// zero-context default. For the built-in default this deliberately bypasses
+/// `apply_ai_fallbacks`: its model is pinned to `QUICK_AI_PI_MODEL` and must
+/// not be replaced by `ai.selected_model_id`. Only the pi binary fallback
+/// from preferences is honored for that default; user-picked profiles get
+/// the same fallback treatment they get in Agent Chat.
 pub(crate) fn resolve_quick_ai_pi_launch(
     ai: &AiPreferences,
     ctx: &AgentChatProfileContext,
 ) -> Result<PiAgentChatLaunch> {
-    let mut profile = crate::ai::agent_chat::profiles::built_in_quick_ai_profile(ctx);
+    let mut profile = crate::ai::agent_chat::profiles::resolve_quick_ai_profile(ai, ctx);
     if profile.pi_binary.is_none() {
         profile.pi_binary = crate::ai::agent_chat::profiles::clean_opt(ai.pi_binary.as_deref())
             .map(crate::ai::agent_chat::pi::binary::expand_tilde_path)
@@ -418,7 +422,8 @@ mod tests {
     #[test]
     fn quick_ai_pi_launch_is_zero_context_and_pins_spark_model() {
         // Even with a user-selected model, Quick AI must stay pinned to the
-        // spark model and strip every context/tool surface.
+        // spark model and strip every context surface. web_search is the one
+        // allowed tool so live-info questions get real answers.
         let ai = AiPreferences {
             pi_binary: Some("/tmp/test-pi".to_string()),
             selected_model_id: Some("openai-codex/gpt-5.5".to_string()),
@@ -440,7 +445,8 @@ mod tests {
             Some("openai-codex/gpt-5.3-codex-spark")
         );
         assert_eq!(launch.cwd, PathBuf::from("/tmp/kit/agent-chat/quick-ai"));
-        assert!(argv.contains(&"--no-tools".to_string()));
+        assert!(!argv.contains(&"--no-tools".to_string()));
+        assert_eq!(argv_value(&argv, "--tools"), Some("web_search"));
         assert!(argv.contains(&"--no-extensions".to_string()));
         assert!(argv.contains(&"--no-skills".to_string()));
         assert!(argv.contains(&"--no-prompt-templates".to_string()));
@@ -451,6 +457,26 @@ mod tests {
             Some(crate::ai::agent_chat::profiles::QUICK_AI_APPEND_SYSTEM_PROMPT)
         );
         assert_eq!(launch.launch_spec.system_prompt, None);
+    }
+
+    #[test]
+    fn quick_ai_pi_launch_honors_shift_tab_profile_pick() {
+        // A profile assigned via the Shift+Tab Profile Search (Tab = "Use for
+        // Quick AI") replaces the pinned zero-context default wholesale.
+        let ai = AiPreferences {
+            pi_binary: Some("/tmp/test-pi".to_string()),
+            quick_ai_profile_id: Some(
+                crate::ai::agent_chat::profiles::BUILTIN_BRAIN_PROFILE_ID.to_string(),
+            ),
+            ..AiPreferences::default()
+        };
+
+        let launch = resolve_quick_ai_pi_launch(&ai, &ctx()).unwrap();
+        assert_eq!(
+            launch.profile.id,
+            crate::ai::agent_chat::profiles::BUILTIN_BRAIN_PROFILE_ID
+        );
+        assert_eq!(launch.cwd, PathBuf::from("/tmp/kit/agent-chat/brain"));
     }
 
     #[test]

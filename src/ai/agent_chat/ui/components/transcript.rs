@@ -20,6 +20,7 @@ use super::super::ui_variant::{AgentChatTranscriptPresentation, AgentChatUiVaria
 use crate::dev_style_tool::agent_chat_catalog::AgentChatStyleDef;
 use crate::list_item::FONT_MONO;
 use crate::theme::{self, PromptColors};
+use crate::ui::chrome::AMBIENT_PULSE_CYCLE_MS;
 
 /// Callback invoked when the user forks the thread by editing message `u64`.
 type ForkEditMessageHandler = Arc<dyn Fn(u64, &mut Window, &mut App) + 'static>;
@@ -158,15 +159,15 @@ pub struct AgentChatTranscript {
     fork_points: Vec<AgentChatForkPoint>,
     thread_status: AgentChatThreadStatus,
     ui_variant: AgentChatUiVariant,
-    /// While a turn is streaming with no assistant text yet, render a
-    /// synthetic "Thinking…" row at the tail so the wait is visible in the
-    /// transcript itself, not just the footer status.
+    /// While a turn is streaming with no assistant text yet, render content in
+    /// the permanent synthetic tail row so visibility changes do not reset the
+    /// whole measured list.
     show_activity_row: bool,
 }
 
 impl AgentChatTranscript {
     pub fn new(messages: Vec<AgentChatThreadMessage>, cx: &mut Context<Self>) -> Self {
-        let total = messages.len();
+        let total = messages.len() + 1;
         let list_state = ListState::new(total, ListAlignment::Bottom, px(200.0)).measure_all();
         list_state.set_follow_tail(true);
 
@@ -190,7 +191,7 @@ impl AgentChatTranscript {
     }
 
     fn row_count(&self) -> usize {
-        self.messages.len() + usize::from(self.show_activity_row)
+        self.messages.len() + 1
     }
 
     pub fn with_ui_variant(mut self, ui_variant: AgentChatUiVariant) -> Self {
@@ -222,6 +223,14 @@ impl AgentChatTranscript {
                         && current.tool_call_id == incoming.tool_call_id
                         && current.tool_meta == incoming.tool_meta
                 })
+    }
+
+    fn message_prefix_matches_current(&self, messages: &[AgentChatThreadMessage]) -> bool {
+        self.messages
+            .iter()
+            .zip(messages.iter())
+            .take(self.messages.len().min(messages.len()))
+            .all(|(current, incoming)| current.id == incoming.id && current.role == incoming.role)
     }
 
     /// Markdown text shown in the message body view.
@@ -314,12 +323,20 @@ impl AgentChatTranscript {
             return;
         }
 
-        let old_rows = self.row_count();
+        let old_message_count = self.messages.len();
+        let tail_only_count_change = self.message_prefix_matches_current(&messages);
         self.messages = messages;
-        let new_rows = self.row_count();
+        let new_message_count = self.messages.len();
 
-        if new_rows != old_rows {
-            self.list_state.reset(new_rows);
+        if new_message_count != old_message_count {
+            if tail_only_count_change {
+                self.list_state.splice(
+                    old_message_count.min(new_message_count)..old_message_count,
+                    new_message_count.saturating_sub(old_message_count),
+                );
+            } else {
+                self.list_state.reset(self.row_count());
+            }
         }
 
         // Clean up message inputs for deleted messages
@@ -341,7 +358,6 @@ impl AgentChatTranscript {
             return;
         }
         self.show_activity_row = show;
-        self.list_state.reset(self.row_count());
         cx.notify();
     }
 
@@ -784,7 +800,7 @@ impl AgentChatTranscript {
             .bg(rgb(theme.colors.accent.selected))
             .with_animation(
                 "agent-chat-transcript-thinking-pulse",
-                Animation::new(std::time::Duration::from_millis(1200)).repeat(),
+                Animation::new(std::time::Duration::from_millis(AMBIENT_PULSE_CYCLE_MS)).repeat(),
                 |style, delta| {
                     let sine = (delta * std::f32::consts::PI * 2.0).sin();
                     style.opacity(0.65 + (0.35 * ((sine + 1.0) / 2.0)))
@@ -805,6 +821,10 @@ impl AgentChatTranscript {
                 ),
             )
             .into_any()
+    }
+
+    fn render_empty_activity_row() -> gpui::AnyElement {
+        div().w_full().h(px(0.0)).overflow_hidden().into_any()
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -1518,8 +1538,12 @@ impl Render for AgentChatTranscript {
         } else {
             let show_activity_row = self.show_activity_row;
             list(self.list_state.clone(), move |ix, _window, _cx| {
-                if show_activity_row && ix == visible_indices.len() {
-                    return Self::render_activity_row(&theme, &style_def);
+                if ix == visible_indices.len() {
+                    return if show_activity_row {
+                        Self::render_activity_row(&theme, &style_def)
+                    } else {
+                        Self::render_empty_activity_row()
+                    };
                 }
                 let Some(&message_ix) = visible_indices.get(ix) else {
                     return div().into_any();

@@ -1,17 +1,36 @@
 use crate::theme::Theme;
 
-// Re-export shared overlay constants consumed by render.rs.
-pub(super) use crate::components::overlay_modal::overlay_color_with_alpha;
-
 /// Shortcut-recorder-specific layout constants
-pub(super) const RECORDER_MODAL_WIDTH: f32 = 320.0;
 pub(super) const RECORDER_MODAL_PADDING: f32 = 18.0;
 pub(super) const KEY_DISPLAY_HEIGHT: f32 = 44.0;
 pub(super) const KEY_DISPLAY_PADDING: f32 = 12.0;
 
-/// Backdrop alpha values specific to shortcut recorder
-pub(super) const OVERLAY_BACKDROP_ALPHA: u8 = 0x80;
-pub(super) const OVERLAY_BACKDROP_HOVER_ALPHA: u8 = 0x90;
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ShortcutRecorderFocusedAction {
+    Save,
+    Clear,
+    Cancel,
+}
+
+impl ShortcutRecorderFocusedAction {
+    pub fn next(self, clear_visible: bool) -> Self {
+        match (self, clear_visible) {
+            (Self::Save, true) => Self::Clear,
+            (Self::Save, false) => Self::Cancel,
+            (Self::Clear, _) => Self::Cancel,
+            (Self::Cancel, _) => Self::Save,
+        }
+    }
+
+    pub fn previous(self, clear_visible: bool) -> Self {
+        match (self, clear_visible) {
+            (Self::Save, _) => Self::Cancel,
+            (Self::Clear, _) => Self::Save,
+            (Self::Cancel, true) => Self::Clear,
+            (Self::Cancel, false) => Self::Save,
+        }
+    }
+}
 
 /// Pre-computed colors for ShortcutRecorder rendering
 #[derive(Clone, Copy, Debug)]

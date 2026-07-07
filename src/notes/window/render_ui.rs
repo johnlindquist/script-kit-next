@@ -38,7 +38,9 @@ impl NotesApp {
         }
         actions.push(ResourcePreviewAction {
             id: "notes-kit-resource-preview-close".into(),
-            label: "Close".into(),
+            // "Back to Note", not "Close": Escape restores the note editor
+            // underneath — it never closes the Notes window from a preview.
+            label: "Back to Note".into(),
             muted: true,
             on_click: std::rc::Rc::new(cx.listener(|this, _, window, cx| {
                 this.close_kit_resource_preview(window, cx);
@@ -61,7 +63,7 @@ impl NotesApp {
             }),
         ));
         footer_hints.push(ClickableHint::new(
-            "Esc Close",
+            "Esc Back to Note",
             cx.listener(|this, _, window, cx| {
                 this.close_kit_resource_preview(window, cx);
             }),

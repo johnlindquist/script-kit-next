@@ -1,15 +1,13 @@
 use std::sync::Arc;
-use std::time::Instant;
 
 use gpui::Context;
 
-use crate::components::overlay_modal::OverlayAnimation;
 use crate::logging;
 use crate::theme::Theme;
 
 use super::types::{
     ConflictChecker, OnCancelCallback, OnSaveCallback, RecordedShortcut, RecorderAction,
-    ShortcutConflict, ShortcutRecorderColors,
+    ShortcutConflict, ShortcutRecorderColors, ShortcutRecorderFocusedAction,
 };
 
 fn has_recording_modifier(modifiers: gpui::Modifiers) -> bool {
@@ -50,24 +48,10 @@ pub struct ShortcutRecorder {
     pub is_recording: bool,
     /// Pending action for the parent to handle (polled after render)
     pub pending_action: Option<RecorderAction>,
-    /// Timestamp for enter animation start (fade/slide-in)
-    overlay_animation_started_at: Instant,
-    /// Ensures we schedule at most one animation tick task at a time
-    overlay_animation_tick_scheduled: bool,
     /// Render as a native popup window surface instead of an in-window overlay.
     pub detached_window: bool,
-}
-
-impl OverlayAnimation for ShortcutRecorder {
-    fn overlay_animation_started_at(&self) -> Instant {
-        self.overlay_animation_started_at
-    }
-    fn overlay_animation_tick_scheduled(&self) -> bool {
-        self.overlay_animation_tick_scheduled
-    }
-    fn set_overlay_animation_tick_scheduled(&mut self, scheduled: bool) {
-        self.overlay_animation_tick_scheduled = scheduled;
-    }
+    /// Which modal action receives Tab focus.
+    pub focused_action: ShortcutRecorderFocusedAction,
 }
 
 impl ShortcutRecorder {
@@ -93,9 +77,8 @@ impl ShortcutRecorder {
             conflict_checker: None,
             is_recording: true,
             pending_action: None,
-            overlay_animation_started_at: Instant::now(),
-            overlay_animation_tick_scheduled: false,
             detached_window: false,
+            focused_action: ShortcutRecorderFocusedAction::Save,
         }
     }
 
@@ -154,6 +137,7 @@ impl ShortcutRecorder {
         self.shortcut = RecordedShortcut::new();
         self.conflict = None;
         self.is_recording = true;
+        self.focused_action = ShortcutRecorderFocusedAction::Save;
         logging::log("SHORTCUT", "Shortcut cleared");
         cx.notify();
     }
@@ -183,6 +167,25 @@ impl ShortcutRecorder {
         if let Some(ref callback) = self.on_cancel {
             callback();
         }
+    }
+
+    pub fn focus_next_action(&mut self, cx: &mut Context<Self>) {
+        self.focused_action = self.focused_action.next(true);
+        cx.notify();
+    }
+
+    pub fn focus_previous_action(&mut self, cx: &mut Context<Self>) {
+        self.focused_action = self.focused_action.previous(true);
+        cx.notify();
+    }
+
+    pub fn activate_focused_action(&mut self, cx: &mut Context<Self>) {
+        match self.focused_action {
+            ShortcutRecorderFocusedAction::Save => self.save(),
+            ShortcutRecorderFocusedAction::Clear => self.clear(cx),
+            ShortcutRecorderFocusedAction::Cancel => self.cancel(),
+        }
+        cx.notify();
     }
 
     /// Take the pending action (returns it and clears the field)

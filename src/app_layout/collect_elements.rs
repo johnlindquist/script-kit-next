@@ -1831,7 +1831,12 @@ impl ScriptListApp {
                         crate::profile_search::source_label(result.profile.source).to_string(),
                     ),
                     selectable: Some(true),
-                    status_kind: result.selected.then(|| "current".to_string()),
+                    status_kind: match (result.selected, result.quick_ai) {
+                        (true, true) => Some("current+quick-ai".to_string()),
+                        (true, false) => Some("current".to_string()),
+                        (false, true) => Some("quick-ai".to_string()),
+                        (false, false) => None,
+                    },
                     action_disabled: None,
             style: None,
                 },

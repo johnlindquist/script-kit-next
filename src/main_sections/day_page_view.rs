@@ -5,13 +5,13 @@ use chrono::Utc;
 use crate::components::notes_editor::{NotesEditorLayout, NotesEditorMarkdownConfig};
 use crate::footer_popup::{FooterAction, FooterButtonConfig};
 use crate::notes::deeplink_activation::{
-    resolve_activation, run_deeplink_confirm_options, Activation, ActivationErrorReason,
-    ActivationSurface,
+    Activation, ActivationErrorReason, ActivationSurface, resolve_activation,
+    run_deeplink_confirm_options,
 };
 use script_kit_gpui::brain::{substrate::BrainSubstrate, wake_indexer};
 use script_kit_gpui::day_page::normalize_day_page_markdown_references;
 use script_kit_gpui::day_page::{
-    parse_day_page_segments, resolve_fragment_path, DayPageBinding, DayPageSegment,
+    DayPageBinding, DayPageSegment, parse_day_page_segments, resolve_fragment_path,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -120,12 +120,19 @@ impl DayPageView {
             },
         );
 
+        // Deeplink hover state changes via plain cx.notify on the InputState
+        // (no InputEvent), so observe it or the hover hint chip won't track
+        // the mouse live.
+        let editor_hover_observation = cx.observe(&editor_state, |_, _, cx| cx.notify());
+
         Self {
             app: app.downgrade(),
             session: DayPageDocumentSession::new(substrate),
             notes_editor,
             editor_state,
             editor_subscription,
+            editor_hover_observation,
+            last_deeplink_hover_hint: None,
             focus_handle: cx.focus_handle(),
             fragment_open_targets: Vec::new(),
             spine_handoff: Default::default(),
@@ -139,9 +146,11 @@ impl DayPageView {
             ),
             last_editor_content_len: 0,
             kit_resource_preview: None,
-            read_mode: false,
+            clipboard_shelf: Vec::new(),
+            clipboard_shelf_expanded: false,
             last_agent_chat_handoff_receipt: None,
             last_context_round_trip_receipt: None,
+            read_mode: false,
         }
     }
 
@@ -165,8 +174,56 @@ impl DayPageView {
         self.apply_loaded_content_to_editor(window, cx);
     }
 
+    /// Lift clipboard sediment refs out of `full` for editor display and
+    /// refresh the shelf. Only the plain Day binding carries a shelf; notes
+    /// and fragments show their content verbatim.
+    fn adopt_clipboard_shelf_from(&mut self, full: &str) -> String {
+        use script_kit_gpui::day_page::{split_day_page_clipboard_shelf, DayPageBinding};
+        if !matches!(self.session.binding(), DayPageBinding::Day) {
+            self.clipboard_shelf.clear();
+            return full.to_string();
+        }
+        let (visible, items) = split_day_page_clipboard_shelf(full);
+        self.clipboard_shelf = items
+            .into_iter()
+            .map(|item| {
+                let preview = clipboard_shelf_preview_text(&item.entry_id);
+                DayPageClipboardShelfEntry { item, preview }
+            })
+            .collect();
+        visible
+    }
+
+    /// Editor content is the visible note body; the canonical day-file
+    /// content rejoins the clipboard shelf (grouped at the end) so the day
+    /// file remains the raw-free record of every kept clipboard entry.
+    fn canonical_content_with_shelf(&self, visible: &str) -> String {
+        use script_kit_gpui::day_page::join_day_page_clipboard_shelf;
+        if self.clipboard_shelf.is_empty() {
+            return visible.to_string();
+        }
+        let items: Vec<script_kit_gpui::day_page::ClipboardShelfItem> = self
+            .clipboard_shelf
+            .iter()
+            .map(|entry| entry.item.clone())
+            .collect();
+        join_day_page_clipboard_shelf(visible, &items)
+    }
+
+    /// Editor-facing projection of canonical content (clipboard refs lifted
+    /// out on the Day binding, verbatim otherwise). Read-only counterpart of
+    /// `adopt_clipboard_shelf_from` for diffing against editor text.
+    fn visible_content_of(&self, full: &str) -> String {
+        use script_kit_gpui::day_page::{split_day_page_clipboard_shelf, DayPageBinding};
+        if !matches!(self.session.binding(), DayPageBinding::Day) {
+            return full.to_string();
+        }
+        split_day_page_clipboard_shelf(full).0
+    }
+
     fn apply_loaded_content_to_editor(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let content = self.session.disk_content().to_string();
+        let full = self.session.disk_content().to_string();
+        let content = self.adopt_clipboard_shelf_from(&full);
         self.reset_day_page_spine_handoff_state(true, true);
         self.kit_resource_preview = None;
         self.read_mode = false;
@@ -232,7 +289,9 @@ impl DayPageView {
     fn on_editor_change(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.notes_editor
             .update(cx, |editor, cx| editor.sync_markdown_link_highlights(cx));
-        let previous = self.session.disk_content().to_string();
+        // The session holds canonical content (with the clipboard shelf); the
+        // editor holds the visible projection. Diff like against like.
+        let previous = self.visible_content_of(self.session.disk_content());
         let mut content = self.notes_editor.read(cx).content(cx);
         let previous_len = self.last_editor_content_len;
         let selection = self.notes_editor.read(cx).selection(cx);
@@ -248,8 +307,12 @@ impl DayPageView {
                     normalize_day_page_markdown_references(&content[..cursor]).len();
                 self.last_editor_content_len = normalized.len();
                 self.notes_editor.update(cx, |editor, cx| {
-                    editor.set_value(normalized.clone(), window, cx);
-                    editor.set_selection(normalized_cursor, normalized_cursor, window, cx);
+                    editor.set_value_preserving_scroll(
+                        normalized.clone(),
+                        normalized_cursor,
+                        window,
+                        cx,
+                    );
                 });
                 content = normalized;
             }
@@ -265,11 +328,11 @@ impl DayPageView {
                 })
         {
             self.notes_editor.update(cx, |editor, cx| {
-                editor.set_value(fixed.clone(), window, cx);
-                editor.set_selection(cursor, cursor, window, cx);
+                editor.set_value_preserving_scroll(fixed.clone(), cursor, window, cx);
             });
             self.last_editor_content_len = fixed.len();
-            self.session.apply_editor_content(&fixed);
+            let canonical = self.canonical_content_with_shelf(&fixed);
+            self.session.apply_editor_content(&canonical);
             self.refresh_fragment_open_targets(&fixed);
             self.spine_handoff.sync_with_markdown_references(&fixed);
             self.poll_external_disk_changes(window, cx);
@@ -278,7 +341,8 @@ impl DayPageView {
             cx.notify();
             return;
         }
-        self.session.apply_editor_content(&content);
+        let canonical = self.canonical_content_with_shelf(&content);
+        self.session.apply_editor_content(&canonical);
         self.refresh_fragment_open_targets(&content);
         self.spine_handoff.sync_with_markdown_references(&content);
         self.poll_external_disk_changes(window, cx);
@@ -371,6 +435,7 @@ impl DayPageView {
         }
         self.last_external_poll = Some(now);
         if let Ok(Some(content)) = self.session.maybe_refresh_from_disk() {
+            let content = self.adopt_clipboard_shelf_from(&content);
             self.reset_day_page_spine_handoff_state(true, true);
             self.refresh_fragment_open_targets(&content);
             // External refresh is not typing: keep the growth detector quiet.
@@ -384,6 +449,7 @@ impl DayPageView {
 
     pub fn save(&mut self, cx: &mut Context<Self>) -> bool {
         let content = self.notes_editor.read(cx).content(cx);
+        let content = self.canonical_content_with_shelf(&content);
         self.session.apply_editor_content(&content);
         match self.session.save_content(&content, Utc::now()) {
             Ok(()) => {
@@ -464,6 +530,7 @@ impl DayPageView {
             "contextReferenceLedger": self.spine_handoff.ledger_state(&input),
             "lastContextRoundTripReceipt": self.last_context_round_trip_receipt.clone(),
             "kitResourcePreview": kit_resource_preview,
+            "deeplinkHoverHint": self.last_deeplink_hover_hint.clone(),
             "lastAgentChatHandoffReceipt": self.last_agent_chat_handoff_receipt.clone(),
         })
     }
@@ -553,18 +620,36 @@ impl DayPageView {
     }
 
     fn schedule_editor_bottom_scroll_retries(&mut self, cx: &mut Context<Self>) {
+        // The retries exist to force the bottom once late layout passes have
+        // committed real bounds. They must stop the moment the user edits or
+        // moves the cursor, otherwise a keystroke inside the retry window
+        // gets its viewport yanked to the bottom up to 800ms later. Content
+        // length + selection captured here identify "still the untouched,
+        // freshly loaded buffer"; any edit or cursor move changes one of them.
+        let anchor_len = self.notes_editor.read(cx).content(cx).len();
+        let anchor_selection = self.notes_editor.read(cx).selection(cx);
         cx.spawn(async move |this, cx| {
             for delay_ms in [50_u64, 150, 350, 800] {
                 cx.background_executor()
                     .timer(std::time::Duration::from_millis(delay_ms))
                     .await;
-                this.update(cx, |view, cx| {
-                    view.notes_editor.update(cx, |editor, cx| {
-                        editor.scroll_to_bottom(cx);
-                    });
-                    cx.notify();
-                })
-                .ok();
+                let untouched = this
+                    .update(cx, |view, cx| {
+                        let len = view.notes_editor.read(cx).content(cx).len();
+                        let selection = view.notes_editor.read(cx).selection(cx);
+                        if len != anchor_len || selection != anchor_selection {
+                            return false;
+                        }
+                        view.notes_editor.update(cx, |editor, cx| {
+                            editor.scroll_to_bottom(cx);
+                        });
+                        cx.notify();
+                        true
+                    })
+                    .unwrap_or(false);
+                if !untouched {
+                    break;
+                }
             }
         })
         .detach();
@@ -576,7 +661,8 @@ impl DayPageView {
         self.notes_editor.update(cx, |editor, cx| {
             editor.set_value_with_cursor_at_end(text.clone(), window, cx);
         });
-        self.session.apply_editor_content(&text);
+        let canonical = self.canonical_content_with_shelf(&text);
+        self.session.apply_editor_content(&canonical);
         self.refresh_fragment_open_targets(&text);
         self.reset_day_page_spine_handoff_state(false, true);
         self.spine_handoff.sync_with_markdown_references(&text);
@@ -724,6 +810,30 @@ impl Render for DayPageView {
 
         let columns = crate::components::main_view_chrome::main_view_content_columns(menu_def);
         let editor_input = self.notes_editor.read(cx).render_input(cx);
+        // Hover discoverability: names the click action while the mouse is
+        // over a deeplink (the vendored input paints underline + pointer
+        // cursor). Absolute overlay — never reflows the editor. The receipt
+        // records what this render actually built (only meaningful in edit
+        // mode; preview/read branches below don't mount the editor).
+        let hover_hint_model = if self.kit_resource_preview.is_some() || self.read_mode {
+            None
+        } else {
+            crate::notes::deeplink_activation::hover_hint_model(
+                self.notes_editor.read(cx).hovered_deeplink(cx),
+                crate::notes::deeplink_activation::ActivationSurface::DayPage,
+            )
+        };
+        self.last_deeplink_hover_hint = hover_hint_model.as_ref().map(|(verb, href)| {
+            serde_json::json!({ "verb": verb, "href": href })
+        });
+        let deeplink_hover_hint = hover_hint_model.map(|(verb, href)| {
+            crate::components::resource_preview::render_deeplink_hover_hint(
+                "day-page-deeplink-hover-hint",
+                verb,
+                &href,
+                cx,
+            )
+        });
         let editor_input = div()
             .relative()
             .flex_1()
@@ -843,8 +953,11 @@ impl Render for DayPageView {
                 .flex_1()
                 .min_h(px(0.))
                 .child(editor_input)
+                .when_some(deeplink_hover_hint, |d, chip| d.child(chip))
                 .into_any_element()
         };
+
+        let clipboard_shelf = self.render_clipboard_shelf(cx);
 
         let editor_body = div()
             .id(DAY_PAGE_EDITOR_ID)
@@ -860,7 +973,8 @@ impl Render for DayPageView {
             .flex()
             .flex_col()
             .when_some(back_bar, |parent, bar| parent.child(bar))
-            .child(editor_content);
+            .child(editor_content)
+            .when_some(clipboard_shelf, |parent, shelf| parent.child(shelf));
 
         let context_zone = app.update(cx, |app, _cx| {
             app.render_inert_main_view_context_zone(menu_def)
@@ -948,101 +1062,17 @@ impl DayPageView {
     }
 
     fn render_kit_resource_preview(&self, cx: &mut Context<Self>) -> AnyElement {
-        use crate::components::hint_strip::ClickableHint;
         use crate::components::resource_preview::{
-            render_resource_preview, ResourcePreviewAction, ResourcePreviewSurface,
+            render_resource_preview, ResourcePreviewSurface,
         };
 
         let Some(preview) = self.kit_resource_preview.as_ref() else {
             return div().into_any_element();
         };
-        let availability = self
-            .kit_resource_preview_action_availability()
-            .expect("preview action availability exists when preview is open");
 
-        let preview_action = |cx: &mut Context<Self>,
-                              id: &'static str,
-                              label: &'static str,
-                              muted: bool,
-                              action_id: &'static str| {
-            ResourcePreviewAction {
-                id: id.into(),
-                label: label.into(),
-                muted,
-                on_click: std::rc::Rc::new(cx.listener(move |this, _, window, cx| {
-                    this.execute_day_page_action_from_preview(action_id, window, cx);
-                })),
-            }
-        };
-        let preview_hint = |cx: &mut Context<Self>, label: &'static str, action_id: &'static str| {
-            ClickableHint::new(
-                label,
-                cx.listener(move |this, _, window, cx| {
-                    this.execute_day_page_action_from_preview(action_id, window, cx);
-                }),
-            )
-        };
-
-        let mut actions = Vec::new();
-        if availability.can_add_to_agent_chat {
-            actions.push(preview_action(
-                cx,
-                "day-page-kit-resource-preview-add-agent-chat",
-                "Add to Agent Chat",
-                false,
-                crate::DAY_PAGE_PREVIEW_ADD_TO_AGENT_CHAT_ACTION_ID,
-            ));
-        }
-        actions.push(preview_action(
-            cx,
-            "day-page-kit-resource-preview-copy-uri",
-            "Copy URI",
-            false,
-            crate::DAY_PAGE_PREVIEW_COPY_URI_ACTION_ID,
-        ));
-        if availability.open_source_target.is_some() {
-            actions.push(preview_action(
-                cx,
-                "day-page-kit-resource-preview-open-source",
-                "Open Source",
-                false,
-                crate::DAY_PAGE_PREVIEW_OPEN_SOURCE_ACTION_ID,
-            ));
-        }
-        actions.push(preview_action(
-            cx,
-            "day-page-kit-resource-preview-close",
-            "Close Preview",
-            true,
-            crate::DAY_PAGE_PREVIEW_CLOSE_ACTION_ID,
-        ));
-
-        let mut footer_hints = Vec::new();
-        if availability.open_source_target.is_some() {
-            footer_hints.push(preview_hint(
-                cx,
-                "↵ Open Source",
-                crate::DAY_PAGE_PREVIEW_OPEN_SOURCE_ACTION_ID,
-            ));
-        }
-        footer_hints.push(preview_hint(
-            cx,
-            "⌘C Copy URI",
-            crate::DAY_PAGE_PREVIEW_COPY_URI_ACTION_ID,
-        ));
-        if availability.can_add_to_agent_chat {
-            footer_hints.push(preview_hint(
-                cx,
-                "⌘↵ Add to Agent Chat",
-                crate::DAY_PAGE_PREVIEW_ADD_TO_AGENT_CHAT_ACTION_ID,
-            ));
-        }
-        footer_hints.push(preview_hint(
-            cx,
-            "Esc Close",
-            crate::DAY_PAGE_PREVIEW_CLOSE_ACTION_ID,
-        ));
-
+        // The main window owns a native footer, so preview actions live there
+        // (see `day_page_footer_buttons`) instead of in-body link rows — same
+        // footer language as every other main-window surface.
         render_resource_preview(
             ResourcePreviewSurface {
                 id_prefix: "day-page-kit-resource-preview",
@@ -1054,11 +1084,98 @@ impl DayPageView {
                 // Match the editor's own text inset so preview content aligns
                 // with Day Page prose instead of hugging the window edge.
                 inset_x: crate::notes::window::style::adopted_metrics().editor_padding_x,
-                actions,
-                footer_hints,
+                actions: Vec::new(),
+                footer_hints: Vec::new(),
             },
             cx,
         )
+    }
+
+    /// Compact clipboard shelf under the editor. Kept clipboard entries stay
+    /// part of the day note (rejoined into the file on save) but read as a
+    /// quiet, collapsible strip instead of raw `[Clipboard entry](kit://…)`
+    /// lines inside the prose. Rows open the shared kit:// resource preview.
+    fn render_clipboard_shelf(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        use gpui_component::theme::ActiveTheme as _;
+
+        if self.clipboard_shelf.is_empty() || self.kit_resource_preview.is_some() {
+            return None;
+        }
+        let expanded = self.clipboard_shelf_expanded;
+        let count = self.clipboard_shelf.len();
+        let muted = cx.theme().muted_foreground;
+        let hover_fg = cx.theme().foreground;
+
+        let header = div()
+            .id("day-page-clipboard-shelf-toggle")
+            .flex()
+            .items_center()
+            .gap_1()
+            .text_xs()
+            .text_color(muted)
+            .cursor_pointer()
+            .hover(move |style| style.text_color(hover_fg))
+            .on_click(cx.listener(|this, _, _window, cx| {
+                this.clipboard_shelf_expanded = !this.clipboard_shelf_expanded;
+                cx.notify();
+            }))
+            .child(if expanded { "▾" } else { "▸" })
+            .child(format!(
+                "Clipboard · {count} kept {}",
+                if count == 1 { "entry" } else { "entries" }
+            ));
+
+        let mut shelf = div()
+            .id("day-page-clipboard-shelf")
+            .flex()
+            .flex_col()
+            .gap_1()
+            .pt(px(6.))
+            .child(header);
+
+        if expanded {
+            let mut list = div()
+                .id("day-page-clipboard-shelf-list")
+                .flex()
+                .flex_col()
+                .max_h(px(180.))
+                .overflow_y_scroll();
+            for (index, entry) in self.clipboard_shelf.iter().enumerate() {
+                let uri = crate::clipboard_history::entry_resource_uri(&entry.item.entry_id);
+                list = list.child(
+                    div()
+                        .id(gpui::SharedString::from(format!(
+                            "day-page-clipboard-shelf-item-{index}"
+                        )))
+                        .flex()
+                        .items_center()
+                        .gap_2()
+                        .py(px(2.))
+                        .text_xs()
+                        .text_color(muted)
+                        .cursor_pointer()
+                        .hover(move |style| style.text_color(hover_fg))
+                        .on_click(cx.listener(move |this, _, window, cx| {
+                            this.open_kit_resource_preview(uri.clone(), true, window, cx);
+                        }))
+                        .child(
+                            div()
+                                .font_family(crate::list_item::FONT_MONO)
+                                .child(entry.item.timestamp.clone()),
+                        )
+                        .child(
+                            div()
+                                .flex_1()
+                                .min_w(px(0.))
+                                .truncate()
+                                .child(entry.preview.clone()),
+                        ),
+                );
+            }
+            shelf = shelf.child(list);
+        }
+
+        Some(shelf.into_any_element())
     }
 
     fn render_day_page_read_mode(&self, cx: &mut Context<Self>) -> AnyElement {
@@ -1107,7 +1224,8 @@ impl DayPageView {
         if toggled {
             let content = self.notes_editor.read(cx).content(cx);
             self.last_editor_content_len = content.len();
-            self.session.apply_editor_content(&content);
+            let canonical = self.canonical_content_with_shelf(&content);
+            self.session.apply_editor_content(&canonical);
             self.refresh_fragment_open_targets(&content);
             self.spine_handoff.sync_with_markdown_references(&content);
             self.schedule_autosave_flush(cx);
@@ -1119,6 +1237,26 @@ impl DayPageView {
             cx.notify();
         }
         toggled
+    }
+
+    /// Where closing the kit resource preview returns to. Escape/Close never
+    /// closes the window from a preview — it restores the editor underneath —
+    /// so the affordance label must say "Back to …", not "Close".
+    pub(crate) fn kit_resource_preview_return_label(&self) -> &'static str {
+        if self.session.is_viewing_note() {
+            return "Back to Note";
+        }
+        if self.session.is_viewing_fragment() {
+            return "Back to Fragment";
+        }
+        let today = Utc::now()
+            .with_timezone(&self.session.substrate().timezone())
+            .date_naive();
+        if self.session.bound_date().is_some_and(|date| date != today) {
+            "Back to Day"
+        } else {
+            "Back to Today"
+        }
     }
 
     pub(crate) fn kit_resource_preview_action_availability(
@@ -1670,7 +1808,7 @@ impl DayPageView {
                 confirm_text: "Copy link".into(),
                 cancel_text: "Dismiss".into(),
                 confirm_variant: gpui_component::button::ButtonVariant::Primary,
-                width: gpui::px(crate::confirm::PARENT_CONFIRM_DIALOG_WIDTH_PX),
+                width: gpui::px(crate::confirm::PARENT_MODAL_WIDTH_PX),
             },
             sender,
             cx,
@@ -1725,13 +1863,68 @@ fn day_page_activation_error_message(reason: &ActivationErrorReason) -> String {
     }
 }
 
+/// Short single-line preview for a clipboard shelf row, resolved from
+/// clipboard history at render-state time. UI-only: this text is shown in the
+/// shelf but never written to the day file, which stays raw-free.
+fn clipboard_shelf_preview_text(entry_id: &str) -> String {
+    const MAX_CHARS: usize = 64;
+    let fallback = || "Clipboard entry".to_string();
+    let Some(content) = crate::clipboard_history::get_entry_content(entry_id) else {
+        return fallback();
+    };
+    let line = content
+        .lines()
+        .map(str::trim)
+        .find(|line| !line.is_empty())
+        .unwrap_or("");
+    if line.is_empty() {
+        return fallback();
+    }
+    if line.chars().count() > MAX_CHARS {
+        let truncated: String = line.chars().take(MAX_CHARS).collect();
+        format!("{truncated}…")
+    } else {
+        line.to_string()
+    }
+}
+
 pub(crate) fn day_page_footer_buttons(
     app: &ScriptListApp,
-    _cx: Option<&gpui::App>,
+    cx: Option<&gpui::App>,
 ) -> Vec<FooterButtonConfig> {
     let footer_disabled = crate::confirm::is_confirm_window_open();
     let actions_open = app.show_actions_popup || crate::actions::is_actions_window_open();
     let enabled = !footer_disabled;
+
+    // While a kit:// resource preview replaces the editor, the footer owns the
+    // preview's actions — same anatomy as other main-window surfaces: primary
+    // action first, Actions ⌘K, and a "Back to …" slot last so Close reads as
+    // "return to where I was", never "close the window". The remaining preview
+    // actions stay reachable through ⌘K and their shortcuts (slot cap is 3).
+    if let (AppView::DayPage { entity }, Some(cx)) = (&app.current_view, cx) {
+        let view = entity.read(cx);
+        if let Some(availability) = view.kit_resource_preview_action_availability() {
+            let primary = if availability.open_source_target.is_some() {
+                FooterButtonConfig::new(FooterAction::Run, "↵", "Open Source")
+            } else if availability.can_add_to_agent_chat {
+                FooterButtonConfig::new(FooterAction::Ai, "⌘↵", "Add to Agent Chat")
+            } else {
+                FooterButtonConfig::new(FooterAction::Copy, "⌘C", "Copy URI")
+            };
+            return vec![
+                primary.enabled(enabled),
+                FooterButtonConfig::new(FooterAction::Actions, "⌘K", "Actions")
+                    .selected(actions_open)
+                    .enabled(enabled),
+                FooterButtonConfig::new(
+                    FooterAction::Close,
+                    "Esc",
+                    view.kit_resource_preview_return_label(),
+                )
+                .enabled(enabled),
+            ];
+        }
+    }
 
     vec![
         FooterButtonConfig::new(FooterAction::Actions, "⌘K", "Actions")

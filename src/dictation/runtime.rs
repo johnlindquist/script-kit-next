@@ -141,6 +141,26 @@ const PARTIAL_MIN_SAMPLES: usize = 16_000; // 1 s
 /// latency stays flat on long recordings (the final pass uses everything).
 const PARTIAL_WINDOW: Duration = Duration::from_secs(20);
 
+/// Finalize-transcription progress in permille (0–1000), or [`u32::MAX`]
+/// when no finalize pass is running. Written by the chunked transcription
+/// worker, read by the overlay renderer's processing band.
+static FINALIZE_PROGRESS_PERMILLE: std::sync::atomic::AtomicU32 =
+    std::sync::atomic::AtomicU32::new(u32::MAX);
+
+/// Fractional progress (0.0–1.0) of the in-flight finalize transcription,
+/// or `None` when no finalize pass is running.
+pub fn finalize_progress() -> Option<f32> {
+    let permille = FINALIZE_PROGRESS_PERMILLE.load(Ordering::Acquire);
+    (permille != u32::MAX).then(|| (permille.min(1000) as f32) / 1000.0)
+}
+
+fn set_finalize_progress(fraction: Option<f32>) {
+    let permille = fraction
+        .map(|f| (f.clamp(0.0, 1.0) * 1000.0) as u32)
+        .unwrap_or(u32::MAX);
+    FINALIZE_PROGRESS_PERMILLE.store(permille, Ordering::Release);
+}
+
 /// Monotonic counter for redacted delivery receipts exposed through automation.
 static DELIVERY_RECEIPT_GENERATION: AtomicU64 = AtomicU64::new(0);
 
@@ -556,6 +576,32 @@ pub fn can_cycle_dictation_target() -> bool {
         .unwrap_or(false)
 }
 
+/// Explicitly set the active session's delivery target (overlay verb chips).
+///
+/// Unlike [`cycle_dictation_target`], this is a direct selection: the target
+/// is inserted into the session cycle if absent so subsequent cycle calls and
+/// overlay state stay coherent. Returns the applied target, or `None` when no
+/// session is active.
+pub fn set_dictation_session_target(target: DictationTarget) -> Option<DictationTarget> {
+    let mut guard = SESSION.lock();
+    let session = guard.as_mut()?;
+
+    if !session.target_cycle.contains(&target) {
+        session.target_cycle.push(target);
+    }
+    session.target = target;
+    bump_dictation_state_generation();
+
+    tracing::info!(
+        category = "DICTATION",
+        ?target,
+        target_label = target.overlay_label(),
+        "Dictation session target set explicitly"
+    );
+
+    Some(target)
+}
+
 /// Advance the active session to the next configured destination.
 pub fn cycle_dictation_target() -> Option<DictationTarget> {
     let mut guard = SESSION.lock();
@@ -632,6 +678,20 @@ pub fn snapshot_overlay_state() -> Option<DictationOverlayState> {
         transcript,
         target: session.target,
     })
+}
+
+/// Latest live partial transcript, if any.
+///
+/// Survives session teardown (it is only replaced by the next session's
+/// partials) so the stop/transcribe path can keep the recognized-so-far text
+/// on screen while the final transcription runs, instead of blanking the
+/// overlay.
+pub fn last_partial_transcript() -> Option<String> {
+    PARTIAL_TRANSCRIPT
+        .lock()
+        .as_ref()
+        .map(|(_, text)| text.clone())
+        .filter(|text| !text.trim().is_empty())
 }
 
 /// Returns `true` when the active recording has outlived its configured
@@ -1048,7 +1108,11 @@ pub fn transcribe_captured_audio(chunks: &[CapturedAudioChunk]) -> Result<Option
         return Ok(None);
     }
 
-    let result = transcribe_samples_with_cached_engine(&samples);
+    set_finalize_progress(Some(0.0));
+    let result = transcribe_samples_with_cached_engine_progress(&samples, &mut |fraction| {
+        set_finalize_progress(Some(fraction));
+    });
+    set_finalize_progress(None);
 
     match &result {
         Ok(Some(transcript)) => tracing::info!(
@@ -1078,6 +1142,16 @@ pub fn transcribe_captured_audio(chunks: &[CapturedAudioChunk]) -> Result<Option
 /// identical engine state — a partial attempt also pre-warms the model that
 /// the final pass will use.
 pub(crate) fn transcribe_samples_with_cached_engine(samples: &[f32]) -> Result<Option<String>> {
+    transcribe_samples_with_cached_engine_progress(samples, &mut |_| {})
+}
+
+/// Progress-reporting variant of [`transcribe_samples_with_cached_engine`].
+/// Long audio routes through the chunked path, which fires `progress` with
+/// the fraction of audio whose chunks have completed.
+pub(crate) fn transcribe_samples_with_cached_engine_progress(
+    samples: &[f32],
+    progress: &mut dyn FnMut(f32),
+) -> Result<Option<String>> {
     let prefs = crate::config::load_user_preferences();
     let model_id = DictationModelId::from_preference(prefs.dictation.model.as_deref());
     let catalog_entry = dictation_model_entry(model_id);
@@ -1161,7 +1235,7 @@ pub(crate) fn transcribe_samples_with_cached_engine(samples: &[f32]) -> Result<O
         .as_ref()
         .context("dictation transcriber unavailable")?
         .transcriber
-        .transcribe_samples(samples)
+        .transcribe_samples_with_progress(samples, progress)
 }
 
 /// Unload the cached transcriber if it has been idle for longer than its

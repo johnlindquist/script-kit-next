@@ -523,6 +523,27 @@ impl ScriptListApp {
                 }
                 DispatchOutcome::success()
             }
+            "clipboard_keep_in_today" => {
+                let Some(entry) = selected_clipboard_entry else {
+                    self.show_error_toast("Select a clipboard entry to keep", cx);
+                    return DispatchOutcome::success();
+                };
+
+                match clipboard_history::keep_entry_in_today(&entry.id, chrono::Utc::now()) {
+                    Ok(true) => {
+                        tracing::info!(entry_id = %entry.id, "clipboard entry kept to Today via action");
+                        self.show_hud("Kept in Today".to_string(), Some(HUD_SHORT_MS), cx);
+                    }
+                    Ok(false) => {
+                        self.show_hud("Already on Today".to_string(), Some(HUD_SHORT_MS), cx);
+                    }
+                    Err(e) => {
+                        tracing::error!(error = %e, "failed to keep clipboard entry in Today");
+                        self.show_error_toast(format!("Couldn't keep in Today: {e}"), cx);
+                    }
+                }
+                DispatchOutcome::success()
+            }
             "clipboard_share" => {
                 let Some(entry) = selected_clipboard_entry else {
                     self.show_error_toast(

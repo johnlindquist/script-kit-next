@@ -781,9 +781,6 @@ pub struct ActionsDialog {
     /// Rendered above script/global rows; rows are full `Action` values so the
     /// host controls ids, shortcuts, and section titles.
     pub host_section: Option<Vec<Action>>,
-    /// Host-specific guard for surfaces that show editable text but must not
-    /// expose generic prompt export/target handoff rows.
-    suppress_prompt_handoff_actions: bool,
     /// List state for variable-height list (section headers 22px, items 36px)
     pub list_state: ListState,
     /// Grouped items for list rendering (includes section headers)
@@ -1157,7 +1154,6 @@ impl ActionsDialog {
             focused_scriptlet,
             menu_syntax_section: None,
             host_section: None,
-            suppress_prompt_handoff_actions: false,
             list_state,
             grouped_items,
             theme,
@@ -1272,12 +1268,14 @@ impl ActionsDialog {
                 dir_info,
             ));
         }
-        // Run 14 Pass 1 — global actions (Reload Scripts / Open Settings /
-        // Show Logs from Run 13 Pass 3) are appended here so that the
-        // file-search Cmd+K dialog never opens empty, even when the user
-        // has not yet selected a file or browsed into a directory. Story
+        // Run 14 Pass 1 — global actions are a fallback so the file-search
+        // Cmd+K dialog never opens empty when the user has not yet selected
+        // a file or browsed into a directory. With a file/directory focused,
+        // the menu stays contextual to it. Story
         // `actions-debounce-builtins-cross-host-live`.
-        actions.extend(crate::actions::builders::get_global_actions());
+        if actions.is_empty() {
+            actions.extend(crate::actions::builders::get_global_actions());
+        }
         clear_duplicate_action_shortcuts(&mut actions);
 
         let context_title = match (file_info, dir_info) {
@@ -1445,7 +1443,7 @@ impl ActionsDialog {
         theme: Arc<theme::Theme>,
         design_variant: DesignVariant,
     ) -> Self {
-        let actions = Self::build_actions(&focused_script, &None, &None, &None, false);
+        let actions = Self::build_actions(&focused_script, &None, &None, &None);
         let config = ActionsDialogConfig::default();
 
         logging::log(
@@ -2890,7 +2888,6 @@ impl ActionsDialog {
                 &self.focused_scriptlet,
                 &self.menu_syntax_section,
                 &self.host_section,
-                self.suppress_prompt_handoff_actions,
             );
             self.reset_filter_to_all();
             self.search_text.clear();
@@ -2939,32 +2936,27 @@ impl ActionsDialog {
         count
     }
 
-    /// Build the complete actions list based on focused script and optional scriptlet
+    /// Build the complete actions list based on focused script and optional scriptlet.
+    ///
+    /// The actions menu is contextual: Power Syntax composer rows, host-owned
+    /// rows (e.g. Day Page "Today"), and focused script/scriptlet actions own
+    /// the list. Global rows (`get_global_actions`) are a fallback appended
+    /// ONLY when the focused item contributes nothing, so Cmd+K never opens
+    /// empty — they must not trail item-specific actions.
     fn build_actions(
         focused_script: &Option<ScriptInfo>,
         focused_scriptlet: &Option<Scriptlet>,
         menu_syntax_section: &Option<PowerSyntaxActionSection>,
         host_section: &Option<Vec<Action>>,
-        suppress_prompt_handoff_actions: bool,
     ) -> Vec<Action> {
-        if let Some(section) = menu_syntax_section {
-            let mut power_syntax_actions = power_syntax_section_to_actions(section);
-            if section.mode == SectionMode::Replace {
-                return power_syntax_actions;
-            }
-
-            let mut actions = Self::build_actions(
-                focused_script,
-                focused_scriptlet,
-                &None,
-                host_section,
-                suppress_prompt_handoff_actions,
-            );
-            power_syntax_actions.append(&mut actions);
-            return power_syntax_actions;
-        }
-
         let mut actions = Vec::new();
+
+        if let Some(section) = menu_syntax_section {
+            actions.extend(power_syntax_section_to_actions(section));
+            if section.mode == SectionMode::Replace {
+                return actions;
+            }
+        }
 
         // Host-owned contextual rows (e.g. Day Page "Today" section) lead the
         // list so the surface's own affordances outrank generic global rows.
@@ -2972,7 +2964,7 @@ impl ActionsDialog {
             actions.extend(host_actions.iter().cloned());
         }
 
-        // Add script-specific actions first if a script is focused
+        // Add script-specific actions if a script is focused
         if let Some(script) = focused_script {
             // If this is a scriptlet with custom actions, use the enhanced builder
             if script.is_scriptlet && focused_scriptlet.is_some() {
@@ -2986,16 +2978,9 @@ impl ActionsDialog {
             }
         }
 
-        // Add global actions. Day/Today owns its local Actions section but
-        // must not expose generic prompt export/target handoff rows that turn
-        // editor content into the deprecated prompt-builder flow.
-        let mut global_actions = get_global_actions();
-        if suppress_prompt_handoff_actions {
-            global_actions.retain(|action| {
-                !action.id.starts_with("prompt-action/") && !action.id.starts_with("prompt-target/")
-            });
+        if actions.is_empty() {
+            actions.extend(get_global_actions());
         }
-        actions.extend(global_actions);
 
         actions
     }
@@ -3009,7 +2994,6 @@ impl ActionsDialog {
             &self.focused_scriptlet,
             &self.menu_syntax_section,
             &self.host_section,
-            self.suppress_prompt_handoff_actions,
         );
         self.refilter();
     }
@@ -3030,7 +3014,6 @@ impl ActionsDialog {
             &self.focused_scriptlet,
             &self.menu_syntax_section,
             &self.host_section,
-            self.suppress_prompt_handoff_actions,
         );
         self.refilter();
 
@@ -3057,21 +3040,6 @@ impl ActionsDialog {
             &self.focused_scriptlet,
             &self.menu_syntax_section,
             &self.host_section,
-            self.suppress_prompt_handoff_actions,
-        );
-        self.refilter();
-    }
-
-    /// Suppress generic prompt export/target rows for hosts like Day Page that
-    /// should not provide any path into prompt-builder handoff surfaces.
-    pub fn set_suppress_prompt_handoff_actions(&mut self, suppress: bool) {
-        self.suppress_prompt_handoff_actions = suppress;
-        self.actions = Self::build_actions(
-            &self.focused_script,
-            &self.focused_scriptlet,
-            &self.menu_syntax_section,
-            &self.host_section,
-            self.suppress_prompt_handoff_actions,
         );
         self.refilter();
     }
@@ -3085,7 +3053,6 @@ impl ActionsDialog {
             &self.focused_scriptlet,
             &self.menu_syntax_section,
             &self.host_section,
-            self.suppress_prompt_handoff_actions,
         );
         self.refilter();
     }
@@ -5020,8 +4987,7 @@ mod tests {
         }
 
         let focused_script = Some(focused_script());
-        let normal_actions =
-            ActionsDialog::build_actions(&focused_script, &None, &None, &None, false);
+        let normal_actions = ActionsDialog::build_actions(&focused_script, &None, &None, &None);
         assert!(
             normal_actions
                 .iter()
@@ -5031,7 +4997,7 @@ mod tests {
 
         let replace_section = Some(power_syntax_section(SectionMode::Replace));
         let replace_actions =
-            ActionsDialog::build_actions(&focused_script, &None, &replace_section, &None, false);
+            ActionsDialog::build_actions(&focused_script, &None, &replace_section, &None);
         assert_eq!(replace_actions.len(), 1);
         assert_eq!(replace_actions[0].id, "menu_syntax:capture.cancel");
         assert!(
@@ -5043,7 +5009,7 @@ mod tests {
 
         let prepend_section = Some(power_syntax_section(SectionMode::Prepend));
         let prepend_actions =
-            ActionsDialog::build_actions(&focused_script, &None, &prepend_section, &None, false);
+            ActionsDialog::build_actions(&focused_script, &None, &prepend_section, &None);
         assert_eq!(prepend_actions[0].id, "menu_syntax:capture.cancel");
         assert_eq!(&prepend_actions[1..], normal_actions.as_slice());
         assert!(
@@ -5051,6 +5017,66 @@ mod tests {
                 .iter()
                 .any(|action| action.id == "run_script"),
             "prepend mode must keep normal selected-row actions after Power Syntax"
+        );
+    }
+
+    /// The actions menu is contextual to the focused item. Global/Discover
+    /// rows and Agent Chat prompt export/handoff rows must never trail a
+    /// focused item's actions; global rows are strictly a fallback for hosts
+    /// where the focused row contributes nothing (so Cmd+K never opens empty).
+    #[test]
+    fn build_actions_keeps_global_rows_out_of_item_focused_menus() {
+        let focused_script = Some(ScriptInfo {
+            name: "Demo Script".to_string(),
+            path: "/tmp/demo-script.ts".to_string(),
+            is_script: true,
+            action_verb: "Run".to_string(),
+            ..ScriptInfo::default()
+        });
+
+        let focused_actions = ActionsDialog::build_actions(&focused_script, &None, &None, &None);
+        assert!(
+            focused_actions.iter().all(|action| {
+                action.id != "reload_scripts"
+                    && action.id != "sdk_reference"
+                    && action.id != "open_settings_menu"
+                    && !action.id.starts_with("prompt-action/")
+                    && !action.id.starts_with("prompt-target/")
+            }),
+            "focused-item menu must not include global/Discover/prompt rows: {:?}",
+            focused_actions
+                .iter()
+                .map(|action| action.id.as_str())
+                .collect::<Vec<_>>()
+        );
+
+        let fallback_actions = ActionsDialog::build_actions(&None, &None, &None, &None);
+        assert!(
+            fallback_actions
+                .iter()
+                .any(|action| action.id == "reload_scripts"),
+            "empty-context menu must fall back to global rows"
+        );
+        assert!(
+            fallback_actions.iter().all(|action| {
+                !action.id.starts_with("prompt-action/")
+                    && !action.id.starts_with("prompt-target/")
+            }),
+            "prompt export/handoff rows are Agent Chat-owned and must not appear in the global fallback"
+        );
+
+        let host_section = Some(vec![Action::new(
+            "day_page_today",
+            "Today",
+            Some("Host-owned row".to_string()),
+            ActionCategory::ScriptContext,
+        )]);
+        let host_actions = ActionsDialog::build_actions(&None, &None, &None, &host_section);
+        assert!(
+            host_actions
+                .iter()
+                .all(|action| action.id != "reload_scripts"),
+            "host-owned sections count as context and must suppress the global fallback"
         );
     }
 

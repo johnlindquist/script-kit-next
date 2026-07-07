@@ -99,6 +99,11 @@ pub enum DictationDestination {
     NotesEditor,
     AiChatComposer,
     TabAiHarness,
+    /// Appended to today's Day Page as a timestamped capture line.
+    DayPageToday,
+    /// Submitted to the AI window as a question (answer mode) or staged in
+    /// its composer (composer mode), per `dictation.quickAi` config.
+    QuickAiQuestion,
 }
 
 /// The Script Kit surface that was active when dictation was invoked.
@@ -122,6 +127,15 @@ pub enum DictationTarget {
     /// No internal Script Kit surface was active — deliver to the
     /// frontmost external app via simulated paste.
     ExternalApp,
+    /// Append the transcript to today's Day Page as a timestamped capture.
+    /// Never resolved implicitly — chosen via overlay chip, config, or an
+    /// explicit delivery label.
+    DayPageToday,
+    /// Treat the transcript as a question for the AI window: fire-and-show
+    /// the answer, or stage it in the composer, per `dictation.quickAi`.
+    /// Never resolved implicitly — chosen via overlay chip, config, or an
+    /// explicit delivery label.
+    QuickAiQuestion,
 }
 
 impl DictationTarget {
@@ -138,6 +152,24 @@ impl DictationTarget {
             Self::AiChatComposer => DictationDestination::AiChatComposer,
             Self::TabAiHarness => DictationDestination::TabAiHarness,
             Self::ExternalApp => DictationDestination::FrontmostApp,
+            Self::DayPageToday => DictationDestination::DayPageToday,
+            Self::QuickAiQuestion => DictationDestination::QuickAiQuestion,
+        }
+    }
+
+    /// Canonical lowercase token persisted as `dictation.lastTarget` and
+    /// accepted back by `parse_dictation_target_label` — the two must stay
+    /// round-trippable.
+    pub fn sticky_label(self) -> &'static str {
+        match self {
+            Self::MainWindowFilter => "filter",
+            Self::MainWindowPrompt => "prompt",
+            Self::NotesEditor => "notes",
+            Self::AiChatComposer => "aichat",
+            Self::TabAiHarness => "agentchat",
+            Self::ExternalApp => "frontmost",
+            Self::DayPageToday => "today",
+            Self::QuickAiQuestion => "ask",
         }
     }
 
@@ -150,6 +182,8 @@ impl DictationTarget {
             Self::AiChatComposer => "AI",
             Self::TabAiHarness => "Agent",
             Self::ExternalApp => "App",
+            Self::DayPageToday => "Today",
+            Self::QuickAiQuestion => "Ask AI",
         }
     }
 }

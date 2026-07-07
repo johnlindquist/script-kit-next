@@ -693,7 +693,7 @@ fn base_main_menu_theme_def(
             button_padding_x: 4.0,
             button_padding_y: 2.0,
             run_button_padding_x: 12.0,
-            button_radius: 14.0,
+            button_radius: 6.0,
             label_font_size: 13.0,
             font_weight: FontWeight(400.0),
             keycap_padding_x: 0.0,

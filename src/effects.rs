@@ -174,7 +174,7 @@ impl BackgroundEffect {
 /// Sources that can move the effect focus point. Each source remembers its
 /// own last position so a stationary source re-reporting every frame (e.g.
 /// the selected row during the 30fps effect ticker) neither fights another
-/// source for the target nor re-fires the change pulse.
+/// source for the target nor re-arms the activity-energy envelope.
 #[derive(Clone, Copy)]
 pub enum EffectFocusSource {
     /// The selected/focused list row (center of its painted bounds).
@@ -207,6 +207,8 @@ static FOCUS_TARGET_Y: AtomicU32 = AtomicU32::new(f32::to_bits(FOCUS_DEFAULT_Y))
 /// Smoothed focus actually handed to the shader.
 static FOCUS_SMOOTH_X: AtomicU32 = AtomicU32::new(f32::to_bits(FOCUS_DEFAULT_X));
 static FOCUS_SMOOTH_Y: AtomicU32 = AtomicU32::new(f32::to_bits(FOCUS_DEFAULT_Y));
+/// Smoothed 0..1 activity energy handed to the shader (f32 bits).
+static FOCUS_ENERGY: AtomicU32 = AtomicU32::new(f32::to_bits(0.0));
 /// Micros since `effect_epoch` of the last change / last smoothing step.
 static LAST_CHANGE_MICROS: AtomicU64 = AtomicU64::new(0);
 static LAST_SMOOTH_MICROS: AtomicU64 = AtomicU64::new(0);
@@ -222,7 +224,7 @@ fn micros_now() -> u64 {
 
 /// Report where a focus source currently is, in normalized (0..1) main-window
 /// coordinates. Only an actual move (per source) retargets the shader focus
-/// and re-fires the change pulse.
+/// and re-arms the activity-energy envelope.
 pub fn note_effect_focus(source: EffectFocusSource, x: f32, y: f32) {
     let x = x.clamp(0.0, 1.0);
     let y = y.clamp(0.0, 1.0);
@@ -265,14 +267,20 @@ pub fn note_effect_focus(source: EffectFocusSource, x: f32, y: f32) {
 }
 
 /// The shader uniforms derived from the recorded focus/change state: a
-/// critically-damped-ish smoothed focus point and the seconds since the last
-/// change. Called once per effect-layer render; advances the smoothing.
+/// critically-damped-ish smoothed focus point and a smoothed 0..1 activity
+/// energy. Called once per effect-layer render; advances the smoothing.
+///
+/// The energy is deliberately an envelope, not a raw event timer: each
+/// change re-arms a target that decays over ~0.5s, and the reported energy
+/// chases that target with a ~300ms time constant. A single change reads as
+/// one slow breath; sustained typing or mouse motion reads as one steady
+/// gentle glow — never a per-keystroke throb.
 fn effect_focus_uniforms() -> ([f32; 2], f32) {
     let now = micros_now();
     let last = LAST_SMOOTH_MICROS.swap(now, Ordering::Relaxed);
     let dt = (now.saturating_sub(last) as f32 / 1_000_000.0).min(0.25);
-    // ~120ms time constant: quick enough to feel attached, slow enough to glide.
-    let k = 1.0 - (-dt * 8.0).exp();
+    // ~170ms time constant: attached to the attention point, but gliding.
+    let k = 1.0 - (-dt * 6.0).exp();
     let tx = f32::from_bits(FOCUS_TARGET_X.load(Ordering::Relaxed));
     let ty = f32::from_bits(FOCUS_TARGET_Y.load(Ordering::Relaxed));
     let mut sx = f32::from_bits(FOCUS_SMOOTH_X.load(Ordering::Relaxed));
@@ -281,8 +289,14 @@ fn effect_focus_uniforms() -> ([f32; 2], f32) {
     sy += (ty - sy) * k;
     FOCUS_SMOOTH_X.store(sx.to_bits(), Ordering::Relaxed);
     FOCUS_SMOOTH_Y.store(sy.to_bits(), Ordering::Relaxed);
-    let pulse = now.saturating_sub(LAST_CHANGE_MICROS.load(Ordering::Relaxed)) as f32 / 1_000_000.0;
-    ([sx, sy], pulse)
+    let since_change =
+        now.saturating_sub(LAST_CHANGE_MICROS.load(Ordering::Relaxed)) as f32 / 1_000_000.0;
+    let target = (-since_change * 2.0).exp();
+    let mut energy = f32::from_bits(FOCUS_ENERGY.load(Ordering::Relaxed));
+    energy += (target - energy) * (1.0 - (-dt * 3.5).exp());
+    energy = energy.clamp(0.0, 1.0);
+    FOCUS_ENERGY.store(energy.to_bits(), Ordering::Relaxed);
+    ([sx, sy], energy)
 }
 
 /// A zero-cost overlay that records the center of its painted bounds as the
@@ -377,7 +391,7 @@ pub fn background_effect_layer(
     color_b.h = (accent.h - effect.hue_shift() + 1.0).fract();
     let color_b = tune(color_b);
 
-    let (focus, pulse) = effect_focus_uniforms();
+    let (focus, energy) = effect_focus_uniforms();
 
     div()
         .id("bg-effect-layer")
@@ -387,7 +401,7 @@ pub fn background_effect_layer(
             effect.shader_id(),
             elapsed_secs,
             focus,
-            pulse,
+            energy,
             color_a,
             color_b,
         ))
@@ -399,11 +413,13 @@ mod tests {
 
     /// One combined sequence test because the recorder is (intentionally)
     /// process-global state: seeding must not claim the focus target, a real
-    /// move must retarget and re-arm the change pulse, smoothing must walk
-    /// toward the target, and sub-epsilon jitter must not re-fire the pulse.
+    /// move must retarget and re-arm the energy envelope, smoothing must walk
+    /// toward the target, energy must swell gradually (never spike), and
+    /// sub-epsilon jitter must not re-arm the envelope.
     #[test]
-    fn focus_recorder_seeds_tracks_and_pulses() {
+    fn focus_recorder_seeds_tracks_and_swells() {
         use super::{effect_focus_uniforms, note_effect_focus, EffectFocusSource};
+        use std::sync::atomic::Ordering;
 
         // First report from a source only seeds its memory.
         note_effect_focus(EffectFocusSource::Mouse, 0.9, 0.9);
@@ -413,27 +429,40 @@ mod tests {
             "seed report must not claim the focus target (x0={x0})"
         );
 
-        // A real move claims the target and re-arms the pulse.
+        // A real move claims the target and re-arms the energy envelope.
+        let armed_before = super::LAST_CHANGE_MICROS.load(Ordering::Relaxed);
+        std::thread::sleep(std::time::Duration::from_millis(5));
         note_effect_focus(EffectFocusSource::Mouse, 0.1, 0.2);
-        let (_, pulse) = effect_focus_uniforms();
-        assert!(pulse < 0.5, "move must re-arm the change pulse ({pulse})");
+        let armed_after = super::LAST_CHANGE_MICROS.load(Ordering::Relaxed);
+        assert!(
+            armed_after > armed_before,
+            "move must re-arm the energy envelope"
+        );
 
-        // Smoothing converges toward the new target.
+        // Energy swells smoothly toward the change instead of spiking: each
+        // sampled step moves at most a bounded fraction toward the target.
+        let (_, e0) = effect_focus_uniforms();
         std::thread::sleep(std::time::Duration::from_millis(60));
-        let ([x1, y1], _) = effect_focus_uniforms();
+        let ([x1, y1], e1) = effect_focus_uniforms();
         std::thread::sleep(std::time::Duration::from_millis(60));
-        let ([x2, y2], _) = effect_focus_uniforms();
+        let ([x2, y2], e2) = effect_focus_uniforms();
+        assert!(e1 >= e0 - 1e-4, "energy must not drop right after a change");
+        assert!(
+            (e1 - e0) < 0.5 && (e2 - e1) < 0.5,
+            "energy must swell gradually, not spike (e0={e0} e1={e1} e2={e2})"
+        );
+
+        // Focus smoothing converges toward the new target.
         assert!((x1 - 0.1).abs() <= (x0 - 0.1).abs() + 1e-4);
         assert!((x2 - 0.1).abs() <= (x1 - 0.1).abs() + 1e-4);
         assert!((y2 - 0.2).abs() <= (y1 - 0.2).abs() + 1e-4);
 
         // Sub-epsilon jitter (paint re-reports, caret blink) is ignored.
-        std::thread::sleep(std::time::Duration::from_millis(40));
         note_effect_focus(EffectFocusSource::Mouse, 0.101, 0.2);
-        let (_, pulse_after_jitter) = effect_focus_uniforms();
-        assert!(
-            pulse_after_jitter >= 0.1,
-            "jitter must not re-fire the pulse ({pulse_after_jitter})"
+        assert_eq!(
+            super::LAST_CHANGE_MICROS.load(Ordering::Relaxed),
+            armed_after,
+            "jitter must not re-arm the energy envelope"
         );
     }
 

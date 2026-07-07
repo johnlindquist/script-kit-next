@@ -4,15 +4,15 @@ use gpui::{
 };
 
 use crate::components::confirm_modal_shell::{
-    confirm_modal_header, confirm_modal_number_override, confirm_modal_shell,
-    ConfirmModalShellConfig, CONFIRM_MODAL_RADIUS,
+    confirm_modal_header, confirm_modal_number_override, confirm_modal_shell, modal_action_row,
+    ConfirmModalShellConfig, ModalActionRowButton, CONFIRM_MODAL_RADIUS,
+    MODAL_ACTION_ROW_TOP_MARGIN_PX, MODAL_WIDTH_PX,
 };
 use crate::components::footer_chrome::{
     current_main_menu_footer_height, current_main_menu_footer_metrics, footer_action_slot_width,
-    footer_button_height, render_footer_hint_action_button_frame, FooterActionSlot,
-    FooterHintActionButtonFrameSpec, FooterHintButtonLayoutOverrides, FooterHintContentJustify,
+    footer_button_height, footer_centered_action_button_layout, FooterActionSlot,
+    FooterHintButtonLayoutOverrides,
 };
-use crate::components::overlay_modal::OverlayAnimation;
 use crate::dev_style_tool::{
     ConfirmModalKnobId, CONFIRM_MODAL_ACTIONS_BUTTON_HEIGHT_KNOB_ID,
     CONFIRM_MODAL_ACTIONS_BUTTON_RADIUS_KNOB_ID, CONFIRM_MODAL_ACTIONS_CONTENT_GAP_KNOB_ID,
@@ -22,10 +22,7 @@ use crate::dev_style_tool::{
 use crate::logging;
 use crate::ui_foundation::{is_key_enter, is_key_escape};
 
-use super::types::{
-    overlay_color_with_alpha, OVERLAY_BACKDROP_ALPHA, OVERLAY_BACKDROP_HOVER_ALPHA,
-    RECORDER_MODAL_PADDING, RECORDER_MODAL_WIDTH,
-};
+use super::types::{ShortcutRecorderFocusedAction, RECORDER_MODAL_PADDING};
 use super::ShortcutRecorder;
 
 fn recorder_modal_number(id: ConfirmModalKnobId, fallback: f32) -> f32 {
@@ -47,29 +44,44 @@ fn recorder_action_button_gap() -> f32 {
 }
 
 fn recorder_action_button_layout() -> FooterHintButtonLayoutOverrides {
-    let metrics = current_main_menu_footer_metrics();
+    let footer_layout = footer_centered_action_button_layout();
     FooterHintButtonLayoutOverrides {
         button_padding_x_px: Some(recorder_modal_number(
             CONFIRM_MODAL_ACTIONS_PADDING_X_KNOB_ID,
-            metrics.button_padding_x,
+            footer_layout
+                .button_padding_x_px
+                .expect("centered footer action layout sets x padding"),
         )),
         button_padding_y_px: Some(recorder_modal_number(
             CONFIRM_MODAL_ACTIONS_PADDING_Y_KNOB_ID,
-            metrics.button_padding_y,
+            footer_layout
+                .button_padding_y_px
+                .expect("centered footer action layout sets y padding"),
         )),
         content_gap_px: Some(recorder_modal_number(
             CONFIRM_MODAL_ACTIONS_CONTENT_GAP_KNOB_ID,
-            metrics.content_gap,
+            footer_layout
+                .content_gap_px
+                .expect("centered footer action layout sets content gap"),
         )),
         button_radius_px: Some(recorder_modal_number(
             CONFIRM_MODAL_ACTIONS_BUTTON_RADIUS_KNOB_ID,
-            metrics.button_radius,
+            footer_layout
+                .button_radius_px
+                .expect("centered footer action layout sets button radius"),
         )),
         edge_padding_x_px: Some(recorder_modal_number(
             CONFIRM_MODAL_ACTIONS_EDGE_PADDING_X_KNOB_ID,
-            metrics.button_padding_x,
+            footer_layout
+                .edge_padding_x_px
+                .expect("centered footer action layout sets edge padding"),
         )),
+        // Save/Clear/Cancel must never ellipsize inside a fixed footer slot:
+        // hug the rendered content like render_universal_footer_action_buttons
+        // while keeping the shared footer metrics above.
         shrink_frame_to_content_px: true,
+        hug_frame_to_content: true,
+        ..footer_layout
     }
 }
 
@@ -86,18 +98,7 @@ impl Render for ShortcutRecorder {
             "compact-modal",
         );
 
-        let colors = self.colors;
         let chrome = crate::theme::AppChromeColors::from_theme(&self.theme);
-        let overlay_appear = self.overlay_appear_style();
-        let backdrop_bg = rgba(overlay_color_with_alpha(
-            colors.overlay_bg,
-            OVERLAY_BACKDROP_ALPHA,
-        ));
-        let backdrop_hover_bg = rgba(overlay_color_with_alpha(
-            colors.overlay_bg,
-            OVERLAY_BACKDROP_HOVER_ALPHA,
-        ));
-        self.schedule_overlay_animation_tick_if_needed(overlay_appear.complete, cx);
 
         // Determine button states
         let can_save = self.shortcut.is_complete() && self.conflict.is_none();
@@ -132,79 +133,64 @@ impl Render for ShortcutRecorder {
         let close_slot_width = footer_action_slot_width(FooterActionSlot::Close);
         let run_slot_width = footer_action_slot_width(FooterActionSlot::Run);
 
-        let mut buttons = div()
-            .w_full()
-            .mt(px(12.))
-            .flex()
-            .flex_row()
-            .items_center()
-            .justify_end()
-            .gap(px(recorder_action_button_gap()));
+        // Footer button order: the primary ↵ action leads and the Esc action
+        // trails, matching the native footer strips and the confirm popup.
+        let mut button_specs = Vec::new();
 
-        if can_clear {
-            buttons = buttons.child(
-                render_footer_hint_action_button_frame(
-                    FooterHintActionButtonFrameSpec {
-                        id: "shortcut-clear-button",
-                        label: "Clear".into(),
-                        key: "".into(),
-                        slot_width_px: close_slot_width,
-                        height_px: action_button_height,
-                        selected: false,
-                        key_first: false,
-                        justify: FooterHintContentJustify::Center,
-                        layout: action_button_layout,
-                    },
-                    &self.theme,
-                )
-                .on_click(move |event, window, cx| {
+        button_specs.push(ModalActionRowButton {
+            id: "shortcut-save-button",
+            label: "Save".into(),
+            key: "↵".into(),
+            slot_width_px: run_slot_width,
+            height_px: action_button_height,
+            selected: self.focused_action == ShortcutRecorderFocusedAction::Save,
+            enabled: can_save,
+            layout: action_button_layout,
+            on_click: Box::new(move |event, window, cx| {
+                if can_save {
+                    save_handler(event, window, cx);
+                }
+            }),
+        });
+
+        button_specs.push(ModalActionRowButton {
+            id: "shortcut-clear-button",
+            label: "Clear".into(),
+            key: "".into(),
+            slot_width_px: close_slot_width,
+            height_px: action_button_height,
+            selected: self.focused_action == ShortcutRecorderFocusedAction::Clear,
+            enabled: can_clear,
+            layout: action_button_layout,
+            on_click: Box::new(move |event, window, cx| {
+                if can_clear {
                     clear_handler(event, window, cx);
-                }),
-            );
-        }
+                }
+            }),
+        });
 
-        let buttons = buttons
-            .child(
-                render_footer_hint_action_button_frame(
-                    FooterHintActionButtonFrameSpec {
-                        id: "shortcut-cancel-button",
-                        label: "Cancel".into(),
-                        key: "Esc".into(),
-                        slot_width_px: close_slot_width,
-                        height_px: action_button_height,
-                        selected: false,
-                        key_first: false,
-                        justify: FooterHintContentJustify::Center,
-                        layout: action_button_layout,
-                    },
-                    &self.theme,
-                )
-                .on_click(move |event, window, cx| {
-                    cancel_handler(event, window, cx);
-                }),
-            )
-            .child(
-                render_footer_hint_action_button_frame(
-                    FooterHintActionButtonFrameSpec {
-                        id: "shortcut-save-button",
-                        label: "Save".into(),
-                        key: "↵".into(),
-                        slot_width_px: run_slot_width,
-                        height_px: action_button_height,
-                        selected: can_save,
-                        key_first: false,
-                        justify: FooterHintContentJustify::Center,
-                        layout: action_button_layout,
-                    },
-                    &self.theme,
-                )
-                .when(!can_save, |style| style.opacity(0.45))
-                .on_click(move |event, window, cx| {
-                    if can_save {
-                        save_handler(event, window, cx);
-                    }
-                }),
-            );
+        button_specs.push(ModalActionRowButton {
+            id: "shortcut-cancel-button",
+            label: "Cancel".into(),
+            key: "Esc".into(),
+            slot_width_px: close_slot_width,
+            height_px: action_button_height,
+            selected: self.focused_action == ShortcutRecorderFocusedAction::Cancel,
+            enabled: true,
+            layout: action_button_layout,
+            on_click: Box::new(move |event, window, cx| {
+                cancel_handler(event, window, cx);
+            }),
+        });
+
+        let buttons = div()
+            .mt(px(MODAL_ACTION_ROW_TOP_MARGIN_PX))
+            .child(modal_action_row(
+                "shortcut-modal-action-row",
+                recorder_action_button_gap(),
+                button_specs,
+                &self.theme,
+            ));
 
         // Key down event handler - captures modifiers and keys
         let handle_key_down = cx.listener(move |this, event: &gpui::KeyDownEvent, _window, cx| {
@@ -220,12 +206,20 @@ impl Render for ShortcutRecorder {
             );
 
             // Handle special keys
-            if (mods.platform && key.eq_ignore_ascii_case("w")) || is_key_escape(key) {
+            let is_plain_tab =
+                key.eq_ignore_ascii_case("tab") && !mods.platform && !mods.alt && !mods.control;
+
+            if is_plain_tab {
+                if mods.shift {
+                    this.focus_previous_action(cx);
+                } else {
+                    this.focus_next_action(cx);
+                }
+            } else if (mods.platform && key.eq_ignore_ascii_case("w")) || is_key_escape(key) {
                 this.cancel();
                 cx.notify();
-            } else if is_key_enter(key) && this.shortcut.is_complete() && this.conflict.is_none() {
-                this.save();
-                cx.notify();
+            } else if is_key_enter(key) {
+                this.activate_focused_action(cx);
             } else {
                 this.handle_key_down(key, mods, cx);
             }
@@ -256,11 +250,6 @@ impl Render for ShortcutRecorder {
         );
 
         // Cancel handler for backdrop clicks
-        let backdrop_cancel = cx.listener(|this, _: &gpui::ClickEvent, _window, cx| {
-            logging::log("SHORTCUT", "Backdrop clicked - cancelling");
-            this.cancel();
-            cx.notify();
-        });
         let detached_surface_cancel = cx.listener(|this, _: &gpui::MouseDownEvent, _window, cx| {
             logging::log(
                 "SHORTCUT",
@@ -275,7 +264,7 @@ impl Render for ShortcutRecorder {
         let modal = confirm_modal_shell(
             ConfirmModalShellConfig {
                 content_id: "shortcut-modal-content",
-                width: Some(RECORDER_MODAL_WIDTH),
+                width: Some(MODAL_WIDTH_PX),
                 padding_x: RECORDER_MODAL_PADDING,
                 padding_y: RECORDER_MODAL_PADDING,
                 gap: 10.0,
@@ -305,44 +294,17 @@ impl Render for ShortcutRecorder {
             .on_key_down(handle_key_down)
             .on_modifiers_changed(handle_modifiers_changed); // CRITICAL: Live modifier feedback
 
-        if self.detached_window {
-            recorder_surface.child(
-                div()
-                    .absolute()
-                    .inset_0()
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .mt(px(overlay_appear.modal_offset_y))
-                    .opacity(overlay_appear.modal_opacity)
-                    .on_mouse_down(gpui::MouseButton::Left, detached_surface_cancel)
-                    .child(modal),
-            )
-        } else {
-            // Full-screen overlay with backdrop and centered modal.
-            recorder_surface
-                .child(
-                    div()
-                        .id("shortcut-backdrop")
-                        .absolute()
-                        .inset_0()
-                        .bg(backdrop_bg)
-                        .cursor_pointer()
-                        .hover(move |style| style.bg(backdrop_hover_bg))
-                        .opacity(overlay_appear.backdrop_opacity)
-                        .on_click(backdrop_cancel),
-                )
-                .child(
-                    div()
-                        .absolute()
-                        .inset_0()
-                        .flex()
-                        .items_center()
-                        .justify_center()
-                        .mt(px(overlay_appear.modal_offset_y))
-                        .opacity(overlay_appear.modal_opacity)
-                        .child(modal),
-                )
-        }
+        recorder_surface.child(
+            div()
+                .absolute()
+                .inset_0()
+                .flex()
+                .items_center()
+                .justify_center()
+                .mt(px(0.0))
+                .opacity(1.0)
+                .on_mouse_down(gpui::MouseButton::Left, detached_surface_cancel)
+                .child(modal),
+        )
     }
 }

@@ -721,6 +721,33 @@ impl ScriptListApp {
         logging::log("NAV", &format!("launch_origin=direct reason={reason}"));
         self.opened_from_main_menu = false;
     }
+
+    pub(crate) fn clear_menu_origin_after_script_list_confirm_cancel(
+        &mut self,
+        reason: &'static str,
+    ) {
+        if !self.opened_from_main_menu || !matches!(self.current_view, AppView::ScriptList) {
+            return;
+        }
+
+        if self.is_in_attachment_portal() || self.computed_filter_text.starts_with("vault: ") {
+            logging::log(
+                "NAV",
+                &format!(
+                    "confirm_cancel_preserved_menu_origin reason={reason} portal={} filter={}",
+                    self.is_in_attachment_portal(),
+                    self.computed_filter_text
+                ),
+            );
+            return;
+        }
+
+        logging::log(
+            "NAV",
+            &format!("confirm_cancel_cleared_menu_origin reason={reason}"),
+        );
+        self.opened_from_main_menu = false;
+    }
 }
 
 #[cfg(all(test, unix))]

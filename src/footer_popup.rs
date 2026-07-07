@@ -1206,6 +1206,13 @@ unsafe fn configure_gpui_footer_overlay_ns_window(ns_window: id) {
     let _: () = msg_send![ns_window, setAnimationBehavior: 2isize];
     let _: () = msg_send![ns_window, setRestorable: NO];
 
+    // SAFETY: `ns_window` is a live NSWindow owned by the GPUI footer overlay.
+    // collectionBehavior / setCollectionBehavior are standard NSWindow accessors.
+    let current_collection_behavior: u64 = msg_send![ns_window, collectionBehavior];
+    let desired_collection_behavior =
+        crate::platform::main_panel_collection_behavior(current_collection_behavior);
+    let _: () = msg_send![ns_window, setCollectionBehavior: desired_collection_behavior];
+
     let title = ns_string(GPUI_FOOTER_OVERLAY_WINDOW_TITLE);
     if title != nil {
         let _: () = msg_send![ns_window, setTitle: title];

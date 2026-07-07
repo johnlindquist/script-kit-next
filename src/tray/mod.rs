@@ -22,6 +22,8 @@ use tray_icon::{
 pub use crate::branding::{LOGO_SVG, URL_DISCORD, URL_FOLLOW_US, URL_GITHUB};
 pub const URL_FEEDBACK: &str = "https://github.com/johnlindquist/script-kit-next/issues/new";
 const TRAY_MENU_SCHEMA_VERSION: u32 = 1;
+/// Displayed at 18pt by tray-icon/muda; 44px covers 2x with 3x headroom.
+const TRAY_ICON_RENDER_PX: u32 = 44;
 
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -68,10 +70,39 @@ pub struct TrayMenuShortcutObservation {
     pub source: &'static str,
 }
 
+/// Accelerators mirrored onto tray rows so the menu advertises the user's
+/// actual global hotkeys instead of hiding them (launcher, Notes, Agent Chat).
+#[derive(Clone, Default)]
+pub struct TrayShortcuts {
+    pub main: Option<Accelerator>,
+    pub notes: Option<Accelerator>,
+    pub agent_chat: Option<Accelerator>,
+}
+
+/// Which tray rows currently display a configured shortcut — kept alongside
+/// the observation source so DevTools/MCP snapshots stay in lockstep with the
+/// real menu.
+#[derive(Clone, Copy, Default)]
+pub(crate) struct TrayShortcutFlags {
+    pub launcher: bool,
+    pub notes: bool,
+    pub agent_chat: bool,
+}
+
+impl TrayShortcuts {
+    fn flags(&self) -> TrayShortcutFlags {
+        TrayShortcutFlags {
+            launcher: self.main.is_some(),
+            notes: self.notes.is_some(),
+            agent_chat: self.agent_chat.is_some(),
+        }
+    }
+}
+
 #[derive(Clone)]
 struct TrayMenuObservationSource {
     update_state: Arc<RwLock<UpdateState>>,
-    launcher_shortcut_configured: bool,
+    shortcut_flags: TrayShortcutFlags,
 }
 
 static TRAY_MENU_OBSERVATION_SOURCE: LazyLock<RwLock<Option<TrayMenuObservationSource>>> =
@@ -206,8 +237,8 @@ unsafe fn template_ns_menu(ns_menu: cocoa::base::id) -> usize {
 }
 
 /// Render an SVG glyph at menu-row resolution and turn it into a `muda::Icon`
-/// suitable for `IconMenuItem::with_id`. We render at 2x (32px) so it stays
-/// crisp on Retina menu bars.
+/// suitable for `IconMenuItem::with_id`. The shared render size avoids
+/// upscaling in the native 18pt menu slot.
 ///
 /// `currentColor` in the source SVG is rewritten to **white** before render
 /// so the rendered bitmap has full alpha where the glyph lives. Once
@@ -217,10 +248,10 @@ unsafe fn template_ns_menu(ns_menu: cocoa::base::id) -> usize {
 /// as `tray.menu_item_template_noop`), the white pixels are the
 /// graceful-degrade fallback.
 fn menu_icon_from_svg(svg: &str) -> Result<tray_icon::menu::Icon> {
-    const SIZE: u32 = 32;
     let recolored = svg.replace("currentColor", "white");
-    let rgba = render_svg_to_rgba(&recolored, SIZE, SIZE).context("render menu icon svg")?;
-    tray_icon::menu::Icon::from_rgba(rgba, SIZE, SIZE)
+    let rgba = render_svg_to_rgba(&recolored, TRAY_ICON_RENDER_PX, TRAY_ICON_RENDER_PX)
+        .context("render menu icon svg")?;
+    tray_icon::menu::Icon::from_rgba(rgba, TRAY_ICON_RENDER_PX, TRAY_ICON_RENDER_PX)
         .context("create muda Icon from menu glyph rgba")
 }
 /// Menu item identifiers for matching events
@@ -327,14 +358,11 @@ impl TrayManager {
     /// - SVG parsing fails
     /// - PNG rendering fails
     /// - Tray icon creation fails
-    pub fn new(
-        update_state: Arc<RwLock<UpdateState>>,
-        main_shortcut: Option<Accelerator>,
-    ) -> Result<Self> {
+    pub fn new(update_state: Arc<RwLock<UpdateState>>, shortcuts: TrayShortcuts) -> Result<Self> {
         let icon = Self::create_icon_from_svg()?;
-        let launcher_shortcut_configured = main_shortcut.is_some();
+        let shortcut_flags = shortcuts.flags();
         let (menu, current_app_commands_item, version_item) =
-            Self::create_menu(&update_state, main_shortcut)?;
+            Self::create_menu(&update_state, &shortcuts)?;
 
         // Mark every menu-item image as an NSImage template BEFORE handing
         // the menu off to muda. AppKit then auto-tints the icons for
@@ -364,7 +392,7 @@ impl TrayManager {
 
         let tray_icon = builder.build().context("Failed to create tray icon")?;
 
-        store_tray_menu_observation_source(Arc::clone(&update_state), launcher_shortcut_configured);
+        store_tray_menu_observation_source(Arc::clone(&update_state), shortcut_flags);
 
         Ok(Self {
             tray_icon,
@@ -378,19 +406,17 @@ impl TrayManager {
     ///
     /// Uses `render_svg_to_rgba` for validated rendering.
     fn create_icon_from_svg() -> Result<Icon> {
-        // Get dimensions from SVG (logo is 32x32)
+        // Parse the SVG first so invalid logo data still fails before render.
         let opts = usvg::Options::default();
-        let tree = usvg::Tree::from_str(LOGO_SVG, &opts).context("Failed to parse logo SVG")?;
-        let size = tree.size();
-        let width = size.width() as u32;
-        let height = size.height() as u32;
+        usvg::Tree::from_str(LOGO_SVG, &opts).context("Failed to parse logo SVG")?;
 
         // Render with validation
-        let rgba = render_svg_to_rgba(LOGO_SVG, width, height)
+        let rgba = render_svg_to_rgba(LOGO_SVG, TRAY_ICON_RENDER_PX, TRAY_ICON_RENDER_PX)
             .context("Failed to render tray logo SVG")?;
 
         // Create tray icon from RGBA data
-        Icon::from_rgba(rgba, width, height).context("Failed to create tray icon from RGBA data")
+        Icon::from_rgba(rgba, TRAY_ICON_RENDER_PX, TRAY_ICON_RENDER_PX)
+            .context("Failed to create tray icon from RGBA data")
     }
 
     /// Creates the tray menu with standard items.
@@ -403,7 +429,7 @@ impl TrayManager {
     ///   • Quit Script Kit
     fn create_menu(
         update_state: &Arc<RwLock<UpdateState>>,
-        main_shortcut: Option<Accelerator>,
+        shortcuts: &TrayShortcuts,
     ) -> Result<(Box<dyn ContextMenu>, IconMenuItem, MenuItem)> {
         let menu = Submenu::with_id("tray.root", "Script Kit", true);
 
@@ -415,7 +441,7 @@ impl TrayManager {
                 "Open Script Kit",
                 true,
                 Some(icon),
-                main_shortcut,
+                shortcuts.main,
             ),
             Err(e) => {
                 tracing::warn!(error = %e, "tray.open_icon_fallback");
@@ -424,7 +450,7 @@ impl TrayManager {
                     "Open Script Kit",
                     true,
                     Some(NativeIcon::Home),
-                    main_shortcut,
+                    shortcuts.main,
                 )
             }
         };
@@ -442,7 +468,7 @@ impl TrayManager {
                 "Open Notes",
                 true,
                 Some(icon),
-                None,
+                shortcuts.notes,
             ),
             Err(e) => {
                 tracing::warn!(error = %e, "tray.notes_icon_fallback");
@@ -451,7 +477,7 @@ impl TrayManager {
                     "Open Notes",
                     true,
                     Some(NativeIcon::Bookmarks),
-                    None,
+                    shortcuts.notes,
                 )
             }
         };
@@ -462,7 +488,7 @@ impl TrayManager {
                 "Open AI",
                 true,
                 Some(icon),
-                None,
+                shortcuts.agent_chat,
             ),
             Err(e) => {
                 tracing::warn!(error = %e, "tray.agent_chat_icon_fallback");
@@ -471,7 +497,7 @@ impl TrayManager {
                     "Open AI",
                     true,
                     Some(NativeIcon::Bookmarks),
-                    None,
+                    shortcuts.agent_chat,
                 )
             }
         };
@@ -578,7 +604,7 @@ impl TrayManager {
             TrayMenuAction::CheckForUpdates.id(),
             "Check for Updates…",
             true,
-            Some(NativeIcon::Refresh),
+            Some(NativeIcon::RefreshFreestanding),
             None,
         );
 
@@ -724,33 +750,26 @@ impl TrayManager {
     }
 
     pub fn observation_snapshot(&self) -> TrayMenuObservation {
-        tray_menu_observation_snapshot(
-            &self.update_state_snapshot(),
-            self.main_shortcut_configured(),
-        )
+        tray_menu_observation_snapshot(&self.update_state_snapshot(), self.shortcut_flags())
     }
 
-    fn main_shortcut_configured(&self) -> bool {
+    fn shortcut_flags(&self) -> TrayShortcutFlags {
         TRAY_MENU_OBSERVATION_SOURCE
             .read()
             .ok()
-            .and_then(|source| {
-                source
-                    .as_ref()
-                    .map(|source| source.launcher_shortcut_configured)
-            })
-            .unwrap_or(false)
+            .and_then(|source| source.as_ref().map(|source| source.shortcut_flags))
+            .unwrap_or_default()
     }
 }
 
 fn store_tray_menu_observation_source(
     update_state: Arc<RwLock<UpdateState>>,
-    launcher_shortcut_configured: bool,
+    shortcut_flags: TrayShortcutFlags,
 ) {
     if let Ok(mut source) = TRAY_MENU_OBSERVATION_SOURCE.write() {
         *source = Some(TrayMenuObservationSource {
             update_state,
-            launcher_shortcut_configured,
+            shortcut_flags,
         });
     }
 }
@@ -771,10 +790,11 @@ pub fn current_tray_menu_observation_snapshot() -> TrayMenuObservation {
                     message: "Update state unavailable".to_string(),
                     failure: crate::updates::UpdateFailure::InvalidResponse,
                 });
-            tray_menu_observation_snapshot(&update_state, source.launcher_shortcut_configured)
+            tray_menu_observation_snapshot(&update_state, source.shortcut_flags)
         }
         None => {
-            let mut snapshot = tray_menu_observation_snapshot(&UpdateState::Idle, false);
+            let mut snapshot =
+                tray_menu_observation_snapshot(&UpdateState::Idle, TrayShortcutFlags::default());
             snapshot
                 .warnings
                 .push("tray menu manager has not been initialized".to_string());
@@ -785,7 +805,7 @@ pub fn current_tray_menu_observation_snapshot() -> TrayMenuObservation {
 
 pub(crate) fn tray_menu_observation_snapshot(
     update_state: &UpdateState,
-    launcher_shortcut_configured: bool,
+    shortcut_flags: TrayShortcutFlags,
 ) -> TrayMenuObservation {
     let (version_label, version_enabled) = version_label_and_enabled(update_state);
 
@@ -806,10 +826,12 @@ pub(crate) fn tray_menu_observation_snapshot(
                         TrayMenuAction::OpenScriptKit,
                         "Open Script Kit".to_string(),
                         true,
-                        launcher_shortcut_configured.then_some(TrayMenuShortcutObservation {
-                            display: None,
-                            source: "configuredLauncherHotkey",
-                        }),
+                        shortcut_flags
+                            .launcher
+                            .then_some(TrayMenuShortcutObservation {
+                                display: None,
+                                source: "configuredLauncherHotkey",
+                            }),
                         "static",
                         "scriptKitWindow",
                     ),
@@ -825,7 +847,10 @@ pub(crate) fn tray_menu_observation_snapshot(
                         TrayMenuAction::OpenNotes,
                         "Open Notes".to_string(),
                         true,
-                        None,
+                        shortcut_flags.notes.then_some(TrayMenuShortcutObservation {
+                            display: None,
+                            source: "configuredNotesHotkey",
+                        }),
                         "static",
                         "scriptKitWindow",
                     ),
@@ -833,7 +858,12 @@ pub(crate) fn tray_menu_observation_snapshot(
                         TrayMenuAction::OpenAgentChat,
                         "Open AI".to_string(),
                         true,
-                        None,
+                        shortcut_flags
+                            .agent_chat
+                            .then_some(TrayMenuShortcutObservation {
+                                display: None,
+                                source: "configuredAgentChatHotkey",
+                            }),
                         "static",
                         "scriptKitWindow",
                     ),
@@ -1164,7 +1194,14 @@ mod tests {
 
     #[test]
     fn tray_menu_observation_contains_all_tray_actions() {
-        let snapshot = tray_menu_observation_snapshot(&UpdateState::Idle, true);
+        let snapshot = tray_menu_observation_snapshot(
+            &UpdateState::Idle,
+            TrayShortcutFlags {
+                launcher: true,
+                notes: true,
+                agent_chat: true,
+            },
+        );
         let ids: Vec<&str> = observed_items(&snapshot)
             .into_iter()
             .map(|item| item.id)
@@ -1182,7 +1219,8 @@ mod tests {
 
     #[test]
     fn tray_menu_observation_sections_match_create_menu_order() {
-        let snapshot = tray_menu_observation_snapshot(&UpdateState::Idle, false);
+        let snapshot =
+            tray_menu_observation_snapshot(&UpdateState::Idle, TrayShortcutFlags::default());
         let section_ids: Vec<&str> = snapshot.sections.iter().map(|section| section.id).collect();
         assert_eq!(
             section_ids,
@@ -1216,7 +1254,8 @@ mod tests {
 
     #[test]
     fn tray_menu_observation_ids_are_unique() {
-        let snapshot = tray_menu_observation_snapshot(&UpdateState::Idle, false);
+        let snapshot =
+            tray_menu_observation_snapshot(&UpdateState::Idle, TrayShortcutFlags::default());
         let ids: Vec<&str> = observed_items(&snapshot)
             .into_iter()
             .map(|item| item.id)
@@ -1234,7 +1273,8 @@ mod tests {
 
     #[test]
     fn tray_menu_observation_current_app_title_uses_frontmost_tracker_fallback() {
-        let snapshot = tray_menu_observation_snapshot(&UpdateState::Idle, false);
+        let snapshot =
+            tray_menu_observation_snapshot(&UpdateState::Idle, TrayShortcutFlags::default());
         let current_app = observed_items(&snapshot)
             .into_iter()
             .find(|item| item.id == TrayMenuAction::OpenCurrentAppCommands.id())
@@ -1263,7 +1303,7 @@ mod tests {
                     },
                 },
             },
-            false,
+            TrayShortcutFlags::default(),
         );
         let version = observed_items(&snapshot)
             .into_iter()
@@ -1277,7 +1317,14 @@ mod tests {
 
     #[test]
     fn tray_menu_observation_has_no_click_or_execute_fields() {
-        let snapshot = tray_menu_observation_snapshot(&UpdateState::Idle, true);
+        let snapshot = tray_menu_observation_snapshot(
+            &UpdateState::Idle,
+            TrayShortcutFlags {
+                launcher: true,
+                notes: true,
+                agent_chat: true,
+            },
+        );
         let text = serde_json::to_string(&snapshot).expect("serialize tray observation");
 
         for forbidden in ["\"click\"", "\"execute\"", "\"action\"", "\"event\""] {
@@ -1362,7 +1409,8 @@ mod tests {
             "NativeIcon::User",                   // Follow Us fallback
             "NativeIcon::FollowLinkFreestanding", // GitHub fallback
             "NativeIcon::UserGroup",              // Discord fallback
-            "NativeIcon::Refresh",                // Check for Updates
+            "NativeIcon::Refresh",                // Reload Scripts
+            "NativeIcon::RefreshFreestanding",    // Check for Updates
         ] {
             assert!(
                 implementation_source.contains(native_icon),

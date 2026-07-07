@@ -474,6 +474,7 @@ impl NotesApp {
             ),
             "previewAnchor": self.automation_preview_anchor(&editor_text, &selection, cx),
             "kitResourcePreview": self.automation_kit_resource_preview_state(),
+            "deeplinkHoverHint": self.last_deeplink_hover_hint.clone(),
             "view": {
                 "viewMode": format!("{:?}", self.view_mode),
                 "surfaceMode": format!("{:?}", self.surface_mode),
@@ -973,8 +974,7 @@ impl NotesApp {
         );
 
         self.editor_state.update(cx, |state, cx| {
-            state.set_value(next_value, window, cx);
-            state.set_selection(next_cursor, next_cursor, window, cx);
+            state.set_value_preserving_scroll(next_value, next_cursor, window, cx);
         });
         self.close_browse_panel(window, cx);
         cx.notify();

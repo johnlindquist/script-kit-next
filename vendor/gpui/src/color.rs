@@ -702,8 +702,9 @@ pub struct Background {
     /// Normalized (0..1) focal point for `ShaderEffect` backgrounds — where
     /// the app's attention currently is (focused item, mouse, or text cursor).
     pub(crate) effect_focus: [f32; 2],
-    /// Seconds since the app last noted a "change" (selection moved, caret
-    /// moved, mouse moved). Effects use this as a decaying energy pulse.
+    /// Smoothed 0..1 activity energy for `ShaderEffect` backgrounds. The app
+    /// pre-smooths change events (selection moved, caret moved, mouse moved)
+    /// into a gentle envelope so effects swell and settle, never flash.
     pub(crate) effect_pulse: f32,
     /// Padding for alignment for repr(C) layout.
     pad: u32,
@@ -749,7 +750,7 @@ impl Default for Background {
             effect_id: 0.0,
             effect_time: 0.0,
             effect_focus: [0.5, 0.35],
-            effect_pulse: 1000.0,
+            effect_pulse: 0.0,
             pad: 0,
         }
     }
@@ -785,8 +786,9 @@ pub fn checkerboard(color: impl Into<Hsla>, size: f32) -> Background {
 /// `time` is the animation clock in seconds. The two colors are the effect's
 /// palette, exposed to the shader as the gradient color stops. `focus` is the
 /// normalized (0..1) point of current user attention (focused item, mouse, or
-/// text cursor) and `pulse` is the seconds elapsed since the last app
-/// "change"; effects treat a small `pulse` as a decaying burst of energy.
+/// text cursor) and `pulse` is a smoothed 0..1 activity energy: the caller
+/// pre-smooths change events into a slow-attack, gentle-release envelope so
+/// effects respond with a soft swell rather than a per-event flash.
 pub fn shader_effect(
     effect_id: u32,
     time: f32,

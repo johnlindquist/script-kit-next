@@ -5,7 +5,8 @@ use crate::components::{
     },
     footer_chrome::{
         current_main_menu_footer_height, current_main_menu_footer_metrics,
-        footer_action_slot_width, footer_button_height, FooterActionSlot,
+        footer_action_slot_width, footer_button_height, footer_centered_action_edge_padding_x,
+        FooterActionSlot,
     },
 };
 
@@ -85,7 +86,7 @@ pub fn base_confirm_modal_style() -> ConfirmModalStyleDef {
             confirm_slot_width: footer_action_slot_width(FooterActionSlot::Run),
             button_radius: footer_metrics.button_radius,
             padding_x: footer_metrics.button_padding_x,
-            edge_padding_x: footer_metrics.button_padding_x,
+            edge_padding_x: footer_centered_action_edge_padding_x(),
             padding_y: footer_metrics.button_padding_y,
             content_gap: footer_metrics.content_gap,
         },

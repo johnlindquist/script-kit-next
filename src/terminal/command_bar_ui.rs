@@ -36,12 +36,6 @@ const POPUP_RADIUS: f32 = 12.0;
 /// Horizontal padding for items
 const ITEM_PADDING_X: f32 = 16.0;
 
-/// Minimum keycap width for shortcut display
-const KEYCAP_MIN_WIDTH: f32 = 24.0;
-
-/// Keycap height
-const KEYCAP_HEIGHT: f32 = 22.0;
-
 /// Events emitted by the command bar
 #[derive(Debug, Clone)]
 pub enum TerminalCommandBarEvent {

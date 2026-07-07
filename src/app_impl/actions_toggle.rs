@@ -1074,9 +1074,6 @@ impl ScriptListApp {
                 // its own route-backed actions, so skip the generic script/global
                 // action rebuild there.
                 if !is_agent_chat_actions_dialog {
-                    if on_day_page {
-                        dialog.set_suppress_prompt_handoff_actions(true);
-                    }
                     dialog.set_menu_syntax_section(power_syntax_section_for_dialog.clone());
                     dialog.set_host_section(day_page_section.clone());
                 }

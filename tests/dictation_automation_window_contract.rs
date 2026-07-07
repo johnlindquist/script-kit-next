@@ -8,6 +8,9 @@ const PROMPT_HANDLER: &str = include_str!("../src/prompt_handler/mod.rs");
 const SCREENSHOT_ROUTING: &str = include_str!("../src/platform/screenshots_window_open.rs");
 const STDIN_COMMANDS: &str = include_str!("../src/stdin_commands/mod.rs");
 const DEVTOOLS_TARGETS: &str = include_str!("../scripts/devtools/targets.ts");
+// Target normalization moved into the shared identity helper during the
+// 2026-07-01 devtools suite consolidation.
+const DEVTOOLS_TARGET_IDENTITY: &str = include_str!("../scripts/devtools/lib/target-identity.ts");
 
 #[test]
 fn dictation_is_a_first_class_automation_window_kind() {
@@ -20,7 +23,9 @@ fn dictation_is_a_first_class_automation_window_kind() {
         "Dictation automation kind must round-trip as camelCase dictation"
     );
     assert!(
-        DEVTOOLS_TARGETS.contains("if (value === \"dictation\") return \"Dictation\";"),
+        DEVTOOLS_TARGETS.contains("if (value === \"dictation\") return \"Dictation\";")
+            || DEVTOOLS_TARGET_IDENTITY
+                .contains("if (value === \"dictation\") return \"Dictation\";"),
         "DevTools target normalization must render dictation windows clearly"
     );
 }

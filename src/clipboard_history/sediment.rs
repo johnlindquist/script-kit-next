@@ -151,12 +151,37 @@ fn keep_url(
         Some(today),
     )?;
     store::record_sediment_signals(url);
+    crate::nux::sediment_disclosure::record_activity();
     debug!(
         entry_id = %entry_id,
         skip_day_line,
         "clipboard URL auto-kept"
     );
     Ok(())
+}
+
+/// Manually keep a clipboard entry on today's day page — the visible
+/// counterpart to the silent auto-keep rules, surfaced as a Cmd+K action in
+/// Clipboard History. Returns `false` when the entry was already brain-kept
+/// (no duplicate day-page line is written).
+pub fn keep_entry_in_today(entry_id: &str, now: DateTime<Utc>) -> anyhow::Result<bool> {
+    let state = get_entry_sediment_state(entry_id)
+        .ok_or_else(|| anyhow::anyhow!("clipboard entry not found: {entry_id}"))?;
+    if state.brain_kept {
+        return Ok(false);
+    }
+
+    let substrate = sediment_substrate();
+    substrate.append_to_day(
+        now,
+        DayEntry::ClipboardRef {
+            entry_id: entry_id.to_string(),
+        },
+    )?;
+    mark_brain_kept(entry_id, ClipboardSedimentTier::Sediment.as_i64(), None)?;
+    store::record_sediment_signals(&crate::clipboard_history::entry_resource_uri(entry_id));
+    debug!(entry_id = %entry_id, "clipboard entry manually kept to Today");
+    Ok(true)
 }
 
 /// Promote a clipboard entry to brain with an optional post-copy why (T12).
@@ -220,6 +245,7 @@ fn promote_recopy(entry_id: &str, text: &str, now: DateTime<Utc>) -> anyhow::Res
 
     mark_brain_kept(entry_id, ClipboardSedimentTier::Sediment.as_i64(), None)?;
     store::record_sediment_signals(text);
+    crate::nux::sediment_disclosure::record_activity();
     debug!(entry_id = %entry_id, "clipboard re-copy promoted to brain");
     Ok(())
 }

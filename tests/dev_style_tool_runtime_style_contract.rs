@@ -88,7 +88,7 @@ fn saved_main_window_style_values_are_project_defaults() {
     assert_eq!(base.footer.metrics.item_gap_px, 2.0);
     assert_eq!(base.footer.metrics.content_gap, 4.0);
     assert_eq!(base.footer.metrics.run_button_padding_x, 12.0);
-    assert_eq!(base.footer.metrics.button_radius, 14.0);
+    assert_eq!(base.footer.metrics.button_radius, 6.0);
     assert_eq!(base.footer.metrics.keycap_padding_x, 0.0);
     assert_eq!(base.footer.metrics.keycap_padding_y, 0.0);
     assert_eq!(base.footer.metrics.label_font_size, 13.0);
@@ -153,6 +153,11 @@ fn saved_confirm_modal_style_values_are_project_defaults() {
     assert_eq!(base.header.accent_width, 2.0);
     assert_eq!(base.header.accent_height, 14.0);
     assert_eq!(base.header.gap, 8.0);
+    assert_eq!(base.actions.button_radius, 6.0);
+    assert_eq!(base.actions.padding_x, 4.0);
+    assert_eq!(base.actions.edge_padding_x, 10.0);
+    assert_eq!(base.actions.padding_y, 2.0);
+    assert_eq!(base.actions.content_gap, 4.0);
 }
 
 #[test]
@@ -920,7 +925,7 @@ fn devtools_confirm_modal_setter_updates_effective_shell_style() {
     let change =
         runtime_overrides::reset_confirm_modal_value(CONFIRM_MODAL_ACTIONS_EDGE_PADDING_X_KNOB_ID)
             .expect("confirm modal action edge padding should reset");
-    assert_eq!(change.applied, StyleValue::Number(4.0));
+    assert_eq!(change.applied, StyleValue::Number(10.0));
 
     runtime_overrides::reset_all();
 }

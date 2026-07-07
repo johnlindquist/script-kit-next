@@ -100,6 +100,11 @@ pub enum DictationTarget {
     AiChatComposer,
     TabAiHarness,
     ExternalApp,
+    /// Background append to today's Day Page — no surface reveal on finish.
+    DayPageToday,
+    /// Quick AI question — the delivery path opens/focuses the AI window
+    /// itself, so the orchestrator treats it like other aux-surface targets.
+    QuickAiQuestion,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -110,6 +110,7 @@ mod logging;
 mod login_item;
 mod menu_syntax;
 mod navigation;
+mod nux;
 mod panel;
 mod pasted_image;
 mod pasted_text;

@@ -190,6 +190,37 @@ impl ScriptListApp {
             .unwrap_or_else(|| "Run".to_string())
     }
 
+    /// Route a footer action to the Day Page kit:// resource preview when one
+    /// is open (the preview's actions live on the native footer). Returns
+    /// true when the action was handled by the preview.
+    fn dispatch_day_page_preview_footer_action(
+        &mut self,
+        action: crate::footer_popup::FooterAction,
+        window: &mut gpui::Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let AppView::DayPage { entity } = &self.current_view else {
+            return false;
+        };
+        let Some(availability) = entity.read(cx).kit_resource_preview_action_availability() else {
+            return false;
+        };
+        let action_id = match action {
+            crate::footer_popup::FooterAction::Run
+                if availability.open_source_target.is_some() =>
+            {
+                crate::DAY_PAGE_PREVIEW_OPEN_SOURCE_ACTION_ID
+            }
+            crate::footer_popup::FooterAction::Ai if availability.can_add_to_agent_chat => {
+                crate::DAY_PAGE_PREVIEW_ADD_TO_AGENT_CHAT_ACTION_ID
+            }
+            crate::footer_popup::FooterAction::Copy => crate::DAY_PAGE_PREVIEW_COPY_URI_ACTION_ID,
+            crate::footer_popup::FooterAction::Close => crate::DAY_PAGE_PREVIEW_CLOSE_ACTION_ID,
+            _ => return false,
+        };
+        self.execute_day_page_action(action_id, window, cx)
+    }
+
     pub(crate) fn dispatch_main_window_footer_action(
         &mut self,
         action: crate::footer_popup::FooterAction,
@@ -247,6 +278,8 @@ impl ScriptListApp {
                 } else if let AppView::ScriptIssuesView { report } = &self.current_view {
                     let report = report.clone();
                     self.fix_script_issues_in_agent(&report, cx);
+                    return;
+                } else if self.dispatch_day_page_preview_footer_action(action, window, cx) {
                     return;
                 } else if self.dispatch_design_gallery_select_footer_action(cx) {
                     return;
@@ -312,6 +345,8 @@ impl ScriptListApp {
                     entity.update(cx, |chat, cx| {
                         chat.open_profile_trigger_picker_in_window(window, cx);
                     });
+                } else if self.dispatch_day_page_preview_footer_action(action, window, cx) {
+                    return;
                 } else if self.day_page_context_return.is_some() {
                     tracing::info!(
                         target: "script_kit::footer_popup",
@@ -360,6 +395,9 @@ impl ScriptListApp {
             | crate::footer_popup::FooterAction::Copy
             | crate::footer_popup::FooterAction::Expand
             | crate::footer_popup::FooterAction::Retry => {
+                if self.dispatch_day_page_preview_footer_action(action, window, cx) {
+                    return;
+                }
                 if let AppView::AgentChatView { entity } = &self.current_view {
                     let entity = entity.clone();
                     entity.update(cx, |chat, cx| {
@@ -400,6 +438,8 @@ impl ScriptListApp {
             }
             crate::footer_popup::FooterAction::Close => {
                 if self.dispatch_kit_store_browse_back_footer_action(window, cx) {
+                    return;
+                } else if self.dispatch_day_page_preview_footer_action(action, window, cx) {
                     return;
                 } else if matches!(self.current_view, AppView::ConfirmPrompt { .. }) {
                     tracing::info!(

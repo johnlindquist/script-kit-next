@@ -174,8 +174,6 @@ fn day_page_header_context_chips_are_inert() {
 fn day_page_actions_do_not_offer_agent_handoff() {
     let actions = source("src/main_sections/day_page_actions.rs");
     let agent_handoff = source("src/app_impl/agent_handoff/mod.rs");
-    let dialog = source("src/actions/dialog.rs");
-    let actions_toggle = source("src/app_impl/actions_toggle.rs");
     let actions_dialog = source("src/app_impl/actions_dialog.rs");
     let ai_mod = source("src/ai/mod.rs");
 
@@ -203,16 +201,18 @@ fn day_page_actions_do_not_offer_agent_handoff() {
         );
     }
 
+    // Generic prompt export/target handoff rows are owned by the Agent Chat
+    // composer (`get_agent_chat_actions`). `get_global_actions` must not
+    // re-introduce them, or every host (Day Page included) would leak
+    // prompt-builder rows that act on state the focused item does not own.
+    let script_context = source("src/actions/builders/script_context.rs");
+    let global_actions_body = function_body(&script_context, "pub fn get_global_actions(");
     assert!(
-        dialog.contains("suppress_prompt_handoff_actions")
-            && dialog.contains("!action.id.starts_with(\"prompt-action/\")")
-            && dialog.contains("!action.id.starts_with(\"prompt-target/\")"),
-        "ActionsDialog must be able to suppress generic prompt export/target handoff rows"
-    );
-    assert!(
-        actions_toggle.contains("if on_day_page")
-            && actions_toggle.contains("dialog.set_suppress_prompt_handoff_actions(true)"),
-        "Day-hosted Actions dialog must suppress generic prompt handoff rows"
+        !global_actions_body.contains("get_prompt_export_actions")
+            && !global_actions_body.contains("get_prompt_target_actions")
+            && !global_actions_body.contains("prompt-action/")
+            && !global_actions_body.contains("prompt-target/"),
+        "get_global_actions must not include generic prompt export/target handoff rows"
     );
 
     let routing = function_body(&actions_dialog, "fn route_key_to_actions_dialog(");

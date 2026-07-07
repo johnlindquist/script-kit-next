@@ -34,6 +34,8 @@ Migrated from the retired imps/ fleet (codex-imps runtime) on 2026-07-04.
 - **[prompts.md](./prompts.md)** (workspace-write): SDK prompt renderers and protocol-to-renderer contracts.
 - **[release.md](./release.md)** (workspace-write): Release pipeline: version bumps matching both Cargo.toml version fields, v* tag flow, pre-tag clippy gate, CI release workflow health.
 - **[scout.md](./scout.md)** (read-only): Read-only intake specialist for owner discovery, routing, and required context.
+- **[screenshots.md](./screenshots.md)** (workspace-write): Marketing screenshot capture: regenerates the numbered "glamour" shot set for the scriptkit.com static site via the devtools driver and OS-level capture; owns the site/images naming contract and JPEG conversion.
 - **[settings.md](./settings.md)** (workspace-write): Config and settings persistence, onboarding/NUX, kit store, sync, updates, login item, startup profile, and secrets.
+- **[site.md](./site.md)** (workspace-write): scriptkit.com static marketing site under site/: page content, screenshot wiring, GitHub latest-release download links, local preview, Vercel deploys (domain cutover only with explicit user approval).
 - **[terminal.md](./terminal.md)** (workspace-write): Terminal prompt rendering, PTY lifecycle, command bar UI, and terminal theme adaptation.
 - **[tests.md](./tests.md)** (workspace-write): Test authorship and policy: enforcement-ladder placement, behavior tests over source audits, contract tests, ratchet maintenance, flaky-test diagnosis.

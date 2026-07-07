@@ -16,6 +16,20 @@ pub enum NotesAction {
     DuplicateNote,
     /// Open the note browser/picker
     BrowseNotes,
+    /// Toggle rendered Markdown preview
+    TogglePreview,
+    /// Cycle note sort order
+    CycleSortMode,
+    /// Open trash view
+    OpenTrash,
+    /// Empty all notes from trash
+    EmptyTrash,
+    /// Return from trash view to active notes
+    BackToNotes,
+    /// Navigate to the previous note history entry
+    HistoryBack,
+    /// Navigate to the next note history entry
+    HistoryForward,
     /// Search within the current note
     FindInNote,
     /// Copy note content as a formatted export
@@ -40,7 +54,7 @@ pub enum NotesAction {
     RestoreNote,
     /// Permanently delete a note from trash
     PermanentlyDeleteNote,
-    /// Enable auto-sizing (window grows/shrinks with content)
+    /// Toggle auto-sizing (window grows/shrinks with content)
     EnableAutoSizing,
     /// Reset the window to its default position on the active display
     ResetWindowPosition,
@@ -57,6 +71,13 @@ impl NotesAction {
             NotesAction::NewNote,
             NotesAction::DuplicateNote,
             NotesAction::BrowseNotes,
+            NotesAction::TogglePreview,
+            NotesAction::CycleSortMode,
+            NotesAction::OpenTrash,
+            NotesAction::EmptyTrash,
+            NotesAction::BackToNotes,
+            NotesAction::HistoryBack,
+            NotesAction::HistoryForward,
             NotesAction::FindInNote,
             NotesAction::CopyNoteAs,
             NotesAction::CopyDeeplink,
@@ -75,7 +96,14 @@ impl NotesAction {
         match self {
             NotesAction::NewNote => "New Note",
             NotesAction::DuplicateNote => "Duplicate Note",
-            NotesAction::BrowseNotes => "Browse Notes",
+            NotesAction::BrowseNotes => "Switch Note",
+            NotesAction::TogglePreview => "Toggle Preview",
+            NotesAction::CycleSortMode => "Cycle Sort",
+            NotesAction::OpenTrash => "Open Trash",
+            NotesAction::EmptyTrash => "Empty Trash",
+            NotesAction::BackToNotes => "Back to Notes",
+            NotesAction::HistoryBack => "History Back",
+            NotesAction::HistoryForward => "History Forward",
             NotesAction::FindInNote => "Find in Note",
             NotesAction::CopyNoteAs => "Copy Note As...",
             NotesAction::CopyDeeplink => "Copy Deeplink",
@@ -88,7 +116,7 @@ impl NotesAction {
             NotesAction::DeleteNote => "Delete Note",
             NotesAction::RestoreNote => "Restore Note",
             NotesAction::PermanentlyDeleteNote => "Delete Permanently",
-            NotesAction::EnableAutoSizing => "Enable Auto-Sizing",
+            NotesAction::EnableAutoSizing => "Toggle Auto-Sizing",
             NotesAction::ResetWindowPosition => "Reset Window Position",
             NotesAction::SendToAi => "Send to Agent Chat",
             NotesAction::Cancel => "Cancel",
@@ -104,6 +132,13 @@ impl NotesAction {
             NotesAction::NewNote => Some("cmd+n"),
             NotesAction::DuplicateNote => Some("cmd+d"),
             NotesAction::BrowseNotes => Some("cmd+p"),
+            NotesAction::TogglePreview => Some("shift+cmd+p"),
+            NotesAction::CycleSortMode => Some("shift+cmd+s"),
+            NotesAction::OpenTrash => Some("shift+cmd+t"),
+            NotesAction::EmptyTrash => None,
+            NotesAction::BackToNotes => None,
+            NotesAction::HistoryBack => Some("cmd+["),
+            NotesAction::HistoryForward => Some("cmd+]"),
             NotesAction::FindInNote => Some("cmd+f"),
             NotesAction::CopyNoteAs => Some("shift+cmd+c"),
             NotesAction::CopyDeeplink => Some("shift+cmd+d"),
@@ -116,7 +151,7 @@ impl NotesAction {
             NotesAction::DeleteNote => Some("cmd+backspace"),
             NotesAction::RestoreNote => Some("cmd+z"),
             NotesAction::PermanentlyDeleteNote => None,
-            NotesAction::EnableAutoSizing => Some("cmd+a"),
+            NotesAction::EnableAutoSizing => None,
             NotesAction::ResetWindowPosition => None,
             NotesAction::SendToAi => Some("shift+cmd+a"),
             NotesAction::Cancel => Some("escape"),
@@ -141,6 +176,13 @@ impl NotesAction {
             NotesAction::NewNote => IconName::Plus,
             NotesAction::DuplicateNote => IconName::Copy,
             NotesAction::BrowseNotes => IconName::FolderOpen,
+            NotesAction::TogglePreview => IconName::Code,
+            NotesAction::CycleSortMode => IconName::Refresh,
+            NotesAction::OpenTrash => IconName::Trash,
+            NotesAction::EmptyTrash => IconName::Trash,
+            NotesAction::BackToNotes => IconName::FolderOpen,
+            NotesAction::HistoryBack => IconName::Refresh,
+            NotesAction::HistoryForward => IconName::ArrowRight,
             NotesAction::FindInNote => IconName::MagnifyingGlass,
             NotesAction::CopyNoteAs => IconName::Copy,
             NotesAction::CopyDeeplink => IconName::ArrowRight,
@@ -166,6 +208,13 @@ impl NotesAction {
             NotesAction::NewNote => "new_note",
             NotesAction::DuplicateNote => "duplicate_note",
             NotesAction::BrowseNotes => "browse_notes",
+            NotesAction::TogglePreview => "toggle_preview",
+            NotesAction::CycleSortMode => "cycle_sort_mode",
+            NotesAction::OpenTrash => "open_trash",
+            NotesAction::EmptyTrash => "empty_trash",
+            NotesAction::BackToNotes => "back_to_notes",
+            NotesAction::HistoryBack => "history_back",
+            NotesAction::HistoryForward => "history_forward",
             NotesAction::FindInNote => "find_in_note",
             NotesAction::CopyNoteAs => "copy_note_as",
             NotesAction::CopyDeeplink => "copy_deeplink",
@@ -178,7 +227,7 @@ impl NotesAction {
             NotesAction::DeleteNote => "delete_note",
             NotesAction::RestoreNote => "restore_note",
             NotesAction::PermanentlyDeleteNote => "permanently_delete_note",
-            NotesAction::EnableAutoSizing => "enable_auto_sizing",
+            NotesAction::EnableAutoSizing => "toggle_auto_sizing",
             NotesAction::ResetWindowPosition => "reset_window_position",
             NotesAction::SendToAi => "send_to_ai",
             NotesAction::Cancel => "cancel",

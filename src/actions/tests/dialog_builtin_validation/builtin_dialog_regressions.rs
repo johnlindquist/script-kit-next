@@ -3744,7 +3744,8 @@ mod from_dialog_builtin_action_validation_tests_34 {
         use crate::actions::builders::get_global_actions;
         let actions = get_global_actions();
         // Seeded, never empty: reload_scripts, settings, view_logs plus
-        // config-dependent prompt-export / handoff actions.
+        // the Discover rows. Prompt export/handoff rows are Agent Chat-owned
+        // and must NOT appear here.
         let ids: Vec<&str> = actions.iter().map(|a| a.id.as_str()).collect();
         assert!(ids.contains(&"reload_scripts"));
         assert!(ids.contains(&"settings"));
@@ -4540,8 +4541,8 @@ mod from_dialog_builtin_action_validation_tests_35 {
         };
         let actions = get_clipboard_history_context_actions(&entry);
         // Text on macOS: paste, copy, paste_keep_open, share, attach_to_ai, quick_look, pin,
-        // save_snippet, save_file, delete, delete_multiple, delete_all = 12
-        assert_eq!(actions.len(), 12);
+        // keep_in_today, save_snippet, save_file, delete, delete_multiple, delete_all = 13
+        assert_eq!(actions.len(), 13);
     }
 
     #[cfg(target_os = "macos")]
@@ -4557,9 +4558,9 @@ mod from_dialog_builtin_action_validation_tests_35 {
         };
         let actions = get_clipboard_history_context_actions(&entry);
         // Image on macOS: paste, copy, paste_keep_open, share, attach_to_ai, quick_look,
-        // open_with, annotate_cleanshot, upload_cleanshot, pin, ocr,
-        // save_file, delete, delete_multiple, delete_all = 15 (no save_snippet for images)
-        assert_eq!(actions.len(), 15);
+        // open_with, annotate_cleanshot, upload_cleanshot, pin, keep_in_today, ocr,
+        // save_file, delete, delete_multiple, delete_all = 16 (no save_snippet for images)
+        assert_eq!(actions.len(), 16);
     }
 
     #[cfg(target_os = "macos")]
@@ -10761,9 +10762,10 @@ mod from_dialog_builtin_action_validation_tests_40 {
             };
             let actions = get_clipboard_history_context_actions(&entry);
             // On macOS: paste, copy, paste_keep_open, share, attach_to_ai, quick_look,
-            //           pin, save_snippet, save_file, delete, delete_multiple, delete_all = 12
+            //           pin, keep_in_today, save_snippet, save_file, delete, delete_multiple,
+            //           delete_all = 13
             #[cfg(target_os = "macos")]
-            assert_eq!(actions.len(), 12);
+            assert_eq!(actions.len(), 13);
         }
 
         #[test]
@@ -10833,10 +10835,10 @@ mod from_dialog_builtin_action_validation_tests_40 {
             };
             let actions = get_clipboard_history_context_actions(&entry);
             // On macOS image: paste, copy, paste_keep_open, share, attach_to_ai, quick_look,
-            //   open_with, annotate_cleanshot, upload_cleanshot, pin, ocr,
-            //   save_file, delete, delete_multiple, delete_all = 15 (no save_snippet for images)
+            //   open_with, annotate_cleanshot, upload_cleanshot, pin, keep_in_today, ocr,
+            //   save_file, delete, delete_multiple, delete_all = 16 (no save_snippet for images)
             #[cfg(target_os = "macos")]
-            assert_eq!(actions.len(), 15);
+            assert_eq!(actions.len(), 16);
         }
 
         #[test]
@@ -16055,7 +16057,8 @@ mod from_dialog_builtin_action_validation_tests_45 {
     fn global_actions_returns_seeded() {
         let actions = get_global_actions();
         // Seeded, never empty: reload_scripts, settings, view_logs plus
-        // config-dependent prompt-export / handoff actions.
+        // the Discover rows. Prompt export/handoff rows are Agent Chat-owned
+        // and must NOT appear here.
         assert!(!actions.is_empty());
     }
 

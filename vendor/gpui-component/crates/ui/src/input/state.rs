@@ -323,6 +323,7 @@ pub struct InputState {
     pub(super) text_align: TextAlign,
     pub(super) highlight_ranges: Vec<(Range<usize>, Hsla)>,
     pub(super) highlight_range_roles: Vec<String>,
+    pub(super) hovered_highlight_range: Option<(Range<usize>, String)>,
 
     /// The mask pattern for formatting the input text
     pub(crate) mask_pattern: MaskPattern,
@@ -482,6 +483,7 @@ impl InputState {
             text_align: TextAlign::Left,
             highlight_ranges: Vec::new(),
             highlight_range_roles: Vec::new(),
+            hovered_highlight_range: None,
             lsp: Lsp::default(),
             diagnostic_popover: None,
             context_menu: None,
@@ -614,12 +616,14 @@ impl InputState {
 
     /// Set byte ranges that should render in custom colors for plain inputs.
     pub fn set_highlight_ranges(&mut self, ranges: Vec<(Range<usize>, Hsla)>) {
+        self.hovered_highlight_range = None;
         self.highlight_range_roles = vec!["highlight".to_string(); ranges.len()];
         self.highlight_ranges = ranges;
     }
 
     /// Set byte ranges plus semantic role names for state receipts.
     pub fn set_highlight_ranges_with_roles(&mut self, ranges: Vec<(Range<usize>, Hsla, String)>) {
+        self.hovered_highlight_range = None;
         self.highlight_range_roles = ranges.iter().map(|(_, _, role)| role.clone()).collect();
         self.highlight_ranges = ranges
             .into_iter()
@@ -629,6 +633,7 @@ impl InputState {
 
     /// Remove all custom highlight ranges. Empty is a meaningful replacement.
     pub fn clear_highlight_ranges(&mut self) {
+        self.hovered_highlight_range = None;
         self.highlight_ranges.clear();
         self.highlight_range_roles.clear();
     }
@@ -641,6 +646,36 @@ impl InputState {
     /// Semantic role names aligned with [`Self::highlight_ranges`].
     pub fn highlight_range_roles(&self) -> &[String] {
         &self.highlight_range_roles
+    }
+
+    /// Highlight range currently under the mouse, paired with its semantic role.
+    pub fn hovered_highlight_range(&self) -> Option<(Range<usize>, String)> {
+        self.hovered_highlight_range.clone()
+    }
+
+    pub(super) fn update_hovered_highlight_range(&mut self, offset: usize, cx: &mut Context<Self>) {
+        let hovered_range = self
+            .highlight_ranges
+            .iter()
+            .zip(self.highlight_range_roles.iter())
+            .find_map(|((range, _), role)| {
+                if range.contains(&offset) {
+                    Some((range.clone(), role.clone()))
+                } else {
+                    None
+                }
+            });
+
+        if self.hovered_highlight_range != hovered_range {
+            self.hovered_highlight_range = hovered_range;
+            cx.notify();
+        }
+    }
+
+    pub(super) fn clear_hovered_highlight_range(&mut self, cx: &mut Context<Self>) {
+        if self.hovered_highlight_range.take().is_some() {
+            cx.notify();
+        }
     }
 
     /// Set enable/disable line number, only for [`InputMode::CodeEditor`] mode.
@@ -1046,6 +1081,34 @@ impl InputState {
     /// editor before its first paint.
     pub fn scroll_to_bottom_after_layout(&mut self, cx: &mut Context<Self>) {
         self.scroll_to_bottom_after_layout = true;
+        cx.notify();
+    }
+
+    /// Replace the entire text while keeping the current scroll position,
+    /// placing the cursor at `cursor` (byte offset, clamped to the new text).
+    ///
+    /// Unlike `set_value` (which resets the scroll offset to the top) followed
+    /// by `set_selection` (whose `scroll_to` then re-anchors the cursor at the
+    /// viewport edge), this keeps the viewport exactly where it was. Hosts use
+    /// it for in-place rewrites during typing (normalization, token fixups,
+    /// formatting) so the view does not jump. If the new cursor happens to be
+    /// outside the viewport, the regular cursor tracking brings it back into
+    /// view on the next frame.
+    pub fn set_value_preserving_scroll(
+        &mut self,
+        value: impl Into<SharedString>,
+        cursor: usize,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let offset = self.scroll_handle.offset();
+        self.set_value(value, window, cx);
+        let cursor = cursor.min(self.text.len());
+        self.selected_range = (cursor..cursor).into();
+        self.selection_reversed = false;
+        self.update_scroll_offset(Some(offset), cx);
+        self.deferred_scroll_offset = None;
+        cx.emit(InputEvent::SelectionChange);
         cx.notify();
     }
 
@@ -1507,6 +1570,7 @@ impl InputState {
         // Show diagnostic popover on mouse move
         let offset = self.index_for_mouse_position(event.position);
         self.handle_mouse_move(offset, event, window, cx);
+        self.update_hovered_highlight_range(offset, cx);
 
         if self.mode.is_code_editor() {
             if let Some(diagnostic) = self
@@ -2096,6 +2160,10 @@ impl InputState {
         let range_utf16 = self.range_to_utf16(&self.selected_range.into());
         let range = self.range_from_utf16(&range_utf16);
         self.text.slice(range)
+    }
+
+    pub fn highlight_range_bounds(&self, range: &Range<usize>) -> Option<Bounds<Pixels>> {
+        self.range_to_bounds(range)
     }
 
     pub(crate) fn range_to_bounds(&self, range: &Range<usize>) -> Option<Bounds<Pixels>> {

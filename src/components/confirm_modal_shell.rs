@@ -1,13 +1,27 @@
-use gpui::{div, prelude::*, px, AnyElement, Div, Rgba, SharedString, Stateful};
+use gpui::{
+    div, prelude::*, px, AnyElement, App, ClickEvent, Div, Rgba, SharedString, Stateful, Window,
+};
 
+use crate::components::footer_chrome::{
+    render_footer_hint_action_button_frame, FooterHintActionButtonFrameSpec,
+    FooterHintButtonLayoutOverrides, FooterHintContentJustify,
+};
 use crate::dev_style_tool::{
     runtime_overrides, StyleValue, CONFIRM_MODAL_GAP_KNOB_ID,
     CONFIRM_MODAL_HEADER_ACCENT_HEIGHT_KNOB_ID, CONFIRM_MODAL_HEADER_ACCENT_WIDTH_KNOB_ID,
     CONFIRM_MODAL_HEADER_GAP_KNOB_ID, CONFIRM_MODAL_PADDING_X_KNOB_ID,
     CONFIRM_MODAL_PADDING_Y_KNOB_ID, CONFIRM_MODAL_RADIUS_KNOB_ID,
 };
+use crate::theme::Theme;
 
 pub(crate) const CONFIRM_MODAL_SHELL_ID: &str = "modal-shell:confirm";
+pub(crate) const MODAL_WIDTH_PX: f32 = 360.0;
+/// Wider request used by parent-attached dialogs. Native modal windows clamp
+/// through `MODAL_WIDTH_PX`, so this variant exists only for callers whose
+/// parent surface can host the wider layout.
+pub(crate) const PARENT_MODAL_WIDTH_PX: f32 = 448.0;
+pub(crate) const MODAL_ACTION_DISABLED_OPACITY: f32 = 0.45;
+pub(crate) const MODAL_ACTION_ROW_TOP_MARGIN_PX: f32 = 12.0;
 pub(crate) const CONFIRM_MODAL_HEADER_ACCENT_WIDTH: f32 = 2.0;
 pub(crate) const CONFIRM_MODAL_HEADER_ACCENT_HEIGHT: f32 = 14.0;
 pub(crate) const CONFIRM_MODAL_HEADER_GAP: f32 = 8.0;
@@ -25,6 +39,18 @@ pub(crate) struct ConfirmModalShellConfig {
     pub(crate) radius: f32,
     pub(crate) offset_y: f32,
     pub(crate) opacity: f32,
+}
+
+pub(crate) struct ModalActionRowButton {
+    pub(crate) id: &'static str,
+    pub(crate) label: SharedString,
+    pub(crate) key: SharedString,
+    pub(crate) slot_width_px: f32,
+    pub(crate) height_px: f32,
+    pub(crate) selected: bool,
+    pub(crate) enabled: bool,
+    pub(crate) layout: FooterHintButtonLayoutOverrides,
+    pub(crate) on_click: Box<dyn Fn(&ClickEvent, &mut Window, &mut App) + 'static>,
 }
 
 pub(crate) fn confirm_modal_header(
@@ -65,6 +91,53 @@ pub(crate) fn confirm_modal_header(
                 .text_color(title_color)
                 .child(title.into()),
         )
+}
+
+pub(crate) fn modal_action_row(
+    id: &'static str,
+    gap_px: f32,
+    buttons: Vec<ModalActionRowButton>,
+    theme: &Theme,
+) -> Stateful<Div> {
+    let mut row = div()
+        .id(id)
+        .w_full()
+        .flex()
+        .flex_row()
+        .items_center()
+        .justify_end()
+        .gap(px(gap_px));
+
+    for button in buttons {
+        let enabled = button.enabled;
+        let on_click = button.on_click;
+        row = row.child(
+            render_footer_hint_action_button_frame(
+                FooterHintActionButtonFrameSpec {
+                    id: button.id,
+                    label: button.label,
+                    key: button.key,
+                    slot_width_px: button.slot_width_px,
+                    height_px: button.height_px,
+                    selected: button.selected,
+                    key_first: false,
+                    justify: FooterHintContentJustify::Center,
+                    layout: button.layout,
+                },
+                theme,
+            )
+            .when(!enabled, |style| {
+                style.opacity(MODAL_ACTION_DISABLED_OPACITY)
+            })
+            .on_click(move |event, window, cx| {
+                if enabled {
+                    on_click(event, window, cx);
+                }
+            }),
+        );
+    }
+
+    row
 }
 
 pub(crate) fn confirm_modal_shell(

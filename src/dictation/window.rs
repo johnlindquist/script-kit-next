@@ -9,9 +9,18 @@ use crate::dictation::visualizer::silent_bars;
 // ---------------------------------------------------------------------------
 
 /// Glass bar width in pixels.
-pub(crate) const OVERLAY_WIDTH_PX: f32 = 520.0;
-/// Glass bar height in pixels.
-pub(crate) const OVERLAY_HEIGHT_PX: f32 = 72.0;
+pub(crate) const OVERLAY_WIDTH_PX: f32 = 560.0;
+/// Glass bar base height in pixels.
+///
+/// The overlay opens at this height (header row + one caption line + native
+/// footer rail) and only ever GROWS while a session runs — one
+/// [`TRANSCRIPT_LINE_HEIGHT_PX`] per wrapped caption line, up to
+/// [`OVERLAY_MAX_EXTRA_CAPTION_LINES`], anchored at the bottom edge so the
+/// pill extends upward. Phase changes never resize; content swaps inline.
+pub(crate) const OVERLAY_HEIGHT_PX: f32 = 100.0;
+/// Height of the header row: timer (left), destination verb chips (center),
+/// target badge (right).
+pub(crate) const OVERLAY_HEADER_ROW_HEIGHT_PX: f32 = 26.0;
 /// Local footer/debug identity for the live overlay, separate from AppView footer ownership.
 pub(crate) const DICTATION_OVERLAY_FOOTER_SURFACE: &str = "dictation_overlay";
 /// Stable automation target id for the live dictation overlay window.
@@ -21,8 +30,14 @@ pub(crate) const DICTATION_OVERLAY_AUTOMATION_ID: &str = "dictation";
 pub(crate) const OVERLAY_RADIUS_PX: f32 = crate::ui::chrome::LIQUID_GLASS_PANEL_RADIUS_PX;
 /// Horizontal padding inside the signal band content.
 pub(crate) const OVERLAY_HORIZONTAL_PADDING_PX: f32 = 11.0;
-/// Font size for timer, status, and transcript text.
+/// Font size for timer, status labels, and chip verbs.
 pub(crate) const STATUS_TEXT_SIZE_PX: f32 = 11.5;
+/// Font size for the live transcript / caption line. Matches the main-menu
+/// footer label size (`FooterMetricsTokens::label_font_size`) so the caption
+/// reads comfortably from a distance.
+pub(crate) const TRANSCRIPT_TEXT_SIZE_PX: f32 = 13.0;
+/// Icon size inside the destination verb chips.
+pub(crate) const CHIP_ICON_SIZE_PX: f32 = 11.0;
 /// Width of the right-hand target badge slot (replaces spacer when target is shown).
 pub(crate) const TARGET_BADGE_SLOT_WIDTH_PX: f32 = 108.0;
 /// App icon size in the external-app destination badge.
@@ -39,9 +54,17 @@ pub(crate) const WAVEFORM_BAR_MIN_HEIGHT_PX: f32 = 4.0;
 /// Maximum waveform bar height (peak level).
 pub(crate) const WAVEFORM_BAR_MAX_HEIGHT_PX: f32 = 18.0;
 
-/// Duration of the fade applied to newly transcribed text and to the
-/// transcript line when it re-enters after a phase swap.
+/// Duration of the fade applied to each newly revealed caption word.
 pub(crate) const TRANSCRIPT_FADE_IN_MS: u64 = 280;
+
+/// Line height of the wrapped caption block.
+pub(crate) const TRANSCRIPT_LINE_HEIGHT_PX: f32 = 19.0;
+
+/// How many wrapped caption lines beyond the first the window grows to fit
+/// (Super Whisper pattern: the pill gets taller as the transcript
+/// accumulates). Past this, older lines clip above the block while the
+/// bottom-anchored layout keeps the newest words visible.
+pub(crate) const OVERLAY_MAX_EXTRA_CAPTION_LINES: usize = 4;
 
 /// Number of transcribing-state dots.
 pub(crate) const TRANSCRIBING_DOT_COUNT: usize = 3;
@@ -86,6 +109,189 @@ pub(crate) fn waveform_bar_height(level: f32) -> f32 {
 /// Returns true if any bar exceeds the sound threshold.
 pub(crate) fn has_sound(bars: &[f32; WAVEFORM_BAR_COUNT]) -> bool {
     bars.iter().any(|&bar| bar > SOUND_THRESHOLD)
+}
+
+/// Destination verb chips shown in the header row: explicit one-click
+/// targets replacing the removed click-to-cycle badge. Order matches the
+/// delivery verbs: Paste (frontmost app), Today (day page capture), Ask
+/// (quick AI), Send (Agent Chat).
+///
+/// The third field is the Lucide icon name, chosen to match how each concept
+/// is drawn elsewhere in the app: `clipboard-paste` (paste builtins),
+/// `calendar-days` (day/today), `sparkles` (ask-AI builtins), and `bot`
+/// (the Agent Chat builtin and footer agent chip).
+pub(crate) const DICTATION_CHIP_TARGETS: [(crate::dictation::DictationTarget, &str, &str); 4] = [
+    (
+        crate::dictation::DictationTarget::ExternalApp,
+        "Paste",
+        "clipboard-paste",
+    ),
+    (
+        crate::dictation::DictationTarget::DayPageToday,
+        "Today",
+        "calendar-days",
+    ),
+    (
+        crate::dictation::DictationTarget::QuickAiQuestion,
+        "Ask",
+        "sparkles",
+    ),
+    (
+        crate::dictation::DictationTarget::TabAiHarness,
+        "Send",
+        "bot",
+    ),
+];
+
+/// Resolve a chip's Lucide icon name to an embedded asset path.
+pub(crate) fn chip_icon_path(lucide_name: &str) -> Option<gpui::SharedString> {
+    use gpui_component::IconNamed;
+    crate::icons::lucide_from_str(lucide_name).map(|icon| icon.path())
+}
+
+/// Shared icon+verb chip styling for the destination row.
+///
+/// Used by both the runtime overlay (which adds click/tooltip handlers) and
+/// the Storybook preview (which stays static), so the two can never drift.
+fn destination_chip_base(
+    verb: &'static str,
+    icon: &'static str,
+    is_active: bool,
+    dimmed: bool,
+    send_mode: bool,
+) -> gpui::Stateful<Div> {
+    let theme = get_cached_theme();
+    let text_muted = theme.colors.text.muted.with_opacity(OPACITY_TEXT_MUTED);
+    let text_active = theme.colors.text.primary.with_opacity(OPACITY_ACTIVE);
+    let label_color = if is_active { text_active } else { text_muted };
+
+    let mut chip = div()
+        .id(SharedString::from(format!("dictation-chip-{verb}")))
+        .px(px(8.))
+        .py(px(1.))
+        .rounded(px(999.))
+        .flex()
+        .flex_row()
+        .items_center()
+        .gap(px(4.))
+        .text_size(px(STATUS_TEXT_SIZE_PX - 1.0))
+        .font_family(FONT_SYSTEM_UI)
+        .text_color(label_color);
+
+    if let Some(icon_path) = chip_icon_path(icon) {
+        chip = chip.child(
+            svg()
+                .path(icon_path)
+                .size(px(CHIP_ICON_SIZE_PX))
+                .flex_shrink_0()
+                .text_color(label_color),
+        );
+    }
+    chip = chip.child(verb);
+    if send_mode {
+        chip = chip.child(
+            div()
+                .text_size(px(STATUS_TEXT_SIZE_PX - 1.0))
+                .font_family(FONT_SYSTEM_UI)
+                .text_color(label_color)
+                .child("\u{21b5}"),
+        );
+    }
+
+    if is_active {
+        chip = chip
+            .bg(theme.colors.background.main.with_opacity(OPACITY_ACTIVE))
+            .border_1()
+            .border_color(theme.colors.ui.border.with_opacity(OPACITY_SELECTED));
+    } else {
+        chip = chip.border_1().border_color(gpui::transparent_black());
+    }
+
+    if dimmed {
+        chip = chip.opacity(0.55).cursor_default();
+    }
+
+    chip
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ChipClickBehavior {
+    Ignore,
+    Retarget,
+    SendTo,
+}
+
+pub(crate) fn chip_click_behavior(
+    phase: &DictationSessionPhase,
+    armed: bool,
+    option_held: bool,
+) -> ChipClickBehavior {
+    if !matches!(
+        phase,
+        DictationSessionPhase::Recording | DictationSessionPhase::Confirming
+    ) {
+        return ChipClickBehavior::Ignore;
+    }
+
+    if !armed || option_held {
+        ChipClickBehavior::Retarget
+    } else {
+        ChipClickBehavior::SendTo
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum DestinationChipMode {
+    Aim,
+    Send,
+}
+
+pub(crate) fn destination_chip_mode(
+    phase: &DictationSessionPhase,
+    armed: bool,
+    option_held: bool,
+) -> DestinationChipMode {
+    match chip_click_behavior(phase, armed, option_held) {
+        ChipClickBehavior::SendTo => DestinationChipMode::Send,
+        ChipClickBehavior::Ignore | ChipClickBehavior::Retarget => DestinationChipMode::Aim,
+    }
+}
+
+/// Tooltip copy for a destination chip, naming the concrete outcome.
+pub(crate) fn chip_tooltip_label(
+    target: crate::dictation::DictationTarget,
+    mode: DestinationChipMode,
+) -> SharedString {
+    let frontmost_app_name = || {
+        crate::frontmost_app_tracker::get_last_real_app()
+            .map(|app| app.name.trim().to_string())
+            .filter(|name| !name.is_empty())
+    };
+
+    match mode {
+        DestinationChipMode::Send => match target {
+            crate::dictation::DictationTarget::ExternalApp => match frontmost_app_name() {
+                Some(name) => format!("Stop & paste into {name}").into(),
+                None => "Stop & paste into the frontmost app".into(),
+            },
+            crate::dictation::DictationTarget::DayPageToday => {
+                "Stop & append to today's note".into()
+            }
+            crate::dictation::DictationTarget::QuickAiQuestion => "Stop & ask AI".into(),
+            crate::dictation::DictationTarget::TabAiHarness => "Stop & send to Agent Chat".into(),
+            other => other.overlay_label().into(),
+        },
+        DestinationChipMode::Aim => match target {
+            crate::dictation::DictationTarget::ExternalApp => match frontmost_app_name() {
+                Some(name) => format!("Dictate into {name}").into(),
+                None => "Dictate into the frontmost app".into(),
+            },
+            crate::dictation::DictationTarget::DayPageToday => "Dictate to today's note".into(),
+            crate::dictation::DictationTarget::QuickAiQuestion => "Dictate to AI".into(),
+            crate::dictation::DictationTarget::TabAiHarness => "Dictate to Agent Chat".into(),
+            other => other.overlay_label().into(),
+        },
+    }
 }
 
 /// Build the overlay badge label for the current delivery target.
@@ -167,6 +373,30 @@ pub(crate) fn transcribing_dot_opacities_at(elapsed_secs: f64) -> [f32; TRANSCRI
     opacities
 }
 
+/// Gentle pulse cycle for the caption while it is being processed
+/// (transcribing/delivering), signalling "working on this text".
+pub(crate) const PROCESSING_PULSE_PERIOD_SECS: f64 = 1.6;
+/// Minimum caption opacity during the processing pulse.
+pub(crate) const PROCESSING_PULSE_OPACITY_MIN: f32 = 0.45;
+/// Maximum caption opacity during the processing pulse.
+pub(crate) const PROCESSING_PULSE_OPACITY_MAX: f32 = 0.9;
+
+/// Compute the processing-caption pulse opacity at a point in time.
+///
+/// A plain sine breath between the min/max opacities; the reduced-motion
+/// fallback is the static midpoint.
+pub(crate) fn processing_pulse_opacity_at(elapsed_secs: f64) -> f32 {
+    let t = std::f64::consts::TAU * elapsed_secs / PROCESSING_PULSE_PERIOD_SECS;
+    let wave = 0.5 + 0.5 * t.sin();
+    PROCESSING_PULSE_OPACITY_MIN
+        + (PROCESSING_PULSE_OPACITY_MAX - PROCESSING_PULSE_OPACITY_MIN) * wave as f32
+}
+
+/// Static processing-caption opacity for the reduced-motion fallback.
+pub(crate) fn processing_pulse_opacity_static() -> f32 {
+    (PROCESSING_PULSE_OPACITY_MIN + PROCESSING_PULSE_OPACITY_MAX) / 2.0
+}
+
 /// Snapshot of the dictation overlay's visual state.
 ///
 /// Updated on every level/phase change and consumed by the overlay renderer.
@@ -196,10 +426,10 @@ impl Default for DictationOverlayState {
 // ---------------------------------------------------------------------------
 
 use gpui::{
-    div, ease_out_quint, prelude::*, px, rgba, svg, Animation, AnimationExt, AnyElement, App,
-    Context, Div, ElementId, FocusHandle, Focusable, IntoElement, KeyDownEvent, MouseButton,
-    MouseDownEvent, ParentElement, Render, StatefulInteractiveElement, Styled, Task, Window,
-    WindowBounds, WindowOptions,
+    div, prelude::*, px, relative, rgba, svg, AnyElement, App, Context, Div, FocusHandle,
+    Focusable, IntoElement, KeyDownEvent, MouseButton, MouseDownEvent, ParentElement, Render,
+    StatefulInteractiveElement, Styled, StyledText, Task, TextRun, Window, WindowBounds,
+    WindowOptions,
 };
 
 use crate::list_item::FONT_SYSTEM_UI;
@@ -208,7 +438,7 @@ use crate::theme::opacity::{OPACITY_ACTIVE, OPACITY_SELECTED, OPACITY_SUBTLE, OP
 use crate::ui_foundation::HexColorExt;
 
 use parking_lot::Mutex;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::OnceLock;
 use std::time::Instant;
 
@@ -281,6 +511,8 @@ fn install_global_escape_monitor() {
     use cocoa::base::{id, nil};
     use objc::{class, msg_send, sel, sel_impl};
 
+    OPTION_HELD.store(false, Ordering::SeqCst);
+
     if crate::platform::require_main_thread("install_global_escape_monitor") {
         return;
     }
@@ -290,29 +522,39 @@ fn install_global_escape_monitor() {
         return;
     }
 
-    // NSEventMaskKeyDown = 1 << 10
-    let mask: u64 = 1 << 10;
+    // NSEventMaskKeyDown = 1 << 10, NSEventMaskFlagsChanged = 1 << 12
+    let mask: u64 = (1 << 10) | (1 << 12);
 
     let block = block::ConcreteBlock::new(move |event: id| {
         // SAFETY: `event` is a valid NSEvent passed by AppKit.
-        // keyCode 53 = Escape, keyCode 36 = Return/Enter.
-        let key_code: u16 = unsafe { msg_send![event, keyCode] };
-        match key_code {
-            53 => {
-                tracing::info!(
-                    category = "DICTATION",
-                    "Global key monitor: Escape pressed in external app"
-                );
-                ESCAPE_REQUESTED.store(true, std::sync::atomic::Ordering::SeqCst);
+        let event_type: u64 = unsafe { msg_send![event, type] };
+        if event_type == 12 {
+            // NSEventModifierFlagOption = 1 << 19
+            let flags: u64 = unsafe { msg_send![event, modifierFlags] };
+            OPTION_HELD.store((flags & (1 << 19)) != 0, Ordering::SeqCst);
+            return;
+        }
+
+        if event_type == 10 {
+            // keyCode 53 = Escape, keyCode 36 = Return/Enter.
+            let key_code: u16 = unsafe { msg_send![event, keyCode] };
+            match key_code {
+                53 => {
+                    tracing::info!(
+                        category = "DICTATION",
+                        "Global key monitor: Escape pressed in external app"
+                    );
+                    ESCAPE_REQUESTED.store(true, std::sync::atomic::Ordering::SeqCst);
+                }
+                36 => {
+                    tracing::info!(
+                        category = "DICTATION",
+                        "Global key monitor: Enter pressed in external app"
+                    );
+                    ENTER_REQUESTED.store(true, std::sync::atomic::Ordering::SeqCst);
+                }
+                _ => {}
             }
-            36 => {
-                tracing::info!(
-                    category = "DICTATION",
-                    "Global key monitor: Enter pressed in external app"
-                );
-                ENTER_REQUESTED.store(true, std::sync::atomic::Ordering::SeqCst);
-            }
-            _ => {}
         }
     });
     let block = block.copy();
@@ -342,12 +584,16 @@ fn install_global_escape_monitor() {
 }
 
 #[cfg(not(target_os = "macos"))]
-fn install_global_escape_monitor() {}
+fn install_global_escape_monitor() {
+    OPTION_HELD.store(false, Ordering::SeqCst);
+}
 
 /// Remove the global key-down monitor.
 #[cfg(target_os = "macos")]
 fn remove_global_escape_monitor() {
     use objc::{class, msg_send, sel, sel_impl};
+
+    OPTION_HELD.store(false, Ordering::SeqCst);
 
     if crate::platform::require_main_thread("remove_global_escape_monitor") {
         return;
@@ -366,7 +612,9 @@ fn remove_global_escape_monitor() {
 }
 
 #[cfg(not(target_os = "macos"))]
-fn remove_global_escape_monitor() {}
+fn remove_global_escape_monitor() {
+    OPTION_HELD.store(false, Ordering::SeqCst);
+}
 
 /// Flag: the global key monitor detected an Escape press that the overlay
 /// needs to process. Checked by `process_global_keys_if_requested` inside
@@ -376,6 +624,13 @@ static ESCAPE_REQUESTED: std::sync::atomic::AtomicBool = std::sync::atomic::Atom
 /// Flag: the global key monitor detected an Enter press while in Confirming
 /// phase. Enter in Confirming = stop and transcribe the session.
 static ENTER_REQUESTED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Flag: the Option (⌥) key is currently held. Fed by the global
+/// FlagsChanged monitor (other app focused) and the overlay's own
+/// `on_modifiers_changed` listener (overlay focused); read at render time to
+/// flip the destination chips between send and aim affordances. Reset on
+/// monitor install/remove so state never leaks across sessions.
+static OPTION_HELD: AtomicBool = AtomicBool::new(false);
 
 // ---------------------------------------------------------------------------
 // Confirming-phase copy constants (single source of truth)
@@ -471,20 +726,16 @@ pub(crate) fn overlay_escape_action(
     }
 }
 
-/// Return the overlay height for a given session phase.
+/// Resize the overlay window to a new height, growing toward the screen
+/// center so the pill never extends offscreen.
 ///
-/// All phases use the same pill height — confirming swaps content inline
-/// rather than expanding vertically (which would push off the bottom edge).
-fn overlay_height_for_phase(_phase: &DictationSessionPhase) -> f32 {
-    OVERLAY_HEIGHT_PX
-}
-
-/// Resize and reposition the overlay window to match the given phase height.
-///
-/// The pill stays bottom-anchored: when height grows, the top edge moves up.
-/// When height shrinks, the top edge moves down.
+/// AppKit frames are bottom-left origin with y increasing upward. When the
+/// window sits in the bottom half of its screen (the default resting spot
+/// above the dock) the bottom edge stays fixed and the top rises; when the
+/// user has moved it to the top half, the top edge stays fixed and the
+/// bottom descends.
 #[cfg(target_os = "macos")]
-fn resize_overlay_for_phase(window: &mut Window, target_height: f32) {
+fn resize_overlay_height(window: &mut Window, target_height: f32) {
     if let Ok(wh) = raw_window_handle::HasWindowHandle::window_handle(window) {
         if let raw_window_handle::RawWindowHandle::AppKit(appkit) = wh.as_raw() {
             use cocoa::base::id;
@@ -493,8 +744,8 @@ fn resize_overlay_for_phase(window: &mut Window, target_height: f32) {
 
             let ns_view = appkit.ns_view.as_ptr() as id;
             // SAFETY: ns_view is from the live overlay window on the main thread.
-            // We read the current frame, adjust origin.y to keep the bottom edge
-            // fixed, set the new height, and apply via setFrame:display:.
+            // We read the current frame, pick the anchored edge from the
+            // window's position on its screen, and apply via setFrame:display:.
             unsafe {
                 let ns_window: id = msg_send![ns_view, window];
                 if ns_window.is_null() {
@@ -503,12 +754,31 @@ fn resize_overlay_for_phase(window: &mut Window, target_height: f32) {
                 let current_frame: NSRect = msg_send![ns_window, frame];
                 let old_height = current_frame.size.height;
                 let new_height = target_height as f64;
-                let delta = new_height - old_height;
+                if (new_height - old_height).abs() < 0.5 {
+                    return;
+                }
+
+                let screen: id = msg_send![ns_window, screen];
+                let grow_down = if screen.is_null() {
+                    false
+                } else {
+                    let visible: NSRect = msg_send![screen, visibleFrame];
+                    let window_center = current_frame.origin.y + old_height / 2.0;
+                    let screen_center = visible.origin.y + visible.size.height / 2.0;
+                    window_center > screen_center
+                };
+
+                let origin_y = if grow_down {
+                    // Top edge fixed: the bottom-left origin descends as the
+                    // window gets taller.
+                    current_frame.origin.y - (new_height - old_height)
+                } else {
+                    // Bottom edge fixed: the origin holds and the top rises.
+                    current_frame.origin.y
+                };
+
                 let new_frame = NSRect::new(
-                    cocoa::foundation::NSPoint::new(
-                        current_frame.origin.x,
-                        current_frame.origin.y - delta,
-                    ),
+                    cocoa::foundation::NSPoint::new(current_frame.origin.x, origin_y),
                     cocoa::foundation::NSSize::new(current_frame.size.width, new_height),
                 );
                 let () = msg_send![ns_window, setFrame: new_frame display: cocoa::base::YES];
@@ -518,7 +788,32 @@ fn resize_overlay_for_phase(window: &mut Window, target_height: f32) {
 }
 
 #[cfg(not(target_os = "macos"))]
-fn resize_overlay_for_phase(_window: &mut Window, _target_height: f32) {}
+fn resize_overlay_height(_window: &mut Window, _target_height: f32) {}
+
+/// Estimate how many lines `text` wraps to at ~`chars_per_line` characters,
+/// using greedy word wrap. Drives window growth only — the text system does
+/// the real wrapping — so being off by a character or two just means the
+/// block clips a hair earlier or later.
+pub(crate) fn estimate_caption_lines(text: &str, chars_per_line: usize) -> usize {
+    let chars_per_line = chars_per_line.max(1);
+    let mut lines = 0usize;
+    let mut current = 0usize;
+    for word in text.split_whitespace() {
+        let word_len = word.chars().count().min(chars_per_line);
+        let needed = if current == 0 {
+            word_len
+        } else {
+            current + 1 + word_len
+        };
+        if current == 0 || needed > chars_per_line {
+            lines += 1;
+            current = word_len;
+        } else {
+            current = needed;
+        }
+    }
+    lines.max(1)
+}
 
 /// The GPUI entity that renders the compact dictation pill.
 pub struct DictationOverlay {
@@ -526,19 +821,35 @@ pub struct DictationOverlay {
     display_bars: [f32; WAVEFORM_BAR_COUNT],
     focus_handle: FocusHandle,
     last_render_logged_phase: Option<DictationSessionPhase>,
-    /// When the transcribing animation started (for pulse phase computation).
-    transcribing_started_at: Option<Instant>,
+    /// When the processing (transcribing/delivering) animation started, for
+    /// dot-stagger and caption-pulse phase computation.
+    processing_started_at: Option<Instant>,
     /// Whether the user has "Reduce motion" enabled in system accessibility.
     reduced_motion: bool,
-    /// Char offset into `state.transcript` where the newest partial text
-    /// begins; everything before it is already on screen and stays static.
-    transcript_fresh_from: usize,
-    /// Bumped on each transcript change so the fresh-tail fade restarts.
-    transcript_generation: u64,
-    /// Keeps the transcribing tick loop alive; dropped when phase changes.
+    /// Paces the word-by-word caption reveal between raw partial updates.
+    caption: crate::dictation::live_caption::LiveCaption,
+    /// Extra wrapped caption lines the window has grown to fit this session.
+    /// Grows monotonically (never shrinks mid-session) so the pill is stable.
+    extra_caption_lines: usize,
+    /// Scroll position of the caption block once it exceeds the max window
+    /// height — auto-follows the newest text, but the user can scroll back.
+    caption_scroll: gpui::ScrollHandle,
+    /// Caption generation the scroll last followed, so auto-follow fires
+    /// once per new word instead of fighting the user's scrollback.
+    caption_scrolled_generation: u64,
+    /// Keeps the processing tick loop alive; dropped when phase changes.
     _animation_task: Option<Task<()>>,
     /// Drains native footer button clicks for the dictation window.
     _footer_action_task: Option<Task<()>>,
+}
+
+/// Phases where the app is working on the captured audio and the overlay
+/// should hold its layout with the caption pulsing.
+fn is_processing_phase(phase: &DictationSessionPhase) -> bool {
+    matches!(
+        phase,
+        DictationSessionPhase::Transcribing | DictationSessionPhase::Delivering
+    )
 }
 
 impl DictationOverlay {
@@ -548,13 +859,39 @@ impl DictationOverlay {
             display_bars: silent_bars(),
             focus_handle: cx.focus_handle(),
             last_render_logged_phase: None,
-            transcribing_started_at: None,
+            processing_started_at: None,
             reduced_motion: crate::platform::prefers_reduced_motion(),
-            transcript_fresh_from: 0,
-            transcript_generation: 0,
+            caption: crate::dictation::live_caption::LiveCaption::default(),
+            extra_caption_lines: 0,
+            caption_scroll: gpui::ScrollHandle::new(),
+            caption_scrolled_generation: 0,
             _animation_task: None,
             _footer_action_task: None,
         }
+    }
+
+    /// Scrollable runtime caption container, sharing the preview block's
+    /// geometry. Content beyond the max window height scrolls; auto-follow
+    /// is driven by [`Self::sync_caption_follow`].
+    fn caption_scroll_container(&self) -> gpui::Stateful<Div> {
+        render_caption_block_container()
+            .id("dictation-caption-scroll")
+            .overflow_y_scroll()
+            .track_scroll(&self.caption_scroll)
+    }
+
+    /// Keep the caption scrolled to the newest text: fires once per caption
+    /// change so a user scrolling back is not fought mid-read, but every new
+    /// word snaps the view back to the live tail.
+    fn sync_caption_follow(&mut self) {
+        if self.caption.generation() != self.caption_scrolled_generation {
+            self.caption_scrolled_generation = self.caption.generation();
+            self.caption_scroll.scroll_to_bottom();
+        }
+    }
+
+    fn transcript_armed(&self) -> bool {
+        !self.caption.visible_text().trim().is_empty()
     }
 
     fn ensure_native_footer_action_listener(&mut self, window: &Window, cx: &mut Context<Self>) {
@@ -596,7 +933,15 @@ impl DictationOverlay {
                     self.state.phase,
                     DictationSessionPhase::Recording | DictationSessionPhase::Confirming
                 ) {
-                    self.submit_overlay_session(window, cx);
+                    if self.transcript_armed() {
+                        self.submit_overlay_session(window, cx);
+                    } else {
+                        tracing::debug!(
+                            category = "DICTATION",
+                            phase = ?self.state.phase,
+                            "Ignoring footer submit action because transcript is unarmed"
+                        );
+                    }
                 } else {
                     self.close_overlay_from_within(window, cx);
                 }
@@ -643,24 +988,9 @@ impl DictationOverlay {
     }
 
     /// Dismiss the confirmation state and resume recording.
-    fn resume_recording(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    fn resume_recording(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
         self.state.phase = DictationSessionPhase::Recording;
         crate::dictation::set_overlay_phase(DictationSessionPhase::Recording);
-        resize_overlay_for_phase(window, OVERLAY_HEIGHT_PX);
-        cx.notify();
-    }
-
-    /// Advance the live dictation session to its next configured destination.
-    fn cycle_target(&mut self, cx: &mut Context<Self>) {
-        if self.state.phase != DictationSessionPhase::Recording {
-            return;
-        }
-
-        let Some(next_target) = crate::dictation::cycle_dictation_target() else {
-            return;
-        };
-
-        self.state.target = next_target;
         cx.notify();
     }
 
@@ -812,6 +1142,13 @@ impl DictationOverlay {
         // Enter is only meaningful in the Confirming phase (= stop & transcribe).
         let enter = ENTER_REQUESTED.swap(false, std::sync::atomic::Ordering::SeqCst);
         if enter && self.state.phase == DictationSessionPhase::Confirming {
+            if !self.transcript_armed() {
+                tracing::debug!(
+                    category = "DICTATION",
+                    "Ignoring global Enter request in Confirming phase because transcript is unarmed"
+                );
+                return GlobalKeyProcessResult::None;
+            }
             tracing::info!(
                 category = "DICTATION",
                 "Processing global Enter request in Confirming phase — stopping to transcribe"
@@ -866,25 +1203,10 @@ impl DictationOverlay {
         cx: &mut Context<Self>,
     ) {
         let previous_phase = self.state.phase.clone();
-        let entering_transcribing = state.phase == DictationSessionPhase::Transcribing
-            && self.state.phase != DictationSessionPhase::Transcribing;
-        let leaving_transcribing = state.phase != DictationSessionPhase::Transcribing
-            && self.state.phase == DictationSessionPhase::Transcribing;
-
-        // Resize the overlay when the phase changes height class.
-        let old_height = overlay_height_for_phase(&self.state.phase);
-        let new_height = overlay_height_for_phase(&state.phase);
-        if (new_height - old_height).abs() > f32::EPSILON {
-            tracing::info!(
-                category = "DICTATION",
-                from_phase = ?previous_phase,
-                to_phase = ?state.phase,
-                old_height,
-                new_height,
-                "Resizing dictation overlay for phase change"
-            );
-            resize_overlay_for_phase(window, new_height);
-        }
+        let entering_processing =
+            is_processing_phase(&state.phase) && !is_processing_phase(&self.state.phase);
+        let leaving_processing =
+            !is_processing_phase(&state.phase) && is_processing_phase(&self.state.phase);
 
         if previous_phase != state.phase {
             let max_bar = state.bars.iter().copied().fold(0.0_f32, f32::max);
@@ -912,27 +1234,65 @@ impl DictationOverlay {
                 state.bars
             };
 
-        // Track where newly transcribed text begins so the renderer can fade
-        // in just the fresh tail instead of popping the whole line.
-        if state.transcript != self.state.transcript {
-            self.transcript_fresh_from =
-                common_char_prefix_len(self.state.transcript.as_ref(), state.transcript.as_ref());
-            self.transcript_generation = self.transcript_generation.wrapping_add(1);
+        // Feed the caption reveal: recording/confirming stream words in on
+        // the paced clock (the 16 ms pump drives ticks); processing and
+        // terminal phases show everything they have immediately so the user
+        // sees the full text the app is working on.
+        match state.phase {
+            DictationSessionPhase::Recording | DictationSessionPhase::Confirming => {
+                self.caption.set_target(state.transcript.as_ref());
+                if self.reduced_motion {
+                    self.caption.reveal_all();
+                } else {
+                    self.caption.tick(Instant::now());
+                }
+            }
+            DictationSessionPhase::Transcribing
+            | DictationSessionPhase::Delivering
+            | DictationSessionPhase::Finished
+            | DictationSessionPhase::Failed(_) => {
+                if !state.transcript.is_empty() {
+                    self.caption.set_target(state.transcript.as_ref());
+                }
+                self.caption.reveal_all();
+            }
+            DictationSessionPhase::Idle => {}
+        }
+
+        // Grow the window toward the screen center (see
+        // `resize_overlay_height`) when the accumulated transcript needs more
+        // wrapped lines. Sized from the full committed text — not just the
+        // revealed prefix — so space is ready before the paced reveal reaches
+        // it, and never shrunk mid-session. At the growth cap the caption
+        // block scrolls instead.
+        if !matches!(state.phase, DictationSessionPhase::Idle) {
+            let target_lines =
+                estimate_caption_lines(&self.caption.target_text(), TRANSCRIPT_PREVIEW_MAX_CHARS);
+            let extra = target_lines
+                .saturating_sub(1)
+                .min(OVERLAY_MAX_EXTRA_CAPTION_LINES);
+            if extra > self.extra_caption_lines {
+                self.extra_caption_lines = extra;
+                resize_overlay_height(
+                    window,
+                    OVERLAY_HEIGHT_PX + extra as f32 * TRANSCRIPT_LINE_HEIGHT_PX,
+                );
+            }
         }
 
         self.state = state;
 
-        if entering_transcribing && !self.reduced_motion {
-            self.transcribing_started_at = Some(Instant::now());
+        if entering_processing && !self.reduced_motion {
+            self.processing_started_at = Some(Instant::now());
             // Spawn a tick loop that re-renders every TRANSCRIBING_TICK_MS so
-            // the sine-wave pulse progresses smoothly.
+            // the dot stagger and caption pulse progress smoothly.
             self._animation_task = Some(cx.spawn(async move |this, cx| loop {
                 cx.background_executor()
                     .timer(Duration::from_millis(TRANSCRIBING_TICK_MS))
                     .await;
                 let should_stop = this
                     .update(cx, |view, cx| {
-                        if view.state.phase != DictationSessionPhase::Transcribing {
+                        if !is_processing_phase(&view.state.phase) {
                             return true;
                         }
                         cx.notify();
@@ -943,24 +1303,22 @@ impl DictationOverlay {
                     break;
                 }
             }));
-        } else if leaving_transcribing {
-            self.transcribing_started_at = None;
+        } else if leaving_processing {
+            self.processing_started_at = None;
             self._animation_task = None;
         }
 
         cx.notify();
     }
 
-    /// Render the right-side target badge, matching footer-button mouse
-    /// affordances when cycling is available.
-    fn render_target_badge_slot(
-        &self,
-        interactive: bool,
-        cx: &mut Context<Self>,
-    ) -> impl IntoElement {
+    /// Render the right-side target badge as a pure destination indicator.
+    ///
+    /// Destination *selection* happens through the explicit verb chip row
+    /// ([`Self::render_destination_chip_row`]) — the badge never cycles on
+    /// click, so the current target is always visible and never hidden state
+    /// discovered by clicking through it.
+    fn render_target_badge_slot(&self, dimmed: bool) -> impl IntoElement {
         let theme = get_cached_theme();
-        let hover_bg = theme.colors.background.main.with_opacity(OPACITY_SELECTED);
-        let active_bg = theme.colors.background.main.with_opacity(OPACITY_ACTIVE);
 
         let target_label = target_badge_label(self.state.target);
         let badge_content = render_target_badge_content(self.state.target);
@@ -978,18 +1336,10 @@ impl DictationOverlay {
                 gpui_component::tooltip::Tooltip::new(target_label.clone()).build(window, cx)
             })
             .child(badge_content);
-
-        if interactive {
-            badge = badge
-                .cursor_pointer()
-                .hover(move |style| style.bg(hover_bg))
-                .active(move |style| style.bg(active_bg))
-                .on_mouse_down(
-                    MouseButton::Left,
-                    cx.listener(|this, _event: &MouseDownEvent, _window, cx| {
-                        this.cycle_target(cx);
-                    }),
-                );
+        if dimmed {
+            // Processing: the destination is locked in — keep it visible but
+            // clearly inert.
+            badge = badge.opacity(0.55);
         }
 
         div()
@@ -999,6 +1349,285 @@ impl DictationOverlay {
             .items_center()
             .justify_end()
             .child(badge)
+    }
+
+    /// Render the destination verb chips: Paste · Today · Ask · Send.
+    ///
+    /// Chip clicks follow [`chip_click_behavior`]: with a recognized
+    /// transcript ("armed") a click stops the session and delivers there in
+    /// one gesture; unarmed — or with Option held — a click only retargets
+    /// the session (and becomes the new sticky default) while recording
+    /// continues. The active chip stays highlighted so the destination is
+    /// always visible, and armed send-mode chips carry a trailing ↵ glyph.
+    /// Targets outside the chip set (Notes, Prompt, Filter) highlight no
+    /// chip — the badge still tells the truth.
+    ///
+    /// While the app is processing the capture the chips stay in place but
+    /// go inert (`interactive: false`) so the layout never jumps.
+    fn render_destination_chip_row(
+        &self,
+        interactive: bool,
+        cx: &mut Context<Self>,
+    ) -> gpui::AnyElement {
+        let mut row = div()
+            .flex()
+            .flex_row()
+            .items_center()
+            .justify_center()
+            .gap(px(6.));
+
+        let theme = get_cached_theme();
+        let hover_bg = theme.colors.background.main.with_opacity(OPACITY_SELECTED);
+        let armed = self.transcript_armed();
+        let option_held = OPTION_HELD.load(Ordering::SeqCst);
+        let mode = destination_chip_mode(&self.state.phase, armed, option_held);
+        let send_mode = matches!(mode, DestinationChipMode::Send);
+        for (target, verb, icon) in DICTATION_CHIP_TARGETS {
+            let is_active = self.state.target == target;
+            let tooltip_label = chip_tooltip_label(target, mode);
+            let mut chip = destination_chip_base(verb, icon, is_active, !interactive, send_mode);
+            if interactive {
+                if send_mode || !is_active {
+                    chip = chip.hover(move |style| style.bg(hover_bg));
+                }
+                chip = chip
+                    .cursor_pointer()
+                    .tooltip(move |window, cx| {
+                        gpui_component::tooltip::Tooltip::new(tooltip_label.clone())
+                            .build(window, cx)
+                    })
+                    .on_mouse_down(
+                        MouseButton::Left,
+                        cx.listener(move |this, _event: &MouseDownEvent, window, cx| {
+                            match chip_click_behavior(
+                                &this.state.phase,
+                                this.transcript_armed(),
+                                OPTION_HELD.load(Ordering::SeqCst),
+                            ) {
+                                ChipClickBehavior::Ignore => {}
+                                ChipClickBehavior::Retarget => {
+                                    this.select_destination(target, cx);
+                                }
+                                ChipClickBehavior::SendTo => {
+                                    this.select_destination(target, cx);
+                                    this.submit_overlay_session(window, cx);
+                                }
+                            }
+                        }),
+                    );
+            }
+            row = row.child(chip);
+        }
+
+        row.into_any_element()
+    }
+
+    /// Apply an explicit destination pick from a verb chip: retarget the live
+    /// session and persist it as the sticky default for the next one.
+    fn select_destination(
+        &mut self,
+        target: crate::dictation::DictationTarget,
+        cx: &mut Context<Self>,
+    ) {
+        if !matches!(
+            self.state.phase,
+            DictationSessionPhase::Recording | DictationSessionPhase::Confirming
+        ) {
+            return;
+        }
+
+        let Some(applied) = crate::dictation::set_dictation_session_target(target) else {
+            return;
+        };
+        self.state.target = applied;
+
+        if let Err(error) = crate::dictation::save_dictation_last_target(applied) {
+            tracing::warn!(
+                category = "DICTATION",
+                error = %error,
+                target_label = applied.overlay_label(),
+                "Failed to persist sticky dictation destination"
+            );
+        }
+
+        cx.notify();
+    }
+
+    /// Render the header row: timer (left), destination chips (center),
+    /// target badge (right).
+    ///
+    /// Present in every non-idle phase so the overlay anatomy never jumps.
+    /// During processing the timer locks at the final duration and the whole
+    /// row grays out — the work status shows in the caption band instead.
+    fn render_header_row(&self, cx: &mut Context<Self>) -> gpui::AnyElement {
+        let theme = get_cached_theme();
+        let interactive = matches!(
+            self.state.phase,
+            DictationSessionPhase::Recording | DictationSessionPhase::Confirming
+        );
+        let timer_color = if interactive {
+            theme.colors.text.primary.with_opacity(OPACITY_ACTIVE)
+        } else {
+            theme.colors.text.muted.with_opacity(OPACITY_TEXT_MUTED)
+        };
+        let timer_text = format_elapsed(self.state.elapsed);
+
+        div()
+            .flex()
+            .flex_row()
+            .items_center()
+            .w_full()
+            .h(px(OVERLAY_HEADER_ROW_HEIGHT_PX))
+            // Left: timer, same slot width as the badge so the chips center.
+            .child(
+                div()
+                    .w(px(TARGET_BADGE_SLOT_WIDTH_PX))
+                    .flex()
+                    .flex_row()
+                    .items_center()
+                    .gap(px(8.))
+                    .child(
+                        div()
+                            .text_size(px(STATUS_TEXT_SIZE_PX))
+                            .font_family(FONT_SYSTEM_UI)
+                            .text_color(timer_color)
+                            .child(timer_text),
+                    ),
+            )
+            // Center: destination verb chips.
+            .child(
+                div()
+                    .flex_1()
+                    .flex()
+                    .flex_row()
+                    .items_center()
+                    .justify_center()
+                    .child(self.render_destination_chip_row(interactive, cx)),
+            )
+            // Right: destination badge (indicator only).
+            .child(self.render_target_badge_slot(!interactive))
+            .into_any_element()
+    }
+
+    /// Render the caption band while the app processes the capture.
+    ///
+    /// While no text is recognized yet the status label ("Transcribing…",
+    /// "Delivering…") plus the staggered dot pulse fill the band. Once text
+    /// exists the caption alone pulses gently — the pulse IS the working
+    /// indicator, so no status label competes with the transcript for the
+    /// band's width and the text stays inside the side padding.
+    fn render_processing_band(&self, status: &'static str) -> gpui::AnyElement {
+        let theme = get_cached_theme();
+        let muted_text = theme.colors.text.muted.with_opacity(OPACITY_TEXT_MUTED);
+
+        let caption_text = self.caption.visible_text();
+        if caption_text.trim().is_empty() {
+            // Nothing recognized yet: status label + staggered dot pulse.
+            let dot_opacities = if self.reduced_motion {
+                transcribing_dot_opacities_static()
+            } else if let Some(started) = self.processing_started_at {
+                transcribing_dot_opacities_at(started.elapsed().as_secs_f64())
+            } else {
+                transcribing_dot_opacities_static()
+            };
+            return div()
+                .flex_1()
+                .min_w(px(0.))
+                .flex()
+                .flex_row()
+                .items_center()
+                .justify_center()
+                .gap(px(8.))
+                .overflow_hidden()
+                .child(
+                    div()
+                        .text_size(px(STATUS_TEXT_SIZE_PX))
+                        .font_family(FONT_SYSTEM_UI)
+                        .text_color(muted_text)
+                        .whitespace_nowrap()
+                        .child(status),
+                )
+                .child(render_transcribing_dots(&dot_opacities))
+                .into_any_element();
+        }
+
+        let pulse = if self.reduced_motion {
+            processing_pulse_opacity_static()
+        } else if let Some(started) = self.processing_started_at {
+            processing_pulse_opacity_at(started.elapsed().as_secs_f64())
+        } else {
+            processing_pulse_opacity_static()
+        };
+
+        // The text being worked on keeps its place and pulses; underneath, a
+        // status label plus a real progress bar (fed by the chunked finalize
+        // pass) says exactly what is happening and how far along it is.
+        div()
+            .flex_1()
+            .min_w(px(0.))
+            .min_h(px(0.))
+            .flex()
+            .flex_col()
+            .overflow_hidden()
+            .gap(px(4.))
+            .child(
+                self.caption_scroll_container()
+                    .text_color(theme.colors.text.primary.with_opacity(OPACITY_ACTIVE))
+                    .child(caption_text.trim().to_string())
+                    .opacity(pulse),
+            )
+            .child(self.render_processing_status_row(status, muted_text))
+            .into_any_element()
+    }
+
+    /// Status label + finalize progress bar shown under the pulsing caption
+    /// while the app processes the capture.
+    fn render_processing_status_row(
+        &self,
+        status: &'static str,
+        muted_text: gpui::Hsla,
+    ) -> gpui::AnyElement {
+        let theme = get_cached_theme();
+        let progress = crate::dictation::finalize_progress();
+
+        let mut row = div()
+            .w_full()
+            .flex_none()
+            .flex()
+            .flex_row()
+            .items_center()
+            .gap(px(8.))
+            .px(px(6.))
+            .pb(px(2.))
+            .child(
+                div()
+                    .text_size(px(STATUS_TEXT_SIZE_PX))
+                    .font_family(FONT_SYSTEM_UI)
+                    .text_color(muted_text)
+                    .whitespace_nowrap()
+                    .child(status),
+            );
+
+        if let Some(fraction) = progress {
+            let track_color = theme.colors.ui.border.with_opacity(OPACITY_SUBTLE);
+            let fill_color = theme.colors.accent.selected.with_opacity(OPACITY_ACTIVE);
+            row = row.child(
+                div()
+                    .flex_1()
+                    .h(px(3.))
+                    .rounded(px(999.))
+                    .bg(track_color)
+                    .child(
+                        div()
+                            .h_full()
+                            .rounded(px(999.))
+                            .bg(fill_color)
+                            .w(relative(fraction.clamp(0.02, 1.0))),
+                    ),
+            );
+        }
+
+        row.into_any_element()
     }
 
     /// Handle key-down events for the overlay.
@@ -1041,6 +1670,14 @@ impl DictationOverlay {
         if self.state.phase == DictationSessionPhase::Recording
             && crate::ui_foundation::is_key_enter(key)
         {
+            if !self.transcript_armed() {
+                tracing::debug!(
+                    category = "DICTATION",
+                    "Enter pressed while recording with unarmed transcript; swallowing"
+                );
+                cx.stop_propagation();
+                return;
+            }
             tracing::info!(
                 category = "DICTATION",
                 "Enter pressed while recording, stopping to transcribe"
@@ -1054,6 +1691,14 @@ impl DictationOverlay {
         // meaning. All other keys are swallowed without changing state.
         if self.state.phase == DictationSessionPhase::Confirming {
             if crate::ui_foundation::is_key_enter(key) {
+                if !self.transcript_armed() {
+                    tracing::debug!(
+                        category = "DICTATION",
+                        "Enter pressed during confirmation with unarmed transcript; swallowing"
+                    );
+                    cx.stop_propagation();
+                    return;
+                }
                 tracing::info!(
                     category = "DICTATION",
                     "Enter pressed during confirmation, stopping to transcribe"
@@ -1139,10 +1784,12 @@ impl Focusable for DictationOverlay {
 
 impl Render for DictationOverlay {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        self.sync_caption_follow();
         self.ensure_native_footer_action_listener(window, cx);
+        let armed = self.transcript_armed();
         crate::footer_popup::sync_window_footer_popup(
             window,
-            &dictation_native_footer_config(&self.state.phase),
+            &dictation_native_footer_config(&self.state.phase, armed),
         );
 
         let theme = get_cached_theme();
@@ -1162,25 +1809,21 @@ impl Render for DictationOverlay {
             crate::ui_foundation::theme_background_gradient_layers("dictation-bg-layer", &theme);
         let border_color = rgba((theme.colors.ui.border << 8) | 0x40);
 
-        let timer_color = theme.colors.text.primary.with_opacity(OPACITY_ACTIVE);
         let muted_text = theme.colors.text.muted.with_opacity(OPACITY_TEXT_MUTED);
         let text_color = theme.colors.text.primary.with_opacity(OPACITY_ACTIVE);
 
-        let phase = &self.state.phase;
+        let phase = self.state.phase.clone();
         let bars = &self.display_bars;
-        let elapsed = &self.state.elapsed;
 
-        // Primary controls plus a visible shortcut rail. The rail is part of
-        // the runtime overlay, not hidden copy, so dictation affordances stay
-        // discoverable while the glass bar stays visually aligned to the launcher.
-        let inner = match phase {
+        // Every non-idle phase shares one anatomy — header row (timer, chips,
+        // badge), caption band, native footer rail — so phase changes swap
+        // content inline and nothing jumps or disappears.
+        let center: AnyElement = match &phase {
             DictationSessionPhase::Recording => {
-                let timer_text = format_elapsed(*elapsed);
                 let active = has_sound(bars);
-                let target_badge_interactive = crate::dictation::can_cycle_dictation_target();
-                // Live partial transcript replaces the waveform once text
-                // arrives; the timer keeps ticking as the level cue.
-                let center = if self.state.transcript.is_empty() {
+                // Live caption replaces the waveform once words arrive; the
+                // timer keeps ticking as the level cue.
+                if self.caption.is_empty() {
                     div()
                         .flex_1()
                         .flex()
@@ -1190,218 +1833,126 @@ impl Render for DictationOverlay {
                         .child(render_waveform_bars(bars, active))
                         .into_any_element()
                 } else {
-                    render_live_transcript_line(
-                        &self.state.transcript,
-                        self.transcript_fresh_from,
-                        self.transcript_generation,
-                        self.reduced_motion,
-                    )
-                };
-
-                div()
-                    .flex()
-                    .flex_col()
-                    .items_center()
-                    .justify_center()
-                    .gap(px(3.))
-                    .w_full()
-                    .child(render_glass_signal_band(
-                        div()
-                            .flex()
-                            .flex_row()
-                            .items_center()
-                            .w_full()
-                            // Left: timer
-                            .child(
-                                div()
-                                    .w(px(TARGET_BADGE_SLOT_WIDTH_PX))
-                                    .flex()
-                                    .flex_row()
-                                    .items_center()
-                                    .gap(px(8.))
-                                    .child(
-                                        div()
-                                            .text_size(px(STATUS_TEXT_SIZE_PX))
-                                            .font_family(FONT_SYSTEM_UI)
-                                            .text_color(timer_color)
-                                            .child(timer_text),
-                                    ),
-                            )
-                            // Center: waveform bars or live partial transcript
-                            .child(center)
-                            // Right: destination badge
-                            .child(self.render_target_badge_slot(target_badge_interactive, cx))
-                            .into_any_element(),
-                    ))
-                    .child(native_footer_spacer())
+                    self.caption_scroll_container()
+                        .child(live_caption_text(&self.caption, self.reduced_motion))
+                        .into_any_element()
+                }
             }
             DictationSessionPhase::Confirming => {
-                let timer_text = format_elapsed(*elapsed);
-                let (headline, _) = overlay_phase_copy(phase);
-
-                div()
+                // Keep the recognized text in place (muted) under the
+                // confirmation headline so pausing never blanks the block.
+                let caption_text = self.caption.visible_text();
+                let mut column = div()
+                    .flex_1()
+                    .min_w(px(0.))
+                    .min_h(px(0.))
                     .flex()
                     .flex_col()
-                    .items_center()
-                    .justify_center()
-                    .gap(px(3.))
-                    .w_full()
-                    .child(render_glass_signal_band(
+                    .overflow_hidden();
+                if !caption_text.trim().is_empty() {
+                    column = column.child(
+                        self.caption_scroll_container()
+                            .text_color(muted_text)
+                            .child(caption_text.trim().to_string()),
+                    );
+                }
+                let (headline, _) = overlay_phase_copy(&phase);
+                column
+                    .child(
                         div()
+                            .w_full()
+                            .flex_none()
                             .flex()
                             .flex_row()
-                            .items_center()
-                            .w_full()
-                            // Left: timer (same position as recording)
-                            .child(
-                                div()
-                                    .w(px(TARGET_BADGE_SLOT_WIDTH_PX))
-                                    .flex()
-                                    .flex_row()
-                                    .items_center()
-                                    .gap(px(8.))
-                                    .child(
-                                        div()
-                                            .text_size(px(STATUS_TEXT_SIZE_PX))
-                                            .font_family(FONT_SYSTEM_UI)
-                                            .text_color(timer_color)
-                                            .child(timer_text),
-                                    ),
-                            )
-                            // Center: confirmation headline
-                            .child(
-                                div()
-                                    .flex_1()
-                                    .flex()
-                                    .flex_row()
-                                    .items_center()
-                                    .justify_center()
-                                    .text_size(px(STATUS_TEXT_SIZE_PX))
-                                    .font_family(FONT_SYSTEM_UI)
-                                    .text_color(text_color)
-                                    .child(headline),
-                            )
-                            // Right: destination badge
-                            .child(self.render_target_badge_slot(false, cx))
-                            .into_any_element(),
-                    ))
-                    .child(native_footer_spacer())
-            }
-            DictationSessionPhase::Transcribing => {
-                // 3 green dots matching vercel-voice .transcribing-dots
-                let dot_opacities = if self.reduced_motion {
-                    transcribing_dot_opacities_static()
-                } else if let Some(started) = self.transcribing_started_at {
-                    transcribing_dot_opacities_at(started.elapsed().as_secs_f64())
-                } else {
-                    transcribing_dot_opacities_static()
-                };
-                div()
-                    .flex()
-                    .flex_col()
-                    .items_center()
-                    .justify_center()
-                    .gap(px(4.))
-                    .w_full()
-                    .child(render_glass_signal_band(
-                        div()
-                            .flex()
-                            .items_center()
                             .justify_center()
-                            .child(render_transcribing_dots(&dot_opacities))
-                            .into_any_element(),
-                    ))
-                    .child(native_footer_spacer())
-            }
-            DictationSessionPhase::Delivering => {
-                let transcript = self.state.transcript.clone();
-                let mut band = div()
-                    .flex()
-                    .flex_row()
-                    .items_center()
-                    .justify_center()
-                    .gap(px(8.))
-                    .w_full()
-                    .child(
-                        div()
-                            .text_size(px(STATUS_TEXT_SIZE_PX))
+                            .pb(px(2.))
+                            .text_size(px(TRANSCRIPT_TEXT_SIZE_PX))
                             .font_family(FONT_SYSTEM_UI)
-                            .text_color(muted_text)
-                            .whitespace_nowrap()
-                            .child("Delivering\u{2026}"),
-                    );
-                if !transcript.is_empty() {
-                    band = band.child(fade_in_line(
-                        "dictation-transcript-delivering",
-                        self.reduced_motion,
-                        render_transcript_line(&transcript, false),
-                    ));
-                }
-                div()
-                    .flex()
-                    .flex_col()
-                    .items_center()
-                    .justify_center()
-                    .gap(px(3.))
-                    .w_full()
-                    .child(render_glass_signal_band(band.into_any_element()))
-                    .child(native_footer_spacer())
+                            .text_color(text_color)
+                            .child(headline),
+                    )
+                    .into_any_element()
+            }
+            DictationSessionPhase::Transcribing | DictationSessionPhase::Delivering => {
+                let (status, _) = overlay_phase_copy(&phase);
+                self.render_processing_band(status)
             }
             DictationSessionPhase::Finished => {
-                let transcript = self.state.transcript.clone();
-                let mut band = div()
+                let caption_text = self.caption.visible_text();
+                let mut column = div()
+                    .flex_1()
+                    .min_w(px(0.))
+                    .min_h(px(0.))
                     .flex()
-                    .flex_row()
-                    .items_center()
-                    .justify_center()
-                    .gap(px(8.))
-                    .w_full()
+                    .flex_col()
+                    .overflow_hidden();
+                if !caption_text.trim().is_empty() {
+                    column = column.child(
+                        self.caption_scroll_container()
+                            .text_color(muted_text)
+                            .child(caption_text.trim().to_string()),
+                    );
+                }
+                column
                     .child(
                         div()
+                            .w_full()
+                            .flex_none()
+                            .flex()
+                            .flex_row()
+                            .justify_center()
+                            .pb(px(2.))
                             .text_size(px(STATUS_TEXT_SIZE_PX))
                             .font_family(FONT_SYSTEM_UI)
                             .text_color(text_color)
-                            .whitespace_nowrap()
                             .child(finished_label()),
-                    );
-                if !transcript.is_empty() {
-                    band = band.child(fade_in_line(
-                        "dictation-transcript-finished",
-                        self.reduced_motion,
-                        render_transcript_line(&transcript, true),
-                    ));
-                }
-                div()
-                    .flex()
-                    .flex_col()
-                    .items_center()
-                    .justify_center()
-                    .gap(px(3.))
-                    .w_full()
-                    .child(render_glass_signal_band(band.into_any_element()))
-                    .child(native_footer_spacer())
+                    )
+                    .into_any_element()
             }
-            DictationSessionPhase::Failed(ref msg) => {
+            DictationSessionPhase::Failed(msg) => {
                 let err_text: SharedString = format!("Error: {msg}").into();
                 div()
+                    .flex_1()
                     .flex()
-                    .flex_col()
+                    .flex_row()
                     .items_center()
                     .justify_center()
-                    .gap(px(3.))
-                    .w_full()
-                    .child(render_glass_signal_band(
-                        div()
-                            .text_size(px(STATUS_TEXT_SIZE_PX))
-                            .font_family(FONT_SYSTEM_UI)
-                            .text_color(muted_text)
-                            .overflow_hidden()
-                            .child(err_text)
-                            .into_any_element(),
-                    ))
-                    .child(native_footer_spacer())
+                    .text_size(px(STATUS_TEXT_SIZE_PX))
+                    .font_family(FONT_SYSTEM_UI)
+                    .text_color(muted_text)
+                    .overflow_hidden()
+                    .child(err_text)
+                    .into_any_element()
             }
-            DictationSessionPhase::Idle => div(),
+            DictationSessionPhase::Idle => div().into_any_element(),
+        };
+
+        let inner = if matches!(phase, DictationSessionPhase::Idle) {
+            div()
+        } else {
+            div()
+                .flex()
+                .flex_col()
+                .w_full()
+                .h_full()
+                .child(
+                    div()
+                        .w_full()
+                        .px(px(OVERLAY_HORIZONTAL_PADDING_PX))
+                        .pt(px(5.0))
+                        .child(self.render_header_row(cx)),
+                )
+                .child(
+                    div()
+                        .flex_1()
+                        .w_full()
+                        .flex()
+                        .flex_row()
+                        .items_center()
+                        .justify_center()
+                        .child(render_glass_signal_band(center)),
+                )
+                .child(native_footer_spacer())
         };
 
         // Same capsule radius for all phases; confirming swaps content inline.
@@ -1430,6 +1981,12 @@ impl Render for DictationOverlay {
         div()
             .track_focus(&self.focus_handle)
             .on_key_down(cx.listener(Self::handle_key_down))
+            .on_modifiers_changed(cx.listener(
+                |_, event: &gpui::ModifiersChangedEvent, _window, cx| {
+                    OPTION_HELD.store(event.modifiers.alt, Ordering::SeqCst);
+                    cx.notify();
+                },
+            ))
             .w_full()
             .h_full()
             .overflow_hidden()
@@ -1442,156 +1999,110 @@ pub(crate) fn finished_label() -> SharedString {
     "Done".into()
 }
 
-/// Max characters of transcript text shown inside the pill.
-pub(crate) const TRANSCRIPT_PREVIEW_MAX_CHARS: usize = 90;
+/// Approximate characters per wrapped caption line at
+/// [`TRANSCRIPT_TEXT_SIZE_PX`]: ~(560 - padding) / ~7 px per char. Drives
+/// the window-growth line estimate ([`estimate_caption_lines`]).
+pub(crate) const TRANSCRIPT_PREVIEW_MAX_CHARS: usize = 74;
 
-/// Keep the freshest tail of a live transcript for the single-line preview,
-/// prefixing an ellipsis when older text was cut off.
-pub(crate) fn transcript_preview_tail(text: &str, max_chars: usize) -> SharedString {
-    let trimmed = text.trim();
-    let char_count = trimmed.chars().count();
-    if char_count <= max_chars {
-        return trimmed.to_string().into();
-    }
-    let skip = char_count - max_chars;
-    let tail: String = trimmed.chars().skip(skip).collect();
-    format!("\u{2026}{}", tail.trim_start()).into()
-}
+/// Live-transcription marker rendered after the newest word while recording
+/// (the Super Whisper "current word" cue).
+pub(crate) const LIVE_CAPTION_MARKER: &str = " \u{00B7}\u{00B7}\u{00B7}";
 
-/// Count the chars shared at the start of two transcript snapshots.
+/// Build the recording-time caption text as styled wrapped runs.
 ///
-/// Live partials may rewrite their tail, so the boundary is the first
-/// divergent char rather than the previous transcript's length.
-pub(crate) fn common_char_prefix_len(previous: &str, current: &str) -> usize {
-    previous
-        .chars()
-        .zip(current.chars())
-        .take_while(|(a, b)| a == b)
-        .count()
-}
-
-/// Split the live transcript preview into (stable, fresh) spans, where
-/// `fresh_from` is the char offset into `text` at which newly arrived text
-/// begins. Concatenating the spans always reproduces
-/// `transcript_preview_tail(text, max_chars)` exactly.
-pub(crate) fn transcript_preview_spans(
-    text: &str,
-    fresh_from: usize,
-    max_chars: usize,
-) -> (SharedString, SharedString) {
-    let chars: Vec<char> = text.chars().collect();
-    let start = chars.iter().take_while(|c| c.is_whitespace()).count();
-    let trailing = chars[start..]
-        .iter()
-        .rev()
-        .take_while(|c| c.is_whitespace())
-        .count();
-    let trimmed = &chars[start..chars.len() - trailing];
-    // Fresh boundary relative to the trimmed text.
-    let mut fresh = fresh_from.saturating_sub(start).min(trimmed.len());
-    let (ellipsis, visible) = if trimmed.len() <= max_chars {
-        ("", trimmed)
-    } else {
-        let skip = trimmed.len() - max_chars;
-        let tail = &trimmed[skip..];
-        let ws = tail.iter().take_while(|c| c.is_whitespace()).count();
-        // A boundary that scrolled out of the window means every visible
-        // char is fresh.
-        fresh = fresh.saturating_sub(skip + ws);
-        ("\u{2026}", &tail[ws..])
-    };
-    let fresh = fresh.min(visible.len());
-    let stable: String = ellipsis
-        .chars()
-        .chain(visible[..fresh].iter().copied())
-        .collect();
-    let fresh_text: String = visible[fresh..].iter().copied().collect();
-    (stable.into(), fresh_text.into())
-}
-
-/// Render the recording-time transcript with only the newest partial text
-/// fading in, so words stream in instead of the whole line popping.
-fn render_live_transcript_line(
-    transcript: &SharedString,
-    fresh_from: usize,
-    generation: u64,
+/// The full committed transcript wraps naturally at the pill width. Only the
+/// newest revealed word fades in — everything before it renders at full
+/// opacity and never shifts, because new words append at the wrap point
+/// instead of pushing the line sideways. A muted dot marker trails the
+/// newest word while the session is live.
+fn live_caption_text(
+    caption: &crate::dictation::live_caption::LiveCaption,
     reduced_motion: bool,
 ) -> AnyElement {
     let theme = get_cached_theme();
-    let color = theme.colors.text.primary.with_opacity(OPACITY_ACTIVE);
-    let (stable, fresh) = transcript_preview_spans(
-        transcript.as_ref(),
-        fresh_from,
-        TRANSCRIPT_PREVIEW_MAX_CHARS,
-    );
-    let mut line = div()
+    let base_color = theme.colors.text.primary.with_opacity(OPACITY_ACTIVE);
+    let marker_color = theme.colors.text.muted.with_opacity(OPACITY_TEXT_MUTED);
+
+    let visible = caption.visible_text();
+    if visible.is_empty() {
+        return div().into_any_element();
+    }
+
+    // Fade computed at render time: the overlay pump re-renders every 16 ms
+    // while recording, so the newest word's alpha eases in without a
+    // separate animation element (which cannot restyle individual runs).
+    let fade = if reduced_motion {
+        1.0
+    } else {
+        caption
+            .last_reveal_at()
+            .map(|at| {
+                (at.elapsed().as_millis() as f32 / TRANSCRIPT_FADE_IN_MS as f32).clamp(0.0, 1.0)
+            })
+            .unwrap_or(1.0)
+    };
+
+    let fresh_chars = caption.fresh_char_offset();
+    let fresh_byte = visible
+        .char_indices()
+        .nth(fresh_chars)
+        .map(|(ix, _)| ix)
+        .unwrap_or(visible.len());
+
+    let font = gpui::font(FONT_SYSTEM_UI);
+    let mut text = visible;
+    let mut runs: Vec<TextRun> = Vec::with_capacity(3);
+    let run = |len: usize, color| TextRun {
+        len,
+        font: font.clone(),
+        color,
+        background_color: None,
+        underline: None,
+        strikethrough: None,
+    };
+    if fresh_byte > 0 {
+        runs.push(run(fresh_byte, base_color));
+    }
+    if text.len() > fresh_byte {
+        runs.push(run(text.len() - fresh_byte, base_color.opacity(fade)));
+    }
+    text.push_str(LIVE_CAPTION_MARKER);
+    runs.push(run(LIVE_CAPTION_MARKER.len(), marker_color));
+
+    StyledText::new(text).with_runs(runs).into_any_element()
+}
+
+/// Shared container for the wrapped caption block: full width, bottom
+/// anchored so the newest line stays visible when the text outgrows the
+/// window, clipped above.
+fn render_caption_block_container() -> Div {
+    div()
         .flex_1()
+        .min_w(px(0.))
+        .min_h(px(0.))
+        .h_full()
         .flex()
-        .flex_row()
-        .items_center()
-        .justify_center()
-        .px(px(6.))
+        .flex_col()
+        .justify_end()
         .overflow_hidden()
-        .text_size(px(STATUS_TEXT_SIZE_PX))
+        .px(px(6.))
+        .text_size(px(TRANSCRIPT_TEXT_SIZE_PX))
         .font_family(FONT_SYSTEM_UI)
-        .text_color(color)
-        .whitespace_nowrap();
-    if !stable.is_empty() {
-        line = line.child(div().flex_none().whitespace_nowrap().child(stable));
-    }
-    if fresh.is_empty() {
-        return line.into_any_element();
-    }
-    let fresh_span = div().flex_none().whitespace_nowrap().child(fresh);
-    if reduced_motion {
-        return line.child(fresh_span).into_any_element();
-    }
-    line.child(fresh_span.with_animation(
-        ElementId::from(("dictation-transcript-fresh", generation)),
-        Animation::new(Duration::from_millis(TRANSCRIPT_FADE_IN_MS)).with_easing(ease_out_quint()),
-        |el, delta| el.opacity(delta),
-    ))
-    .into_any_element()
+        .line_height(px(TRANSCRIPT_LINE_HEIGHT_PX))
 }
 
-/// Wrap a transcript line in a one-shot fade so it eases in after a phase
-/// swap instead of popping. No-op under reduced motion.
-fn fade_in_line(id: &'static str, reduced_motion: bool, line: Div) -> AnyElement {
-    if reduced_motion {
-        return line.into_any_element();
-    }
-    line.with_animation(
-        id,
-        Animation::new(Duration::from_millis(TRANSCRIPT_FADE_IN_MS)).with_easing(ease_out_quint()),
-        |el, delta| el.opacity(delta),
-    )
-    .into_any_element()
-}
-
-/// Render the final transcript as a single centered line in the pill.
-fn render_transcript_line(transcript: &SharedString, muted: bool) -> Div {
+/// Render a static transcript as a wrapped bottom-anchored block (processing
+/// and terminal phases — same geometry as the live block, no marker).
+fn render_transcript_block(transcript: &str, muted: bool) -> Div {
     let theme = get_cached_theme();
     let color = if muted {
         theme.colors.text.muted.with_opacity(OPACITY_TEXT_MUTED)
     } else {
         theme.colors.text.primary.with_opacity(OPACITY_ACTIVE)
     };
-    div()
-        .flex_1()
-        .flex()
-        .flex_row()
-        .items_center()
-        .justify_center()
-        .px(px(6.))
-        .overflow_hidden()
-        .text_size(px(STATUS_TEXT_SIZE_PX))
-        .font_family(FONT_SYSTEM_UI)
+    render_caption_block_container()
         .text_color(color)
-        .whitespace_nowrap()
-        .child(transcript_preview_tail(
-            transcript.as_ref(),
-            TRANSCRIPT_PREVIEW_MAX_CHARS,
-        ))
+        .child(transcript.trim().to_string())
 }
 
 /// Render waveform bars for the glass bar.
@@ -1706,34 +2217,54 @@ fn action_chip_width(label: &str) -> f32 {
     }
 }
 
-fn dictation_native_footer_config(
+pub(crate) fn dictation_native_footer_config(
     phase: &DictationSessionPhase,
+    armed: bool,
 ) -> crate::footer_popup::MainWindowFooterConfig {
     use crate::footer_popup::{FooterAction, FooterButtonConfig, MainWindowFooterConfig};
 
     let buttons = match phase {
-        DictationSessionPhase::Recording => vec![
-            FooterButtonConfig::new(
+        DictationSessionPhase::Recording => {
+            let mut buttons = vec![FooterButtonConfig::new(
                 FooterAction::Ai,
                 MIC_KEYCAP,
                 active_microphone_footer_label(),
-            ),
-            FooterButtonConfig::new(
-                FooterAction::Stop,
-                dictation_stop_keycap(),
-                ACTION_STOP_LABEL,
-            ),
-            FooterButtonConfig::new(FooterAction::Close, ESC_KEYCAP, ACTION_CANCEL_LABEL),
-        ],
-        DictationSessionPhase::Confirming => vec![
-            FooterButtonConfig::new(FooterAction::Stop, ENTER_KEYCAP, ACTION_STOP_LABEL),
-            FooterButtonConfig::new(
+            )];
+            if armed {
+                buttons.push(FooterButtonConfig::new(
+                    FooterAction::Stop,
+                    dictation_stop_keycap(),
+                    ACTION_STOP_LABEL,
+                ));
+            }
+            buttons.push(FooterButtonConfig::new(
+                FooterAction::Close,
+                ESC_KEYCAP,
+                ACTION_CANCEL_LABEL,
+            ));
+            buttons
+        }
+        DictationSessionPhase::Confirming => {
+            let mut buttons = Vec::new();
+            if armed {
+                buttons.push(FooterButtonConfig::new(
+                    FooterAction::Stop,
+                    ENTER_KEYCAP,
+                    ACTION_STOP_LABEL,
+                ));
+            }
+            buttons.push(FooterButtonConfig::new(
                 FooterAction::Actions,
                 BACKSPACE_KEYCAP,
                 ACTION_DISCARD_LABEL,
-            ),
-            FooterButtonConfig::new(FooterAction::Close, ESC_KEYCAP, ACTION_CONTINUE_LABEL),
-        ],
+            ));
+            buttons.push(FooterButtonConfig::new(
+                FooterAction::Close,
+                ESC_KEYCAP,
+                ACTION_CONTINUE_LABEL,
+            ));
+            buttons
+        }
         DictationSessionPhase::Idle => Vec::new(),
         DictationSessionPhase::Transcribing
         | DictationSessionPhase::Delivering
@@ -1894,7 +2425,6 @@ pub(crate) fn render_dictation_overlay_state_preview(
         &theme,
     );
     let border_color = rgba((theme.colors.ui.border << 8) | 0x40);
-    let timer_color = theme.colors.text.primary.with_opacity(OPACITY_ACTIVE);
     let muted_text = theme.colors.text.muted.with_opacity(OPACITY_TEXT_MUTED);
     let text_color = theme.colors.text.primary.with_opacity(OPACITY_ACTIVE);
 
@@ -1905,194 +2435,153 @@ pub(crate) fn render_dictation_overlay_state_preview(
             .into_any_element();
     }
 
-    let inner = match &state.phase {
+    let center: gpui::AnyElement = match &state.phase {
         DictationSessionPhase::Recording => {
-            let timer_text = format_elapsed(state.elapsed);
             let active = has_sound(&state.bars);
             div()
+                .flex_1()
                 .flex()
-                .flex_col()
+                .flex_row()
                 .items_center()
                 .justify_center()
-                .gap(px(3.))
-                .w_full()
-                .child(render_glass_signal_band(
-                    div()
-                        .flex()
-                        .flex_row()
-                        .items_center()
-                        .w_full()
-                        .child(
-                            div()
-                                .w(px(TARGET_BADGE_SLOT_WIDTH_PX))
-                                .flex()
-                                .flex_row()
-                                .items_center()
-                                .gap(px(8.))
-                                .child(
-                                    div()
-                                        .text_size(px(STATUS_TEXT_SIZE_PX))
-                                        .font_family(FONT_SYSTEM_UI)
-                                        .text_color(timer_color)
-                                        .child(timer_text),
-                                ),
-                        )
-                        .child(
-                            div()
-                                .flex_1()
-                                .flex()
-                                .flex_row()
-                                .items_center()
-                                .justify_center()
-                                .child(render_waveform_bars(&state.bars, active)),
-                        )
-                        .child(render_static_target_badge_slot(state.target))
-                        .into_any_element(),
-                ))
-                .child(wrap_dictation_overlay_action_rail(
-                    render_static_action_rail([
-                        (ACTION_STOP_LABEL, dictation_stop_keycap()),
-                        (ACTION_MIC_LABEL, SharedString::default()),
-                        (ACTION_CANCEL_LABEL, ESC_KEYCAP.into()),
-                    ]),
-                ))
+                .child(render_waveform_bars(&state.bars, active))
+                .into_any_element()
         }
         DictationSessionPhase::Confirming => {
-            let timer_text = format_elapsed(state.elapsed);
             let (headline, _) = overlay_phase_copy(&state.phase);
             div()
+                .flex_1()
                 .flex()
-                .flex_col()
+                .flex_row()
                 .items_center()
                 .justify_center()
-                .gap(px(3.))
-                .w_full()
-                .child(render_glass_signal_band(
-                    div()
-                        .flex()
-                        .flex_row()
-                        .items_center()
-                        .w_full()
-                        .child(
-                            div()
-                                .w(px(TARGET_BADGE_SLOT_WIDTH_PX))
-                                .flex()
-                                .flex_row()
-                                .items_center()
-                                .gap(px(8.))
-                                .child(
-                                    div()
-                                        .text_size(px(STATUS_TEXT_SIZE_PX))
-                                        .font_family(FONT_SYSTEM_UI)
-                                        .text_color(timer_color)
-                                        .child(timer_text),
-                                ),
-                        )
-                        .child(
-                            div()
-                                .flex_1()
-                                .flex()
-                                .flex_row()
-                                .items_center()
-                                .justify_center()
-                                .text_size(px(STATUS_TEXT_SIZE_PX))
-                                .font_family(FONT_SYSTEM_UI)
-                                .text_color(text_color)
-                                .child(headline),
-                        )
-                        .child(render_static_target_badge_slot(state.target))
-                        .into_any_element(),
-                ))
-                .child(wrap_dictation_overlay_action_rail(
-                    render_static_action_rail([
-                        (ACTION_STOP_LABEL, ENTER_KEYCAP.into()),
-                        (ACTION_DISCARD_LABEL, BACKSPACE_KEYCAP.into()),
-                        (ACTION_CONTINUE_LABEL, ESC_KEYCAP.into()),
-                    ]),
-                ))
+                .text_size(px(TRANSCRIPT_TEXT_SIZE_PX))
+                .font_family(FONT_SYSTEM_UI)
+                .text_color(text_color)
+                .child(headline)
+                .into_any_element()
         }
-        DictationSessionPhase::Transcribing => div()
-            .flex()
-            .flex_col()
-            .items_center()
-            .justify_center()
-            .gap(px(4.))
-            .w_full()
-            .child(render_glass_signal_band(
-                div()
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .child(render_transcribing_dots(
-                        &transcribing_dot_opacities_static(),
-                    ))
-                    .into_any_element(),
-            ))
-            .child(wrap_dictation_overlay_action_rail(
-                render_static_action_rail([(ACTION_CLOSE_LABEL, ESC_KEYCAP.into())]),
-            )),
-        DictationSessionPhase::Delivering => div()
-            .flex()
-            .flex_col()
-            .items_center()
-            .justify_center()
-            .gap(px(3.))
-            .w_full()
-            .child(render_glass_signal_band(
-                div()
-                    .text_size(px(STATUS_TEXT_SIZE_PX))
-                    .font_family(FONT_SYSTEM_UI)
-                    .text_color(text_color)
-                    .overflow_hidden()
-                    .child("Delivering\u{2026}")
-                    .into_any_element(),
-            ))
-            .child(wrap_dictation_overlay_action_rail(
-                render_static_action_rail([(ACTION_CLOSE_LABEL, ESC_KEYCAP.into())]),
-            )),
-        DictationSessionPhase::Finished => div()
-            .flex()
-            .flex_col()
-            .items_center()
-            .justify_center()
-            .gap(px(3.))
-            .w_full()
-            .child(render_glass_signal_band(
-                div()
-                    .text_size(px(STATUS_TEXT_SIZE_PX))
-                    .font_family(FONT_SYSTEM_UI)
-                    .text_color(text_color)
-                    .overflow_hidden()
-                    .child(finished_label())
-                    .into_any_element(),
-            ))
-            .child(wrap_dictation_overlay_action_rail(
-                render_static_action_rail([(ACTION_CLOSE_LABEL, ESC_KEYCAP.into())]),
-            )),
-        DictationSessionPhase::Failed(msg) => {
-            let err_text: SharedString = format!("Error: {msg}").into();
-            div()
+        DictationSessionPhase::Transcribing | DictationSessionPhase::Delivering => {
+            let (status, _) = overlay_phase_copy(&state.phase);
+            let band = div()
+                .flex_1()
+                .min_w(px(0.))
                 .flex()
-                .flex_col()
+                .flex_row()
                 .items_center()
                 .justify_center()
-                .gap(px(3.))
-                .w_full()
-                .child(render_glass_signal_band(
+                .gap(px(8.))
+                .overflow_hidden();
+            if state.transcript.trim().is_empty() {
+                band.child(
                     div()
                         .text_size(px(STATUS_TEXT_SIZE_PX))
                         .font_family(FONT_SYSTEM_UI)
                         .text_color(muted_text)
-                        .overflow_hidden()
-                        .child(err_text)
-                        .into_any_element(),
+                        .whitespace_nowrap()
+                        .child(status),
+                )
+                .child(render_transcribing_dots(
+                    &transcribing_dot_opacities_static(),
                 ))
-                .child(wrap_dictation_overlay_action_rail(
-                    render_static_action_rail([(ACTION_CLOSE_LABEL, ESC_KEYCAP.into())]),
-                ))
+                .into_any_element()
+            } else {
+                band.child(
+                    render_transcript_block(state.transcript.as_ref(), false)
+                        .min_w(px(0.))
+                        .opacity(processing_pulse_opacity_static()),
+                )
+                .into_any_element()
+            }
         }
-        DictationSessionPhase::Idle => div(),
+        DictationSessionPhase::Finished => {
+            let mut band = div()
+                .flex_1()
+                .min_w(px(0.))
+                .flex()
+                .flex_row()
+                .items_center()
+                .justify_center()
+                .gap(px(8.))
+                .overflow_hidden()
+                .child(
+                    div()
+                        .text_size(px(STATUS_TEXT_SIZE_PX))
+                        .font_family(FONT_SYSTEM_UI)
+                        .text_color(text_color)
+                        .whitespace_nowrap()
+                        .child(finished_label()),
+                );
+            if !state.transcript.trim().is_empty() {
+                band = band
+                    .child(render_transcript_block(state.transcript.as_ref(), true).min_w(px(0.)));
+            }
+            band.into_any_element()
+        }
+        DictationSessionPhase::Failed(msg) => {
+            let err_text: SharedString = format!("Error: {msg}").into();
+            div()
+                .flex_1()
+                .flex()
+                .flex_row()
+                .items_center()
+                .justify_center()
+                .text_size(px(STATUS_TEXT_SIZE_PX))
+                .font_family(FONT_SYSTEM_UI)
+                .text_color(muted_text)
+                .overflow_hidden()
+                .child(err_text)
+                .into_any_element()
+        }
+        DictationSessionPhase::Idle => div().into_any_element(),
     };
+
+    let armed = !state.transcript.trim().is_empty();
+    let rail_actions: Vec<(&'static str, SharedString)> = match &state.phase {
+        DictationSessionPhase::Recording => {
+            let mut actions = vec![(ACTION_MIC_LABEL, SharedString::default())];
+            if armed {
+                actions.push((ACTION_STOP_LABEL, dictation_stop_keycap()));
+            }
+            actions.push((ACTION_CANCEL_LABEL, ESC_KEYCAP.into()));
+            actions
+        }
+        DictationSessionPhase::Confirming => {
+            let mut actions = Vec::new();
+            if armed {
+                actions.push((ACTION_STOP_LABEL, ENTER_KEYCAP.into()));
+            }
+            actions.push((ACTION_DISCARD_LABEL, BACKSPACE_KEYCAP.into()));
+            actions.push((ACTION_CONTINUE_LABEL, ESC_KEYCAP.into()));
+            actions
+        }
+        _ => vec![(ACTION_CLOSE_LABEL, ESC_KEYCAP.into())],
+    };
+    let action_rail = render_static_action_rail(rail_actions);
+
+    let inner = div()
+        .flex()
+        .flex_col()
+        .w_full()
+        .h_full()
+        .child(
+            div()
+                .w_full()
+                .px(px(OVERLAY_HORIZONTAL_PADDING_PX))
+                .pt(px(5.0))
+                .child(render_static_header_row(state)),
+        )
+        .child(
+            div()
+                .flex_1()
+                .w_full()
+                .flex()
+                .flex_row()
+                .items_center()
+                .justify_center()
+                .child(render_glass_signal_band(center)),
+        )
+        .child(wrap_dictation_overlay_action_rail(action_rail));
 
     div()
         .w(px(OVERLAY_WIDTH_PX))
@@ -2112,10 +2601,77 @@ pub(crate) fn render_dictation_overlay_state_preview(
         .into_any_element()
 }
 
+/// Static header row for Storybook previews: timer, chips, badge — same
+/// anatomy as the runtime header, without click handlers.
 #[allow(dead_code)] // preview-chain helper (see render_dictation_overlay_state_preview)
-fn render_static_target_badge_slot(target: crate::dictation::DictationTarget) -> impl IntoElement {
+fn render_static_header_row(state: &DictationOverlayState) -> impl IntoElement {
     let theme = get_cached_theme();
-    let badge = div()
+    let live = matches!(
+        state.phase,
+        DictationSessionPhase::Recording | DictationSessionPhase::Confirming
+    );
+    let timer_color = if live {
+        theme.colors.text.primary.with_opacity(OPACITY_ACTIVE)
+    } else {
+        theme.colors.text.muted.with_opacity(OPACITY_TEXT_MUTED)
+    };
+
+    let mut chip_row = div()
+        .flex()
+        .flex_row()
+        .items_center()
+        .justify_center()
+        .gap(px(6.));
+    for (target, verb, icon) in DICTATION_CHIP_TARGETS {
+        chip_row = chip_row.child(destination_chip_base(
+            verb,
+            icon,
+            state.target == target,
+            !live,
+            false,
+        ));
+    }
+
+    div()
+        .flex()
+        .flex_row()
+        .items_center()
+        .w_full()
+        .h(px(OVERLAY_HEADER_ROW_HEIGHT_PX))
+        .child(
+            div()
+                .w(px(TARGET_BADGE_SLOT_WIDTH_PX))
+                .flex()
+                .flex_row()
+                .items_center()
+                .gap(px(8.))
+                .child(
+                    div()
+                        .text_size(px(STATUS_TEXT_SIZE_PX))
+                        .font_family(FONT_SYSTEM_UI)
+                        .text_color(timer_color)
+                        .child(format_elapsed(state.elapsed)),
+                ),
+        )
+        .child(
+            div()
+                .flex_1()
+                .flex()
+                .flex_row()
+                .items_center()
+                .justify_center()
+                .child(chip_row),
+        )
+        .child(render_static_target_badge_slot(state.target, !live))
+}
+
+#[allow(dead_code)] // preview-chain helper (see render_dictation_overlay_state_preview)
+fn render_static_target_badge_slot(
+    target: crate::dictation::DictationTarget,
+    dimmed: bool,
+) -> impl IntoElement {
+    let theme = get_cached_theme();
+    let mut badge = div()
         .id("dictation-target-badge")
         .px(px(8.))
         .py(px(2.))
@@ -2125,6 +2681,9 @@ fn render_static_target_badge_slot(target: crate::dictation::DictationTarget) ->
         .border_color(theme.colors.ui.border.with_opacity(OPACITY_SUBTLE))
         .cursor_default()
         .child(render_target_badge_content(target));
+    if dimmed {
+        badge = badge.opacity(0.55);
+    }
 
     div()
         .w(px(TARGET_BADGE_SLOT_WIDTH_PX))
@@ -2170,15 +2729,17 @@ fn calculate_overlay_bottom_center_bounds() -> gpui::Bounds<gpui::Pixels> {
         (0.0_f32, 24.0_f32, 1920.0_f32, 1056.0_f32)
     };
 
+    // One constant height for every phase — the window never resizes.
+    let initial_height = OVERLAY_HEIGHT_PX;
     let x = vis_x + (vis_w - OVERLAY_WIDTH_PX) / 2.0;
-    let y = vis_y + vis_h - OVERLAY_BOTTOM_OFFSET_PX - OVERLAY_HEIGHT_PX;
+    let y = vis_y + vis_h - OVERLAY_BOTTOM_OFFSET_PX - initial_height;
 
     tracing::info!(
         category = "DICTATION",
         x,
         y,
         width = OVERLAY_WIDTH_PX,
-        height = OVERLAY_HEIGHT_PX,
+        height = initial_height,
         display_count,
         used_display,
         vis_x,
@@ -2192,7 +2753,7 @@ fn calculate_overlay_bottom_center_bounds() -> gpui::Bounds<gpui::Pixels> {
         origin: gpui::Point { x: px(x), y: px(y) },
         size: gpui::Size {
             width: px(OVERLAY_WIDTH_PX),
-            height: px(OVERLAY_HEIGHT_PX),
+            height: px(initial_height),
         },
     }
 }
@@ -2691,7 +3252,10 @@ pub fn automation_layout_info(
     let height = bounds.height as f32;
     let footer_height =
         crate::components::footer_chrome::footer_rail_chrome(&get_cached_theme()).height_px;
-    let signal_height = (height - footer_height).max(0.0);
+    let header_top = 5.0;
+    let header_height = OVERLAY_HEADER_ROW_HEIGHT_PX;
+    let caption_top = header_top + header_height;
+    let caption_height = (height - footer_height - caption_top).max(0.0);
 
     let components = vec![
         LayoutComponentInfo::new("DictationOverlayWindow", LayoutComponentType::Container)
@@ -2703,26 +3267,26 @@ pub fn automation_layout_info(
             )
             .with_hit_bounds(0.0, 0.0, width, height)
             .with_padding(0.0, 0.0, 0.0, 0.0),
-        LayoutComponentInfo::new("DictationSignalBand", LayoutComponentType::Container)
-            .with_bounds(0.0, 0.0, width, signal_height)
+        LayoutComponentInfo::new("DictationHeaderRow", LayoutComponentType::Container)
+            .with_bounds(0.0, header_top, width, header_height)
             .with_visual_style(
                 chrome_tokens::CHROME_LAYER_FUNCTIONAL,
                 chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
-                Some(OVERLAY_RADIUS_PX),
+                None,
             )
-            .with_hit_bounds(0.0, 0.0, width, signal_height)
+            .with_hit_bounds(0.0, header_top, width, header_height)
             .with_padding(
-                6.0,
+                0.0,
                 OVERLAY_HORIZONTAL_PADDING_PX,
-                6.0,
+                0.0,
                 OVERLAY_HORIZONTAL_PADDING_PX,
             ),
         LayoutComponentInfo::new("DictationTimerSlot", LayoutComponentType::Other)
             .with_bounds(
                 OVERLAY_HORIZONTAL_PADDING_PX,
-                6.0,
+                header_top,
                 TARGET_BADGE_SLOT_WIDTH_PX,
-                signal_height.max(12.0) - 12.0,
+                header_height,
             )
             .with_visual_style(
                 chrome_tokens::CHROME_LAYER_CONTENT,
@@ -2730,20 +3294,33 @@ pub fn automation_layout_info(
                 None,
             )
             .with_padding(0.0, 0.0, 0.0, 0.0),
-        LayoutComponentInfo::new("DictationWaveform", LayoutComponentType::Container)
-            .with_bounds((width - 48.0) / 2.0, 12.0, 48.0, WAVEFORM_BAR_MAX_HEIGHT_PX)
-            .with_visual_style(
-                chrome_tokens::CHROME_LAYER_CONTENT,
-                chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
-                Some(chrome_tokens::LIQUID_GLASS_COMPACT_RADIUS_PX),
+        LayoutComponentInfo::new("DictationDestinationChips", LayoutComponentType::Button)
+            .with_bounds(
+                TARGET_BADGE_SLOT_WIDTH_PX + OVERLAY_HORIZONTAL_PADDING_PX,
+                header_top,
+                (width - 2.0 * (TARGET_BADGE_SLOT_WIDTH_PX + OVERLAY_HORIZONTAL_PADDING_PX))
+                    .max(0.0),
+                header_height,
             )
-            .with_gap(WAVEFORM_BAR_GAP_PX),
+            .with_visual_style(
+                chrome_tokens::CHROME_LAYER_FUNCTIONAL,
+                chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                Some(chrome_tokens::LIQUID_GLASS_CONTROL_RADIUS_PX),
+            )
+            .with_hit_bounds(
+                TARGET_BADGE_SLOT_WIDTH_PX + OVERLAY_HORIZONTAL_PADDING_PX,
+                header_top,
+                (width - 2.0 * (TARGET_BADGE_SLOT_WIDTH_PX + OVERLAY_HORIZONTAL_PADDING_PX))
+                    .max(0.0),
+                header_height,
+            )
+            .with_gap(6.0),
         LayoutComponentInfo::new("DictationTargetBadge", LayoutComponentType::Button)
             .with_bounds(
                 width - TARGET_BADGE_SLOT_WIDTH_PX - OVERLAY_HORIZONTAL_PADDING_PX,
-                10.0,
+                header_top,
                 TARGET_BADGE_SLOT_WIDTH_PX,
-                28.0,
+                header_height,
             )
             .with_visual_style(
                 chrome_tokens::CHROME_LAYER_FUNCTIONAL,
@@ -2752,19 +3329,46 @@ pub fn automation_layout_info(
             )
             .with_hit_bounds(
                 width - TARGET_BADGE_SLOT_WIDTH_PX - OVERLAY_HORIZONTAL_PADDING_PX,
-                10.0,
+                header_top,
                 TARGET_BADGE_SLOT_WIDTH_PX,
-                28.0,
+                header_height,
             )
             .with_padding(2.0, 8.0, 2.0, 8.0),
+        LayoutComponentInfo::new("DictationSignalBand", LayoutComponentType::Container)
+            .with_bounds(0.0, caption_top, width, caption_height)
+            .with_visual_style(
+                chrome_tokens::CHROME_LAYER_FUNCTIONAL,
+                chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                Some(OVERLAY_RADIUS_PX),
+            )
+            .with_hit_bounds(0.0, caption_top, width, caption_height)
+            .with_padding(
+                6.0,
+                OVERLAY_HORIZONTAL_PADDING_PX,
+                6.0,
+                OVERLAY_HORIZONTAL_PADDING_PX,
+            ),
+        LayoutComponentInfo::new("DictationWaveform", LayoutComponentType::Container)
+            .with_bounds(
+                (width - 48.0) / 2.0,
+                caption_top + (caption_height - WAVEFORM_BAR_MAX_HEIGHT_PX).max(0.0) / 2.0,
+                48.0,
+                WAVEFORM_BAR_MAX_HEIGHT_PX,
+            )
+            .with_visual_style(
+                chrome_tokens::CHROME_LAYER_CONTENT,
+                chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
+                Some(chrome_tokens::LIQUID_GLASS_COMPACT_RADIUS_PX),
+            )
+            .with_gap(WAVEFORM_BAR_GAP_PX),
         LayoutComponentInfo::new("DictationFooterRail", LayoutComponentType::Panel)
-            .with_bounds(0.0, signal_height, width, footer_height)
+            .with_bounds(0.0, height - footer_height, width, footer_height)
             .with_visual_style(
                 chrome_tokens::CHROME_LAYER_FUNCTIONAL,
                 chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
                 Some(chrome_tokens::LIQUID_GLASS_COMPACT_RADIUS_PX),
             )
-            .with_hit_bounds(0.0, signal_height, width, footer_height)
+            .with_hit_bounds(0.0, height - footer_height, width, footer_height)
             .with_padding(0.0, 0.0, 0.0, 0.0),
     ];
 

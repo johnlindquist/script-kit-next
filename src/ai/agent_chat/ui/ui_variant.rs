@@ -9,7 +9,7 @@ pub enum AgentChatUiVariant {
     Sidecar,
     FocusedTextMini,
     /// Zero-context instant answers: launcher Tab-with-text. Pinned to the
-    /// Quick AI profile (spark model, no tools/skills/context). Not listed in
+    /// Quick AI profile (spark model, web_search only, no skills/context). Not listed in
     /// EXPERIMENTS — it is a launch mode, not a pickable chat design.
     QuickAi,
 }
@@ -72,7 +72,9 @@ impl AgentChatUiVariant {
             Self::DenseLog => "Open Agent Chat in a compact transcript layout",
             Self::Sidecar => "Open Agent Chat with a live state sidecar",
             Self::FocusedTextMini => "Open Agent Chat as a compact focused-text editing surface",
-            Self::QuickAi => "Ask the zero-context Quick AI (no tools, skills, or memories)",
+            Self::QuickAi => {
+                "Ask the zero-context Quick AI (web search only — no files, skills, or memories)"
+            }
         }
     }
 

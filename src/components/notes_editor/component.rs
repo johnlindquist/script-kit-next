@@ -181,6 +181,24 @@ impl NotesEditor {
         self.load_value_with_cursor_at_end(text, window, cx);
     }
 
+    /// Rewrite the buffer in place (normalization, mention fixups, formatting)
+    /// without moving the viewport. `set_value` + `set_selection` resets the
+    /// scroll to the top and then re-anchors the cursor at the viewport edge,
+    /// which reads as a jump while typing.
+    pub fn set_value_preserving_scroll(
+        &mut self,
+        value: impl Into<String>,
+        cursor: usize,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let value = value.into();
+        self.input_state.update(cx, |state, cx| {
+            state.set_value_preserving_scroll(value, cursor, window, cx);
+        });
+        self.sync_markdown_link_highlights(cx);
+    }
+
     pub fn set_selection(
         &mut self,
         start: usize,
@@ -237,6 +255,20 @@ impl NotesEditor {
         })
     }
 
+    /// Href of the deeplink currently under the mouse, if any.
+    ///
+    /// The editor's custom highlight ranges are exclusively markdown-link
+    /// spans (`sync_markdown_link_highlights`), so the vendor input's hovered
+    /// highlight range maps directly to a link; the href resolves through the
+    /// same target parser the click path uses, keeping hover and activation
+    /// honest with each other.
+    pub(crate) fn hovered_deeplink(&self, cx: &App) -> Option<String> {
+        self.read_input(cx, |state| {
+            let (range, _role) = state.hovered_highlight_range()?;
+            activation_href_at_cursor_in_text(&state.value(), range.start)
+        })
+    }
+
     pub fn markdown_runtime_info_with_scroll(
         &self,
         cx: &App,
@@ -257,20 +289,40 @@ impl NotesEditor {
                 .iter()
                 .enumerate()
                 .filter_map(|(index, (range, _color))| {
-                    let text = text.get(range.clone())?;
+                    let range_text = text.get(range.clone())?;
+                    // Window-coordinate pixel bounds (when the range is laid
+                    // out) so probes can mouseMove to a link center and
+                    // assert hover state without screenshots.
+                    let bounds = state.highlight_range_bounds(range).map(|bounds| {
+                        serde_json::json!({
+                            "x": bounds.origin.x.as_f32(),
+                            "y": bounds.origin.y.as_f32(),
+                            "width": bounds.size.width.as_f32(),
+                            "height": bounds.size.height.as_f32(),
+                        })
+                    });
                     Some(serde_json::json!({
                         "range": [range.start, range.end],
-                        "text": text,
+                        "text": range_text,
                         "role": roles
                             .get(index)
                             .cloned()
                             .unwrap_or_else(|| "markdownLink".to_string()),
+                        "bounds": bounds,
                     }))
                 })
                 .collect::<Vec<_>>();
+            let hovered = state.hovered_highlight_range().map(|(range, role)| {
+                serde_json::json!({
+                    "range": [range.start, range.end],
+                    "role": role,
+                    "href": activation_href_at_cursor_in_text(&text, range.start),
+                })
+            });
             serde_json::json!({
                 "count": ranges.len(),
                 "ranges": ranges,
+                "hovered": hovered,
             })
         })
     }

@@ -1,17 +1,10 @@
 use super::*;
 
 impl NotesApp {
-    #[allow(clippy::too_many_arguments)]
-    pub(super) fn render_titlebar_icons(
+    pub(super) fn render_titlebar_trash_actions(
         &self,
-        window_hovered: bool,
         has_selection: bool,
         is_trash: bool,
-        in_focus_mode: bool,
-        preview_label: String,
-        preview_color: gpui::Hsla,
-        muted_color: gpui::Hsla,
-        accent_color: gpui::Hsla,
         cx: &mut Context<Self>,
     ) -> AnyElement {
         div()
@@ -20,110 +13,7 @@ impl NotesApp {
             .flex()
             .items_center()
             .justify_end()
-            .gap_2()
-            .when(window_hovered && !is_trash && !in_focus_mode, |d| {
-                d.when(has_selection, |d| {
-                    d.child(
-                        div()
-                            .id("titlebar-cmd-icon")
-                            .min_w(px(MIN_TARGET_SIZE))
-                            .min_h(px(MIN_TARGET_SIZE))
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .text_sm()
-                            .text_color(muted_color.opacity(OPACITY_MUTED))
-                            .cursor_pointer()
-                            .hover(|s| s.text_color(muted_color))
-                            .tooltip(|window, cx| {
-                                Tooltip::new("Actions")
-                                    .key_binding(gpui::Keystroke::parse("cmd-k").ok().map(Kbd::new))
-                                    .build(window, cx)
-                            })
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                if this.command_bar.is_open() {
-                                    this.close_actions_panel(window, cx);
-                                } else {
-                                    this.open_actions_panel(window, cx);
-                                }
-                            }))
-                            .child("⌘"),
-                    )
-                })
-                .child(
-                    div()
-                        .id("titlebar-browse-icon")
-                        .min_w(px(MIN_TARGET_SIZE))
-                        .min_h(px(MIN_TARGET_SIZE))
-                        .flex()
-                        .items_center()
-                        .justify_center()
-                        .text_sm()
-                        .text_color(muted_color.opacity(OPACITY_MUTED))
-                        .cursor_pointer()
-                        .hover(|s| s.text_color(muted_color))
-                        .tooltip(|window, cx| {
-                            Tooltip::new("Note switcher")
-                                .key_binding(gpui::Keystroke::parse("cmd-p").ok().map(Kbd::new))
-                                .build(window, cx)
-                        })
-                        .on_click(cx.listener(|this, _, window, cx| {
-                            if this.note_switcher.is_open() {
-                                this.close_browse_panel(window, cx);
-                            } else {
-                                this.close_actions_panel(window, cx);
-                                this.open_browse_panel(window, cx);
-                            }
-                        }))
-                        .child("≡"),
-                )
-                .child(
-                    div()
-                        .id("titlebar-preview-icon")
-                        .min_w(px(MIN_TARGET_SIZE))
-                        .min_h(px(MIN_TARGET_SIZE))
-                        .flex()
-                        .items_center()
-                        .justify_center()
-                        .text_sm()
-                        .text_color(preview_color)
-                        .cursor_pointer()
-                        .hover(|s| s.text_color(accent_color))
-                        .tooltip(|window, cx| {
-                            Tooltip::new("Toggle preview")
-                                .key_binding(
-                                    gpui::Keystroke::parse("cmd-shift-p").ok().map(Kbd::new),
-                                )
-                                .build(window, cx)
-                        })
-                        .on_click(cx.listener(|this, _, window, cx| {
-                            this.toggle_preview(window, cx);
-                        }))
-                        .child(preview_label.clone()),
-                )
-                .child(
-                    div()
-                        .id("titlebar-new-icon")
-                        .min_w(px(MIN_TARGET_SIZE))
-                        .min_h(px(MIN_TARGET_SIZE))
-                        .flex()
-                        .items_center()
-                        .justify_center()
-                        .text_sm()
-                        .text_color(muted_color.opacity(OPACITY_MUTED))
-                        .cursor_pointer()
-                        .hover(|s| s.text_color(muted_color))
-                        .tooltip(|window, cx| {
-                            Tooltip::new("New note")
-                                .key_binding(gpui::Keystroke::parse("cmd-n").ok().map(Kbd::new))
-                                .build(window, cx)
-                        })
-                        .on_click(cx.listener(|this, _, window, cx| {
-                            this.create_note(window, cx);
-                        }))
-                        .child("+"),
-                )
-            })
+            .gap_1()
             .when(has_selection && is_trash, |d| {
                 d.child(
                     div()
@@ -160,32 +50,16 @@ impl NotesApp {
         window_hovered: bool,
         has_selection: bool,
         is_trash: bool,
-        is_preview: bool,
+        _is_preview: bool,
         is_pinned: bool,
         in_focus_mode: bool,
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let muted_color = cx.theme().muted_foreground;
         let accent_color = cx.theme().accent;
-        let preview_label = if is_preview { "MD" } else { "TXT" }.to_string();
-        let preview_color = if is_preview {
-            accent_color
-        } else {
-            muted_color.opacity(OPACITY_MUTED)
-        };
         let metrics = style::adopted_metrics();
 
-        let titlebar_icons = self.render_titlebar_icons(
-            window_hovered,
-            has_selection,
-            is_trash,
-            in_focus_mode,
-            preview_label,
-            preview_color,
-            muted_color,
-            accent_color,
-            cx,
-        );
+        let titlebar_actions = self.render_titlebar_trash_actions(has_selection, is_trash, cx);
 
         div()
             .id("notes-titlebar")
@@ -233,7 +107,7 @@ impl NotesApp {
                         )
                     }),
             )
-            .child(titlebar_icons)
+            .child(titlebar_actions)
             .into_any_element()
     }
 }

@@ -18,6 +18,31 @@ use super::{InputState, LastLayout, mode::InputMode};
 
 const BOTTOM_MARGIN_ROWS: usize = 3;
 pub(super) const RIGHT_MARGIN: Pixels = px(10.);
+
+/// Scroll offset (y) that keeps the cursor inside `[margin, viewport_height - margin]`.
+///
+/// Deterministic: the same cursor position and viewport always produce the
+/// same offset, no matter how far the cursor moved since the last frame. When
+/// the cursor is already inside the margins the offset is returned unchanged.
+/// The result is capped at 0 (content never scrolls below its top edge); the
+/// bottom cap against the full scroll range is applied later by
+/// `InputState::update_scroll_offset` once the frame's scroll size is known.
+fn track_cursor_scroll_y(
+    scroll_y: Pixels,
+    cursor_y: Pixels,
+    viewport_height: Pixels,
+    margin: Pixels,
+) -> Pixels {
+    if scroll_y + cursor_y > viewport_height - margin {
+        // Cursor is below the bottom margin: pin it to the bottom margin.
+        (viewport_height - margin - cursor_y).min(px(0.))
+    } else if scroll_y + cursor_y < margin {
+        // Cursor is above the top margin: pin it to the top margin.
+        (margin - cursor_y).min(px(0.))
+    } else {
+        scroll_y
+    }
+}
 pub(super) const LINE_NUMBER_RIGHT_MARGIN: Pixels = px(10.);
 
 pub(super) struct TextElement {
@@ -44,9 +69,16 @@ impl TextElement {
             let state = self.state.clone();
 
             move |event: &MouseMoveEvent, _, window, cx| {
-                if event.pressed_button == Some(MouseButton::Left) {
+                let should_update = event.pressed_button == Some(MouseButton::Left)
+                    || state.read(cx).hovered_highlight_range.is_some();
+                if should_update {
                     state.update(cx, |state, cx| {
-                        state.on_drag_move(event, window, cx);
+                        if event.pressed_button == Some(MouseButton::Left) {
+                            state.on_drag_move(event, window, cx);
+                        }
+                        if !state.input_bounds.contains(&event.position) {
+                            state.clear_hovered_highlight_range(cx);
+                        }
                     });
                 }
             }
@@ -95,9 +127,16 @@ impl TextElement {
         let mut cursor_bounds = None;
 
         // If the input has a fixed height (Otherwise is auto-grow), we need to add a bottom margin to the input.
+        //
+        // Key the margin to the viewport height, not `visible_range.len()`:
+        // the visible range shrinks with short documents and near the end of
+        // the scroll range, so a content-dependent margin flips between one
+        // and three lines while typing and makes cursor auto-scroll land in
+        // different places from one keystroke to the next.
+        let viewport_rows = (bounds.size.height / line_height).floor() as usize;
         let top_bottom_margin = if state.mode.is_auto_grow() {
             line_height
-        } else if visible_range.len() < BOTTOM_MARGIN_ROWS * 8 {
+        } else if viewport_rows < BOTTOM_MARGIN_ROWS * 8 {
             line_height
         } else {
             BOTTOM_MARGIN_ROWS * line_height
@@ -203,18 +242,18 @@ impl TextElement {
                     );
                 }
 
-                // If we change the scroll_offset.y, GPUI will render and trigger the next run loop.
-                // So, here we just adjust offset by `line_height` for move smooth.
-                scroll_offset.y =
-                    if scroll_offset.y + cursor_pos.y > bounds.size.height - top_bottom_margin {
-                        // cursor is out of bottom
-                        scroll_offset.y - line_height
-                    } else if scroll_offset.y + cursor_pos.y < top_bottom_margin {
-                        // cursor is out of top
-                        (scroll_offset.y + line_height).min(px(0.))
-                    } else {
-                        scroll_offset.y
-                    };
+                // Keep the cursor fully inside the vertical margins in one
+                // step. The previous incremental version moved the offset by
+                // a single `line_height` per frame and only on frames where
+                // the selection changed, so rapid multi-line edits (holding
+                // Enter/Backspace, paste) let the cursor drift out of view
+                // and the viewport lagged behind unpredictably.
+                scroll_offset.y = track_cursor_scroll_y(
+                    scroll_offset.y,
+                    cursor_pos.y,
+                    bounds.size.height,
+                    top_bottom_margin,
+                );
 
                 // For selection to move scroll
                 if state.selection_reversed {
@@ -575,6 +614,44 @@ impl TextElement {
         }
     }
 
+    fn layout_hovered_highlight_range(&self, cx: &App) -> Option<(Range<usize>, HighlightStyle)> {
+        let state = self.state.read(cx);
+        let Some((range, _)) = state.hovered_highlight_range.as_ref() else {
+            return None;
+        };
+
+        let mut highlight_style: HighlightStyle = cx
+            .theme()
+            .highlight_theme
+            .link_text
+            .map(|style| style.into())
+            .unwrap_or_default();
+
+        // Mirror LSP hover-definition affordances for semantic highlight ranges.
+        highlight_style.underline = Some(UnderlineStyle {
+            thickness: px(1.),
+            ..UnderlineStyle::default()
+        });
+
+        Some((range.clone(), highlight_style))
+    }
+
+    fn layout_hovered_highlight_range_hitbox(
+        &self,
+        state: &InputState,
+        window: &mut Window,
+        _cx: &App,
+    ) -> Option<Hitbox> {
+        let Some((range, _)) = state.hovered_highlight_range.as_ref() else {
+            return None;
+        };
+        let Some(bounds) = state.range_to_bounds(range) else {
+            return None;
+        };
+
+        Some(window.insert_hitbox(bounds, gpui::HitboxBehavior::Normal))
+    }
+
     fn layout_selections(
         &self,
         last_layout: &LastLayout,
@@ -876,7 +953,17 @@ impl TextElement {
         visible_byte_range: Range<usize>,
         cx: &mut App,
     ) -> Option<Vec<(Range<usize>, HighlightStyle)>> {
-        let custom_styles = self.custom_highlight_styles(visible_byte_range.clone(), cx);
+        let hovered_highlight_style = self.layout_hovered_highlight_range(cx);
+        let custom_styles = match (
+            self.custom_highlight_styles(visible_byte_range.clone(), cx),
+            hovered_highlight_style.clone(),
+        ) {
+            (Some(styles), Some(hovered_style)) => {
+                Some(gpui::combine_highlights(styles, vec![hovered_style]).collect())
+            }
+            (None, Some(hovered_style)) => Some(vec![hovered_style]),
+            (styles, None) => styles,
+        };
         let custom_colored_styles =
             self.custom_colored_highlight_styles(visible_byte_range.clone(), cx);
         let state = self.state.read(cx);
@@ -921,6 +1008,9 @@ impl TextElement {
         if let Some(hover_style) = self.layout_hover_definition(cx) {
             styles.push(hover_style);
         }
+        if let Some(hover_style) = hovered_highlight_style {
+            styles.push(hover_style);
+        }
 
         // Combine marker styles
         styles = gpui::combine_highlights(diagnostic_styles, styles).collect();
@@ -950,6 +1040,7 @@ pub(super) struct PrepaintState {
     search_match_paths: Vec<(Path<Pixels>, bool)>,
     document_color_paths: Vec<(Path<Pixels>, Hsla)>,
     hover_definition_hitbox: Option<Hitbox>,
+    hovered_highlight_range_hitbox: Option<Hitbox>,
     indent_guides_path: Option<Path<Pixels>>,
     bounds: Bounds<Pixels>,
     // Inline completion rendering data
@@ -1367,6 +1458,8 @@ impl Element for TextElement {
         };
 
         let hover_definition_hitbox = self.layout_hover_definition_hitbox(state, window, cx);
+        let hovered_highlight_range_hitbox =
+            self.layout_hovered_highlight_range_hitbox(state, window, cx);
         let indent_guides_path =
             self.layout_indent_guides(state, &bounds, &last_layout, &text_style, window);
 
@@ -1382,6 +1475,7 @@ impl Element for TextElement {
             search_match_paths,
             hover_highlight_path,
             hover_definition_hitbox,
+            hovered_highlight_range_hitbox,
             document_color_paths,
             indent_guides_path,
             ghost_first_line,
@@ -1656,6 +1750,9 @@ impl Element for TextElement {
         if let Some(hitbox) = prepaint.hover_definition_hitbox.as_ref() {
             window.set_cursor_style(gpui::CursorStyle::PointingHand, &hitbox);
         }
+        if let Some(hitbox) = prepaint.hovered_highlight_range_hitbox.as_ref() {
+            window.set_cursor_style(gpui::CursorStyle::PointingHand, &hitbox);
+        }
 
         // Paint inline completion first line suffix (after cursor on same line)
         if show_inline_completion {
@@ -1803,6 +1900,48 @@ fn split_runs_by_bg_segments(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_track_cursor_scroll_y() {
+        let viewport = px(400.);
+        let margin = px(60.); // 3 rows at 20px
+
+        // Cursor already inside the margins: offset is untouched.
+        assert_eq!(
+            track_cursor_scroll_y(px(-100.), px(300.), viewport, margin),
+            px(-100.)
+        );
+
+        // Cursor far below the bottom margin catches up in ONE step (the old
+        // incremental version moved a single line per changed frame).
+        assert_eq!(
+            track_cursor_scroll_y(px(0.), px(1000.), viewport, margin),
+            viewport - margin - px(1000.)
+        );
+
+        // Cursor exactly at the bottom margin boundary: unchanged.
+        assert_eq!(
+            track_cursor_scroll_y(px(0.), viewport - margin, viewport, margin),
+            px(0.)
+        );
+
+        // Cursor far above the top margin: pinned to the top margin.
+        assert_eq!(
+            track_cursor_scroll_y(px(-1000.), px(500.), viewport, margin),
+            margin - px(500.)
+        );
+
+        // Near the document top the offset never goes positive.
+        assert_eq!(
+            track_cursor_scroll_y(px(-10.), px(20.), viewport, margin),
+            px(0.)
+        );
+
+        // Deterministic: repeated calls converge instead of drifting.
+        let once = track_cursor_scroll_y(px(0.), px(1000.), viewport, margin);
+        let twice = track_cursor_scroll_y(once, px(1000.), viewport, margin);
+        assert_eq!(once, twice);
+    }
 
     #[test]
     fn test_runs_for_range() {

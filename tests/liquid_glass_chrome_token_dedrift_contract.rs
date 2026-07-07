@@ -57,8 +57,8 @@ fn actions_radii_reference_shared_liquid_glass_tokens() {
 #[test]
 fn footer_action_button_radius_stays_pinned_literal() {
     assert!(
-        FOOTER_CHROME.contains("pub(crate) const FOOTER_ACTION_BUTTON_RADIUS_PX: f32 = 14.0;"),
-        "FOOTER_ACTION_BUTTON_RADIUS_PX must remain its design-tool pinned 14.0 literal"
+        FOOTER_CHROME.contains("pub(crate) const FOOTER_ACTION_BUTTON_RADIUS_PX: f32 = 6.0;"),
+        "FOOTER_ACTION_BUTTON_RADIUS_PX must remain its design-tool pinned 6.0 literal (2026-07-07: user restored the pre-Liquid-Glass-polish less-rounded button style)"
     );
 }
 

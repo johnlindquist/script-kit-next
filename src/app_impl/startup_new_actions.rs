@@ -8,6 +8,7 @@
                 let is_ai = crate::ai::is_ai_window(window);
                 let is_detached_agent_chat = crate::ai::agent_chat::ui::chat_window::is_chat_window(window);
                 let is_actions = crate::actions::is_actions_window(window);
+                let is_shortcut_recorder = super::shortcut_recorder::is_shortcut_recorder_window(window);
 
                 // A detached actions popup hosted by a secondary window (Notes,
                 // detached Agent Chat) owns its keys via ActionsWindow::on_key_down.
@@ -147,7 +148,7 @@
                 // Skip keystrokes from secondary windows — interceptors are
                 // GLOBAL and fire for ALL windows.  Secondary windows own
                 // their own Cmd+K/Escape/Enter handling.
-                if is_notes || is_ai || is_detached_agent_chat {
+                if is_notes || is_ai || is_detached_agent_chat || is_shortcut_recorder {
                     tracing::debug!(
                         target: "script_kit::keyboard",
                         event = "actions_interceptor_skipped_secondary_window",
@@ -155,6 +156,7 @@
                         is_ai,
                         is_detached_agent_chat,
                         is_actions,
+                        is_shortcut_recorder,
                     );
                     return;
                 }
@@ -195,6 +197,10 @@
                                     this.focused_input
                                 ),
                             );
+                        }
+
+                        if this.main_window_modal_owns_keyboard() {
+                            return;
                         }
 
                         // Route displayed action shortcuts even when the popup is closed.

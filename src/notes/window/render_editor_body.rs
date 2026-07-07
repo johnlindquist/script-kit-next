@@ -8,6 +8,10 @@ impl NotesApp {
         is_preview: bool,
         cx: &mut Context<Self>,
     ) -> AnyElement {
+        // Render receipt default: no hover chip this frame. The editor branch
+        // below overwrites it when a chip is actually built.
+        self.last_deeplink_hover_hint = None;
+
         if self.kit_resource_preview.is_some() {
             return self.render_kit_resource_preview(cx);
         }
@@ -124,6 +128,25 @@ impl NotesApp {
         // padding/advance/line-height math drifts from the Input's real
         // metrics and renders the ghost offset from the text.
         let input = self.notes_editor.read(cx).render_input(cx);
+        // Hover discoverability: while the mouse is over a deeplink the
+        // vendored input paints an underline + pointer cursor, and this chip
+        // names the click action so previews are learnable before the first
+        // blind click. Absolute overlay — never reflows the editor.
+        let hover_hint_model = crate::notes::deeplink_activation::hover_hint_model(
+            self.notes_editor.read(cx).hovered_deeplink(cx),
+            crate::notes::deeplink_activation::ActivationSurface::NotesWindow,
+        );
+        self.last_deeplink_hover_hint = hover_hint_model
+            .as_ref()
+            .map(|(verb, href)| serde_json::json!({ "verb": verb, "href": href }));
+        let hover_hint = hover_hint_model.map(|(verb, href)| {
+            crate::components::resource_preview::render_deeplink_hover_hint(
+                "notes-deeplink-hover-hint",
+                verb,
+                &href,
+                cx,
+            )
+        });
         let input = div()
             .relative()
             .flex_1()
@@ -143,6 +166,7 @@ impl NotesApp {
             .min_h(px(0.))
             .h_full()
             .child(input)
+            .when_some(hover_hint, |d, chip| d.child(chip))
             .when_some(spine_panel, |d, panel| d.child(panel))
             .into_any_element()
     }
@@ -303,8 +327,7 @@ impl NotesApp {
         };
 
         self.notes_editor.update(cx, |editor, cx| {
-            editor.set_value(new_content.clone(), window, cx);
-            editor.set_selection(cursor, cursor, window, cx);
+            editor.set_value_preserving_scroll(new_content.clone(), cursor, window, cx);
         });
         self.spine_runtime.selected_index = 0;
         self.spine_runtime.clear_alias_cache();

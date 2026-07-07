@@ -18,9 +18,7 @@ use cocoa::base::{id, nil};
 use gpui_component::{
     button::{Button, ButtonVariants},
     input::{Input, InputEvent, InputState, Search},
-    kbd::Kbd,
     theme::ActiveTheme,
-    tooltip::Tooltip,
     IconName, Root, Sizable, WindowExt as _,
 };
 #[cfg(target_os = "macos")]
@@ -423,6 +421,12 @@ pub struct NotesApp {
 
     /// Subscriptions to keep alive
     _subscriptions: Vec<Subscription>,
+
+    /// Render receipt: the deeplink hover hint chip built during the last
+    /// editor-body render (`{"verb", "href"}`), or `None` when no chip was
+    /// rendered. Written only on the render path so automation can prove the
+    /// hover→re-render→chip pipeline, not just the hover state.
+    pub(super) last_deeplink_hover_hint: Option<serde_json::Value>,
 
     /// Command bar component (Cmd+K) - uses unified CommandBar wrapper
     /// Opens in a separate vibrancy window for proper macOS blur effect

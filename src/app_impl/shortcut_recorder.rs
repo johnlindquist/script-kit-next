@@ -3,11 +3,11 @@ use super::*;
 use std::sync::{Mutex, OnceLock};
 
 use gpui::{
-    div, AnyWindowHandle, Bounds, DisplayId, Entity, FocusHandle, Pixels, Point, Render, Size,
+    AnyWindowHandle, Bounds, DisplayId, Entity, FocusHandle, Pixels, Point, Render, Size,
     WeakEntity, WindowBackgroundAppearance, WindowBounds, WindowHandle, WindowKind, WindowOptions,
+    div,
 };
 
-const SHORTCUT_RECORDER_POPUP_WIDTH: f32 = 360.0;
 const SHORTCUT_RECORDER_POPUP_HEIGHT: f32 = 196.0;
 #[cfg(target_os = "macos")]
 const NS_WINDOW_ABOVE: i64 = 1;
@@ -190,7 +190,8 @@ impl Render for ShortcutRecorderPopupWindow {
 }
 
 fn shortcut_recorder_window_bounds(parent_bounds: Bounds<Pixels>) -> Bounds<Pixels> {
-    let width = px(SHORTCUT_RECORDER_POPUP_WIDTH).min(parent_bounds.size.width);
+    let width =
+        px(crate::components::confirm_modal_shell::MODAL_WIDTH_PX).min(parent_bounds.size.width);
     let height = px(SHORTCUT_RECORDER_POPUP_HEIGHT).min(parent_bounds.size.height);
     let x = parent_bounds.origin.x + ((parent_bounds.size.width - width) / 2.0);
     let y = parent_bounds.origin.y + ((parent_bounds.size.height - height) / 2.0);
@@ -213,6 +214,18 @@ fn close_shortcut_recorder_window(cx: &mut App) {
             }
         }
     }
+}
+
+pub(crate) fn is_shortcut_recorder_window(window: &gpui::Window) -> bool {
+    if let Some(storage) = SHORTCUT_RECORDER_WINDOW.get() {
+        if let Ok(guard) = storage.lock() {
+            if let Some(handle) = guard.as_ref() {
+                let recorder_any: AnyWindowHandle = (*handle).into();
+                return window.window_handle() == recorder_any;
+            }
+        }
+    }
+    false
 }
 
 #[cfg(target_os = "macos")]
@@ -265,6 +278,12 @@ fn attach_shortcut_recorder_to_parent_window(
     });
 }
 
+/// Opens the shortcut recorder as a key popup because raw shortcut capture must
+/// receive Tab/modifier keystrokes instead of routing them through the main
+/// window. This is the explicit exception to confirm's `focus:false` model: the
+/// AppKit setup still follows the actions popup recipe
+/// (`WindowKind::PopUp` + `configure_actions_popup_window`) so the child panel
+/// stays non-activating while owning keyboard input for Escape/capture.
 fn open_shortcut_recorder_window(
     cx: &mut App,
     app: WeakEntity<ScriptListApp>,
@@ -363,6 +382,12 @@ fn open_shortcut_recorder_window(
 }
 
 impl ScriptListApp {
+    pub(crate) fn main_window_modal_owns_keyboard(&self) -> bool {
+        self.shortcut_recorder_state.is_some()
+            || self.alias_input_state.is_some()
+            || crate::confirm::is_confirm_window_open()
+    }
+
     pub(crate) fn edit_script(&mut self, path: &std::path::Path) {
         let editor = self.config.get_editor();
         logging::log(
@@ -621,166 +646,6 @@ export default {
             .detach();
             cx.notify();
         }
-    }
-
-    /// Legacy inline overlay path for the shortcut recorder.
-    ///
-    /// Returns None if no recorder is active.
-    ///
-    /// The current native popup path returns None while shortcut_recorder_state
-    /// is set so the parent is not dimmed. The remaining inline path is kept for
-    /// legacy state/entity handling.
-    pub(crate) fn render_shortcut_recorder_overlay(
-        &mut self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> Option<gpui::AnyElement> {
-        if self.shortcut_recorder_state.is_some() {
-            return None;
-        }
-
-        use crate::components::shortcut_recorder::ShortcutRecorder;
-
-        // Check if we have state but no entity yet - need to create the recorder
-        let state = self.shortcut_recorder_state.as_ref()?;
-
-        // Create entity if needed (only once per show)
-        if self.shortcut_recorder_entity.is_none() {
-            let command_id = state.command_id.clone();
-            let command_name = state.command_name.clone();
-            let theme = std::sync::Arc::clone(&self.theme);
-
-            // Get a weak reference to the app for callbacks
-            let app_entity = cx.entity().downgrade();
-            let app_entity_for_cancel = app_entity.clone();
-
-            let recorder = cx.new(move |cx| {
-                // Create the recorder with its own focus handle from its own context
-                // This is CRITICAL for keyboard events to work
-                let conflict_command_id = command_id.clone();
-                let mut r =
-                    ShortcutRecorder::new(cx, theme).with_conflict_checker(move |recorded| {
-                        crate::hotkeys::shortcut_conflict_for_recording(
-                            &conflict_command_id,
-                            &recorded.to_config_string(),
-                        )
-                        .map(|conflict| {
-                            crate::components::shortcut_recorder::ShortcutConflict {
-                                command_name: conflict.command_name,
-                                shortcut: conflict.shortcut,
-                            }
-                        })
-                    });
-                r.set_command_name(Some(command_name.clone()));
-                r.set_command_description(Some(format!("ID: {}", command_id)));
-
-                // Set save callback - directly updates the app via entity reference
-                let app_for_save = app_entity.clone();
-                r.on_save = Some(Box::new(move |recorded| {
-                    logging::log(
-                        "SHORTCUT",
-                        &format!(
-                            "Recorder on_save triggered: {}",
-                            recorded.to_config_string()
-                        ),
-                    );
-                    // Schedule the save on the app - this will be picked up by the app
-                    if app_for_save.upgrade().is_some() {
-                        // We can't call update() from here directly, so we'll use a different approach
-                        // Store the result in the recorder and check it in render
-                        logging::log("SHORTCUT", "Save callback - app entity available");
-                    }
-                }));
-
-                // Set cancel callback
-                let app_for_cancel = app_entity_for_cancel.clone();
-                r.on_cancel = Some(Box::new(move || {
-                    logging::log("SHORTCUT", "Recorder on_cancel triggered");
-                    if let Some(_app) = app_for_cancel.upgrade() {
-                        logging::log("SHORTCUT", "Cancel callback - app entity available");
-                    }
-                }));
-
-                r
-            });
-
-            self.shortcut_recorder_entity = Some(recorder);
-            logging::log("SHORTCUT", "Created new shortcut recorder entity");
-        }
-
-        // Get the existing entity
-        let recorder = self.shortcut_recorder_entity.as_ref()?;
-
-        // ALWAYS focus the recorder to ensure it captures keyboard input
-        // This is critical for modal behavior - the recorder must have focus
-        let recorder_fh = recorder.read(cx).focus_handle.clone();
-        let was_focused = recorder_fh.is_focused(window);
-        window.focus(&recorder_fh, cx);
-        if !was_focused {
-            logging::log("SHORTCUT", "Focused shortcut recorder (was not focused)");
-        }
-
-        // Check for pending actions from the recorder (Save or Cancel)
-        // We need to update() the recorder entity to take the pending action
-        let pending_action = recorder.update(cx, |r, _cx| r.take_pending_action());
-
-        if let Some(action) = pending_action {
-            use crate::components::shortcut_recorder::RecorderAction;
-            match action {
-                RecorderAction::Save(recorded) => {
-                    logging::log(
-                        "SHORTCUT",
-                        &format!("Handling save action: {}", recorded.to_config_string()),
-                    );
-                    // Handle the save - need to defer to avoid borrow issues
-                    let app_entity = cx.entity().downgrade();
-                    cx.spawn(async move |_this, cx| {
-                        cx.background_executor()
-                            .timer(std::time::Duration::from_millis(1))
-                            .await;
-                        cx.update(|cx| {
-                            if let Some(app) = app_entity.upgrade() {
-                                app.update(cx, |this, cx| {
-                                    this.handle_shortcut_save(&recorded, cx);
-                                });
-                            }
-                        });
-                    })
-                    .detach();
-                }
-                RecorderAction::Cancel => {
-                    logging::log("SHORTCUT", "Handling cancel action");
-                    // Handle the cancel - need to defer to avoid borrow issues
-                    let app_entity = cx.entity().downgrade();
-                    cx.spawn(async move |_this, cx| {
-                        cx.background_executor()
-                            .timer(std::time::Duration::from_millis(1))
-                            .await;
-                        cx.update(|cx| {
-                            if let Some(app) = app_entity.upgrade() {
-                                app.update(cx, |this, cx| {
-                                    this.close_shortcut_recorder(cx);
-                                });
-                            }
-                        });
-                    })
-                    .detach();
-                }
-            }
-        }
-
-        // Clone the entity for rendering
-        let recorder_clone = recorder.clone();
-
-        // Render the recorder as a child element
-        Some(
-            div()
-                .id("shortcut-recorder-wrapper")
-                .absolute()
-                .inset_0()
-                .child(recorder_clone)
-                .into_any_element(),
-        )
     }
 
     /// Handle saving a shortcut from the recorder.

@@ -97,6 +97,15 @@ impl DayPageKitResourcePreviewState {
     }
 }
 
+/// One clipboard shelf row: the lifted day-file line plus a short content
+/// preview resolved from clipboard history (UI-only — the preview text is
+/// never persisted to the brain, keeping day files raw-free).
+#[derive(Debug, Clone)]
+pub(crate) struct DayPageClipboardShelfEntry {
+    pub(crate) item: script_kit_gpui::day_page::ClipboardShelfItem,
+    pub(crate) preview: String,
+}
+
 /// Host for today's day page inside the main launcher window.
 pub struct DayPageView {
     pub(crate) app: WeakEntity<ScriptListApp>,
@@ -104,6 +113,15 @@ pub struct DayPageView {
     pub(crate) notes_editor: Entity<NotesEditor>,
     pub(crate) editor_state: Entity<InputState>,
     pub(crate) editor_subscription: Subscription,
+    /// Observes the editor `InputState` for deeplink hover changes, which
+    /// arrive as plain `cx.notify` (no `InputEvent`) — required for the
+    /// hover hint chip to appear/disappear live.
+    pub(crate) editor_hover_observation: Subscription,
+    /// Render receipt: the deeplink hover hint chip built during the last
+    /// render (`{"verb", "href"}`), or `None` when no chip was rendered.
+    /// Written only on the render path so automation can prove the
+    /// hover→re-render→chip pipeline, not just the hover state.
+    pub(crate) last_deeplink_hover_hint: Option<serde_json::Value>,
     pub(crate) focus_handle: FocusHandle,
     /// Resolved fragment paths aligned with parsed fragment reference indices.
     pub(crate) fragment_open_targets: Vec<PathBuf>,
@@ -126,6 +144,13 @@ pub struct DayPageView {
     pub(crate) last_editor_content_len: usize,
     /// Read-only preview opened from a `kit://` resource link in Day Page markdown.
     pub(crate) kit_resource_preview: Option<DayPageKitResourcePreviewState>,
+    /// Clipboard sediment refs lifted out of the editor buffer (Day binding
+    /// only). They stay in the day file — rejoined at the end on every save —
+    /// but render as a compact shelf below the editor instead of raw
+    /// `[Clipboard entry](kit://…)` lines inside the note.
+    pub(crate) clipboard_shelf: Vec<DayPageClipboardShelfEntry>,
+    /// Whether the clipboard shelf list is expanded (collapsed by default).
+    pub(crate) clipboard_shelf_expanded: bool,
     /// True when Day Page content is rendered through the shared Notes
     /// Markdown preview renderer instead of the editable Notes editor input.
     pub(crate) read_mode: bool,

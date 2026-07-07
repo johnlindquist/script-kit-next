@@ -344,18 +344,18 @@ fn clipboard_text_exact_action_count() {
     };
     let actions = get_clipboard_history_context_actions(&info);
     // Text: paste, copy, paste_keep_open, share, attach_to_ai, quick_look (macOS),
-    //        pin, save_snippet, save_file, delete, delete_multiple, delete_all
+    //        pin, keep_in_today, save_snippet, save_file, delete, delete_multiple, delete_all
     #[cfg(target_os = "macos")]
     assert_eq!(
         actions.len(),
-        12,
-        "macOS text clipboard should have 12 actions"
+        13,
+        "macOS text clipboard should have 13 actions"
     );
     #[cfg(not(target_os = "macos"))]
     assert_eq!(
         actions.len(),
-        11,
-        "non-macOS text clipboard should have 11 actions"
+        12,
+        "non-macOS text clipboard should have 12 actions"
     );
 }
 
@@ -374,14 +374,14 @@ fn clipboard_image_exact_action_count() {
     #[cfg(target_os = "macos")]
     assert_eq!(
         actions.len(),
-        15,
-        "macOS image clipboard should have 15 actions"
+        16,
+        "macOS image clipboard should have 16 actions"
     );
     #[cfg(not(target_os = "macos"))]
     assert_eq!(
         actions.len(),
-        11,
-        "non-macOS image clipboard should have 11 actions"
+        12,
+        "non-macOS image clipboard should have 12 actions"
     );
 }
 

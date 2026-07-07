@@ -80,6 +80,16 @@ impl NotesCommandBarActionPlan {
                 | Self::SelectedTrashNeedsAutoSizing
         )
     }
+
+    fn is_trash_view(self) -> bool {
+        matches!(
+            self,
+            Self::EmptyTrashAutoSized
+                | Self::EmptyTrashNeedsAutoSizing
+                | Self::SelectedTrashAutoSized
+                | Self::SelectedTrashNeedsAutoSizing
+        )
+    }
 }
 
 fn is_blank(value: &str) -> bool {
@@ -197,14 +207,98 @@ pub fn get_notes_command_bar_actions(info: &NotesInfo) -> Vec<Action> {
     actions.push(
         Action::new(
             "browse_notes",
-            "Browse Notes",
-            Some("Opens the note browser".to_string()),
+            "Switch Note",
+            Some("Opens the note switcher".to_string()),
             ActionCategory::ScriptContext,
         )
         .with_shortcut("⌘P")
         .with_icon(IconName::FolderOpen)
         .with_section("Notes"),
     );
+
+    actions.push(
+        Action::new(
+            "toggle_preview",
+            "Toggle Preview",
+            Some("Toggles Markdown preview mode".to_string()),
+            ActionCategory::ScriptContext,
+        )
+        .with_shortcut("⇧⌘P")
+        .with_icon(IconName::Code)
+        .with_section("Notes"),
+    );
+
+    actions.push(
+        Action::new(
+            "history_back",
+            "History Back",
+            Some("Returns to the previous note selection".to_string()),
+            ActionCategory::ScriptContext,
+        )
+        .with_shortcut("⌘[")
+        .with_icon(IconName::Refresh)
+        .with_section("Navigation"),
+    );
+
+    actions.push(
+        Action::new(
+            "history_forward",
+            "History Forward",
+            Some("Moves forward in note selection history".to_string()),
+            ActionCategory::ScriptContext,
+        )
+        .with_shortcut("⌘]")
+        .with_icon(IconName::ArrowRight)
+        .with_section("Navigation"),
+    );
+
+    if action_plan.is_trash_view() {
+        actions.push(
+            Action::new(
+                "back_to_notes",
+                "Back to Notes",
+                Some("Returns to active notes".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_icon(IconName::FolderOpen)
+            .with_section("Trash"),
+        );
+
+        actions.push(
+            Action::new(
+                "empty_trash",
+                "Empty Trash",
+                Some("Permanently deletes every note in Trash".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_icon(IconName::Trash)
+            .with_section("Trash"),
+        );
+    } else {
+        actions.push(
+            Action::new(
+                "cycle_sort_mode",
+                "Cycle Sort",
+                Some("Cycles Notes sorting by updated, created, or title".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut("⇧⌘S")
+            .with_icon(IconName::Refresh)
+            .with_section("Notes"),
+        );
+
+        actions.push(
+            Action::new(
+                "open_trash",
+                "Open Trash",
+                Some("Shows deleted notes".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut("⇧⌘T")
+            .with_icon(IconName::Trash)
+            .with_section("Trash"),
+        );
+    }
 
     if action_plan.has_active_note_actions() {
         actions.push(
@@ -338,19 +432,20 @@ pub fn get_notes_command_bar_actions(info: &NotesInfo) -> Vec<Action> {
         );
     }
 
-    if action_plan.needs_auto_sizing_action() {
-        actions.push(
-            Action::new(
-                "enable_auto_sizing",
-                "Enable Auto-Sizing",
-                Some("Resizes the window to match content".to_string()),
-                ActionCategory::ScriptContext,
-            )
-            .with_shortcut("⌘A")
-            .with_icon(IconName::Settings)
-            .with_section("Settings"),
-        );
-    }
+    actions.push(
+        Action::new(
+            "toggle_auto_sizing",
+            if action_plan.needs_auto_sizing_action() {
+                "Enable Auto-Sizing"
+            } else {
+                "Disable Auto-Sizing"
+            },
+            Some("Toggles whether the window resizes to match content".to_string()),
+            ActionCategory::ScriptContext,
+        )
+        .with_icon(IconName::Settings)
+        .with_section("Settings"),
+    );
 
     // Always available: this is the recovery path for a window dragged
     // off-screen, so it must not depend on selection or view mode.

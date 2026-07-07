@@ -68,6 +68,38 @@ mod tests {
         assert_eq!(NS_WINDOW_COLLECTION_BEHAVIOR_MOVE_TO_ACTIVE_SPACE, 2);
     }
 
+    /// GPUI PopUp windows default to CanJoinAllSpaces | FullScreenAuxiliary.
+    /// Footer overlays must inherit the main panel Space behavior so the footer
+    /// cannot follow the user across macOS Spaces after its parent stays behind.
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn test_main_panel_collection_behavior_strips_all_spaces_from_popup_default() {
+        let gpui_popup_default = NS_WINDOW_COLLECTION_BEHAVIOR_CAN_JOIN_ALL_SPACES
+            | NS_WINDOW_COLLECTION_BEHAVIOR_FULL_SCREEN_AUXILIARY;
+
+        let desired = main_panel_collection_behavior(gpui_popup_default);
+
+        assert_eq!(desired & NS_WINDOW_COLLECTION_BEHAVIOR_CAN_JOIN_ALL_SPACES, 0);
+        assert_ne!(
+            desired & NS_WINDOW_COLLECTION_BEHAVIOR_MOVE_TO_ACTIVE_SPACE,
+            0
+        );
+        assert_ne!(
+            desired & NS_WINDOW_COLLECTION_BEHAVIOR_IGNORES_CYCLE,
+            0
+        );
+        assert_ne!(
+            desired & NS_WINDOW_COLLECTION_BEHAVIOR_FULL_SCREEN_AUXILIARY,
+            0
+        );
+        assert_eq!(
+            desired,
+            NS_WINDOW_COLLECTION_BEHAVIOR_MOVE_TO_ACTIVE_SPACE
+                | NS_WINDOW_COLLECTION_BEHAVIOR_IGNORES_CYCLE
+                | NS_WINDOW_COLLECTION_BEHAVIOR_FULL_SCREEN_AUXILIARY
+        );
+    }
+
     /// Test that both functions can be called in sequence.
     /// This mirrors the typical usage pattern in main.rs where both are called
     /// during window setup.

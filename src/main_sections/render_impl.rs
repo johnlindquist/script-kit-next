@@ -326,6 +326,14 @@ impl Render for ScriptListApp {
         // No need to render it as part of this view
         let shared_header_owned_by_view = self.current_view.uses_shared_main_view_header();
         let current_view = self.current_view.clone();
+        let main_window_modal_dim_active = confirm::is_confirm_window_open()
+            || self.shortcut_recorder_state.is_some()
+            || self.shortcut_recorder_entity.is_some();
+        let main_window_modal_dim_layer =
+            crate::components::modal_dim::render_main_window_modal_dim_layer(
+                main_window_modal_dim_active,
+                &self.theme,
+            );
         let main_content: AnyElement = match current_view {
             AppView::ScriptList => self.render_script_list(cx).into_any_element(),
             AppView::About {
@@ -734,9 +742,6 @@ impl Render for ScriptListApp {
             None
         };
 
-        // Build shortcut recorder overlay if state is set
-        let shortcut_recorder_overlay = self.render_shortcut_recorder_overlay(window, cx);
-
         // Build alias input overlay if state is set
         let alias_input_overlay = self.render_alias_input_overlay(window, cx);
 
@@ -1067,16 +1072,15 @@ impl Render for ScriptListApp {
                     .when_some(warning_banner, |container, banner| container.child(banner))
                     // Main content takes remaining space
                     .child(main_content_container)
-                    // Shortcut recorder overlay (on top of main content when recording)
-                    .when_some(shortcut_recorder_overlay, |container, overlay| {
-                        container.child(overlay)
-                    })
                     // Alias input overlay (on top of main content when entering alias)
                     .when_some(alias_input_overlay, |container, overlay| {
                         container.child(overlay)
                     })
                     // Tab AI save-offer overlay (on top after successful Tab AI execution)
                     .when_some(tab_ai_save_offer_overlay, |container, overlay| {
+                        container.child(overlay)
+                    })
+                    .when_some(main_window_modal_dim_layer, |container, overlay| {
                         container.child(overlay)
                     })
                     .when_some(actions_background_shield, |container, overlay| {

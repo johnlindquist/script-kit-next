@@ -44,6 +44,7 @@ pub mod inline_prompt_input;
 pub(crate) mod launcher_ask_ai_hint;
 pub(crate) mod main_view_chrome;
 pub mod minimal_prompt_shell;
+pub(crate) mod modal_dim;
 pub(crate) mod non_list_state;
 pub mod notes_editor;
 pub(crate) mod overlay_modal;
@@ -66,8 +67,10 @@ pub use alias_input::{AliasInput, AliasInputAction, AliasInputColors};
 pub use button::{Button, ButtonColors, ButtonVariant};
 #[allow(unused_imports)]
 pub(crate) use confirm_modal_shell::{
-    confirm_modal_header, confirm_modal_shell, ConfirmModalShellConfig, CONFIRM_MODAL_RADIUS,
-    CONFIRM_MODAL_SHELL_ID,
+    confirm_modal_header, confirm_modal_shell, modal_action_row, ConfirmModalShellConfig,
+    ModalActionRowButton, CONFIRM_MODAL_RADIUS, CONFIRM_MODAL_SHELL_ID,
+    MODAL_ACTION_DISABLED_OPACITY, MODAL_ACTION_ROW_TOP_MARGIN_PX, MODAL_WIDTH_PX,
+    PARENT_MODAL_WIDTH_PX,
 };
 #[allow(unused_imports)]
 pub use focusable_prompt_wrapper::{
@@ -125,11 +128,14 @@ pub use prompt_footer::{PromptFooter, PromptFooterColors, PromptFooterConfig};
 #[allow(unused_imports)]
 pub(crate) use prompt_layout_shell::{
     editor_prompt_hints, emit_prompt_chrome_audit, emit_prompt_hint_audit,
-    emit_surface_prompt_hint_audit, is_universal_prompt_hints, render_universal_prompt_hint_strip,
+    emit_surface_prompt_hint_audit, is_universal_prompt_hints,
+    render_universal_footer_action_buttons, render_universal_prompt_hint_strip,
     render_universal_prompt_hint_strip_clickable,
+    render_universal_prompt_hint_strip_clickable_with_primary_key_label,
     render_universal_prompt_hint_strip_clickable_with_primary_label, template_prompt_hints,
-    universal_prompt_hints, universal_prompt_hints_with_primary_label, PromptChromeAudit,
-    PromptHintAudit, UNIVERSAL_PROMPT_HINT_COUNT,
+    universal_prompt_hints, universal_prompt_hints_with_primary_key_label,
+    universal_prompt_hints_with_primary_label, PromptChromeAudit, PromptHintAudit,
+    UNIVERSAL_PROMPT_HINT_COUNT,
 };
 #[allow(unused_imports)]
 pub(crate) use prompt_layout_shell::{

@@ -441,7 +441,7 @@ impl ScriptListApp {
                         confirm_text: removal_action.confirm_title().into(),
                         cancel_text: "Cancel".into(),
                         confirm_variant: gpui_component::button::ButtonVariant::Danger,
-                        width: gpui::px(crate::confirm::PARENT_CONFIRM_DIALOG_WIDTH_PX),
+                        width: gpui::px(crate::confirm::PARENT_MODAL_WIDTH_PX),
                     },
                     {
                         let trace_id = trace_id.clone();
@@ -589,6 +589,81 @@ impl ScriptListApp {
                     });
                 })
                 .detach();
+                DispatchOutcome::success()
+            }
+            "open_settings_menu" | "setup_dictation" | "check_permissions" | "sdk_reference" => {
+                let builtin_id = match action_id {
+                    "open_settings_menu" => "builtin/settings",
+                    "setup_dictation" => "builtin/dictation-setup",
+                    "check_permissions" => "builtin/check-permissions",
+                    _ => "builtin/sdk-reference",
+                };
+                tracing::info!(category = "UI", builtin_id, "global discovery action");
+                match crate::builtins::resolve_builtin_entry(
+                    builtin_id,
+                    &self.config.get_builtins(),
+                ) {
+                    Some(entry) => {
+                        self.execute_builtin(&entry, cx);
+                        DispatchOutcome::success()
+                    }
+                    None => DispatchOutcome::not_handled(),
+                }
+            }
+            "open_help" => {
+                tracing::info!(category = "UI", "open help guide action");
+
+                let editor = self.config.get_editor();
+                let kit_dir = shellexpand::tilde("~/.scriptkit").to_string();
+                let guide_file = format!("{kit_dir}/GUIDE.md");
+
+                if !std::path::Path::new(&guide_file).exists() {
+                    self.show_error_toast(
+                        "GUIDE.md not found — run Script Kit setup to restore it".to_string(),
+                        cx,
+                    );
+                    return DispatchOutcome::success();
+                }
+
+                let editor_for_hud = editor.clone();
+                cx.spawn(async move |this, cx| {
+                    let result = cx
+                        .background_executor()
+                        .spawn(async move {
+                            let launch_plan = SettingsEditorLaunchPlan::from_editor(&editor);
+                            launch_plan
+                                .spawn(&editor, &kit_dir, &guide_file)
+                                .map(|child| (launch_plan, child))
+                        })
+                        .await;
+                    let _ = this.update(cx, |this, cx| match result {
+                        Ok((launch_plan, _)) => {
+                            this.show_hud(
+                                launch_plan.success_hud(&editor_for_hud),
+                                Some(HUD_SHORT_MS),
+                                cx,
+                            );
+                            this.hide_main_and_reset(cx);
+                        }
+                        Err(e) => {
+                            let launch_plan =
+                                SettingsEditorLaunchPlan::from_editor(&editor_for_hud);
+                            this.show_error_toast(
+                                launch_plan.failure_message(&editor_for_hud, e),
+                                cx,
+                            );
+                        }
+                    });
+                })
+                .detach();
+                DispatchOutcome::success()
+            }
+            "ask_ai_settings" => {
+                tracing::info!(category = "UI", "ask AI to change settings action");
+                self.open_tab_ai_agent_chat_with_entry_intent(
+                    Some("Update my Script Kit settings in ~/.scriptkit/config.ts: ".to_string()),
+                    cx,
+                );
                 DispatchOutcome::success()
             }
             "quit" => {

@@ -1,15 +1,6 @@
 use super::*;
 
 #[test]
-fn test_parse_shortcut_keycaps() {
-    let keycaps = TerminalCommandBar::parse_shortcut_keycaps("⌘C");
-    assert_eq!(keycaps, vec!["⌘", "C"]);
-
-    let keycaps = TerminalCommandBar::parse_shortcut_keycaps("⌃⇧T");
-    assert_eq!(keycaps, vec!["⌃", "⇧", "T"]);
-}
-
-#[test]
 fn test_should_accept_search_char_rejects_control_chars() {
     assert!(TerminalCommandBar::should_accept_search_char('a'));
     assert!(TerminalCommandBar::should_accept_search_char('⌘'));

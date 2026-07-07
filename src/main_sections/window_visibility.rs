@@ -627,6 +627,7 @@ fn show_main_window_helper(
                         view.pending_focus = Some(FocusTarget::MainFilter);
                     }
                     view.maybe_show_tap_dismiss_retired_hint(ctx);
+                    view.maybe_show_sediment_disclosure_hint(ctx);
                     ctx.notify();
                 });
                 platform::trace_main_window_native_geometry(

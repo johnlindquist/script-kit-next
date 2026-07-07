@@ -11,6 +11,16 @@
 #   Defaults to SCRIPT_KIT_AI_LOG=1 (compact AI format: SS.mmm|L|C|message)
 #   Override with: SCRIPT_KIT_AI_LOG=0 ./dev.sh   (standard verbose logs)
 #   Or use:        RUST_LOG=debug ./dev.sh         (debug-level verbose logs)
+#
+# Flags:
+#   --takeover | --force | -f  Kill any previous ./dev.sh watcher (and orphaned
+#                              cargo-watch processes for this repo), then start.
+#                              Env equivalent: SCRIPT_KIT_DEV_TAKEOVER=1
+#   --stop                     Stop the running watcher for this repo and exit.
+#                              The app itself is left running; the next dev.sh
+#                              build relaunches it via the session contract.
+#   --status                   Show lock holder + orphaned watcher state, exit.
+#   -h | --help                Show usage.
 
 set -e
 
@@ -32,6 +42,66 @@ dev_sh_lock_key() {
         printf '%s' "$root" | md5 -q
     fi
 }
+# Guard against PID reuse: a lock is only "live" if the recorded pid is both
+# alive AND still looks like a dev.sh process.
+dev_sh_pid_is_dev_sh() {
+    local cmd
+    cmd="$(ps -p "$1" -o command= 2>/dev/null || true)"
+    case "$cmd" in
+        *dev.sh*) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+dev_sh_kill_tree() {
+    local pid="$1" sig="${2:-TERM}" child
+    for child in $(pgrep -P "$pid" 2>/dev/null || true); do
+        dev_sh_kill_tree "$child" "$sig"
+    done
+    kill "-$sig" "$pid" 2>/dev/null || true
+}
+# cargo-watch / dev-cycle processes whose cwd is this repo. These get orphaned
+# when a previous dev.sh dies via SIGKILL (EXIT trap never runs), and keep
+# rebuilding+relaunching invisibly while a new dev.sh fights them.
+dev_sh_repo_watcher_pids() {
+    local repo_root="$1" pid cwd
+    for pid in $(pgrep -f 'cargo-watch watch|scripts/agentic/dev-cycle\.sh' 2>/dev/null || true); do
+        [ "$pid" = "$$" ] && continue
+        cwd="$(lsof -a -p "$pid" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p' | head -1)"
+        [ "$cwd" = "$repo_root" ] && echo "$pid"
+    done
+    return 0
+}
+dev_sh_write_lock() {
+    printf '%s\n' "$$" > "$SCRIPT_KIT_DEV_LOCK_DIR/pid"
+    printf '%s\n' "${SCRIPT_KIT_DEV_SESSION_NAME:-dev-watch}" > "$SCRIPT_KIT_DEV_LOCK_DIR/session"
+    printf '%s\n' "$1" > "$SCRIPT_KIT_DEV_LOCK_DIR/root"
+}
+# Stop the previous watcher (if any), sweep orphaned cargo-watch processes for
+# this repo, and remove the lock dir. Safe to call when nothing is running.
+dev_sh_stop_existing() {
+    local repo_root="$1" lock_dir="$2" old_pid orphan i
+    old_pid="$(cat "$lock_dir/pid" 2>/dev/null || true)"
+    if dev_sh_pid_alive "$old_pid" && dev_sh_pid_is_dev_sh "$old_pid"; then
+        echo "[dev.sh] stopping previous watcher pid=${old_pid} session=$(cat "$lock_dir/session" 2>/dev/null || echo '?')"
+        dev_sh_kill_tree "$old_pid" TERM
+        i=0
+        while dev_sh_pid_alive "$old_pid" && [ "$i" -lt 50 ]; do
+            sleep 0.1
+            i=$((i + 1))
+        done
+        if dev_sh_pid_alive "$old_pid"; then
+            echo "[dev.sh] previous watcher ignored TERM; sending KILL"
+            dev_sh_kill_tree "$old_pid" KILL
+        fi
+    fi
+    for orphan in $(dev_sh_repo_watcher_pids "$repo_root"); do
+        echo "[dev.sh] killing orphaned watcher pid=${orphan} (cwd=${repo_root})"
+        dev_sh_kill_tree "$orphan" TERM
+        sleep 0.2
+        dev_sh_kill_tree "$orphan" KILL
+    done
+    rm -rf "$lock_dir" 2>/dev/null || true
+}
 dev_sh_acquire_lock() {
     local lock_root="/tmp/sk-dev-launcher-locks"
     local repo_root
@@ -40,25 +110,33 @@ dev_sh_acquire_lock() {
     SCRIPT_KIT_DEV_LOCK_DIR="${lock_root}/$(dev_sh_lock_key "$repo_root").lock"
 
     if mkdir "$SCRIPT_KIT_DEV_LOCK_DIR" 2>/dev/null; then
-        printf '%s\n' "$$" > "$SCRIPT_KIT_DEV_LOCK_DIR/pid"
-        printf '%s\n' "${SCRIPT_KIT_DEV_SESSION_NAME:-dev-watch}" > "$SCRIPT_KIT_DEV_LOCK_DIR/session"
-        printf '%s\n' "$repo_root" > "$SCRIPT_KIT_DEV_LOCK_DIR/root"
+        dev_sh_write_lock "$repo_root"
         return 0
     fi
 
     local old_pid=""
     old_pid="$(cat "$SCRIPT_KIT_DEV_LOCK_DIR/pid" 2>/dev/null || true)"
-    if dev_sh_pid_alive "$old_pid"; then
-        echo "[dev.sh] ERROR another ./dev.sh is already running for this repo: pid=${old_pid} session=$(cat "$SCRIPT_KIT_DEV_LOCK_DIR/session" 2>/dev/null || echo '?')" >&2
-        echo "[dev.sh] Stop it first, or set SCRIPT_KIT_DEV_ALLOW_MULTI=1 if you intentionally want multiple watchers." >&2
-        exit 2
+    if dev_sh_pid_alive "$old_pid" && dev_sh_pid_is_dev_sh "$old_pid"; then
+        if [ "${SCRIPT_KIT_DEV_TAKEOVER:-0}" = "1" ]; then
+            dev_sh_stop_existing "$repo_root" "$SCRIPT_KIT_DEV_LOCK_DIR"
+        else
+            echo "[dev.sh] ERROR another ./dev.sh is already running for this repo: pid=${old_pid} session=$(cat "$SCRIPT_KIT_DEV_LOCK_DIR/session" 2>/dev/null || echo '?')" >&2
+            echo "[dev.sh] Take it over with: ./dev.sh --takeover   (or stop it: ./dev.sh --stop)" >&2
+            echo "[dev.sh] Or set SCRIPT_KIT_DEV_ALLOW_MULTI=1 if you intentionally want multiple watchers." >&2
+            exit 2
+        fi
+    else
+        if dev_sh_pid_alive "$old_pid"; then
+            echo "[dev.sh] lock pid ${old_pid} is not a dev.sh (PID reuse); clearing stale lock"
+        else
+            echo "[dev.sh] clearing stale lock (pid ${old_pid:-?} is gone)"
+        fi
+        # Also sweep watchers orphaned by a hard-killed previous dev.sh.
+        dev_sh_stop_existing "$repo_root" "$SCRIPT_KIT_DEV_LOCK_DIR"
     fi
 
-    rm -rf "$SCRIPT_KIT_DEV_LOCK_DIR"
     mkdir "$SCRIPT_KIT_DEV_LOCK_DIR"
-    printf '%s\n' "$$" > "$SCRIPT_KIT_DEV_LOCK_DIR/pid"
-    printf '%s\n' "${SCRIPT_KIT_DEV_SESSION_NAME:-dev-watch}" > "$SCRIPT_KIT_DEV_LOCK_DIR/session"
-    printf '%s\n' "$repo_root" > "$SCRIPT_KIT_DEV_LOCK_DIR/root"
+    dev_sh_write_lock "$repo_root"
 }
 dev_sh_cleanup() {
     if [ "$DEV_SH_CLEANED_UP" = "1" ]; then
@@ -105,6 +183,60 @@ dev_sh_on_signal() {
 trap 'dev_sh_on_signal INT' INT
 trap 'dev_sh_on_signal TERM' TERM
 trap dev_sh_cleanup EXIT
+
+# --- Flags -------------------------------------------------------------------
+dev_sh_usage() {
+    sed -n '/^# Flags:/,/^$/p' "$0" | sed 's/^# \{0,1\}//'
+}
+SCRIPT_KIT_DEV_TAKEOVER="${SCRIPT_KIT_DEV_TAKEOVER:-0}"
+DEV_SH_MODE="run"
+for arg in "$@"; do
+    case "$arg" in
+        --takeover|--force|-f) SCRIPT_KIT_DEV_TAKEOVER=1 ;;
+        --stop) DEV_SH_MODE="stop" ;;
+        --status) DEV_SH_MODE="status" ;;
+        -h|--help) dev_sh_usage; exit 0 ;;
+        *)
+            echo "[dev.sh] ERROR unknown flag: $arg" >&2
+            dev_sh_usage >&2
+            DEV_SH_EXIT_CODE=64
+            exit 64
+            ;;
+    esac
+done
+
+if [ "$DEV_SH_MODE" != "run" ]; then
+    DEV_SH_REPO_ROOT="$(pwd -P)"
+    DEV_SH_LOCK_DIR="/tmp/sk-dev-launcher-locks/$(dev_sh_lock_key "$DEV_SH_REPO_ROOT").lock"
+    DEV_SH_LOCK_PID="$(cat "$DEV_SH_LOCK_DIR/pid" 2>/dev/null || true)"
+    case "$DEV_SH_MODE" in
+        status)
+            if [ -n "$DEV_SH_LOCK_PID" ] && dev_sh_pid_alive "$DEV_SH_LOCK_PID" && dev_sh_pid_is_dev_sh "$DEV_SH_LOCK_PID"; then
+                echo "[dev.sh] RUNNING pid=${DEV_SH_LOCK_PID} session=$(cat "$DEV_SH_LOCK_DIR/session" 2>/dev/null || echo '?') tty=$(ps -p "$DEV_SH_LOCK_PID" -o tty= 2>/dev/null | tr -d ' ')"
+            elif [ -d "$DEV_SH_LOCK_DIR" ]; then
+                echo "[dev.sh] STALE lock present but pid ${DEV_SH_LOCK_PID:-?} is not a live dev.sh (next start clears it)"
+            else
+                echo "[dev.sh] NOT RUNNING (no lock)"
+            fi
+            DEV_SH_ORPHANS="$(dev_sh_repo_watcher_pids "$DEV_SH_REPO_ROOT")"
+            if [ -n "$DEV_SH_ORPHANS" ]; then
+                echo "[dev.sh] watcher processes for this repo:"
+                # shellcheck disable=SC2086
+                ps -o pid,ppid,etime,command -p $DEV_SH_ORPHANS 2>/dev/null || true
+            fi
+            exit 0
+            ;;
+        stop)
+            if [ ! -d "$DEV_SH_LOCK_DIR" ] && [ -z "$(dev_sh_repo_watcher_pids "$DEV_SH_REPO_ROOT")" ]; then
+                echo "[dev.sh] nothing to stop (no lock, no watcher processes)"
+                exit 0
+            fi
+            dev_sh_stop_existing "$DEV_SH_REPO_ROOT" "$DEV_SH_LOCK_DIR"
+            echo "[dev.sh] stopped. The app itself (if running) was left alone."
+            exit 0
+            ;;
+    esac
+fi
 
 # --- Banner FIRST so the user sees activity within ~1s, before any du scan ---
 echo "[dev.sh] start t=$(date '+%Y-%m-%dT%H:%M:%S%z') pid=$$"

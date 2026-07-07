@@ -84,7 +84,8 @@ pub mod window_resize;
 pub mod window_state;
 pub mod windows;
 
-pub(crate) const ROOT_LAUNCHER_PLACEHOLDER: &str = "Search • @ context • / skills • . profile";
+pub(crate) const ROOT_LAUNCHER_PLACEHOLDER: &str =
+    "Search • @ context • / commands • ; capture • : filters";
 
 // Phase 1 system API modules
 pub mod clipboard_history;

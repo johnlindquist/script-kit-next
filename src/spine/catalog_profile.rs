@@ -7,7 +7,7 @@ fn profile_source_label(
     match source {
         crate::ai::agent_chat::profiles::AgentChatProfileSource::BuiltIn => "Built-in",
         crate::ai::agent_chat::profiles::AgentChatProfileSource::User => "Custom",
-        crate::ai::agent_chat::profiles::AgentChatProfileSource::Plugin => "Plugin",
+        crate::ai::agent_chat::profiles::AgentChatProfileSource::Mdflow => "Markdown",
     }
 }
 

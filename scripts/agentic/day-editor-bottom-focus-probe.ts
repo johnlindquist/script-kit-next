@@ -2,6 +2,7 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { Driver, type Json } from "../devtools/driver";
+import { openDayPage } from "./day-page-open-helper";
 
 const binary =
   process.env.PROBE_BINARY ??
@@ -97,11 +98,12 @@ async function mainElements(driver: Driver): Promise<Json> {
   )) as Json;
 }
 
+// Open via the hotkey hold gesture (shared helper). The old "setInput ','
+// then Enter" opener silently launched whatever script matched "," in the
+// sandbox (e.g. the todo example via alias fuzzy match) — the day page never
+// opened and waitForState's failed result was swallowed.
 async function openDayWithComma(driver: Driver) {
-  await driver.batch([{ type: "setInput", text: "," }], { timeoutMs: 5000 });
-  await Bun.sleep(200);
-  driver.simulateKey("enter");
-  await driver.waitForState({ windowVisible: true, promptType: "dayPage" }, { timeoutMs: 8000 });
+  await openDayPage(driver, "day-editor-bottom-focus");
   await Bun.sleep(600);
 }
 

@@ -4,6 +4,8 @@ pub use crate::window_resize::main_layout::{
 };
 
 pub const DIVIDER_OPACITY: f32 = crate::theme::opacity::OPACITY_HOVER;
+/// Theme-derived scrim opacity for dimming GPUI content behind modal windows.
+pub const MAIN_WINDOW_MODAL_DIM_OPACITY: f32 = crate::theme::opacity::OPACITY_MODAL_DIM;
 
 pub const LIQUID_GLASS_MIN_HIT_PX: f32 = 28.0;
 pub const LIQUID_GLASS_MIN_VISUAL_PX: f32 = 20.0;
@@ -21,6 +23,9 @@ pub const LIQUID_GLASS_COMPACT_RADIUS_PX: f32 = 10.0;
 pub const LIQUID_GLASS_PANEL_PADDING_PX: f32 = 16.0;
 /// Canonical dense gap between stacked controls/labels inside chrome.
 pub const LIQUID_GLASS_DENSE_GAP_PX: f32 = 8.0;
+
+/// Minimum cycle for ambient/pulsing motion so status indicators stay calm.
+pub const AMBIENT_PULSE_CYCLE_MS: u64 = 2_000;
 
 /// Internal horizontal text inset for the main search input. This is shared by
 /// the theme and dev style tool so saved design exports can tune the real

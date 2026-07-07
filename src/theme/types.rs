@@ -2134,6 +2134,7 @@ mod tests {
             dictation: Default::default(),
             ai: Default::default(),
             window_management: Default::default(),
+            effects: Default::default(),
         }
     }
 

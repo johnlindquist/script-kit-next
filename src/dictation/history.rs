@@ -122,6 +122,8 @@ fn target_label(target: DictationTarget) -> String {
             .map(|app| app.name.trim().to_string())
             .filter(|name| !name.is_empty())
             .unwrap_or_else(|| "Frontmost App".to_string()),
+        DictationTarget::DayPageToday => "Today".to_string(),
+        DictationTarget::QuickAiQuestion => "Ask AI".to_string(),
     }
 }
 

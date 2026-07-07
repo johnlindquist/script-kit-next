@@ -27,6 +27,7 @@ const HISTORY_POPUP_FOOTER_HEIGHT: f32 = crate::window_resize::main_layout::HINT
 const HISTORY_POPUP_ROW_HEIGHT: f32 = 60.0;
 const HISTORY_POPUP_EMPTY_HEIGHT: f32 = 72.0;
 const HISTORY_POPUP_VISIBLE_ROWS: usize = 5;
+const HISTORY_POPUP_MAX_SECTION_HEADERS: usize = 4;
 const HISTORY_POPUP_VERTICAL_PADDING: f32 = 4.0;
 pub(super) const HISTORY_POPUP_SEARCH_LIMIT: usize = 24;
 pub(super) const HISTORY_POPUP_PAGE_JUMP: usize = 8;
@@ -262,19 +263,12 @@ fn register_history_popup_automation_window(
     )
 }
 
-fn popup_height(snapshot: &AgentChatHistoryPopupSnapshot) -> f32 {
-    let body_height = if snapshot.entries.is_empty() {
-        HISTORY_POPUP_EMPTY_HEIGHT
-    } else {
-        let visible_rows = snapshot.entries.len().min(HISTORY_POPUP_VISIBLE_ROWS) as f32;
-        let header_count = bucket_history_entries(&snapshot.entries, Local::now()).len() as f32;
-        visible_rows * HISTORY_POPUP_ROW_HEIGHT
-            + header_count * crate::list_item::SECTION_HEADER_HEIGHT
-    };
-
+fn popup_height(_snapshot: &AgentChatHistoryPopupSnapshot) -> f32 {
+    let body_height = (HISTORY_POPUP_VISIBLE_ROWS as f32 * HISTORY_POPUP_ROW_HEIGHT)
+        + (HISTORY_POPUP_MAX_SECTION_HEADERS as f32 * crate::list_item::SECTION_HEADER_HEIGHT);
     HISTORY_POPUP_SEARCH_HEIGHT
         + HISTORY_POPUP_FOOTER_HEIGHT
-        + body_height
+        + body_height.max(HISTORY_POPUP_EMPTY_HEIGHT)
         + (HISTORY_POPUP_VERTICAL_PADDING * 2.0)
 }
 
@@ -322,7 +316,7 @@ pub(crate) fn sync_history_popup_window(
             if slot.parent_window_handle == parent_window_handle {
                 let update_result = slot.handle.update(cx, |popup, window, cx| {
                     popup.set_snapshot(snapshot.clone());
-                    super::popup_window::set_popup_window_bounds(window, bounds, cx);
+                    let _ = window;
                     cx.notify();
                 });
 

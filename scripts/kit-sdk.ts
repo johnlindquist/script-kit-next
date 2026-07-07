@@ -1433,6 +1433,69 @@ export interface DictationPreferences {
    * @example "usb-mic"
    */
   selectedDeviceId?: string;
+
+  /**
+   * Dictation model catalog ID.
+   * Omit this field to use the default model.
+   *
+   * @default undefined (default model)
+   * @example "whisper-large-v3-turbo"
+   */
+  model?: string;
+
+  /**
+   * Language hint for engines that support one (Whisper only — Parakeet
+   * auto-detects its supported languages).
+   *
+   * @default undefined (auto-detect)
+   * @example "en"
+   */
+  language?: string;
+
+  /**
+   * Whether transcripts are appended to `dictation-history.jsonl`.
+   * Disable to keep dictated text out of plaintext history.
+   *
+   * @default true
+   * @example false // Keep dictations out of plaintext history
+   */
+  saveHistory?: boolean;
+
+  /**
+   * RMS energy threshold below which a capture is treated as silence and
+   * skipped. Lower this if a quiet microphone causes dictations to be
+   * silently dropped. Clamped to 0.0-0.5 at runtime.
+   *
+   * @default 0.01
+   * @example 0.005 // More sensitive (quiet microphone)
+   */
+  silenceRms?: number;
+
+  /**
+   * Auto-stop guard for runaway recordings, in seconds.
+   * Set to 0 to disable the guard. Clamped to 30-14400 at runtime.
+   *
+   * @default 600
+   * @example 1800 // Allow 30-minute recordings
+   */
+  maxDurationSecs?: number;
+
+  /**
+   * Live partial transcript preview in the recording overlay.
+   *
+   * @default true
+   * @example false // Hide partial transcripts while recording
+   */
+  livePreview?: boolean;
+
+  /**
+   * Hold-the-dictation-hotkey push-to-talk: release after holding to stop
+   * and transcribe; a quick tap keeps toggle behavior.
+   *
+   * @default true
+   * @example false // Hotkey always toggles recording
+   */
+  pushToTalk?: boolean;
 }
 
 /**
@@ -1440,10 +1503,49 @@ export interface DictationPreferences {
  */
 export type AgentChatBackend = "agent_chat" | "pi";
 
+/**
+ * Structured Pi tool policy for an Agent Chat profile.
+ * `allow` supersedes the legacy `tools` array.
+ */
+export interface AgentChatToolPolicyConfig {
+  /**
+   * Tool allow-list. `[]` means no tools; omit to keep Pi defaults.
+   *
+   * @example ["read", "grep"]
+   */
+  allow?: string[];
+}
+
+/**
+ * Runtime filesystem scope forwarded to Pi for read/write-capable tools.
+ */
+export interface AgentChatPathPolicyConfig {
+  /**
+   * Paths (or globs) readable by the profile's tools.
+   *
+   * @example ["~/notes/**"]
+   */
+  allowRead?: string[];
+  /**
+   * Paths (or globs) writable by the profile's tools.
+   *
+   * @example ["~/notes/drafts/**"]
+   */
+  allowWrite?: string[];
+  /**
+   * Paths (or globs) denied even when covered by an allow rule.
+   *
+   * @example ["~/.ssh/**"]
+   */
+  deny?: string[];
+}
+
 export interface AiProfile {
   id?: string;
   name: string;
+  iconName?: string;
   backend?: AgentChatBackend;
+  piBinary?: string;
   agent?: string;
   provider?: string;
   model?: string;
@@ -1451,9 +1553,13 @@ export interface AiProfile {
   appendSystemPrompt?: string;
   cwd?: string;
   tools?: string[];
+  toolPolicy?: AgentChatToolPolicyConfig;
+  pathPolicy?: AgentChatPathPolicyConfig;
+  blockedActionMessage?: string;
   disableExtensions?: boolean;
   disableSkills?: boolean;
   disablePromptTemplates?: boolean;
+  disableContextFiles?: boolean;
   hideCwdInPrompt?: boolean;
   thinking?: string;
   extensionPolicy?: string;
@@ -1483,6 +1589,12 @@ export interface AiPreferences {
   selectedProfileId?: string;
 
   /**
+   * Profile used by the launcher's Tab "Quick AI" mode. Omit (or use
+   * "quick-ai") for the pinned fast zero-context default.
+   */
+  quickAiProfileId?: string;
+
+  /**
    * Last-selected Agent Chat backend.
    */
   selectedBackend?: AgentChatBackend;
@@ -1508,6 +1620,208 @@ export interface WindowManagementPreferences {
    * Drag-snap density/mode for desktop tiling.
    */
   snapMode?: SnapMode;
+}
+
+/**
+ * Hard clipboard secret-rejection extensions (see ADR 0004).
+ * Conservative built-in rules always apply; these lists only extend them.
+ *
+ * @example
+ * ```typescript
+ * clipboardHistorySecretRejection: {
+ *   extraBlockedSourceApps: ["com.example.passwordmanager"],
+ *   extraSecretPatterns: ["^corp-token-[A-Za-z0-9]{32}$"]
+ * }
+ * ```
+ */
+export interface ClipboardHistorySecretRejectionConfig {
+  /**
+   * Additional bundle IDs (prefix match) whose clipboard copies are never
+   * stored. Defaults already cover common password managers.
+   *
+   * @default []
+   * @example ["com.example.passwordmanager"]
+   */
+  extraBlockedSourceApps?: string[];
+
+  /**
+   * Additional regex patterns for secret-shaped clipboard text rejected
+   * before storage.
+   *
+   * @default []
+   * @example ["^corp-token-[A-Za-z0-9]{32}$"]
+   */
+  extraSecretPatterns?: string[];
+}
+
+/**
+ * Background shader-effect preferences.
+ *
+ * @example
+ * ```typescript
+ * effects: {
+ *   background: "aurora",
+ *   intensity: 0.5
+ * }
+ * ```
+ */
+export interface EffectsPreferences {
+  /**
+   * Background effect slug (for example: "aurora").
+   * Omit this field for no effect.
+   *
+   * @default undefined (no effect)
+   * @example "aurora"
+   */
+  background?: string;
+
+  /**
+   * Effect strength in the range 0.0 to 1.0.
+   *
+   * @default 0.5
+   * @example 0.25 // Subtler effect
+   */
+  intensity?: number;
+}
+
+/**
+ * A user-defined `.style` for the spine prompt builder.
+ * Merged over the built-in catalog; matching ids override built-ins.
+ * The `instruction` is the payload delivered to the agent.
+ *
+ * @example
+ * ```typescript
+ * spineStyles: [
+ *   {
+ *     id: "haiku",
+ *     title: "Haiku",
+ *     description: "Answer as a haiku",
+ *     instruction: "Respond only with a single haiku."
+ *   }
+ * ]
+ * ```
+ */
+export interface SpineStyleConfig {
+  /**
+   * Stable style id used by the `.style` sigil.
+   *
+   * @example "haiku"
+   */
+  id: string;
+
+  /**
+   * Display title shown in the style picker.
+   *
+   * @default undefined (falls back to the id)
+   * @example "Haiku"
+   */
+  title?: string;
+
+  /**
+   * Short description shown next to the style.
+   *
+   * @default undefined
+   * @example "Answer as a haiku"
+   */
+  description?: string;
+
+  /**
+   * Icon name shown in the style picker.
+   *
+   * @default undefined
+   * @example "sparkles"
+   */
+  icon?: string;
+
+  /**
+   * Instruction text delivered to the agent when the style is applied.
+   *
+   * @example "Respond only with a single haiku."
+   */
+  instruction: string;
+}
+
+/**
+ * A user-defined `/command` for the spine prompt builder.
+ * Merged over the built-in catalog; matching names override built-ins.
+ *
+ * @example
+ * ```typescript
+ * spineCommands: [
+ *   { name: "standup", description: "Draft my daily standup" }
+ * ]
+ * ```
+ */
+export interface SpineCommandConfig {
+  /**
+   * Command name used by the `/command` sigil.
+   *
+   * @example "standup"
+   */
+  name: string;
+
+  /**
+   * Short description shown next to the command.
+   *
+   * @default undefined
+   * @example "Draft my daily standup"
+   */
+  description?: string;
+
+  /**
+   * Icon name shown in the command picker.
+   *
+   * @default undefined
+   * @example "calendar"
+   */
+  icon?: string;
+}
+
+/**
+ * Opt-in remote access to the brain (local memory) over Telegram.
+ *
+ * SECURITY: the bot token grants remote capture and queries into your local
+ * memory. It is treated as a secret (never logged, redacted from errors).
+ * The bridge only runs when ALL THREE hold: `enabled` is true, a bot token
+ * is configured, and `telegramAllowedUserIds` is non-empty. An empty
+ * allowlist disables the bot entirely — there is no "open" mode.
+ *
+ * @example
+ * ```typescript
+ * brainRemote: {
+ *   enabled: true,
+ *   telegramBotToken: "123456:ABC-DEF...",
+ *   telegramAllowedUserIds: [123456789]
+ * }
+ * ```
+ */
+export interface BrainRemoteConfig {
+  /**
+   * Master switch for the Telegram bridge.
+   *
+   * @default false
+   * @example true
+   */
+  enabled?: boolean;
+
+  /**
+   * Telegram bot token from @BotFather. Treated as a secret: never logged,
+   * and redacted from any error output.
+   *
+   * @default undefined (bridge inactive)
+   * @example "123456:ABC-DEF..."
+   */
+  telegramBotToken?: string;
+
+  /**
+   * Numeric Telegram user ids allowed to query the brain. Empty disables
+   * the bridge entirely; messages from any unlisted user are rejected with
+   * a hint showing their own id.
+   *
+   * @default []
+   * @example [123456789]
+   */
+  telegramAllowedUserIds?: number[];
 }
 
 /**
@@ -1651,7 +1965,17 @@ export interface Config {
    * @example 0 // No limit
    */
   clipboardHistoryMaxTextLength?: number;
-  
+
+  /**
+   * Hard secret-rejection extensions for clipboard history (ADR 0004).
+   * Extends the built-in blocklists; validated before anything is stored.
+   *
+   * @default { extraBlockedSourceApps: [], extraSecretPatterns: [] }
+   * @example { extraBlockedSourceApps: ["com.example.passwordmanager"] }
+   * @example { extraSecretPatterns: ["^corp-token-[A-Za-z0-9]{32}$"] }
+   */
+  clipboardHistorySecretRejection?: ClipboardHistorySecretRejectionConfig;
+
   /**
    * Process resource limits and health monitoring configuration.
    * Control memory usage, runtime limits, and monitoring frequency for scripts.
@@ -1665,11 +1989,20 @@ export interface Config {
 
   /**
    * Hotkey for opening the Notes window.
-   * No default is registered; set this explicitly if you want one.
+   * Falls back to Cmd+Ctrl+N when enabled and unset.
    *
-   * @default undefined
+   * @default { modifiers: ["meta", "ctrl"], key: "KeyN" }
+   * @example { modifiers: ["meta", "shift"], key: "KeyN" } // Cmd+Shift+N
    */
   notesHotkey?: HotkeyConfig;
+
+  /**
+   * Whether the Notes hotkey should be registered.
+   *
+   * @default true
+   * @example false // Disable the Notes global shortcut
+   */
+  notesHotkeyEnabled?: boolean;
 
   /**
    * Hotkey for opening Agent Chat.
@@ -1715,6 +2048,40 @@ export interface Config {
    * @default true
    */
   dictationHotkeyEnabled?: boolean;
+
+  /**
+   * Hotkey for inline AI focused-text editing.
+   * Captures the focused text field in the frontmost macOS app, then shows
+   * the inline agent overlay. Falls back to Cmd+Ctrl+I when enabled and unset.
+   *
+   * @default { modifiers: ["meta", "ctrl"], key: "KeyI" }
+   */
+  inlineAiHotkey?: HotkeyConfig;
+
+  /**
+   * Whether the inline AI focused-text hotkey should be registered.
+   *
+   * @default true
+   */
+  inlineAiHotkeyEnabled?: boolean;
+
+  /**
+   * Hotkey for the instant rewrite flow.
+   * Captures the focused text and immediately streams three rewrite
+   * variations in the mini UI. Falls back to Cmd+Ctrl+R when enabled and
+   * unset; change it if you need Xcode's Cmd+Ctrl+R.
+   *
+   * @default { modifiers: ["meta", "ctrl"], key: "KeyR" }
+   * @example { modifiers: ["meta", "shift"], key: "KeyR" } // Cmd+Shift+R
+   */
+  rewriteHotkey?: HotkeyConfig;
+
+  /**
+   * Whether the instant rewrite hotkey should be registered.
+   *
+   * @default true
+   */
+  rewriteHotkeyEnabled?: boolean;
 
   /**
    * Suggested-commands (frecency) configuration.
@@ -1781,11 +2148,58 @@ export interface Config {
   ai?: AiPreferences;
 
   /**
+   * User-defined spine prompt-builder styles (`.style` sigil). Merged over
+   * the built-in catalog; matching ids override built-ins.
+   *
+   * @default undefined (built-in styles only)
+   * @example
+   * ```typescript
+   * spineStyles: [
+   *   {
+   *     id: "haiku",
+   *     title: "Haiku",
+   *     description: "Answer as a haiku",
+   *     instruction: "Respond only with a single haiku."
+   *   }
+   * ]
+   * ```
+   */
+  spineStyles?: SpineStyleConfig[];
+
+  /**
+   * User-defined spine slash commands (`/command` sigil). Merged over the
+   * built-in catalog; matching names override built-ins.
+   *
+   * @default undefined (built-in commands only)
+   * @example
+   * ```typescript
+   * spineCommands: [
+   *   { name: "standup", description: "Draft my daily standup" }
+   * ]
+   * ```
+   */
+  spineCommands?: SpineCommandConfig[];
+
+  /**
    * Window-management preferences such as drag-snap mode.
    *
    * @default undefined
    */
   windowManagement?: WindowManagementPreferences;
+
+  /**
+   * Background shader-effect preferences for the launcher window.
+   *
+   * @default undefined (no effect; intensity 0.5 once an effect is set)
+   * @example
+   * ```typescript
+   * effects: {
+   *   background: "aurora",
+   *   intensity: 0.5
+   * }
+   * ```
+   */
+  effects?: EffectsPreferences;
 
   /**
    * Per-command configuration for shortcuts and visibility.
@@ -1892,6 +2306,37 @@ export interface Config {
    * ```
    */
   mcp?: McpConfig;
+
+  /**
+   * Canonical command IDs to hide from the launcher main menu.
+   *
+   * Hidden commands remain resolvable via `triggerBuiltin`, hotkeys, and
+   * deeplinks — this only filters them from visible lists.
+   *
+   * @default undefined (no commands hidden)
+   * @example ["builtin/clipboard-history", "script/deprecated-tool"]
+   */
+  hiddenCommands?: string[];
+
+  /**
+   * Opt-in Telegram remote access to the brain (local memory).
+   *
+   * SECURITY: the bot token grants remote capture and queries into your
+   * local memory — treat it as a secret. The bridge stays inactive unless
+   * `enabled` is true, a bot token is set, AND `telegramAllowedUserIds` is
+   * non-empty.
+   *
+   * @default undefined (bridge disabled)
+   * @example
+   * ```typescript
+   * brainRemote: {
+   *   enabled: true,
+   *   telegramBotToken: "123456:ABC-DEF...",
+   *   telegramAllowedUserIds: [123456789]
+   * }
+   * ```
+   */
+  brainRemote?: BrainRemoteConfig;
 }
 
 // =============================================================================

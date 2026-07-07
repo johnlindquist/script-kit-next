@@ -157,17 +157,30 @@ pub(crate) fn run_processor(
         }
     }
 
-    // Flush remaining samples as a tail chunk.
+    // Flush remaining samples as a tail chunk. This is the last audio the
+    // user spoke before stop — send it blocking so a momentarily full event
+    // channel cannot silently drop the end of the recording. The stop
+    // coordinator is draining the receiver at this point, and if the session
+    // was abandoned instead the receiver is dropped, which makes
+    // send_blocking return an error immediately rather than hang.
     if !pending_samples.is_empty() {
         let duration = duration_from_samples(pending_samples.len(), sample_rate_hz);
-        let _ = event_tx.try_send(DictationCaptureEvent::Chunk(CapturedAudioChunk {
-            sample_rate_hz,
-            samples: pending_samples,
-            duration,
-        }));
+        if event_tx
+            .send_blocking(DictationCaptureEvent::Chunk(CapturedAudioChunk {
+                sample_rate_hz,
+                samples: pending_samples,
+                duration,
+            }))
+            .is_err()
+        {
+            tracing::warn!(
+                category = "DICTATION",
+                "Dictation event channel closed before the tail chunk could be flushed"
+            );
+        }
     }
 
-    let _ = event_tx.try_send(DictationCaptureEvent::EndOfStream);
+    let _ = event_tx.send_blocking(DictationCaptureEvent::EndOfStream);
 }
 
 fn samples_for_duration(sample_rate_hz: u32, duration: Duration) -> usize {
@@ -259,7 +272,10 @@ pub fn start_capture(
     static REGISTER: Once = Once::new();
     REGISTER.call_once(register_delegate_class);
 
-    let (event_tx, event_rx) = async_channel::bounded(128);
+    // ~41 events/s at steady state (40 ms chunks + 60 ms bar windows), so
+    // 4096 gives the UI drain loop ~100 s of slack before mid-recording
+    // chunks would be dropped — a stalled pump must not cost the user audio.
+    let (event_tx, event_rx) = async_channel::bounded(4096);
     let (raw_tx, raw_rx) = mpsc::sync_channel::<RawAudioChunk>(128);
     let processor_thread = std::thread::Builder::new()
         .name("dictation-processor".to_string())

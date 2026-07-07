@@ -349,9 +349,11 @@
         .detach();
 
         // Dictation hotkey listener - event-driven via async_channel
-        // The global dictation shortcut routes to Agent Chat quick-submit.
-        // Contextual main-window/prompt dictation remains available from the
-        // regular builtin entry.
+        // The global dictation shortcut routes through the config-governed
+        // dictation builtin: `dictation.target` decides the destination
+        // (sticky last chip pick by default, context capture or an explicit
+        // label otherwise). The forced Agent Chat route stays available as
+        // the builtin/dictation-to-ai menu entry.
         let app_entity_for_dictation = app_entity.clone();
         cx.spawn(async move |cx: &mut gpui::AsyncApp| {
             logging::log("HOTKEY", "Dictation hotkey listener started (event-driven)");
@@ -359,12 +361,12 @@
                 let _guard = logging::set_correlation_id(hotkey_event.correlation_id.clone());
                 logging::log(
                     "HOTKEY",
-                    "Dictation hotkey triggered - toggling Agent Chat dictation via builtin",
+                    "Dictation hotkey triggered - toggling dictation via builtin",
                 );
                 let app_entity_inner = app_entity_for_dictation.clone();
                 let _ = cx.update(move |cx: &mut gpui::App| {
                     let should_show_window = app_entity_inner.update(cx, |view, ctx| {
-                        view.execute_by_command_id_or_path("builtin/dictation-to-ai", ctx)
+                        view.execute_by_command_id_or_path("builtin/dictation", ctx)
                     });
                     if should_show_window {
                         logging::log(

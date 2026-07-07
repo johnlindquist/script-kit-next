@@ -1170,12 +1170,14 @@ float2x2 rotate2d(float angle) {
 
 // ---- procedural shader-effect backgrounds (BackgroundTag::ShaderEffect) ----
 // Each effect maps (uv in 0..1, p = aspect-corrected uv, t seconds, fp =
-// aspect-corrected focus point, pe = decaying change-pulse energy in 0..1,
-// pt = raw seconds since the last app change, two straight-alpha palette
-// colors) to a straight-alpha color, matching the form the pattern branches
-// of fill_color produce. Effect intensity is carried by the palette colors'
-// alpha, set app-side. Effects are deliberately quiet at idle and lean
-// toward the focus point; a small pt reads as a soft burst of energy.
+// aspect-corrected focus point, pe/pt = app-side smoothed activity energy in
+// 0..1, two straight-alpha palette colors) to a straight-alpha color,
+// matching the form the pattern branches of fill_color produce. Effect
+// intensity is carried by the palette colors' alpha, set app-side. Effects
+// are deliberately quiet at idle and lean toward the focus point. The energy
+// envelope is pre-smoothed app-side (slow attack, gentle release), so every
+// pe-driven response is a gradual swell by construction — effects must keep
+// it that way: no rings, flashes, or population changes keyed on pe.
 
 float fx_hash21(float2 p) {
   p = fract(p * float2(234.34, 435.345));
@@ -1216,14 +1218,6 @@ float fx_focus_glow(float2 p, float2 fp, float tight) {
   return exp(-dot(d, d) * tight);
 }
 
-// Expanding ripple ring emitted from the focus point on each change.
-float fx_pulse_ring(float2 p, float2 fp, float pt, float speed, float sharp) {
-  float d = length(p - fp);
-  float r = pt * speed;
-  float band = (d - r) * sharp;
-  return exp(-band * band) * exp(-pt * 2.5);
-}
-
 // 1. Aurora — drifting sinusoidal curtains, brightening over the focus.
 float4 fx_aurora(float2 uv, float2 p, float t, float aspect, float2 fp,
                  float pe, float pt, float4 ca, float4 cb) {
@@ -1254,7 +1248,6 @@ float4 fx_plasma(float2 uv, float2 p, float t, float aspect, float2 fp,
   v = 0.5 + 0.5 * sin(v * 1.1);
   float4 col = mix(ca, cb, v);
   float a = (0.12 + 0.20 * v) * (1.0 + pe * 0.4 * fx_focus_glow(p, fp, 2.5));
-  a += fx_pulse_ring(p, fp, pt, 0.9, 9.0) * 0.10;
   return float4(col.rgb, col.a * a);
 }
 
@@ -1323,9 +1316,11 @@ float4 fx_rain(float2 uv, float2 p, float t, float aspect, float2 fp,
     float2 cell = floor(q);
     float rnd = fx_hash21(cell);
     float2 f = fract(q);
+    // Density stays constant: drops popping into existence on activity
+    // reads as flicker, so the shared focus halo carries the response.
     float drop = smoothstep(0.35, 0.0, abs(f.x - 0.5))
                * smoothstep(1.0, 0.2, f.y)
-               * step(0.85 - pe * 0.10, rnd);
+               * step(0.85, rnd);
     drop *= 0.55 + 0.65 * exp(-pow((p.x - fp.x) * 1.4, 2.0));
     acc += drop * (0.40 - fi * 0.13);
   }
@@ -1377,7 +1372,9 @@ float4 fx_huedrift(float2 uv, float2 p, float t, float aspect, float2 fp,
                    float pe, float pt, float4 ca, float4 cb) {
   float2 center = float2(0.5 * aspect, 0.5);
   float2 to_focus = fp - center + float2(cos(t * 0.05), sin(t * 0.05)) * 0.12;
-  float2 dir = to_focus / max(length(to_focus), 1e-3);
+  // Soft normalization floor: when the focus glides through the center the
+  // gradient flattens out instead of flipping direction in a frame.
+  float2 dir = to_focus / max(length(to_focus), 0.35);
   float g = 0.5 + 0.5 * dot(p - center, dir) * 1.4;
   float4 col = mix(ca, cb, clamp(g, 0.0, 1.0));
   return float4(col.rgb, col.a * (0.22 + pe * 0.08));
@@ -1401,7 +1398,7 @@ float4 fx_scanlines(float2 uv, float2 p, float t, float aspect, float2 fp,
   return float4(ca.rgb, ca.a * line * (0.07 + 0.04 * pe) * vig);
 }
 
-// 12. Dot grid — quiet lattice lit around the focus; changes ripple outward.
+// 12. Dot grid — quiet lattice lit gently around the focus.
 float4 fx_dotgrid(float2 uv, float2 p, float t, float aspect, float2 fp,
                   float pe, float pt, float4 ca, float4 cb) {
   float2 q = p * 36.0;
@@ -1409,8 +1406,7 @@ float4 fx_dotgrid(float2 uv, float2 p, float t, float aspect, float2 fp,
   float dot_mask = smoothstep(0.11, 0.07, d);
   float2 cellp = (floor(q) + 0.5) / 36.0;
   float glow = fx_focus_glow(cellp, fp, 14.0) * (0.55 + 0.45 * pe);
-  float ring = fx_pulse_ring(cellp, fp, pt, 0.7, 10.0);
-  float hi = clamp(glow + ring, 0.0, 1.0);
+  float hi = clamp(glow, 0.0, 1.0);
   float4 col = mix(ca, cb, hi);
   return float4(col.rgb, col.a * dot_mask * (0.07 + hi * 0.45));
 }
@@ -1443,8 +1439,10 @@ float4 fx_matrix(float2 uv, float2 p, float t, float aspect, float2 fp,
   float cell_y = floor(q.y);
   float dist = head - cell_y;
   float glow = dist >= 0.0 ? exp(-dist * 0.35) : 0.0;
+  // A slow 2Hz glyph shuffle: fast binary blinking reads as distraction,
+  // not atmosphere.
   float flicker =
-      step(0.35, fx_hash21(float2(col_id, cell_y + floor(t * 5.0))));
+      step(0.35, fx_hash21(float2(col_id, cell_y + floor(t * 2.0))));
   float in_cell = smoothstep(0.5, 0.32, abs(fract(q.x) - 0.5))
                 * smoothstep(0.5, 0.30, abs(fract(q.y) - 0.5));
   float near = 0.55 + 0.9 * exp(-pow((p.x - fp.x) * 2.2, 2.0));
@@ -1493,9 +1491,10 @@ float4 fx_confetti(float2 uv, float2 p, float t, float aspect, float2 fp,
 float4 shader_effect_color(int effect, float2 uv, float2 p, float aspect,
                            float t, float2 fp, float pt, float4 ca,
                            float4 cb) {
-  // Change-pulse energy: a fast ~120ms attack into a gentle ~600ms decay, so
-  // a change reads as a soft breath of energy rather than a pop.
-  float pe = exp(-pt * 1.6) * smoothstep(0.0, 0.12, pt);
+  // Activity energy arrives pre-smoothed from the app (slow ~300ms attack,
+  // gentle ~1s release), so a change reads as one soft breath and sustained
+  // typing/mouse motion as one steady glow — never a per-event throb.
+  float pe = clamp(pt, 0.0, 1.0);
   float4 col = float4(0.0);
   switch (effect) {
     case 1: col = fx_aurora(uv, p, t, aspect, fp, pe, pt, ca, cb); break;

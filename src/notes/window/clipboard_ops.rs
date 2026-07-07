@@ -19,8 +19,7 @@ impl NotesApp {
             let end = selection.end.min(value.len());
             let new_value = format!("{}{}{}", &value[..start], text, &value[end..]);
             let new_cursor = start + text.len();
-            state.set_value(&new_value, window, cx);
-            state.set_selection(new_cursor, new_cursor, window, cx);
+            state.set_value_preserving_scroll(new_value, new_cursor, window, cx);
             serde_json::json!({
                 "available": true,
                 "unit": "utf8Bytes",
@@ -54,8 +53,7 @@ impl NotesApp {
             let end = selection.end.min(value.len());
             let new_value = format!("{}{}{}", &value[..start], date_str, &value[end..]);
             let new_cursor = start + date_str.len();
-            state.set_value(&new_value, window, cx);
-            state.set_selection(new_cursor, new_cursor, window, cx);
+            state.set_value_preserving_scroll(new_value, new_cursor, window, cx);
         });
         self.has_unsaved_changes = true;
         info!("Inserted date/time at cursor");

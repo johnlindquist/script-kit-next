@@ -1,11 +1,6 @@
-use std::time::Duration;
-
-use crate::components::overlay_modal::{
-    compute_overlay_appear_style, overlay_color_with_alpha, OVERLAY_ANIMATION_DURATION_MS,
-};
 use crate::theme::Theme;
 
-use super::types::{OVERLAY_BACKDROP_ALPHA, OVERLAY_BACKDROP_HOVER_ALPHA};
+use super::types::ShortcutRecorderFocusedAction;
 use super::{RecordedShortcut, ShortcutRecorderColors};
 
 #[test]
@@ -89,30 +84,29 @@ fn test_shortcut_recorder_colors_from_theme_uses_theme_overlay_token() {
 }
 
 #[test]
-fn test_compute_overlay_appear_style_starts_hidden_offset_and_transparent() {
-    let style = compute_overlay_appear_style(Duration::from_millis(0));
-    assert_eq!(style.backdrop_opacity, 0.0);
-    assert!(style.modal_offset_y > 0.0);
-    assert!(style.modal_opacity < 1.0);
-    assert!(!style.complete);
+fn test_shortcut_recorder_focus_cycles_forward_through_actions() {
+    let mut focused = ShortcutRecorderFocusedAction::Save;
+
+    focused = focused.next(true);
+    assert_eq!(focused, ShortcutRecorderFocusedAction::Clear);
+
+    focused = focused.next(true);
+    assert_eq!(focused, ShortcutRecorderFocusedAction::Cancel);
+
+    focused = focused.next(true);
+    assert_eq!(focused, ShortcutRecorderFocusedAction::Save);
 }
 
 #[test]
-fn test_compute_overlay_appear_style_reaches_full_visibility_after_duration() {
-    let style = compute_overlay_appear_style(Duration::from_millis(OVERLAY_ANIMATION_DURATION_MS));
-    assert!((style.backdrop_opacity - 1.0).abs() < 0.001);
-    assert!((style.modal_offset_y - 0.0).abs() < 0.001);
-    assert!((style.modal_opacity - 1.0).abs() < 0.001);
-    assert!(style.complete);
-}
+fn test_shortcut_recorder_focus_cycles_backward_through_actions() {
+    let mut focused = ShortcutRecorderFocusedAction::Save;
 
-#[test]
-fn test_overlay_color_with_alpha_applies_requested_backdrop_alphas() {
-    let base = 0x123456;
-    let backdrop = overlay_color_with_alpha(base, OVERLAY_BACKDROP_ALPHA);
-    let backdrop_hover = overlay_color_with_alpha(base, OVERLAY_BACKDROP_HOVER_ALPHA);
+    focused = focused.previous(true);
+    assert_eq!(focused, ShortcutRecorderFocusedAction::Cancel);
 
-    assert_eq!(backdrop, 0x12345680);
-    assert_eq!(backdrop_hover, 0x12345690);
-    assert!(backdrop_hover > backdrop);
+    focused = focused.previous(true);
+    assert_eq!(focused, ShortcutRecorderFocusedAction::Clear);
+
+    focused = focused.previous(true);
+    assert_eq!(focused, ShortcutRecorderFocusedAction::Save);
 }

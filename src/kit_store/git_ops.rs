@@ -77,7 +77,7 @@ pub fn install_kit(repo_url: &str) -> Result<(String, PathBuf), String> {
         "plugin_installed"
     );
 
-    crate::ai::agent_chat::profiles::invalidate_plugin_profile_cache();
+    crate::ai::agent_chat::mdflow_profiles::invalidate_mdflow_profile_cache();
 
     Ok((plugin_id, target_path))
 }
@@ -98,7 +98,7 @@ pub fn update_kit(kit_path: &str) -> Result<(), String> {
         })?;
 
     if output.status.success() {
-        crate::ai::agent_chat::profiles::invalidate_plugin_profile_cache();
+        crate::ai::agent_chat::mdflow_profiles::invalidate_mdflow_profile_cache();
         Ok(())
     } else {
         Err(format!(
@@ -113,7 +113,7 @@ pub fn update_kit(kit_path: &str) -> Result<(), String> {
 pub fn remove_kit(kit_path: &str) -> Result<(), String> {
     fs::remove_dir_all(kit_path)
         .map_err(|err| format!("Failed to remove kit directory '{}': {}", kit_path, err))?;
-    crate::ai::agent_chat::profiles::invalidate_plugin_profile_cache();
+    crate::ai::agent_chat::mdflow_profiles::invalidate_mdflow_profile_cache();
     Ok(())
 }
 

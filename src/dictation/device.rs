@@ -378,6 +378,27 @@ pub fn save_dictation_model(model: Option<&str>) -> Result<()> {
     Ok(())
 }
 
+/// Persist the sticky dictation destination (`dictation.lastTarget`).
+///
+/// Called when the user picks a destination via an overlay verb chip so
+/// "sticky" target mode reuses it for the next session. Skips the config
+/// write when the stored value already matches.
+pub fn save_dictation_last_target(target: crate::dictation::DictationTarget) -> Result<()> {
+    let label = target.sticky_label();
+    let mut prefs = crate::config::load_user_preferences();
+    if prefs.dictation.last_target.as_deref() == Some(label) {
+        return Ok(());
+    }
+    prefs.dictation.last_target = Some(label.to_string());
+    crate::config::save_user_preferences(&prefs)?;
+    tracing::info!(
+        category = "DICTATION",
+        target = %label,
+        "Saved sticky dictation destination"
+    );
+    Ok(())
+}
+
 /// Persist the dictation language hint.
 ///
 /// Pass `None` to clear the language preference.

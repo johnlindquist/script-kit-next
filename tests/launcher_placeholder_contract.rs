@@ -4,18 +4,54 @@ fn read_source(path: &str) -> String {
     fs::read_to_string(path).unwrap_or_else(|err| panic!("failed to read {path}: {err}"))
 }
 
-#[test]
-fn root_launcher_placeholder_uses_selected_guidance_copy() {
-    let app_state = read_source("src/main_sections/app_state.rs");
+/// Extract the string literal assigned to `ROOT_LAUNCHER_PLACEHOLDER` in the
+/// given source text. The constant is defined twice by design — once in
+/// `src/lib.rs` (lib crate root) and once in `src/main_sections/app_state.rs`
+/// (include!-merged into the bin crate root) — so the load-bearing invariant
+/// is that the two copies never drift apart.
+fn extract_placeholder(source: &str, path: &str) -> String {
+    let marker = "ROOT_LAUNCHER_PLACEHOLDER: &str =";
+    let start = source
+        .find(marker)
+        .unwrap_or_else(|| panic!("{path} should define ROOT_LAUNCHER_PLACEHOLDER"));
+    let rest = &source[start + marker.len()..];
+    let open = rest
+        .find('"')
+        .unwrap_or_else(|| panic!("{path}: placeholder should be a string literal"));
+    let rest = &rest[open + 1..];
+    let close = rest
+        .find('"')
+        .unwrap_or_else(|| panic!("{path}: unterminated placeholder literal"));
+    rest[..close].to_string()
+}
 
-    assert!(
-        app_state.contains("pub(crate) const ROOT_LAUNCHER_PLACEHOLDER"),
-        "root launcher placeholder should live behind one named constant"
+/// WHY: the root launcher placeholder is the only always-visible teacher of
+/// the main-input sigil grammar. It exists as two constants (lib crate root +
+/// bin crate root via include!), and they historically drifted into three
+/// different sigil sets. The user-facing contract is: one copy, everywhere,
+/// and it must advertise the core sigil families that actually work.
+#[test]
+fn root_launcher_placeholder_is_identical_in_lib_and_bin() {
+    let lib = extract_placeholder(&read_source("src/lib.rs"), "src/lib.rs");
+    let bin = extract_placeholder(
+        &read_source("src/main_sections/app_state.rs"),
+        "src/main_sections/app_state.rs",
     );
-    assert!(
-        app_state.contains("Search • @ context • / skills • . profile"),
-        "root launcher placeholder should match the selected WebChoices copy"
+    assert_eq!(
+        lib, bin,
+        "lib.rs and app_state.rs root launcher placeholders must not drift"
     );
+}
+
+#[test]
+fn root_launcher_placeholder_teaches_core_sigils() {
+    let placeholder = extract_placeholder(&read_source("src/lib.rs"), "src/lib.rs");
+    for sigil in ["@", "/", ";", ":"] {
+        assert!(
+            placeholder.contains(sigil),
+            "placeholder should advertise the `{sigil}` sigil family; got {placeholder:?}"
+        );
+    }
 }
 
 #[test]

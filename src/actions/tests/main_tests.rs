@@ -24,7 +24,7 @@ mod core_part_01 {
     #[test]
     fn test_actions_exceed_visible_space() {
         // Verify script context actions count
-        // Global actions are seeded (reload_scripts/settings/view_logs + prompt handoff)
+        // Global actions are seeded (reload_scripts/settings/view_logs + Discover)
         let script = ScriptInfo::new("test-script", "/path/to/test.ts");
         let script_actions = get_script_context_actions(&script);
         let global_actions = get_global_actions();

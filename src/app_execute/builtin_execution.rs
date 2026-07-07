@@ -3286,7 +3286,10 @@ impl ScriptListApp {
                         let outcome = crate::action_helpers::DispatchOutcome::cancelled()
                             .with_trace_id(dctx_owned.trace_id.clone())
                             .with_detail("builtin_confirmation_cancelled");
-                        let _ = this.update(cx, |_, _| {
+                        let _ = this.update(cx, |this, _| {
+                            this.clear_menu_origin_after_script_list_confirm_cancel(
+                                "builtin_confirmation_cancelled",
+                            );
                             Self::log_builtin_outcome(
                                 &entry_id,
                                 &dctx_owned,
@@ -6061,9 +6064,30 @@ impl ScriptListApp {
         &self,
         action: DictationBuiltinAction,
     ) -> crate::dictation::DictationTarget {
-        action
-            .forced_target()
-            .unwrap_or_else(|| self.resolve_dictation_target())
+        if let Some(target) = action.forced_target() {
+            return target;
+        }
+
+        let prefs = crate::config::load_user_preferences();
+        let target = match prefs.dictation.target_mode() {
+            crate::config::DictationTargetMode::Explicit(target) => target,
+            crate::config::DictationTargetMode::Sticky => prefs
+                .dictation
+                .sticky_target()
+                .unwrap_or_else(|| self.resolve_dictation_target()),
+            crate::config::DictationTargetMode::Context => self.resolve_dictation_target(),
+        };
+
+        // A sticky/explicit frontmost-app target is only honorable when the
+        // tracker actually has a paste target; fall back to context capture
+        // instead of guaranteeing a delivery refusal later.
+        if matches!(target, crate::dictation::DictationTarget::ExternalApp)
+            && !Self::has_dictation_frontmost_target()
+        {
+            return self.resolve_dictation_target();
+        }
+
+        target
     }
 
     fn handle_dictation_started(
@@ -6172,6 +6196,10 @@ impl ScriptListApp {
         transcribe: bool,
         cx: &mut Context<Self>,
     ) {
+        // Freeze the timer at the moment the user stopped so the overlay can
+        // keep it on screen (grayed) instead of resetting to 0:00 while the
+        // capture is transcribed.
+        let elapsed_at_stop = crate::dictation::dictation_elapsed().unwrap_or_default();
         match crate::dictation::begin_stop_capture(reason) {
             Ok(crate::dictation::BeginStopCapture::Started {
                 request_id,
@@ -6181,9 +6209,15 @@ impl ScriptListApp {
                 if transcribe {
                     let _ = crate::dictation::begin_overlay_session();
                     let _ = crate::dictation::open_dictation_overlay(cx);
+                    // Keep the recognized-so-far text visible while the final
+                    // transcription runs — the overlay pulses it instead of
+                    // blanking into a bare progress indicator.
+                    let partial = crate::dictation::last_partial_transcript().unwrap_or_default();
                     let _ = crate::dictation::update_dictation_overlay(
                         crate::dictation::DictationOverlayState {
                             phase: crate::dictation::DictationSessionPhase::Transcribing,
+                            elapsed: elapsed_at_stop,
+                            transcript: partial.into(),
                             target,
                             ..Default::default()
                         },
@@ -6310,6 +6344,9 @@ impl ScriptListApp {
             crate::dictation::DictationOverlayState {
                 phase: crate::dictation::DictationSessionPhase::Transcribing,
                 elapsed: capture.audio_duration,
+                transcript: crate::dictation::last_partial_transcript()
+                    .unwrap_or_default()
+                    .into(),
                 target,
                 ..Default::default()
             },
@@ -6497,6 +6534,50 @@ impl ScriptListApp {
                         );
                         true
                     }
+                    crate::dictation::DictationTarget::DayPageToday => {
+                        // Day pages are line-oriented; collapse interior
+                        // newlines so the capture stays one timestamped entry.
+                        let capture_text =
+                            transcript.split_whitespace().collect::<Vec<_>>().join(" ");
+                        match crate::brain::substrate::BrainSubstrate::default_kit().append_to_day(
+                            chrono::Utc::now(),
+                            crate::brain::substrate::DayEntry::Capture { text: capture_text },
+                        ) {
+                            Ok(()) => true,
+                            Err(error) => {
+                                tracing::warn!(
+                                    category = "DICTATION",
+                                    error = %error,
+                                    "Day Page delivery failed, falling back to frontmost app"
+                                );
+                                false
+                            }
+                        }
+                    }
+                    crate::dictation::DictationTarget::QuickAiQuestion => {
+                        let submit = crate::config::load_user_preferences()
+                            .dictation
+                            .quick_ai_answers();
+                        let opened = if submit {
+                            ai::open_mini_ai_window_from("dictation_quick_ai", &mut **cx)
+                        } else {
+                            ai::open_ai_window(&mut **cx)
+                        };
+                        match opened.map_err(|error| error.to_string()).and_then(|()| {
+                            ai::set_ai_input(&mut **cx, &transcript, submit)
+                        }) {
+                            Ok(()) => true,
+                            Err(error) => {
+                                tracing::warn!(
+                                    category = "DICTATION",
+                                    error = %error,
+                                    submit,
+                                    "Quick AI delivery failed, falling back to frontmost app"
+                                );
+                                false
+                            }
+                        }
+                    }
                     crate::dictation::DictationTarget::ExternalApp => false,
                 };
 
@@ -6508,7 +6589,8 @@ impl ScriptListApp {
                         crate::dictation::DictationDestination::MainWindowFilter
                         | crate::dictation::DictationDestination::ActivePrompt
                         | crate::dictation::DictationDestination::AiChatComposer
-                        | crate::dictation::DictationDestination::TabAiHarness => {
+                        | crate::dictation::DictationDestination::TabAiHarness
+                        | crate::dictation::DictationDestination::QuickAiQuestion => {
                             Some(serde_json::json!({
                                 "available": true,
                                 "unit": "utf8Bytes",
@@ -6523,7 +6605,8 @@ impl ScriptListApp {
                         crate::dictation::DictationDestination::NotesEditor => {
                             delivery_insertion_range
                         }
-                        crate::dictation::DictationDestination::FrontmostApp => None,
+                        crate::dictation::DictationDestination::FrontmostApp
+                        | crate::dictation::DictationDestination::DayPageToday => None,
                     };
                     tracing::info!(
                         category = "DICTATION",
@@ -8178,7 +8261,9 @@ impl ScriptListApp {
             | crate::dictation::DictationTarget::MainWindowPrompt
             | crate::dictation::DictationTarget::NotesEditor
             | crate::dictation::DictationTarget::AiChatComposer
-            | crate::dictation::DictationTarget::TabAiHarness => Ok(()),
+            | crate::dictation::DictationTarget::TabAiHarness
+            | crate::dictation::DictationTarget::DayPageToday
+            | crate::dictation::DictationTarget::QuickAiQuestion => Ok(()),
         }
     }
 
@@ -8213,6 +8298,14 @@ impl ScriptListApp {
             ],
             crate::dictation::DictationTarget::TabAiHarness => vec![
                 crate::dictation::DictationTarget::TabAiHarness,
+                crate::dictation::DictationTarget::ExternalApp,
+            ],
+            crate::dictation::DictationTarget::DayPageToday => vec![
+                crate::dictation::DictationTarget::DayPageToday,
+                crate::dictation::DictationTarget::ExternalApp,
+            ],
+            crate::dictation::DictationTarget::QuickAiQuestion => vec![
+                crate::dictation::DictationTarget::QuickAiQuestion,
                 crate::dictation::DictationTarget::ExternalApp,
             ],
         }

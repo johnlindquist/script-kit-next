@@ -24,7 +24,7 @@ const NS_APPLICATION_ACTIVATION_POLICY_ACCESSORY: i64 = 1;
 const NS_WINDOW_ANIMATION_BEHAVIOR_NONE: i64 = 2;
 
 #[cfg(target_os = "macos")]
-const fn main_panel_collection_behavior(current: u64) -> u64 {
+pub(crate) const fn main_panel_collection_behavior(current: u64) -> u64 {
     (current & !NS_WINDOW_COLLECTION_BEHAVIOR_CAN_JOIN_ALL_SPACES)
         | NS_WINDOW_COLLECTION_BEHAVIOR_MOVE_TO_ACTIVE_SPACE
         | NS_WINDOW_COLLECTION_BEHAVIOR_FULL_SCREEN_AUXILIARY

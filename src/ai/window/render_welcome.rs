@@ -29,9 +29,9 @@ pub(super) fn script_kit_welcome_suggestions() -> [(&'static str, &'static str, 
             LocalIconName::Terminal,
         ),
         (
-            "Quick launcher",
-            "Generate a focused launcher for your most-used Script Kit workflows.",
-            LocalIconName::Warning,
+            "Change a setting",
+            "Update a Script Kit setting in my config.ts — theme, hotkeys, search sources, dictation.",
+            LocalIconName::Settings,
         ),
     ]
 }

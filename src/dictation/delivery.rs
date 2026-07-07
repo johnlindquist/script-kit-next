@@ -61,6 +61,8 @@ pub fn parse_dictation_target_label(label: &str) -> Option<DictationTarget> {
             Some(DictationTarget::TabAiHarness)
         }
         "externalapp" | "frontmostapp" | "frontmost" | "app" => Some(DictationTarget::ExternalApp),
+        "daypagetoday" | "daypage" | "today" | "todaynote" => Some(DictationTarget::DayPageToday),
+        "quickaiquestion" | "quickai" | "ask" | "askai" => Some(DictationTarget::QuickAiQuestion),
         _ => None,
     }
 }
