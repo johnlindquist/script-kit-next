@@ -4,7 +4,7 @@ One markdown agent per job. Run one with `md flows/<name>.md "request"`.
 Every run costs one engine turn. Dry runs are free:
 `md flows/<name>.md --_dry-run`.
 
-All flows run on codex (see ../.mdflow.yaml) at gpt-5.5, medium reasoning.
+All flows run on codex (see ../.mdflow.yaml) at gpt-5.6-sol, medium reasoning.
 Sandbox mode is pinned per flow in frontmatter.
 
 Migrated from the retired imps/ fleet (codex-imps runtime) on 2026-07-04.
