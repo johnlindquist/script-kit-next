@@ -249,7 +249,7 @@ mod tests {
     fn test_notes_action_labels() {
         assert_eq!(NotesAction::NewNote.label(), "New Note");
         assert_eq!(NotesAction::DuplicateNote.label(), "Duplicate Note");
-        assert_eq!(NotesAction::BrowseNotes.label(), "Browse Notes");
+        assert_eq!(NotesAction::BrowseNotes.label(), "Switch Note");
         assert_eq!(NotesAction::FindInNote.label(), "Find in Note");
         assert_eq!(NotesAction::CopyNoteAs.label(), "Copy Note As...");
         assert_eq!(NotesAction::CopyDeeplink.label(), "Copy Deeplink");

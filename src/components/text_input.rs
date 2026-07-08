@@ -18,6 +18,6 @@ mod tests;
 pub use core::{TextInputState, TextSelection};
 #[allow(unused_imports)]
 pub(crate) use render::{
-    render_text_input_cursor_selection, TextHighlightRange, TextInlinePillRange,
-    TextInputRenderConfig, TextInputRenderIndicator,
+    render_compact_search_text, render_text_input_cursor_selection, CompactSearchTextConfig,
+    TextHighlightRange, TextInlinePillRange, TextInputRenderConfig, TextInputRenderIndicator,
 };

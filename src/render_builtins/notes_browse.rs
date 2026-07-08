@@ -1,26 +1,3 @@
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum NotesBrowseEmptyState {
-    NoNotesYet,
-    NoFilteredMatches,
-}
-
-impl NotesBrowseEmptyState {
-    fn from_filter(filter: &str) -> Self {
-        if filter.is_empty() {
-            Self::NoNotesYet
-        } else {
-            Self::NoFilteredMatches
-        }
-    }
-
-    fn message(self) -> &'static str {
-        match self {
-            Self::NoNotesYet => "No notes yet",
-            Self::NoFilteredMatches => "No notes match your filter",
-        }
-    }
-}
-
 impl ScriptListApp {
     fn notes_browse_display_title(note: &crate::notes::Note) -> String {
         if note.title.trim().is_empty() {
@@ -249,10 +226,14 @@ impl ScriptListApp {
             div()
                 .w_full()
                 .py(px(design_spacing.padding_xl))
-                .text_center()
-                .text_color(rgba(chrome.text_hint_rgba))
+                .px(px(design_spacing.padding_md))
                 .font_family(design_typography.font_family)
-                .child(NotesBrowseEmptyState::from_filter(&filter).message())
+                .child(crate::components::render_shared_empty_state(
+                    crate::components::InfoEmptySurface::NotesBrowse,
+                    &filter,
+                    &self.theme,
+                    cx,
+                ))
                 .into_any_element()
         } else {
             let notes_for_closure = filtered_notes.clone();

@@ -162,7 +162,6 @@ impl ScriptListApp {
         // P4: Pre-compute theme values for arg prompt - use theme for consistent styling
         let arg_list_colors = ListItemColors::from_theme(theme);
         let text_primary = theme.colors.text.primary;
-        let text_muted = theme.colors.text.muted;
 
         // P0: Clone data needed for uniform_list closure
         let arg_selected_index = self.arg_selected_index;
@@ -174,13 +173,15 @@ impl ScriptListApp {
         let list_element: AnyElement = if filtered_choices_len == 0 {
             div()
                 .w_full()
-                .h(px(crate::list_item::LIST_ITEM_HEIGHT))
                 .px(px(design_spacing.padding_md))
-                .flex()
-                .items_center()
-                .text_color(rgb(text_muted))
+                .py(px(design_spacing.padding_sm))
                 .font_family(design_typography.font_family)
-                .child("No matches · Enter to submit typed value")
+                .child(crate::components::render_shared_empty_state(
+                    crate::components::InfoEmptySurface::ArgChoices,
+                    self.filter_text(),
+                    self.theme.as_ref(),
+                    cx,
+                ))
                 .into_any_element()
         } else {
             // P0: Use uniform_list for virtualized scrolling of arg choices

@@ -8,7 +8,7 @@
  *
  * ### Cmd+K (Actions Panel)
  * - Opens the actions panel overlay
- * - Shows list of actions: New Note, Duplicate Note, Browse Notes, Find in Note,
+ * - Shows list of actions: New Note, Duplicate Note, Switch Note, Find in Note,
  *   Copy Note As..., Copy Deeplink, Create Quicklink, Export..., Move List Item Up,
  *   Move List Item Down, Format...
  * - Each action shows keyboard shortcut badge

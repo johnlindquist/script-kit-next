@@ -47,7 +47,6 @@ const HOVER_HINT_PADDING_Y: f32 = 4.0;
 const HOVER_HINT_BG_OPACITY: f32 = 0.92;
 /// Longest href shown in the hover hint chip before middle truncation.
 const HOVER_HINT_HREF_MAX_CHARS: usize = 44;
-
 /// One header action link ("Copy URI", "Close Preview", …).
 pub(crate) struct ResourcePreviewAction {
     /// Full element id, e.g. "day-page-kit-resource-preview-copy-uri".
@@ -79,6 +78,39 @@ pub(crate) struct ResourcePreviewSurface {
 
 fn preview_id(prefix: &str, suffix: &str) -> SharedString {
     SharedString::from(format!("{prefix}-{suffix}"))
+}
+
+#[allow(dead_code)] // Used by the binary target's Day Page clipboard shelf.
+pub(crate) struct CompactResourceRow {
+    pub id: SharedString,
+    pub meta: SharedString,
+    pub preview: SharedString,
+}
+
+#[allow(dead_code)] // Used by the binary target's Day Page clipboard shelf.
+pub(crate) fn render_compact_resource_row(
+    row: CompactResourceRow,
+    cx: &App,
+    on_click: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
+) -> gpui::Stateful<gpui::Div> {
+    let muted = cx.theme().muted_foreground;
+    let foreground = cx.theme().foreground;
+
+    div()
+        .id(row.id)
+        .w_full()
+        .flex()
+        .items_center()
+        .gap_2()
+        .px(px(crate::components::INFO_SPACING.xs))
+        .py(px(crate::components::INFO_SPACING.xxs))
+        .text_xs()
+        .text_color(muted)
+        .cursor_pointer()
+        .hover(move |style| style.text_color(foreground))
+        .on_click(on_click)
+        .child(div().font_family(FONT_MONO).child(row.meta))
+        .child(div().flex_1().min_w(px(0.)).truncate().child(row.preview))
 }
 
 /// Transient chip shown while the mouse hovers a deeplink in a markdown

@@ -45,6 +45,7 @@ pub(crate) mod launcher_ask_ai_hint;
 pub(crate) mod main_view_chrome;
 pub mod minimal_prompt_shell;
 pub(crate) mod modal_dim;
+pub(crate) mod navigation_affordance;
 pub(crate) mod non_list_state;
 pub mod notes_editor;
 pub(crate) mod overlay_modal;
@@ -87,10 +88,12 @@ pub use hint_strip::{
 };
 #[allow(unused_imports)]
 pub(crate) use info_state::{
-    agent_chat_empty_guidance_spec, info_metrics, info_palette, launcher_empty_or_no_results_spec,
+    agent_chat_empty_guidance_spec, agent_setup_info_spec, info_metrics, info_palette,
+    launcher_empty_or_no_results_spec, permission_onboarding_intro_spec,
     render_agent_chat_empty_guidance, render_info_state, render_launcher_empty_or_no_results,
-    InfoGuidanceItem, InfoMetrics, InfoSection, InfoStateDensity, InfoStateLayout, InfoStateSpec,
-    InfoStateTone, InfoTextMetric, InfoTypeScale, INFO_SPACING, INFO_TYPE_SCALE,
+    render_shared_empty_state, shared_empty_state_spec, InfoEmptySurface, InfoGuidanceItem,
+    InfoMetrics, InfoSection, InfoStateDensity, InfoStateLayout, InfoStateSpec, InfoStateTone,
+    InfoTextMetric, InfoTypeScale, INFO_SPACING, INFO_TYPE_SCALE,
 };
 #[allow(unused_imports)]
 pub(crate) use inline_dropdown::{
@@ -104,6 +107,8 @@ pub use inline_prompt_input::InlinePromptInput;
 pub(crate) use launcher_ask_ai_hint::render_launcher_ask_ai_hint;
 #[allow(unused_imports)]
 pub use minimal_prompt_shell::MinimalPromptShell;
+#[allow(unused_imports)]
+pub(crate) use navigation_affordance::render_back_affordance;
 #[allow(unused_imports)]
 pub(crate) use non_list_state::{
     non_list_action_row, non_list_callout, non_list_card, non_list_centered_shell,

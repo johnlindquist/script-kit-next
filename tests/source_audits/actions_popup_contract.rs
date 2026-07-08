@@ -173,49 +173,54 @@ fn spawn_open_emits_open_failed_on_error() {
 fn actions_popup_search_uses_requested_typography_and_synced_cursor_height() {
     let theme = read("src/designs/core/actions_popup_theme.rs");
     let dialog = read("src/actions/dialog.rs");
+    let text_input = read("src/components/text_input/render.rs");
 
     assert!(
         theme.contains("height: 40.0"),
         "actions popup search height must default to 40px"
     );
     assert!(
-        theme.contains("font_size: 16.0"),
-        "actions popup search font must default to 16pt"
+        theme.contains("font_size: 14.0"),
+        "actions popup search font must match compact action-row typography"
     );
     assert!(
-        theme.contains("cursor_height: 16.0"),
-        "actions popup cursor height must default to the 16pt font height"
+        theme.contains("cursor_height: 14.0"),
+        "actions popup cursor height must default to the 14pt font height"
     );
     assert!(
         theme.contains("def.search.cursor_height = def.search.font_size;"),
         "actions popup cursor height must stay synced to search font size after overrides"
     );
+    assert!(dialog.contains("render_compact_search_text("));
     assert!(
-        dialog.contains(".line_height(px(popup_theme.search.font_size))"),
-        "actions popup search text line height must follow the search font size"
+        dialog.contains("font_size: popup_theme.search.font_size")
+            && dialog.contains("cursor_height: popup_theme.search.cursor_height"),
+        "actions popup search text and cursor must use their shared popup tokens"
     );
     assert!(
-        dialog.contains("actions_search_cursor(\n                    popup_theme.search.cursor_width,\n                    popup_theme.search.font_size,"),
-        "actions popup search cursor render height must use the synced search font size"
+        text_input.contains(".line_height(px(config.font_size))"),
+        "shared compact search text must keep line height synced to its font size"
     );
 }
 
 #[test]
 fn actions_popup_search_placeholder_and_typed_text_share_origin() {
     let dialog = read("src/actions/dialog.rs");
+    let text_input = read("src/components/text_input/render.rs");
 
     assert!(
-        dialog.contains("let build_search_content = |search_display: SharedString|"),
+        dialog.contains("let build_search_content = |search_display: SharedString|")
+            && dialog.contains("render_compact_search_text("),
         "top and bottom actions search fields must share one content builder"
     );
     assert!(
-        dialog.contains("fn actions_search_cursor(")
-            && dialog.contains(".relative()")
-            && dialog.contains(".w(px(0.0))"),
-        "actions search cursor must be zero-width so it cannot shift placeholder text"
+        text_input.contains("fn render_compact_search_cursor(")
+            && text_input.contains(".relative()")
+            && text_input.contains(".w(px(0.0))"),
+        "shared compact search cursor must be zero-width so it cannot shift placeholder text"
     );
     assert!(
-        !dialog.contains(".mr(px(2.))") && !dialog.contains(".ml(px(2.))"),
+        !text_input.contains(".mr(px(2.))") && !text_input.contains(".ml(px(2.))"),
         "actions search cursor margins must not offset placeholder or typed text"
     );
 }

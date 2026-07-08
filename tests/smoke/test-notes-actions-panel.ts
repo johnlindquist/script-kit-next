@@ -6,7 +6,7 @@
  * 
  * 1. Panel Structure
  *    - Has search input at top
- *    - Lists Raycast actions: New Note, Duplicate Note, Browse Notes, Find in Note,
+ *    - Lists Raycast actions: New Note, Duplicate Note, Switch Note, Find in Note,
  *      Copy Note As..., Copy Deeplink, Create Quicklink, Export..., Move List Item Up,
  *      Move List Item Down, Format...
  *    - Each action shows icon, label, and keyboard shortcut badge
@@ -58,7 +58,7 @@ try {
   const expectedActions = [
     { id: 'new_note', label: 'New Note', shortcut: '⌘N' },
     { id: 'duplicate_note', label: 'Duplicate Note', shortcut: '⌘D' },
-    { id: 'browse_notes', label: 'Browse Notes', shortcut: '⌘P' },
+    { id: 'browse_notes', label: 'Switch Note', shortcut: '⌘P' },
     { id: 'find_in_note', label: 'Find in Note', shortcut: '⌘F' },
     { id: 'copy_note_as', label: 'Copy Note As...', shortcut: '⇧⌘C' },
     { id: 'copy_deeplink', label: 'Copy Deeplink', shortcut: '⇧⌘D' },
@@ -94,7 +94,7 @@ try {
   const actions = [
     { id: 'new_note', label: 'New Note' },
     { id: 'duplicate_note', label: 'Duplicate Note' },
-    { id: 'browse_notes', label: 'Browse Notes' },
+    { id: 'browse_notes', label: 'Switch Note' },
     { id: 'find_in_note', label: 'Find in Note' },
     { id: 'copy_note_as', label: 'Copy Note As...' },
     { id: 'copy_deeplink', label: 'Copy Deeplink' },

@@ -73,7 +73,7 @@ fn composer_empty_info_state_uses_main_view_columns_not_centered_card() {
     assert!(info.contains(".pt(px(cols.top_inset_y))"));
     assert!(
         info.contains(
-            "render_info_content(&spec, theme, palette, metrics, !uses_main_view_columns)"
+            "render_info_content(&spec, theme, palette, metrics, !uses_main_view_columns, cx)"
         ),
         "main-view info layouts should not keep the old fixed max-width cap"
     );

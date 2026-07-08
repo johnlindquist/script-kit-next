@@ -92,7 +92,7 @@ pub fn base_actions_popup_theme() -> ActionsPopupThemeDef {
             // main-list names (14) for readability.
             font_size: 14.0,
             cursor_width: 2.0,
-            cursor_height: 16.0,
+            cursor_height: 14.0,
             prefix_gap: 6.0,
         },
         list: ActionsPopupListTokens {

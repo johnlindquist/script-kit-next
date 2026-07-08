@@ -3,7 +3,7 @@ use crate::{
     panel::{CURSOR_HEIGHT_LG, CURSOR_WIDTH},
     ui_foundation::ALPHA_SELECTION,
 };
-use gpui::{div, px, rgb, rgba, Div, Hsla, IntoElement, ParentElement, Styled};
+use gpui::{div, px, rgb, rgba, Div, Hsla, IntoElement, ParentElement, Rgba, SharedString, Styled};
 
 /// A character range to render with a specific text color.
 #[derive(Clone, Copy, Debug)]
@@ -61,6 +61,90 @@ pub(crate) struct TextInputRenderConfig<'a> {
     pub highlight_ranges: &'a [TextHighlightRange],
     /// Inline pill ranges rendered in place of the underlying token text.
     pub pill_ranges: &'a [TextInlinePillRange],
+}
+
+/// Render-only search text for surfaces whose keyboard state is owned by a
+/// parent controller rather than a `TextInputState` entity.
+///
+/// ActionsDialog uses this contract because the host routes key events into
+/// the dialog directly. Keeping the display/cursor anatomy here still gives
+/// those controller-owned fields the shared text-input implementation.
+#[derive(Clone, Debug)]
+pub(crate) struct CompactSearchTextConfig<'a> {
+    pub display: SharedString,
+    pub is_placeholder: bool,
+    pub prefix_marker: Option<&'a str>,
+    pub prefix_gap: f32,
+    pub mono_font: bool,
+    pub font_size: f32,
+    pub inner_height: f32,
+    pub cursor_width: f32,
+    pub cursor_height: f32,
+    pub cursor_visible: bool,
+    pub cursor_color: Rgba,
+    pub placeholder_color: Rgba,
+    pub text_color: Rgba,
+}
+
+pub(crate) fn render_compact_search_text(config: CompactSearchTextConfig<'_>) -> Div {
+    let mut content = div()
+        .flex_1()
+        .h(px(config.inner_height))
+        .flex()
+        .flex_row()
+        .items_center()
+        .text_size(px(config.font_size))
+        .line_height(px(config.font_size))
+        .text_color(if config.is_placeholder {
+            config.placeholder_color
+        } else {
+            config.text_color
+        });
+
+    if let Some(prefix_marker) = config.prefix_marker {
+        content = content.child(
+            div()
+                .mr(px(config.prefix_gap))
+                .text_color(config.placeholder_color)
+                .font_family(if config.mono_font {
+                    crate::list_item::FONT_MONO
+                } else {
+                    crate::list_item::FONT_SYSTEM_UI
+                })
+                .child(prefix_marker.to_string()),
+        );
+    }
+
+    if config.is_placeholder {
+        content = content.child(render_compact_search_cursor(&config));
+    }
+
+    content = content.child(config.display.clone());
+
+    if !config.is_placeholder {
+        content = content.child(render_compact_search_cursor(&config));
+    }
+
+    content
+}
+
+fn render_compact_search_cursor(config: &CompactSearchTextConfig<'_>) -> Div {
+    let mut cursor_bar = div()
+        .absolute()
+        .left(px(-(config.cursor_width / 2.0)))
+        .top(px(0.0))
+        .w(px(config.cursor_width))
+        .h(px(config.cursor_height))
+        .rounded(px(config.cursor_width / 2.0));
+    if config.cursor_visible {
+        cursor_bar = cursor_bar.bg(config.cursor_color);
+    }
+
+    div()
+        .relative()
+        .w(px(0.0))
+        .h(px(config.cursor_height))
+        .child(cursor_bar)
 }
 
 impl<'a> TextInputRenderConfig<'a> {

@@ -869,23 +869,14 @@ impl Render for DayPageView {
                 DayPageBinding::Note { title, .. } => title.clone(),
             };
             Some(
-                div()
-                    .id(script_kit_gpui::day_page::FRAGMENT_BACK_ID)
-                    .w_full()
-                    .flex()
-                    .items_center()
-                    .gap(px(8.))
-                    .pb(px(6.))
-                    .text_sm()
-                    .cursor_pointer()
-                    .on_mouse_down(
-                        gpui::MouseButton::Left,
-                        cx.listener(|this, _, window, cx| {
-                            this.return_to_day_page(window, cx);
-                        }),
-                    )
-                    .child("←")
-                    .child(label),
+                crate::components::render_back_affordance(
+                    script_kit_gpui::day_page::FRAGMENT_BACK_ID.into(),
+                    label.into(),
+                    &theme,
+                    cx.listener(|this, _, window, cx| {
+                        this.return_to_day_page(window, cx);
+                    }),
+                ),
             )
         } else if viewing_past_day {
             let label = self
@@ -894,24 +885,15 @@ impl Render for DayPageView {
                 .map(|date| format!("Back to Today · viewing {date}"))
                 .unwrap_or_else(|| "Back to Today".to_string());
             Some(
-                div()
-                    .id("day-page-past-day-back")
-                    .w_full()
-                    .flex()
-                    .items_center()
-                    .gap(px(8.))
-                    .pb(px(6.))
-                    .text_sm()
-                    .cursor_pointer()
-                    .on_mouse_down(
-                        gpui::MouseButton::Left,
-                        cx.listener(|this, _, window, cx| {
-                            this.bind_today(window, cx);
-                            this.focus_editor(window, cx);
-                        }),
-                    )
-                    .child("←")
-                    .child(label),
+                crate::components::render_back_affordance(
+                    "day-page-past-day-back".into(),
+                    label.into(),
+                    &theme,
+                    cx.listener(|this, _, window, cx| {
+                        this.bind_today(window, cx);
+                        this.focus_editor(window, cx);
+                    }),
+                ),
             )
         } else if self.session.is_viewing_note() {
             let label = self
@@ -920,24 +902,15 @@ impl Render for DayPageView {
                 .map(|title| format!("Back to Today · viewing {title}"))
                 .unwrap_or_else(|| "Back to Today".to_string());
             Some(
-                div()
-                    .id("day-page-note-back")
-                    .w_full()
-                    .flex()
-                    .items_center()
-                    .gap(px(8.))
-                    .pb(px(6.))
-                    .text_sm()
-                    .cursor_pointer()
-                    .on_mouse_down(
-                        gpui::MouseButton::Left,
-                        cx.listener(|this, _, window, cx| {
-                            this.return_to_day_page(window, cx);
-                            this.focus_editor(window, cx);
-                        }),
-                    )
-                    .child("←")
-                    .child(label),
+                crate::components::render_back_affordance(
+                    "day-page-note-back".into(),
+                    label.into(),
+                    &theme,
+                    cx.listener(|this, _, window, cx| {
+                        this.return_to_day_page(window, cx);
+                        this.focus_editor(window, cx);
+                    }),
+                ),
             )
         } else {
             None
@@ -1143,33 +1116,19 @@ impl DayPageView {
             for (index, entry) in self.clipboard_shelf.iter().enumerate() {
                 let uri = crate::clipboard_history::entry_resource_uri(&entry.item.entry_id);
                 list = list.child(
-                    div()
-                        .id(gpui::SharedString::from(format!(
-                            "day-page-clipboard-shelf-item-{index}"
-                        )))
-                        .flex()
-                        .items_center()
-                        .gap_2()
-                        .py(px(2.))
-                        .text_xs()
-                        .text_color(muted)
-                        .cursor_pointer()
-                        .hover(move |style| style.text_color(hover_fg))
-                        .on_click(cx.listener(move |this, _, window, cx| {
+                    crate::components::resource_preview::render_compact_resource_row(
+                        crate::components::resource_preview::CompactResourceRow {
+                            id: gpui::SharedString::from(format!(
+                                "day-page-clipboard-shelf-item-{index}"
+                            )),
+                            meta: entry.item.timestamp.clone().into(),
+                            preview: entry.preview.clone().into(),
+                        },
+                        cx,
+                        cx.listener(move |this, _, window, cx| {
                             this.open_kit_resource_preview(uri.clone(), true, window, cx);
-                        }))
-                        .child(
-                            div()
-                                .font_family(crate::list_item::FONT_MONO)
-                                .child(entry.item.timestamp.clone()),
-                        )
-                        .child(
-                            div()
-                                .flex_1()
-                                .min_w(px(0.))
-                                .truncate()
-                                .child(entry.preview.clone()),
-                        ),
+                        }),
+                    ),
                 );
             }
             shelf = shelf.child(list);

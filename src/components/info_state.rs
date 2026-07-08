@@ -86,6 +86,7 @@ pub(crate) enum InfoStateLayout {
     AnchoredTop,
     MainViewColumns,
     ComposerEmpty,
+    InlineRow,
     InlinePanel,
 }
 
@@ -250,6 +251,13 @@ pub(crate) struct InfoStateSpec {
     pub footer_shortcut_note: Option<InfoShortcutNote>,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum InfoEmptySurface {
+    ActionsSearch,
+    ArgChoices,
+    NotesBrowse,
+}
+
 impl InfoStateSpec {
     pub(crate) fn new(id: &'static str) -> Self {
         Self {
@@ -316,6 +324,112 @@ impl InfoStateSpec {
         self.footer_note = None;
         self
     }
+}
+
+pub(crate) fn shared_empty_state_spec(surface: InfoEmptySurface, query: &str) -> InfoStateSpec {
+    let query = query.trim();
+    match surface {
+        InfoEmptySurface::ActionsSearch => {
+            if query.is_empty() {
+                InfoStateSpec::new("actions-empty-no-actions")
+                    .layout(InfoStateLayout::InlineRow)
+                    .density(InfoStateDensity::Compact)
+                    .tone(InfoStateTone::Help)
+                    .body("No actions available")
+            } else {
+                InfoStateSpec::new("actions-empty-no-matches")
+                    .layout(InfoStateLayout::InlineRow)
+                    .density(InfoStateDensity::Compact)
+                    .tone(InfoStateTone::Recovery)
+                    .body("No actions match your search")
+            }
+        }
+        InfoEmptySurface::ArgChoices => {
+            if query.is_empty() {
+                InfoStateSpec::new("arg-empty-no-choices")
+                    .layout(InfoStateLayout::InlineRow)
+                    .density(InfoStateDensity::Compact)
+                    .tone(InfoStateTone::Help)
+                    .body("No choices · Enter to submit typed value")
+            } else {
+                InfoStateSpec::new("arg-empty-no-matches")
+                    .layout(InfoStateLayout::InlineRow)
+                    .density(InfoStateDensity::Compact)
+                    .tone(InfoStateTone::Recovery)
+                    .body("No matches · Enter to submit typed value")
+            }
+        }
+        InfoEmptySurface::NotesBrowse => {
+            if query.is_empty() {
+                InfoStateSpec::new("notes-browse-empty-no-notes")
+                    .layout(InfoStateLayout::InlineRow)
+                    .density(InfoStateDensity::Compact)
+                    .tone(InfoStateTone::Help)
+                    .body("No notes yet")
+            } else {
+                InfoStateSpec::new("notes-browse-empty-no-matches")
+                    .layout(InfoStateLayout::InlineRow)
+                    .density(InfoStateDensity::Compact)
+                    .tone(InfoStateTone::Recovery)
+                    .body("No notes match your filter")
+            }
+        }
+    }
+}
+
+pub(crate) fn render_shared_empty_state(
+    surface: InfoEmptySurface,
+    query: &str,
+    theme: &theme::Theme,
+    cx: &gpui::App,
+) -> AnyElement {
+    render_info_state(shared_empty_state_spec(surface, query), theme, cx)
+}
+
+pub(crate) fn permission_onboarding_intro_spec(
+    granted_count: usize,
+    row_count: usize,
+    all_required_granted: bool,
+) -> InfoStateSpec {
+    let footer = if all_required_granted {
+        "All required permissions granted. Press Esc to finish."
+    } else {
+        "Press Enter on a row to grant it. Status updates automatically."
+    };
+    InfoStateSpec::new("permissions-onboarding-intro")
+        .layout(InfoStateLayout::InlinePanel)
+        .density(InfoStateDensity::Compact)
+        .tone(InfoStateTone::Permission)
+        .eyebrow(format!("{granted_count} of {row_count} granted"))
+        .body(
+            "Script Kit uses macOS permissions to read selected text, paste into other apps, run shortcuts, and capture context.",
+        )
+        .section(InfoSection::titled(
+            "Actions",
+            vec![
+                InfoGuidanceItem::new(Some("↵"), "Grant selected permission"),
+                InfoGuidanceItem::new(Some("Esc"), "Finish setup"),
+            ],
+        ))
+        .footer_note(footer)
+}
+
+pub(crate) fn agent_setup_info_spec(
+    title: impl Into<SharedString>,
+    body: impl Into<SharedString>,
+    selected_agent: Option<impl Into<SharedString>>,
+) -> InfoStateSpec {
+    let mut spec = InfoStateSpec::new("agent-setup-guidance")
+        .layout(InfoStateLayout::InlineRow)
+        .density(InfoStateDensity::Comfortable)
+        .tone(InfoStateTone::Setup)
+        .title(title)
+        .body(body);
+    if let Some(agent) = selected_agent {
+        let agent: SharedString = agent.into();
+        spec = spec.eyebrow(format!("Selected · {agent}"));
+    }
+    spec
 }
 
 pub(crate) fn agent_chat_empty_guidance_spec() -> InfoStateSpec {
@@ -544,6 +658,7 @@ pub(crate) fn render_info_state_with_main_view_def(
             .py(px(INFO_SPACING.xl))
             .child(content)
             .into_any_element(),
+        InfoStateLayout::InlineRow => div().id(spec.id).w_full().child(content).into_any_element(),
         InfoStateLayout::InlinePanel => div()
             .id(spec.id)
             .w_full()
@@ -1045,6 +1160,78 @@ mod tests {
         assert!(
             !source.contains(old_generic_fallback),
             "old generic no-results fallback must not return"
+        );
+    }
+
+    #[test]
+    fn shared_empty_specs_cover_actions_arg_and_notes_without_surface_local_copy() {
+        let actions_empty = format!(
+            "{:?}",
+            shared_empty_state_spec(InfoEmptySurface::ActionsSearch, "")
+        );
+        assert!(actions_empty.contains("No actions available"));
+
+        let actions_filtered = format!(
+            "{:?}",
+            shared_empty_state_spec(InfoEmptySurface::ActionsSearch, "open")
+        );
+        assert!(actions_filtered.contains("No actions match your search"));
+
+        let arg_filtered = shared_empty_state_spec(InfoEmptySurface::ArgChoices, "abc");
+        assert_eq!(arg_filtered.layout, InfoStateLayout::InlineRow);
+        let arg_copy = format!("{arg_filtered:?}");
+        assert!(arg_copy.contains("No matches"));
+        assert!(arg_copy.contains("Enter to submit typed value"));
+
+        let notes_empty = format!(
+            "{:?}",
+            shared_empty_state_spec(InfoEmptySurface::NotesBrowse, "")
+        );
+        assert!(notes_empty.contains("No notes yet"));
+
+        let notes_filtered = format!(
+            "{:?}",
+            shared_empty_state_spec(InfoEmptySurface::NotesBrowse, "meeting")
+        );
+        assert!(notes_filtered.contains("No notes match your filter"));
+    }
+
+    #[test]
+    fn permission_intro_spec_models_progress_and_completion_footer() {
+        let pending = permission_onboarding_intro_spec(2, 5, false);
+        let pending_copy = format!("{pending:?}");
+        assert_eq!(pending.tone, InfoStateTone::Permission);
+        assert!(pending_copy.contains("2 of 5 granted"));
+        assert!(pending_copy.contains("Press Enter on a row to grant it"));
+        assert!(pending_copy.contains("Grant selected permission"));
+        assert!(pending_copy.contains("Finish setup"));
+
+        let complete = permission_onboarding_intro_spec(5, 5, true);
+        let complete_copy = format!("{complete:?}");
+        assert!(complete_copy.contains("All required permissions granted"));
+        assert!(complete_copy.contains("Press Esc to finish"));
+    }
+
+    #[test]
+    fn agent_setup_spec_uses_shared_setup_anatomy_and_optional_selection_context() {
+        let without_agent = agent_setup_info_spec(
+            "Agent required",
+            "Choose an agent to continue.",
+            None::<SharedString>,
+        );
+        assert_eq!(without_agent.layout, InfoStateLayout::InlineRow);
+        assert_eq!(without_agent.density, InfoStateDensity::Comfortable);
+        assert_eq!(without_agent.tone, InfoStateTone::Setup);
+        assert!(without_agent.eyebrow.is_none());
+
+        let with_agent = agent_setup_info_spec(
+            "Authentication required",
+            "Authenticate, then retry.",
+            Some("Claude Code"),
+        );
+        assert_eq!(
+            with_agent.eyebrow.as_ref().map(|eyebrow| eyebrow.as_ref()),
+            Some("Selected · Claude Code")
         );
     }
 }

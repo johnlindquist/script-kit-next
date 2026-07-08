@@ -1,6 +1,6 @@
 use gpui::{
-    div, prelude::*, px, rgb, rgba, Context, Entity, FocusHandle, IntoElement, KeyDownEvent,
-    ParentElement, Render, Window,
+    div, prelude::*, px, rgb, rgba, Context, FocusHandle, IntoElement, KeyDownEvent, ParentElement,
+    Render, Window,
 };
 
 use super::super::catalog::{
@@ -21,11 +21,10 @@ pub struct AgentChatSetupAgentPickerState {
 }
 
 #[allow(clippy::large_enum_variant)]
-pub enum AgentChatSetupCardEvent {
+pub(crate) enum AgentChatSetupCardEvent {
     ConfirmAgent(AgentChatAgentCatalogEntry),
     CancelPicker,
-    OpenPicker,
-    Retry,
+    ActivateAction(AgentChatSetupAction),
 }
 
 impl gpui::EventEmitter<AgentChatSetupCardEvent> for AgentChatSetupCard {}
@@ -34,6 +33,36 @@ pub struct AgentChatSetupCard {
     state: AgentChatInlineSetupState,
     pub(crate) agent_picker: Option<AgentChatSetupAgentPickerState>,
     focus_handle: FocusHandle,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct SetupActionControl {
+    label: &'static str,
+    activation: AgentChatSetupAction,
+}
+
+fn setup_action_control(action: AgentChatSetupAction) -> SetupActionControl {
+    match action {
+        AgentChatSetupAction::Retry => SetupActionControl {
+            label: "Retry",
+            activation: AgentChatSetupAction::Retry,
+        },
+        // Installation and authentication happen in the selected agent's own
+        // CLI. The useful in-app action afterward is a real retry, not the
+        // previous no-op event advertised as though Script Kit performed it.
+        AgentChatSetupAction::Install | AgentChatSetupAction::Authenticate => SetupActionControl {
+            label: "Retry",
+            activation: AgentChatSetupAction::Retry,
+        },
+        AgentChatSetupAction::OpenCatalog => SetupActionControl {
+            label: "Open Agent Catalog",
+            activation: AgentChatSetupAction::OpenCatalog,
+        },
+        AgentChatSetupAction::SelectAgent => SetupActionControl {
+            label: "Choose Agent",
+            activation: AgentChatSetupAction::SelectAgent,
+        },
+    }
 }
 
 impl AgentChatSetupCard {
@@ -113,7 +142,9 @@ impl AgentChatSetupCard {
         // the displayed Tab information wrong.
 
         if ui_foundation::is_key_enter(key) {
-            cx.emit(AgentChatSetupCardEvent::OpenPicker);
+            cx.emit(AgentChatSetupCardEvent::ActivateAction(
+                setup_action_control(self.state.primary_action).activation,
+            ));
             return true;
         }
 
@@ -192,36 +223,55 @@ impl AgentChatSetupCard {
 impl Render for AgentChatSetupCard {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = theme::get_cached_theme();
-        let state = &self.state;
-
-        let action_hint: String = match state.primary_action {
-            AgentChatSetupAction::Retry => "Press Enter to retry".to_string(),
-            AgentChatSetupAction::Install => {
-                "Install the agent, then press Enter to retry".to_string()
-            }
-            AgentChatSetupAction::Authenticate => {
-                "Authenticate, then press Enter to retry".to_string()
-            }
-            AgentChatSetupAction::OpenCatalog => {
-                "Add or edit an Agent Chat profile in config.ts, then press Enter to retry"
-                    .to_string()
-            }
-            AgentChatSetupAction::SelectAgent => {
-                "Press Enter to select a different agent".to_string()
-            }
-        };
-
-        let secondary_hint: Option<String> = state.secondary_action.map(|action| match action {
-            AgentChatSetupAction::SelectAgent => "Enter: select agent".to_string(),
-            AgentChatSetupAction::Retry => "Enter: retry".to_string(),
-            AgentChatSetupAction::OpenCatalog => "Add agent".to_string(),
-            _ => String::new(),
-        });
-
-        let agent_name: Option<String> = state
+        let title = self.state.title.clone();
+        let body = self.state.body.clone();
+        let agent_name = self
+            .state
             .selected_agent
             .as_ref()
-            .map(|a| format!("Selected: {}", a.display_name));
+            .map(|agent| agent.display_name.clone());
+        let primary = setup_action_control(self.state.primary_action);
+        let secondary = self.state.secondary_action.map(setup_action_control);
+        let info = crate::components::render_info_state(
+            crate::components::agent_setup_info_spec(title, body, agent_name),
+            &theme,
+            cx,
+        );
+        let button_colors = crate::components::ButtonColors::from_theme(&theme);
+
+        let primary_button = crate::components::Button::new(primary.label, button_colors)
+            .id("agent-chat-setup-primary-action")
+            .shortcut("↵")
+            .on_click(Box::new(cx.listener(move |_this, _, _window, cx| {
+                cx.emit(AgentChatSetupCardEvent::ActivateAction(primary.activation));
+                cx.stop_propagation();
+            })));
+
+        let secondary_button = secondary.map(|control| {
+            crate::components::Button::new(control.label, button_colors)
+                .id("agent-chat-setup-secondary-action")
+                .variant(crate::components::ButtonVariant::Ghost)
+                .on_click(Box::new(cx.listener(move |_this, _, _window, cx| {
+                    cx.emit(AgentChatSetupCardEvent::ActivateAction(control.activation));
+                    cx.stop_propagation();
+                })))
+                .into_any_element()
+        });
+
+        let actions = if self.agent_picker.is_none() {
+            Some(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(px(crate::components::INFO_SPACING.xs))
+                    .child(primary_button)
+                    .children(secondary_button)
+                    .into_any_element(),
+            )
+        } else {
+            None
+        };
+        let picker = self.render_agent_picker(window, cx);
 
         div()
             .id("agent_chat-inline-setup")
@@ -230,48 +280,47 @@ impl Render for AgentChatSetupCard {
             .flex_col()
             .items_center()
             .justify_center()
-            .gap(px(16.0))
+            .gap(px(crate::components::INFO_SPACING.md))
             .track_focus(&self.focus_handle)
             .child(
                 div()
-                    .text_xl()
-                    .text_color(rgb(theme.colors.text.primary))
-                    .child(state.title.clone()),
+                    .w_full()
+                    .max_w(px(crate::components::info_metrics(
+                        crate::components::InfoStateDensity::Comfortable,
+                    )
+                    .max_width))
+                    .child(info),
             )
-            .child(
-                div()
-                    .text_sm()
-                    .text_color(rgb(theme.colors.text.muted))
-                    .max_w(px(400.0))
-                    .text_center()
-                    .child(state.body.clone()),
-            )
-            .when_some(agent_name, |d, name| {
-                d.child(
-                    div()
-                        .text_xs()
-                        .text_color(rgb(theme.colors.text.muted))
-                        .child(name),
-                )
-            })
-            .when_some(self.render_agent_picker(window, cx), |d, picker| {
-                d.child(picker)
-            })
-            .child(
-                div()
-                    .text_xs()
-                    .text_color(rgb(theme.colors.text.muted))
-                    .child(action_hint),
-            )
-            .when_some(secondary_hint.filter(|s| !s.is_empty()), |d, hint| {
-                d.child(
-                    div()
-                        .text_xs()
-                        .text_color(rgb(theme.colors.text.muted))
-                        .opacity(0.6)
-                        .child(hint),
-                )
-            })
+            .children(actions)
+            .children(picker)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn setup_action_controls_only_advertise_actions_the_card_can_perform() {
+        assert_eq!(
+            setup_action_control(AgentChatSetupAction::SelectAgent),
+            SetupActionControl {
+                label: "Choose Agent",
+                activation: AgentChatSetupAction::SelectAgent,
+            }
+        );
+        assert_eq!(
+            setup_action_control(AgentChatSetupAction::OpenCatalog).label,
+            "Open Agent Catalog"
+        );
+        for external_action in [
+            AgentChatSetupAction::Install,
+            AgentChatSetupAction::Authenticate,
+        ] {
+            let control = setup_action_control(external_action);
+            assert_eq!(control.label, "Retry");
+            assert_eq!(control.activation, AgentChatSetupAction::Retry);
+        }
     }
 }
 

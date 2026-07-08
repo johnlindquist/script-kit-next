@@ -18,7 +18,7 @@ use crate::theme::types::BackgroundOpacity;
 use crate::theme::AppChromeColors;
 use gpui::{
     div, list, prelude::*, px, rgb, rgba, App, BoxShadow, Context, ElementId, FocusHandle,
-    Focusable, ListAlignment, ListState, Render, Rgba, SharedString, Window,
+    Focusable, ListAlignment, ListState, Render, SharedString, Window,
 };
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -93,30 +93,6 @@ fn actions_dialog_default_style() -> ActionsDialogStyleFallback {
 #[inline]
 fn hex_with_alpha(hex: u32, alpha: u8) -> u32 {
     DesignColors::hex_with_alpha(hex, alpha)
-}
-
-fn actions_search_cursor(
-    cursor_width: f32,
-    cursor_height: f32,
-    cursor_visible: bool,
-    accent_color: Rgba,
-) -> gpui::Div {
-    let mut cursor_bar = div()
-        .absolute()
-        .left(px(-(cursor_width / 2.0)))
-        .top(px(0.0))
-        .w(px(cursor_width))
-        .h(px(cursor_height))
-        .rounded(px(1.0));
-    if cursor_visible {
-        cursor_bar = cursor_bar.bg(accent_color);
-    }
-
-    div()
-        .relative()
-        .w(px(0.0))
-        .h(px(cursor_height))
-        .child(cursor_bar)
 }
 
 /// Action subtitle text shown in the popup row, if any.
@@ -650,15 +626,6 @@ pub(super) fn actions_dialog_revealed_scroll_top(
     next_top.clamp(0.0, (content_height - viewport_height).max(0.0))
 }
 
-/// Resolve empty-state copy based on whether a search query is active.
-pub(super) fn actions_dialog_empty_state_message(search_text: &str) -> &'static str {
-    if search_text.trim().is_empty() {
-        "No actions available"
-    } else {
-        "No actions match your search"
-    }
-}
-
 // ── Route / back-stack contract ──────────────────────────────────────────────
 // Reusable drill-down navigation for the shared ActionsDialog.
 
@@ -842,31 +809,6 @@ pub struct ActionsDialog {
 fn actions_dialog_footerless_config(mut config: ActionsDialogConfig) -> ActionsDialogConfig {
     config.show_footer = false;
     config
-}
-
-#[cfg(test)]
-mod empty_state_message_tests {
-    use super::actions_dialog_empty_state_message;
-
-    #[test]
-    fn test_actions_dialog_empty_state_message_returns_available_when_search_is_empty() {
-        assert_eq!(
-            actions_dialog_empty_state_message(""),
-            "No actions available"
-        );
-        assert_eq!(
-            actions_dialog_empty_state_message("   "),
-            "No actions available"
-        );
-    }
-
-    #[test]
-    fn test_actions_dialog_empty_state_message_returns_no_match_when_search_has_text() {
-        assert_eq!(
-            actions_dialog_empty_state_message("open"),
-            "No actions match your search"
-        );
-    }
 }
 
 // --- merged from part_02.rs ---
@@ -4056,55 +3998,23 @@ impl Render for ActionsDialog {
         let input_text_color = primary_text;
         let search_is_empty = self.search_text.is_empty();
         let build_search_content = |search_display: SharedString| {
-            let mut content = div()
-                .flex_1()
-                .h(px(popup_theme.search.inner_height))
-                .flex()
-                .flex_row()
-                .items_center()
-                .text_size(px(popup_theme.search.font_size))
-                .line_height(px(popup_theme.search.font_size))
-                .text_color(if search_is_empty {
-                    hint_text_color
-                } else {
-                    input_text_color
-                });
-
-            if let Some(prefix_marker) = style.prefix_marker {
-                content = content.child(
-                    div()
-                        .mr(px(popup_theme.search.prefix_gap))
-                        .text_color(hint_text_color)
-                        .font_family(if style.mono_font {
-                            crate::list_item::FONT_MONO
-                        } else {
-                            crate::list_item::FONT_SYSTEM_UI
-                        })
-                        .child(prefix_marker),
-                );
-            }
-
-            if search_is_empty {
-                content = content.child(actions_search_cursor(
-                    popup_theme.search.cursor_width,
-                    popup_theme.search.font_size,
-                    self.cursor_visible,
-                    accent_color,
-                ));
-            }
-
-            content = content.child(search_display);
-
-            if !search_is_empty {
-                content = content.child(actions_search_cursor(
-                    popup_theme.search.cursor_width,
-                    popup_theme.search.font_size,
-                    self.cursor_visible,
-                    accent_color,
-                ));
-            }
-
-            content
+            crate::components::text_input::render_compact_search_text(
+                crate::components::text_input::CompactSearchTextConfig {
+                    display: search_display,
+                    is_placeholder: search_is_empty,
+                    prefix_marker: style.prefix_marker,
+                    prefix_gap: popup_theme.search.prefix_gap,
+                    mono_font: style.mono_font,
+                    font_size: popup_theme.search.font_size,
+                    inner_height: popup_theme.search.inner_height,
+                    cursor_width: popup_theme.search.cursor_width,
+                    cursor_height: popup_theme.search.cursor_height,
+                    cursor_visible: self.cursor_visible,
+                    cursor_color: accent_color,
+                    placeholder_color: hint_text_color,
+                    text_color: input_text_color,
+                },
+            )
         };
 
         let mut input_container = div()
@@ -4397,7 +4307,6 @@ impl Render for ActionsDialog {
             // Note: Using flex_1() to fill remaining space in flex column.
             // Do NOT use h_full() here as it can conflict with flex layout
             // and cause the search bar to be pushed off-screen.
-            let empty_message = actions_dialog_empty_state_message(&self.search_text);
             div()
                 .relative()
                 .flex()
@@ -4427,9 +4336,12 @@ impl Render for ActionsDialog {
                             .flex()
                             .items_center()
                             .px(px(spacing.item_padding_x))
-                            .text_color(hint_text_color)
-                            .text_sm()
-                            .child(empty_message),
+                            .child(crate::components::render_shared_empty_state(
+                                crate::components::InfoEmptySurface::ActionsSearch,
+                                &self.search_text,
+                                &self.theme,
+                                cx,
+                            )),
                     )
                 })
                 .into_any_element()

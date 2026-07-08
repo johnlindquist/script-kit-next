@@ -12408,11 +12408,8 @@ impl AgentChatView {
                 this.composer_picker_session = None;
                 cx.notify();
             }
-            AgentChatSetupCardEvent::OpenPicker => {
-                this.open_setup_agent_picker(cx);
-            }
-            AgentChatSetupCardEvent::Retry => {
-                // KNOWN: Needs Window context unavailable in subscription handlers.
+            AgentChatSetupCardEvent::ActivateAction(action) => {
+                this.handle_setup_action(*action, cx);
             }
         })
         .detach();

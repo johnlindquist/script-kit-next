@@ -380,35 +380,15 @@ impl ScriptListApp {
             .w_full()
             .px(px(design_spacing.padding_md))
             .pb(px(design_spacing.padding_xs))
-            .flex()
-            .flex_col()
-            .gap(px(4.0))
-            .child(
-                div()
-                    .text_size(px(crate::components::INFO_TYPE_SCALE.body.size))
-                    .line_height(px(crate::components::INFO_TYPE_SCALE.body.line))
-                    .text_color(info_palette.body)
-                    .child(
-                        "Script Kit uses these macOS permissions to read selected text, \
-                         paste into other apps, run shortcuts, and capture context. \
-                         Press ↵ on a row to grant it — cards update automatically.",
-                    ),
-            );
-
-        let footer_note: Option<AnyElement> = if all_required_granted {
-            Some(
-                div()
-                    .w_full()
-                    .px(px(design_spacing.padding_md))
-                    .pt(px(design_spacing.padding_xs))
-                    .text_xs()
-                    .text_color(success_color)
-                    .child("All required permissions granted — press Esc to finish.")
-                    .into_any_element(),
-            )
-        } else {
-            None
-        };
+            .child(crate::components::render_info_state(
+                crate::components::permission_onboarding_intro_spec(
+                    granted_count,
+                    row_count,
+                    all_required_granted,
+                ),
+                &self.theme,
+                cx,
+            ));
 
         let content = div()
             .flex_1()
@@ -426,8 +406,7 @@ impl ScriptListApp {
                     .flex_col()
                     .min_h(px(0.))
                     .children(list_items),
-            )
-            .children(footer_note);
+            );
 
         let footer = self.main_window_footer_slot(crate::components::render_simple_hint_strip(
             vec![
@@ -445,8 +424,6 @@ impl ScriptListApp {
             .flex()
             .flex_row()
             .items_center()
-            .justify_between()
-            .gap(px(8.0))
             .child(
                 div()
                     .text_lg()
@@ -454,9 +431,6 @@ impl ScriptListApp {
                     .text_color(rgb(chrome.text_primary_hex))
                     .child("Set Up Permissions"),
             )
-            .child(self.render_builtin_main_input_count_label(format!(
-                "{granted_count} of {row_count} granted"
-            )))
             .into_any_element();
 
         crate::components::main_view_chrome::render_main_view_chrome(

@@ -49,8 +49,6 @@ pub(super) const SIDEBAR_INSET_X: Pixels = S3;
 pub(super) const PANEL_INSET_X: Pixels = S4;
 
 // -- Setup card constants --
-pub(super) const SETUP_ICON_CONTAINER_SIZE: Pixels = px(80.);
-pub(super) const SETUP_DESCRIPTION_MAX_W: Pixels = px(380.);
 pub(super) const SETUP_FEEDBACK_MAX_W: Pixels = px(340.);
 pub(super) const SETUP_API_KEY_MAX_W: Pixels = px(400.);
 
@@ -174,8 +172,6 @@ mod layout_token_tests {
         assert_eq!(PANEL_INSET_X, S4);
         assert_eq!(TITLEBAR_H, px(48.));
 
-        assert_eq!(SETUP_ICON_CONTAINER_SIZE, px(80.));
-        assert_eq!(SETUP_DESCRIPTION_MAX_W, px(380.));
         assert_eq!(SETUP_FEEDBACK_MAX_W, px(340.));
         assert_eq!(SETUP_API_KEY_MAX_W, px(400.));
         assert_eq!(SIDEBAR_SEARCH_ICON_SIZE, px(10.));

@@ -1,30 +1,32 @@
 use super::types::*;
 use super::*;
-use crate::theme::opacity::{
-    OPACITY_ACCENT_MEDIUM, OPACITY_ACTIVE, OPACITY_HOVER, OPACITY_PROMINENT, OPACITY_SELECTED,
-    OPACITY_STRONG, OPACITY_SUBTLE,
-};
+use crate::theme::opacity::{OPACITY_ACCENT_MEDIUM, OPACITY_HOVER, OPACITY_SUBTLE};
 
 impl AiApp {
     pub(super) fn render_setup_card(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        debug!(
-            setup_icon_size = %SETUP_ICON_CONTAINER_SIZE,
-            description_max_w = %SETUP_DESCRIPTION_MAX_W,
-            feedback_max_w = %SETUP_FEEDBACK_MAX_W,
-            api_key_max_w = %SETUP_API_KEY_MAX_W,
-            "render_setup_card layout constants"
-        );
-
-        // If showing API key input mode, render that instead
         if self.showing_api_key_input {
             return self.render_api_key_input(cx).into_any_element();
         }
 
-        // Theme-aware accent color for the button (Raycast style)
-        let button_bg = cx.theme().accent;
-        let button_text = cx.theme().primary_foreground;
-        let catalog_button_focused = self.setup_button_focus_index == 0;
-        let focus_color = cx.theme().ring;
+        let theme = crate::theme::get_cached_theme();
+        let setup_info = crate::components::agent_setup_info_spec(
+            "Agent Required",
+            "Add, install, or authenticate an agent in the catalog or config.ts.",
+            None::<String>,
+        )
+        .footer_note("Supports compatible command-line agents · no restart required · Esc closes");
+        let setup_info = crate::components::render_info_state(setup_info, &theme, cx);
+        let setup_width =
+            crate::components::info_metrics(crate::components::InfoStateDensity::Comfortable)
+                .max_width;
+        let button_colors = crate::components::ButtonColors::from_theme(&theme);
+        let catalog_button = crate::components::Button::new("Open Agent Catalog", button_colors)
+            .id("open-agent-catalog-btn")
+            .shortcut("↵")
+            .focused(self.setup_button_focus_index == 0)
+            .on_click(Box::new(cx.listener(|this, _event, window, cx| {
+                this.open_agent_chat_agents_catalog(window, cx);
+            })));
 
         div()
             .id("setup-card-container")
@@ -35,78 +37,9 @@ impl AiApp {
             .flex_1()
             .gap(S6)
             .px(S4)
-            // Default cursor for the container (buttons will override with pointer)
             .cursor_default()
-            // Icon - muted settings icon at top
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .size(SETUP_ICON_CONTAINER_SIZE)
-                    .rounded(R_XL)
-                    .bg(cx.theme().muted.opacity(OPACITY_SUBTLE))
-                    .child(
-                        svg()
-                            .path(LocalIconName::Settings.asset_path())
-                            .size(S8)
-                            .text_color(cx.theme().muted_foreground.opacity(OPACITY_SELECTED)),
-                    ),
-            )
-            // Title
-            .child(
-                div()
-                    .text_xl()
-                    .font_weight(gpui::FontWeight::SEMIBOLD)
-                    .text_color(cx.theme().foreground)
-                    .child("Agent Required"),
-            )
-            // Description
-            .child(
-                div()
-                    .text_sm()
-                    .text_color(cx.theme().muted_foreground)
-                    .text_center()
-                    .max_w(SETUP_DESCRIPTION_MAX_W)
-                    .child("Add, install, or authenticate an agent in the catalog or config.ts."),
-            )
-            // Open agent catalog button
-            .child(
-                div()
-                    .id("open-agent-catalog-btn")
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .gap(S2)
-                    .px(S5)
-                    .py(S2)
-                    .rounded(R_LG)
-                    .bg(button_bg)
-                    .cursor_pointer()
-                    .border_1()
-                    .border_color(button_bg.opacity(OPACITY_PROMINENT))
-                    .when(catalog_button_focused, |s| {
-                        s.border_2().border_color(focus_color)
-                    })
-                    .hover(|s| s.bg(button_bg.opacity(OPACITY_ACTIVE)))
-                    .on_click(cx.listener(|this, _event, window, cx| {
-                        this.open_agent_chat_agents_catalog(window, cx);
-                    }))
-                    .child(
-                        svg()
-                            .path(LocalIconName::Terminal.asset_path())
-                            .size(ICON_MD)
-                            .text_color(button_text),
-                    )
-                    .child(
-                        div()
-                            .text_sm()
-                            .font_weight(gpui::FontWeight::MEDIUM)
-                            .text_color(button_text)
-                            .child("Open Agent Catalog"),
-                    ),
-            )
-            // Agent Chat setup feedback (shown when setup state changes)
+            .child(div().w_full().max_w(px(setup_width)).child(setup_info))
+            .child(catalog_button)
             .when_some(self.claude_code_setup_feedback.clone(), |el, feedback| {
                 el.child(
                     div()
@@ -130,65 +63,13 @@ impl AiApp {
                         ),
                 )
             })
-            // Info text
-            .child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .items_center()
-                    .gap(S1)
-                    .mt(S2)
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(cx.theme().muted_foreground.opacity(OPACITY_STRONG))
-                            .child("Supports compatible command-line agents"),
-                    )
-                    .child(
-                        div()
-                            .text_sm()
-                            .text_color(cx.theme().muted_foreground)
-                            .child("No restart required"),
-                    ),
-            )
-            // Keyboard hints
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .gap(S4)
-                    .mt(S4)
-                    // Esc to go back
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap(S2)
-                            .child(
-                                div()
-                                    .px(S2)
-                                    .py(S1)
-                                    .rounded(R_SM)
-                                    .bg(cx.theme().muted)
-                                    .text_xs()
-                                    .font_weight(gpui::FontWeight::MEDIUM)
-                                    .text_color(cx.theme().muted_foreground)
-                                    .child("Esc"),
-                            )
-                            .child(
-                                div()
-                                    .text_xs()
-                                    .text_color(cx.theme().muted_foreground)
-                                    .child("to go back"),
-                            ),
-                    ),
-            )
             .into_any_element()
     }
 
     /// Render the API key input view (shown when user clicks Configure)
     pub(super) fn render_api_key_input(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let input_border_color = cx.theme().accent;
+        let theme = crate::theme::get_cached_theme();
 
         div()
             .flex()
@@ -198,39 +79,24 @@ impl AiApp {
             .flex_1()
             .gap(S6)
             .px(S4)
-            // Back arrow + title
             .child(
                 div()
-                    .flex()
-                    .items_center()
-                    .gap(S2)
-                    .child(
-                        div()
-                            .id("back-btn")
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .size(S6)
-                            .rounded(R_MD)
-                            .cursor_pointer()
-                            .hover(|s| s.bg(cx.theme().muted.opacity(OPACITY_HOVER)))
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                this.hide_api_key_input(window, cx);
-                            }))
-                            .child(
-                                div()
-                                    .text_sm()
-                                    .text_color(cx.theme().muted_foreground)
-                                    .child("←"),
-                            ),
-                    )
-                    .child(
-                        div()
-                            .text_lg()
-                            .font_weight(gpui::FontWeight::MEDIUM)
-                            .text_color(cx.theme().foreground)
-                            .child("Enter API Key"),
-                    ),
+                    .w(SETUP_API_KEY_MAX_W)
+                    .child(crate::components::render_back_affordance(
+                        "back-btn".into(),
+                        "Agent setup".into(),
+                        &theme,
+                        cx.listener(|this, _, window, cx| {
+                            this.hide_api_key_input(window, cx);
+                        }),
+                    )),
+            )
+            .child(
+                div()
+                    .text_lg()
+                    .font_weight(gpui::FontWeight::MEDIUM)
+                    .text_color(cx.theme().foreground)
+                    .child("Enter API Key"),
             )
             // Description
             .child(
