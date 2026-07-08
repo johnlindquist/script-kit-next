@@ -2,6 +2,53 @@ use super::*;
 
 const FILTER_COMPUTE_DEFER: std::time::Duration = std::time::Duration::from_millis(16);
 
+/// Leading characters that put the launcher list into a structurally
+/// different presentation (sigil hint surfaces, capture composer, command
+/// heads, spine projections, fallback "Use X with..." sections) rather than
+/// just narrowing the fuzzy rows.
+const LIST_STRUCTURE_SIGILS: &[char] = &['@', '/', ';', ':', '!', '~', '|', '>', '+', '.'];
+
+/// Which structural "family" of launcher list a filter query renders.
+#[derive(Debug, PartialEq, Eq)]
+enum FilterListFamily {
+    /// Empty query: default sections (Brain Inbox, Suggested, ...).
+    Default,
+    /// Sigil-headed query (`@`, `/`, `;`, ...): hint/fallback/projection
+    /// surfaces keyed to that sigil.
+    Sigil(char),
+    /// Menu-syntax qualifier head that owns the main list (`has:`, `t:`, ...).
+    QualifierOwned,
+    /// Plain fuzzy-filter text.
+    Plain,
+}
+
+fn filter_list_family(text: &str) -> FilterListFamily {
+    if text.is_empty() {
+        return FilterListFamily::Default;
+    }
+    if let Some(head) = text.trim_start().chars().next() {
+        if LIST_STRUCTURE_SIGILS.contains(&head) {
+            return FilterListFamily::Sigil(head);
+        }
+    }
+    if crate::menu_syntax::active_filter_head_owns_main_list(text) {
+        FilterListFamily::QualifierOwned
+    } else {
+        FilterListFamily::Plain
+    }
+}
+
+/// The input echoes every keystroke immediately, while the grouped list
+/// follows `computed_filter_text` after the coalescer defer. Within one
+/// list family a one-frame-stale list is imperceptible (fuzzy rows narrow
+/// slightly), but across families (default sections vs the `Use "@" with...`
+/// fallback vs a sigil-owned surface) the stale frame reads as a flash of
+/// the wrong screen. Those transitions must apply in the same frame as the
+/// input echo instead of waiting out `FILTER_COMPUTE_DEFER`.
+pub(crate) fn filter_change_flips_list_structure(old: &str, new: &str) -> bool {
+    filter_list_family(old) != filter_list_family(new)
+}
+
 pub(crate) fn menu_syntax_filter_only_escape_should_clear(
     raw: &str,
     mode: &crate::menu_syntax::MenuSyntaxMode,
@@ -215,6 +262,17 @@ impl ScriptListApp {
                 filter_len = value.len(),
             );
             self.filter_coalescer.reset();
+            return;
+        }
+
+        // Structural flips (empty <-> sigil/fallback/qualifier surfaces) must
+        // not publish even one stale-list frame: the input already echoed the
+        // new text, so compute now instead of deferring. Same-family typing
+        // keeps the coalescer so rapid keystrokes still skip intermediate
+        // computes.
+        if filter_change_flips_list_structure(&self.computed_filter_text, &value) {
+            self.filter_coalescer.reset();
+            self.apply_filter_compute_now(value, cx);
             return;
         }
 
@@ -1409,5 +1467,47 @@ mod spine_mention_atomic_delete_tests {
         // deletion to the position after the shared prefix, which is the same
         // token span either way.
         assert_eq!(single_char_deletion_index("aab", "ab"), Some(1));
+    }
+}
+
+#[cfg(test)]
+mod filter_list_structure_tests {
+    use super::filter_change_flips_list_structure;
+
+    #[test]
+    fn empty_to_sigil_flips_both_directions() {
+        // The reported flash: type "@" (default sections must not linger),
+        // then delete it (the `Use "@" with...` fallback must not linger).
+        assert!(filter_change_flips_list_structure("", "@"));
+        assert!(filter_change_flips_list_structure("@", ""));
+    }
+
+    #[test]
+    fn empty_to_plain_text_flips() {
+        assert!(filter_change_flips_list_structure("", "a"));
+        assert!(filter_change_flips_list_structure("a", ""));
+    }
+
+    #[test]
+    fn typing_within_one_family_defers() {
+        assert!(!filter_change_flips_list_structure("a", "ab"));
+        assert!(!filter_change_flips_list_structure("ab", "a"));
+        assert!(!filter_change_flips_list_structure("@", "@f"));
+        assert!(!filter_change_flips_list_structure(";todo", ";todo x"));
+    }
+
+    #[test]
+    fn sigil_head_change_flips() {
+        assert!(filter_change_flips_list_structure("@", "/"));
+        assert!(filter_change_flips_list_structure(";", ":"));
+        assert!(filter_change_flips_list_structure("a", "@a"));
+    }
+
+    #[test]
+    fn qualifier_head_ownership_flips() {
+        // "has" is plain fuzzy text; "has:" is a menu-syntax head that owns
+        // the main list, so the transition must apply synchronously.
+        assert!(filter_change_flips_list_structure("has", "has:"));
+        assert!(filter_change_flips_list_structure("has:", "has"));
     }
 }
