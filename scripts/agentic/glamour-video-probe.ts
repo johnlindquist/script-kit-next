@@ -12,6 +12,10 @@
 //   theme-preview   — type "theme", Enter, arrows live-preview themes; the
 //                     whole app AND the theme-anchored shader recolor.
 //   montage         — greatest hits: search, shader cycling, theme flips.
+//   team-review-actions      — shared compact Actions search + empty guidance.
+//   team-review-permissions  — shared permissions intro/progress surface.
+//   team-review-agent-setup  — provider-free Agent Chat setup recovery card.
+//   team-review-day-page     — compact clipboard shelf + past-day back affordance.
 //
 // Mechanics (shared with shader-screenshot-probe.ts — keep in sync):
 // - Capture rect from tahoe_window_geometry (global points) + generous
@@ -33,7 +37,7 @@
 // with ffmpeg (fps=30, h264, faststart) for the web.
 
 import { join } from "node:path";
-import { mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync, rmSync } from "node:fs";
 import { Driver } from "../devtools/driver";
 
 const PROJECT_ROOT = new URL("../..", import.meta.url).pathname;
@@ -124,6 +128,82 @@ async function keys(driver: Driver, sequence: string[], stepMs = 340) {
   }
 }
 
+const ACTIONS_DIALOG_TARGET = { type: "kind", kind: "actionsDialog" };
+
+async function setActionsDialogInput(driver: Driver, text: string) {
+  const result = await driver.request(
+    {
+      type: "batch",
+      target: ACTIONS_DIALOG_TARGET,
+      commands: [{ type: "setInput", text }],
+      options: { stopOnError: true, rollbackOnError: false, timeout: 5000 },
+      trace: "on",
+    },
+    { expect: "batchResult", timeoutMs: 6000 },
+  );
+  if (result.success === false) {
+    throw new Error(`ActionsDialog setInput failed for ${JSON.stringify(text)}: ${JSON.stringify(result)}`);
+  }
+  return result;
+}
+
+async function progressivelySetActionsDialogInput(
+  driver: Driver,
+  text: string,
+  perKeyMs = 85,
+) {
+  for (let i = 1; i <= text.length; i++) {
+    await setActionsDialogInput(driver, text.slice(0, i));
+    await Bun.sleep(perKeyMs);
+  }
+}
+
+async function progressivelyClearActionsDialogInput(
+  driver: Driver,
+  text: string,
+  perKeyMs = 45,
+) {
+  for (let i = text.length - 1; i >= 0; i--) {
+    await setActionsDialogInput(driver, text.slice(0, i));
+    await Bun.sleep(perKeyMs);
+  }
+}
+
+async function actionsDialogState(driver: Driver) {
+  return driver.request(
+    { type: "getState", target: ACTIONS_DIALOG_TARGET, summaryOnly: true },
+    { expect: "stateResult", timeoutMs: 6000 },
+  );
+}
+
+async function waitForActionsDialog(driver: Driver) {
+  for (let attempt = 0; attempt < 50; attempt++) {
+    try {
+      const state = await actionsDialogState(driver);
+      if (state.actionsDialog?.surface === "actionsDialog") return state;
+    } catch {}
+    await Bun.sleep(100);
+  }
+  throw new Error("ActionsDialog did not become automation-ready");
+}
+
+async function waitForAgentChatSetup(driver: Driver) {
+  for (let attempt = 0; attempt < 80; attempt++) {
+    try {
+      const result = await driver.request(
+        { type: "getAgentChatState" },
+        { timeoutMs: 5000 },
+      );
+      const state = result.state ?? result;
+      if (state.setup) return state;
+    } catch {}
+    await Bun.sleep(125);
+  }
+  throw new Error(
+    "Agent Chat setup did not become deterministic; missing setup fixture/empty-sandbox setup state",
+  );
+}
+
 function mousePos(): { x: number; y: number } | null {
   const r = Bun.spawnSync(["cliclick", "p"]);
   const m = r.stdout.toString().match(/(\d+),(\d+)/);
@@ -135,6 +215,17 @@ async function mouseSweep(points: Array<{ x: number; y: number }>, easeMs = 700)
     Bun.spawnSync(["cliclick", "-e", String(easeMs), `m:${Math.round(p.x)},${Math.round(p.y)}`]);
     await Bun.sleep(120);
   }
+}
+
+async function mouseClick(point: { x: number; y: number }, easeMs = 500) {
+  Bun.spawnSync([
+    "cliclick",
+    "-e",
+    String(easeMs),
+    `m:${Math.round(point.x)},${Math.round(point.y)}`,
+    `c:${Math.round(point.x)},${Math.round(point.y)}`,
+  ]);
+  await Bun.sleep(180);
 }
 
 function setClipboard(text: string) {
@@ -152,14 +243,20 @@ function getClipboardText(): string | null {
 
 type Waypoints = { left: any; right: any; lower: any; upper: any };
 
+type ScenarioContext = {
+  home: string;
+  kitDir: string;
+};
+
 type Scenario = {
   name: string;
   theme: string | null;
   effect: string;
   durationSecs: number;
+  env?: Record<string, string>;
   /** Runs after launch+show, BEFORE recording starts (invisible staging). */
-  stage?: (driver: Driver) => Promise<void>;
-  run: (driver: Driver, w: Waypoints) => Promise<void>;
+  stage?: (driver: Driver, context: ScenarioContext) => Promise<Record<string, any> | void>;
+  run: (driver: Driver, w: Waypoints) => Promise<Record<string, any> | void>;
 };
 
 const DICTATION_SEEDS = [
@@ -167,6 +264,26 @@ const DICTATION_SEEDS = [
   "Idea: end the glamour reel on the day page",
   "Call with Sarah moved to two thirty, bring the demo laptop",
 ];
+
+const ACTIONS_NO_MATCH_QUERY = "zz-no-action-848b3428a";
+const TEAM_REVIEW_PAST_DATE = "2026-06-30";
+const TEAM_REVIEW_PAST_DAY = [
+  "# Team review archive",
+  "",
+  "Polish the recovery states before sharing the next build.",
+  "",
+  "- Verify compact search alignment",
+  "- Review onboarding progress",
+].join("\n");
+
+function localDateStamp() {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: process.env.SCRIPT_KIT_BRAIN_TZ ?? "America/Denver",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+}
 
 const SCENARIOS: Scenario[] = [
   {
@@ -321,6 +438,173 @@ const SCENARIOS: Scenario[] = [
       await Bun.sleep(1200);
     },
   },
+  {
+    name: "team-review-actions",
+    theme: "rose-pine",
+    effect: "starfield",
+    durationSecs: 18,
+    stage: async (driver) => {
+      driver.setFilter("theme");
+      await driver.waitForState({ inputValue: "theme" }, { timeoutMs: 5000 });
+      const opened = await driver.batch([{ type: "openActions" }], { timeoutMs: 6000 });
+      const initial = await waitForActionsDialog(driver);
+      return {
+        openActionsSuccess: opened.success !== false,
+        initialSearchTextLength: initial.actionsDialog?.search?.textLength ?? null,
+      };
+    },
+    run: async (driver) => {
+      await Bun.sleep(1300);
+      await progressivelySetActionsDialogInput(driver, ACTIONS_NO_MATCH_QUERY, 78);
+      await Bun.sleep(2200);
+      const noMatch = await actionsDialogState(driver);
+      await progressivelyClearActionsDialogInput(driver, ACTIONS_NO_MATCH_QUERY, 42);
+      await Bun.sleep(2200);
+      const cleared = await actionsDialogState(driver);
+      await keys(driver, ["down", "down", "up", "up"], 320);
+      await Bun.sleep(900);
+      return {
+        target: "ActionsDialog",
+        noMatchSearchTextLength: noMatch.actionsDialog?.search?.textLength ?? null,
+        noMatchFilteredActionCount: noMatch.actionsDialog?.actions?.filteredCount ?? null,
+        clearedSearchTextLength: cleared.actionsDialog?.search?.textLength ?? null,
+        clearedFilteredActionCount: cleared.actionsDialog?.actions?.filteredCount ?? null,
+      };
+    },
+  },
+  {
+    name: "team-review-permissions",
+    theme: "synthwave-84",
+    effect: "plasma",
+    durationSecs: 18,
+    run: async (driver) => {
+      await Bun.sleep(900);
+      await typeText(driver, "permissions", 85);
+      await Bun.sleep(650);
+      // Take the normal launcher path so the recording proves the same
+      // interaction a user performs: select the second permissions command,
+      // then open the wizard with Return.
+      await keys(driver, ["down"], 250);
+      driver.simulateKey("enter");
+      await driver.waitForState({ promptType: "permissionsWizard" }, { timeoutMs: 6000 });
+      await Bun.sleep(1800);
+      await keys(driver, ["down", "down", "up"], 700);
+      await Bun.sleep(1800);
+      const state = await driver.getState({ timeoutMs: 5000 });
+      return {
+        builtin: "builtin/setup-permissions",
+        opened: state.promptType === "permissionsWizard",
+        promptType: state.promptType ?? null,
+        selectedIndex: state.selectedIndex ?? null,
+        selectedValue: state.selectedValue ?? null,
+      };
+    },
+  },
+  {
+    name: "team-review-agent-setup",
+    theme: "dracula",
+    effect: "lavalamp",
+    durationSecs: 17,
+    // Keep provider CLIs out of discovery. The starter catalog remains, so
+    // the empty sandbox deterministically shows install recovery instead of
+    // launching a provider or borrowing the user's auth.
+    env: {
+      PATH: "/usr/bin:/bin",
+      SCRIPT_KIT_DISABLE_CODEX_AGENT_CHAT: "1",
+    },
+    stage: async (driver) => {
+      driver.send({ type: "triggerBuiltin", builtinId: "builtin/ai-chat" });
+      const setupState = await waitForAgentChatSetup(driver);
+      // The restricted PATH intentionally trips the unrelated Bun discovery
+      // toast. Dismiss it before recording so the clip stays about recovery.
+      const { win } = await windowGeometry();
+      await mouseClick({ x: win.x + win.w - 20, y: win.y + 17 }, 150);
+      await Bun.sleep(400);
+      return {
+        providerFree: true,
+        setup: setupState.setup,
+      };
+    },
+    run: async (driver, w) => {
+      const before = await waitForAgentChatSetup(driver);
+      await Bun.sleep(1800);
+      await mouseSweep([w.upper, w.lower], 700);
+      await Bun.sleep(900);
+      driver.simulateKey("enter");
+      await Bun.sleep(2200);
+      const after = await waitForAgentChatSetup(driver);
+      const logs = await driver.getLogs({ contains: "agent_chat_setup_retry_requested" });
+      await Bun.sleep(1800);
+      return {
+        providerFree: true,
+        beforeSetup: before.setup,
+        afterSetup: after.setup,
+        enterPrimaryRetryLogCount: Array.isArray(logs.logs) ? logs.logs.length : null,
+      };
+    },
+  },
+  {
+    name: "team-review-day-page",
+    theme: "rose-pine",
+    effect: "starfield",
+    durationSecs: 22,
+    stage: async (driver, { kitDir }) => {
+      const daysDir = join(kitDir, "brain", "days");
+      mkdirSync(daysDir, { recursive: true });
+      writeFileSync(join(daysDir, `${TEAM_REVIEW_PAST_DATE}.md`), TEAM_REVIEW_PAST_DAY);
+      driver.send({
+        type: "pushDictationResult",
+        transcript: "Team review: unify guidance, recovery, and navigation surfaces",
+        target: "today",
+      });
+      await Bun.sleep(650);
+      setClipboard("https://scriptkit.com/review/compact-actions");
+      await Bun.sleep(1100);
+      setClipboard("https://scriptkit.com/review/recovery-states");
+      await Bun.sleep(1300);
+      const todayPath = join(daysDir, `${localDateStamp()}.md`);
+      const todayText = existsSync(todayPath) ? readFileSync(todayPath, "utf8") : "";
+      return {
+        todayPath,
+        clipboardShelfRefs: (todayText.match(/kit:\/\/clipboard-history\?id=/g) ?? []).length,
+        pastDayPath: join(daysDir, `${TEAM_REVIEW_PAST_DATE}.md`),
+        pastDaySeeded: existsSync(join(daysDir, `${TEAM_REVIEW_PAST_DATE}.md`)),
+      };
+    },
+    run: async (driver) => {
+      await Bun.sleep(800);
+      driver.setFilter(" ");
+      await driver.waitForState({ promptType: "dayPage" }, { timeoutMs: 7000 });
+      await Bun.sleep(1900);
+
+      // The clipboard shelf sits directly above the footer. Use the real
+      // cursor so hover/click behavior is represented in the recording.
+      const dayGeo = await windowGeometry();
+      await mouseClick({
+        x: dayGeo.win.x + Math.min(150, dayGeo.win.w * 0.24),
+        y: dayGeo.win.y + dayGeo.win.h - 30,
+      });
+      await Bun.sleep(2400);
+
+      driver.simulateKey("p", ["cmd"]);
+      await waitForActionsDialog(driver);
+      await setActionsDialogInput(driver, TEAM_REVIEW_PAST_DATE);
+      await Bun.sleep(1300);
+      driver.simulateKey("enter");
+      await driver.waitForState(
+        { promptType: "dayPage", inputValue: TEAM_REVIEW_PAST_DAY },
+        { timeoutMs: 7000 },
+      );
+      await Bun.sleep(2600);
+      const state = await driver.getState({ timeoutMs: 5000 });
+      return {
+        promptType: state.promptType ?? null,
+        pastDay: TEAM_REVIEW_PAST_DATE,
+        inputMatchesPastDay: state.inputValue === TEAM_REVIEW_PAST_DAY,
+        visibleWindowRetained: state.windowVisible === true,
+      };
+    },
+  },
 ];
 
 const requested = process.argv.slice(2);
@@ -353,14 +637,15 @@ try {
     const driver = await Driver.launch({
       binary: join(PROJECT_ROOT, "target-agent/artifacts/glamour/script-kit-gpui"),
       sessionName: `video-${scenario.name}`,
-      env: { HOME: home, SK_PATH: kitDir },
+      env: { HOME: home, SK_PATH: kitDir, ...scenario.env },
     });
     try {
       driver.send({ type: "show" });
       await driver.waitForSettle();
+      let stageEvidence: Record<string, any> | void;
       if (scenario.stage) {
         log(`${scenario.name}: staging`);
-        await scenario.stage(driver);
+        stageEvidence = await scenario.stage(driver, { home, kitDir });
         await driver.waitForSettle();
       }
       const { win: f, display } = await windowGeometry();
@@ -390,7 +675,7 @@ try {
         mov,
       ]);
       await Bun.sleep(900);
-      await scenario.run(driver, waypoints);
+      const runEvidence = await scenario.run(driver, waypoints);
       log(`${scenario.name}: interaction done, waiting for recorder`);
       const recResult = await Promise.race([
         rec.exited,
@@ -404,7 +689,7 @@ try {
         throw new Error(`screencapture exited (code ${recResult}) but wrote no file`);
       }
       log(`${scenario.name}: recorded ok`);
-      receipt.videos.push({ name: scenario.name, rect, mov });
+      receipt.videos.push({ name: scenario.name, rect, mov, stageEvidence, runEvidence });
     } catch (err: any) {
       receipt.errors.push({ name: scenario.name, error: String(err?.message ?? err) });
     } finally {
