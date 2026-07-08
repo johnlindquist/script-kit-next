@@ -1029,7 +1029,8 @@ impl DictationPreferences {
 #[serde(rename_all = "camelCase")]
 pub struct EffectsPreferences {
     /// Persisted background effect slug (for example: "aurora").
-    /// `None` means no effect.
+    /// Absent means the install default (Starfield); the explicit "off"
+    /// sentinel disables effects (see `BackgroundEffect::resolve_pref`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub background: Option<String>,
     /// Effect strength in the range 0.0 to 1.0 (default: 0.5).

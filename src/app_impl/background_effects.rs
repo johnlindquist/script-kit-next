@@ -22,7 +22,9 @@ impl ScriptListApp {
         }
 
         let mut prefs = crate::config::load_user_preferences();
-        let slug = effect.map(|e| e.slug().to_string());
+        // "Effect Off" persists the explicit "off" sentinel — a bare absent
+        // key now means "use the install default" (Starfield).
+        let slug = Some(BackgroundEffect::persisted_slug(effect));
         if prefs.effects.background != slug {
             prefs.effects.background = slug;
             if let Err(err) = crate::config::save_user_preferences(&prefs) {

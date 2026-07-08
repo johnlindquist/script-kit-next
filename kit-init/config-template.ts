@@ -201,8 +201,10 @@ export default {
   // },
   //
   // Background shader effect for the launcher window.
+  // Defaults to "starfield"; set "off" to disable effects entirely.
   // intensity ranges 0.0-1.0 (default 0.5).
   // effects: { background: "aurora", intensity: 0.5 },
+  // effects: { background: "off" },
   //
   // Behavior:
   // - No selectedDeviceId means use the macOS default microphone

@@ -332,14 +332,51 @@ fn startup_prefs() -> &'static (Option<BackgroundEffect>, f32) {
     PREFS.get_or_init(|| {
         let prefs = crate::config::load_user_preferences();
         (
-            prefs
-                .effects
-                .background
-                .as_deref()
-                .and_then(BackgroundEffect::from_slug),
+            BackgroundEffect::resolve_pref(prefs.effects.background.as_deref()),
             prefs.effects.intensity(),
         )
     })
+}
+
+/// The effect a fresh install ships with.
+pub const DEFAULT_BACKGROUND_EFFECT: BackgroundEffect = BackgroundEffect::Starfield;
+
+/// Sentinel slug persisted when the user explicitly turns effects off.
+/// `background` is skipped when `None` on serialize, so absence must stay
+/// free to mean "use the default" — off needs its own value.
+pub const BACKGROUND_EFFECT_OFF_SLUG: &str = "off";
+
+impl BackgroundEffect {
+    /// Resolve the persisted `effects.background` preference:
+    /// - absent → the install default ([`DEFAULT_BACKGROUND_EFFECT`])
+    /// - "off"/"none" (any case) → no effect
+    /// - a known slug → that effect
+    /// - anything else → no effect (fail quiet, never fail loud at startup)
+    pub fn resolve_pref(pref: Option<&str>) -> Option<BackgroundEffect> {
+        match pref {
+            None => Some(DEFAULT_BACKGROUND_EFFECT),
+            Some(raw) => {
+                let slug = raw.trim();
+                if slug.is_empty()
+                    || slug.eq_ignore_ascii_case(BACKGROUND_EFFECT_OFF_SLUG)
+                    || slug.eq_ignore_ascii_case("none")
+                {
+                    None
+                } else {
+                    BackgroundEffect::from_slug(slug)
+                }
+            }
+        }
+    }
+
+    /// The slug to persist for a runtime effect change. `None` (Effect Off)
+    /// persists the explicit off sentinel so it survives the default.
+    pub fn persisted_slug(effect: Option<BackgroundEffect>) -> String {
+        effect.map_or_else(
+            || BACKGROUND_EFFECT_OFF_SLUG.to_string(),
+            |e| e.slug().to_string(),
+        )
+    }
 }
 
 /// The background effect persisted in preferences, if any.
@@ -499,5 +536,38 @@ mod tests {
         ids.dedup();
         assert_eq!(ids.len(), BackgroundEffect::all().len());
         assert!(ids.iter().all(|&id| (1..=16).contains(&id)));
+    }
+
+    /// A fresh install (no persisted preference) ships with Starfield, the
+    /// explicit "off" sentinel disables effects across relaunches, and the
+    /// persisted slug for Effect Off must be that sentinel — `None` is
+    /// skipped on serialize, so it can never mean "off" once a default
+    /// exists.
+    #[test]
+    fn background_pref_resolution_defaults_and_off_round_trip() {
+        use super::{BACKGROUND_EFFECT_OFF_SLUG, DEFAULT_BACKGROUND_EFFECT};
+
+        assert_eq!(
+            BackgroundEffect::resolve_pref(None),
+            Some(DEFAULT_BACKGROUND_EFFECT)
+        );
+        for off in ["off", "Off", "OFF", "none", "None", "", "  "] {
+            assert_eq!(BackgroundEffect::resolve_pref(Some(off)), None, "{off:?}");
+        }
+        assert_eq!(
+            BackgroundEffect::resolve_pref(Some("aurora")),
+            Some(BackgroundEffect::Aurora)
+        );
+        assert_eq!(BackgroundEffect::resolve_pref(Some("not-a-shader")), None);
+
+        // Runtime "Effect Off" persists the sentinel; the sentinel resolves
+        // back to off after a relaunch.
+        let persisted = BackgroundEffect::persisted_slug(None);
+        assert_eq!(persisted, BACKGROUND_EFFECT_OFF_SLUG);
+        assert_eq!(BackgroundEffect::resolve_pref(Some(&persisted)), None);
+        assert_eq!(
+            BackgroundEffect::persisted_slug(Some(BackgroundEffect::Starfield)),
+            "starfield"
+        );
     }
 }

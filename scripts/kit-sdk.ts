@@ -1668,10 +1668,12 @@ export interface ClipboardHistorySecretRejectionConfig {
 export interface EffectsPreferences {
   /**
    * Background effect slug (for example: "aurora").
-   * Omit this field for no effect.
+   * Omit this field for the install default (Starfield).
+   * Set "off" to disable background effects entirely.
    *
-   * @default undefined (no effect)
+   * @default "starfield"
    * @example "aurora"
+   * @example "off" // disable effects
    */
   background?: string;
 
