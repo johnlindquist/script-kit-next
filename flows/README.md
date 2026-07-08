@@ -39,3 +39,4 @@ Migrated from the retired imps/ fleet (codex-imps runtime) on 2026-07-04.
 - **[site.md](./site.md)** (workspace-write): scriptkit.com static marketing site under site/: page content, screenshot wiring, GitHub latest-release download links, local preview, Vercel deploys (domain cutover only with explicit user approval).
 - **[terminal.md](./terminal.md)** (workspace-write): Terminal prompt rendering, PTY lifecycle, command bar UI, and terminal theme adaptation.
 - **[tests.md](./tests.md)** (workspace-write): Test authorship and policy: enforcement-ladder placement, behavior tests over source audits, contract tests, ratchet maintenance, flaky-test diagnosis.
+- **[videos.md](./videos.md)** (workspace-write): Marketing video capture: glamour demo-reel loops of the real app in use, built from storyboarded driver scenarios in scripts/agentic/glamour-video-probe.ts, recorded over a clean desktop, encoded to small autoplay MP4 loops; owns the site/videos contract.

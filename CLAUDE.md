@@ -83,6 +83,7 @@ Routing rules:
 - v1→v2 script migration: `scripts/migrate` engine, compat map, validator ladder, honesty pass, Migrate board built-in -> `flows/migrate.md`.
 - scriptkit.com static site (`site/**`): page content, download links, deploys -> `flows/site.md`.
 - Marketing screenshots ("glamour" shot set, `site/images/**`) -> `flows/screenshots.md`.
+- Marketing videos (glamour demo-reel loops, `site/videos/**`, `scripts/agentic/glamour-video-probe.ts`) -> `flows/videos.md`.
 
 Role flows (cross-cutting, any surface):
 
