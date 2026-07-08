@@ -6,11 +6,11 @@ use script_kit_gpui::ai::agent_chat::pi::binary::{
 use script_kit_gpui::ai::agent_chat::pi::launch_spec::PiLaunchSpec;
 use script_kit_gpui::ai::agent_chat::profiles::{
     agent_chat_profile_picker_entries, persist_agent_chat_profile_selection,
-    resolve_effective_profile, selected_agent_chat_profile_picker_id, AgentChatProfileContext,
-    AgentChatProfileSource, BUILTIN_BRAIN_PROFILE_ID, BUILTIN_GENERAL_PROFILE_ID,
-    BUILTIN_SCRIPT_KIT_PROFILE_ID, BUILTIN_TEXT_PROFILE_ID, DEFAULT_PI_MODEL, DEFAULT_PI_PROVIDER,
-    GENERAL_PI_TOOLS, SCRIPT_KIT_PI_TOOLS, TEXT_APPEND_SYSTEM_PROMPT, TEXT_BLOCKED_ACTION_MESSAGE,
-    TEXT_PI_MODEL,
+    pi_provider_model_catalog, resolve_effective_profile, selected_agent_chat_profile_picker_id,
+    AgentChatProfileContext, AgentChatProfileSource, BUILTIN_BRAIN_PROFILE_ID,
+    BUILTIN_GENERAL_PROFILE_ID, BUILTIN_SCRIPT_KIT_PROFILE_ID, BUILTIN_TEXT_PROFILE_ID,
+    DEFAULT_PI_MODEL, DEFAULT_PI_PROVIDER, DEFAULT_PI_THINKING, GENERAL_PI_TOOLS,
+    SCRIPT_KIT_PI_TOOLS, TEXT_APPEND_SYSTEM_PROMPT, TEXT_BLOCKED_ACTION_MESSAGE, TEXT_PI_MODEL,
 };
 use script_kit_gpui::config::{AgentChatBackend, AgentChatProfile, AiPreferences};
 
@@ -56,6 +56,8 @@ fn general_builtin_profile_builds_locked_down_pi_rpc_launch_spec() {
     assert!(argv.contains(&DEFAULT_PI_PROVIDER.to_string()));
     assert!(argv.contains(&"--model".to_string()));
     assert!(argv.contains(&DEFAULT_PI_MODEL.to_string()));
+    assert_eq!(spec.thinking.as_deref(), Some(DEFAULT_PI_THINKING));
+    assert_eq!(argv_value(&argv, "--thinking"), Some(DEFAULT_PI_THINKING));
     assert!(argv.contains(&"--append-system-prompt".to_string()));
     assert_eq!(
         profile.tools.as_deref(),
@@ -114,6 +116,7 @@ fn script_kit_builtin_profile_builds_workspace_pi_rpc_launch_spec() {
     let argv = spec.argv();
     assert!(argv.contains(&"--tools".to_string()));
     assert!(argv.contains(&SCRIPT_KIT_PI_TOOLS.join(",")));
+    assert_eq!(argv_value(&argv, "--thinking"), Some(DEFAULT_PI_THINKING));
     assert!(!argv.contains(&"--no-tools".to_string()));
     assert!(!argv.contains(&"--hide-cwd-in-prompt".to_string()));
 }
@@ -182,9 +185,55 @@ fn text_builtin_profile_builds_focused_text_only_pi_rpc_launch_spec() {
     assert!(argv.contains(&"--no-session".to_string()));
     assert!(argv.contains(&"--append-system-prompt".to_string()));
     assert!(argv.contains(&TEXT_APPEND_SYSTEM_PROMPT.to_string()));
+    assert_eq!(argv_value(&argv, "--thinking"), None);
     assert_pi_argv_omits_unsupported_profile_metadata_flags(&argv);
     assert!(!argv.contains(&"--agent".to_string()));
     assert!(!argv.contains(&"--system-prompt".to_string()));
+}
+
+fn argv_value<'a>(argv: &'a [String], flag: &str) -> Option<&'a str> {
+    argv.windows(2)
+        .find(|pair| pair[0] == flag)
+        .map(|pair| pair[1].as_str())
+}
+
+#[test]
+fn built_in_non_speed_profiles_launch_gpt_5_6_sol_with_medium_thinking() {
+    let ctx = context();
+
+    for profile_id in [
+        BUILTIN_BRAIN_PROFILE_ID,
+        BUILTIN_GENERAL_PROFILE_ID,
+        BUILTIN_SCRIPT_KIT_PROFILE_ID,
+    ] {
+        let ai = AiPreferences {
+            pi_binary: Some("/tmp/test-pi".to_string()),
+            selected_profile_id: Some(profile_id.to_string()),
+            ..AiPreferences::default()
+        };
+        let profile = resolve_effective_profile(&ai, &ctx);
+        let spec = PiLaunchSpec::from_profile(&profile).expect("built-in profile should use Pi");
+        let argv = spec.argv();
+
+        assert_eq!(profile.provider.as_deref(), Some("openai-codex"));
+        assert_eq!(profile.model.as_deref(), Some("gpt-5.6-sol"));
+        assert_eq!(profile.thinking.as_deref(), Some("medium"));
+        assert_eq!(argv_value(&argv, "--provider"), Some("openai-codex"));
+        assert_eq!(argv_value(&argv, "--model"), Some("gpt-5.6-sol"));
+        assert_eq!(argv_value(&argv, "--thinking"), Some("medium"));
+    }
+}
+
+#[test]
+fn provider_catalog_lists_gpt_5_6_sol_first() {
+    let catalog = pi_provider_model_catalog();
+    let codex = catalog.first().expect("Codex provider must be present");
+
+    assert_eq!(codex.id, "openai-codex");
+    assert_eq!(
+        codex.models.first().copied(),
+        Some(("gpt-5.6-sol", "GPT-5.6 SOL"))
+    );
 }
 
 fn assert_pi_argv_omits_unsupported_profile_metadata_flags(argv: &[String]) {

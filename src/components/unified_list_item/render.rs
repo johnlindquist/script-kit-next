@@ -386,7 +386,14 @@ fn render_text_content(
                 .text_ellipsis()
                 .whitespace_nowrap()
                 .line_height(px(line_height))
-                .tooltip(move |window, cx| Tooltip::new(full_label.clone()).build(window, cx))
+                .when(
+                    crate::list_item::LIST_ITEM_MOUSE_HOVER_TOOLTIPS_ENABLED,
+                    |element| {
+                        element.tooltip(move |window, cx| {
+                            Tooltip::new(full_label.clone()).build(window, cx)
+                        })
+                    },
+                )
                 .child(text.clone())
                 .into_any_element()
         }
@@ -412,7 +419,14 @@ fn render_text_content(
                 .text_ellipsis()
                 .whitespace_nowrap()
                 .line_height(px(line_height))
-                .tooltip(move |window, cx| Tooltip::new(full_label.clone()).build(window, cx))
+                .when(
+                    crate::list_item::LIST_ITEM_MOUSE_HOVER_TOOLTIPS_ENABLED,
+                    |element| {
+                        element.tooltip(move |window, cx| {
+                            Tooltip::new(full_label.clone()).build(window, cx)
+                        })
+                    },
+                )
                 .flex()
                 .flex_row()
                 .children(spans)

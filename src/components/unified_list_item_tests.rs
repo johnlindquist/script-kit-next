@@ -3,6 +3,11 @@
 use super::unified_list_item::{Density, ListItemLayout, TextContent, SECTION_HEADER_HEIGHT};
 
 #[test]
+fn unified_rows_share_the_disabled_hover_tooltip_policy() {
+    assert!(!crate::list_item::LIST_ITEM_MOUSE_HOVER_TOOLTIPS_ENABLED);
+}
+
+#[test]
 fn highlighted_text_preserves_source_text_and_ranges() {
     let content = TextContent::highlighted("Hello World", vec![0..5, 6..11]);
 

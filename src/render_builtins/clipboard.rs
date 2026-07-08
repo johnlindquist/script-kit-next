@@ -636,17 +636,22 @@ impl ScriptListApp {
                                 div()
                                     .id(ix)
                                     .cursor_pointer()
-                                    .tooltip(|window, cx| {
-                                        gpui_component::tooltip::Tooltip::new(
-                                            "Paste selected clipboard entry",
-                                        )
-                                        .key_binding(
-                                            gpui::Keystroke::parse("enter")
-                                                .ok()
-                                                .map(gpui_component::kbd::Kbd::new),
-                                        )
-                                        .build(window, cx)
-                                    })
+                                    .when(
+                                        crate::list_item::LIST_ITEM_MOUSE_HOVER_TOOLTIPS_ENABLED,
+                                        |row| {
+                                            row.tooltip(|window, cx| {
+                                                gpui_component::tooltip::Tooltip::new(
+                                                    "Paste selected clipboard entry",
+                                                )
+                                                .key_binding(
+                                                    gpui::Keystroke::parse("enter")
+                                                        .ok()
+                                                        .map(gpui_component::kbd::Kbd::new),
+                                                )
+                                                .build(window, cx)
+                                            })
+                                        },
+                                    )
                                     .on_click(click_handler)
                                     .on_hover(hover_handler)
                                     .child(item)

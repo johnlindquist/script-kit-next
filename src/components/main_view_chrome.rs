@@ -25,6 +25,8 @@ const DEFAULT_CONTEXT_EDGE_OUTSET_X: f32 = 8.0;
 pub(crate) const MAIN_VIEW_HEADER_DIVIDER_ID: &str = "main-view-header-divider";
 #[allow(dead_code)]
 pub(crate) const MAIN_VIEW_MAIN_ID: &str = "main-view-main";
+#[allow(dead_code)] // Used by the binary target through include!-merged built-in render code.
+pub(crate) const MAIN_VIEW_SCROLL_FLOW_ID: &str = "main-view-scroll-flow";
 
 /// What pressing Tab actually does on the surface rendering the context row.
 /// The header Tab chip must always advertise the real action, so the owning
@@ -128,6 +130,26 @@ pub(crate) struct MainViewChrome {
     pub(crate) main: AnyElement,
     pub(crate) footer: Option<AnyElement>,
     pub(crate) overlays: Vec<AnyElement>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[allow(dead_code)] // Used by the binary target through include!-merged built-in render code.
+pub(crate) struct MainViewFlowSpacing {
+    pub(crate) inset_x: f32,
+    pub(crate) inset_y: f32,
+    pub(crate) section_gap: f32,
+}
+
+#[allow(dead_code)] // Used by the binary target through include!-merged built-in render code.
+pub(crate) fn main_view_flow_spacing(
+    def: MainMenuThemeDef,
+    spacing: crate::designs::DesignSpacing,
+) -> MainViewFlowSpacing {
+    MainViewFlowSpacing {
+        inset_x: def.shell.content_inset_x,
+        inset_y: spacing.padding_sm,
+        section_gap: spacing.gap_lg,
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -573,6 +595,28 @@ pub(crate) fn render_main_view_main_slot(def: MainMenuThemeDef, main: AnyElement
         .into_any_element()
 }
 
+/// Scrollable, token-spaced content for main-view flows that stack distinct
+/// blocks instead of rendering one edge-to-edge list.
+#[allow(dead_code)] // Used by the binary target through include!-merged built-in render code.
+pub(crate) fn render_main_view_scroll_flow(
+    spacing: MainViewFlowSpacing,
+    sections: impl IntoIterator<Item = AnyElement>,
+) -> AnyElement {
+    div()
+        .id(MAIN_VIEW_SCROLL_FLOW_ID)
+        .flex_1()
+        .min_h(px(0.))
+        .w_full()
+        .overflow_y_scroll()
+        .px(px(spacing.inset_x))
+        .py(px(spacing.inset_y))
+        .flex()
+        .flex_col()
+        .gap(px(spacing.section_gap))
+        .children(sections)
+        .into_any_element()
+}
+
 pub(crate) fn main_view_input_text_inset_left(def: MainMenuThemeDef) -> f32 {
     def.search.text_inset_x
 }
@@ -641,7 +685,7 @@ pub(crate) fn render_main_view_input_shell(
 
 #[cfg(test)]
 mod tests {
-    use super::selection_hint_snippet;
+    use super::{main_view_flow_spacing, selection_hint_snippet};
 
     #[test]
     fn snippet_collapses_whitespace_and_truncates_at_char_boundary() {
@@ -664,5 +708,19 @@ mod tests {
     fn snippet_short_text_passes_through_unchanged() {
         assert_eq!(selection_hint_snippet("short", 24), "short");
         assert_eq!(selection_hint_snippet("  padded  ", 24), "padded");
+    }
+
+    #[test]
+    fn flow_spacing_uses_balanced_shell_inset_and_safe_vertical_tokens() {
+        let def = crate::designs::MainMenuThemeVariant::default().def();
+        let design_spacing = crate::designs::DesignSpacing::default();
+        let flow = main_view_flow_spacing(def, design_spacing);
+
+        assert_eq!(flow.inset_x, def.shell.content_inset_x);
+        assert_eq!(flow.inset_y, design_spacing.padding_sm);
+        assert_eq!(flow.section_gap, design_spacing.gap_lg);
+        assert!(flow.inset_x > 0.0);
+        assert!(flow.inset_y > 0.0);
+        assert!(flow.section_gap > flow.inset_y);
     }
 }

@@ -8,7 +8,13 @@ mod tests {
     use crate::list_item::{
         format_shortcut_display, should_show_row_shortcut, should_show_search_description,
         should_show_search_shortcut, RowShortcutVisibilityPolicy,
+        LIST_ITEM_MOUSE_HOVER_TOOLTIPS_ENABLED,
     };
+
+    #[test]
+    fn legacy_rows_share_the_disabled_hover_tooltip_policy() {
+        assert!(!LIST_ITEM_MOUSE_HOVER_TOOLTIPS_ENABLED);
+    }
 
     #[test]
     fn test_format_shortcut_display_plus_delimited() {

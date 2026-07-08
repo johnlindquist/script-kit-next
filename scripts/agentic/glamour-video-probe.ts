@@ -43,6 +43,7 @@ import { Driver } from "../devtools/driver";
 const PROJECT_ROOT = new URL("../..", import.meta.url).pathname;
 const OUT_DIR = join(PROJECT_ROOT, ".test-screenshots/glamour/video");
 const GEO = join(PROJECT_ROOT, "scripts/devtools/bin/tahoe_window_geometry");
+const PRESERVE_CURRENT_SPACE = process.env.SCRIPT_KIT_GLAMOUR_PRESERVE_SPACE === "1";
 mkdirSync(OUT_DIR, { recursive: true });
 
 const PAD_X = 150;
@@ -356,15 +357,32 @@ const SCENARIOS: Scenario[] = [
       await Bun.sleep(900);
       await typeText(driver, "agent chat");
       await Bun.sleep(1100);
-      driver.send({ type: "openAgentChatKitchenSinkFixture" });
-      await Bun.sleep(2400);
-      await keys(driver, ["down", "down", "down", "down", "down"], 500);
-      await Bun.sleep(800);
-      await keys(driver, ["up", "up"], 450);
-      await Bun.sleep(600);
+      await driver.request(
+        { type: "openAgentChatKitchenSinkFixture" },
+        { expect: "externalCommandResult", timeoutMs: 10_000 },
+      );
+      await Bun.sleep(1500);
+
+      // The real kitchen-sink fixture has 21 provider-free rows with distinct
+      // system, markdown, error, and tool-card states. Jump between those
+      // beats so the reel reads as a walkthrough instead of a static card.
+      const scrollPositions = [0, 4, 10, 19];
+      for (const itemIx of scrollPositions) {
+        await driver.request(
+          { type: "setAgentChatTranscriptScroll", itemIx, offsetPx: 0 },
+          { expect: "externalCommandResult", timeoutMs: 5000 },
+        );
+        await Bun.sleep(1900);
+      }
+
       await mouseSweep([w.lower, w.upper], 800);
       driver.send({ type: "pasteClipboardIntoAgentChat" });
       await Bun.sleep(2200);
+      return {
+        providerFreeKitchenSink: true,
+        transcriptScrollPositions: scrollPositions,
+        pastedIntoComposer: true,
+      };
     },
   },
   {
@@ -488,8 +506,12 @@ const SCENARIOS: Scenario[] = [
       driver.simulateKey("enter");
       await driver.waitForState({ promptType: "permissionsWizard" }, { timeoutMs: 6000 });
       await Bun.sleep(1800);
-      await keys(driver, ["down", "down", "up"], 700);
-      await Bun.sleep(1800);
+      // Walk the full requirements list so the capture proves the repaired
+      // content area scrolls instead of clipping its final rows.
+      await keys(driver, ["down", "down", "down", "down"], 500);
+      await Bun.sleep(1500);
+      await keys(driver, ["up", "up", "up", "up"], 360);
+      await Bun.sleep(1400);
       const state = await driver.getState({ timeoutMs: 5000 });
       return {
         builtin: "builtin/setup-permissions",
@@ -617,7 +639,8 @@ if (requested.length && toRun.length !== requested.length) {
 }
 
 const receipt: any = { videos: [], errors: [] };
-const hidden = hideOtherApps();
+const hidden = PRESERVE_CURRENT_SPACE ? [] : hideOtherApps();
+receipt.preserveCurrentSpace = PRESERVE_CURRENT_SPACE;
 receipt.hiddenApps = hidden;
 const originalMouse = mousePos();
 const originalClipboard = getClipboardText();
@@ -704,7 +727,7 @@ try {
     }
   }
 } finally {
-  restoreApps(hidden);
+  if (!PRESERVE_CURRENT_SPACE) restoreApps(hidden);
   if (originalMouse) {
     Bun.spawnSync(["cliclick", `m:${originalMouse.x},${originalMouse.y}`]);
   }

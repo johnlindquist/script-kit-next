@@ -376,37 +376,32 @@ impl ScriptListApp {
             })
             .collect();
 
-        let intro = div()
-            .w_full()
-            .px(px(design_spacing.padding_md))
-            .pb(px(design_spacing.padding_xs))
-            .child(crate::components::render_info_state(
-                crate::components::permission_onboarding_intro_spec(
-                    granted_count,
-                    row_count,
-                    all_required_granted,
-                ),
-                &self.theme,
-                cx,
-            ));
+        let intro = div().w_full().child(crate::components::render_info_state(
+            crate::components::permission_onboarding_intro_spec(
+                granted_count,
+                row_count,
+                all_required_granted,
+            ),
+            &self.theme,
+            cx,
+        ));
 
-        let content = div()
-            .flex_1()
-            .min_h(px(0.))
-            .w_full()
-            .overflow_hidden()
-            .py(px(design_spacing.padding_xs))
-            .flex()
-            .flex_col()
-            .child(intro)
-            .child(
+        let menu_def = self.current_main_menu_theme.def();
+        let flow_spacing =
+            crate::components::main_view_chrome::main_view_flow_spacing(menu_def, design_spacing);
+        let content = crate::components::main_view_chrome::render_main_view_scroll_flow(
+            flow_spacing,
+            [
+                intro.into_any_element(),
                 div()
                     .w_full()
                     .flex()
                     .flex_col()
                     .min_h(px(0.))
-                    .children(list_items),
-            );
+                    .children(list_items)
+                    .into_any_element(),
+            ],
+        );
 
         let footer = self.main_window_footer_slot(crate::components::render_simple_hint_strip(
             vec![
@@ -416,7 +411,6 @@ impl ScriptListApp {
             None,
         ));
 
-        let menu_def = self.current_main_menu_theme.def();
         let shell = menu_def.shell;
 
         let header_title = div()
@@ -446,7 +440,7 @@ impl ScriptListApp {
                 header: crate::components::main_view_chrome::MainViewHeaderChrome {
                     context: None,
                     input: header_title,
-                    padding_x: shell.header_padding_x,
+                    padding_x: shell.content_inset_x,
                     padding_y: shell.header_padding_y,
                     gap: shell.header_gap,
                 },
@@ -455,7 +449,7 @@ impl ScriptListApp {
                     height: shell.divider_height,
                     visible: shell.divider_height > 0.0,
                 },
-                main: content.into_any_element(),
+                main: content,
                 footer,
                 overlays: Vec::new(),
             },

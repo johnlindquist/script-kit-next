@@ -13,7 +13,8 @@ pub const BUILTIN_TEXT_PROFILE_ID: &str = "text";
 pub const BUILTIN_BRAIN_PROFILE_ID: &str = "brain";
 pub const BUILTIN_QUICK_AI_PROFILE_ID: &str = "quick-ai";
 pub const DEFAULT_PI_PROVIDER: &str = "openai-codex";
-pub const DEFAULT_PI_MODEL: &str = "gpt-5.4";
+pub const DEFAULT_PI_MODEL: &str = "gpt-5.6-sol";
+pub const DEFAULT_PI_THINKING: &str = "medium";
 /// Quick AI (launcher Tab-with-text) is pinned to the fastest Codex model so
 /// answers stream back with minimal latency. It intentionally ignores the
 /// user's selected Agent Chat model.
@@ -48,6 +49,7 @@ pub fn pi_provider_model_catalog() -> Vec<PiProviderCatalogEntry> {
         id: "openai-codex",
         display_name: "Codex",
         models: vec![
+            ("gpt-5.6-sol", "GPT-5.6 SOL"),
             ("gpt-5.5", "GPT-5.5"),
             ("gpt-5.4", "GPT-5.4"),
             // The fastest model a ChatGPT-account Codex subscription offers.
@@ -264,7 +266,7 @@ pub fn built_in_brain_profile(ctx: &AgentChatProfileContext) -> ResolvedAgentCha
         disable_prompt_templates: Some(true),
         disable_context_files: Some(true),
         hide_cwd_in_prompt: Some(true),
-        thinking: None,
+        thinking: Some(DEFAULT_PI_THINKING.to_string()),
         extension_policy: None,
         session_dir: None,
         no_session: Some(false),
@@ -311,7 +313,7 @@ pub fn built_in_general_profile(ctx: &AgentChatProfileContext) -> ResolvedAgentC
         disable_prompt_templates: Some(true),
         disable_context_files: Some(true),
         hide_cwd_in_prompt: Some(true),
-        thinking: None,
+        thinking: Some(DEFAULT_PI_THINKING.to_string()),
         extension_policy: None,
         session_dir: None,
         no_session: Some(false),
@@ -358,7 +360,7 @@ pub fn built_in_script_kit_profile(ctx: &AgentChatProfileContext) -> ResolvedAge
         disable_prompt_templates: Some(true),
         disable_context_files: Some(true),
         hide_cwd_in_prompt: Some(false),
-        thinking: None,
+        thinking: Some(DEFAULT_PI_THINKING.to_string()),
         extension_policy: None,
         session_dir: None,
         no_session: Some(false),

@@ -302,13 +302,17 @@ mod tests {
 
         assert_eq!(
             launch.selected_model_id.as_deref(),
-            Some("openai-codex/gpt-5.4")
+            Some("openai-codex/gpt-5.6-sol")
         );
         assert_eq!(launch.available_models.len(), 1);
-        assert_eq!(launch.available_models[0].id, "openai-codex/gpt-5.4");
+        assert_eq!(launch.available_models[0].id, "openai-codex/gpt-5.6-sol");
         assert_eq!(
             launch.available_models[0].display_name.as_deref(),
-            Some("gpt-5.4")
+            Some("gpt-5.6-sol")
+        );
+        assert_eq!(
+            argv_value(&launch.rpc_spec.args, "--thinking"),
+            Some("medium")
         );
     }
 
@@ -347,6 +351,7 @@ mod tests {
             launch.selected_model_id.as_deref(),
             Some("openai-codex/gpt-5.3-codex-spark")
         );
+        assert_eq!(argv_value(&argv, "--thinking"), None);
         // The Text/mini profile now ships exactly one read-only network tool so
         // live-info questions can search the web; it must NOT fall back to
         // --no-tools, and must stay otherwise locked down.
@@ -444,6 +449,7 @@ mod tests {
             launch.selected_model_id.as_deref(),
             Some("openai-codex/gpt-5.3-codex-spark")
         );
+        assert_eq!(argv_value(&argv, "--thinking"), None);
         assert_eq!(launch.cwd, PathBuf::from("/tmp/kit/agent-chat/quick-ai"));
         assert!(!argv.contains(&"--no-tools".to_string()));
         assert_eq!(argv_value(&argv, "--tools"), Some("web_search"));

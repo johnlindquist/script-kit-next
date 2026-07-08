@@ -8,9 +8,14 @@
 use crate::designs::icon_variations::{icon_name_from_str, IconName};
 use crate::logging;
 use crate::ui_foundation::HexColorExt;
+use gpui::prelude::FluentBuilder;
 use gpui::*;
 use gpui_component::tooltip::Tooltip;
 use std::sync::Arc;
+
+/// Temporary product policy: list-row hover must stay quiet while control
+/// tooltips elsewhere in the UI remain enabled.
+pub(crate) const LIST_ITEM_MOUSE_HOVER_TOOLTIPS_ENABLED: bool = false;
 /// Icon type for list items - supports emoji strings, SVG icons, and pre-decoded images
 #[derive(Clone)]
 pub enum IconKind {
@@ -1497,7 +1502,8 @@ impl ListItem {
         self
     }
 
-    /// Set a type accessory icon for search-mode rows (tooltip uses label)
+    /// Set a type accessory icon for search-mode rows (label remains available
+    /// for accessibility even while list-row hover tooltips are disabled).
     pub fn type_accessory(mut self, accessory: TypeAccessory) -> Self {
         self.type_accessory = Some(accessory);
         self
@@ -1969,8 +1975,10 @@ impl RenderOnce for ListItem {
                             "list-desc".into(),
                             item_index as u64,
                         ))
-                        .tooltip(move |window, cx| {
-                            Tooltip::new(full_desc.clone()).build(window, cx)
+                        .when(LIST_ITEM_MOUSE_HOVER_TOOLTIPS_ENABLED, |element| {
+                            element.tooltip(move |window, cx| {
+                                Tooltip::new(full_desc.clone()).build(window, cx)
+                            })
                         })
                         .whitespace_nowrap()
                         .child(styled)
@@ -1987,8 +1995,10 @@ impl RenderOnce for ListItem {
                             "list-desc".into(),
                             item_index as u64,
                         ))
-                        .tooltip(move |window, cx| {
-                            Tooltip::new(full_desc.clone()).build(window, cx)
+                        .when(LIST_ITEM_MOUSE_HOVER_TOOLTIPS_ENABLED, |element| {
+                            element.tooltip(move |window, cx| {
+                                Tooltip::new(full_desc.clone()).build(window, cx)
+                            })
                         })
                         .whitespace_nowrap()
                         .child(desc)
@@ -2151,8 +2161,10 @@ impl RenderOnce for ListItem {
                         .id(ElementId::Name(
                             format!("type-accessory-{}", accessory.label).into(),
                         ))
-                        .tooltip(move |window, cx| {
-                            Tooltip::new(tooltip_label.clone()).build(window, cx)
+                        .when(LIST_ITEM_MOUSE_HOVER_TOOLTIPS_ENABLED, |element| {
+                            element.tooltip(move |window, cx| {
+                                Tooltip::new(tooltip_label.clone()).build(window, cx)
+                            })
                         })
                         .flex_shrink_0()
                         .child(
