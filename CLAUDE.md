@@ -33,7 +33,7 @@ fallback, not the default.
 
 Flows live under `flows/` at the repo root: one markdown agent per job, run
 by [mdflow](https://mdflow.dev) (`npm i -g mdflow@next`). They run on codex
-(pinned in `.mdflow.yaml`) at `gpt-5.5` with `medium` reasoning; sandbox mode
+(pinned in `.mdflow.yaml`) at `gpt-5.6-sol` with `medium` reasoning; sandbox mode
 is pinned per flow in frontmatter. Each `flows/<name>.md` file is
 **self-contained**: frontmatter owns the engine contract, the body owns the
 instructions, and there is no central registry. `flows/README.md` is the
