@@ -70,12 +70,14 @@ use super::components::toolbar::{AgentChatToolbar, AgentChatToolbarEvent};
 use super::components::transcript::{AgentChatTranscript, AgentChatTranscriptEvent};
 
 mod slash_and_skills;
+mod types_local;
 
 use slash_and_skills::parse_skill_description;
 pub(crate) use slash_and_skills::{
     build_skill_context_part, build_skill_slash_command_text, build_staged_skill_prompt,
     SlashCommandEntry, SlashCommandSource,
 };
+pub(crate) use types_local::{parse_script_ready_receipt, ScriptReadyReceipt};
 
 /// Click handler type for collapsible block toggle.
 type ToggleHandler = Box<dyn Fn(&gpui::ClickEvent, &mut Window, &mut App) + 'static>;
@@ -506,34 +508,6 @@ pub(crate) struct AgentChatThreadSummary {
     /// Messages appended since the user last viewed this thread.
     pub unread: usize,
     pub is_streaming: bool,
-}
-
-/// Parsed `SCRIPT_READY path=... validated=true` receipt from assistant output.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct ScriptReadyReceipt {
-    pub path: std::path::PathBuf,
-    pub validated: bool,
-}
-
-/// Parse the last `SCRIPT_READY path=<path> validated=true` line from text.
-pub(crate) fn parse_script_ready_receipt(text: &str) -> Option<ScriptReadyReceipt> {
-    let line = text
-        .lines()
-        .rev()
-        .find(|line| line.trim_start().starts_with("SCRIPT_READY "))?;
-    let mut path: Option<std::path::PathBuf> = None;
-    let mut validated = false;
-    for token in line.split_whitespace().skip(1) {
-        if let Some(rest) = token.strip_prefix("path=") {
-            path = Some(std::path::PathBuf::from(rest));
-        } else if token == "validated=true" {
-            validated = true;
-        }
-    }
-    Some(ScriptReadyReceipt {
-        path: path?,
-        validated,
-    })
 }
 
 /// GPUI view entity wrapping an `AgentChatThread` for the Tab AI surface.
