@@ -26,10 +26,11 @@ Run repository inspection with shell commands before any final answer. Do not an
 
 ## Command map
 repo state / what changed / dirty tree -> git status --short --branch
-find code / who owns / where is -> rg -n "<term>" src/clipboard_history/**
+find code / who owns / where is -> rg -n "<term>" src/clipboard_history/** crates/sk-clipboard/**
 surface map / repo policy -> read GLOSSARY.md and AGENTS.md
 type-check the library -> ./scripts/agentic/agent-cargo.sh check --lib
 verify changed behavior -> ./scripts/agentic/agent-cargo.sh test --test clipboard_sediment_no_popup_contract
+verify extracted clipboard domain -> ./scripts/agentic/agent-cargo.sh test -p sk-clipboard
 verify changed behavior -> focused sediment unit tests
 verify changed behavior -> source contract only for popup-free invariant
 
@@ -39,6 +40,7 @@ verify changed behavior -> source contract only for popup-free invariant
 - `src/day_page/sediment.rs`
 - `src/clipboard_preview_helpers.rs`
 - `tests/clipboard_sediment_no_popup_contract.rs`
+- `crates/sk-clipboard/**`
 
 ## Workflow
 1. Preserve unrelated dirty work; note pre-existing dirty files before changing anything.
@@ -58,13 +60,14 @@ Allowed edit globs (advisory until launcher enforcement exists; leave them only 
 - `src/clipboard_preview_helpers.rs`
 - `tests/*clipboard*`
 - `scripts/agentic/*clipboard*`
+- `crates/sk-clipboard/**`
 
 Never git commit, push, tag, stash, reset, or clean unless the user explicitly asks. Never run bare cargo; every cargo invocation goes through ./scripts/agentic/agent-cargo.sh.
 
 ## Worked examples (follow this shape exactly)
 Example 1 — "diagnose why X misbehaves":
 1. git status --short --branch
-2. rg -n "<symptom term>" src/clipboard_history/**
+2. rg -n "<symptom term>" src/clipboard_history/** crates/sk-clipboard/**
 3. Read the implicated files end to end before concluding.
 4. Report the root cause with file:line evidence and the smallest fix. Done.
 
@@ -73,7 +76,8 @@ Example 2 — "fix X":
 2. Read the current owner files for X.
 3. Make the smallest edit inside the Allowed edit globs.
 4. ./scripts/agentic/agent-cargo.sh test --test clipboard_sediment_no_popup_contract
-5. Report changed files, the verification command and its result, and anything skipped.
+5. If `crates/sk-clipboard/**` changed, ./scripts/agentic/agent-cargo.sh test -p sk-clipboard
+6. Report changed files, the verification command and its result, and anything skipped.
 
 ## Error recovery (error text -> exact next step)
 "Blocking waiting for file lock on build directory" -> a bare cargo ran; rerun the same args via ./scripts/agentic/agent-cargo.sh

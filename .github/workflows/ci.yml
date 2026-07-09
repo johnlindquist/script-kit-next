@@ -138,8 +138,8 @@ jobs:
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Lint app crate
         run: cargo clippy --locked --lib --no-deps -- -D warnings
-      - name: Lint protocol domain crate
-        run: cargo clippy --locked -p sk-protocol --all-targets -- -D warnings
+      - name: Lint domain crates
+        run: cargo clippy --locked -p sk-clipboard -p sk-protocol --all-targets -- -D warnings
 
   test:
     name: Test
@@ -168,8 +168,8 @@ jobs:
       # teardown races that made parallel runs abort.
       - name: Run tests
         run: cargo test --locked
-      - name: Run protocol domain tests
-        run: cargo test --locked -p sk-protocol
+      - name: Run domain tests
+        run: cargo test --locked -p sk-clipboard -p sk-protocol
 
   typescript-tests:
     name: TypeScript SDK Tests

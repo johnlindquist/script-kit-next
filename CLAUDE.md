@@ -66,7 +66,7 @@ Routing rules:
 - Use `flows/scout.md` when ownership is unclear.
 - Agent Chat, `@file`, `@context`, attachments, portal, or Pi handoff -> `flows/agent-chat.md`.
 - Day Page, Today, brain, fragments, spine, or Notes parity -> `flows/brain.md`.
-- Clipboard history, sediment, post-copy, copy-to-brain, or no-popup capture -> `flows/clipboard.md`.
+- Clipboard history, sediment, post-copy, copy-to-brain, no-popup capture, or `crates/sk-clipboard/**` -> `flows/clipboard.md`.
 - Shared UI, components, list rows, inputs, prompt shells, chrome, or theme tokens -> `flows/components.md`.
 - Script List, main window, mini/full view, launcher selection -> `flows/launcher.md`.
 - Actions menu, command palette, trigger picker, confirm popup -> `flows/actions.md`.
