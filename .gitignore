@@ -118,3 +118,4 @@ scripts/devtools/bin/
 .mdflow-eval-runs.jsonl
 /runs/
 /.fusion-runs/
+tests/__pycache__/
