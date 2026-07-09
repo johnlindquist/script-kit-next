@@ -234,7 +234,7 @@ fn automation_ai_target_routes_to_live_agent_chat_entity_for_batch_and_reads() {
         "fn active_agent_chat_entity(",
         "automation.target.ai_routed_to_agent_chat_entity",
         "automation.agent_chat_target.ai_resolved_to_entity",
-        "fn embedded_agent_chat_automation_entity(",
+        "self.embedded_agent_chat_automation_entity().as_ref()",
     ] {
         assert!(
             PROMPT_HANDLER.contains(marker),
