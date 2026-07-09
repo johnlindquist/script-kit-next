@@ -245,9 +245,17 @@ export async function portScript(
     }
 
     // Success: write the port (unless dry run).
-    const hasWarnings = attempts
+    const hasCaveats = attempts
       .at(-1)!
-      .verdicts.some((v) => v.outcome === "warn");
+      .verdicts.some((v) => v.outcome === "warn" || v.outcome === "skipped");
+    if (!useAgent && classification.bucket === "ready") {
+      note = {
+        summary: "Copied verbatim; no migration changes were required.",
+        behavior_changes: [],
+        confidence: hasCaveats ? "medium" : "high",
+      };
+      attempts.at(-1)!.note = note;
+    }
     let portedPath: string | undefined;
     if (!opts.dryRun) {
       mkdirSync(opts.outDir, { recursive: true });
@@ -258,7 +266,7 @@ export async function portScript(
     return {
       file,
       bucket: classification.bucket,
-      status: hasWarnings ? "verified-with-warnings" : "verified",
+      status: hasCaveats ? "verified-with-warnings" : "verified",
       portedPath,
       attempts,
       note,

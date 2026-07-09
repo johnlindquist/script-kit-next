@@ -94,8 +94,8 @@ export interface PortAttempt {
 }
 
 export type PortStatus =
-  | "verified" // passed the ladder
-  | "verified-with-warnings" // passed, but with warn verdicts (caveats / inconclusive walkthrough)
+  | "verified" // every validator passed
+  | "verified-with-warnings" // passed, but with warn/skipped verdicts (caveats or incomplete validation)
   | "needs-review" // repair loop exhausted or honesty check flagged it
   | "error"; // engine-level failure (agent unreachable, unreadable file, ...)
 
