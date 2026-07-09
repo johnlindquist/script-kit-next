@@ -1139,17 +1139,8 @@ impl ScriptListApp {
                     return;
                 }
 
-                let is_notes = crate::notes::is_notes_window(window);
-                let is_ai = crate::ai::is_ai_window(window);
-                let is_detached_agent_chat =
-                    crate::ai::agent_chat::ui::chat_window::is_chat_window(window);
                 let is_actions = crate::actions::is_actions_window(window);
-                let is_shortcut_recorder =
-                    super::shortcut_recorder::is_shortcut_recorder_window(window);
-                let is_flow_manager =
-                    crate::flows::manager_window::is_flow_manager_window(window);
-
-                if is_notes || is_ai || is_detached_agent_chat || is_shortcut_recorder || is_flow_manager {
+                if is_secondary_surface_window(window) {
                     return;
                 }
 
@@ -2828,19 +2819,9 @@ impl ScriptListApp {
         let actions_interceptor = cx.intercept_keystrokes({
             let app_entity = app_entity_for_actions;
             move |event, window, cx| {
-                let is_notes = crate::notes::is_notes_window(window);
-                let is_ai = crate::ai::is_ai_window(window);
-                let is_detached_agent_chat = crate::ai::agent_chat::ui::chat_window::is_chat_window(window);
                 let is_actions = crate::actions::is_actions_window(window);
-                let is_shortcut_recorder =
-                    super::shortcut_recorder::is_shortcut_recorder_window(window);
-                let is_flow_manager =
-                    crate::flows::manager_window::is_flow_manager_window(window);
-                let is_secondary_surface_window = is_notes
-                    || is_ai
-                    || is_detached_agent_chat
-                    || is_shortcut_recorder
-                    || is_flow_manager;
+                let secondary_window = SecondarySurfaceWindowState::inspect(window);
+                let is_secondary_surface_window = secondary_window.is_secondary();
                 let actions_open_for_main = crate::actions::is_actions_window_open_for_main();
 
                 // A detached actions popup hosted by a secondary window (Notes,
@@ -2868,11 +2849,11 @@ impl ScriptListApp {
                     tracing::debug!(
                         target: "script_kit::keyboard",
                         event = "actions_interceptor_skipped_secondary_window",
-                        is_notes,
-                        is_ai,
-                        is_detached_agent_chat,
+                        is_notes = secondary_window.is_notes,
+                        is_ai = secondary_window.is_ai,
+                        is_detached_agent_chat = secondary_window.is_detached_agent_chat,
                         is_actions,
-                        is_shortcut_recorder,
+                        is_shortcut_recorder = secondary_window.is_shortcut_recorder,
                         key = %key,
                         is_actions_close_key,
                     );
@@ -2951,9 +2932,9 @@ impl ScriptListApp {
                     tracing::debug!(
                         target: "script_kit::keyboard",
                         event = "actions_interceptor_main_window_hidden",
-                        is_notes,
-                        is_ai,
-                        is_detached_agent_chat,
+                        is_notes = secondary_window.is_notes,
+                        is_ai = secondary_window.is_ai,
+                        is_detached_agent_chat = secondary_window.is_detached_agent_chat,
                         is_actions,
                     );
                     return;
