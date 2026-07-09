@@ -58,7 +58,6 @@
                 initial_cached_root_windows,
                 initial_root_windows_provider_status,
             ),
-            root_passive_frame: None,
             pending_root_file_actions_file: None,
             pending_root_unified_actions_subject: None,
             cached_processes: Vec::new(),

@@ -350,7 +350,7 @@ fn build_tab_action(app: &crate::ScriptListApp) -> Option<MainWindowPreflightAct
 }
 
 fn build_root_passive_frame_receipt(app: &crate::ScriptListApp) -> Option<RootPassiveFrameReceipt> {
-    let frame = app.root_passive_frame.as_ref()?;
+    let frame = app.root_search.root_passive_frame()?;
     let browser_tabs_status = crate::browser_tabs::root_browser_tabs_snapshot_status();
     let browser_history_status = crate::browser_history::root_browser_history_snapshot_status();
 

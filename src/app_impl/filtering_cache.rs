@@ -285,7 +285,6 @@ impl ScriptListApp {
                 if !app.root_search.root_windows_refresh_token_matches(token) {
                     return;
                 }
-                app.root_search.finish_root_windows_refresh_request();
                 match result {
                     Ok(windows) => app.install_root_windows(windows, cx),
                     Err(error) => {
@@ -333,7 +332,7 @@ impl ScriptListApp {
     }
 
     pub(crate) fn invalidate_root_passive_and_grouped_cache(&mut self) {
-        self.root_passive_frame = None;
+        self.root_search.clear_root_passive_frame();
         self.invalidate_grouped_cache();
         self.invalidate_main_window_preflight();
     }
@@ -628,10 +627,8 @@ impl ScriptListApp {
             browser_history_snapshot_generation: browser_history_status.generation,
         };
 
-        if let Some(frame) = self.root_passive_frame.as_ref() {
-            if frame.key == key {
-                return frame.clone();
-            }
+        if let Some(frame) = self.root_search.cached_root_passive_frame(&key) {
+            return frame;
         }
 
         let explicit_brain =
@@ -911,8 +908,7 @@ impl ScriptListApp {
             browser_tabs_snapshot_generation: browser_tabs_status.generation,
             browser_history_snapshot_generation: browser_history_status.generation,
         };
-        self.root_passive_frame = Some(frame.clone());
-        frame
+        self.root_search.cache_root_passive_frame(frame)
     }
 
     fn root_file_frame_for_current_query(

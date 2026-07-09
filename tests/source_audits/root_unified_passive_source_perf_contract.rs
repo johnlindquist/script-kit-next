@@ -246,7 +246,7 @@ fn explicit_browser_sources_have_app_managed_refresh_completion() {
         );
     }
     assert!(
-        filtering.contains("self.root_passive_frame = None;"),
+        filtering.contains("self.root_search.clear_root_passive_frame();"),
         "browser refresh completion should invalidate the passive frame"
     );
     assert!(

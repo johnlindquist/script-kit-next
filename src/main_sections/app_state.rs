@@ -663,8 +663,6 @@ pub(crate) struct ScriptListApp {
     cached_file_results: Vec<file_search::FileResult>,
     /// Cohesive async state for root-launcher file search and visible paging.
     root_search: RootSearchStore,
-    /// Frozen cache-refreshable passive rows for the current root-search query frame.
-    root_passive_frame: Option<RootPassiveFrame>,
     // ── Spine @file: subsearch async state ─────────────────────────
     spine_file_search_query: String,
     pub(crate) spine_file_search_generation: u64,

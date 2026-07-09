@@ -1,5 +1,7 @@
 /// Root-launcher Windows, file, and Brain search state owned as one coherent async cohort.
 pub(crate) struct RootSearchStore {
+    /// Frozen cache-refreshable passive rows for the current root-search query frame.
+    root_passive_frame: Option<crate::RootPassiveFrame>,
     /// App-layer enriched rows for root/unified `windows:` search.
     pub(crate) cached_root_windows: Vec<crate::scripts::RootWindowEntry>,
     /// Last provider state for root unified `windows:` search.
@@ -62,6 +64,7 @@ pub(crate) struct RootSearchStore {
 impl Default for RootSearchStore {
     fn default() -> Self {
         Self {
+            root_passive_frame: None,
             cached_root_windows: Vec::new(),
             root_windows_provider_status:
                 crate::window_control::RootWindowsProviderStatus::Unknown,
@@ -108,12 +111,39 @@ impl RootSearchStore {
         }
     }
 
+    pub(crate) fn clear_root_passive_frame(&mut self) {
+        self.root_passive_frame = None;
+    }
+
+    pub(crate) fn cached_root_passive_frame(
+        &self,
+        key: &crate::RootPassiveFrameKey,
+    ) -> Option<crate::RootPassiveFrame> {
+        self.root_passive_frame
+            .as_ref()
+            .filter(|frame| &frame.key == key)
+            .cloned()
+    }
+
+    pub(crate) fn cache_root_passive_frame(
+        &mut self,
+        frame: crate::RootPassiveFrame,
+    ) -> crate::RootPassiveFrame {
+        self.root_passive_frame = Some(frame.clone());
+        frame
+    }
+
+    pub(crate) fn root_passive_frame(&self) -> Option<&crate::RootPassiveFrame> {
+        self.root_passive_frame.as_ref()
+    }
+
     pub(crate) fn install_root_windows(
         &mut self,
         cached_root_windows: Vec<crate::scripts::RootWindowEntry>,
     ) {
         let count = cached_root_windows.len();
         self.cached_root_windows = cached_root_windows;
+        self.root_windows_refreshing = false;
         self.bump_root_windows_refresh_generation();
         self.root_windows_provider_status =
             crate::window_control::RootWindowsProviderStatus::Ready { count };
@@ -151,14 +181,11 @@ impl RootSearchStore {
         self.root_windows_refresh_token == token
     }
 
-    pub(crate) fn finish_root_windows_refresh_request(&mut self) {
-        self.root_windows_refreshing = false;
-    }
-
     pub(crate) fn fail_root_windows_refresh(
         &mut self,
         status: crate::window_control::RootWindowsProviderStatus,
     ) {
+        self.root_windows_refreshing = false;
         self.root_windows_provider_status = status;
         self.bump_root_windows_refresh_generation();
     }
@@ -178,10 +205,46 @@ impl RootSearchStore {
 mod root_search_store_tests {
     use super::*;
 
+    fn passive_frame(query: &str) -> crate::RootPassiveFrame {
+        crate::RootPassiveFrame {
+            key: crate::RootPassiveFrameKey {
+                query: query.to_string(),
+                advanced_query: false,
+                source_filters: Default::default(),
+                todo_options: Default::default(),
+                brain_options: Default::default(),
+                brain_semantic_epoch: 0,
+                notes_options: Default::default(),
+                clipboard_history_options: Default::default(),
+                dictation_history_options: Default::default(),
+                agent_chat_history_options: Default::default(),
+                ai_vault_options: Default::default(),
+                ai_vault_snapshot_generation: 0,
+                browser_tabs_options: Default::default(),
+                browser_tabs_snapshot_generation: 0,
+                browser_history_options: Default::default(),
+                browser_history_snapshot_generation: 0,
+            },
+            note_hits: Vec::new(),
+            brain_hits: Vec::new(),
+            todo_hits: Vec::new(),
+            clipboard_history_hits: Vec::new(),
+            dictation_history_hits: Vec::new(),
+            agent_chat_history_hits: Vec::new(),
+            ai_vault_hits: Vec::new(),
+            browser_tab_hits: Vec::new(),
+            browser_history_hits: Vec::new(),
+            ai_vault_snapshot_generation: 0,
+            browser_tabs_snapshot_generation: 0,
+            browser_history_snapshot_generation: 0,
+        }
+    }
+
     #[test]
     fn default_preserves_root_search_startup_contract() {
         let store = RootSearchStore::default();
 
+        assert!(store.root_passive_frame().is_none());
         assert!(store.cached_root_windows.is_empty());
         assert!(matches!(
             store.root_windows_provider_status,
@@ -234,15 +297,19 @@ mod root_search_store_tests {
             crate::window_control::RootWindowsProviderStatus::Refreshing { count: 0 }
         ));
 
-        store.finish_root_windows_refresh_request();
         store.fail_root_windows_refresh(
             crate::window_control::RootWindowsProviderStatus::PermissionRequired,
         );
         assert!(!store.root_windows_refreshing);
         assert_eq!(store.root_windows_refresh_generation, 2);
 
+        let previous_token = token;
+        let token = store.begin_root_windows_refresh();
+        assert!(!store.root_windows_refresh_token_matches(previous_token));
+        assert!(store.root_windows_refresh_token_matches(token));
         store.install_root_windows(Vec::new());
-        assert_eq!(store.root_windows_refresh_generation, 3);
+        assert!(!store.root_windows_refreshing);
+        assert_eq!(store.root_windows_refresh_generation, 4);
         assert!(matches!(
             store.root_windows_provider_status,
             crate::window_control::RootWindowsProviderStatus::Ready { count: 0 }
@@ -250,10 +317,31 @@ mod root_search_store_tests {
         assert!(store.root_windows_last_completed_at.is_some());
 
         store.rebuild_root_windows(Vec::new());
-        assert_eq!(store.root_windows_refresh_generation, 4);
+        assert_eq!(store.root_windows_refresh_generation, 5);
 
         store.record_root_window_focus("window-key".to_string());
         assert_eq!(store.root_window_focus_seq, 1);
         assert_eq!(store.root_window_focus_recency.get("window-key"), Some(&1));
+    }
+
+    #[test]
+    fn passive_frame_cache_reuses_only_the_matching_query_frame() {
+        let mut store = RootSearchStore::default();
+        let first = passive_frame("first");
+        let other = passive_frame("other");
+
+        assert!(store.cached_root_passive_frame(&first.key).is_none());
+        let returned = store.cache_root_passive_frame(first.clone());
+        assert_eq!(returned.key, first.key);
+        assert_eq!(
+            store
+                .cached_root_passive_frame(&first.key)
+                .map(|frame| frame.key),
+            Some(first.key)
+        );
+        assert!(store.cached_root_passive_frame(&other.key).is_none());
+
+        store.clear_root_passive_frame();
+        assert!(store.root_passive_frame().is_none());
     }
 }

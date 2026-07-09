@@ -1,3 +1,24 @@
+fn braced_body<'a>(source: &'a str, signature: &str) -> &'a str {
+    let body = source
+        .split_once(signature)
+        .map(|(_, body)| body)
+        .unwrap_or_else(|| panic!("missing structural signature `{signature}`"));
+    let mut depth = 1_usize;
+    for (index, ch) in body.char_indices() {
+        match ch {
+            '{' => depth += 1,
+            '}' => {
+                depth -= 1;
+                if depth == 0 {
+                    return &body[..index];
+                }
+            }
+            _ => {}
+        }
+    }
+    panic!("unterminated structural signature `{signature}`");
+}
+
 #[test]
 fn root_browser_tabs_foreground_search_is_cache_only() {
     let browser_tabs = include_str!("../../src/browser_tabs.rs");
@@ -129,13 +150,26 @@ fn filtering_cache_freezes_passive_snapshot_hits_per_query_frame() {
     let preflight_types = include_str!("../../src/main_window_preflight/types.rs");
     let preflight_build = include_str!("../../src/main_window_preflight/build.rs");
 
+    let app_body = braced_body(app_state, "pub(crate) struct ScriptListApp {");
+    let frame_fn = filtering_cache
+        .split("fn root_passive_frame_for_current_query(")
+        .nth(1)
+        .and_then(|rest| rest.split("fn root_file_frame_for_current_query(").next())
+        .expect("root_passive_frame_for_current_query should exist");
+    let preflight_fn = preflight_build
+        .split("fn build_root_passive_frame_receipt(")
+        .nth(1)
+        .and_then(|rest| rest.split("fn build_root_file_frame_receipt(").next())
+        .expect("build_root_passive_frame_receipt should exist");
+
     assert!(app_state.contains("pub(crate) struct RootPassiveFrameKey"));
     assert!(app_state.contains("pub(crate) struct RootPassiveFrame"));
-    assert!(app_state.contains("root_passive_frame: Option<RootPassiveFrame>"));
+    assert!(app_body.contains("root_search: RootSearchStore"));
+    assert!(!app_body.contains("root_passive_frame:"));
     assert!(filtering_cache.contains("fn root_passive_frame_for_current_query("));
     assert!(
-        filtering_cache.contains("if frame.key == key")
-            && filtering_cache.contains("return frame.clone()"),
+        frame_fn.contains("self.root_search.cached_root_passive_frame(&key)")
+            && frame_fn.contains("self.root_search.cache_root_passive_frame(frame)"),
         "same-query passive frames should reuse the frozen hit vectors"
     );
     assert!(
@@ -160,9 +194,9 @@ fn filtering_cache_freezes_passive_snapshot_hits_per_query_frame() {
         "preflight state receipts should expose content-free passive frame status"
     );
     assert!(
-        preflight_build.contains("build_root_passive_frame_receipt(")
-            && preflight_build.contains("root_browser_tabs_snapshot_status()")
-            && preflight_build.contains("root_browser_history_snapshot_status()"),
+        preflight_fn.contains("app.root_search.root_passive_frame()")
+            && preflight_fn.contains("root_browser_tabs_snapshot_status()")
+            && preflight_fn.contains("root_browser_history_snapshot_status()"),
         "runtime proof should be able to wait for browser passive refresh completion"
     );
 }

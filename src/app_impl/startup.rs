@@ -929,7 +929,6 @@ impl ScriptListApp {
                 initial_cached_root_windows,
                 initial_root_windows_provider_status,
             ),
-            root_passive_frame: None,
             spine_file_search_query: String::new(),
             spine_file_search_generation: 0,
             spine_file_search_loading: false,
