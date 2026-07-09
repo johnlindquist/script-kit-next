@@ -454,4 +454,31 @@ mod tests {
             .expect("missing save-file action");
         assert_eq!(save_file.section.as_deref(), Some("Share"));
     }
+
+    #[test]
+    fn clipboard_save_snippet_action_is_text_only() {
+        for pinned in [false, true] {
+            let text_actions =
+                get_clipboard_history_context_actions(&entry_info(ContentType::Text, pinned));
+            assert!(text_actions
+                .iter()
+                .any(|action| action.id == "clip:clipboard_save_snippet"));
+
+            for content_type in [
+                ContentType::Image,
+                ContentType::Link,
+                ContentType::File,
+                ContentType::Color,
+            ] {
+                let actions =
+                    get_clipboard_history_context_actions(&entry_info(content_type, pinned));
+                assert!(
+                    actions
+                        .iter()
+                        .all(|action| action.id != "clip:clipboard_save_snippet"),
+                    "{content_type:?} exposed clipboard_save_snippet"
+                );
+            }
+        }
+    }
 }

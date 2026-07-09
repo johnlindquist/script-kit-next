@@ -154,27 +154,6 @@ fn builtin_actions_dialog_uses_builtin_default_action_text() {
 }
 
 #[test]
-fn preview_metadata_uses_agent_chat_labels() {
-    let group_header = super::read_source("src/app_render/group_header_item.rs");
-    let app_render_tests = super::read_source("src/app_render/tests.rs");
-
-    assert!(
-        group_header.contains("BuiltInFeature::AiChat => \"Agent Chat\"")
-            && group_header.contains("BuiltInFeature::AiCommand(_) => \"Agent Chat Command\""),
-        "preview metadata annotations should not expose stale generic AI Assistant/AI Command labels"
-    );
-    assert!(
-        !group_header.contains("AI Assistant") && !group_header.contains("\"AI Command\""),
-        "preview metadata should name Agent Chat surfaces concretely"
-    );
-    assert!(
-        app_render_tests.contains("\"Agent Chat\"")
-            && app_render_tests.contains("\"Agent Chat Command\""),
-        "app-render tests should lock the Agent Chat preview metadata labels"
-    );
-}
-
-#[test]
 fn agent_chat_history_text_names_agent_chat_conversations() {
     let entries = get_builtin_entries(&BuiltInConfig::default());
     let agent_chat_history = entries

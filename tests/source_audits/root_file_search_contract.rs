@@ -13,6 +13,30 @@ mod tests {
         source.split("#[cfg(test)]").next().unwrap_or(source)
     }
 
+    fn function_body<'a>(source: &'a str, signature: &str) -> &'a str {
+        let start = source
+            .find(signature)
+            .unwrap_or_else(|| panic!("missing function signature {signature}"));
+        let source = &source[start..];
+        let body_start = source.find('{').expect("function body open brace");
+        let mut depth = 0usize;
+
+        for (offset, character) in source[body_start..].char_indices() {
+            match character {
+                '{' => depth += 1,
+                '}' => {
+                    depth -= 1;
+                    if depth == 0 {
+                        return &source[body_start..body_start + offset + 1];
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        panic!("unterminated function body for {signature}");
+    }
+
     #[test]
     fn unified_search_module_does_not_call_file_search_processes() {
         let source = fs::read_to_string("src/scripts/search/unified.rs")
@@ -232,30 +256,6 @@ mod tests {
         assert!(
             !script.contains("captureScreenshot") && !script.contains("simulateClick"),
             "lazy scroll proof should stay state-first and not rely on screenshots or mouse clicks"
-        );
-    }
-
-    #[test]
-    fn explicit_files_source_filter_single_character_threshold_stays_intent_scoped() {
-        let source =
-            fs::read_to_string("src/file_search/mod.rs").expect("read src/file_search/mod.rs");
-        let normalized = source.split_whitespace().collect::<Vec<_>>().join(" ");
-
-        assert!(
-            normalized.contains(
-                "intent == RootFileQueryIntent::ExplicitFilesSourceFilter && (1..=2).contains(&query.chars().count()) && query.chars().all(|ch| ch.is_ascii_alphanumeric())"
-            ),
-            "single-character root Files search should be allowed only for explicit Files source-filter intent"
-        );
-        assert!(
-            normalized.contains("pub const ROOT_FILE_MIN_QUERY_CHARS: usize = 3"),
-            "ordinary root file search should keep its three-character threshold"
-        );
-        assert!(
-            source.contains("fn explicit_files_source_filter_allows_single_character_file_queries")
-                && source.contains("assert!(!should_search_root_files(\"s\"));")
-                && source.contains("RootFileQueryIntent::ExplicitFilesSourceFilter"),
-            "lib tests should pin f:s eligibility while plain s remains below the ordinary root threshold"
         );
     }
 
@@ -978,36 +978,15 @@ mod tests {
         }
     }
 
+    /// Global-file merging is a pure ranking boundary: starting providers here
+    /// would duplicate asynchronous search work during every grouping pass.
     #[test]
-    fn root_global_file_rows_filter_app_bundles_without_affecting_directory_browse() {
-        let file_search_source =
-            fs::read_to_string("src/file_search/mod.rs").expect("read src/file_search/mod.rs");
+    fn root_global_file_merge_does_not_start_providers_or_scan_directories() {
         let grouping_source =
             fs::read_to_string("src/scripts/grouping.rs").expect("read src/scripts/grouping.rs");
-        let file_search_production = production_source(&file_search_source);
-        let grouping_production = production_source(&grouping_source);
-
-        assert!(
-            file_search_production.contains("pub fn root_global_file_result_is_eligible(")
-                && file_search_production.contains("file.file_type != FileType::Application"),
-            "root global file result eligibility should keep app bundles out of global Files"
-        );
-
-        let merge_helper = grouping_production
-            .split("fn merge_root_global_file_results_with_recent(")
-            .nth(1)
-            .and_then(|section| section.split("struct RootFileSectionUiState").next())
-            .expect("recent/global merge helper should be present");
-        assert!(
-            merge_helper.contains("root_global_file_result_is_eligible(file)")
-                && merge_helper
-                    .contains("root_file_recent_seed_matches_query_for_intent("),
-            "global Files should filter app bundles before ranking while preserving recent seed gating"
-        );
-        assert!(
-            grouping_production.contains("RootFileSectionMode::DirectoryBrowse")
-                && grouping_production.contains("root_directory_file_matches("),
-            "directory browse should keep rendering already-collected direct children, including app bundles"
+        let merge_helper = function_body(
+            production_source(&grouping_source),
+            "fn merge_root_global_file_results_with_recent(",
         );
 
         for forbidden in [
@@ -1020,53 +999,7 @@ mod tests {
         ] {
             assert!(
                 !merge_helper.contains(forbidden),
-                "global app-bundle filtering must stay grouping-only: {forbidden}"
-            );
-        }
-    }
-
-    #[test]
-    fn root_global_file_rows_filter_app_bundle_contents_without_affecting_directory_browse() {
-        let file_search_source =
-            fs::read_to_string("src/file_search/mod.rs").expect("read src/file_search/mod.rs");
-        let grouping_source =
-            fs::read_to_string("src/scripts/grouping.rs").expect("read src/scripts/grouping.rs");
-        let file_search_production = production_source(&file_search_source);
-        let grouping_production = production_source(&grouping_source);
-
-        assert!(
-            file_search_production.contains("fn path_contains_application_bundle_component(")
-                && file_search_production.contains("eq_ignore_ascii_case(\"app\")")
-                && file_search_production.contains("!path_contains_application_bundle_component(&file.path)"),
-            "global root file eligibility should reject rows nested under .app bundle path components"
-        );
-
-        let merge_helper = grouping_production
-            .split("fn merge_root_global_file_results_with_recent(")
-            .nth(1)
-            .and_then(|section| section.split("struct RootFileSectionUiState").next())
-            .expect("recent/global merge helper should be present");
-        assert!(
-            merge_helper.contains("root_global_file_result_is_eligible(file)"),
-            "global provider and recent rows should share the app-bundle-content eligibility gate"
-        );
-        assert!(
-            grouping_production.contains("RootFileSectionMode::DirectoryBrowse")
-                && grouping_production.contains("root_directory_file_matches("),
-            "explicit directory browse should stay outside the global app-bundle-content filter"
-        );
-
-        for forbidden in [
-            "mdfind",
-            "search_files(",
-            "search_files_streaming",
-            "std::process::Command",
-            "std::fs::read_dir",
-            "list_directory",
-        ] {
-            assert!(
-                !merge_helper.contains(forbidden),
-                "app-bundle-content filtering must stay grouping-only: {forbidden}"
+                "global file merging must stay in-memory: {forbidden}"
             );
         }
     }

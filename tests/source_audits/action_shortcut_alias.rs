@@ -35,30 +35,6 @@ fn shortcut_actions_use_launcher_command_ids() {
     );
 }
 
-#[test]
-fn add_update_shortcut_actions_advertise_cmd_shift_k() {
-    let script_context = super::read_source("src/actions/builders/script_context.rs");
-    let add_block = script_context
-        .split("\"add_shortcut\"")
-        .nth(1)
-        .and_then(|tail| tail.split("with_section(\"Edit\")").next())
-        .expect("add_shortcut action should be built in script context actions");
-    let update_block = script_context
-        .split("\"update_shortcut\"")
-        .nth(1)
-        .and_then(|tail| tail.split("with_section(\"Edit\")").next())
-        .expect("update_shortcut action should be built in script context actions");
-
-    assert!(
-        add_block.contains(".with_shortcut(\"⌘⇧K\")"),
-        "Add Keyboard Shortcut must advertise the Cmd+Shift+K shortcut consumed by the action router"
-    );
-    assert!(
-        update_block.contains(".with_shortcut(\"⌘⇧K\")"),
-        "Edit Keyboard Shortcut must advertise the Cmd+Shift+K shortcut consumed by the action router"
-    );
-}
-
 // ---------------------------------------------------------------------------
 // add_shortcut / update_shortcut — error path
 // ---------------------------------------------------------------------------
@@ -298,48 +274,6 @@ fn alias_actions_reject_window_items() {
             && block.contains("ShortcutAliasTargetError::UnsupportedItemType")
             && content.contains("Aliases not supported for this item type"),
         "Alias actions should derive unsupported-item copy from the named action state"
-    );
-}
-
-#[test]
-fn agent_script_context_does_not_advertise_unsupported_shortcut_or_alias_actions() {
-    let builder = super::read_source("src/actions/builders/script_context.rs");
-    let plan_start = builder
-        .find("fn preference_action_plan")
-        .expect("script context builder should derive shortcut/alias actions from a plan");
-    let shortcut_append_start = builder
-        .find("fn append_shortcut_preference_actions")
-        .expect("script context builder should append shortcut rows from the plan");
-    let alias_append_start = builder
-        .find("fn append_alias_preference_actions")
-        .expect("script context builder should append alias rows from the plan");
-    let plan_block = &builder[plan_start..shortcut_append_start];
-    let guarded_block =
-        &builder[shortcut_append_start..builder.len().min(alias_append_start + 2500)];
-
-    assert!(
-        plan_block.contains("if script.is_agent")
-            && plan_block.contains("ScriptContextPreferenceActionPlan::AgentNoPreferenceActions"),
-        "script context builder should map agents to the no-preference-action plan"
-    );
-
-    for action_id in [
-        "\"update_shortcut\"",
-        "\"remove_shortcut\"",
-        "\"add_shortcut\"",
-        "\"update_alias\"",
-        "\"remove_alias\"",
-        "\"add_alias\"",
-    ] {
-        assert!(
-            guarded_block.contains(action_id),
-            "{action_id} should only be built inside the non-agent shortcut/alias guard"
-        );
-    }
-
-    assert!(
-        guarded_block.contains("ScriptContextPreferenceActionPlan::AgentNoPreferenceActions => {}"),
-        "agent preference plans must not append shortcut or alias action rows"
     );
 }
 

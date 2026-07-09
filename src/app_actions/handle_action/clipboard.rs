@@ -1281,8 +1281,8 @@ impl ScriptListApp {
                     return DispatchOutcome::success();
                 };
 
-                if entry.content_type != clipboard_history::ContentType::Text {
-                    self.show_error_toast(save_snippet_action.text_required_message(), cx);
+                if let Some(message) = save_snippet_action.content_type_error(entry.content_type) {
+                    self.show_error_toast(message, cx);
                     return DispatchOutcome::success();
                 }
 
@@ -1436,6 +1436,19 @@ impl ClipboardSaveSnippetHandlerAction {
     fn text_required_message(self) -> &'static str {
         match self {
             Self::SaveSnippet => "Only text can be saved as snippet",
+        }
+    }
+
+    fn content_type_error(
+        self,
+        content_type: clipboard_history::ContentType,
+    ) -> Option<&'static str> {
+        match content_type {
+            clipboard_history::ContentType::Text => None,
+            clipboard_history::ContentType::Image
+            | clipboard_history::ContentType::Link
+            | clipboard_history::ContentType::File
+            | clipboard_history::ContentType::Color => Some(self.text_required_message()),
         }
     }
 
@@ -1654,6 +1667,33 @@ impl ClipboardUnpinnedDeleteAvailability {
         match self {
             Self::Empty => None,
             Self::Available { unpinned_count } => Some(unpinned_count),
+        }
+    }
+}
+
+#[cfg(test)]
+mod clipboard_save_snippet_action_tests {
+    use super::*;
+
+    #[test]
+    fn content_type_gate_accepts_only_text() {
+        let action = ClipboardSaveSnippetHandlerAction::SaveSnippet;
+
+        assert_eq!(
+            action.content_type_error(clipboard_history::ContentType::Text),
+            None
+        );
+        for content_type in [
+            clipboard_history::ContentType::Image,
+            clipboard_history::ContentType::Link,
+            clipboard_history::ContentType::File,
+            clipboard_history::ContentType::Color,
+        ] {
+            assert_eq!(
+                action.content_type_error(content_type),
+                Some("Only text can be saved as snippet"),
+                "{content_type:?} must be rejected"
+            );
         }
     }
 }

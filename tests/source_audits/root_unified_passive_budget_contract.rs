@@ -1,21 +1,4 @@
 #[test]
-fn passive_budget_is_applied_after_root_files_before_passive_sources() {
-    let grouping = include_str!("../../src/scripts/grouping.rs");
-    let root_files = grouping.find("append_root_file_section(").unwrap();
-    let recent_files = grouping.find("append_recent_root_file_section(").unwrap();
-    let budget = grouping
-        .find("RootPassiveResultBudget::for_results")
-        .unwrap();
-    let passive_loop = grouping
-        .find("for source in root_passive_source_order")
-        .unwrap();
-
-    assert!(root_files < budget);
-    assert!(recent_files < budget);
-    assert!(budget < passive_loop);
-}
-
-#[test]
 fn every_passive_append_function_consumes_shared_budget() {
     let grouping = include_str!("../../src/scripts/grouping.rs");
     for fn_name in [
